@@ -118,7 +118,7 @@ namespace {PROJECT_NAME}
         return std::filesystem::relative(filepath, m_Info.filepath.parent_path());
     }
 
-    void Project::SetActiveScene(const Ref<Scene> &scene)
+    void Project::SetActiveScene(Scene *scene)
     {
         m_ActiveScene = scene;
     }
@@ -216,9 +216,5 @@ namespace {PROJECT_NAME}
         }
 
         m_Info.scriptModuleFilepath = std::format("bin/{}.dll", m_Info.name);
-    }
-
-    void Project::SerializeAssetRegistry()
-    {
     }
 }

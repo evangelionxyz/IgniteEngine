@@ -1,5 +1,4 @@
 #include "editor_layer.hpp"
-
 #include "panels/scene_panel.hpp"
 #include "panels/content_browser_panel.hpp"
 
@@ -7,26 +6,15 @@
 #include "ignite/core/command.hpp"
 #include "ignite/graphics/renderer_2d.hpp"
 #include "ignite/imgui/gui_function.hpp"
-#include "ignite/graphics/mesh.hpp"
 #include "ignite/asset/asset.hpp"
 #include "ignite/asset/asset_importer.hpp"
-
-#include "ignite/audio/fmod_audio.hpp"
-#include "ignite/audio/fmod_sound.hpp"
-#include "ignite/audio/fmod_dsp.hpp"
-
 #include "ignite/scripting/script_engine.hpp"
-
 #include "stb_image_write.h"
 
-#include <glm/glm.hpp>
-#include <nvrhi/utils.h>
-#include <ranges>
 #include <cinttypes>
 
 namespace ignite
 {
-   
     EditorLayer::EditorLayer(const std::string &name)
         : Layer(name)
     {
@@ -39,14 +27,11 @@ namespace ignite
         m_Device = Application::GetDeviceManager()->GetDevice();
         m_CommandList = m_Device->createCommandList();
 
-        m_SceneRenderer.Init();
-
         // write buffer with command list
-        Renderer2D::InitQuadData(m_CommandList);
-        Renderer2D::InitLineData(m_CommandList);
+        Renderer2D::InitQuadData();
+        Renderer2D::InitLineData();
 
         m_ScenePanel = CreateRef<ScenePanel>("Scene Panel", this);
-        m_ScenePanel->CreateRenderTarget(m_Device);
 
         m_ContentBrowserPanel = CreateRef<ContentBrowserPanel>("Content Browser");
 
@@ -64,21 +49,19 @@ namespace ignite
         }
 
         // create render target framebuffer
-        m_ScenePanel->GetRenderTarget()->CreateSingleFramebuffer();
-        m_SceneRenderer.CreatePipelines(m_ScenePanel->GetRenderTarget()->GetCurrentFramebuffer());
+        m_SceneRenderer.Create();
     }
 
     void EditorLayer::OnDetach()
     {
         Layer::OnDetach();
-        m_CommandList = nullptr;
     }
 
     void EditorLayer::OnUpdate(f32 deltaTime)
     {
         Layer::OnUpdate(deltaTime);
         
-        AssetImporter::SyncMainThread(m_CommandList, m_Device);
+        AssetImporter::SyncMainThread();
 
         if (!m_ActiveScene)
             return;
@@ -194,6 +177,7 @@ namespace ignite
                 }
                 break;
             }
+        default: break;
         }
         return false;
     }
@@ -215,34 +199,12 @@ namespace ignite
         if (!m_ActiveScene)
             return;
 
-        nvrhi::IFramebuffer *viewportFramebuffer = m_ScenePanel->GetRenderTarget()->GetCurrentFramebuffer();
-
-        // main scene rendering
-        m_CommandList->open();
-
-        // clear main framebuffer color attachment
-        nvrhi::utils::ClearColorAttachment(m_CommandList, mainFramebuffer, 0, nvrhi::Color(0.0f, 0.0f, 0.0f, 1.0f));
-
-        m_ScenePanel->GetRenderTarget()->ClearColorAttachmentFloat(m_CommandList, 0);
-        m_ScenePanel->GetRenderTarget()->ClearColorAttachmentUint(m_CommandList, 1, static_cast<uint32_t>(-1));
-
-        f32 farDepth = 1.0f; // LessOrEqual
-        m_CommandList->clearDepthStencilTexture(m_ScenePanel->GetRenderTarget()->GetDepthAttachment(), 
-            nvrhi::AllSubresources, 
-            true, // clear depth ?
-            farDepth, // depth
-            true, // clear stencil?
-            0 // stencil
-        );
-        
         switch (m_Data.sceneState)
         {
         case State::SceneSimulate:
         case State::SceneEdit:
         {
-            CameraBuffer cameraBuffer = { m_ScenePanel->GetViewportCamera().GetViewProjectionMatrix(), glm::vec4(m_ScenePanel->GetViewportCamera().position, 1.0f) };
-            m_CommandList->writeBuffer(Renderer::GetCameraBufferHandle(), &cameraBuffer, sizeof(cameraBuffer));
-            m_SceneRenderer.Render(m_ActiveScene.get(), m_CommandList, viewportFramebuffer);
+            m_SceneRenderer.Render(&m_ScenePanel->GetViewportCamera());
             break;
         }
         case State::ScenePlay:
@@ -252,30 +214,27 @@ namespace ignite
             {
                 camera = &primaryCam.GetComponent<Camera>().camera;
             }
-
-            CameraBuffer cameraBuffer = { camera->GetViewProjectionMatrix(), glm::vec4(camera->position, 1.0f) };
-            m_CommandList->writeBuffer(Renderer::GetCameraBufferHandle(), &cameraBuffer, sizeof(cameraBuffer));
-            m_SceneRenderer.Render(m_ActiveScene.get(), m_CommandList, viewportFramebuffer, camera->projectionType == ICamera::Type::Perspective);
+            m_SceneRenderer.Render(camera, camera->projectionType == ICamera::Type::Perspective);
             break;
         }
         }
 
+        m_CommandList->open();
         // Create staging texture for read-back
         if (m_Data.isPickingEntity)
         {
-            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetRenderTarget()->GetColorAttachment(1)->getDesc();
+            nvrhi::TextureDesc stagingDesc = m_SceneRenderer.GetRenderTarget()->GetColorAttachment(1)->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
-            m_EntityIDStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            LOG_ASSERT(m_EntityIDStagingTexture, "Failed to create staging texture");
-            m_CommandList->copyTexture(m_EntityIDStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetRenderTarget()->GetColorAttachment(1), nvrhi::TextureSlice());
+            m_MousePickingStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
+            m_CommandList->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_SceneRenderer.GetRenderTarget()->GetColorAttachment(1), nvrhi::TextureSlice());
         }
 
         if (m_Data.takeScreenshot)
         {
-            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetRenderTarget()->GetColorAttachment(0)->getDesc();
+            nvrhi::TextureDesc stagingDesc = m_SceneRenderer.GetRenderTarget()->GetColorAttachment(0)->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_ScreenshotStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            m_CommandList->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetRenderTarget()->GetColorAttachment(0), nvrhi::TextureSlice());
+            m_CommandList->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_SceneRenderer.GetRenderTarget()->GetColorAttachment(0), nvrhi::TextureSlice());
         }
 
         m_CommandList->close();
@@ -287,7 +246,7 @@ namespace ignite
             size_t rowPitch = 0;
             if (void *mappedData = m_Device->mapStagingTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch))
             {
-                const void *pixelData = reinterpret_cast<const void *>(mappedData);
+                const void *pixelData = mappedData;
                 std::string filepath = FileDialogs::SaveFile("PNG (*.png)\0*.png");
                 if (!filepath.empty())
                 {
@@ -304,12 +263,12 @@ namespace ignite
         {
             // Map and read the pixel data
             size_t rowPitch = 0;
-            if (void *mappedData = m_Device->mapStagingTexture(m_EntityIDStagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch)) {
+            if (void *mappedData = m_Device->mapStagingTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch)) {
                 uint32_t *pixelData = static_cast<uint32_t *>(mappedData);
 
                 glm::vec2 mousePos = m_ScenePanel->GetViewportMousePos();
-                int pixelX = static_cast<i32>(mousePos.x);
-                int pixelY = static_cast<i32>(mousePos.y);
+                const int pixelX = static_cast<i32>(mousePos.x);
+                const int pixelY = static_cast<i32>(mousePos.y);
 
                 // Get row pitch from texture mapping
                 m_Data.hoveredEntity = pixelData[pixelY * (rowPitch / sizeof(uint32_t)) + pixelX];
@@ -333,7 +292,7 @@ namespace ignite
                     m_ScenePanel->SetGizmoOperation(ImGuizmo::OPERATION::NONE);
                 }
 
-                m_Device->unmapStagingTexture(m_EntityIDStagingTexture);
+                m_Device->unmapStagingTexture(m_MousePickingStagingTexture);
             }
 
             m_Data.isPickingEntity = false;
@@ -354,7 +313,6 @@ namespace ignite
         ImGuiWindow *window = ImGui::GetCurrentWindow();
         window->DC.LayoutType = ImGuiLayoutType_Horizontal;
         window->DC.NavLayerCurrent = ImGuiNavLayer_Menu;
-        ImDrawList *drawList = ImGui::GetWindowDrawList();
 
         if (ImGui::BeginMenuBar())
         {
@@ -460,17 +418,15 @@ namespace ignite
             {
                 if (!m_Data.projectCreateInfo.name.empty() && !m_Data.projectCreateInfo.filepath.empty())
                 {
-                    while (m_Data.projectCreateInfo.name.find(" ") != std::string::npos)
+                    while (m_Data.projectCreateInfo.name.find(' ') != std::string::npos)
                     {
-                        size_t spacePos = m_Data.projectCreateInfo.name.find(" ");
+                        const size_t spacePos = m_Data.projectCreateInfo.name.find(' ');
                         m_Data.projectCreateInfo.name.replace(spacePos, 1, "");
                     }
 
                     m_Data.projectCreateInfo.filepath /= (m_Data.projectCreateInfo.name + ".ixproj");
 
-                    Ref<Project> newProject = Project::Create(m_Data.projectCreateInfo);
-
-                    if (newProject)
+                    if (Ref<Project> newProject = Project::Create(m_Data.projectCreateInfo))
                     {
                         m_ActiveProject = newProject;
 
@@ -483,26 +439,18 @@ namespace ignite
 
                         if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
                         {
-                            Ref<Scene> activeScene = Project::GetAsset<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle);
-                            if (activeScene)
+                            if (Ref<Scene> activeScene = Project::GetAsset<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
                             {
-                                m_ActiveProject->SetActiveScene(activeScene);
+                                m_EditorScene = SceneManager::Copy(activeScene);
+                                m_EditorScene->SetDirtyFlag(false);
+
+                                m_ActiveScene = m_EditorScene;
+                                SetActiveScene(m_ActiveScene.get());
+
+                                AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(activeScene->handle);
+                                auto scenePath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
+                                m_CurrentSceneFilePath = scenePath;
                             }
-                        }
-
-                        if (m_ActiveProject->GetActiveScene())
-                        {
-                            Ref<Scene> scene = m_ActiveProject->GetActiveScene();
-
-                            m_EditorScene = SceneManager::Copy(scene);
-                            m_EditorScene->SetDirtyFlag(false);
-
-                            m_ActiveScene = m_EditorScene;
-                            m_ScenePanel->SetActiveScene(m_ActiveScene.get(), true);
-
-                            AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(scene->handle);
-                            auto scenePath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
-                            m_CurrentSceneFilePath = scenePath;
                         }
                         else
                         {
@@ -570,6 +518,13 @@ namespace ignite
         ImGui::End(); // end dockspace
     }
 
+    void EditorLayer::SetActiveScene(Scene* scene)
+    {
+        m_ScenePanel->SetActiveScene(scene);
+        m_SceneRenderer.SetActiveScene(scene);
+        m_ActiveProject->SetActiveScene(scene);
+    }
+
     void EditorLayer::NewScene()
     {
         if (m_EditorScene)
@@ -584,7 +539,7 @@ namespace ignite
 
         // pass to active scene
         m_ActiveScene = m_EditorScene;
-        m_ScenePanel->SetActiveScene(m_ActiveScene.get(), true); // reset selected entity
+        SetActiveScene(m_ActiveScene.get());
     }
 
     void EditorLayer::SaveScene()
@@ -599,10 +554,10 @@ namespace ignite
         }
     }
 
-    bool EditorLayer::SaveScene(const std::filesystem::path &filepath) const
+    void EditorLayer::SaveScene(const std::filesystem::path &filepath) const
     {
         SceneSerializer serializer(m_ActiveScene);
-        return serializer.Serialize(filepath);
+        serializer.Serialize(filepath);
     }
 
     void EditorLayer::SaveSceneAs()
@@ -624,7 +579,7 @@ namespace ignite
         }
     }
 
-    bool EditorLayer::OpenScene(const std::filesystem::path &filepath)
+    void EditorLayer::OpenScene(const std::filesystem::path &filepath)
     {
         if (m_EditorScene)
         {
@@ -640,15 +595,13 @@ namespace ignite
             m_EditorScene->SetDirtyFlag(false);
 
             m_ActiveScene = m_EditorScene;
-            m_ScenePanel->SetActiveScene(m_ActiveScene.get(), true);
+            SetActiveScene(m_ActiveScene.get());
 
             m_CurrentSceneFilePath = filepath;
         }
-
-        return true;
     }
 
-    void EditorLayer::SaveProject()
+    void EditorLayer::SaveProject() const
     {
         if (m_ActiveProject)
         {
@@ -663,7 +616,6 @@ namespace ignite
 
     void EditorLayer::SaveProjectAs()
     {
-
     }
 
     void EditorLayer::OpenProject()
@@ -675,12 +627,12 @@ namespace ignite
         }
     }
 
-    bool EditorLayer::OpenProject(const std::filesystem::path &filepath)
+    void EditorLayer::OpenProject(const std::filesystem::path &filepath)
     {
         Ref<Project> openedProject = ProjectSerializer::Deserialize(filepath);
         if (!openedProject)
         {
-            return false;
+            return;
         }
 
         m_ActiveProject = openedProject;
@@ -688,36 +640,27 @@ namespace ignite
 
         ScriptEngine::Init();
 
+        // Get Project default scene
         if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
         {
-            Ref<Scene> activeScene = Project::GetAsset<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle);
-            if (activeScene)
+            if (Ref<Scene> activeScene = Project::GetAsset<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
             {
-                m_ActiveProject->SetActiveScene(activeScene);
+                m_EditorScene = SceneManager::Copy(activeScene);
+                m_EditorScene->SetDirtyFlag(false);
+
+                m_ActiveScene = m_EditorScene;
+                SetActiveScene(m_ActiveScene.get());
+
+                AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(activeScene->handle);
+                auto scenePath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
+                m_CurrentSceneFilePath = scenePath;
             }
-        }
-
-        if (m_ActiveProject->GetActiveScene())
-        {
-            Ref<Scene> scene = m_ActiveProject->GetActiveScene();
-
-            m_EditorScene = SceneManager::Copy(scene);
-            m_EditorScene->SetDirtyFlag(false);
-
-            m_ActiveScene = m_EditorScene;
-            m_ScenePanel->SetActiveScene(m_ActiveScene.get(), true);
-
-            AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(scene->handle);
-            auto scenePath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
-            m_CurrentSceneFilePath = scenePath;
         }
         else
         {
             // Create default scene
             NewScene();
         }
-
-        return true;
     }
 
     void EditorLayer::OnScenePlay()
@@ -738,7 +681,7 @@ namespace ignite
         m_ActiveScene = SceneManager::Copy(m_EditorScene);
         m_ActiveScene->OnStart();
 
-        m_ScenePanel->SetActiveScene(m_ActiveScene.get());
+        SetActiveScene(m_ActiveScene.get());
     }
 
     void EditorLayer::OnSceneStop()
@@ -748,7 +691,7 @@ namespace ignite
         m_ActiveScene->OnStop();
         m_ActiveScene = m_EditorScene;
 
-        m_ScenePanel->SetActiveScene(m_EditorScene.get());
+        SetActiveScene(m_EditorScene.get());
     }
 
     void  EditorLayer::OnSceneSimulate()
@@ -762,7 +705,7 @@ namespace ignite
         m_ActiveScene = SceneManager::Copy(m_EditorScene);
         m_ActiveScene->OnStart();
 
-        m_ScenePanel->SetActiveScene(m_ActiveScene.get());
+        SetActiveScene(m_ActiveScene.get());
     }
 
     void EditorLayer::SettingsUI()

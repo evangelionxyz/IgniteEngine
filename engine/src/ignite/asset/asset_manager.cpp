@@ -102,7 +102,7 @@ namespace ignite {
         return Import(handle, metadata);
     }
 
-    AssetType AssetManager::GetAssetType(AssetHandle handle)
+    AssetType AssetManager::GetAssetType(AssetHandle handle) const
     {
         return GetMetaData(handle).type;
     }
@@ -141,14 +141,14 @@ namespace ignite {
         return AssetHandle(0);
     }
 
-    const std::filesystem::path &AssetManager::GetFilepath(AssetHandle handle)
+    const std::filesystem::path &AssetManager::GetFilepath(AssetHandle handle) const
     {
         return GetMetaData(handle).filepath;
     }
 
-    bool AssetManager::IsAssetHandleValid(AssetHandle handle)
+    bool AssetManager::IsAssetHandleValid(AssetHandle handle) const
     {
-        return (uint64_t)handle != 0 && m_AssetRegistry.contains(handle);
+        return static_cast<uint64_t>(handle) != 0 && m_AssetRegistry.contains(handle);
     }
 
     Ref<Asset> AssetManager::Import(AssetHandle handle, const AssetMetaData &metadata)

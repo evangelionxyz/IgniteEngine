@@ -117,6 +117,8 @@ namespace ignite
     void Application::Run()
     {
         DeviceManager *deviceManager = GetDeviceManager();
+        nvrhi::IDevice *device = deviceManager->GetDevice();
+        nvrhi::CommandListHandle commandList = device->createCommandList();
 
         while (m_Window->IsLooping())
         {
@@ -134,7 +136,7 @@ namespace ignite
             {
                 std::stringstream ss;
                 ss << m_CreateInfo.name;
-                ss << " (" << nvrhi::utils::GraphicsAPIToString(deviceManager->GetDevice()->getGraphicsAPI());
+                ss << " (" << nvrhi::utils::GraphicsAPIToString(device->getGraphicsAPI());
                 if (deviceManager->GetDeviceParams().enableDebugRuntime)
                 {
                     if (m_CreateInfo.graphicsApi == nvrhi::GraphicsAPI::VULKAN)
@@ -157,7 +159,7 @@ namespace ignite
             {
                 // update system (physics etc..)
                 for (auto layer = m_LayerStack.rbegin(); layer != m_LayerStack.rend(); ++layer)
-                    (*layer)->OnUpdate(static_cast<f32>(m_DeltaTime));
+                    (*layer)->OnUpdate(m_DeltaTime);
 
                 // render to main framebuffer
                 // begin render frame
@@ -165,8 +167,13 @@ namespace ignite
                 {
                     if (deviceManager->BeginFrame())
                     {
+                        // Clearing framebuffer
                         nvrhi::IFramebuffer *framebuffer = deviceManager->GetCurrentFramebuffer();
-
+                        commandList->open();
+                        nvrhi::utils::ClearColorAttachment(commandList, framebuffer, 0, nvrhi::Color(0.0f, 0.0f, 0.0f, 1.0f));
+                        commandList->close();
+                        device->executeCommandList(commandList);
+                        
                         for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
                         {
                             Layer *layer = *it;
@@ -186,9 +193,9 @@ namespace ignite
                     }
                 }
             }
-
+            
             // call this at lease once per frame!
-            deviceManager->GetDevice()->runGarbageCollection();
+            device->runGarbageCollection();
 
             UpdateAverageTimeTime(m_DeltaTime);
             // set previous time
@@ -196,7 +203,9 @@ namespace ignite
             ++m_FrameIndex;
         }
 
-        deviceManager->GetDevice()->waitForIdle();
+        commandList.Reset();
+
+        device->waitForIdle();
 
         if (m_ImGuiLayer)
         {

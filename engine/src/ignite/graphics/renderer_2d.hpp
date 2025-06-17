@@ -73,8 +73,8 @@ namespace ignite
         static void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, Ref<Texture> texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t entityID = 0);
         static void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, Ref<Texture> texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t entityID = 0);
 
-        static void InitQuadData(nvrhi::ICommandList *commandList);
-        static void InitLineData(nvrhi::ICommandList *commandList);
+        static void InitQuadData();
+        static void InitLineData();
 
         static u32 GetOrInsertTexture(Ref<Texture> texture);
         static void UpdateTextureBindings();

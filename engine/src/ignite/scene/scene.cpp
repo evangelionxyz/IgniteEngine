@@ -218,7 +218,7 @@ namespace ignite
         UpdateTransforms(deltaTime);
     }
 
-    void Scene::OnResize(uint32_t width, uint32_t height)
+    void Scene::Resize(uint32_t width, uint32_t height)
     {
         this->viewportWidth = width; this->viewportHeight = height;
         

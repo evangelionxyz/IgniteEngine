@@ -29,14 +29,11 @@ namespace ignite
     public:
         explicit ScenePanel(const char *windowTitle, EditorLayer *editor);
         
-        void SetActiveScene(Scene *scene, bool reset = false);
-        void CreateRenderTarget(nvrhi::IDevice *device);
+        void SetActiveScene(Scene *scene);
 
         void OnUpdate(f32 deltaTime) override;
         void OnGuiRender() override;
         void RenderViewport();
-
-        Ref<RenderTarget> GetRenderTarget() const { return m_RenderTarget; }
 
         void OnEvent(Event &event);
         bool OnMouseScrolledEvent(MouseScrolledEvent &event);
@@ -54,22 +51,19 @@ namespace ignite
 
         void RenderHierarchy();
         Entity ShowEntityContextMenu();
-        void RenderEntityNode(Entity entity, UUID uuid);
+        void RenderEntityNode(Entity entity);
         
         void RenderInspector();
-
         void CameraSettingsUI();
         void UpdateCameraInput(f32 deltaTime);
         void DestroyEntity(Entity entity);
-        
+        void DuplicateSelectedEntity();
         void ClearSelection();
 
         Entity SetSelectedEntity(Entity entity);
         Entity GetSelectedEntity();
 
         const std::unordered_map<UUID, Entity> &GetSelectedEntities() { return m_SelectedEntities; }
-        
-        void DuplicateSelectedEntity();
 
         template<typename T, typename UIFunction>
         void RenderComponent(const std::string &name, Entity entity, UIFunction uiFunction, bool allowedToRemove = true);
@@ -86,7 +80,6 @@ namespace ignite
         } m_Data;
 
         EditorCamera m_Camera;
-        Ref<RenderTarget> m_RenderTarget;
         EditorLayer *m_Editor;
 
         Scene *m_Scene = nullptr;

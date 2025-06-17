@@ -194,7 +194,7 @@ namespace ignite
                     channel.rotationKeys.frames.push_back(frame);
                 }
 
-                // process rotation keys
+                // process scale keys
                 uint32_t scaleFrameCount = 0;
                 inFile.read(reinterpret_cast<char *>(&scaleFrameCount), sizeof(scaleFrameCount));
 

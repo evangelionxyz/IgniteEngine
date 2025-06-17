@@ -16,7 +16,7 @@ namespace ignite {
     class AssetImporter
     {
     public:
-        static void SyncMainThread(nvrhi::ICommandList *commandList, nvrhi::IDevice *device);
+        static void SyncMainThread();
         static Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<Scene> ImportScene(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata);
@@ -30,7 +30,7 @@ namespace ignite {
     public:
         static void Import(Ref<Environment> *outEnvironment, const std::string &filepath);
         static void UpdateTexture(Ref<Environment> *outEnvironment, const std::string &filepath);
-        static void SyncMainThread(nvrhi::ICommandList *commandList, nvrhi::IDevice *device);
+        static void SyncMainThread();
 
     private:
         static Ref<Environment> ImportAsync(Ref<Environment> *outEnvironment, const std::string &filepath);

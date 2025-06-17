@@ -12,7 +12,6 @@
 #include "ignite/core/platform_utils.hpp"
 #include "editor_layer.hpp"
 #include "ignite/graphics/mesh.hpp"
-#include "ignite/animation/animation_system.hpp"
 
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/script_field.hpp"
@@ -22,8 +21,7 @@
 #include "../states.hpp"
 
 #ifdef _WIN32
-#   include <dwmapi.h>
-#   include <ShellScalingApi.h>
+#include <dwmapi.h>
 #endif
 
 #include <set>
@@ -38,17 +36,17 @@ namespace ignite
     UUID ScenePanel::m_TrackingSelectedEntity = UUID(0);
 
     ScenePanel::ScenePanel(const char *windowTitle, EditorLayer *editor)
-        : IPanel(windowTitle), m_Editor(editor)
+        : IPanel(windowTitle), m_Editor(editor), m_Gizmo()
     {
-        Application *app = Application::GetInstance();
+        Application* app = Application::GetInstance();
 
         m_Camera = EditorCamera("ScenePanel-Editor Camera");
         // m_Camera.CreateOrthographic(app->GetCreateInfo().width, app->GetCreateInfo().height, 8.0f, 0.1f, 350.0f);
-        m_Camera.CreatePerspective(45.0f, 
-            static_cast<float>(app->GetCreateInfo().width), 
-            static_cast<float>(app->GetCreateInfo().height),
-            0.1f,
-            450.0f);
+        m_Camera.CreatePerspective(45.0f,
+                                   static_cast<float>(app->GetCreateInfo().width),
+                                   static_cast<float>(app->GetCreateInfo().height),
+                                   0.1f,
+                                   450.0f);
 
         m_Camera.position = {3.0f, 2.0f, 3.0f};
         m_Camera.yaw = -0.729f;
@@ -56,7 +54,6 @@ namespace ignite
 
         m_Camera.UpdateViewMatrix();
         m_Camera.UpdateProjectionMatrix();
-
 
         // Load icons
         TextureCreateInfo createInfo;
@@ -67,30 +64,15 @@ namespace ignite
         m_Icons["checker128"] = Texture::Create("resources/ui/checker-128px.jpg", createInfo);
     }
 
-    void ScenePanel::SetActiveScene(Scene *scene, bool reset)
+    void ScenePanel::SetActiveScene(Scene *scene)
     {
         m_Scene = scene;
         m_SelectedEntities.clear();
     }
 
-    void ScenePanel::CreateRenderTarget(nvrhi::IDevice *device)
-    {
-        RenderTargetCreateInfo createInfo = {};
-        createInfo.device = device;
-        createInfo.attachments = 
-        {
-            FramebufferAttachments{ nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }, // Depth
-            FramebufferAttachments{ nvrhi::Format::SRGBA8_UNORM, nvrhi::ResourceStates::RenderTarget }, // Main Color
-            FramebufferAttachments{ nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget }, // Mouse picking
-        };
-
-        m_RenderTarget = CreateRef<RenderTarget>(createInfo);
-    }
-
     void ScenePanel::OnGuiRender()
     {
-        constexpr ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoScrollbar;
-        ImGui::Begin(m_WindowTitle.c_str(), &m_IsOpen, windowFlags);
+        ImGui::Begin(m_WindowTitle.c_str(), &m_IsOpen, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoScrollbar);
         ImGui::DockSpace(ImGui::GetID(m_WindowTitle.c_str()), ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
         ImGui::End();
 
@@ -114,7 +96,6 @@ namespace ignite
     void ScenePanel::RenderHierarchy()
     {
         ImGui::Begin("Hierarchy");
-      
         ImGui::Button(m_Scene->name.c_str(), { ImGui::GetContentRegionAvail().x, 0.0f });
 
         // target drop
@@ -124,10 +105,9 @@ namespace ignite
             {
                 LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ITEM, that should be an entity");
                 Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene };
-                ID &idComp = src.GetComponent<ID>();
 
                 // check if src entity has parent
-                if (idComp.parent != 0)
+                if (ID &idComp = src.GetComponent<ID>(); idComp.parent != 0)
                 {
                     // current parent should be removed it
                     Entity parent = SceneManager::GetEntity(m_Scene, idComp.parent);
@@ -161,10 +141,12 @@ namespace ignite
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 2.0f, 0.0f });
 
             // Render root entity
-            m_Scene->registry->view<ID>().each([&](entt::entity e, ID &id)
+            m_Scene->registry->view<ID>().each([&](const entt::entity e, const ID &id)
             {
                 if (id.parent == UUID(0))
-                    RenderEntityNode(Entity{ e, m_Scene }, id.uuid);
+                {
+                    RenderEntityNode(Entity{ e, m_Scene });
+                }
             });
 
             ImGui::PopStyleVar();
@@ -208,7 +190,7 @@ namespace ignite
         return entity;
     }
 
-    void ScenePanel::RenderEntityNode(Entity entity, UUID uuid)
+    void ScenePanel::RenderEntityNode(Entity entity)
     {
         if (!entity.IsValid())
             return;
@@ -218,18 +200,19 @@ namespace ignite
             | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_OpenOnArrow
             | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_SpanFullWidth;
 
-        void *imguiPushId = (void*)(uint64_t)(uint32_t)entity;
+        void* imguiPushId = reinterpret_cast<void*>(static_cast<uint64_t>(static_cast<uint32_t>(entity)));
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
 
         ImGui::PushStyleColor(ImGuiCol_Header, { 0.000f, 0.305f, 0.453f, 1.000f });
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, { 0.435f, 0.287f, 0.000f, 1.000f });
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, { 0.780f, 0.520f, 0.000f, 1.000f });
-        bool opened = ImGui::TreeNodeEx(imguiPushId, flags, idComp.name.c_str());
+        
+        const bool opened = ImGui::TreeNodeEx(imguiPushId, flags, "%s", idComp.name.c_str());
+        
         ImGui::PopStyleColor(3);
 
         bool isDeleting = false;
-
         if (!m_Scene->IsPlaying() || true)
         {
             ImGui::PushID(imguiPushId);
@@ -262,13 +245,12 @@ namespace ignite
         if (!isDeleting)
         {
             // drag and drop
-            // drop source
             if (ImGui::BeginDragDropSource())
             {
                 ImGui::SetDragDropPayload("ENTITY_SOURCE_ITEM", &entity, sizeof(Entity));
 
                 ImGui::BeginTooltip();
-                ImGui::Text("%s %llu", idComp.name.c_str(), u64(idComp.uuid));
+                ImGui::Text("%s %llu", idComp.name.c_str(), static_cast<u64>(idComp.uuid));
                 ImGui::EndTooltip();
 
                 ImGui::EndDragDropSource();
@@ -314,7 +296,7 @@ namespace ignite
                 for (UUID uuid : entity.GetComponent<ID>().children)
                 {
                     Entity childEntity = SceneManager::GetEntity(m_Scene, uuid);
-                    RenderEntityNode(childEntity, uuid);
+                    RenderEntityNode(childEntity);
                 }
             }
 
@@ -326,13 +308,10 @@ namespace ignite
     {
         ImGui::Begin("Inspector");
 
-        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_FramePadding;
-
         Entity selectedEntity = GetSelectedEntity();
         if (selectedEntity.IsValid())
         {
             // Main Component
-
             auto &comps = m_Scene->registeredComps[selectedEntity];
 
             // ID Component
@@ -375,11 +354,8 @@ namespace ignite
 
             for (IComponent *comp : comps)
             {
-                ImGui::PushID(&*comp);
-
-                auto compType = comp->GetType();
-
-                switch (compType)
+                ImGui::PushID(comp);
+                switch (comp->GetType())
                 {
                 case CompType_Sprite2D:
                 {
@@ -408,10 +384,9 @@ namespace ignite
                             }
                         }
 
-                        bool textureRemoved = false;
-
                         if (c->texture)
                         {
+                            bool textureRemoved = false;
                             ImGui::SameLine();
 
                             if (ImGui::Button("X"))
@@ -424,7 +399,7 @@ namespace ignite
                             {
                                 ImGui::SameLine();
                                 const std::filesystem::path &displayFilepath = c->texture->GetFilepath().filename();
-                                ImGui::Text(displayFilepath.generic_string().c_str());
+                                ImGui::Text("%s", displayFilepath.generic_string().c_str());
                             }
                         }
 
@@ -1170,7 +1145,6 @@ namespace ignite
                                 anim.isPlaying = false;
                             }
 
-#if 0
                             ImGui::SameLine();
 
                             if (ImGui::Button("Save Animations"))
@@ -1186,7 +1160,6 @@ namespace ignite
                                     }
                                 }
                             }
-#endif
 
                             if (ImGui::TreeNodeEx("Animations", 0))
                             {
@@ -1213,6 +1186,7 @@ namespace ignite
                     });
                     break;
                 }
+                default: break;
                 }
 
                 ImGui::PopID();
@@ -1359,8 +1333,8 @@ namespace ignite
         m_ViewportData.rect.min = { canvasPos.x, canvasPos.y };
         m_ViewportData.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
 
-        uint32_t vpWidth = static_cast<uint32_t>(m_ViewportData.rect.GetSize().x);
-        uint32_t vpHeight = static_cast<uint32_t>(m_ViewportData.rect.GetSize().y);
+        const uint32_t vpWidth = static_cast<uint32_t>(m_ViewportData.rect.GetSize().x);
+        const uint32_t vpHeight = static_cast<uint32_t>(m_ViewportData.rect.GetSize().y);
 
         // Mouse position in screen space
         ImVec2 mousePos = ImGui::GetMousePos();
@@ -1374,26 +1348,22 @@ namespace ignite
         m_ViewportData.mousePos = localMouse;
 
         // trigger resize
-        if (vpWidth > 0 && vpHeight > 0 && (vpWidth != m_RenderTarget->GetWidth() || vpHeight != m_RenderTarget->GetHeight()))
+        if (vpWidth > 0 && vpHeight > 0
+            && (vpWidth != m_Scene->sceneRenderer->GetRenderTarget()->GetWidth()
+            || vpHeight != m_Scene->sceneRenderer->GetRenderTarget()->GetHeight())
+            )
         {
             // prevent resizing each frame
             // just when the mouse is not resizing
-            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) || m_Scene->sceneRenderer->ShouldResize())
             {
-                m_RenderTarget->Resize(vpWidth, vpHeight);
-                m_RenderTarget->CreateSingleFramebuffer();
-
+                m_Scene->sceneRenderer->Resize(vpWidth, vpHeight);
                 m_Camera.SetSize(static_cast<float>(vpWidth), static_cast<float>(vpHeight));
                 m_Camera.UpdateProjectionMatrix();
             }
         }
 
-        if (m_Scene && (m_Scene->viewportWidth != vpWidth || m_Scene->viewportHeight != vpHeight))
-        {
-            m_Scene->OnResize(vpWidth, vpHeight);
-        }
-
-        const ImTextureID imguiTex = reinterpret_cast<ImTextureID>(m_RenderTarget->GetColorAttachment(0).Get());
+        const ImTextureID imguiTex = reinterpret_cast<ImTextureID>(m_Scene->sceneRenderer->GetRenderTarget()->GetColorAttachment(0).Get());
         ImGui::Image(imguiTex, window->Size);
 
         if (ImGui::BeginDragDropTarget())

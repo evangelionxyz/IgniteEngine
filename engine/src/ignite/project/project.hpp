@@ -37,7 +37,7 @@ namespace ignite
         std::filesystem::path GetAssetFilepath(const std::filesystem::path &filepath) const;
         std::filesystem::path GetRelativeFilepath(const std::filesystem::path &filepath) const;
         
-        void SetActiveScene(const Ref<Scene> &scene);
+        void SetActiveScene(Scene *scene);
         bool BuildSolution();
         std::vector<std::pair<AssetHandle, AssetMetaData>> ValidateAssetRegistry();
 
@@ -92,7 +92,7 @@ namespace ignite
 
         AssetManager &GetAssetManager() { return m_AssetManager; }
         ProjectInfo &GetInfo() { return m_Info; }
-        const Ref<Scene> &GetActiveScene() { return m_ActiveScene; }
+        Scene *GetActiveScene() const { return m_ActiveScene; }
 
         static Project *GetActive();
         static Ref<Project> Create(const ProjectInfo &info);
@@ -102,9 +102,8 @@ namespace ignite
 
     private:
         void GenerateProject();
-        void SerializeAssetRegistry();
 
-        Ref<Scene> m_ActiveScene; // current active scene in editor
+        Scene *m_ActiveScene = nullptr; // current active scene in editor
         ProjectInfo m_Info;
 
         AssetManager m_AssetManager;

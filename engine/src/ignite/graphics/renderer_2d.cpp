@@ -29,10 +29,11 @@ namespace ignite
         }
     }
 
-    void Renderer2D::InitQuadData(nvrhi::ICommandList *commandList)
+    void Renderer2D::InitQuadData()
     {
         nvrhi::IDevice* device = Application::GetRenderDevice();
-
+        nvrhi::CommandListHandle commandList = device->createCommandList();
+        
         size_t vertAllocSize = s_Data->quadBatch.maxVertices * sizeof(Vertex2DQuad);
         s_Data->quadBatch.vertexBufferBase = new Vertex2DQuad[vertAllocSize];
 
@@ -108,10 +109,11 @@ namespace ignite
         s_Data->quadPositions[3] = { 0.5f, -0.5f, 0.0f, 1.0f }; // bottom-right
     }
 
-    void Renderer2D::InitLineData(nvrhi::ICommandList* commandList)
+    void Renderer2D::InitLineData()
     {
         nvrhi::IDevice* device = Application::GetRenderDevice();
-
+        nvrhi::CommandListHandle commandList = device->createCommandList();
+        
         size_t vertAllocSize = s_Data->lineBatch.maxVertices * sizeof(Vertex2DLine);
         s_Data->lineBatch.vertexBufferBase = new Vertex2DLine[vertAllocSize];
 
