@@ -51,7 +51,7 @@ namespace ignite
     
     void Mesh::CreateBindingSet()
     {
-        nvrhi::IDevice *device = Application::GetRenderDevice();
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
         auto desc = nvrhi::BindingSetDesc();
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraBufferHandle()));
@@ -79,7 +79,7 @@ namespace ignite
 
     void Mesh::WriteBuffers(uint32_t entityID)
     {
-        nvrhi::IDevice *device = Application::GetRenderDevice();
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
         nvrhi::CommandListHandle commandList = device->createCommandList();
 
         commandList->open();

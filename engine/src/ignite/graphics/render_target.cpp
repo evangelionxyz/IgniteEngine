@@ -14,7 +14,7 @@ namespace ignite {
     RenderTarget::RenderTarget(const RenderTargetCreateInfo &createInfo)
         : m_CreateInfo(createInfo)
     {
-        nvrhi::IDevice *device = Application::GetRenderDevice();
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
         
         for (auto &attachment : m_CreateInfo.attachments)
         {
@@ -85,7 +85,7 @@ namespace ignite {
                 m_FramebufferDesc.addColorAttachment(colorAttachment);
             }
 
-            nvrhi::IDevice *device = Application::GetRenderDevice();
+            nvrhi::IDevice *device = Application::GetGraphicsDevice();
             m_FramebufferHandle = device->createFramebuffer(m_FramebufferDesc);
             LOG_ASSERT(m_FramebufferHandle, "Failed to create render target framebuffer");
         }
@@ -93,7 +93,7 @@ namespace ignite {
 
     void RenderTarget::Resize(const uint32_t width, const uint32_t height)
     {
-        nvrhi::IDevice *device = Application::GetRenderDevice();
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
         m_CreateInfo.width = width;
         m_CreateInfo.height = height;

@@ -31,7 +31,7 @@ namespace ignite
 
     void Renderer2D::InitQuadData()
     {
-        nvrhi::IDevice* device = Application::GetRenderDevice();
+        nvrhi::IDevice* device = Application::GetGraphicsDevice();
         nvrhi::CommandListHandle commandList = device->createCommandList();
         
         size_t vertAllocSize = s_Data->quadBatch.maxVertices * sizeof(Vertex2DQuad);
@@ -111,7 +111,7 @@ namespace ignite
 
     void Renderer2D::InitLineData()
     {
-        nvrhi::IDevice* device = Application::GetRenderDevice();
+        nvrhi::IDevice* device = Application::GetGraphicsDevice();
         nvrhi::CommandListHandle commandList = device->createCommandList();
         
         size_t vertAllocSize = s_Data->lineBatch.maxVertices * sizeof(Vertex2DLine);
@@ -393,7 +393,7 @@ namespace ignite
 
     void Renderer2D::UpdateTextureBindings()
     {
-        nvrhi::IDevice* device = Application::GetRenderDevice();
+        nvrhi::IDevice* device = Application::GetGraphicsDevice();
 
         nvrhi::BindingSetDesc bindingSetDesc;
         bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraBufferHandle()));

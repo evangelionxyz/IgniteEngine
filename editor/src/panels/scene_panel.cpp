@@ -1363,7 +1363,7 @@ namespace ignite
             }
         }
 
-        const ImTextureID imguiTex = reinterpret_cast<ImTextureID>(m_Scene->sceneRenderer->GetRenderTarget()->GetColorAttachment(0).Get());
+        const ImTextureID imguiTex = reinterpret_cast<ImTextureID>(m_Scene->sceneRenderer->GetEdgeDetection().outputTexture.Get());
         ImGui::Image(imguiTex, window->Size);
 
         if (ImGui::BeginDragDropTarget())
@@ -1528,7 +1528,7 @@ namespace ignite
 
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 12.0f, 5.0f });
 
-        const ImVec2 buttonSize = { 20.0f, 20.0f };
+        constexpr ImVec2 buttonSize = { 20.0f, 20.0f };
         auto mode = m_Gizmo.GetMode();
         std::string gizmoModeStr = mode == ImGuizmo::MODE::LOCAL ? "LOCAL" : "WORLD";
         if (ImGui::Button(gizmoModeStr.c_str(), buttonSize))
@@ -1536,7 +1536,7 @@ namespace ignite
             m_Gizmo.SetMode(mode == ImGuizmo::MODE::LOCAL ? ImGuizmo::MODE::WORLD : ImGuizmo::MODE::LOCAL);
         }
 
-        auto sceneState = m_Editor->GetState().sceneState;
+        State sceneState = m_Editor->GetState().sceneState;
         const bool isScenePlaying = sceneState == ignite::State::ScenePlay;
         Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
         ImTextureID scenePlayStopID = reinterpret_cast<ImTextureID>(scenePlayStopTex->GetHandle().Get());
@@ -1545,11 +1545,13 @@ namespace ignite
         ImGui::Image(scenePlayStopID, buttonSize);
         if (ImGui::IsItemClicked())
         {
+            GLFWwindow *glfwWindow = Application::GetInstance()->GetDeviceManager()->GetWindow();
+            
             if (isScenePlaying)
             {
                 m_Editor->OnSceneStop();
 #if _WIN32
-                HWND hwnd = glfwGetWin32Window(Application::GetInstance()->GetDeviceManager()->GetWindow());
+                HWND hwnd = glfwGetWin32Window(glfwWindow);
                 COLORREF rgbRed = 0x00E86071;
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
 #endif
@@ -1558,7 +1560,7 @@ namespace ignite
             {
                 m_Editor->OnScenePlay();
 #if _WIN32
-                HWND hwnd = glfwGetWin32Window(Application::GetInstance()->GetDeviceManager()->GetWindow());
+                HWND hwnd = glfwGetWin32Window(glfwWindow);
                 COLORREF rgbRed = 0x000000AB;
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
 #endif
@@ -1573,11 +1575,12 @@ namespace ignite
         ImGui::Image(sceneSimulateID, buttonSize);
         if (ImGui::IsItemClicked())
         {
+            GLFWwindow *glfwWindow = Application::GetInstance()->GetDeviceManager()->GetWindow();
             if (isSceneSimulate)
             {
                 m_Editor->OnSceneStop();
 #if _WIN32
-                HWND hwnd = glfwGetWin32Window(Application::GetInstance()->GetDeviceManager()->GetWindow());
+                HWND hwnd = glfwGetWin32Window(glfwWindow);
                 COLORREF rgbRed = 0x00E86071;
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
 #endif
@@ -1586,7 +1589,7 @@ namespace ignite
             {
                 m_Editor->OnSceneSimulate();
 #if _WIN32
-                HWND hwnd = glfwGetWin32Window(Application::GetInstance()->GetDeviceManager()->GetWindow());
+                HWND hwnd = glfwGetWin32Window(glfwWindow);
                 COLORREF rgbRed = 0x000000AB;
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
 #endif
@@ -1596,6 +1599,16 @@ namespace ignite
         ImGui::PopStyleVar(1);
         
         ImGui::End();
+
+
+        // Camera Preview
+        // ImGui::SetNextWindowPos(canvasPos, ImGuiCond_Always);
+        // ImGui::SetNextWindowBgAlpha(0.8f);
+        // ImGui::Begin("Camera", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize);
+        // 
+        // ImGui::Image();
+        // 
+        // ImGui::End();
     }
 
     void ScenePanel::DebugRender()

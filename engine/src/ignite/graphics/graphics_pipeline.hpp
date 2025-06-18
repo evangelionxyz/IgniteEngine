@@ -41,7 +41,7 @@ namespace ignite {
         GraphicsPipeline() = default;
         GraphicsPipeline(const GraphicsPipelineParams &params, GraphicsPiplineCreateInfo *createInfo, nvrhi::BindingLayoutHandle bindingLayout);
 
-        GraphicsPipeline& AddShader(const std::string& filepath, nvrhi::ShaderType type, bool recompile = false);
+        GraphicsPipeline& AddShader(const std::string& filepath, nvrhi::ShaderType type, const std::string &entryPoint = "main", bool recompile = false);
         GraphicsPipeline& AddShader(nvrhi::ShaderHandle& handle, nvrhi::ShaderType type);
         void Build();
         void CreatePipeline(nvrhi::IFramebuffer *framebuffer);

@@ -48,7 +48,7 @@ namespace ignite {
 
     Environment::Environment()
     {
-        nvrhi::IDevice *device = Application::GetRenderDevice();
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
         // create vertex buffer
         nvrhi::BufferDesc vbDesc;
@@ -130,7 +130,7 @@ namespace ignite {
 
     void Environment::LoadTexture(const std::string &filepath)
     {
-        nvrhi::IDevice *device = Application::GetRenderDevice();
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
         TextureCreateInfo textureCI;
         textureCI.dimension = nvrhi::TextureDimension::Texture2D;

@@ -86,7 +86,7 @@ namespace ignite
         }
     }
 
-    void Application::ProcessMainThreadSubmissons()
+    void Application::ProcessMainThreadSubmissions()
     {
         while (!m_ThreadFuncs.empty())
         {
@@ -127,7 +127,7 @@ namespace ignite
             const f64 currTime = glfwGetTime();
             m_DeltaTime = static_cast<float>(currTime - m_PreviousTime);
 
-            ProcessMainThreadSubmissons();
+            ProcessMainThreadSubmissions();
 
             FmodAudio::Update(m_DeltaTime);
 
@@ -150,9 +150,12 @@ namespace ignite
                 ss << ")";
 
                 const f64 fps = 1.0 / m_AverageFrameTime;
+
                 const i32 precision = (fps <= 20.0) ? 1 : 0;
+
                 ss << " - " << std::fixed << std::setprecision(precision) << fps << " FPS ";
-                m_Window->SetTitle(ss.str().c_str());
+
+                m_Window->SetTitle(ss.str());
             }
 
             if (m_Window->IsVisible() && m_Window->IsInFocus())
@@ -266,7 +269,7 @@ namespace ignite
         return GetInstance()->m_CommandManager.get();
     }
 
-    nvrhi::IDevice* Application::GetRenderDevice()
+    nvrhi::IDevice* Application::GetGraphicsDevice()
     {
         return GetInstance()->m_Window->GetDeviceManager()->GetDevice();
     }

@@ -12,10 +12,14 @@ namespace ignite {
     {
     }
 
-    GraphicsPipeline& GraphicsPipeline::AddShader(const std::string& filepath, nvrhi::ShaderType type, bool recompile)
+    GraphicsPipeline& GraphicsPipeline::AddShader(const std::string& filepath, nvrhi::ShaderType type, const std::string &entryPoint, bool recompile)
     {
         ShaderMake::ShaderType shaderType = GetShaderMakeShaderType(type);
-        Ref<ShaderMake::ShaderContext> context = CreateRef<ShaderMake::ShaderContext>(filepath, shaderType, ShaderMake::ShaderContextDesc(), recompile);
+
+        ShaderMake::ShaderContextDesc desc;
+        desc.entryPoint = entryPoint;
+        
+        Ref<ShaderMake::ShaderContext> context = CreateRef<ShaderMake::ShaderContext>(filepath, shaderType, desc, recompile);
         m_ShaderContexts.push_back(std::move(context));
 
         m_NeedsToCompileShader = true;
@@ -81,7 +85,7 @@ namespace ignite {
                 pipelineDesc.addBindingLayout(m_BindingLayout);
 
             // create with the same framebuffer to be rendered
-            nvrhi::IDevice* device = Application::GetRenderDevice();
+            nvrhi::IDevice* device = Application::GetGraphicsDevice();
 
             m_Handle = device->createGraphicsPipeline(pipelineDesc, framebuffer);
             LOG_ASSERT(m_Handle, "Failed to create graphics pipeline");
@@ -95,7 +99,7 @@ namespace ignite {
 
     void GraphicsPipeline::Build()
     {
-        nvrhi::IDevice* device = Application::GetRenderDevice();
+        nvrhi::IDevice* device = Application::GetGraphicsDevice();
 
         if (m_NeedsToCompileShader)
         {

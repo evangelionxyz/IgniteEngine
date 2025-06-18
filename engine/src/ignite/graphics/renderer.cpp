@@ -30,7 +30,7 @@ namespace ignite
 
     void ShaderLibrary::Compile()
     {
-        nvrhi::IDevice *device = Application::GetRenderDevice();
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
         
         std::vector<Ref<ShaderMake::ShaderContext>> contexts;
         for (auto &shader : m_Shaders | std::views::values)

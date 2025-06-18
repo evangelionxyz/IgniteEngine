@@ -38,6 +38,8 @@ namespace ignite
         {
             case ShaderMake::ShaderType::Vertex: return "Vertex";
             case ShaderMake::ShaderType::Pixel: return "Pixel";
+            case ShaderMake::ShaderType::Geometry: return "Geometry";
+            case ShaderMake::ShaderType::Compute: return "Compute";
         }
 
         LOG_ASSERT(false, "Invalid shader type");
@@ -59,7 +61,7 @@ namespace ignite
 
     Shader::Shader(const std::filesystem::path &filepath, ShaderMake::ShaderType type, bool recompile)
     {
-        nvrhi::IDevice *device = Application::GetRenderDevice();
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
         CreateShaderCachedDirectoryIfNeeded();
 
         ShaderMake::ShaderBlob blob = CompileOrGetShader(filepath, type, recompile);

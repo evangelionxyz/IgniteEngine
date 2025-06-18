@@ -513,6 +513,8 @@ namespace ignite
             
             // Render GUI
             SettingsUI();
+
+            m_SceneRenderer.OnGuiRender();
         }
 
         ImGui::End(); // end dockspace

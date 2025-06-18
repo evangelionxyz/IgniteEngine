@@ -10,7 +10,7 @@ namespace ignite
     Texture::Texture(Buffer buffer, const TextureCreateInfo &createInfo)
         : m_CreateInfo(createInfo), m_Data(buffer.Data)
     {
-        nvrhi::IDevice *device = Application::GetRenderDevice();
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
         
         LOG_ASSERT(m_Data && buffer.Data, "[Texture] Pixel data is null");
 
@@ -74,7 +74,7 @@ namespace ignite
             }
         }
 
-        nvrhi::IDevice *device = Application::GetRenderDevice();
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
         const auto &textureDesc = nvrhi::TextureDesc()
             .setDimension(m_CreateInfo.dimension)

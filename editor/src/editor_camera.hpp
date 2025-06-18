@@ -8,7 +8,7 @@ namespace ignite
     {
     public:
         EditorCamera() = default;
-        EditorCamera(const std::string &name);
+        EditorCamera(std::string name);
 
     private:
         std::string m_Name;

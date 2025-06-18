@@ -24,6 +24,7 @@ namespace ignite
         case ShaderMake::ShaderType::Vertex: return nvrhi::ShaderType::Vertex;
         case ShaderMake::ShaderType::Pixel: return nvrhi::ShaderType::Pixel;
         case ShaderMake::ShaderType::Geometry: return nvrhi::ShaderType::Geometry;
+        case ShaderMake::ShaderType::Compute: return nvrhi::ShaderType::Compute;
         }
 
         LOG_ASSERT(false, "Invalid shader stage");
@@ -37,6 +38,7 @@ namespace ignite
         case nvrhi::ShaderType::Vertex: return ShaderMake::ShaderType::Vertex;
         case nvrhi::ShaderType::Pixel: return ShaderMake::ShaderType::Pixel;
         case nvrhi::ShaderType::Geometry: return ShaderMake::ShaderType::Geometry;
+        case nvrhi::ShaderType::Compute: return ShaderMake::ShaderType::Compute;
         }
 
         LOG_ASSERT(false, "Invalid shader stage");

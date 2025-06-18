@@ -66,7 +66,7 @@ namespace ignite
         static Application *GetInstance();
         static DeviceManager *GetDeviceManager();
         static CommandManager *GetCommandManager();
-        static nvrhi::IDevice *GetRenderDevice();
+        static nvrhi::IDevice *GetGraphicsDevice();
 
         static f32 GetDeltaTime();
 
@@ -79,7 +79,7 @@ namespace ignite
 
     private:
         void UpdateAverageTimeTime(f64 elapsedTime);
-        void ProcessMainThreadSubmissons();
+        void ProcessMainThreadSubmissions();
 
     protected:
         ApplicationCreateInfo m_CreateInfo;

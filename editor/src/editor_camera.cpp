@@ -2,9 +2,8 @@
 
 namespace ignite
 {
-
-    EditorCamera::EditorCamera(const std::string &name)
-        : m_Name(name)
+    EditorCamera::EditorCamera(std::string name)
+        : m_Name(std::move(name))
     {
     }
 
