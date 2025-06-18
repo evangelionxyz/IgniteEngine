@@ -60,6 +60,9 @@ namespace ignite
         static nvrhi::GraphicsAPI GetGraphicsAPI();
         static nvrhi::BindingLayoutHandle GetBindingLayout(GPipeline type);
 
+        static void OnUpdate();
+        static void Submit(const std::function<void(nvrhi::ICommandList *)>& func);
+
         static ShaderLibrary &GetShaderLibrary();
 
         static nvrhi::BufferHandle GetCameraBufferHandle();
@@ -74,5 +77,10 @@ namespace ignite
         Ref<Texture> m_BlackTexture;
 
         nvrhi::BufferHandle m_CameraBufferHandle;
+        nvrhi::CommandListHandle m_CommandList;
+        nvrhi::IDevice *m_Device;
+        std::vector<std::function<void(nvrhi::ICommandList *)>> m_SubmitFuncs;
+
+        friend class ShaderLibrary;
     };
 }

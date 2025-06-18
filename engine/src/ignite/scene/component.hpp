@@ -239,6 +239,9 @@ namespace ignite
      class SkinnedMesh : public IComponent
      {
      public:
+         AssetHandle animationHandle;
+         AssetHandle skeletonHandle;
+
          Skeleton skeleton;
          std::vector<glm::mat4> boneTransforms;
          std::vector<SkeletalAnimation> animations;
@@ -251,6 +254,17 @@ namespace ignite
          static CompType StaticType() { return CompType_SkinnedMesh; }
          virtual CompType GetType() override { return StaticType(); };
      };
+
+    class StaticMesh : public IComponent
+    {
+    public:
+        AssetHandle handle;
+
+        StaticMesh() = default;
+
+        static CompType StaticType() { return CompType_StaticMesh; }
+        virtual CompType GetType() override { return StaticType(); };
+    };
 
     class MeshRenderer : public IComponent
     {

@@ -60,7 +60,8 @@ namespace ignite
     void EditorLayer::OnUpdate(f32 deltaTime)
     {
         Layer::OnUpdate(deltaTime);
-        
+
+        Renderer::OnUpdate();
         AssetImporter::SyncMainThread();
 
         if (!m_ActiveScene)

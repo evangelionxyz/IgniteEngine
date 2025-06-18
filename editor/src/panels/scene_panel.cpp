@@ -1040,9 +1040,18 @@ namespace ignite
                                 const std::filesystem::path filepath = FileDialogs::OpenFile("Image Files (*.jpg,*.jpeg,*.png)\0*.jpg;*.jpeg;*.png");
                                 if (!filepath.empty())
                                 {
+                                    nvrhi::IDevice *device = Application::GetGraphicsDevice();
+
                                     TextureCreateInfo createInfo;
                                     createInfo.format = nvrhi::Format::RGBA8_UNORM;
                                     Ref<Texture> texture = Texture::Create(filepath, createInfo);
+
+                                    nvrhi::CommandListHandle commandList = device->createCommandList();
+                                    commandList->open();
+                                    texture->Write(commandList);
+                                    commandList->close();
+                                    device->executeCommandList(commandList);
+
                                     c->mesh->UpdateTexture(texture, aiTextureType_BASE_COLOR);
                                 }
                             }

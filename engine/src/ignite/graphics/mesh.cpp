@@ -103,7 +103,7 @@ namespace ignite
         device->executeCommandList(commandList);
     }
 
-    void Mesh::UpdateTexture(Ref<Texture> texture, aiTextureType type)
+    void Mesh::UpdateTexture(const Ref<Texture>& texture, aiTextureType type)
     {
         if (!texture)
             return;

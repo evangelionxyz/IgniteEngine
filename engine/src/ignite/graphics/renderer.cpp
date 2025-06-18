@@ -49,14 +49,14 @@ namespace ignite
         {
             for (auto &[type, shader] : shader)
             {
-                shader.handle = device->createShader(type,
-                shader.context->blob.data.data(),
-                shader.context->blob.dataSize());
+                shader.handle = s_instance->m_Device->createShader(type,
+                    shader.context->blob.data.data(),
+                    shader.context->blob.dataSize());
             }
         }
     }
 
-    void ShaderLibrary::Load(const std::string& name, const std::string& filepath)
+    void ShaderLibrary::Load(const std::string &name, const std::string &filepath)
     {
         if (!Exists(name))
         {
@@ -67,12 +67,12 @@ namespace ignite
         }
     }
 
-    bool ShaderLibrary::Exists(const std::string& name) const
+    bool ShaderLibrary::Exists(const std::string &name) const
     {
         return m_Shaders.contains(name);
     }
 
-    std::unordered_map<nvrhi::ShaderType, ShaderHandleContext> ShaderLibrary::Get(const std::string& name)
+    std::unordered_map<nvrhi::ShaderType, ShaderHandleContext> ShaderLibrary::Get(const std::string &name)
     {
         if (Exists(name))
             return m_Shaders[name];
@@ -89,7 +89,8 @@ namespace ignite
         s_instance = this;
         m_GraphicsAPI = api;
 
-        nvrhi::IDevice *device = deviceManager->GetDevice();
+        s_instance->m_Device = deviceManager->GetDevice();
+        s_instance->m_CommandList = s_instance->m_Device->createCommandList();
 
         {
             TextureCreateInfo textureCI;
@@ -100,24 +101,23 @@ namespace ignite
             textureCI.height = 1;
             textureCI.flip = false;
 
-            nvrhi::CommandListHandle commandList = device->createCommandList();
-            commandList->open();
+            s_instance->m_CommandList->open();
 
             u32 white = 0xFFFFFFFF;
             m_WhiteTexture = Texture::Create(Buffer(&white, sizeof(u32)), textureCI);
-            m_WhiteTexture->Write(commandList);
+            m_WhiteTexture->Write(s_instance->m_CommandList);
 
             u32 black = 0x00000000;
             m_BlackTexture = Texture::Create(Buffer(&black, sizeof(u32)), textureCI);
-            m_BlackTexture->Write(commandList);
-            commandList->close();
-            device->executeCommandList(commandList);
+            m_BlackTexture->Write(s_instance->m_CommandList);
+            s_instance->m_CommandList->close();
+            s_instance->m_Device->executeCommandList(s_instance->m_CommandList);
         }
 
         // Create shaders
         {
             m_ShaderLibrary.Init(m_GraphicsAPI);
-            
+
             m_ShaderLibrary.Load("batch_2d_quad", "batch_2d_quad");
             m_ShaderLibrary.Load("batch_2d_line", "batch_2d_line");
             m_ShaderLibrary.Load("imgui", "imgui");
@@ -127,10 +127,10 @@ namespace ignite
         }
 
         // Create binding layouts
-        m_BindingLayouts[GPipeline::MESH] = device->createBindingLayout(VertexMesh::GetBindingLayoutDesc());
-        m_BindingLayouts[GPipeline::QUAD2D] = device->createBindingLayout(Vertex2DQuad::GetBindingLayoutDesc());
-        m_BindingLayouts[GPipeline::LINE] = device->createBindingLayout(Vertex2DLine::GetBindingLayoutDesc());
-        m_BindingLayouts[GPipeline::ENVIRONMENT] = device->createBindingLayout(Environment::GetBindingLayoutDesc());
+        m_BindingLayouts[GPipeline::MESH] = s_instance->m_Device->createBindingLayout(VertexMesh::GetBindingLayoutDesc());
+        m_BindingLayouts[GPipeline::QUAD2D] = s_instance->m_Device->createBindingLayout(Vertex2DQuad::GetBindingLayoutDesc());
+        m_BindingLayouts[GPipeline::LINE] = s_instance->m_Device->createBindingLayout(Vertex2DLine::GetBindingLayoutDesc());
+        m_BindingLayouts[GPipeline::ENVIRONMENT] = s_instance->m_Device->createBindingLayout(Environment::GetBindingLayoutDesc());
 
 
         // Create camera constant buffer
@@ -143,7 +143,7 @@ namespace ignite
         cameraConstantBufferDesc.keepInitialState = true;
         cameraConstantBufferDesc.maxVersions = 16;
 
-        m_CameraBufferHandle = device->createBuffer(cameraConstantBufferDesc);
+        m_CameraBufferHandle = s_instance->m_Device->createBuffer(cameraConstantBufferDesc);
         LOG_ASSERT(m_CameraBufferHandle, "[Renderer] Failed to create constant buffer");
 
         Renderer2D::Init();
@@ -166,6 +166,24 @@ namespace ignite
             return s_instance->m_BindingLayouts[type];
 
         return nullptr;
+    }
+
+    void Renderer::OnUpdate()
+    {
+        s_instance->m_CommandList->open();
+
+        for (const auto &func : s_instance->m_SubmitFuncs)
+            func(s_instance->m_CommandList);
+
+        s_instance->m_CommandList->close();
+        s_instance->m_Device->executeCommandList(s_instance->m_CommandList);
+
+        s_instance->m_SubmitFuncs.clear();
+    }
+
+    void Renderer::Submit(const std::function<void(nvrhi::ICommandList*)>& func)
+    {
+        s_instance->m_SubmitFuncs.push_back(std::move(func));
     }
 
     ShaderLibrary &Renderer::GetShaderLibrary()
