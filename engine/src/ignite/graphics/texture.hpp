@@ -364,6 +364,7 @@ namespace ignite
 
         nvrhi::TextureHandle GetHandle() { return m_Handle; }
         nvrhi::SamplerHandle GetSampler() { return m_Sampler; }
+        void Write(nvrhi::ICommandList *commandList);
 
         i32 GetWidth() const { return m_CreateInfo.width; }
         i32 GetHeight() const { return m_CreateInfo.height; }
@@ -380,7 +381,6 @@ namespace ignite
         virtual AssetType GetType() override { return GetStaticType(); }
 
     private:
-        void Write(nvrhi::ICommandList *commandList);
 
         void *m_Data = nullptr;
         bool m_WithSTBI = false;

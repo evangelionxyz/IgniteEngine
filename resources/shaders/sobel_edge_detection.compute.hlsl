@@ -1,19 +1,26 @@
-// Constant buffer for parameters
+﻿// Constant buffer for parameters
 cbuffer EdgeDetectionParams : register(b0)
 {
     float2 texelSize; // 1.0 / textureSize
-    float edgeThreshold; // Edge detection sensitivity
-    float outlineWidth; // Outline thickness multiplier
-    float4 outlineColor; // Outline color (RGB + intensity)
-    float depthSensitivity; // Depth edge sensitivity
-    int useObjectID; // Use object ID buffer for selection
-    float padding[1]; // Pad to 16-byte alignment
+    float edgeThreshold; // Sobel threshold
+    float outlineWidth; // Thickness multiplier
+
+    float4 outlineColor; // RGBA
+
+    float depthSensitivity; // Depth edge weight
+    int useObjectID; // 0 = ignore ID buffer
+    uint selectedCount; // how many ids in list
+
+    uint _padding; // pad to 16‑byte boundary
 };
 
 // Input textures
 Texture2D<float4> sceneTexture : register(t0); // main scene color
 Texture2D<float> depthTexture : register(t1); // depth buffer
 Texture2D<uint> objectIDTexture : register(t2); // object ID buffer
+
+// Selected object IDs
+StructuredBuffer<uint> selectedIDs : register(t3);
 
 // Output texture (for compute shader)
 RWTexture2D<float4> outputTexture : register(u0); // output texture
@@ -53,7 +60,7 @@ float2 SobelColor(float2 uv)
     float sobelYResult = 0.0f;
 
     [unroll]
-    for (int i = 0; i < 9; ++i)
+    for (int i = 0; i < 9; i++)
     {
         float2 sampleUV = uv + offsets[i] * texelSize;
         float3 color = sceneTexture.SampleLevel(linearSampler, sampleUV, 0).rgb; // Use red channel for luminance
@@ -66,14 +73,13 @@ float2 SobelColor(float2 uv)
     return float2(sobelXResult, sobelYResult);
 }
 
-
 float2 SobelDepth(float2 uv)
 {
     float sobelXResult = 0;
     float sobelYResult = 0;
     
     [unroll]
-    for (int i = 0; i < 9; ++i)
+    for (int i = 0; i < 9; i++)
     {
         float2 sampleUV = uv + offsets[i] * texelSize;
         float depth = depthTexture.SampleLevel(linearSampler, sampleUV, 0).r;
@@ -85,33 +91,42 @@ float2 SobelDepth(float2 uv)
     return float2(sobelXResult, sobelYResult) * depthSensitivity;
 }
 
+bool IsIDSelected(uint id)
+{
+    if (id == 0xFFFFFFFFu)
+        return false;
+    
+    [loop]
+    for (uint i = 0; i < selectedCount; i++)
+    {
+        if (selectedIDs[i] == id)
+            return true;
+    }
+    
+    return false;
+}
+
 // Check if pixel is part of selected object
-bool IsSelectedObject(float2 uv, float2 texSize)
+bool IsSelectedObject(int2 pixelCoord, float2 texSize)
 {    
-    int2 pixelCoord = int2(uv * texSize);
     uint centerID = objectIDTexture.Load(int3(pixelCoord, 0.0));
     
-    if (centerID == -1)
+    // background -> no outline
+    if (!IsIDSelected(centerID))
         return false;
 
-     // Check if any neighboring pixel has different object ID
+    // look for a neighbour with a different ID (or background)
     [unroll]
     for (int i = 0; i < 9; i++)
     {
-        if (i == 4)
-            continue; // Skip center pixel
-        
-        int2 neighborCoord = pixelCoord + int2(offsets[i]);
-        
-        // Bounds check
-        if (neighborCoord.x < 0 || neighborCoord.y < 0 ||
-            neighborCoord.x >= texSize.x || neighborCoord.y >= texSize.y)
+        int2 n = pixelCoord + int2(offsets[i]);
+        if (n.x < 0 || n.y < 0 || n.x >= (int)texSize.x || n.y >= (int)texSize.y)
             continue;
             
-        uint neighborID = objectIDTexture.Load(int3(neighborCoord, 0));
+        uint nid = objectIDTexture.Load(int3(n, 0));
         
         // Edge detected if neighbor has different ID or is background
-        if (neighborID != centerID)
+        if (nid != centerID)
             return true;
     }
 
@@ -120,41 +135,32 @@ bool IsSelectedObject(float2 uv, float2 texSize)
 
 // Compute Shader
 [numthreads(8, 8, 1)]
-void main(uint3 id : SV_DISPATCHTHREADID)
+void main(uint3 dispatchId : SV_DISPATCHTHREADID)
 {
     uint2 texSize;
     outputTexture.GetDimensions(texSize.x, texSize.y);
 
-    if (id.x >= texSize.x || id.y >= texSize.y)
+    if (dispatchId.x >= texSize.x || dispatchId.y >= texSize.y)
         return; // Out of bounds
-
-    float2 uv = (float2(id.xy) + 0.5f) * texelSize; // Center pixel UV
+    
+    int2 pixel = int2(dispatchId.xy);
+    float2 uv = (float2(pixel) + 0.5f) * texelSize; // Center pixel UV
 
     // Sample original color
-    float4 originalColor = sceneTexture.SampleLevel(linearSampler, uv, 0);
+    float4 baseColor = sceneTexture.SampleLevel(linearSampler, uv, 0);
 
     // Check if this pixel should have outline
-    bool shouldOutline = IsSelectedObject(uv, float2(texSize));
-
-    if (!shouldOutline)
+    if (!IsSelectedObject(pixel, float2(texSize)))
     {
-        outputTexture[id.xy] = originalColor; // No outline, just copy original color
+        outputTexture[pixel] = baseColor;
         return;
     }
 
-    // Perform Sobel edge detection
+    // Sobel on color & depth
     float2 colorEdge = SobelColor(uv);
-    float2 depthEdge = SobelDepth(uv);
-    
-    // combile the result
-    float2 totalEdge = colorEdge + depthEdge;
-    float edgeIntensity = length(totalEdge);
+    float2 depthEdge = SobelDepth(uv) * depthSensitivity;
+    float edgeIntensity = length(colorEdge + depthEdge);
+    float outline = saturate(step(edgeThreshold, edgeIntensity) * outlineWidth);
 
-    // Apply threashold and create outline
-    float outline = step(edgeThreshold, edgeIntensity);
-    outline *= outlineWidth; // Scale by outline width
-    outline = saturate(outline); // Clamp to [0, 1]
-
-    // Blend outline with original color
-    outputTexture[id.xy] = lerp(originalColor, outlineColor, outline * outlineColor.a);
+    outputTexture[pixel] = lerp(baseColor, outlineColor, outline * outlineColor.a);
 }

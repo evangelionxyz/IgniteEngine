@@ -100,12 +100,18 @@ namespace ignite
             textureCI.height = 1;
             textureCI.flip = false;
 
+            nvrhi::CommandListHandle commandList = device->createCommandList();
+            commandList->open();
+
             u32 white = 0xFFFFFFFF;
             m_WhiteTexture = Texture::Create(Buffer(&white, sizeof(u32)), textureCI);
+            m_WhiteTexture->Write(commandList);
 
             u32 black = 0x00000000;
             m_BlackTexture = Texture::Create(Buffer(&black, sizeof(u32)), textureCI);
-            
+            m_BlackTexture->Write(commandList);
+            commandList->close();
+            device->executeCommandList(commandList);
         }
 
         // Create shaders

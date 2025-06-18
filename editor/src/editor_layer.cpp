@@ -277,8 +277,7 @@ namespace ignite
                 auto view = m_ActiveScene->registry->view<Transform>();
                 for (entt::entity e : view)
                 {
-                    uint32_t eId = static_cast<uint32_t>(e);
-                    if (eId == m_Data.hoveredEntity)
+                    if (uint32_t eId = static_cast<uint32_t>(e); eId == m_Data.hoveredEntity)
                     {
                         m_ScenePanel->SetSelectedEntity(Entity{ e, m_ActiveScene.get() });
                         found = true;

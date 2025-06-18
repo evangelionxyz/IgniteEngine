@@ -62,6 +62,15 @@ namespace ignite
         m_Icons["play"] = Texture::Create("resources/ui/ic_play.png", createInfo);
         m_Icons["stop"] = Texture::Create("resources/ui/ic_stop.png", createInfo);
         m_Icons["checker128"] = Texture::Create("resources/ui/checker-128px.jpg", createInfo);
+
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+
+        nvrhi::CommandListHandle commandList = device->createCommandList();
+        commandList->open();
+        for (auto &tex : m_Icons | std::views::values)
+            tex->Write(commandList);
+        commandList->close();
+        device->executeCommandList(commandList);
     }
 
     void ScenePanel::SetActiveScene(Scene *scene)
@@ -1363,8 +1372,8 @@ namespace ignite
             }
         }
 
-        const ImTextureID imguiTex = reinterpret_cast<ImTextureID>(m_Scene->sceneRenderer->GetEdgeDetection().outputTexture.Get());
-        ImGui::Image(imguiTex, window->Size);
+        const ImTextureID tex = reinterpret_cast<ImTextureID>(m_Scene->sceneRenderer->GetEdgeDetection().outputTexture.Get());
+        ImGui::Image(tex, window->Size);
 
         if (ImGui::BeginDragDropTarget())
         {
@@ -1927,36 +1936,41 @@ namespace ignite
         {
             m_SelectedEntities.clear();
             m_TrackingSelectedEntity = UUID(0);
+
+            m_Scene->sceneRenderer->ClearSelectedEntities();
             return {};
         }
 
         // multi select
         if (m_Editor->GetState().multiSelect)
         {
-            auto it = m_SelectedEntities.find(entity.GetUUID());
-            if (it != m_SelectedEntities.end())
+            if (auto it = m_SelectedEntities.find(entity.GetUUID()); it != m_SelectedEntities.end())
             {
                 // deselect
+                m_Scene->sceneRenderer->UnselectEntity(it->second);
                 it = m_SelectedEntities.erase(it);
                 
                 if (!m_SelectedEntities.empty())
                 {
                     m_TrackingSelectedEntity = m_SelectedEntities.begin()->first;
+                    m_Scene->sceneRenderer->SetSelectedEntity(m_SelectedEntities.begin()->second);
+                    
                     return m_SelectedEntities.begin()->second;
                 }
             }
             else
             {
                 m_SelectedEntities[entity.GetUUID()] = entity;
+                m_Scene->sceneRenderer->SetSelectedEntity(entity);
             }
         }
         else // single select
         {
-            // clear first
-            if (!m_SelectedEntities.empty())
-                m_SelectedEntities.clear();
+            m_SelectedEntities.clear();
+            m_Scene->sceneRenderer->ClearSelectedEntities();
 
             m_SelectedEntities[entity.GetUUID()] = entity;
+            m_Scene->sceneRenderer->SetSelectedEntity(entity);
         }
 
         if (m_SelectedEntities.empty())

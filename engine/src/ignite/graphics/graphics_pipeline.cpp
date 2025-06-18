@@ -94,7 +94,7 @@ namespace ignite {
 
     void GraphicsPipeline::ResetHandle()
     {
-        m_Handle.Reset();
+        m_Handle = nullptr;
     }
 
     void GraphicsPipeline::Build()

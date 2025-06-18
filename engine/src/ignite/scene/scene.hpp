@@ -38,7 +38,6 @@ namespace ignite
         
         void OnUpdateRuntimeSimulate(f32 deltaTime);
         void OnUpdateEdit(f32 deltaTime);
-
         void Resize(uint32_t width, uint32_t height);
 
         template<typename T>

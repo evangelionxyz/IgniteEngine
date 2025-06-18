@@ -14,6 +14,15 @@ namespace ignite {
         createInfo.format = nvrhi::Format::RGBA8_UNORM;
         m_Icons["folder"] = Texture::Create("resources/ui/ic_folder.png", createInfo);
         m_Icons["unknown"] = Texture::Create("resources/ui/ic_file.png", createInfo);
+
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+
+        nvrhi::CommandListHandle commandList = device->createCommandList();
+        commandList->open();
+        for (auto &tex : m_Icons | std::views::values)
+            tex->Write(commandList);
+        commandList->close();
+        device->executeCommandList(commandList);
     }
 
     void ContentBrowserPanel::SetActiveProject(const Ref<Project> &project)

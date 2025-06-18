@@ -248,6 +248,7 @@ namespace ignite {
         if (m_Future.valid() && m_Future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
         {
             nvrhi::IDevice *device = Application::GetGraphicsDevice();
+
             nvrhi::CommandListHandle commandList = device->createCommandList(); 
             
             Ref<Environment> env = m_Future.get();

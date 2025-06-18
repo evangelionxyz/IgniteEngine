@@ -153,6 +153,8 @@ namespace ignite {
     void Environment::WriteBuffer(nvrhi::ICommandList *commandList)
     {
         // write buffers
+        m_HDRTexture->Write(commandList);
+
         commandList->writeBuffer(m_VertexBuffer, vertices.data(), sizeof(vertices));
 
         u32 *indices = new u32[36];
