@@ -145,7 +145,7 @@ namespace ignite
         std::filesystem::path coreAssemblyFilepath;
         std::filesystem::path appAssemblyFilepath;
 
-        std::unique_ptr<filewatch::FileWatch<std::string>> appAssemblyFilewatcher;
+        std::unique_ptr<filewatch::FileWatch<std::string>> appAssemblyFileWatcher;
         bool assemblyReloadingPending = false;
 
         Scene *scene = nullptr;
@@ -211,8 +211,9 @@ namespace ignite
         InitMono();
 
         // Script Core Assembly
-        LOG_ASSERT(std::filesystem::exists("IgniteScript.dll"), "[Script Engine] Script core assembly not found!");
-        LoadAssembly("IgniteScript.dll");
+        const std::filesystem::path coreAssemblyPath = "lib/IgniteScript.dll";
+        LOG_ASSERT(std::filesystem::exists(coreAssemblyPath), "[Script Engine] Script core assembly not found!");
+        LoadAssembly(coreAssemblyPath);
 
         LoadAppAssembly(appAssemblyPath);
         LoadAppAssemblyClasses();
@@ -288,7 +289,7 @@ namespace ignite
                 if (scriptEngineData->scene && scriptEngineData->scene->IsPlaying())
                     return false;
                 
-                scriptEngineData->appAssemblyFilewatcher.reset();
+                scriptEngineData->appAssemblyFileWatcher.reset();
                 ScriptEngine::ReloadAssembly();
 
                 return true;
@@ -315,7 +316,7 @@ namespace ignite
         }
 
         scriptEngineData->appAssemblyImage = mono_assembly_get_image(scriptEngineData->appAssembly);
-        scriptEngineData->appAssemblyFilewatcher = std::make_unique<filewatch::FileWatch<std::string>>(filepath.string(), OnAppAssemblyFileSystemEvent);
+        scriptEngineData->appAssemblyFileWatcher = std::make_unique<filewatch::FileWatch<std::string>>(filepath.string(), OnAppAssemblyFileSystemEvent);
         scriptEngineData->assemblyReloadingPending = false;
 
         return true;

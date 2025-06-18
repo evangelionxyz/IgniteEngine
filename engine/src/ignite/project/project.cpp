@@ -28,18 +28,18 @@ namespace ignite
     --
     filter { "configurations:Debug" }
         local igniteBin = path.join(os.getenv("IgniteEngine"), "bin/Debug")
-        links     { path.join(igniteBin, "IgniteScript.dll") }
-        -- copylocal { path.join(igniteBin, "IgniteScript.dll") }   -- optional
+        links     { path.join(igniteBin, "/lib/IgniteScript.dll") }
+        -- copylocal { path.join(igniteBin, "/lib/IgniteScript.dll") }   -- optional
 
     filter { "configurations:Release" }
         local igniteBin = path.join(os.getenv("IgniteEngine"), "bin/Release")
-        links     { path.join(igniteBin, "IgniteScript.dll") }
-        -- copylocal { path.join(igniteBin, "IgniteScript.dll") }
+        links     { path.join(igniteBin, "/lib/IgniteScript.dll") }
+        -- copylocal { path.join(igniteBin, "/lib/IgniteScript.dll") }
 
     filter { "configurations:Dist" }
         local igniteBin = path.join(os.getenv("IgniteEngine"), "bin/Dist")
-        links     { path.join(igniteBin, "IgniteScript.dll") }
-        -- copylocal { path.join(igniteBin, "IgniteScript.dll") }
+        links     { path.join(igniteBin, "/lib/IgniteScript.dll") }
+        -- copylocal { path.join(igniteBin, "/lib/IgniteScript.dll") }
 
     filter {}            -- clear filters
 
