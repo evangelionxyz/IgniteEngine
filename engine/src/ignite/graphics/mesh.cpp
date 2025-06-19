@@ -49,7 +49,7 @@ namespace ignite
         LOG_ASSERT(materialBufferHandle, "[Model] Failed to create material constant buffer");
     }
     
-    void Mesh::CreateBindingSet()
+    void Mesh::UpdateBindingSet()
     {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
@@ -60,13 +60,13 @@ namespace ignite
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, environment->GetParamsBuffer()));
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, materialBufferHandle));
 
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, material.textures[aiTextureType_BASE_COLOR].handle ? material.textures[aiTextureType_BASE_COLOR].handle : Renderer::GetWhiteTexture()->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, material.textures[aiTextureType_SPECULAR].handle ? material.textures[aiTextureType_SPECULAR].handle : Renderer::GetWhiteTexture()->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, material.textures[aiTextureType_EMISSIVE].handle ? material.textures[aiTextureType_EMISSIVE].handle : Renderer::GetWhiteTexture()->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, material.textures[aiTextureType_DIFFUSE_ROUGHNESS].handle ? material.textures[aiTextureType_DIFFUSE_ROUGHNESS].handle : Renderer::GetWhiteTexture()->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, material.textures[aiTextureType_BASE_COLOR].handle ? material.textures[aiTextureType_BASE_COLOR].handle : Renderer::GetBlackTexture()->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, material.textures[aiTextureType_SPECULAR].handle ? material.textures[aiTextureType_SPECULAR].handle : Renderer::GetBlackTexture()->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, material.textures[aiTextureType_EMISSIVE].handle ? material.textures[aiTextureType_EMISSIVE].handle : Renderer::GetBlackTexture()->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, material.textures[aiTextureType_DIFFUSE_ROUGHNESS].handle ? material.textures[aiTextureType_DIFFUSE_ROUGHNESS].handle : Renderer::GetBlackTexture()->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, material.textures[aiTextureType_NORMALS].handle ? material.textures[aiTextureType_NORMALS].handle : Renderer::GetWhiteTexture()->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, environment->GetHDRTexture()));
-        desc.addItem(nvrhi::BindingSetItem::Sampler(0, material.sampler ? material.sampler : Renderer::GetWhiteTexture()->GetSampler()));
+        desc.addItem(nvrhi::BindingSetItem::Sampler(0, material.sampler ? material.sampler : Renderer::GetBlackTexture()->GetSampler()));
 
         auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GPipeline::MESH));
         LOG_ASSERT(newBindingSet, "Failed to create binding set");
@@ -114,6 +114,6 @@ namespace ignite
         }
 
         material.textures[type].handle = texture->GetHandle();
-        CreateBindingSet();
+        UpdateBindingSet();
     }
 }

@@ -1033,6 +1033,8 @@ namespace ignite
                             ImGui::ColorEdit4("Base Color", &c->mesh->material.data.baseColor.x);
                             
                             auto checkerTex = m_Icons["checker128"]->GetHandle().Get();
+
+                            // Base color texture (Diffuse texture)
                             auto baseColorTex = c->mesh->material.textures[aiTextureType_BASE_COLOR].handle ? c->mesh->material.textures[aiTextureType_BASE_COLOR].handle.Get() : checkerTex;
                             ImTextureID texId = reinterpret_cast<ImTextureID>(baseColorTex);
                             if (ImGui::ImageButton("Base Color Texture", texId, imageSize))
@@ -1077,51 +1079,130 @@ namespace ignite
 
                                 ImGui::EndDragDropTarget();
                             }
+                            ImGui::SameLine();
+                            ImGui::Text("Base Texture");
 
-                            ImGui::DragFloat("Metallic", &c->mesh->material.data.metallic, 0.025f, 0.0f, 1.0f);
-                            auto metalTex = c->mesh->material.textures[aiTextureType_SPECULAR].handle ? c->mesh->material.textures[aiTextureType_SPECULAR].handle.Get() : checkerTex;
-                            texId = reinterpret_cast<ImTextureID>(metalTex);
+                            // Normal texture
+                            auto normalTex = c->mesh->material.textures[aiTextureType_NORMALS].handle ? c->mesh->material.textures[aiTextureType_NORMALS].handle.Get() : checkerTex;
+                            texId = reinterpret_cast<ImTextureID>(normalTex);
+                            if (ImGui::ImageButton("Normal Texture", texId, imageSize))
+                            {
+                                const std::filesystem::path filepath = FileDialogs::OpenFile("Image Files (*.jpg,*.jpeg,*.png)\0*.jpg;*.jpeg;*.png");
+                                if (!filepath.empty())
+                                {
+                                    nvrhi::IDevice *device = Application::GetGraphicsDevice();
+
+                                    TextureCreateInfo createInfo;
+                                    createInfo.format = nvrhi::Format::RGBA8_UNORM;
+                                    Ref<Texture> texture = Texture::Create(filepath, createInfo);
+
+                                    nvrhi::CommandListHandle commandList = device->createCommandList();
+                                    commandList->open();
+                                    texture->Write(commandList);
+                                    commandList->close();
+                                    device->executeCommandList(commandList);
+
+                                    c->mesh->UpdateTexture(texture, aiTextureType_NORMALS);
+                                }
+                            }
+                            ImGui::SameLine();
+                            ImGui::Text("Normal Texture");
+
+                            // Specular texture
+                            ImGui::DragFloat("Specular", &c->mesh->material.data.specularFactor, 0.025f, 0.0f, 1.0f);
+                            auto specularTex = c->mesh->material.textures[aiTextureType_SPECULAR].handle ? c->mesh->material.textures[aiTextureType_SPECULAR].handle.Get() : checkerTex;
+                            texId = reinterpret_cast<ImTextureID>(specularTex);
                             if (ImGui::ImageButton("Specular Texture", texId, imageSize))
                             {
                                 const std::filesystem::path filepath = FileDialogs::OpenFile("Image Files (*.jpg,*.jpeg,*.png)\0*.jpg;*.jpeg;*.png");
                                 if (!filepath.empty())
                                 {
+                                    nvrhi::IDevice *device = Application::GetGraphicsDevice();
+
                                     TextureCreateInfo createInfo;
                                     createInfo.format = nvrhi::Format::RGBA8_UNORM;
                                     Ref<Texture> texture = Texture::Create(filepath, createInfo);
+
+                                    nvrhi::CommandListHandle commandList = device->createCommandList();
+                                    commandList->open();
+                                    texture->Write(commandList);
+                                    commandList->close();
+                                    device->executeCommandList(commandList);
+
                                     c->mesh->UpdateTexture(texture, aiTextureType_SPECULAR);
                                 }
                             }
+                            ImGui::SameLine();
+                            ImGui::Text("Specular Texture");
 
-                            ImGui::DragFloat("Roughness", &c->mesh->material.data.roughness, 0.025f, 0.0f, 1.0f);
+                            // Metalness and Roughness texture
+                            ImGui::DragFloat("Metallic Factor", &c->mesh->material.data.metallicFactor, 0.025f, 0.0f, 1.0f);
+                            if (ImGui::IsItemHovered())
+                            {
+                                ImGui::BeginTooltip();
+                                ImGui::Text("B channel of texture");
+                                ImGui::EndTooltip();
+                            }
+
+                            ImGui::DragFloat("Roughness Factor", &c->mesh->material.data.roughnessFactor, 0.025f, 0.0f, 1.0f);
+                            if (ImGui::IsItemHovered())
+                            {
+                                ImGui::BeginTooltip();
+                                ImGui::Text("G channel of texture");
+                                ImGui::EndTooltip();
+                            }
+
                             auto roughnessTex = c->mesh->material.textures[aiTextureType_DIFFUSE_ROUGHNESS].handle ? c->mesh->material.textures[aiTextureType_DIFFUSE_ROUGHNESS].handle.Get() : checkerTex;
                             texId = reinterpret_cast<ImTextureID>(roughnessTex);
-                            if (ImGui::ImageButton("Roughness Texture", texId, imageSize))
+                            if (ImGui::ImageButton("Metallic & Roughness Texture", texId, imageSize))
                             {
                                 const std::filesystem::path filepath = FileDialogs::OpenFile("Image Files (*.jpg,*.jpeg,*.png)\0*.jpg;*.jpeg;*.png");
                                 if (!filepath.empty())
                                 {
+                                    nvrhi::IDevice *device = Application::GetGraphicsDevice();
+
                                     TextureCreateInfo createInfo;
                                     createInfo.format = nvrhi::Format::RGBA8_UNORM;
                                     Ref<Texture> texture = Texture::Create(filepath, createInfo);
+
+                                    nvrhi::CommandListHandle commandList = device->createCommandList();
+                                    commandList->open();
+                                    texture->Write(commandList);
+                                    commandList->close();
+                                    device->executeCommandList(commandList);
+
                                     c->mesh->UpdateTexture(texture, aiTextureType_DIFFUSE_ROUGHNESS);
                                 }
                             }
+                            ImGui::SameLine();
+                            ImGui::Text("Metallic & Roughness Texture");
 
-                            ImGui::DragFloat("Emissive", &c->mesh->material.data.emissive, 0.025f, 0.0f, 1.0f);
-                            auto emmisiveTex = c->mesh->material.textures[aiTextureType_EMISSIVE].handle ? c->mesh->material.textures[aiTextureType_EMISSIVE].handle.Get() : checkerTex;
-                            texId = reinterpret_cast<ImTextureID>(emmisiveTex);
+                            // Emissive texture
+                            ImGui::DragFloat("Emissive", &c->mesh->material.data.emissiveFactor, 0.025f, 0.0f, 1.0f);
+                            auto emissiveTex = c->mesh->material.textures[aiTextureType_EMISSIVE].handle ? c->mesh->material.textures[aiTextureType_EMISSIVE].handle.Get() : checkerTex;
+                            texId = reinterpret_cast<ImTextureID>(emissiveTex);
                             if (ImGui::ImageButton("Emissive Texture", texId, imageSize))
                             {
                                 const std::filesystem::path filepath = FileDialogs::OpenFile("Image Files (*.jpg,*.jpeg,*.png)\0*.jpg;*.jpeg;*.png");
                                 if (!filepath.empty())
                                 {
+                                    nvrhi::IDevice *device = Application::GetGraphicsDevice();
+
                                     TextureCreateInfo createInfo;
                                     createInfo.format = nvrhi::Format::RGBA8_UNORM;
                                     Ref<Texture> texture = Texture::Create(filepath, createInfo);
+
+                                    nvrhi::CommandListHandle commandList = device->createCommandList();
+                                    commandList->open();
+                                    texture->Write(commandList);
+                                    commandList->close();
+                                    device->executeCommandList(commandList);
+
                                     c->mesh->UpdateTexture(texture, aiTextureType_EMISSIVE);
                                 }
                             }
+                            ImGui::SameLine();
+                            ImGui::Text("Emissive Texture");
                         }
                     });
                     break;
@@ -1135,7 +1216,7 @@ namespace ignite
                         std::string btnLabel = c->filepath.empty() ? "Load" : "Loaded";
                         if (ImGui::Button(btnLabel.c_str(), {55.0f, 30.0f}))
                         {
-                            std::filesystem::path filepath = FileDialogs::OpenFile("GLB/GLTF (*.glb;*.gltf)\0*.glb;*.gltf\0FBX (*.fbx)\0*.fbx");
+                            std::filesystem::path filepath = FileDialogs::OpenFile("3D Files (*.glb;*.gltf;*.fbx)\0*.glb;*.gltf;*.fbx");
                             if (!filepath.empty())
                             {
                                 AssetImporter::LoadSkinnedMesh(m_Scene, selectedEntity, filepath);
@@ -1167,7 +1248,7 @@ namespace ignite
 
                             if (ImGui::Button("Save Animations"))
                             {
-                                std::filesystem::path directory = FileDialogs::SelectFolder();
+                                const std::filesystem::path directory = FileDialogs::SelectFolder();
                                 if (!directory.empty())
                                 {
                                     for (auto &anim : c->animations)

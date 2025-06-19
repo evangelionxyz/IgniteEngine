@@ -780,10 +780,10 @@ namespace ignite
                     m_SceneRenderer.GetEnvironment()->dirLight.angularSize = glm::radians(angularSize);
                 }
 
-                ImGui::DragFloat("Ambient", &m_SceneRenderer.GetEnvironment()->dirLight.ambientIntensity, 0.005f, 0.01f, 100.0f);
                 ImGui::DragFloat("Exposure", &m_SceneRenderer.GetEnvironment()->params.exposure, 0.005f, 0.1f, 10.0f);
                 ImGui::DragFloat("Gamma", &m_SceneRenderer.GetEnvironment()->params.gamma, 0.005f, 0.1f, 10.0f);
-        
+                ImGui::DragFloat("Ambient", &m_SceneRenderer.GetEnvironment()->params.ambient, 0.005f, 0.01f, 100.0f);
+
                 ImGui::TreePop();
             }
         }

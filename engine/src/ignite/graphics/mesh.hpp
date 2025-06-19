@@ -94,7 +94,7 @@ namespace ignite {
         }
 
         void CreateBuffers();
-        void CreateBindingSet();
+        void UpdateBindingSet();
         void WriteBuffers(uint32_t entityID = -1);
         void UpdateTexture(const Ref<Texture>& texture, aiTextureType type);
     };

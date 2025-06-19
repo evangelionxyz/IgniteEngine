@@ -312,7 +312,7 @@ namespace ignite
         skeleton.joints = std::move(sortedJoints);
     }
 
-    void MeshLoader::LoadMaterial(const aiScene *scene, aiMaterial *assimpMaterial, Material &material, const std::filesystem::path &filepath)
+    void MeshLoader::LoadMaterial(const aiScene *scene, const aiMaterial *assimpMaterial, Material &material, const std::filesystem::path &filepath)
     {
         aiColor4D baseColor(1.0f, 1.0f, 1.0f, 1.0f);
         aiColor4D diffuseColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -321,14 +321,17 @@ namespace ignite
 
         assimpMaterial->Get(AI_MATKEY_BASE_COLOR, baseColor);
         assimpMaterial->Get(AI_MATKEY_COLOR_DIFFUSE, diffuseColor);
+        assimpMaterial->Get(AI_MATKEY_METALLIC_FACTOR, material.data.metallicFactor);
+        assimpMaterial->Get(AI_MATKEY_SPECULAR_FACTOR, material.data.specularFactor);
+        assimpMaterial->Get(AI_MATKEY_ROUGHNESS_FACTOR, material.data.roughnessFactor);
         assimpMaterial->Get(AI_MATKEY_COLOR_EMISSIVE, emissiveColor);
-        assimpMaterial->Get(AI_MATKEY_METALLIC_FACTOR, material.data.metallic);
-        assimpMaterial->Get(AI_MATKEY_ROUGHNESS_FACTOR, material.data.roughness);
         assimpMaterial->Get(AI_MATKEY_REFLECTIVITY, reflectivity);
         material.data.baseColor = { baseColor.r, baseColor.g, baseColor.b, 1.0f };
         
         if (diffuseColor.r > 0.0f)
-            material.data.emissive = emissiveColor.r / diffuseColor.r;
+        {
+            material.data.emissiveFactor = emissiveColor.r / diffuseColor.r;
+        }
 
         // load textures
         LoadTextures(scene, assimpMaterial, &material, aiTextureType_BASE_COLOR, filepath);
@@ -353,14 +356,16 @@ namespace ignite
         }
     }
 
-    void MeshLoader::LoadTextures(const aiScene *scene, aiMaterial *material, Material *meshMaterial, aiTextureType type, const std::filesystem::path &modelFilepath)
+    void MeshLoader::LoadTextures(const aiScene *scene, const aiMaterial *material, Material *meshMaterial, aiTextureType type, const std::filesystem::path &modelFilepath)
     {
-        if (const i32 texCount = material->GetTextureCount(type))
+        if (const uint32_t texCount = material->GetTextureCount(type))
         {
-            for (i32 i = 0; i < texCount; ++i)
+            for (uint32_t i = 0; i < texCount; ++i)
             {
                 aiString aiTextureFilepath;
                 material->GetTexture(type, i, &aiTextureFilepath);
+
+                LOG_INFO("[Material] Texture type {}", aiTextureTypeToString(type));
 
                 // try to load from cache
                 for (auto &[path, tex] : textureCache)
@@ -374,12 +379,13 @@ namespace ignite
                 }
 
                 nvrhi::IDevice *device = Application::GetDeviceManager()->GetDevice();
+
                 stbi_set_flip_vertically_on_load(false);
-                i32 width, height, channels;
+                int width, height, channels;
                 uint8_t *sourceData = nullptr;
 
                 // create new texture
-                // Embedded texture
+                // Load embedded texture
                 const aiTexture *embeddedTexture = scene->GetEmbeddedTexture(aiTextureFilepath.C_Str());
                 if (embeddedTexture && meshMaterial->textures[type].handle == nullptr)
                 {
@@ -402,12 +408,12 @@ namespace ignite
 
                         // Assimp embedded uncompressed texture data is usually in RGB format without alpha
                         // You can test with alpha channel (or assume RGB with alpha set to 255)
-                        for (int i = 0; i < width * height; ++i)
+                        for (int p = 0; p < width * height; ++p)
                         {
-                            destinationData[i * 4 + 0] = sourceData[i * 3 + 0]; // R
-                            destinationData[i * 4 + 1] = sourceData[i * 3 + 1]; // G
-                            destinationData[i * 4 + 2] = sourceData[i * 3 + 2]; // B
-                            destinationData[i * 4 + 3] = 255;                   // A
+                            destinationData[p * 4 + 0] = sourceData[p * 3 + 0]; // R
+                            destinationData[p * 4 + 1] = sourceData[p * 3 + 1]; // G
+                            destinationData[p * 4 + 2] = sourceData[p * 3 + 2]; // B
+                            destinationData[p * 4 + 3] = 255;                   // A
                         }
 
                         meshMaterial->textures[type].buffer.Data = destinationData;
@@ -418,29 +424,31 @@ namespace ignite
                 }
                 else
                 {
+                    // Texture from file
                     std::filesystem::path filepath = modelFilepath.parent_path() / std::string(aiTextureFilepath.C_Str());
+                    if (!std::filesystem::exists(filepath))
+                    {
+                        LOG_ERROR("[Material] texture path is not found! '{}'", filepath.generic_string());
+                        return;
+                    }
 
-                    LOG_ASSERT(std::filesystem::exists(filepath), "[Material] texture path is not exists!");
-
-                    LOG_INFO("[Material] Load texture from {}", filepath.generic_string());
-                    
+                    LOG_INFO("[Material] Load texture from '{}'", filepath.generic_string());
                     sourceData = stbi_load(filepath.generic_string().c_str(), &width, &height, &channels, 4);
                     LOG_ASSERT(sourceData, "[Material] Failed to load texture");
                 }
 
-
+                // 
                 if (sourceData)
                 {
                     meshMaterial->textures[type].buffer.Data = sourceData;
+                    LOG_ASSERT(meshMaterial->textures[type].buffer.Data, "[Material] Failed to load texture");
                 }
-                
-                LOG_ASSERT(meshMaterial->textures[type].buffer.Data, "[Material] Failed to load texture");
 
                 if (meshMaterial->textures[type].buffer.Data)
                 {
-                    meshMaterial->textures[type].width = width;
-                    meshMaterial->textures[type].height = height;
-                    meshMaterial->textures[type].buffer.Size = width * height * 4u;
+                    meshMaterial->textures[type].width = static_cast<uint32_t>(width);
+                    meshMaterial->textures[type].height = static_cast<uint32_t>(height);
+                    meshMaterial->textures[type].buffer.Size = static_cast<uint64_t>(width * height) * 4u;
                     meshMaterial->textures[type].rowPitch = width * 4u;
 
                     // create texture
@@ -463,14 +471,6 @@ namespace ignite
                 }
             }
         }
-
-        // if (!meshMaterial->textures[type].handle)
-        // {
-        //     meshMaterial->textures[type].handle = Renderer::GetWhiteTexture()->GetHandle();
-        // }
-
-        // meshMaterial->sampler = Renderer::GetWhiteTexture()->GetSampler();
-
     }
 
     void MeshLoader::CalculateWorldTransforms(std::vector<NodeInfo> &nodes)

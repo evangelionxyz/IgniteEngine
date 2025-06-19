@@ -15,9 +15,10 @@ namespace ignite {
     struct MaterialData
     {
         glm::vec4 baseColor;
-        f32 metallic = 0.0f;
-        f32 roughness = 1.0f;
-        f32 emissive = 0.0f;
+        float specularFactor = 0.0f;
+        float metallicFactor = 0.0f;
+        float roughnessFactor = 1.0f;
+        float emissiveFactor = 0.0f;
     };
 
     struct Material
@@ -27,6 +28,7 @@ namespace ignite {
         struct TextureData
         {
             Buffer buffer;
+
             uint32_t width;
             uint32_t height;
             uint32_t rowPitch = 0;
@@ -44,13 +46,8 @@ namespace ignite {
         bool ShouldWriteTexture() const { return _shouldWriteTexture; }
 
         void UploadTextureWithMips(nvrhi::ICommandList *commandList,
-            nvrhi::TextureHandle handle,
-            const void *baseData,
-            uint32_t baseWidth,
-            uint32_t baseHeight,
-            uint32_t baseRowPitch,
-            nvrhi::Format format,
-            uint32_t mipLevels)
+            nvrhi::TextureHandle handle, const void *baseData, uint32_t baseWidth, uint32_t baseHeight, uint32_t baseRowPitch,
+            nvrhi::Format format, uint32_t mipLevels)
         {
             // Generate all mip levels on CPU
             auto mipChain = CPUMipGenerator::GenerateMipChain(baseData, baseWidth, baseHeight, baseRowPitch, format, mipLevels);
@@ -65,11 +62,13 @@ namespace ignite {
 
         void WriteBuffer(nvrhi::ICommandList *commandList)
         {
-            for (const auto& [buffer, width, height, rowPitch, handle] : textures | std::views::values)
+            for (auto& [buffer, width, height, rowPitch, handle] : textures | std::views::values)
             {
                 if (buffer.Data)
                 {
                     UploadTextureWithMips(commandList, handle, buffer.Data, width, height, rowPitch, nvrhi::Format::RGBA8_UNORM, mipLevels);
+
+                    // buffer.Release();
                 }
             }
         }

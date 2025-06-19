@@ -17,6 +17,7 @@ namespace ignite {
     {
         float exposure = 1.0f;
         float gamma = 2.2f;
+        float ambient = 0.5f;
     };
 
     class Environment

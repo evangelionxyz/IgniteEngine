@@ -245,7 +245,7 @@ namespace ignite
             MeshRenderer &mr = newEntity.GetComponent<MeshRenderer>();
             mr.mesh->environment = scene->sceneRenderer->GetEnvironment();
             mr.mesh->WriteBuffers(newEntity);
-            mr.mesh->CreateBindingSet();
+            mr.mesh->UpdateBindingSet();
         }
 
         // get new entity's ID Component
@@ -420,7 +420,7 @@ namespace ignite
 
             mr.mesh->environment = newScene->sceneRenderer->GetEnvironment();
             mr.mesh->WriteBuffers(static_cast<uint32_t>(e));
-            mr.mesh->CreateBindingSet();
+            mr.mesh->UpdateBindingSet();
         }
 
         Application::GetDeviceManager()->WaitForIdle();

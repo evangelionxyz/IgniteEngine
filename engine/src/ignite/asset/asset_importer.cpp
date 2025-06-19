@@ -203,13 +203,13 @@ namespace ignite {
             {
                 const auto &mesh = meshes[meshIdx];
 
-                MeshRenderer &meshRenderer = nodeEntity.AddComponent<MeshRenderer>();
+                MeshRenderer &meshRenderer = nodeEntity.AddOrReplaceComponent<MeshRenderer>();
                 meshRenderer.meshIndex = meshIdx;
                 meshRenderer.root = outEntity.GetUUID();
                 meshRenderer.mesh = mesh;
                 meshRenderer.mesh->environment = scene->sceneRenderer->GetEnvironment();
                 meshRenderer.mesh->CreateBuffers();
-                meshRenderer.mesh->CreateBindingSet();
+                meshRenderer.mesh->UpdateBindingSet();
                 meshRenderer.mesh->WriteBuffers(nodeEntity);
             }
 

@@ -93,7 +93,7 @@ namespace ignite
                 .addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)) // diffuse
                 .addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)) // specular
                 .addItem(nvrhi::BindingLayoutItem::Texture_SRV(2)) // emissive
-                .addItem(nvrhi::BindingLayoutItem::Texture_SRV(3)) // roughness
+                .addItem(nvrhi::BindingLayoutItem::Texture_SRV(3)) // metallic roughness
                 .addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)) // normals
                 .addItem(nvrhi::BindingLayoutItem::Texture_SRV(5)) // texture cube
                 .addItem(nvrhi::BindingLayoutItem::Sampler(0)); // sampler

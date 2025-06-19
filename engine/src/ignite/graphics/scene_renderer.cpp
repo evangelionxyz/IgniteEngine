@@ -82,7 +82,7 @@ namespace ignite
         ShaderMake::ShaderContextDesc desc;
 
         Ref<ShaderMake::ShaderContext> computeContext = CreateRef<ShaderMake::ShaderContext>("sobel_edge_detection.compute.hlsl",
-            ShaderMake::ShaderType::Compute, desc, true);
+            ShaderMake::ShaderType::Compute, desc, false);
 
         Renderer::GetShaderLibrary().GetContext()->CompileShader({ computeContext });
         computeShader = device->createShader(nvrhi::ShaderType::Compute, computeContext->blob.data.data(), computeContext->blob.dataSize());
@@ -170,9 +170,9 @@ namespace ignite
         params.depthTest = true;
         params.enableDepthStencil = false;
         params.fillMode = nvrhi::RasterFillMode::Solid;
-        params.cullMode = nvrhi::RasterCullMode::Front;
+        params.cullMode = nvrhi::RasterCullMode::None;
 
-        // Mesh pipeline
+        // Geometry pipeline
         {
             auto attributes = VertexMesh::GetAttributes();
             GraphicsPiplineCreateInfo pci;
@@ -181,7 +181,7 @@ namespace ignite
 
             m_GeometryPipeline = GraphicsPipeline::Create(params, &pci, Renderer::GetBindingLayout(GPipeline::MESH));
             m_GeometryPipeline->AddShader("default_mesh.vertex.hlsl", nvrhi::ShaderType::Vertex)
-                .AddShader("default_mesh.pixel.hlsl", nvrhi::ShaderType::Pixel)
+                .AddShader("default_mesh.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
                 .Build();
         }
 
@@ -346,7 +346,7 @@ namespace ignite
                 for (entt::entity e : meshRendererView)
                 {
                     const MeshRenderer &mr = meshRendererView.get<MeshRenderer>(e);
-                    mr.mesh->CreateBindingSet();
+                    mr.mesh->UpdateBindingSet();
                 }
 
                 m_Environment->isUpdatingTexture = false;
@@ -434,8 +434,8 @@ namespace ignite
 
     void SceneRenderer::SetSelectedEntity(const Entity& entity)
     {
-        auto it = std::ranges::find_if(m_SelectedEntities,
-            [&](uint32_t id)
+        const auto it = std::ranges::find_if(m_SelectedEntities,
+            [&](const uint32_t id)
             {
                 return id == static_cast<uint32_t>(entity);
             });
@@ -448,12 +448,12 @@ namespace ignite
     void SceneRenderer::UnselectEntity(const Entity& entity)
     {
         auto it = std::ranges::find_if(m_SelectedEntities,
-            [&](uint32_t id)
+            [&](const uint32_t id)
             {
                 return id == static_cast<uint32_t>(entity);
             });
 
-        // push back if not found
+        // remove if found
         if (it != m_SelectedEntities.end())
             it = m_SelectedEntities.erase(it);
     }
