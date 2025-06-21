@@ -108,7 +108,7 @@ namespace ignite {
             return static_cast<T *>(this);
         }
 
-        virtual AssetType GetType() { return AssetType::Invalid; };
+        virtual AssetType GetType() { return AssetType::Invalid; }
 
         void SetDirtyFlag(bool dirty) 
         { 

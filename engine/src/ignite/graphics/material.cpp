@@ -11,7 +11,7 @@ namespace ignite
         auto paramsBufferDesc = nvrhi::BufferDesc();
         paramsBufferDesc.setIsConstantBuffer(true);
         paramsBufferDesc.setIsVolatile(true);
-        paramsBufferDesc.setMaxVersions(16);
+        paramsBufferDesc.setMaxVersions(128);
         paramsBufferDesc.setInitialState(nvrhi::ResourceStates::ConstantBuffer);
         paramsBufferDesc.setDebugName("MaterialConstantBuffer");
         paramsBufferDesc.setByteSize(sizeof(MaterialConstants));
@@ -67,7 +67,7 @@ namespace ignite
         UpdateBindingSet();
     }
 
-    void Material::WriteBuffer(nvrhi::ICommandList* commandList) const
+    void Material::WriteBuffer(nvrhi::ICommandList* commandList)
     {
         commandList->writeBuffer(paramsBuffer, &params, sizeof(params));
     }

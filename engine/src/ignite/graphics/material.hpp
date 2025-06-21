@@ -27,8 +27,13 @@ namespace ignite
         uint32_t width = 0;
         uint32_t height = 0;
         uint32_t rowPitch = 0;
-        nvrhi::Format format = nvrhi::Format::UNKNOWN;
         nvrhi::TextureHandle handle;
+
+        ~MaterialTextureResource()
+        {
+            if (data)
+                delete data;
+        }
     };
 
     enum class MaterialTextureType : uint8_t
@@ -149,7 +154,7 @@ namespace ignite
         void UpdateTexture(const Ref<Texture> &texture, MaterialTextureType textureType);
         void WriteTexture(nvrhi::ICommandList *commandList);
 
-        void WriteBuffer(nvrhi::ICommandList *commandList) const;
+        void WriteBuffer(nvrhi::ICommandList *commandList);
 
         static void UploadTextureWithMips(nvrhi::ICommandList *commandList,
             const nvrhi::TextureHandle &handle, const void *baseData,
@@ -157,7 +162,7 @@ namespace ignite
             nvrhi::Format format, uint32_t mipLevels);
 
         static AssetType GetStaticType() { return AssetType::Material; }
-        virtual AssetType GetType() override { return GetStaticType(); };
+        virtual AssetType GetType() override { return GetStaticType(); }
 
     private:
         friend class MeshLoader;
