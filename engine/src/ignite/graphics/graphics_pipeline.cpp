@@ -7,9 +7,15 @@
 
 namespace ignite {
 
-    GraphicsPipeline::GraphicsPipeline(const GraphicsPipelineParams &params, GraphicsPiplineCreateInfo *createInfo, nvrhi::BindingLayoutHandle bindingLayout)
-        : m_Params(params), m_CreateInfo(std::move(createInfo)), m_BindingLayout(bindingLayout)
+    GraphicsPipeline::GraphicsPipeline(const GraphicsPipelineParams &params, GraphicsPiplineCreateInfo *createInfo)
+        : m_Params(params), m_CreateInfo(std::move(createInfo))
     {
+    }
+
+    GraphicsPipeline& GraphicsPipeline::AddBindingLayout(const nvrhi::BindingLayoutHandle& layout)
+    {
+        m_BindingLayouts.emplace_back(layout);
+        return *this;
     }
 
     GraphicsPipeline& GraphicsPipeline::AddShader(const std::string& filepath, nvrhi::ShaderType type, const std::string &entryPoint, bool recompile)
@@ -81,8 +87,8 @@ namespace ignite {
             pipelineDesc.setRenderState(renderState);
             pipelineDesc.primType = m_Params.primitiveType;
 
-            if (m_BindingLayout)
-                pipelineDesc.addBindingLayout(m_BindingLayout);
+            for (auto &layout : m_BindingLayouts)
+                pipelineDesc.addBindingLayout(layout);
 
             // create with the same framebuffer to be rendered
             nvrhi::IDevice* device = Application::GetGraphicsDevice();
@@ -120,9 +126,9 @@ namespace ignite {
         LOG_ASSERT(m_InputLayout, "[Graphics Pipeline] Failed to create input layout");
     }
 
-    Ref<GraphicsPipeline> GraphicsPipeline::Create(const GraphicsPipelineParams &params, GraphicsPiplineCreateInfo *createInfo, nvrhi::BindingLayoutHandle bindingLayout)
+    Ref<GraphicsPipeline> GraphicsPipeline::Create(const GraphicsPipelineParams &params, GraphicsPiplineCreateInfo *createInfo)
     {
-        return CreateRef<GraphicsPipeline>(params, createInfo, bindingLayout);
+        return CreateRef<GraphicsPipeline>(params, createInfo);
     }
 
 }

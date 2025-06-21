@@ -211,7 +211,6 @@ namespace ignite
         }
 
         scene->registry->destroy(entity);
-        scene->registeredComps.erase(entity);
         scene->physics2D->DestroyBody(entity);
         scene->entities.erase(idComp.uuid);
         
@@ -243,9 +242,10 @@ namespace ignite
         if (newEntity.HasComponent<MeshRenderer>())
         {
             MeshRenderer &mr = newEntity.GetComponent<MeshRenderer>();
-            mr.mesh->environment = scene->sceneRenderer->GetEnvironment();
-            mr.mesh->WriteBuffers(newEntity);
-            mr.mesh->UpdateBindingSet();
+            bool isSkinnedMesh = true;
+            mr.Create(isSkinnedMesh);
+            mr.mesh->CreateBuffers();
+            mr.mesh->WriteVertexBuffer(newEntity);
         }
 
         // get new entity's ID Component
@@ -399,7 +399,7 @@ namespace ignite
             entityMap[srcIdComp.uuid] = newEntity;
         }
 
-        SceneManager::CopyComponent(AllComponents{}, destRegistry, srcRegistry, entityMap, newScene->registeredComps);
+        SceneManager::CopyComponent(AllComponents{}, destRegistry, srcRegistry, entityMap);
 
         // copy scene extra data
         newScene->handle = other->handle;
@@ -417,10 +417,10 @@ namespace ignite
         for (entt::entity e : mrView)
         {
             MeshRenderer &mr = mrView.get<MeshRenderer>(e);
-
-            mr.mesh->environment = newScene->sceneRenderer->GetEnvironment();
-            mr.mesh->WriteBuffers(static_cast<uint32_t>(e));
-            mr.mesh->UpdateBindingSet();
+            bool isSkinnedMesh = true;
+            mr.Create(isSkinnedMesh);
+            mr.mesh->CreateBuffers();
+            mr.mesh->WriteVertexBuffer(static_cast<uint32_t>(e));
         }
 
         Application::GetDeviceManager()->WaitForIdle();

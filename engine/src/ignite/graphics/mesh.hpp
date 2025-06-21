@@ -25,8 +25,10 @@ namespace ignite {
 
     struct NodeInfo
     {
-        i32 id = -1;
-        i32 parentID = -1;
+        int id = -1;
+        int parentID = -1;
+        int materialIndex = -1;
+
         bool isJoint = false;
         
         UUID uuid = UUID(0);
@@ -34,8 +36,8 @@ namespace ignite {
         std::string name;
         glm::mat4 localTransform;
         glm::mat4 worldTransform;
-        std::vector<i32> childrenIDs;
-        std::vector<i32> meshIndices;  // Meshes owned by this node
+        std::vector<int> childrenIDs;
+        std::vector<int> meshIndices;  // Meshes owned by this node
     };
 
     struct BoneInfo
@@ -48,7 +50,6 @@ namespace ignite {
     {
         std::vector<VertexMesh> vertices;
         std::vector<uint32_t> indices;
-
         int materialIndex = -1;
     };
 
@@ -56,47 +57,34 @@ namespace ignite {
     {
     public:
         std::string name;
-
         MeshData data;
-        Material material;
-        Ref<Shader> vertexShader;
-        Ref<Shader> pixelShader;
-        Ref<Environment> environment;
 
         // do not copy the buffer
         nvrhi::BufferHandle vertexBuffer;
         nvrhi::BufferHandle indexBuffer;
-        nvrhi::BufferHandle objectBufferHandle;
-        nvrhi::BufferHandle materialBufferHandle;
-        std::unordered_map<GPipeline, nvrhi::BindingSetHandle> bindingSets;
 
-        i32 nodeParentID = -1;
-        i32 nodeID = -1; // ID of the bone this mesh is attached to
-
+        uint32_t materialIndex = -1;
+        int nodeParentID = -1;
+        int nodeID = -1; // ID of the bone this mesh is attached to
         std::vector<BoneInfo> boneInfo; // Bone weights and indices
         std::unordered_map<std::string, uint32_t> boneMapping; // Maps bone name to indices
 
         AABB aabb;
 
         Mesh() = default;
+
         Mesh(const Mesh &other)
         {
             data = other.data;
-
-            vertexShader = other.vertexShader;
-            pixelShader = other.pixelShader;
-            material = other.material;
+            aabb = other.aabb;
             boneInfo = other.boneInfo;
             boneMapping = other.boneMapping;
-            aabb = other.aabb;
 
             CreateBuffers();
         }
 
         void CreateBuffers();
-        void UpdateBindingSet();
-        void WriteBuffers(uint32_t entityID = -1);
-        void UpdateTexture(const Ref<Texture>& texture, aiTextureType type);
+        void WriteVertexBuffer(uint32_t entityID = -1);
     };
     
 }

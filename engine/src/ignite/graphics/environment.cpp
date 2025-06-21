@@ -146,7 +146,7 @@ namespace ignite {
         bsDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_HDRTexture->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_HDRTexture->GetSampler()));
 
-        m_BindingSet = device->createBindingSet(bsDesc, Renderer::GetBindingLayout(GPipeline::ENVIRONMENT));
+        m_BindingSet = device->createBindingSet(bsDesc, Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT));
         LOG_ASSERT(m_BindingSet, "Failed to create binding set");
     }
 

@@ -25,6 +25,16 @@ namespace ignite {
         static void LoadSkinnedMesh(Scene *scene, Entity outEntity, const std::filesystem::path& filepath);
     };
 
+    class MaterialImporter : public AssetImporter
+    {
+    public:
+        static std::vector<Ref<Material>> Load(const aiScene *aiScene, const std::filesystem::path &filepath);
+        static void LoadTexture(const aiScene *aiScene, uint32_t materialIndex, const std::filesystem::path &filepath, const Ref<Material>& material, MaterialTextureType textureType);
+
+    private:
+        static std::unordered_map<std::string, Ref<MaterialTextureResource>> s_TextureCache;
+    };
+
     class EnvironmentImporter : public AssetImporter
     {
     public:

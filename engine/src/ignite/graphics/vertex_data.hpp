@@ -9,13 +9,13 @@ namespace ignite
 #define VERTEX_MAX_BONES 4
 #define MAX_BONES 100
 
-    struct CameraBuffer
+    struct CameraConstants
     {
         glm::mat4 viewProjection;
         glm::vec4 position;
     };
 
-    struct ObjectBuffer
+    struct SkinnedMeshConstants
     {
         glm::mat4 transformation;
         glm::mat4 normal;
@@ -83,13 +83,22 @@ namespace ignite
         static nvrhi::BindingLayoutDesc GetBindingLayoutDesc()
         {
             return nvrhi::BindingLayoutDesc()
+                .setRegisterSpace(0) // set 0
+                .setRegisterSpaceIsDescriptorSet(true)
                 .setVisibility(nvrhi::ShaderType::All)
                 .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)) // camera
                 .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1)) // model
                 .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(2)) // directional light
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(3)) // environment
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(4)) // material
+                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(3)); // environment
+        }
 
+        static nvrhi::BindingLayoutDesc GetMaterialBindingLayoutDesc()
+        {
+            return nvrhi::BindingLayoutDesc()
+                .setRegisterSpace(1) // set 1
+                .setRegisterSpaceIsDescriptorSet(true)
+                .setVisibility(nvrhi::ShaderType::All)
+                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)) // material
                 .addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)) // diffuse
                 .addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)) // specular
                 .addItem(nvrhi::BindingLayoutItem::Texture_SRV(2)) // emissive

@@ -18,6 +18,7 @@ namespace ignite {
         Model,
         Project,
         Texture,
+        Material,
         TextureCube,
         SkeletalAnimation,
         Anim2D,
@@ -32,6 +33,7 @@ namespace ignite {
         switch (type)
         {
             case ignite::AssetType::Texture: return "Texture";
+            case ignite::AssetType::Material: return "Material";
             case ignite::AssetType::Audio: return "Audio";
             case ignite::AssetType::Model: return "Model";
             case ignite::AssetType::Project: return "Project";
@@ -61,6 +63,7 @@ namespace ignite {
         { ".fbx", AssetType::MeshSource },
         { ".glb", AssetType::MeshSource },
         { ".gltf", AssetType::MeshSource },
+        { ".mat", AssetType::Material},
     };
 
     static AssetType AssetTypeFromString(const std::string &typeStr)
@@ -76,6 +79,7 @@ namespace ignite {
         if (typeStr == "Mesh")  return AssetType::Mesh;
         if (typeStr == "MeshSource")  return AssetType::MeshSource;
         if (typeStr == "Skeleton")  return AssetType::Skeleton;
+        if (typeStr == "Material")  return AssetType::Material;
         return AssetType::Invalid;
     }
 

@@ -16,6 +16,8 @@
 
 namespace ignite
 {
+    static SceneRenderer *s_SceneRenderer = nullptr;
+
     void SobelEdgeDetection::Initialize()
     {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
@@ -39,7 +41,6 @@ namespace ignite
         bufferDesc.initialState = nvrhi::ResourceStates::ShaderResource;
 
         selectedIDBuffer = device->createBuffer(bufferDesc);
-
 
         // Create linear sampler
         nvrhi::SamplerDesc samplerDesc;
@@ -126,9 +127,7 @@ namespace ignite
             nvrhi::BindingSetItem::Texture_SRV(1, inDepthTexture),
             nvrhi::BindingSetItem::Texture_SRV(2, inObjectIDTexture),
             nvrhi::BindingSetItem::StructuredBuffer_SRV(3, this->selectedIDBuffer),
-
             nvrhi::BindingSetItem::Sampler(0, this->linearSampler),
-
             nvrhi::BindingSetItem::Texture_UAV(0, outputTexture),
         };
 
@@ -156,6 +155,7 @@ namespace ignite
 
     SceneRenderer::SceneRenderer()
     {
+        s_SceneRenderer = this;
     }
 
     SceneRenderer::~SceneRenderer()
@@ -179,9 +179,11 @@ namespace ignite
             pci.attributes = attributes.data();
             pci.attributeCount = static_cast<uint32_t>(attributes.size());
 
-            m_GeometryPipeline = GraphicsPipeline::Create(params, &pci, Renderer::GetBindingLayout(GPipeline::MESH));
+            m_GeometryPipeline = GraphicsPipeline::Create(params, &pci);
             m_GeometryPipeline->AddShader("default_mesh.vertex.hlsl", nvrhi::ShaderType::Vertex)
                 .AddShader("default_mesh.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
+                .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH))
+                .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
                 .Build();
         }
 
@@ -195,9 +197,10 @@ namespace ignite
             pci.attributes = &attribute;
             pci.attributeCount = 1;
 
-            m_EnvironmentPipeline = GraphicsPipeline::Create(params, &pci, Renderer::GetBindingLayout(GPipeline::ENVIRONMENT));
+            m_EnvironmentPipeline = GraphicsPipeline::Create(params, &pci);
             m_EnvironmentPipeline->AddShader("skybox.vertex.hlsl", nvrhi::ShaderType::Vertex)
                 .AddShader("skybox.pixel.hlsl", nvrhi::ShaderType::Pixel)
+                .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT))
                 .Build();
         }
 
@@ -213,9 +216,10 @@ namespace ignite
             pci.attributeCount = static_cast<uint32_t>(attributes.size());
 
             auto shaderContext = Renderer::GetShaderLibrary().Get("batch_2d_quad");
-            m_BatchQuadPipeline = GraphicsPipeline::Create(params, &pci, Renderer::GetBindingLayout(GPipeline::QUAD2D));
+            m_BatchQuadPipeline = GraphicsPipeline::Create(params, &pci);
             m_BatchQuadPipeline->AddShader(shaderContext[nvrhi::ShaderType::Vertex].handle, nvrhi::ShaderType::Vertex)
                 .AddShader(shaderContext[nvrhi::ShaderType::Pixel].handle, nvrhi::ShaderType::Pixel)
+                .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::QUAD2D))
                 .Build();
         }
 
@@ -230,12 +234,13 @@ namespace ignite
             pci.attributes = attributes.data();
             pci.attributeCount = static_cast<uint32_t>(attributes.size());
 
-            m_BatchLinePipeline = GraphicsPipeline::Create(params, &pci, Renderer::GetBindingLayout(GPipeline::LINE));
+            m_BatchLinePipeline = GraphicsPipeline::Create(params, &pci);
 
             auto shaderContext = Renderer::GetShaderLibrary().Get("batch_2d_line");
 
             m_BatchLinePipeline->AddShader(shaderContext[nvrhi::ShaderType::Vertex].handle, nvrhi::ShaderType::Vertex)
                 .AddShader(shaderContext[nvrhi::ShaderType::Pixel].handle, nvrhi::ShaderType::Pixel)
+                .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::LINE))
                 .Build();
         }
 
@@ -320,7 +325,7 @@ namespace ignite
     {
         m_CommandList->open();
         
-        CameraBuffer cameraBuffer = { camera->GetViewProjectionMatrix(), glm::vec4(camera->position, 1.0f) };
+        CameraConstants cameraBuffer = { camera->GetViewProjectionMatrix(), glm::vec4(camera->position, 1.0f) };
         m_CommandList->writeBuffer(Renderer::GetCameraBufferHandle(), &cameraBuffer, sizeof(cameraBuffer));
 
         m_RenderTarget->ClearColorAttachmentFloat(m_CommandList, 0);
@@ -346,7 +351,7 @@ namespace ignite
                 for (entt::entity e : meshRendererView)
                 {
                     const MeshRenderer &mr = meshRendererView.get<MeshRenderer>(e);
-                    mr.mesh->UpdateBindingSet();
+                    mr.material->UpdateBindingSet();
                 }
 
                 m_Environment->isUpdatingTexture = false;
@@ -374,15 +379,17 @@ namespace ignite
                     continue;
 
                 // write material constant buffer
-                m_CommandList->writeBuffer(meshRenderer.mesh->materialBufferHandle, &meshRenderer.mesh->material.data, sizeof(meshRenderer.mesh->material.data));
-                m_CommandList->writeBuffer(meshRenderer.mesh->objectBufferHandle, &meshRenderer.meshBuffer, sizeof(meshRenderer.meshBuffer));
+                meshRenderer.material->WriteBuffer(m_CommandList);
+                meshRenderer.WriteTransformBuffer(m_CommandList);
 
                 // render
                 auto state = nvrhi::GraphicsState();
                 state.pipeline = m_GeometryPipeline->GetHandle();
                 state.framebuffer = framebuffer;
                 state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
-                state.addBindingSet(meshRenderer.mesh->bindingSets[GPipeline::MESH]);
+
+                state.bindings = { meshRenderer.bindingSet, meshRenderer.material->bindingSet };
+
                 state.setIndexBuffer({ meshRenderer.mesh->indexBuffer, nvrhi::Format::R32_UINT });
                 state.addVertexBuffer({ meshRenderer.mesh->vertexBuffer, 0, 0 });
 
@@ -496,5 +503,10 @@ namespace ignite
         }
 
         ImGui::End();
+    }
+
+    SceneRenderer* SceneRenderer::GetActive()
+    {
+        return s_SceneRenderer;
     }
 }

@@ -166,11 +166,11 @@ namespace ignite
         {
             MeshRenderer &meshRenderer = entity.GetComponent<MeshRenderer>();
 
-            meshRenderer.meshBuffer.transformation = worldMatrix;
-            glm::decompose(meshRenderer.meshBuffer.transformation, transform.scale, transform.rotation, transform.translation, skew, perspective);
+            meshRenderer.transformData.transformation = worldMatrix;
+            glm::decompose(meshRenderer.transformData.transformation, transform.scale, transform.rotation, transform.translation, skew, perspective);
 
-            glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(meshRenderer.meshBuffer.transformation)));
-            meshRenderer.meshBuffer.normal = glm::mat4(normalMat3);
+            glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(meshRenderer.transformData.transformation)));
+            meshRenderer.transformData.normal = glm::mat4(normalMat3);
             if (meshRenderer.root != UUID(0))
             {
                 Entity rootNodeEntity = SceneManager::GetEntity(this, meshRenderer.root);
@@ -185,19 +185,19 @@ namespace ignite
                 const size_t numBones = std::min(skinnedMesh.boneTransforms.size(), static_cast<size_t>(MAX_BONES));
                 for (size_t i = 0; i < numBones; ++i)
                 {
-                    meshRenderer.meshBuffer.boneTransforms[i] = skinnedMesh.boneTransforms[i];
+                    meshRenderer.transformData.boneTransforms[i] = skinnedMesh.boneTransforms[i];
                 }
                 
                 for (size_t i = numBones; i < MAX_BONES; ++i)
                 {
-                    meshRenderer.meshBuffer.boneTransforms[i] = glm::mat4(1.0f);
+                    meshRenderer.transformData.boneTransforms[i] = glm::mat4(1.0f);
                 }
             }
             else
             {
                 for (size_t i = 0; i < MAX_BONES; ++i)
                 {
-                    meshRenderer.meshBuffer.boneTransforms[i] = glm::mat4(1.0f);
+                    meshRenderer.transformData.boneTransforms[i] = glm::mat4(1.0f);
                 }
             }
         }

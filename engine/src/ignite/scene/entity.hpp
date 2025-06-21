@@ -3,6 +3,7 @@
 #include "scene.hpp"
 #include "component.hpp"
 #include "ignite/core/types.hpp"
+
 #include <entt/entt.hpp>
 
 namespace ignite
@@ -12,21 +13,17 @@ namespace ignite
     public:
         Entity();
         Entity(entt::entity e, Scene *scene);
-        Entity(const Entity &other) = default;
+        Entity(const Entity &other);
 
-        ~Entity()
-        {
-            m_Handle = {entt::null};
-            m_Scene = nullptr;
-        }
+        ~Entity();
 
         template<typename T, typename... Args>
         T &AddComponent(Args &&... args)
         {
             T &comp = m_Scene->registry->get_or_emplace<T>(m_Handle, std::forward<Args>(args)...);
-            if constexpr (std::is_base_of<IComponent, T>::value)
+
+            if (std::is_base_of_v<IComponent, T>)
             {
-                m_Scene->registeredComps[m_Handle].emplace_back(static_cast<IComponent*>(&comp));
                 m_Scene->OnComponentAdded<T>(*this, comp);
             }
 
@@ -36,10 +33,13 @@ namespace ignite
         template<typename T, typename... Args>
         T &AddOrReplaceComponent(Args &&... args)
         {
+            if (HasComponent<T>())
+                return GetComponent<T>();
+
             T &comp = m_Scene->registry->emplace_or_replace<T>(m_Handle, std::forward<Args>(args)...);
-            if constexpr (std::is_base_of<IComponent, T>::value)
+
+            if (std::is_base_of_v<IComponent, T>)
             {
-                m_Scene->registeredComps[m_Handle].emplace_back(static_cast<IComponent*>(&comp));
                 m_Scene->OnComponentAdded<T>(*this, comp);
             }
             return comp;
@@ -58,17 +58,10 @@ namespace ignite
         }
 
         template<typename T>
-        void RemoveComponent()
+        void RemoveComponent() const
         {
             T &comp = m_Scene->registry->get<T>(m_Handle);
             m_Scene->registry->remove<T>(m_Handle);
-
-            std::vector<IComponent *> &regComps = m_Scene->registeredComps[m_Handle];
-
-            regComps.erase(std::remove_if(regComps.begin(), regComps.end(), [&](IComponent *regComp)
-            {
-                return ((IComponent *) &comp) == regComp;
-            }), regComps.end());
         }
 
         bool IsValid() const
@@ -92,7 +85,6 @@ namespace ignite
         UUID GetUUID() { return GetComponent<ID>().uuid; }
         UUID GetParentUUID() { return GetComponent<ID>().parent; }
         Transform &GetTransform() { return GetComponent<Transform>(); }
-        
         const std::string &GetName() { return GetComponent<ID>().name; }
 
     private:

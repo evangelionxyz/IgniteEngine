@@ -321,8 +321,6 @@ namespace ignite
         if (selectedEntity.IsValid())
         {
             // Main Component
-            auto &comps = m_Scene->registeredComps[selectedEntity];
-
             // ID Component
             ID &idComp = selectedEntity.GetComponent<ID>();
             char buffer[255] = {};
@@ -361,683 +359,636 @@ namespace ignite
 
             }, false); // false: not allowed to remove the component
 
-            for (IComponent *comp : comps)
-            {
-                ImGui::PushID(comp);
-                switch (comp->GetType())
+            RenderComponent<Sprite2D>("Sprite 2D", selectedEntity, [&]()
                 {
-                case CompType_Sprite2D:
-                {
-                    RenderComponent<Sprite2D>("Sprite 2D", selectedEntity, [&]()
+                    Sprite2D &c = selectedEntity.GetComponent<Sprite2D>();
+
+                    std::string imageButtonLabel = "Load Texture";
+                    if (c.texture)
                     {
-                        Sprite2D *c = comp->As<Sprite2D>();
+                        imageButtonLabel = "Loaded";
+                    }
 
-                        std::string imageButtonLabel = "Load Texture";
-                        if (c->texture)
+                    if (ImGui::Button(imageButtonLabel.c_str()))
+                    {
+                        std::filesystem::path filepath = FileDialogs::OpenFile("JPG/JPEG (*.jpg;*jpeg)\0*.jpg;*jpeg\0PNG (*.png)\0*.png\0All Files (*.)\0*.*");
+                        if (!filepath.empty())
                         {
-                            imageButtonLabel = "Loaded";
+                            TextureCreateInfo texCI;
+                            texCI.flip = false;
+                            texCI.format = nvrhi::Format::RGBA8_UNORM;
+                            texCI.dimension = nvrhi::TextureDimension::Texture2D;
+                            texCI.samplerMode = nvrhi::SamplerAddressMode::ClampToEdge;
+
+                            c.texture = Texture::Create(filepath.generic_string(), texCI);
+                        }
+                    }
+
+                    if (c.texture)
+                    {
+                        bool textureRemoved = false;
+                        ImGui::SameLine();
+
+                        if (ImGui::Button("X"))
+                        {
+                            c.texture.reset();
+                            textureRemoved = true;
                         }
 
-                        if (ImGui::Button(imageButtonLabel.c_str()))
+                        if (!textureRemoved)
                         {
-                            std::filesystem::path filepath = FileDialogs::OpenFile("JPG/JPEG (*.jpg;*jpeg)\0*.jpg;*jpeg\0PNG (*.png)\0*.png\0All Files (*.)\0*.*");
-                            if (!filepath.empty())
-                            {
-                                TextureCreateInfo texCI;
-                                texCI.flip = false;
-                                texCI.format = nvrhi::Format::RGBA8_UNORM;
-                                texCI.dimension = nvrhi::TextureDimension::Texture2D;
-                                texCI.samplerMode = nvrhi::SamplerAddressMode::ClampToEdge;
-
-                                c->texture = Texture::Create(filepath.generic_string(), texCI);
-                            }
-                        }
-
-                        if (c->texture)
-                        {
-                            bool textureRemoved = false;
                             ImGui::SameLine();
+                            const std::filesystem::path &displayFilepath = c.texture->GetFilepath().filename();
+                            ImGui::Text("%s", displayFilepath.generic_string().c_str());
+                        }
+                    }
 
-                            if (ImGui::Button("X"))
+                    ImGui::DragFloat2("Tiling", &c.tilingFactor.x, 0.025f);
+                    ImGui::ColorEdit4("Color", &c.color.x);
+                });
+            RenderComponent<Rigidbody2D>("Rigid Body 2D", selectedEntity, [&]()
+                {
+                    Rigidbody2D &c = selectedEntity.GetComponent<Rigidbody2D>();
+
+                    const char *bodyTypeStr[3] = { "Static", "Dynamic", "Kinematic" };
+                    const char *currentBodyType = bodyTypeStr[static_cast<i32>(c.type)];
+
+                    if (ImGui::BeginCombo("Body Type", currentBodyType))
+                    {
+                        for (i32 i = 0; i < std::size(bodyTypeStr); ++i)
+                        {
+                            if (ImGui::Selectable(bodyTypeStr[i]))
                             {
-                                c->texture.reset();
-                                textureRemoved = true;
+                                c.type = static_cast<Body2DType>(i);
+                                break;
                             }
 
-                            if (!textureRemoved)
+                            bool isSelected = (strcmp(bodyTypeStr[i], currentBodyType) == 0);
+                            if (isSelected)
+                            {
+                                ImGui::SetItemDefaultFocus();
+                            }
+                        }
+                        ImGui::EndCombo();
+                    }
+
+                    if (m_Scene->IsPlaying())
+                    {
+                        if (ImGui::DragFloat2("Linear Vel", &c.linearVelocity.x, 0.025f))
+                            b2Body_SetLinearVelocity(c.bodyId, { c.linearVelocity.x, c.linearVelocity.y });
+
+                        if (ImGui::DragFloat("Angular Vel", &c.angularVelocity, 0.025f))
+                            b2Body_SetAngularVelocity(c.bodyId, c.angularVelocity);
+
+                        if (ImGui::DragFloat("Gravity", &c.gravityScale, 0.025f))
+                            b2Body_SetGravityScale(c.bodyId, c.gravityScale);
+
+
+                        if (ImGui::DragFloat("Linear Damping", &c.linearDamping, 0.025f))
+                            b2Body_SetLinearDamping(c.bodyId, c.linearDamping);
+
+                        if (ImGui::DragFloat("Angular Damping", &c.angularDamping, 0.025f))
+                            b2Body_SetAngularDamping(c.bodyId, c.angularDamping);
+
+
+                        if (ImGui::Checkbox("Fixed Rotation", &c.fixedRotation))
+                            b2Body_SetFixedRotation(c.bodyId, c.fixedRotation);
+
+                        if (ImGui::Checkbox("Awake", &c.isAwake))
+                            b2Body_SetAwake(c.bodyId, c.isAwake);
+
+                        if (ImGui::Checkbox("Enabled", &c.isEnabled))
+                        {
+                            c.isEnabled ? b2Body_Enable(c.bodyId) : b2Body_Disable(c.bodyId);
+                        }
+
+                        if (ImGui::Checkbox("Sleep", &c.isEnableSleep))
+                            b2Body_EnableSleep(c.bodyId, c.isEnableSleep);
+                    }
+                    else
+                    {
+                        ImGui::DragFloat2("Linear Vel", &c.linearVelocity.x, 0.025f, FLT_MIN, FLT_MAX);
+                        ImGui::DragFloat("Angular Vel", &c.angularVelocity, 0.025f, FLT_MIN, FLT_MAX);
+                        ImGui::DragFloat("Gravity", &c.gravityScale, 0.025f, FLT_MIN, FLT_MAX);
+                        ImGui::DragFloat("Linear Damping", &c.linearDamping, 0.0f, FLT_MAX);
+                        ImGui::DragFloat("Angular Damping", &c.angularDamping, 0.025f, 0.0f, FLT_MAX);
+                        ImGui::Checkbox("Fixed Rotation", &c.fixedRotation);
+                        ImGui::Checkbox("Awake", &c.isAwake);
+                        ImGui::Checkbox("Enabled", &c.isEnabled);
+                        ImGui::Checkbox("Sleep", &c.isEnableSleep);
+                    }
+                });
+            RenderComponent<Camera>("Camera", selectedEntity, [&]()
+                {
+                    Camera &c = selectedEntity.GetComponent<Camera>();
+
+                    static const char *projectionTypeStr[] = { "Orthographic", "Perspective" };
+                    const char *currentProjectionTypeStr = projectionTypeStr[static_cast<int>(c.projectionType)];
+
+                    if (ImGui::BeginCombo("Projection", currentProjectionTypeStr))
+                    {
+                        for (size_t i = 0; i < std::size(projectionTypeStr); ++i)
+                        {
+                            bool selected = false;
+                            if (ImGui::Selectable(projectionTypeStr[i]))
+                            {
+                                c.projectionType = static_cast<ICamera::Type>(i);
+                                c.camera.projectionType = c.projectionType;
+                                c.camera.UpdateProjectionMatrix();
+
+                                selected = true;
+                            }
+
+                            if (selected)
+                            {
+                                ImGui::SetItemDefaultFocus();
+                            }
+                        }
+                        ImGui::EndCombo();
+                    }
+
+                    bool modified = false;
+
+                    if (c.projectionType == ICamera::Type::Perspective)
+                    {
+                        modified |= ImGui::DragFloat("Fov", &c.fov, 0.025f, 0.0f, FLT_MAX);
+                    }
+                    else
+                    {
+                        modified |= ImGui::DragFloat("Zoom", &c.zoom, 0.025f, 0.0f, FLT_MAX);
+                    }
+
+                    modified |= ImGui::DragFloat("Near", &c.nearClip, 0.025f, 0.0f, FLT_MAX);
+                    modified |= ImGui::DragFloat("Far", &c.farClip, 0.025f, 0.0f, FLT_MAX);
+                    modified |= ImGui::Checkbox("Primary", &c.primary);
+
+                    if (modified)
+                    {
+                        c.camera.fov = c.fov;
+                        c.camera.nearClip = c.nearClip;
+                        c.camera.farClip = c.farClip;
+                        c.camera.zoom = c.zoom;
+                        c.camera.UpdateProjectionMatrix();
+                    }
+                });
+            RenderComponent<BoxCollider2D>("Box Collider 2D", selectedEntity, [&]()
+                {
+                    BoxCollider2D &c = selectedEntity.GetComponent<BoxCollider2D>();
+                    ImGui::DragFloat2("Size", &c.size.x, 0.025f, 0.0f, FLT_MAX);
+                    ImGui::DragFloat2("Offset", &c.offset.x, 0.025f, 0.0f, FLT_MAX);
+                    ImGui::DragFloat("Restitution", &c.restitution, 0.025f, 0.0f, FLT_MAX);
+                    ImGui::DragFloat("Friction", &c.friction, 0.025f, 0.0f, FLT_MAX);
+                    ImGui::DragFloat("Density", &c.density, 0.025f);
+                    ImGui::Checkbox("Is Sensor", &c.isSensor);
+                });
+            RenderComponent<Rigibody>("Rigid Body", selectedEntity, [&]()
+                {
+                    Rigibody &c = selectedEntity.GetComponent<Rigibody>();
+                    ImGui::Checkbox("Static", &c.isStatic);
+                });
+            RenderComponent<BoxCollider>("Box Collider", selectedEntity, [&]()
+                {
+                    BoxCollider &c = selectedEntity.GetComponent<BoxCollider>();
+                    ImGui::DragFloat3("Scale", &c.scale.x, 0.025f, 0.0f, 10000.0f);
+                    ImGui::DragFloat("Friction", &c.friction, 0.025f);
+                    ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
+                    ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
+                    ImGui::DragFloat("Density", &c.density, 0.025f);
+                });
+            RenderComponent<SphereCollider>("Sphere Collider", selectedEntity, [&]()
+                {
+                    SphereCollider &c = selectedEntity.GetComponent<SphereCollider>();
+                    ImGui::DragFloat("Radius", &c.radius, 0.025f, 0.01f, 10000.0f);
+                    ImGui::DragFloat("Friction", &c.friction, 0.025f);
+                    ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
+                    ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
+                    ImGui::DragFloat("Density", &c.density, 0.025f);
+                });
+            RenderComponent<AudioSource>("Audio Source", selectedEntity, [&]()
+                {
+                    AudioSource &c = selectedEntity.GetComponent<AudioSource>();
+
+                    ImGui::Button("Drag Here", { 65, 30.0f });
+
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+                        {
+                            if (payload->DataSize == sizeof(AssetHandle))
+                            {
+                                AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
+                                if (handle && *handle != AssetHandle(0))
+                                {
+                                    AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(*handle);
+                                    if (metadata.type == AssetType::Audio)
+                                    {
+                                        c.handle = *handle;
+                                        Ref<FmodSound> sound = Project::GetAsset<FmodSound>(*handle);
+                                    }
+                                }
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+
+                    ImGui::SameLine();
+                    ImGui::Text("%llu", c.handle);
+
+                    if (c.handle != AssetHandle(0))
+                    {
+                        if (Ref<FmodSound> sound = Project::GetAsset<FmodSound>(c.handle))
+                        {
+                            if (ImGui::Button("Play", { 55.0f, 30.0f }))
+                            {
+                                sound->Stop();
+
+                                sound->Play();
+                                sound->SetVolume(c.volume);
+                                sound->SetPitch(c.pitch);
+                                sound->SetPan(c.pan);
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::Button("Stop", { 55.0f, 30.0f }))
+                            {
+                                sound->Stop();
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::Button("Pause", { 55.0f, 30.0f }))
+                            {
+                                sound->Pause();
+                            }
+                            if (sound->IsPaused())
                             {
                                 ImGui::SameLine();
-                                const std::filesystem::path &displayFilepath = c->texture->GetFilepath().filename();
-                                ImGui::Text("%s", displayFilepath.generic_string().c_str());
-                            }
-                        }
-
-                        ImGui::DragFloat2("Tiling", &c->tilingFactor.x, 0.025f);
-                        ImGui::ColorEdit4("Color", &c->color.x);
-                    });
-
-                    break;
-                }
-                case CompType_Rigidbody2D:
-                {
-                    RenderComponent<Rigidbody2D>("Rigid Body 2D", selectedEntity, [&]()
-                    {
-                        Rigidbody2D *c = comp->As<Rigidbody2D>();
-                        
-                        const char *bodyTypeStr[3] = { "Static", "Dynamic", "Kinematic" };
-                        const char *currentBodyType = bodyTypeStr[static_cast<i32>(c->type)];
-    
-                        if (ImGui::BeginCombo("Body Type", currentBodyType))
-                        {
-                            for (i32 i = 0; i < std::size(bodyTypeStr); ++i)
-                            {
-                                if (ImGui::Selectable(bodyTypeStr[i]))
+                                if (ImGui::Button("Resume", { 55.0f, 30.0f }))
                                 {
-                                    c->type = static_cast<Body2DType>(i);
+                                    sound->Resume();
+                                }
+                            }
+
+                            ImGui::DragFloat("Volume", &c.volume, 0.001f, 0.0f, 1.0f);
+                            ImGui::DragFloat("Pitch", &c.pitch, 0.001f);
+                            ImGui::DragFloat("Pan", &c.pan, 0.001f);
+                            ImGui::Checkbox("Play On Start", &c.playOnStart);
+                        }
+                    }
+                });
+            RenderComponent<Script>("C# Script", selectedEntity, [&]()
+                {
+                    Script &c = selectedEntity.GetComponent<Script>();
+
+                    bool scriptClassExist = ScriptEngine::EntityClassExists(c.className);
+                    bool is_selected = false;
+
+                    if (!scriptClassExist)
+                    {
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));
+                    }
+
+                    auto scriptStorage = ScriptEngine::GetScriptClassStorage();
+                    std::string currentScriptClasses = c.className;
+
+                    // drop-down
+                    if (ImGui::BeginCombo("Script Class", currentScriptClasses.c_str()))
+                    {
+                        for (int i = 0; i < scriptStorage.size(); i++)
+                        {
+                            is_selected = currentScriptClasses == scriptStorage[i];
+                            if (ImGui::Selectable(scriptStorage[i].c_str(), is_selected))
+                            {
+                                currentScriptClasses = scriptStorage[i];
+                                c.className = scriptStorage[i];
+                            }
+                            if (is_selected) ImGui::SetItemDefaultFocus();
+                        }
+                        ImGui::EndCombo();
+                    }
+
+                    if (ImGui::Button("Detach"))
+                    {
+                        c.className = "Detached";
+                        is_selected = false;
+                    }
+
+                    bool detached = c.className == "Detached";
+
+                    // classFields
+                    bool isRunning = m_Scene->IsPlaying();
+
+                    // Editable classFields (edit mode)
+                    if (isRunning && !detached)
+                    {
+                        Ref<ScriptInstance> scriptInstance = ScriptEngine::GetEntityScriptInstance(selectedEntity.GetUUID());
+                        if (scriptInstance)
+                        {
+                            auto classFields = scriptInstance->GetScriptClass()->GetFields();
+
+                            for (const auto &[fieldName, field] : classFields)
+                            {
+                                switch (field.Type)
+                                {
+                                case ScriptFieldType::Float:
+                                {
+                                    float data = scriptInstance->GetFieldValue<float>(fieldName);
+                                    if (ImGui::DragFloat(fieldName.c_str(), &data, 0.1f))
+                                    {
+                                        scriptInstance->SetFieldValue<float>(fieldName, data);
+                                    }
                                     break;
                                 }
-    
-                                bool isSelected = (strcmp(bodyTypeStr[i], currentBodyType) == 0);
-                                if (isSelected)
+                                case ScriptFieldType::Int:
                                 {
-                                    ImGui::SetItemDefaultFocus();
+                                    int data = scriptInstance->GetFieldValue<int>(fieldName);
+                                    if (ImGui::DragInt(fieldName.c_str(), &data, 1))
+                                    {
+                                        scriptInstance->SetFieldValue<int>(fieldName, data);
+                                    }
+                                    break;
+                                }
+                                case ScriptFieldType::Vector2:
+                                {
+                                    glm::vec2 data = scriptInstance->GetFieldValue<glm::vec2>(fieldName);
+                                    if (ImGui::DragFloat2(fieldName.c_str(), &data.x, 0.1f))
+                                    {
+                                        scriptInstance->SetFieldValue<glm::vec2>(fieldName, data);
+                                    }
+                                    break;
+                                }
+                                case ScriptFieldType::Vector3:
+                                {
+                                    glm::vec3 data = scriptInstance->GetFieldValue<glm::vec3>(fieldName);
+                                    if (ImGui::DragFloat3(fieldName.c_str(), &data.x, 0.1f))
+                                    {
+                                        scriptInstance->SetFieldValue<glm::vec3>(fieldName, data);
+                                    }
+                                    break;
+                                }
+                                case ScriptFieldType::Vector4:
+                                {
+                                    glm::vec4 data = scriptInstance->GetFieldValue<glm::vec4>(fieldName);
+                                    if (ImGui::DragFloat4(fieldName.c_str(), &data.x, 0.1f))
+                                    {
+                                        scriptInstance->SetFieldValue<glm::vec4>(fieldName, data);
+                                    }
+                                    break;
+                                }
+                                case ScriptFieldType::Entity:
+                                {
+                                    uint64_t uuid = scriptInstance->GetFieldValue<uint64_t>(fieldName);
+                                    if (Entity entity = SceneManager::GetEntity(m_Scene, UUID(uuid)))
+                                    {
+                                        ImGui::Button(fieldName.c_str());
+                                        if (ImGui::IsItemHovered())
+                                        {
+                                            ImGui::BeginTooltip();
+                                            ImGui::Text("%llu", uuid);
+                                            ImGui::EndTooltip();
+                                        }
+                                    }
+                                    break;
+                                }
                                 }
                             }
-                            ImGui::EndCombo();
                         }
-    
-                        if (m_Scene->IsPlaying())
-                        {
-                            if (ImGui::DragFloat2("Linear Vel", &c->linearVelocity.x, 0.025f))
-                                b2Body_SetLinearVelocity(c->bodyId, {c->linearVelocity.x, c->linearVelocity.y});
-                                
-                            if (ImGui::DragFloat("Angular Vel", &c->angularVelocity, 0.025f))
-                                b2Body_SetAngularVelocity(c->bodyId, c->angularVelocity);
-        
-                            if (ImGui::DragFloat("Gravity", &c->gravityScale, 0.025f))
-                                b2Body_SetGravityScale(c->bodyId, c->gravityScale);
-        
-        
-                            if (ImGui::DragFloat("Linear Damping", &c->linearDamping, 0.025f))
-                                b2Body_SetLinearDamping(c->bodyId, c->linearDamping);
-        
-                            if (ImGui::DragFloat("Angular Damping", &c->angularDamping, 0.025f))
-                                b2Body_SetAngularDamping(c->bodyId, c->angularDamping);
-        
-        
-                            if (ImGui::Checkbox("Fixed Rotation", &c->fixedRotation))
-                                b2Body_SetFixedRotation(c->bodyId, c->fixedRotation);
-        
-                            if (ImGui::Checkbox("Awake", &c->isAwake))
-                                b2Body_SetAwake(c->bodyId, c->isAwake);
-        
-                            if (ImGui::Checkbox("Enabled", &c->isEnabled))
-                            {
-                                c->isEnabled ? b2Body_Enable(c->bodyId) : b2Body_Disable(c->bodyId);
-                            }
-        
-                            if (ImGui::Checkbox("Sleep", &c->isEnableSleep))
-                                b2Body_EnableSleep(c->bodyId, c->isEnableSleep);
-                        }
-                        else
-                        {
-                            ImGui::DragFloat2("Linear Vel", &c->linearVelocity.x, 0.025f, FLT_MIN, FLT_MAX);
-                            ImGui::DragFloat("Angular Vel", &c->angularVelocity, 0.025f, FLT_MIN, FLT_MAX);
-                            ImGui::DragFloat("Gravity", &c->gravityScale, 0.025f, FLT_MIN, FLT_MAX);
-                            ImGui::DragFloat("Linear Damping", &c->linearDamping, 0.0f, FLT_MAX);
-                            ImGui::DragFloat("Angular Damping", &c->angularDamping, 0.025f, 0.0f, FLT_MAX);
-                            ImGui::Checkbox("Fixed Rotation", &c->fixedRotation);
-                            ImGui::Checkbox("Awake", &c->isAwake);
-                            ImGui::Checkbox("Enabled", &c->isEnabled);
-                            ImGui::Checkbox("Sleep", &c->isEnableSleep);
-                        }
-                    });
-
-                    break;
-                }
-                case CompType_Camera:
-                    {
-                        RenderComponent<Camera>("Camera", selectedEntity, [&]()
-                        {
-                            Camera *c = comp->As<Camera>();
-
-                            static const char *projectionTypeStr[] = {"Ortho", "Perspective"};
-                            const char *currentProjectionTypeStr = projectionTypeStr[static_cast<int>(c->projectionType)];
-
-                            if (ImGui::BeginCombo("Projection", currentProjectionTypeStr))
-                            {
-                                for (size_t i = 0; i < std::size(projectionTypeStr); ++i)
-                                {
-                                    bool selected = false;
-                                    if (ImGui::Selectable(projectionTypeStr[i]))
-                                    {
-                                        c->projectionType = static_cast<ICamera::Type>(i);
-                                        c->camera.projectionType = c->projectionType;
-                                        c->camera.UpdateProjectionMatrix();
-
-                                        selected = true;
-                                    }
-                                    
-                                    if (selected)
-                                    {
-                                        ImGui::SetItemDefaultFocus();
-                                    }
-                                }
-                                ImGui::EndCombo();
-                            }
-
-                            bool modified = false;
-
-                            if (c->projectionType == ICamera::Type::Perspective)
-                            {
-                                modified |= ImGui::DragFloat("Fov", &c->fov, 0.025f, 0.0f, FLT_MAX);
-                            }
-                            else
-                            {
-                                modified |= ImGui::DragFloat("Zoom", &c->zoom, 0.025f, 0.0f, FLT_MAX);
-                            }
-                            
-                            modified |= ImGui::DragFloat("Near", &c->nearClip, 0.025f, 0.0f, FLT_MAX);
-                            modified |= ImGui::DragFloat("Far", &c->farClip, 0.025f, 0.0f, FLT_MAX);
-                            modified |= ImGui::Checkbox("Primary", &c->primary);
-
-                            if (modified)
-                            {
-                                c->camera.fov = c->fov;
-                                c->camera.nearClip = c->nearClip;
-                                c->camera.farClip = c->farClip;
-                                c->camera.zoom = c->zoom;
-                                c->camera.UpdateProjectionMatrix();
-                            }
-                        });
-
-                        break;
                     }
-                case CompType_BoxCollider2D:
-                {
-                    RenderComponent<BoxCollider2D>("Box Collider 2D", selectedEntity, [&]()
+
+                    // Scene is running, we don't have to set anything
+                    else if (!isRunning && scriptClassExist && !detached)
                     {
-                        BoxCollider2D *c = comp->As<BoxCollider2D>();
-                        ImGui::DragFloat2("Size", &c->size.x, 0.025f, 0.0f, FLT_MAX);
-                        ImGui::DragFloat2("Offset", &c->offset.x, 0.025f, 0.0f, FLT_MAX);
-                        ImGui::DragFloat("Restitution", &c->restitution, 0.025f, 0.0f, FLT_MAX);
-                        ImGui::DragFloat("Friction", &c->friction, 0.025f, 0.0f, FLT_MAX);
-                        ImGui::DragFloat("Density", &c->density, 0.025f);
-                        ImGui::Checkbox("Is Sensor", &c->isSensor);
-                    });
-
-                    break;
-                }
-                case CompType_Rigidbody:
-                {
-                    RenderComponent<Rigibody>("Rigid Body", selectedEntity, [&]()
-                    {
-                        Rigibody *c = comp->As<Rigibody>();
-                        ImGui::Checkbox("Static", &c->isStatic);
-
-                    });
-                    break;
-                }
-                case CompType_BoxCollider:
-                {
-                    RenderComponent<BoxCollider>("Box Collider", selectedEntity, [&]()
-                    {
-                        BoxCollider *c = comp->As<BoxCollider>();
-                        ImGui::DragFloat3("Scale", &c->scale.x, 0.025f, 0.0f, 10000.0f);
-                        ImGui::DragFloat("Friction", &c->friction, 0.025f);
-                        ImGui::DragFloat("Static Friction", &c->staticFriction, 0.025f);
-                        ImGui::DragFloat("Restitution", &c->restitution, 0.025f);
-                        ImGui::DragFloat("Density", &c->density, 0.025f);
-                    });
-                    break;
-                }
-                case CompType_SphereCollider:
-                {
-                    RenderComponent<SphereCollider>("Sphere Collider", selectedEntity, [&]()
+                        // !IsRunning
+                        Ref<ScriptClass> entityClass = ScriptEngine::GetEntityClassesByName(c.className);
+                        if (entityClass)
                         {
-                            SphereCollider *c = comp->As<SphereCollider>();
-                            ImGui::DragFloat("Radius", &c->radius, 0.025f, 0.01f, 10000.0f);
-                            ImGui::DragFloat("Friction", &c->friction, 0.025f);
-                            ImGui::DragFloat("Static Friction", &c->staticFriction, 0.025f);
-                            ImGui::DragFloat("Restitution", &c->restitution, 0.025f);
-                            ImGui::DragFloat("Density", &c->density, 0.025f);
-                        });
-                    break;
-                }
-                case CompType_AudioSource:
-                {
-                    RenderComponent<AudioSource>("Audio Source", selectedEntity, [&]()
-                        {
-                            AudioSource *c = comp->As<AudioSource>();
+                            const auto &classFields = entityClass->GetFields();
+                            auto &entityFields = ScriptEngine::GetScriptFieldMap(selectedEntity);
 
-                            ImGui::Button("Drag Here", { 65, 30.0f });
-
-                            if (ImGui::BeginDragDropTarget())
+                            for (const auto &[name, field] : classFields)
                             {
-                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+                                if (entityFields.find(name) != entityFields.end())
                                 {
-                                    if (payload->DataSize == sizeof(AssetHandle))
-                                    {
-                                        AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
-                                        if (handle && *handle != AssetHandle(0))
-                                        {
-                                            AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(*handle);
-                                            if (metadata.type == AssetType::Audio)
-                                            {
-                                                c->handle = *handle;
-                                                Ref<FmodSound> sound = Project::GetAsset<FmodSound>(*handle);
-                                            }
-                                        }
-                                    }
-                                }
-                                ImGui::EndDragDropTarget();
-                            }
+                                    ScriptFieldInstance &scriptField = entityFields.at(name);
 
-                            ImGui::SameLine();
-                            ImGui::Text("%llu", c->handle);
-
-                            if (c->handle != AssetHandle(0))
-                            {
-                                if (Ref<FmodSound> sound = Project::GetAsset<FmodSound>(c->handle))
-                                {
-                                    if (ImGui::Button("Play", { 55.0f, 30.0f }))
-                                    {
-                                        sound->Stop();
-
-                                        sound->Play();
-                                        sound->SetVolume(c->volume);
-                                        sound->SetPitch(c->pitch);
-                                        sound->SetPan(c->pan);
-                                    }
-                                    ImGui::SameLine();
-                                    if (ImGui::Button("Stop", { 55.0f, 30.0f }))
-                                    {
-                                        sound->Stop();
-                                    }
-                                    ImGui::SameLine();
-                                    if (ImGui::Button("Pause", { 55.0f, 30.0f }))
-                                    {
-                                        sound->Pause();
-                                    }
-                                    if (sound->IsPaused())
-                                    {
-                                        ImGui::SameLine();
-                                        if (ImGui::Button("Resume", { 55.0f, 30.0f }))
-                                        {
-                                            sound->Resume();
-                                        }
-                                    }
-
-                                    ImGui::DragFloat("Volume", &c->volume, 0.001f, 0.0f, 1.0f);
-                                    ImGui::DragFloat("Pitch", &c->pitch, 0.001f);
-                                    ImGui::DragFloat("Pan", &c->pan, 0.001f);
-                                    ImGui::Checkbox("Play On Start", &c->playOnStart);
-                                }
-                            }
-                        }
-                    );
-
-                    break;
-                }
-                case CompType_Script:
-                {
-                    RenderComponent<Script>("C# Script", selectedEntity, [&]()
-                    {
-                        Script *c = comp->As<Script>();
-
-                        bool scriptClassExist = ScriptEngine::EntityClassExists(c->className);
-                        bool is_selected = false;
-
-                        if (!scriptClassExist)
-                        {
-                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));
-                        }
-
-                        auto scriptStorage = ScriptEngine::GetScriptClassStorage();
-                        std::string currentScriptClasses = c->className;
-
-                        // drop-down
-                        if (ImGui::BeginCombo("Script Class", currentScriptClasses.c_str()))
-                        {
-                            for (int i = 0; i < scriptStorage.size(); i++)
-                            {
-                                is_selected = currentScriptClasses == scriptStorage[i];
-                                if (ImGui::Selectable(scriptStorage[i].c_str(), is_selected))
-                                {
-                                    currentScriptClasses = scriptStorage[i];
-                                    c->className = scriptStorage[i];
-                                }
-                                if (is_selected) ImGui::SetItemDefaultFocus();
-                            }
-                            ImGui::EndCombo();
-                        }
-
-                        if (ImGui::Button("Detach"))
-                        {
-                            c->className = "Detached";
-                            is_selected = false;
-                        }
-
-                        bool detached = c->className == "Detached";
-
-                        // classFields
-                        bool isRunning = m_Scene->IsPlaying();
-
-                        // Editable classFields (edit mode)
-                        if (isRunning && !detached)
-                        {
-                            Ref<ScriptInstance> scriptInstance = ScriptEngine::GetEntityScriptInstance(selectedEntity.GetUUID());
-                            if (scriptInstance)
-                            {
-                                auto classFields = scriptInstance->GetScriptClass()->GetFields();
-
-                                for (const auto &[fieldName, field] : classFields)
-                                {
                                     switch (field.Type)
                                     {
                                     case ScriptFieldType::Float:
                                     {
-                                        float data = scriptInstance->GetFieldValue<float>(fieldName);
-                                        if (ImGui::DragFloat(fieldName.c_str(), &data, 0.1f))
+                                        float data = scriptField.GetValue<float>();
+                                        if (ImGui::DragFloat(name.c_str(), &data, 0.1f))
                                         {
-                                            scriptInstance->SetFieldValue<float>(fieldName, data);
+                                            scriptField.SetValue<float>(data);
                                         }
                                         break;
                                     }
                                     case ScriptFieldType::Int:
                                     {
-                                        int data = scriptInstance->GetFieldValue<int>(fieldName);
-                                        if (ImGui::DragInt(fieldName.c_str(), &data, 1))
+                                        int data = scriptField.GetValue<int>();
+                                        if (ImGui::DragInt(name.c_str(), &data))
                                         {
-                                            scriptInstance->SetFieldValue<int>(fieldName, data);
+                                            scriptField.SetValue<int>(data);
                                         }
                                         break;
                                     }
                                     case ScriptFieldType::Vector2:
                                     {
-                                        glm::vec2 data = scriptInstance->GetFieldValue<glm::vec2>(fieldName);
-                                        if (ImGui::DragFloat2(fieldName.c_str(), &data.x, 0.1f))
+                                        glm::vec2 data = scriptField.GetValue<glm::vec3>();
+                                        if (ImGui::DragFloat2(name.c_str(), &data.x, 0.1f))
                                         {
-                                            scriptInstance->SetFieldValue<glm::vec2>(fieldName, data);
+                                            scriptField.SetValue<glm::vec2>(data);
                                         }
                                         break;
                                     }
                                     case ScriptFieldType::Vector3:
                                     {
-                                        glm::vec3 data = scriptInstance->GetFieldValue<glm::vec3>(fieldName);
-                                        if (ImGui::DragFloat3(fieldName.c_str(), &data.x, 0.1f))
+                                        glm::vec3 data = scriptField.GetValue<glm::vec3>();
+                                        if (ImGui::DragFloat3(name.c_str(), &data.x, 0.1f))
                                         {
-                                            scriptInstance->SetFieldValue<glm::vec3>(fieldName, data);
+                                            scriptField.SetValue<glm::vec3>(data);
                                         }
                                         break;
                                     }
                                     case ScriptFieldType::Vector4:
                                     {
-                                        glm::vec4 data = scriptInstance->GetFieldValue<glm::vec4>(fieldName);
-                                        if (ImGui::DragFloat4(fieldName.c_str(), &data.x, 0.1f))
+                                        glm::vec4 data = scriptField.GetValue<glm::vec4>();
+                                        if (ImGui::DragFloat4(name.c_str(), &data.x, 0.1f))
                                         {
-                                            scriptInstance->SetFieldValue<glm::vec4>(fieldName, data);
+                                            scriptField.SetValue<glm::vec4>(data);
                                         }
                                         break;
                                     }
                                     case ScriptFieldType::Entity:
                                     {
-                                        uint64_t uuid = scriptInstance->GetFieldValue<uint64_t>(fieldName);
-                                        if (Entity entity = SceneManager::GetEntity(m_Scene, UUID(uuid)))
+                                        uint64_t uuid = scriptField.GetValue<uint64_t>();
+                                        std::string label = "Drag Here";
+                                        if (uuid)
                                         {
-                                            ImGui::Button(fieldName.c_str());
-                                            if (ImGui::IsItemHovered())
+                                            Entity e = SceneManager::GetEntity(m_Scene, UUID(uuid));
+                                            if (e)
                                             {
-                                                ImGui::BeginTooltip();
-                                                ImGui::Text("%llu", uuid);
-                                                ImGui::EndTooltip();
+                                                label = e.GetName();
                                             }
+                                        }
+
+                                        ImGui::Button(label.c_str());
+
+                                        if (ImGui::BeginDragDropTarget())
+                                        {
+                                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY_SOURCE_ITEM"))
+                                            {
+                                                LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ENTITY ITEM");
+                                                if (payload->DataSize == sizeof(Entity))
+                                                {
+                                                    Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene };
+                                                    uint64_t id = (uint64_t)src.GetUUID();
+                                                    scriptField.Field.Type = ScriptFieldType::Entity;
+                                                    scriptField.SetValue<uint64_t>(id);
+                                                }
+                                            }
+                                            ImGui::EndDragDropTarget();
+                                        }
+
+                                        if (ImGui::IsItemHovered())
+                                        {
+                                            ImGui::BeginTooltip();
+
+                                            if (uuid)
+                                                ImGui::Text("%llu", uuid);
+                                            else
+                                                ImGui::Text("Null Entity!");
+
+                                            ImGui::EndTooltip();
+                                        }
+
+                                        ImGui::SameLine();
+                                        if (ImGui::Button("X"))
+                                        {
+                                            scriptField.SetValue<uint64_t>(0);
                                         }
                                         break;
                                     }
                                     }
                                 }
-                            }
-                        }
-
-                        // Scene is running, we don't have to set anything
-                        else if (!isRunning && scriptClassExist && !detached)
-                        {
-                            // !IsRunning
-                            Ref<ScriptClass> entityClass = ScriptEngine::GetEntityClassesByName(c->className);
-                            if (entityClass)
-                            {
-                                const auto &classFields = entityClass->GetFields();
-                                auto &entityFields = ScriptEngine::GetScriptFieldMap(selectedEntity);
-
-                                for (const auto &[name, field] : classFields)
+                                else
                                 {
-                                    if (entityFields.find(name) != entityFields.end())
+                                    ScriptFieldInstance &fieldInstance = entityFields[name];
+                                    switch (field.Type)
                                     {
-                                        ScriptFieldInstance &scriptField = entityFields.at(name);
-
-                                        switch (field.Type)
+                                    case ScriptFieldType::Float:
+                                    {
+                                        float data = 0.0f;
+                                        if (ImGui::DragFloat(name.c_str(), &data, 0.1f))
                                         {
-                                        case ScriptFieldType::Float:
-                                        {
-                                            float data = scriptField.GetValue<float>();
-                                            if (ImGui::DragFloat(name.c_str(), &data, 0.1f))
-                                            {
-                                                scriptField.SetValue<float>(data);
-                                            }
-                                            break;
+                                            fieldInstance.Field = field;
+                                            fieldInstance.SetValue<float>(data);
                                         }
-                                        case ScriptFieldType::Int:
-                                        {
-                                            int data = scriptField.GetValue<int>();
-                                            if (ImGui::DragInt(name.c_str(), &data))
-                                            {
-                                                scriptField.SetValue<int>(data);
-                                            }
-                                            break;
-                                        }
-                                        case ScriptFieldType::Vector2:
-                                        {
-                                            glm::vec2 data = scriptField.GetValue<glm::vec3>();
-                                            if (ImGui::DragFloat2(name.c_str(), &data.x, 0.1f))
-                                            {
-                                                scriptField.SetValue<glm::vec2>(data);
-                                            }
-                                            break;
-                                        }
-                                        case ScriptFieldType::Vector3:
-                                        {
-                                            glm::vec3 data = scriptField.GetValue<glm::vec3>();
-                                            if (ImGui::DragFloat3(name.c_str(), &data.x, 0.1f))
-                                            {
-                                                scriptField.SetValue<glm::vec3>(data);
-                                            }
-                                            break;
-                                        }
-                                        case ScriptFieldType::Vector4:
-                                        {
-                                            glm::vec4 data = scriptField.GetValue<glm::vec4>();
-                                            if (ImGui::DragFloat4(name.c_str(), &data.x, 0.1f))
-                                            {
-                                                scriptField.SetValue<glm::vec4>(data);
-                                            }
-                                            break;
-                                        }
-                                        case ScriptFieldType::Entity:
-                                        {
-                                            uint64_t uuid = scriptField.GetValue<uint64_t>();
-                                            std::string label = "Drag Here";
-                                            if (uuid)
-                                            {
-                                                Entity e = SceneManager::GetEntity(m_Scene, UUID(uuid));
-                                                if (e)
-                                                {
-                                                    label = e.GetName();
-                                                }
-                                            }
-
-                                            ImGui::Button(label.c_str());
-
-                                            if (ImGui::BeginDragDropTarget())
-                                            {
-                                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY_SOURCE_ITEM"))
-                                                {
-                                                    LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ENTITY ITEM");
-                                                    if (payload->DataSize == sizeof(Entity))
-                                                    {
-                                                        Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene };
-                                                        uint64_t id = (uint64_t)src.GetUUID();
-                                                        scriptField.Field.Type = ScriptFieldType::Entity;
-                                                        scriptField.SetValue<uint64_t>(id);
-                                                    }
-                                                }
-                                                ImGui::EndDragDropTarget();
-                                            }
-
-                                            if (ImGui::IsItemHovered())
-                                            {
-                                                ImGui::BeginTooltip();
-
-                                                if (uuid)
-                                                    ImGui::Text("%llu", uuid);
-                                                else
-                                                    ImGui::Text("Null Entity!");
-
-                                                ImGui::EndTooltip();
-                                            }
-
-                                            ImGui::SameLine();
-                                            if (ImGui::Button("X"))
-                                            {
-                                                scriptField.SetValue<uint64_t>(0);
-                                            }
-                                            break;
-                                        }
-                                        }
+                                        break;
                                     }
-                                    else
+                                    case ScriptFieldType::Int:
                                     {
-                                        ScriptFieldInstance &fieldInstance = entityFields[name];
-                                        switch (field.Type)
+                                        int data = 0;
+                                        if (ImGui::DragInt(name.c_str(), &data))
                                         {
-                                        case ScriptFieldType::Float:
-                                        {
-                                            float data = 0.0f;
-                                            if (ImGui::DragFloat(name.c_str(), &data, 0.1f))
-                                            {
-                                                fieldInstance.Field = field;
-                                                fieldInstance.SetValue<float>(data);
-                                            }
-                                            break;
+                                            fieldInstance.Field = field;
+                                            fieldInstance.SetValue<int>(data);
                                         }
-                                        case ScriptFieldType::Int:
+                                        break;
+                                    }
+                                    case ScriptFieldType::Vector2:
+                                    {
+                                        glm::vec2 data(0.0f);
+                                        if (ImGui::DragFloat2(name.c_str(), &data.x, 0.1f))
                                         {
-                                            int data = 0;
-                                            if (ImGui::DragInt(name.c_str(), &data))
-                                            {
-                                                fieldInstance.Field = field;
-                                                fieldInstance.SetValue<int>(data);
-                                            }
-                                            break;
+                                            fieldInstance.Field = field;
+                                            fieldInstance.SetValue<glm::vec2>(data);
                                         }
-                                        case ScriptFieldType::Vector2:
+                                        break;
+                                    }
+                                    case ScriptFieldType::Vector3:
+                                    {
+                                        glm::vec3 data(0.0f);
+                                        if (ImGui::DragFloat3(name.c_str(), &data.x, 0.1f))
                                         {
-                                            glm::vec2 data(0.0f);
-                                            if (ImGui::DragFloat2(name.c_str(), &data.x, 0.1f))
-                                            {
-                                                fieldInstance.Field = field;
-                                                fieldInstance.SetValue<glm::vec2>(data);
-                                            }
-                                            break;
+                                            fieldInstance.Field = field;
+                                            fieldInstance.SetValue<glm::vec3>(data);
                                         }
-                                        case ScriptFieldType::Vector3:
+                                        break;
+                                    }
+                                    case ScriptFieldType::Vector4:
+                                    {
+                                        glm::vec4 data(0.0f);
+                                        if (ImGui::DragFloat4(name.c_str(), &data.x, 0.1f))
                                         {
-                                            glm::vec3 data(0.0f);
-                                            if (ImGui::DragFloat3(name.c_str(), &data.x, 0.1f))
-                                            {
-                                                fieldInstance.Field = field;
-                                                fieldInstance.SetValue<glm::vec3>(data);
-                                            }
-                                            break;
+                                            fieldInstance.Field = field;
+                                            fieldInstance.SetValue<glm::vec4>(data);
                                         }
-                                        case ScriptFieldType::Vector4:
-                                        {
-                                            glm::vec4 data(0.0f);
-                                            if (ImGui::DragFloat4(name.c_str(), &data.x, 0.1f))
-                                            {
-                                                fieldInstance.Field = field;
-                                                fieldInstance.SetValue<glm::vec4>(data);
-                                            }
-                                            break;
-                                        }
-                                        case ScriptFieldType::Entity:
-                                        {
-                                            ImGui::Button("Drag Here");
+                                        break;
+                                    }
+                                    case ScriptFieldType::Entity:
+                                    {
+                                        ImGui::Button("Drag Here");
 
-                                            if (ImGui::BeginDragDropTarget())
+                                        if (ImGui::BeginDragDropTarget())
+                                        {
+                                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY_SOURCE_ITEM"))
                                             {
-                                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY_SOURCE_ITEM"))
+                                                LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ENTITY ITEM");
+                                                if (payload->DataSize == sizeof(Entity))
                                                 {
-                                                    LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ENTITY ITEM");
-                                                    if (payload->DataSize == sizeof(Entity))
-                                                    {
-                                                        Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene };
-                                                        fieldInstance.Field = field;
-                                                        fieldInstance.SetValue<uint64_t>(src.GetUUID());
-                                                    }
+                                                    Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene };
+                                                    fieldInstance.Field = field;
+                                                    fieldInstance.SetValue<uint64_t>(src.GetUUID());
                                                 }
-                                                ImGui::EndDragDropTarget();
                                             }
-
-                                            if (ImGui::IsItemHovered())
-                                            {
-                                                ImGui::BeginTooltip();
-                                                ImGui::Text("Null Entity!");
-                                                ImGui::EndTooltip();
-                                            }
-
-                                            ImGui::SameLine();
-                                            if (ImGui::Button("X"))
-                                            {
-                                                fieldInstance.Field = field;
-                                                fieldInstance.SetValue<uint64_t>(0);
-                                            }
-
-                                            break;
+                                            ImGui::EndDragDropTarget();
                                         }
-                                        default: break;
+
+                                        if (ImGui::IsItemHovered())
+                                        {
+                                            ImGui::BeginTooltip();
+                                            ImGui::Text("Null Entity!");
+                                            ImGui::EndTooltip();
                                         }
+
+                                        ImGui::SameLine();
+                                        if (ImGui::Button("X"))
+                                        {
+                                            fieldInstance.Field = field;
+                                            fieldInstance.SetValue<uint64_t>(0);
+                                        }
+
+                                        break;
+                                    }
+                                    default: break;
                                     }
                                 }
                             }
                         }
+                    }
 
-                        if (!scriptClassExist)
-                        {
-                            ImGui::PopStyleColor();
-                        }
-                    });
-                    break;
-                }
-                case CompType_MeshRenderer:
-                {
-                    RenderComponent<MeshRenderer>("Mesh Renderer", selectedEntity, [&]()
+                    if (!scriptClassExist)
                     {
-                        MeshRenderer *c = comp->As<MeshRenderer>();
-                        
-                        ImGui::Text("Mesh [%d]: %s", c->meshIndex, c->mesh ? c->mesh->name.c_str() : "<null>");
-                        if (c->meshIndex != -1)
+                        ImGui::PopStyleColor();
+                    }
+                });
+            RenderComponent<MeshRenderer>("Mesh Renderer", selectedEntity, [&]()
+                {
+                    MeshRenderer &c = selectedEntity.GetComponent<MeshRenderer>();
+
+                    ImGui::Text("Mesh [%d]: %s", c.meshIndex, c.mesh ? c.mesh->name.c_str() : "<null>");
+                    if (c.meshIndex != -1)
+                    {
+                        auto checkerTex = m_Icons["checker128"]->GetHandle().Get();
+                        constexpr ImVec2 imageSize = { 72.0f, 72.0f };
+
+                        // Base color texture (Diffuse texture)
+                        if (ImGui::TreeNodeEx("BASE COLOR", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed))
                         {
-                            const ImVec2 imageSize = { 72.0f, 72.0f };
+                            ImGui::ColorEdit4("Color", &c.material->params.baseColor.x);
 
-                            ImGui::ColorEdit4("Base Color", &c->mesh->material.data.baseColor.x);
-                            
-                            auto checkerTex = m_Icons["checker128"]->GetHandle().Get();
+                            constexpr MaterialTextureType texType = MaterialTextureType::BaseColor;
 
-                            // Base color texture (Diffuse texture)
-                            auto baseColorTex = c->mesh->material.textures[aiTextureType_BASE_COLOR].handle ? c->mesh->material.textures[aiTextureType_BASE_COLOR].handle.Get() : checkerTex;
+                            auto baseColorTex = c.material->textures[texType]->handle ? c.material->textures[texType]->handle.Get() : checkerTex;
                             ImTextureID texId = reinterpret_cast<ImTextureID>(baseColorTex);
-                            if (ImGui::ImageButton("Base Color Texture", texId, imageSize))
+                            if (ImGui::ImageButton("Texture", texId, imageSize))
                             {
                                 const std::filesystem::path filepath = FileDialogs::OpenFile("Image Files (*.jpg,*.jpeg,*.png)\0*.jpg;*.jpeg;*.png");
                                 if (!filepath.empty())
@@ -1054,7 +1005,7 @@ namespace ignite
                                     commandList->close();
                                     device->executeCommandList(commandList);
 
-                                    c->mesh->UpdateTexture(texture, aiTextureType_BASE_COLOR);
+                                    c.material->UpdateTexture(texture, texType);
                                 }
                             }
 
@@ -1071,7 +1022,7 @@ namespace ignite
                                             if (metadata.type == AssetType::Texture)
                                             {
                                                 Ref<Texture> texture = Project::GetAsset<Texture>(*handle);
-                                                c->mesh->UpdateTexture(texture, aiTextureType_BASE_COLOR);
+                                                c.material->UpdateTexture(texture, texType);
                                             }
                                         }
                                     }
@@ -1080,12 +1031,19 @@ namespace ignite
                                 ImGui::EndDragDropTarget();
                             }
                             ImGui::SameLine();
-                            ImGui::Text("Base Texture");
+                            ImGui::Text("Texture");
 
-                            // Normal texture
-                            auto normalTex = c->mesh->material.textures[aiTextureType_NORMALS].handle ? c->mesh->material.textures[aiTextureType_NORMALS].handle.Get() : checkerTex;
-                            texId = reinterpret_cast<ImTextureID>(normalTex);
-                            if (ImGui::ImageButton("Normal Texture", texId, imageSize))
+                            ImGui::TreePop();
+                        }
+
+                        // Normal texture
+                        if (ImGui::TreeNodeEx("NORMALS", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed))
+                        {
+                            constexpr MaterialTextureType texType = MaterialTextureType::Normals;
+
+                            auto baseColorTex = c.material->textures[texType]->handle ? c.material->textures[texType]->handle.Get() : checkerTex;
+                            ImTextureID texId = reinterpret_cast<ImTextureID>(baseColorTex);
+                            if (ImGui::ImageButton("Texture", texId, imageSize))
                             {
                                 const std::filesystem::path filepath = FileDialogs::OpenFile("Image Files (*.jpg,*.jpeg,*.png)\0*.jpg;*.jpeg;*.png");
                                 if (!filepath.empty())
@@ -1102,17 +1060,47 @@ namespace ignite
                                     commandList->close();
                                     device->executeCommandList(commandList);
 
-                                    c->mesh->UpdateTexture(texture, aiTextureType_NORMALS);
+                                    c.material->UpdateTexture(texture, texType);
                                 }
                             }
-                            ImGui::SameLine();
-                            ImGui::Text("Normal Texture");
 
-                            // Specular texture
-                            ImGui::DragFloat("Specular", &c->mesh->material.data.specularFactor, 0.025f, 0.0f, 1.0f);
-                            auto specularTex = c->mesh->material.textures[aiTextureType_SPECULAR].handle ? c->mesh->material.textures[aiTextureType_SPECULAR].handle.Get() : checkerTex;
-                            texId = reinterpret_cast<ImTextureID>(specularTex);
-                            if (ImGui::ImageButton("Specular Texture", texId, imageSize))
+                            if (ImGui::BeginDragDropTarget())
+                            {
+                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+                                {
+                                    if (payload->DataSize == sizeof(AssetHandle))
+                                    {
+                                        AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
+                                        if (handle && *handle != AssetHandle(0))
+                                        {
+                                            AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(*handle);
+                                            if (metadata.type == AssetType::Texture)
+                                            {
+                                                Ref<Texture> texture = Project::GetAsset<Texture>(*handle);
+                                                c.material->UpdateTexture(texture, texType);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                ImGui::EndDragDropTarget();
+                            }
+                            ImGui::SameLine();
+                            ImGui::Text("Texture");
+
+                            ImGui::TreePop();
+                        }
+
+                        // Specular texture
+                        if (ImGui::TreeNodeEx("SPECULAR", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed))
+                        {
+                            ImGui::DragFloat("Specular Factor", &c.material->params.specularFactor, 0.025f, 0.0f, 1.0f);
+
+                            constexpr MaterialTextureType texType = MaterialTextureType::Specular;
+
+                            auto baseColorTex = c.material->textures[texType]->handle ? c.material->textures[texType]->handle.Get() : checkerTex;
+                            ImTextureID texId = reinterpret_cast<ImTextureID>(baseColorTex);
+                            if (ImGui::ImageButton("Texture", texId, imageSize))
                             {
                                 const std::filesystem::path filepath = FileDialogs::OpenFile("Image Files (*.jpg,*.jpeg,*.png)\0*.jpg;*.jpeg;*.png");
                                 if (!filepath.empty())
@@ -1129,14 +1117,42 @@ namespace ignite
                                     commandList->close();
                                     device->executeCommandList(commandList);
 
-                                    c->mesh->UpdateTexture(texture, aiTextureType_SPECULAR);
+                                    c.material->UpdateTexture(texture, texType);
                                 }
                             }
-                            ImGui::SameLine();
-                            ImGui::Text("Specular Texture");
 
-                            // Metalness and Roughness texture
-                            ImGui::DragFloat("Metallic Factor", &c->mesh->material.data.metallicFactor, 0.025f, 0.0f, 1.0f);
+                            if (ImGui::BeginDragDropTarget())
+                            {
+                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+                                {
+                                    if (payload->DataSize == sizeof(AssetHandle))
+                                    {
+                                        AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
+                                        if (handle && *handle != AssetHandle(0))
+                                        {
+                                            AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(*handle);
+                                            if (metadata.type == AssetType::Texture)
+                                            {
+                                                Ref<Texture> texture = Project::GetAsset<Texture>(*handle);
+                                                c.material->UpdateTexture(texture, texType);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                ImGui::EndDragDropTarget();
+                            }
+                            ImGui::SameLine();
+                            ImGui::Text("Texture");
+
+                            ImGui::TreePop();
+                        }
+
+
+                        // Metalness and Roughness texture
+                        if (ImGui::TreeNodeEx("METALNESS & ROUGHNESS", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed))
+                        {
+                            ImGui::DragFloat("Metallic Factor", &c.material->params.metallicFactor, 0.025f, 0.0f, 1.0f);
                             if (ImGui::IsItemHovered())
                             {
                                 ImGui::BeginTooltip();
@@ -1144,7 +1160,7 @@ namespace ignite
                                 ImGui::EndTooltip();
                             }
 
-                            ImGui::DragFloat("Roughness Factor", &c->mesh->material.data.roughnessFactor, 0.025f, 0.0f, 1.0f);
+                            ImGui::DragFloat("Roughness Factor", &c.material->params.roughnessFactor, 0.025f, 0.0f, 1.0f);
                             if (ImGui::IsItemHovered())
                             {
                                 ImGui::BeginTooltip();
@@ -1152,9 +1168,11 @@ namespace ignite
                                 ImGui::EndTooltip();
                             }
 
-                            auto roughnessTex = c->mesh->material.textures[aiTextureType_DIFFUSE_ROUGHNESS].handle ? c->mesh->material.textures[aiTextureType_DIFFUSE_ROUGHNESS].handle.Get() : checkerTex;
-                            texId = reinterpret_cast<ImTextureID>(roughnessTex);
-                            if (ImGui::ImageButton("Metallic & Roughness Texture", texId, imageSize))
+                            constexpr MaterialTextureType texType = MaterialTextureType::Roughness;
+
+                            auto baseColorTex = c.material->textures[texType]->handle ? c.material->textures[texType]->handle.Get() : checkerTex;
+                            ImTextureID texId = reinterpret_cast<ImTextureID>(baseColorTex);
+                            if (ImGui::ImageButton("Texture", texId, imageSize))
                             {
                                 const std::filesystem::path filepath = FileDialogs::OpenFile("Image Files (*.jpg,*.jpeg,*.png)\0*.jpg;*.jpeg;*.png");
                                 if (!filepath.empty())
@@ -1171,125 +1189,171 @@ namespace ignite
                                     commandList->close();
                                     device->executeCommandList(commandList);
 
-                                    c->mesh->UpdateTexture(texture, aiTextureType_DIFFUSE_ROUGHNESS);
+                                    c.material->UpdateTexture(texture, texType);
                                 }
                             }
-                            ImGui::SameLine();
-                            ImGui::Text("Metallic & Roughness Texture");
 
-                            // Emissive texture
-                            ImGui::DragFloat("Emissive", &c->mesh->material.data.emissiveFactor, 0.025f, 0.0f, 1.0f);
-                            auto emissiveTex = c->mesh->material.textures[aiTextureType_EMISSIVE].handle ? c->mesh->material.textures[aiTextureType_EMISSIVE].handle.Get() : checkerTex;
-                            texId = reinterpret_cast<ImTextureID>(emissiveTex);
-                            if (ImGui::ImageButton("Emissive Texture", texId, imageSize))
+                            if (ImGui::BeginDragDropTarget())
                             {
-                                const std::filesystem::path filepath = FileDialogs::OpenFile("Image Files (*.jpg,*.jpeg,*.png)\0*.jpg;*.jpeg;*.png");
-                                if (!filepath.empty())
+                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
                                 {
-                                    nvrhi::IDevice *device = Application::GetGraphicsDevice();
-
-                                    TextureCreateInfo createInfo;
-                                    createInfo.format = nvrhi::Format::RGBA8_UNORM;
-                                    Ref<Texture> texture = Texture::Create(filepath, createInfo);
-
-                                    nvrhi::CommandListHandle commandList = device->createCommandList();
-                                    commandList->open();
-                                    texture->Write(commandList);
-                                    commandList->close();
-                                    device->executeCommandList(commandList);
-
-                                    c->mesh->UpdateTexture(texture, aiTextureType_EMISSIVE);
+                                    if (payload->DataSize == sizeof(AssetHandle))
+                                    {
+                                        AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
+                                        if (handle && *handle != AssetHandle(0))
+                                        {
+                                            AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(*handle);
+                                            if (metadata.type == AssetType::Texture)
+                                            {
+                                                Ref<Texture> texture = Project::GetAsset<Texture>(*handle);
+                                                c.material->UpdateTexture(texture, texType);
+                                            }
+                                        }
+                                    }
                                 }
+
+                                ImGui::EndDragDropTarget();
                             }
                             ImGui::SameLine();
-                            ImGui::Text("Emissive Texture");
+                            ImGui::Text("Texture");
+
+                            ImGui::TreePop();
                         }
-                    });
-                    break;
-                }
-                case CompType_SkinnedMesh:
-                {
-                    RenderComponent<SkinnedMesh>("Skinned Mesh", selectedEntity, [&]()
-                    {
-                        SkinnedMesh *c = comp->As<SkinnedMesh>();
 
-                        std::string btnLabel = c->filepath.empty() ? "Load" : "Loaded";
-                        if (ImGui::Button(btnLabel.c_str(), {55.0f, 30.0f}))
+                        // Emissive texture
+                        if (ImGui::TreeNodeEx("EMISSIVE", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed))
                         {
-                            std::filesystem::path filepath = FileDialogs::OpenFile("3D Files (*.glb;*.gltf;*.fbx)\0*.glb;*.gltf;*.fbx");
-                            if (!filepath.empty())
+                            ImGui::DragFloat("Emissive Factor", &c.material->params.emissiveFactor, 0.025f, 0.0f, 1.0f);
+
+                            constexpr MaterialTextureType texType = MaterialTextureType::Emissive;
+
+                            auto baseColorTex = c.material->textures[texType]->handle ? c.material->textures[texType]->handle.Get() : checkerTex;
+                            ImTextureID texId = reinterpret_cast<ImTextureID>(baseColorTex);
+                            if (ImGui::ImageButton("Texture", texId, imageSize))
                             {
-                                AssetImporter::LoadSkinnedMesh(m_Scene, selectedEntity, filepath);
+                                const std::filesystem::path filepath = FileDialogs::OpenFile("Image Files (*.jpg,*.jpeg,*.png)\0*.jpg;*.jpeg;*.png");
+                                if (!filepath.empty())
+                                {
+                                    nvrhi::IDevice *device = Application::GetGraphicsDevice();
+
+                                    TextureCreateInfo createInfo;
+                                    createInfo.format = nvrhi::Format::RGBA8_UNORM;
+                                    Ref<Texture> texture = Texture::Create(filepath, createInfo);
+
+                                    nvrhi::CommandListHandle commandList = device->createCommandList();
+                                    commandList->open();
+                                    texture->Write(commandList);
+                                    commandList->close();
+                                    device->executeCommandList(commandList);
+
+                                    c.material->UpdateTexture(texture, texType);
+                                }
                             }
+
+                            if (ImGui::BeginDragDropTarget())
+                            {
+                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+                                {
+                                    if (payload->DataSize == sizeof(AssetHandle))
+                                    {
+                                        AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
+                                        if (handle && *handle != AssetHandle(0))
+                                        {
+                                            AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(*handle);
+                                            if (metadata.type == AssetType::Texture)
+                                            {
+                                                Ref<Texture> texture = Project::GetAsset<Texture>(*handle);
+                                                c.material->UpdateTexture(texture, texType);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                ImGui::EndDragDropTarget();
+                            }
+                            ImGui::SameLine();
+                            ImGui::Text("Texture");
+
+                            ImGui::TreePop();
+                        }
+                    }
+                });
+            RenderComponent<SkinnedMesh>("Skinned Mesh", selectedEntity, [&]()
+                {
+                    SkinnedMesh &c = selectedEntity.GetComponent<SkinnedMesh>();
+
+                    std::string btnLabel = c.filepath.empty() ? "Load" : "Loaded";
+                    if (ImGui::Button(btnLabel.c_str(), { 55.0f, 30.0f }))
+                    {
+                        std::filesystem::path filepath = FileDialogs::OpenFile("3D Files (*.glb;*.gltf;*.fbx)\0*.glb;*.gltf;*.fbx");
+                        if (!filepath.empty())
+                        {
+                            AssetImporter::LoadSkinnedMesh(m_Scene, selectedEntity, filepath);
+                            c.filepath = Project::GetActive()->GetAssetRelativeFilepath(filepath);
+                        }
+                    }
+
+                    ImGui::SameLine();
+                    ImGui::Text("%s", c.filepath.generic_string().c_str());
+
+                    if (!c.animations.empty())
+                    {
+                        ImGui::SeparatorText("Animations");
+
+                        if (ImGui::Button("Play"))
+                        {
+                            SkeletalAnimation &anim = c.animations[c.activeAnimIndex];
+                            anim.isPlaying = true;
                         }
 
                         ImGui::SameLine();
-                        ImGui::Text("%s", c->filepath.generic_string().c_str());
 
-                        if (!c->animations.empty())
+                        if (ImGui::Button("Stop"))
                         {
-                            ImGui::SeparatorText("Animations");
-                            
-                            if (ImGui::Button("Play"))
+                            SkeletalAnimation &anim = c.animations[c.activeAnimIndex];
+                            anim.isPlaying = false;
+                        }
+
+                        ImGui::SameLine();
+
+                        if (ImGui::Button("Save Animations"))
+                        {
+                            const std::filesystem::path directory = FileDialogs::SelectFolder();
+                            if (!directory.empty())
                             {
-                                SkeletalAnimation &anim = c->animations[c->activeAnimIndex];
-                                anim.isPlaying = true;
-                            }
-
-                            ImGui::SameLine();
-
-                            if (ImGui::Button("Stop"))
-                            {
-                                SkeletalAnimation &anim = c->animations[c->activeAnimIndex];
-                                anim.isPlaying = false;
-                            }
-
-                            ImGui::SameLine();
-
-                            if (ImGui::Button("Save Animations"))
-                            {
-                                const std::filesystem::path directory = FileDialogs::SelectFolder();
-                                if (!directory.empty())
+                                for (auto &anim : c.animations)
                                 {
-                                    for (auto &anim : c->animations)
-                                    {
-                                        std::filesystem::path filepath = directory / std::format("anim_{0}.anim", anim.name);
-                                        AnimationSerializer sr(anim);
-                                        sr.Serialize(filepath);
-                                    }
+                                    std::filesystem::path filepath = directory / std::format("anim_{0}.anim", anim.name);
+                                    AnimationSerializer sr(anim);
+                                    sr.Serialize(filepath);
                                 }
-                            }
-
-                            if (ImGui::TreeNodeEx("Animations", 0))
-                            {
-                                for (size_t animIdx = 0; animIdx < c->animations.size(); ++animIdx)
-                                {
-                                    const SkeletalAnimation &anim = c->animations[animIdx];
-                                    if (ImGui::TreeNodeEx(anim.name.c_str(), ImGuiTreeNodeFlags_Leaf, "%s", anim.name.c_str()))
-                                    {
-                                        if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
-                                        {
-                                            bool play = false;
-                                            if (c->animations[c->activeAnimIndex].isPlaying)
-                                                play = true;
-                                            
-                                            c->activeAnimIndex = static_cast<int>(animIdx);
-                                            c->animations[c->activeAnimIndex].isPlaying = play;
-                                        }
-                                        ImGui::TreePop();
-                                    }
-                                }
-                                ImGui::TreePop();
                             }
                         }
-                    });
-                    break;
-                }
-                default: break;
-                }
 
-                ImGui::PopID();
-            }
+                        if (ImGui::TreeNodeEx("Animations", 0))
+                        {
+                            for (size_t animIdx = 0; animIdx < c.animations.size(); ++animIdx)
+                            {
+                                const SkeletalAnimation &anim = c.animations[animIdx];
+                                if (ImGui::TreeNodeEx(anim.name.c_str(), ImGuiTreeNodeFlags_Leaf, "%s", anim.name.c_str()))
+                                {
+                                    if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+                                    {
+                                        bool play = false;
+                                        if (c.animations[c.activeAnimIndex].isPlaying)
+                                            play = true;
+
+                                        c.activeAnimIndex = static_cast<int>(animIdx);
+                                        c.animations[c.activeAnimIndex].isPlaying = play;
+                                    }
+                                    ImGui::TreePop();
+                                }
+                            }
+                            ImGui::TreePop();
+                        }
+                    }
+                });
+            
 
             if (ImGui::BeginPopup("##add_component_context", ImGuiWindowFlags_NoDecoration))
             {
@@ -1308,17 +1372,18 @@ namespace ignite
                     std::string search = stringutils::ToLower(compNameFilterResultStr);
                     for (const auto &[strName, type] : s_ComponentsName)
                     {
-                        bool found = false;
-                        for (IComponent *comp : comps)
+                        /*bool found = false;
+                        for (int i = 0; i < CompType_LAST; ++i)
                         {
-                            if (comp->GetType() == type)
+                            m_Scene->registry->
+                            if (entity->GetType() == type)
                             {
                                 found = true;
                                 break;
                             }
                         }
                         if (found)
-                            continue;
+                            continue;*/
 
                         std::string nameLower = stringutils::ToLower(strName);
                         if (nameLower.find(search) != std::string::npos)
@@ -1373,7 +1438,7 @@ namespace ignite
                 {
                     for (const auto &[strName, type] : s_ComponentsName)
                     {
-                        bool found = false;
+                        /*bool found = false;
                         for (IComponent *comp : comps)
                         {
                             if (comp->GetType() == type)
@@ -1385,7 +1450,7 @@ namespace ignite
                         if (found)
                         {
                             continue;
-                        }
+                        }*/
 
                         if (ImGui::Selectable(strName.c_str()))
                         {
@@ -1778,12 +1843,11 @@ namespace ignite
     template<typename T, typename UIFunction>
     void ScenePanel::RenderComponent(const std::string &name, Entity entity, UIFunction uiFunction, bool allowedToRemove)
     {
-
-        constexpr ImGuiTreeNodeFlags treeNdeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth
-            | ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_FramePadding;
-
         if (entity.HasComponent<T>())
         {
+            constexpr ImGuiTreeNodeFlags treeNdeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth
+                | ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_FramePadding;
+
             T &comp = entity.GetComponent<T>();
             UUID compID = comp.GetCompID();
 

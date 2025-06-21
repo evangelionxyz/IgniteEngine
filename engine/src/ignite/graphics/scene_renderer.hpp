@@ -71,6 +71,8 @@ namespace ignite
 
         void OnGuiRender();
 
+        static SceneRenderer *GetActive();
+
         Ref<GraphicsPipeline> &GetBatchQuadPipeline() { return m_BatchQuadPipeline; }
         Ref<GraphicsPipeline> &GetBatchLinePipeline() { return m_BatchLinePipeline; }
         Ref<GraphicsPipeline> &GetEnvironmentPipeline() { return m_EnvironmentPipeline; }

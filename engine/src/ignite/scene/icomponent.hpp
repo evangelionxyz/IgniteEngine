@@ -22,6 +22,7 @@ namespace ignite
         CompType_SphereCollider,
         CompType_AudioSource,
         CompType_Script,
+        CompType_LAST
     };
 
     class IComponent

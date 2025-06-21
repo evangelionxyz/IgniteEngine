@@ -20,8 +20,6 @@ namespace ignite
     class Environment;
     class SceneRenderer;
 
-    using EntityComponents = std::unordered_map<entt::entity, std::vector<IComponent *>>;
-
     class Scene : public Asset
     {
     public:
@@ -52,8 +50,6 @@ namespace ignite
 
         std::unordered_map<UUID, entt::entity> entities; // uuid to entity
         
-        EntityComponents registeredComps;
-
         Scope<Physics2D> physics2D;
         Scope<JoltScene> physics;
 

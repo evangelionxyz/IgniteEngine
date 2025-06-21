@@ -18,18 +18,17 @@
 
 namespace ignite
 {
-    static std::unordered_map<std::string, Material::TextureData> textureCache;
-    
     // Mesh loader
-    void MeshLoader::ProcessNode(const aiScene *scene, aiNode *node, const std::filesystem::path &filepath, std::vector<Ref<Mesh>> &meshes, std::vector<NodeInfo> &nodes, const Skeleton &skeleton, i32 parentNodeID)
+    void MeshLoader::ProcessNode(const aiScene *scene, const aiNode *node, const std::filesystem::path &filepath, std::vector<Ref<Mesh>> &meshes, std::vector<NodeInfo> &nodes, const Skeleton &skeleton, const int parentNodeID)
     {
         // Create a node entry and get its index
         NodeInfo nodeInfo;
+        const int currentNodeID = static_cast<int>(nodes.size());
+
         nodeInfo.localTransform = Math::AssimpToGlmMatrix(node->mTransformation);
-        nodeInfo.id = nodes.size();
+        nodeInfo.id = currentNodeID;
         nodeInfo.parentID = parentNodeID;
         nodeInfo.name = node->mName.C_Str();
-        i32 currentNodeID = nodes.size();
 
         nodes.push_back(nodeInfo);
 
@@ -39,43 +38,39 @@ namespace ignite
             nodes[parentNodeID].childrenIDs.push_back(currentNodeID);
         }
 
+        // Load meshes
         for (uint32_t i = 0; i < node->mNumMeshes; ++i)
         {
-            i32 meshIndex = node->mMeshes[i];
+            int meshIndex = node->mMeshes[i];
             aiMesh *assimpMesh = scene->mMeshes[meshIndex];
+            const Ref<Mesh> &mesh = meshes[meshIndex];
 
-            meshes[meshIndex]->name = assimpMesh->mName.C_Str();
+            mesh->name = assimpMesh->mName.C_Str();
+            mesh->materialIndex = assimpMesh->mMaterialIndex;
 
             // Set node
-            meshes[meshIndex]->nodeID = currentNodeID;
+            mesh->nodeID = currentNodeID;
 
             // Set parent node
             if (nodeInfo.parentID != -1)
             {
                 // Go up 
-                NodeInfo parentNode = nodes[nodeInfo.parentID];
-                auto it = skeleton.nameToJointMap.find(parentNode.name);
-                if (it != skeleton.nameToJointMap.end())
+                const NodeInfo &parentNode = nodes[nodeInfo.parentID];
+                if (const auto it = skeleton.nameToJointMap.find(parentNode.name); it != skeleton.nameToJointMap.end())
                 {
-                    meshes[meshIndex]->nodeParentID = nodeInfo.parentID;
+                    mesh->nodeParentID = nodeInfo.parentID;
                 }
             }
 
             // Store mesh index in the node
             nodes[currentNodeID].meshIndices.push_back(meshIndex);
 
-            if (assimpMesh->mMaterialIndex >= 0)
-            {
-                aiMaterial *mat = scene->mMaterials[assimpMesh->mMaterialIndex];
-                LoadMaterial(scene, mat, meshes[meshIndex]->material, filepath);
-            }
-
-            LoadSingleMesh(scene, assimpMesh, meshIndex, meshes[meshIndex]->data, skeleton, meshes[meshIndex]->aabb);
+            LoadSingleMesh(scene, assimpMesh, meshIndex, mesh->data, skeleton, mesh->aabb);
 
             // Load bones
             if (assimpMesh->HasBones())
             {
-                ProcessBoneWeights(assimpMesh, meshes[meshIndex]->data, meshes[meshIndex]->boneInfo, meshes[meshIndex]->boneMapping, skeleton);
+                ProcessBoneWeights(assimpMesh, mesh->data, mesh->boneInfo, mesh->boneMapping, skeleton);
             }
 
             LOG_WARN("[Mesh Loader] {} [{}] Loaded", assimpMesh->mName.data, meshIndex);
@@ -145,7 +140,7 @@ namespace ignite
         for (size_t i = 0; i < skeleton.joints.size(); ++i)
         {
             outBoneInfo[i].offsetMatrix = skeleton.joints[i].inverseBindPose;
-            outBoneMapping[skeleton.joints[i].name] = static_cast<i32>(i);
+            outBoneMapping[skeleton.joints[i].name] = static_cast<int>(i);
         }
 
         for (uint32_t boneIndex = 0; boneIndex < assimpMesh->mNumBones; ++boneIndex)
@@ -232,17 +227,17 @@ namespace ignite
         ExtractSkeletonRecursive(scene->mRootNode, -1, skeleton, inverseBindMatrices);
     }
 
-    void MeshLoader::ExtractSkeletonRecursive(aiNode *node, i32 parentJointId, Skeleton &skeleton, const std::unordered_map<std::string, glm::mat4> &inverseBindMatrices)
+    void MeshLoader::ExtractSkeletonRecursive(aiNode *node, int parentJointId, Skeleton &skeleton, const std::unordered_map<std::string, glm::mat4> &inverseBindMatrices)
     {
         std::string nodeName = node->mName.C_Str();
         bool isJoint = inverseBindMatrices.contains(nodeName);
-        i32 currentJointId = -1;
+        int currentJointId = -1;
         if (isJoint)
         {
             // Add this node as a joint
             Joint joint;
             joint.name = nodeName;
-            joint.id = static_cast<i32>(skeleton.joints.size());
+            joint.id = static_cast<int>(skeleton.joints.size());
             joint.parentJointId = parentJointId;
             joint.inverseBindPose = inverseBindMatrices.at(nodeName);
             joint.localTransform = Math::AssimpToGlmMatrix(node->mTransformation);
@@ -253,7 +248,7 @@ namespace ignite
         }
 
         // process child (use parent id if this node is not a joint)
-        i32 childParentId = isJoint ? currentJointId : parentJointId;
+        int childParentId = isJoint ? currentJointId : parentJointId;
         for (uint32_t i = 0; i < node->mNumChildren; ++i)
         {
             ExtractSkeletonRecursive(node->mChildren[i], childParentId, skeleton, inverseBindMatrices);
@@ -265,7 +260,7 @@ namespace ignite
         std::vector<Joint> sortedJoints;
         sortedJoints.reserve(skeleton.joints.size());
         // use a queue to process joints level by level
-        std::queue<i32> queue;
+        std::queue<int> queue;
         // start with root joints
         for (size_t i = 0; i < skeleton.joints.size(); ++i)
         {
@@ -275,16 +270,16 @@ namespace ignite
         // BFS traversal to ensure parents are processed before children
         while (!queue.empty())
         {
-            i32 jointIdx = queue.front();
+            int jointIdx = queue.front();
             queue.pop();
             sortedJoints.push_back(skeleton.joints[jointIdx]);
-            i32 newIdx = static_cast<int>(sortedJoints.size()) - 1;
+            int newIdx = static_cast<int>(sortedJoints.size()) - 1;
             // Update joint indices in the new array
             if (sortedJoints[newIdx].parentJointId != -1)
             {
                 // Find new parent index
                 std::string parentName = skeleton.joints[sortedJoints[newIdx].parentJointId].name;
-                for (i32 j = 0; j < newIdx; ++j)
+                for (int j = 0; j < newIdx; ++j)
                 {
                     if (sortedJoints[j].name == parentName)
                     {
@@ -312,39 +307,6 @@ namespace ignite
         skeleton.joints = std::move(sortedJoints);
     }
 
-    void MeshLoader::LoadMaterial(const aiScene *scene, const aiMaterial *assimpMaterial, Material &material, const std::filesystem::path &filepath)
-    {
-        aiColor4D baseColor(1.0f, 1.0f, 1.0f, 1.0f);
-        aiColor4D diffuseColor(1.0f, 1.0f, 1.0f, 1.0f);
-        aiColor4D emissiveColor(0.0f, 0.0f, 0.0f, 0.0f);
-        f32 reflectivity = 0.0f;
-
-        assimpMaterial->Get(AI_MATKEY_BASE_COLOR, baseColor);
-        assimpMaterial->Get(AI_MATKEY_COLOR_DIFFUSE, diffuseColor);
-        assimpMaterial->Get(AI_MATKEY_METALLIC_FACTOR, material.data.metallicFactor);
-        assimpMaterial->Get(AI_MATKEY_SPECULAR_FACTOR, material.data.specularFactor);
-        assimpMaterial->Get(AI_MATKEY_ROUGHNESS_FACTOR, material.data.roughnessFactor);
-        assimpMaterial->Get(AI_MATKEY_COLOR_EMISSIVE, emissiveColor);
-        assimpMaterial->Get(AI_MATKEY_REFLECTIVITY, reflectivity);
-        material.data.baseColor = { baseColor.r, baseColor.g, baseColor.b, 1.0f };
-        
-        if (diffuseColor.r > 0.0f)
-        {
-            material.data.emissiveFactor = emissiveColor.r / diffuseColor.r;
-        }
-
-        // load textures
-        LoadTextures(scene, assimpMaterial, &material, aiTextureType_BASE_COLOR, filepath);
-        LoadTextures(scene, assimpMaterial, &material, aiTextureType_SPECULAR, filepath);
-        LoadTextures(scene, assimpMaterial, &material, aiTextureType_EMISSIVE, filepath);
-        LoadTextures(scene, assimpMaterial, &material, aiTextureType_DIFFUSE_ROUGHNESS, filepath);
-        LoadTextures(scene, assimpMaterial, &material, aiTextureType_NORMALS, filepath);
-
-        // set transparent and reflectivity
-        material._transparent = false;
-        material._reflective = reflectivity > 0.0f;
-    }
-
     void MeshLoader::LoadAnimation(const aiScene *scene, std::vector<SkeletalAnimation> &animations)
     {
         animations.resize(scene->mNumAnimations);
@@ -353,123 +315,6 @@ namespace ignite
         {
             aiAnimation *anim = scene->mAnimations[i];
             animations[i] = SkeletalAnimation(anim);
-        }
-    }
-
-    void MeshLoader::LoadTextures(const aiScene *scene, const aiMaterial *material, Material *meshMaterial, aiTextureType type, const std::filesystem::path &modelFilepath)
-    {
-        if (const uint32_t texCount = material->GetTextureCount(type))
-        {
-            for (uint32_t i = 0; i < texCount; ++i)
-            {
-                aiString aiTextureFilepath;
-                material->GetTexture(type, i, &aiTextureFilepath);
-
-                LOG_INFO("[Material] Texture type {}", aiTextureTypeToString(type));
-
-                // try to load from cache
-                for (auto &[path, tex] : textureCache)
-                {
-                    if (std::strcmp(path.c_str(), aiTextureFilepath.C_Str()) == 0)
-                    {
-                        meshMaterial->textures[type] = tex;
-                        LOG_WARN("[Material] {} Loaded from cache", path.c_str());
-                        return;
-                    }
-                }
-
-                nvrhi::IDevice *device = Application::GetDeviceManager()->GetDevice();
-
-                stbi_set_flip_vertically_on_load(false);
-                int width, height, channels;
-                uint8_t *sourceData = nullptr;
-
-                // create new texture
-                // Load embedded texture
-                const aiTexture *embeddedTexture = scene->GetEmbeddedTexture(aiTextureFilepath.C_Str());
-                if (embeddedTexture && meshMaterial->textures[type].handle == nullptr)
-                {
-                    // handle compressed textures
-                    if (embeddedTexture->mHeight == 0)
-                    {
-                        LOG_INFO("[Material] Loading embedded compressed format texture of size {} bytes", embeddedTexture->mWidth);
-                        meshMaterial->textures[type].buffer.Data = stbi_load_from_memory(reinterpret_cast<const stbi_uc *>(embeddedTexture->pcData),
-                            embeddedTexture->mWidth, &width, &height, &channels, 4);
-                    }
-                    else
-                    {
-                        width = static_cast<int>(embeddedTexture->mWidth);
-                        height = static_cast<int>(embeddedTexture->mHeight);
-
-                        LOG_INFO("[Material] Loading embedded uncompressed texture of size {}x{}", width, height);
-
-                        // Allocate space for RGBA8 data
-                        uint8_t *destinationData = new uint8_t[width * height * 4];
-
-                        // Assimp embedded uncompressed texture data is usually in RGB format without alpha
-                        // You can test with alpha channel (or assume RGB with alpha set to 255)
-                        for (int p = 0; p < width * height; ++p)
-                        {
-                            destinationData[p * 4 + 0] = sourceData[p * 3 + 0]; // R
-                            destinationData[p * 4 + 1] = sourceData[p * 3 + 1]; // G
-                            destinationData[p * 4 + 2] = sourceData[p * 3 + 2]; // B
-                            destinationData[p * 4 + 3] = 255;                   // A
-                        }
-
-                        meshMaterial->textures[type].buffer.Data = destinationData;
-
-                        sourceData = reinterpret_cast<uint8_t *>(embeddedTexture->pcData);
-                        LOG_ASSERT(sourceData, "[Material] Failed to load texture");
-                    }
-                }
-                else
-                {
-                    // Texture from file
-                    std::filesystem::path filepath = modelFilepath.parent_path() / std::string(aiTextureFilepath.C_Str());
-                    if (!std::filesystem::exists(filepath))
-                    {
-                        LOG_ERROR("[Material] texture path is not found! '{}'", filepath.generic_string());
-                        return;
-                    }
-
-                    LOG_INFO("[Material] Load texture from '{}'", filepath.generic_string());
-                    sourceData = stbi_load(filepath.generic_string().c_str(), &width, &height, &channels, 4);
-                    LOG_ASSERT(sourceData, "[Material] Failed to load texture");
-                }
-
-                // 
-                if (sourceData)
-                {
-                    meshMaterial->textures[type].buffer.Data = sourceData;
-                    LOG_ASSERT(meshMaterial->textures[type].buffer.Data, "[Material] Failed to load texture");
-                }
-
-                if (meshMaterial->textures[type].buffer.Data)
-                {
-                    meshMaterial->textures[type].width = static_cast<uint32_t>(width);
-                    meshMaterial->textures[type].height = static_cast<uint32_t>(height);
-                    meshMaterial->textures[type].buffer.Size = static_cast<uint64_t>(width * height) * 4u;
-                    meshMaterial->textures[type].rowPitch = width * 4u;
-
-                    // create texture
-                    const auto textureDesc = nvrhi::TextureDesc()
-                        .setDimension(nvrhi::TextureDimension::Texture2D)
-                        .setWidth(width)
-                        .setHeight(height)
-                        .setFormat(nvrhi::Format::RGBA8_UNORM)
-                        .setInitialState(nvrhi::ResourceStates::ShaderResource)
-                        .setKeepInitialState(true)
-                        .setMipLevels(meshMaterial->mipLevels)
-                        .setDebugName("Material embedded Texture");
-
-                    meshMaterial->textures[type].handle = device->createTexture(textureDesc);
-                    LOG_ASSERT(meshMaterial->textures[type].handle, "[Material] Failed to create texture!");
-
-                    // store to cache
-                    textureCache[aiTextureFilepath.C_Str()] = meshMaterial->textures[type];
-                    meshMaterial->_shouldWriteTexture = true;
-                }
-            }
         }
     }
 
@@ -490,16 +335,11 @@ namespace ignite
             }
 #if 0
             // Apply node's world transform to all its meshes
-            for (i32 meshIdx : nodes[i].meshIndices)
+            for (int meshIdx : nodes[i].meshIndices)
             {
                 outMeshIndexGlobalMatrices[meshIdx] = nodes[i].worldTransform;
             }
 #endif
         }
-    }
-
-    void MeshLoader::ClearTextureCache()
-    {
-        textureCache.clear();
     }
 }

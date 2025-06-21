@@ -35,6 +35,9 @@ namespace ignite
 
         m_ContentBrowserPanel = CreateRef<ContentBrowserPanel>("Content Browser");
 
+        // create render target framebuffer
+        m_SceneRenderer.Create();
+
         const auto &cmdArgs = Application::GetInstance()->GetCreateInfo().cmdLineArgs;
         for (int i = 0; i < cmdArgs.count; ++i)
         {
@@ -47,9 +50,6 @@ namespace ignite
                 OpenProject(projectFilepath);
             }
         }
-
-        // create render target framebuffer
-        m_SceneRenderer.Create();
     }
 
     void EditorLayer::OnDetach()

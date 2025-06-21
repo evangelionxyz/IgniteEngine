@@ -79,6 +79,25 @@ namespace ignite
         return EntityType_Invalid;
     }
 
+    static const char *ComponentTypeToString(const CompType type)
+    {
+        switch (type)
+        {
+            case CompType_Camera: return "CompType_Camera";
+            case CompType_Rigidbody2D: return "CompType_Rigidbody2D";
+            case CompType_BoxCollider2D: return "CompType_BoxCollider2D";
+            case CompType_Sprite2D: return "CompType_Sprite2D";
+            case CompType_MeshRenderer: return "CompType_MeshRenderer";
+            case CompType_SkinnedMesh: return "CompType_SkinnedMesh";
+            case CompType_Rigidbody: return "CompType_Rigidbody";
+            case CompType_BoxCollider: return "CompType_BoxCollider";
+            case CompType_SphereCollider: return "CompType_SphereCollider";
+            case CompType_AudioSource: return "CompType_AudioSource";
+            case CompType_Script: return "CompType_Script";
+            default: return "Invalid Component";
+        }
+    }
+
     class ID final : public IComponent
     {
     public:
@@ -88,6 +107,9 @@ namespace ignite
 
         UUID parent = UUID(0);
         std::vector<UUID> children;
+
+        // TODO: mote to better place
+        bool isPrefab = false;
 
         void AddChild(UUID childId)
         {
@@ -252,7 +274,7 @@ namespace ignite
          SkinnedMesh() = default;
 
          static CompType StaticType() { return CompType_SkinnedMesh; }
-         virtual CompType GetType() override { return StaticType(); };
+         virtual CompType GetType() override { return StaticType(); }
      };
 
     class StaticMesh : public IComponent
@@ -263,25 +285,35 @@ namespace ignite
         StaticMesh() = default;
 
         static CompType StaticType() { return CompType_StaticMesh; }
-        virtual CompType GetType() override { return StaticType(); };
+        virtual CompType GetType() override { return StaticType(); }
     };
 
     class MeshRenderer : public IComponent
     {
     public:
         Ref<Mesh> mesh;
+        Ref<Material> material;
+
         AssetHandle meshSource = AssetHandle(0); // actual .glb, .gltf, .fbx file
+
+        bool isSkinnedMesh = false;
         int meshIndex = -1; // submesh index
 
         UUID root = UUID(0);
 
-        ObjectBuffer meshBuffer;
+        SkinnedMeshConstants transformData;
+        nvrhi::BindingSetHandle bindingSet;
+        nvrhi::BufferHandle transformBufferHandle;
 
         nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::Front;
         nvrhi::RasterFillMode fillMode = nvrhi::RasterFillMode::Solid;
 
         MeshRenderer() = default;
         MeshRenderer(const MeshRenderer &other);
+
+        void Create(bool _isSkinnedMesh);
+        void UpdateBindingSet();
+        void WriteTransformBuffer(nvrhi::ICommandList *commandList) const;
 
         static CompType StaticType() { return CompType_MeshRenderer; }
         virtual CompType GetType() override { return StaticType(); }

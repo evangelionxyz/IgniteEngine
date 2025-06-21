@@ -32,7 +32,7 @@ namespace ignite
         using EntityComponents = std::unordered_map<entt::entity, std::vector<IComponent *>>;
 
         template<typename... Component>
-        static void CopyComponent(entt::registry *destRegistry, entt::registry *srcRegistry, const EntityMap &entityMap, EntityComponents &registerComps)
+        static void CopyComponent(entt::registry *destRegistry, entt::registry *srcRegistry, const EntityMap &entityMap)
         {
             ([&]()
                 {
@@ -44,12 +44,7 @@ namespace ignite
                             // key (UUID)
                             if (uuid == srcRegistry->get<ID>(srcEntity).uuid)
                             {
-                                Component &comp = destRegistry->emplace_or_replace<Component>(destEntity, srcRegistry->get<Component>(srcEntity));
-
-                                if constexpr (std::is_base_of<IComponent, Component>::value)
-                                {
-                                    registerComps[destEntity].emplace_back(static_cast<IComponent *>(&comp));
-                                }
+                                destRegistry->emplace_or_replace<Component>(destEntity, srcRegistry->get<Component>(srcEntity));
                             }
                         }
                     }
@@ -58,9 +53,9 @@ namespace ignite
         }
     
         template<typename... Component>
-        static void CopyComponent(ComponentGroup<Component...>, entt::registry *destRegistry, entt::registry *srcRegistry, const EntityMap &entityMap, EntityComponents &registerComps)
+        static void CopyComponent(ComponentGroup<Component...>, entt::registry *destRegistry, entt::registry *srcRegistry, const EntityMap &entityMap)
         {
-            CopyComponent<Component...>(destRegistry, srcRegistry, entityMap, registerComps);
+            CopyComponent<Component...>(destRegistry, srcRegistry, entityMap);
         }
     
         template <typename... Component>

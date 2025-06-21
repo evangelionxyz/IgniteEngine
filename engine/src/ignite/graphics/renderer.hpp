@@ -21,9 +21,10 @@ namespace ignite
         nvrhi::ShaderHandle handle;
     };
 
-    enum class GPipeline
+    enum class GLayoutMap
     {
         MESH, 
+        MATERIAL, 
         ENVIRONMENT, 
         QUAD2D, 
         LINE,
@@ -58,7 +59,7 @@ namespace ignite
         static Ref<Texture> GetWhiteTexture();
         static Ref<Texture> GetBlackTexture();
         static nvrhi::GraphicsAPI GetGraphicsAPI();
-        static nvrhi::BindingLayoutHandle GetBindingLayout(GPipeline type);
+        static nvrhi::BindingLayoutHandle GetBindingLayout(GLayoutMap type);
 
         static void OnUpdate();
         static void Submit(const std::function<void(nvrhi::ICommandList *)>& func);
@@ -71,7 +72,7 @@ namespace ignite
         nvrhi::GraphicsAPI m_GraphicsAPI;
         ShaderLibrary m_ShaderLibrary;
 
-        std::unordered_map<GPipeline, nvrhi::BindingLayoutHandle> m_BindingLayouts;
+        std::unordered_map<GLayoutMap, nvrhi::BindingLayoutHandle> m_BindingLayouts;
 
         Ref<Texture> m_WhiteTexture;
         Ref<Texture> m_BlackTexture;

@@ -16,8 +16,8 @@ struct Object
     float4x4 boneTransforms[MAX_BONES];
 };
 
-cbuffer CameraBuffer : register(b0) { Camera camera; }
-cbuffer ObjectBuffer : register(b1) { Object object; }
+cbuffer CameraBuffer : register(b0, space0) { Camera camera; }
+cbuffer ObjectBuffer : register(b1, space0) { Object object; }
 
 struct VSInput
 {

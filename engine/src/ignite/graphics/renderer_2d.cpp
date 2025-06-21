@@ -75,7 +75,7 @@ namespace ignite
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, s_Data->quadBatch.sampler));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, Renderer::GetWhiteTexture()->GetHandle(), nvrhi::Format::UNKNOWN, nvrhi::AllSubresources, nvrhi::TextureDimension::Texture2D));
 
-        s_Data->quadBindingSet = device->createBindingSet(bindingSetDesc, Renderer::GetBindingLayout(GPipeline::QUAD2D));
+        s_Data->quadBindingSet = device->createBindingSet(bindingSetDesc, Renderer::GetBindingLayout(GLayoutMap::QUAD2D));
         LOG_ASSERT(s_Data->quadBindingSet, "[Renderer 2D] Failed to create binding set");
 
 
@@ -133,7 +133,7 @@ namespace ignite
         // add constant buffer
         bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraBufferHandle()));
 
-        s_Data->lineBindingSet = device->createBindingSet(bindingSetDesc, Renderer::GetBindingLayout(GPipeline::LINE));
+        s_Data->lineBindingSet = device->createBindingSet(bindingSetDesc, Renderer::GetBindingLayout(GLayoutMap::LINE));
         LOG_ASSERT(s_Data->lineBindingSet, "[Renderer 2D] Failed to create binding");
     }
 
@@ -409,6 +409,6 @@ namespace ignite
             bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(i, tex->GetHandle()));
         }
 
-        s_Data->quadBindingSet = device->createBindingSet(bindingSetDesc, Renderer::GetBindingLayout(GPipeline::QUAD2D));
+        s_Data->quadBindingSet = device->createBindingSet(bindingSetDesc, Renderer::GetBindingLayout(GLayoutMap::QUAD2D));
     }
 }

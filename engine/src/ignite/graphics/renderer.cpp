@@ -127,15 +127,16 @@ namespace ignite
         }
 
         // Create binding layouts
-        m_BindingLayouts[GPipeline::MESH] = s_instance->m_Device->createBindingLayout(VertexMesh::GetBindingLayoutDesc());
-        m_BindingLayouts[GPipeline::QUAD2D] = s_instance->m_Device->createBindingLayout(Vertex2DQuad::GetBindingLayoutDesc());
-        m_BindingLayouts[GPipeline::LINE] = s_instance->m_Device->createBindingLayout(Vertex2DLine::GetBindingLayoutDesc());
-        m_BindingLayouts[GPipeline::ENVIRONMENT] = s_instance->m_Device->createBindingLayout(Environment::GetBindingLayoutDesc());
+        m_BindingLayouts[GLayoutMap::MESH] = s_instance->m_Device->createBindingLayout(VertexMesh::GetBindingLayoutDesc());
+        m_BindingLayouts[GLayoutMap::MATERIAL] = s_instance->m_Device->createBindingLayout(VertexMesh::GetMaterialBindingLayoutDesc());
+        m_BindingLayouts[GLayoutMap::QUAD2D] = s_instance->m_Device->createBindingLayout(Vertex2DQuad::GetBindingLayoutDesc());
+        m_BindingLayouts[GLayoutMap::LINE] = s_instance->m_Device->createBindingLayout(Vertex2DLine::GetBindingLayoutDesc());
+        m_BindingLayouts[GLayoutMap::ENVIRONMENT] = s_instance->m_Device->createBindingLayout(Environment::GetBindingLayoutDesc());
 
 
         // Create camera constant buffer
         nvrhi::BufferDesc cameraConstantBufferDesc;
-        cameraConstantBufferDesc.byteSize = sizeof(CameraBuffer);
+        cameraConstantBufferDesc.byteSize = sizeof(CameraConstants);
         cameraConstantBufferDesc.isConstantBuffer = true;
         cameraConstantBufferDesc.isVolatile = true;
         cameraConstantBufferDesc.debugName = "Camera constant buffer";
@@ -160,7 +161,7 @@ namespace ignite
         return s_instance->m_GraphicsAPI;
     }
 
-    nvrhi::BindingLayoutHandle Renderer::GetBindingLayout(GPipeline type)
+    nvrhi::BindingLayoutHandle Renderer::GetBindingLayout(GLayoutMap type)
     {
         if (s_instance->m_BindingLayouts.contains(type))
             return s_instance->m_BindingLayouts[type];

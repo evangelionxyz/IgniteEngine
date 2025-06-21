@@ -40,30 +40,33 @@ struct Material
 };
 
 // push constant buffers
-cbuffer CameraBuffer : register(b0) { Camera camera; }
-cbuffer ObjectBuffer : register(b1) { Object object; }
-cbuffer DirLightBuffer : register(b2) { DirLight dirLight; }
-cbuffer EnvironmentBuffer : register(b3) { Environment env; }
-cbuffer MaterialBuffer : register(b4) { Material material; }
+
+// set 0
+cbuffer CameraBuffer      : register(b0, space0) { Camera camera; }
+cbuffer ObjectBuffer      : register(b1, space0) { Object object; }
+cbuffer DirLightBuffer    : register(b2, space0) { DirLight dirLight; }
+cbuffer EnvironmentBuffer : register(b3, space0) { Environment env; }
+
+// set 1
+cbuffer MaterialBuffer    : register(b0, space1) { Material material; }
+Texture2D diffuseTex      : register(t0, space1);
+Texture2D specularTex     : register(t1, space1);
+Texture2D emissiveTex     : register(t2, space1);
+Texture2D metallicRoughnessTex : register(t3, space1);
+Texture2D normalMapTex    : register(t4, space1);
+Texture2D environmentTex  : register(t5, space1);
+SamplerState sampler0     : register(s0, space1);
 
 struct PSInput
 {
-    float4 position     : SV_POSITION;
-    float3 normal       : NORMAL;
-    float3 worldPos     : WORLDPOS;
-    float2 uv           : TEXCOORD;
+    float4 position : SV_POSITION;
+    float3 normal : NORMAL;
+    float3 worldPos : WORLDPOS;
+    float2 uv : TEXCOORD;
     float2 tilingFactor : TILINGFACTOR;
-    float4 color        : COLOR;
-    uint entityID       : ENTITYID;
+    float4 color : COLOR;
+    uint entityID : ENTITYID;
 };
-
-Texture2D diffuseTex : register(t0);
-Texture2D specularTex : register(t1);
-Texture2D emissiveTex : register(t2);
-Texture2D metallicRoughnessTex : register(t3);
-Texture2D normalMapTex : register(t4);
-Texture2D environmentTex : register(t5);
-SamplerState sampler0 : register(s0);
 
 float3 CalcDirLight(float3 ldirection, float3 lcolor, float3 normal, float3 viewDirection, float3 diffTexColor, float shadow)
 {

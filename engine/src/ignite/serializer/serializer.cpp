@@ -103,6 +103,10 @@ namespace ignite {
             Entity entity = { e, m_Scene.get() };
             const ID &idComp = entity.GetComponent<ID>();
 
+            // TODO: Mesh renderer (Skinned & Static Mesh)
+            if (idComp.isPrefab || entity.HasComponent<MeshRenderer>())
+                continue;
+
             sr.BeginMap(); // START Entity
             {
                 // ID Component
@@ -205,16 +209,16 @@ namespace ignite {
                 }
 
                 // Mesh Renderer
-                if (entity.HasComponent<MeshRenderer>())
-                {
-                    const MeshRenderer &comp = entity.GetComponent<MeshRenderer>();
-                    sr.BeginMap("MeshRenderer");
-                    {
-                        sr.AddKeyValue("Root", static_cast<uint64_t>(comp.root));
-                        sr.AddKeyValue("MeshIndex", comp.meshIndex);
-                    }
-                    sr.EndMap();
-                }
+                // if (entity.HasComponent<MeshRenderer>())
+                // {
+                //     const MeshRenderer &comp = entity.GetComponent<MeshRenderer>();
+                //     sr.BeginMap("MeshRenderer");
+                //     {
+                //         sr.AddKeyValue("Root", static_cast<uint64_t>(comp.root));
+                //         sr.AddKeyValue("MeshIndex", comp.meshIndex);
+                //     }
+                //     sr.EndMap();
+                // }
 
                 // Audio Source
                 if (entity.HasComponent<AudioSource>())
@@ -454,6 +458,18 @@ namespace ignite {
                 comp.playOnStart = node["PlayOnStart"].as<bool>();
             }
 
+            // Skinned Mesh
+            if (YAML::Node node = entityNode["SkinnedMesh"])
+            {
+                SkinnedMesh &skinnedMesh = desEntity.AddComponent<SkinnedMesh>();
+
+                auto modelFilepath= node["Filepath"].as<std::string>();
+                modelFilepath = Project::GetActive()->GetAssetFilepath(modelFilepath).generic_string();
+                AssetImporter::LoadSkinnedMesh(desScene.get(), desEntity, modelFilepath);
+
+                skinnedMesh.filepath = Project::GetActive()->GetAssetRelativeFilepath(filepath);
+            }
+
             // Script
             if (YAML::Node node = entityNode["Script"])
             {
@@ -462,8 +478,7 @@ namespace ignite {
 
                 if (YAML::Node classFieldsNode = node["Fields"])
                 {
-                    Ref<ScriptClass> scriptClass = ScriptEngine::GetEntityClassesByName(sc.className);
-                    if (scriptClass)
+                    if (Ref<ScriptClass> scriptClass = ScriptEngine::GetEntityClassesByName(sc.className))
                     {
                         const auto &classFields = scriptClass->GetFields();
                         ScriptFieldMap &fieldMap = ScriptEngine::GetScriptFieldMap(desEntity);
