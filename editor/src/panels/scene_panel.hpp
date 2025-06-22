@@ -1,3 +1,26 @@
+/* MIT License
+* 
+* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* 
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+* 
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+* 
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
+*/
+
 #pragma once
 
 #include "ipanel.hpp"
@@ -29,14 +52,11 @@ namespace ignite
     public:
         explicit ScenePanel(const char *windowTitle, EditorLayer *editor);
         
-        void SetActiveScene(Scene *scene, bool reset = false);
-        void CreateRenderTarget(nvrhi::IDevice *device);
+        void SetActiveScene(Scene *scene);
 
         void OnUpdate(f32 deltaTime) override;
         void OnGuiRender() override;
         void RenderViewport();
-
-        Ref<RenderTarget> GetRenderTarget() const { return m_RenderTarget; }
 
         void OnEvent(Event &event);
         bool OnMouseScrolledEvent(MouseScrolledEvent &event);
@@ -54,22 +74,19 @@ namespace ignite
 
         void RenderHierarchy();
         Entity ShowEntityContextMenu();
-        void RenderEntityNode(Entity entity, UUID uuid);
+        void RenderEntityNode(Entity entity);
         
         void RenderInspector();
-
         void CameraSettingsUI();
         void UpdateCameraInput(f32 deltaTime);
         void DestroyEntity(Entity entity);
-        
+        void DuplicateSelectedEntity();
         void ClearSelection();
 
         Entity SetSelectedEntity(Entity entity);
         Entity GetSelectedEntity();
 
         const std::unordered_map<UUID, Entity> &GetSelectedEntities() { return m_SelectedEntities; }
-        
-        void DuplicateSelectedEntity();
 
         template<typename T, typename UIFunction>
         void RenderComponent(const std::string &name, Entity entity, UIFunction uiFunction, bool allowedToRemove = true);
@@ -86,7 +103,6 @@ namespace ignite
         } m_Data;
 
         EditorCamera m_Camera;
-        Ref<RenderTarget> m_RenderTarget;
         EditorLayer *m_Editor;
 
         Scene *m_Scene = nullptr;

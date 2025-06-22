@@ -1,4 +1,4 @@
-#include "include/helpers.hlsli"
+﻿#include "include/helpers.hlsli"
 #include "include/pbr.hlsli"
 #include "include/binding_helpers.hlsli"
 
@@ -14,7 +14,6 @@ struct DirLight
     float4 direction;
     float intensity;
     float angularSize;
-    float ambientIntensity;
     float shadowStrength;
 };
 
@@ -22,6 +21,7 @@ struct Environment
 {
     float exposure;
     float gamma;
+    float ambient;
 };
 
 struct Object
@@ -33,36 +33,40 @@ struct Object
 struct Material
 {
     float4 baseColor;
-    float metallic;
-    float roughness;
-    float emissive;
+    float specularFactor;
+    float metallicFactor;
+    float roughnessFactor;
+    float emissiveFactor;
 };
 
 // push constant buffers
-cbuffer CameraBuffer : register(b0) { Camera camera; }
-cbuffer ObjectBuffer : register(b1) { Object object; }
-cbuffer DirLightBuffer : register(b2) { DirLight dirLight; }
-cbuffer EnvironmentBuffer : register(b3) { Environment env; }
-cbuffer MaterialBuffer : register(b4) { Material material; }
+
+// set 0
+cbuffer CameraBuffer      : register(b0, space0) { Camera camera; }
+cbuffer ObjectBuffer      : register(b1, space0) { Object object; }
+cbuffer DirLightBuffer    : register(b2, space0) { DirLight dirLight; }
+cbuffer EnvironmentBuffer : register(b3, space0) { Environment env; }
+
+// set 1
+cbuffer MaterialBuffer    : register(b0, space1) { Material material; }
+Texture2D diffuseTex      : register(t0, space1);
+Texture2D specularTex     : register(t1, space1);
+Texture2D emissiveTex     : register(t2, space1);
+Texture2D metallicRoughnessTex : register(t3, space1);
+Texture2D normalMapTex    : register(t4, space1);
+Texture2D environmentTex  : register(t5, space1);
+SamplerState sampler0     : register(s0, space1);
 
 struct PSInput
 {
-    float4 position     : SV_POSITION;
-    float3 normal       : NORMAL;
-    float3 worldPos     : WORLDPOS;
-    float2 uv           : TEXCOORD;
+    float4 position : SV_POSITION;
+    float3 normal : NORMAL;
+    float3 worldPos : WORLDPOS;
+    float2 uv : TEXCOORD;
     float2 tilingFactor : TILINGFACTOR;
-    float4 color        : COLOR;
-    uint entityID       : ENTITYID;
+    float4 color : COLOR;
+    uint entityID : ENTITYID;
 };
-
-Texture2D diffuseTex : register(t0);
-Texture2D specularTex : register(t1);
-Texture2D emissiveTex : register(t2);
-Texture2D roughnessTex : register(t3);
-Texture2D normalTex : register(t4);
-Texture2D environTex : register(t5);
-SamplerState sampler0 : register(s0);
 
 float3 CalcDirLight(float3 ldirection, float3 lcolor, float3 normal, float3 viewDirection, float3 diffTexColor, float shadow)
 {
@@ -93,11 +97,14 @@ PSOutput main(PSInput input)
     // ===== TEXTURES =====
     float3 diffColTex = diffuseTex.Sample(sampler0, input.uv).rgb;
     float3 specColTex = specularTex.Sample(sampler0, input.uv).rgb;
-    float3 emissiveCol = emissiveTex.Sample(sampler0, input.uv).rgb;
-    float roughColTex = roughnessTex.Sample(sampler0, input.uv).r;
-    float3 normalColTex = normalTex.Sample(sampler0, input.uv).rgb;
+    float3 emissiveColTex = emissiveTex.Sample(sampler0, input.uv).rgb;
+    
+    float metalTexValue = metallicRoughnessTex.Sample(sampler0, input.uv).b; // metallic uses blue
+    float roughnessTexValue = metallicRoughnessTex.Sample(sampler0, input.uv).g; // roughness uses green
+    
+    float3 normalMap = normalMapTex.Sample(sampler0, input.uv).rgb;
 
-    float3 normal = normalize(input.normal * normalColTex);
+    float3 normal = normalize(input.normal * normalMap);
     float3 viewDir = normalize(camera.position.xyz - input.worldPos);
     float3 lightDir = normalize(dirLight.direction.xyz);
 
@@ -107,16 +114,16 @@ PSOutput main(PSInput input)
     
     // ===== ROUGHNESS =====
     float minRoughness = saturate(sqrt(sunSolidAngle / M_PI)); // Convert to minimum roughness
-    float filteredRoughness = max(material.roughness * roughColTex, minRoughness);
+    float filteredRoughness = max(material.roughnessFactor * roughnessTexValue, minRoughness);
 
-    float finalMetallic = clamp(material.metallic, 0.0f, 1.0f);
+    float finalMetallic = clamp(material.metallicFactor * metalTexValue, 0.0f, 1.0f);
     float3 albedo = diffColTex * material.baseColor.rgb;
     float3 diffuseColor = albedo * (1.0f - finalMetallic);
     float3 specularColor = lerp(float3(0.04f, 0.04f, 0.04f), albedo, finalMetallic);
     
     float3 reflectDir = reflect(-viewDir, normal);
     float mipLevel = filteredRoughness * 5.0f;
-    float3 reflectRadiance = SampleSphericalMap(environTex, sampler0, reflectDir);
+    float3 reflectRadiance = SampleSphericalMap(environmentTex, sampler0, reflectDir);
     reflectRadiance = reflectRadiance / (reflectRadiance + 1.0f); // soft clamp (ACES-like)
 
     float reflectionStrength = lerp(0.001f, 1.0f, finalMetallic);
@@ -124,10 +131,10 @@ PSOutput main(PSInput input)
 
     float3 F = SchlickFresnel(viewDir, normal, specularColor);
     float NdotR = saturate(dot(normal, reflectDir));
-    float3 reflectedSpecular = GGXReflect(normal, viewDir, reflectDir, reflectRadiance, specularColor, material.roughness);
+    float3 reflectedSpecular = GGXReflect(normal, viewDir, reflectDir, reflectRadiance, specularColor, material.roughnessFactor * roughnessTexValue);
     reflectedSpecular *= reflectionStrength * dirLight.intensity * NdotR * F;
 
-    float3 ambient = dirLight.color.rgb * dirLight.ambientIntensity * diffuseColor;
+    float3 ambient = dirLight.color.rgb * env.ambient * diffuseColor;
     float3 irradiance = dirLight.color.rgb * dirLight.intensity;
     
     lighting = GGX(
@@ -137,14 +144,13 @@ PSOutput main(PSInput input)
         irradiance,
         diffuseColor,
         specularColor,
-        material.roughness
+        filteredRoughness
     );
 
-    lighting += ambient;
-    lighting += reflectedSpecular;
+    lighting += ambient + reflectedSpecular;
 
     // Add emissive
-    float3 emissive = TextureEmissive(emissiveCol, material.emissive);
+    float3 emissive = TextureEmissive(emissiveColTex, material.emissiveFactor);
     lighting += emissive;
     
     PSOutput result;

@@ -3,7 +3,7 @@ project "IgniteScript"
     language "C#"
     dotnetframework "4.8"
     
-    targetdir (OUTPUT_DIR)
+    targetdir (OUTPUT_DIR .. "/lib/")
     objdir (INTOUTPUT_DIR)
 
     files {
