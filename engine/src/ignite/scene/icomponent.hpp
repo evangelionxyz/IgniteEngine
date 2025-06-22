@@ -32,20 +32,20 @@ namespace ignite
     {
         CompType_Invalid = 0,
         CompType_ID = 1,
-        CompType_Camera,
-        CompType_Transform,
-        CompType_Sprite2D,
-        CompType_SkinnedMesh,
-        CompType_StaticMesh,
-        CompType_MeshRenderer,
-        CompType_BoxCollider2D,
-        CompType_Rigidbody2D,
-        CompType_Rigidbody,
-        CompType_BoxCollider,
-        CompType_SphereCollider,
-        CompType_AudioSource,
-        CompType_Script,
-        CompType_LAST
+        CompType_Camera = 2,
+        CompType_Transform = 3,
+        CompType_Sprite2D = 4,
+        CompType_SkeletalMesh = 5,
+        CompType_StaticMesh = 6,
+        CompType_MeshRenderer = 7,
+        CompType_BoxCollider2D = 8,
+        CompType_Rigidbody2D = 9,
+        CompType_Rigidbody = 10,
+        CompType_BoxCollider = 11,
+        CompType_SphereCollider = 12,
+        CompType_AudioSource = 13,
+        CompType_Script = 14,
+        CompType_LAST = 15
     };
 
     class IComponent
@@ -53,16 +53,15 @@ namespace ignite
     public:
         virtual ~IComponent() = default;
 
+        bool dirty = true;
+
         template<typename T>
         T *As()
         {
             return static_cast<T *>(this);
         }
 
-        UUID GetCompID() { return m_UUID; }
-
-        bool dirty = true;
-
+        UUID GetCompID() const { return m_UUID; }
         virtual CompType GetType() { return CompType_Invalid; };
     private:
         UUID m_UUID;

@@ -25,7 +25,7 @@
 #include <entt/entt.hpp>
 
 #include "ignite/audio/fmod_sound.hpp"
-#include "ignite/graphics/mesh.hpp"
+
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/renderer_2d.hpp"
 #include "ignite/graphics/environment.hpp"
@@ -34,8 +34,11 @@
 #include "ignite/math/math.hpp"
 #include "scene_manager.hpp"
 #include "ignite/scripting/script_engine.hpp"
+
 #include "entity.hpp"
+
 #include "ignite/core/application.hpp"
+#include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/animation_system.hpp"
 
 #include "ignite/project/project.hpp"
@@ -131,10 +134,11 @@ namespace ignite
 
     void Scene::UpdateTransforms(float deltaTime)
     {
-        auto skinnedMeshView = registry->view<SkinnedMesh>();
+#if 0
+        auto skinnedMeshView = registry->view<SkeletalMesh>();
         for (auto entity : skinnedMeshView)
         {
-            SkinnedMesh &skinnedMesh = skinnedMeshView.get<SkinnedMesh>(entity);
+            SkeletalMesh &skinnedMesh = skinnedMeshView.get<SkeletalMesh>(entity);
             if (!skinnedMesh.animations.empty() && skinnedMesh.animations[skinnedMesh.activeAnimIndex].isPlaying)
             {
                 if (AnimationSystem::UpdateSkeleton(skinnedMesh.skeleton, skinnedMesh.animations[skinnedMesh.activeAnimIndex], timeInSeconds))
@@ -144,6 +148,7 @@ namespace ignite
                 }
             }
         }
+#endif
 
         auto view = registry->view<ID, Transform>();
         for (auto ent : view)
@@ -203,7 +208,7 @@ namespace ignite
                     meshRenderer.root = UUID(0);
                 }
 
-                SkinnedMesh &skinnedMesh = rootNodeEntity.GetComponent<SkinnedMesh>();
+                SkeletalMesh &skinnedMesh = rootNodeEntity.GetComponent<SkeletalMesh>();
                 
                 const size_t numBones = std::min(skinnedMesh.boneTransforms.size(), static_cast<size_t>(MAX_BONES));
                 for (size_t i = 0; i < numBones; ++i)
@@ -309,7 +314,7 @@ namespace ignite
     }
 
     template<>
-    void Scene::OnComponentAdded<SkinnedMesh>(Entity entity, SkinnedMesh &comp)
+    void Scene::OnComponentAdded<SkeletalMesh>(Entity entity, SkeletalMesh &comp)
     {
     }
 

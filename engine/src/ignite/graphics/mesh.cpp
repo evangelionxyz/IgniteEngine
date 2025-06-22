@@ -39,8 +39,8 @@ namespace ignite
         vbDesc.keepInitialState = true;
         vbDesc.debugName = "[Mesh] vertex buffer";
 
-        vertexBuffer = device->createBuffer(vbDesc);
-        LOG_ASSERT(vertexBuffer, "[Mesh] Failed to create Vertex Buffer");
+        m_VertexBuffer = device->createBuffer(vbDesc);
+        LOG_ASSERT(m_VertexBuffer, "[Mesh] Failed to create Vertex Buffer");
 
         // create index buffer
         auto ibDesc = nvrhi::BufferDesc();
@@ -50,8 +50,8 @@ namespace ignite
         ibDesc.keepInitialState = true;
         ibDesc.debugName = "[Mesh] index buffer";
 
-        indexBuffer = device->createBuffer(ibDesc);
-        LOG_ASSERT(indexBuffer, "[Mesh] Failed to create Index Buffer");
+        m_IndexBuffer = device->createBuffer(ibDesc);
+        LOG_ASSERT(m_IndexBuffer, "[Mesh] Failed to create Index Buffer");
     }
 
     void Mesh::WriteVertexBuffer(uint32_t entityID)
@@ -64,8 +64,8 @@ namespace ignite
         // Write to buffers
         nvrhi::CommandListHandle commandList = device->createCommandList();
         commandList->open();
-        commandList->writeBuffer(vertexBuffer, data.vertices.data(), sizeof(VertexMesh) * data.vertices.size());
-        commandList->writeBuffer(indexBuffer, data.indices.data(), sizeof(uint32_t) * data.indices.size());
+        commandList->writeBuffer(m_VertexBuffer, data.vertices.data(), sizeof(VertexMesh) * data.vertices.size());
+        commandList->writeBuffer(m_IndexBuffer, data.indices.data(), sizeof(uint32_t) * data.indices.size());
         commandList->close();
         device->executeCommandList(commandList);
     }

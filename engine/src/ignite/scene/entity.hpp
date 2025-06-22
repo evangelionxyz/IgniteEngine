@@ -23,10 +23,10 @@
 
 #pragma once
 
-#include "scene.hpp"
 #include "component.hpp"
-#include "ignite/core/types.hpp"
 
+#include "scene.hpp"
+#include "ignite/core/types.hpp"
 #include <entt/entt.hpp>
 
 namespace ignite

@@ -25,7 +25,7 @@
 
 #include <vector>
 #include <cinttypes>
-
+#include "stb_image_write.h"
 #include "ignite/animation/keyframes.hpp"
 #include "ignite/animation/skeleton.hpp"
 
@@ -62,16 +62,385 @@ namespace ignite
             out.insert(out.end(), raw, raw + sizeof(T));
         }
 
-        static std::vector<std::byte> SerializeAnimation(const SkeletalAnimation &anim)
+        static std::vector<std::byte> SerializeMaterial(const Ref<Material> &mat, const std::filesystem::path &filepath)
+        {
+            std::vector<std::byte> buffer;
+
+            // write name
+            std::string nameCopy = mat->name;
+            nameCopy += '\0';
+            uint32_t nameSize = static_cast<uint32_t>(nameCopy.size());
+            AppendRaw(buffer, nameSize);
+
+            buffer.insert(buffer.end(),
+                reinterpret_cast<const std::byte *>(nameCopy.data()),
+                reinterpret_cast<const std::byte *>(nameCopy.data()) + nameSize
+            );
+
+            AppendRaw(buffer, mat->params);
+            AppendRaw(buffer, mat->type);
+            AppendRaw(buffer, mat->blendMode);
+            AppendRaw(buffer, mat->mipLevels);
+
+            // write texture
+            uint32_t textureCount = static_cast<uint32_t>(mat->textures.size());
+            AppendRaw(buffer, textureCount);
+
+            for (auto &[type, tex] : mat->textures)
+            {
+                // write texture type
+                AppendRaw(buffer, type);
+
+                AppendRaw(buffer, tex->width);
+                AppendRaw(buffer, tex->height);
+                AppendRaw(buffer, tex->rowPitch);
+
+                const std::size_t pixelBytes = static_cast<std::size_t>(tex->height) * tex->rowPitch;
+
+                // write RGBA blob
+                const std::byte *begin = reinterpret_cast<const std::byte *>(tex->data);
+                buffer.insert(buffer.end(), begin, begin + pixelBytes);
+            }
+
+            // Write to file
+            std::ofstream of(filepath, std::ios::binary);
+            of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
+            of.close();
+
+            return buffer;
+        }
+
+        static Ref<Material> DeserializeMaterial(const std::filesystem::path &filepath)
+        {
+            Ref<Material> mat = CreateRef<Material>();
+
+            std::ifstream inFile(filepath, std::ios::binary);
+
+            if (!inFile)
+            {
+                throw std::runtime_error("Cannot open material file " + filepath.string());
+            }
+
+            // read name
+            uint32_t nameSize = 0;
+            inFile.read(reinterpret_cast<char *>(&nameSize), sizeof(nameSize));
+            std::vector<char> stringBytes(nameSize); // owns the bytes
+            inFile.read(stringBytes.data(), nameSize);
+            mat->name = std::string(stringBytes.data());
+
+            inFile.read(reinterpret_cast<char *>(&mat->params), sizeof(mat->params));
+            inFile.read(reinterpret_cast<char *>(&mat->type), sizeof(mat->type));
+            inFile.read(reinterpret_cast<char *>(&mat->blendMode), sizeof(mat->blendMode));
+            inFile.read(reinterpret_cast<char *>(&mat->mipLevels), sizeof(mat->mipLevels));
+
+            // write texture
+            uint32_t textureCount = 0;
+            inFile.read(reinterpret_cast<char *>(&textureCount), sizeof(textureCount));
+
+            for (uint32_t i = 0; i < textureCount; ++i)
+            {
+                Ref<MaterialTextureResource> tex = CreateRef<MaterialTextureResource>();
+
+                MaterialTextureType textureType;
+                inFile.read(reinterpret_cast<char *>(&textureType), sizeof(textureType));
+
+                inFile.read(reinterpret_cast<char *>(&tex->width), sizeof(tex->width));
+                inFile.read(reinterpret_cast<char *>(&tex->height), sizeof(tex->height));
+                inFile.read(reinterpret_cast<char *>(&tex->rowPitch), sizeof(tex->rowPitch));
+
+                const std::size_t pixelBytes = static_cast<std::size_t>(tex->height) * tex->rowPitch;
+                tex->data = new uint8_t[pixelBytes];
+
+                // read blob *into* the buffer, not into the pointer itself
+                inFile.read(reinterpret_cast<char *>(tex->data), pixelBytes);
+
+                if (pixelBytes == 0)
+                {
+                    delete tex->data;
+                    tex->data = nullptr;
+                }
+
+                mat->textures[textureType] = tex;
+            }
+
+            inFile.close();
+
+            return mat;
+        }
+
+        static std::vector<std::byte> SerializeMeshAsset(const Ref<MeshAsset> &sm, const std::filesystem::path &filepath)
+        {
+            std::vector<std::byte> buffer;
+
+            // write nodes vector
+            uint32_t nodeCount = static_cast<uint32_t>(sm->nodes.size());
+            AppendRaw(buffer, nodeCount);
+
+            uint32_t nodeSizeInBytes = nodeCount * sizeof(NodeInfo);
+            AppendRaw(buffer, nodeSizeInBytes);
+
+            // write mesh vector info
+            uint32_t meshCount = static_cast<uint32_t>(sm->meshes.size());
+            AppendRaw(buffer, meshCount);
+
+            uint32_t meshesSizeInBytes = meshCount * sizeof(MeshData);
+            AppendRaw(buffer, meshesSizeInBytes);
+
+            for (const auto &node : sm->nodes)
+            {
+                AppendRaw(buffer, node.id);            // id
+                AppendRaw(buffer, node.parentID);      // parentID
+                AppendRaw(buffer, node.materialIndex); // material index
+                AppendRaw(buffer, node.isJoint);       // joint flag
+
+                // write children vector
+                uint32_t childrenIDCount = static_cast<uint32_t>(node.childrenIDs.size());
+                AppendRaw(buffer, childrenIDCount);
+
+                // write referenced mesh indices
+                uint32_t meshIndicesCount = static_cast<uint32_t>(node.meshIndices.size());
+                AppendRaw(buffer, meshIndicesCount);
+                
+                // write name
+                std::string nameCopy = node.name;
+                nameCopy += '\0';
+                // name size in bytes including null-terminated
+                uint32_t nameSize = static_cast<uint32_t>(nameCopy.size());
+                AppendRaw(buffer, nameSize);
+
+                buffer.insert(buffer.end(),
+                    reinterpret_cast<const std::byte *>(nameCopy.data()),
+                    reinterpret_cast<const std::byte *>(nameCopy.data() + nameSize)
+                );
+
+                // write local transform
+                for (int i = 0; i < 4; ++i)
+                {
+                    AppendRaw(buffer, node.localTransform[i].x);
+                    AppendRaw(buffer, node.localTransform[i].y);
+                    AppendRaw(buffer, node.localTransform[i].z);
+                    AppendRaw(buffer, node.localTransform[i].w);
+                }
+
+                // ---------------------------
+                // SKIPPED WORLD TRANSFORM
+                // ---------------------------
+
+                // write children vector
+                for (int id : node.childrenIDs)
+                {
+                    AppendRaw(buffer, id);
+                }
+
+                // write referenced mesh indices
+                for (int index : node.meshIndices)
+                {
+                    AppendRaw(buffer, index);
+                }
+            }
+
+            // write mesh vector
+
+            for (auto &mesh : sm->meshes)
+            {
+                AppendRaw(buffer, mesh.meshIndex);
+                AppendRaw(buffer, mesh.materialIndex);
+                AppendRaw(buffer, mesh.nodeParentID);
+                AppendRaw(buffer, mesh.nodeID);
+
+                // write vertex data
+                uint32_t vertexCount = static_cast<uint32_t>(mesh.vertices.size());
+                AppendRaw(buffer, vertexCount);
+
+                // write indices data
+                uint32_t indicesCount = static_cast<uint32_t>(mesh.indices.size());
+                AppendRaw(buffer, indicesCount);
+
+                // write name
+                std::string nameCopy = mesh.name;
+                nameCopy += '\0';
+                // name size in bytes including null-terminated
+                uint32_t nameSize = static_cast<uint32_t>(nameCopy.size());
+                AppendRaw(buffer, nameSize);
+
+                buffer.insert(buffer.end(),
+                    reinterpret_cast<const std::byte *>(nameCopy.data()),
+                    reinterpret_cast<const std::byte *>(nameCopy.data() + nameSize)
+                );
+
+                // write vertices
+                for (auto &vertex : mesh.vertices)
+                {
+                    AppendRaw(buffer, vertex.position);
+                    AppendRaw(buffer, vertex.normal);
+                    AppendRaw(buffer, vertex.texCoord);
+                    AppendRaw(buffer, vertex.tilingFactor);
+                    AppendRaw(buffer, vertex.color);
+
+                    AppendRaw(buffer, vertex.boneIDs);
+                    AppendRaw(buffer, vertex.weights);
+
+                    // ---------------------------
+                    // SKIPPED ENTITY ID
+                    // ---------------------------
+                }
+
+                // write indices
+                buffer.insert(buffer.end(),
+                    reinterpret_cast<const std::byte *>(mesh.indices.data()),
+                    reinterpret_cast<const std::byte *>(mesh.indices.data()) + indicesCount * sizeof(uint32_t)
+                );
+            }
+
+            // Write to file
+            std::ofstream of(filepath, std::ios::binary);
+            of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
+            of.close();
+
+            return buffer;
+        }
+
+        static Ref<MeshAsset> DeserializeMeshAsset(const std::filesystem::path &filepath)
+        {
+            Ref<MeshAsset> meshAsset = CreateRef<MeshAsset>();
+
+            std::ifstream inFile(filepath, std::ios::binary);
+
+            if (!inFile)
+            {
+                throw std::runtime_error("Cannot open skeletal mesh file " + filepath.string());
+            }
+
+            // write nodes vector
+            uint32_t nodeCount = 0;
+            inFile.read(reinterpret_cast<char *>(&nodeCount), sizeof(nodeCount));
+
+            uint32_t nodeSizeInBytes = 0;
+            inFile.read(reinterpret_cast<char *>(&nodeSizeInBytes), sizeof(nodeSizeInBytes));
+
+            // write mesh vector
+            uint32_t meshCount = 0;
+            inFile.read(reinterpret_cast<char *>(&meshCount), sizeof(meshCount));
+
+            uint32_t meshesSizeInBytes = 0;
+            inFile.read(reinterpret_cast<char *>(&meshesSizeInBytes), sizeof(meshesSizeInBytes));
+
+            meshAsset->nodes.reserve(nodeCount);
+            for (uint32_t nodeIndex = 0; nodeIndex < nodeCount; ++nodeIndex)
+            {
+                NodeInfo node;
+
+                inFile.read(reinterpret_cast<char *>(&node.id), sizeof(node.id));
+                inFile.read(reinterpret_cast<char *>(&node.parentID), sizeof(node.parentID));
+                inFile.read(reinterpret_cast<char *>(&node.materialIndex), sizeof(node.materialIndex));
+                inFile.read(reinterpret_cast<char *>(&node.isJoint), sizeof(node.isJoint));
+
+                // read children count
+                uint32_t childrenIDCount = 0;
+                inFile.read(reinterpret_cast<char *>(&childrenIDCount), sizeof(childrenIDCount));
+
+                // read mesh count
+                uint32_t meshIndicesCount = 0;
+                inFile.read(reinterpret_cast<char *>(&meshIndicesCount), sizeof(meshIndicesCount));
+
+                // read name
+                uint32_t nameSize = 0;
+                inFile.read(reinterpret_cast<char *>(&nameSize), sizeof(nameSize));
+                std::vector<char> stringBytes(nameSize); // owns the bytes
+                inFile.read(stringBytes.data(), nameSize);
+                node.name = std::string(stringBytes.data());
+
+                // read local transform
+                for (int i = 0; i < 4; ++i)
+                {
+                    inFile.read(reinterpret_cast<char *>(&node.localTransform[i].x), sizeof(float));
+                    inFile.read(reinterpret_cast<char *>(&node.localTransform[i].y), sizeof(float));
+                    inFile.read(reinterpret_cast<char *>(&node.localTransform[i].z), sizeof(float));
+                    inFile.read(reinterpret_cast<char *>(&node.localTransform[i].w), sizeof(float));
+                }
+
+                // read children ids
+                node.childrenIDs.reserve(childrenIDCount);
+                for (uint32_t childIndex = 0; childIndex < childrenIDCount; ++childIndex)
+                {
+                    int index = -1;
+                    inFile.read(reinterpret_cast<char *>(&index), sizeof(int));
+                    node.childrenIDs.push_back(index);
+                }
+
+                // read mesh indices
+                for (uint32_t meshIndex = 0; meshIndex < meshIndicesCount; ++meshIndex)
+                {
+                    int index = -1;
+                    inFile.read(reinterpret_cast<char *>(&index), sizeof(index));
+                    node.meshIndices.push_back(index);
+                }
+
+                meshAsset->nodes.push_back(node);
+            }
+
+            // read mesh vector
+            meshAsset->meshes.reserve(meshCount);
+            for (uint32_t meshIndex = 0; meshIndex < meshCount; ++meshIndex)
+            {
+                MeshData mesh;
+
+                inFile.read(reinterpret_cast<char *>(&mesh.meshIndex), sizeof(mesh.meshIndex));
+                inFile.read(reinterpret_cast<char *>(&mesh.materialIndex), sizeof(mesh.materialIndex));
+                inFile.read(reinterpret_cast<char *>(&mesh.nodeParentID), sizeof(mesh.nodeParentID));
+                inFile.read(reinterpret_cast<char *>(&mesh.nodeID), sizeof(mesh.nodeID));
+
+                uint32_t vertexCount = 0;
+                inFile.read(reinterpret_cast<char *>(&vertexCount), sizeof(vertexCount));
+
+                uint32_t indexCount = 0;
+                inFile.read(reinterpret_cast<char *>(&indexCount), sizeof(indexCount));
+
+                // read name
+                uint32_t nameSize = 0;
+                inFile.read(reinterpret_cast<char *>(&nameSize), sizeof(nameSize));
+                std::vector<char> stringBytes(nameSize); // owns the bytes
+                inFile.read(stringBytes.data(), nameSize);
+                mesh.name = std::string(stringBytes.data());
+
+                // read vertices
+                mesh.vertices.reserve(vertexCount);
+                for (uint32_t vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex)
+                {
+                    VertexMesh vertex;
+                    inFile.read(reinterpret_cast<char *>(&vertex.position), sizeof(vertex.position));
+                    inFile.read(reinterpret_cast<char *>(&vertex.normal), sizeof(vertex.normal));
+                    inFile.read(reinterpret_cast<char *>(&vertex.texCoord), sizeof(vertex.texCoord));
+                    inFile.read(reinterpret_cast<char *>(&vertex.tilingFactor), sizeof(vertex.tilingFactor));
+                    inFile.read(reinterpret_cast<char *>(&vertex.color), sizeof(vertex.color));
+                    inFile.read(reinterpret_cast<char *>(vertex.boneIDs), sizeof(vertex.boneIDs));
+                    inFile.read(reinterpret_cast<char *>(vertex.weights), sizeof(vertex.weights));
+
+                    mesh.vertices.push_back(vertex);
+                }
+
+                // read indices
+                mesh.indices.resize(indexCount);
+                inFile.read(reinterpret_cast<char *>(mesh.indices.data()), indexCount * sizeof(uint32_t));
+
+                meshAsset->meshes.push_back(mesh);
+            }
+
+            inFile.close();
+           
+            return meshAsset;
+        }
+
+        static std::vector<std::byte> SerializeAnimation(const Ref<SkeletalAnimation> &anim, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
 
             // write animation duration and ticks per second
-            AppendRaw(buffer, anim.duration);
-            AppendRaw(buffer, anim.ticksPerSeconds);
+            AppendRaw(buffer, anim->duration);
+            AppendRaw(buffer, anim->ticksPerSeconds);
 
             // write name size and name
-            std::string nameCopy = anim.name;
+            std::string nameCopy = anim->name;
             nameCopy += '\0';
             uint32_t nameSize = static_cast<uint32_t>(nameCopy.size());
             AppendRaw(buffer, nameSize);
@@ -82,10 +451,10 @@ namespace ignite
             );
 
             // write channels
-            uint32_t channelCount = static_cast<uint32_t>(anim.channels.size());
+            uint32_t channelCount = static_cast<uint32_t>(anim->channels.size());
             AppendRaw(buffer, channelCount);
 
-            for (const auto &[channelName, channel] : anim.channels)
+            for (const auto &[channelName, channel] : anim->channels)
             {
                 // write uint32_t name size
                 nameCopy = channelName;
@@ -138,12 +507,17 @@ namespace ignite
 
             }
 
+            // Write to file
+            std::ofstream of(filepath, std::ios::binary);
+            of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
+            of.close();
+
             return buffer;
         }
 
-        static SkeletalAnimation DeserializeAnimation(const std::filesystem::path &filepath)
+        static Ref<SkeletalAnimation> DeserializeAnimation(const std::filesystem::path &filepath)
         {
-            SkeletalAnimation anim;
+            Ref<SkeletalAnimation> anim = CreateRef<SkeletalAnimation>();
 
             std::ifstream inFile(filepath, std::ios::binary);
 
@@ -153,21 +527,21 @@ namespace ignite
             }
 
             // read animation duration and ticks per second
-            inFile.read(reinterpret_cast<char *>(&anim.duration), sizeof(anim.duration));
-            inFile.read(reinterpret_cast<char *>(&anim.ticksPerSeconds), sizeof(anim.ticksPerSeconds));
+            inFile.read(reinterpret_cast<char *>(&anim->duration), sizeof(anim->duration));
+            inFile.read(reinterpret_cast<char *>(&anim->ticksPerSeconds), sizeof(anim->ticksPerSeconds));
 
             // read name size and name
             uint32_t nameSize = 0;
             inFile.read(reinterpret_cast<char *>(&nameSize), sizeof(nameSize));
             std::vector<char> stringBytes(nameSize); // owns the bytes
             inFile.read(stringBytes.data(), nameSize);
-            anim.name = std::string(stringBytes.data());
+            anim->name = std::string(stringBytes.data());
 
             // read channel count
             uint32_t channelCount = 0;
             inFile.read(reinterpret_cast<char *>(&channelCount), sizeof(channelCount));
 
-            anim.channels.reserve(channelCount);
+            anim->channels.reserve(channelCount);
 
             for (uint32_t channelIdx = 0; channelIdx < channelCount; ++channelIdx)
             {
@@ -237,25 +611,27 @@ namespace ignite
                     "Corrupt animation data expected channel size {}, got {}",
                     expectedTotalSize, totalChannelByteSize);
 
-                anim.channels[channelName] = channel;
+                anim->channels[channelName] = channel;
             }
+
+            inFile.close();
 
             return anim;
         }
 
-        static std::vector<std::byte> SerializeSkeleton(const Skeleton &skeleton)
+        static std::vector<std::byte> SerializeSkeleton(const Ref<Skeleton> &skeleton, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
 
             // write joint count
-            uint32_t jointCount = static_cast<uint32_t>(skeleton.joints.size());
+            uint32_t jointCount = static_cast<uint32_t>(skeleton->joints.size());
             AppendRaw(buffer, jointCount);
 
             // build the string table and map: joint name -> offset in string table
             std::string stringTable;
             std::unordered_map<std::string, uint32_t> nameOffsets;
 
-            for (const Joint &joint : skeleton.joints)
+            for (const Joint &joint : skeleton->joints)
             {
                 if (!nameOffsets.contains(joint.name))
                 {
@@ -266,7 +642,7 @@ namespace ignite
                 }
             }
 
-            for (const Joint &joint : skeleton.joints)
+            for (const Joint &joint : skeleton->joints)
             {
                 DiskJoint dj{};
                 dj.nameOffset = nameOffsets[joint.name];
@@ -290,12 +666,17 @@ namespace ignite
                 reinterpret_cast<const std::byte *>(stringTable.data() + stringSize)
             );
 
+            // Write to file
+            std::ofstream of(filepath, std::ios::binary);
+            of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
+            of.close();
+
             return buffer;
         }
 
-        static Skeleton DeserializeSkeleton(const std::filesystem::path &filepath)
+        static Ref<Skeleton> DeserializeSkeleton(const std::filesystem::path &filepath)
         {
-            Skeleton skeleton;
+            Ref<Skeleton> skeleton = CreateRef<Skeleton>();
 
             std::ifstream inFile(filepath, std::ios::binary);
 
@@ -319,7 +700,7 @@ namespace ignite
             std::vector<char> stringTable(stringTableSize); // owns the bytes
             inFile.read(stringTable.data(), stringTableSize);
 
-            skeleton.joints.reserve(jointCount);
+            skeleton->joints.reserve(jointCount);
 
             for (const DiskJoint &dj : diskJoints)
             {
@@ -340,10 +721,12 @@ namespace ignite
                 std::memcpy(&joint.inverseBindPose[0].x, dj.inverseBindPose, sizeof(float) * 16);
                 std::memcpy(&joint.localTransform[0].x, dj.localTransform, sizeof(float) * 16);
 
-                skeleton.joints.push_back(std::move(joint));
+                skeleton->joints.push_back(std::move(joint));
 
-                skeleton.nameToJointMap[jointName] = joint.id;
+                skeleton->nameToJointMap[jointName] = joint.id;
             }
+
+            inFile.close();
 
             return skeleton;
         }

@@ -44,18 +44,16 @@ namespace ignite {
         static Ref<Scene> ImportScene(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<FmodSound> ImportAudio(AssetHandle handle, const AssetMetaData &metadata);
-
-        static void LoadSkinnedMesh(Scene *scene, Entity outEntity, const std::filesystem::path& filepath);
     };
 
-    class MaterialImporter : public AssetImporter
+    class MeshImporter : public AssetImporter
     {
     public:
-        static std::vector<Ref<Material>> Load(const aiScene *aiScene, const std::filesystem::path &filepath);
-        static void LoadTexture(const aiScene *aiScene, uint32_t materialIndex, const std::filesystem::path &filepath, const Ref<Material>& material, MaterialTextureType textureType);
-
-    private:
-        static std::unordered_map<std::string, Ref<MaterialTextureResource>> s_TextureCache;
+        static Ref<Asset> ImportMeshSource(AssetHandle handle, const AssetMetaData &metadata);
+        static Ref<Asset> ImportSkeletalMesh(AssetHandle handle, const AssetMetaData &metadata);
+        static Ref<Asset> ImportSkeleton(AssetHandle handle, const AssetMetaData &metadata);
+        static Ref<Asset> ImportAnimation(AssetHandle handle, const AssetMetaData &metadata);
+        static Ref<Asset> ImportMaterial(AssetHandle handle, const AssetMetaData &metadata);
     };
 
     class EnvironmentImporter : public AssetImporter

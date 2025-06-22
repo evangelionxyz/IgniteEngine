@@ -1,4 +1,4 @@
-/* MIT License
+﻿/* MIT License
 * 
 * Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
 * 
@@ -26,17 +26,20 @@
 #define GLM_ENABLE_EXPERIMENTAL
 
 #include "icomponent.hpp"
-#include "ignite/graphics/material.hpp"
-#include "ignite/core/uuid.hpp"
-#include "ignite/math/aabb.hpp"
-#include "ignite/graphics/vertex_data.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
-#include "ignite/animation/skeleton.hpp"
+#include "ignite/core/uuid.hpp"
+#include "ignite/graphics/material.hpp"
+#include "ignite/graphics/vertex_data.hpp"
+#include "ignite/graphics/mesh.hpp"
+#include "ignite/math/aabb.hpp"
 #include "scene_camera.hpp"
+
 #include <glm/glm.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <nvrhi/nvrhi.h>
 #include <string>
+
+#include "ignite/core/string_utils.hpp"
 
 // Forward declaration
 namespace JPH
@@ -48,8 +51,8 @@ namespace ignite
 {
     class Texture;
     class Mesh;
-    struct Skeleton;
-    
+    class Skeleton;
+
     static std::unordered_map<std::string, CompType> s_ComponentsName =
     {
         { "Camera", CompType_Camera },
@@ -57,7 +60,7 @@ namespace ignite
         { "Box Collider 2D", CompType_BoxCollider2D },
         { "Sprite 2D", CompType_Sprite2D},
         { "Mesh Renderer", CompType_MeshRenderer },
-        { "Skinned Mesh", CompType_SkinnedMesh},
+        { "Skeletal Mesh", CompType_SkeletalMesh},
         { "Rigid Body", CompType_Rigidbody},
         { "Box Collider", CompType_BoxCollider},
         { "Sphere Collider", CompType_SphereCollider},
@@ -65,41 +68,88 @@ namespace ignite
         { "C# Script", CompType_Script},
     };
 
-    enum EntityType : u8
+    enum EntityType : uint8_t
     {
-        EntityType_Node,
-        EntityType_Camera,
-        EntityType_Mesh,
-        EntityType_Prefab,
-        EntityType_Joint,
-        EntityType_Audio,
-        EntityType_Invalid
+        EntityType_Node = BIT(0),
+        EntityType_Camera = BIT(1),
+        EntityType_Mesh = BIT(2),
+        EntityType_Prefab = BIT(3),
+        EntityType_Joint = BIT(4),
+        EntityType_Audio = BIT(5),
+        EntityType_Invalid = BIT(6)
     };
 
-    static const char *EntityTypeToString(EntityType type)
+    // --- 1.  Tiny helpers so the enum behaves like a bit-mask ------------------
+    constexpr EntityType operator|(EntityType a, EntityType b)
     {
-        switch (type)
-        {
-        case EntityType_Node: return "Node";
-        case EntityType_Camera: return "Camera";
-        case EntityType_Mesh: return "Mesh";
-        case EntityType_Prefab: return "Prefab";
-        case EntityType_Joint: return "Joint";
-        case EntityType_Audio: return "Audio";
-        case EntityType_Invalid:
-        default: return "Invalid";
-        }
+        return static_cast<EntityType>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
     }
 
-    static EntityType EntityTypeFromString(const std::string &typeStr)
+    constexpr EntityType operator&(EntityType a, EntityType b)
     {
-        if (typeStr == "Node") return EntityType_Node;
-        if (typeStr == "Camera") return EntityType_Camera;
-        if (typeStr == "Mesh") return EntityType_Mesh;
-        if (typeStr == "Prefab") return EntityType_Prefab;
-        if (typeStr == "Joint") return EntityType_Joint;
-        if (typeStr == "Audio") return EntityType_Audio;
-        return EntityType_Invalid;
+        return static_cast<EntityType>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));
+    }
+
+    // --- 2.  Lookup table: bit value  -> literal string ------------------------
+    static constexpr std::array<std::pair<EntityType, const char *>, 7> kEntityNames{ {
+        {EntityType_Node  , "Node"},
+        {EntityType_Camera, "Camera"},
+        {EntityType_Mesh  , "Mesh"},
+        {EntityType_Prefab, "Prefab"},
+        {EntityType_Joint , "Joint"},
+        {EntityType_Audio , "Audio"},
+        {EntityType_Invalid,"Invalid"}
+    } };
+
+    // --- 3.  Convert an OR-combination of flags to a pipe-separated string ------
+    inline std::string EntityTypeFlagsToString(EntityType flags)
+    {
+        std::ostringstream oss;
+        bool first = true;
+
+        for (auto [bit, name] : kEntityNames)
+        {
+            if ((flags & bit) != static_cast<EntityType>(0))
+            {
+                if (!first) oss << " | ";
+                oss << name;
+                first = false;
+            }
+        }
+
+        if (first) // nothing matched → treat as “Invalid”
+            oss << "Invalid";
+
+        return oss.str();
+    }
+
+    static EntityType EntityTypeFromStringFlags(const std::string &typeStr)
+    {
+        static const std::unordered_map<std::string, EntityType> stringToType = {
+            {"Node", EntityType_Node},
+            {"Camera", EntityType_Camera},
+            {"Mesh", EntityType_Mesh},
+            {"Prefab", EntityType_Prefab},
+            {"Joint", EntityType_Joint},
+            {"Audio", EntityType_Audio},
+            {"Invalid", EntityType_Invalid}
+        };
+
+        EntityType result = static_cast<EntityType>(0);
+        std::istringstream stream(typeStr);
+        std::string token;
+
+        while (std::getline(stream, token, '|'))
+        {
+            std::string trimmed = stringutils::Trim(token);
+            auto it = stringToType.find(trimmed);
+            if (it != stringToType.end())
+            {
+                result = static_cast<EntityType>(result | it->second);
+            }
+        }
+
+        return result == static_cast<EntityType>(0) ? EntityType_Invalid : result;
     }
 
     static const char *ComponentTypeToString(const CompType type)
@@ -111,12 +161,16 @@ namespace ignite
             case CompType_BoxCollider2D: return "CompType_BoxCollider2D";
             case CompType_Sprite2D: return "CompType_Sprite2D";
             case CompType_MeshRenderer: return "CompType_MeshRenderer";
-            case CompType_SkinnedMesh: return "CompType_SkinnedMesh";
+            case CompType_SkeletalMesh: return "CompType_SkeletalMesh";
             case CompType_Rigidbody: return "CompType_Rigidbody";
             case CompType_BoxCollider: return "CompType_BoxCollider";
             case CompType_SphereCollider: return "CompType_SphereCollider";
             case CompType_AudioSource: return "CompType_AudioSource";
             case CompType_Script: return "CompType_Script";
+            case CompType_ID: return "CompType_ID";
+            case CompType_Transform: return "CompType_Transform";
+            case CompType_StaticMesh: return "CompType_StaticMesh";
+            case CompType_Invalid:
             default: return "Invalid Component";
         }
     }
@@ -126,13 +180,9 @@ namespace ignite
     public:
         std::string name;
         UUID uuid;
-        EntityType type;
-
         UUID parent = UUID(0);
         std::vector<UUID> children;
-
-        // TODO: mote to better place
-        bool isPrefab = false;
+        EntityType type;
 
         void AddChild(UUID childId)
         {
@@ -150,6 +200,11 @@ namespace ignite
         bool HasChild() const
         {
             return !children.empty();
+        }
+
+        bool IsInType(EntityType type) const
+        {
+            return (this->type & type) != 0;
         }
 
         ID(const std::string &_name,  EntityType _type, const UUID &_uuid = UUID())
@@ -281,29 +336,26 @@ namespace ignite
         virtual CompType GetType() override { return StaticType(); }
     };
 
-     class SkinnedMesh : public IComponent
+     class SkeletalMesh : public IComponent
      {
      public:
-         AssetHandle animationHandle;
-         AssetHandle skeletonHandle;
-
-         Skeleton skeleton;
+         AssetHandle meshHandle = AssetHandle(0); // Primitive Mesh Data
+         AssetHandle skeletonHandle = AssetHandle(0);
+         std::vector<AssetHandle> animationHandle;
          std::vector<glm::mat4> boneTransforms;
-         std::vector<SkeletalAnimation> animations;
+
          i32 activeAnimIndex = 0;
 
-         std::filesystem::path filepath;
+         SkeletalMesh() = default;
 
-         SkinnedMesh() = default;
-
-         static CompType StaticType() { return CompType_SkinnedMesh; }
+         static CompType StaticType() { return CompType_SkeletalMesh; }
          virtual CompType GetType() override { return StaticType(); }
      };
 
     class StaticMesh : public IComponent
     {
     public:
-        AssetHandle handle;
+        AssetHandle meshHandle = AssetHandle(0);
 
         StaticMesh() = default;
 
@@ -317,10 +369,7 @@ namespace ignite
         Ref<Mesh> mesh;
         Ref<Material> material;
 
-        AssetHandle meshSource = AssetHandle(0); // actual .glb, .gltf, .fbx file
-
         bool isSkinnedMesh = false;
-        int meshIndex = -1; // submesh index
 
         UUID root = UUID(0);
 
@@ -423,7 +472,7 @@ namespace ignite
     class Script : public IComponent
     {
     public:
-        std::string className = "null";
+        std::string className = "EMPTY";
         Script() = default;
 
         static CompType StaticType() { return CompType_Script; }

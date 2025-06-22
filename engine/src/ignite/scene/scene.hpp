@@ -24,14 +24,13 @@
 #pragma once
 
 #define GLM_ENABLE_EXPERIMENTAL
-#include "ignite/physics/2d/physics_2d.hpp"
-#include "ignite/core/logger.hpp"
+#include <entt/entt.hpp>
+
 #include "ignite/core/types.hpp"
 #include "ignite/core/uuid.hpp"
 #include "ignite/asset/asset.hpp"
 #include "ignite/math/aabb.hpp"
 
-#include <nvrhi/nvrhi.h>
 #include <unordered_map>
 
 namespace ignite
@@ -66,10 +65,8 @@ namespace ignite
 
         Entity GetPrimaryCamera();
 
-        SceneRenderer *sceneRenderer = nullptr;
-
         std::string name;
-        entt::registry *registry = nullptr;
+        entt::registry *registry;
 
         std::unordered_map<UUID, entt::entity> entities; // uuid to entity
         
@@ -82,12 +79,6 @@ namespace ignite
 
         static AssetType GetStaticType() { return AssetType::Scene; }
         virtual AssetType GetType() override { return GetStaticType(); }
-
-        struct DebugBoundingBox
-        {
-            AABB aabb;
-            glm::mat4 transform;
-        };
 
         glm::vec3 physicsGravity{ 0.0f, -9.8f, 0.0f };
         float timeInSeconds = 0.0f;

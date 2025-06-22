@@ -190,6 +190,8 @@ namespace ignite {
             return nullptr;
         }
 
+        case AssetType::MeshSource:
+        case AssetType::Skeleton:
         case AssetType::Scene:
         case AssetType::Texture:
         case AssetType::Audio:

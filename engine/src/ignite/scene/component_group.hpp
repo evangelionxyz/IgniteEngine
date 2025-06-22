@@ -39,7 +39,7 @@ namespace ignite
         Sprite2D,
         Rigidbody2D,
         BoxCollider2D,
-        SkinnedMesh,
+        SkeletalMesh,
         MeshRenderer,
         Rigibody,
         BoxCollider,

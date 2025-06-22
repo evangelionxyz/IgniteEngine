@@ -43,7 +43,7 @@ namespace ignite::stringutils
     static std::string ToLower(const std::string &str)
     {
         std::string result = str;
-        std::transform(result.begin(), result.end(), result.begin(), ::tolower);
+        std::ranges::transform(result, result.begin(), ::tolower);
         return result;
     }
 
@@ -54,5 +54,12 @@ namespace ignite::stringutils
             size_t targetPos = outStr.find(targetKey);
             outStr.replace(targetPos, targetKey.size(), replaceKey);
         }
+    }
+
+    inline std::string Trim(const std::string &s)
+    {
+        const auto begin = s.find_first_not_of(" \t");
+        const auto end = s.find_last_not_of(" \t");
+        return (begin == std::string::npos) ? "" : s.substr(begin, end - begin + 1);
     }
 }

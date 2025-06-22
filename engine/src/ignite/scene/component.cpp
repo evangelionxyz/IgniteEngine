@@ -23,11 +23,11 @@
 
 #include "component.hpp"
 #include "ignite/graphics/mesh.hpp"
-
 #include "ignite/graphics/scene_renderer.hpp"
 
 namespace ignite
 {
+
     MeshRenderer::MeshRenderer(const MeshRenderer& other)
         : IComponent(other)
     {
@@ -39,13 +39,7 @@ namespace ignite
         cullMode = other.cullMode;
         fillMode = other.fillMode;
         material = other.material;
-
         transformData = other.transformData;
-
-        // transformBufferHandle = other.transformBufferHandle; //buffer handle should not to be copied
-
-        meshSource = other.meshSource;
-        meshIndex = other.meshIndex;
 
         root = other.root;
     }

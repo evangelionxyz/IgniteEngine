@@ -156,9 +156,11 @@ namespace ignite
         }
     }
 
-    struct Material : public Asset
+    class Material : public Asset
     {
+    public:
         Material();
+        Material(const aiScene *aiScene, aiMaterial *aiMat, const std::filesystem::path &baseFilepath);
 
         std::string name;
 
@@ -172,6 +174,10 @@ namespace ignite
 
         nvrhi::BindingSetHandle bindingSet;
         nvrhi::BufferHandle paramsBuffer;
+
+        void LoadTexture(const aiScene *aiScene, const aiMaterial *aiMat, const std::filesystem::path &filepath, MaterialTextureType textureType);
+
+        void CreateTextures();
 
         void UpdateBindingSet();
         void UpdateTexture(const Ref<Texture> &texture, MaterialTextureType textureType);

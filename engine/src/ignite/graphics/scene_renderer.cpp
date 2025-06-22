@@ -313,7 +313,6 @@ namespace ignite
     void SceneRenderer::SetActiveScene(Scene* scene)
     {
         m_Scene = scene;
-        m_Scene->sceneRenderer = this;
     }
 
     bool SceneRenderer::ShouldResize() const
@@ -398,7 +397,7 @@ namespace ignite
                 MeshRenderer &meshRenderer = entity.GetComponent<MeshRenderer>();
                 
                 // not loaded mesh
-                if (meshRenderer.meshIndex == -1)
+                if (meshRenderer.mesh->data.meshIndex == -1)
                     continue;
 
                 // write material constant buffer
@@ -413,8 +412,8 @@ namespace ignite
 
                 state.bindings = { meshRenderer.bindingSet, meshRenderer.material->bindingSet };
 
-                state.setIndexBuffer({ meshRenderer.mesh->indexBuffer, nvrhi::Format::R32_UINT });
-                state.addVertexBuffer({ meshRenderer.mesh->vertexBuffer, 0, 0 });
+                state.addVertexBuffer({ meshRenderer.mesh->GetVertexBuffer(), 0, 0 });
+                state.setIndexBuffer({ meshRenderer.mesh->GetIndexBuffer(), nvrhi::Format::R32_UINT });
 
                 m_CommandList->setGraphicsState(state);
 

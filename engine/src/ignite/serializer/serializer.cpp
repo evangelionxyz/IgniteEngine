@@ -22,7 +22,6 @@
 */
 
 #include "serializer.hpp"
-#include "serializer.hpp"
 
 #include "ignite/scripting/script_class.hpp"
 #include "ignite/scripting/script_engine.hpp"
@@ -126,8 +125,10 @@ namespace ignite {
             Entity entity = { e, m_Scene.get() };
             const ID &idComp = entity.GetComponent<ID>();
 
+            bool isPrefab = idComp.IsInType(EntityType_Prefab);
+
             // TODO: Mesh renderer (Skinned & Static Mesh)
-            if (idComp.isPrefab || entity.HasComponent<MeshRenderer>())
+            if (isPrefab || entity.HasComponent<MeshRenderer>())
                 continue;
 
             sr.BeginMap(); // START Entity
@@ -135,7 +136,7 @@ namespace ignite {
                 // ID Component
                 sr.AddKeyValue("ID", idComp.uuid);
                 sr.AddKeyValue("Name", idComp.name);
-                sr.AddKeyValue("Type", EntityTypeToString(idComp.type));
+                sr.AddKeyValue("Type", EntityTypeFlagsToString(idComp.type));
                 sr.AddKeyValue("Parent", idComp.parent);
 
                 // Transform Component
@@ -223,11 +224,20 @@ namespace ignite {
                 }
 
                 // skinned mesh
-                if (entity.HasComponent<SkinnedMesh>())
+                if (entity.HasComponent<SkeletalMesh>())
                 {
-                    const SkinnedMesh &comp = entity.GetComponent<SkinnedMesh>();
-                    sr.BeginMap("SkinnedMesh");
-                    sr.AddKeyValue("Filepath", comp.filepath.generic_string());
+                    const SkeletalMesh &comp = entity.GetComponent<SkeletalMesh>();
+                    sr.BeginMap("SkeletalMesh");
+                    sr.AddKeyValue("MeshHandle", static_cast<uint64_t>(comp.meshHandle));
+                    sr.AddKeyValue("SkeletonHandle", static_cast<uint64_t>(comp.skeletonHandle));
+                    sr.BeginSequence("Animations");
+                    for (const auto &anim : comp.animationHandle)
+                    {
+                        sr.BeginMap("Anim");
+                        sr.AddKeyValue("Handle", static_cast<uint64_t>(anim));
+                        sr.EndMap();
+                    }
+                    sr.EndSequence();
                     sr.EndMap();
                 }
 
@@ -280,7 +290,7 @@ namespace ignite {
                                 sr.BeginSequence("Fields");
                                 for (const auto &[fieldName, field] : classFields)
                                 {
-                                    if (fields.find(fieldName) == fields.end() || field.Type == ScriptFieldType::Invalid)
+                                    if (!fields.contains(fieldName) || field.Type == ScriptFieldType::Invalid)
                                     {
                                         continue;
                                     }
@@ -403,7 +413,7 @@ namespace ignite {
         {
             UUID uuid = UUID(entityNode["ID"].as<uint64_t>());
             std::string name = entityNode["Name"].as<std::string>();
-            EntityType type = EntityTypeFromString(entityNode["Type"].as<std::string>());
+            EntityType type = EntityTypeFromStringFlags(entityNode["Type"].as<std::string>());
 
             Entity desEntity = SceneManager::CreateEntity(desScene.get(), name, type, uuid);
             UUID parent = UUID(entityNode["Parent"].as<uint64_t>());
@@ -482,15 +492,11 @@ namespace ignite {
             }
 
             // Skinned Mesh
-            if (YAML::Node node = entityNode["SkinnedMesh"])
+            if (YAML::Node node = entityNode["SkeletalMesh"])
             {
-                SkinnedMesh &skinnedMesh = desEntity.AddComponent<SkinnedMesh>();
-
-                auto modelFilepath= node["Filepath"].as<std::string>();
-                modelFilepath = Project::GetActive()->GetAssetFilepath(modelFilepath).generic_string();
-                AssetImporter::LoadSkinnedMesh(desScene.get(), desEntity, modelFilepath);
-
-                skinnedMesh.filepath = Project::GetActive()->GetAssetRelativeFilepath(filepath);
+                SkeletalMesh &skinnedMesh = desEntity.AddComponent<SkeletalMesh>();
+                skinnedMesh.meshHandle = AssetHandle(node["MeshHandle"].as<uint64_t>());
+                Project::GetAsset<MeshAsset>(skinnedMesh.meshHandle);
             }
 
             // Script

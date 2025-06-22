@@ -54,7 +54,7 @@ namespace ignite
         glm::vec4 color;
         u32 boneIDs[VERTEX_MAX_BONES] = { 0 };
         f32 weights[VERTEX_MAX_BONES] = { 0.0f };
-        u32 entityID;
+        u32 entityID; // should not be serialized
 
         static std::array<nvrhi::VertexAttributeDesc, 8> GetAttributes()
         {

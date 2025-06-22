@@ -30,6 +30,7 @@
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/scene_manager.hpp"
 
+#include "ignite/physics/2d/physics_2d.hpp"
 #include "ignite/physics/jolt/jolt_physics.hpp"
 
 #include <mono/metadata/object.h>

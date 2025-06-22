@@ -47,6 +47,7 @@ namespace ignite {
         Anim2D,
         Skeleton,
         MeshSource, // Mesh Source (contains vertices, indices, etc...)
+        SkeletalMesh, // Skeletal Mesh Asset
         Mesh, // Mesh Asset
         Scene
     };
@@ -86,6 +87,7 @@ namespace ignite {
         { ".fbx", AssetType::MeshSource },
         { ".glb", AssetType::MeshSource },
         { ".gltf", AssetType::MeshSource },
+        { ".skel", AssetType::Skeleton},
         { ".mat", AssetType::Material},
     };
 

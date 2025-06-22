@@ -155,7 +155,7 @@ namespace ignite
 
         ImGui::Text("Entity count: %zu", m_Scene->entities.size());
 
-        ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX;
+        ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable;
 
         if (ImGui::BeginTable("entity_hierarchy_table", 3, tableFlags))
         {
@@ -163,8 +163,8 @@ namespace ignite
             // Name, Type, Active (check box)
             ImGui::TableSetupScrollFreeze(0, 1);
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-            ImGui::TableSetupColumn("Active", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+            ImGui::TableSetupColumn("Type");
+            ImGui::TableSetupColumn("Active");
             ImGui::TableHeadersRow();
 
             ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, { 0.000f, 0.245f, 0.409f, 1.000f });
@@ -228,23 +228,25 @@ namespace ignite
             return;
 
         ID &idComp = entity.GetComponent<ID>();
+        bool isDeleting = false;
+        const bool isPrefab = idComp.IsInType(EntityType_Prefab);
+
         ImGuiTreeNodeFlags flags = (GetSelectedEntity() == entity ? ImGuiTreeNodeFlags_Selected : 0) | (!idComp.HasChild() ? ImGuiTreeNodeFlags_Leaf : 0)
             | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_OpenOnArrow
             | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_SpanFullWidth;
 
-        void* imguiPushId = reinterpret_cast<void*>(static_cast<uint64_t>(static_cast<uint32_t>(entity)));
+        const intptr_t imguiPushId = static_cast<intptr_t>(static_cast<uint64_t>(static_cast<uint32_t>(entity)));
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
 
-        ImGui::PushStyleColor(ImGuiCol_Header, { 0.000f, 0.305f, 0.453f, 1.000f });
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, { 0.435f, 0.287f, 0.000f, 1.000f });
+        ImGui::PushStyleColor(ImGuiCol_Header, { 0.000f, 0.305f, 0.453f, 1.000f });
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, { 0.780f, 0.520f, 0.000f, 1.000f });
         
-        const bool opened = ImGui::TreeNodeEx(imguiPushId, flags, "%s", idComp.name.c_str());
+        const bool opened = ImGui::TreeNodeEx(reinterpret_cast<void *>(imguiPushId), flags, "%s", idComp.name.c_str());
         
         ImGui::PopStyleColor(3);
 
-        bool isDeleting = false;
         if (!m_Scene->IsPlaying() || true)
         {
             ImGui::PushID(imguiPushId);
@@ -277,7 +279,7 @@ namespace ignite
         if (!isDeleting)
         {
             // drag and drop
-            if (ImGui::BeginDragDropSource())
+            if (isPrefab == false && ImGui::BeginDragDropSource())
             {
                 ImGui::SetDragDropPayload("ENTITY_SOURCE_ITEM", &entity, sizeof(Entity));
 
@@ -289,7 +291,7 @@ namespace ignite
             }
 
             // target drop
-            if (ImGui::BeginDragDropTarget())
+            if (isPrefab == false && ImGui::BeginDragDropTarget())
             {
                 if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY_SOURCE_ITEM"))
                 {
@@ -312,7 +314,7 @@ namespace ignite
 
             // second column
             ImGui::TableNextColumn();
-            ImGui::TextWrapped(EntityTypeToString(idComp.type));
+            ImGui::TextWrapped(EntityTypeFlagsToString(idComp.type).c_str());
 
             // third column (last)
             ImGui::TableNextColumn();
@@ -996,8 +998,8 @@ namespace ignite
                 {
                     MeshRenderer &c = selectedEntity.GetComponent<MeshRenderer>();
 
-                    ImGui::Text("Mesh [%d]: %s", c.meshIndex, c.mesh ? c.mesh->name.c_str() : "<null>");
-                    if (c.meshIndex != -1)
+                    ImGui::Text("Mesh [%d]: %s", c.mesh->data.meshIndex, c.mesh ? c.mesh->data.name.c_str() : "<null>");
+                    if (c.mesh->data.meshIndex != -1)
                     {
                         auto checkerTex = m_Icons["checker128"]->GetHandle().Get();
                         constexpr ImVec2 imageSize = { 72.0f, 72.0f };
@@ -1301,24 +1303,27 @@ namespace ignite
                         }
                     }
                 });
-            RenderComponent<SkinnedMesh>("Skinned Mesh", selectedEntity, [&]()
+            RenderComponent<SkeletalMesh>("Skeletal Mesh", selectedEntity, [&]()
                 {
-                    SkinnedMesh &c = selectedEntity.GetComponent<SkinnedMesh>();
+                    SkeletalMesh &c = selectedEntity.GetComponent<SkeletalMesh>();
 
-                    std::string btnLabel = c.filepath.empty() ? "Load" : "Loaded";
+                    std::string btnLabel = c.meshHandle == AssetHandle(0) ? "Load" : "Loaded";
                     if (ImGui::Button(btnLabel.c_str(), { 55.0f, 30.0f }))
                     {
                         std::filesystem::path filepath = FileDialogs::OpenFile("3D Files (*.glb;*.gltf;*.fbx)\0*.glb;*.gltf;*.fbx");
                         if (!filepath.empty())
                         {
-                            AssetImporter::LoadSkinnedMesh(m_Scene, selectedEntity, filepath);
-                            c.filepath = Project::GetActive()->GetAssetRelativeFilepath(filepath);
+                            AssetMetaData metadata;
+                            metadata.type = AssetType::MeshSource;
+                            metadata.filepath = filepath;
+                            Project::GetActive()->GetAssetManager().InsertMetaData(AssetHandle(), metadata);
                         }
                     }
 
-                    ImGui::SameLine();
-                    ImGui::Text("%s", c.filepath.generic_string().c_str());
+                    // ImGui::SameLine();
+                    // ImGui::Text("%s", c.filepath.generic_string().c_str());
 
+#if 0
                     if (!c.animations.empty())
                     {
                         ImGui::SeparatorText("Animations");
@@ -1375,6 +1380,7 @@ namespace ignite
                             ImGui::TreePop();
                         }
                     }
+#endif
                 });
             
 
@@ -1435,8 +1441,8 @@ namespace ignite
                     case CompType_MeshRenderer:
                         entity.AddComponent<MeshRenderer>();
                         break;
-                    case CompType_SkinnedMesh:
-                        entity.AddComponent<SkinnedMesh>();
+                    case CompType_SkeletalMesh:
+                        entity.AddComponent<SkeletalMesh>();
                         break;
                     case CompType_Rigidbody:
                         entity.AddComponent<Rigibody>();
@@ -1536,21 +1542,21 @@ namespace ignite
 
         // trigger resize
         if (vpWidth > 0 && vpHeight > 0
-            && (vpWidth != m_Scene->sceneRenderer->GetRenderTarget()->GetWidth()
-            || vpHeight != m_Scene->sceneRenderer->GetRenderTarget()->GetHeight())
+            && (vpWidth != SceneRenderer::GetActive()->GetRenderTarget()->GetWidth()
+            || vpHeight != SceneRenderer::GetActive()->GetRenderTarget()->GetHeight())
             )
         {
             // prevent resizing each frame
             // just when the mouse is not resizing
-            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) || m_Scene->sceneRenderer->ShouldResize())
+            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) || SceneRenderer::GetActive()->ShouldResize())
             {
-                m_Scene->sceneRenderer->Resize(vpWidth, vpHeight);
+                SceneRenderer::GetActive()->Resize(vpWidth, vpHeight);
                 m_Camera.SetSize(static_cast<float>(vpWidth), static_cast<float>(vpHeight));
                 m_Camera.UpdateProjectionMatrix();
             }
         }
 
-        const ImTextureID tex = reinterpret_cast<ImTextureID>(m_Scene->sceneRenderer->GetEdgeDetection().outputTexture.Get());
+        const ImTextureID tex = reinterpret_cast<ImTextureID>(SceneRenderer::GetActive()->GetEdgeDetection().outputTexture.Get());
         ImGui::Image(tex, window->Size);
 
         if (ImGui::BeginDragDropTarget())
@@ -2114,7 +2120,7 @@ namespace ignite
             m_SelectedEntities.clear();
             m_TrackingSelectedEntity = UUID(0);
 
-            m_Scene->sceneRenderer->ClearSelectedEntities();
+            SceneRenderer::GetActive()->ClearSelectedEntities();
             return {};
         }
 
@@ -2124,13 +2130,13 @@ namespace ignite
             if (auto it = m_SelectedEntities.find(entity.GetUUID()); it != m_SelectedEntities.end())
             {
                 // deselect
-                m_Scene->sceneRenderer->UnselectEntity(it->second);
+                SceneRenderer::GetActive()->UnselectEntity(it->second);
                 it = m_SelectedEntities.erase(it);
                 
                 if (!m_SelectedEntities.empty())
                 {
                     m_TrackingSelectedEntity = m_SelectedEntities.begin()->first;
-                    m_Scene->sceneRenderer->SetSelectedEntity(m_SelectedEntities.begin()->second);
+                    SceneRenderer::GetActive()->SetSelectedEntity(m_SelectedEntities.begin()->second);
                     
                     return m_SelectedEntities.begin()->second;
                 }
@@ -2138,16 +2144,16 @@ namespace ignite
             else
             {
                 m_SelectedEntities[entity.GetUUID()] = entity;
-                m_Scene->sceneRenderer->SetSelectedEntity(entity);
+                SceneRenderer::GetActive()->SetSelectedEntity(entity);
             }
         }
         else // single select
         {
             m_SelectedEntities.clear();
-            m_Scene->sceneRenderer->ClearSelectedEntities();
+            SceneRenderer::GetActive()->ClearSelectedEntities();
 
             m_SelectedEntities[entity.GetUUID()] = entity;
-            m_Scene->sceneRenderer->SetSelectedEntity(entity);
+            SceneRenderer::GetActive()->SetSelectedEntity(entity);
         }
 
         if (m_SelectedEntities.empty())

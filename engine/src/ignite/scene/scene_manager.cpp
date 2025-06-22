@@ -26,6 +26,8 @@
 #include "entity.hpp"
 #include "entity_command_manager.hpp"
 
+#include "ignite/physics/2d/physics_2d.hpp"
+
 #include "ignite/core/application.hpp"
 #include "ignite/core/uuid.hpp"
 
@@ -418,6 +420,7 @@ namespace ignite
             ID &newEntityIdComp = newEntity.GetComponent<ID>();
             newEntityIdComp.parent = srcIdComp.parent;
             newEntityIdComp.children = srcIdComp.children;
+            newEntityIdComp.type = srcIdComp.type;
 
             entityMap[srcIdComp.uuid] = newEntity;
         }
@@ -426,7 +429,6 @@ namespace ignite
 
         // copy scene extra data
         newScene->handle = other->handle;
-        newScene->sceneRenderer = other->sceneRenderer;
         newScene->viewportWidth = other->viewportWidth;
         newScene->viewportHeight = other->viewportHeight;
 

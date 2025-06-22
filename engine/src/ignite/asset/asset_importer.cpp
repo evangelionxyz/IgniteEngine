@@ -51,6 +51,10 @@ namespace ignite {
         { AssetType::Scene, AssetImporter::ImportScene },
         { AssetType::Texture, AssetImporter::ImportTexture },
         { AssetType::Audio, AssetImporter::ImportAudio },
+        { AssetType::Skeleton, MeshImporter::ImportSkeleton },
+        { AssetType::MeshSource, MeshImporter::ImportMeshSource },
+        { AssetType::SkeletalMesh, MeshImporter::ImportSkeletalMesh },
+        { AssetType::Material, MeshImporter::ImportMaterial },
     };
 
     void AssetImporter::SyncMainThread()
@@ -61,11 +65,9 @@ namespace ignite {
 
     Ref<Asset> AssetImporter::Import(AssetHandle handle, const AssetMetaData &metadata)
     {
-        Project *activeProject = Project::GetActive();
-
         // should be always importing with full filepath
         AssetMetaData metadataCopy = metadata;
-        metadataCopy.filepath = activeProject->GetAssetFilepath(metadata.filepath);
+        metadataCopy.filepath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
 
         if (s_ImportFunctions.contains(metadataCopy.type))
             return s_ImportFunctions.at(metadataCopy.type)(handle, metadataCopy);
@@ -107,11 +109,100 @@ namespace ignite {
         return sound;
     }
 
+    Ref<Asset> MeshImporter::ImportMeshSource(AssetHandle handle, const AssetMetaData& metadata)
+    {
+        Assimp::Importer importer;
+        const aiScene *assimpScene = importer.ReadFile(metadata.filepath.generic_string(), ASSIMP_IMPORTER_FLAGS);
+
+        LOG_ASSERT(assimpScene == nullptr || assimpScene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || assimpScene->mRootNode,
+            "[Asset Importer] Failed to load {}: {}", metadata.filepath, importer.GetErrorString());
+
+        if (!assimpScene)
+            return nullptr;
+
+        std::filesystem::path containerDirectory = metadata.filepath.parent_path() / metadata.filepath.stem().generic_string();
+
+        // Generated directory
+        std::filesystem::path meshBinaryFilepath = containerDirectory / (metadata.filepath.stem().generic_string() + ".ixmesh");
+        Ref<MeshAsset> meshAsset = CreateRef<MeshAsset>();
+        meshAsset->handle = handle;
+
+        if (std::filesystem::exists(meshBinaryFilepath))
+        {
+            meshAsset = BinarySerializer::DeserializeMeshAsset(meshBinaryFilepath);
+        }
+        else
+        {
+            // Load Meshes
+            std::vector<Ref<Mesh>> meshes;
+            meshes.resize(assimpScene->mNumMeshes);
+            meshAsset->meshes.resize(assimpScene->mNumMeshes);
+
+            for (auto &mesh : meshes)
+            {
+                mesh = CreateRef<Mesh>();
+            }
+
+            MeshLoader::ProcessNode(assimpScene, assimpScene->mRootNode, metadata.filepath, meshes,
+                meshAsset->nodes, nullptr, -1);
+
+            MeshLoader::CalculateWorldTransforms(meshAsset->nodes);
+
+            for (size_t meshIdx = 0; meshIdx < meshes.size(); ++meshIdx)
+            {
+                Ref<Mesh> mesh = meshes[meshIdx];
+                meshAsset->meshes[meshIdx].meshIndex = mesh->data.meshIndex;
+                meshAsset->meshes[meshIdx].materialIndex = mesh->data.materialIndex;
+                meshAsset->meshes[meshIdx].nodeParentID = mesh->data.nodeParentID;
+                meshAsset->meshes[meshIdx].nodeID = mesh->data.nodeID;
+                meshAsset->meshes[meshIdx].name = mesh->data.name;
+                meshAsset->meshes[meshIdx].vertices = mesh->data.vertices;
+                meshAsset->meshes[meshIdx].indices = mesh->data.indices;
+            }
+
+            // Save to binary
+            BinarySerializer::SerializeMeshAsset(meshAsset, meshBinaryFilepath);
+        }
+
+        // Load Materials
+        std::vector<Ref<Material>> materials;
+        
+        for (uint32_t matIndex = 0; matIndex < assimpScene->mNumMaterials; ++matIndex)
+        {
+            aiMaterial *aiMat = assimpScene->mMaterials[matIndex];
+            std::string materialName = aiMat->GetName().data;
+
+            if (materialName.empty())
+                continue;
+
+            Ref<Material> mat;
+            std::filesystem::path materialBinaryFilepath = containerDirectory / (materialName + ".ixmat");
+            if (std::filesystem::exists(materialBinaryFilepath))
+            {
+                mat = BinarySerializer::DeserializeMaterial(materialBinaryFilepath);
+            }
+            else
+            {
+                mat = CreateRef<Material>(assimpScene, aiMat, metadata.filepath);
+                BinarySerializer::SerializeMaterial(mat, materialBinaryFilepath);
+            }
+
+            if (mat)
+            {
+                mat->CreateTextures();
+                materials.push_back(mat);
+            }
+        }
+
+        return meshAsset;
+    }
+
+#ifdef OLD
     void AssetImporter::LoadSkinnedMesh(Scene *scene, Entity outEntity, const std::filesystem::path &filepath)
     {
         LOG_ASSERT(std::filesystem::exists(filepath), "[Mesh Loader] File does not exists!");
 
-        SkinnedMesh &skinnedMesh = outEntity.GetComponent<SkinnedMesh>();
+        SkeletalMesh &skinnedMesh = outEntity.GetComponent<SkeletalMesh>();
 
         Assimp::Importer importer;
         const aiScene *assimpScene = importer.ReadFile(filepath.generic_string(), ASSIMP_IMPORTER_FLAGS);
@@ -152,7 +243,7 @@ namespace ignite {
             }
 
             // Process Skeleton
-            std::filesystem::path skeletonFilepath = containerDirectory / (filepath.stem().generic_string() + ".skeleton");
+            std::filesystem::path skeletonFilepath = containerDirectory / (filepath.stem().generic_string() + ".skel");
             if (std::filesystem::exists(skeletonFilepath))
             {
                 skinnedMesh.skeleton = BinarySerializer::DeserializeSkeleton(skeletonFilepath);
@@ -191,7 +282,6 @@ namespace ignite {
                 Entity nodeEntity = SceneManager::CreateEntity(scene, node.name, EntityType_Node);
 
                 ID &idComp = nodeEntity.GetComponent<ID>();
-                idComp.isPrefab = true;
                 node.uuid = idComp.uuid;
 
                 Transform &tr = nodeEntity.GetComponent<Transform>();
@@ -208,12 +298,14 @@ namespace ignite {
         for (auto &node : nodes)
         {
             Entity nodeEntity = SceneManager::GetEntity(scene, node.uuid);
+            ID &idComp = nodeEntity.GetComponent<ID>();
+            idComp.type = EntityType_Node | EntityType_Prefab;
 
             if (node.parentID == -1)
             {
                 // Attach the node to root node
-                ID &id = outEntity.GetComponent<ID>();
-                id.name = filepath.stem().string();
+                ID &rootIDComp = outEntity.GetComponent<ID>();
+                rootIDComp.name = filepath.stem().string();
                 SceneManager::AddChild(scene, outEntity, nodeEntity);
             }
             else
@@ -232,12 +324,8 @@ namespace ignite {
                 MeshRenderer &mr = nodeEntity.AddComponent<MeshRenderer>();
 
                 mr.Create(isSkinnedMesh);
-                mr.meshIndex = meshIdx;
-                mr.material = materials[mesh->materialIndex]; // set material
 
-                if (!mr.material)
-                    mr.material = CreateRef<Material>(); // default material
-
+                mr.material = materials[mesh->materialIndex] ? materials[mesh->materialIndex] : CreateRef<Material>(); // set material
                 mr.root = outEntity.GetUUID();
                 mr.mesh = mesh;
                 mr.mesh->CreateBuffers();
@@ -245,216 +333,130 @@ namespace ignite {
             }
 
             // Extract skeleton joints into entity
-            for (size_t i = 0; i < skinnedMesh.skeleton.joints.size(); ++i)
+            for (size_t i = 0; i < skinnedMesh.skeleton->joints.size(); ++i)
             {
-                const std::string &name = skinnedMesh.skeleton.joints[i].name;
+                const std::string &name = skinnedMesh.skeleton->joints[i].name;
                 for (auto [uuid, e] : scene->entities)
                 {
                     Entity jointEntity = { e, scene };
                     if (jointEntity.GetName() == name)
                     {
-                        skinnedMesh.skeleton.jointEntityMap[static_cast<i32>(i)] = uuid;
-                        jointEntity.GetComponent<ID>().type = EntityType_Joint;
+                        skinnedMesh.skeleton->jointEntityMap[static_cast<i32>(i)] = uuid;
+                        jointEntity.GetComponent<ID>().type = EntityType_Joint | EntityType_Prefab;
                         break;
                     }
                 }
             }
         }
     }
+#endif
 
-
-    // Material Importer Class
-    std::unordered_map<std::string, Ref<MaterialTextureResource>> MaterialImporter::s_TextureCache;
-
-    std::vector<Ref<Material>> MaterialImporter::Load(const aiScene* aiScene, const std::filesystem::path &filepath)
+    Ref<Asset> MeshImporter::ImportSkeletalMesh(AssetHandle handle, const AssetMetaData& metadata)
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-        nvrhi::CommandListHandle commandList = device->createCommandList();
-        commandList->open();
+        // Generated directory
+        std::filesystem::path containerDirectory = metadata.filepath.parent_path() / metadata.filepath.stem().generic_string();
 
-        // Create material buckets and reserve space
-        std::vector<Ref<Material>> materials;
-        materials.reserve(aiScene->mNumMaterials);
+        std::filesystem::path meshBinaryFilepath = containerDirectory / (metadata.filepath.stem().generic_string() + ".ixmesh");
+        Ref<MeshAsset> skeletalMeshAsset = CreateRef<MeshAsset>();
 
-        for (uint32_t materialIndex = 0; materialIndex < aiScene->mNumMaterials; ++materialIndex)
+        Assimp::Importer importer;
+        const aiScene *assimpScene = importer.ReadFile(metadata.filepath.generic_string(), ASSIMP_IMPORTER_FLAGS);
+
+        LOG_ASSERT(assimpScene == nullptr || assimpScene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || assimpScene->mRootNode,
+            "[Asset Importer] Failed to load {}: {}", metadata.filepath, importer.GetErrorString());
+
+        if (!assimpScene)
+            return nullptr;
+
+        Ref<Skeleton> skeleton;
+        std::vector<Ref<SkeletalAnimation>> animations;
+
+        // Load Animations
+        if (assimpScene->HasAnimations())
         {
-            aiMaterial *aiMat = aiScene->mMaterials[materialIndex];
-            Ref<Material> material = CreateRef<Material>();
-            material->name = aiMat->GetName().data;
+            if (!std::filesystem::exists(containerDirectory))
+                std::filesystem::create_directory(containerDirectory);
 
-            aiColor4D baseColor(1.0f, 1.0f, 1.0f, 1.0f);
-            aiColor4D diffuseColor(1.0f, 1.0f, 1.0f, 1.0f);
-            aiColor4D emissiveColor(0.0f, 0.0f, 0.0f, 0.0f);
-            f32 reflectivity = 0.0f;
-
-            aiMat->Get(AI_MATKEY_BASE_COLOR, baseColor);
-            aiMat->Get(AI_MATKEY_COLOR_DIFFUSE, diffuseColor);
-            aiMat->Get(AI_MATKEY_METALLIC_FACTOR, material->params.metallicFactor);
-            aiMat->Get(AI_MATKEY_SPECULAR_FACTOR, material->params.specularFactor);
-            aiMat->Get(AI_MATKEY_ROUGHNESS_FACTOR, material->params.roughnessFactor);
-            aiMat->Get(AI_MATKEY_COLOR_EMISSIVE, emissiveColor);
-            aiMat->Get(AI_MATKEY_REFLECTIVITY, reflectivity);
-
-            material->params.baseColor = { baseColor.r, baseColor.g, baseColor.b, 1.0f };
-
-            if (diffuseColor.r > 0.0f)
+            // Load animation
+            // MeshLoader::LoadAnimation(assimpScene, skinnedMesh.animations);
+            animations.resize(assimpScene->mNumAnimations);
+            for (uint32_t i = 0; i < assimpScene->mNumAnimations; ++i)
             {
-                material->params.emissiveFactor = emissiveColor.r / diffuseColor.r;
-            }
+                aiAnimation *anim = assimpScene->mAnimations[i];
+                std::string animName = anim->mName.data;
 
-            // load textures
-            LoadTexture(aiScene, materialIndex, filepath, material, MaterialTextureType::BaseColor);
-            LoadTexture(aiScene, materialIndex, filepath, material, MaterialTextureType::Specular);
-            LoadTexture(aiScene, materialIndex, filepath, material, MaterialTextureType::Emissive);
-            LoadTexture(aiScene, materialIndex, filepath, material, MaterialTextureType::Roughness);
-            LoadTexture(aiScene, materialIndex, filepath, material, MaterialTextureType::Normals);
-
-            // set transparent and reflectivity
-            // material->_transparent = false;
-            // material->_reflective = reflectivity > 0.0f;
-
-            // Create loaded textures
-            for (const auto& tex : material->textures | std::views::values)
-            {
-                // use white texture
-                if (tex->data == nullptr)
+                std::filesystem::path animationFilepath = containerDirectory / (metadata.filepath.stem().generic_string() + "_" + animName + ".anim");
+                if (std::filesystem::exists(animationFilepath))
                 {
-                    tex->handle = Renderer::GetWhiteTexture()->GetHandle();
-                    continue;
-                }
-
-                // create texture
-                auto textureDesc = nvrhi::TextureDesc();
-                textureDesc.setDimension(nvrhi::TextureDimension::Texture2D);
-                textureDesc.setWidth(tex->width);
-                textureDesc.setHeight(tex->height);
-                textureDesc.setFormat(nvrhi::Format::RGBA8_UNORM);
-                textureDesc.setInitialState(nvrhi::ResourceStates::ShaderResource);
-                textureDesc.setKeepInitialState(true);
-                textureDesc.setMipLevels(material->mipLevels);
-                textureDesc.setDebugName("Material embedded Texture");
-
-                tex->handle = device->createTexture(textureDesc);
-                LOG_ASSERT(tex->handle, "[Material Importer] Failed to create texture!");
-            }
-           
-            material->WriteTexture(commandList);
-
-            materials.push_back(material);
-        }
-
-        commandList->close();
-        device->executeCommandList(commandList);
-
-        s_TextureCache.clear();
-        return materials;
-    }
-
-    void MaterialImporter::LoadTexture(const aiScene* aiScene, uint32_t materialIndex, const std::filesystem::path& filepath,
-        const Ref<Material>& material, MaterialTextureType textureType)
-    {
-        const aiMaterial *mat = aiScene->mMaterials[materialIndex];
-        const aiTextureType type = GetAssimpTextureType(textureType);
-
-        // Create the material texture first (Ref counted object)
-        material->textures[textureType] = CreateRef<MaterialTextureResource>();
-
-        if (const uint32_t texCount = mat->GetTextureCount(type))
-        {
-            for (uint32_t i = 0; i < texCount; ++i)
-            {
-                aiString texFilename;
-                mat->GetTexture(type, i, &texFilename);
-
-                LOG_INFO("[Material Importer] Texture type {}", aiTextureTypeToString(type));
-
-                // try to load from cache
-                for (auto &[path, tex] : s_TextureCache)
-                {
-                    if (std::strcmp(path.c_str(), texFilename.C_Str()) == 0)
-                    {
-                        material->textures[textureType] = tex;
-                        LOG_WARN("[Material Importer] {} Loaded from cache", path.c_str());
-                        return;
-                    }
-                }
-
-                stbi_set_flip_vertically_on_load(false);
-                int width, height, channels;
-                uint8_t *sourceData = nullptr;
-
-                // create new texture
-                // Load embedded texture
-                const aiTexture *embeddedTexture = aiScene->GetEmbeddedTexture(texFilename.C_Str());
-                if (embeddedTexture && material->textures[textureType]->handle == nullptr)
-                {
-                    // handle compressed textures
-                    if (embeddedTexture->mHeight == 0)
-                    {
-                        LOG_INFO("[Material Importer] Loading embedded compressed format texture of size {} bytes", embeddedTexture->mWidth);
-                        material->textures[textureType]->data = stbi_load_from_memory(reinterpret_cast<const stbi_uc *>(embeddedTexture->pcData),
-                            embeddedTexture->mWidth, &width, &height, &channels, 4);
-                    }
-                    else
-                    {
-                        width = static_cast<int>(embeddedTexture->mWidth);
-                        height = static_cast<int>(embeddedTexture->mHeight);
-
-                        LOG_INFO("[Material Importer] Loading embedded uncompressed texture of size {}x{}", width, height);
-
-                        // Allocate space for RGBA8 data
-                        uint8_t *destinationData = new uint8_t[width * height * 4];
-
-                        // Assimp embedded uncompressed texture data is usually in RGB format without alpha
-                        // You can test with alpha channel (or assume RGB with alpha set to 255)
-                        for (int p = 0; p < width * height; ++p)
-                        {
-                            destinationData[p * 4 + 0] = sourceData[p * 3 + 0]; // R
-                            destinationData[p * 4 + 1] = sourceData[p * 3 + 1]; // G
-                            destinationData[p * 4 + 2] = sourceData[p * 3 + 2]; // B
-                            destinationData[p * 4 + 3] = 255;                   // A
-                        }
-
-                        material->textures[textureType]->data = destinationData;
-
-                        sourceData = reinterpret_cast<uint8_t *>(embeddedTexture->pcData);
-                        LOG_ASSERT(sourceData, "[Material Importer] Failed to load texture");
-                    }
+                    animations[i] = BinarySerializer::DeserializeAnimation(animationFilepath);
                 }
                 else
                 {
-                    // Texture from file
-                    std::filesystem::path textureFilepath = filepath.parent_path() / std::string(texFilename.C_Str());
-                    if (!std::filesystem::exists(textureFilepath))
-                    {
-                        LOG_ERROR("[Material Importer] texture path is not found! \"{}\"", textureFilepath.generic_string());
-                        return;
-                    }
-
-                    LOG_INFO("[Material Importer] Load texture from \"{}\"", textureFilepath.generic_string());
-                    sourceData = stbi_load(textureFilepath.generic_string().c_str(), &width, &height, &channels, 4);
-                    LOG_ASSERT(sourceData, "[Material Importer] Failed to load texture");
-                }
-
-                if (sourceData)
-                {
-                    material->textures[textureType]->data = sourceData;
-                    LOG_ASSERT(material->textures[textureType]->data, "[Material Importer] Failed to load texture");
-                }
-
-                if (material->textures[textureType]->data)
-                {
-                    material->textures[textureType]->width = static_cast<uint32_t>(width);
-                    material->textures[textureType]->height = static_cast<uint32_t>(height);
-                    // material->textures[textureType]->buffer.Size = static_cast<uint64_t>(width * height) * 4u;
-                    material->textures[textureType]->rowPitch = width * 4u;
-
-                    s_TextureCache[texFilename.C_Str()] = material->textures[textureType];
+                    animations[i] = CreateRef<SkeletalAnimation>(anim);
+                    BinarySerializer::SerializeAnimation(animations[i], animationFilepath);
                 }
             }
+
+            // Process Skeleton
+            std::filesystem::path skeletonFilepath = containerDirectory / (metadata.filepath.stem().generic_string() + ".skel");
+            if (std::filesystem::exists(skeletonFilepath))
+            {
+                skeleton = BinarySerializer::DeserializeSkeleton(skeletonFilepath);
+            }
+            else
+            {
+                MeshLoader::ExtractSkeleton(assimpScene, skeleton);
+                MeshLoader::SortJointsHierarchically(skeleton);
+                BinarySerializer::SerializeSkeleton(skeleton, skeletonFilepath);
+            }
         }
+
+        // Load Materials
+        // std::vector<Ref<Material>> materials = MaterialImporter::Load(assimpScene, metadata.filepath);
+
+        // Load Meshes
+        std::vector<Ref<Mesh>> meshes;
+        meshes.resize(assimpScene->mNumMeshes);
+        for (auto &mesh : meshes)
+        {
+            mesh = CreateRef<Mesh>();
+        }
+
+        MeshLoader::ProcessNode(assimpScene, assimpScene->mRootNode, metadata.filepath, meshes, skeletalMeshAsset->nodes, skeleton, -1);
+        MeshLoader::CalculateWorldTransforms(skeletalMeshAsset->nodes);
+
+        // Save to binary
+        BinarySerializer::SerializeMeshAsset(skeletalMeshAsset, meshBinaryFilepath);
+
+        return skeletalMeshAsset;
     }
 
+    Ref<Asset> MeshImporter::ImportSkeleton(AssetHandle handle, const AssetMetaData& metadata)
+    {
+        Ref<Skeleton> skeleton = BinarySerializer::DeserializeSkeleton(metadata.filepath);
+
+        if (skeleton)
+            skeleton->handle = handle;
+
+        return skeleton;
+    }
+
+    Ref<Asset> MeshImporter::ImportAnimation(AssetHandle handle, const AssetMetaData& metadata)
+    {
+        /*Ref<SkeletalAnimation> animation = BinarySerializer::DeserializeAnimation(metadata.filepath);
+
+        if (animation)
+            animation->handle = handle;*/
+
+        return nullptr;
+    }
+
+    Ref<Asset> MeshImporter::ImportMaterial(AssetHandle handle, const AssetMetaData& metadata)
+    {
+        Ref<Material> mat;
+        return mat;
+    }
+    
 
     // Environment Importer Class
     void EnvironmentImporter::Import(Ref<Environment> *outEnvironment, const std::string &filepath)
