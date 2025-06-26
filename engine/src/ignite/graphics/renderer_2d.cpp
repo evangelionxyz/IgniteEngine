@@ -60,26 +60,9 @@ namespace ignite
         size_t vertAllocSize = s_Data->quadBatch.maxVertices * sizeof(Vertex2DQuad);
         s_Data->quadBatch.vertexBufferBase = new Vertex2DQuad[vertAllocSize];
 
-        // create buffers
-        const auto desc = nvrhi::BufferDesc()
-            .setByteSize(vertAllocSize)
-            .setIsVertexBuffer(true)
-            .setInitialState(nvrhi::ResourceStates::VertexBuffer)
-            .setKeepInitialState(true)
-            .setDebugName("Renderer 2D Quad Vertex Buffer");
 
-        s_Data->quadBatch.vertexBuffer = device->createBuffer(desc);
-        LOG_ASSERT(s_Data->quadBatch.vertexBuffer, "[Renderer 2D] Failed to create Renderer 2D Quad Vertex Buffer");
-
-        const auto ibDesc = nvrhi::BufferDesc()
-            .setByteSize(s_Data->quadBatch.maxIndices * sizeof(u32))
-            .setIsIndexBuffer(true)
-            .setInitialState(nvrhi::ResourceStates::IndexBuffer)
-            .setKeepInitialState(true)
-            .setDebugName("Renderer 2D Quad Index Buffer");
-
-        s_Data->quadBatch.indexBuffer = device->createBuffer(ibDesc);
-        LOG_ASSERT(s_Data->quadBatch.indexBuffer, "[Renderer 2D] Failed to create Renderer 2D Quad Index Buffer");
+        s_Data->quadBatch.vertexBuffer = VertexBuffer::Create(vertAllocSize);
+        s_Data->quadBatch.indexBuffer = IndexBuffer::Create(s_Data->quadBatch.maxIndices * sizeof(uint32_t));
 
         // create texture
         s_Data->quadBatch.textureSlots.resize(s_Data->quadBatch.maxTextureCount);
@@ -103,10 +86,10 @@ namespace ignite
 
 
         // write index buffer
-        u32 *indices = new u32[s_Data->quadBatch.maxIndices];
+        uint32_t *indices = new uint32_t[s_Data->quadBatch.maxIndices];
 
-        u32 offset = 0;
-        for (u32 i = 0; i < s_Data->quadBatch.maxIndices; i += 6)
+        uint32_t offset = 0;
+        for (uint32_t i = 0; i < s_Data->quadBatch.maxIndices; i += 6)
         {
             indices[0 + i] = offset + 0;
             indices[1 + i] = offset + 1;
@@ -119,10 +102,7 @@ namespace ignite
             offset += 4;
         }
 
-        commandList->open();
-        commandList->writeBuffer(s_Data->quadBatch.indexBuffer, indices, s_Data->quadBatch.maxIndices * sizeof(u32));        
-        commandList->close();
-        device->executeCommandList(commandList);
+        s_Data->quadBatch.indexBuffer->SetData(Buffer(indices, s_Data->quadBatch.maxIndices * sizeof(u32)));
         
         delete[] indices;
         
@@ -140,16 +120,7 @@ namespace ignite
         size_t vertAllocSize = s_Data->lineBatch.maxVertices * sizeof(Vertex2DLine);
         s_Data->lineBatch.vertexBufferBase = new Vertex2DLine[vertAllocSize];
 
-        // create buffers
-        const auto vbDesc = nvrhi::BufferDesc()
-            .setByteSize(vertAllocSize)
-            .setIsVertexBuffer(true)
-            .setInitialState(nvrhi::ResourceStates::VertexBuffer)
-            .setKeepInitialState(true)
-            .setDebugName("Renderer 2D Line Vertex Buffer");
-
-        s_Data->lineBatch.vertexBuffer = device->createBuffer(vbDesc);
-        LOG_ASSERT(s_Data->lineBatch.vertexBuffer, "[Renderer 2D] Failed to create Renderer 2D Line Vertex Buffer");
+        s_Data->lineBatch.vertexBuffer = VertexBuffer::Create(vertAllocSize);
 
         // create binding set
         nvrhi::BindingSetDesc bindingSetDesc;
@@ -183,15 +154,15 @@ namespace ignite
         if (s_Data->quadBatch.indexCount > 0)
         {
             const size_t bufferSize = reinterpret_cast<uint8_t*>(s_Data->quadBatch.vertexBufferPtr) - reinterpret_cast<uint8_t*>(s_Data->quadBatch.vertexBufferBase);
-            renderCommandList->writeBuffer(s_Data->quadBatch.vertexBuffer, s_Data->quadBatch.vertexBufferBase, bufferSize);
+            s_Data->quadBatch.vertexBuffer->SetData(renderCommandList, Buffer(s_Data->quadBatch.vertexBufferBase, bufferSize));
 
             const auto graphicsState = nvrhi::GraphicsState()
                 .setPipeline(quadPipeline->GetHandle())
                 .setFramebuffer(renderFramebuffer)
                 .addBindingSet(s_Data->quadBindingSet)
                 .setViewport(nvrhi::ViewportState().addViewportAndScissorRect(viewport))
-                .addVertexBuffer(nvrhi::VertexBufferBinding{ s_Data->quadBatch.vertexBuffer, 0, 0 })
-                .setIndexBuffer({ s_Data->quadBatch.indexBuffer, nvrhi::Format::R32_UINT });
+                .addVertexBuffer(nvrhi::VertexBufferBinding{ s_Data->quadBatch.vertexBuffer->GetHandle(), 0, 0})
+                .setIndexBuffer({ s_Data->quadBatch.indexBuffer->GetHandle(), nvrhi::Format::R32_UINT});
 
             renderCommandList->setGraphicsState(graphicsState);
             nvrhi::DrawArguments args;
@@ -204,14 +175,14 @@ namespace ignite
         if (s_Data->lineBatch.indexCount > 0)
         {
             const size_t bufferSize = reinterpret_cast<uint8_t*>(s_Data->lineBatch.vertexBufferPtr) - reinterpret_cast<uint8_t*>(s_Data->lineBatch.vertexBufferBase);
-            renderCommandList->writeBuffer(s_Data->lineBatch.vertexBuffer, s_Data->lineBatch.vertexBufferBase, bufferSize);
+            s_Data->lineBatch.vertexBuffer->SetData(renderCommandList, Buffer(s_Data->lineBatch.vertexBufferBase, bufferSize));
 
             const auto graphicsState = nvrhi::GraphicsState()
                 .setPipeline(linePipeline->GetHandle())
                 .setFramebuffer(renderFramebuffer)
                 .addBindingSet(s_Data->lineBindingSet)
                 .setViewport(nvrhi::ViewportState().addViewportAndScissorRect(viewport))
-                .addVertexBuffer(nvrhi::VertexBufferBinding{ s_Data->lineBatch.vertexBuffer, 0, 0 });
+                .addVertexBuffer(nvrhi::VertexBufferBinding{ s_Data->lineBatch.vertexBuffer->GetHandle(), 0, 0});
 
             renderCommandList->setGraphicsState(graphicsState);
             nvrhi::DrawArguments args;

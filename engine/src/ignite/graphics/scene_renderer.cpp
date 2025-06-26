@@ -197,15 +197,15 @@ namespace ignite
 
         // Geometry pipeline
         {
-            auto attributes = VertexMesh::GetAttributes();
+            auto attributes = VertexMesh_Anim::GetAttributes();
             GraphicsPiplineCreateInfo pci;
             pci.attributes = attributes.data();
             pci.attributeCount = static_cast<uint32_t>(attributes.size());
 
-            m_GeometryPipeline = GraphicsPipeline::Create(params, &pci);
-            m_GeometryPipeline->AddShader("default_mesh.vertex.hlsl", nvrhi::ShaderType::Vertex)
-                .AddShader("default_mesh.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
-                .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH))
+            m_GeometryAnimPipeline = GraphicsPipeline::Create(params, &pci);
+            m_GeometryAnimPipeline->AddShader("mesh_anim.vertex.hlsl", nvrhi::ShaderType::Vertex)
+                .AddShader("mesh_anim.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
+                .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
                 .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
                 .Build();
         }
@@ -340,7 +340,7 @@ namespace ignite
         m_BatchQuadPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
         m_BatchLinePipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
         m_EnvironmentPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
-        m_GeometryPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
+        m_GeometryAnimPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
     }
 
     void SceneRenderer::Render(const ICamera *camera, bool renderEnvironment)
@@ -406,14 +406,14 @@ namespace ignite
 
                 // render
                 auto state = nvrhi::GraphicsState();
-                state.pipeline = m_GeometryPipeline->GetHandle();
+                state.pipeline = m_GeometryAnimPipeline->GetHandle();
                 state.framebuffer = framebuffer;
                 state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
                 state.bindings = { meshRenderer.bindingSet, meshRenderer.material->bindingSet };
 
-                state.addVertexBuffer({ meshRenderer.mesh->GetVertexBuffer(), 0, 0 });
-                state.setIndexBuffer({ meshRenderer.mesh->GetIndexBuffer(), nvrhi::Format::R32_UINT });
+                state.addVertexBuffer({ meshRenderer.mesh->GetVertexBuffer()->GetHandle(), 0, 0});
+                state.setIndexBuffer({ meshRenderer.mesh->GetIndexBuffer()->GetHandle(), nvrhi::Format::R32_UINT});
 
                 m_CommandList->setGraphicsState(state);
 
@@ -456,9 +456,9 @@ namespace ignite
         m_BatchQuadPipeline->ResetHandle();
         m_BatchQuadPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
 
-        m_GeometryPipeline->GetParams().fillMode = mode;
-        m_GeometryPipeline->ResetHandle();
-        m_GeometryPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
+        m_GeometryAnimPipeline->GetParams().fillMode = mode;
+        m_GeometryAnimPipeline->ResetHandle();
+        m_GeometryAnimPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
     }
 
     void SceneRenderer::SetSelectedEntity(const Entity& entity)

@@ -29,6 +29,9 @@
 #include "renderer.hpp"
 #include "shader.hpp"
 
+#include "vertex_buffer.hpp"
+#include "index_buffer.hpp"
+
 #include <unordered_map>
 
 namespace ignite
@@ -47,8 +50,8 @@ namespace ignite
 
         VertexType* vertexBufferBase = nullptr;
         VertexType*vertexBufferPtr = nullptr;
-        nvrhi::BufferHandle vertexBuffer = nullptr;
-        nvrhi::BufferHandle indexBuffer = nullptr;
+        Ref<VertexBuffer> vertexBuffer;
+        Ref<IndexBuffer> indexBuffer;
         nvrhi::SamplerHandle sampler = nullptr;
         std::vector<Ref<Texture>> textureSlots;
         u8 textureSlotIndex = 1; // 0 for white texture

@@ -46,7 +46,8 @@ namespace ignite
 
     enum class GLayoutMap
     {
-        MESH, 
+        MESH,
+        MESH_ANIM, 
         MATERIAL, 
         ENVIRONMENT, 
         QUAD2D, 

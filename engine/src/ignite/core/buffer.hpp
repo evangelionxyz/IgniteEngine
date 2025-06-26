@@ -23,16 +23,16 @@
 
 #pragma once
 
-#include "types.hpp"
-
+#include <cstdint>
+#include <cstdlib>
 #include <string.h>
 
 namespace ignite
 {
     struct Buffer
     {
-        uint8_t* Data = nullptr;
-        uint64_t Size = 0;
+        uint8_t* data = nullptr;
+        uint64_t size = 0;
 
         Buffer() = default;
 
@@ -41,15 +41,15 @@ namespace ignite
             Allocate(size);
         }
 
-        Buffer(const void* data, uint64_t size)
-            : Data((uint8_t*)data), Size(size)
+        Buffer(void* data, uint64_t size)
+            : data(static_cast<uint8_t *>(data)), size(size)
         {
         }
 
         static Buffer Copy(Buffer other)
         {
-            Buffer result(other.Size);
-            memcpy(result.Data, other.Data, other.Size);
+            Buffer result(other.size);
+            memcpy(result.data, other.data, other.size);
             return result;
         }
 
@@ -57,26 +57,26 @@ namespace ignite
         {
             Release();
 
-            Data = static_cast<u8 *>(malloc(size));
-            Size = size;
+            data = static_cast<uint8_t *>(std::malloc(size));
+            this->size = size;
         }
 
         void Release()
         {
-            free(Data);
-            Data = nullptr;
-            Size = 0;
+            std::free(data);
+            data = nullptr;
+            size = 0;
         }
 
         template<typename T>
         T* As()
         {
-            return static_cast<T *>(Data);
+            return static_cast<T *>(data);
         }
 
         operator bool() const
         {
-            return static_cast<bool>(Data);
+            return static_cast<bool>(data);
         }
     };
 
@@ -97,8 +97,8 @@ namespace ignite
             m_Buffer.Release();
         }
 
-        uint8_t* Data() { return m_Buffer.Data; }
-        uint8_t Size() { return static_cast<uint8_t>(m_Buffer.Size); }
+        uint8_t* Data() { return m_Buffer.data; }
+        uint8_t Size() { return static_cast<uint8_t>(m_Buffer.size); }
 
         template<typename T>
         T* As()

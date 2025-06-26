@@ -31,11 +31,11 @@
 namespace ignite
 {
     Texture::Texture(Buffer buffer, const TextureCreateInfo &createInfo)
-        : m_CreateInfo(createInfo), m_Data(buffer.Data)
+        : m_CreateInfo(createInfo), m_Data(buffer.data)
     {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
         
-        LOG_ASSERT(m_Data && buffer.Data, "[Texture] Pixel data is null");
+        LOG_ASSERT(m_Data && buffer.data, "[Texture] Pixel data is null");
 
         const auto &textureDesc = nvrhi::TextureDesc()
             .setDimension(m_CreateInfo.dimension)

@@ -73,12 +73,12 @@ namespace ignite
 
         m_ImFont = nullptr;
 
-        if (m_Data.Data)
+        if (m_Data.data)
         {
             fontConfig.FontDataOwnedByAtlas = false;
             m_ImFont = m_IsCompressed 
-                ? ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(m_Data.Data, static_cast<int>(m_Data.Size), 0.0f, &fontConfig)
-                : ImGui::GetIO().Fonts->AddFontFromMemoryTTF(m_Data.Data, static_cast<int>(m_Data.Size), 0.0f, &fontConfig);
+                ? ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(m_Data.data, static_cast<int>(m_Data.size), 0.0f, &fontConfig)
+                : ImGui::GetIO().Fonts->AddFontFromMemoryTTF(m_Data.data, static_cast<int>(m_Data.size), 0.0f, &fontConfig);
         }
         else if (m_IsDefault)
         {

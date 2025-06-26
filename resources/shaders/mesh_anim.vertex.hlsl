@@ -24,7 +24,6 @@ struct VSInput
     float3 position     : POSITION;
     float3 normal       : NORMAL;
     float2 UV           : TEXCOORD;
-    float2 tilingFactor : TILINGFACTOR;
     float4 color        : COLOR;
     uint4 boneIDs       : BONEIDS;
     float4 weights      : WEIGHTS;
@@ -37,7 +36,6 @@ struct PSInput
     float3 normal       : NORMAL;
     float3 worldPos     : WORLDPOS;
     float2 UV           : TEXCOORD;
-    float2 tilingFactor : TILINGFACTOR;
     float4 color        : COLOR;
     uint entityID       : ENTITYID;
 };
@@ -79,7 +77,6 @@ PSInput main(VSInput input)
     output.normal       = worldNormal;
     output.worldPos     = worldPos.xyz;
     output.UV           = input.UV;
-    output.tilingFactor = input.tilingFactor;
     output.color        = input.color;
     output.entityID     = input.entityID;
     return output;

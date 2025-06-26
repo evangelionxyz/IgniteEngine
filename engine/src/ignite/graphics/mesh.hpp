@@ -23,9 +23,10 @@
 
 #pragma once
 
+#include "vertex_buffer.hpp"
+#include "index_buffer.hpp"
 #include "vertex_data.hpp"
 #include "material.hpp"
-
 #include "renderer.hpp"
 
 #include "ignite/core/uuid.hpp"
@@ -69,7 +70,7 @@ namespace ignite {
         int nodeID = -1; // ID of the bone this mesh is attached to
 
         std::string name;
-        std::vector<VertexMesh> vertices;
+        std::vector<VertexMesh_Anim> vertices;
         std::vector<uint32_t> indices;
     };
 
@@ -89,16 +90,15 @@ namespace ignite {
         void CreateBuffers();
         void WriteVertexBuffer(uint32_t entityID = -1);
 
-        nvrhi::BufferHandle &GetVertexBuffer() { return m_VertexBuffer; }
-        nvrhi::BufferHandle &GetIndexBuffer() { return m_IndexBuffer; }
-
+        Ref<VertexBuffer> GetVertexBuffer() { return m_VertexBuffer; }
+        Ref<IndexBuffer> GetIndexBuffer() { return m_IndexBuffer; }
+        
         MeshData data;
         AABB aabb;
 
     private:
-        // do not copy the buffer
-        nvrhi::BufferHandle m_VertexBuffer;
-        nvrhi::BufferHandle m_IndexBuffer;
+        Ref<VertexBuffer> m_VertexBuffer;
+        Ref<IndexBuffer> m_IndexBuffer;
     };
 
     // Skeletal Mesh Asset

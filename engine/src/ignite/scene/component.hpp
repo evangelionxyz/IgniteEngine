@@ -339,7 +339,7 @@ namespace ignite
      class SkeletalMesh : public IComponent
      {
      public:
-         AssetHandle meshHandle = AssetHandle(0); // Primitive Mesh Data
+         AssetHandle meshHandle = AssetHandle(0); // Primitive Mesh data
          AssetHandle skeletonHandle = AssetHandle(0);
          std::vector<AssetHandle> animationHandle;
          std::vector<glm::mat4> boneTransforms;
