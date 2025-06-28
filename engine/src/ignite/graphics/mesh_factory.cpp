@@ -25,43 +25,45 @@
 
 namespace ignite {
 
-    std::array<VertexMesh, 24> MeshFactory::CubeVertices = {
+    std::array<VertexMesh, 24> MeshFactory::CubeVertices =
+    {
         // Front face
-        VertexMesh{{-0.5f, -0.5f,  0.5f}, { 0.f,  0.f,  1.f}, {0.f, 0.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{ 0.5f, -0.5f,  0.5f}, { 0.f,  0.f,  1.f}, {1.f, 0.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{ 0.5f,  0.5f,  0.5f}, { 0.f,  0.f,  1.f}, {1.f, 1.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{-0.5f,  0.5f,  0.5f}, { 0.f,  0.f,  1.f}, {0.f, 1.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
+        VertexMesh{{-0.5f, -0.5f,  0.5f}, { 0.f,  0.f,  1.f}, {0.f, 0.f}, {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{ 0.5f, -0.5f,  0.5f}, { 0.f,  0.f,  1.f}, {1.f, 0.f}, {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{ 0.5f,  0.5f,  0.5f}, { 0.f,  0.f,  1.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{-0.5f,  0.5f,  0.5f}, { 0.f,  0.f,  1.f}, {0.f, 1.f}, {1.f, 1.f, 1.f, 1.f}, 0},
 
         // Back face
-        VertexMesh{{ 0.5f, -0.5f, -0.5f}, { 0.f,  0.f, -1.f}, {0.f, 0.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{-0.5f, -0.5f, -0.5f}, { 0.f,  0.f, -1.f}, {1.f, 0.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{-0.5f,  0.5f, -0.5f}, { 0.f,  0.f, -1.f}, {1.f, 1.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{ 0.5f,  0.5f, -0.5f}, { 0.f,  0.f, -1.f}, {0.f, 1.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
+        VertexMesh{{ 0.5f, -0.5f, -0.5f}, { 0.f,  0.f, -1.f}, {0.f, 0.f}, {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{-0.5f, -0.5f, -0.5f}, { 0.f,  0.f, -1.f}, {1.f, 0.f}, {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{-0.5f,  0.5f, -0.5f}, { 0.f,  0.f, -1.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{ 0.5f,  0.5f, -0.5f}, { 0.f,  0.f, -1.f}, {0.f, 1.f}, {1.f, 1.f, 1.f, 1.f}, 0},
 
         // Left face
-        VertexMesh{{-0.5f, -0.5f, -0.5f}, {-1.f,  0.f,  0.f}, {0.f, 0.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{-0.5f, -0.5f,  0.5f}, {-1.f,  0.f,  0.f}, {1.f, 0.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{-0.5f,  0.5f,  0.5f}, {-1.f,  0.f,  0.f}, {1.f, 1.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{-0.5f,  0.5f, -0.5f}, {-1.f,  0.f,  0.f}, {0.f, 1.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
+        VertexMesh{{-0.5f, -0.5f, -0.5f}, {-1.f,  0.f,  0.f}, {0.f, 0.f}, {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{-0.5f, -0.5f,  0.5f}, {-1.f,  0.f,  0.f}, {1.f, 0.f}, {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{-0.5f,  0.5f,  0.5f}, {-1.f,  0.f,  0.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{-0.5f,  0.5f, -0.5f}, {-1.f,  0.f,  0.f}, {0.f, 1.f}, {1.f, 1.f, 1.f, 1.f}, 0},
 
         // Right face
-        VertexMesh{{ 0.5f, -0.5f,  0.5f}, { 1.f,  0.f,  0.f}, {0.f, 0.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{ 0.5f, -0.5f, -0.5f}, { 1.f,  0.f,  0.f}, {1.f, 0.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{ 0.5f,  0.5f, -0.5f}, { 1.f,  0.f,  0.f}, {1.f, 1.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{ 0.5f,  0.5f,  0.5f}, { 1.f,  0.f,  0.f}, {0.f, 1.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
+        VertexMesh{{ 0.5f, -0.5f,  0.5f}, { 1.f,  0.f,  0.f}, {0.f, 0.f},  {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{ 0.5f, -0.5f, -0.5f}, { 1.f,  0.f,  0.f}, {1.f, 0.f},  {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{ 0.5f,  0.5f, -0.5f}, { 1.f,  0.f,  0.f}, {1.f, 1.f},  {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{ 0.5f,  0.5f,  0.5f}, { 1.f,  0.f,  0.f}, {0.f, 1.f},  {1.f, 1.f, 1.f, 1.f}, 0},
 
         // Top face
-        VertexMesh{{-0.5f,  0.5f,  0.5f}, { 0.f,  1.f,  0.f}, {0.f, 0.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{ 0.5f,  0.5f,  0.5f}, { 0.f,  1.f,  0.f}, {1.f, 0.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{ 0.5f,  0.5f, -0.5f}, { 0.f,  1.f,  0.f}, {1.f, 1.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{-0.5f,  0.5f, -0.5f}, { 0.f,  1.f,  0.f}, {0.f, 1.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
+        VertexMesh{{-0.5f,  0.5f,  0.5f}, { 0.f,  1.f,  0.f}, {0.f, 0.f}, {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{ 0.5f,  0.5f,  0.5f}, { 0.f,  1.f,  0.f}, {1.f, 0.f}, {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{ 0.5f,  0.5f, -0.5f}, { 0.f,  1.f,  0.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{-0.5f,  0.5f, -0.5f}, { 0.f,  1.f,  0.f}, {0.f, 1.f}, {1.f, 1.f, 1.f, 1.f}, 0},
 
         // Bottom face
-        VertexMesh{{-0.5f, -0.5f, -0.5f}, { 0.f, -1.f,  0.f}, {0.f, 0.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{ 0.5f, -0.5f, -0.5f}, { 0.f, -1.f,  0.f}, {1.f, 0.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{ 0.5f, -0.5f,  0.5f}, { 0.f, -1.f,  0.f}, {1.f, 1.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
-        VertexMesh{{-0.5f, -0.5f,  0.5f}, { 0.f, -1.f,  0.f}, {0.f, 1.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}},
+        VertexMesh{{-0.5f, -0.5f, -0.5f}, { 0.f, -1.f,  0.f}, {0.f, 0.f}, {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{ 0.5f, -0.5f, -0.5f}, { 0.f, -1.f,  0.f}, {1.f, 0.f}, {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{ 0.5f, -0.5f,  0.5f}, { 0.f, -1.f,  0.f}, {1.f, 1.f}, {1.f, 1.f, 1.f, 1.f}, 0},
+        VertexMesh{{-0.5f, -0.5f,  0.5f}, { 0.f, -1.f,  0.f}, {0.f, 1.f}, {1.f, 1.f, 1.f, 1.f}, 0},
     };
+
     std::array<uint32_t, 36> MeshFactory::CubeIndices = {
         // Front face
         0, 1, 2,  2, 3, 0,

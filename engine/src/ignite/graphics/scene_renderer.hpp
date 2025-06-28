@@ -96,10 +96,8 @@ namespace ignite
 
         static SceneRenderer *GetActive();
 
-        Ref<GraphicsPipeline> &GetBatchQuadPipeline() { return m_BatchQuadPipeline; }
-        Ref<GraphicsPipeline> &GetBatchLinePipeline() { return m_BatchLinePipeline; }
         Ref<GraphicsPipeline> &GetEnvironmentPipeline() { return m_EnvironmentPipeline; }
-        Ref<GraphicsPipeline> &GetGeometryPipeline() { return m_GeometryPipeline; }
+        Ref<GraphicsPipeline> &GetGeometryAnimPipeline() { return m_GeometryAnimPipeline; }
         
         Ref<Environment> &GetEnvironment() { return m_Environment; }
         Ref<RenderTarget> &GetRenderTarget() { return m_RenderTarget; }
@@ -110,10 +108,8 @@ namespace ignite
         void CreateEnvironment();
 
         Ref<Environment> m_Environment;
-        Ref<GraphicsPipeline> m_BatchQuadPipeline;
-        Ref<GraphicsPipeline> m_BatchLinePipeline;
         Ref<GraphicsPipeline> m_EnvironmentPipeline;
-        Ref<GraphicsPipeline> m_GeometryPipeline;
+        Ref<GraphicsPipeline> m_GeometryAnimPipeline;
         Ref<RenderTarget> m_RenderTarget;
 
         std::vector<uint32_t> m_SelectedEntities;

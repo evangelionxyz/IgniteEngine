@@ -27,7 +27,6 @@
 #include "ignite/scene/scene_manager.hpp"
 
 #include "renderer.hpp"
-#include "texture.hpp"
 #include "lighting.hpp"
 #include "ignite/math/math.hpp"
 #include "ignite/core/logger.hpp"
@@ -114,7 +113,7 @@ namespace ignite
     void MeshLoader::LoadSingleMesh(aiMesh *mesh, MeshData &outMeshData, AABB &outAABB)
     {
         // vertices;
-        VertexMesh vertex;
+        VertexMesh_Anim vertex;
         outMeshData.vertices.resize(mesh->mNumVertices);
 
         outAABB.min = glm::vec3(FLT_MAX);
@@ -124,7 +123,6 @@ namespace ignite
         {
             vertex.position = { mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z };
             vertex.color = { 1.0f, 1.0f, 1.0f, 1.0f };
-            vertex.tilingFactor = { 1.0f, 1.0f };
 
             outAABB.min = glm::min(outAABB.min, vertex.position);
             outAABB.max = glm::max(outAABB.max, vertex.position);

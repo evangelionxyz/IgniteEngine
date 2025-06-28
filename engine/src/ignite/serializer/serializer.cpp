@@ -181,6 +181,7 @@ namespace ignite {
                     const Sprite2D &comp = entity.GetComponent<Sprite2D>();
                     sr.BeginMap("Sprite2D");
                     {
+                        sr.AddKeyValue("Handle", comp.handle);
                         sr.AddKeyValue("Color", comp.color);
                         sr.AddKeyValue("TilingFactor", comp.tilingFactor);
                     }
@@ -448,6 +449,7 @@ namespace ignite {
             if (YAML::Node node = entityNode["Sprite2D"])
             {
                 Sprite2D &comp = desEntity.AddComponent<Sprite2D>();
+                comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
                 comp.color = node["Color"].as<glm::vec4>();
                 comp.tilingFactor = node["TilingFactor"].as<glm::vec2>();
             }

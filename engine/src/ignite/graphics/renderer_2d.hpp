@@ -29,6 +29,9 @@
 #include "renderer.hpp"
 #include "shader.hpp"
 
+#include "vertex_buffer.hpp"
+#include "index_buffer.hpp"
+
 #include <unordered_map>
 
 namespace ignite
@@ -40,39 +43,33 @@ namespace ignite
     template<typename VertexType>
     struct BatchRender
     {
-        const size_t maxCount = 1024 * 3;
-        const size_t maxVertices = maxCount * 4;
-        const size_t maxIndices = maxCount * 6;
-        const i32 maxTextureCount = 16;
+        const uint32_t maxCount = 1024 * 3;
+        const uint32_t maxVertices = maxCount * 4;
+        const uint32_t maxIndices = maxCount * 6;
+        uint8_t textureSlotIndex = 1; // 0 for white texture
+        uint32_t indexCount = 0;
+        uint32_t count = 0;
 
         VertexType* vertexBufferBase = nullptr;
         VertexType*vertexBufferPtr = nullptr;
-        nvrhi::BufferHandle vertexBuffer = nullptr;
-        nvrhi::BufferHandle indexBuffer = nullptr;
-        nvrhi::SamplerHandle sampler = nullptr;
+        Ref<VertexBuffer> vertexBuffer;
+        Ref<IndexBuffer> indexBuffer;
+        Ref<GraphicsPipeline> pipeline;
+        nvrhi::BindingSetHandle bindingSet;
         std::vector<Ref<Texture>> textureSlots;
-        u8 textureSlotIndex = 1; // 0 for white texture
-        u32 indexCount = 0;
-        u32 count = 0;
 
         ~BatchRender()
         {
             vertexBufferPtr = nullptr;
-            if (vertexBufferBase)
-                delete[] vertexBufferBase;
-
-            indexCount = 0;
-            count = 0;
+            delete[] vertexBufferBase;
         }
     };
 
     struct Renderer2DData
     {
         BatchRender<Vertex2DQuad> quadBatch;
-        nvrhi::BindingSetHandle quadBindingSet;
-
         BatchRender<Vertex2DLine> lineBatch;
-        nvrhi::BindingSetHandle lineBindingSet;
+        const uint8_t MAX_TEXTURE_COUNT = 32;
 
         glm::vec4 quadPositions[4];
     };
@@ -82,9 +79,11 @@ namespace ignite
     public:
         static void Init();
         static void Shutdown();
+        static void CreatePipelines(nvrhi::IFramebuffer *framebuffer);
+        static void SetFillMode(nvrhi::RasterFillMode mode);
 
         static void Begin(nvrhi::ICommandList *commandList, nvrhi::IFramebuffer* framebuffer);
-        static void Flush(Ref<GraphicsPipeline> quadPipeline, Ref<GraphicsPipeline> linePipeline);
+        static void Flush();
         static void End();
 
         static void DrawBox(const glm::mat4& transform, const glm::vec4& color = glm::vec4(1.0f), uint32_t entityID = 0);
@@ -92,14 +91,14 @@ namespace ignite
         static void DrawLine(const std::vector<glm::vec3>& positions, const glm::vec4& color = glm::vec4(1.0f), uint32_t entityID = 0);
         static void DrawLine(const glm::vec3 &pos0, const glm::vec3 &pos1, const glm::vec4& color = glm::vec4(1.0f), uint32_t entityID = 0);
 
-        static void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, Ref<Texture> texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t entityID = 0);
-        static void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, Ref<Texture> texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t entityID = 0);
-        static void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, Ref<Texture> texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t entityID = 0);
+        static void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t entityID = 0);
+        static void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t entityID = 0);
+        static void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t entityID = 0);
 
         static void InitQuadData();
         static void InitLineData();
 
-        static u32 GetOrInsertTexture(Ref<Texture> texture);
+        static u32 GetOrInsertTexture(const Ref<Texture>& texture);
         static void UpdateTextureBindings();
 
     private:

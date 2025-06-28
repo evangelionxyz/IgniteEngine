@@ -149,17 +149,13 @@ namespace ignite
                 inFile.read(reinterpret_cast<char *>(&tex->rowPitch), sizeof(tex->rowPitch));
 
                 const std::size_t pixelBytes = static_cast<std::size_t>(tex->height) * tex->rowPitch;
-                tex->data = new uint8_t[pixelBytes];
-
+                if (pixelBytes > 0)
+                {
+                    tex->data = new uint8_t[pixelBytes];
+                }
+                
                 // read blob *into* the buffer, not into the pointer itself
                 inFile.read(reinterpret_cast<char *>(tex->data), pixelBytes);
-
-                if (pixelBytes == 0)
-                {
-                    delete tex->data;
-                    tex->data = nullptr;
-                }
-
                 mat->textures[textureType] = tex;
             }
 
@@ -274,7 +270,6 @@ namespace ignite
                     AppendRaw(buffer, vertex.position);
                     AppendRaw(buffer, vertex.normal);
                     AppendRaw(buffer, vertex.texCoord);
-                    AppendRaw(buffer, vertex.tilingFactor);
                     AppendRaw(buffer, vertex.color);
 
                     AppendRaw(buffer, vertex.boneIDs);
@@ -407,11 +402,10 @@ namespace ignite
                 mesh.vertices.reserve(vertexCount);
                 for (uint32_t vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex)
                 {
-                    VertexMesh vertex;
+                    VertexMesh_Anim vertex;
                     inFile.read(reinterpret_cast<char *>(&vertex.position), sizeof(vertex.position));
                     inFile.read(reinterpret_cast<char *>(&vertex.normal), sizeof(vertex.normal));
                     inFile.read(reinterpret_cast<char *>(&vertex.texCoord), sizeof(vertex.texCoord));
-                    inFile.read(reinterpret_cast<char *>(&vertex.tilingFactor), sizeof(vertex.tilingFactor));
                     inFile.read(reinterpret_cast<char *>(&vertex.color), sizeof(vertex.color));
                     inFile.read(reinterpret_cast<char *>(vertex.boneIDs), sizeof(vertex.boneIDs));
                     inFile.read(reinterpret_cast<char *>(vertex.weights), sizeof(vertex.weights));

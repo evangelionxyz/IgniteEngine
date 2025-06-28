@@ -53,8 +53,6 @@ namespace ignite
 
     void ShaderLibrary::Compile()
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-        
         std::vector<Ref<ShaderMake::ShaderContext>> contexts;
         for (auto &shader : m_Shaders | std::views::values)
         {
@@ -150,12 +148,9 @@ namespace ignite
         }
 
         // Create binding layouts
-        m_BindingLayouts[GLayoutMap::MESH] = s_instance->m_Device->createBindingLayout(VertexMesh::GetBindingLayoutDesc());
-        m_BindingLayouts[GLayoutMap::MATERIAL] = s_instance->m_Device->createBindingLayout(VertexMesh::GetMaterialBindingLayoutDesc());
-        m_BindingLayouts[GLayoutMap::QUAD2D] = s_instance->m_Device->createBindingLayout(Vertex2DQuad::GetBindingLayoutDesc());
-        m_BindingLayouts[GLayoutMap::LINE] = s_instance->m_Device->createBindingLayout(Vertex2DLine::GetBindingLayoutDesc());
+        m_BindingLayouts[GLayoutMap::MESH_ANIM] = s_instance->m_Device->createBindingLayout(VertexMesh_Anim::GetBindingLayoutDesc());
+        m_BindingLayouts[GLayoutMap::MATERIAL] = s_instance->m_Device->createBindingLayout(VertexMesh_Anim::GetMaterialBindingLayoutDesc());
         m_BindingLayouts[GLayoutMap::ENVIRONMENT] = s_instance->m_Device->createBindingLayout(Environment::GetBindingLayoutDesc());
-
 
         // Create camera constant buffer
         nvrhi::BufferDesc cameraConstantBufferDesc;
@@ -207,7 +202,7 @@ namespace ignite
 
     void Renderer::Submit(const std::function<void(nvrhi::ICommandList*)>& func)
     {
-        s_instance->m_SubmitFuncs.push_back(std::move(func));
+        s_instance->m_SubmitFuncs.push_back(func);
     }
 
     ShaderLibrary &Renderer::GetShaderLibrary()

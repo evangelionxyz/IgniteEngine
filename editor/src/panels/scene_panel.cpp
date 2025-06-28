@@ -388,44 +388,43 @@ namespace ignite
                 {
                     Sprite2D &c = selectedEntity.GetComponent<Sprite2D>();
 
+                    bool isTextureLoaded = c.handle != AssetHandle(0);
+
                     std::string imageButtonLabel = "Load Texture";
-                    if (c.texture)
+                    if (isTextureLoaded)
                     {
                         imageButtonLabel = "Loaded";
                     }
 
                     if (ImGui::Button(imageButtonLabel.c_str()))
                     {
-                        std::filesystem::path filepath = FileDialogs::OpenFile("JPG/JPEG (*.jpg;*jpeg)\0*.jpg;*jpeg\0PNG (*.png)\0*.png\0All Files (*.)\0*.*");
-                        if (!filepath.empty())
-                        {
-                            TextureCreateInfo texCI;
-                            texCI.flip = false;
-                            texCI.format = nvrhi::Format::RGBA8_UNORM;
-                            texCI.dimension = nvrhi::TextureDimension::Texture2D;
-                            texCI.samplerMode = nvrhi::SamplerAddressMode::ClampToEdge;
-
-                            c.texture = Texture::Create(filepath.generic_string(), texCI);
-                        }
                     }
 
-                    if (c.texture)
+                    if (ImGui::BeginDragDropTarget())
                     {
-                        bool textureRemoved = false;
-                        ImGui::SameLine();
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+                        {
+                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                            AssetType type = Project::GetActive()->GetAssetManager().GetAssetType(handle);
+                            if (type == AssetType::Texture)
+                            {
+                                c.handle = handle;
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
 
+                    if (isTextureLoaded)
+                    {
+                        ImGui::SameLine();
                         if (ImGui::Button("X"))
                         {
-                            c.texture.reset();
-                            textureRemoved = true;
+                            c.handle = AssetHandle(0); // reset the texture handle
                         }
 
-                        if (!textureRemoved)
-                        {
-                            ImGui::SameLine();
-                            const std::filesystem::path &displayFilepath = c.texture->GetFilepath().filename();
-                            ImGui::Text("%s", displayFilepath.generic_string().c_str());
-                        }
+                        ImGui::SameLine();
+                        ImGui::Text("Handle: %llu", static_cast<u64>(c.handle));
                     }
 
                     ImGui::DragFloat2("Tiling", &c.tilingFactor.x, 0.025f);
@@ -448,8 +447,7 @@ namespace ignite
                                 break;
                             }
 
-                            bool isSelected = (strcmp(bodyTypeStr[i], currentBodyType) == 0);
-                            if (isSelected)
+                            if ((strcmp(bodyTypeStr[i], currentBodyType) == 0))
                             {
                                 ImGui::SetItemDefaultFocus();
                             }

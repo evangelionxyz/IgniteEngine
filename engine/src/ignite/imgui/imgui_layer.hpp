@@ -46,7 +46,7 @@ namespace ignite
         GuiFont(f32 size);
         GuiFont(Buffer data, bool isCompressed, f32 size);
 
-        bool HasFontData() const { return m_Data.Data != nullptr; }
+        bool HasFontData() const { return m_Data.data != nullptr; }
         ImFont *GetScaledFont() const { return m_ImFont; }
 
     protected:

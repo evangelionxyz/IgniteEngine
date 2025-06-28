@@ -71,6 +71,8 @@ namespace ignite {
         void CreatePipeline(nvrhi::IFramebuffer *framebuffer);
         void ResetHandle();
 
+        nvrhi::BindingLayoutHandle GetBindingLayout(uint32_t index);
+
         nvrhi::GraphicsPipelineHandle GetHandle() { return m_Handle; }
         nvrhi::InputLayoutHandle GetInputLayout() { return m_InputLayout; }
 

@@ -50,56 +50,59 @@ namespace ignite
         glm::vec3 position;
         glm::vec3 normal;
         glm::vec2 texCoord;
-        glm::vec2 tilingFactor;
         glm::vec4 color;
-        u32 boneIDs[VERTEX_MAX_BONES] = { 0 };
-        f32 weights[VERTEX_MAX_BONES] = { 0.0f };
-        u32 entityID; // should not be serialized
+        uint32_t entityID;
+    };
 
-        static std::array<nvrhi::VertexAttributeDesc, 8> GetAttributes()
+    struct VertexMesh_Anim
+    {
+        glm::vec3 position;
+        glm::vec3 normal;
+        glm::vec2 texCoord;
+        glm::vec4 color;
+        uint32_t boneIDs[VERTEX_MAX_BONES] = { 0 };
+        float weights[VERTEX_MAX_BONES] = { 0.0f };
+        uint32_t entityID; // should not be serialized
+
+        static std::array<nvrhi::VertexAttributeDesc, 7> GetAttributes()
         {
             return 
             {
                 nvrhi::VertexAttributeDesc()
                     .setName("POSITION")
                     .setFormat(nvrhi::Format::RGB32_FLOAT)
-                    .setOffset(offsetof(VertexMesh, position))
-                    .setElementStride(sizeof(VertexMesh)),
+                    .setOffset(offsetof(VertexMesh_Anim, position))
+                    .setElementStride(sizeof(VertexMesh_Anim)),
                 nvrhi::VertexAttributeDesc()
                     .setName("NORMAL")
                     .setFormat(nvrhi::Format::RGB32_FLOAT)
-                    .setOffset(offsetof(VertexMesh, normal))
-                    .setElementStride(sizeof(VertexMesh)),
+                    .setOffset(offsetof(VertexMesh_Anim, normal))
+                    .setElementStride(sizeof(VertexMesh_Anim)),
                 nvrhi::VertexAttributeDesc()
                     .setName("TEXCOORD")
                     .setFormat(nvrhi::Format::RG32_FLOAT)
-                    .setOffset(offsetof(VertexMesh, texCoord))
-                    .setElementStride(sizeof(VertexMesh)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("TILINGFACTOR")
-                    .setFormat(nvrhi::Format::RG32_FLOAT)
-                    .setOffset(offsetof(VertexMesh, tilingFactor))
-                    .setElementStride(sizeof(VertexMesh)),
+                    .setOffset(offsetof(VertexMesh_Anim, texCoord))
+                    .setElementStride(sizeof(VertexMesh_Anim)),
                 nvrhi::VertexAttributeDesc()
                     .setName("COLOR")
                     .setFormat(nvrhi::Format::RGBA32_FLOAT)
-                    .setOffset(offsetof(VertexMesh, color))
-                    .setElementStride(sizeof(VertexMesh)),
+                    .setOffset(offsetof(VertexMesh_Anim, color))
+                    .setElementStride(sizeof(VertexMesh_Anim)),
                 nvrhi::VertexAttributeDesc()
                     .setName("BONEIDS")
                     .setFormat(nvrhi::Format::RGBA32_UINT)
-                    .setOffset(offsetof(VertexMesh, boneIDs))
-                    .setElementStride(sizeof(VertexMesh)),
+                    .setOffset(offsetof(VertexMesh_Anim, boneIDs))
+                    .setElementStride(sizeof(VertexMesh_Anim)),
                 nvrhi::VertexAttributeDesc()
                     .setName("WEIGHTS")
                     .setFormat(nvrhi::Format::RGBA32_FLOAT)
-                    .setOffset(offsetof(VertexMesh, weights))
-                    .setElementStride(sizeof(VertexMesh)),
+                    .setOffset(offsetof(VertexMesh_Anim, weights))
+                    .setElementStride(sizeof(VertexMesh_Anim)),
                 nvrhi::VertexAttributeDesc()
                     .setName("ENTITYID")
                     .setFormat(nvrhi::Format::R32_UINT)
-                    .setOffset(offsetof(VertexMesh, entityID))
-                    .setElementStride(sizeof(VertexMesh))
+                    .setOffset(offsetof(VertexMesh_Anim, entityID))
+                    .setElementStride(sizeof(VertexMesh_Anim))
             };
         }
 
@@ -178,16 +181,6 @@ namespace ignite
                     .setElementStride(sizeof(Vertex2DQuad))
             };
         }
-
-        static nvrhi::BindingLayoutDesc GetBindingLayoutDesc()
-        {
-            nvrhi::BindingLayoutDesc bindingDesc;
-            bindingDesc.setVisibility(nvrhi::ShaderType::All);
-            bindingDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
-            bindingDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
-            bindingDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0));
-            return bindingDesc;
-        }
     };
 
     struct Vertex2DLine
@@ -218,50 +211,6 @@ namespace ignite
                     .setElementStride(sizeof(Vertex2DLine))
             };
         }
-
-        static nvrhi::BindingLayoutDesc GetBindingLayoutDesc()
-        {
-            nvrhi::BindingLayoutDesc bindingDesc;
-            bindingDesc.setVisibility(nvrhi::ShaderType::All);
-            bindingDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
-            return bindingDesc;
-        }
     };
 
-    struct VertexMeshOutline
-    {
-        glm::vec3 position;
-        u32 boneIDs[VERTEX_MAX_BONES] = { 0 };
-        f32 weights[VERTEX_MAX_BONES] = { 0.0f };
-
-        static std::array<nvrhi::VertexAttributeDesc, 3> GetAttributes()
-        {
-            return
-            {
-                nvrhi::VertexAttributeDesc()
-                    .setName("POSITION")
-                    .setFormat(nvrhi::Format::RGB32_FLOAT)
-                    .setOffset(offsetof(VertexMeshOutline, position))
-                    .setElementStride(sizeof(VertexMeshOutline)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("BONEIDS")
-                    .setFormat(nvrhi::Format::RGBA32_UINT)
-                    .setOffset(offsetof(VertexMeshOutline, boneIDs))
-                    .setElementStride(sizeof(VertexMeshOutline)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("WEIGHTS")
-                    .setFormat(nvrhi::Format::RGBA32_FLOAT)
-                    .setOffset(offsetof(VertexMeshOutline, weights))
-                    .setElementStride(sizeof(VertexMeshOutline))
-            };
-        }
-
-        static nvrhi::BindingLayoutDesc GetBindingLayoutDesc()
-        {
-            return nvrhi::BindingLayoutDesc()
-                .setVisibility(nvrhi::ShaderType::All)
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)) // camera
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1)); // model
-        }
-    };
 }

@@ -63,7 +63,6 @@ struct PSInput
     float3 normal : NORMAL;
     float3 worldPos : WORLDPOS;
     float2 uv : TEXCOORD;
-    float2 tilingFactor : TILINGFACTOR;
     float4 color : COLOR;
     uint entityID : ENTITYID;
 };
