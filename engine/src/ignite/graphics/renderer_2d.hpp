@@ -69,7 +69,7 @@ namespace ignite
     {
         BatchRender<Vertex2DQuad> quadBatch;
         BatchRender<Vertex2DLine> lineBatch;
-        const uint8_t MAX_TEXTURE_COUNT = 16;
+        const uint8_t MAX_TEXTURE_COUNT = 32;
 
         glm::vec4 quadPositions[4];
     };
