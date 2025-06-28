@@ -90,7 +90,7 @@ namespace ignite
         void OpenScene();
         void OpenScene(const std::filesystem::path &filepath);
         
-        void SaveProject() const;
+        void SaveProject();
         void SaveProjectAs();
         void OpenProject();
         void OpenProject(const std::filesystem::path &filepath);

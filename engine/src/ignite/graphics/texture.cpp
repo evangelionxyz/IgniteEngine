@@ -122,6 +122,8 @@ namespace ignite
     {
         LOG_ASSERT(m_Data, "[Texture] Pixel data is null");
 
+        // Generate all mip levels on CPU
+
         // Row Pitch   = width * channels
         // Depth pitch = Row Pitch * height (for 3D TEXTURE)
 
@@ -134,18 +136,31 @@ namespace ignite
             // char = 1 byte, 8 bit
             uint8_t *byteData = static_cast<uint8_t *>(m_Data);
 
-            for (uint32_t mip = 0; mip < m_CreateInfo.mipLevels; ++mip)
+            auto mipChain = CPUMipGenerator::GenerateMipChain(byteData,
+                m_CreateInfo.width, m_CreateInfo.height, rowPitch,
+                m_CreateInfo.format, m_CreateInfo.mipLevels);
+
+            // Upload all mip levels
+            for (uint32_t mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
             {
-                commandList->writeTexture(m_Handle, 0, mip, byteData, rowPitch);
+                const auto &mipData = mipChain[mip];
+                commandList->writeTexture(m_Handle, 0, mip, mipData.data.data(), mipData.rowPitch);
             }
         }
         else if (m_CreateInfo.format == nvrhi::Format::RGBA32_FLOAT)
         {
             // float = 4 bytes, 32 bit, we need to multiply sizeof(float)
             float *floatData = static_cast<float *>(m_Data);
-            for (uint32_t mip = 0; mip < m_CreateInfo.mipLevels; ++mip)
+
+            auto mipChain = CPUMipGenerator::GenerateMipChain(floatData,
+                m_CreateInfo.width, m_CreateInfo.height, rowPitch * sizeof(float),
+                m_CreateInfo.format, m_CreateInfo.mipLevels);
+
+            // Upload all mip levels
+            for (uint32_t mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
             {
-                commandList->writeTexture(m_Handle, 0, mip, floatData, rowPitch * sizeof(float), depthPitch * sizeof(float));
+                const auto &mipData = mipChain[mip];
+                commandList->writeTexture(m_Handle, 0, mip, mipData.data.data(), rowPitch * sizeof(float), depthPitch * sizeof(float));
             }
         }
 

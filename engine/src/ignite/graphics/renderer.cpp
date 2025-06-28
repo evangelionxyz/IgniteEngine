@@ -53,8 +53,6 @@ namespace ignite
 
     void ShaderLibrary::Compile()
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-        
         std::vector<Ref<ShaderMake::ShaderContext>> contexts;
         for (auto &shader : m_Shaders | std::views::values)
         {
@@ -204,7 +202,7 @@ namespace ignite
 
     void Renderer::Submit(const std::function<void(nvrhi::ICommandList*)>& func)
     {
-        s_instance->m_SubmitFuncs.push_back(std::move(func));
+        s_instance->m_SubmitFuncs.push_back(func);
     }
 
     ShaderLibrary &Renderer::GetShaderLibrary()

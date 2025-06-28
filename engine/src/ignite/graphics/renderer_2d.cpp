@@ -115,15 +115,15 @@ namespace ignite
 
         // then add textures
         const auto samplerDesc = nvrhi::SamplerDesc()
-            .setAllAddressModes(nvrhi::SamplerAddressMode::ClampToEdge)
+            .setAllAddressModes(nvrhi::SamplerAddressMode::Repeat)
             .setAllFilters(true);
 
-        s_Data->quadBatch.sampler = device->createSampler(samplerDesc);
+        nvrhi::SamplerHandle sampler = device->createSampler(samplerDesc);
 
         // create binding set
         nvrhi::BindingSetDesc bindingSetDesc;
         bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraBufferHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, s_Data->quadBatch.sampler));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
 
         for (uint8_t i  = 0; i < s_Data->MAX_TEXTURE_COUNT; i++)
         {
@@ -471,9 +471,16 @@ namespace ignite
     {
         nvrhi::IDevice* device = Application::GetGraphicsDevice();
 
+        // then add textures
+        const auto samplerDesc = nvrhi::SamplerDesc()
+            .setAllAddressModes(nvrhi::SamplerAddressMode::Repeat)
+            .setAllFilters(true);
+
+        nvrhi::SamplerHandle sampler = device->createSampler(samplerDesc);
+
         nvrhi::BindingSetDesc bindingSetDesc;
         bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraBufferHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, s_Data->quadBatch.sampler));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
         for (uint8_t i = 0; i < s_Data->MAX_TEXTURE_COUNT; ++i)
         {
             Ref<Texture> tex = s_Data->quadBatch.textureSlots[i];

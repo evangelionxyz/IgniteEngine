@@ -328,9 +328,9 @@ namespace ignite
     class Sprite2D : public IComponent
     {
     public:
+        AssetHandle handle = AssetHandle(0); // Texture handle
         glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
         glm::vec2 tilingFactor = { 1.0f, 1.0f };
-        Ref<Texture> texture = nullptr;
 
         static CompType StaticType() { return CompType_Sprite2D; }
         virtual CompType GetType() override { return StaticType(); }

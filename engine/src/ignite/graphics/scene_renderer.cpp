@@ -37,6 +37,8 @@
 
 #include <ranges>
 
+#include "ignite/project/project.hpp"
+
 namespace ignite
 {
     static SceneRenderer *s_SceneRenderer = nullptr;
@@ -387,8 +389,9 @@ namespace ignite
 
             if (entity.HasComponent<Sprite2D>())
             {
-                auto &sprite = entity.GetComponent<Sprite2D>();
-                Renderer2D::DrawQuad(tr.GetWorldMatrix(), sprite.color, sprite.texture, sprite.tilingFactor, static_cast<u32>(e));
+                Sprite2D &sprite = entity.GetComponent<Sprite2D>();
+                Ref<Texture> texture = Project::GetAsset<Texture>(sprite.handle);
+                Renderer2D::DrawQuad(tr.GetWorldMatrix(), sprite.color, texture, sprite.tilingFactor, static_cast<u32>(e));
             }
         }
 

@@ -57,7 +57,6 @@ namespace ignite
         Ref<GraphicsPipeline> pipeline;
         nvrhi::BindingSetHandle bindingSet;
         std::vector<Ref<Texture>> textureSlots;
-        nvrhi::SamplerHandle sampler;
 
         ~BatchRender()
         {

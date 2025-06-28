@@ -59,7 +59,6 @@ namespace ignite {
 
     void AssetImporter::SyncMainThread()
     {
-        // ModelImporter::SyncMainThread(commandList, device);
         EnvironmentImporter::SyncMainThread();
     }
 
@@ -89,11 +88,17 @@ namespace ignite {
     {
         TextureCreateInfo createInfo;
         createInfo.format = nvrhi::Format::RGBA8_UNORM;
+        createInfo.mipLevels = 4;
 
         Ref<Texture> texture = Texture::Create(metadata.filepath, createInfo);
         if (texture)
         {
+            // asset handle
             texture->handle = handle;
+            Renderer::Submit([tex = texture](nvrhi::ICommandList *commandList)
+            {
+                tex->Write(commandList);
+            });
         }
 
         return texture;

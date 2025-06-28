@@ -22,9 +22,8 @@ struct PSOutput
 
 PSOutput main(PSInput input)
 {
-    float4 texColor = textures[input.texIndex].Sample(samplerState, input.texCoord);
+    float4 texColor = textures[input.texIndex].Sample(samplerState, input.texCoord * input.tilingFactor);
     float4 finalColor = input.color * texColor;
-    // float4 finalColor =  texColor;
     
     // Discard pixel if alpha is zero
     clip(finalColor.a == 0.0f ? -1.0f : 1.0f);

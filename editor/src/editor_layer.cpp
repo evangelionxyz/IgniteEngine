@@ -145,9 +145,9 @@ namespace ignite
                 if (control)
                 {
                     if (shift)
-                        SaveSceneAs();
+                        SaveProjectAs();
                     else
-                        SaveScene();
+                        SaveProject();
                 }
                 break;
             }
@@ -626,10 +626,12 @@ namespace ignite
         }
     }
 
-    void EditorLayer::SaveProject() const
+    void EditorLayer::SaveProject()
     {
         if (m_ActiveProject)
         {
+            SaveScene();
+
             const auto &info = m_ActiveProject->GetInfo();
             ProjectSerializer sr(m_ActiveProject);
             if (!info.filepath.empty())
