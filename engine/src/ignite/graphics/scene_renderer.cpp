@@ -187,6 +187,8 @@ namespace ignite
 
     void SceneRenderer::Create()
     {
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+
         GraphicsPipelineParams params;
         params.enableBlend = true;
         params.depthWrite = true;
@@ -224,46 +226,6 @@ namespace ignite
             m_EnvironmentPipeline->AddShader("skybox.vertex.hlsl", nvrhi::ShaderType::Vertex)
                 .AddShader("skybox.pixel.hlsl", nvrhi::ShaderType::Pixel)
                 .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT))
-                .Build();
-        }
-
-        // Batch Quad 2D
-        {
-            params.fillMode = nvrhi::RasterFillMode::Solid;
-            params.cullMode = nvrhi::RasterCullMode::None;
-            params.comparison = nvrhi::ComparisonFunc::LessOrEqual;
-
-            auto attributes = Vertex2DQuad::GetAttributes();
-            GraphicsPiplineCreateInfo pci;
-            pci.attributes = attributes.data();
-            pci.attributeCount = static_cast<uint32_t>(attributes.size());
-
-            auto shaderContext = Renderer::GetShaderLibrary().Get("batch_2d_quad");
-            m_BatchQuadPipeline = GraphicsPipeline::Create(params, &pci);
-            m_BatchQuadPipeline->AddShader(shaderContext[nvrhi::ShaderType::Vertex].handle, nvrhi::ShaderType::Vertex)
-                .AddShader(shaderContext[nvrhi::ShaderType::Pixel].handle, nvrhi::ShaderType::Pixel)
-                .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::QUAD2D))
-                .Build();
-        }
-
-        // Batch Line 2D Pipeline
-        {
-            params.fillMode = nvrhi::RasterFillMode::Wireframe;
-            params.cullMode = nvrhi::RasterCullMode::None;
-            params.primitiveType = nvrhi::PrimitiveType::LineList;
-
-            auto attributes = Vertex2DLine::GetAttributes();
-            GraphicsPiplineCreateInfo pci;
-            pci.attributes = attributes.data();
-            pci.attributeCount = static_cast<uint32_t>(attributes.size());
-
-            m_BatchLinePipeline = GraphicsPipeline::Create(params, &pci);
-
-            auto shaderContext = Renderer::GetShaderLibrary().Get("batch_2d_line");
-
-            m_BatchLinePipeline->AddShader(shaderContext[nvrhi::ShaderType::Vertex].handle, nvrhi::ShaderType::Vertex)
-                .AddShader(shaderContext[nvrhi::ShaderType::Pixel].handle, nvrhi::ShaderType::Pixel)
-                .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::LINE))
                 .Build();
         }
 
@@ -337,8 +299,7 @@ namespace ignite
 
     void SceneRenderer::CreatePipelines() const
     {
-        m_BatchQuadPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
-        m_BatchLinePipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
+        Renderer2D::CreatePipelines(m_RenderTarget->GetFramebuffer());
         m_EnvironmentPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
         m_GeometryAnimPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
     }
@@ -431,7 +392,7 @@ namespace ignite
             }
         }
 
-        Renderer2D::Flush(m_BatchQuadPipeline, m_BatchLinePipeline);
+        Renderer2D::Flush();
         Renderer2D::End();
 
         m_EdgeDetectionParams.useObjectID = 1;
@@ -452,12 +413,10 @@ namespace ignite
 
     void SceneRenderer::SetFillMode(nvrhi::RasterFillMode mode) const
     {
-        m_BatchQuadPipeline->GetParams().fillMode = mode;
-        m_BatchQuadPipeline->ResetHandle();
-        m_BatchQuadPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
+        Renderer2D::SetFillMode(mode);
+        Renderer2D::CreatePipelines(m_RenderTarget->GetFramebuffer());
 
         m_GeometryAnimPipeline->GetParams().fillMode = mode;
-        m_GeometryAnimPipeline->ResetHandle();
         m_GeometryAnimPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
     }
 

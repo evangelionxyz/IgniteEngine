@@ -49,9 +49,7 @@ namespace ignite
         MESH,
         MESH_ANIM, 
         MATERIAL, 
-        ENVIRONMENT, 
-        QUAD2D, 
-        LINE,
+        ENVIRONMENT
     };
 
     class ShaderLibrary

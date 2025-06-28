@@ -152,10 +152,7 @@ namespace ignite
         // Create binding layouts
         m_BindingLayouts[GLayoutMap::MESH_ANIM] = s_instance->m_Device->createBindingLayout(VertexMesh_Anim::GetBindingLayoutDesc());
         m_BindingLayouts[GLayoutMap::MATERIAL] = s_instance->m_Device->createBindingLayout(VertexMesh_Anim::GetMaterialBindingLayoutDesc());
-        m_BindingLayouts[GLayoutMap::QUAD2D] = s_instance->m_Device->createBindingLayout(Vertex2DQuad::GetBindingLayoutDesc());
-        m_BindingLayouts[GLayoutMap::LINE] = s_instance->m_Device->createBindingLayout(Vertex2DLine::GetBindingLayoutDesc());
         m_BindingLayouts[GLayoutMap::ENVIRONMENT] = s_instance->m_Device->createBindingLayout(Environment::GetBindingLayoutDesc());
-
 
         // Create camera constant buffer
         nvrhi::BufferDesc cameraConstantBufferDesc;

@@ -96,8 +96,6 @@ namespace ignite
 
         static SceneRenderer *GetActive();
 
-        Ref<GraphicsPipeline> &GetBatchQuadPipeline() { return m_BatchQuadPipeline; }
-        Ref<GraphicsPipeline> &GetBatchLinePipeline() { return m_BatchLinePipeline; }
         Ref<GraphicsPipeline> &GetEnvironmentPipeline() { return m_EnvironmentPipeline; }
         Ref<GraphicsPipeline> &GetGeometryAnimPipeline() { return m_GeometryAnimPipeline; }
         
@@ -110,8 +108,6 @@ namespace ignite
         void CreateEnvironment();
 
         Ref<Environment> m_Environment;
-        Ref<GraphicsPipeline> m_BatchQuadPipeline;
-        Ref<GraphicsPipeline> m_BatchLinePipeline;
         Ref<GraphicsPipeline> m_EnvironmentPipeline;
         Ref<GraphicsPipeline> m_GeometryAnimPipeline;
         Ref<RenderTarget> m_RenderTarget;

@@ -399,6 +399,10 @@ namespace ignite
                         std::filesystem::path filepath = FileDialogs::OpenFile("JPG/JPEG (*.jpg;*jpeg)\0*.jpg;*jpeg\0PNG (*.png)\0*.png\0All Files (*.)\0*.*");
                         if (!filepath.empty())
                         {
+                            nvrhi::IDevice *device = Application::GetGraphicsDevice();
+                            nvrhi::CommandListHandle commandList = device->createCommandList();
+                            commandList->open();
+
                             TextureCreateInfo texCI;
                             texCI.flip = false;
                             texCI.format = nvrhi::Format::RGBA8_UNORM;
@@ -406,6 +410,10 @@ namespace ignite
                             texCI.samplerMode = nvrhi::SamplerAddressMode::ClampToEdge;
 
                             c.texture = Texture::Create(filepath.generic_string(), texCI);
+
+                            c.texture->Write(commandList);
+                            commandList->close();
+                            device->executeCommandList(commandList);
                         }
                     }
 

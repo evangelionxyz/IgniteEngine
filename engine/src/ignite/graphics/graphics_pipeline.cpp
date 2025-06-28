@@ -126,6 +126,13 @@ namespace ignite {
         m_Handle = nullptr;
     }
 
+    nvrhi::BindingLayoutHandle GraphicsPipeline::GetBindingLayout(uint32_t index)
+    {
+        if (index < m_BindingLayouts.size())
+            return m_BindingLayouts[index];
+        return nullptr;
+    }
+
     void GraphicsPipeline::Build()
     {
         nvrhi::IDevice* device = Application::GetGraphicsDevice();
