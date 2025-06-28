@@ -257,7 +257,7 @@ namespace ignite {
                 {
                     if (!std::filesystem::is_directory(item))
                     {
-                        const std::filesystem::path filepath = m_ActiveProject->GetAssetRelativeFilepath(m_BaseDirectory / node->path / item);
+                        const std::filesystem::path filepath = m_ActiveProject->GetAssetRelativeFilepath(m_CurrentDirectory / item);
                         AssetHandle handle = m_ActiveProject->GetAssetManager().GetAssetHandle(filepath);
                         if (handle != AssetHandle(0))
                         {
@@ -358,6 +358,7 @@ namespace ignite {
                     {
                         std::string relPath = relativePath.generic_string();
                         assetHandle = m_ActiveProject->GetAssetManager().GetAssetHandle(relPath);
+                        AssetType assetType = GetAssetTypeFromExtension(relativePath.extension().generic_string());
                         
                         // not registered yet
                         // (insert the metadata and generate the asset handle)
@@ -365,7 +366,7 @@ namespace ignite {
                         {
                             assetHandle = AssetHandle();
                             AssetMetaData metadata;
-                            metadata.type = GetAssetTypeFromExtension(relativePath.extension().generic_string());
+                            metadata.type = assetType;
                             metadata.filepath = relPath;
                             m_ActiveProject->GetAssetManager().InsertMetaData(assetHandle, metadata);
                         }
