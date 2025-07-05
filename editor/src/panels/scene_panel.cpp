@@ -996,8 +996,18 @@ namespace ignite
                 {
                     MeshRenderer &c = selectedEntity.GetComponent<MeshRenderer>();
 
-                    ImGui::Text("Mesh [%d]: %s", c.mesh->data.meshIndex, c.mesh ? c.mesh->data.name.c_str() : "<null>");
-                    if (c.mesh->data.meshIndex != -1)
+                    std::string meshName = "empty";
+                    int meshIndex = -1;
+
+                    if (c.mesh)
+                    {
+                        meshName = c.mesh->data.name;
+                        meshIndex = c.mesh->data.meshIndex;
+                    }
+
+                    ImGui::Text("Mesh [%d]: %s", meshIndex, meshName.c_str());
+
+                    if (c.mesh && c.mesh->data.meshIndex != -1)
                     {
                         auto checkerTex = m_Icons["checker128"]->GetHandle().Get();
                         constexpr ImVec2 imageSize = { 72.0f, 72.0f };
@@ -1314,8 +1324,34 @@ namespace ignite
                             AssetMetaData metadata;
                             metadata.type = AssetType::MeshSource;
                             metadata.filepath = filepath;
-                            Project::GetActive()->GetAssetManager().InsertMetaData(AssetHandle(), metadata);
+                            c.meshHandle = AssetHandle();
+                            Project::GetActive()->GetAssetManager().InsertMetaData(c.meshHandle, metadata);
+
+                            Project::GetActive()->GetAsset<MeshAsset>(c.meshHandle);
                         }
+                    }
+
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+                        {
+                            if (payload->DataSize == sizeof(AssetHandle))
+                            {
+                                AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
+                                if (handle && *handle != AssetHandle(0))
+                                {
+                                    AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(*handle);
+                                    if (metadata.type == AssetType::MeshSource)
+                                    {
+                                        Project::GetActive()->GetAsset<MeshAsset>(*handle);
+
+                                        // std::filesystem::path filepath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
+                                        // m_Editor->OpenScene(filepath);
+                                    }
+                                }
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
                     }
 
                     // ImGui::SameLine();

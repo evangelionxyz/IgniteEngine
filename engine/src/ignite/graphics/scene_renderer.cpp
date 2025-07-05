@@ -96,8 +96,8 @@ namespace ignite
 
             // Create pipeline
             m_CompositePipeline = GraphicsPipeline::Create(params, &pci);
-            m_CompositePipeline->AddShader("composite.vertex.hlsl", nvrhi::ShaderType::Vertex, "main", true)
-                .AddShader("composite.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
+            m_CompositePipeline->AddShader("composite.vertex.hlsl", nvrhi::ShaderType::Vertex)
+                .AddShader("composite.pixel.hlsl", nvrhi::ShaderType::Pixel)
                 .AddBindingLayout(bindingLayout)
                 .Build();
         }
@@ -159,7 +159,7 @@ namespace ignite
         m_EdgeDetection->CreatePipeline();
         m_EdgeDetection->CreateOutputTexture(width, height);
 
-        m_EdgeDetection->UpdateBindingSet(  m_SceneRenderTarget->GetColorAttachment(0),
+        m_EdgeDetection->UpdateBindingSet(m_SceneRenderTarget->GetColorAttachment(0),
             m_SceneRenderTarget->GetColorAttachment(1), m_SceneRenderTarget->GetDepthAttachment());
 
         // Composite Binding set
@@ -191,10 +191,8 @@ namespace ignite
         m_Scene->Resize(width, height);
 
         m_EdgeDetection->CreateOutputTexture(width, height);
-        m_EdgeDetection->UpdateBindingSet(
-            m_SceneRenderTarget->GetColorAttachment(0),
-            m_SceneRenderTarget->GetColorAttachment(1),
-            m_SceneRenderTarget->GetDepthAttachment());
+        m_EdgeDetection->UpdateBindingSet(m_SceneRenderTarget->GetColorAttachment(0),
+            m_SceneRenderTarget->GetColorAttachment(1), m_SceneRenderTarget->GetDepthAttachment());
 
         CompositeUpdateBindingSet();
 
@@ -225,13 +223,8 @@ namespace ignite
         m_SceneRenderTarget->ClearColorAttachmentFloat(m_CommandList, 0);
         m_SceneRenderTarget->ClearColorAttachmentUint(m_CommandList, 1, static_cast<uint32_t>(-1));
         static const f32 farDepth = 1.0f; // LessOrEqual
-        m_CommandList->clearDepthStencilTexture(m_SceneRenderTarget->GetDepthAttachment(), 
-            nvrhi::AllSubresources,
-            true, // clear depth ?
-            farDepth, // depth
-            true, // clear stencil?
-            0 // stencil
-        );
+        m_CommandList->clearDepthStencilTexture(m_SceneRenderTarget->GetDepthAttachment(), nvrhi::AllSubresources,
+            true, farDepth, true, 0); // depth & stencil
 
         nvrhi::IFramebuffer *sceneFramebuffer = m_SceneRenderTarget->GetFramebuffer();
         
@@ -267,7 +260,7 @@ namespace ignite
                 MeshRenderer &meshRenderer = entity.GetComponent<MeshRenderer>();
                 
                 // not loaded mesh
-                if (meshRenderer.mesh->data.meshIndex == -1)
+                if (!meshRenderer.mesh || meshRenderer.mesh->data.meshIndex == -1)
                     continue;
 
                 // write material constant buffer
