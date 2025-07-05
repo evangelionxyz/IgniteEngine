@@ -126,6 +126,8 @@ namespace ignite {
             return nullptr;
 
         std::filesystem::path containerDirectory = metadata.filepath.parent_path() / metadata.filepath.stem().generic_string();
+        if (!std::filesystem::exists(containerDirectory))
+            std::filesystem::create_directory(containerDirectory);
 
         // Generated directory
         std::filesystem::path meshBinaryFilepath = containerDirectory / (metadata.filepath.stem().generic_string() + ".ixmesh");
