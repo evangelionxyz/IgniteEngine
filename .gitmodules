@@ -22,3 +22,6 @@
 [submodule "thirdparty/JOLT"]
 	path = thirdparty/JOLT
 	url = https://github.com/jrouwe/JoltPhysics.git
+[submodule "thirdparty/MSDFAtlasGen"]
+	path = thirdparty/MSDFAtlasGen
+	url = https://github.com/evangelionxyz/msdf-atlas-gen.git

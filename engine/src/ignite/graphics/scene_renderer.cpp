@@ -43,141 +43,6 @@ namespace ignite
 {
     static SceneRenderer *s_SceneRenderer = nullptr;
 
-    void SobelEdgeDetection::Initialize()
-    {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-        
-        auto bufferDesc = nvrhi::BufferDesc();
-        bufferDesc.byteSize = sizeof(EdgeDetectionParams);
-        bufferDesc.isConstantBuffer = true;
-        bufferDesc.isVolatile = true;
-        bufferDesc.debugName = "Edge detection constant buffer";
-        bufferDesc.initialState = nvrhi::ResourceStates::ConstantBuffer;
-        bufferDesc.keepInitialState = true;
-        bufferDesc.maxVersions = 16;
-        constantBuffer = device->createBuffer(bufferDesc);
-
-        bufferDesc = nvrhi::BufferDesc();
-        bufferDesc.byteSize = sizeof(uint32_t) * 100; // allocate enough memory for selection
-        bufferDesc.structStride = sizeof(uint32_t);
-        bufferDesc.cpuAccess = nvrhi::CpuAccessMode::None;
-        bufferDesc.debugName = "Selected Object IDs";
-        bufferDesc.keepInitialState = true;
-        bufferDesc.initialState = nvrhi::ResourceStates::ShaderResource;
-
-        selectedIDBuffer = device->createBuffer(bufferDesc);
-
-        // Create linear sampler
-        nvrhi::SamplerDesc samplerDesc;
-        samplerDesc.minFilter = true;
-        samplerDesc.magFilter = true;
-        samplerDesc.addressU = nvrhi::SamplerAddressMode::Clamp;
-        samplerDesc.addressV = nvrhi::SamplerAddressMode::Clamp;
-        linearSampler = device->createSampler(samplerDesc);
-
-        // Create binding layout
-        nvrhi::BindingLayoutDesc layoutDesc;
-        layoutDesc.visibility = nvrhi::ShaderType::All;
-        layoutDesc.bindings = 
-        {
-            // constant buffer
-            nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
-
-            // Textures
-            nvrhi::BindingLayoutItem::Texture_SRV(0), // Scene texture
-            nvrhi::BindingLayoutItem::Texture_SRV(1), // Depth texture
-            nvrhi::BindingLayoutItem::Texture_SRV(2), // Object ID texture
-            nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3), // Object ID texture
-
-            // Sampler
-            nvrhi::BindingLayoutItem::Sampler(0),
-
-            // Output texture (for Compute)
-            nvrhi::BindingLayoutItem::Texture_UAV(0)
-        };
-
-        bindingLayout = device->createBindingLayout(layoutDesc);
-
-        CreateShaders();
-    }
-
-    void SobelEdgeDetection::CreateShaders()
-    {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-
-        ShaderMake::ShaderContextDesc desc;
-
-        Ref<ShaderMake::ShaderContext> computeContext = CreateRef<ShaderMake::ShaderContext>("sobel_edge_detection.compute.hlsl",
-            ShaderMake::ShaderType::Compute, desc, false);
-
-        Renderer::GetShaderLibrary().GetContext()->CompileShader({ computeContext });
-        computeShader = device->createShader(nvrhi::ShaderType::Compute, computeContext->blob.data.data(), computeContext->blob.dataSize());
-    }
-
-    void SobelEdgeDetection::CreateOutputTexture(const uint32_t width, const uint32_t height)
-    {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-        
-        nvrhi::TextureDesc desc;
-        desc.width = width;
-        desc.height = height;
-        desc.format = nvrhi::Format::RGBA8_UNORM;
-        desc.initialState = nvrhi::ResourceStates::UnorderedAccess | nvrhi::ResourceStates::ShaderResource;
-        desc.isUAV = true;
-        desc.debugName = "SobelDetection Output Texture";
-        outputTexture = device->createTexture(desc);
-    }
-
-    void SobelEdgeDetection::CreatePipeline()
-    {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-
-        // Create compute pipeline
-        nvrhi::ComputePipelineDesc computeDesc;
-        computeDesc.CS = computeShader;
-        computeDesc.bindingLayouts = { bindingLayout };
-        computePipeline = device->createComputePipeline(computeDesc);
-    }
-
-    void SobelEdgeDetection::UpdateBindingSet(const nvrhi::TextureHandle& inSceneTexture, const nvrhi::TextureHandle& inDepthTexture, const nvrhi::TextureHandle& inObjectIDTexture)
-    {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-        
-        nvrhi::BindingSetDesc desc;
-        desc.bindings =
-        {
-            nvrhi::BindingSetItem::ConstantBuffer(0, this->constantBuffer),
-
-            nvrhi::BindingSetItem::Texture_SRV(0, inSceneTexture),
-            nvrhi::BindingSetItem::Texture_SRV(1, inDepthTexture),
-            nvrhi::BindingSetItem::Texture_SRV(2, inObjectIDTexture),
-            nvrhi::BindingSetItem::StructuredBuffer_SRV(3, this->selectedIDBuffer),
-            nvrhi::BindingSetItem::Sampler(0, this->linearSampler),
-            nvrhi::BindingSetItem::Texture_UAV(0, outputTexture),
-        };
-
-        bindingSet = device->createBindingSet(desc, bindingLayout);
-        LOG_ASSERT(bindingSet, "[Scene renderer] Failed to create binding set");
-    }
-
-    void SobelEdgeDetection::ExecuteCompute(nvrhi::ICommandList *commandList, const EdgeDetectionParams& params,
-        const uint32_t width, const uint32_t height)
-    {
-        // Update constant buffer
-        commandList->writeBuffer(constantBuffer, &params, sizeof(params));
-
-        // Set compute pipeline
-        nvrhi::ComputeState computeState;
-        computeState.pipeline = computePipeline;
-        computeState.bindings = { bindingSet };
-        commandList->setComputeState(computeState);
-
-        // Dispatch compute shader
-        uint32_t groupsX = (width + 7) / 8; // 8x8 threads groups
-        uint32_t groupsY = (height + 7) / 8;
-        commandList->dispatch(groupsX, groupsY, 1);
-    }
-
     SceneRenderer::SceneRenderer()
     {
         s_SceneRenderer = this;
@@ -253,13 +118,16 @@ namespace ignite
         const uint32_t width = m_RenderTarget->GetWidth();
         const uint32_t height = m_RenderTarget->GetHeight();
 
-        m_EdgeDetection.Initialize();
-        m_EdgeDetection.CreatePipeline();
-        m_EdgeDetection.CreateOutputTexture(width, height);
-        m_EdgeDetection.UpdateBindingSet(
-            m_RenderTarget->GetColorAttachment(0), 
-            m_RenderTarget->GetDepthAttachment(),
-            m_RenderTarget->GetColorAttachment(1));
+        // Create Edge Detection
+        m_EdgeDetection = EdgeDetection::Create();
+
+        m_EdgeDetection->CreatePipeline();
+        m_EdgeDetection->CreateOutputTexture(width, height);
+
+        m_EdgeDetection->UpdateBindingSet(
+            m_RenderTarget->GetColorAttachment(0),
+            m_RenderTarget->GetColorAttachment(1),
+            m_RenderTarget->GetDepthAttachment());
 
         m_SelectedEntities.reserve(100);
 
@@ -289,11 +157,11 @@ namespace ignite
         m_RenderTarget->Resize(width, height);
         m_Scene->Resize(width, height);
 
-        m_EdgeDetection.CreateOutputTexture(width, height);
-        m_EdgeDetection.UpdateBindingSet(
+        m_EdgeDetection->CreateOutputTexture(width, height);
+        m_EdgeDetection->UpdateBindingSet(
             m_RenderTarget->GetColorAttachment(0),
-            m_RenderTarget->GetDepthAttachment(),
-            m_RenderTarget->GetColorAttachment(1));
+            m_RenderTarget->GetColorAttachment(1),
+            m_RenderTarget->GetDepthAttachment());
 
         m_EdgeDetectionParams.texelSize.x = 1.0f / static_cast<float>(width);
         m_EdgeDetectionParams.texelSize.y = 1.0f / static_cast<float>(height);
@@ -314,8 +182,7 @@ namespace ignite
         m_CommandList->writeBuffer(Renderer::GetCameraBufferHandle(), &cameraBuffer, sizeof(cameraBuffer));
 
         m_RenderTarget->ClearColorAttachmentFloat(m_CommandList, 0);
-        m_RenderTarget->ClearColorAttachmentUint(m_CommandList, 1, 
-            static_cast<uint32_t>(-1));
+        m_RenderTarget->ClearColorAttachmentUint(m_CommandList, 1, static_cast<uint32_t>(-1));
 
         f32 farDepth = 1.0f; // LessOrEqual
         m_CommandList->clearDepthStencilTexture(m_RenderTarget->GetDepthAttachment(), 
@@ -403,12 +270,12 @@ namespace ignite
 
         if (!m_SelectedEntities.empty())
         {
-            m_CommandList->writeBuffer(m_EdgeDetection.selectedIDBuffer, m_SelectedEntities.data(), m_SelectedEntities.size() * sizeof(uint32_t));
+            m_CommandList->writeBuffer(m_EdgeDetection->GetSelectedIDBuffer(), m_SelectedEntities.data(), m_SelectedEntities.size() * sizeof(uint32_t));
         }
 
         const uint32_t width = m_RenderTarget->GetWidth();
         const uint32_t height = m_RenderTarget->GetHeight();
-        m_EdgeDetection.ExecuteCompute(m_CommandList, m_EdgeDetectionParams, width, height);
+        m_EdgeDetection->ExecuteCompute(m_CommandList, m_EdgeDetectionParams, width, height);
 
         m_CommandList->close();
         m_Device->executeCommandList(m_CommandList);
@@ -472,7 +339,7 @@ namespace ignite
     {
         ImGui::Begin("Debug");
        
-        if (m_EdgeDetection.outputTexture)
+        if (m_EdgeDetection->GetOutputTexture())
         {
             // ImTextureID tex = reinterpret_cast<ImTextureID>(m_EdgeDetection.outputTexture.Get());
             // float width = ImGui::GetContentRegionAvail().x;

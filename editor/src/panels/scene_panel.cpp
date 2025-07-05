@@ -1554,7 +1554,7 @@ namespace ignite
             }
         }
 
-        const ImTextureID tex = reinterpret_cast<ImTextureID>(SceneRenderer::GetActive()->GetEdgeDetection().outputTexture.Get());
+        const ImTextureID tex = reinterpret_cast<ImTextureID>(SceneRenderer::GetActive()->GetEdgeDetection()->GetOutputTexture().Get());
         ImGui::Image(tex, window->Size);
 
         if (ImGui::BeginDragDropTarget())
