@@ -77,6 +77,11 @@ namespace ignite
         }
     }
 
+    void ShaderLibrary::CompileShaders(const std::vector<Ref<ShaderMake::ShaderContext>> &contexts)
+    {
+        m_ShaderContext->CompileShader(contexts);
+    }
+
     void ShaderLibrary::Load(const std::string &name, const std::string &filepath)
     {
         if (!Exists(name))

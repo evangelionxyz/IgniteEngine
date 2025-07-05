@@ -79,7 +79,7 @@ namespace ignite
                 return VK_FALSE;
         }
 
-        LOG_WARN("[VULKAN: Location={} code {}, layerPrefix='{}'] {}", location, code, layerPrefix, msg);
+        LOG_WARN("[VULKAN: Location={} code {}, layerPrefix='{}'] \n\t{}\n", location, code, layerPrefix, msg);
 
         return VK_FALSE;
     }

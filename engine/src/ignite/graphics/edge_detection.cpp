@@ -71,8 +71,8 @@ namespace ignite
 
             // Textures
             nvrhi::BindingLayoutItem::Texture_SRV(0), // Scene texture
-            nvrhi::BindingLayoutItem::Texture_SRV(1), // Depth texture
-            nvrhi::BindingLayoutItem::Texture_SRV(2), // Object ID texture
+            nvrhi::BindingLayoutItem::Texture_SRV(1), // Object ID texture
+            nvrhi::BindingLayoutItem::Texture_SRV(2), // Depth texture
             nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3), // Object ID texture
 
             // Sampler
@@ -88,15 +88,14 @@ namespace ignite
         ShaderMake::ShaderContextDesc desc;
 
         Ref<ShaderMake::ShaderContext> csContext = CreateRef<ShaderMake::ShaderContext>("sobel_edge_detection.compute.hlsl",
-            ShaderMake::ShaderType::Compute, desc, false);
+            ShaderMake::ShaderType::Compute, desc, true);
 
-        Renderer::GetShaderLibrary().GetContext()->CompileShader({ csContext });
+        Renderer::GetShaderLibrary().CompileShaders({ csContext });
         m_ComputeShader = device->createShader(nvrhi::ShaderType::Compute, csContext->blob.data.data(), csContext->blob.dataSize());
     }
 
     EdgeDetection::~EdgeDetection()
     {
-
     }
 
     void EdgeDetection::CreatePipeline()
@@ -119,8 +118,8 @@ namespace ignite
         {
             nvrhi::BindingSetItem::ConstantBuffer(0, m_ConstantBuffer),
             nvrhi::BindingSetItem::Texture_SRV(0, sceneTexture),
-            nvrhi::BindingSetItem::Texture_SRV(1, depth),
-            nvrhi::BindingSetItem::Texture_SRV(2, objectIDTexture),
+            nvrhi::BindingSetItem::Texture_SRV(1, objectIDTexture),
+            nvrhi::BindingSetItem::Texture_SRV(2, depth),
             nvrhi::BindingSetItem::StructuredBuffer_SRV(3, m_SelectedIDBuffer),
             nvrhi::BindingSetItem::Sampler(0, m_LinearSampler),
             nvrhi::BindingSetItem::Texture_UAV(0, m_OutputTexture),

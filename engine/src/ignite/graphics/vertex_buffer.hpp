@@ -35,7 +35,6 @@ namespace ignite
     public:
         VertexBuffer(size_t size);
 
-
         void SetData(nvrhi::ICommandList *commandList, Buffer buffer, size_t offset = 0) const;
         void SetData(Buffer buffer, size_t offset = 0) const;
 

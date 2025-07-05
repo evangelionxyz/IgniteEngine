@@ -135,6 +135,29 @@ namespace ignite
         }
     };
 
+    struct VertexScreen
+    {
+        glm::vec2 position;
+        glm::vec2 texCoord;
+
+        static std::array<nvrhi::VertexAttributeDesc, 2> GetAttributes()
+        {
+            return {
+                nvrhi::VertexAttributeDesc()
+                    .setName("POSITION")
+                    .setBufferIndex(0)
+                    .setFormat(nvrhi::Format::RG32_FLOAT)
+                    .setOffset(offsetof(VertexScreen, position))
+                    .setElementStride(sizeof(VertexScreen)),
+                nvrhi::VertexAttributeDesc()
+                    .setName("TEXCOORD0")
+                    .setFormat(nvrhi::Format::RG32_FLOAT)
+                    .setOffset(offsetof(VertexScreen, texCoord))
+                    .setElementStride(sizeof(VertexScreen))
+            };
+        }
+    };
+
     struct Vertex2DQuad
     {
         glm::vec3 position;

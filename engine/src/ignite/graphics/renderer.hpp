@@ -57,6 +57,7 @@ namespace ignite
     public:
         void Init(nvrhi::GraphicsAPI api);
         void Compile();
+        void CompileShaders(const std::vector<Ref<ShaderMake::ShaderContext>> &contexts);
         void Load(const std::string &name, const std::string &filepath);
         bool Exists(const std::string &name) const;
         

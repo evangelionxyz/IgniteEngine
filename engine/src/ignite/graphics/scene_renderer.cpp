@@ -56,6 +56,52 @@ namespace ignite
     {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
+        // Composite Pipeline & geometry
+        {
+            // Geometry
+            VertexScreen vertices[]
+            {
+                { { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+                { { -1.0f,  1.0f }, { 0.0f, 0.0f } },
+                { {  1.0f,  1.0f }, { 1.0f, 0.0f } },
+
+                { {  1.0f,  1.0f }, { 1.0f, 0.0f } },
+                { {  1.0f, -1.0f }, { 1.0f, 1.0f } },
+                { { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+            };
+
+            m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
+            m_CompositeVertexBuffer->SetData(Buffer(vertices, sizeof(vertices)));
+
+            GraphicsPipelineParams params;
+            params.enableBlend = false;
+            params.depthWrite = false;
+            params.depthTest = false;
+            params.enableDepthStencil = false;
+            params.fillMode = nvrhi::RasterFillMode::Solid;
+            params.cullMode = nvrhi::RasterCullMode::None;
+
+            auto attributes = VertexScreen::GetAttributes();
+            GraphicsPiplineCreateInfo pci;
+            pci.attributes = attributes.data();
+            pci.attributeCount = static_cast<uint32_t>(attributes.size());
+
+            // Binding layout
+            nvrhi::BindingLayoutDesc layoutDesc = {};
+            layoutDesc.visibility = nvrhi::ShaderType::All;
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)); // scene
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)); // edge detection
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0)); // sampler
+            nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(layoutDesc);
+
+            // Create pipeline
+            m_CompositePipeline = GraphicsPipeline::Create(params, &pci);
+            m_CompositePipeline->AddShader("composite.vertex.hlsl", nvrhi::ShaderType::Vertex, "main", true)
+                .AddShader("composite.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
+                .AddBindingLayout(bindingLayout)
+                .Build();
+        }
+
         GraphicsPipelineParams params;
         params.enableBlend = true;
         params.depthWrite = true;
@@ -101,22 +147,11 @@ namespace ignite
         
         // Create Environment
         CreateEnvironment();
-
-        // Create render target
-        RenderTargetCreateInfo createInfo = {};
-        createInfo.attachments = 
-        {
-            FramebufferAttachments{ nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }, // Depth
-            FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget }, // Main Color
-            FramebufferAttachments{ nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget }, // Mouse picking
-        };
-
-        m_RenderTarget = RenderTarget::Create(createInfo);
-
+        CreateRenderTargets();
         CreatePipelines();
 
-        const uint32_t width = m_RenderTarget->GetWidth();
-        const uint32_t height = m_RenderTarget->GetHeight();
+        const uint32_t width = m_SceneRenderTarget->GetWidth();
+        const uint32_t height = m_SceneRenderTarget->GetHeight();
 
         // Create Edge Detection
         m_EdgeDetection = EdgeDetection::Create();
@@ -124,20 +159,16 @@ namespace ignite
         m_EdgeDetection->CreatePipeline();
         m_EdgeDetection->CreateOutputTexture(width, height);
 
-        m_EdgeDetection->UpdateBindingSet(
-            m_RenderTarget->GetColorAttachment(0),
-            m_RenderTarget->GetColorAttachment(1),
-            m_RenderTarget->GetDepthAttachment());
+        m_EdgeDetection->UpdateBindingSet(  m_SceneRenderTarget->GetColorAttachment(0),
+            m_SceneRenderTarget->GetColorAttachment(1), m_SceneRenderTarget->GetDepthAttachment());
+
+        // Composite Binding set
+        CompositeUpdateBindingSet();
 
         m_SelectedEntities.reserve(100);
-
         m_EdgeDetectionParams.texelSize.x = 1.0f / static_cast<float>(width);
         m_EdgeDetectionParams.texelSize.y = 1.0f / static_cast<float>(height);
-
-        m_EdgeDetectionParams.edgeThreshold = 0.001f;
-        m_EdgeDetectionParams.outlineWidth = 1.0f;
         m_EdgeDetectionParams.depthSensitivity = 1.0f;
-        m_EdgeDetectionParams.useObjectID = 1;
         m_EdgeDetectionParams.selectedCount = static_cast<uint32_t>(m_SelectedEntities.size());
         m_EdgeDetectionParams.outlineColor = { 1.0f, 0.75f, 0.0f, 1.0f };
     }
@@ -149,51 +180,60 @@ namespace ignite
 
     bool SceneRenderer::ShouldResize() const
     {
-        return m_RenderTarget->GetWidth() != m_Scene->viewportWidth || m_RenderTarget->GetHeight() != m_Scene->viewportHeight;
+        return m_SceneRenderTarget->GetWidth() != m_Scene->viewportWidth || m_SceneRenderTarget->GetHeight() != m_Scene->viewportHeight;
     }
 
     void SceneRenderer::Resize(uint32_t width, uint32_t height)
     {
-        m_RenderTarget->Resize(width, height);
+        m_SceneRenderTarget->Resize(width, height);
+        m_CompositeRenderTarget->Resize(width, height);
+
         m_Scene->Resize(width, height);
 
         m_EdgeDetection->CreateOutputTexture(width, height);
         m_EdgeDetection->UpdateBindingSet(
-            m_RenderTarget->GetColorAttachment(0),
-            m_RenderTarget->GetColorAttachment(1),
-            m_RenderTarget->GetDepthAttachment());
+            m_SceneRenderTarget->GetColorAttachment(0),
+            m_SceneRenderTarget->GetColorAttachment(1),
+            m_SceneRenderTarget->GetDepthAttachment());
+
+        CompositeUpdateBindingSet();
 
         m_EdgeDetectionParams.texelSize.x = 1.0f / static_cast<float>(width);
         m_EdgeDetectionParams.texelSize.y = 1.0f / static_cast<float>(height);
     }
 
-    void SceneRenderer::CreatePipelines() const
+    void SceneRenderer::CreatePipelines()
     {
-        Renderer2D::CreatePipelines(m_RenderTarget->GetFramebuffer());
-        m_EnvironmentPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
-        m_GeometryAnimPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
+        Renderer2D::CreatePipelines(m_SceneRenderTarget->GetFramebuffer());
+        m_EnvironmentPipeline->CreatePipeline(m_SceneRenderTarget->GetFramebuffer());
+        m_GeometryAnimPipeline->CreatePipeline(m_SceneRenderTarget->GetFramebuffer());
+
+        // Composite
+        m_CompositePipeline->CreatePipeline(m_CompositeRenderTarget->GetFramebuffer());
     }
 
     void SceneRenderer::Render(const ICamera *camera, bool renderEnvironment)
     {
         m_CommandList->open();
+
+        // Composite
+        m_CompositeRenderTarget->ClearColorAttachmentFloat(m_CommandList, 0);
         
+        // Scene Render Target
         CameraConstants cameraBuffer = { camera->GetViewProjectionMatrix(), glm::vec4(camera->position, 1.0f) };
         m_CommandList->writeBuffer(Renderer::GetCameraBufferHandle(), &cameraBuffer, sizeof(cameraBuffer));
-
-        m_RenderTarget->ClearColorAttachmentFloat(m_CommandList, 0);
-        m_RenderTarget->ClearColorAttachmentUint(m_CommandList, 1, static_cast<uint32_t>(-1));
-
-        f32 farDepth = 1.0f; // LessOrEqual
-        m_CommandList->clearDepthStencilTexture(m_RenderTarget->GetDepthAttachment(), 
-            nvrhi::AllSubresources, 
+        m_SceneRenderTarget->ClearColorAttachmentFloat(m_CommandList, 0);
+        m_SceneRenderTarget->ClearColorAttachmentUint(m_CommandList, 1, static_cast<uint32_t>(-1));
+        static const f32 farDepth = 1.0f; // LessOrEqual
+        m_CommandList->clearDepthStencilTexture(m_SceneRenderTarget->GetDepthAttachment(), 
+            nvrhi::AllSubresources,
             true, // clear depth ?
             farDepth, // depth
             true, // clear stencil?
             0 // stencil
         );
 
-        nvrhi::IFramebuffer *framebuffer = m_RenderTarget->GetFramebuffer();
+        nvrhi::IFramebuffer *sceneFramebuffer = m_SceneRenderTarget->GetFramebuffer();
         
         if (renderEnvironment)
         {
@@ -209,10 +249,10 @@ namespace ignite
                 m_Environment->isUpdatingTexture = false;
             }
 
-            m_Environment->Render(m_CommandList, framebuffer, m_EnvironmentPipeline);
+            m_Environment->Render(m_CommandList, sceneFramebuffer, m_EnvironmentPipeline);
         }
         
-        Renderer2D::Begin(m_CommandList, framebuffer);
+        Renderer2D::Begin(m_CommandList, sceneFramebuffer);
 
         for (entt::entity e : m_Scene->entities | std::views::values)
         {
@@ -237,8 +277,8 @@ namespace ignite
                 // render
                 auto state = nvrhi::GraphicsState();
                 state.pipeline = m_GeometryAnimPipeline->GetHandle();
-                state.framebuffer = framebuffer;
-                state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+                state.framebuffer = sceneFramebuffer;
+                state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(sceneFramebuffer->getFramebufferInfo().getViewport());
 
                 state.bindings = { meshRenderer.bindingSet, meshRenderer.material->bindingSet };
 
@@ -265,17 +305,31 @@ namespace ignite
         Renderer2D::Flush();
         Renderer2D::End();
 
-        m_EdgeDetectionParams.useObjectID = 1;
-        m_EdgeDetectionParams.selectedCount = static_cast<uint32_t>(m_SelectedEntities.size());
 
+        m_EdgeDetectionParams.selectedCount = static_cast<uint32_t>(m_SelectedEntities.size());
         if (!m_SelectedEntities.empty())
         {
             m_CommandList->writeBuffer(m_EdgeDetection->GetSelectedIDBuffer(), m_SelectedEntities.data(), m_SelectedEntities.size() * sizeof(uint32_t));
         }
-
-        const uint32_t width = m_RenderTarget->GetWidth();
-        const uint32_t height = m_RenderTarget->GetHeight();
+        const uint32_t width = m_SceneRenderTarget->GetWidth();
+        const uint32_t height = m_SceneRenderTarget->GetHeight();
         m_EdgeDetection->ExecuteCompute(m_CommandList, m_EdgeDetectionParams, width, height);
+
+        // Composite render
+        {
+            auto graphicsState = nvrhi::GraphicsState();
+            graphicsState.pipeline = m_CompositePipeline->GetHandle();
+            graphicsState.framebuffer = m_CompositeRenderTarget->GetFramebuffer();
+            graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding { m_CompositeVertexBuffer->GetHandle(), 0, 0 } };
+            graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(m_CompositeRenderTarget->GetFramebuffer()->getFramebufferInfo().getViewport());
+            graphicsState.bindings = { m_CompositeBindingSet };
+            m_CommandList->setGraphicsState(graphicsState);
+
+            auto args = nvrhi::DrawArguments();
+            args.instanceCount = 1;
+            args.vertexCount = 6;
+            m_CommandList->draw(args);
+        }
 
         m_CommandList->close();
         m_Device->executeCommandList(m_CommandList);
@@ -284,10 +338,10 @@ namespace ignite
     void SceneRenderer::SetFillMode(nvrhi::RasterFillMode mode) const
     {
         Renderer2D::SetFillMode(mode);
-        Renderer2D::CreatePipelines(m_RenderTarget->GetFramebuffer());
+        Renderer2D::CreatePipelines(m_SceneRenderTarget->GetFramebuffer());
 
         m_GeometryAnimPipeline->GetParams().fillMode = mode;
-        m_GeometryAnimPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
+        m_GeometryAnimPipeline->CreatePipeline(m_SceneRenderTarget->GetFramebuffer());
     }
 
     void SceneRenderer::SetSelectedEntity(const Entity& entity)
@@ -335,20 +389,45 @@ namespace ignite
         m_Environment->SetSunDirection(50.0f, -27.0f);
     }
 
+    void SceneRenderer::CreateRenderTargets()
+    {
+        // Create scene render target
+        RenderTargetCreateInfo createInfo = {};
+        createInfo.attachments =
+        {
+            FramebufferAttachments{ nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }, // Depth
+            FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget }, // Main Color
+            FramebufferAttachments{ nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget }, // Mouse picking
+        };
+
+        m_SceneRenderTarget = RenderTarget::Create(createInfo);
+
+        // Composite render target
+        createInfo = {};
+        createInfo.attachments =
+        {
+            FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } // Main Color
+        };
+
+        m_CompositeRenderTarget = RenderTarget::Create(createInfo);
+    }
+
+    void SceneRenderer::CompositeUpdateBindingSet()
+    {
+        // Composite Binding set
+        auto bindingSetDesc = nvrhi::BindingSetDesc();
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_SceneRenderTarget->GetColorAttachment(0)));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, m_EdgeDetection->GetOutputTexture()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, Renderer::GetWhiteTexture()->GetSampler()));
+        m_CompositeBindingSet = Application::GetGraphicsDevice()->createBindingSet(bindingSetDesc, m_CompositePipeline->GetBindingLayout(0));
+    }
+
     void SceneRenderer::OnGuiRender()
     {
         ImGui::Begin("Debug");
        
         if (m_EdgeDetection->GetOutputTexture())
         {
-            // ImTextureID tex = reinterpret_cast<ImTextureID>(m_EdgeDetection.outputTexture.Get());
-            // float width = ImGui::GetContentRegionAvail().x;
-            // float height = width / (16.0f / 9.0f);
-            // 
-            // ImGui::Image(tex, { width, height});
-
-            ImGui::DragFloat("Edge Threshold", &m_EdgeDetectionParams.edgeThreshold, 0.025f, 0.001f, 100.0f);
-            ImGui::DragFloat("Outline Width", &m_EdgeDetectionParams.outlineWidth, 0.025f, 0.0f, FLT_MAX);
             ImGui::DragFloat("Depth Sensitivity", &m_EdgeDetectionParams.depthSensitivity, 0.025f, 0.0f, FLT_MAX);
             ImGui::ColorEdit4("Color", &m_EdgeDetectionParams.outlineColor.x);
         }

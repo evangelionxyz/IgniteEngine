@@ -50,7 +50,7 @@ namespace ignite
         void SetActiveScene(Scene *scene);
         bool ShouldResize() const;
         void Resize(uint32_t width, uint32_t height);
-        void CreatePipelines() const;
+        void CreatePipelines();
         void Render(const ICamera *camera, bool renderEnvironment = true);
         void SetFillMode(nvrhi::RasterFillMode mode) const;
 
@@ -66,17 +66,28 @@ namespace ignite
         Ref<GraphicsPipeline> &GetGeometryAnimPipeline() { return m_GeometryAnimPipeline; }
         
         Ref<Environment> &GetEnvironment() { return m_Environment; }
-        Ref<RenderTarget> &GetRenderTarget() { return m_RenderTarget; }
+        Ref<RenderTarget> &GetRenderTarget() { return m_SceneRenderTarget; }
+        Ref<RenderTarget> &GetCompositeRenderTarget() { return m_CompositeRenderTarget; }
+        
         Ref<EdgeDetection> GetEdgeDetection() { return m_EdgeDetection; }
 
 
     private:
         void CreateEnvironment();
+        void CreateRenderTargets();
+
+        void CompositeUpdateBindingSet();
 
         Ref<Environment> m_Environment;
         Ref<GraphicsPipeline> m_EnvironmentPipeline;
         Ref<GraphicsPipeline> m_GeometryAnimPipeline;
-        Ref<RenderTarget> m_RenderTarget;
+        Ref<RenderTarget> m_SceneRenderTarget;
+
+        // Composite
+        Ref<GraphicsPipeline> m_CompositePipeline;
+        Ref<RenderTarget> m_CompositeRenderTarget;
+        Ref<VertexBuffer> m_CompositeVertexBuffer;
+        nvrhi::BindingSetHandle m_CompositeBindingSet;
 
         std::vector<uint32_t> m_SelectedEntities;
 
