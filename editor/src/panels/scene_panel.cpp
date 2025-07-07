@@ -1315,8 +1315,9 @@ namespace ignite
                 {
                     SkeletalMesh &c = selectedEntity.GetComponent<SkeletalMesh>();
 
-                    std::string btnLabel = c.meshHandle == AssetHandle(0) ? "Load" : "Loaded";
-                    if (ImGui::Button(btnLabel.c_str(), { 55.0f, 30.0f }))
+                    const bool meshLoaded = c.meshHandle != AssetHandle(0);
+
+                    if (ImGui::Button("Drag Here"))
                     {
                         std::filesystem::path filepath = FileDialogs::OpenFile("3D Files (*.glb;*.gltf;*.fbx)\0*.glb;*.gltf;*.fbx");
                         if (!filepath.empty())
@@ -1326,8 +1327,7 @@ namespace ignite
                             metadata.filepath = filepath;
                             c.meshHandle = AssetHandle();
                             Project::GetActive()->GetAssetManager().InsertMetaData(c.meshHandle, metadata);
-
-                            Project::GetActive()->GetAsset<MeshAsset>(c.meshHandle);
+                            Ref<MeshAsset> meshAsset = Project::GetActive()->GetAsset<MeshAsset>(c.meshHandle);
                         }
                     }
 
@@ -1343,15 +1343,78 @@ namespace ignite
                                     AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(*handle);
                                     if (metadata.type == AssetType::MeshSource)
                                     {
-                                        Project::GetActive()->GetAsset<MeshAsset>(*handle);
+                                        Ref<MeshAsset> meshAsset = Project::GetActive()->GetAsset<MeshAsset>(*handle);
+                                        if (meshAsset)
+                                        {
+                                            c.meshHandle = *handle;
 
-                                        // std::filesystem::path filepath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
-                                        // m_Editor->OpenScene(filepath);
+                                            // create meshes
+                                            c.meshes.resize(meshAsset->meshes.size());
+                                            for (size_t i = 0; i < meshAsset->meshes.size(); ++i)
+                                            {
+                                                SkeletalMesh::RenderMesh &m = c.meshes[i];
+
+                                                m.mesh.data = meshAsset->meshes[i];
+                                                m.mesh.CreateBuffers();
+                                                m.mesh.WriteVertexBuffer();
+
+                                                // TODO: Remove this code
+                                                m.constant.transformation = glm::mat4(1.0f);
+                                                m.constant.normal = glm::mat4(1.0f);
+
+                                                // Material
+                                                m.material = meshAsset->materials[m.mesh.data.materialIndex];
+
+                                                nvrhi::IDevice *device = Application::GetGraphicsDevice();;
+
+                                                // create per Mesh constant buffers
+                                                auto bufferDesc = nvrhi::BufferDesc();
+                                                bufferDesc.setIsConstantBuffer(true);
+                                                bufferDesc.setIsVolatile(true);
+                                                bufferDesc.setMaxVersions(16);
+                                                bufferDesc.setInitialState(nvrhi::ResourceStates::ConstantBuffer);
+                                                bufferDesc.setDebugName("MeshConstantBuffer");
+                                                bufferDesc.setByteSize(sizeof(SkinnedMeshConstants));
+                                                m.constantBuffer = device->createBuffer(bufferDesc);
+                                                LOG_ASSERT(m.constantBuffer, "[MeshRenderer] Failed to create mesh constant buffer");
+
+                                                // Create binding set
+                                                auto desc = nvrhi::BindingSetDesc();
+                                                desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraBufferHandle()));
+                                                desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m.constantBuffer));
+                                                desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, SceneRenderer::GetActive()->GetEnvironment()->GetDirLightBuffer()));
+                                                desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, SceneRenderer::GetActive()->GetEnvironment()->GetParamsBuffer()));
+
+                                                const auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
+                                                LOG_ASSERT(newBindingSet, "Failed to create binding set");
+
+                                                if (newBindingSet)
+                                                {
+                                                    m.bindingSet = newBindingSet;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    else if (metadata.type == AssetType::Mesh)
+                                    {
+                                        LOG_WARN("Skeletal Mesh Drag and Drop (Mesh Binary) not implemented yet!");
                                     }
                                 }
                             }
                         }
                         ImGui::EndDragDropTarget();
+                    }
+
+                    if (meshLoaded)
+                    {
+                        ImGui::SameLine();
+                        if (ImGui::Button("X"))
+                        {
+                            c.meshHandle = AssetHandle(0); // reset the texture handle
+                        }
+
+                        ImGui::SameLine();
+                        ImGui::Text("Handle: %llu", static_cast<u64>(c.meshHandle));
                     }
 
                     // ImGui::SameLine();

@@ -341,10 +341,22 @@ namespace ignite
      public:
          AssetHandle meshHandle = AssetHandle(0); // Primitive Mesh data
          AssetHandle skeletonHandle = AssetHandle(0);
+         AssetHandle activeAnimationHandle = AssetHandle(0);
+
          std::vector<AssetHandle> animationHandle;
          std::vector<glm::mat4> boneTransforms;
 
-         i32 activeAnimIndex = 0;
+         struct RenderMesh
+         {
+             Mesh mesh;
+             Ref<Material> material;
+             SkinnedMeshConstants constant;
+             nvrhi::BufferHandle constantBuffer;
+             nvrhi::BindingSetHandle bindingSet;
+         };
+
+         // for rendering
+         std::vector<RenderMesh> meshes;
 
          SkeletalMesh() = default;
 
@@ -385,7 +397,6 @@ namespace ignite
 
         void Create(bool _isSkinnedMesh);
         void UpdateBindingSet();
-        void WriteTransformBuffer(nvrhi::ICommandList *commandList) const;
 
         static CompType StaticType() { return CompType_MeshRenderer; }
         virtual CompType GetType() override { return StaticType(); }

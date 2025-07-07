@@ -134,21 +134,36 @@ namespace ignite
 
     void Scene::UpdateTransforms(float deltaTime)
     {
-#if 0
-        auto skinnedMeshView = registry->view<SkeletalMesh>();
-        for (auto entity : skinnedMeshView)
+        auto skeletalMeshView = registry->view<SkeletalMesh>();
+        for (auto entity : skeletalMeshView)
         {
-            SkeletalMesh &skinnedMesh = skinnedMeshView.get<SkeletalMesh>(entity);
-            if (!skinnedMesh.animations.empty() && skinnedMesh.animations[skinnedMesh.activeAnimIndex].isPlaying)
+            SkeletalMesh &sm = skeletalMeshView.get<SkeletalMesh>(entity);
+            Ref<Skeleton> skeleton = Project::GetActive()->GetAsset<Skeleton>(sm.skeletonHandle);
+            Ref<SkeletalAnimation> anim = Project::GetActive()->GetAsset<SkeletalAnimation>(sm.activeAnimationHandle);
+
+            if (skeleton && anim && anim->isPlaying)
             {
-                if (AnimationSystem::UpdateSkeleton(skinnedMesh.skeleton, skinnedMesh.animations[skinnedMesh.activeAnimIndex], timeInSeconds))
+                if (AnimationSystem::UpdateSkeleton(skeleton, anim, timeInSeconds))
                 {
-                    AnimationSystem::ApplySkeletonToEntities(this, skinnedMesh.skeleton);
-                    skinnedMesh.boneTransforms = AnimationSystem::GetFinalJointTransforms(skinnedMesh.skeleton);
+                    AnimationSystem::ApplySkeletonToEntities(this, skeleton);
+                    sm.boneTransforms = AnimationSystem::GetFinalJointTransforms(skeleton);
+                }
+            }
+            
+            const size_t numBones = std::min(sm.boneTransforms.size(), static_cast<size_t>(MAX_BONES));
+            for (auto &mesh : sm.meshes)
+            {
+                for (size_t i = 0; i < numBones; ++i)
+                {
+                    mesh.constant.boneTransforms[i] = sm.boneTransforms[i];
+                }
+
+                for (size_t i = numBones; i < MAX_BONES; ++i)
+                {
+                    mesh.constant.boneTransforms[i] = glm::mat4(1.0f);
                 }
             }
         }
-#endif
 
         auto view = registry->view<ID, Transform>();
         for (auto ent : view)

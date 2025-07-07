@@ -74,6 +74,23 @@ namespace ignite {
         return nullptr;
     }
 
+    void AssetImporter::ImportAsync(AssetHandle handle, const AssetMetaData &metadata, std::function<void(Ref<Asset>, AssetHandle)> callback)
+    {
+        Project::GetActive()->GetAssetManager().SubmitJob([handle, metadata, callback]()
+        {
+            // should be always importing with full filepath
+            AssetMetaData metadataCopy = metadata;
+            metadataCopy.filepath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
+
+            Ref<Asset> asset;
+            if (s_ImportFunctions.contains(metadataCopy.type))
+                asset = s_ImportFunctions.at(metadataCopy.type)(handle, metadataCopy);
+            
+            if (asset)
+                callback(asset, handle);
+        });
+    }
+
     Ref<Scene> AssetImporter::ImportScene(AssetHandle handle, const AssetMetaData& metadata)
     {
         Ref<Scene> scene = SceneSerializer::Deserialize(metadata.filepath);
@@ -114,7 +131,7 @@ namespace ignite {
         return sound;
     }
 
-    Ref<Asset> MeshImporter::ImportMeshSource(AssetHandle handle, const AssetMetaData& metadata)
+    Ref<Asset> MeshImporter::ImportMeshSource(AssetHandle handle, const AssetMetaData &metadata)
     {
         Assimp::Importer importer;
         const aiScene *assimpScene = importer.ReadFile(metadata.filepath.generic_string(), ASSIMP_IMPORTER_FLAGS);
@@ -172,8 +189,7 @@ namespace ignite {
         }
 
         // Load Materials
-        std::vector<Ref<Material>> materials;
-        
+        meshAsset->materials.reserve(assimpScene->mNumMaterials);
         for (uint32_t matIndex = 0; matIndex < assimpScene->mNumMaterials; ++matIndex)
         {
             aiMaterial *aiMat = assimpScene->mMaterials[matIndex];
@@ -197,7 +213,7 @@ namespace ignite {
             if (mat)
             {
                 mat->CreateTextures();
-                materials.push_back(mat);
+                meshAsset->materials.push_back(mat);
             }
         }
 

@@ -35,8 +35,8 @@ namespace ignite
 
     void Mesh::WriteVertexBuffer(uint32_t entityID)
     {
-        for (auto &vertex : data.vertices)
-            vertex.entityID = entityID;
+        // for (auto &vertex : data.vertices)
+        //     vertex.entityID = entityID;
 
         m_VertexBuffer->SetData(Buffer(data.vertices.data(), sizeof(VertexMesh_Anim) * data.vertices.size()));
         m_IndexBuffer->SetData(Buffer(data.indices.data(), sizeof(uint32_t) * data.indices.size()));

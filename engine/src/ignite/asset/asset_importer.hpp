@@ -41,6 +41,8 @@ namespace ignite {
     public:
         static void SyncMainThread();
         static Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
+        static void ImportAsync(AssetHandle handle, const AssetMetaData &metadata, std::function<void(Ref<Asset>, AssetHandle)> callback);
+
         static Ref<Scene> ImportScene(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<FmodSound> ImportAudio(AssetHandle handle, const AssetMetaData &metadata);

@@ -245,7 +245,64 @@ namespace ignite
             m_Environment->Render(m_CommandList, sceneFramebuffer, m_EnvironmentPipeline);
         }
         
+
+        auto skeletalMeshview = m_Scene->registry->view<Transform, SkeletalMesh>();
+        for (entt::entity e : skeletalMeshview)
+        {
+            Transform &tr = m_Scene->registry->get<Transform>(e);
+            if (!tr.visible)
+                continue;
+
+            SkeletalMesh &sm = m_Scene->registry->get<SkeletalMesh>(e);
+            Ref<MeshAsset> meshAsset = Project::GetActive()->GetAsset<MeshAsset>(sm.meshHandle);
+            if (!meshAsset)
+                continue;
+
+            // render each mesh
+            for (size_t i = 0; i < sm.meshes.size(); ++i)
+            {
+                SkeletalMesh::RenderMesh &m = sm.meshes[i];
+                m_CommandList->writeBuffer(m.constantBuffer, &m.constant, sizeof(m.constant));
+                m.material->WriteBuffer(m_CommandList);
+
+                // render
+                auto state = nvrhi::GraphicsState();
+                state.pipeline = m_GeometryAnimPipeline->GetHandle();
+                state.framebuffer = sceneFramebuffer;
+                state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(sceneFramebuffer->getFramebufferInfo().getViewport());
+
+                state.bindings = { m.bindingSet, m.material->bindingSet };
+
+                state.addVertexBuffer({ m.mesh.GetVertexBuffer()->GetHandle(), 0, 0 });
+                state.setIndexBuffer({ m.mesh.GetIndexBuffer()->GetHandle(), nvrhi::Format::R32_UINT });
+
+                m_CommandList->setGraphicsState(state);
+
+                nvrhi::DrawArguments args;
+                args.setVertexCount(static_cast<uint32_t>(m.mesh.data.indices.size()));
+                args.instanceCount = 1;
+
+                m_CommandList->drawIndexed(args);
+            }
+        }
+
+        // 2D Pass
         Renderer2D::Begin(m_CommandList, sceneFramebuffer);
+        auto object2DView = m_Scene->registry->view<Transform, Sprite2D>();
+        for (entt::entity e: object2DView)
+        {
+            Transform &tr = m_Scene->registry->get<Transform>(e);
+            if (!tr.visible)
+                continue;
+
+            Sprite2D &sprite = m_Scene->registry->get<Sprite2D>(e);
+            Ref<Texture> texture = Project::GetAsset<Texture>(sprite.handle);
+            Renderer2D::DrawQuad(tr.GetWorldMatrix(), sprite.color, texture, sprite.tilingFactor, static_cast<u32>(e));
+        }
+        Renderer2D::Flush();
+        Renderer2D::End();
+
+#if 0
 
         for (entt::entity e : m_Scene->entities | std::views::values)
         {
@@ -254,6 +311,25 @@ namespace ignite
 
             if (!tr.visible)
                 continue;
+
+            if (entity.HasComponent<SkeletalMesh>())
+            {
+                SkeletalMesh &sm = entity.GetComponent<SkeletalMesh>();
+
+                Ref<MeshAsset> meshAsset = Project::GetActive()->GetAsset<MeshAsset>(sm.meshHandle);
+                if (!meshAsset)
+                    continue;
+
+                // render each mesh
+                for (size_t i = 0; i < sm.meshes.size(); ++i)
+                {
+                    Mesh &mesh = sm.meshes[i];
+                    m_CommandList->writeBuffer(sm.meshesTransformBuffer[i], &sm.meshesTransform[i], sizeof(sm.meshesTransform[i]));
+
+                    Material &mat = sm.materials[mesh.data.materialIndex];
+                    mat.WriteBuffer(m_CommandList);
+                }
+            }
 
             if (entity.HasComponent<MeshRenderer>())
             {
@@ -265,7 +341,7 @@ namespace ignite
 
                 // write material constant buffer
                 meshRenderer.material->WriteBuffer(m_CommandList);
-                meshRenderer.WriteTransformBuffer(m_CommandList);
+                m_CommandList->writeBuffer(meshRenderer.transformBufferHandle, &meshRenderer.transformData, sizeof(meshRenderer.transformData));
 
                 // render
                 auto state = nvrhi::GraphicsState();
@@ -286,19 +362,9 @@ namespace ignite
 
                 m_CommandList->drawIndexed(args);
             }
-
-            if (entity.HasComponent<Sprite2D>())
-            {
-                Sprite2D &sprite = entity.GetComponent<Sprite2D>();
-                Ref<Texture> texture = Project::GetAsset<Texture>(sprite.handle);
-                Renderer2D::DrawQuad(tr.GetWorldMatrix(), sprite.color, texture, sprite.tilingFactor, static_cast<u32>(e));
-            }
         }
 
-        Renderer2D::Flush();
-        Renderer2D::End();
-
-
+#endif
         m_EdgeDetectionParams.selectedCount = static_cast<uint32_t>(m_SelectedEntities.size());
         if (!m_SelectedEntities.empty())
         {

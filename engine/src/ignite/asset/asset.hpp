@@ -125,6 +125,8 @@ namespace ignite {
     class Asset
     {
     public:
+        AssetHandle handle;
+
         virtual ~Asset() = default;
 
         template<typename T>
@@ -135,19 +137,14 @@ namespace ignite {
 
         virtual AssetType GetType() { return AssetType::Invalid; }
 
-        void SetDirtyFlag(bool dirty) 
-        { 
-            m_IsDirty = dirty; 
-        }
+        void SetDirtyFlag(bool dirty)  { m_Dirty = dirty; }
+        bool IsDirty() const  { return m_Dirty; }
 
-        bool IsDirty() const 
-        { 
-            return m_IsDirty;
-        }
-
-        AssetHandle handle;
+        void SetReadyFlag(bool ready) { m_Ready = ready; }
+        bool IsReady() const { return m_Ready; }
 
     protected:
-        bool m_IsDirty = true;
+        bool m_Ready = false;
+        bool m_Dirty = true;
     };
 }

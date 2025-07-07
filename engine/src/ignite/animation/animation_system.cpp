@@ -30,11 +30,11 @@
 
 namespace ignite {
 
-    void AnimationSystem::PlayAnimation(std::vector<SkeletalAnimation> &animations, int animIndex /*= 0*/)
+    void AnimationSystem::PlayAnimation(std::vector<Ref<SkeletalAnimation>> &animations, int animIndex /*= 0*/)
     {
         if (animIndex < animations.size())
         {
-            animations[animIndex].isPlaying = true;
+            animations[animIndex]->isPlaying = true;
         }
     }
 
@@ -67,12 +67,12 @@ namespace ignite {
         }
     }
 
-    bool AnimationSystem::UpdateSkeleton(Ref<Skeleton> &skeleton, SkeletalAnimation &animation, float timeInSeconds)
+    bool AnimationSystem::UpdateSkeleton(Ref<Skeleton> &skeleton, const Ref<SkeletalAnimation> &animation, float timeInSeconds)
     {
         // Find animation key frames
-        const float animTime = fmod(timeInSeconds * animation.ticksPerSeconds, animation.duration);
+        const float animTime = fmod(timeInSeconds * animation->ticksPerSeconds, animation->duration);
 
-        for (auto &[nodeName, channel] : animation.channels)
+        for (auto &[nodeName, channel] : animation->channels)
         {
             if (const auto it = skeleton->nameToJointMap.find(nodeName); it != skeleton->nameToJointMap.end())
             {

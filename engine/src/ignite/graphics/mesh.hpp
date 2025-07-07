@@ -107,7 +107,7 @@ namespace ignite {
     public:
         std::vector<NodeInfo> nodes;
         std::vector<MeshData> meshes;
-        std::vector<std::string> materialsName;
+        std::vector<Ref<Material>> materials;
 
         static AssetType GetStaticType() { return AssetType::SkeletalMesh; }
         virtual AssetType GetType() override { return GetStaticType(); }

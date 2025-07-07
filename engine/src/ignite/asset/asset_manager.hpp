@@ -26,23 +26,35 @@
 #include "asset.hpp"
 
 #include <map>
+#include <vector>
+#include <thread>
+#include <functional>
+#include <condition_variable>
+#include <queue>
 
 namespace ignite {
 
     using AssetRegistry = std::map<AssetHandle, AssetMetaData>;
+    using AssetJob = std::function<void()>;
 
     class AssetManager
     {
     public:
-        AssetManager() = default;
+        AssetManager();
+        ~AssetManager();
 
         AssetHandle ImportAsset(const std::filesystem::path &filepath);
         void InsertMetaData(AssetHandle handle, const AssetMetaData &metadata);
         void RemoveAsset(AssetHandle handle);
+
+        void SubmitJob(AssetJob job);
+
         Ref<Asset> GetAsset(AssetHandle handle);
         AssetType GetAssetType(AssetHandle handle) const;
+
         const AssetMetaData &GetMetaData(const std::filesystem::path &filepath, AssetHandle &outHandle);
         const AssetMetaData &GetMetaData(AssetHandle handle) const;
+        
         AssetHandle GetAssetHandle(const std::filesystem::path &filepath);
         
         const std::filesystem::path &GetFilepath(AssetHandle handle) const;
@@ -51,10 +63,17 @@ namespace ignite {
         AssetRegistry &GetAssetAssetRegistry() { return m_AssetRegistry; }
 
     private:
-        Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
 
+        void WorkerLoop();
+
+        Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
         AssetRegistry m_AssetRegistry;
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
+
+        std::condition_variable m_ConditionVariable;
+        std::vector<std::thread> m_Workers;
+        std::queue<AssetJob> m_Jobs;
+        bool m_Running;
     };
 
 }

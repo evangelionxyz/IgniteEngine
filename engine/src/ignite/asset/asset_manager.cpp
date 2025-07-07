@@ -30,6 +30,33 @@
 namespace ignite {
 
     static AssetMetaData s_NullMetaData;
+    static std::mutex s_AssetMutex;
+
+    AssetManager::AssetManager()
+        : m_Running(true)
+    {
+        const uint32_t THREAD_COUNT = std::thread::hardware_concurrency();
+        LOG_INFO("[Asset Manager] Creating {} worker threads!", THREAD_COUNT);
+
+        for (uint32_t i = 0; i < THREAD_COUNT; ++i)
+        {
+            m_Workers.emplace_back(&AssetManager::WorkerLoop, this);
+        }
+    }
+
+    AssetManager::~AssetManager()
+    {
+        {
+            std::unique_lock lock(s_AssetMutex);
+            m_Running = false;
+        }
+
+        m_ConditionVariable.notify_all();
+        for (std::thread &worker : m_Workers)
+        {
+            worker.join();
+        }
+    }
 
     AssetHandle AssetManager::ImportAsset(const std::filesystem::path &filepath)
     {
@@ -114,6 +141,16 @@ namespace ignite {
             m_AssetRegistry.erase(it);
     }
 
+    void AssetManager::SubmitJob(AssetJob job)
+    {
+        {
+            std::unique_lock lock(s_AssetMutex);
+            m_Jobs.push(std::move(job));
+        }
+
+        m_ConditionVariable.notify_one();
+    }
+
     Ref<Asset> AssetManager::GetAsset(AssetHandle handle)
     {
         if (!IsAssetHandleValid(handle))
@@ -161,6 +198,7 @@ namespace ignite {
             if (metadata.filepath == filepath)
                 return handle;
         }
+
         return AssetHandle(0);
     }
 
@@ -172,6 +210,31 @@ namespace ignite {
     bool AssetManager::IsAssetHandleValid(AssetHandle handle) const
     {
         return static_cast<uint64_t>(handle) != 0 && m_AssetRegistry.contains(handle);
+    }
+
+    void AssetManager::WorkerLoop()
+    {
+        while (true)
+        {
+            AssetJob job{};
+            
+            {
+                std::unique_lock lock(s_AssetMutex);
+                m_ConditionVariable.wait(lock, [this]() { 
+                    return !m_Running || !m_Jobs.empty(); 
+                });
+
+                // stop the loop if engine is shutting down
+                if (!m_Running && m_Jobs.empty())
+                    return;
+
+                job = std::move(m_Jobs.front());
+                m_Jobs.pop();
+            }
+
+            // Execute job
+            job();
+        }
     }
 
     Ref<Asset> AssetManager::Import(AssetHandle handle, const AssetMetaData &metadata)
@@ -194,13 +257,26 @@ namespace ignite {
         case AssetType::Skeleton:
         case AssetType::Scene:
         case AssetType::Texture:
-        case AssetType::Audio:
         {
             asset = AssetImporter::Import(handle, metadata);
             m_LoadedAssets[handle] = asset;
+            asset->SetReadyFlag(true);
+            break;
+        }
+        case AssetType::Audio:
+        {
+            m_LoadedAssets[handle] = asset;
+
+            AssetImporter::ImportAsync(handle, metadata, [&](Ref<Asset> assetResult, AssetHandle assetHandle)
+            {
+                assetResult->SetReadyFlag(true);
+                m_LoadedAssets[assetHandle] = assetResult;
+            });
+
             break;
         }
         }
+
         return asset;
     }
 
