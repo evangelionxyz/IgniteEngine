@@ -72,7 +72,7 @@ namespace ignite
         std::string vulkanLibraryName;
         std::vector<std::string> requiredVulkanInstanceExtensions;
         std::vector<std::string> requiredVulkanLayers;
-        std::vector<std::string> optionalVulaknInstanceExtensions;
+        std::vector<std::string> optionalVulkanInstanceExtensions;
         std::vector<std::string> optionalVulkanLayers;
 #endif
 
@@ -151,6 +151,8 @@ namespace ignite
         bool IsUpdateDPIScaleFactor();
         void GetDPIScaleInfo(float &x, float &y) const;
 
+        void ResizeBackbuffer(uint32_t width, uint32_t height);
+
     public:
         // device specific methods
         virtual bool CreateInstanceInternal() = 0;
@@ -228,6 +230,7 @@ namespace ignite
         std::vector<nvrhi::FramebufferHandle> m_SwapChainFramebuffers;
 
         friend class Window;
+        friend class Renderer;
 
     private:
         static DeviceManager *CreateD3D12();

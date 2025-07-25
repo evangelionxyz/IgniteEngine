@@ -116,8 +116,13 @@ namespace ignite
         m_GraphicsAPI = api;
 
         s_instance->m_Device = deviceManager->GetDevice();
-        s_instance->m_CommandList = s_instance->m_Device->createCommandList();
 
+        for (auto &commandList : s_instance->m_CommandLists)
+        {
+            commandList = s_instance->m_Device->createCommandList();
+        }
+
+        auto commandList = GetActiveCommandList();
         {
             TextureCreateInfo textureCI;
             textureCI.format = nvrhi::Format::RGBA8_UNORM;
@@ -127,17 +132,17 @@ namespace ignite
             textureCI.height = 1;
             textureCI.flip = false;
 
-            s_instance->m_CommandList->open();
+            commandList->open();
 
             u32 white = 0xFFFFFFFF;
             m_WhiteTexture = Texture::Create(Buffer(&white, sizeof(u32)), textureCI);
-            m_WhiteTexture->Write(s_instance->m_CommandList);
+            m_WhiteTexture->Write(commandList);
 
             u32 black = 0x00000000;
             m_BlackTexture = Texture::Create(Buffer(&black, sizeof(u32)), textureCI);
-            m_BlackTexture->Write(s_instance->m_CommandList);
-            s_instance->m_CommandList->close();
-            s_instance->m_Device->executeCommandList(s_instance->m_CommandList);
+            m_BlackTexture->Write(commandList);
+            commandList->close();
+            s_instance->m_Device->executeCommandList(commandList);
         }
 
         // Create shaders
@@ -194,14 +199,17 @@ namespace ignite
 
     void Renderer::OnUpdate()
     {
-        s_instance->m_CommandList->open();
+        if (s_instance->m_SubmitFuncs.empty())
+            return;
+
+        nvrhi::CommandListHandle commandList = Renderer::GetActiveCommandList();
+        commandList->open();
 
         for (const auto &func : s_instance->m_SubmitFuncs)
-            func(s_instance->m_CommandList);
-
-        s_instance->m_CommandList->close();
-        s_instance->m_Device->executeCommandList(s_instance->m_CommandList);
-
+            func(commandList);
+        
+        commandList->close();
+        s_instance->m_Device->executeCommandList(commandList);
         s_instance->m_SubmitFuncs.clear();
     }
 
@@ -218,6 +226,12 @@ namespace ignite
     nvrhi::BufferHandle Renderer::GetCameraBufferHandle()
     {
         return s_instance->m_CameraBufferHandle;
+    }
+
+    nvrhi::CommandListHandle Renderer::GetActiveCommandList()
+    {
+        u32 frameIndex = Application::GetDeviceManager()->GetCurrentBackBufferIndex();
+        return s_instance->m_CommandLists[frameIndex];
     }
 
     Ref<Texture> Renderer::GetWhiteTexture()

@@ -30,13 +30,12 @@
 namespace ignite {
 
     static AssetMetaData s_NullMetaData;
-    static std::mutex s_AssetMutex;
 
     AssetManager::AssetManager()
         : m_Running(true)
     {
-        const uint32_t THREAD_COUNT = std::thread::hardware_concurrency();
-        LOG_INFO("[Asset Manager] Creating {} worker threads!", THREAD_COUNT);
+        const uint32_t THREAD_COUNT = std::max(std::thread::hardware_concurrency() / 2u, 1u);
+        LOG_WARN("[Asset Manager] Creating {} worker threads!", THREAD_COUNT);
 
         for (uint32_t i = 0; i < THREAD_COUNT; ++i)
         {
@@ -47,10 +46,11 @@ namespace ignite {
     AssetManager::~AssetManager()
     {
         {
-            std::unique_lock lock(s_AssetMutex);
+            std::unique_lock lock(m_Mutex);
             m_Running = false;
         }
 
+        // Notify other threads
         m_ConditionVariable.notify_all();
         for (std::thread &worker : m_Workers)
         {
@@ -144,7 +144,7 @@ namespace ignite {
     void AssetManager::SubmitJob(AssetJob job)
     {
         {
-            std::unique_lock lock(s_AssetMutex);
+            std::unique_lock lock(m_Mutex);
             m_Jobs.push(std::move(job));
         }
 
@@ -216,10 +216,10 @@ namespace ignite {
     {
         while (true)
         {
-            AssetJob job{};
+            AssetJob job;
             
             {
-                std::unique_lock lock(s_AssetMutex);
+                std::unique_lock lock(m_Mutex);
                 m_ConditionVariable.wait(lock, [this]() { 
                     return !m_Running || !m_Jobs.empty(); 
                 });

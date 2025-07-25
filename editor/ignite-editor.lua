@@ -94,7 +94,7 @@ filter "configurations:Debug"
 filter "configurations:Release"
     runtime "Release"
     optimize "on"
-    symbols "off"
+    symbols "on"
     defines {
         "NDEBUG"
     }

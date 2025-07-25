@@ -63,7 +63,7 @@ namespace ignite
             }
             case nvrhi::MessageSeverity::Error:
             {
-                LOG_ERROR("NVHRI ERROR: {}\n", messageText);
+                LOG_ASSERT(false, "NVHRI ERROR: {}\n", messageText);
                 break;
             }
             case nvrhi::MessageSeverity::Fatal:
@@ -111,6 +111,12 @@ namespace ignite
     {
         x = m_DPIScaleFactorX;
         y = m_DPIScaleFactorY;
+    }
+
+    void DeviceManager::ResizeBackbuffer(uint32_t width, uint32_t height)
+    {
+        m_DeviceParams.backBufferWidth = width;
+        m_DeviceParams.backBufferHeight = height;
     }
 
     void DeviceManager::CreateBackBuffers()

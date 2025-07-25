@@ -362,14 +362,16 @@ namespace ignite
                 semaphore,
                 vk::Fence(),
                 &m_SwapChainIndex);
-
+            
             if (res == vk::Result::eErrorOutOfDateKHR && attempt < maxAttempts)
             {
                 ResizeSwapChain();
                 CreateBackBuffers();
             }
             else
+            {
                 break;
+            }
         }
 
         m_AcquireSemaphoreIndex = (m_AcquireSemaphoreIndex + 1) % m_AcquireSemaphores.size();
@@ -510,7 +512,7 @@ namespace ignite
             enabledExtensions.instance.insert(name);
         }
 
-        for (const std::string &name : m_DeviceParams.optionalVulaknInstanceExtensions)
+        for (const std::string &name : m_DeviceParams.optionalVulkanInstanceExtensions)
         {
             optionalExtensions.instance.insert(name);
         }

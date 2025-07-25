@@ -112,7 +112,6 @@ namespace ignite
 
         std::filesystem::path m_CurrentSceneFilePath;
         nvrhi::BufferHandle m_DebugRenderBuffer;
-        nvrhi::CommandListHandle m_CommandList;
         nvrhi::StagingTextureHandle m_MousePickingStagingTexture;
         nvrhi::StagingTextureHandle m_ScreenshotStagingTexture;
             

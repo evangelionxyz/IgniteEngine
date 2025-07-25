@@ -48,7 +48,6 @@ namespace ignite
         Layer::OnAttach();
 
         m_Device = Application::GetDeviceManager()->GetDevice();
-        m_CommandList = m_Device->createCommandList();
 
         // write buffer with command list
         Renderer2D::InitQuadData();
@@ -85,7 +84,6 @@ namespace ignite
         Layer::OnUpdate(deltaTime);
 
         Renderer::OnUpdate();
-        AssetImporter::SyncMainThread();
 
         if (!m_ActiveScene)
             return;
@@ -243,14 +241,15 @@ namespace ignite
         }
         }
 
-        m_CommandList->open();
+        nvrhi::CommandListHandle commandList = Renderer::GetActiveCommandList();
+        commandList->open();
         // Create staging texture for read-back
         if (m_Data.isPickingEntity)
         {
             nvrhi::TextureDesc stagingDesc = m_SceneRenderer.GetRenderTarget()->GetColorAttachment(1)->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_MousePickingStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            m_CommandList->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_SceneRenderer.GetRenderTarget()->GetColorAttachment(1), nvrhi::TextureSlice());
+            commandList->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_SceneRenderer.GetRenderTarget()->GetColorAttachment(1), nvrhi::TextureSlice());
         }
 
         if (m_Data.takeScreenshot)
@@ -258,11 +257,11 @@ namespace ignite
             nvrhi::TextureDesc stagingDesc = m_SceneRenderer.GetRenderTarget()->GetColorAttachment(0)->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_ScreenshotStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            m_CommandList->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_SceneRenderer.GetRenderTarget()->GetColorAttachment(0), nvrhi::TextureSlice());
+            commandList->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_SceneRenderer.GetRenderTarget()->GetColorAttachment(0), nvrhi::TextureSlice());
         }
 
-        m_CommandList->close();
-        m_Device->executeCommandList(m_CommandList);
+        commandList->close();
+        m_Device->executeCommandList(commandList);
 
         if (m_Data.takeScreenshot)
         {

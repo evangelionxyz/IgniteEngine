@@ -39,7 +39,6 @@ namespace ignite {
     class AssetImporter
     {
     public:
-        static void SyncMainThread();
         static Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
         static void ImportAsync(AssetHandle handle, const AssetMetaData &metadata, std::function<void(Ref<Asset>, AssetHandle)> callback);
 
@@ -63,11 +62,5 @@ namespace ignite {
     public:
         static void Import(Ref<Environment> *outEnvironment, const std::string &filepath);
         static void UpdateTexture(Ref<Environment> *outEnvironment, const std::string &filepath);
-        static void SyncMainThread();
-
-    private:
-        static Ref<Environment> ImportAsync(Ref<Environment> *outEnvironment, const std::string &filepath);
-        static Ref<Environment> LoadTextureAsync(Ref<Environment> *outEnvironment, const std::string &filepath);
-        static std::future<Ref<Environment>> m_Future;
     };
 }

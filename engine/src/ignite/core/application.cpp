@@ -58,6 +58,7 @@ namespace ignite
         deviceCreateInfo.backBufferWidth = m_CreateInfo.width;
         deviceCreateInfo.backBufferHeight = m_CreateInfo.height;
         deviceCreateInfo.startMaximized = m_CreateInfo.maximized;
+        deviceCreateInfo.swapChainBufferCount = 3;
 
         m_Window = CreateScope<Window>(
             m_CreateInfo.name.c_str(),
@@ -141,7 +142,6 @@ namespace ignite
     {
         DeviceManager *deviceManager = GetDeviceManager();
         nvrhi::IDevice *device = deviceManager->GetDevice();
-        nvrhi::CommandListHandle commandList = device->createCommandList();
 
         while (m_Window->IsLooping())
         {
@@ -195,6 +195,7 @@ namespace ignite
                     {
                         // Clearing framebuffer
                         nvrhi::IFramebuffer *framebuffer = deviceManager->GetCurrentFramebuffer();
+                        nvrhi::CommandListHandle commandList = Renderer::GetActiveCommandList();
                         commandList->open();
                         nvrhi::utils::ClearColorAttachment(commandList, framebuffer, 0, nvrhi::Color(0.0f, 0.0f, 0.0f, 1.0f));
                         commandList->close();
@@ -228,8 +229,6 @@ namespace ignite
             m_PreviousTime = currTime;
             ++m_FrameIndex;
         }
-
-        commandList.Reset();
 
         device->waitForIdle();
 

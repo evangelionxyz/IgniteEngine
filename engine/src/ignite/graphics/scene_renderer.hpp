@@ -94,7 +94,6 @@ namespace ignite
         Ref<EdgeDetection> m_EdgeDetection;
         EdgeDetectionParameter m_EdgeDetectionParams;
 
-        nvrhi::CommandListHandle m_CommandList;
         nvrhi::IDevice *m_Device = nullptr;
 
         Scene *m_Scene = nullptr;

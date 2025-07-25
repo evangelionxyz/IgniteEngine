@@ -72,6 +72,7 @@ namespace ignite {
 
         std::condition_variable m_ConditionVariable;
         std::vector<std::thread> m_Workers;
+        std::mutex m_Mutex;
         std::queue<AssetJob> m_Jobs;
         bool m_Running;
     };

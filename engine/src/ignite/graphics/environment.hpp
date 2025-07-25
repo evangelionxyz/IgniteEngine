@@ -25,6 +25,7 @@
 
 #include "lighting.hpp"
 #include "texture.hpp"
+#include "ignite/asset/asset.hpp"
 
 #include <string>
 #include <filesystem>
@@ -43,7 +44,7 @@ namespace ignite {
         float ambient = 0.5f;
     };
 
-    class Environment
+    class Environment : public Asset
     {
     public:
         Environment();

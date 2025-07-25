@@ -143,7 +143,6 @@ namespace ignite
         }
 
         m_Device = Application::GetGraphicsDevice();
-        m_CommandList = m_Device->createCommandList();
         
         // Create Environment
         CreateEnvironment();
@@ -212,22 +211,23 @@ namespace ignite
 
     void SceneRenderer::Render(const ICamera *camera, bool renderEnvironment)
     {
-        m_CommandList->open();
+        nvrhi::CommandListHandle commandList = Renderer::GetActiveCommandList();
+        commandList->open();
 
         // Composite
-        m_CompositeRenderTarget->ClearColorAttachmentFloat(m_CommandList, 0);
+        m_CompositeRenderTarget->ClearColorAttachmentFloat(commandList, 0);
         
         // Scene Render Target
         CameraConstants cameraBuffer = { camera->GetViewProjectionMatrix(), glm::vec4(camera->position, 1.0f) };
-        m_CommandList->writeBuffer(Renderer::GetCameraBufferHandle(), &cameraBuffer, sizeof(cameraBuffer));
-        m_SceneRenderTarget->ClearColorAttachmentFloat(m_CommandList, 0);
-        m_SceneRenderTarget->ClearColorAttachmentUint(m_CommandList, 1, static_cast<uint32_t>(-1));
+        commandList->writeBuffer(Renderer::GetCameraBufferHandle(), &cameraBuffer, sizeof(cameraBuffer));
+        m_SceneRenderTarget->ClearColorAttachmentFloat(commandList, 0);
+        m_SceneRenderTarget->ClearColorAttachmentUint(commandList, 1, static_cast<uint32_t>(-1));
         static const f32 farDepth = 1.0f; // LessOrEqual
-        m_CommandList->clearDepthStencilTexture(m_SceneRenderTarget->GetDepthAttachment(), nvrhi::AllSubresources,
+        commandList->clearDepthStencilTexture(m_SceneRenderTarget->GetDepthAttachment(), nvrhi::AllSubresources,
             true, farDepth, true, 0); // depth & stencil
 
         nvrhi::IFramebuffer *sceneFramebuffer = m_SceneRenderTarget->GetFramebuffer();
-        
+
         if (renderEnvironment)
         {
             if (m_Environment->isUpdatingTexture)
@@ -242,9 +242,9 @@ namespace ignite
                 m_Environment->isUpdatingTexture = false;
             }
 
-            m_Environment->Render(m_CommandList, sceneFramebuffer, m_EnvironmentPipeline);
+            m_Environment->Render(commandList, sceneFramebuffer, m_EnvironmentPipeline);
         }
-        
+
 
         auto skeletalMeshview = m_Scene->registry->view<Transform, SkeletalMesh>();
         for (entt::entity e : skeletalMeshview)
@@ -262,8 +262,8 @@ namespace ignite
             for (size_t i = 0; i < sm.meshes.size(); ++i)
             {
                 SkeletalMesh::RenderMesh &m = sm.meshes[i];
-                m_CommandList->writeBuffer(m.constantBuffer, &m.constant, sizeof(m.constant));
-                m.material->WriteBuffer(m_CommandList);
+                commandList->writeBuffer(m.constantBuffer, &m.constant, sizeof(m.constant));
+                m.material->WriteBuffer(commandList);
 
                 // render
                 auto state = nvrhi::GraphicsState();
@@ -276,20 +276,20 @@ namespace ignite
                 state.addVertexBuffer({ m.mesh.GetVertexBuffer()->GetHandle(), 0, 0 });
                 state.setIndexBuffer({ m.mesh.GetIndexBuffer()->GetHandle(), nvrhi::Format::R32_UINT });
 
-                m_CommandList->setGraphicsState(state);
+                commandList->setGraphicsState(state);
 
                 nvrhi::DrawArguments args;
                 args.setVertexCount(static_cast<uint32_t>(m.mesh.data.indices.size()));
                 args.instanceCount = 1;
 
-                m_CommandList->drawIndexed(args);
+                commandList->drawIndexed(args);
             }
         }
 
         // 2D Pass
-        Renderer2D::Begin(m_CommandList, sceneFramebuffer);
+        Renderer2D::Begin(commandList, sceneFramebuffer);
         auto object2DView = m_Scene->registry->view<Transform, Sprite2D>();
-        for (entt::entity e: object2DView)
+        for (entt::entity e : object2DView)
         {
             Transform &tr = m_Scene->registry->get<Transform>(e);
             if (!tr.visible)
@@ -299,6 +299,7 @@ namespace ignite
             Ref<Texture> texture = Project::GetAsset<Texture>(sprite.handle);
             Renderer2D::DrawQuad(tr.GetWorldMatrix(), sprite.color, texture, sprite.tilingFactor, static_cast<u32>(e));
         }
+
         Renderer2D::Flush();
         Renderer2D::End();
 
@@ -324,24 +325,24 @@ namespace ignite
                 for (size_t i = 0; i < sm.meshes.size(); ++i)
                 {
                     Mesh &mesh = sm.meshes[i];
-                    m_CommandList->writeBuffer(sm.meshesTransformBuffer[i], &sm.meshesTransform[i], sizeof(sm.meshesTransform[i]));
+                    commandList->writeBuffer(sm.meshesTransformBuffer[i], &sm.meshesTransform[i], sizeof(sm.meshesTransform[i]));
 
                     Material &mat = sm.materials[mesh.data.materialIndex];
-                    mat.WriteBuffer(m_CommandList);
+                    mat.WriteBuffer(commandList);
                 }
             }
 
             if (entity.HasComponent<MeshRenderer>())
             {
                 MeshRenderer &meshRenderer = entity.GetComponent<MeshRenderer>();
-                
+
                 // not loaded mesh
                 if (!meshRenderer.mesh || meshRenderer.mesh->data.meshIndex == -1)
                     continue;
 
                 // write material constant buffer
-                meshRenderer.material->WriteBuffer(m_CommandList);
-                m_CommandList->writeBuffer(meshRenderer.transformBufferHandle, &meshRenderer.transformData, sizeof(meshRenderer.transformData));
+                meshRenderer.material->WriteBuffer(commandList);
+                commandList->writeBuffer(meshRenderer.transformBufferHandle, &meshRenderer.transformData, sizeof(meshRenderer.transformData));
 
                 // render
                 auto state = nvrhi::GraphicsState();
@@ -351,16 +352,16 @@ namespace ignite
 
                 state.bindings = { meshRenderer.bindingSet, meshRenderer.material->bindingSet };
 
-                state.addVertexBuffer({ meshRenderer.mesh->GetVertexBuffer()->GetHandle(), 0, 0});
-                state.setIndexBuffer({ meshRenderer.mesh->GetIndexBuffer()->GetHandle(), nvrhi::Format::R32_UINT});
+                state.addVertexBuffer({ meshRenderer.mesh->GetVertexBuffer()->GetHandle(), 0, 0 });
+                state.setIndexBuffer({ meshRenderer.mesh->GetIndexBuffer()->GetHandle(), nvrhi::Format::R32_UINT });
 
-                m_CommandList->setGraphicsState(state);
+                commandList->setGraphicsState(state);
 
                 nvrhi::DrawArguments args;
                 args.setVertexCount(static_cast<uint32_t>(meshRenderer.mesh->data.indices.size()));
                 args.instanceCount = 1;
 
-                m_CommandList->drawIndexed(args);
+                commandList->drawIndexed(args);
             }
         }
 
@@ -368,11 +369,13 @@ namespace ignite
         m_EdgeDetectionParams.selectedCount = static_cast<uint32_t>(m_SelectedEntities.size());
         if (!m_SelectedEntities.empty())
         {
-            m_CommandList->writeBuffer(m_EdgeDetection->GetSelectedIDBuffer(), m_SelectedEntities.data(), m_SelectedEntities.size() * sizeof(uint32_t));
+            commandList->writeBuffer(m_EdgeDetection->GetSelectedIDBuffer(), m_SelectedEntities.data(), m_SelectedEntities.size() * sizeof(uint32_t));
         }
+
         const uint32_t width = m_SceneRenderTarget->GetWidth();
         const uint32_t height = m_SceneRenderTarget->GetHeight();
-        m_EdgeDetection->ExecuteCompute(m_CommandList, m_EdgeDetectionParams, width, height);
+
+        m_EdgeDetection->ExecuteCompute(commandList, m_EdgeDetectionParams, width, height);
 
         // Composite render
         {
@@ -382,16 +385,16 @@ namespace ignite
             graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding { m_CompositeVertexBuffer->GetHandle(), 0, 0 } };
             graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(m_CompositeRenderTarget->GetFramebuffer()->getFramebufferInfo().getViewport());
             graphicsState.bindings = { m_CompositeBindingSet };
-            m_CommandList->setGraphicsState(graphicsState);
+            commandList->setGraphicsState(graphicsState);
 
             auto args = nvrhi::DrawArguments();
             args.instanceCount = 1;
             args.vertexCount = 6;
-            m_CommandList->draw(args);
+            commandList->draw(args);
         }
 
-        m_CommandList->close();
-        m_Device->executeCommandList(m_CommandList);
+        commandList->close();
+        m_Device->executeCommandList(commandList);
     }
 
     void SceneRenderer::SetFillMode(nvrhi::RasterFillMode mode) const
@@ -403,7 +406,7 @@ namespace ignite
         m_GeometryAnimPipeline->CreatePipeline(m_SceneRenderTarget->GetFramebuffer());
     }
 
-    void SceneRenderer::SetSelectedEntity(const Entity& entity)
+    void SceneRenderer::SetSelectedEntity(const Entity &entity)
     {
         const auto it = std::ranges::find_if(m_SelectedEntities,
             [&](const uint32_t id)
@@ -416,7 +419,7 @@ namespace ignite
             m_SelectedEntities.push_back(entity);
     }
 
-    void SceneRenderer::UnselectEntity(const Entity& entity)
+    void SceneRenderer::UnselectEntity(const Entity &entity)
     {
         auto it = std::ranges::find_if(m_SelectedEntities,
             [&](const uint32_t id)
@@ -440,10 +443,12 @@ namespace ignite
         m_Environment = Environment::Create();
         m_Environment->LoadTexture("resources/hdr/klippad_sunrise_2_2k.hdr");
 
-        m_CommandList->open();
-        m_Environment->WriteBuffer(m_CommandList);
-        m_CommandList->close();
-        m_Device->executeCommandList(m_CommandList);
+        nvrhi::CommandListHandle commandList = Renderer::GetActiveCommandList();
+
+        commandList->open();
+        m_Environment->WriteBuffer(commandList);
+        commandList->close();
+        m_Device->executeCommandList(commandList);
 
         m_Environment->SetSunDirection(50.0f, -27.0f);
     }

@@ -44,6 +44,7 @@ namespace ignite {
         Material,
         TextureCube,
         SkeletalAnimation,
+        Environment,
         Anim2D,
         Skeleton,
         MeshSource, // Mesh Source (contains vertices, indices, etc...)
@@ -68,6 +69,7 @@ namespace ignite {
             case ignite::AssetType::MeshSource: return "MeshSource";
             case ignite::AssetType::Mesh: return "Mesh";
             case ignite::AssetType::Skeleton: return "Skeleton";
+            case ignite::AssetType::Environment: return "Environment";
             case ignite::AssetType::Invalid:
             default: return "Invalid";
         }
@@ -89,6 +91,7 @@ namespace ignite {
         { ".gltf", AssetType::MeshSource },
         { ".skel", AssetType::Skeleton},
         { ".mat", AssetType::Material},
+        { ".ixenv", AssetType::Environment},
     };
 
     static AssetType AssetTypeFromString(const std::string &typeStr)
@@ -105,6 +108,7 @@ namespace ignite {
         if (typeStr == "MeshSource")  return AssetType::MeshSource;
         if (typeStr == "Skeleton")  return AssetType::Skeleton;
         if (typeStr == "Material")  return AssetType::Material;
+        if (typeStr == "Environment")  return AssetType::Environment;
         return AssetType::Invalid;
     }
 

@@ -57,11 +57,6 @@ namespace ignite {
         { AssetType::Material, MeshImporter::ImportMaterial },
     };
 
-    void AssetImporter::SyncMainThread()
-    {
-        EnvironmentImporter::SyncMainThread();
-    }
-
     Ref<Asset> AssetImporter::Import(AssetHandle handle, const AssetMetaData &metadata)
     {
         // should be always importing with full filepath
@@ -112,9 +107,11 @@ namespace ignite {
         {
             // asset handle
             texture->handle = handle;
-            Renderer::Submit([tex = texture](nvrhi::ICommandList *commandList)
+
+            // writing texture data (capture the texture)
+            Renderer::Submit([texture] (auto commandList)
             {
-                tex->Write(commandList);
+                texture->Write(commandList);
             });
         }
 
@@ -124,10 +121,12 @@ namespace ignite {
     Ref<FmodSound> AssetImporter::ImportAudio(AssetHandle handle, const AssetMetaData &metadata)
     {
         Ref<FmodSound> sound = FmodSound::Create(metadata.filepath.filename().string(), metadata.filepath.generic_string(), FMOD_DEFAULT);
+        
         if (sound)
         {
             sound->handle = handle;
         }
+
         return sound;
     }
 
@@ -480,50 +479,27 @@ namespace ignite {
         return mat;
     }
     
-
-    // Environment Importer Class
     void EnvironmentImporter::Import(Ref<Environment> *outEnvironment, const std::string &filepath)
     {
-        m_Future = std::async(std::launch::async, ImportAsync, outEnvironment, filepath);
+        (*outEnvironment) = Environment::Create();
+
+        Project::GetActive()->GetAssetManager().SubmitJob([outEnvironment, filepath]()
+        {
+            (*outEnvironment)->LoadTexture(filepath);
+
+            nvrhi::IDevice *device = Application::GetGraphicsDevice();
+            nvrhi::CommandListHandle commandList = Renderer::GetActiveCommandList();
+            commandList->open();
+
+            (*outEnvironment)->WriteBuffer(commandList);
+
+            commandList->close();
+            device->executeCommandList(commandList);
+        });
     }
 
     void EnvironmentImporter::UpdateTexture(Ref<Environment> *outEnvironment, const std::string &filepath)
     {
-        m_Future = std::async(std::launch::async, LoadTextureAsync, outEnvironment, filepath);
-    }
-
-    void EnvironmentImporter::SyncMainThread()
-    {
-        if (m_Future.valid() && m_Future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
-        {
-            nvrhi::IDevice *device = Application::GetGraphicsDevice();
-
-            nvrhi::CommandListHandle commandList = device->createCommandList(); 
-            
-            Ref<Environment> env = m_Future.get();
-
-            commandList->open();
-            env->WriteBuffer(commandList);
-            commandList->close();
-            device->executeCommandList(commandList);
-
-            env->isUpdatingTexture = true;
-        }
-    }
-
-    Ref<Environment> EnvironmentImporter::ImportAsync(Ref<Environment> *outEnvironment, const std::string &filepath)
-    {
-        (*outEnvironment) = Environment::Create();
         (*outEnvironment)->LoadTexture(filepath);
-        return *outEnvironment;
     }
-
-    Ref<Environment> EnvironmentImporter::LoadTextureAsync(Ref<Environment> *outEnvironment, const std::string &filepath)
-    {
-        (*outEnvironment)->LoadTexture(filepath);
-        return *outEnvironment;
-    }
-
-    std::future<Ref<Environment>> EnvironmentImporter::m_Future;
-
 }

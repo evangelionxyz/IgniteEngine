@@ -85,11 +85,12 @@ namespace ignite
         static nvrhi::BindingLayoutHandle GetBindingLayout(GLayoutMap type);
 
         static void OnUpdate();
-        static void Submit(const std::function<void(nvrhi::ICommandList *)>& func);
+        static void Submit(const std::function<void(nvrhi::ICommandList *)> &func);
 
         static ShaderLibrary &GetShaderLibrary();
 
         static nvrhi::BufferHandle GetCameraBufferHandle();
+        static nvrhi::CommandListHandle GetActiveCommandList();
         
     private:
         nvrhi::GraphicsAPI m_GraphicsAPI;
@@ -101,7 +102,8 @@ namespace ignite
         Ref<Texture> m_BlackTexture;
 
         nvrhi::BufferHandle m_CameraBufferHandle;
-        nvrhi::CommandListHandle m_CommandList;
+        std::array<nvrhi::CommandListHandle, 3> m_CommandLists;
+
         nvrhi::IDevice *m_Device;
         std::vector<std::function<void(nvrhi::ICommandList *)>> m_SubmitFuncs;
 
