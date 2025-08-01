@@ -54,6 +54,8 @@ namespace ignite
 
     void SceneRenderer::Create()
     {
+        m_CommandList = CommandList::Create();
+
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
         // Composite Pipeline & geometry
@@ -82,7 +84,7 @@ namespace ignite
             params.cullMode = nvrhi::RasterCullMode::None;
 
             auto attributes = VertexScreen::GetAttributes();
-            GraphicsPiplineCreateInfo pci;
+            GraphicsPipelineCreateInfo pci;
             pci.attributes = attributes.data();
             pci.attributeCount = static_cast<uint32_t>(attributes.size());
 
@@ -113,7 +115,7 @@ namespace ignite
         // Geometry pipeline
         {
             auto attributes = VertexMesh_Anim::GetAttributes();
-            GraphicsPiplineCreateInfo pci;
+            GraphicsPipelineCreateInfo pci;
             pci.attributes = attributes.data();
             pci.attributeCount = static_cast<uint32_t>(attributes.size());
 
@@ -131,7 +133,7 @@ namespace ignite
             params.comparison = nvrhi::ComparisonFunc::Always;
 
             auto attribute = Environment::GetAttribute();
-            GraphicsPiplineCreateInfo pci;
+            GraphicsPipelineCreateInfo pci;
             pci.attributes = &attribute;
             pci.attributeCount = 1;
 
@@ -209,21 +211,23 @@ namespace ignite
         m_CompositePipeline->CreatePipeline(m_CompositeRenderTarget->GetFramebuffer());
     }
 
-    void SceneRenderer::Render(const ICamera *camera, bool renderEnvironment)
+    void SceneRenderer::Render(ICamera *camera, bool renderEnvironment)
     {
-        nvrhi::CommandListHandle commandList = Renderer::GetActiveCommandList();
-        commandList->open();
+        m_CommandList->Begin();
+
+        auto cmd = m_CommandList->GetActiveHandle();
+
+        // setup camera constants
+        CameraConstants cameraBuffer = { camera->GetViewProjectionMatrix(), glm::vec4(camera->position, 1.0f) };
 
         // Composite
-        m_CompositeRenderTarget->ClearColorAttachmentFloat(commandList, 0);
+        m_CompositeRenderTarget->ClearColorAttachmentFloat(cmd, 0);
         
         // Scene Render Target
-        CameraConstants cameraBuffer = { camera->GetViewProjectionMatrix(), glm::vec4(camera->position, 1.0f) };
-        commandList->writeBuffer(Renderer::GetCameraBufferHandle(), &cameraBuffer, sizeof(cameraBuffer));
-        m_SceneRenderTarget->ClearColorAttachmentFloat(commandList, 0);
-        m_SceneRenderTarget->ClearColorAttachmentUint(commandList, 1, static_cast<uint32_t>(-1));
-        static const f32 farDepth = 1.0f; // LessOrEqual
-        commandList->clearDepthStencilTexture(m_SceneRenderTarget->GetDepthAttachment(), nvrhi::AllSubresources,
+        m_SceneRenderTarget->ClearColorAttachmentFloat(cmd, 0);
+        m_SceneRenderTarget->ClearColorAttachmentUint(cmd, 1, static_cast<uint32_t>(-1));
+        const f32 farDepth = 1.0f; // LessOrEqual
+        cmd->clearDepthStencilTexture(m_SceneRenderTarget->GetDepthAttachment(), nvrhi::AllSubresources,
             true, farDepth, true, 0); // depth & stencil
 
         nvrhi::IFramebuffer *sceneFramebuffer = m_SceneRenderTarget->GetFramebuffer();
@@ -242,12 +246,12 @@ namespace ignite
                 m_Environment->isUpdatingTexture = false;
             }
 
-            m_Environment->Render(commandList, sceneFramebuffer, m_EnvironmentPipeline);
+            m_Environment->Render(cmd, camera, sceneFramebuffer, m_EnvironmentPipeline);
         }
 
 
-        auto skeletalMeshview = m_Scene->registry->view<Transform, SkeletalMesh>();
-        for (entt::entity e : skeletalMeshview)
+        auto skeletalMeshView = m_Scene->registry->view<Transform, SkeletalMesh>();
+        for (entt::entity e : skeletalMeshView)
         {
             Transform &tr = m_Scene->registry->get<Transform>(e);
             if (!tr.visible)
@@ -262,8 +266,8 @@ namespace ignite
             for (size_t i = 0; i < sm.meshes.size(); ++i)
             {
                 SkeletalMesh::RenderMesh &m = sm.meshes[i];
-                commandList->writeBuffer(m.constantBuffer, &m.constant, sizeof(m.constant));
-                m.material->WriteBuffer(commandList);
+                cmd->writeBuffer(m.constantBuffer, &m.constant, sizeof(m.constant));
+                m.material->WriteBuffer(cmd);
 
                 // render
                 auto state = nvrhi::GraphicsState();
@@ -276,18 +280,21 @@ namespace ignite
                 state.addVertexBuffer({ m.mesh.GetVertexBuffer()->GetHandle(), 0, 0 });
                 state.setIndexBuffer({ m.mesh.GetIndexBuffer()->GetHandle(), nvrhi::Format::R32_UINT });
 
-                commandList->setGraphicsState(state);
+                cmd->setGraphicsState(state);
+
+                // push camera constants
+                cmd->setPushConstants(&cameraBuffer, sizeof(CameraConstants));
 
                 nvrhi::DrawArguments args;
-                args.setVertexCount(static_cast<uint32_t>(m.mesh.data.indices.size()));
+                args.setVertexCount(m.mesh.GetIndicesCount());
                 args.instanceCount = 1;
 
-                commandList->drawIndexed(args);
+                cmd->drawIndexed(args);
             }
         }
 
         // 2D Pass
-        Renderer2D::Begin(commandList, sceneFramebuffer);
+        Renderer2D::Begin(cmd, camera, sceneFramebuffer);
         auto object2DView = m_Scene->registry->view<Transform, Sprite2D>();
         for (entt::entity e : object2DView)
         {
@@ -304,7 +311,6 @@ namespace ignite
         Renderer2D::End();
 
 #if 0
-
         for (entt::entity e : m_Scene->entities | std::views::values)
         {
             Entity entity = { e, m_Scene };
@@ -369,13 +375,13 @@ namespace ignite
         m_EdgeDetectionParams.selectedCount = static_cast<uint32_t>(m_SelectedEntities.size());
         if (!m_SelectedEntities.empty())
         {
-            commandList->writeBuffer(m_EdgeDetection->GetSelectedIDBuffer(), m_SelectedEntities.data(), m_SelectedEntities.size() * sizeof(uint32_t));
+            cmd->writeBuffer(m_EdgeDetection->GetSelectedIDBuffer(), m_SelectedEntities.data(), m_SelectedEntities.size() * sizeof(uint32_t));
         }
 
         const uint32_t width = m_SceneRenderTarget->GetWidth();
         const uint32_t height = m_SceneRenderTarget->GetHeight();
 
-        m_EdgeDetection->ExecuteCompute(commandList, m_EdgeDetectionParams, width, height);
+        m_EdgeDetection->ExecuteCompute(cmd, m_EdgeDetectionParams, width, height);
 
         // Composite render
         {
@@ -385,16 +391,15 @@ namespace ignite
             graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding { m_CompositeVertexBuffer->GetHandle(), 0, 0 } };
             graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(m_CompositeRenderTarget->GetFramebuffer()->getFramebufferInfo().getViewport());
             graphicsState.bindings = { m_CompositeBindingSet };
-            commandList->setGraphicsState(graphicsState);
+            cmd->setGraphicsState(graphicsState);
 
             auto args = nvrhi::DrawArguments();
             args.instanceCount = 1;
             args.vertexCount = 6;
-            commandList->draw(args);
+            cmd->draw(args);
         }
 
-        commandList->close();
-        m_Device->executeCommandList(commandList);
+        m_CommandList->Submit();
     }
 
     void SceneRenderer::SetFillMode(nvrhi::RasterFillMode mode) const
@@ -409,10 +414,10 @@ namespace ignite
     void SceneRenderer::SetSelectedEntity(const Entity &entity)
     {
         const auto it = std::ranges::find_if(m_SelectedEntities,
-            [&](const uint32_t id)
-            {
-                return id == static_cast<uint32_t>(entity);
-            });
+        [&](const uint32_t id)
+        {
+            return id == static_cast<uint32_t>(entity);
+        });
 
         // push back if not found
         if (it == m_SelectedEntities.end())
@@ -422,10 +427,10 @@ namespace ignite
     void SceneRenderer::UnselectEntity(const Entity &entity)
     {
         auto it = std::ranges::find_if(m_SelectedEntities,
-            [&](const uint32_t id)
-            {
-                return id == static_cast<uint32_t>(entity);
-            });
+        [&](const uint32_t id)
+        {
+            return id == static_cast<uint32_t>(entity);
+        });
 
         // remove if found
         if (it != m_SelectedEntities.end())
@@ -443,7 +448,7 @@ namespace ignite
         m_Environment = Environment::Create();
         m_Environment->LoadTexture("resources/hdr/klippad_sunrise_2_2k.hdr");
 
-        nvrhi::CommandListHandle commandList = Renderer::GetActiveCommandList();
+        auto commandList = m_CommandList->GetActiveHandle();
 
         commandList->open();
         m_Environment->WriteBuffer(commandList);

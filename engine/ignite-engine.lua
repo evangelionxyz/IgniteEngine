@@ -10,7 +10,19 @@ files {
     "src/ignite/**.cpp",
     "src/ignite/**.hpp",
     "src/ignite/**.h",
+    "%{wks.location}/resources/shaders/**.hlsl",
+    "%{wks.location}/resources/shaders/**.glsl",
 }
+
+-- Set HLSL and GLSL files to not be compiled
+filter "files:**.hlsl"
+    buildaction "None"
+
+filter "files:**.glsl"
+    buildaction "None"
+
+-- Reset filter for the rest of the configuration
+filter {}
 
 includedirs {
     "src",

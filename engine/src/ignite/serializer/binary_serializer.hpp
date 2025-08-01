@@ -176,7 +176,7 @@ namespace ignite
             AppendRaw(buffer, nodeSizeInBytes);
 
             // write mesh vector info
-            uint32_t meshCount = static_cast<uint32_t>(sm->meshes.size());
+            uint32_t meshCount = static_cast<uint32_t>(sm->meshesData.size());
             AppendRaw(buffer, meshCount);
 
             uint32_t meshesSizeInBytes = meshCount * sizeof(MeshData);
@@ -237,7 +237,7 @@ namespace ignite
 
             // write mesh vector
 
-            for (auto &mesh : sm->meshes)
+            for (auto &mesh : sm->meshesData)
             {
                 AppendRaw(buffer, mesh.meshIndex);
                 AppendRaw(buffer, mesh.materialIndex);
@@ -375,7 +375,7 @@ namespace ignite
             }
 
             // read mesh vector
-            meshAsset->meshes.reserve(meshCount);
+            meshAsset->meshesData.reserve(meshCount);
             for (uint32_t meshIndex = 0; meshIndex < meshCount; ++meshIndex)
             {
                 MeshData mesh;
@@ -417,7 +417,7 @@ namespace ignite
                 mesh.indices.resize(indexCount);
                 inFile.read(reinterpret_cast<char *>(mesh.indices.data()), indexCount * sizeof(uint32_t));
 
-                meshAsset->meshes.push_back(mesh);
+                meshAsset->meshesData.push_back(mesh);
             }
 
             inFile.close();

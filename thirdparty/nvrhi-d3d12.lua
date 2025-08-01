@@ -31,6 +31,10 @@ filter "configurations:Debug"
 
 filter "configurations:Release"
     runtime "Release"
+    symbols "on" -- with symbols
+
+filter "configurations:Dist"
+    runtime "Release"
     symbols "off"
 
 --windows

@@ -1,17 +1,17 @@
 /* MIT License
-* 
+*
 * Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
+*
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
 * in the Software without restriction, including without limitation the rights
 * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 * copies of the Software, and to permit persons to whom the Software is
 * furnished to do so, subject to the following conditions:
-* 
+*
 * The above copyright notice and this permission notice shall be included in all
 * copies or substantial portions of the Software.
-* 
+*
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -23,44 +23,32 @@
 
 #pragma once
 
-#include <imgui.h>
-#include <imgui_internal.h>
-#include <string>
-#include "ignite/core/logger.hpp"
 #include "ignite/core/types.hpp"
-
-#include "states.hpp"
+#include <nvrhi/nvrhi.h>
 
 namespace ignite
 {
-    class IPanel
+    class CommandList
     {
     public:
-        IPanel() = default;
-        explicit IPanel(const char *windowTitle)
-            : m_WindowTitle(windowTitle)
+        CommandList(uint32_t count = 0);
+        ~CommandList();
+
+        void Begin();
+        void Submit();
+
+        nvrhi::CommandListHandle GetActiveHandle() const;
+        nvrhi::CommandListHandle GetHandle(uint32_t index) const;
+
+        static Ref<CommandList> Create(uint32_t count = 0);
+
+        operator nvrhi::CommandListHandle() const
         {
+            return GetActiveHandle();
         }
 
-        virtual ~IPanel() = default;
-
-        // from Layer class
-        virtual void OnGuiRender() { }
-
-        // to child class
-        virtual bool IsOpen() { return m_IsOpen; }
-        virtual bool IsFocused() { return m_IsFocused; }
-        virtual bool IsHovered() { return m_IsHovered; }
-        virtual void OnUpdate(f32 deltaTime) { }
-
-        std::string &GetTitle() { return m_WindowTitle; }
-
-    protected:
-        std::string m_WindowTitle;
-        bool m_IsOpen = true;
-        bool m_IsFocused = false;
-        bool m_IsHovered = false;
+    private:
+        std::vector<nvrhi::CommandListHandle> m_CommandLists;
+        nvrhi::IDevice* m_Device;
     };
 }
-
-

@@ -24,6 +24,7 @@
 #pragma once
 #include "ignite/core/types.hpp"
 #include "graphics_pipeline.hpp"
+#include "command_list.hpp"
 
 #include <nvrhi/nvrhi.h>
 #include <ShaderMake/ShaderMake.h>
@@ -89,20 +90,15 @@ namespace ignite
 
         static ShaderLibrary &GetShaderLibrary();
 
-        static nvrhi::BufferHandle GetCameraBufferHandle();
-        static nvrhi::CommandListHandle GetActiveCommandList();
-        
     private:
         nvrhi::GraphicsAPI m_GraphicsAPI;
         ShaderLibrary m_ShaderLibrary;
 
         std::unordered_map<GLayoutMap, nvrhi::BindingLayoutHandle> m_BindingLayouts;
+        Ref<CommandList> m_CommandList;
 
         Ref<Texture> m_WhiteTexture;
         Ref<Texture> m_BlackTexture;
-
-        nvrhi::BufferHandle m_CameraBufferHandle;
-        std::array<nvrhi::CommandListHandle, 3> m_CommandLists;
 
         nvrhi::IDevice *m_Device;
         std::vector<std::function<void(nvrhi::ICommandList *)>> m_SubmitFuncs;

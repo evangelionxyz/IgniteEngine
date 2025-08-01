@@ -88,7 +88,7 @@ namespace ignite
 
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
-        nvrhi::CommandListHandle commandList = Renderer::GetActiveCommandList();
+        nvrhi::CommandListHandle commandList = device->createCommandList();
         commandList->open();
         for (auto &tex : m_Icons | std::views::values)
             tex->Write(commandList);
@@ -249,7 +249,7 @@ namespace ignite
 
         if (!m_Scene->IsPlaying() || true)
         {
-            ImGui::PushID(imguiPushId);
+            ImGui::PushID((int)imguiPushId);
             if (ImGui::BeginPopupContextItem(idComp.name.c_str()))
             {
                 if (ImGui::BeginMenu("Create"))
@@ -310,7 +310,7 @@ namespace ignite
                 SetSelectedEntity(entity);
             }
 
-            ImGui::PushID(imguiPushId);
+            ImGui::PushID((int)imguiPushId);
 
             // second column
             ImGui::TableNextColumn();
@@ -1349,12 +1349,12 @@ namespace ignite
                                             c.meshHandle = *handle;
 
                                             // create meshes
-                                            c.meshes.resize(meshAsset->meshes.size());
-                                            for (size_t i = 0; i < meshAsset->meshes.size(); ++i)
+                                            c.meshes.resize(meshAsset->meshesData.size());
+                                            for (size_t i = 0; i < meshAsset->meshesData.size(); ++i)
                                             {
                                                 SkeletalMesh::RenderMesh &m = c.meshes[i];
 
-                                                m.mesh.data = meshAsset->meshes[i];
+                                                m.mesh.data = meshAsset->meshesData[i];
                                                 m.mesh.CreateBuffers();
                                                 m.mesh.WriteVertexBuffer();
 
@@ -1380,7 +1380,7 @@ namespace ignite
 
                                                 // Create binding set
                                                 auto desc = nvrhi::BindingSetDesc();
-                                                desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraBufferHandle()));
+                                                desc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(CameraConstants)));
                                                 desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m.constantBuffer));
                                                 desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, SceneRenderer::GetActive()->GetEnvironment()->GetDirLightBuffer()));
                                                 desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, SceneRenderer::GetActive()->GetEnvironment()->GetParamsBuffer()));

@@ -40,7 +40,7 @@ namespace ignite {
 
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
-        nvrhi::CommandListHandle commandList = Renderer::GetActiveCommandList();
+        nvrhi::CommandListHandle commandList = device->createCommandList();
         commandList->open();
         for (auto &tex : m_Icons | std::views::values)
             tex->Write(commandList);

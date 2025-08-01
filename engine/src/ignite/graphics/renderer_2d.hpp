@@ -39,6 +39,7 @@ namespace ignite
     class GraphicsPipeline;
     class DeviceManager;
     class Texture;
+    class ICamera;
 
     template<typename VertexType>
     struct BatchRender
@@ -65,15 +66,6 @@ namespace ignite
         }
     };
 
-    struct Renderer2DData
-    {
-        BatchRender<Vertex2DQuad> quadBatch;
-        BatchRender<Vertex2DLine> lineBatch;
-        const uint8_t MAX_TEXTURE_COUNT = 32;
-
-        glm::vec4 quadPositions[4];
-    };
-
     class Renderer2D
     {
     public:
@@ -82,7 +74,7 @@ namespace ignite
         static void CreatePipelines(nvrhi::IFramebuffer *framebuffer);
         static void SetFillMode(nvrhi::RasterFillMode mode);
 
-        static void Begin(nvrhi::ICommandList *commandList, nvrhi::IFramebuffer* framebuffer);
+        static void Begin(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer* framebuffer);
         static void Flush();
         static void End();
 
@@ -104,7 +96,5 @@ namespace ignite
     private:
         static nvrhi::ICommandList *renderCommandList;
         static nvrhi::IFramebuffer *renderFramebuffer;
-
-        static Renderer2DData *s_Data;
     };
 }

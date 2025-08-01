@@ -134,6 +134,10 @@ namespace ignite
         // Update constant buffer
         commandList->writeBuffer(m_ConstantBuffer, &params, sizeof(params));
 
+        // Transition output texture to UAV state before compute
+        commandList->setTextureState(m_OutputTexture, nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::UnorderedAccess);
+        commandList->commitBarriers(); // commit the barriers
+
         // Set compute pipeline
         nvrhi::ComputeState computeState;
         computeState.pipeline = m_Pipeline;
@@ -144,6 +148,10 @@ namespace ignite
         uint32_t groupsX = (width + 7) / 8; // 8x8 threads groups
         uint32_t groupsY = (height + 7) / 8;
         commandList->dispatch(groupsX, groupsY, 1);
+
+        // Transition edge detection output from UAV to ShaderResource for composite pass
+        commandList->setTextureState(m_OutputTexture, nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::ShaderResource);
+        commandList->commitBarriers(); // Commit the barrier before composite pass
     }
 
     Ref<EdgeDetection> EdgeDetection::Create()
@@ -155,11 +163,15 @@ namespace ignite
     {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
+        // Texture creation -> Common state
+        // First use in Compute: Common -> UnorderedAccess (for writing)
+        // After compute       : UnorderedAccess -> ShaderResource (for reading in composite pass)
+
         nvrhi::TextureDesc desc;
         desc.width = width;
         desc.height = height;
         desc.format = nvrhi::Format::RGBA8_UNORM;
-        desc.initialState = nvrhi::ResourceStates::UnorderedAccess | nvrhi::ResourceStates::ShaderResource;
+        desc.initialState = nvrhi::ResourceStates::ShaderResource;
         desc.isUAV = true;
         desc.debugName = "SobelDetection Output Texture";
         m_OutputTexture = device->createTexture(desc);

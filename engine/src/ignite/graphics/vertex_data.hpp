@@ -25,18 +25,13 @@
 
 #include <nvrhi/nvrhi.h>
 #include <glm/glm.hpp>
+#include "ignite/scene/icamera.hpp"
 #include "ignite/core/types.hpp"
 
 namespace ignite
 {
 #define VERTEX_MAX_BONES 4
 #define MAX_BONES 100
-
-    struct CameraConstants
-    {
-        glm::mat4 viewProjection;
-        glm::vec4 position;
-    };
 
     struct SkinnedMeshConstants
     {
@@ -112,7 +107,7 @@ namespace ignite
                 .setRegisterSpace(0) // set 0
                 .setRegisterSpaceIsDescriptorSet(true)
                 .setVisibility(nvrhi::ShaderType::All)
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)) // camera
+                .addItem(nvrhi::BindingLayoutItem::PushConstants(0, sizeof(CameraConstants))) // camera
                 .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1)) // model
                 .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(2)) // directional light
                 .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(3)); // environment
@@ -150,7 +145,7 @@ namespace ignite
                     .setOffset(offsetof(VertexScreen, position))
                     .setElementStride(sizeof(VertexScreen)),
                 nvrhi::VertexAttributeDesc()
-                    .setName("TEXCOORD0")
+                    .setName("TEXCOORD")
                     .setFormat(nvrhi::Format::RG32_FLOAT)
                     .setOffset(offsetof(VertexScreen, texCoord))
                     .setElementStride(sizeof(VertexScreen))

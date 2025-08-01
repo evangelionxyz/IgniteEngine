@@ -24,6 +24,7 @@
 #include "editor_layer.hpp"
 #include "panels/scene_panel.hpp"
 #include "panels/content_browser_panel.hpp"
+#include "panels/model_viewer_panel.hpp"
 
 #include "ignite/core/platform_utils.hpp"
 #include "ignite/core/command.hpp"
@@ -54,8 +55,8 @@ namespace ignite
         Renderer2D::InitLineData();
 
         m_ScenePanel = CreateRef<ScenePanel>("Scene Panel", this);
-
         m_ContentBrowserPanel = CreateRef<ContentBrowserPanel>("Content Browser");
+        m_ModelViewerPanel = CreateRef<ModelViewerPanel>();
 
         // create render target framebuffer
         m_SceneRenderer.Create();
@@ -72,6 +73,8 @@ namespace ignite
                 OpenProject(projectFilepath);
             }
         }
+
+        m_CommandList = CommandList::Create();
     }
 
     void EditorLayer::OnDetach()
@@ -85,14 +88,16 @@ namespace ignite
 
         Renderer::OnUpdate();
 
-        if (!m_ActiveScene)
-            return;
+        // update panels
+        // m_ModelViewerPanel->OnUpdate(deltaTime);
 
-        // multi select entity
-        m_Data.multiSelect = Input::IsKeyPressed(Key::LeftShift);
-
-        switch (m_Data.sceneState)
+        if (m_ActiveScene)
         {
+            // multi select entity
+            m_Data.multiSelect = Input::IsKeyPressed(Key::LeftShift);
+
+            switch (m_Data.sceneState)
+            {
             case State::SceneSimulate:
             case State::ScenePlay:
             {
@@ -104,16 +109,17 @@ namespace ignite
                 m_ActiveScene->OnUpdateEdit(deltaTime);
                 break;
             }
-        }
+            }
 
-        // update panels
-        m_ScenePanel->OnUpdate(deltaTime);
+            m_ScenePanel->OnUpdate(deltaTime);
+        }
     }
 
     void EditorLayer::OnEvent(Event &e)
     {
         Layer::OnEvent(e);
         m_ScenePanel->OnEvent(e);
+        // m_ModelViewerPanel->OnEvent(e);
 
         EventDispatcher dispatcher(e);
         dispatcher.Dispatch<KeyPressedEvent>(BIND_CLASS_EVENT_FN(EditorLayer::OnKeyPressedEvent));
@@ -218,6 +224,8 @@ namespace ignite
     {
         Layer::OnRender(mainFramebuffer);
 
+        // m_ModelViewerPanel->OnRender();
+
         if (!m_ActiveScene)
             return;
 
@@ -241,15 +249,17 @@ namespace ignite
         }
         }
 
-        nvrhi::CommandListHandle commandList = Renderer::GetActiveCommandList();
-        commandList->open();
+        m_CommandList->Begin();
+
+        auto cmd = m_CommandList->GetActiveHandle();
+
         // Create staging texture for read-back
         if (m_Data.isPickingEntity)
         {
             nvrhi::TextureDesc stagingDesc = m_SceneRenderer.GetRenderTarget()->GetColorAttachment(1)->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_MousePickingStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            commandList->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_SceneRenderer.GetRenderTarget()->GetColorAttachment(1), nvrhi::TextureSlice());
+            cmd->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_SceneRenderer.GetRenderTarget()->GetColorAttachment(1), nvrhi::TextureSlice());
         }
 
         if (m_Data.takeScreenshot)
@@ -257,11 +267,10 @@ namespace ignite
             nvrhi::TextureDesc stagingDesc = m_SceneRenderer.GetRenderTarget()->GetColorAttachment(0)->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_ScreenshotStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            commandList->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_SceneRenderer.GetRenderTarget()->GetColorAttachment(0), nvrhi::TextureSlice());
+            cmd->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_SceneRenderer.GetRenderTarget()->GetColorAttachment(0), nvrhi::TextureSlice());
         }
 
-        commandList->close();
-        m_Device->executeCommandList(commandList);
+        m_CommandList->Submit();
 
         if (m_Data.takeScreenshot)
         {
@@ -338,7 +347,6 @@ namespace ignite
 
         if (ImGui::BeginMenuBar())
         {
-
             if (ImGui::BeginMenu("File"))
             {
                 if (ImGui::MenuItem("New Scene", nullptr, false, m_ActiveProject != nullptr))
@@ -518,6 +526,7 @@ namespace ignite
             // scene dockspace
             m_ScenePanel->OnGuiRender();
             m_ContentBrowserPanel->OnGuiRender();
+            // m_ModelViewerPanel->OnGuiRender();
 
             ImGui::Begin("Project");
 
@@ -953,8 +962,6 @@ namespace ignite
                 }
                 ImGui::EndTable();
             }
-            
-
             ImGui::End();
         }
     }

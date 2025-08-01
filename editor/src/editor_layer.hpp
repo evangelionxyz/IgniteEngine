@@ -26,6 +26,7 @@
 #include <nvrhi/nvrhi.h>
 #include "ignite/core/layer.hpp"
 #include "ignite/ignite.hpp"
+#include "ignite/graphics/command_list.hpp"
 #include "ignite/graphics/scene_renderer.hpp"
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/project/project.hpp"
@@ -37,6 +38,7 @@ namespace ignite
     class ShaderFactory;
     class ScenePanel;
     class ContentBrowserPanel;
+    class ModelViewerPanel;
 
     class EditorLayer final : public Layer
     {
@@ -103,6 +105,7 @@ namespace ignite
 
         Ref<ScenePanel> m_ScenePanel;
         Ref<ContentBrowserPanel> m_ContentBrowserPanel;
+        Ref<ModelViewerPanel> m_ModelViewerPanel;
         SceneRenderer m_SceneRenderer;
 
         Ref<Scene> m_ActiveScene;
@@ -114,6 +117,7 @@ namespace ignite
         nvrhi::BufferHandle m_DebugRenderBuffer;
         nvrhi::StagingTextureHandle m_MousePickingStagingTexture;
         nvrhi::StagingTextureHandle m_ScreenshotStagingTexture;
+        Ref<CommandList > m_CommandList;
             
         nvrhi::IDevice *m_Device = nullptr;
 

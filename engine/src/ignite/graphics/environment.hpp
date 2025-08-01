@@ -36,6 +36,7 @@
 namespace ignite {
 
     class GraphicsPipeline;
+    class ICamera;
 
     struct EnvironmentParams
     {
@@ -49,7 +50,7 @@ namespace ignite {
     public:
         Environment();
 
-        void Render(nvrhi::ICommandList *commandList, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline);
+        void Render(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline);
         void LoadTexture(const std::string &filepath);
         void WriteBuffer(nvrhi::ICommandList *commandList);
         void SetSunDirection(float pitch, float yaw);

@@ -191,9 +191,10 @@ namespace ignite
                 float weight = bone->mWeights[weightIndex].mWeight;
 
                 // Find the first empty slot in this vertex's bone array
+                const float EPSILON = 0.00001f;
                 for (uint32_t j = 0; j < VERTEX_MAX_BONES; ++j)
                 {
-                    if (outMeshData.vertices[vertexId].weights[j] < 0.00001f)
+                    if (outMeshData.vertices[vertexId].weights[j] < EPSILON)
                     {
                         outMeshData.vertices[vertexId].boneIDs[j] = boneId;
                         outMeshData.vertices[vertexId].weights[j] = weight;

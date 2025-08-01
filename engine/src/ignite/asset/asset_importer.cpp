@@ -159,28 +159,20 @@ namespace ignite {
             // Load Meshes
             std::vector<Ref<Mesh>> meshes;
             meshes.resize(assimpScene->mNumMeshes);
-            meshAsset->meshes.resize(assimpScene->mNumMeshes);
+            meshAsset->meshesData.resize(assimpScene->mNumMeshes);
 
             for (auto &mesh : meshes)
             {
                 mesh = CreateRef<Mesh>();
             }
 
-            MeshLoader::ProcessNode(assimpScene, assimpScene->mRootNode, metadata.filepath, meshes,
-                meshAsset->nodes, nullptr, -1);
-
+            MeshLoader::ProcessNode(assimpScene, assimpScene->mRootNode, metadata.filepath, meshes, meshAsset->nodes, nullptr, -1);
             MeshLoader::CalculateWorldTransforms(meshAsset->nodes);
 
             for (size_t meshIdx = 0; meshIdx < meshes.size(); ++meshIdx)
             {
                 Ref<Mesh> mesh = meshes[meshIdx];
-                meshAsset->meshes[meshIdx].meshIndex = mesh->data.meshIndex;
-                meshAsset->meshes[meshIdx].materialIndex = mesh->data.materialIndex;
-                meshAsset->meshes[meshIdx].nodeParentID = mesh->data.nodeParentID;
-                meshAsset->meshes[meshIdx].nodeID = mesh->data.nodeID;
-                meshAsset->meshes[meshIdx].name = mesh->data.name;
-                meshAsset->meshes[meshIdx].vertices = mesh->data.vertices;
-                meshAsset->meshes[meshIdx].indices = mesh->data.indices;
+                meshAsset->meshesData[meshIdx] = mesh->data;
             }
 
             // Save to binary
@@ -488,7 +480,7 @@ namespace ignite {
             (*outEnvironment)->LoadTexture(filepath);
 
             nvrhi::IDevice *device = Application::GetGraphicsDevice();
-            nvrhi::CommandListHandle commandList = Renderer::GetActiveCommandList();
+            nvrhi::CommandListHandle commandList = device->createCommandList();
             commandList->open();
 
             (*outEnvironment)->WriteBuffer(commandList);

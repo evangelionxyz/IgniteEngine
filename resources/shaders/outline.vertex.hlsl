@@ -1,14 +1,12 @@
+#include "include/binding_helpers.hlsli"
 
-struct Camera
+struct CameraConstants
 {
-    float4x4 viewProjection;
-    float3 position;
+  float4x4 viewProjection;
+  float4 position;
 };
 
-cbuffer CameraBuffer : register(b0)
-{
-    Camera camera;
-}
+DECLARE_PUSH_CONSTANTS(CameraConstants, g_CameraConstants, 0, 0);
 
 struct VSInput
 {
@@ -23,6 +21,6 @@ struct PSInput
 PSInput main(VSInput input)
 {
     PSInput output;
-    output.position = mul(camera.viewProjection, float4(input.position.x, input.position.y, input.position.z, 1.0f));
+    output.position = mul(g_CameraConstants.viewProjection, float4(input.position.x, input.position.y, input.position.z, 1.0f));
     return output;
 }

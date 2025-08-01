@@ -23,6 +23,7 @@
 
 #include "icamera.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/core/application.hpp"
 
 namespace ignite
 {
@@ -41,6 +42,19 @@ namespace ignite
     , fov(45.0f)
     , projectionType(Type::Orthographic)
     {
+        auto device = Application::GetDeviceManager()->GetDevice();
+
+        // Create camera constant buffer
+        nvrhi::BufferDesc cameraConstantBufferDesc;
+        cameraConstantBufferDesc.byteSize = sizeof(CameraConstants);
+        cameraConstantBufferDesc.isConstantBuffer = true;
+        cameraConstantBufferDesc.isVolatile = true;
+        cameraConstantBufferDesc.debugName = "Camera constant buffer";
+        cameraConstantBufferDesc.initialState = nvrhi::ResourceStates::ConstantBuffer;
+        cameraConstantBufferDesc.keepInitialState = true;
+        cameraConstantBufferDesc.maxVersions = 16;
+
+        m_Buffer = device->createBuffer(cameraConstantBufferDesc);
     }
 
     void ICamera::CreateOrthographic(f32 width, f32 height, f32 zoom, f32 nearClip, f32 farClip)

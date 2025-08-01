@@ -2,10 +2,10 @@
 #include "include/pbr.hlsli"
 #include "include/binding_helpers.hlsli"
 
-struct Camera
+struct CameraConstants
 {
-    float4x4 viewProjection;
-    float4 position;
+  float4x4 viewProjection;
+  float4 position;
 };
 
 struct DirLight
@@ -42,7 +42,7 @@ struct Material
 // push constant buffers
 
 // set 0
-cbuffer CameraBuffer      : register(b0, space0) { Camera camera; }
+DECLARE_PUSH_CONSTANTS(CameraConstants, g_CameraConstants, 0, 0);
 cbuffer ObjectBuffer      : register(b1, space0) { Object object; }
 cbuffer DirLightBuffer    : register(b2, space0) { DirLight dirLight; }
 cbuffer EnvironmentBuffer : register(b3, space0) { Environment env; }
@@ -104,7 +104,7 @@ PSOutput main(PSInput input)
     float3 normalMap = normalMapTex.Sample(sampler0, input.uv).rgb;
 
     float3 normal = normalize(input.normal * normalMap);
-    float3 viewDir = normalize(camera.position.xyz - input.worldPos);
+    float3 viewDir = normalize(g_CameraConstants.position.xyz - input.worldPos);
     float3 lightDir = normalize(dirLight.direction.xyz);
 
     // ===== SUN =====

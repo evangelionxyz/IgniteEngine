@@ -24,7 +24,7 @@
 #pragma once
 
 #include "ignite/core/types.hpp"
-
+#include <nvrhi/nvrhi.h>
 #include <string>
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -35,41 +35,50 @@
 
 namespace ignite
 {
-  class ICamera
-  {
-  public:
-    enum class Type
+    struct CameraConstants
     {
-      Orthographic, Perspective
+        glm::mat4 viewProjection;
+        glm::vec4 position;
     };
 
-    ICamera();
+    class ICamera
+    {
+    public:
+        enum class Type
+        {
+            Orthographic, Perspective
+        };
 
-    void CreateOrthographic(f32 width, f32 height, f32 zoom, f32 nearClip, f32 farClip);
-    void CreatePerspective(f32 fov, f32 width, f32 height, f32 nearClip, f32 farClip);
+        ICamera();
 
-    void UpdateProjectionMatrix();
-    void UpdateViewMatrix();
+        void CreateOrthographic(f32 width, f32 height, f32 zoom, f32 nearClip, f32 farClip);
+        void CreatePerspective(f32 fov, f32 width, f32 height, f32 nearClip, f32 farClip);
 
-    void SetSize(f32 w, f32 h);
-    glm::vec2 GetSize();
-    glm::mat4 GetViewProjectionMatrix() const { return projectionMatrix * viewMatrix; }
+        void UpdateProjectionMatrix();
+        void UpdateViewMatrix();
 
-    glm::vec3 GetUpDirection() const;
-    glm::vec3 GetRightDirection() const;
-    glm::vec3 GetForwardDirection() const;
-    f32 GetAspectRatio() const { return m_AspectRatio; }
+        void SetSize(f32 w, f32 h);
+        glm::vec2 GetSize();
+        glm::mat4 GetViewProjectionMatrix() const { return projectionMatrix * viewMatrix; }
 
-    f32 zoom, width, height;
-    f32 yaw, pitch, fov;
-    f32 nearClip, farClip;
+        glm::vec3 GetUpDirection() const;
+        glm::vec3 GetRightDirection() const;
+        glm::vec3 GetForwardDirection() const;
+        f32 GetAspectRatio() const { return m_AspectRatio; }
 
-    glm::vec3 position;
-    glm::mat4 viewMatrix;
-    glm::mat4 projectionMatrix;
-    Type projectionType;
+        f32 zoom, width, height;
+        f32 yaw, pitch, fov;
+        f32 nearClip, farClip;
 
-  protected:
-    f32 m_AspectRatio = 1.0f;
-  };
+        glm::vec3 position;
+        glm::mat4 viewMatrix;
+        glm::mat4 projectionMatrix;
+        Type projectionType;
+
+        nvrhi::BufferHandle GetBuffer() const { return m_Buffer; }
+
+    protected:
+        nvrhi::BufferHandle m_Buffer;
+        f32 m_AspectRatio = 1.0f;
+    };
 }

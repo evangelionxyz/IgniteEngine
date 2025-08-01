@@ -22,6 +22,7 @@
 */
 
 #include "renderer_2d.hpp"
+#include "ignite/scene/icamera.hpp"
 
 #include <stb_image.h>
 
@@ -37,7 +38,17 @@ namespace ignite
 {
     nvrhi::ICommandList *Renderer2D::renderCommandList = nullptr;
     nvrhi::IFramebuffer *Renderer2D::renderFramebuffer = nullptr;
-    ignite::Renderer2DData *Renderer2D::s_Data = nullptr;
+
+    struct Renderer2DData
+    {
+        BatchRender<Vertex2DQuad> quadBatch;
+        BatchRender<Vertex2DLine> lineBatch;
+        CameraConstants cameraConstants;
+        glm::vec4 quadPositions[4];
+        const uint8_t MAX_TEXTURE_COUNT = 32;
+    };
+
+    static Renderer2DData* s_Data;
 
     void Renderer2D::Init()
     {
@@ -77,7 +88,7 @@ namespace ignite
         // create binding layout
         nvrhi::BindingLayoutDesc bindingLayoutDesc;
         bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
-        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
+        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::PushConstants(0, sizeof(CameraConstants)));
         bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
 
         for (uint8_t i = 0; i < s_Data->MAX_TEXTURE_COUNT; i++)
@@ -92,7 +103,7 @@ namespace ignite
         params.comparison = nvrhi::ComparisonFunc::LessOrEqual;
 
         auto attributes = Vertex2DQuad::GetAttributes();
-        GraphicsPiplineCreateInfo pci;
+        GraphicsPipelineCreateInfo pci;
         pci.attributes = attributes.data();
         pci.attributeCount = static_cast<uint32_t>(attributes.size());
 
@@ -112,31 +123,6 @@ namespace ignite
         // create texture
         s_Data->quadBatch.textureSlots.resize(s_Data->MAX_TEXTURE_COUNT);
         s_Data->quadBatch.textureSlots[0] = Renderer::GetWhiteTexture();
-
-        // then add textures
-        const auto samplerDesc = nvrhi::SamplerDesc()
-            .setAllAddressModes(nvrhi::SamplerAddressMode::Repeat)
-            .setAllFilters(true);
-
-        nvrhi::SamplerHandle sampler = device->createSampler(samplerDesc);
-
-        // create binding set
-        nvrhi::BindingSetDesc bindingSetDesc;
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraBufferHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
-
-        for (uint8_t i  = 0; i < s_Data->MAX_TEXTURE_COUNT; i++)
-        {
-            bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(
-                i, 
-                Renderer::GetWhiteTexture()->GetHandle(),
-                nvrhi::Format::UNKNOWN, 
-                nvrhi::AllSubresources, 
-                nvrhi::TextureDimension::Texture2D));
-        }
-
-        s_Data->quadBatch.bindingSet = device->createBindingSet(bindingSetDesc, s_Data->quadBatch.pipeline->GetBindingLayout(0));
-        LOG_ASSERT(s_Data->quadBatch.bindingSet, "[Renderer 2D] Failed to create binding set");
 
         // write index buffer
         uint32_t *indices = new uint32_t[s_Data->quadBatch.maxIndices];
@@ -158,6 +144,31 @@ namespace ignite
         s_Data->quadBatch.indexBuffer->SetData(Buffer(indices, s_Data->quadBatch.maxIndices * sizeof(uint32_t)));
         
         delete[] indices;
+
+        // create binding sets
+        const auto samplerDesc = nvrhi::SamplerDesc()
+            .setAllAddressModes(nvrhi::SamplerAddressMode::Repeat)
+            .setAllFilters(true);
+
+        nvrhi::SamplerHandle sampler = device->createSampler(samplerDesc);
+
+        // create binding set
+        nvrhi::BindingSetDesc bindingSetDesc;
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(CameraConstants)));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
+
+        for (uint8_t i = 0; i < s_Data->MAX_TEXTURE_COUNT; i++)
+        {
+            bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(
+                i,
+                Renderer::GetWhiteTexture()->GetHandle(),
+                nvrhi::Format::UNKNOWN,
+                nvrhi::AllSubresources,
+                nvrhi::TextureDimension::Texture2D));
+        }
+
+        s_Data->quadBatch.bindingSet = device->createBindingSet(bindingSetDesc, s_Data->quadBatch.pipeline->GetBindingLayout(0));
+        LOG_ASSERT(s_Data->quadBatch.bindingSet, "[Renderer 2D] Failed to create binding set");
         
         s_Data->quadPositions[0] = {-0.5f, -0.5f, 0.0f, 1.0f }; // bottom-left
         s_Data->quadPositions[1] = { 0.5f,  0.5f, 0.0f, 1.0f }; // top-right
@@ -181,7 +192,7 @@ namespace ignite
         params.primitiveType = nvrhi::PrimitiveType::LineList;
 
         auto attributes = Vertex2DLine::GetAttributes();
-        GraphicsPiplineCreateInfo pci;
+        GraphicsPipelineCreateInfo pci;
         pci.attributes = attributes.data();
         pci.attributeCount = static_cast<uint32_t>(attributes.size());
 
@@ -189,10 +200,10 @@ namespace ignite
 
         auto shaderContext = Renderer::GetShaderLibrary().Get("batch_2d_line");
 
-        nvrhi::BindingLayoutDesc bindingDesc;
-        bindingDesc.setVisibility(nvrhi::ShaderType::All);
-        bindingDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
-        nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingDesc);
+        nvrhi::BindingLayoutDesc bindingLayoutDesc;
+        bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
+        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::PushConstants(0, sizeof(CameraConstants)));
+        nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
 
         s_Data->lineBatch.pipeline->AddShader(shaderContext[nvrhi::ShaderType::Vertex].handle, nvrhi::ShaderType::Vertex)
             .AddShader(shaderContext[nvrhi::ShaderType::Pixel].handle, nvrhi::ShaderType::Pixel)
@@ -207,14 +218,16 @@ namespace ignite
         // create binding set
         nvrhi::BindingSetDesc bindingSetDesc;
         // add constant buffer
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraBufferHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(CameraConstants)));
 
         s_Data->lineBatch.bindingSet = device->createBindingSet(bindingSetDesc, s_Data->lineBatch.pipeline->GetBindingLayout(0));
         LOG_ASSERT(s_Data->lineBatch.bindingSet, "[Renderer 2D] Failed to create binding");
     }
 
-    void Renderer2D::Begin(nvrhi::ICommandList* commandList, nvrhi::IFramebuffer* framebuffer)
+    void Renderer2D::Begin(nvrhi::ICommandList* commandList, ICamera* camera, nvrhi::IFramebuffer* framebuffer)
     {
+        s_Data->cameraConstants = { camera->GetViewProjectionMatrix(), glm::vec4(camera->position, 1.0f) };
+
         // Quad data
         s_Data->quadBatch.indexCount = 0;
         s_Data->quadBatch.count = 0;
@@ -247,6 +260,9 @@ namespace ignite
                 .setIndexBuffer({ s_Data->quadBatch.indexBuffer->GetHandle(), nvrhi::Format::R32_UINT});
 
             renderCommandList->setGraphicsState(graphicsState);
+
+            renderCommandList->setPushConstants(&s_Data->cameraConstants, sizeof(CameraConstants));
+
             nvrhi::DrawArguments args;
             args.vertexCount = s_Data->quadBatch.indexCount;
             args.instanceCount = 1;
@@ -267,6 +283,9 @@ namespace ignite
                 .addVertexBuffer(nvrhi::VertexBufferBinding{ s_Data->lineBatch.vertexBuffer->GetHandle(), 0, 0});
 
             renderCommandList->setGraphicsState(graphicsState);
+
+            renderCommandList->setPushConstants(&s_Data->cameraConstants, sizeof(CameraConstants));
+
             nvrhi::DrawArguments args;
             args.vertexCount = s_Data->lineBatch.indexCount;
             args.instanceCount = 1;
@@ -479,7 +498,7 @@ namespace ignite
         nvrhi::SamplerHandle sampler = device->createSampler(samplerDesc);
 
         nvrhi::BindingSetDesc bindingSetDesc;
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraBufferHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(CameraConstants)));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
         for (uint8_t i = 0; i < s_Data->MAX_TEXTURE_COUNT; ++i)
         {

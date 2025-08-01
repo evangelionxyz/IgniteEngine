@@ -22,14 +22,14 @@
 */
 
 #include "environment.hpp"
-#include "ignite/core/logger.hpp"
 #include "vertex_data.hpp"
-
-#include "ignite/core/application.hpp"
-
 #include "graphics_pipeline.hpp"
-
 #include "renderer.hpp"
+
+#include "ignite/scene/icamera.hpp"
+#include "ignite/core/logger.hpp"
+#include "ignite/scene/icamera.hpp"
+#include "ignite/core/application.hpp"
 
 #include <stb_image.h>
 
@@ -121,9 +121,11 @@ namespace ignite {
         LOG_ASSERT(m_DirLightConstantBuffer, "[Environment] Failed to create directional light constant buffer!");
     }
 
-    void Environment::Render(nvrhi::ICommandList *commandList, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline)
+    void Environment::Render(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline)
     {
         isUpdatingTexture = false;
+
+        CameraConstants cameraConstants = { camera->GetViewProjectionMatrix(), glm::vec4(camera->position, 1.0f) };
 
         // write params buffer
         commandList->writeBuffer(m_ParamsConstantBuffer, &params, sizeof(EnvironmentParams));
@@ -143,6 +145,9 @@ namespace ignite {
         }
 
         commandList->setGraphicsState(state);
+
+        // push camera constants
+        commandList->setPushConstants(&cameraConstants, sizeof(CameraConstants));
 
         nvrhi::DrawArguments args;
         args.setVertexCount(36);
@@ -164,7 +169,7 @@ namespace ignite {
 
         // create binding set after load the texture
         nvrhi::BindingSetDesc bsDesc;
-        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraBufferHandle()));
+        bsDesc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(CameraConstants)));
         bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m_ParamsConstantBuffer));
         bsDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_HDRTexture->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_HDRTexture->GetSampler()));
@@ -232,7 +237,7 @@ namespace ignite {
     {
         return nvrhi::BindingLayoutDesc()
             .setVisibility(nvrhi::ShaderType::All)
-            .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0))
+            .addItem(nvrhi::BindingLayoutItem::PushConstants(0, sizeof(CameraConstants)))
             .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1))
             .addItem(nvrhi::BindingLayoutItem::Texture_SRV(0))
             .addItem(nvrhi::BindingLayoutItem::Sampler(0));

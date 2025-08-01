@@ -30,7 +30,7 @@
 
 namespace ignite {
 
-    GraphicsPipeline::GraphicsPipeline(const GraphicsPipelineParams &params, GraphicsPiplineCreateInfo *createInfo)
+    GraphicsPipeline::GraphicsPipeline(const GraphicsPipelineParams &params, GraphicsPipelineCreateInfo *createInfo)
         : m_Params(params), m_CreateInfo(std::move(createInfo))
     {
     }
@@ -156,7 +156,7 @@ namespace ignite {
         LOG_ASSERT(m_InputLayout, "[Graphics Pipeline] Failed to create input layout");
     }
 
-    Ref<GraphicsPipeline> GraphicsPipeline::Create(const GraphicsPipelineParams &params, GraphicsPiplineCreateInfo *createInfo)
+    Ref<GraphicsPipeline> GraphicsPipeline::Create(const GraphicsPipelineParams &params, GraphicsPipelineCreateInfo *createInfo)
     {
         return CreateRef<GraphicsPipeline>(params, createInfo);
     }

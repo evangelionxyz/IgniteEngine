@@ -28,6 +28,7 @@
 #include "graphics_pipeline.hpp"
 #include "render_target.hpp"
 #include "ignite/scene/entity.hpp"
+#include "command_list.hpp"
 
 #include "imgui.h"
 
@@ -51,7 +52,7 @@ namespace ignite
         bool ShouldResize() const;
         void Resize(uint32_t width, uint32_t height);
         void CreatePipelines();
-        void Render(const ICamera *camera, bool renderEnvironment = true);
+        void Render(ICamera *camera, bool renderEnvironment = true);
         void SetFillMode(nvrhi::RasterFillMode mode) const;
 
         void SetSelectedEntity(const Entity& entity);
@@ -71,7 +72,6 @@ namespace ignite
         
         Ref<EdgeDetection> GetEdgeDetection() { return m_EdgeDetection; }
 
-
     private:
         void CreateEnvironment();
         void CreateRenderTargets();
@@ -82,6 +82,7 @@ namespace ignite
         Ref<GraphicsPipeline> m_EnvironmentPipeline;
         Ref<GraphicsPipeline> m_GeometryAnimPipeline;
         Ref<RenderTarget> m_SceneRenderTarget;
+        Ref<CommandList> m_CommandList;
 
         // Composite
         Ref<GraphicsPipeline> m_CompositePipeline;

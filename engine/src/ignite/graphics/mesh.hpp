@@ -92,6 +92,11 @@ namespace ignite {
 
         Ref<VertexBuffer> GetVertexBuffer() { return m_VertexBuffer; }
         Ref<IndexBuffer> GetIndexBuffer() { return m_IndexBuffer; }
+
+        uint32_t GetIndicesCount() const
+        {
+            return static_cast<uint32_t>(data.indices.size());
+        }
         
         MeshData data;
         AABB aabb;
@@ -106,7 +111,7 @@ namespace ignite {
     {
     public:
         std::vector<NodeInfo> nodes;
-        std::vector<MeshData> meshes;
+        std::vector<MeshData> meshesData;
         std::vector<Ref<Material>> materials;
 
         static AssetType GetStaticType() { return AssetType::SkeletalMesh; }
