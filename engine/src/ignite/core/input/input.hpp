@@ -30,6 +30,14 @@
 
 namespace ignite
 {
+    enum class CursorMode
+    {
+        Normal,
+        Hidden,
+        Disabled,
+        Captured
+    };
+
     class Input
     {
     public:
@@ -39,5 +47,7 @@ namespace ignite
         static bool IsKeyPressed(KeyCode keycode);
         static bool IsMouseButtonPressed(MouseCode button);
         static glm::vec2 GetMousePosition();
+        static void SetMousePosition(float x, float y);
+        static void SetCursorMode(CursorMode mode);
     };
 }

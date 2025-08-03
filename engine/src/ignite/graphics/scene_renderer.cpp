@@ -226,9 +226,7 @@ namespace ignite
         // Scene Render Target
         m_SceneRenderTarget->ClearColorAttachmentFloat(cmd, 0);
         m_SceneRenderTarget->ClearColorAttachmentUint(cmd, 1, static_cast<uint32_t>(-1));
-        const f32 farDepth = 1.0f; // LessOrEqual
-        cmd->clearDepthStencilTexture(m_SceneRenderTarget->GetDepthAttachment(), nvrhi::AllSubresources,
-            true, farDepth, true, 0); // depth & stencil
+        m_SceneRenderTarget->ClearDepthAttachment(cmd, 1.0f, 0); // far depth = 1.0f == LessOrEqual
 
         nvrhi::IFramebuffer *sceneFramebuffer = m_SceneRenderTarget->GetFramebuffer();
 
@@ -421,7 +419,9 @@ namespace ignite
 
         // push back if not found
         if (it == m_SelectedEntities.end())
+        {
             m_SelectedEntities.push_back(entity);
+        }
     }
 
     void SceneRenderer::UnselectEntity(const Entity &entity)
@@ -434,7 +434,9 @@ namespace ignite
 
         // remove if found
         if (it != m_SelectedEntities.end())
+        {
             it = m_SelectedEntities.erase(it);
+        }
     }
 
     void SceneRenderer::ClearSelectedEntities()

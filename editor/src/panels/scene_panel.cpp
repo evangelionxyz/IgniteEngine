@@ -74,8 +74,9 @@ namespace ignite
         m_Camera.position = {3.0f, 2.0f, 3.0f};
         m_Camera.yaw = -0.729f;
         m_Camera.pitch = 0.410f;
+        m_Camera.UpdateOrbitPosition();
 
-        m_Camera.UpdateViewMatrix();
+        // m_Camera.UpdateViewMatrix();
         m_Camera.UpdateProjectionMatrix();
 
         // Load icons
@@ -1612,13 +1613,13 @@ namespace ignite
 
         ImGui::Begin("Viewport", nullptr, windowFlags);
 
-        const ImGuiWindow *window = ImGui::GetCurrentWindow();
+        const ImGuiWindow* window = ImGui::GetCurrentWindow();
 
         m_IsFocused = ImGui::IsWindowFocused();
         m_IsHovered = ImGui::IsWindowHovered();
 
         ImVec2 canvasPos = ImGui::GetCursorScreenPos();
-        ImVec2 canvasSize = ImGui::GetContentRegionMax();
+        ImVec2 canvasSize = ImGui::GetContentRegionAvail();
 
         m_ViewportData.rect.min = { canvasPos.x, canvasPos.y };
         m_ViewportData.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
@@ -1640,8 +1641,7 @@ namespace ignite
         // trigger resize
         if (vpWidth > 0 && vpHeight > 0
             && (vpWidth != SceneRenderer::GetActive()->GetRenderTarget()->GetWidth()
-            || vpHeight != SceneRenderer::GetActive()->GetRenderTarget()->GetHeight())
-            )
+            || vpHeight != SceneRenderer::GetActive()->GetRenderTarget()->GetHeight()))
         {
             // prevent resizing each frame
             // just when the mouse is not resizing
@@ -1653,16 +1653,16 @@ namespace ignite
             }
         }
 
-        const ImTextureID tex = reinterpret_cast<ImTextureID>(SceneRenderer::GetActive()->GetCompositeRenderTarget()->GetColorAttachment(0).Get());
-        ImGui::Image(tex, window->Size);
+        const ImTextureID sceneImage = reinterpret_cast<ImTextureID>(SceneRenderer::GetActive()->GetCompositeRenderTarget()->GetColorAttachment(0).Get());
+        ImGui::Image(sceneImage, window->Size);
 
         if (ImGui::BeginDragDropTarget())
         {
-            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("content_browser_item"))
             {
                 if (payload->DataSize == sizeof(AssetHandle))
                 {
-                    AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
+                    AssetHandle* handle = static_cast<AssetHandle*>(payload->Data);
                     if (handle && *handle != AssetHandle(0))
                     {
                         AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(*handle);
@@ -1695,7 +1695,7 @@ namespace ignite
         if (isManipulatingNow && !m_Data.isGizmoManipulating)
         {
             initialTransforms.clear();
-            for (auto [uuid, entity]: m_SelectedEntities)
+            for (auto [uuid, entity] : m_SelectedEntities)
             {
                 // Store the original transform of each selected entity
                 initialTransforms[uuid] = entity.GetTransform();
@@ -1714,11 +1714,11 @@ namespace ignite
                 pivot += entity.GetTransform().translation;
             }
             pivot /= static_cast<float>(m_SelectedEntities.size());
-     
+
             // Step 2: create a transform matrix for the gizmo at the pivot point
             glm::mat4 gizmoTransform = glm::translate(glm::mat4(1.0f), pivot);
             glm::mat4 manipulatedTransform = gizmoTransform; // This will be modified by the gizmo
-     
+
             // Step 3: Manipulate the matrix
             m_Gizmo.Manipulate(manipulatedTransform);
 
@@ -1729,15 +1729,15 @@ namespace ignite
 
                 // Decompose the total delta
                 glm::vec3 deltaTranslation, deltaScale, deltaRotation;
-                Math::DecomposeTransformEuler(gizmoDelta , deltaTranslation, deltaRotation, deltaScale);
-                
+                Math::DecomposeTransformEuler(gizmoDelta, deltaTranslation, deltaRotation, deltaScale);
+
                 for (auto [uuid, entity] : m_SelectedEntities)
                 {
                     // Get the live transform component to apply changes to it
-                    Transform &tr = entity.GetTransform();
-     
+                    Transform& tr = entity.GetTransform();
+
                     // Get the ORIGINAL transform we stored at the beginning of the manipulation
-                    const Transform &initialTransform = initialTransforms.at(uuid);
+                    const Transform& initialTransform = initialTransforms.at(uuid);
                     glm::mat4 initialWorldMatrix = initialTransform.GetWorldMatrix();
 
                     // Apply Translation and Rotation around the shared pivot
@@ -1749,12 +1749,12 @@ namespace ignite
                     glm::mat4 newWorldMatrix = fromPivot * noScaleDelta * toPivot * tr.GetWorldMatrix();
                     glm::vec3 newTranslation, newRotationEuler, newScale;
                     Math::DecomposeTransformEuler(newWorldMatrix, newTranslation, newRotationEuler, newScale);
-                    
+
                     // ----- Apply Scale and Update Local Transform -----
                     if (entity.GetParentUUID() != UUID(0))
                     {
                         Entity parent = SceneManager::GetEntity(m_Scene, entity.GetParentUUID());
-                        const Transform &parentTr = parent.GetTransform();
+                        const Transform& parentTr = parent.GetTransform();
                         glm::mat4 parentWorld = parentTr.GetWorldMatrix();
                         glm::mat4 localMatrix = glm::inverse(parentWorld) * newWorldMatrix;
 
@@ -1780,7 +1780,7 @@ namespace ignite
         }
         else if (Entity entity = GetSelectedEntity())
         {
-            Transform &tr = entity.GetTransform();
+            Transform& tr = entity.GetTransform();
             glm::mat4 transformMatrix = tr.GetWorldMatrix();
 
             m_Gizmo.Manipulate(transformMatrix);
@@ -1793,7 +1793,7 @@ namespace ignite
                 if (entity.GetParentUUID() != UUID(0))
                 {
                     Entity parent = SceneManager::GetEntity(m_Scene, entity.GetParentUUID());
-                    const Transform &parentTr = parent.GetTransform();
+                    const Transform& parentTr = parent.GetTransform();
                     glm::vec4 localTranslation = glm::inverse(parentTr.GetWorldMatrix()) * glm::vec4(translation, 1.0f);
                     tr.localTranslation = localTranslation;
                     tr.localRotation = glm::inverse(parentTr.rotation) * glm::quat(rotation);
@@ -1809,16 +1809,12 @@ namespace ignite
             }
         }
 
-        ImGui::End();
-
         // TOOLBAR: 
-        ImGui::SetNextWindowPos(canvasPos, ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.8f);
-        ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize);
-
+        const ImVec2 toolbarPadding = { 8.0f, 8.0f };
+        ImGui::SetCursorScreenPos({ window->DC.CursorStartPos.x + toolbarPadding.x, window->DC.CursorStartPos.y + toolbarPadding.y });
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 12.0f, 5.0f });
 
-        constexpr ImVec2 buttonSize = { 20.0f, 20.0f };
+        constexpr ImVec2 buttonSize = { 24.0f, 24.0f };
         auto mode = m_Gizmo.GetMode();
         std::string gizmoModeStr = mode == ImGuizmo::MODE::LOCAL ? "LOCAL" : "WORLD";
         if (ImGui::Button(gizmoModeStr.c_str(), buttonSize))
@@ -1889,7 +1885,6 @@ namespace ignite
         ImGui::PopStyleVar(1);
         
         ImGui::End();
-
 
         // Camera Preview
         // ImGui::SetNextWindowPos(canvasPos, ImGuiCond_Always);
@@ -2023,57 +2018,7 @@ namespace ignite
     {
         if (m_IsHovered)
         {
-            const f32 dx = event.GetXOffset(), dy = event.GetYOffset();
-
-            switch (m_Camera.projectionType)
-            {
-                case ICamera::Type::Perspective:
-                {
-                    if (Input::IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
-                    {
-                        m_CameraData.moveSpeed += dy;
-                        m_CameraData.moveSpeed = glm::clamp(m_CameraData.moveSpeed, 0.5f, m_CameraData.maxMoveSpeed);
-                    }
-                    else
-                    {
-                        m_Camera.position += m_Camera.GetForwardDirection() * dy * m_CameraData.moveSpeed * 0.5f;
-                    }
-                    break;
-                }
-                case ICamera::Type::Orthographic:
-                default:
-                {
-                    const f32 scaleFactor = std::max(m_ViewportData.rect.GetSize().x, m_ViewportData.rect.GetSize().y);
-                    const f32 zoomSqrt = glm::sqrt(m_Camera.zoom * m_Camera.zoom);
-                    const f32 moveSpeed = 50.0f / scaleFactor;
-                    const f32 mulFactor = moveSpeed * m_Camera.GetAspectRatio() * zoomSqrt;
-                    if (Input::IsKeyPressed(KEY_LEFT_SHIFT))
-                    {
-                        if (Input::IsKeyPressed(KEY_LEFT_CONTROL))
-                        {
-                            m_Camera.position -= m_Camera.GetRightDirection() * dy * mulFactor;
-                            m_Camera.position += m_Camera.GetUpDirection() * dx * mulFactor;
-                        }
-                        else
-                        {
-                            m_Camera.position -= m_Camera.GetRightDirection() * dx * mulFactor;
-                            m_Camera.position += m_Camera.GetUpDirection() * dy * mulFactor;
-                        }
-                    }
-                    else
-                    {
-                        m_Camera.zoom -= dy * zoomSqrt * 0.1f;
-                        m_Camera.zoom = glm::clamp(m_Camera.zoom, 1.0f, 100.0f);
-                    }
-                    break;
-                }
-            }
-
-            if (m_IsFocused)
-            {
-            }
-
-            m_Camera.UpdateViewMatrix();
+            m_Camera.ProcessMouseScroll(event.GetYOffset(), !Input::IsMouseButtonPressed(MOUSE_BUTTON_RIGHT));
         }
 
         return false;
@@ -2121,83 +2066,86 @@ namespace ignite
             LOG_INFO(j->ToString());
         }
 
-        if (!m_IsHovered)
+        if (!m_IsHovered && !m_ViewportData.wantMouseDragging)
             return;
 
-        
+        bool mouseButtonDown = Input::IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) || Input::IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE);
+        m_ViewportData.wantMouseDragging = mouseButtonDown;
+
+        Input::SetCursorMode(mouseButtonDown ? CursorMode::Disabled : CursorMode::Normal);
+
         // Static to preserve state between frames
-        static glm::vec2 lastMousePos = { ImGui::GetMousePos().x, ImGui::GetMousePos().y };
-        glm::vec2 currentMousePos = { ImGui::GetMousePos().x, ImGui::GetMousePos().y };
+        static glm::vec2 lastMousePos = Input::GetMousePosition();
+        glm::vec2 currentMousePos = Input::GetMousePosition();
         glm::vec2 mouseDelta = { 0.0f, 0.0f };
 
-        // Only update mouseDelta when a mouse button is pressed
-        bool mbPressed = Input::IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || Input::IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) || Input::IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE);
+        if (mouseButtonDown)
+        {
+            const auto window = Application::GetInstance()->GetWindow();
+            const glm::vec2 windowPos = window->GetPosition();
+            const glm::vec2 framebufferSize = window->GetFramebufferSize();
 
-        if (mbPressed)
-            mouseDelta = currentMousePos - lastMousePos;
+            const float offset = 20.0f;
+            bool clamped = false;
+            if (currentMousePos.x < windowPos.x + offset)
+            {
+                float newX = framebufferSize.x - offset;
+                Input::SetMousePosition(newX, currentMousePos.y);
+                currentMousePos = Input::GetMousePosition();
+                clamped = true;
+            }
+
+            if (currentMousePos.x > framebufferSize.x - offset)
+            {
+                float newX = windowPos.x + offset;
+                Input::SetMousePosition(windowPos.x + offset, currentMousePos.y);
+                currentMousePos = Input::GetMousePosition();
+                clamped = true;
+            }
+
+            if (currentMousePos.y > framebufferSize.y - offset)
+            {
+                float newY = windowPos.y + offset;
+                Input::SetMousePosition(currentMousePos.x, newY);
+                currentMousePos = Input::GetMousePosition();
+                clamped = true;
+            }
+
+            if (currentMousePos.y < windowPos.y + offset)
+            {
+                float newY = framebufferSize.y - offset;
+                Input::SetMousePosition(currentMousePos.x, newY);
+                currentMousePos = Input::GetMousePosition();
+                clamped = true;
+            }
+
+            if (clamped)
+            {
+                // Reset lastMousePos to avoid an artificial delta jump
+                lastMousePos = currentMousePos;
+                mouseDelta = { 0.0f, 0.0f };
+            }
+            else
+            {
+                mouseDelta = currentMousePos - lastMousePos;
+            }
+
+            // Mouse input
+            if (Input::IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
+                m_Camera.ProcessMouseMovement(deltaTime, mouseDelta.x, mouseDelta.y);
+            else if (Input::IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE))
+                m_Camera.ProcessMousePanning(deltaTime, mouseDelta.x, mouseDelta.y);
+
+            // Key input
+            m_Camera.ProcessKeyboardInput(deltaTime, Input::IsKeyPressed(KEY_W), Input::IsKeyPressed(KEY_S), Input::IsKeyPressed(KEY_D), Input::IsKeyPressed(KEY_A), false, false);
+        }
         else
+        {
             mouseDelta = { 0.0f, 0.0f };
+        }
 
         lastMousePos = currentMousePos;
 
-        const f32 x = std::min(m_ViewportData.rect.GetSize().x * 0.01f, 1.8f);
-        const f32 y = std::min(m_ViewportData.rect.GetSize().y * 0.01f, 1.8f);
-        const f32 xFactor = 0.0366f * (x * x) - 0.1778f * x + 0.3021f;
-        const f32 yFactor = 0.0366f * (y * y) - 0.1778f * y + 0.3021f;
-        const f32 yawSign = m_Camera.GetUpDirection().y < 0 ? -1.0f : 1.0f;
-
-        const bool control = Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl);
-        const bool shift = Input::IsKeyPressed(Key::LeftShift) || Input::IsKeyPressed(Key::RightShift);
-
-        // skip keyboard control
-        if (control || shift || mbPressed == false)
-            return;
-
-        if (m_Camera.projectionType == ICamera::Type::Orthographic)
-        {
-            if (Input::IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE))
-            {
-                m_Camera.position.x += -mouseDelta.x * xFactor * m_Camera.zoom * 0.005f;
-                m_Camera.position.y += mouseDelta.y * yFactor * m_Camera.zoom * 0.005f;
-            }
-        }
-
-        if (m_Camera.projectionType == ICamera::Type::Perspective)
-        {
-            // mouse input
-            if (Input::IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
-            {
-                m_Camera.yaw += yawSign * m_CameraData.rotationSpeed * mouseDelta.x * xFactor * 0.03f;
-                m_Camera.pitch += m_CameraData.rotationSpeed * mouseDelta.y * yFactor * 0.03f;
-                m_Camera.pitch = glm::clamp(m_Camera.pitch, -89.0f, 89.0f);
-            }
-            else if (Input::IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE))
-            {
-                m_Camera.position += m_Camera.GetRightDirection() * mouseDelta.x * xFactor * m_CameraData.moveSpeed * 0.03f;
-                m_Camera.position += m_Camera.GetUpDirection() * -mouseDelta.y * yFactor * m_CameraData.moveSpeed * 0.03f;
-            }
-
-            // key input
-            if (Input::IsKeyPressed(KEY_W))
-            {
-                m_Camera.position += m_Camera.GetForwardDirection() * deltaTime * m_CameraData.moveSpeed;
-            }
-            else if (Input::IsKeyPressed(KEY_S))
-            {
-                m_Camera.position -= m_Camera.GetForwardDirection() * deltaTime * m_CameraData.moveSpeed;
-            }
-            
-            if (Input::IsKeyPressed(KEY_A))
-            {
-                m_Camera.position -= m_Camera.GetRightDirection() * deltaTime * m_CameraData.moveSpeed;
-            }
-            else if (Input::IsKeyPressed(KEY_D))
-            {
-                m_Camera.position += m_Camera.GetRightDirection() * deltaTime * m_CameraData.moveSpeed;
-            }
-        }
-
-        m_Camera.UpdateViewMatrix();
     }
 
     void ScenePanel::DestroyEntity(Entity entity)

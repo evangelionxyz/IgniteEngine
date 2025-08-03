@@ -189,9 +189,6 @@ namespace ignite
         m_DeviceManager->m_WindowIsInFocus = true;
 
         m_DeviceManager->CreateBackBuffers();
-
-        m_DeviceManager->m_DeviceParams.backBufferWidth = 0;
-        m_DeviceManager->m_DeviceParams.backBufferHeight = 0;
     }
 
     void Window::PollEvents()
@@ -232,6 +229,20 @@ namespace ignite
     void Window::Restore() const
     {
         glfwRestoreWindow(m_DeviceManager->m_Window);
+    }
+    
+    glm::vec2 Window::GetPosition()
+    {
+        int xPos, yPos;
+        glfwGetWindowPos(m_DeviceManager->m_Window, &xPos, &yPos);
+        return { static_cast<float>(xPos), static_cast<float>(yPos) };
+    }
+
+    glm::vec2 Window::GetFramebufferSize()
+    {
+        float width = static_cast<float>(m_DeviceManager->m_DeviceParams.backBufferWidth);
+        float height = static_cast<float>(m_DeviceManager->m_DeviceParams.backBufferHeight);
+        return { width, height };
     }
 
     void Window::SetCallbacks() const

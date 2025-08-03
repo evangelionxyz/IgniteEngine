@@ -124,6 +124,7 @@ namespace ignite
         {
             Rect rect = { 0, 0, 1, 1 };
             glm::vec2 mousePos = glm::vec2(0.0f);
+            bool wantMouseDragging = false;
         } m_ViewportData;
 
         std::unordered_map<std::string, Ref<Texture>> m_Icons;

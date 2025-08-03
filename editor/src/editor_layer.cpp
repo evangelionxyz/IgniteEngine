@@ -136,6 +136,15 @@ namespace ignite
 
         switch (event.GetKeyCode())
         {
+            case Key::F:
+            {
+                Entity entity = m_ScenePanel->GetSelectedEntity();
+                if (entity.IsValid())
+                {
+                    m_ScenePanel->GetViewportCamera().SetOrbitingTarget(entity.GetComponent<Transform>().translation);
+                }
+                break;
+            }
             case Key::Escape:
             {
                 if (m_ScenePanel->IsFocused())
@@ -311,7 +320,8 @@ namespace ignite
                 {
                     if (uint32_t eId = static_cast<uint32_t>(e); eId == m_Data.hoveredEntity)
                     {
-                        m_ScenePanel->SetSelectedEntity(Entity{ e, m_ActiveScene.get() });
+                        Entity entity { e, m_ActiveScene.get() };
+                        m_ScenePanel->SetSelectedEntity(entity);
                         found = true;
                         break;
                     }

@@ -31,6 +31,7 @@
 
 #include "ignite/core/types.hpp"
 
+#include <glm/glm.hpp>
 #include <list>
 
 namespace ignite
@@ -58,6 +59,9 @@ namespace ignite
         void Iconify() const;
         void Maximize() const;
         void Restore() const;
+
+        glm::vec2 GetPosition();
+        glm::vec2 GetFramebufferSize();
 
     private:
         void SetCallbacks() const;
