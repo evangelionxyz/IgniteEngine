@@ -379,6 +379,8 @@ namespace ignite
             for (uint32_t meshIndex = 0; meshIndex < meshCount; ++meshIndex)
             {
                 MeshData mesh;
+                mesh.aabb.min = glm::vec3(FLT_MAX);
+                mesh.aabb.max = glm::vec3(-FLT_MAX);
 
                 inFile.read(reinterpret_cast<char *>(&mesh.meshIndex), sizeof(mesh.meshIndex));
                 inFile.read(reinterpret_cast<char *>(&mesh.materialIndex), sizeof(mesh.materialIndex));
@@ -409,6 +411,10 @@ namespace ignite
                     inFile.read(reinterpret_cast<char *>(&vertex.color), sizeof(vertex.color));
                     inFile.read(reinterpret_cast<char *>(vertex.boneIDs), sizeof(vertex.boneIDs));
                     inFile.read(reinterpret_cast<char *>(vertex.weights), sizeof(vertex.weights));
+
+                    // load aabb
+                    mesh.aabb.min = glm::min(mesh.aabb.min, vertex.position);
+                    mesh.aabb.max = glm::max(mesh.aabb.max, vertex.position);
 
                     mesh.vertices.push_back(vertex);
                 }

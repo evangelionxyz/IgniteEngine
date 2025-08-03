@@ -33,7 +33,6 @@ struct VSInput
     float4 color        : COLOR;
     uint4 boneIDs       : BONEIDS;
     float4 weights      : WEIGHTS;
-    uint entityID       : ENTITYID;
 };
 
 struct PSInput
@@ -43,7 +42,6 @@ struct PSInput
     float3 worldPos     : WORLDPOS;
     float2 UV           : TEXCOORD;
     float4 color        : COLOR;
-    uint entityID       : ENTITYID;
 };
 
 PSInput main(VSInput input)
@@ -84,6 +82,5 @@ PSInput main(VSInput input)
     output.worldPos     = worldPos.xyz;
     output.UV           = input.UV;
     output.color        = input.color;
-    output.entityID     = input.entityID;
     return output;
 }

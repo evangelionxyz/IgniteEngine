@@ -213,6 +213,8 @@ namespace ignite
 
     void SceneRenderer::Render(ICamera *camera, bool renderEnvironment)
     {
+        m_EntityBounds.clear();
+
         m_CommandList->Begin();
 
         auto cmd = m_CommandList->GetActiveHandle();
@@ -264,6 +266,39 @@ namespace ignite
                     auto& m = sm.meshes[i];
                     LOG_ASSERT(m, "[SceneRenderer] Mesh instance is null");
 
+                    m->constant.transformation = tr.GetWorldMatrix();
+
+                    // Recalculate the AABB using the full world transform.
+                    glm::mat4 worldMatrix = tr.GetWorldMatrix();
+                    glm::vec3 origMin = m->mesh.data.aabb.min;
+                    glm::vec3 origMax = m->mesh.data.aabb.max;
+
+                    glm::vec3 corners[8] = {
+                        glm::vec3(origMin.x, origMin.y, origMin.z),
+                        glm::vec3(origMax.x, origMin.y, origMin.z),
+                        glm::vec3(origMin.x, origMax.y, origMin.z),
+                        glm::vec3(origMax.x, origMax.y, origMin.z),
+                        glm::vec3(origMin.x, origMin.y, origMax.z),
+                        glm::vec3(origMax.x, origMin.y, origMax.z),
+                        glm::vec3(origMin.x, origMax.y, origMax.z),
+                        glm::vec3(origMax.x, origMax.y, origMax.z)
+                    };
+
+                    glm::vec3 transformedMin(FLT_MAX);
+                    glm::vec3 transformedMax(-FLT_MAX);
+
+                    for (const auto& corner : corners)
+                    {
+                        glm::vec3 worldPos = glm::vec3(worldMatrix * glm::vec4(corner, 1.0f));
+                        transformedMin = glm::min(transformedMin, worldPos);
+                        transformedMax = glm::max(transformedMax, worldPos);
+                    }
+
+                    AABB worldAABB;
+                    worldAABB.min = transformedMin;
+                    worldAABB.max = transformedMax;
+                    m_EntityBounds.push_back(worldAABB);
+
                     cmd->writeBuffer(m->constantBuffer, &m->constant, sizeof(m->constant));
                     m->material->WriteBuffer(cmd);
 
@@ -305,6 +340,11 @@ namespace ignite
             Sprite2D &sprite = m_Scene->registry->get<Sprite2D>(e);
             Ref<Texture> texture = Project::GetAsset<Texture>(sprite.handle);
             Renderer2D::DrawQuad(tr.GetWorldMatrix(), sprite.color, texture, sprite.tilingFactor, static_cast<u32>(e));
+        }
+
+        for (auto &aabb : m_EntityBounds)
+        {
+            Renderer2D::DrawAABB(aabb, { 1.0f, 0.0f, 0.0f, 1.0f });
         }
 
         Renderer2D::Flush();

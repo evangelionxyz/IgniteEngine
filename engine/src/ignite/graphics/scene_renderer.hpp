@@ -91,6 +91,7 @@ namespace ignite
         nvrhi::BindingSetHandle m_CompositeBindingSet;
 
         std::vector<uint32_t> m_SelectedEntities;
+        std::vector<AABB> m_EntityBounds;
 
         Ref<EdgeDetection> m_EdgeDetection;
         EdgeDetectionParameter m_EdgeDetectionParams;

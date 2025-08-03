@@ -72,6 +72,7 @@ namespace ignite {
         std::string name;
         std::vector<VertexMesh_Anim> vertices;
         std::vector<uint32_t> indices;
+        AABB aabb;
     };
 
     class Mesh
@@ -82,7 +83,6 @@ namespace ignite {
         Mesh(const Mesh &other)
         {
             data = other.data;
-            aabb = other.aabb;
             CreateBuffers();
         }
 
@@ -97,7 +97,6 @@ namespace ignite {
         }
         
         MeshData data;
-        AABB aabb;
 
     private:
         Ref<VertexBuffer> m_VertexBuffer;

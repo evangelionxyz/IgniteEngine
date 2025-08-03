@@ -64,7 +64,6 @@ struct PSInput
     float3 worldPos : WORLDPOS;
     float2 uv : TEXCOORD;
     float4 color : COLOR;
-    uint entityID : ENTITYID;
 };
 
 float3 CalcDirLight(float3 ldirection, float3 lcolor, float3 normal, float3 viewDirection, float3 diffTexColor, float shadow)
@@ -86,7 +85,6 @@ float3 CalcDirLight(float3 ldirection, float3 lcolor, float3 normal, float3 view
 struct PSOutput
 {
     float4 color : SV_TARGET0;
-    uint4 entityID : SV_TARGET1;
 };
 
 PSOutput main(PSInput input)
@@ -155,7 +153,7 @@ PSOutput main(PSInput input)
     PSOutput result;
     lighting = FilmicTonemap(lighting, env.exposure, env.gamma);
     result.color = float4(lighting, 1.0);
-    result.entityID = uint4(input.entityID, input.entityID, input.entityID, input.entityID);
+    // result.entityID = uint4(input.entityID, input.entityID, input.entityID, input.entityID);
     
     return result;
 }

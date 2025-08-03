@@ -92,7 +92,7 @@ namespace ignite
             // Store mesh index in the node
             nodes[currentNodeID].meshIndices.push_back(meshIndex);
 
-            LoadSingleMesh(assimpMesh, mesh->data, mesh->aabb);
+            LoadSingleMesh(assimpMesh, mesh->data, mesh->data.aabb);
 
             // Load bones
             if (skeleton != nullptr && assimpMesh->HasBones())

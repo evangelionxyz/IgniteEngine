@@ -46,7 +46,6 @@ namespace ignite
         glm::vec3 normal;
         glm::vec2 texCoord;
         glm::vec4 color;
-        uint32_t entityID;
     };
 
     struct VertexMesh_Anim
@@ -57,11 +56,10 @@ namespace ignite
         glm::vec4 color;
         uint32_t boneIDs[VERTEX_MAX_BONES] = { 0 };
         float weights[VERTEX_MAX_BONES] = { 0.0f };
-        uint32_t entityID; // should not be serialized
 
-        static std::array<nvrhi::VertexAttributeDesc, 7> GetAttributes()
+        static std::array<nvrhi::VertexAttributeDesc, 6> GetAttributes()
         {
-            return 
+            return
             {
                 nvrhi::VertexAttributeDesc()
                     .setName("POSITION")
@@ -92,11 +90,6 @@ namespace ignite
                     .setName("WEIGHTS")
                     .setFormat(nvrhi::Format::RGBA32_FLOAT)
                     .setOffset(offsetof(VertexMesh_Anim, weights))
-                    .setElementStride(sizeof(VertexMesh_Anim)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("ENTITYID")
-                    .setFormat(nvrhi::Format::R32_UINT)
-                    .setOffset(offsetof(VertexMesh_Anim, entityID))
                     .setElementStride(sizeof(VertexMesh_Anim))
             };
         }

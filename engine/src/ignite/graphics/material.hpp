@@ -162,6 +162,8 @@ namespace ignite
         Material();
         Material(const aiScene *aiScene, aiMaterial *aiMat, const std::filesystem::path &baseFilepath);
 
+        ~Material();
+
         std::string name;
 
         MaterialConstants params;

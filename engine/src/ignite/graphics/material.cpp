@@ -96,6 +96,11 @@ namespace ignite
         // _reflective = reflectivity > 0.0f
     }
 
+    Material::~Material()
+    {
+        s_TextureCache.clear();
+    }
+
     void Material::LoadTexture(const aiScene* aiScene, const aiMaterial* aiMat, const std::filesystem::path& filepath, MaterialTextureType textureType)
     {
         const aiTextureType type = GetAssimpTextureType(textureType);

@@ -29,6 +29,8 @@
 #include "renderer.hpp"
 #include "shader.hpp"
 
+#include "ignite/math/aabb.hpp"
+
 #include "vertex_buffer.hpp"
 #include "index_buffer.hpp"
 
@@ -82,6 +84,7 @@ namespace ignite
         static void DrawRect(const glm::mat4& transform, const glm::vec4& color = glm::vec4(1.0f), uint32_t entityID = 0);
         static void DrawLine(const std::vector<glm::vec3>& positions, const glm::vec4& color = glm::vec4(1.0f), uint32_t entityID = 0);
         static void DrawLine(const glm::vec3 &pos0, const glm::vec3 &pos1, const glm::vec4& color = glm::vec4(1.0f), uint32_t entityID = 0);
+        static void DrawAABB(const AABB& aabb, const glm::vec4& color = glm::vec4(1.0f));
 
         static void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t entityID = 0);
         static void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t entityID = 0);
