@@ -278,8 +278,7 @@ namespace ignite
             if (!texture->data)
                 continue;
 
-            Material::UploadTextureWithMips(commandList, texture->handle, texture->data,
-                texture->width, texture->height, texture->rowPitch, nvrhi::Format::RGBA8_UNORM, mipLevels);
+            Material::UploadTextureWithMips(commandList, texture->handle, texture->data, texture->width, texture->height, texture->rowPitch, nvrhi::Format::RGBA8_UNORM, mipLevels);
         }
 
         UpdateBindingSet();

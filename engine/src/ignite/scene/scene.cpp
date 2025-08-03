@@ -155,12 +155,12 @@ namespace ignite
             {
                 for (size_t i = 0; i < numBones; ++i)
                 {
-                    mesh.constant.boneTransforms[i] = sm.boneTransforms[i];
+                    mesh->constant.boneTransforms[i] = sm.boneTransforms[i];
                 }
 
                 for (size_t i = numBones; i < MAX_BONES; ++i)
                 {
-                    mesh.constant.boneTransforms[i] = glm::mat4(1.0f);
+                    mesh->constant.boneTransforms[i] = glm::mat4(1.0f);
                 }
             }
         }

@@ -115,37 +115,37 @@ namespace ignite
         m_RenderTarget->ClearColorAttachmentFloat(cmd);
         m_RenderTarget->ClearDepthAttachment(cmd, 1.0f, 0);
 
-        if (m_Model)
-        {
-            for (size_t i = 0; i < m_Model->meshes.size(); ++i)
-            {
-                auto& mesh = m_Model->meshes[i];
-                cmd->writeBuffer(mesh.constantBuffer, &mesh.constant, sizeof(mesh.constant));
+        //if (m_Model)
+        //{
+        //    for (size_t i = 0; i < m_Model->meshes.size(); ++i)
+        //    {
+        //        auto& mesh = m_Model->meshes[i];
+        //        cmd->writeBuffer(mesh.constantBuffer, &mesh.constant, sizeof(mesh.constant));
 
-                // get material
-                mesh.material->WriteBuffer(cmd);
+        //        // get material
+        //        mesh.material->WriteBuffer(cmd);
 
-                // render
-                auto state = nvrhi::GraphicsState();
-                state.pipeline = m_Pipeline->GetHandle();
-                state.framebuffer = m_RenderTarget->GetFramebuffer();
-                state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(m_RenderTarget->GetFramebuffer()->getFramebufferInfo().getViewport());
-                state.bindings = { mesh.bindingSet, mesh.material->bindingSet };
+        //        // render
+        //        auto state = nvrhi::GraphicsState();
+        //        state.pipeline = m_Pipeline->GetHandle();
+        //        state.framebuffer = m_RenderTarget->GetFramebuffer();
+        //        state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(m_RenderTarget->GetFramebuffer()->getFramebufferInfo().getViewport());
+        //        state.bindings = { mesh.bindingSet, mesh.material->bindingSet };
 
-                state.addVertexBuffer({ mesh.mesh->GetVertexBuffer()->GetHandle(), 0, 0 });
-                state.setIndexBuffer({ mesh.mesh->GetIndexBuffer()->GetHandle(), nvrhi::Format::R32_UINT });
+        //        state.addVertexBuffer({ mesh.mesh->GetVertexBuffer()->GetHandle(), 0, 0 });
+        //        state.setIndexBuffer({ mesh.mesh->GetIndexBuffer()->GetHandle(), nvrhi::Format::R32_UINT });
 
-                cmd->setGraphicsState(state);
+        //        cmd->setGraphicsState(state);
 
-                cmd->setPushConstants(&cameraConstants, sizeof(CameraConstants));
+        //        cmd->setPushConstants(&cameraConstants, sizeof(CameraConstants));
 
-                nvrhi::DrawArguments args;
-                args.setVertexCount(static_cast<uint32_t>(mesh.mesh->data.indices.size()));
-                args.instanceCount = 1;
+        //        nvrhi::DrawArguments args;
+        //        args.setVertexCount(static_cast<uint32_t>(mesh.mesh->data.indices.size()));
+        //        args.instanceCount = 1;
 
-                cmd->drawIndexed(args);
-            }
-        }
+        //        cmd->drawIndexed(args);
+        //    }
+        //}
 
         m_CommandList->Submit();
     }
@@ -176,48 +176,11 @@ namespace ignite
         meshes.resize(meshData.size());
         for (size_t i = 0; i < meshData.size(); ++i)
         {
-            auto& data = meshData[i];
-            meshes[i].mesh = CreateRef<Mesh>();
-
-            meshes[i].mesh->data = data;
-            meshes[i].mesh->CreateBuffers();
-            meshes[i].mesh->WriteVertexBuffer();
-
-            int materialIndex = data.materialIndex;
-            if (materialIndex >= 0 && materialIndex < materials.size())
-            {
-                meshes[i].material = materials[materialIndex];
-            }
-            else
-            {
-                meshes[i].material = CreateRef<Material>();
-            }
-
-            // create per Mesh constant buffers
-            auto bufferDesc = nvrhi::BufferDesc();
-            bufferDesc.setIsConstantBuffer(true);
-            bufferDesc.setIsVolatile(true);
-            bufferDesc.setMaxVersions(16);
-            bufferDesc.setInitialState(nvrhi::ResourceStates::ConstantBuffer);
-            bufferDesc.setDebugName("MeshConstantBuffer");
-            bufferDesc.setByteSize(sizeof(SkinnedMeshConstants));
-            meshes[i].constantBuffer = device->createBuffer(bufferDesc);
-            LOG_ASSERT(meshes[i].constantBuffer, "[MeshRenderer] Failed to create mesh constant buffer");
-
-            // Create binding set
-            auto desc = nvrhi::BindingSetDesc();
-            desc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(CameraConstants)));
-            desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, meshes[i].constantBuffer));
-            desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, SceneRenderer::GetActive()->GetEnvironment()->GetDirLightBuffer()));
-            desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, SceneRenderer::GetActive()->GetEnvironment()->GetParamsBuffer()));
-
-            const auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
-            LOG_ASSERT(newBindingSet, "Failed to create binding set");
-
-            if (newBindingSet)
-            {
-                meshes[i].bindingSet = newBindingSet;
-            }
+            meshes[i] = CreateRef<MeshInstance>();
+            auto& m = meshes[i];
+            m->mesh.data = meshData[i];
+            m->SetMaterial(materials[m->mesh.data.materialIndex]);
+            m->UpdateBindingSet();
         }
     }
 

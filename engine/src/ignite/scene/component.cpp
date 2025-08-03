@@ -62,7 +62,5 @@ namespace ignite
     void MeshRenderer::UpdateBindingSet()
     {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
-
-        
     }
 }

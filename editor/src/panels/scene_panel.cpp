@@ -1347,53 +1347,9 @@ namespace ignite
                                         Ref<MeshAsset> meshAsset = Project::GetActive()->GetAsset<MeshAsset>(*handle);
                                         if (meshAsset)
                                         {
-                                            c.meshHandle = *handle;
-
                                             // create meshes
-                                            c.meshes.resize(meshAsset->meshesData.size());
-                                            for (size_t i = 0; i < meshAsset->meshesData.size(); ++i)
-                                            {
-                                                SkeletalMesh::RenderMesh &m = c.meshes[i];
-
-                                                m.mesh.data = meshAsset->meshesData[i];
-                                                m.mesh.CreateBuffers();
-                                                m.mesh.WriteVertexBuffer();
-
-                                                // TODO: Remove this code
-                                                m.constant.transformation = glm::mat4(1.0f);
-                                                m.constant.normal = glm::mat4(1.0f);
-
-                                                // Material
-                                                m.material = meshAsset->materials[m.mesh.data.materialIndex];
-
-                                                nvrhi::IDevice *device = Application::GetGraphicsDevice();;
-
-                                                // create per Mesh constant buffers
-                                                auto bufferDesc = nvrhi::BufferDesc();
-                                                bufferDesc.setIsConstantBuffer(true);
-                                                bufferDesc.setIsVolatile(true);
-                                                bufferDesc.setMaxVersions(16);
-                                                bufferDesc.setInitialState(nvrhi::ResourceStates::ConstantBuffer);
-                                                bufferDesc.setDebugName("MeshConstantBuffer");
-                                                bufferDesc.setByteSize(sizeof(SkinnedMeshConstants));
-                                                m.constantBuffer = device->createBuffer(bufferDesc);
-                                                LOG_ASSERT(m.constantBuffer, "[MeshRenderer] Failed to create mesh constant buffer");
-
-                                                // Create binding set
-                                                auto desc = nvrhi::BindingSetDesc();
-                                                desc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(CameraConstants)));
-                                                desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m.constantBuffer));
-                                                desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, SceneRenderer::GetActive()->GetEnvironment()->GetDirLightBuffer()));
-                                                desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, SceneRenderer::GetActive()->GetEnvironment()->GetParamsBuffer()));
-
-                                                const auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
-                                                LOG_ASSERT(newBindingSet, "Failed to create binding set");
-
-                                                if (newBindingSet)
-                                                {
-                                                    m.bindingSet = newBindingSet;
-                                                }
-                                            }
+                                            c.meshHandle = *handle;
+                                            c.meshes = meshAsset->Create();
                                         }
                                     }
                                     else if (metadata.type == AssetType::Mesh)
@@ -2174,7 +2130,7 @@ namespace ignite
         {
             if (auto it = m_SelectedEntities.find(entity.GetUUID()); it != m_SelectedEntities.end())
             {
-                // deselect
+                // de-select
                 SceneRenderer::GetActive()->UnselectEntity(it->second);
                 it = m_SelectedEntities.erase(it);
                 

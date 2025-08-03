@@ -256,39 +256,41 @@ namespace ignite
                 continue;
 
             SkeletalMesh &sm = m_Scene->registry->get<SkeletalMesh>(e);
-            Ref<MeshAsset> meshAsset = Project::GetActive()->GetAsset<MeshAsset>(sm.meshHandle);
-            if (!meshAsset)
-                continue;
-
-            // render each mesh
-            for (size_t i = 0; i < sm.meshes.size(); ++i)
+            if (Ref<MeshAsset> meshAsset = Project::GetActive()->GetAsset<MeshAsset>(sm.meshHandle))
             {
-                SkeletalMesh::RenderMesh &m = sm.meshes[i];
-                cmd->writeBuffer(m.constantBuffer, &m.constant, sizeof(m.constant));
-                m.material->WriteBuffer(cmd);
+                // render each mesh
+                for (size_t i = 0; i < sm.meshes.size(); ++i)
+                {
+                    auto& m = sm.meshes[i];
+                    LOG_ASSERT(m, "[SceneRenderer] Mesh instance is null");
 
-                // render
-                auto state = nvrhi::GraphicsState();
-                state.pipeline = m_GeometryAnimPipeline->GetHandle();
-                state.framebuffer = sceneFramebuffer;
-                state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(sceneFramebuffer->getFramebufferInfo().getViewport());
+                    cmd->writeBuffer(m->constantBuffer, &m->constant, sizeof(m->constant));
+                    m->material->WriteBuffer(cmd);
 
-                state.bindings = { m.bindingSet, m.material->bindingSet };
+                    // render
+                    auto state = nvrhi::GraphicsState();
+                    state.pipeline = m_GeometryAnimPipeline->GetHandle();
+                    state.framebuffer = sceneFramebuffer;
+                    state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(sceneFramebuffer->getFramebufferInfo().getViewport());
 
-                state.addVertexBuffer({ m.mesh.GetVertexBuffer()->GetHandle(), 0, 0 });
-                state.setIndexBuffer({ m.mesh.GetIndexBuffer()->GetHandle(), nvrhi::Format::R32_UINT });
+                    state.bindings = { m->bindingSet, m->material->bindingSet };
 
-                cmd->setGraphicsState(state);
+                    state.addVertexBuffer({ m->mesh.GetVertexBuffer()->GetHandle(), 0, 0 });
+                    state.setIndexBuffer({ m->mesh.GetIndexBuffer()->GetHandle(), nvrhi::Format::R32_UINT });
 
-                // push camera constants
-                cmd->setPushConstants(&cameraBuffer, sizeof(CameraConstants));
+                    cmd->setGraphicsState(state);
 
-                nvrhi::DrawArguments args;
-                args.setVertexCount(m.mesh.GetIndicesCount());
-                args.instanceCount = 1;
+                    // push camera constants
+                    cmd->setPushConstants(&cameraBuffer, sizeof(CameraConstants));
 
-                cmd->drawIndexed(args);
+                    nvrhi::DrawArguments args;
+                    args.setVertexCount(m->mesh.GetIndicesCount());
+                    args.instanceCount = 1;
+
+                    cmd->drawIndexed(args);
+                }
             }
+            
         }
 
         // 2D Pass

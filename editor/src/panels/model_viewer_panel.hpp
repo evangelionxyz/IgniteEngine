@@ -53,20 +53,10 @@ namespace ignite
     private:
         void LoadModel(const std::filesystem::path& filepath);
         std::filesystem::path m_ModelFilepath;
-        Ref<MeshAsset> m_MeshAsset;
-
-        struct RenderMesh
-        {
-            Ref<Mesh> mesh;
-            Ref<Material> material;
-            SkinnedMeshConstants constant;
-            nvrhi::BufferHandle constantBuffer;
-            nvrhi::BindingSetHandle bindingSet;
-        };
-
+        Ref<MeshAsset> m_MeshAsset;        
         struct Model
         {
-            std::vector<RenderMesh> meshes;
+            std::vector<Ref<MeshInstance>> meshes;
             void CreateMeshes(const std::vector<MeshData> &meshData, const std::vector<Ref<Material>> &materials);
         };
 

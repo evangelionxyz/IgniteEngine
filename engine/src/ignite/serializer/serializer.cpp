@@ -498,7 +498,10 @@ namespace ignite {
             {
                 SkeletalMesh &skinnedMesh = desEntity.AddComponent<SkeletalMesh>();
                 skinnedMesh.meshHandle = AssetHandle(node["MeshHandle"].as<uint64_t>());
-                Project::GetAsset<MeshAsset>(skinnedMesh.meshHandle);
+                if (auto meshAsset = Project::GetAsset<MeshAsset>(skinnedMesh.meshHandle))
+                {
+                    skinnedMesh.meshes = meshAsset->Create();
+                }
             }
 
             // Script

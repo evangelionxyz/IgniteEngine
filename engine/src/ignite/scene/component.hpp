@@ -346,17 +346,8 @@ namespace ignite
          std::vector<AssetHandle> animationHandle;
          std::vector<glm::mat4> boneTransforms;
 
-         struct RenderMesh
-         {
-             Mesh mesh;
-             Ref<Material> material;
-             SkinnedMeshConstants constant;
-             nvrhi::BufferHandle constantBuffer;
-             nvrhi::BindingSetHandle bindingSet;
-         };
-
          // for rendering
-         std::vector<RenderMesh> meshes;
+         std::vector<Ref<MeshInstance>> meshes;
 
          SkeletalMesh() = default;
 

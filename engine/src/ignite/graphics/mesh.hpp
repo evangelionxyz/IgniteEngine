@@ -83,12 +83,10 @@ namespace ignite {
         {
             data = other.data;
             aabb = other.aabb;
-
             CreateBuffers();
         }
 
         void CreateBuffers();
-        void WriteVertexBuffer(uint32_t entityID = -1);
 
         Ref<VertexBuffer> GetVertexBuffer() { return m_VertexBuffer; }
         Ref<IndexBuffer> GetIndexBuffer() { return m_IndexBuffer; }
@@ -106,6 +104,20 @@ namespace ignite {
         Ref<IndexBuffer> m_IndexBuffer;
     };
 
+    struct MeshInstance
+    {
+        Mesh mesh;
+        Ref<Material> material;
+        SkinnedMeshConstants constant;
+        nvrhi::BufferHandle constantBuffer = nullptr;
+        nvrhi::BindingSetHandle bindingSet = nullptr;
+
+        MeshInstance() = default;
+
+        void UpdateBindingSet();
+        void SetMaterial(const Ref<Material> &mat);
+    };
+
     // Skeletal Mesh Asset
     class MeshAsset : public Asset
     {
@@ -114,8 +126,12 @@ namespace ignite {
         std::vector<MeshData> meshesData;
         std::vector<Ref<Material>> materials;
 
+        std::vector<Ref<MeshInstance>> Create();
+
         static AssetType GetStaticType() { return AssetType::SkeletalMesh; }
         virtual AssetType GetType() override { return GetStaticType(); }
     };
+
+    
     
 }

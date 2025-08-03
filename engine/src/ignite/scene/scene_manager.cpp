@@ -270,7 +270,6 @@ namespace ignite
             bool isSkinnedMesh = true;
             mr.Create(isSkinnedMesh);
             mr.mesh->CreateBuffers();
-            mr.mesh->WriteVertexBuffer(newEntity);
         }
 
         // get new entity's ID Component
@@ -438,7 +437,7 @@ namespace ignite
         // Do not copy registered comps
         // newScene->registeredComps = other->registeredComps;
 
-        auto mrView = destRegistry->view<MeshRenderer>();
+        /*auto mrView = destRegistry->view<MeshRenderer>();
         for (entt::entity e : mrView)
         {
             MeshRenderer &mr = mrView.get<MeshRenderer>(e);
@@ -446,7 +445,7 @@ namespace ignite
             mr.Create(isSkinnedMesh);
             mr.mesh->CreateBuffers();
             mr.mesh->WriteVertexBuffer(static_cast<uint32_t>(e));
-        }
+        }*/
 
         Application::GetDeviceManager()->WaitForIdle();
 

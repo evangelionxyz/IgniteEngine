@@ -31,14 +31,73 @@ namespace ignite
     {
         m_VertexBuffer = VertexBuffer::Create(sizeof(VertexMesh_Anim) * data.vertices.size());
         m_IndexBuffer = IndexBuffer::Create(sizeof(uint32_t) * data.indices.size());
-    }
-
-    void Mesh::WriteVertexBuffer(uint32_t entityID)
-    {
-        // for (auto &vertex : data.vertices)
-        //     vertex.entityID = entityID;
 
         m_VertexBuffer->SetData(Buffer(data.vertices.data(), sizeof(VertexMesh_Anim) * data.vertices.size()));
         m_IndexBuffer->SetData(Buffer(data.indices.data(), sizeof(uint32_t) * data.indices.size()));
     }
+
+    void MeshInstance::UpdateBindingSet()
+    {
+        // TODO: Remove this code
+        constant.transformation = glm::mat4(1.0f);
+        constant.normal = glm::mat4(1.0f);
+
+        nvrhi::IDevice* device = Application::GetGraphicsDevice();;
+
+        // create per Mesh constant buffers
+        auto bufferDesc = nvrhi::BufferDesc();
+        bufferDesc.setIsConstantBuffer(true);
+        bufferDesc.setIsVolatile(true);
+        bufferDesc.setMaxVersions(16);
+        bufferDesc.setInitialState(nvrhi::ResourceStates::ConstantBuffer);
+        bufferDesc.setDebugName("MeshConstantBuffer");
+        bufferDesc.setByteSize(sizeof(SkinnedMeshConstants));
+        constantBuffer = device->createBuffer(bufferDesc);
+        LOG_ASSERT(constantBuffer, "[MeshRenderer] Failed to create mesh constant buffer");
+
+        // Create binding set
+        auto desc = nvrhi::BindingSetDesc();
+        desc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(CameraConstants)));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, constantBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, SceneRenderer::GetActive()->GetEnvironment()->GetDirLightBuffer()));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, SceneRenderer::GetActive()->GetEnvironment()->GetParamsBuffer()));
+
+        const auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
+        LOG_ASSERT(newBindingSet, "Failed to create binding set");
+
+        if (newBindingSet)
+        {
+            bindingSet = newBindingSet;
+        }
+    }
+
+    void MeshInstance::SetMaterial(const Ref<Material>& mat)
+    {
+        material = mat;
+    }
+
+    std::vector<Ref<MeshInstance>> MeshAsset::Create()
+    {
+        // create meshes
+        std::vector<Ref<MeshInstance>> instances(meshesData.size());
+
+        for (size_t i = 0; i < meshesData.size(); ++i)
+        {
+            // Create mesh instance
+            instances[i] = CreateRef<MeshInstance>();
+            auto& m = instances[i];
+
+            m->mesh.data = meshesData[i];
+            m->mesh.CreateBuffers();
+
+            // Material
+            m->SetMaterial(materials[m->mesh.data.materialIndex]);
+            m->UpdateBindingSet();
+        }
+
+        return instances;
+    }
+
+    
+
 }
