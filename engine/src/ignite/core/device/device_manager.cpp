@@ -83,8 +83,34 @@ namespace ignite
         if (!params.headlessDevice)
         {
 #ifdef PLATFORM_WINDOWS
-            if (!params.enablePerMonitorDPI)
+            if (params.enablePerMonitorDPI)
+            {
+                // Enable per-monitor DPI awareness V2 for better DPI handling
+                // Use runtime linking to avoid compilation issues on older SDKs
+                typedef BOOL(WINAPI *SetProcessDpiAwarenessContextFunc)(DPI_AWARENESS_CONTEXT);
+                HMODULE user32 = GetModuleHandleA("user32.dll");
+                SetProcessDpiAwarenessContextFunc setProcessDpiAwarenessContext = 
+                    (SetProcessDpiAwarenessContextFunc)GetProcAddress(user32, "SetProcessDpiAwarenessContext");
+                
+                if (setProcessDpiAwarenessContext)
+                {
+                    // Try to set per-monitor DPI aware V2 (Windows 10 1703+)
+                    if (!setProcessDpiAwarenessContext((DPI_AWARENESS_CONTEXT)-4)) // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+                    {
+                        // Fallback to V1 if V2 fails
+                        SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+                    }
+                }
+                else
+                {
+                    // Fallback for older Windows versions
+                    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+                }
+            }
+            else
+            {
                 SetProcessDpiAwareness(PROCESS_DPI_UNAWARE);
+            }
 #endif
         }
 

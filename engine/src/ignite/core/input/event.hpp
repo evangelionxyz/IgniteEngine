@@ -39,6 +39,7 @@ namespace ignite {
         WindowMaximized,
         WindowMinimized,
         WindowRestored,
+        WindowDPIScaleChanged,
         FramebufferResize,
         AppTick,
         AppUpdate,

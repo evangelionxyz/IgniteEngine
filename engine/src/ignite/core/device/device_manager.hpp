@@ -66,7 +66,7 @@ namespace ignite
         bool headlessDevice = false;
         bool logBufferLifetime = false;
         bool enableHeapDirectlyIndexed = false;
-        bool enablePerMonitorDPI = false;
+        bool enablePerMonitorDPI = true;
 
 #ifdef IGNITE_WITH_VULKAN
         std::string vulkanLibraryName;

@@ -59,6 +59,8 @@ namespace ignite
         deviceCreateInfo.backBufferHeight = m_CreateInfo.height;
         deviceCreateInfo.startMaximized = m_CreateInfo.maximized;
         deviceCreateInfo.swapChainBufferCount = 3;
+        deviceCreateInfo.enablePerMonitorDPI = true;
+        deviceCreateInfo.supportExplicitDisplayScaling = true;
 
         m_Window = CreateScope<Window>(
             m_CreateInfo.name.c_str(),

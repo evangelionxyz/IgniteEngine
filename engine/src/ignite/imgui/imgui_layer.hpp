@@ -76,6 +76,7 @@ namespace ignite
 
         void OnEvent(Event &event) override;
         bool OnFramebufferResize(FramebufferResizeEvent &event) const;
+        bool OnDPIScaleChanged(WindowDPIScaleChangedEvent &event);
 
     private:
         Scope<ImGui_NVRHI> imguiNVRHI;
@@ -84,5 +85,9 @@ namespace ignite
         bool m_SupportExplicitDisplayScaling;
         bool m_BeginFrameCalled = false;
         DeviceManager *m_DeviceManager = nullptr;
+        
+        // Store original style for proper scaling
+        ImGuiStyle m_OriginalStyle;
+        f32 m_CurrentDPIScale = 1.0f;
     };
 }

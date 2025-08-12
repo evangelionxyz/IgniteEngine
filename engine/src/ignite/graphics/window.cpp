@@ -189,6 +189,23 @@ namespace ignite
         m_DeviceManager->m_WindowIsInFocus = true;
 
         m_DeviceManager->CreateBackBuffers();
+
+        if (m_DeviceManager->m_DeviceParams.enablePerMonitorDPI)
+        {
+#ifdef _WIN32
+            HWND hwnd = glfwGetWin32Window(m_DeviceManager->m_Window);
+            HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            u32 dpiX, dpiY;
+            GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+            m_DeviceManager->m_DPIScaleFactorX = dpiX / 96.f;
+            m_DeviceManager->m_DPIScaleFactorY = dpiY / 96.f;
+#else
+            GLFWmonitor *monitor = glfwGetWindowMonitor(window);
+            if (!monitor)
+                monitor = glfwGetPrimaryMonitor();
+            glfwGetMonitorContentScale(monitor, &m_DeviceManager->m_DPIScaleFactorX, &m_DeviceManager->m_DPIScaleFactorY);
+#endif
+        }
     }
 
     void Window::PollEvents()
@@ -252,6 +269,22 @@ namespace ignite
             Window &win = *static_cast<Window *>(glfwGetWindowUserPointer(window));
             win.m_DeviceManager->m_DeviceParams.windowPosX = xpos;
             win.m_DeviceManager->m_DeviceParams.windowPosY = ypos;
+        });
+
+        // Add dedicated content scale callback for better DPI change detection
+        glfwSetWindowContentScaleCallback(m_DeviceManager->m_Window, [](GLFWwindow* window, float xscale, float yscale)
+        {
+            Window &win = *static_cast<Window *>(glfwGetWindowUserPointer(window));
+            
+            if (win.m_DeviceManager->m_DeviceParams.enablePerMonitorDPI)
+            {
+                win.m_DeviceManager->m_DPIScaleFactorX = xscale;
+                win.m_DeviceManager->m_DPIScaleFactorY = yscale;
+                
+                // Create a custom DPI change event to notify the application
+                // This will trigger ImGui font/style updates
+                LOG_INFO("DPI Scale changed to: {}x{}", xscale, yscale);
+            }
 
             if (win.m_DeviceManager->m_DeviceParams.enablePerMonitorDPI)
             {
@@ -263,18 +296,12 @@ namespace ignite
                 win.m_DeviceManager->m_DPIScaleFactorX = dpiX / 96.f;
                 win.m_DeviceManager->m_DPIScaleFactorY = dpiY / 96.f;
 #else
-            GLFWmonitor *monitor = glfwGetWindowMonitor(window);
-            if (!monitor)
-                monitor = glfwGetPrimaryMonitor();
-            glfwGetMonitorContentScale(monitor, &win.m_DeviceManager->m_DPIScaleFactorX, &win.m_DeviceManager->m_DPIScaleFactorY);
+                GLFWmonitor *monitor = glfwGetWindowMonitor(window);
+                if (!monitor)
+                    monitor = glfwGetPrimaryMonitor();
+                glfwGetMonitorContentScale(monitor, &win.m_DeviceManager->m_DPIScaleFactorX, &win.m_DeviceManager->m_DPIScaleFactorY);
 #endif
             }
-
-            // render during window movement
-            /*if (m_EnableRenderDuringWindowMovement && m_SwapChainFramebuffers.size() > 0)
-            {
-                AnimateRenderPresent();
-            }*/
         });
 
         glfwSetFramebufferSizeCallback(m_DeviceManager->m_Window, [](GLFWwindow* window, i32 width, i32 height)
