@@ -242,6 +242,24 @@ namespace ignite
         renderFramebuffer = framebuffer;
     }
 
+    void Renderer2D::Begin(nvrhi::ICommandList *commandList, nvrhi::IFramebuffer *framebuffer, const CameraConstants &cameraConstants)
+    {
+        s_Data->cameraConstants = cameraConstants;
+
+        // Quad data
+        s_Data->quadBatch.indexCount = 0;
+        s_Data->quadBatch.count = 0;
+        s_Data->quadBatch.vertexBufferPtr = s_Data->quadBatch.vertexBufferBase;
+
+        // Line data
+        s_Data->lineBatch.indexCount = 0;
+        s_Data->lineBatch.count = 0;
+        s_Data->lineBatch.vertexBufferPtr = s_Data->lineBatch.vertexBufferBase;
+
+        renderCommandList = commandList;
+        renderFramebuffer = framebuffer;
+    }
+
     void Renderer2D::Flush()
     {
         nvrhi::Viewport viewport = renderFramebuffer->getFramebufferInfo().getViewport();

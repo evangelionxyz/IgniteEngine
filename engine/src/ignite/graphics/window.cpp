@@ -278,16 +278,8 @@ namespace ignite
             
             if (win.m_DeviceManager->m_DeviceParams.enablePerMonitorDPI)
             {
-                win.m_DeviceManager->m_DPIScaleFactorX = xscale;
-                win.m_DeviceManager->m_DPIScaleFactorY = yscale;
-                
-                // Create a custom DPI change event to notify the application
-                // This will trigger ImGui font/style updates
-                LOG_INFO("DPI Scale changed to: {}x{}", xscale, yscale);
-            }
-
-            if (win.m_DeviceManager->m_DeviceParams.enablePerMonitorDPI)
-            {
+                WindowDPIScaleChangedEvent event(xscale, yscale);
+                win.m_Callback(event);
 #ifdef _WIN32
                 HWND hwnd = glfwGetWin32Window(window);
                 HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
@@ -297,8 +289,7 @@ namespace ignite
                 win.m_DeviceManager->m_DPIScaleFactorY = dpiY / 96.f;
 #else
                 GLFWmonitor *monitor = glfwGetWindowMonitor(window);
-                if (!monitor)
-                    monitor = glfwGetPrimaryMonitor();
+                if (!monitor) monitor = glfwGetPrimaryMonitor();
                 glfwGetMonitorContentScale(monitor, &win.m_DeviceManager->m_DPIScaleFactorX, &win.m_DeviceManager->m_DPIScaleFactorY);
 #endif
             }

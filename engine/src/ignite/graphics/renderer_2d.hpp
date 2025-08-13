@@ -76,6 +76,7 @@ namespace ignite
         static void CreatePipelines(nvrhi::IFramebuffer *framebuffer);
         static void SetFillMode(nvrhi::RasterFillMode mode);
 
+        static void Begin(nvrhi::ICommandList *commandList, nvrhi::IFramebuffer *framebuffer, const CameraConstants &cameraConstants);
         static void Begin(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer* framebuffer);
         static void Flush();
         static void End();

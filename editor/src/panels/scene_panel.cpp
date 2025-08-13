@@ -358,7 +358,9 @@ namespace ignite
 
             ImGui::SameLine();
 
-            if (ImGui::Button("Add Component", { ImGui::GetContentRegionAvail().x, 25.0f }))
+            ImVec2 addCompBtSize = ImGui::CalcTextSize("Add Component");
+            //if (ImGui::Button("Add Component", { ImGui::GetContentRegionAvail().x, addCompBtSize.y + addCompBtSize.y / 2.0f }))
+            if (ImGui::Button("Add Component", { ImGui::GetContentRegionAvail().x, 25.0f * ImGui::GetWindowDpiScale() }))
             {
                 ImGui::OpenPopup("##add_component_context");
             }
@@ -1312,130 +1314,6 @@ namespace ignite
                         }
                     }
                 });
-            RenderComponent<SkeletalMesh>("Skeletal Mesh", selectedEntity, [&]()
-                {
-                    SkeletalMesh &c = selectedEntity.GetComponent<SkeletalMesh>();
-
-                    const bool meshLoaded = c.meshHandle != AssetHandle(0);
-
-                    if (ImGui::Button("Drag Here"))
-                    {
-                        std::filesystem::path filepath = FileDialogs::OpenFile("3D Files (*.glb;*.gltf;*.fbx)\0*.glb;*.gltf;*.fbx");
-                        if (!filepath.empty())
-                        {
-                            AssetMetaData metadata;
-                            metadata.type = AssetType::MeshSource;
-                            metadata.filepath = filepath;
-                            c.meshHandle = AssetHandle();
-                            Project::GetActive()->GetAssetManager().InsertMetaData(c.meshHandle, metadata);
-                            Ref<MeshAsset> meshAsset = Project::GetActive()->GetAsset<MeshAsset>(c.meshHandle);
-                        }
-                    }
-
-                    if (ImGui::BeginDragDropTarget())
-                    {
-                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
-                        {
-                            if (payload->DataSize == sizeof(AssetHandle))
-                            {
-                                AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
-                                if (handle && *handle != AssetHandle(0))
-                                {
-                                    AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(*handle);
-                                    if (metadata.type == AssetType::MeshSource)
-                                    {
-                                        Ref<MeshAsset> meshAsset = Project::GetActive()->GetAsset<MeshAsset>(*handle);
-                                        if (meshAsset)
-                                        {
-                                            // create meshes
-                                            c.meshHandle = *handle;
-                                            c.meshes = meshAsset->Create();
-                                        }
-                                    }
-                                    else if (metadata.type == AssetType::Mesh)
-                                    {
-                                        LOG_WARN("Skeletal Mesh Drag and Drop (Mesh Binary) not implemented yet!");
-                                    }
-                                }
-                            }
-                        }
-                        ImGui::EndDragDropTarget();
-                    }
-
-                    if (meshLoaded)
-                    {
-                        ImGui::SameLine();
-                        if (ImGui::Button("X"))
-                        {
-                            c.meshHandle = AssetHandle(0); // reset the texture handle
-                        }
-
-                        ImGui::SameLine();
-                        ImGui::Text("Handle: %llu", static_cast<u64>(c.meshHandle));
-                    }
-
-                    // ImGui::SameLine();
-                    // ImGui::Text("%s", c.filepath.generic_string().c_str());
-
-#if 0
-                    if (!c.animations.empty())
-                    {
-                        ImGui::SeparatorText("Animations");
-
-                        if (ImGui::Button("Play"))
-                        {
-                            SkeletalAnimation &anim = c.animations[c.activeAnimIndex];
-                            anim.isPlaying = true;
-                        }
-
-                        ImGui::SameLine();
-
-                        if (ImGui::Button("Stop"))
-                        {
-                            SkeletalAnimation &anim = c.animations[c.activeAnimIndex];
-                            anim.isPlaying = false;
-                        }
-
-                        ImGui::SameLine();
-
-                        if (ImGui::Button("Save Animations"))
-                        {
-                            const std::filesystem::path directory = FileDialogs::SelectFolder();
-                            if (!directory.empty())
-                            {
-                                for (auto &anim : c.animations)
-                                {
-                                    std::filesystem::path filepath = directory / std::format("anim_{0}.anim", anim.name);
-                                    AnimationSerializer sr(anim);
-                                    sr.Serialize(filepath);
-                                }
-                            }
-                        }
-
-                        if (ImGui::TreeNodeEx("Animations", 0))
-                        {
-                            for (size_t animIdx = 0; animIdx < c.animations.size(); ++animIdx)
-                            {
-                                const SkeletalAnimation &anim = c.animations[animIdx];
-                                if (ImGui::TreeNodeEx(anim.name.c_str(), ImGuiTreeNodeFlags_Leaf, "%s", anim.name.c_str()))
-                                {
-                                    if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
-                                    {
-                                        bool play = false;
-                                        if (c.animations[c.activeAnimIndex].isPlaying)
-                                            play = true;
-
-                                        c.activeAnimIndex = static_cast<int>(animIdx);
-                                        c.animations[c.activeAnimIndex].isPlaying = play;
-                                    }
-                                    ImGui::TreePop();
-                                }
-                            }
-                            ImGui::TreePop();
-                        }
-                    }
-#endif
-                });
             
 
             if (ImGui::BeginPopup("##add_component_context", ImGuiWindowFlags_NoDecoration))
@@ -1589,10 +1467,21 @@ namespace ignite
         // Mouse position relative to viewport
         glm::vec2 localMouse = { mousePos.x - canvasPos.x, mousePos.y - canvasPos.y };
 
-        // Clamp to valid range [0, size - 1]
-        localMouse = glm::clamp(localMouse, glm::vec2(0.0f), glm::vec2(vpWidth - 1, vpHeight - 1));
+        // Clamp to valid range [0, size] - allow full viewport area
+        localMouse = glm::clamp(localMouse, glm::vec2(0.0f), glm::vec2(static_cast<float>(vpWidth), static_cast<float>(vpHeight)));
 
         m_ViewportData.mousePos = localMouse;
+
+        // Update UI input handling
+        if (SceneRenderer::GetActive())
+        {
+            glm::vec2 viewportPos = { canvasPos.x, canvasPos.y };
+            glm::vec2 viewportSize = { canvasSize.x, canvasSize.y };
+            glm::vec2 screenMousePos = { mousePos.x, mousePos.y };
+            bool mousePressed = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+            
+            SceneRenderer::GetActive()->UpdateUIInput(screenMousePos, viewportPos, viewportSize, mousePressed);
+        }
 
         // trigger resize
         if (vpWidth > 0 && vpHeight > 0
@@ -2054,7 +1943,7 @@ namespace ignite
             if (currentMousePos.x > framebufferSize.x - offset)
             {
                 float newX = windowPos.x + offset;
-                Input::SetMousePosition(windowPos.x + offset, currentMousePos.y);
+                Input::SetMousePosition(newX, currentMousePos.y);
                 currentMousePos = Input::GetMousePosition();
                 clamped = true;
             }

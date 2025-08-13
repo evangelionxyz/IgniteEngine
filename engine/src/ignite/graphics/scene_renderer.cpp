@@ -27,6 +27,8 @@
 #include "renderer.hpp"
 #include "renderer_2d.hpp"
 #include "environment.hpp"
+#include "ui_renderer.hpp"
+#include "ui/ui_manager.hpp"
 
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/icamera.hpp"
@@ -34,8 +36,10 @@
 #include "ignite/scene/component.hpp"
 
 #include "ignite/core/application.hpp"
+#include "ignite/core/input/input.hpp"
 
 #include <ranges>
+#include <cstdlib>
 
 #include "ignite/project/project.hpp"
 
@@ -154,6 +158,13 @@ namespace ignite
         const uint32_t width = m_SceneRenderTarget->GetWidth();
         const uint32_t height = m_SceneRenderTarget->GetHeight();
 
+        // Create UI Renderer
+        m_UIRenderer = UIRenderer::Create(width, height);
+
+        // Set up UI Manager with UI Renderer
+        m_UIRenderer->SetUIManager(&UIManager::GetInstance());
+        UIManager::GetInstance().SetViewportSize(width, height);
+
         // Create Edge Detection
         m_EdgeDetection = EdgeDetection::Create();
 
@@ -172,6 +183,9 @@ namespace ignite
         m_EdgeDetectionParams.depthSensitivity = 1.0f;
         m_EdgeDetectionParams.selectedCount = static_cast<uint32_t>(m_SelectedEntities.size());
         m_EdgeDetectionParams.outlineColor = { 1.0f, 0.75f, 0.0f, 1.0f };
+
+        // Create some demo UI elements
+        CreateDemoUI();
     }
 
     void SceneRenderer::SetActiveScene(Scene* scene)
@@ -188,12 +202,12 @@ namespace ignite
     {
         m_SceneRenderTarget->Resize(width, height);
         m_CompositeRenderTarget->Resize(width, height);
+        m_UIRenderer->Resize(width, height);
 
         m_Scene->Resize(width, height);
 
         m_EdgeDetection->CreateOutputTexture(width, height);
-        m_EdgeDetection->UpdateBindingSet(m_SceneRenderTarget->GetColorAttachment(0),
-            m_SceneRenderTarget->GetColorAttachment(1), m_SceneRenderTarget->GetDepthAttachment());
+        m_EdgeDetection->UpdateBindingSet(m_SceneRenderTarget->GetColorAttachment(0), m_SceneRenderTarget->GetColorAttachment(1), m_SceneRenderTarget->GetDepthAttachment());
 
         CompositeUpdateBindingSet();
 
@@ -211,9 +225,12 @@ namespace ignite
         m_CompositePipeline->CreatePipeline(m_CompositeRenderTarget->GetFramebuffer());
     }
 
-    void SceneRenderer::Render(ICamera *camera, bool renderEnvironment)
+    void SceneRenderer::Render(ICamera *camera, bool renderEnvironment /*= true*/)
     {
         m_EntityBounds.clear();
+
+        // Update UI system
+        m_UIRenderer->Update(0.016f); // Assuming ~60 FPS for now
 
         m_CommandList->Begin();
 
@@ -224,7 +241,7 @@ namespace ignite
 
         // Composite
         m_CompositeRenderTarget->ClearColorAttachmentFloat(cmd, 0);
-        
+
         // Scene Render Target
         m_SceneRenderTarget->ClearColorAttachmentFloat(cmd, 0);
         m_SceneRenderTarget->ClearColorAttachmentUint(cmd, 1, static_cast<uint32_t>(-1));
@@ -263,7 +280,7 @@ namespace ignite
                 // render each mesh
                 for (size_t i = 0; i < sm.meshes.size(); ++i)
                 {
-                    auto& m = sm.meshes[i];
+                    auto &m = sm.meshes[i];
                     LOG_ASSERT(m, "[SceneRenderer] Mesh instance is null");
 
                     m->constant.transformation = tr.GetWorldMatrix();
@@ -287,7 +304,7 @@ namespace ignite
                     glm::vec3 transformedMin(FLT_MAX);
                     glm::vec3 transformedMax(-FLT_MAX);
 
-                    for (const auto& corner : corners)
+                    for (const auto &corner : corners)
                     {
                         glm::vec3 worldPos = glm::vec3(worldMatrix * glm::vec4(corner, 1.0f));
                         transformedMin = glm::min(transformedMin, worldPos);
@@ -325,7 +342,7 @@ namespace ignite
                     cmd->drawIndexed(args);
                 }
             }
-            
+
         }
 
         // 2D Pass
@@ -350,68 +367,9 @@ namespace ignite
         Renderer2D::Flush();
         Renderer2D::End();
 
-#if 0
-        for (entt::entity e : m_Scene->entities | std::views::values)
-        {
-            Entity entity = { e, m_Scene };
-            auto &tr = entity.GetTransform();
+        // UI Pass
+        m_UIRenderer->Render(cmd, sceneFramebuffer);
 
-            if (!tr.visible)
-                continue;
-
-            if (entity.HasComponent<SkeletalMesh>())
-            {
-                SkeletalMesh &sm = entity.GetComponent<SkeletalMesh>();
-
-                Ref<MeshAsset> meshAsset = Project::GetActive()->GetAsset<MeshAsset>(sm.meshHandle);
-                if (!meshAsset)
-                    continue;
-
-                // render each mesh
-                for (size_t i = 0; i < sm.meshes.size(); ++i)
-                {
-                    Mesh &mesh = sm.meshes[i];
-                    commandList->writeBuffer(sm.meshesTransformBuffer[i], &sm.meshesTransform[i], sizeof(sm.meshesTransform[i]));
-
-                    Material &mat = sm.materials[mesh.data.materialIndex];
-                    mat.WriteBuffer(commandList);
-                }
-            }
-
-            if (entity.HasComponent<MeshRenderer>())
-            {
-                MeshRenderer &meshRenderer = entity.GetComponent<MeshRenderer>();
-
-                // not loaded mesh
-                if (!meshRenderer.mesh || meshRenderer.mesh->data.meshIndex == -1)
-                    continue;
-
-                // write material constant buffer
-                meshRenderer.material->WriteBuffer(commandList);
-                commandList->writeBuffer(meshRenderer.transformBufferHandle, &meshRenderer.transformData, sizeof(meshRenderer.transformData));
-
-                // render
-                auto state = nvrhi::GraphicsState();
-                state.pipeline = m_GeometryAnimPipeline->GetHandle();
-                state.framebuffer = sceneFramebuffer;
-                state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(sceneFramebuffer->getFramebufferInfo().getViewport());
-
-                state.bindings = { meshRenderer.bindingSet, meshRenderer.material->bindingSet };
-
-                state.addVertexBuffer({ meshRenderer.mesh->GetVertexBuffer()->GetHandle(), 0, 0 });
-                state.setIndexBuffer({ meshRenderer.mesh->GetIndexBuffer()->GetHandle(), nvrhi::Format::R32_UINT });
-
-                commandList->setGraphicsState(state);
-
-                nvrhi::DrawArguments args;
-                args.setVertexCount(static_cast<uint32_t>(meshRenderer.mesh->data.indices.size()));
-                args.instanceCount = 1;
-
-                commandList->drawIndexed(args);
-            }
-        }
-
-#endif
         m_EdgeDetectionParams.selectedCount = static_cast<uint32_t>(m_SelectedEntities.size());
         if (!m_SelectedEntities.empty())
         {
@@ -422,7 +380,6 @@ namespace ignite
         const uint32_t height = m_SceneRenderTarget->GetHeight();
 
         m_EdgeDetection->ExecuteCompute(cmd, m_EdgeDetectionParams, width, height);
-
         // Composite render
         {
             auto graphicsState = nvrhi::GraphicsState();
@@ -440,6 +397,59 @@ namespace ignite
         }
 
         m_CommandList->Submit();
+    }
+
+    void SceneRenderer::UpdateUIInput(const glm::vec2 &viewportMousePos, const glm::vec2 &viewportPos, const glm::vec2 &viewportSize, bool mousePressed)
+    {
+        UIManager& uiManager = UIManager::GetInstance();
+        uiManager.SetMousePosition(viewportMousePos, viewportPos, viewportSize);
+        uiManager.HandleMouseClick(mousePressed);
+    }
+
+    void SceneRenderer::CreateDemoUI()
+    {
+        UIManager& uiManager = UIManager::GetInstance();
+
+        // Enable layout grid
+        uiManager.SetLayoutGridVisible(true);
+        uiManager.SetLayoutGridSize(50);
+
+        // Create demo buttons
+        auto playButton = uiManager.CreateButton("Play", glm::vec2(100, 100), glm::vec2(120, 40));
+        playButton->SetColors(
+            glm::vec4(0.2f, 0.6f, 0.2f, 1.0f), // normal - green
+            glm::vec4(0.3f, 0.7f, 0.3f, 1.0f), // hover - lighter green
+            glm::vec4(0.1f, 0.5f, 0.1f, 1.0f)  // pressed - darker green
+        );
+        playButton->SetOnClick([]() {
+            // LOG_INFO("Play button clicked!");
+        });
+
+        auto stopButton = uiManager.CreateButton("Stop", glm::vec2(250, 100), glm::vec2(120, 40));
+        stopButton->SetColors(
+            glm::vec4(0.6f, 0.2f, 0.2f, 1.0f), // normal - red
+            glm::vec4(0.7f, 0.3f, 0.3f, 1.0f), // hover - lighter red
+            glm::vec4(0.5f, 0.1f, 0.1f, 1.0f)  // pressed - darker red
+        );
+        stopButton->SetOnClick([]() {
+            // LOG_INFO("Stop button clicked!");
+        });
+
+        auto settingsButton = uiManager.CreateButton("Settings", glm::vec2(400, 100), glm::vec2(120, 40));
+        settingsButton->SetAlignment(UI_Alignment::CENTER);
+        settingsButton->SetColors(
+            glm::vec4(0.2f, 0.2f, 0.6f, 1.0f), // normal - blue
+            glm::vec4(0.3f, 0.3f, 0.7f, 1.0f), // hover - lighter blue
+            glm::vec4(0.1f, 0.1f, 0.5f, 1.0f)  // pressed - darker blue
+        );
+        settingsButton->SetOnClick([]() {
+            // LOG_INFO("Settings button clicked!");
+        });
+
+        // Create demo text (placeholder for now)
+        auto titleText = uiManager.CreateText("UI Demo", glm::vec2(300, 50));
+        titleText->SetAlignment(UI_Alignment::CENTER);
+        titleText->SetColor(glm::vec4(1.0f, 1.0f, 0.0f, 1.0f)); // yellow
     }
 
     void SceneRenderer::SetFillMode(nvrhi::RasterFillMode mode) const
@@ -543,6 +553,116 @@ namespace ignite
         {
             ImGui::DragFloat("Depth Sensitivity", &m_EdgeDetectionParams.depthSensitivity, 0.025f, 0.0f, FLT_MAX);
             ImGui::ColorEdit4("Color", &m_EdgeDetectionParams.outlineColor.x);
+        }
+
+        // UI System Debug Controls
+        if (ImGui::CollapsingHeader("UI System"))
+        {
+            UIManager& uiManager = UIManager::GetInstance();
+            UILayoutGrid& grid = uiManager.GetLayoutGrid();
+            
+            bool gridVisible = grid.IsVisible();
+            if (ImGui::Checkbox("Show Layout Grid", &gridVisible))
+            {
+                grid.SetVisible(gridVisible);
+            }
+            
+            if (gridVisible)
+            {
+                int gridSize = static_cast<int>(grid.GetGridSize());
+                if (ImGui::SliderInt("Grid Size", &gridSize, 10, 100))
+                {
+                    grid.SetGridSize(static_cast<uint32_t>(gridSize));
+                }
+                
+                glm::vec4 gridColor = grid.GetGridColor();
+                if (ImGui::ColorEdit4("Grid Color", &gridColor.x))
+                {
+                    grid.SetGridColor(gridColor);
+                }
+                
+                glm::vec4 majorGridColor = grid.GetMajorGridColor();
+                if (ImGui::ColorEdit4("Major Grid Color", &majorGridColor.x))
+                {
+                    grid.SetMajorGridColor(majorGridColor);
+                }
+                
+                int majorInterval = static_cast<int>(grid.GetMajorGridInterval());
+                if (ImGui::SliderInt("Major Grid Interval", &majorInterval, 1, 10))
+                {
+                    grid.SetMajorGridInterval(static_cast<uint32_t>(majorInterval));
+                }
+            }
+            
+            // Mouse position info
+            glm::vec2 mousePos = uiManager.GetMousePosition();
+            ImGui::Text("UI Mouse Position: %.1f, %.1f", mousePos.x, mousePos.y);
+            
+            // Show if any button is hovered
+            bool anyButtonHovered = false;
+            for (const auto& widget : uiManager.GetWidgets())
+            {
+                if (auto button = std::dynamic_pointer_cast<UIButton>(widget))
+                {
+                    if (button->IsHovered())
+                    {
+                        anyButtonHovered = true;
+                        ImGui::Text("Hovered Button: %s", button->GetText().c_str());
+                        glm::vec2 buttonPos = button->GetAlignedPosition();
+                        glm::vec2 buttonSize = button->GetSize();
+                        ImGui::Text("Button Bounds: (%.1f, %.1f) to (%.1f, %.1f)", 
+                                   buttonPos.x, buttonPos.y, 
+                                   buttonPos.x + buttonSize.x, buttonPos.y + buttonSize.y);
+                        break;
+                    }
+                }
+            }
+            if (!anyButtonHovered)
+            {
+                ImGui::Text("No buttons hovered");
+            }
+            
+            // Snap to grid example
+            glm::vec2 snappedPos = grid.SnapToGrid(mousePos);
+            ImGui::Text("Snapped Position: %.1f, %.1f", snappedPos.x, snappedPos.y);
+            
+            // Widget count
+            ImGui::Text("Widget Count: %zu", uiManager.GetWidgets().size());
+            
+            // Add/Remove demo widgets
+            if (ImGui::Button("Add Demo Button"))
+            {
+                static int buttonCount = 0;
+                buttonCount++;
+                
+                auto newButton = uiManager.CreateButton(
+                    "Button " + std::to_string(buttonCount), 
+                    glm::vec2(100 + (buttonCount % 5) * 140, 200 + (buttonCount / 5) * 60), 
+                    glm::vec2(120, 40)
+                );
+                
+                // Random color
+                float r = static_cast<float>(rand()) / RAND_MAX * 0.5f + 0.2f;
+                float g = static_cast<float>(rand()) / RAND_MAX * 0.5f + 0.2f;
+                float b = static_cast<float>(rand()) / RAND_MAX * 0.5f + 0.2f;
+                
+                newButton->SetColors(
+                    glm::vec4(r, g, b, 1.0f),
+                    glm::vec4(r + 0.2f, g + 0.2f, b + 0.2f, 1.0f),
+                    glm::vec4(r - 0.1f, g - 0.1f, b - 0.1f, 1.0f)
+                );
+                
+                newButton->SetOnClick([]() {
+                    // Placeholder for logging when available
+                });
+            }
+            
+            ImGui::SameLine();
+            if (ImGui::Button("Clear All Widgets"))
+            {
+                uiManager.ClearWidgets();
+                CreateDemoUI(); // Recreate default demo UI
+            }
         }
 
         ImGui::End();

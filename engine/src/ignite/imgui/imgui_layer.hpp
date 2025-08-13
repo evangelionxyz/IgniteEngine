@@ -68,8 +68,8 @@ namespace ignite
         virtual ~ImGuiLayer() = default;
 
         ImGuiLayer(DeviceManager *deviceManager);
-        bool Init();
-        void OnDetach();
+        void OnAttach() override;
+        void OnDetach() override;
 
         void BeginFrame();
         void EndFrame(nvrhi::IFramebuffer* framebuffer);

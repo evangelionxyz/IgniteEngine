@@ -76,7 +76,8 @@ namespace ignite
         if (createInfo.useGui)
         {
             m_ImGuiLayer = CreateScope<ImGuiLayer>(GetDeviceManager());
-            m_ImGuiLayer->Init();
+            m_ImGuiLayer->OnAttach();
+            // PushLayer(m_ImGuiLayer.get());
         }
 
         FmodAudio::Init();

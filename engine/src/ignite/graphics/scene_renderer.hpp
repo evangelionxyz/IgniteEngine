@@ -40,6 +40,7 @@ namespace ignite
     class Scene;
     class ICamera;
     class RenderTarget;
+    class UIRenderer;
         
     class SceneRenderer
     {
@@ -59,6 +60,9 @@ namespace ignite
         void UnselectEntity(const Entity& entity);
         void ClearSelectedEntities();
 
+        // UI Input handling
+        void UpdateUIInput(const glm::vec2& viewportMousePos, const glm::vec2& viewportPos, const glm::vec2& viewportSize, bool mousePressed);
+
         void OnGuiRender();
 
         static SceneRenderer *GetActive();
@@ -72,9 +76,12 @@ namespace ignite
         
         Ref<EdgeDetection> GetEdgeDetection() { return m_EdgeDetection; }
 
+        Ref<UIRenderer> &GetUIRenderer() { return m_UIRenderer; }
+
     private:
         void CreateEnvironment();
         void CreateRenderTargets();
+        void CreateDemoUI();
 
         void CompositeUpdateBindingSet();
 
@@ -89,6 +96,8 @@ namespace ignite
         Ref<RenderTarget> m_CompositeRenderTarget;
         Ref<VertexBuffer> m_CompositeVertexBuffer;
         nvrhi::BindingSetHandle m_CompositeBindingSet;
+
+        Ref<UIRenderer> m_UIRenderer;
 
         std::vector<uint32_t> m_SelectedEntities;
         std::vector<AABB> m_EntityBounds;

@@ -21,7 +21,7 @@
 * SOFTWARE.
 */
 
- #include "scene.hpp"
+#include "scene.hpp"
 #include <entt/entt.hpp>
 
 #include "ignite/audio/fmod_sound.hpp"

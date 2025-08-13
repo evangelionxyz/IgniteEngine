@@ -273,10 +273,10 @@ namespace ignite
         }
     }
 
-    bool ImGuiLayer::Init()
+    void ImGuiLayer::OnAttach()
     {
         imguiNVRHI = CreateScope<ImGui_NVRHI>();
-        return imguiNVRHI->Init(m_DeviceManager->GetDevice());
+        imguiNVRHI->Init(m_DeviceManager->GetDevice());
     }
 
     void ImGuiLayer::OnEvent(Event &event)

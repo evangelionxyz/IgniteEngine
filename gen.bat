@@ -1,19 +1,29 @@
 @echo off
->nul 2>&1 "%SYSTEMROOT%\system32\cacls.exe" "%SYSTEMROOT%\system32\config\system"
+setlocal EnableExtensions EnableDelayedExpansion
 
-rem
-if not exist "%~dp0\Scripts\__pycache__" (
-    if %errorlevel% NEQ 0 (
-        powershell -Command "Start-Process -FilePath '%0' -Verb RunAs"
-        exit /b
-    )
+rem Bootstrap CMake configuration on Windows using Python script
+set ROOT=%~dp0
+pushd "%ROOT%"
 
-    python -m pip install requests
-    python -m pip install --upgrade pip
+where python >nul 2>nul
+if errorlevel 1 (
+    echo Python is required but was not found in PATH.
+    echo Please install Python 3 and re-run this script.
+    pause
+    exit /b 1
 )
-rem
 
-pushd %~dp0
-python scripts\setup.py
+rem Configure (and build) with default VS 2022 generator
+python scripts\setup.py --with-build -c Debug
+set ERR=%ERRORLEVEL%
 popd
+
+if NOT %ERR%==0 (
+    echo CMake configure/build failed with code %ERR%.
+    pause
+    exit /b %ERR%
+)
+
+echo.
+echo Done. To build again: cmake --build build --config Debug
 pause
