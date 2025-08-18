@@ -24,10 +24,13 @@
 #pragma once
 
 #include "ignite/core/types.hpp"
-#include <glm/glm.hpp>
+#include "ignite/math/math.hpp"
+#include "ignite/core/logger.hpp"
+
 #include <string>
 #include <functional>
 #include <memory>
+#include <glm/glm.hpp>
 
 // In Game Widget
 namespace ignite {
@@ -39,7 +42,9 @@ namespace ignite {
 #define UI_COLOR_YELLOW glm::vec4{ 1.0f, 1.0f, 0.0f, 1.0f }
 #define UI_COLOR_GRAY glm::vec4{ 0.5f, 0.5f, 0.5f, 1.0f }
 
-    enum class UI_Alignment
+    class Texture;
+
+    enum class UIAlignment
     {
         TOP_LEFT,
         TOP_CENTER,
@@ -49,7 +54,8 @@ namespace ignite {
         CENTER_RIGHT,
         BOTTOM_LEFT,
         BOTTOM_CENTER,
-        BOTTOM_RIGHT
+        BOTTOM_RIGHT,
+        COUNT
     };
 
     class UIWidget : public std::enable_shared_from_this<UIWidget>
@@ -58,69 +64,37 @@ namespace ignite {
         UIWidget() = default;
         virtual ~UIWidget() = default;
 
-        virtual void Update(float deltaTime, const glm::vec2& mousePos) {}
-        virtual void SetPosition(const glm::vec2 &position) { m_Position = position; }
-        virtual void SetSize(const glm::vec2 &size) { m_Size = size; }
-        virtual void SetAlignment(UI_Alignment alignment) { m_Alignment = alignment; }
+        virtual void Update(float deltaTime, const glm::vec2& mousePos)
+        {
+        }
 
-        virtual const glm::vec2 &GetPosition() const { return m_Position; }
-        virtual const glm::vec2 &GetSize() const { return m_Size; }
-        virtual const UI_Alignment GetAlignment() const { return m_Alignment; }
+        virtual void SetPosition(const glm::vec2 &position) 
+        {
+            m_Rect.min = position;
+        }
+
+        virtual void SetSize(const glm::vec2 &size)
+        {
+            m_Rect.max = size;
+        }
+
+        virtual void SetAlignment(UIAlignment alignment)
+        {
+            m_Alignment = alignment;
+        }
+
+        virtual const glm::vec2 GetSize() const { return m_Rect.GetSize(); }
+        virtual const Rect &GetRect() const { return m_Rect; }
+        virtual const UIAlignment GetAlignment() const { return m_Alignment; }
 
         // Check if point is within widget bounds
         virtual bool Contains(const glm::vec2& point) const
         {
-            glm::vec2 minBounds = GetAlignedPosition();
-            glm::vec2 maxBounds = minBounds + m_Size;
-            
-            bool result = point.x >= minBounds.x && point.x <= maxBounds.x &&
-                         point.y >= minBounds.y && point.y <= maxBounds.y;
-            
-            return result;
+            return GetAlignedRect().Contains(point);
         }
 
-        // Get position adjusted for alignment
-        virtual glm::vec2 GetAlignedPosition() const
-        {
-            glm::vec2 alignedPos = m_Position;
-            
-            switch (m_Alignment)
-            {
-                case UI_Alignment::TOP_CENTER:
-                    alignedPos.x -= m_Size.x * 0.5f;
-                    break;
-                case UI_Alignment::TOP_RIGHT:
-                    alignedPos.x -= m_Size.x;
-                    break;
-                case UI_Alignment::CENTER_LEFT:
-                    alignedPos.y -= m_Size.y * 0.5f;
-                    break;
-                case UI_Alignment::CENTER:
-                    alignedPos.x -= m_Size.x * 0.5f;
-                    alignedPos.y -= m_Size.y * 0.5f;
-                    break;
-                case UI_Alignment::CENTER_RIGHT:
-                    alignedPos.x -= m_Size.x;
-                    alignedPos.y -= m_Size.y * 0.5f;
-                    break;
-                case UI_Alignment::BOTTOM_LEFT:
-                    alignedPos.y -= m_Size.y;
-                    break;
-                case UI_Alignment::BOTTOM_CENTER:
-                    alignedPos.x -= m_Size.x * 0.5f;
-                    alignedPos.y -= m_Size.y;
-                    break;
-                case UI_Alignment::BOTTOM_RIGHT:
-                    alignedPos.x -= m_Size.x;
-                    alignedPos.y -= m_Size.y;
-                    break;
-                case UI_Alignment::TOP_LEFT:
-                default:
-                    break;
-            }
-            
-            return alignedPos;
-        }
+        // Get position adjusted for alignment relative to canvas (viewport)
+        virtual Rect GetAlignedRect() const;
 
         template<typename T>
         Ref<T> As()
@@ -129,9 +103,8 @@ namespace ignite {
         }
 
     protected:
-        glm::vec2 m_Position = glm::vec2(0.0f, 0.0f);
-        glm::vec2 m_Size = glm::vec2(100.0f, 50.0f);
-        UI_Alignment m_Alignment = UI_Alignment::TOP_LEFT;
+        Rect m_Rect = Rect({0.0f, 0.0f}, {100.0f, 50.0f});
+        UIAlignment m_Alignment = UIAlignment::TOP_LEFT;
     };
 
     class UIButton : public UIWidget
@@ -145,6 +118,10 @@ namespace ignite {
             m_PressedColor = glm::vec4(0.2f, 0.2f, 0.2f, 1.0f);
             m_TextColor = UI_COLOR_WHITE;
             m_BorderColor = glm::vec4(0.6f, 0.6f, 0.6f, 1.0f);
+        }
+
+        ~UIButton()
+        {
         }
 
         void Update(float deltaTime, const glm::vec2& mousePos) override
@@ -191,6 +168,8 @@ namespace ignite {
 
         // Getters
         const std::string& GetText() const { return m_Text; }
+        const Ref<Texture> &GetImage() const { return m_Image; }
+
         bool IsHovered() const { return m_IsHovered; }
         bool IsPressed() const { return m_IsPressed; }
 
@@ -214,6 +193,7 @@ namespace ignite {
         }
         void SetTextColor(const glm::vec4& color) { m_TextColor = color; }
         void SetBorderColor(const glm::vec4& color) { m_BorderColor = color; }
+        void SetImage(const Ref<Texture> &image) { m_Image = image; }
 
         // Event callbacks
         void SetOnClick(std::function<void()> callback) { m_OnClick = callback; }
@@ -226,6 +206,8 @@ namespace ignite {
         std::string m_Text;
         bool m_IsHovered = false;
         bool m_IsPressed = false;
+
+        Ref<Texture> m_Image;
 
         glm::vec4 m_NormalColor;
         glm::vec4 m_HoverColor;

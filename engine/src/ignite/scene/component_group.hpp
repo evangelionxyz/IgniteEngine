@@ -45,6 +45,7 @@ namespace ignite
         BoxCollider,
         AudioSource,
         Script,
+        WorldEnvironment,
         SphereCollider
     >; 
 }

@@ -153,9 +153,8 @@ namespace ignite
         glm::vec2 tilingFactor;
         glm::vec4 color;
         u32 texIndex;
-        u32 entityID;
 
-        static std::array<nvrhi::VertexAttributeDesc, 6> GetAttributes()
+        static std::array<nvrhi::VertexAttributeDesc, 5> GetAttributes()
         {
             return
             {
@@ -184,11 +183,6 @@ namespace ignite
                     .setName("TEXINDEX")
                     .setFormat(nvrhi::Format::R32_UINT)
                     .setOffset(offsetof(Vertex2DQuad, texIndex))
-                    .setElementStride(sizeof(Vertex2DQuad)),
-                 nvrhi::VertexAttributeDesc()
-                    .setName("ENTITYID")
-                    .setFormat(nvrhi::Format::R32_UINT)
-                    .setOffset(offsetof(Vertex2DQuad, entityID))
                     .setElementStride(sizeof(Vertex2DQuad))
             };
         }
@@ -198,9 +192,8 @@ namespace ignite
     {
         glm::vec3 position;
         glm::vec4 color;
-        u32 entityID;
 
-        static std::array<nvrhi::VertexAttributeDesc, 3> GetAttributes()
+        static std::array<nvrhi::VertexAttributeDesc, 2> GetAttributes()
         {
             return
             {
@@ -214,11 +207,6 @@ namespace ignite
                     .setName("COLOR")
                     .setFormat(nvrhi::Format::RGBA32_FLOAT)
                     .setOffset(offsetof(Vertex2DLine, color))
-                    .setElementStride(sizeof(Vertex2DLine)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("ENTITYID")
-                    .setFormat(nvrhi::Format::R32_UINT)
-                    .setOffset(offsetof(Vertex2DLine, entityID))
                     .setElementStride(sizeof(Vertex2DLine))
             };
         }

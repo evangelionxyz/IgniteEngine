@@ -74,70 +74,28 @@ namespace ignite {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
         // create vertex buffer
-        nvrhi::BufferDesc vbDesc;
-        vbDesc.byteSize = sizeof(vertices);
-        vbDesc.isVertexBuffer = true;
-        vbDesc.debugName = "Skybox vertex buffer";
-        vbDesc.initialState = nvrhi::ResourceStates::VertexBuffer;
-        vbDesc.keepInitialState = true;
+        m_VertexBuffer = VertexBuffer::Create(sizeof(vertices), "[Environment] Vertex Buffer");
+        m_IndexBuffer = IndexBuffer::Create(sizeof(uint32_t) * 36, "[Environment] Index Buffer");
 
-        m_VertexBuffer = device->createBuffer(vbDesc);
-        LOG_ASSERT(m_VertexBuffer, "[Environment] Failed to create vertex buffer!");
-
-        // create index buffer
-        nvrhi::BufferDesc ibDesc;
-        ibDesc.byteSize = sizeof(uint32_t) * 36;
-        ibDesc.isIndexBuffer = true;
-        ibDesc.debugName = "Skybox index buffer";
-        ibDesc.initialState = nvrhi::ResourceStates::IndexBuffer;
-        ibDesc.keepInitialState = true;
-
-        m_IndexBuffer = device->createBuffer(ibDesc);
-        LOG_ASSERT(m_IndexBuffer, "[Environment] Failed to create index buffer!");
-
-        // create constant buffer
-        nvrhi::BufferDesc cbDesc;
-        cbDesc.byteSize = sizeof(EnvironmentParams);
-        cbDesc.isConstantBuffer = true;
-        cbDesc.isVolatile = true;
-        cbDesc.debugName = "Skybox params constant buffer";
-        cbDesc.initialState = nvrhi::ResourceStates::ConstantBuffer;
-        cbDesc.keepInitialState = true;
-        cbDesc.maxVersions = 16;
-
-        m_ParamsConstantBuffer = device->createBuffer(cbDesc);
-        LOG_ASSERT(m_ParamsConstantBuffer, "[Environment] Failed to create constant buffer!");
-
-        nvrhi::BufferDesc desc;
-        desc.byteSize = sizeof(DirLight);
-        desc.isConstantBuffer = true;
-        desc.isVolatile = true;
-        desc.debugName = "Directional light constant buffer";
-        desc.initialState = nvrhi::ResourceStates::ConstantBuffer;
-        desc.keepInitialState = true;
-        desc.maxVersions = 16;
-
-        m_DirLightConstantBuffer = device->createBuffer(desc);
-        LOG_ASSERT(m_DirLightConstantBuffer, "[Environment] Failed to create directional light constant buffer!");
+        m_ParamsConstantBuffer = ConstantBuffer::Create(sizeof(EnvironmentParams), true, 16, "[Environment] EnvironmentParams constant buffer!");
+        m_DirLightConstantBuffer = ConstantBuffer::Create(sizeof(DirLight), true, 16, "[Environment] DirLight constant buffer!");
     }
 
-    void Environment::Render(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline)
+    void Environment::Begin(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline)
     {
-        isUpdatingTexture = false;
-
         CameraConstants cameraConstants = { camera->GetViewProjectionMatrix(), glm::vec4(camera->position, 1.0f) };
 
         // write params buffer
-        commandList->writeBuffer(m_ParamsConstantBuffer, &params, sizeof(EnvironmentParams));
-        commandList->writeBuffer(m_DirLightConstantBuffer, &dirLight, sizeof(DirLight));
+        m_ParamsConstantBuffer->SetData(commandList, Buffer(&params, sizeof(EnvironmentParams)));
+        m_DirLightConstantBuffer->SetData(commandList, Buffer(&dirLight, sizeof(DirLight)));
 
         // render
         auto state = nvrhi::GraphicsState();
         state.pipeline = pipeline->GetHandle();
         state.framebuffer = framebuffer;
         state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
-        state.addVertexBuffer({ m_VertexBuffer, 0, 0 });
-        state.indexBuffer = { m_IndexBuffer, nvrhi::Format::R32_UINT };
+        state.addVertexBuffer({ m_VertexBuffer->GetHandle(), 0, 0 });
+        state.indexBuffer = { m_IndexBuffer->GetHandle(), nvrhi::Format::R32_UINT };
 
         if (m_BindingSet != nullptr)
         {
@@ -156,8 +114,15 @@ namespace ignite {
         commandList->drawIndexed(args);
     }
 
+    void Environment::End()
+    {
+        m_Invalidating = false;
+    }
+
     void Environment::LoadTexture(const std::string &filepath)
     {
+        m_Invalidating = true;
+        
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
         TextureCreateInfo textureCI;
@@ -170,7 +135,7 @@ namespace ignite {
         // create binding set after load the texture
         nvrhi::BindingSetDesc bsDesc;
         bsDesc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(CameraConstants)));
-        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m_ParamsConstantBuffer));
+        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m_ParamsConstantBuffer->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_HDRTexture->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_HDRTexture->GetSampler()));
 
@@ -182,9 +147,9 @@ namespace ignite {
     {
         // write buffers
         m_HDRTexture->Write(commandList);
+        m_VertexBuffer->SetData(commandList, Buffer(vertices.data(), sizeof(vertices)));
 
-        commandList->writeBuffer(m_VertexBuffer, vertices.data(), sizeof(vertices));
-
+        // index buffer
         u32 *indices = new u32[36];
         u32 Offset = 0;
         for (u32 i = 0; i < 36; i += 6)
@@ -200,9 +165,7 @@ namespace ignite {
             Offset += 4;
         }
 
-        // index buffer
-        commandList->writeBuffer(m_IndexBuffer, indices, sizeof(uint32_t) * 36);
-
+        m_IndexBuffer->SetData(commandList, Buffer(indices, sizeof(uint32_t) * 36));
         delete[] indices;
     }
 

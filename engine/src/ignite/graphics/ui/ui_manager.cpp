@@ -26,13 +26,17 @@
 
 namespace ignite
 {
+    static UIManager *s_UIManager = nullptr;
+
     UIManager::UIManager()
         : m_LayoutGrid(m_ViewportWidth, m_ViewportHeight)
     {
+        s_UIManager = this;
     }
 
     UIManager::~UIManager()
     {
+        s_UIManager = nullptr;
         ClearWidgets();
     }
 
@@ -40,7 +44,7 @@ namespace ignite
     {
         auto button = CreateRef<UIButton>(text);
         button->SetPosition(position);
-        button->SetSize(size);
+        button->SetSize(position + size);
         AddWidget(button);
         return button;
     }
@@ -114,8 +118,7 @@ namespace ignite
     void UIManager::SetMousePosition(const glm::vec2& screenMousePos, const glm::vec2& viewportPos, const glm::vec2& viewportSize)
     {
         // Calculate mouse position relative to viewport
-        glm::vec2 localMouse = UIMouseHelper::GetViewportMousePosition(screenMousePos, viewportPos, viewportSize);
-        m_MousePosition = localMouse;
+        m_MousePosition = UIMouseHelper::GetViewportMousePosition(screenMousePos, viewportPos, viewportSize);
     }
 
     void UIManager::HandleMouseClick(bool isPressed)
@@ -125,7 +128,6 @@ namespace ignite
 
     UIManager& UIManager::GetInstance()
     {
-        static UIManager instance;
-        return instance;
+        return *s_UIManager;
     }
 }

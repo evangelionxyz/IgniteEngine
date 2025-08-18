@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.23)
 
 # Workspace: IGN (converted from Premake)
-project(IGN LANGUAGES C CXX)
+# Enable C# support only on Windows where it's available
+project(IGN LANGUAGES C CXX CSharp)
 
 # Enable solution folders in IDEs like Visual Studio
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -90,7 +91,12 @@ endif()
 add_subdirectory(thirdparty)
 add_subdirectory(engine)
 add_subdirectory(editor)
-add_subdirectory(scriptcore)
+add_subdirectory(runtime)
+
+# Only include C# scriptcore project on Windows
+if(WIN32)
+	add_subdirectory(scriptcore)
+endif()
 
 # Set startup project in Visual Studio
 if(MSVC)

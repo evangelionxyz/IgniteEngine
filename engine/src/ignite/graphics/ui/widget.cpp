@@ -22,7 +22,65 @@
 */
 
 #include "widget.hpp"
+#include "ui_manager.hpp"
 
 namespace ignite {
 
+    Rect UIWidget::GetAlignedRect() const
+    {
+        Rect alignedRect = m_Rect;
+        glm::vec2 &position = alignedRect.min;
+        glm::vec2 &size = alignedRect.max;
+        
+        UIManager &uiManager = UIManager::GetInstance();
+        const glm::vec2 viewportSize = { static_cast<float>(uiManager.GetViewportWidth()), static_cast<float>(uiManager.GetViewportHeight()) };
+        
+        switch (m_Alignment)
+        {
+            case UIAlignment::TOP_CENTER:
+                position.x = viewportSize.x / 2.0f + m_Rect.min.x - m_Rect.GetSize().x / 2.0f;
+                size.x = viewportSize.x / 2.0f + m_Rect.min.x + m_Rect.GetSize().x / 2.0f;
+            break;
+            case UIAlignment::TOP_RIGHT:
+                position.x = viewportSize.x - m_Rect.min.x - m_Rect.GetSize().x;
+                size.x = viewportSize.x - m_Rect.min.x;
+                break;
+            case UIAlignment::CENTER_LEFT:
+                position.y = viewportSize.y / 2.0f + m_Rect.min.y - m_Rect.GetSize().y / 2.0f;
+                size.y = viewportSize.y / 2.0f + m_Rect.min.y + m_Rect.GetSize().y / 2.0f;
+                break;
+            case UIAlignment::CENTER:
+                position.x = viewportSize.x / 2.0f + m_Rect.min.x - m_Rect.GetSize().x / 2.0f;
+                size.x = viewportSize.x / 2.0f + m_Rect.min.x + m_Rect.GetSize().x / 2.0f;
+                position.y = viewportSize.y / 2.0f + m_Rect.min.y - m_Rect.GetSize().y / 2.0f;
+                size.y = viewportSize.y / 2.0f + m_Rect.min.y + m_Rect.GetSize().y / 2.0f;
+                break;
+            case UIAlignment::CENTER_RIGHT:
+                position.x = viewportSize.x - m_Rect.min.x - m_Rect.GetSize().x;
+                size.x = viewportSize.x - m_Rect.min.x;
+                position.y = viewportSize.y / 2.0f + m_Rect.min.y - m_Rect.GetSize().y / 2.0f;
+                size.y = viewportSize.y / 2.0f + m_Rect.min.y + m_Rect.GetSize().y / 2.0f;
+                break;
+            case UIAlignment::BOTTOM_LEFT:
+                position.y = viewportSize.y - m_Rect.max.y;
+                size.y = viewportSize.y - m_Rect.min.y;
+                break;
+            case UIAlignment::BOTTOM_CENTER:
+                position.x = viewportSize.x / 2.0f + m_Rect.min.x - m_Rect.GetSize().x / 2.0f;
+                size.x = viewportSize.x / 2.0f + m_Rect.min.x + m_Rect.GetSize().x / 2.0f;
+                position.y = viewportSize.y - m_Rect.max.y;
+                size.y = viewportSize.y - m_Rect.min.y;
+                break;
+            case UIAlignment::BOTTOM_RIGHT:
+                position.x = viewportSize.x - m_Rect.min.x - m_Rect.GetSize().x;
+                size.x = viewportSize.x - m_Rect.min.x; 
+                position.y = viewportSize.y - m_Rect.max.y;
+                size.y = viewportSize.y - m_Rect.min.y;
+                break;
+            case UIAlignment::TOP_LEFT:
+            default: break;
+        }
+
+        return alignedRect;
+    }
 }

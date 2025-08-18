@@ -59,7 +59,7 @@ namespace ignite
         nvrhi::TextureHandle GetColorAttachment(uint32_t index);
         std::vector<nvrhi::TextureHandle> &GetColorAttachments();
 
-        void ClearColorAttachmentFloat(nvrhi::CommandListHandle commandList, uint32_t attachmentIndex = 0, const glm::vec3 &clearColor = glm::vec3(0.0f, 0.0f, 0.0f)) const;
+        void ClearColorAttachmentFloat(nvrhi::CommandListHandle commandList, uint32_t attachmentIndex = 0, const glm::vec4 &clearColor = glm::vec4(0.0f)) const;
         void ClearColorAttachmentUint(nvrhi::CommandListHandle commandList, uint32_t attachmentIndex = 0, uint32_t clearColor = 0) const;
         void ClearDepthAttachment(nvrhi::CommandListHandle commandList, float depth, uint32_t stencil) const;
 

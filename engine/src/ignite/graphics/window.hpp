@@ -55,10 +55,14 @@ namespace ignite
         [[nodiscard]] bool IsInFocus() const { return m_DeviceManager->m_WindowIsInFocus; }
 
         void SetTitle(const std::string &title) const;
+        void SetIcon(const std::string &filepath);
 
         void Iconify() const;
         void Maximize() const;
         void Restore() const;
+
+        void Show();
+        void Hide();
 
         glm::vec2 GetPosition();
         glm::vec2 GetFramebufferSize();

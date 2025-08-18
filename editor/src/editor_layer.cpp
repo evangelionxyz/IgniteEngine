@@ -48,11 +48,7 @@ namespace ignite
     {
         Layer::OnAttach();
 
-        m_Device = Application::GetDeviceManager()->GetDevice();
-
-        // write buffer with command list
-        Renderer2D::InitQuadData();
-        Renderer2D::InitLineData();
+        m_Device = Application::GetGraphicsDevice();
 
         m_ScenePanel = CreateRef<ScenePanel>("Scene Panel", this);
         m_ContentBrowserPanel = CreateRef<ContentBrowserPanel>("Content Browser");
@@ -74,7 +70,14 @@ namespace ignite
             }
         }
 
+        while (!m_ActiveProject)
+        {
+            OpenProject();
+        }
+
         m_CommandList = CommandList::Create();
+
+        Application::GetInstance()->GetWindow()->Show(); // Show window after initialization
     }
 
     void EditorLayer::OnDetach()
@@ -263,7 +266,7 @@ namespace ignite
         auto cmd = m_CommandList->GetActiveHandle();
 
         // Create staging texture for read-back
-        if (m_Data.isPickingEntity)
+        if (m_Data.isPickingEntity && false) // FIXME: No mouse picking
         {
             nvrhi::TextureDesc stagingDesc = m_SceneRenderer.GetRenderTarget()->GetColorAttachment(1)->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
@@ -300,7 +303,7 @@ namespace ignite
             m_Data.takeScreenshot = false;
         }
 
-        if (m_Data.isPickingEntity)
+        if (m_Data.isPickingEntity && false) // FIXME: No mouse picking
         {
             // Map and read the pixel data
             size_t rowPitch = 0;
@@ -663,49 +666,54 @@ namespace ignite
     {
     }
 
-    void EditorLayer::OpenProject()
+    Ref<Project> EditorLayer::OpenProject()
     {
         std::filesystem::path filepath = FileDialogs::OpenFile("Ignite Project (*.ixproj)\0*.ixproj\0");
+
+        Ref<Project> openedProject;
+        
         if (!filepath.empty())
         {
-            OpenProject(filepath);
+            openedProject = OpenProject(filepath);
         }
+
+        return openedProject;
     }
 
-    void EditorLayer::OpenProject(const std::filesystem::path &filepath)
+    Ref<Project> EditorLayer::OpenProject(const std::filesystem::path &filepath)
     {
         Ref<Project> openedProject = ProjectSerializer::Deserialize(filepath);
-        if (!openedProject)
+        if (openedProject)
         {
-            return;
-        }
+            m_ActiveProject = openedProject;
+            m_ContentBrowserPanel->SetActiveProject(m_ActiveProject);
 
-        m_ActiveProject = openedProject;
-        m_ContentBrowserPanel->SetActiveProject(m_ActiveProject);
+            ScriptEngine::Init();
 
-        ScriptEngine::Init();
-
-        // Get Project default scene
-        if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
-        {
-            if (Ref<Scene> activeScene = Project::GetAsset<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
+            // Get Project default scene
+            if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
             {
-                m_EditorScene = SceneManager::Copy(activeScene);
-                m_EditorScene->SetDirtyFlag(false);
+                if (Ref<Scene> activeScene = Project::GetAsset<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
+                {
+                    m_EditorScene = SceneManager::Copy(activeScene);
+                    m_EditorScene->SetDirtyFlag(false);
 
-                m_ActiveScene = m_EditorScene;
-                SetActiveScene(m_ActiveScene.get());
+                    m_ActiveScene = m_EditorScene;
+                    SetActiveScene(m_ActiveScene.get());
 
-                AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(activeScene->handle);
-                auto scenePath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
-                m_CurrentSceneFilePath = scenePath;
+                    AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(activeScene->handle);
+                    auto scenePath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
+                    m_CurrentSceneFilePath = scenePath;
+                }
+            }
+            else
+            {
+                // Create default scene
+                NewScene();
             }
         }
-        else
-        {
-            // Create default scene
-            NewScene();
-        }
+
+        return openedProject;
     }
 
     void EditorLayer::OnScenePlay()

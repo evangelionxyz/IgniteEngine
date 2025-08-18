@@ -31,21 +31,22 @@ namespace ignite
     enum CompType : u8
     {
         CompType_Invalid = 0,
-        CompType_ID = 1,
-        CompType_Camera = 2,
-        CompType_Transform = 3,
-        CompType_Sprite2D = 4,
-        CompType_SkeletalMesh = 5,
-        CompType_StaticMesh = 6,
-        CompType_MeshRenderer = 7,
-        CompType_BoxCollider2D = 8,
-        CompType_Rigidbody2D = 9,
-        CompType_Rigidbody = 10,
-        CompType_BoxCollider = 11,
-        CompType_SphereCollider = 12,
-        CompType_AudioSource = 13,
-        CompType_Script = 14,
-        CompType_LAST = 15
+        CompType_ID,
+        CompType_Camera,
+        CompType_Transform,
+        CompType_Sprite2D,
+        CompType_SkeletalMesh,
+        CompType_StaticMesh,
+        CompType_MeshRenderer,
+        CompType_BoxCollider2D,
+        CompType_Rigidbody2D,
+        CompType_Rigidbody,
+        CompType_BoxCollider,
+        CompType_SphereCollider,
+        CompType_AudioSource,
+        CompType_Script,
+        CompType_WorldEnvironment,
+        CompType_LAST
     };
 
     class IComponent

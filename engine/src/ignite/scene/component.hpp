@@ -31,6 +31,7 @@
 #include "ignite/graphics/material.hpp"
 #include "ignite/graphics/vertex_data.hpp"
 #include "ignite/graphics/mesh.hpp"
+#include "ignite/graphics/environment.hpp"
 #include "ignite/math/aabb.hpp"
 #include "scene_camera.hpp"
 
@@ -76,6 +77,7 @@ namespace ignite
         EntityType_Prefab = BIT(3),
         EntityType_Joint = BIT(4),
         EntityType_Audio = BIT(5),
+        EntityType_WorldEnvironment = BIT(5),
         EntityType_Invalid = BIT(6)
     };
 
@@ -322,6 +324,19 @@ namespace ignite
         }
 
         static CompType StaticType() { return CompType_Transform; }
+        virtual CompType GetType() override { return StaticType(); }
+    };
+
+    class WorldEnvironment : public IComponent
+    {
+    public:
+        Ref<Environment> environment;
+        EnvironmentParams params;
+        AssetHandle imageHandle;
+
+        bool primary = false;
+        
+        static CompType StaticType() { return CompType_WorldEnvironment; }
         virtual CompType GetType() override { return StaticType(); }
     };
 

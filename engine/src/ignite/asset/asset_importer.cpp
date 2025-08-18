@@ -493,5 +493,13 @@ namespace ignite {
     void EnvironmentImporter::UpdateTexture(Ref<Environment> *outEnvironment, const std::string &filepath)
     {
         (*outEnvironment)->LoadTexture(filepath);
+
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        auto commandList = device->createCommandList();
+
+        commandList->open();
+        (*outEnvironment)->WriteBuffer(commandList);
+        commandList->close();
+        device->executeCommandList(commandList);
     }
 }

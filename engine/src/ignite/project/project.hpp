@@ -25,6 +25,7 @@
 
 #include "ignite/asset/asset.hpp"
 #include "ignite/asset/asset_manager.hpp"
+#include "ignite/asset/material_manager.hpp"
 
 #include <string>
 #include <filesystem>
@@ -32,7 +33,6 @@
 namespace ignite
 {
     class Scene;
-
     struct ProjectInfo
     {
         std::string name;
@@ -51,7 +51,6 @@ namespace ignite
     {
     public:
         Project() = default;
-
         Project(const ProjectInfo &info);
 
         ~Project() override;
@@ -62,8 +61,8 @@ namespace ignite
         
         void SetActiveScene(Scene *scene);
         bool BuildSolution();
-        std::vector<std::pair<AssetHandle, AssetMetaData>> ValidateAssetRegistry();
 
+        std::vector<std::pair<AssetHandle, AssetMetaData>> ValidateAssetRegistry();
 
         std::filesystem::path GetDirectory() const
         {
@@ -114,6 +113,8 @@ namespace ignite
         }
 
         AssetManager &GetAssetManager() { return m_AssetManager; }
+        MaterialManager &GetMaterialManager() { return m_MaterialManager; }
+
         ProjectInfo &GetInfo() { return m_Info; }
         Scene *GetActiveScene() const { return m_ActiveScene; }
 
@@ -125,10 +126,10 @@ namespace ignite
 
     private:
         void GenerateProject();
-
         Scene *m_ActiveScene = nullptr; // current active scene in editor
         ProjectInfo m_Info;
 
+        MaterialManager m_MaterialManager;
         AssetManager m_AssetManager;
     };
 

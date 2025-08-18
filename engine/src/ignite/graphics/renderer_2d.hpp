@@ -28,6 +28,7 @@
 #include "graphics_pipeline.hpp"
 #include "renderer.hpp"
 #include "shader.hpp"
+#include "ignite/math/math.hpp"
 
 #include "ignite/math/aabb.hpp"
 
@@ -42,6 +43,7 @@ namespace ignite
     class DeviceManager;
     class Texture;
     class ICamera;
+    class RenderTarget;
 
     template<typename VertexType>
     struct BatchRender
@@ -71,34 +73,42 @@ namespace ignite
     class Renderer2D
     {
     public:
-        static void Init();
-        static void Shutdown();
-        static void CreatePipelines(nvrhi::IFramebuffer *framebuffer);
-        static void SetFillMode(nvrhi::RasterFillMode mode);
+        Renderer2D(Ref<RenderTarget> renderTarget);
+        ~Renderer2D();
 
-        static void Begin(nvrhi::ICommandList *commandList, nvrhi::IFramebuffer *framebuffer, const CameraConstants &cameraConstants);
-        static void Begin(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer* framebuffer);
-        static void Flush();
-        static void End();
+        void SetFillMode(nvrhi::RasterFillMode mode);
 
-        static void DrawBox(const glm::mat4& transform, const glm::vec4& color = glm::vec4(1.0f), uint32_t entityID = 0);
-        static void DrawRect(const glm::mat4& transform, const glm::vec4& color = glm::vec4(1.0f), uint32_t entityID = 0);
-        static void DrawLine(const std::vector<glm::vec3>& positions, const glm::vec4& color = glm::vec4(1.0f), uint32_t entityID = 0);
-        static void DrawLine(const glm::vec3 &pos0, const glm::vec3 &pos1, const glm::vec4& color = glm::vec4(1.0f), uint32_t entityID = 0);
-        static void DrawAABB(const AABB& aabb, const glm::vec4& color = glm::vec4(1.0f));
+        void Begin(nvrhi::ICommandList *cmd, const CameraConstants &cameraConstants);
+        void Begin(nvrhi::ICommandList *cmd, ICamera *camera);
+        void Flush();
+        void End();
 
-        static void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t entityID = 0);
-        static void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t entityID = 0);
-        static void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t entityID = 0);
+        void DrawBox(const glm::mat4& transform, const glm::vec4& color = glm::vec4(1.0f));
+        void DrawRect(const glm::mat4& transform, const glm::vec4& color = glm::vec4(1.0f));
+        void DrawLine(const std::vector<glm::vec3>& positions, const glm::vec4& color = glm::vec4(1.0f));
+        void DrawLine(const glm::vec3 &pos0, const glm::vec3 &pos1, const glm::vec4& color = glm::vec4(1.0f));
+        void DrawAABB(const AABB& aabb, const glm::vec4& color = glm::vec4(1.0f));
 
-        static void InitQuadData();
-        static void InitLineData();
+        void DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
+        void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
+        void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
+        void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
 
-        static u32 GetOrInsertTexture(const Ref<Texture>& texture);
-        static void UpdateTextureBindings();
+        void InitQuadData();
+        void InitLineData();
+
+        u32 GetOrInsertTexture(const Ref<Texture>& texture);
+        void UpdateTextureBindings();
+
+        static Ref<Renderer2D> Create(Ref<RenderTarget> renderTarget);
 
     private:
-        static nvrhi::ICommandList *renderCommandList;
-        static nvrhi::IFramebuffer *renderFramebuffer;
+        nvrhi::ICommandList *m_Cmd;
+        Ref<RenderTarget> m_RenderTarget;
+
+        BatchRender<Vertex2DQuad> m_QuadBatch;
+        BatchRender<Vertex2DLine> m_LineBatch;
+        CameraConstants m_CameraBuffer;
+        const uint8_t MAX_TEXTURE_COUNT = 32;
     };
 }

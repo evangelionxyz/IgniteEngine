@@ -22,6 +22,8 @@
 */
 
 #include "ui_renderer.hpp"
+
+#include "render_target.hpp"
 #include "renderer_2d.hpp"
 
 namespace ignite
@@ -29,12 +31,23 @@ namespace ignite
     UIRenderer::UIRenderer(uint32_t width, uint32_t height)
         : m_Width(width), m_Height(height)
     {
-        m_Projection = glm::ortho(0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f);
+        // UI render target
+        RenderTargetCreateInfo createInfo = {};
+        createInfo.attachments =
+        {
+            FramebufferAttachments{ nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }, // Depth
+            FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } // Main Color
+        };
+        m_RenderTarget = RenderTarget::Create(createInfo);
+
+        m_Renderer = Renderer2D::Create(m_RenderTarget);
+        m_Projection = glm::ortho(
+            0.0f, static_cast<float>(width),
+            static_cast<float>(height), 0.0f);
     }
 
     UIRenderer::~UIRenderer()
     {
-
     }
 
     void UIRenderer::Update(float deltaTime)
@@ -45,23 +58,26 @@ namespace ignite
         }
     }
 
-    void UIRenderer::Render(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
+    void UIRenderer::Render(nvrhi::ICommandList *cmd)
     {
         // 2D Pass
         CameraConstants cc{ m_Projection, { 0.0f, 0.0f, 0.0f, 1.0f } };
+        m_RenderTarget->ClearColorAttachmentFloat(cmd);
+
+        nvrhi::IFramebuffer *framebuffer = m_RenderTarget->GetFramebuffer();
 
         // Begin 2D rendering
-        Renderer2D::Begin(cmd, framebuffer, cc);
+        m_Renderer->Begin(cmd, cc);
+        
+        // Render UI widgets
+        RenderWidgets(cmd, framebuffer);
 
         // Render layout grid first (background)
         RenderLayoutGrid(cmd, framebuffer);
 
-        // Render UI widgets
-        RenderWidgets(cmd, framebuffer);
-
         // Flush and end 2D rendering
-        Renderer2D::Flush();
-        Renderer2D::End();
+        m_Renderer->Flush();
+        m_Renderer->End();
     }
 
     void UIRenderer::Resize(uint32_t width, uint32_t height)
@@ -70,6 +86,7 @@ namespace ignite
         m_Height = height;
 
         m_Projection = glm::ortho(0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f);
+        m_RenderTarget->Resize(width, height);
 
         if (m_UIManager)
         {
@@ -95,7 +112,7 @@ namespace ignite
             glm::vec3 start = { line.start.x, static_cast<float>(m_Height) - line.start.y, 0.0f };
             glm::vec3 end = { line.end.x, static_cast<float>(m_Height) - line.end.y, 0.0f };
             
-            Renderer2D::DrawLine(start, end, color);
+            m_Renderer->DrawLine(start, end, color);
         }
     }
 
@@ -123,23 +140,17 @@ namespace ignite
 
     void UIRenderer::RenderButton(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<UIButton> button)
     {
-        glm::vec2 position = button->GetAlignedPosition();
-        glm::vec2 size = button->GetSize();
+        // Rect rect( { position.x, position.y }, { position.x + size.x, position.y + size.y } );
         
-        // Convert UI space to screen space (flip Y coordinate)
-        glm::vec3 screenPos = { position.x, static_cast<float>(m_Height) - position.y - size.y, 0.0f };
+        const Rect &rect = button->GetAlignedRect();
+        const glm::vec4 &buttonColor = button->GetCurrentColor();
+        const Ref<Texture> image = button->GetImage();
         
-        // Create transform matrix for the button
-        glm::mat4 transform = glm::translate(glm::mat4(1.0f), screenPos);
-        transform = glm::scale(transform, { size.x, size.y, 1.0f });
-        
-        // Render button background
-        glm::vec4 buttonColor = button->GetCurrentColor();
-        Renderer2D::DrawQuad(transform, buttonColor);
+        m_Renderer->DrawQuad(rect, 0.0f, buttonColor, image);
         
         // Render button border
-        glm::vec4 borderColor = button->GetBorderColor();
-        Renderer2D::DrawRect(transform, borderColor);
+        // glm::vec4 borderColor = button->GetBorderColor();
+        // m_Renderer->DrawRect(transform, borderColor);
         
         // TODO: Add text rendering when text system is available
         // For now, we just render the button rectangle
@@ -149,16 +160,16 @@ namespace ignite
     {
         // TODO: Implement text rendering when text/font system is available
         // For now, just render a small quad as placeholder
-        glm::vec2 position = text->GetAlignedPosition();
-        glm::vec2 size = text->GetSize();
+        // glm::vec2 position = text->GetAlignedPosition();
+        // glm::vec2 size = text->GetSize();
         
         // Convert UI space to screen space (flip Y coordinate)
-        glm::vec3 screenPos = { position.x, static_cast<float>(m_Height) - position.y - size.y, 0.0f };
+        // glm::vec3 screenPos = { position.x, static_cast<float>(m_Height) - position.y - size.y, 0.0f };
         
-        glm::mat4 transform = glm::translate(glm::mat4(1.0f), screenPos);
-        transform = glm::scale(transform, { size.x, size.y, 1.0f });
+        // glm::mat4 transform = glm::translate(glm::mat4(1.0f), screenPos);
+        // transform = glm::scale(transform, { size.x, size.y, 1.0f });
         
-        Renderer2D::DrawQuad(transform, text->GetColor());
+        // m_Renderer->DrawQuad(transform, text->GetColor());
     }
 
     Ref<UIRenderer> UIRenderer::Create(uint32_t width, uint32_t height)

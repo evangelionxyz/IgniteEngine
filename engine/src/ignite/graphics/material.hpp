@@ -25,6 +25,8 @@
 
 #include "ignite/core/buffer.hpp"
 #include "ignite/core/application.hpp"
+#include "constant_buffer.hpp"
+
 #include "texture.hpp"
 
 #include <glm/glm.hpp>
@@ -175,27 +177,22 @@ namespace ignite
         std::unordered_map<MaterialTextureType, Ref<MaterialTextureResource>> textures;
 
         nvrhi::BindingSetHandle bindingSet;
-        nvrhi::BufferHandle paramsBuffer;
 
         void LoadTexture(const aiScene *aiScene, const aiMaterial *aiMat, const std::filesystem::path &filepath, MaterialTextureType textureType);
-
         void CreateTextures();
 
         void UpdateBindingSet();
         void UpdateTexture(const Ref<Texture> &texture, MaterialTextureType textureType);
         void WriteTexture(nvrhi::ICommandList *commandList);
-
         void WriteBuffer(nvrhi::ICommandList *commandList);
 
-        static void UploadTextureWithMips(nvrhi::ICommandList *commandList,
-            const nvrhi::TextureHandle &handle, const void *baseData,
-            uint32_t baseWidth, uint32_t baseHeight, uint32_t baseRowPitch,
-            nvrhi::Format format, uint32_t mipLevels);
+        static void UploadTextureWithMips(nvrhi::ICommandList *commandList, const nvrhi::TextureHandle &handle,
+            const void *baseData, uint32_t baseWidth, uint32_t baseHeight, uint32_t baseRowPitch, nvrhi::Format format, uint32_t mipLevels);
 
         static AssetType GetStaticType() { return AssetType::Material; }
         virtual AssetType GetType() override { return GetStaticType(); }
 
     private:
-        friend class MeshLoader;
+        Ref<ConstantBuffer> m_ConstantBuffer;
     };
 }

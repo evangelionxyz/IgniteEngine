@@ -187,12 +187,10 @@ namespace ignite {
         return m_ColorAttachments;
     }
 
-    void RenderTarget::ClearColorAttachmentFloat(nvrhi::CommandListHandle commandList, uint32_t attachmentIndex, const glm::vec3 &clearColor) const
+    void RenderTarget::ClearColorAttachmentFloat(nvrhi::CommandListHandle commandList, uint32_t attachmentIndex, const glm::vec4 &clearColor) const
     {
         nvrhi::TextureHandle texture = m_ColorAttachments[attachmentIndex];
-        nvrhi::utils::ClearColorAttachment(commandList, m_FramebufferHandle, attachmentIndex,
-            nvrhi::Color(clearColor.x, clearColor.y, clearColor.z, 1.0f)
-        );
+        nvrhi::utils::ClearColorAttachment(commandList, m_FramebufferHandle, attachmentIndex, nvrhi::Color(clearColor.x, clearColor.y, clearColor.z, clearColor.w));
     }
 
     void RenderTarget::ClearColorAttachmentUint(nvrhi::CommandListHandle commandList, uint32_t attachmentIndex, uint32_t clearColor) const

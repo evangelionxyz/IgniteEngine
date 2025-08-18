@@ -33,14 +33,14 @@ namespace ignite
     class VertexBuffer
     {
     public:
-        VertexBuffer(size_t size);
+        VertexBuffer(const size_t size, const std::string &debugName = "Vertex Buffer");
 
         void SetData(nvrhi::ICommandList *commandList, Buffer buffer, size_t offset = 0) const;
-        void SetData(Buffer buffer, size_t offset = 0) const;
+        void SetData(Buffer buffer, const size_t offset = 0) const;
 
         nvrhi::BufferHandle GetHandle() { return m_Handle; }
 
-        static Ref<VertexBuffer> Create(size_t size);
+        static Ref<VertexBuffer> Create(const size_t size, const std::string &debugName = "Vertex Buffer");
 
     private:
         nvrhi::BufferHandle m_Handle;

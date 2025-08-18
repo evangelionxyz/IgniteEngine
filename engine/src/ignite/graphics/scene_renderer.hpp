@@ -41,6 +41,7 @@ namespace ignite
     class ICamera;
     class RenderTarget;
     class UIRenderer;
+    class Renderer2D;
         
     class SceneRenderer
     {
@@ -73,9 +74,6 @@ namespace ignite
         Ref<Environment> &GetEnvironment() { return m_Environment; }
         Ref<RenderTarget> &GetRenderTarget() { return m_SceneRenderTarget; }
         Ref<RenderTarget> &GetCompositeRenderTarget() { return m_CompositeRenderTarget; }
-        
-        Ref<EdgeDetection> GetEdgeDetection() { return m_EdgeDetection; }
-
         Ref<UIRenderer> &GetUIRenderer() { return m_UIRenderer; }
 
     private:
@@ -85,11 +83,17 @@ namespace ignite
 
         void CompositeUpdateBindingSet();
 
+        void UIPass(nvrhi::ICommandList *cmd);
+        void CompositePass(nvrhi::ICommandList *cmd);
+
         Ref<Environment> m_Environment;
+        Ref<CommandList> m_CommandList;
+
         Ref<GraphicsPipeline> m_EnvironmentPipeline;
         Ref<GraphicsPipeline> m_GeometryAnimPipeline;
+        Ref<GraphicsPipeline> m_UIPipeline;
+
         Ref<RenderTarget> m_SceneRenderTarget;
-        Ref<CommandList> m_CommandList;
 
         // Composite
         Ref<GraphicsPipeline> m_CompositePipeline;
@@ -97,16 +101,16 @@ namespace ignite
         Ref<VertexBuffer> m_CompositeVertexBuffer;
         nvrhi::BindingSetHandle m_CompositeBindingSet;
 
+        Ref<Renderer2D> m_Renderer2D;
         Ref<UIRenderer> m_UIRenderer;
 
         std::vector<uint32_t> m_SelectedEntities;
         std::vector<AABB> m_EntityBounds;
 
-        Ref<EdgeDetection> m_EdgeDetection;
-        EdgeDetectionParameter m_EdgeDetectionParams;
+        // Ref<EdgeDetection> m_EdgeDetection;
+        // EdgeDetectionParameter m_EdgeDetectionParams;
 
         nvrhi::IDevice *m_Device = nullptr;
-
         Scene *m_Scene = nullptr;
     };
 }

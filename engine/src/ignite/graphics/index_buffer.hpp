@@ -33,13 +33,14 @@ namespace ignite
     class IndexBuffer
     {
     public:
-        IndexBuffer(size_t size);
+        IndexBuffer(size_t size, const std::string &debugName = "Index Buffer");
 
+        void SetData(nvrhi::ICommandList *commandList, Buffer buffer, size_t offset = 0) const;
         void SetData(Buffer buffer, size_t offset = 0) const;
 
         nvrhi::BufferHandle GetHandle() { return m_Handle; }
 
-        static Ref<IndexBuffer> Create(size_t size);
+        static Ref<IndexBuffer> Create(size_t size, const std::string &debugName = "Index Buffer");
 
     private:
         nvrhi::BufferHandle m_Handle;

@@ -22,7 +22,7 @@
 */
 
 #include "window.hpp"
-
+#include "stb_image.h"
 #include "ignite/core/logger.hpp"
 #include "ignite/core/input/app_event.hpp"
 #include "ignite/core/input/event.hpp"
@@ -131,13 +131,15 @@ namespace ignite
         m_DeviceManager->m_Window = glfwCreateWindow(
             m_DeviceManager->m_DeviceParams.backBufferWidth,
             m_DeviceManager->m_DeviceParams.backBufferHeight,
-           windowTitle ? windowTitle : "",
-           m_DeviceManager->m_DeviceParams.startFullscreen ? glfwGetPrimaryMonitor() : nullptr,
-           nullptr);
+            windowTitle ? windowTitle : "",
+            m_DeviceManager->m_DeviceParams.startFullscreen ? glfwGetPrimaryMonitor() : nullptr,
+            nullptr);
 
         LOG_ASSERT(m_DeviceManager->m_Window, "Failed to create GLFW window\n");
 
         JoystickManager::Init(this);
+
+        Hide(); // Hide window when initialization
 
         if (m_DeviceManager->m_DeviceParams.startMaximized)
         {
@@ -184,7 +186,6 @@ namespace ignite
         result = m_DeviceManager->CreateSwapChain();
         LOG_ASSERT(result, "Failed to create Swap Chain\n");
 
-        glfwShowWindow(m_DeviceManager->m_Window);
         m_DeviceManager->m_WindowVisible = true;
         m_DeviceManager->m_WindowIsInFocus = true;
 
@@ -233,6 +234,25 @@ namespace ignite
         glfwSetWindowTitle(m_DeviceManager->m_Window, title.c_str());
     }
 
+    void Window::SetIcon(const std::string &filepath)
+    {
+        GLFWimage image[1];
+        int width, height, channels;
+        uint8_t *pixels = stbi_load(filepath.c_str(), &width, &height, &channels, 4);
+
+        if (pixels)
+        {
+            image[0].width = width;
+            image[0].height = height;
+            image[0].pixels = pixels;
+            glfwSetWindowIcon(m_DeviceManager->m_Window, 1, image);
+        }
+        else
+        {
+            LOG_ERROR("Window icon file not found: {}", filepath);
+        }
+    }
+
     void Window::Iconify() const
     {
         glfwIconifyWindow(m_DeviceManager->m_Window);
@@ -248,6 +268,16 @@ namespace ignite
         glfwRestoreWindow(m_DeviceManager->m_Window);
     }
     
+    void Window::Show()
+    {
+        glfwShowWindow(m_DeviceManager->m_Window);
+    }
+
+    void Window::Hide()
+    {
+        glfwHideWindow(m_DeviceManager->m_Window);
+    }
+
     glm::vec2 Window::GetPosition()
     {
         int xPos, yPos;

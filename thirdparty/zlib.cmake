@@ -1,0 +1,6 @@
+# ZLIB (custom subset)
+add_library(ZLIB STATIC)
+file(GLOB ZLIB_SOURCES CONFIGURE_DEPENDS "ZLIB/*.c")
+target_sources(ZLIB PRIVATE ${ZLIB_SOURCES})
+target_include_directories(ZLIB PUBLIC ${THIRDPARTY_DIR}/ZLIB)
+set_common_target_options(ZLIB)

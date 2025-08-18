@@ -115,8 +115,9 @@ namespace ignite {
         ImGui::Begin("Content Browser");
 
         ImVec2 regionSize = ImGui::GetContentRegionAvail();
-        constexpr ImVec2 navbarBtSize = ImVec2(40.0f, 30.0f);
-        const ImVec2 navbarSize = ImVec2(regionSize.x, 45.0f);
+        const float &dpiScale = ImGui::GetWindowDpiScale();
+        const ImVec2 navbarBtSize = ImVec2(40.0f * dpiScale, 30.0f * dpiScale);
+        const ImVec2 navbarSize = ImVec2(regionSize.x, 45.0f * dpiScale);
         // Navigation bar
         ImGui::BeginChild("##NAV_BUTTON_BAR", navbarSize, ImGuiChildFlags_Borders);
 
@@ -208,7 +209,7 @@ namespace ignite {
                 bool isDirectory = std::filesystem::is_directory(path);
 
                 // float thumbnailHeight = m_ThumbnailSize * (thumbnail->GetHeight() / thumbnail->GetWidth());
-                const float thumbnailHeight = static_cast<float>(m_ThumbnailSize) * (320.0f / 540.0f);
+                const float thumbnailHeight = static_cast<float>(m_ThumbnailSize) * ImGui::GetWindowDpiScale() * (320.0f / 540.0f);
                 const float diff = static_cast<float>(m_ThumbnailSize) - thumbnailHeight;
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + diff);
 

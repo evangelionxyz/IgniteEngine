@@ -1,0 +1,133 @@
+# ASSIMP (custom subset per premake)
+file(GLOB_RECURSE ASSIMP_COMMON
+  ASSIMP/code/Common/*.cpp
+  ASSIMP/code/CApi/*.cpp
+)
+set(ASSIMP_ZLIB
+  ASSIMP/contrib/zlib/adler32.c
+  ASSIMP/contrib/zlib/compress.c
+  ASSIMP/contrib/zlib/crc32.c
+  ASSIMP/contrib/zlib/deflate.c
+  ASSIMP/contrib/zlib/gzclose.c
+  ASSIMP/contrib/zlib/gzlib.c
+  ASSIMP/contrib/zlib/gzread.c
+  ASSIMP/contrib/zlib/gzwrite.c
+  ASSIMP/contrib/zlib/infback.c
+  ASSIMP/contrib/zlib/inffast.c
+  ASSIMP/contrib/zlib/inflate.c
+  ASSIMP/contrib/zlib/inftrees.c
+  ASSIMP/contrib/zlib/trees.c
+  ASSIMP/contrib/zlib/uncompr.c
+  ASSIMP/contrib/zlib/zutil.c
+)
+set(ASSIMP_UNZIP
+  ASSIMP/contrib/unzip/ioapi.c
+  ASSIMP/contrib/unzip/unzip.c
+)
+file(GLOB ASSIMP_M3D CONFIGURE_DEPENDS ASSIMP/code/AssetLib/M3D/*.cpp)
+file(GLOB ASSIMP_MD5 CONFIGURE_DEPENDS ASSIMP/code/AssetLib/MD5/*.cpp)
+file(GLOB ASSIMP_IQM CONFIGURE_DEPENDS ASSIMP/code/AssetLib/IQM/*.cpp)
+file(GLOB ASSIMP_COLLADA CONFIGURE_DEPENDS ASSIMP/code/AssetLib/Collada/*.cpp)
+file(GLOB ASSIMP_OBJ CONFIGURE_DEPENDS ASSIMP/code/AssetLib/Obj/*.cpp)
+file(GLOB ASSIMP_POST CONFIGURE_DEPENDS ASSIMP/code/PostProcessing/*.cpp)
+
+set(ASSIMP_ASSETLIB
+  ASSIMP/code/AssetLib/FBX/FBXAnimation.cpp
+  ASSIMP/code/AssetLib/FBX/FBXBinaryTokenizer.cpp
+  ASSIMP/code/AssetLib/FBX/FBXConverter.cpp
+  ASSIMP/code/AssetLib/FBX/FBXDeformer.cpp
+  ASSIMP/code/AssetLib/FBX/FBXDocument.cpp
+  ASSIMP/code/AssetLib/FBX/FBXDocumentUtil.cpp
+  ASSIMP/code/AssetLib/FBX/FBXExporter.cpp
+  ASSIMP/code/AssetLib/FBX/FBXImporter.cpp
+  ASSIMP/code/AssetLib/FBX/FBXMaterial.cpp
+  ASSIMP/code/AssetLib/FBX/FBXMeshGeometry.cpp
+  ASSIMP/code/AssetLib/FBX/FBXModel.cpp
+  ASSIMP/code/AssetLib/FBX/FBXNodeAttribute.cpp
+  ASSIMP/code/AssetLib/FBX/FBXParser.cpp
+  ASSIMP/code/AssetLib/FBX/FBXProperties.cpp
+  ASSIMP/code/AssetLib/FBX/FBXTokenizer.cpp
+  ASSIMP/code/AssetLib/FBX/FBXUtil.cpp
+  ${ASSIMP_M3D}
+  ${ASSIMP_MD5}
+  ${ASSIMP_IQM}
+  ${ASSIMP_COLLADA}
+  ${ASSIMP_OBJ}
+  ASSIMP/code/AssetLib/glTF/glTFCommon.cpp
+  ASSIMP/code/AssetLib/glTF/glTFImporter.cpp
+  ASSIMP/code/AssetLib/glTF2/glTF2Importer.cpp
+  ASSIMP/code/Material/MaterialSystem.cpp
+  ASSIMP/code/Geometry/GeometryUtils.cpp
+  ${ASSIMP_POST}
+  ASSIMP/code/Pbrt/PbrtExporter.cpp
+)
+add_library(ASSIMP STATIC
+  ${ASSIMP_COMMON}
+  ${ASSIMP_ZLIB}
+  ${ASSIMP_UNZIP}
+  ${ASSIMP_ASSETLIB}
+)
+target_include_directories(ASSIMP PUBLIC
+  ${THIRDPARTY_DIR}/ASSIMP
+  ${THIRDPARTY_DIR}/ASSIMP/code
+  ${THIRDPARTY_DIR}/ASSIMP/include
+  ${THIRDPARTY_DIR}/ASSIMP/contrib
+  ${THIRDPARTY_DIR}/ASSIMP/contrib/zip
+  ${THIRDPARTY_DIR}/ASSIMP/contrib/zlib
+  ${THIRDPARTY_DIR}/ASSIMP/contrib/unzip
+  ${THIRDPARTY_DIR}/ASSIMP/contrib/pugixml/src
+  ${THIRDPARTY_DIR}/ASSIMP/contrib/utf8cpp/source
+  ${THIRDPARTY_DIR}/ASSIMP/contrib/rapidjson/include
+  ${THIRDPARTY_DIR}/ASSIMP/contrib/openddlparser/include
+)
+# Defines copied from premake
+target_compile_definitions(ASSIMP PUBLIC
+  RAPIDJSON_HAS_STDSTRING=1
+  ASSIMP_BUILD_NO_X_IMPORTER
+  ASSIMP_BUILD_NO_3DS_IMPORTER
+  ASSIMP_BUILD_NO_MD3_IMPORTER
+  ASSIMP_BUILD_NO_MDL_IMPORTER
+  ASSIMP_BUILD_NO_MD2_IMPORTER
+  ASSIMP_BUILD_NO_PLY_IMPORTER
+  ASSIMP_BUILD_NO_ASE_IMPORTER
+  ASSIMP_BUILD_NO_AMF_IMPORTER
+  ASSIMP_BUILD_NO_HMP_IMPORTER
+  ASSIMP_BUILD_NO_SMD_IMPORTER
+  ASSIMP_BUILD_NO_MDC_IMPORTER
+  ASSIMP_BUILD_NO_STL_IMPORTER
+  ASSIMP_BUILD_NO_LWO_IMPORTER
+  ASSIMP_BUILD_NO_DXF_IMPORTER
+  ASSIMP_BUILD_NO_NFF_IMPORTER
+  ASSIMP_BUILD_NO_RAW_IMPORTER
+  ASSIMP_BUILD_NO_OFF_IMPORTER
+  ASSIMP_BUILD_NO_AC_IMPORTER
+  ASSIMP_BUILD_NO_BVH_IMPORTER
+  ASSIMP_BUILD_NO_IRRMESH_IMPORTER
+  ASSIMP_BUILD_NO_IRR_IMPORTER
+  ASSIMP_BUILD_NO_Q3D_IMPORTER
+  ASSIMP_BUILD_NO_B3D_IMPORTER
+  ASSIMP_BUILD_NO_TERRAGEN_IMPORTER
+  ASSIMP_BUILD_NO_CSM_IMPORTER
+  ASSIMP_BUILD_NO_3D_IMPORTER
+  ASSIMP_BUILD_NO_LWS_IMPORTER
+  ASSIMP_BUILD_NO_OGRE_IMPORTER
+  ASSIMP_BUILD_NO_OPENGEX_IMPORTER
+  ASSIMP_BUILD_NO_MS3D_IMPORTER
+  ASSIMP_BUILD_NO_COB_IMPORTER
+  ASSIMP_BUILD_NO_BLEND_IMPORTER
+  ASSIMP_BUILD_NO_Q3BSP_IMPORTER
+  ASSIMP_BUILD_NO_NDO_IMPORTER
+  ASSIMP_BUILD_NO_IFC_IMPORTER
+  ASSIMP_BUILD_NO_XGL_IMPORTER
+  ASSIMP_BUILD_NO_ASSBIN_IMPORTER
+  ASSIMP_BUILD_NO_C4D_IMPORTER
+  ASSIMP_BUILD_NO_3MF_IMPORTER
+  ASSIMP_BUILD_NO_X3D_IMPORTER
+  ASSIMP_BUILD_NO_MMD_IMPORTER
+  ASSIMP_BUILD_NO_STEP_EXPORTER
+  ASSIMP_BUILD_NO_SIB_IMPORTER
+  ASSIMP_BUILD_NO_USD_IMPORTER
+  ASSIMP_BUILD_NO_PBRT_IMPORTER
+)
+set_common_target_options(ASSIMP)
+set_target_properties(ASSIMP PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)

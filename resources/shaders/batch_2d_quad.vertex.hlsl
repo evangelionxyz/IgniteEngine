@@ -15,7 +15,6 @@ struct VSInput
     float2 tilingFactor : TILINGFACTOR;
     float4 color        : COLOR;
     uint texIndex       : TEXINDEX;
-    uint entityID       : ENTITYID;
 };
 
 struct PSInput
@@ -25,7 +24,6 @@ struct PSInput
     float2 tilingFactor : TILINGFACTOR;
     float4 color        : COLOR;
     uint texIndex       : TEXINDEX;
-    uint entityID       : ENTITYID;
 };
 
 PSInput main(VSInput input)
@@ -37,7 +35,6 @@ PSInput main(VSInput input)
     output.tilingFactor = input.tilingFactor;
     output.texCoord     = input.texCoord;
     output.texIndex     = input.texIndex;
-    output.entityID     = input.entityID;
     
     return output;
 }

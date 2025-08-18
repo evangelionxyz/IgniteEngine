@@ -98,12 +98,10 @@ namespace ignite {
 
             nvrhi::GraphicsPipelineDesc pipelineDesc;
 
-            for (auto& shader : m_Shaders)
+            for (auto& [type, shader] : m_Shaders)
             {
-                if (shader.first == nvrhi::ShaderType::Vertex)
-                    pipelineDesc.setVertexShader(shader.second);
-                else if (shader.first == nvrhi::ShaderType::Pixel)
-                    pipelineDesc.setPixelShader(shader.second);
+                if (type == nvrhi::ShaderType::Vertex) pipelineDesc.setVertexShader(shader);
+                else if (type == nvrhi::ShaderType::Pixel) pipelineDesc.setPixelShader(shader);
             }
 
             pipelineDesc.setInputLayout(m_InputLayout);

@@ -28,7 +28,7 @@
 
 namespace ignite
 {
-    VertexBuffer::VertexBuffer(const size_t size)
+    VertexBuffer::VertexBuffer(const size_t size, const std::string &debugName)
     {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
@@ -37,6 +37,7 @@ namespace ignite
         desc.isVertexBuffer = true;
         desc.keepInitialState = true;
         desc.initialState = nvrhi::ResourceStates::VertexBuffer;
+        desc.debugName = debugName;
 
         m_Handle = device->createBuffer(desc);
         LOG_ASSERT(m_Handle, "[Vertex Buffer] Failed to create handle!");
@@ -60,8 +61,8 @@ namespace ignite
 
     }
 
-    Ref<VertexBuffer> VertexBuffer::Create(uint64_t size)
+    Ref<VertexBuffer> VertexBuffer::Create(uint64_t size, const std::string &debugName)
     {
-        return CreateRef<VertexBuffer>(size);
+        return CreateRef<VertexBuffer>(size, debugName);
     }
 }

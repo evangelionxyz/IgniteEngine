@@ -34,33 +34,12 @@ namespace ignite
 
     Material::Material()
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-        auto paramsBufferDesc = nvrhi::BufferDesc();
-        paramsBufferDesc.setIsConstantBuffer(true);
-        paramsBufferDesc.setIsVolatile(true);
-        paramsBufferDesc.setMaxVersions(128);
-        paramsBufferDesc.setInitialState(nvrhi::ResourceStates::ConstantBuffer);
-        paramsBufferDesc.setDebugName("MaterialConstantBuffer");
-        paramsBufferDesc.setByteSize(sizeof(MaterialConstants));
-
-        paramsBuffer = device->createBuffer(paramsBufferDesc);
-        LOG_ASSERT(paramsBuffer, "[Material] Failed to create constant buffer");
+        m_ConstantBuffer = ConstantBuffer::Create(sizeof(MaterialConstants), true, 128, "[Material] Constant Buffer");
     }
 
     Material::Material(const aiScene *aiScene, aiMaterial* aiMat, const std::filesystem::path& baseFilepath)
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-
-        auto paramsBufferDesc = nvrhi::BufferDesc();
-        paramsBufferDesc.setIsConstantBuffer(true);
-        paramsBufferDesc.setIsVolatile(true);
-        paramsBufferDesc.setMaxVersions(128);
-        paramsBufferDesc.setInitialState(nvrhi::ResourceStates::ConstantBuffer);
-        paramsBufferDesc.setDebugName("MaterialConstantBuffer");
-        paramsBufferDesc.setByteSize(sizeof(MaterialConstants));
-
-        paramsBuffer = device->createBuffer(paramsBufferDesc);
-        LOG_ASSERT(paramsBuffer, "[Material] Failed to create constant buffer");
+        m_ConstantBuffer = ConstantBuffer::Create(sizeof(MaterialConstants), true, 128, "[Material] Constant Buffer");
 
         name = aiMat->GetName().data;
 
@@ -247,14 +226,16 @@ namespace ignite
     {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
+        const Ref<Environment> &env = SceneRenderer::GetActive()->GetEnvironment();
+        
         auto desc = nvrhi::BindingSetDesc();
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, paramsBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_ConstantBuffer->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, textures[MaterialTextureType::BaseColor]->handle));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, textures[MaterialTextureType::Specular]->handle));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, textures[MaterialTextureType::Emissive]->handle));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, textures[MaterialTextureType::Roughness]->handle));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, textures[MaterialTextureType::Normals]->handle));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, SceneRenderer::GetActive()->GetEnvironment()->GetHDRTexture()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, env->GetHDRTexture()->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Sampler(0, Renderer::GetWhiteTexture()->GetSampler()));
 
         auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MATERIAL));
@@ -291,7 +272,7 @@ namespace ignite
 
     void Material::WriteBuffer(nvrhi::ICommandList* commandList)
     {
-        commandList->writeBuffer(paramsBuffer, &params, sizeof(params));
+        m_ConstantBuffer->SetData(commandList, Buffer(&params, sizeof(MaterialConstants)));
     }
 
     void Material::UploadTextureWithMips(nvrhi::ICommandList *commandList,

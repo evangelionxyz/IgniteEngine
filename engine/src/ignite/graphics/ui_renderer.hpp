@@ -33,6 +33,8 @@
 namespace ignite
 {
     class UIWidget;
+    class RenderTarget;
+    class Renderer2D;
 
     class UIRenderer
     {
@@ -41,7 +43,7 @@ namespace ignite
         ~UIRenderer();
 
         void Update(float deltaTime);
-        void Render(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
+        void Render(nvrhi::ICommandList *cmd);
         void Resize(uint32_t width, uint32_t height);
 
         // UI Manager integration
@@ -49,6 +51,9 @@ namespace ignite
         UIManager* GetUIManager() const { return m_UIManager; }
 
         static Ref<UIRenderer> Create(uint32_t width, uint32_t height);
+        
+        Ref<RenderTarget> GetRenderTarget() { return m_RenderTarget; }
+        Ref<Renderer2D> GetRenderer() { return m_Renderer; }
 
         const uint32_t &GetWidth() { return m_Width; }
         const uint32_t &GetHeight() { return m_Height; }
@@ -61,6 +66,8 @@ namespace ignite
 
         uint32_t m_Width;
         uint32_t m_Height;
+        Ref<RenderTarget> m_RenderTarget;
+        Ref<Renderer2D> m_Renderer;
 
         std::vector<Ref<UIWidget>> m_Widgets;
         UIManager* m_UIManager = nullptr;

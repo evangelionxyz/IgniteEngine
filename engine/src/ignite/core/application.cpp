@@ -22,7 +22,6 @@
 */
 
 #include "application.hpp"
-
 #include "ignite/graphics/shader_factory.hpp"
 #include "input/app_event.hpp"
 #include "ignite/imgui/imgui_layer.hpp"
@@ -62,16 +61,14 @@ namespace ignite
         deviceCreateInfo.enablePerMonitorDPI = true;
         deviceCreateInfo.supportExplicitDisplayScaling = true;
 
-        m_Window = CreateScope<Window>(
-            m_CreateInfo.name.c_str(),
-            deviceCreateInfo,
-            m_CreateInfo.graphicsApi
-        );
-
+        m_Window = CreateScope<Window>(m_CreateInfo.name.c_str(),  deviceCreateInfo, m_CreateInfo.graphicsApi );
         m_Window->SetEventCallback(BIND_CLASS_EVENT_FN(Application::OnEvent));
+        m_Window->SetIcon("resources/icon.png");
+
         m_Input = Input(m_Window->GetWindowHandle());
 
         m_Renderer = CreateRef<Renderer>(m_Window->GetDeviceManager(), m_CreateInfo.graphicsApi);
+        m_UIManager = CreateScope<UIManager>();
 
         if (createInfo.useGui)
         {
@@ -234,22 +231,24 @@ namespace ignite
         }
 
         commandList = nullptr;
-
+        
+        
         device->waitForIdle();
-
+        
         if (m_ImGuiLayer)
         {
             m_ImGuiLayer->OnDetach();
             m_ImGuiLayer.reset();
         }
-
+        
         for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
         {
             (*it)->OnDetach();
             delete *it;
         }
-
-        // destroy renderer first
+        
+        // destroy
+        m_UIManager.reset();
         m_Renderer.reset();
 
         // destroy device

@@ -27,6 +27,10 @@
 #include "texture.hpp"
 #include "ignite/asset/asset.hpp"
 
+#include "index_buffer.hpp"
+#include "vertex_buffer.hpp"
+#include "constant_buffer.hpp"
+
 #include <string>
 #include <filesystem>
 
@@ -50,7 +54,9 @@ namespace ignite {
     public:
         Environment();
 
-        void Render(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline);
+        void Begin(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline);
+        void End();
+
         void LoadTexture(const std::string &filepath);
         void WriteBuffer(nvrhi::ICommandList *commandList);
         void SetSunDirection(float pitch, float yaw);
@@ -63,20 +69,21 @@ namespace ignite {
         EnvironmentParams params;
         DirLight dirLight;
 
-        nvrhi::TextureHandle GetHDRTexture() { return m_HDRTexture->GetHandle(); }
-        nvrhi::BufferHandle GetParamsBuffer() { return m_ParamsConstantBuffer; }
-        nvrhi::BufferHandle GetDirLightBuffer() { return m_DirLightConstantBuffer; }
+        Ref<Texture> GetHDRTexture() { return m_HDRTexture; }
+        Ref<ConstantBuffer> GetParamsBuffer() { return m_ParamsConstantBuffer; }
+        Ref<ConstantBuffer> GetDirLightBuffer() { return m_DirLightConstantBuffer; }
 
-        bool isUpdatingTexture = false;
+        bool IsInvalidating() const { return m_Invalidating; }
+
     private:
+        bool m_Invalidating = false;
 
-        nvrhi::BufferHandle m_VertexBuffer;
-        nvrhi::BufferHandle m_IndexBuffer;
-        nvrhi::BufferHandle m_ParamsConstantBuffer;
-        nvrhi::BufferHandle m_DirLightConstantBuffer;
+        Ref<VertexBuffer> m_VertexBuffer;
+        Ref<IndexBuffer> m_IndexBuffer;
+        Ref<ConstantBuffer> m_ParamsConstantBuffer;
+        Ref<ConstantBuffer> m_DirLightConstantBuffer;
+        Ref<Texture> m_HDRTexture;
 
         nvrhi::BindingSetHandle m_BindingSet;
-
-        Ref<Texture> m_HDRTexture;
     };
 }

@@ -86,8 +86,7 @@ namespace ignite
     {
         m_PhysicsSystem.Init(cNumBodies, cNumBodyMutexes, cMaxBodyPairs,
             cMaxContactConstraints, s_JoltInstance->broadPhaseLayer,
-            s_JoltInstance->objectVsBroadPhaseLayerFilter,
-            s_JoltInstance->objectLayerPairFilter);
+            s_JoltInstance->objectVsBroadPhaseLayerFilter, s_JoltInstance->objectLayerPairFilter);
 
         // m_PhysicsSystem.SetBodyActivationListener(s_JoltInstance->bodyActivationListener.get());
         // m_PhysicsSystem.SetContactListener(s_JoltInstance->contactListener.get());
@@ -129,9 +128,7 @@ namespace ignite
             tc.rotation = tc.localRotation;
         }
 
-        m_PhysicsSystem.Update(deltaTime, 1, 
-            s_JoltInstance->tempAllocator.get(), 
-            s_JoltInstance->jobSystem.get());
+        m_PhysicsSystem.Update(deltaTime, 1, s_JoltInstance->tempAllocator.get(), s_JoltInstance->jobSystem.get());
     }
 
     void JoltScene::InstantiateEntity(Entity entity)

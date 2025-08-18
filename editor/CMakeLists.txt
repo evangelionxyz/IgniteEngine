@@ -65,7 +65,6 @@ if(WIN32)
     _CRT_SECURE_NO_WARNINGS
   )
   target_compile_options(IgniteEditor PRIVATE /utf-8)
-
   # Embed application icon if an ICO file exists at editor/resources/icon.ico
   set(IGNITE_EDITOR_ICON "${CMAKE_SOURCE_DIR}/resources/icon.ico")
   if(EXISTS "${IGNITE_EDITOR_ICON}")

@@ -208,6 +208,44 @@ namespace ignite
         return createdEntity;
     }
 
+    Entity SceneManager::CreateWorldEnvironment(Scene *scene, const std::string &name, UUID uuid)
+    {
+        // create local storage for entity data
+        Entity createdEntity;
+
+        // prepare entity creation logic
+        std::function createFunc = [=, &createdEntity]() mutable
+        {
+            createdEntity = CreateEntity(scene, name, EntityType_WorldEnvironment, uuid);
+            createdEntity.AddComponent<WorldEnvironment>();
+        };
+
+        // immediately call createFunc to initialize createdEntity
+        createFunc();
+
+        // capture scene and entity by value to preserve the for undo
+        Scene *capturedScene = scene;
+        UUID capturedUUID = createdEntity.GetComponent<ID>().uuid;
+
+        std::function destroyFunc = [capturedScene, capturedUUID]()
+        {
+            if (Entity entityToDestroy = GetEntity(capturedScene, capturedUUID))
+            {
+                DestroyEntity(capturedScene, entityToDestroy);
+            }
+        };
+
+        CommandManager::AddCommand(
+            CreateScope<EntityManagerCommand>(
+                createFunc, 
+                destroyFunc, 
+                CommandState_Create
+            )
+        );
+
+        return createdEntity;
+    }
+
     void SceneManager::RenameEntity(Scene *scene, Entity entity, const std::string &newName)
     {
         scene->SetDirtyFlag(true);

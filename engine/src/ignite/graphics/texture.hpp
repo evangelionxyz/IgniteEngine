@@ -33,7 +33,6 @@
 
 namespace ignite
 {
-
     struct MipLevelData
     {
         std::vector<uint8_t> data;

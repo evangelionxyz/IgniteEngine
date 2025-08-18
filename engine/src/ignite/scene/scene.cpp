@@ -374,6 +374,11 @@ namespace ignite
     }
 
     template<>
+    void Scene::OnComponentAdded<WorldEnvironment>(Entity entity, WorldEnvironment &comp)
+    {
+    }
+
+    template<>
     void Scene::OnComponentAdded<Camera>(Entity entity, Camera &comp)
     {
         comp.camera.projectionType = comp.projectionType;

@@ -37,15 +37,7 @@ namespace ignite
         static glm::vec2 GetViewportMousePosition(const glm::vec2& screenMousePos, const glm::vec2& viewportPos, const glm::vec2& viewportSize)
         {
             // Calculate mouse position relative to viewport
-            glm::vec2 localMouse = screenMousePos - viewportPos;
-            
-            // Clamp to valid range [0, size]
-            localMouse = glm::clamp(localMouse, glm::vec2(0.0f), viewportSize);
-
-            // Flip Y coordinate
-            localMouse.y = viewportSize.y - localMouse.y;
-            
-            return localMouse;
+            return screenMousePos - viewportPos;
         }
 
         // Convert from screen space to UI space (flip Y coordinate for UI)

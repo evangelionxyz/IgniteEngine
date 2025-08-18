@@ -28,7 +28,7 @@
 
 namespace ignite
 {
-    IndexBuffer::IndexBuffer(size_t size)
+    IndexBuffer::IndexBuffer(size_t size, const std::string &debugName)
     {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
@@ -37,9 +37,15 @@ namespace ignite
         desc.isIndexBuffer = true;
         desc.keepInitialState = true;
         desc.initialState = nvrhi::ResourceStates::IndexBuffer;
+        desc.debugName = debugName;
 
         m_Handle = device->createBuffer(desc);
         LOG_ASSERT(m_Handle, "[Index Buffer] Failed to create handle!");
+    }
+
+    void IndexBuffer::SetData(nvrhi::ICommandList *commandList, Buffer buffer, size_t offset) const
+    {
+        commandList->writeBuffer(m_Handle, buffer.data, buffer.size, offset);
     }
 
     void IndexBuffer::SetData(Buffer buffer, size_t offset) const
@@ -54,8 +60,8 @@ namespace ignite
         device->executeCommandList(commandList);
     }
 
-    Ref<IndexBuffer> IndexBuffer::Create(size_t size)
+    Ref<IndexBuffer> IndexBuffer::Create(size_t size, const std::string &debugName)
     {
-        return CreateRef<IndexBuffer>(size);
+        return CreateRef<IndexBuffer>(size, debugName);
     }
 }

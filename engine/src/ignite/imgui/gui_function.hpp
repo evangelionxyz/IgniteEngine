@@ -34,7 +34,7 @@
 
 namespace ignite {
 
-    struct UIWidget
+    struct EditorWidget
     {
         template<typename T>
         T *As()
@@ -43,19 +43,19 @@ namespace ignite {
         }
     };
 
-    struct UIWidgetColor : public UIWidget
+    struct EditorWidgetColor : public EditorWidget
     {
         glm::vec4 normal;
         glm::vec4 hover;
 
-        UIWidgetColor() = default;
+        EditorWidgetColor() = default;
 
-        UIWidgetColor(const glm::vec4 &color)
+        EditorWidgetColor(const glm::vec4 &color)
             : normal(color), hover(color)
         {
         }
 
-        UIWidgetColor(const glm::vec4 &normal, const glm::vec4 &hover)
+        EditorWidgetColor(const glm::vec4 &normal, const glm::vec4 &hover)
             : normal(normal), hover(hover)
         {
         }
@@ -67,53 +67,53 @@ namespace ignite {
         }
     };
 
-    struct UIButtonDecorate : public UIWidget
+    struct EditorButtonDecorate : public EditorWidget
     {
-        UIWidgetColor fillColor;
-        UIWidgetColor outlineColor;
+        EditorWidgetColor fillColor;
+        EditorWidgetColor outlineColor;
 
-        UIButtonDecorate()
+        EditorButtonDecorate()
         {
-            fillColor = UIWidgetColor(
+            fillColor = EditorWidgetColor(
                 { 0.2f, 0.2f, 0.2f, 1.0f },
                 { 0.43f, 0.43f, 0.43f, 1.0f }
             );
 
-            outlineColor = UIWidgetColor(
+            outlineColor = EditorWidgetColor(
                 { 0.6f, 0.6f, 0.6f, 1.0f },
                 { 0.7f, 0.7f, 0.7f, 1.0f }
             );
         }
 
-        UIButtonDecorate Fill(const glm::vec4 &color)
+        EditorButtonDecorate Fill(const glm::vec4 &color)
         {
-            fillColor = UIWidgetColor(color);
+            fillColor = EditorWidgetColor(color);
             return *this;
         }
 
-        UIButtonDecorate Fill(const glm::vec4 &normal, const glm::vec4 &hover)
+        EditorButtonDecorate Fill(const glm::vec4 &normal, const glm::vec4 &hover)
         {
-            fillColor = UIWidgetColor(normal, hover);
+            fillColor = EditorWidgetColor(normal, hover);
             return *this;
         }
 
-        UIButtonDecorate Outline(const glm::vec4 &color)
+        EditorButtonDecorate Outline(const glm::vec4 &color)
         {
-            outlineColor = UIWidgetColor(color);
+            outlineColor = EditorWidgetColor(color);
             return *this;
         }
 
-        UIButtonDecorate Outline(const glm::vec4 &normal, const glm::vec4 &hover)
+        EditorButtonDecorate Outline(const glm::vec4 &normal, const glm::vec4 &hover)
         {
-            outlineColor = UIWidgetColor(normal, hover);
+            outlineColor = EditorWidgetColor(normal, hover);
             return *this;
         }
     };
 
-    struct UIButton
+    struct EditorButton
     {
         std::string text;
-        UIButtonDecorate decorate;
+        EditorButtonDecorate decorate;
         
         // only for getter
         std::function<void()> onClick;
@@ -121,17 +121,17 @@ namespace ignite {
         bool isHovered = false;
         bool isClicked = false;
 
-        UIButton(const std::string &text)
+        EditorButton(const std::string &text)
             : text(text)
         {
         }
 
-        UIButton(const std::string &text, const UIButtonDecorate &decorate)
+        EditorButton(const std::string &text, const EditorButtonDecorate &decorate)
             : text(text), decorate(decorate)
         {
         }
 
-        UIButton(const std::string &text, const UIButtonDecorate &decorate, const std::function<void()> &onClick)
+        EditorButton(const std::string &text, const EditorButtonDecorate &decorate, const std::function<void()> &onClick)
             : text(text), decorate(decorate), onClick(onClick)
         {
         }
@@ -139,7 +139,7 @@ namespace ignite {
 
 namespace UI {
 
-    bool DrawButton(const UIButton &button, const glm::vec2 &buttonSize, const glm::vec2 &padding, const Margin &margin)
+    bool DrawButton(const EditorButton &button, const glm::vec2 &buttonSize, const glm::vec2 &padding, const Margin &margin)
     {
         ImDrawList *drawList = ImGui::GetWindowDrawList();
         const ImGuiWindow *currentWindow = ImGui::GetCurrentWindow();
@@ -191,7 +191,7 @@ namespace UI {
         return isClicked;
     }
 
-    void DrawHorizontalButtonList(const glm::vec2 &buttonSize, std::vector<UIButton> buttons, const float &gap, const glm::vec2 &padding, const glm::vec2 &margin)
+    void DrawHorizontalButtonList(const glm::vec2 &buttonSize, std::vector<EditorButton> buttons, const float &gap, const glm::vec2 &padding, const glm::vec2 &margin)
     {
         ImDrawList *drawList = ImGui::GetWindowDrawList();
         ImGuiWindow *currentWindow = ImGui::GetCurrentWindow();

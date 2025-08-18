@@ -30,6 +30,7 @@
 #include "ignite/scene/scene.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/graphics/environment.hpp"
 
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/component.hpp"
@@ -501,6 +502,19 @@ namespace ignite {
                 if (auto meshAsset = Project::GetAsset<MeshAsset>(skinnedMesh.meshHandle))
                 {
                     skinnedMesh.meshes = meshAsset->Create();
+                }
+            }
+
+            // World Environment
+            if (YAML::Node node = entityNode["WorldEnvironment"])
+            {
+                WorldEnvironment &world = desEntity.AddComponent<WorldEnvironment>();
+                world.environment = Environment::Create();
+                world.imageHandle = AssetHandle(node["ImageHandle"].as<uint64_t>());
+                const AssetMetaData &metadata = Project::GetActive()->GetAssetManager().GetMetaData(world.imageHandle);
+                if (metadata.type == AssetType::Texture)
+                {
+                    world.environment->LoadTexture(metadata.filepath.generic_string());
                 }
             }
 

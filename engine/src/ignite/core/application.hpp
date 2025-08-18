@@ -34,6 +34,7 @@
 #include "input/app_event.hpp"
 #include "input/input.hpp"
 #include "command.hpp"
+#include "ignite/graphics/ui/ui_manager.hpp"
 
 #include <queue>
 #include <filesystem>
@@ -108,6 +109,7 @@ namespace ignite
         ApplicationCreateInfo m_CreateInfo;
         Scope<Window> m_Window;
         Scope<CommandManager> m_CommandManager;
+        Scope<UIManager> m_UIManager;
         LayerStack m_LayerStack;
         Ref<ImGuiLayer> m_ImGuiLayer;
         Input m_Input;

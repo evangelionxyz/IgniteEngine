@@ -81,6 +81,7 @@ namespace ignite
 
         Scene *GetActiveScene() const { return m_ActiveScene.get(); }
         Project *GetActiveProject() const { return m_ActiveProject.get(); }
+        SceneRenderer *GetSceneRenderer() { return &m_SceneRenderer; }
 
         EditorData &GetState() { return m_Data; }
 
@@ -94,8 +95,8 @@ namespace ignite
         
         void SaveProject();
         void SaveProjectAs();
-        void OpenProject();
-        void OpenProject(const std::filesystem::path &filepath);
+        Ref<Project> OpenProject();
+        Ref<Project> OpenProject(const std::filesystem::path &filepath);
 
         void OnScenePlay();
         void OnSceneStop();

@@ -12,6 +12,7 @@
 /bin-int
 /out
 /lib
+/cmake
 /bin-cmake
 /resources/shaders/bin
 /scripts/__pycache__

@@ -157,14 +157,11 @@ namespace ignite
         m_BindingLayouts[GLayoutMap::MESH_ANIM] = s_instance->m_Device->createBindingLayout(VertexMesh_Anim::GetBindingLayoutDesc());
         m_BindingLayouts[GLayoutMap::MATERIAL] = s_instance->m_Device->createBindingLayout(VertexMesh_Anim::GetMaterialBindingLayoutDesc());
         m_BindingLayouts[GLayoutMap::ENVIRONMENT] = s_instance->m_Device->createBindingLayout(Environment::GetBindingLayoutDesc());
-
-        Renderer2D::Init();
     }
 
     Renderer::~Renderer()
     {
         m_WhiteTexture.reset();
-        Renderer2D::Shutdown();
     }
 
     nvrhi::GraphicsAPI Renderer::GetGraphicsAPI()

@@ -56,11 +56,12 @@ namespace ignite
         LOG_ASSERT(constantBuffer, "[MeshRenderer] Failed to create mesh constant buffer");
 
         // Create binding set
+        const Ref<Environment> &env = SceneRenderer::GetActive()->GetEnvironment();
         auto desc = nvrhi::BindingSetDesc();
         desc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(CameraConstants)));
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, constantBuffer));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, SceneRenderer::GetActive()->GetEnvironment()->GetDirLightBuffer()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, SceneRenderer::GetActive()->GetEnvironment()->GetParamsBuffer()));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, env->GetDirLightBuffer()->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, env->GetParamsBuffer()->GetHandle()));
 
         const auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
         LOG_ASSERT(newBindingSet, "Failed to create binding set");
@@ -85,14 +86,14 @@ namespace ignite
         {
             // Create mesh instance
             instances[i] = CreateRef<MeshInstance>();
-            auto& m = instances[i];
+            auto& meshInstance = instances[i];
 
-            m->mesh.data = meshesData[i];
-            m->mesh.CreateBuffers();
+            meshInstance->mesh.data = meshesData[i];
+            meshInstance->mesh.CreateBuffers();
 
             // Material
-            m->SetMaterial(materials[m->mesh.data.materialIndex]);
-            m->UpdateBindingSet();
+            meshInstance->SetMaterial(materials[meshInstance->mesh.data.materialIndex]);
+            meshInstance->UpdateBindingSet();
         }
 
         return instances;
