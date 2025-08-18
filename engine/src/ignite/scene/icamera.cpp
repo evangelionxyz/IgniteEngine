@@ -28,19 +28,19 @@
 namespace ignite
 {
     ICamera::ICamera()
-    : position({0.0f, 0.0f, 0.0f})
-    , m_AspectRatio(16.0f / 9.0f)
-    , zoom(1.0f)
-    , yaw(0.0f)
-    , pitch(0.0f)
-    , projectionMatrix(glm::mat4(1.0f))
-    , viewMatrix(glm::mat4(1.0f))
-    , nearClip(0.1f)
-    , farClip(300.0f)
-    , width(1280.0f)
-    , height(720.0f)
-    , fov(45.0f)
-    , projectionType(Type::Orthographic)
+        : position({0.0f, 0.0f, 0.0f})
+        , m_AspectRatio(16.0f / 9.0f)
+        , zoom(5.0f)
+        , yaw(0.0f)
+        , pitch(0.0f)
+        , projectionMatrix(glm::mat4(1.0f))
+        , viewMatrix(glm::mat4(1.0f))
+        , nearClip(0.1f)
+        , farClip(300.0f)
+        , width(1280.0f)
+        , height(720.0f)
+        , fov(45.0f)
+        , projectionType(Type::Orthographic)
     {
         auto device = Application::GetDeviceManager()->GetDevice();
 
@@ -96,7 +96,7 @@ namespace ignite
             {
                 f32 orthoWidth = zoom * m_AspectRatio / 2.0f;
                 f32 orthoHeight = zoom / 2.0f;
-                projectionMatrix = glm::ortho(-orthoWidth, orthoWidth, -orthoHeight, orthoHeight, nearClip, farClip);
+                projectionMatrix = glm::orthoZO(-orthoWidth, orthoWidth, -orthoHeight, orthoHeight, nearClip, farClip);
                 break;
             }
             case Type::Perspective:
@@ -110,16 +110,9 @@ namespace ignite
 
     void ICamera::UpdateViewMatrix()
     {
-        switch (projectionType)
-        {
-            case Type::Orthographic:
-            default:
-                viewMatrix = glm::translate(glm::mat4(1.0f), position);
-            break;
-            case Type::Perspective:
-                viewMatrix = glm::translate(glm::mat4(1.0f), position) * glm::toMat4(glm::quat({ -pitch, -yaw, 0.0f }));
-            break;
-        }
+        // Both orthographic and perspective cameras should use the same view matrix calculation
+        // The view matrix depends on position and rotation, not on projection type
+        viewMatrix = glm::translate(glm::mat4(1.0f), position) * glm::toMat4(glm::quat({ -pitch, -yaw, 0.0f }));
         viewMatrix = glm::inverse(viewMatrix);
     }
 
