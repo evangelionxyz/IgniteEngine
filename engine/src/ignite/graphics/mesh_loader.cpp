@@ -119,6 +119,8 @@ namespace ignite
         outAABB.min = glm::vec3(FLT_MAX);
         outAABB.max = glm::vec3(-FLT_MAX);
 
+        const bool hasNormals = mesh->HasNormals();
+
         for (uint32_t i = 0; i < mesh->mNumVertices; ++i)
         {
             vertex.position = { mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z };
@@ -127,10 +129,10 @@ namespace ignite
             outAABB.min = glm::min(outAABB.min, vertex.position);
             outAABB.max = glm::max(outAABB.max, vertex.position);
 
-            if (mesh->HasNormals())
-                vertex.normal = { mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z };
+            if (hasNormals)
+                vertex.normal = glm::normalize(glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z));
             else 
-                vertex.normal = { 0.0f, 1.0f, 0.0f }; // default normals
+                vertex.normal = glm::vec3(0.0f); // will calculate later
 
             if (mesh->mTextureCoords[0])
                 vertex.texCoord = { mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y };
@@ -154,6 +156,43 @@ namespace ignite
             outMeshData.indices.push_back(face.mIndices[0]);
             outMeshData.indices.push_back(face.mIndices[1]);
             outMeshData.indices.push_back(face.mIndices[2]);
+        }
+
+        if (!hasNormals)
+        {
+            // Accumulate face normals to vertices and normalize at the end
+            std::vector<glm::vec3> normalAccum(outMeshData.vertices.size(), glm::vec3(0.0f));
+
+            for (size_t f = 0; f + 2 < outMeshData.indices.size(); f += 3)
+            {
+                const uint32_t i0 = outMeshData.indices[f + 0];
+                const uint32_t i1 = outMeshData.indices[f + 1];
+                const uint32_t i2 = outMeshData.indices[f + 2];
+
+                const glm::vec3 &p0 = outMeshData.vertices[i0].position;
+                const glm::vec3 &p1 = outMeshData.vertices[i1].position;
+                const glm::vec3 &p2 = outMeshData.vertices[i2].position;
+
+                const glm::vec3 e0 = p1 - p0;
+                const glm::vec3 e1 = p2 - p0;
+                glm::vec3 faceNormal = glm::cross(e0, e1);
+
+                if (glm::length2(faceNormal) > 0.0f)
+                {
+                    faceNormal = glm::normalize(faceNormal);
+                    normalAccum[i0] += faceNormal;
+                    normalAccum[i1] += faceNormal;
+                    normalAccum[i2] += faceNormal;
+                }
+            }
+
+            for (size_t i = 0; i < outMeshData.vertices.size(); ++i)
+            {
+                if (glm::length2(normalAccum[i]) > 0.0f)
+                    outMeshData.vertices[i].normal = glm::normalize(normalAccum[i]);
+                else
+                    outMeshData.vertices[i].normal = glm::vec3(0.0f, 1.0f, 0.0f); // fallback up
+            }
         }
     }
 

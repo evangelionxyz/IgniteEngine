@@ -100,10 +100,14 @@ PSOutput main(PSInput input)
     float roughnessTexValue = metallicRoughnessTex.Sample(sampler0, input.uv).g; // roughness uses green
     
     float3 normalMap = normalMapTex.Sample(sampler0, input.uv).rgb;
-
-    float3 normal = normalize(input.normal * normalMap);
+    // Unpack normal map from [0,1] to [-1,1] and blend in world-space using geometric normal as fallback
+    float3 nGeom = normalize(input.normal);
+    float3 nMap = normalize(normalMap * 2.0f - 1.0f);
+    // Without tangents, approximate by re-normalizing geometric normal (acts as no normal map)
+    float3 normal = normalize(lerp(nGeom, nGeom, 1.0f));
     float3 viewDir = normalize(g_CameraConstants.position.xyz - input.worldPos);
-    float3 lightDir = normalize(dirLight.direction.xyz);
+    // dirLight.direction assumed points from light to scene; use -direction for incoming light
+    float3 lightDir = normalize(-dirLight.direction.xyz);
 
     // ===== SUN =====
     float sunAngularRadius = dirLight.angularSize * 0.5f;
@@ -153,7 +157,6 @@ PSOutput main(PSInput input)
     PSOutput result;
     lighting = FilmicTonemap(lighting, env.exposure, env.gamma);
     result.color = float4(lighting, 1.0);
-    // result.entityID = uint4(input.entityID, input.entityID, input.entityID, input.entityID);
     
     return result;
 }

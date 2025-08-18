@@ -65,6 +65,7 @@ namespace ignite
 
     public:
         EditorLayer(const std::string &name);
+        ~EditorLayer();
 
         void OnAttach() override;
         void OnDetach() override;

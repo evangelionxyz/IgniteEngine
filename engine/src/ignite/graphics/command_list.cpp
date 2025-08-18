@@ -26,8 +26,7 @@
 
 namespace  ignite
 {
-
-    CommandList::CommandList(uint32_t count /*= 0*/)
+    CommandList::CommandList(uint32_t count)
     {
         m_Device = Application::GetGraphicsDevice();
 

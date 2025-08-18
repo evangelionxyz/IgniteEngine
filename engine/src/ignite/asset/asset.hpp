@@ -130,8 +130,7 @@ namespace ignite {
     {
     public:
         AssetHandle handle;
-
-        virtual ~Asset() = default;
+        virtual ~Asset() { };
 
         template<typename T>
         T *As()

@@ -51,6 +51,7 @@ namespace ignite
     {
     public:
         explicit ScenePanel(const char *windowTitle, EditorLayer *editor);
+        ~ScenePanel();
         
         void SetActiveScene(Scene *scene);
 
@@ -87,6 +88,14 @@ namespace ignite
         Entity GetSelectedEntity();
 
         const std::unordered_map<UUID, Entity> &GetSelectedEntities() { return m_SelectedEntities; }
+
+        const Ref<RenderTarget> &GetSceneViewportRT() { return m_SceneViewportRT; }
+        const Ref<RenderTarget> &GetCompositeViewportRT() { return m_CompositeViewportRT; }
+        const Ref<RenderTarget> &GetUIViewportRT() { return m_UIViewportRT; }
+        const Ref<RenderTarget> &GetUICameratRT() { return m_UICameraRT; }
+        
+        const Ref<RenderTarget> &GetSceneCameraRT() { return m_SceneCameraRT; }
+        const Ref<RenderTarget> &GetCompositeCameraRT() { return m_CompositeCameraRT; }
 
         template<typename T, typename UIFunction>
         void RenderComponent(const std::string &name, Entity entity, UIFunction uiFunction, bool allowedToRemove = true);
@@ -128,5 +137,15 @@ namespace ignite
         } m_ViewportData;
 
         std::unordered_map<std::string, Ref<Texture>> m_Icons;
+
+        // For viewport
+        Ref<RenderTarget> m_SceneViewportRT;
+        Ref<RenderTarget> m_UIViewportRT;
+        Ref<RenderTarget> m_CompositeViewportRT;
+        
+        // For camera preview
+        Ref<RenderTarget> m_SceneCameraRT;
+        Ref<RenderTarget> m_CompositeCameraRT;
+        Ref<RenderTarget> m_UICameraRT;
     };
 }

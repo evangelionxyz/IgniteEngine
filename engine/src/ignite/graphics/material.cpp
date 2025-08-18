@@ -34,12 +34,12 @@ namespace ignite
 
     Material::Material()
     {
-        m_ConstantBuffer = ConstantBuffer::Create(sizeof(MaterialConstants), true, 128, "[Material] Constant Buffer");
+        m_ConstantBuffer = ConstantBuffer::Create(sizeof(MaterialConstants), true, 256, "[Material] Constant Buffer");
     }
 
     Material::Material(const aiScene *aiScene, aiMaterial* aiMat, const std::filesystem::path& baseFilepath)
     {
-        m_ConstantBuffer = ConstantBuffer::Create(sizeof(MaterialConstants), true, 128, "[Material] Constant Buffer");
+        m_ConstantBuffer = ConstantBuffer::Create(sizeof(MaterialConstants), true, 256, "[Material] Constant Buffer");
 
         name = aiMat->GetName().data;
 
@@ -70,6 +70,8 @@ namespace ignite
         LoadTexture(aiScene, aiMat, baseFilepath, MaterialTextureType::Roughness);
         LoadTexture(aiScene, aiMat, baseFilepath, MaterialTextureType::Normals);
 
+        s_TextureCache.clear();
+
         // set transparent and reflectivity
         // _transparent = false;
         // _reflective = reflectivity > 0.0f
@@ -77,7 +79,6 @@ namespace ignite
 
     Material::~Material()
     {
-        s_TextureCache.clear();
     }
 
     void Material::LoadTexture(const aiScene* aiScene, const aiMaterial* aiMat, const std::filesystem::path& filepath, MaterialTextureType textureType)
@@ -209,10 +210,10 @@ namespace ignite
             textureDesc.setInitialState(nvrhi::ResourceStates::ShaderResource);
             textureDesc.setKeepInitialState(true);
             textureDesc.setMipLevels(mipLevels);
-            textureDesc.setDebugName("Material embedded Texture");
+            textureDesc.setDebugName("[Material] Embedded Texture");
 
             tex->handle = device->createTexture(textureDesc);
-            LOG_ASSERT(tex->handle, "[Material Importer] Failed to create texture!");
+            LOG_ASSERT(tex->handle, "[Material] Failed to create texture!");
         }
 
         nvrhi::CommandListHandle commandList = device->createCommandList();

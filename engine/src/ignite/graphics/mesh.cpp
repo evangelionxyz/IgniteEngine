@@ -42,24 +42,15 @@ namespace ignite
         constant.transformation = glm::mat4(1.0f);
         constant.normal = glm::mat4(1.0f);
 
-        nvrhi::IDevice* device = Application::GetGraphicsDevice();;
+        nvrhi::IDevice* device = Application::GetGraphicsDevice();
 
-        // create per Mesh constant buffers
-        auto bufferDesc = nvrhi::BufferDesc();
-        bufferDesc.setIsConstantBuffer(true);
-        bufferDesc.setIsVolatile(true);
-        bufferDesc.setMaxVersions(16);
-        bufferDesc.setInitialState(nvrhi::ResourceStates::ConstantBuffer);
-        bufferDesc.setDebugName("MeshConstantBuffer");
-        bufferDesc.setByteSize(sizeof(SkinnedMeshConstants));
-        constantBuffer = device->createBuffer(bufferDesc);
-        LOG_ASSERT(constantBuffer, "[MeshRenderer] Failed to create mesh constant buffer");
+        constantBuffer = ConstantBuffer::Create(sizeof(SkinnedMeshConstants), true, 16, "[Mesh Renderer] Constant Buffer");
 
         // Create binding set
         const Ref<Environment> &env = SceneRenderer::GetActive()->GetEnvironment();
         auto desc = nvrhi::BindingSetDesc();
         desc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(CameraConstants)));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, constantBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, constantBuffer->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, env->GetDirLightBuffer()->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, env->GetParamsBuffer()->GetHandle()));
 
@@ -98,7 +89,4 @@ namespace ignite
 
         return instances;
     }
-
-    
-
 }

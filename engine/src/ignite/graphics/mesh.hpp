@@ -28,6 +28,7 @@
 #include "vertex_data.hpp"
 #include "material.hpp"
 #include "renderer.hpp"
+#include "constant_buffer.hpp"
 
 #include "ignite/core/uuid.hpp"
 #include "ignite/math/aabb.hpp"
@@ -108,7 +109,7 @@ namespace ignite {
         Mesh mesh;
         Ref<Material> material;
         SkinnedMeshConstants constant;
-        nvrhi::BufferHandle constantBuffer = nullptr;
+        Ref<ConstantBuffer> constantBuffer;
         nvrhi::BindingSetHandle bindingSet = nullptr;
 
         MeshInstance() = default;
@@ -130,7 +131,4 @@ namespace ignite {
         static AssetType GetStaticType() { return AssetType::SkeletalMesh; }
         virtual AssetType GetType() override { return GetStaticType(); }
     };
-
-    
-    
 }

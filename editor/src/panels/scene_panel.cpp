@@ -33,6 +33,7 @@
 #include "ignite/graphics/texture.hpp"
 #include "ignite/scene/icomponent.hpp"
 #include "ignite/core/platform_utils.hpp"
+#include "ignite/graphics/ui_renderer.hpp"
 #include "editor_layer.hpp"
 #include "ignite/graphics/mesh.hpp"
 
@@ -98,6 +99,28 @@ namespace ignite
             tex->Write(commandList);
         commandList->close();
         device->executeCommandList(commandList);
+
+        // Create scene render target
+        RenderTargetCreateInfo rtCreateInfo = {};
+        rtCreateInfo.attachments =
+        {
+            FramebufferAttachments{ nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }, // Depth
+            FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } // Main Color
+        };
+        m_SceneViewportRT = RenderTarget::Create(rtCreateInfo);
+        m_SceneCameraRT = RenderTarget::Create(rtCreateInfo);
+        m_UIViewportRT = RenderTarget::Create(rtCreateInfo);
+        m_UICameraRT = RenderTarget::Create(rtCreateInfo);
+
+        // Composite render target
+        rtCreateInfo = {};
+        rtCreateInfo.attachments = {FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } }; // Main Color
+        m_CompositeViewportRT = RenderTarget::Create(rtCreateInfo);
+        m_CompositeCameraRT = RenderTarget::Create(rtCreateInfo);
+    }
+
+    ScenePanel::~ScenePanel()
+    {
     }
 
     void ScenePanel::SetActiveScene(Scene *scene)
@@ -1550,7 +1573,19 @@ namespace ignite
             
             const uint32_t width = static_cast<uint32_t>(m_ViewportData.rect.GetSize().x);
             const uint32_t height = static_cast<uint32_t>(m_ViewportData.rect.GetSize().y);
-            SceneRenderer::GetActive()->Resize(width, height);
+            
+            m_SceneViewportRT->Resize(width, height);
+            m_CompositeViewportRT->Resize(width, height);
+            m_UIViewportRT->Resize(width, height);
+
+            m_UICameraRT->Resize(width, height);
+            m_SceneCameraRT->Resize(width, height);
+            m_CompositeCameraRT->Resize(width, height);
+
+            m_Editor->GetSceneRenderer()->GetUIRenderer()->Resize(width, height);
+
+            m_Scene->Resize(width, height);
+            
             m_Camera.SetSize(static_cast<float>(width), static_cast<float>(height));
             m_Camera.UpdateProjectionMatrix();
 
@@ -1586,7 +1621,19 @@ namespace ignite
             
             const uint32_t width = static_cast<uint32_t>(m_ViewportData.rect.GetSize().x);
             const uint32_t height = static_cast<uint32_t>(m_ViewportData.rect.GetSize().y);
-            SceneRenderer::GetActive()->Resize(width, height);
+
+            m_SceneViewportRT->Resize(width, height);
+            m_CompositeViewportRT->Resize(width, height);
+            m_UIViewportRT->Resize(width, height);
+            
+            m_UICameraRT->Resize(width, height);
+            m_SceneCameraRT->Resize(width, height);
+            m_CompositeCameraRT->Resize(width, height);
+
+            m_Editor->GetSceneRenderer()->GetUIRenderer()->Resize(width, height);
+
+            m_Scene->Resize(width, height);
+
             m_Camera.SetSize(static_cast<float>(width), static_cast<float>(height));
             m_Camera.UpdateProjectionMatrix();
 
@@ -1638,22 +1685,35 @@ namespace ignite
         }
 
         // trigger resize
-        if (vpWidth > 0 && vpHeight > 0
-            && (vpWidth != SceneRenderer::GetActive()->GetRenderTarget()->GetWidth()
-            || vpHeight != SceneRenderer::GetActive()->GetRenderTarget()->GetHeight()))
+        if (vpWidth > 0 && vpHeight > 0)
         {
             // prevent resizing each frame
             // just when the mouse is not resizing
-            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) || SceneRenderer::GetActive()->ShouldResize())
+            const bool sceneResize = m_SceneViewportRT->ShouldResize(vpWidth, vpHeight);
+            const bool compositeResize = m_CompositeViewportRT->ShouldResize(vpWidth, vpHeight);
+            const bool uiResize = m_UIViewportRT->ShouldResize(vpWidth, vpHeight);
+
+            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) && (sceneResize || compositeResize || uiResize))
             {
-                SceneRenderer::GetActive()->Resize(vpWidth, vpHeight);
+                m_SceneViewportRT->Resize(vpWidth, vpHeight);
+                m_CompositeViewportRT->Resize(vpWidth, vpHeight);
+                m_UIViewportRT->Resize(vpWidth, vpHeight);
+
+                m_UICameraRT->Resize(vpWidth, vpHeight);
+                m_SceneCameraRT->Resize(vpWidth, vpHeight);
+                m_CompositeCameraRT->Resize(vpWidth, vpHeight);
+
+                m_Scene->Resize(vpWidth, vpHeight);
+
+                m_Editor->GetSceneRenderer()->GetUIRenderer()->Resize(vpWidth, vpHeight);
+
                 m_Camera.SetSize(static_cast<float>(vpWidth), static_cast<float>(vpHeight));
                 m_Camera.UpdateProjectionMatrix();
             }
         }
 
         // Render Scene
-        ImTextureID sceneImage = reinterpret_cast<ImTextureID>(SceneRenderer::GetActive()->GetCompositeRenderTarget()->GetColorAttachment(0).Get());
+        ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_CompositeViewportRT->GetColorAttachment(0).Get());
         ImGui::Image(sceneImage, canvasSize);
         if (ImGui::BeginDragDropTarget())
         {
@@ -1808,22 +1868,16 @@ namespace ignite
             }
         }
 
+        const ImVec2 vpSize = { static_cast<float>(m_Scene->viewportWidth), static_cast<float>(m_Scene->viewportHeight) };
+        const float padding = 8.0f;
+        const float width = 256.0f;
+        const float height = width / (vpSize.x / vpSize.y);
+
+        ImGui::SetCursorPos({canvasSize.x - width - padding, canvasSize.y - height});
+        ImTextureID previewImage = reinterpret_cast<ImTextureID>(m_CompositeCameraRT->GetColorAttachment(0).Get());
+        ImGui::Image(previewImage, {width, height});
+
         ImGui::End();
-
-        // Camera Preview
-        if (Entity selectedEntity = GetSelectedEntity())
-        {
-            if (selectedEntity.HasComponent<Camera>())
-            {
-                Camera cameraComponent = selectedEntity.GetComponent<Camera>();
-                m_Editor->GetSceneRenderer()->Render(&cameraComponent.camera, cameraComponent.camera.projectionType == ICamera::Type::Perspective);
-                ImTextureID previewImage = reinterpret_cast<ImTextureID>(SceneRenderer::GetActive()->GetCompositeRenderTarget()->GetColorAttachment(0).Get());
-
-                ImGui::Begin("Camera Preview");
-                ImGui::Image(previewImage, {256, 256});
-                ImGui::End();
-            }
-        }
     }
 
     void ScenePanel::DebugRender()

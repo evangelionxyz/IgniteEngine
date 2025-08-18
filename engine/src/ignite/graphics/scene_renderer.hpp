@@ -51,11 +51,8 @@ namespace ignite
         
         void Create();
         void SetActiveScene(Scene *scene);
-        bool ShouldResize() const;
-        void Resize(uint32_t width, uint32_t height);
-        void CreatePipelines();
-        void Render(ICamera *camera, bool renderEnvironment = true);
-        void SetFillMode(nvrhi::RasterFillMode mode) const;
+        void RenderTo(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT, bool renderEnvironment = true);
+        void SetFillMode(nvrhi::RasterFillMode mode);
 
         void SetSelectedEntity(const Entity& entity);
         void UnselectEntity(const Entity& entity);
@@ -64,51 +61,28 @@ namespace ignite
         // UI Input handling
         void UpdateUIInput(const glm::vec2& viewportMousePos, const glm::vec2& viewportPos, const glm::vec2& viewportSize, bool mousePressed);
 
-        void OnGuiRender();
-
         static SceneRenderer *GetActive();
 
-        Ref<GraphicsPipeline> &GetEnvironmentPipeline() { return m_EnvironmentPipeline; }
-        Ref<GraphicsPipeline> &GetGeometryAnimPipeline() { return m_GeometryAnimPipeline; }
-        
         Ref<Environment> &GetEnvironment() { return m_Environment; }
-        Ref<RenderTarget> &GetRenderTarget() { return m_SceneRenderTarget; }
-        Ref<RenderTarget> &GetCompositeRenderTarget() { return m_CompositeRenderTarget; }
         Ref<UIRenderer> &GetUIRenderer() { return m_UIRenderer; }
 
     private:
         void CreateEnvironment();
-        void CreateRenderTargets();
         void CreateDemoUI();
-
-        void CompositeUpdateBindingSet();
-
-        void UIPass(nvrhi::ICommandList *cmd);
-        void CompositePass(nvrhi::ICommandList *cmd);
 
         Ref<Environment> m_Environment;
         Ref<CommandList> m_CommandList;
 
-        Ref<GraphicsPipeline> m_EnvironmentPipeline;
-        Ref<GraphicsPipeline> m_GeometryAnimPipeline;
-        Ref<GraphicsPipeline> m_UIPipeline;
-
-        Ref<RenderTarget> m_SceneRenderTarget;
-
         // Composite
-        Ref<GraphicsPipeline> m_CompositePipeline;
-        Ref<RenderTarget> m_CompositeRenderTarget;
         Ref<VertexBuffer> m_CompositeVertexBuffer;
-        nvrhi::BindingSetHandle m_CompositeBindingSet;
 
         Ref<Renderer2D> m_Renderer2D;
         Ref<UIRenderer> m_UIRenderer;
 
         std::vector<uint32_t> m_SelectedEntities;
         std::vector<AABB> m_EntityBounds;
-
-        // Ref<EdgeDetection> m_EdgeDetection;
-        // EdgeDetectionParameter m_EdgeDetectionParams;
+        
+        nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
 
         nvrhi::IDevice *m_Device = nullptr;
         Scene *m_Scene = nullptr;

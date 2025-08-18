@@ -111,7 +111,7 @@ namespace ignite {
         args.setVertexCount(36);
         args.instanceCount = 1;
 
-        commandList->drawIndexed(args);
+        // commandList->drawIndexed(args);
     }
 
     void Environment::End()

@@ -59,8 +59,6 @@ namespace ignite
         VertexType*vertexBufferPtr = nullptr;
         Ref<VertexBuffer> vertexBuffer;
         Ref<IndexBuffer> indexBuffer;
-        Ref<GraphicsPipeline> pipeline;
-        nvrhi::BindingSetHandle bindingSet;
         std::vector<Ref<Texture>> textureSlots;
 
         ~BatchRender()
@@ -73,14 +71,12 @@ namespace ignite
     class Renderer2D
     {
     public:
-        Renderer2D(Ref<RenderTarget> renderTarget);
+        Renderer2D();
         ~Renderer2D();
-
-        void SetFillMode(nvrhi::RasterFillMode mode);
 
         void Begin(nvrhi::ICommandList *cmd, const CameraConstants &cameraConstants);
         void Begin(nvrhi::ICommandList *cmd, ICamera *camera);
-        void Flush();
+        void Flush(nvrhi::IFramebuffer *framebuffer);
         void End();
 
         void DrawBox(const glm::mat4& transform, const glm::vec4& color = glm::vec4(1.0f));
@@ -97,18 +93,19 @@ namespace ignite
         void InitQuadData();
         void InitLineData();
 
+        void ClearPipelineCache();
+
+        
         u32 GetOrInsertTexture(const Ref<Texture>& texture);
         void UpdateTextureBindings();
-
-        static Ref<Renderer2D> Create(Ref<RenderTarget> renderTarget);
-
+        
+        static Ref<Renderer2D> Create();
+        
     private:
         nvrhi::ICommandList *m_Cmd;
-        Ref<RenderTarget> m_RenderTarget;
 
         BatchRender<Vertex2DQuad> m_QuadBatch;
         BatchRender<Vertex2DLine> m_LineBatch;
         CameraConstants m_CameraBuffer;
-        const uint8_t MAX_TEXTURE_COUNT = 32;
     };
 }

@@ -31,19 +31,8 @@ namespace ignite
     UIRenderer::UIRenderer(uint32_t width, uint32_t height)
         : m_Width(width), m_Height(height)
     {
-        // UI render target
-        RenderTargetCreateInfo createInfo = {};
-        createInfo.attachments =
-        {
-            FramebufferAttachments{ nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }, // Depth
-            FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } // Main Color
-        };
-        m_RenderTarget = RenderTarget::Create(createInfo);
-
-        m_Renderer = Renderer2D::Create(m_RenderTarget);
-        m_Projection = glm::ortho(
-            0.0f, static_cast<float>(width),
-            static_cast<float>(height), 0.0f);
+        m_Renderer = Renderer2D::Create();
+        m_Projection = glm::ortho(0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f);
     }
 
     UIRenderer::~UIRenderer()
@@ -58,13 +47,10 @@ namespace ignite
         }
     }
 
-    void UIRenderer::Render(nvrhi::ICommandList *cmd)
+    void UIRenderer::Render(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
     {
         // 2D Pass
         CameraConstants cc{ m_Projection, { 0.0f, 0.0f, 0.0f, 1.0f } };
-        m_RenderTarget->ClearColorAttachmentFloat(cmd);
-
-        nvrhi::IFramebuffer *framebuffer = m_RenderTarget->GetFramebuffer();
 
         // Begin 2D rendering
         m_Renderer->Begin(cmd, cc);
@@ -76,7 +62,7 @@ namespace ignite
         RenderLayoutGrid(cmd, framebuffer);
 
         // Flush and end 2D rendering
-        m_Renderer->Flush();
+        m_Renderer->Flush(framebuffer);
         m_Renderer->End();
     }
 
@@ -84,9 +70,7 @@ namespace ignite
     {
         m_Width = width;
         m_Height = height;
-
         m_Projection = glm::ortho(0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f);
-        m_RenderTarget->Resize(width, height);
 
         if (m_UIManager)
         {
@@ -133,7 +117,7 @@ namespace ignite
             }
             else if (auto text = std::dynamic_pointer_cast<UIText>(widget))
             {
-                RenderText(cmd, framebuffer, text);
+                // RenderText(cmd, framebuffer, text);
             }
         }
     }
@@ -147,29 +131,6 @@ namespace ignite
         const Ref<Texture> image = button->GetImage();
         
         m_Renderer->DrawQuad(rect, 0.0f, buttonColor, image);
-        
-        // Render button border
-        // glm::vec4 borderColor = button->GetBorderColor();
-        // m_Renderer->DrawRect(transform, borderColor);
-        
-        // TODO: Add text rendering when text system is available
-        // For now, we just render the button rectangle
-    }
-
-    void UIRenderer::RenderText(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<UIText> text)
-    {
-        // TODO: Implement text rendering when text/font system is available
-        // For now, just render a small quad as placeholder
-        // glm::vec2 position = text->GetAlignedPosition();
-        // glm::vec2 size = text->GetSize();
-        
-        // Convert UI space to screen space (flip Y coordinate)
-        // glm::vec3 screenPos = { position.x, static_cast<float>(m_Height) - position.y - size.y, 0.0f };
-        
-        // glm::mat4 transform = glm::translate(glm::mat4(1.0f), screenPos);
-        // transform = glm::scale(transform, { size.x, size.y, 1.0f });
-        
-        // m_Renderer->DrawQuad(transform, text->GetColor());
     }
 
     Ref<UIRenderer> UIRenderer::Create(uint32_t width, uint32_t height)

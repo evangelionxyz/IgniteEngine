@@ -67,9 +67,7 @@ namespace ignite {
         GraphicsPipeline &AddBindingLayout(const nvrhi::BindingLayoutHandle &layout);
         GraphicsPipeline& AddShader(const std::string& filepath, nvrhi::ShaderType type, const std::string &entryPoint = "main", bool recompile = false);
         GraphicsPipeline& AddShader(nvrhi::ShaderHandle& handle, nvrhi::ShaderType type);
-        void Build();
-        void CreatePipeline(nvrhi::IFramebuffer *framebuffer);
-        void ResetHandle();
+        void Build(nvrhi::IFramebuffer *framebuffer);
 
         nvrhi::BindingLayoutHandle GetBindingLayout(uint32_t index);
 

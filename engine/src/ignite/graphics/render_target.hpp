@@ -54,6 +54,8 @@ namespace ignite
         uint32_t GetWidth() const { return m_CreateInfo.width; }
         uint32_t GetHeight() const { return m_CreateInfo.height; }
 
+        bool ShouldResize(const uint32_t width, const uint32_t height);
+
         nvrhi::TextureHandle GetDepthAttachment();
         nvrhi::FramebufferHandle GetFramebuffer();
         nvrhi::TextureHandle GetColorAttachment(uint32_t index);

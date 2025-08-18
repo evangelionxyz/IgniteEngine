@@ -44,6 +44,10 @@ namespace ignite
     {
     }
 
+    EditorLayer::~EditorLayer()
+    {
+    }
+
     void EditorLayer::OnAttach()
     {
         Layer::OnAttach();
@@ -246,7 +250,10 @@ namespace ignite
         case State::SceneSimulate:
         case State::SceneEdit:
         {
-            m_SceneRenderer.Render(&m_ScenePanel->GetViewportCamera());
+            m_SceneRenderer.RenderTo(&m_ScenePanel->GetViewportCamera(),
+                m_ScenePanel->GetSceneViewportRT(),
+                m_ScenePanel->GetUIViewportRT(),
+                m_ScenePanel->GetCompositeViewportRT());
             break;
         }
         case State::ScenePlay:
@@ -256,9 +263,24 @@ namespace ignite
             {
                 camera = &primaryCam.GetComponent<Camera>().camera;
             }
-            m_SceneRenderer.Render(camera, camera->projectionType == ICamera::Type::Perspective);
+            m_SceneRenderer.RenderTo(camera,
+                m_ScenePanel->GetSceneViewportRT(),
+                m_ScenePanel->GetUIViewportRT(),
+                m_ScenePanel->GetCompositeViewportRT());
             break;
         }
+        }
+
+        if (Entity selectedEntity = m_ScenePanel->GetSelectedEntity())
+        {
+            if (selectedEntity.HasComponent<Camera>())
+            {
+                ICamera *camera = &selectedEntity.GetComponent<Camera>().camera;
+                m_SceneRenderer.RenderTo(camera,
+                    m_ScenePanel->GetSceneCameraRT(),
+                    m_ScenePanel->GetUICameratRT(),
+                    m_ScenePanel->GetCompositeCameraRT());
+            }
         }
 
         m_CommandList->Begin();
@@ -268,18 +290,18 @@ namespace ignite
         // Create staging texture for read-back
         if (m_Data.isPickingEntity && false) // FIXME: No mouse picking
         {
-            nvrhi::TextureDesc stagingDesc = m_SceneRenderer.GetRenderTarget()->GetColorAttachment(1)->getDesc();
+            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(1)->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_MousePickingStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            cmd->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_SceneRenderer.GetRenderTarget()->GetColorAttachment(1), nvrhi::TextureSlice());
+            cmd->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(1), nvrhi::TextureSlice());
         }
 
         if (m_Data.takeScreenshot)
         {
-            nvrhi::TextureDesc stagingDesc = m_SceneRenderer.GetRenderTarget()->GetColorAttachment(0)->getDesc();
+            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(0)->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_ScreenshotStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            cmd->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_SceneRenderer.GetRenderTarget()->GetColorAttachment(0), nvrhi::TextureSlice());
+            cmd->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(0), nvrhi::TextureSlice());
         }
 
         m_CommandList->Submit();
@@ -557,8 +579,6 @@ namespace ignite
             
             // Render GUI
             SettingsUI();
-
-            m_SceneRenderer.OnGuiRender();
         }
 
         ImGui::End(); // end dockspace

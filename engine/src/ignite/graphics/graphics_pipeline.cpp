@@ -28,8 +28,8 @@
 
 #include "ignite/core/application.hpp"
 
-namespace ignite {
-
+namespace ignite
+{
     GraphicsPipeline::GraphicsPipeline(const GraphicsPipelineParams &params, GraphicsPipelineCreateInfo *createInfo)
         : m_Params(params), m_CreateInfo(std::move(createInfo))
     {
@@ -62,68 +62,6 @@ namespace ignite {
         return *this;
     }
 
-    void GraphicsPipeline::CreatePipeline(nvrhi::IFramebuffer *framebuffer)
-    {
-        if (m_Handle == nullptr)
-        {
-            // create graphics pipeline
-            nvrhi::BlendState blendState;
-            blendState.targets[0].blendEnable = m_Params.enableBlend;
-            // blendState.targets[1].blendEnable = false;
-            // blendState.targets[1].colorWriteMask = nvrhi::ColorMask::All;
-
-            nvrhi::DepthStencilState depthStencilState;
-            depthStencilState.depthWriteEnable = m_Params.depthWrite;
-            depthStencilState.depthTestEnable = m_Params.depthTest;
-            depthStencilState.depthFunc = m_Params.comparison;
-
-            depthStencilState.stencilEnable = m_Params.enableDepthStencil;
-            depthStencilState.frontFaceStencil = m_Params.frontFaceStencilDesc;
-            depthStencilState.backFaceStencil = m_Params.backFaceStencilDesc;
-            depthStencilState.stencilWriteMask = m_Params.stencilWriteMask;
-            depthStencilState.stencilReadMask = m_Params.stencilReadMask;
-            depthStencilState.stencilRefValue = m_Params.stencilRefValue;
-
-            nvrhi::RasterState rasterState;
-
-            rasterState.cullMode = m_Params.cullMode;
-            rasterState.fillMode = m_Params.fillMode;
-            rasterState.setFrontCounterClockwise(false);
-            rasterState.setMultisampleEnable(false);
-
-            nvrhi::RenderState renderState;
-            renderState.setRasterState(rasterState);
-            renderState.setDepthStencilState(depthStencilState);
-            renderState.setBlendState(blendState);
-
-            nvrhi::GraphicsPipelineDesc pipelineDesc;
-
-            for (auto& [type, shader] : m_Shaders)
-            {
-                if (type == nvrhi::ShaderType::Vertex) pipelineDesc.setVertexShader(shader);
-                else if (type == nvrhi::ShaderType::Pixel) pipelineDesc.setPixelShader(shader);
-            }
-
-            pipelineDesc.setInputLayout(m_InputLayout);
-            pipelineDesc.setRenderState(renderState);
-            pipelineDesc.primType = m_Params.primitiveType;
-
-            for (auto &layout : m_BindingLayouts)
-                pipelineDesc.addBindingLayout(layout);
-
-            // create with the same framebuffer to be rendered
-            nvrhi::IDevice* device = Application::GetGraphicsDevice();
-
-            m_Handle = device->createGraphicsPipeline(pipelineDesc, framebuffer);
-            LOG_ASSERT(m_Handle, "Failed to create graphics pipeline");
-        }
-    }
-
-    void GraphicsPipeline::ResetHandle()
-    {
-        m_Handle = nullptr;
-    }
-
     nvrhi::BindingLayoutHandle GraphicsPipeline::GetBindingLayout(uint32_t index)
     {
         if (index < m_BindingLayouts.size())
@@ -131,7 +69,7 @@ namespace ignite {
         return nullptr;
     }
 
-    void GraphicsPipeline::Build()
+    void GraphicsPipeline::Build(nvrhi::IFramebuffer *framebuffer)
     {
         nvrhi::IDevice* device = Application::GetGraphicsDevice();
 
@@ -152,6 +90,57 @@ namespace ignite {
 
         m_InputLayout = device->createInputLayout(m_CreateInfo->attributes, m_CreateInfo->attributeCount, nullptr);
         LOG_ASSERT(m_InputLayout, "[Graphics Pipeline] Failed to create input layout");
+
+        LOG_ASSERT(m_Handle == nullptr, "[GraphicsPipeline] Should not re-create pipeline");
+        
+        // create graphics pipeline
+        nvrhi::BlendState blendState;
+        blendState.targets[0].blendEnable = m_Params.enableBlend;
+        // blendState.targets[1].blendEnable = false;
+        // blendState.targets[1].colorWriteMask = nvrhi::ColorMask::All;
+
+        nvrhi::DepthStencilState depthStencilState;
+        depthStencilState.depthWriteEnable = m_Params.depthWrite;
+        depthStencilState.depthTestEnable = m_Params.depthTest;
+        depthStencilState.depthFunc = m_Params.comparison;
+
+        depthStencilState.stencilEnable = m_Params.enableDepthStencil;
+        depthStencilState.frontFaceStencil = m_Params.frontFaceStencilDesc;
+        depthStencilState.backFaceStencil = m_Params.backFaceStencilDesc;
+        depthStencilState.stencilWriteMask = m_Params.stencilWriteMask;
+        depthStencilState.stencilReadMask = m_Params.stencilReadMask;
+        depthStencilState.stencilRefValue = m_Params.stencilRefValue;
+
+        nvrhi::RasterState rasterState;
+
+        rasterState.cullMode = m_Params.cullMode;
+        rasterState.fillMode = m_Params.fillMode;
+        rasterState.setFrontCounterClockwise(false);
+        rasterState.setMultisampleEnable(false);
+
+        nvrhi::RenderState renderState;
+        renderState.setRasterState(rasterState);
+        renderState.setDepthStencilState(depthStencilState);
+        renderState.setBlendState(blendState);
+
+        nvrhi::GraphicsPipelineDesc pipelineDesc;
+
+        for (auto& [type, shader] : m_Shaders)
+        {
+            if (type == nvrhi::ShaderType::Vertex) pipelineDesc.setVertexShader(shader);
+            else if (type == nvrhi::ShaderType::Pixel) pipelineDesc.setPixelShader(shader);
+        }
+
+        pipelineDesc.setInputLayout(m_InputLayout);
+        pipelineDesc.setRenderState(renderState);
+        pipelineDesc.primType = m_Params.primitiveType;
+
+        for (auto &layout : m_BindingLayouts)
+            pipelineDesc.addBindingLayout(layout);
+
+        // create with the same framebuffer to be rendered
+        m_Handle = device->createGraphicsPipeline(pipelineDesc, framebuffer);
+        LOG_ASSERT(m_Handle, "Failed to create graphics pipeline");
     }
 
     Ref<GraphicsPipeline> GraphicsPipeline::Create(const GraphicsPipelineParams &params, GraphicsPipelineCreateInfo *createInfo)

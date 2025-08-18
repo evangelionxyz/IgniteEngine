@@ -67,24 +67,26 @@ namespace ignite
 
         std::string name;
         entt::registry *registry;
-
-        std::unordered_map<UUID, entt::entity> entities; // uuid to entity
-        
         Scope<Physics2D> physics2D;
         Scope<JoltScene> physics;
+        std::unordered_map<UUID, entt::entity> entities; // uuid to entity
 
+        
         bool IsPlaying() const { return m_Playing; }
-
+        
         static Ref<Scene> Create(const std::string &name);
-
+        
         static AssetType GetStaticType() { return AssetType::Scene; }
         virtual AssetType GetType() override { return GetStaticType(); }
+        Ref<SceneRenderer> GetSceneRenderer() { return m_SceneRenderer; }
 
         glm::vec3 physicsGravity{ 0.0f, -9.8f, 0.0f };
         float timeInSeconds = 0.0f;
         uint32_t viewportWidth = 1280, viewportHeight = 720;
-    
+
+        
     private:
+        Ref<SceneRenderer> m_SceneRenderer;
         bool m_Playing = false;
     };
 }

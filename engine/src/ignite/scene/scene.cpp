@@ -78,6 +78,7 @@ namespace ignite
             Camera &cam = camView.get<Camera>(entity);
             cam.camera.SetSize(static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
             cam.camera.UpdateProjectionMatrix();
+            cam.camera.UpdateViewMatrix();
         }
 
         // play on start audio
@@ -198,9 +199,9 @@ namespace ignite
             Camera &cam = entity.GetComponent<Camera>();
             if (cam.primary)
             {
+                cam.camera.position = transform.translation;
                 cam.camera.viewMatrix = glm::translate(glm::mat4(1.0f), transform.translation) * glm::toMat4(transform.rotation);
                 cam.camera.viewMatrix = glm::inverse(cam.camera.viewMatrix);
-                cam.camera.position = transform.translation;
             }
         }
         

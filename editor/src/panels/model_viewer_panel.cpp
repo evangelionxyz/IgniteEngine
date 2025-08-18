@@ -62,9 +62,7 @@ namespace ignite
             .AddShader("mesh_anim.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
             .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
             .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
-            .Build();
-
-        m_Pipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
+            .Build(m_RenderTarget->GetFramebuffer());
 
         m_Camera.CreatePerspective(60.0f, 1280.0f, 720.0f, 0.1f, 100.0f);
 
