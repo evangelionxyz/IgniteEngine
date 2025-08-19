@@ -60,11 +60,12 @@ namespace ignite
         { "Rigid Body 2D", CompType_Rigidbody2D },
         { "Box Collider 2D", CompType_BoxCollider2D },
         { "Sprite 2D", CompType_Sprite2D},
-        { "Mesh Renderer", CompType_MeshRenderer },
         { "Skeletal Mesh", CompType_SkeletalMesh},
         { "Rigid Body", CompType_Rigidbody},
         { "Box Collider", CompType_BoxCollider},
         { "Sphere Collider", CompType_SphereCollider},
+        { "Capsule Collider", CompType_CapsuleCollider},
+        { "Mesh Collider", CompType_MeshCollider},
         { "Audio Source", CompType_AudioSource},
         { "C# Script", CompType_Script},
     };
@@ -162,11 +163,12 @@ namespace ignite
             case CompType_Rigidbody2D: return "CompType_Rigidbody2D";
             case CompType_BoxCollider2D: return "CompType_BoxCollider2D";
             case CompType_Sprite2D: return "CompType_Sprite2D";
-            case CompType_MeshRenderer: return "CompType_MeshRenderer";
             case CompType_SkeletalMesh: return "CompType_SkeletalMesh";
             case CompType_Rigidbody: return "CompType_Rigidbody";
             case CompType_BoxCollider: return "CompType_BoxCollider";
             case CompType_SphereCollider: return "CompType_SphereCollider";
+            case CompType_CapsuleCollider: return "CompType_CapsuleCollider";
+            case CompType_MeshCollider: return "CompType_MeshCollider";
             case CompType_AudioSource: return "CompType_AudioSource";
             case CompType_Script: return "CompType_Script";
             case CompType_ID: return "CompType_ID";
@@ -224,13 +226,6 @@ namespace ignite
     {
     public:
         SceneCamera camera;
-        ICamera::Type projectionType = ICamera::Type::Perspective;
-
-        float fov = 45.0f;
-        float nearClip = 0.1f;
-        float farClip = 500.0f;
-        float zoom = 5.0f;
-        
         bool primary = true;
 
         Camera() = default;
@@ -381,33 +376,6 @@ namespace ignite
         virtual CompType GetType() override { return StaticType(); }
     };
 
-    class MeshRenderer : public IComponent
-    {
-    public:
-        Ref<Mesh> mesh;
-        Ref<Material> material;
-
-        bool isSkinnedMesh = false;
-
-        UUID root = UUID(0);
-
-        SkinnedMeshConstants transformData;
-        nvrhi::BindingSetHandle bindingSet;
-        nvrhi::BufferHandle transformBufferHandle;
-
-        nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::Front;
-        nvrhi::RasterFillMode fillMode = nvrhi::RasterFillMode::Solid;
-
-        MeshRenderer() = default;
-        MeshRenderer(const MeshRenderer &other);
-
-        void Create(bool _isSkinnedMesh);
-        void UpdateBindingSet();
-
-        static CompType StaticType() { return CompType_MeshRenderer; }
-        virtual CompType GetType() override { return StaticType(); }
-    };
-
     class Rigibody : public IComponent
     {
     public:
@@ -467,6 +435,31 @@ namespace ignite
         SphereCollider() = default;
 
         static CompType StaticType() { return CompType_SphereCollider; }
+        virtual CompType GetType() override { return StaticType(); }
+    };
+
+    class CapsuleCollider : public PhysicsCollider, public IComponent
+    {
+    public:
+        float radius = 0.5f;
+        float height = 1.0f;
+
+        CapsuleCollider() = default;
+
+        static CompType StaticType() { return CompType_CapsuleCollider; }
+        virtual CompType GetType() override { return StaticType(); }
+    };
+
+    class MeshCollider : public PhysicsCollider, public IComponent
+    {
+    public:
+        std::vector<glm::vec3> vertices;
+        std::vector<uint32_t> indices;
+        bool convex = false; // Whether to use convex hull or triangle mesh
+
+        MeshCollider() = default;
+
+        static CompType StaticType() { return CompType_MeshCollider; }
         virtual CompType GetType() override { return StaticType(); }
     };
 

@@ -59,10 +59,16 @@ namespace ignite
         std::filesystem::path GetAssetFilepath(const std::filesystem::path &filepath) const;
         std::filesystem::path GetRelativeFilepath(const std::filesystem::path &filepath) const;
         
-        void SetActiveScene(Scene *scene);
+        void SetActiveScene(const Ref<Scene> &scene);
+        void SetDefaultScene(AssetHandle handle);
         bool BuildSolution();
 
         std::vector<std::pair<AssetHandle, AssetMetaData>> ValidateAssetRegistry();
+
+        std::filesystem::path GetFilepath() const
+        {
+            return GetDirectory() / m_Info.filepath;
+        }
 
         std::filesystem::path GetDirectory() const
         {
@@ -85,6 +91,11 @@ namespace ignite
         }
 
         // Static methods
+        static std::filesystem::path GetActiveFilepath()
+        {
+            return GetActive()->GetFilepath();
+        }
+
         static std::filesystem::path GetActiveScriptsDirectory()
         {
             return GetActive()->GetScriptsDirectory();
@@ -116,9 +127,9 @@ namespace ignite
         MaterialManager &GetMaterialManager() { return m_MaterialManager; }
 
         ProjectInfo &GetInfo() { return m_Info; }
-        Scene *GetActiveScene() const { return m_ActiveScene; }
+        Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
 
-        static Project *GetActive();
+        static Ref<Project> GetActive();
         static Ref<Project> Create(const ProjectInfo &info);
 
         static AssetType GetStaticType() { return AssetType::Project; }
@@ -126,7 +137,7 @@ namespace ignite
 
     private:
         void GenerateProject();
-        Scene *m_ActiveScene = nullptr; // current active scene in editor
+        Ref<Scene> m_ActiveScene; // current active scene in editor
         ProjectInfo m_Info;
 
         MaterialManager m_MaterialManager;

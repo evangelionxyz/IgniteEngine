@@ -23,49 +23,39 @@
 
 #pragma once
 
-#include "ignite/asset/asset.hpp"
-#include "keyframes.hpp"
+#include "ignite/core/types.hpp"
+#include "ignite/graphics/material.hpp"
 
-#include <assimp/anim.h>
 #include <string>
-#include <unordered_map>
 
-namespace ignite {
-    
-    class AnimationChannel
+namespace ignite
+{
+    class MaterialEditorPanel
     {
     public:
-        AnimationChannel() = default;
-        AnimationChannel(const aiNodeAnim *animNode);
+        MaterialEditorPanel();
+        ~MaterialEditorPanel();
 
-        // time in seconds * ticks per second
-        // S * (T/S)
-        glm::mat4 CalculateTransform(float timeInTicks);
+        void OnImGuiRender();
+        void SetSelectedMaterial(Ref<Material> material);
+        void SetSelectedMaterial(const std::string &materialName);
+        
+        bool IsOpen() const { return m_IsOpen; }
+        void SetOpen(bool open) { m_IsOpen = open; }
 
-        Vec3Key translationKeys;
-        QuatKey rotationKeys;
-        Vec3Key scaleKeys;
-
-        glm::vec3 translation;
-        glm::vec3 scale;
-        glm::quat rotation;
-    };
-
-    class SkeletalAnimation : public Asset
-    {
-    public:
-        SkeletalAnimation() = default;
-        SkeletalAnimation(aiAnimation *anim);
-
-        std::string name;
-        float duration = 0;
-        float ticksPerSeconds = 1.0f;
-        float timeInSeconds = 0.0f;
-        bool isPlaying = false;
-
-        std::unordered_map<std::string, AnimationChannel> channels;
-
-        static AssetType GetStaticType() { return AssetType::SkeletalAnimation; }
-        virtual AssetType GetType() override { return GetStaticType(); }
+    private:
+        void RenderMaterialProperties();
+        void RenderTextureSlot(const char* label, MaterialTextureType textureType);
+        void RenderColorProperty(const char* label, glm::vec4& color);
+        void RenderFloatProperty(const char* label, float& value, float min = 0.0f, float max = 1.0f);
+        void RenderMaterialTypeCombo();
+        void RenderBlendModeCombo();
+        
+        bool m_IsOpen = false;
+        Ref<Material> m_SelectedMaterial;
+        std::string m_MaterialName;
+        
+        // UI state
+        bool m_ShowAdvancedProperties = false;
     };
 }

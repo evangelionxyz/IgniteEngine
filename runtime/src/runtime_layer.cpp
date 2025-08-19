@@ -28,6 +28,7 @@
 #include "ignite/project/project.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/scene_manager.hpp"
+#include "ignite/graphics/ui_renderer.hpp"
 
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/scripting/script_engine.hpp"
@@ -48,6 +49,7 @@ namespace ignite
         Layer::OnAttach();
 
         m_Device = Application::GetGraphicsDevice();
+        m_CommandList = CommandList::Create();
 
         m_SceneRenderer.Create();
 
@@ -64,34 +66,56 @@ namespace ignite
             }
         }
 
-        while (!m_ActiveProject)
-        {
-            OpenProject();
-        }
+        OpenProject();
 
-        if (m_ActiveScene)
+        if (m_ActiveProject && m_ActiveScene)
         {
-            m_SceneRenderer.SetActiveScene(m_ActiveScene.get());
+            m_SceneRenderer.SetActiveScene(m_ActiveScene);
             m_ActiveScene->OnStart();
-
             m_ViewportData.size = Application::GetInstance()->GetWindow()->GetFramebufferSize();
-            m_SceneRenderer.Resize(m_ViewportData.size.x, m_ViewportData.size.y);
+
+            // Create scene render target
+            RenderTargetCreateInfo rtCreateInfo = {};
+            rtCreateInfo.attachments =
+            {
+                FramebufferAttachments{ nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }, // Depth
+                FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } // Main Color
+            };
+
+            m_SceneRT = RenderTarget::Create(rtCreateInfo);
+            m_UIRT = RenderTarget::Create(rtCreateInfo);
+
+            // Composite render target
+            rtCreateInfo = {};
+            rtCreateInfo.attachments = { FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } }; // Main Color
+            m_CompositeRT = RenderTarget::Create(rtCreateInfo);
+
             m_BindingSet = nullptr;
+
+            Application::GetInstance()->GetWindow()->Show(); // Show window after initialization
         }
         else
         {
-            exit(1);
-        }
+            if (!m_ActiveScene)
+            {
+                LOG_ERROR("[Runtime] No Default Scene");
+            }
 
-        m_CommandList = CommandList::Create();
+            if (!m_ActiveProject)
+            {
+                LOG_ERROR("[Runtime] Project is not valid");
+            }
 
-        Application::GetInstance()->GetWindow()->Show(); // Show window after initialization
+            Application::Shutdown();
+        }        
     }
 
     void RuntimeLayer::OnDetach() 
     {
         if (m_ActiveScene)
+        {
             m_ActiveScene->OnStop();
+        }
 
         Layer::OnDetach();
     }
@@ -105,7 +129,6 @@ namespace ignite
 
         if (m_ActiveScene)
         {
-            // m_ViewportData.position = window->GetPosition();
             m_ViewportData.position = glm::vec2(0.0f);
             m_ViewportData.size = window->GetFramebufferSize();
             m_ViewportData.mousePosition = Input::GetMousePosition();
@@ -130,7 +153,7 @@ namespace ignite
             if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
             {
                 ICamera *camera = &primaryCam.GetComponent<Camera>().camera;
-                m_SceneRenderer.Render(camera, camera->projectionType == ICamera::Type::Perspective);
+                m_SceneRenderer.RenderTo(camera, m_SceneRT, m_UIRT, m_CompositeRT, camera->projectionType == ICamera::Type::Perspective);
             }
 
             UpdateBindingSet();
@@ -139,7 +162,7 @@ namespace ignite
             auto cmd = m_CommandList->GetActiveHandle();
             
             auto graphicsState = nvrhi::GraphicsState();
-            graphicsState.pipeline = m_Pipeline->GetHandle();
+            graphicsState.pipeline = m_CompositePipeline->GetHandle();
             graphicsState.framebuffer = framebuffer;
             graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding { m_ScreenVertexBuffer->GetHandle(), 0, 0 } };
             graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
@@ -167,7 +190,17 @@ namespace ignite
         {
             // UIManager::GetInstance().SetViewportSize(event.GetWidth(), event.GetHeight());
 
-            m_SceneRenderer.Resize(event.GetWidth(), event.GetHeight());
+            const uint32_t width = event.GetWidth();
+            const uint32_t height = event.GetHeight();
+
+            m_SceneRT->Resize(width, height);
+            m_UIRT->Resize(width, height);
+            m_CompositeRT->Resize(width, height);
+
+            m_ActiveScene->Resize(width, height);
+
+            m_SceneRenderer.GetUIRenderer()->Resize(width, height);
+
             m_BindingSet = nullptr;
         }
         return false;
@@ -178,16 +211,19 @@ namespace ignite
         // Composite Binding set
         if (!m_BindingSet)
         {
+            nvrhi::IDevice *device = Application::GetGraphicsDevice();
             auto bindingSetDesc = nvrhi::BindingSetDesc();
-            bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_SceneRenderer.GetCompositeRenderTarget()->GetColorAttachment(0)));
+            bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_SceneRT->GetColorAttachment(0)));
+            bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, m_UIRT->GetColorAttachment(0)));
             bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, Renderer::GetWhiteTexture()->GetSampler()));
-            m_BindingSet = Application::GetGraphicsDevice()->createBindingSet(bindingSetDesc, m_Pipeline->GetBindingLayout(0));
+
+            m_BindingSet = device->createBindingSet(bindingSetDesc, m_CompositePipeline->GetBindingLayout(0));
         }
     }
 
     void RuntimeLayer::CreatePipeline(nvrhi::IFramebuffer *framebuffer)
     {
-        if (!m_Pipeline)
+        if (!m_CompositePipeline)
         {
             // Geometry
             VertexScreen vertices[]
@@ -221,17 +257,16 @@ namespace ignite
             nvrhi::BindingLayoutDesc layoutDesc = {};
             layoutDesc.visibility = nvrhi::ShaderType::All;
             layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)); // scene
+            layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)); // ui
             layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0)); // sampler
             nvrhi::BindingLayoutHandle bindingLayout = m_Device->createBindingLayout(layoutDesc);
 
             // Create pipeline
-            m_Pipeline = GraphicsPipeline::Create(params, &pci);
-            m_Pipeline->AddShader("screen.vertex.hlsl", nvrhi::ShaderType::Vertex)
+            m_CompositePipeline = GraphicsPipeline::Create(params, &pci);
+            m_CompositePipeline->AddShader("screen.vertex.hlsl", nvrhi::ShaderType::Vertex)
                 .AddShader("screen.pixel.hlsl", nvrhi::ShaderType::Pixel, "main")
                 .AddBindingLayout(bindingLayout)
-                .Build();
-
-            m_Pipeline->CreatePipeline(framebuffer);
+                .Build(framebuffer);
         }
     }
 
@@ -239,7 +274,7 @@ namespace ignite
     {
         Layer::OnGuiRender();
 
-        ImGui::Begin("Debug");
+        ImGui::Begin("Debug Window");
 
         ImGui::DragFloat2("position", glm::value_ptr(m_ViewportData.position));
         ImGui::DragFloat2("size", glm::value_ptr(m_ViewportData.size));

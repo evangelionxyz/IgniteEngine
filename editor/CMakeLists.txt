@@ -43,7 +43,6 @@ target_include_directories(IgniteEditor PRIVATE
 )
 
 # Defines
-
 target_compile_definitions(IgniteEditor PRIVATE
   SHADERMAKE_COLORS
   YAML_CPP_STATIC_DEFINE
@@ -75,9 +74,3 @@ if(WIN32)
 endif()
 
 set_target_properties(IgniteEditor PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED YES)
-
-# In Visual Studio, set the debugger working directory to the executable output folder
-if(MSVC)
-  # Expands per-config to something like build/bin/Debug
-  set_property(TARGET IgniteEditor PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:IgniteEditor>")
-endif()

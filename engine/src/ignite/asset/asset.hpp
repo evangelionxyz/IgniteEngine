@@ -42,6 +42,7 @@ namespace ignite {
         Project,
         Texture,
         Material,
+        Font,
         TextureCube,
         SkeletalAnimation,
         Environment,
@@ -61,6 +62,7 @@ namespace ignite {
             case ignite::AssetType::Material: return "Material";
             case ignite::AssetType::Audio: return "Audio";
             case ignite::AssetType::Model: return "Model";
+            case ignite::AssetType::Font: return "Font";
             case ignite::AssetType::Project: return "Project";
             case ignite::AssetType::TextureCube: return "TextureCube";
             case ignite::AssetType::Scene: return "Scene";
@@ -82,7 +84,9 @@ namespace ignite {
         { ".jpg", AssetType::Texture },
         { ".png", AssetType::Texture },
         { ".jpeg", AssetType::Texture },
-        { ".hdr", AssetType::TextureCube },
+        { ".hdr", AssetType::Texture },
+        { ".otf", AssetType::Font },
+        { ".ttf", AssetType::Font },
         { ".mp3", AssetType::Audio },
         { ".flac", AssetType::Audio },
         { ".wav", AssetType::Audio },
@@ -91,6 +95,7 @@ namespace ignite {
         { ".gltf", AssetType::MeshSource },
         { ".skel", AssetType::Skeleton},
         { ".mat", AssetType::Material},
+        { ".ixmat", AssetType::Material},
         { ".ixenv", AssetType::Environment},
     };
 
@@ -109,6 +114,7 @@ namespace ignite {
         if (typeStr == "Skeleton")  return AssetType::Skeleton;
         if (typeStr == "Material")  return AssetType::Material;
         if (typeStr == "Environment")  return AssetType::Environment;
+        if (typeStr == "Font")  return AssetType::Font;
         return AssetType::Invalid;
     }
 
@@ -126,16 +132,16 @@ namespace ignite {
         std::filesystem::path filepath;
     };
 
-    class Asset
+    class Asset : public std::enable_shared_from_this<Asset>
     {
     public:
         AssetHandle handle;
         virtual ~Asset() { };
 
         template<typename T>
-        T *As()
+        Ref<T> As()
         {
-            return static_cast<T *>(this);
+            return std::dynamic_pointer_cast<T>(shared_from_this());
         }
 
         virtual AssetType GetType() { return AssetType::Invalid; }

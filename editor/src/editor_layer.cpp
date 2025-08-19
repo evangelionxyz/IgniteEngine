@@ -25,6 +25,8 @@
 #include "panels/scene_panel.hpp"
 #include "panels/content_browser_panel.hpp"
 #include "panels/model_viewer_panel.hpp"
+#include "panels/material_editor_panel.hpp"
+#include "panels/materials_panel.hpp"
 
 #include "ignite/core/platform_utils.hpp"
 #include "ignite/core/command.hpp"
@@ -57,9 +59,22 @@ namespace ignite
         m_ScenePanel = CreateRef<ScenePanel>("Scene Panel", this);
         m_ContentBrowserPanel = CreateRef<ContentBrowserPanel>("Content Browser");
         m_ModelViewerPanel = CreateRef<ModelViewerPanel>();
+        m_MaterialEditorPanel = CreateRef<MaterialEditorPanel>();
+        m_MaterialsPanel = CreateRef<MaterialsPanel>();
+
+        // Set up material panel callbacks
+        m_MaterialsPanel->SetMaterialSelectionCallback([this](Ref<Material> material) {
+            // Optional: Handle material selection in main editor
+        });
+        
+        m_MaterialsPanel->SetMaterialEditCallback([this](Ref<Material> material) {
+            m_MaterialEditorPanel->SetSelectedMaterial(material);
+            m_MaterialEditorPanel->SetOpen(true);
+        });
 
         // create render target framebuffer
         m_SceneRenderer.Create();
+        m_CommandList = CommandList::Create();
 
         const auto &cmdArgs = Application::GetInstance()->GetCreateInfo().cmdLineArgs;
         for (int i = 0; i < cmdArgs.count; ++i)
@@ -74,14 +89,16 @@ namespace ignite
             }
         }
 
-        while (!m_ActiveProject)
+        OpenProject();
+
+        if (m_ActiveProject)
         {
-            OpenProject();
+            Application::GetInstance()->GetWindow()->Show(); // Show window after initialization
         }
-
-        m_CommandList = CommandList::Create();
-
-        Application::GetInstance()->GetWindow()->Show(); // Show window after initialization
+        else
+        {
+            Application::Shutdown();
+        }
     }
 
     void EditorLayer::OnDetach()
@@ -438,6 +455,20 @@ namespace ignite
                     m_Data.takeScreenshot = true;
                 }
 
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("Window"))
+            {
+                if (ImGui::MenuItem("Materials", nullptr, m_MaterialsPanel->IsOpen(), m_ActiveProject != nullptr))
+                {
+                    m_MaterialsPanel->SetOpen(!m_MaterialsPanel->IsOpen());
+                }
+
+                if (ImGui::MenuItem("Material Editor", nullptr, m_MaterialEditorPanel->IsOpen(), m_ActiveProject != nullptr))
+                {
+                    m_MaterialEditorPanel->SetOpen(!m_MaterialEditorPanel->IsOpen());
+                }
 
                 ImGui::EndMenu();
             }
@@ -510,7 +541,7 @@ namespace ignite
                                 m_EditorScene->SetDirtyFlag(false);
 
                                 m_ActiveScene = m_EditorScene;
-                                SetActiveScene(m_ActiveScene.get());
+                                SetActiveScene(m_ActiveScene);
 
                                 AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(activeScene->handle);
                                 auto scenePath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
@@ -561,11 +592,13 @@ namespace ignite
             // scene dockspace
             m_ScenePanel->OnGuiRender();
             m_ContentBrowserPanel->OnGuiRender();
+            m_MaterialEditorPanel->OnImGuiRender();
+            m_MaterialsPanel->OnImGuiRender();
             // m_ModelViewerPanel->OnGuiRender();
 
             ImGui::Begin("Project");
 
-            if (Project *activeProject = Project::GetActive())
+            if (Ref<Project> activeProject = Project::GetActive())
             {
                 const auto &info = activeProject->GetInfo();
                 std::string projectName = info.name;
@@ -584,7 +617,7 @@ namespace ignite
         ImGui::End(); // end dockspace
     }
 
-    void EditorLayer::SetActiveScene(Scene* scene)
+    void EditorLayer::SetActiveScene(const Ref<Scene> &scene)
     {
         m_ScenePanel->SetActiveScene(scene);
         m_SceneRenderer.SetActiveScene(scene);
@@ -605,7 +638,7 @@ namespace ignite
 
         // pass to active scene
         m_ActiveScene = m_EditorScene;
-        SetActiveScene(m_ActiveScene.get());
+        SetActiveScene(m_ActiveScene);
     }
 
     void EditorLayer::SaveScene()
@@ -628,7 +661,7 @@ namespace ignite
 
     void EditorLayer::SaveSceneAs()
     {
-        std::string filepath = FileDialogs::SaveFile("Ignite Scene (*.ixasset)\0*.ixasset\0");
+        std::string filepath = FileDialogs::SaveFile("Ignite Scene (*.ixscene)\0*.ixscene\0");
         if (!filepath.empty())
         {
             m_CurrentSceneFilePath = filepath;
@@ -638,7 +671,7 @@ namespace ignite
 
     void EditorLayer::OpenScene()
     {
-        std::string filepath = FileDialogs::OpenFile("Ignite Scene (*.ixasset)\0*.ixasset\0");
+        std::string filepath = FileDialogs::OpenFile("Ignite Scene (*.ixscene)\0*.ixscene\0");
         if (!filepath.empty())
         {
             OpenScene(filepath);
@@ -653,7 +686,9 @@ namespace ignite
         }
 
         if (m_Data.sceneState == State::ScenePlay)
+        {
             OnSceneStop();
+        }
 
         if (Ref<Scene> openScene = SceneSerializer::Deserialize(filepath))
         {
@@ -661,7 +696,7 @@ namespace ignite
             m_EditorScene->SetDirtyFlag(false);
 
             m_ActiveScene = m_EditorScene;
-            SetActiveScene(m_ActiveScene.get());
+            SetActiveScene(m_ActiveScene);
 
             m_CurrentSceneFilePath = filepath;
         }
@@ -719,7 +754,7 @@ namespace ignite
                     m_EditorScene->SetDirtyFlag(false);
 
                     m_ActiveScene = m_EditorScene;
-                    SetActiveScene(m_ActiveScene.get());
+                    SetActiveScene(m_ActiveScene);
 
                     AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(activeScene->handle);
                     auto scenePath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
@@ -754,7 +789,7 @@ namespace ignite
         m_ActiveScene = SceneManager::Copy(m_EditorScene);
         m_ActiveScene->OnStart();
 
-        SetActiveScene(m_ActiveScene.get());
+        SetActiveScene(m_ActiveScene);
     }
 
     void EditorLayer::OnSceneStop()
@@ -764,7 +799,7 @@ namespace ignite
         m_ActiveScene->OnStop();
         m_ActiveScene = m_EditorScene;
 
-        SetActiveScene(m_EditorScene.get());
+        SetActiveScene(m_EditorScene);
     }
 
     void  EditorLayer::OnSceneSimulate()
@@ -778,7 +813,7 @@ namespace ignite
         m_ActiveScene = SceneManager::Copy(m_EditorScene);
         m_ActiveScene->OnStart();
 
-        SetActiveScene(m_ActiveScene.get());
+        SetActiveScene(m_ActiveScene);
     }
 
     void EditorLayer::SettingsUI()

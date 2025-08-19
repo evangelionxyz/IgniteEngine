@@ -179,6 +179,7 @@ namespace ignite
         nvrhi::BindingSetHandle bindingSet;
 
         void LoadTexture(const aiScene *aiScene, const aiMaterial *aiMat, const std::filesystem::path &filepath, MaterialTextureType textureType);
+        void CreateDefaultTextures();
         void CreateTextures();
 
         void UpdateBindingSet();

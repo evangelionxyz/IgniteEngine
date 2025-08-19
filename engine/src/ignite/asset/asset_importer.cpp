@@ -205,6 +205,13 @@ namespace ignite {
             {
                 mat->CreateTextures();
                 meshAsset->materials.push_back(mat);
+                
+                // Register with material manager
+                if (Project::GetActive())
+                {
+                    auto &materialManager = Project::GetActive()->GetMaterialManager();
+                    materialManager.AddMaterial(mat->name, mat);
+                }
             }
         }
 
@@ -467,7 +474,14 @@ namespace ignite {
 
     Ref<Asset> MeshImporter::ImportMaterial(AssetHandle handle, const AssetMetaData& metadata)
     {
-        Ref<Material> mat;
+        Ref<Material> mat = BinarySerializer::DeserializeMaterial(metadata.filepath);
+        if (mat)
+        {
+            mat->handle = handle;
+            mat->CreateTextures();
+            mat->UpdateBindingSet();
+        }
+
         return mat;
     }
     

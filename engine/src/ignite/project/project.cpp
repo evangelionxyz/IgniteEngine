@@ -113,7 +113,7 @@ namespace {PROJECT_NAME}
 }
 )";
 
-    static Project *s_ActiveProject = nullptr;
+    static Ref<Project> s_ActiveProject;
 
     Project::Project(const ProjectInfo &info)
         : m_Info(info)
@@ -141,9 +141,14 @@ namespace {PROJECT_NAME}
         return std::filesystem::relative(filepath, m_Info.filepath.parent_path());
     }
 
-    void Project::SetActiveScene(Scene *scene)
+    void Project::SetActiveScene(const Ref<Scene> &scene)
     {
         m_ActiveScene = scene;
+    }
+
+    void Project::SetDefaultScene(AssetHandle handle)
+    {
+        m_Info.defaultSceneHandle = handle;
     }
 
     std::vector<std::pair<AssetHandle, AssetMetaData>> Project::ValidateAssetRegistry()
@@ -168,7 +173,7 @@ namespace {PROJECT_NAME}
         return invalidRegistry;
     }
 
-    Project *Project::GetActive()
+    Ref<Project> Project::GetActive()
     {
         return s_ActiveProject;
     }
@@ -176,7 +181,7 @@ namespace {PROJECT_NAME}
     Ref<Project> Project::Create(const ProjectInfo &info)
     {
         Ref<Project> project = CreateRef<Project>(info);
-        s_ActiveProject = project.get();
+        s_ActiveProject = project;
 
         return project;
     }

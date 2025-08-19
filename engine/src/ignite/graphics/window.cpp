@@ -268,6 +268,11 @@ namespace ignite
         glfwRestoreWindow(m_DeviceManager->m_Window);
     }
     
+    void Window::Shutdown() const
+    {
+        glfwSetWindowShouldClose(m_DeviceManager->m_Window, 1);
+    }
+
     void Window::Show()
     {
         glfwShowWindow(m_DeviceManager->m_Window);

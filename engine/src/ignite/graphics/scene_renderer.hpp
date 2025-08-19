@@ -50,7 +50,7 @@ namespace ignite
         ~SceneRenderer();
         
         void Create();
-        void SetActiveScene(Scene *scene);
+        void SetActiveScene(const Ref<Scene> &scene);
         void RenderTo(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT, bool renderEnvironment = true);
         void SetFillMode(nvrhi::RasterFillMode mode);
 
@@ -85,6 +85,6 @@ namespace ignite
         nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
 
         nvrhi::IDevice *m_Device = nullptr;
-        Scene *m_Scene = nullptr;
+        Ref<Scene> m_Scene;
     };
 }

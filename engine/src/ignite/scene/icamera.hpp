@@ -50,6 +50,7 @@ namespace ignite
         };
 
         ICamera();
+        ~ICamera() { }
 
         void CreateOrthographic(f32 width, f32 height, f32 zoom, f32 nearClip, f32 farClip);
         void CreatePerspective(f32 fov, f32 width, f32 height, f32 nearClip, f32 farClip);
@@ -75,10 +76,9 @@ namespace ignite
         glm::mat4 projectionMatrix;
         Type projectionType;
 
-        nvrhi::BufferHandle GetBuffer() const { return m_Buffer; }
-
     protected:
-        nvrhi::BufferHandle m_Buffer;
+        f32 m_MinOrthoZoom = 1.5f;
+        f32 m_MaxOrthoZoom = 100.0f;
         f32 m_AspectRatio = 1.0f;
     };
 }

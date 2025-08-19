@@ -302,14 +302,6 @@ namespace ignite
         // copy current entity's components to new entity
         SceneManager::CopyComponentIfExists(AllComponents{}, newEntity, entity);
 
-        if (newEntity.HasComponent<MeshRenderer>())
-        {
-            MeshRenderer &mr = newEntity.GetComponent<MeshRenderer>();
-            bool isSkinnedMesh = true;
-            mr.Create(isSkinnedMesh);
-            mr.mesh->CreateBuffers();
-        }
-
         // get new entity's ID Component
         ID &newEntityIDComp = newEntity.GetComponent<ID>();
 

@@ -62,9 +62,14 @@ namespace ignite
 
         Ref<Project> m_ActiveProject;
         Ref<Scene> m_ActiveScene;
-        Ref<GraphicsPipeline> m_Pipeline;
         Ref<VertexBuffer> m_ScreenVertexBuffer;
         nvrhi::BindingSetHandle m_BindingSet;
+
+        Ref<RenderTarget> m_SceneRT;
+        Ref<RenderTarget> m_UIRT;
+        Ref<RenderTarget> m_CompositeRT;
+
+        Ref<GraphicsPipeline> m_CompositePipeline;
 
         SceneRenderer m_SceneRenderer;
 

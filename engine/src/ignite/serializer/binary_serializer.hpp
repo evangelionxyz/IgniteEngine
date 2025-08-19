@@ -23,11 +23,15 @@
 
 #pragma once
 
+#include "stb_image_write.h"
+#include "ignite/animation/skeletal_animation.hpp"
+#include "ignite/animation/skeleton.hpp"
+
+#include "ignite/graphics/mesh.hpp"
+
+#include <filesystem>
 #include <vector>
 #include <cinttypes>
-#include "stb_image_write.h"
-#include "ignite/animation/keyframes.hpp"
-#include "ignite/animation/skeleton.hpp"
 
 namespace ignite
 {
@@ -113,7 +117,6 @@ namespace ignite
         static Ref<Material> DeserializeMaterial(const std::filesystem::path &filepath)
         {
             Ref<Material> mat = CreateRef<Material>();
-
             std::ifstream inFile(filepath, std::ios::binary);
 
             if (!inFile)
@@ -427,7 +430,7 @@ namespace ignite
             }
 
             inFile.close();
-           
+            
             return meshAsset;
         }
 

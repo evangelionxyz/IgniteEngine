@@ -23,6 +23,7 @@
 
 #include "asset_manager.hpp"
 #include "asset_importer.hpp"
+#include "ignite/project/project.hpp"
 
 #include "ignite/core/logger.hpp"
 #include <cstdint>
@@ -253,6 +254,7 @@ namespace ignite {
             return nullptr;
         }
 
+        case AssetType::Material:
         case AssetType::MeshSource:
         case AssetType::Skeleton:
         case AssetType::Scene:
@@ -261,6 +263,16 @@ namespace ignite {
             asset = AssetImporter::Import(handle, metadata);
             m_LoadedAssets[handle] = asset;
             asset->SetReadyFlag(true);
+
+            if (asset && metadata.type == AssetType::Material)
+            {
+                Ref<Material> materialAsset = asset->As<Material>();
+                if (materialAsset)
+                {
+                    auto &materialManager = Project::GetActive()->GetMaterialManager();
+                    materialManager.AddMaterial(materialAsset->name, materialAsset);
+                }
+            }
             break;
         }
         case AssetType::Audio:

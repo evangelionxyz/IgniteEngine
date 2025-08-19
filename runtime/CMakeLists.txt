@@ -76,7 +76,7 @@ endif()
 set_target_properties(IgniteRuntime PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED YES)
 
 # In Visual Studio, set the debugger working directory to the executable output folder
-if(MSVC)
-  # Expands per-config to something like build/bin/Debug
-  set_property(TARGET IgniteRuntime PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:IgniteRuntime>")
-endif()
+# if(CMAKE_GENERATOR MATCHES "Visual Studio")
+#   # Expands per-config to something like build/bin/Debug
+#   set_property(TARGET IgniteRuntime PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:IgniteRuntime>")
+# endif()

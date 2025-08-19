@@ -39,6 +39,8 @@ namespace ignite
     class ScenePanel;
     class ContentBrowserPanel;
     class ModelViewerPanel;
+    class MaterialEditorPanel;
+    class MaterialsPanel;
 
     class EditorLayer final : public Layer
     {
@@ -78,9 +80,9 @@ namespace ignite
         void OnRender(nvrhi::IFramebuffer *framebuffer) override;
         void OnGuiRender() override;
 
-        void SetActiveScene(Scene *scene);
+        void SetActiveScene(const Ref<Scene> &scene);
 
-        Scene *GetActiveScene() const { return m_ActiveScene.get(); }
+        Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
         Project *GetActiveProject() const { return m_ActiveProject.get(); }
         SceneRenderer *GetSceneRenderer() { return &m_SceneRenderer; }
 
@@ -108,6 +110,8 @@ namespace ignite
         Ref<ScenePanel> m_ScenePanel;
         Ref<ContentBrowserPanel> m_ContentBrowserPanel;
         Ref<ModelViewerPanel> m_ModelViewerPanel;
+        Ref<MaterialEditorPanel> m_MaterialEditorPanel;
+        Ref<MaterialsPanel> m_MaterialsPanel;
         SceneRenderer m_SceneRenderer;
 
         Ref<Scene> m_ActiveScene;

@@ -187,6 +187,17 @@ namespace ignite
         }
     }
 
+    void Material::CreateDefaultTextures()
+    {
+        textures[MaterialTextureType::BaseColor] = CreateRef<MaterialTextureResource>(); textures[MaterialTextureType::BaseColor]->handle = Renderer::GetWhiteTexture()->GetHandle();
+        textures[MaterialTextureType::Specular] = CreateRef<MaterialTextureResource>(); textures[MaterialTextureType::Specular]->handle = Renderer::GetWhiteTexture()->GetHandle();
+        textures[MaterialTextureType::Emissive] = CreateRef<MaterialTextureResource>(); textures[MaterialTextureType::Emissive]->handle = Renderer::GetWhiteTexture()->GetHandle();
+        textures[MaterialTextureType::Roughness] = CreateRef<MaterialTextureResource>(); textures[MaterialTextureType::Roughness]->handle = Renderer::GetWhiteTexture()->GetHandle();
+        textures[MaterialTextureType::Normals] = CreateRef<MaterialTextureResource>(); textures[MaterialTextureType::Normals]->handle = Renderer::GetWhiteTexture()->GetHandle();
+
+        UpdateBindingSet();
+    }
+
     void Material::CreateTextures()
     {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();

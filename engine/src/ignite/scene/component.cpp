@@ -27,40 +27,4 @@
 
 namespace ignite
 {
-
-    MeshRenderer::MeshRenderer(const MeshRenderer& other)
-        : IComponent(other)
-    {
-        if (!other.mesh)
-            return;
-
-        mesh = CreateRef<Mesh>(*other.mesh.get());
-
-        cullMode = other.cullMode;
-        fillMode = other.fillMode;
-        material = other.material;
-        transformData = other.transformData;
-
-        root = other.root;
-    }
-
-    void  MeshRenderer::Create(bool _isSkinnedMesh)
-    {
-        isSkinnedMesh = _isSkinnedMesh;
-
-        if (isSkinnedMesh)
-        {
-           
-        }
-        else
-        {
-        }
-
-        UpdateBindingSet();
-    }
-
-    void MeshRenderer::UpdateBindingSet()
-    {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-    }
 }

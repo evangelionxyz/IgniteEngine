@@ -1,17 +1,17 @@
 /* MIT License
-* 
+*
 * Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
+*
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
 * in the Software without restriction, including without limitation the rights
 * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 * copies of the Software, and to permit persons to whom the Software is
 * furnished to do so, subject to the following conditions:
-* 
+*
 * The above copyright notice and this permission notice shall be included in all
 * copies or substantial portions of the Software.
-* 
+*
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -24,48 +24,30 @@
 #pragma once
 
 #include "ignite/asset/asset.hpp"
-#include "keyframes.hpp"
+#include "ignite/core/types.hpp"
+#include "ignite/core/buffer.hpp"
 
-#include <assimp/anim.h>
-#include <string>
-#include <unordered_map>
+#include <filesystem>
 
-namespace ignite {
-    
-    class AnimationChannel
+namespace ignite
+{
+    struct FontCreateInfo
     {
-    public:
-        AnimationChannel() = default;
-        AnimationChannel(const aiNodeAnim *animNode);
-
-        // time in seconds * ticks per second
-        // S * (T/S)
-        glm::mat4 CalculateTransform(float timeInTicks);
-
-        Vec3Key translationKeys;
-        QuatKey rotationKeys;
-        Vec3Key scaleKeys;
-
-        glm::vec3 translation;
-        glm::vec3 scale;
-        glm::quat rotation;
+        Buffer buffer;
+        int width = 1, height = 1;
     };
 
-    class SkeletalAnimation : public Asset
+    class Font : public Asset
     {
     public:
-        SkeletalAnimation() = default;
-        SkeletalAnimation(aiAnimation *anim);
 
-        std::string name;
-        float duration = 0;
-        float ticksPerSeconds = 1.0f;
-        float timeInSeconds = 0.0f;
-        bool isPlaying = false;
+        Font(const FontCreateInfo &createInfo, const std::filesystem::path &filepath);
+        ~Font();
 
-        std::unordered_map<std::string, AnimationChannel> channels;
+        static Ref<Font> Create(const FontCreateInfo &createInfo, const std::filesystem::path &filepath);
 
-        static AssetType GetStaticType() { return AssetType::SkeletalAnimation; }
-        virtual AssetType GetType() override { return GetStaticType(); }
+        static AssetType GetStaticType() { return AssetType::Font; }
+        AssetType GetType() override { return GetStaticType(); }
+    private:
     };
-}
+} // namespace ignite

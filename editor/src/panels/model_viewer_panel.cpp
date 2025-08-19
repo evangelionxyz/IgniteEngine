@@ -31,16 +31,14 @@ namespace ignite
         : IPanel("Model Viewer")
     {
         // Create scene render target
-        RenderTargetCreateInfo createInfo = {};
-        createInfo.attachments =
+        RenderTargetCreateInfo rtCreateInfo = {};
+        rtCreateInfo.attachments =
         {
             FramebufferAttachments{ nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }, // Depth
-            FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget }, // Main Color
-            FramebufferAttachments{ nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget }, // Mouse picking
+            FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } // Main Color
         };
 
-        m_RenderTarget = RenderTarget::Create(createInfo);
-
+        m_RenderTarget = RenderTarget::Create(rtCreateInfo);
         m_RenderTarget->CreateFramebuffer();
 
         // Create graphics pipeline
@@ -75,20 +73,23 @@ namespace ignite
 
     void ModelViewerPanel::OnGuiRender()
     {
-        ImGui::Begin(m_WindowTitle.c_str(), &m_IsOpen);
-        ImTextureID textureID = (ImTextureID)m_RenderTarget->GetColorAttachment(0).Get();
-        ImGui::Image(textureID, ImVec2(400, 300)); // Placeholder for model image
-        ImGui::SameLine();
-        if (ImGui::Button("Load Model"))
+        if (ImGui::Begin(m_WindowTitle.c_str(), &m_IsOpen))
         {
-            std::string filepath = FileDialogs::OpenFile("Model Files (*.fbx;*.gltf;*.glb)\0*.fbx;*.gltf;*.glb\0");
-            if (!filepath.empty())
+            ImTextureID textureID = (ImTextureID)m_RenderTarget->GetColorAttachment(0).Get();
+            ImGui::Image(textureID, ImVec2(400, 300)); // Placeholder for model image
+            ImGui::SameLine();
+            if (ImGui::Button("Load Model"))
             {
-                m_ModelFilepath = std::filesystem::path(filepath);
-                LoadModel(m_ModelFilepath);
+                std::string filepath = FileDialogs::OpenFile("Model Files (*.fbx;*.gltf;*.glb)\0*.fbx;*.gltf;*.glb\0");
+                if (!filepath.empty())
+                {
+                    m_ModelFilepath = std::filesystem::path(filepath);
+                    LoadModel(m_ModelFilepath);
+                }
             }
-        }
-        ImGui::End();
+
+            ImGui::End();
+        }        
     }
 
     void ModelViewerPanel::OnUpdate(f32 deltaTime)

@@ -219,7 +219,6 @@ namespace ignite {
                 ImTextureID iconId = reinterpret_cast<ImTextureID>( icon->GetHandle().Get());
                 ImGui::ImageButton(item.string().c_str(), iconId, { static_cast<float>(m_ThumbnailSize), static_cast<float>(m_ThumbnailSize) });
 
-
                 if (ImGui::IsItemHovered())
                 {
                     if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
@@ -249,6 +248,27 @@ namespace ignite {
                         }
                     }
 
+
+                    if (ImGui::MenuItem("Import"))
+                    {
+                        Project::GetActive()->GetAssetManager().ImportAsset(path);
+                    }
+
+                    if (item.extension() == ".ixscene")
+                    {
+                        if (ImGui::MenuItem("Set As Default Scene"))
+                        {
+                            Project::GetActive()->GetAssetManager().ImportAsset(path);
+
+                            AssetHandle handle = Project::GetActive()->GetAssetManager().GetAssetHandle(path);
+                            Project::GetActive()->SetDefaultScene(handle);
+
+                            ProjectSerializer serializer(Project::GetActive());
+                            serializer.Serialize(Project::GetActiveFilepath());
+                        }
+                    }
+
+                    ImGui::Separator();
                     ImGui::Text("%s", filenameStr.c_str());
 
                     ImGui::EndPopup();

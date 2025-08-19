@@ -205,47 +205,6 @@ namespace ignite
             }
         }
         
-        // Special logic for MeshRenderer (e.g., skeletal animation)
-        if (entity.HasComponent<MeshRenderer>())
-        {
-            MeshRenderer &meshRenderer = entity.GetComponent<MeshRenderer>();
-
-            meshRenderer.transformData.transformation = worldMatrix;
-            glm::decompose(meshRenderer.transformData.transformation, transform.scale, transform.rotation, transform.translation, skew, perspective);
-
-            glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(meshRenderer.transformData.transformation)));
-            meshRenderer.transformData.normal = glm::mat4(normalMat3);
-            if (meshRenderer.root != UUID(0))
-            {
-                Entity rootNodeEntity = SceneManager::GetEntity(this, meshRenderer.root);
-                
-                if (!rootNodeEntity.IsValid())
-                {
-                    meshRenderer.root = UUID(0);
-                }
-
-                SkeletalMesh &skinnedMesh = rootNodeEntity.GetComponent<SkeletalMesh>();
-                
-                const size_t numBones = std::min(skinnedMesh.boneTransforms.size(), static_cast<size_t>(MAX_BONES));
-                for (size_t i = 0; i < numBones; ++i)
-                {
-                    meshRenderer.transformData.boneTransforms[i] = skinnedMesh.boneTransforms[i];
-                }
-                
-                for (size_t i = numBones; i < MAX_BONES; ++i)
-                {
-                    meshRenderer.transformData.boneTransforms[i] = glm::mat4(1.0f);
-                }
-            }
-            else
-            {
-                for (size_t i = 0; i < MAX_BONES; ++i)
-                {
-                    meshRenderer.transformData.boneTransforms[i] = glm::mat4(1.0f);
-                }
-            }
-        }
-
         transform.dirty = false;
 
         for (const UUID &childUUID : id.children)
@@ -335,11 +294,6 @@ namespace ignite
     }
 
     template<>
-    void Scene::OnComponentAdded<MeshRenderer>(Entity entity, MeshRenderer &comp)
-    {
-    }
-
-    template<>
     void Scene::OnComponentAdded<Rigidbody2D>(Entity entity, Rigidbody2D &comp)
     {
     }
@@ -365,6 +319,16 @@ namespace ignite
     }
 
     template<>
+    void Scene::OnComponentAdded<CapsuleCollider>(Entity entity, CapsuleCollider &comp)
+    {
+    }
+
+    template<>
+    void Scene::OnComponentAdded<MeshCollider>(Entity entity, MeshCollider &comp)
+    {
+    }
+
+    template<>
     void Scene::OnComponentAdded<AudioSource>(Entity entity, AudioSource &comp)
     {
     }
@@ -382,19 +346,6 @@ namespace ignite
     template<>
     void Scene::OnComponentAdded<Camera>(Entity entity, Camera &comp)
     {
-        comp.camera.projectionType = comp.projectionType;
-        switch (comp.projectionType)
-        {
-            case ICamera::Type::Perspective:
-            {
-                comp.camera.CreatePerspective(comp.fov, static_cast<float>(viewportWidth), static_cast<float>(viewportHeight), comp.nearClip, comp.farClip);
-                break;
-            }
-            case ICamera::Type::Orthographic:
-            {
-                comp.camera.CreateOrthographic(static_cast<float>(viewportWidth), static_cast<float>(viewportHeight), comp.zoom, comp.nearClip, comp.farClip);
-                break;
-            }
-        }
+        comp.camera.CreatePerspective(45.0f, static_cast<float>(viewportWidth), static_cast<float>(viewportHeight), 0.1f, 450.0f);
     }
 }

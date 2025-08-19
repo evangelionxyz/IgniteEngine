@@ -97,6 +97,11 @@ namespace ignite
         GetInstance()->m_Window->SetTitle(title);
     }
 
+    void Application::Shutdown()
+    {
+        GetInstance()->m_Window->Shutdown();
+    }
+
     void Application::UpdateAverageTimeTime(f64 elapsedTime)
     {
         m_FrameTimeSum += elapsedTime;

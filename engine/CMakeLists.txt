@@ -45,6 +45,9 @@ target_include_directories(IgniteEngine PUBLIC
   ${IncludeDir_ZLIB}
   ${IncludeDir_ASSIMP}
   ${IncludeDir_YAMLCPP}
+  ${IncludeDir_MSDF_ATLAS_GEN}
+  ${IncludeDir_MSDFGEN}
+  ${IncludeDir_FREETYPE}
 )
 
 # Public defines
@@ -59,7 +62,9 @@ target_compile_definitions(IgniteEngine PUBLIC
 
 # Link thirdparty static libs
 target_link_libraries(IgniteEngine PUBLIC
-  IMGUI box2d GLFW STB JOLT SPDLOG ShaderMake ASSIMP NVRHI NVRHI_VULKAN ZLIB YAMLCPP
+  IMGUI box2d GLFW STB JOLT SPDLOG ShaderMake
+  ASSIMP NVRHI NVRHI_VULKAN ZLIB YAMLCPP
+  MSDF_ATLAS_GEN MSDFGEN
 )
 
 if(WIN32)

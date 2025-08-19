@@ -53,7 +53,7 @@ namespace ignite
         explicit ScenePanel(const char *windowTitle, EditorLayer *editor);
         ~ScenePanel();
         
-        void SetActiveScene(Scene *scene);
+        void SetActiveScene(const Ref<Scene> &scene);
 
         void OnUpdate(f32 deltaTime) override;
         void OnGuiRender() override;
@@ -114,7 +114,7 @@ namespace ignite
         EditorCamera m_Camera;
         EditorLayer *m_Editor;
 
-        Scene *m_Scene = nullptr;
+        Ref<Scene> m_Scene;
         Gizmo m_Gizmo;
 
         std::unordered_map<UUID, Entity> m_SelectedEntities;

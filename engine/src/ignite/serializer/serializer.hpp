@@ -312,6 +312,12 @@ namespace ignite {
             m_Emitter << YAML::Key << keyName << YAML::Value << value;
         }
 
+        template<typename T>
+        void AddValue(T value)
+        {
+            m_Emitter << value;
+        }
+
         static YAML::Node Deserialize(const std::filesystem::path &filepath);
 
         const std::filesystem::path &GetFilepath() const { return m_Filepath; }

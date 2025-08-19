@@ -61,6 +61,8 @@ namespace ignite
         void Maximize() const;
         void Restore() const;
 
+        void Shutdown() const;
+
         void Show();
         void Hide();
 

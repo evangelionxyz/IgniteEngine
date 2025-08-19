@@ -1,17 +1,17 @@
 /* MIT License
-* 
+*
 * Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
+*
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
 * in the Software without restriction, including without limitation the rights
 * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 * copies of the Software, and to permit persons to whom the Software is
 * furnished to do so, subject to the following conditions:
-* 
+*
 * The above copyright notice and this permission notice shall be included in all
 * copies or substantial portions of the Software.
-* 
+*
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -21,52 +21,22 @@
 * SOFTWARE.
 */
 
-#pragma once
-
-#include "ignite/core/types.hpp"
-#include "ignite/core/uuid.hpp"
+#include "font.hpp"
 
 namespace ignite
 {
-    enum CompType : u8
+    Font::Font(const FontCreateInfo &createInfo, const std::filesystem::path &filepath)
     {
-        CompType_Invalid = 0,
-        CompType_ID,
-        CompType_Camera,
-        CompType_Transform,
-        CompType_Sprite2D,
-        CompType_SkeletalMesh,
-        CompType_StaticMesh,
-        CompType_MeshRenderer,
-        CompType_BoxCollider2D,
-        CompType_Rigidbody2D,
-        CompType_Rigidbody,
-        CompType_BoxCollider,
-        CompType_SphereCollider,
-        CompType_CapsuleCollider,
-        CompType_MeshCollider,
-        CompType_AudioSource,
-        CompType_Script,
-        CompType_WorldEnvironment,
-        CompType_LAST
-    };
 
-    class IComponent
+    }
+
+    Font::~Font()
     {
-    public:
-        virtual ~IComponent() = default;
 
-        bool dirty = true;
+    }
 
-        template<typename T>
-        T *As()
-        {
-            return static_cast<T *>(this);
-        }
-
-        UUID GetCompID() const { return m_UUID; }
-        virtual CompType GetType() { return CompType_Invalid; };
-    private:
-        UUID m_UUID;
-    };
-}
+    Ref<Font> Font::Create(const FontCreateInfo &createInfo, const std::filesystem::path &filepath)
+    {
+        return CreateRef<Font>(createInfo, filepath);
+    }
+} // namespace ignite

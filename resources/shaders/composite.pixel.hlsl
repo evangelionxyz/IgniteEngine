@@ -16,5 +16,6 @@ float4 main(VSOutput input) : SV_Target
     float4 uiColor = uiTexture.SampleLevel(linearSampler, input.uv, 0.0f);
     
     // float4 edgeDetectionColor = edgeDetection.SampleLevel(linearSampler, input.uv, 0.0f);
+    //return float4(lerp(sceneColor, uiColor, uiColor.a).xyz, 1.0f);
     return lerp(sceneColor, uiColor, uiColor.a);
 }

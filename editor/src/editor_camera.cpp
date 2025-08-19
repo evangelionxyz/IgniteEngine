@@ -91,21 +91,24 @@ namespace ignite
 
     void EditorCamera::ProcessMouseMovement(float deltaTime, float xOffset, float yOffset, bool constrainPitch)
     {
-        float rotationVelocity = m_RotationSpeed * deltaTime;
-        xOffset *= rotationVelocity;
-        yOffset *= rotationVelocity;
-
-        yaw += xOffset;
-        pitch += yOffset;
-        pitch = glm::clamp(pitch, glm::radians(-89.0f), glm::radians(89.0f));
-
-        if (m_MovementMode == MovementMode::Flying)
+        if (projectionType == ICamera::Type::Perspective)
         {
-            UpdateViewMatrix();
-        }
-        else if (m_MovementMode == MovementMode::Orbiting)
-        {
-            UpdateOrbitPosition();
+            float rotationVelocity = m_RotationSpeed * deltaTime;
+            xOffset *= rotationVelocity;
+            yOffset *= rotationVelocity;
+
+            yaw += xOffset;
+            pitch += yOffset;
+            pitch = glm::clamp(pitch, glm::radians(-89.0f), glm::radians(89.0f));
+
+            if (m_MovementMode == MovementMode::Flying)
+            {
+                UpdateViewMatrix();
+            }
+            else if (m_MovementMode == MovementMode::Orbiting)
+            {
+                UpdateOrbitPosition();
+            }
         }
     }
 
@@ -136,19 +139,31 @@ namespace ignite
     void EditorCamera::ProcessMouseScroll(float yOffset, bool zooming)
     {
         f32 zoomVelocity = m_ZoomSpeed;
-        if (m_MovementMode == MovementMode::Flying || !zooming)
+
+        if (projectionType == ICamera::Type::Perspective)
         {
-            // In flying mode, scroll wheel changes movement speed
-            m_MovementSpeed += yOffset * zoomVelocity;
-            m_MovementSpeed = std::max(0.1f, m_MovementSpeed); // Prevent negative or zero speed
+            if (m_MovementMode == MovementMode::Flying || !zooming)
+            {
+                // In flying mode, scroll wheel changes movement speed
+                m_MovementSpeed += yOffset * zoomVelocity;
+                m_MovementSpeed = std::max(0.1f, m_MovementSpeed); // Prevent negative or zero speed
+            }
+            else if (m_MovementMode == MovementMode::Orbiting && zooming)
+            {
+                // In orbiting mode, scroll wheel changes orbit distance (zoom)
+                m_OrbitDistance -= yOffset * zoomVelocity * (m_OrbitDistance / m_MaxOrbitDistance);
+                m_OrbitDistance = glm::clamp(m_OrbitDistance, m_MinOrbitDistance, m_MaxOrbitDistance);
+            }
         }
-        else if (m_MovementMode == MovementMode::Orbiting && zooming)
+        else if (projectionType == ICamera::Type::Orthographic)
         {
-            // In orbiting mode, scroll wheel changes orbit distance (zoom)
-            m_OrbitDistance -= yOffset * zoomVelocity * (m_OrbitDistance / m_MaxOrbitDistance);
-            m_OrbitDistance = glm::clamp(m_OrbitDistance, m_MinOrbitDistance, m_MaxOrbitDistance);
-            UpdateOrbitPosition();
+            zoom -= yOffset * (zoom / m_MaxOrthoZoom) * 8.0f;
+            zoom = glm::clamp(zoom, m_MinOrthoZoom, m_MaxOrthoZoom);
+
+            UpdateProjectionMatrix();
         }
+
+        UpdateOrbitPosition();
     }
 
     void EditorCamera::UpdateOrbitPosition()

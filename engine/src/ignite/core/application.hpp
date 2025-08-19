@@ -95,6 +95,7 @@ namespace ignite
         static f32 GetDeltaTime();
 
         static void SetWindowTitle(const std::string &title);
+        static void Shutdown();
 
         static void WindowIconify();
         static void WindowMaximize();

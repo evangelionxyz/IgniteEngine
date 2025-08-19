@@ -104,7 +104,7 @@ namespace ignite
           .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
           .Build(framebuffer);
 
-    s_GeometryPSOCache.emplace(key, gp);
+        s_GeometryPSOCache.emplace(key, gp);
         return gp;
     }
 
@@ -198,8 +198,8 @@ namespace ignite
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, uiTexture));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, Renderer::GetWhiteTexture()->GetSampler()));
 
-    nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
-    s_CompositeBindingSetCache.emplace(key, bindingSet);
+        nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
+        s_CompositeBindingSetCache.emplace(key, bindingSet);
 
         return bindingSet;
     }
@@ -221,25 +221,19 @@ namespace ignite
     {
         m_CommandList = CommandList::Create();
 
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-
-        // Composite Pipeline & geometry
+        VertexScreen vertices[]
         {
-            // Geometry
-            VertexScreen vertices[]
-            {
-                { { -1.0f, -1.0f }, { 0.0f, 1.0f } },
-                { { -1.0f,  1.0f }, { 0.0f, 0.0f } },
-                { {  1.0f,  1.0f }, { 1.0f, 0.0f } },
+            { { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+            { { -1.0f,  1.0f }, { 0.0f, 0.0f } },
+            { {  1.0f,  1.0f }, { 1.0f, 0.0f } },
 
-                { {  1.0f,  1.0f }, { 1.0f, 0.0f } },
-                { {  1.0f, -1.0f }, { 1.0f, 1.0f } },
-                { { -1.0f, -1.0f }, { 0.0f, 1.0f } },
-            };
+            { {  1.0f,  1.0f }, { 1.0f, 0.0f } },
+            { {  1.0f, -1.0f }, { 1.0f, 1.0f } },
+            { { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+        };
 
-            m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
-            m_CompositeVertexBuffer->SetData(Buffer(vertices, sizeof(vertices)));
-        }
+        m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
+        m_CompositeVertexBuffer->SetData(Buffer(vertices, sizeof(vertices)));
 
         m_Device = Application::GetGraphicsDevice();
         
@@ -253,7 +247,7 @@ namespace ignite
         CreateDemoUI();
     }
 
-    void SceneRenderer::SetActiveScene(Scene* scene)
+    void SceneRenderer::SetActiveScene(const Ref<Scene> &scene)
     {
         m_Scene = scene;
     }
@@ -292,7 +286,6 @@ namespace ignite
                 continue;
 
             SkeletalMesh &sm = m_Scene->registry->get<SkeletalMesh>(e);
-            // if (Ref<MeshAsset> meshAsset = Project::GetActive()->GetAsset<MeshAsset>(sm.meshHandle))
             {
                 // render each mesh
                 for (size_t i = 0; i < sm.meshes.size(); ++i)
@@ -407,7 +400,7 @@ namespace ignite
 
         // Composite Pass
         {
-            compositeRT->ClearColorAttachmentFloat(cmd, 0);
+            compositeRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
             nvrhi::IFramebuffer *framebuffer = compositeRT->GetFramebuffer();
 
             Ref<GraphicsPipeline> compositePipeline = GetCompositePipelineForFB(framebuffer, m_FillMode);
