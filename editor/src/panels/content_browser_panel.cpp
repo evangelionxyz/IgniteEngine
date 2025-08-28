@@ -42,30 +42,28 @@ namespace ignite {
 
         nvrhi::CommandListHandle commandList = device->createCommandList();
         commandList->open();
-        for (auto &tex : m_Icons | std::views::values)
-            tex->Write(commandList);
+        for (const Ref<Texture> &icon : m_Icons | std::views::values)
+        {
+            icon->WriteData(commandList);
+        }
+        
         commandList->close();
         device->executeCommandList(commandList);
     }
 
-    void ContentBrowserPanel::SetActiveProject(const Ref<Project> &project)
+    void ContentBrowserPanel::LoadProjectFiles()
     {
-        m_ActiveProject = project;
+        // clear directories
+        m_PathEntryList.clear();
+        m_TreeNodes.clear();
 
-        if (m_ActiveProject)
-        {
-            // clear directories
-            m_PathEntryList.clear();
-            m_TreeNodes.clear();
+        m_TreeNodes.emplace_back(".", AssetHandle(0));
+        
+        m_BaseDirectory = Project::GetInstance()->GetAssetDirectory();
+        m_PathEntryList.push_back(m_BaseDirectory);
 
-            m_TreeNodes.emplace_back(".", AssetHandle(0));
-            
-            m_BaseDirectory = m_ActiveProject->GetAssetDirectory();
-            m_PathEntryList.push_back(m_BaseDirectory);
-
-            m_CurrentDirectory = m_ActiveProject->GetAssetDirectory();
-            RefreshAssetTree();
-        }
+        m_CurrentDirectory = Project::GetInstance()->GetAssetDirectory();
+        RefreshAssetTree();
     }
 
     void ContentBrowserPanel::RenderFileTree(FileTreeNode *node)
@@ -73,7 +71,7 @@ namespace ignite {
         if (node->path.empty())
             return;
 
-        const std::filesystem::path &filepath = m_ActiveProject->GetAssetFilepath(node->path);
+        const std::filesystem::path &filepath = Project::GetInstance()->GetAssetFilepath(node->path);
         const std::string filename = filepath.filename().string();
         const bool isDirectory = std::filesystem::is_directory(filepath);
 
@@ -145,15 +143,15 @@ namespace ignite {
         ImGui::SameLine();
         if (ImGui::Button("R", navbarBtSize))
         {
-            m_ActiveProject->ValidateAssetRegistry();
-            PruneMissingNodes(0, m_ActiveProject->GetAssetDirectory());
+            Project::GetInstance()->ValidateAssetRegistry();
+            PruneMissingNodes(0, Project::GetInstance()->GetAssetDirectory());
             RefreshAssetTree();
             CompactTree();
         }
 
         ImGui::EndChild();
 
-        if (m_ActiveProject)
+        if (Project::GetInstance())
         {
             // Left side directory tree
             ImGui::BeginChild("left_item_browser", { 300.0f, 0.0f }, ImGuiChildFlags_ResizeX);
@@ -170,7 +168,7 @@ namespace ignite {
 
             // Insert path nodes
             FileTreeNode *node = m_TreeNodes.data();
-            auto f = Project::GetActiveAssetDirectory();
+            auto f = Project::GetInstance()->GetAssetDirectory();
             const auto &relativePath = std::filesystem::relative(m_CurrentDirectory, f);
 
             for (const auto &path : relativePath)
@@ -251,20 +249,20 @@ namespace ignite {
 
                     if (ImGui::MenuItem("Import"))
                     {
-                        Project::GetActive()->GetAssetManager().ImportAsset(path);
+                        Project::GetInstance()->GetAssetManager().ImportAsset(path);
                     }
 
                     if (item.extension() == ".ixscene")
                     {
                         if (ImGui::MenuItem("Set As Default Scene"))
                         {
-                            Project::GetActive()->GetAssetManager().ImportAsset(path);
+                            Project::GetInstance()->GetAssetManager().ImportAsset(path);
 
-                            AssetHandle handle = Project::GetActive()->GetAssetManager().GetAssetHandle(path);
-                            Project::GetActive()->SetDefaultScene(handle);
+                            AssetHandle handle = Project::GetInstance()->GetAssetManager().GetAssetHandle(path);
+                            Project::GetInstance()->SetDefaultScene(handle);
 
-                            ProjectSerializer serializer(Project::GetActive());
-                            serializer.Serialize(Project::GetActiveFilepath());
+                            ProjectSerializer serializer(Project::GetInstance());
+                            serializer.Serialize(Project::GetInstance()->GetFilepath());
                         }
                     }
 
@@ -278,8 +276,8 @@ namespace ignite {
                 {
                     if (!std::filesystem::is_directory(item))
                     {
-                        const std::filesystem::path filepath = m_ActiveProject->GetAssetRelativeFilepath(m_CurrentDirectory / item);
-                        AssetHandle handle = m_ActiveProject->GetAssetManager().GetAssetHandle(filepath);
+                        const std::filesystem::path filepath = Project::GetInstance()->GetAssetRelativeFilepath(m_CurrentDirectory / item);
+                        AssetHandle handle = Project::GetInstance()->GetAssetManager().GetAssetHandle(filepath);
                         if (handle != AssetHandle(0))
                         {
                             ImGui::SetDragDropPayload("content_browser_item", &handle, sizeof(AssetHandle));
@@ -336,8 +334,8 @@ namespace ignite {
     {
         m_PathEntryList.erase(m_PathEntryList.begin() + 1, m_PathEntryList.end());
 
-        const auto &relativePath = std::filesystem::relative(m_CurrentDirectory, Project::GetActiveAssetDirectory());
-        auto currentDir = Project::GetActiveAssetDirectory();
+        const auto &relativePath = std::filesystem::relative(m_CurrentDirectory, Project::GetInstance()->GetAssetDirectory());
+        auto currentDir = Project::GetInstance()->GetAssetDirectory();
 
         for (const auto &p : relativePath)
         {
@@ -352,13 +350,13 @@ namespace ignite {
 
     void ContentBrowserPanel::RefreshAssetTree()
     {
-        const std::filesystem::path &assetPath = Project::GetActiveAssetDirectory();
+        const std::filesystem::path &assetPath = Project::GetInstance()->GetAssetDirectory();
         LoadAssetTree(assetPath);
     }
 
     void ContentBrowserPanel::LoadAssetTree(const std::filesystem::path &directory)
     {
-        const std::filesystem::path assetPath = Project::GetActiveAssetDirectory();
+        const std::filesystem::path assetPath = Project::GetInstance()->GetAssetDirectory();
 
         for (const auto &entry : std::filesystem::directory_iterator(directory))
         {
@@ -378,7 +376,7 @@ namespace ignite {
                     if (!std::filesystem::is_directory(path) && path.has_extension())
                     {
                         std::string relPath = relativePath.generic_string();
-                        assetHandle = m_ActiveProject->GetAssetManager().GetAssetHandle(relPath);
+                        assetHandle = Project::GetInstance()->GetAssetManager().GetAssetHandle(relPath);
                         AssetType assetType = GetAssetTypeFromExtension(relativePath.extension().generic_string());
                         
                         // not registered yet
@@ -389,7 +387,12 @@ namespace ignite {
                             AssetMetaData metadata;
                             metadata.type = assetType;
                             metadata.filepath = relPath;
-                            m_ActiveProject->GetAssetManager().InsertMetaData(assetHandle, metadata);
+                            Project::GetInstance()->GetAssetManager().InsertMetaData(assetHandle, metadata);
+                        }
+
+                        if (assetType == AssetType::Material)
+                        {
+                            Project::GetInstance()->GetAsset<Material>(assetHandle);
                         }
                     }
 

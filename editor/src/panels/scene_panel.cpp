@@ -62,8 +62,8 @@ namespace ignite
 {
     UUID ScenePanel::m_TrackingSelectedEntity = UUID(0);
 
-    ScenePanel::ScenePanel(const char *windowTitle, EditorLayer *editor)
-        : IPanel(windowTitle), m_Editor(editor), m_Gizmo()
+    ScenePanel::ScenePanel(const char *windowTitle)
+        : IPanel(windowTitle), m_Gizmo()
     {
         Application* app = Application::GetInstance();
 
@@ -94,8 +94,10 @@ namespace ignite
 
         nvrhi::CommandListHandle commandList = device->createCommandList();
         commandList->open();
-        for (auto &tex : m_Icons | std::views::values)
-            tex->Write(commandList);
+        for (const Ref<Texture> &icon : m_Icons | std::views::values)
+        {
+            icon->WriteData(commandList);
+        }
         commandList->close();
         device->executeCommandList(commandList);
 
@@ -113,7 +115,7 @@ namespace ignite
 
         // Composite render target
         rtCreateInfo = {};
-        rtCreateInfo.attachments = {FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } }; // Main Color
+        rtCreateInfo.attachments = { FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } }; // Main Color
         m_CompositeViewportRT = RenderTarget::Create(rtCreateInfo);
         m_CompositeCameraRT = RenderTarget::Create(rtCreateInfo);
     }
@@ -441,7 +443,7 @@ namespace ignite
                     {
                         LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
                         AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                        AssetType type = Project::GetActive()->GetAssetManager().GetAssetType(handle);
+                        AssetType type = Project::GetInstance()->GetAssetManager().GetAssetType(handle);
                         if (type == AssetType::Texture)
                         {
                             c.handle = handle;
@@ -494,11 +496,11 @@ namespace ignite
                     {
                         LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
                         AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                        AssetType type = Project::GetActive()->GetAssetManager().GetAssetType(handle);
+                        AssetType type = Project::GetInstance()->GetAssetManager().GetAssetType(handle);
                         if (type == AssetType::MeshSource)
                         {
                             sm.meshHandle = AssetHandle(handle);
-                            if (auto meshAsset = Project::GetAsset<MeshAsset>(sm.meshHandle))
+                            if (auto meshAsset = Project::GetInstance()->GetAsset<MeshAsset>(sm.meshHandle))
                             {
                                 sm.meshes = meshAsset->Create();
                             }
@@ -533,10 +535,10 @@ namespace ignite
                             {
                                 LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
                                 AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(handle);
+                                AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(handle);
                                 if (metadata.type == AssetType::Material)
                                 {
-                                    Ref<Material> mat = Project::GetAsset<Material>(handle);
+                                    Ref<Material> mat = Project::GetInstance()->GetAsset<Material>(handle);
                                     if (mat)
                                     {
                                         mesh->material = mat;
@@ -555,7 +557,7 @@ namespace ignite
 
                             constexpr MaterialTextureType texType = MaterialTextureType::BaseColor;
 
-                            auto baseColorTex = mesh->material->textures[texType]->handle ? mesh->material->textures[texType]->handle.Get() : checkerTex;
+                            auto baseColorTex = mesh->material->textures[texType]->handle ? mesh->material->textures[texType]->GetHandle().Get() : checkerTex;
                             ImTextureID texId = reinterpret_cast<ImTextureID>(baseColorTex);
                             if (ImGui::ImageButton("Texture", texId, imageSize))
                             {
@@ -570,7 +572,7 @@ namespace ignite
 
                                     nvrhi::CommandListHandle commandList = device->createCommandList();
                                     commandList->open();
-                                    texture->Write(commandList);
+                                    texture->WriteData(commandList);
                                     commandList->close();
                                     device->executeCommandList(commandList);
 
@@ -587,10 +589,10 @@ namespace ignite
                                         AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
                                         if (handle && *handle != AssetHandle(0))
                                         {
-                                            AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(*handle);
+                                            AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(*handle);
                                             if (metadata.type == AssetType::Texture)
                                             {
-                                                Ref<Texture> texture = Project::GetAsset<Texture>(*handle);
+                                                Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(*handle);
                                                 mesh->material->UpdateTexture(texture, texType);
                                             }
                                         }
@@ -610,7 +612,7 @@ namespace ignite
                         {
                             constexpr MaterialTextureType texType = MaterialTextureType::Normals;
 
-                            auto baseColorTex = mesh->material->textures[texType]->handle ? mesh->material->textures[texType]->handle.Get() : checkerTex;
+                            auto baseColorTex = mesh->material->textures[texType]->handle ? mesh->material->textures[texType]->GetHandle().Get() : checkerTex;
                             ImTextureID texId = reinterpret_cast<ImTextureID>(baseColorTex);
                             if (ImGui::ImageButton("Texture", texId, imageSize))
                             {
@@ -625,7 +627,7 @@ namespace ignite
 
                                     nvrhi::CommandListHandle commandList = device->createCommandList();
                                     commandList->open();
-                                    texture->Write(commandList);
+                                    texture->WriteData(commandList);
                                     commandList->close();
                                     device->executeCommandList(commandList);
 
@@ -642,10 +644,10 @@ namespace ignite
                                         AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
                                         if (handle && *handle != AssetHandle(0))
                                         {
-                                            AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(*handle);
+                                            AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(*handle);
                                             if (metadata.type == AssetType::Texture)
                                             {
-                                                Ref<Texture> texture = Project::GetAsset<Texture>(*handle);
+                                                Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(*handle);
                                                 mesh->material->UpdateTexture(texture, texType);
                                             }
                                         }
@@ -667,7 +669,7 @@ namespace ignite
 
                             constexpr MaterialTextureType texType = MaterialTextureType::Specular;
 
-                            auto baseColorTex = mesh->material->textures[texType]->handle ? mesh->material->textures[texType]->handle.Get() : checkerTex;
+                            auto baseColorTex = mesh->material->textures[texType]->handle ? mesh->material->textures[texType]->GetHandle().Get() : checkerTex;
                             ImTextureID texId = reinterpret_cast<ImTextureID>(baseColorTex);
                             if (ImGui::ImageButton("Texture", texId, imageSize))
                             {
@@ -682,7 +684,7 @@ namespace ignite
 
                                     nvrhi::CommandListHandle commandList = device->createCommandList();
                                     commandList->open();
-                                    texture->Write(commandList);
+                                    texture->WriteData(commandList);
                                     commandList->close();
                                     device->executeCommandList(commandList);
 
@@ -699,10 +701,10 @@ namespace ignite
                                         AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
                                         if (handle && *handle != AssetHandle(0))
                                         {
-                                            AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(*handle);
+                                            AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(*handle);
                                             if (metadata.type == AssetType::Texture)
                                             {
-                                                Ref<Texture> texture = Project::GetAsset<Texture>(*handle);
+                                                Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(*handle);
                                                 mesh->material->UpdateTexture(texture, texType);
                                             }
                                         }
@@ -738,7 +740,7 @@ namespace ignite
 
                             constexpr MaterialTextureType texType = MaterialTextureType::Roughness;
 
-                            auto baseColorTex = mesh->material->textures[texType]->handle ? mesh->material->textures[texType]->handle.Get() : checkerTex;
+                            auto baseColorTex = mesh->material->textures[texType]->handle ? mesh->material->textures[texType]->GetHandle().Get() : checkerTex;
                             ImTextureID texId = reinterpret_cast<ImTextureID>(baseColorTex);
                             if (ImGui::ImageButton("Texture", texId, imageSize))
                             {
@@ -753,7 +755,7 @@ namespace ignite
 
                                     nvrhi::CommandListHandle commandList = device->createCommandList();
                                     commandList->open();
-                                    texture->Write(commandList);
+                                    texture->WriteData(commandList);
                                     commandList->close();
                                     device->executeCommandList(commandList);
 
@@ -770,10 +772,10 @@ namespace ignite
                                         AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
                                         if (handle && *handle != AssetHandle(0))
                                         {
-                                            AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(*handle);
+                                            AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(*handle);
                                             if (metadata.type == AssetType::Texture)
                                             {
-                                                Ref<Texture> texture = Project::GetAsset<Texture>(*handle);
+                                                Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(*handle);
                                                 mesh->material->UpdateTexture(texture, texType);
                                             }
                                         }
@@ -795,7 +797,7 @@ namespace ignite
 
                         constexpr MaterialTextureType texType = MaterialTextureType::Emissive;
 
-                        auto baseColorTex = mesh->material->textures[texType]->handle ? mesh->material->textures[texType]->handle.Get() : checkerTex;
+                        auto baseColorTex = mesh->material->textures[texType]->handle ? mesh->material->textures[texType]->GetHandle().Get() : checkerTex;
                         ImTextureID texId = reinterpret_cast<ImTextureID>(baseColorTex);
                         if (ImGui::ImageButton("Texture", texId, imageSize))
                         {
@@ -810,7 +812,7 @@ namespace ignite
 
                                 nvrhi::CommandListHandle commandList = device->createCommandList();
                                 commandList->open();
-                                texture->Write(commandList);
+                                texture->WriteData(commandList);
                                 commandList->close();
                                 device->executeCommandList(commandList);
 
@@ -827,10 +829,10 @@ namespace ignite
                                     AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
                                     if (handle && *handle != AssetHandle(0))
                                     {
-                                        AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(*handle);
+                                        AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(*handle);
                                         if (metadata.type == AssetType::Texture)
                                         {
-                                            Ref<Texture> texture = Project::GetAsset<Texture>(*handle);
+                                            Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(*handle);
                                             mesh->material->UpdateTexture(texture, texType);
                                         }
                                     }
@@ -1042,11 +1044,11 @@ namespace ignite
                             AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
                             if (handle && *handle != AssetHandle(0))
                             {
-                                AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(*handle);
+                                AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(*handle);
                                 if (metadata.type == AssetType::Audio)
                                 {
                                     c.handle = *handle;
-                                    Ref<FmodSound> sound = Project::GetAsset<FmodSound>(*handle);
+                                    Ref<FmodSound> sound = Project::GetInstance()->GetAsset<FmodSound>(*handle);
                                 }
                             }
                         }
@@ -1059,7 +1061,7 @@ namespace ignite
 
                 if (c.handle != AssetHandle(0))
                 {
-                    if (Ref<FmodSound> sound = Project::GetAsset<FmodSound>(c.handle))
+                    if (Ref<FmodSound> sound = Project::GetInstance()->GetAsset<FmodSound>(c.handle))
                     {
                         if (ImGui::Button("Play", { 55.0f, 30.0f }))
                         {
@@ -1100,7 +1102,7 @@ namespace ignite
             {
                 Script &c = selectedEntity.GetComponent<Script>();
 
-                bool scriptClassExist = ScriptEngine::EntityClassExists(c.className);
+                bool scriptClassExist = ScriptEngine::GetInstance()->EntityClassExists(c.className);
                 bool is_selected = false;
 
                 if (!scriptClassExist)
@@ -1108,7 +1110,7 @@ namespace ignite
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));
                 }
 
-                auto scriptStorage = ScriptEngine::GetScriptClassStorage();
+                auto scriptStorage = ScriptEngine::GetInstance()->GetScriptClassStorage();
                 std::string currentScriptClasses = c.className;
 
                 // drop-down
@@ -1141,8 +1143,7 @@ namespace ignite
                 // Editable classFields (edit mode)
                 if (isRunning && !detached)
                 {
-                    Ref<ScriptInstance> scriptInstance = ScriptEngine::GetEntityScriptInstance(selectedEntity.GetUUID());
-                    if (scriptInstance)
+                    if (Ref<ScriptInstance> scriptInstance = ScriptEngine::GetInstance()->GetEntityScriptInstance(selectedEntity.GetUUID()))
                     {
                         auto classFields = scriptInstance->GetScriptClass()->GetFields();
 
@@ -1170,7 +1171,7 @@ namespace ignite
                             }
                             case ScriptFieldType::Vector2:
                             {
-                                glm::vec2 data = scriptInstance->GetFieldValue<glm::vec2>(fieldName);
+                                auto data = scriptInstance->GetFieldValue<glm::vec2>(fieldName);
                                 if (ImGui::DragFloat2(fieldName.c_str(), &data.x, 0.1f))
                                 {
                                     scriptInstance->SetFieldValue<glm::vec2>(fieldName, data);
@@ -1179,7 +1180,7 @@ namespace ignite
                             }
                             case ScriptFieldType::Vector3:
                             {
-                                glm::vec3 data = scriptInstance->GetFieldValue<glm::vec3>(fieldName);
+                                auto data = scriptInstance->GetFieldValue<glm::vec3>(fieldName);
                                 if (ImGui::DragFloat3(fieldName.c_str(), &data.x, 0.1f))
                                 {
                                     scriptInstance->SetFieldValue<glm::vec3>(fieldName, data);
@@ -1188,7 +1189,7 @@ namespace ignite
                             }
                             case ScriptFieldType::Vector4:
                             {
-                                glm::vec4 data = scriptInstance->GetFieldValue<glm::vec4>(fieldName);
+                                auto data = scriptInstance->GetFieldValue<glm::vec4>(fieldName);
                                 if (ImGui::DragFloat4(fieldName.c_str(), &data.x, 0.1f))
                                 {
                                     scriptInstance->SetFieldValue<glm::vec4>(fieldName, data);
@@ -1197,7 +1198,7 @@ namespace ignite
                             }
                             case ScriptFieldType::Entity:
                             {
-                                uint64_t uuid = scriptInstance->GetFieldValue<uint64_t>(fieldName);
+                                auto uuid = scriptInstance->GetFieldValue<uint64_t>(fieldName);
                                 if (Entity entity = SceneManager::GetEntity(m_Scene.get(), UUID(uuid)))
                                 {
                                     ImGui::Button(fieldName.c_str());
@@ -1219,11 +1220,11 @@ namespace ignite
                 else if (!isRunning && scriptClassExist && !detached)
                 {
                     // !IsRunning
-                    Ref<ScriptClass> entityClass = ScriptEngine::GetEntityClassesByName(c.className);
+                    Ref<ScriptClass> entityClass = ScriptEngine::GetInstance()->GetEntityClassesByName(c.className);
                     if (entityClass)
                     {
                         const auto &classFields = entityClass->GetFields();
-                        auto &entityFields = ScriptEngine::GetScriptFieldMap(selectedEntity);
+                        auto &entityFields = ScriptEngine::GetInstance()->GetScriptFieldMap(selectedEntity);
 
                         for (const auto &[name, field] : classFields)
                         {
@@ -1235,7 +1236,7 @@ namespace ignite
                                 {
                                 case ScriptFieldType::Float:
                                 {
-                                    float data = scriptField.GetValue<float>();
+                                    auto data = scriptField.GetValue<float>();
                                     if (ImGui::DragFloat(name.c_str(), &data, 0.1f))
                                     {
                                         scriptField.SetValue<float>(data);
@@ -1244,7 +1245,7 @@ namespace ignite
                                 }
                                 case ScriptFieldType::Int:
                                 {
-                                    int data = scriptField.GetValue<int>();
+                                    auto data = scriptField.GetValue<int>();
                                     if (ImGui::DragInt(name.c_str(), &data))
                                     {
                                         scriptField.SetValue<int>(data);
@@ -1253,7 +1254,7 @@ namespace ignite
                                 }
                                 case ScriptFieldType::Vector2:
                                 {
-                                    glm::vec2 data = scriptField.GetValue<glm::vec3>();
+                                    auto data = scriptField.GetValue<glm::vec2>();
                                     if (ImGui::DragFloat2(name.c_str(), &data.x, 0.1f))
                                     {
                                         scriptField.SetValue<glm::vec2>(data);
@@ -1262,7 +1263,7 @@ namespace ignite
                                 }
                                 case ScriptFieldType::Vector3:
                                 {
-                                    glm::vec3 data = scriptField.GetValue<glm::vec3>();
+                                    auto data = scriptField.GetValue<glm::vec3>();
                                     if (ImGui::DragFloat3(name.c_str(), &data.x, 0.1f))
                                     {
                                         scriptField.SetValue<glm::vec3>(data);
@@ -1271,7 +1272,7 @@ namespace ignite
                                 }
                                 case ScriptFieldType::Vector4:
                                 {
-                                    glm::vec4 data = scriptField.GetValue<glm::vec4>();
+                                    auto data = scriptField.GetValue<glm::vec4>();
                                     if (ImGui::DragFloat4(name.c_str(), &data.x, 0.1f))
                                     {
                                         scriptField.SetValue<glm::vec4>(data);
@@ -1280,7 +1281,7 @@ namespace ignite
                                 }
                                 case ScriptFieldType::Entity:
                                 {
-                                    uint64_t uuid = scriptField.GetValue<uint64_t>();
+                                    auto uuid = scriptField.GetValue<uint64_t>();
                                     std::string label = "Drag Here";
                                     if (uuid)
                                     {
@@ -1584,7 +1585,7 @@ namespace ignite
             m_Gizmo.SetMode(mode == ImGuizmo::MODE::LOCAL ? ImGuizmo::MODE::WORLD : ImGuizmo::MODE::LOCAL);
         }
 
-        State sceneState = m_Editor->GetState().sceneState;
+        State sceneState = EditorLayer::GetInstance()->GetState().sceneState;
         const bool isScenePlaying = sceneState == ignite::State::ScenePlay;
         Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
         ImTextureID scenePlayStopID = reinterpret_cast<ImTextureID>(scenePlayStopTex->GetHandle().Get());
@@ -1593,7 +1594,7 @@ namespace ignite
         ImGui::Image(scenePlayStopID, buttonSize);
         if (ImGui::IsItemClicked())
         {
-            GLFWwindow *glfwWindow = Application::GetInstance()->GetDeviceManager()->GetWindow();
+            GLFWwindow *glfwWindow = ignite::Application::GetDeviceManager()->GetWindow();
             
             const uint32_t width = static_cast<uint32_t>(m_ViewportData.rect.GetSize().x);
             const uint32_t height = static_cast<uint32_t>(m_ViewportData.rect.GetSize().y);
@@ -1606,7 +1607,7 @@ namespace ignite
             m_SceneCameraRT->Resize(width, height);
             m_CompositeCameraRT->Resize(width, height);
 
-            m_Editor->GetSceneRenderer()->GetUIRenderer()->Resize(width, height);
+            EditorLayer::GetInstance()->GetSceneRenderer()->GetUIRenderer()->Resize(width, height);
 
             m_Scene->Resize(width, height);
             
@@ -1615,7 +1616,7 @@ namespace ignite
 
             if (isScenePlaying)
             {
-                m_Editor->OnSceneStop();
+                EditorLayer::GetInstance()->OnSceneStop();
 #if _WIN32
                 HWND hwnd = glfwGetWin32Window(glfwWindow);
                 COLORREF rgbRed = 0x00E86071;
@@ -1624,7 +1625,7 @@ namespace ignite
             }
             else
             {
-                m_Editor->OnScenePlay();
+                EditorLayer::GetInstance()->OnScenePlay();
 #if _WIN32
                 HWND hwnd = glfwGetWin32Window(glfwWindow);
                 COLORREF rgbRed = 0x000000AB;
@@ -1641,29 +1642,33 @@ namespace ignite
         ImGui::Image(sceneSimulateID, buttonSize);
         if (ImGui::IsItemClicked())
         {
-            GLFWwindow *glfwWindow = Application::GetInstance()->GetDeviceManager()->GetWindow();
+            GLFWwindow *glfwWindow = Application::GetDeviceManager()->GetWindow();
             
             const uint32_t width = static_cast<uint32_t>(m_ViewportData.rect.GetSize().x);
             const uint32_t height = static_cast<uint32_t>(m_ViewportData.rect.GetSize().y);
 
-            m_SceneViewportRT->Resize(width, height);
-            m_CompositeViewportRT->Resize(width, height);
-            m_UIViewportRT->Resize(width, height);
-            
-            m_UICameraRT->Resize(width, height);
-            m_SceneCameraRT->Resize(width, height);
-            m_CompositeCameraRT->Resize(width, height);
+            glm::vec2 vpSize = m_ViewportData.rect.GetSize();
+            if (vpSize.x > 0.0f && vpSize.y > 0.0f)
+            {
+                m_SceneViewportRT->Resize(width, height);
+                m_CompositeViewportRT->Resize(width, height);
+                m_UIViewportRT->Resize(width, height);
 
-            m_Editor->GetSceneRenderer()->GetUIRenderer()->Resize(width, height);
+                m_UICameraRT->Resize(width, height);
+                m_SceneCameraRT->Resize(width, height);
+                m_CompositeCameraRT->Resize(width, height);
 
-            m_Scene->Resize(width, height);
+                EditorLayer::GetInstance()->GetSceneRenderer()->GetUIRenderer()->Resize(width, height);
 
-            m_Camera.SetSize(static_cast<float>(width), static_cast<float>(height));
-            m_Camera.UpdateProjectionMatrix();
+                m_Scene->Resize(width, height);
+
+                m_Camera.SetSize(static_cast<float>(width), static_cast<float>(height));
+                m_Camera.UpdateProjectionMatrix();
+            }
 
             if (isSceneSimulate)
             {
-                m_Editor->OnSceneStop();
+                EditorLayer::GetInstance()->OnSceneStop();
 #if _WIN32
                 HWND hwnd = glfwGetWin32Window(glfwWindow);
                 COLORREF rgbRed = 0x00E86071;
@@ -1672,7 +1677,7 @@ namespace ignite
             }
             else
             {
-                m_Editor->OnSceneSimulate();
+                EditorLayer::GetInstance()->OnSceneSimulate();
 #if _WIN32
                 HWND hwnd = glfwGetWin32Window(glfwWindow);
                 COLORREF rgbRed = 0x000000AB;
@@ -1689,9 +1694,10 @@ namespace ignite
 
         m_ViewportData.rect.min = { canvasPos.x, canvasPos.y };
         m_ViewportData.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
+        glm::vec2 vpSize = m_ViewportData.rect.GetSize();
 
-        const uint32_t vpWidth = static_cast<uint32_t>(m_ViewportData.rect.GetSize().x);
-        const uint32_t vpHeight = static_cast<uint32_t>(m_ViewportData.rect.GetSize().y);
+        const auto vpWidth = static_cast<uint32_t>(vpSize.x);
+        const auto vpHeight = static_cast<uint32_t>(vpSize.y);
 
         // Mouse position in screen space
         const ImVec2 &mousePos = ImGui::GetMousePos();
@@ -1709,15 +1715,15 @@ namespace ignite
         }
 
         // trigger resize
-        if (vpWidth > 0 && vpHeight > 0)
+        if (vpSize.x > 0.0f && vpSize.y > 0.0f)
         {
             // prevent resizing each frame
             // just when the mouse is not resizing
             const bool sceneResize = m_SceneViewportRT->ShouldResize(vpWidth, vpHeight);
             const bool compositeResize = m_CompositeViewportRT->ShouldResize(vpWidth, vpHeight);
-            const bool uiResize = m_UIViewportRT->ShouldResize(vpWidth, vpHeight);
 
-            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) && (sceneResize || compositeResize || uiResize))
+            if (const bool uiResize = m_UIViewportRT->ShouldResize(vpWidth, vpHeight);
+                !ImGui::IsMouseDown(ImGuiMouseButton_Left) && (sceneResize || compositeResize || uiResize))
             {
                 m_SceneViewportRT->Resize(vpWidth, vpHeight);
                 m_CompositeViewportRT->Resize(vpWidth, vpHeight);
@@ -1729,15 +1735,16 @@ namespace ignite
 
                 m_Scene->Resize(vpWidth, vpHeight);
 
-                m_Editor->GetSceneRenderer()->GetUIRenderer()->Resize(vpWidth, vpHeight);
+                EditorLayer::GetInstance()->GetSceneRenderer()->GetUIRenderer()->Resize(vpWidth, vpHeight);
 
                 m_Camera.SetSize(static_cast<float>(vpWidth), static_cast<float>(vpHeight));
                 m_Camera.UpdateProjectionMatrix();
             }
         }
 
-        // Render Scene
-        ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_CompositeViewportRT->GetColorAttachment(0).Get());
+        ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_SceneViewportRT->GetColorAttachment(0).Get());     // Test scene RT
+        // ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_UIViewportRT->GetColorAttachment(0).Get());       // Test UI RT
+        // ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_CompositeViewportRT->GetColorAttachment(0).Get()); // Current composite RT
         ImGui::Image(sceneImage, canvasSize);
         if (ImGui::BeginDragDropTarget())
         {
@@ -1745,14 +1752,14 @@ namespace ignite
             {
                 if (payload->DataSize == sizeof(AssetHandle))
                 {
-                    AssetHandle* handle = static_cast<AssetHandle*>(payload->Data);
+                    auto* handle = static_cast<AssetHandle*>(payload->Data);
                     if (handle && *handle != AssetHandle(0))
                     {
-                        AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(*handle);
+                        AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(*handle);
                         if (metadata.type == AssetType::Scene)
                         {
-                            std::filesystem::path filepath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
-                            m_Editor->OpenScene(filepath);
+                            std::filesystem::path filepath = Project::GetInstance()->GetAssetFilepath(metadata.filepath);
+                            EditorLayer::GetInstance()->OpenScene(filepath);
                         }
                     }
                 }
@@ -2185,7 +2192,7 @@ namespace ignite
         }
 
         // multi select
-        if (m_Editor->GetState().multiSelect)
+        if (EditorLayer::GetInstance()->GetState().multiSelect)
         {
             if (auto it = m_SelectedEntities.find(entity.GetUUID()); it != m_SelectedEntities.end())
             {
@@ -2232,7 +2239,7 @@ namespace ignite
 
     void ScenePanel::DuplicateSelectedEntity()
     {
-        for (Entity entity : m_SelectedEntities | std::views::values)
+        for (const Entity& entity : m_SelectedEntities | std::views::values)
         {
             if (entity.IsValid())
             {

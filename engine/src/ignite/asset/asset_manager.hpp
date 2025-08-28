@@ -36,13 +36,15 @@ namespace ignite {
 
     using AssetRegistry = std::map<AssetHandle, AssetMetaData>;
     using AssetJob = std::function<void()>;
+    class Project;
 
     class AssetManager
     {
     public:
-        AssetManager();
+        AssetManager(Project *project);
         ~AssetManager();
 
+        Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
         AssetHandle ImportAsset(const std::filesystem::path &filepath);
         void InsertMetaData(AssetHandle handle, const AssetMetaData &metadata);
         void RemoveAsset(AssetHandle handle);
@@ -62,11 +64,11 @@ namespace ignite {
     
         AssetRegistry &GetAssetAssetRegistry() { return m_AssetRegistry; }
 
-    private:
+        static Project *GetProject();
 
+    private:
         void WorkerLoop();
 
-        Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
         AssetRegistry m_AssetRegistry;
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
 

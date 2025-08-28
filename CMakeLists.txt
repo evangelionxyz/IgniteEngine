@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.23)
 
-# Workspace: IGN (converted from Premake)
-# Enable C# support only on Windows where it's available
 project(IGN LANGUAGES C CXX CSharp)
 
 # Enable solution folders in IDEs like Visual Studio
@@ -20,6 +18,7 @@ endif()
 foreach(dir RUNTIME LIBRARY ARCHIVE)
 	set(CMAKE_${dir}_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/$<CONFIG>)
 endforeach()
+
 
 # Speed up MSVC builds similar to Premake's MultiProcessorCompile
 if(MSVC)
@@ -50,6 +49,9 @@ set(IncludeDir_JOLT            "${THIRDPARTY_DIR}/JOLT")
 set(IncludeDir_MONO            "${THIRDPARTY_DIR}/MONO/include")
 set(IncludeDir_FILEWATCHER     "${THIRDPARTY_DIR}/Filewatcher/include")
 set(IncludeDir_ZLIB            "${THIRDPARTY_DIR}/ZLIB")
+set(IncludeDir_MSDF_ATLAS_GEN  "${THIRDPARTY_DIR}/MSDFAtlasGen/msdf-atlas-gen")
+set(IncludeDir_MSDFGEN         "${THIRDPARTY_DIR}/MSDFAtlasGen/msdfgen")
+set(IncludeDir_FREETYPE        "${THIRDPARTY_DIR}/MSDFAtlasGen/msdfgen/freetype/include")
 
 # Library mapping from premake (Windows specific)
 if(WIN32)
@@ -66,7 +68,7 @@ if(WIN32)
 	set(Library_vulkan        "${LibraryDir_VULKAN_SDK}/vulkan-1.lib")
 
 	# Mono & FMOD
-	set(Library_mono "${THIRDPARTY_DIR}/Mono/lib/windows/libmono-static-sgen.lib")
+	set(Library_mono "${THIRDPARTY_DIR}/MONO/lib/windows/libmono-static-sgen.lib")
 	set(Library_FMOD "${THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod_vc.lib")
 
 	# ShaderC / SPIRV-Cross / SPIRV-Tools (Debug/Release variants)
@@ -91,15 +93,25 @@ endif()
 add_subdirectory(thirdparty)
 add_subdirectory(engine)
 add_subdirectory(editor)
+add_subdirectory(editorV2)
 add_subdirectory(runtime)
-
-# Only include C# scriptcore project on Windows
-if(WIN32)
-	add_subdirectory(scriptcore)
-endif()
+add_subdirectory(scriptcore)
 
 # Set startup project in Visual Studio
 if(MSVC)
 	set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT IgniteEditor)
 endif()
 
+set(_IGN_RUNTIME_TARGETS IgniteEditor IgniteEditorV2 IgniteRuntime)
+foreach(_t IN LISTS _IGN_RUNTIME_TARGETS)
+  if(TARGET ${_t})
+    set_property(TARGET ${_t} PROPERTY FOLDER "Runtime")
+  endif()
+endforeach()
+
+set(_IGN_ENGINE_TARGETS IgniteEngine IgniteScript)
+foreach(_t IN LISTS _IGN_ENGINE_TARGETS)
+  if(TARGET ${_t})
+    set_property(TARGET ${_t} PROPERTY FOLDER "Engine")
+  endif()
+endforeach()

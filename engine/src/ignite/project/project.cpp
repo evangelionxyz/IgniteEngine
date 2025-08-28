@@ -24,6 +24,7 @@
 #include "project.hpp"
 #include "ignite/core/string_utils.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/scripting/script_engine.hpp"
 
 #include <fstream>
 #include <format>
@@ -113,16 +114,22 @@ namespace {PROJECT_NAME}
 }
 )";
 
-    static Ref<Project> s_ActiveProject;
+    Project *project = nullptr;
 
     Project::Project(const ProjectInfo &info)
         : m_Info(info)
     {
+        project = this;
         GenerateProject();
+
+        m_AssetManager = new AssetManager(this);
+        m_ScriptEngine = new ScriptEngine(this);
     }
 
     Project::~Project()
     {
+        delete m_ScriptEngine;
+        delete m_AssetManager;
     }
 
     std::filesystem::path Project::GetAssetRelativeFilepath(const std::filesystem::path &filepath) const
@@ -173,17 +180,14 @@ namespace {PROJECT_NAME}
         return invalidRegistry;
     }
 
-    Ref<Project> Project::GetActive()
+    Project *Project::GetInstance()
     {
-        return s_ActiveProject;
+        return project;
     }
 
     Ref<Project> Project::Create(const ProjectInfo &info)
     {
-        Ref<Project> project = CreateRef<Project>(info);
-        s_ActiveProject = project;
-
-        return project;
+        return CreateRef<Project>(info);
     }
 
     bool Project::BuildSolution()

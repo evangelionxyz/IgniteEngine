@@ -39,7 +39,6 @@ namespace ignite
         };
 
         m_RenderTarget = RenderTarget::Create(rtCreateInfo);
-        m_RenderTarget->CreateFramebuffer();
 
         // Create graphics pipeline
         GraphicsPipelineCreateInfo pipelineInfo;
@@ -55,12 +54,12 @@ namespace ignite
         pipelineParams.fillMode = nvrhi::RasterFillMode::Solid;
         pipelineParams.cullMode = nvrhi::RasterCullMode::None;
 
-        m_Pipeline = GraphicsPipeline::Create(pipelineParams, &pipelineInfo);
+        m_Pipeline = GraphicsPipeline::Create();
         m_Pipeline->AddShader("mesh_anim.vertex.hlsl", nvrhi::ShaderType::Vertex)
-            .AddShader("mesh_anim.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
+            .AddShader("mesh_anim.pixel.hlsl", nvrhi::ShaderType::Pixel)
             .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
             .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
-            .Build(m_RenderTarget->GetFramebuffer());
+            .Build(m_RenderTarget->GetFramebuffer(), pipelineParams, pipelineInfo);
 
         m_Camera.CreatePerspective(60.0f, 1280.0f, 720.0f, 0.1f, 100.0f);
 

@@ -33,6 +33,8 @@
 namespace ignite
 {
     class Scene;
+    class ScriptEngine;
+    
     struct ProjectInfo
     {
         std::string name;
@@ -90,46 +92,23 @@ namespace ignite
             return GetDirectory() / m_Info.scriptsDirectory;
         }
 
-        // Static methods
-        static std::filesystem::path GetActiveFilepath()
-        {
-            return GetActive()->GetFilepath();
-        }
-
-        static std::filesystem::path GetActiveScriptsDirectory()
-        {
-            return GetActive()->GetScriptsDirectory();
-        }
-
-        static std::filesystem::path GetActiveSolutionFilepath()
-        {
-            return GetActive()->GetSolutionFilepath();
-        }
-
-        static std::filesystem::path GetActiveAssetDirectory()
-        {
-            return GetActive()->GetAssetDirectory();
-        }
-
-        static std::filesystem::path GetActiveProjectDirectory()
-        {
-            return GetActive()->GetDirectory();
-        }
-
         template<typename T>
-        static Ref<T> GetAsset(AssetHandle handle)
+        Ref<T> GetAsset(AssetHandle handle)
         {
-            Ref<Asset> asset = GetActive()->GetAssetManager().GetAsset(handle);
+            Ref<Asset> asset = m_AssetManager->GetAsset(handle);
             return std::static_pointer_cast<T>(asset);
         }
 
-        AssetManager &GetAssetManager() { return m_AssetManager; }
+        AssetManager &GetAssetManager() { return *m_AssetManager; }
         MaterialManager &GetMaterialManager() { return m_MaterialManager; }
+
+        ScriptEngine *GetScriptEngine() { return m_ScriptEngine; }
 
         ProjectInfo &GetInfo() { return m_Info; }
         Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
 
-        static Ref<Project> GetActive();
+        static Project *GetInstance();
+
         static Ref<Project> Create(const ProjectInfo &info);
 
         static AssetType GetStaticType() { return AssetType::Project; }
@@ -141,7 +120,8 @@ namespace ignite
         ProjectInfo m_Info;
 
         MaterialManager m_MaterialManager;
-        AssetManager m_AssetManager;
+        AssetManager *m_AssetManager = nullptr;
+        ScriptEngine *m_ScriptEngine = nullptr;
     };
 
 }

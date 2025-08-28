@@ -50,7 +50,7 @@ namespace ignite
     class ScenePanel final : public IPanel
     {
     public:
-        explicit ScenePanel(const char *windowTitle, EditorLayer *editor);
+        explicit ScenePanel(const char *windowTitle);
         ~ScenePanel();
         
         void SetActiveScene(const Ref<Scene> &scene);
@@ -112,8 +112,6 @@ namespace ignite
         } m_Data;
 
         EditorCamera m_Camera;
-        EditorLayer *m_Editor;
-
         Ref<Scene> m_Scene;
         Gizmo m_Gizmo;
 

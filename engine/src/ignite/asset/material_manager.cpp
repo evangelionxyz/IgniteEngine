@@ -37,9 +37,6 @@ namespace ignite
 
     MaterialManager::~MaterialManager()
     {
-        // removing shared reference
-        m_Materials.clear();
-        m_AssetToMaterialMap.clear();
     }
 
     Ref<Material> MaterialManager::CreateMaterial(const std::string &name)

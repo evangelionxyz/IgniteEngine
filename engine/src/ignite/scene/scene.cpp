@@ -47,11 +47,10 @@
 
 namespace ignite
 {
-    Scene::Scene(const std::string &_name)
-        : name(_name)
+    Scene::Scene(Project *project, const std::string &_name)
+        : m_Project(project), name(_name)
     {
         registry = new entt::registry();
-
         physics2D = CreateScope<Physics2D>(this);
         physics = CreateScope<JoltScene>(this);
     }
@@ -66,7 +65,7 @@ namespace ignite
     {
         m_Playing = true;
 
-        ScriptEngine::SetSceneContext(this);
+        ScriptEngine::GetInstance()->SetSceneContext(this);
 
         // reset time
         timeInSeconds = 0.0f;
@@ -88,7 +87,7 @@ namespace ignite
             AudioSource &as = audioView.get<AudioSource>(e);
             if (as.playOnStart)
             {
-                Ref<FmodSound> sound = Project::GetAsset<FmodSound>(as.handle);
+                Ref<FmodSound> sound = m_Project->GetAsset<FmodSound>(as.handle);
                 if (sound)
                 {
                     sound->Play();
@@ -102,7 +101,7 @@ namespace ignite
         registry->view<Script>().each([this](entt::entity e, Script &script)
         {
             Entity entity{ e, this };
-            ScriptEngine::OnCreateEntity(entity);
+            ScriptEngine::GetInstance()->OnCreateEntity(entity);
         });
 
         physics2D->SimulationStart();
@@ -120,14 +119,14 @@ namespace ignite
         for (entt::entity e : audioView)
         {
             AudioSource &as = audioView.get<AudioSource>(e);
-            Ref<FmodSound> sound = Project::GetAsset<FmodSound>(as.handle);
+            Ref<FmodSound> sound = m_Project->GetAsset<FmodSound>(as.handle);
             if (sound)
             {
                 sound->Stop();
             }
         }
 
-        ScriptEngine::ClearSceneContext();
+        ScriptEngine::GetInstance()->ClearSceneContext();
         
         physics2D->SimulationStop();
         physics->SimulationStop();
@@ -139,8 +138,8 @@ namespace ignite
         for (auto entity : skeletalMeshView)
         {
             SkeletalMesh &sm = skeletalMeshView.get<SkeletalMesh>(entity);
-            Ref<Skeleton> skeleton = Project::GetActive()->GetAsset<Skeleton>(sm.skeletonHandle);
-            Ref<SkeletalAnimation> anim = Project::GetActive()->GetAsset<SkeletalAnimation>(sm.activeAnimationHandle);
+            Ref<Skeleton> skeleton = m_Project->GetAsset<Skeleton>(sm.skeletonHandle);
+            Ref<SkeletalAnimation> anim = m_Project->GetAsset<SkeletalAnimation>(sm.activeAnimationHandle);
 
             if (skeleton && anim && anim->isPlaying)
             {
@@ -254,7 +253,7 @@ namespace ignite
         registry->view<Script>().each([this, deltaTime](entt::entity e, Script &sc)
         {
             Entity entity{ e, this };
-            ScriptEngine::OnUpdateEntity(entity, deltaTime);
+            ScriptEngine::GetInstance()->OnUpdateEntity(entity, deltaTime);
         });
 
         UpdateTransforms(deltaTime);
@@ -263,9 +262,9 @@ namespace ignite
         physics->Simulate(deltaTime);
     }
 
-    Ref<Scene> Scene::Create(const std::string &name)
+    Ref<Scene> Scene::Create(Project *project, const std::string &name)
     {
-        return CreateRef<Scene>(name);
+        return CreateRef<Scene>(project, name);
     }
 
     template<typename T>

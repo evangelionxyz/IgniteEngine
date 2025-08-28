@@ -41,9 +41,17 @@
 
 namespace ignite
 {
+    EditorLayer *editorLayerInstance = nullptr;
+
+    EditorLayer *EditorLayer::GetInstance()
+    {
+        return editorLayerInstance;
+    }
+
     EditorLayer::EditorLayer(const std::string &name)
         : Layer(name)
     {
+        editorLayerInstance = this;
     }
 
     EditorLayer::~EditorLayer()
@@ -56,7 +64,7 @@ namespace ignite
 
         m_Device = Application::GetGraphicsDevice();
 
-        m_ScenePanel = CreateRef<ScenePanel>("Scene Panel", this);
+        m_ScenePanel = CreateRef<ScenePanel>("Scene Panel");
         m_ContentBrowserPanel = CreateRef<ContentBrowserPanel>("Content Browser");
         m_ModelViewerPanel = CreateRef<ModelViewerPanel>();
         m_MaterialEditorPanel = CreateRef<MaterialEditorPanel>();
@@ -256,8 +264,6 @@ namespace ignite
     void EditorLayer::OnRender(nvrhi::IFramebuffer *mainFramebuffer)
     {
         Layer::OnRender(mainFramebuffer);
-
-        // m_ModelViewerPanel->OnRender();
 
         if (!m_ActiveScene)
             return;
@@ -526,16 +532,15 @@ namespace ignite
                     {
                         m_ActiveProject = newProject;
 
-                        ProjectSerializer serializer(m_ActiveProject);
+                        ProjectSerializer serializer(m_ActiveProject.get());
                         serializer.Serialize(m_Data.projectCreateInfo.filepath);
 
-                        m_ContentBrowserPanel->SetActiveProject(m_ActiveProject);
-
-                        ScriptEngine::Init();
+                        // Reload content browser
+                        m_ContentBrowserPanel->LoadProjectFiles();
 
                         if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
                         {
-                            if (Ref<Scene> activeScene = Project::GetAsset<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
+                            if (Ref<Scene> activeScene = m_ActiveProject->GetAsset<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
                             {
                                 m_EditorScene = SceneManager::Copy(activeScene);
                                 m_EditorScene->SetDirtyFlag(false);
@@ -543,8 +548,8 @@ namespace ignite
                                 m_ActiveScene = m_EditorScene;
                                 SetActiveScene(m_ActiveScene);
 
-                                AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(activeScene->handle);
-                                auto scenePath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
+                                AssetMetaData metadata = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
+                                auto scenePath = m_ActiveProject->GetAssetFilepath(metadata.filepath);
                                 m_CurrentSceneFilePath = scenePath;
                             }
                         }
@@ -598,11 +603,11 @@ namespace ignite
 
             ImGui::Begin("Project");
 
-            if (Ref<Project> activeProject = Project::GetActive())
+            if (m_ActiveProject)
             {
-                const auto &info = activeProject->GetInfo();
+                const auto &info = m_ActiveProject->GetInfo();
                 std::string projectName = info.name;
-                if (activeProject->IsDirty())
+                if (m_ActiveProject->IsDirty())
                     projectName += "*";
                 ImGui::Text("Name: %s", projectName.c_str());
                 ImGui::Text("Filepath: %s", info.filepath.generic_string().c_str());
@@ -634,7 +639,7 @@ namespace ignite
         m_CurrentSceneFilePath.clear();
 
         // create editor scene
-        m_EditorScene = CreateRef<Scene>("New Scene");
+        m_EditorScene = CreateRef<Scene>(m_ActiveProject.get(), "New Scene");
 
         // pass to active scene
         m_ActiveScene = m_EditorScene;
@@ -655,7 +660,7 @@ namespace ignite
 
     void EditorLayer::SaveScene(const std::filesystem::path &filepath) const
     {
-        SceneSerializer serializer(m_ActiveScene);
+        SceneSerializer serializer(m_ActiveScene, m_ActiveProject.get());
         serializer.Serialize(filepath);
     }
 
@@ -690,7 +695,7 @@ namespace ignite
             OnSceneStop();
         }
 
-        if (Ref<Scene> openScene = SceneSerializer::Deserialize(filepath))
+        if (Ref<Scene> openScene = SceneSerializer::Deserialize(filepath, m_ActiveProject.get()))
         {
             m_EditorScene = SceneManager::Copy(openScene);
             m_EditorScene->SetDirtyFlag(false);
@@ -709,7 +714,7 @@ namespace ignite
             SaveScene();
 
             const auto &info = m_ActiveProject->GetInfo();
-            ProjectSerializer sr(m_ActiveProject);
+            ProjectSerializer sr(m_ActiveProject.get());
             if (!info.filepath.empty())
             {
                 sr.Serialize(info.filepath);
@@ -741,14 +746,14 @@ namespace ignite
         if (openedProject)
         {
             m_ActiveProject = openedProject;
-            m_ContentBrowserPanel->SetActiveProject(m_ActiveProject);
 
-            ScriptEngine::Init();
+            // Reload project files
+            m_ContentBrowserPanel->LoadProjectFiles();
 
             // Get Project default scene
             if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
             {
-                if (Ref<Scene> activeScene = Project::GetAsset<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
+                if (Ref<Scene> activeScene = m_ActiveProject->GetAsset<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
                 {
                     m_EditorScene = SceneManager::Copy(activeScene);
                     m_EditorScene->SetDirtyFlag(false);
@@ -756,8 +761,8 @@ namespace ignite
                     m_ActiveScene = m_EditorScene;
                     SetActiveScene(m_ActiveScene);
 
-                    AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(activeScene->handle);
-                    auto scenePath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
+                    AssetMetaData metadata = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
+                    auto scenePath = m_ActiveProject->GetAssetFilepath(metadata.filepath);
                     m_CurrentSceneFilePath = scenePath;
                 }
             }
@@ -947,7 +952,7 @@ namespace ignite
             ImGui::SameLine();
             if (ImGui::Button("Refresh"))
             {
-                Project::GetActive()->ValidateAssetRegistry();
+                m_ActiveProject->ValidateAssetRegistry();
             }
 
             ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX;

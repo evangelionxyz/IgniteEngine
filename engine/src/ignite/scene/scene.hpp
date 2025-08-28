@@ -41,12 +41,13 @@ namespace ignite
     class Entity;
     class Environment;
     class SceneRenderer;
+    class Project;
 
     class Scene : public Asset
     {
     public:
         Scene() = default;
-        explicit Scene(const std::string &name);
+        explicit Scene(Project *project, const std::string &name);
 
         ~Scene();
 
@@ -64,17 +65,17 @@ namespace ignite
         void OnComponentAdded(Entity entity, T &comp);
 
         Entity GetPrimaryCamera();
+        Project *GetProject() { return m_Project; }
 
         std::string name;
         entt::registry *registry;
         Scope<Physics2D> physics2D;
         Scope<JoltScene> physics;
         std::unordered_map<UUID, entt::entity> entities; // uuid to entity
-
         
         bool IsPlaying() const { return m_Playing; }
         
-        static Ref<Scene> Create(const std::string &name);
+        static Ref<Scene> Create(Project *project, const std::string &name);
         
         static AssetType GetStaticType() { return AssetType::Scene; }
         virtual AssetType GetType() override { return GetStaticType(); }
@@ -84,9 +85,10 @@ namespace ignite
         float timeInSeconds = 0.0f;
         uint32_t viewportWidth = 1280, viewportHeight = 720;
 
-        
     private:
         Ref<SceneRenderer> m_SceneRenderer;
+        Project *m_Project;
+
         bool m_Playing = false;
     };
 }

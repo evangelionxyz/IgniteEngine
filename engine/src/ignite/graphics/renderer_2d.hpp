@@ -79,6 +79,8 @@ namespace ignite
         void Flush(nvrhi::IFramebuffer *framebuffer);
         void End();
 
+        void SetFillMode(nvrhi::RasterFillMode mode) { m_FillMode = mode; ClearPipelineCache(); }
+
         void DrawBox(const glm::mat4& transform, const glm::vec4& color = glm::vec4(1.0f));
         void DrawRect(const glm::mat4& transform, const glm::vec4& color = glm::vec4(1.0f));
         void DrawLine(const std::vector<glm::vec3>& positions, const glm::vec4& color = glm::vec4(1.0f));
@@ -94,18 +96,16 @@ namespace ignite
         void InitLineData();
 
         void ClearPipelineCache();
-
         
         u32 GetOrInsertTexture(const Ref<Texture>& texture);
-        void UpdateTextureBindings();
         
         static Ref<Renderer2D> Create();
         
     private:
         nvrhi::ICommandList *m_Cmd;
-
         BatchRender<Vertex2DQuad> m_QuadBatch;
         BatchRender<Vertex2DLine> m_LineBatch;
         CameraConstants m_CameraBuffer;
+        nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
     };
 }

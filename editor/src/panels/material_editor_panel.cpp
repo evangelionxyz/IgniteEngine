@@ -59,9 +59,9 @@ namespace ignite
                 
                 if (ImGui::Button("Create New Material"))
                 {
-                    if (Project::GetActive())
+                    if (Project::GetInstance())
                     {
-                        auto& materialManager = Project::GetActive()->GetMaterialManager();
+                        auto& materialManager = Project::GetInstance()->GetMaterialManager();
                         m_SelectedMaterial = materialManager.CreateUniqueMaterial("NewMaterial");
                         m_MaterialName = m_SelectedMaterial->name;
                     }
@@ -86,9 +86,9 @@ namespace ignite
 
     void MaterialEditorPanel::SetSelectedMaterial(const std::string &materialName)
     {
-        if (Project::GetActive())
+        if (Project::GetInstance())
         {
-            auto& materialManager = Project::GetActive()->GetMaterialManager();
+            auto& materialManager = Project::GetInstance()->GetMaterialManager();
             m_SelectedMaterial = materialManager.GetMaterial(materialName);
             if (m_SelectedMaterial)
             {
@@ -154,9 +154,9 @@ namespace ignite
         // Actions
         if (ImGui::Button("Make Unique"))
         {
-            if (Project::GetActive())
+            if (Project::GetInstance())
             {
-                auto& materialManager = Project::GetActive()->GetMaterialManager();
+                auto& materialManager = Project::GetInstance()->GetMaterialManager();
                 std::string uniqueName = m_SelectedMaterial->name + "_Copy";
                 auto uniqueMaterial = materialManager.CloneMaterial(m_SelectedMaterial->name, uniqueName);
                 if (uniqueMaterial)
@@ -178,13 +178,10 @@ namespace ignite
             if (!filepath.empty())
             {
                 BinarySerializer::SerializeMaterial(m_SelectedMaterial, filepath);
-                Project::GetActive()->GetAssetManager().ImportAsset(filepath);
+                Project::GetInstance()->GetAssetManager().ImportAsset(filepath);
 
-                Project::GetActive();
-
-                Ref<Project> projectCopy = CreateRef<Project>();
-                ProjectSerializer serializer(projectCopy);
-                serializer.Serialize(Project::GetActiveFilepath());
+                ProjectSerializer serializer(Project::GetInstance());
+                serializer.Serialize(Project::GetInstance()->GetFilepath());
             }
         }
     }
@@ -226,13 +223,13 @@ namespace ignite
                     AssetHandle* handle = static_cast<AssetHandle*>(payload->Data);
                     if (handle && *handle != AssetHandle(0))
                     {
-                        if (Project::GetActive())
+                        if (Project::GetInstance())
                         {
-                            auto& assetManager = Project::GetActive()->GetAssetManager();
+                            auto& assetManager = Project::GetInstance()->GetAssetManager();
                             AssetMetaData metadata = assetManager.GetMetaData(*handle);
                             if (metadata.type == AssetType::Texture)
                             {
-                                Ref<Texture> texture = Project::GetAsset<Texture>(*handle);
+                                Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(*handle);
                                 if (texture)
                                 {
                                     m_SelectedMaterial->UpdateTexture(texture, textureType);

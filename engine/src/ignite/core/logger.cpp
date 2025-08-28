@@ -47,6 +47,12 @@ namespace ignite
             "[IGNITE]",
             impl->sink
         );
+
+#ifdef _DEBUG
+        impl->logger->set_level(spdlog::level::trace);
+#else
+        impl->logger->set_level(spdlog::level::off);
+#endif
     }
 
     void Logger::Shutdown()

@@ -23,6 +23,7 @@
 
 #include "graphics_pipeline.hpp"
 #include "ignite/core/logger.hpp"
+#include "shader.hpp"
 
 #include "renderer.hpp"
 
@@ -30,11 +31,6 @@
 
 namespace ignite
 {
-    GraphicsPipeline::GraphicsPipeline(const GraphicsPipelineParams &params, GraphicsPipelineCreateInfo *createInfo)
-        : m_Params(params), m_CreateInfo(std::move(createInfo))
-    {
-    }
-
     GraphicsPipeline& GraphicsPipeline::AddBindingLayout(const nvrhi::BindingLayoutHandle& layout)
     {
         m_BindingLayouts.emplace_back(layout);
@@ -69,26 +65,27 @@ namespace ignite
         return nullptr;
     }
 
-    void GraphicsPipeline::Build(nvrhi::IFramebuffer *framebuffer)
+    void GraphicsPipeline::Build(nvrhi::IFramebuffer *framebuffer, const GraphicsPipelineParams &params, const GraphicsPipelineCreateInfo &createInfo)
     {
         nvrhi::IDevice* device = Application::GetGraphicsDevice();
 
         if (m_NeedsToCompileShader)
         {
-            Renderer::GetShaderLibrary().GetContext()->CompileShader(m_ShaderContexts);
+            Renderer::GetShaderLibrary().CompileShaders(m_ShaderContexts);
 
             for (auto& context : m_ShaderContexts)
             {
                 nvrhi::ShaderType shaderType = GetNVRHIShaderType(context->GetType());
                 m_Shaders[shaderType] = device->createShader(shaderType, context->blob.data.data(), context->blob.dataSize());
-
                 LOG_ASSERT(m_Shaders[shaderType], "[Graphics Pipeline] Failed to create shader");
+
+                Shader::SPIRVReflect(context->GetType(), context->blob);
             }
 
             m_ShaderContexts.clear();
         }
 
-        m_InputLayout = device->createInputLayout(m_CreateInfo->attributes, m_CreateInfo->attributeCount, nullptr);
+        m_InputLayout = device->createInputLayout(createInfo.attributes, createInfo.attributeCount, nullptr);
         LOG_ASSERT(m_InputLayout, "[Graphics Pipeline] Failed to create input layout");
 
         LOG_ASSERT(m_Handle == nullptr, "[GraphicsPipeline] Should not re-create pipeline");
@@ -143,9 +140,9 @@ namespace ignite
         LOG_ASSERT(m_Handle, "Failed to create graphics pipeline");
     }
 
-    Ref<GraphicsPipeline> GraphicsPipeline::Create(const GraphicsPipelineParams &params, GraphicsPipelineCreateInfo *createInfo)
+    Ref<GraphicsPipeline> GraphicsPipeline::Create()
     {
-        return CreateRef<GraphicsPipeline>(params, createInfo);
+        return CreateRef<GraphicsPipeline>();
     }
 
 }

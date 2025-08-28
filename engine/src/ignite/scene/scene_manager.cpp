@@ -428,7 +428,7 @@ namespace ignite
     Ref<Scene> SceneManager::Copy(Ref<Scene> &other)
     {
         // create new scene with other's name
-        Ref<Scene> newScene = CreateRef<Scene>(other->name);
+        Ref<Scene> newScene = CreateRef<Scene>(other->GetProject(), other->name);
 
         // create source and destination registry
         auto srcRegistry = other->registry;

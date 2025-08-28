@@ -6,19 +6,19 @@
       "name": "windows-vs2022-Debug",
       "generator": "Visual Studio 17 2022",
       "architecture": { "value": "x64" },
-      "binaryDir": "${sourceDir}/build/windows-vs2022"
+      "binaryDir": "./"
     },
     {
       "name": "windows-vs2022-Release",
       "generator": "Visual Studio 17 2022",
       "architecture": { "value": "x64" },
-      "binaryDir": "${sourceDir}/build/windows-vs2022"
+      "binaryDir": "./"
     },
     {
       "name": "windows-vs2022-RelWithDebInfo",
       "generator": "Visual Studio 17 2022",
       "architecture": { "value": "x64" },
-      "binaryDir": "${sourceDir}/build/windows-vs2022"
+      "binaryDir": "./"
     },
 
     {

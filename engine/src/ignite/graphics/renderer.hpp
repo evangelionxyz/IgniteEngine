@@ -58,13 +58,11 @@ namespace ignite
     public:
         void Init(nvrhi::GraphicsAPI api);
         void Compile();
-        void CompileShaders(const std::vector<Ref<ShaderMake::ShaderContext>> &contexts);
+        ShaderMake::CompileStatus CompileShaders(const std::vector<Ref<ShaderMake::ShaderContext>> &contexts);
         void Load(const std::string &name, const std::string &filepath);
         bool Exists(const std::string &name) const;
         
         std::unordered_map<nvrhi::ShaderType, ShaderHandleContext> Get(const std::string &name);
-
-        ShaderMake::Context *GetContext() const;
 
     private:
         std::unordered_map<std::string, std::unordered_map<nvrhi::ShaderType, ShaderHandleContext>> m_Shaders;

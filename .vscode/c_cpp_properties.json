@@ -4,18 +4,35 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "${workspaceFolder}/THIRDPARTY/GLFW/include/"
+                "${workspaceFolder}/THIRDPARTY/GLFW/include/",
+                "${VULKAN_SDK}/include"
             ],
             "defines": [
                 "_DEBUG",
                 "UNICODE",
                 "_UNICODE",
-                "GLFW_EXPOSE_NATIVE_WIN32"
+                "GLFW_EXPOSE_NATIVE_WIN32",
+                "IGNITE_PLATFORM_WINDOWS"
             ],
             "windowsSdkVersion": "10.0.26100.0",
             "compilerPath": "cl.exe",
             "cStandard": "c17",
+            "cppStandard": "c++23",
             "intelliSenseMode": "windows-msvc-x64"
+        },
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/lib/",
+                "/usr/include/"
+            ],
+            "defines": [
+                "IGNITE_PLATFORM_LINUX"
+            ],
+            "cStandard": "c17",
+            "cppStandard": "gnu++23",
+            "intelliSenseMode": "clang-x64"
         }
     ],
     "version": 4

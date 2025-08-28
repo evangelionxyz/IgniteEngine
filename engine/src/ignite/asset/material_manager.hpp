@@ -33,6 +33,7 @@
 namespace ignite
 {
     class Material;
+    class Project;
 
     class MaterialManager
     {

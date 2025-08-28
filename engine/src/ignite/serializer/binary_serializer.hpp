@@ -70,6 +70,9 @@ namespace ignite
         {
             std::vector<std::byte> buffer;
 
+            nvrhi::IDevice *device = Application::GetGraphicsDevice();
+            nvrhi::CommandListHandle cmd = device->createCommandList();
+
             // write name
             std::string nameCopy = mat->name;
             nameCopy += '\0';
@@ -90,19 +93,34 @@ namespace ignite
             uint32_t textureCount = static_cast<uint32_t>(mat->textures.size());
             AppendRaw(buffer, textureCount);
 
-            for (auto &[type, tex] : mat->textures)
+            for (auto &[type, texture] : mat->textures)
             {
+                size_t width = static_cast<size_t>(texture->GetWidth());
+                size_t height = static_cast<size_t>(texture->GetHeight());
+                size_t rowPitch = 0;
+                
+                cmd->open();
+                nvrhi::TextureDesc stagingDesc = texture->GetHandle()->getDesc();
+                stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
+                nvrhi::StagingTextureHandle stagingTexture = device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
+                cmd->copyTexture(stagingTexture, nvrhi::TextureSlice(), texture->GetHandle(), nvrhi::TextureSlice());
+                cmd->close();
+                device->executeCommandList(cmd);
+
+                // Map and read the pixel data
+                void *pixelData = device->mapStagingTexture(stagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch);
+
                 // write texture type
                 AppendRaw(buffer, type);
 
-                AppendRaw(buffer, tex->width);
-                AppendRaw(buffer, tex->height);
-                AppendRaw(buffer, tex->rowPitch);
+                AppendRaw(buffer, width);
+                AppendRaw(buffer, height);
+                AppendRaw(buffer, rowPitch);
 
-                const std::size_t pixelBytes = static_cast<std::size_t>(tex->height) * tex->rowPitch;
+                const size_t pixelBytes = height * rowPitch;
 
                 // write RGBA blob
-                const std::byte *begin = reinterpret_cast<const std::byte *>(tex->data);
+                const std::byte *begin = reinterpret_cast<const std::byte *>(pixelData);
                 buffer.insert(buffer.end(), begin, begin + pixelBytes);
             }
 
@@ -118,6 +136,10 @@ namespace ignite
         {
             Ref<Material> mat = CreateRef<Material>();
             std::ifstream inFile(filepath, std::ios::binary);
+
+            nvrhi::IDevice *device = Application::GetGraphicsDevice();
+            nvrhi::CommandListHandle cmd = device->createCommandList();
+            cmd->open();
 
             if (!inFile)
             {
@@ -142,25 +164,37 @@ namespace ignite
 
             for (uint32_t i = 0; i < textureCount; ++i)
             {
-                Ref<MaterialTextureResource> tex = CreateRef<MaterialTextureResource>();
-
+                size_t width, height, rowPitch;
                 MaterialTextureType textureType;
                 inFile.read(reinterpret_cast<char *>(&textureType), sizeof(textureType));
-
-                inFile.read(reinterpret_cast<char *>(&tex->width), sizeof(tex->width));
-                inFile.read(reinterpret_cast<char *>(&tex->height), sizeof(tex->height));
-                inFile.read(reinterpret_cast<char *>(&tex->rowPitch), sizeof(tex->rowPitch));
-
-                const std::size_t pixelBytes = static_cast<std::size_t>(tex->height) * tex->rowPitch;
-                if (pixelBytes > 0)
-                {
-                    tex->data = new uint8_t[pixelBytes];
-                }
                 
+                inFile.read(reinterpret_cast<char *>(&width), sizeof(width));
+                inFile.read(reinterpret_cast<char *>(&height), sizeof(height));
+                inFile.read(reinterpret_cast<char *>(&rowPitch), sizeof(rowPitch));
+                
+                const size_t pixelBytes = height * rowPitch;
+                Buffer buffer(pixelBytes);
+
                 // read blob *into* the buffer, not into the pointer itself
-                inFile.read(reinterpret_cast<char *>(tex->data), pixelBytes);
-                mat->textures[textureType] = tex;
+                inFile.read(reinterpret_cast<char *>(buffer.data), pixelBytes);
+
+                TextureCreateInfo createInfo;
+                createInfo.dimension = nvrhi::TextureDimension::Texture2D;
+                createInfo.width = width;
+                createInfo.height = height;
+                createInfo.mipLevels = (width == 1 && height == 1) ? 1 : 4;
+                createInfo.flip = false;
+                createInfo.format = nvrhi::Format::RGBA8_UNORM;
+
+                Ref<Texture> texture = Texture::Create(createInfo);
+                texture->SetData(cmd, buffer, rowPitch, 0);
+                mat->textures[textureType] = texture;
             }
+
+            cmd->close();
+            device->executeCommandList(cmd);
+
+            mat->UpdateBindingSet();
 
             inFile.close();
 

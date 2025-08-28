@@ -47,7 +47,7 @@ namespace ignite
     static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_LineBindingSetCache;
 
     // Helper to build a quad pipeline for a framebuffer (once) and cache it.
-    static Ref<GraphicsPipeline> GetQuadPipelineForFB(nvrhi::IFramebuffer* framebuffer)
+    static Ref<GraphicsPipeline> GetQuadPipelineForFB(nvrhi::IFramebuffer* framebuffer, nvrhi::RasterFillMode fillMode)
     {
         auto key = MakeFramebufferKey(framebuffer);
         auto it = s_QuadPSOCache.find(key);
@@ -61,6 +61,7 @@ namespace ignite
         params.depthWrite = true;
         params.depthTest = true;
         params.enableDepthStencil = false;
+        params.fillMode = fillMode;
 
         // create binding layout
         nvrhi::BindingLayoutDesc bindingLayoutDesc;
@@ -80,16 +81,16 @@ namespace ignite
         params.comparison = nvrhi::ComparisonFunc::LessOrEqual;
 
         auto attributes = Vertex2DQuad::GetAttributes();
-        GraphicsPipelineCreateInfo pci;
-        pci.attributes = attributes.data();
-        pci.attributeCount = static_cast<uint32_t>(attributes.size());
+        GraphicsPipelineCreateInfo createInfo;
+        createInfo.attributes = attributes.data();
+        createInfo.attributeCount = static_cast<uint32_t>(attributes.size());
 
         auto shaderContext = Renderer::GetShaderLibrary().Get("batch_2d_quad");
-        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create(params, &pci);
+        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
         gp->AddShader(shaderContext[nvrhi::ShaderType::Vertex].handle, nvrhi::ShaderType::Vertex)
             .AddShader(shaderContext[nvrhi::ShaderType::Pixel].handle, nvrhi::ShaderType::Pixel)
             .AddBindingLayout(bindingLayout)
-            .Build(framebuffer);
+            .Build(framebuffer, params, createInfo);
 
         s_QuadPSOCache.emplace(key, gp);
 
@@ -117,12 +118,12 @@ namespace ignite
         params.primitiveType = nvrhi::PrimitiveType::LineList;
 
         auto attributes = Vertex2DLine::GetAttributes();
-        GraphicsPipelineCreateInfo pci;
-        pci.attributes = attributes.data();
-        pci.attributeCount = static_cast<uint32_t>(attributes.size());
+        GraphicsPipelineCreateInfo createInfo;
+        createInfo.attributes = attributes.data();
+        createInfo.attributeCount = static_cast<uint32_t>(attributes.size());
 
         auto shaderContext = Renderer::GetShaderLibrary().Get("batch_2d_line");
-        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create(params, &pci);
+        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
         nvrhi::BindingLayoutDesc bindingLayoutDesc;
         bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
         bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::PushConstants(0, sizeof(CameraConstants)));
@@ -131,7 +132,7 @@ namespace ignite
         gp->AddShader(shaderContext[nvrhi::ShaderType::Vertex].handle, nvrhi::ShaderType::Vertex)
             .AddShader(shaderContext[nvrhi::ShaderType::Pixel].handle, nvrhi::ShaderType::Pixel)
             .AddBindingLayout(bindingLayout)
-            .Build(framebuffer);
+            .Build(framebuffer, params, createInfo);
 
         s_LinePSOCache.emplace(key, gp);
 
@@ -334,7 +335,7 @@ namespace ignite
             const size_t bufferSize = reinterpret_cast<uint8_t*>(m_QuadBatch.vertexBufferPtr) - reinterpret_cast<uint8_t*>(m_QuadBatch.vertexBufferBase);
             m_QuadBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_QuadBatch.vertexBufferBase, bufferSize));
 
-            Ref<GraphicsPipeline> gp = GetQuadPipelineForFB(framebuffer);
+            Ref<GraphicsPipeline> gp = GetQuadPipelineForFB(framebuffer, m_FillMode);
             nvrhi::BindingSetHandle bindingSet = GetQuadBindingSet(gp->GetBindingLayout(0), m_QuadBatch.textureSlots);
 
             const auto graphicsState = nvrhi::GraphicsState()

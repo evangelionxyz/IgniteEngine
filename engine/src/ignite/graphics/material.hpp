@@ -46,21 +46,6 @@ namespace ignite
         float emissiveFactor = 0.0f;
     };
 
-    struct MaterialTextureResource
-    {
-        uint8_t *data = nullptr;
-        uint32_t width = 0;
-        uint32_t height = 0;
-        uint32_t rowPitch = 0;
-        nvrhi::TextureHandle handle;
-
-        ~MaterialTextureResource()
-        {
-            if (data)
-                delete data;
-        }
-    };
-
     enum class MaterialTextureType : uint8_t
     {
         None,
@@ -174,26 +159,24 @@ namespace ignite
 
         uint32_t mipLevels = 4;
         nvrhi::TextureHandle cubeMapTexture;
-        std::unordered_map<MaterialTextureType, Ref<MaterialTextureResource>> textures;
+        std::unordered_map<MaterialTextureType, Ref<Texture>> textures;
 
         nvrhi::BindingSetHandle bindingSet;
 
-        void LoadTexture(const aiScene *aiScene, const aiMaterial *aiMat, const std::filesystem::path &filepath, MaterialTextureType textureType);
         void CreateDefaultTextures();
-        void CreateTextures();
 
         void UpdateBindingSet();
         void UpdateTexture(const Ref<Texture> &texture, MaterialTextureType textureType);
-        void WriteTexture(nvrhi::ICommandList *commandList);
         void WriteBuffer(nvrhi::ICommandList *commandList);
 
-        static void UploadTextureWithMips(nvrhi::ICommandList *commandList, const nvrhi::TextureHandle &handle,
-            const void *baseData, uint32_t baseWidth, uint32_t baseHeight, uint32_t baseRowPitch, nvrhi::Format format, uint32_t mipLevels);
+        static Ref<Material> Create(const aiScene *aiScene, aiMaterial *aiMat, const std::filesystem::path &baseFilepath);
 
         static AssetType GetStaticType() { return AssetType::Material; }
         virtual AssetType GetType() override { return GetStaticType(); }
 
     private:
+        void LoadTexture(nvrhi::ICommandList *cmd, const aiScene *aiScene, const aiMaterial *aiMat, const std::filesystem::path &filepath, MaterialTextureType textureType);
+        
         Ref<ConstantBuffer> m_ConstantBuffer;
     };
 }

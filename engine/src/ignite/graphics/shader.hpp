@@ -26,6 +26,10 @@
 #include "ignite/core/types.hpp"
 #include "ignite/core/logger.hpp"
 
+#include <spirv_cross/spirv_cross.hpp>
+#include <spirv_cross/spirv_glsl.hpp>
+#include <spirv_cross/spirv_hlsl.hpp>
+
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -74,12 +78,15 @@ namespace ignite
         Shader() = default;
         Shader(const std::filesystem::path &filepath, ShaderMake::ShaderType type, bool recompile = false);
 
-        static ShaderMake::ShaderBlob CompileOrGetShader(const std::filesystem::path &filepath, ShaderMake::ShaderType type, bool recompile);
-        static Ref<Shader> Create(const std::filesystem::path &filepath, ShaderMake::ShaderType type, bool recompile = false);
         nvrhi::ShaderHandle GetHandle() { return m_Handle; }
+        const spirv_cross::ShaderResources &GetResources() { return m_Resources; }
 
-        static void SPIRVReflect(ShaderMake::ShaderType type, const ShaderMake::ShaderBlob &blob);
+        static ShaderMake::ShaderBlob CompileOrGetShader(const std::filesystem::path &filepath, ShaderMake::ShaderType type, spirv_cross::ShaderResources *resources, bool recompile);
+        static Ref<Shader> Create(const std::filesystem::path &filepath, ShaderMake::ShaderType type, bool recompile = false);
+        static spirv_cross::ShaderResources SPIRVReflect(ShaderMake::ShaderType type, const ShaderMake::ShaderBlob &blob);
+    
     private:
+        spirv_cross::ShaderResources m_Resources;
         nvrhi::ShaderHandle m_Handle = nullptr;
     };
 }

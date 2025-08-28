@@ -100,7 +100,7 @@ namespace ignite
                 ProcessBoneWeights(assimpMesh, meshIndex, mesh->data, skeleton);
             }
 
-            LOG_WARN("[Mesh Loader] {} [{}] Loaded", assimpMesh->mName.data, meshIndex);
+            LOG_WARN("[Mesh Loader] {} [{}] Loaded: v: {} | f: {}", assimpMesh->mName.data, meshIndex, mesh->data.vertices.size(), mesh->data.indices.size());
         }
 
         // Process all children with this node as parent
@@ -160,7 +160,7 @@ namespace ignite
 
         if (!hasNormals)
         {
-            // Accumulate face normals to vertices and normalize at the end
+            // accumulate face normals to vertices and normalize at the end
             std::vector<glm::vec3> normalAccum(outMeshData.vertices.size(), glm::vec3(0.0f));
 
             for (size_t f = 0; f + 2 < outMeshData.indices.size(); f += 3)

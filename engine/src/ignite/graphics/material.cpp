@@ -30,7 +30,7 @@
 
 namespace ignite
 {
-    static std::unordered_map<std::string, Ref<MaterialTextureResource>> s_TextureCache;
+    static std::unordered_map<std::string, Ref<Texture>> s_TextureCache;
 
     Material::Material()
     {
@@ -40,14 +40,13 @@ namespace ignite
     Material::Material(const aiScene *aiScene, aiMaterial* aiMat, const std::filesystem::path& baseFilepath)
     {
         m_ConstantBuffer = ConstantBuffer::Create(sizeof(MaterialConstants), true, 256, "[Material] Constant Buffer");
-
         name = aiMat->GetName().data;
 
+        // Load Materal's params
         aiColor4D baseColor(1.0f, 1.0f, 1.0f, 1.0f);
         aiColor4D diffuseColor(1.0f, 1.0f, 1.0f, 1.0f);
         aiColor4D emissiveColor(0.0f, 0.0f, 0.0f, 0.0f);
         f32 reflectivity = 0.0f;
-
         aiMat->Get(AI_MATKEY_BASE_COLOR, baseColor);
         aiMat->Get(AI_MATKEY_COLOR_DIFFUSE, diffuseColor);
         aiMat->Get(AI_MATKEY_METALLIC_FACTOR, params.metallicFactor);
@@ -63,14 +62,23 @@ namespace ignite
             params.emissiveFactor = emissiveColor.r / diffuseColor.r;
         }
 
-        // load textures
-        LoadTexture(aiScene, aiMat, baseFilepath, MaterialTextureType::BaseColor);
-        LoadTexture(aiScene, aiMat, baseFilepath, MaterialTextureType::Specular);
-        LoadTexture(aiScene, aiMat, baseFilepath, MaterialTextureType::Emissive);
-        LoadTexture(aiScene, aiMat, baseFilepath, MaterialTextureType::Roughness);
-        LoadTexture(aiScene, aiMat, baseFilepath, MaterialTextureType::Normals);
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::CommandListHandle cmd = device->createCommandList();
+        cmd->open();
 
-        s_TextureCache.clear();
+        // load textures
+        LoadTexture(cmd, aiScene, aiMat, baseFilepath, MaterialTextureType::BaseColor);
+        LoadTexture(cmd, aiScene, aiMat, baseFilepath, MaterialTextureType::Specular);
+        LoadTexture(cmd, aiScene, aiMat, baseFilepath, MaterialTextureType::Emissive);
+        LoadTexture(cmd, aiScene, aiMat, baseFilepath, MaterialTextureType::Roughness);
+        LoadTexture(cmd, aiScene, aiMat, baseFilepath, MaterialTextureType::Normals);
+
+        cmd->close();
+        device->executeCommandList(cmd);
+
+        UpdateBindingSet();
+
+        // s_TextureCache.clear();
 
         // set transparent and reflectivity
         // _transparent = false;
@@ -81,12 +89,20 @@ namespace ignite
     {
     }
 
-    void Material::LoadTexture(const aiScene* aiScene, const aiMaterial* aiMat, const std::filesystem::path& filepath, MaterialTextureType textureType)
+    void Material::LoadTexture(nvrhi::ICommandList *cmd, const aiScene* aiScene, const aiMaterial* aiMat, const std::filesystem::path& filepath, MaterialTextureType textureType)
     {
         const aiTextureType type = GetAssimpTextureType(textureType);
 
         // Create the material texture first (Ref counted object)
-        textures[textureType] = CreateRef<MaterialTextureResource>();
+        TextureCreateInfo createInfo = {};
+        createInfo.dimension = nvrhi::TextureDimension::Texture2D;
+        createInfo.format = nvrhi::Format::RGBA8_UNORM;
+        createInfo.mipLevels = 4;
+        createInfo.flip = false;
+
+        Buffer buffer;
+        int channels;
+        uint8_t *sourceData = nullptr;
 
         if (const uint32_t texCount = aiMat->GetTextureCount(type))
         {
@@ -95,60 +111,52 @@ namespace ignite
                 aiString texFilename;
                 aiMat->GetTexture(type, i, &texFilename);
 
-                LOG_INFO("[Material Importer] Texture type {}", aiTextureTypeToString(type));
-
                 // try to load from cache
                 for (auto &[path, tex] : s_TextureCache)
                 {
                     if (std::strcmp(path.c_str(), texFilename.C_Str()) == 0)
                     {
                         textures[textureType] = tex;
-                        LOG_WARN("[Material Importer] {} Loaded from cache", path.c_str());
+                        LOG_WARN("[Material Importer] {}: {} Texture Loaded from cache", aiTextureTypeToString(type), path.c_str());
                         return;
                     }
                 }
-
-                stbi_set_flip_vertically_on_load(false);
-                int width, height, channels;
-                uint8_t *sourceData = nullptr;
+                
+                stbi_set_flip_vertically_on_load(createInfo.flip);
 
                 // create new texture
                 // Load embedded texture
                 const aiTexture *embeddedTexture = aiScene->GetEmbeddedTexture(texFilename.C_Str());
-                if (embeddedTexture && textures[textureType]->handle == nullptr)
+                if (embeddedTexture)
                 {
                     // handle compressed textures
                     if (embeddedTexture->mHeight == 0)
                     {
-                        LOG_INFO("[Material Importer] Loading embedded compressed format texture of size {} bytes", embeddedTexture->mWidth);
-                        textures[textureType]->data = stbi_load_from_memory(reinterpret_cast<const stbi_uc *>(embeddedTexture->pcData),
-                            embeddedTexture->mWidth, &width, &height, &channels, 4);
-
-                        textures[textureType]->rowPitch = width * 4u;
+                        LOG_INFO("[Material Importer] {}: Loading embedded compressed format texture of size {} bytes", aiTextureTypeToString(type), embeddedTexture->mWidth);
+                        buffer.data = stbi_load_from_memory(reinterpret_cast<const stbi_uc *>(embeddedTexture->pcData), embeddedTexture->mWidth, &createInfo.width, &createInfo.height, &channels, 4);
+                        buffer.size = createInfo.width * createInfo.height * 4;
                     }
                     else
                     {
-                        width = static_cast<int>(embeddedTexture->mWidth);
-                        height = static_cast<int>(embeddedTexture->mHeight);
+                        createInfo.width = static_cast<int>(embeddedTexture->mWidth);
+                        createInfo.height = static_cast<int>(embeddedTexture->mHeight);
 
-                        LOG_INFO("[Material Importer] Loading embedded uncompressed texture of size {}x{}", width, height);
+                        LOG_INFO("[Material Importer] {}: Loading embedded uncompressed texture of size {}x{}", aiTextureTypeToString(type), createInfo.width, createInfo.height);
 
                         // Allocate space for RGBA8 data
-                        uint8_t *destinationData = new uint8_t[width * height * 4];
+                        buffer = Buffer(createInfo.width * createInfo.height * 4);
 
                         // Assimp embedded uncompressed texture data is usually in RGB format without alpha
                         // You can test with alpha channel (or assume RGB with alpha set to 255)
-                        for (int p = 0; p < width * height; ++p)
+                        for (int p = 0; p < createInfo.width * createInfo.height; ++p)
                         {
-                            destinationData[p * 4 + 0] = sourceData[p * 3 + 0]; // R
-                            destinationData[p * 4 + 1] = sourceData[p * 3 + 1]; // G
-                            destinationData[p * 4 + 2] = sourceData[p * 3 + 2]; // B
-                            destinationData[p * 4 + 3] = 255;                   // A
+                            buffer.data[p * 4 + 0] = sourceData[p * 3 + 0]; // R
+                            buffer.data[p * 4 + 1] = sourceData[p * 3 + 1]; // G
+                            buffer.data[p * 4 + 2] = sourceData[p * 3 + 2]; // B
+                            buffer.data[p * 4 + 3] = 255;                   // A
                         }
 
-                        textures[textureType]->data = destinationData;
-                        textures[textureType]->rowPitch = width * 4u;
-
+                        buffer.size = createInfo.width * createInfo.height * 4;
                         sourceData = reinterpret_cast<uint8_t *>(embeddedTexture->pcData);
                         LOG_ASSERT(sourceData, "[Material Importer] Failed to load texture");
                     }
@@ -159,79 +167,44 @@ namespace ignite
                     std::filesystem::path textureFilepath = filepath.parent_path() / std::string(texFilename.C_Str());
                     if (!std::filesystem::exists(textureFilepath))
                     {
-                        LOG_ERROR("[Material Importer] texture path is not found! \"{}\"", textureFilepath.generic_string());
+                        LOG_ERROR("[Material Importer] {}: Texture path is not found! \"{}\"", aiTextureTypeToString(type), textureFilepath.generic_string());
                         return;
                     }
 
-                    LOG_INFO("[Material Importer] Load texture from \"{}\"", textureFilepath.generic_string());
-                    sourceData = stbi_load(textureFilepath.generic_string().c_str(), &width, &height, &channels, 4);
+                    LOG_INFO("[Material Importer] {}: Load texture from \"{}\"", aiTextureTypeToString(type), textureFilepath.generic_string());
+                    sourceData = stbi_load(textureFilepath.generic_string().c_str(), &createInfo.width, &createInfo.height, &channels, 4);
                     LOG_ASSERT(sourceData, "[Material Importer] Failed to load texture");
                 }
 
                 if (sourceData)
                 {
-                    textures[textureType]->data = sourceData;
-                    LOG_ASSERT(textures[textureType]->data, "[Material Importer] Failed to load texture");
+                    buffer.data = sourceData;
+                    LOG_ASSERT(buffer.data, "[Material Importer] Failed to load texture");
                 }
 
-                if (textures[textureType]->data)
-                {
-                    textures[textureType]->width = static_cast<uint32_t>(width);
-                    textures[textureType]->height = static_cast<uint32_t>(height);
-                    // textures[textureType]->buffer.Size = static_cast<uint64_t>(width * height) * 4u;
-                    textures[textureType]->rowPitch = width * 4u;
+                Ref<Texture> texture = Texture::Create(createInfo);
+                int rowPitch = createInfo.width * 4;
+                texture->SetData(cmd, buffer, rowPitch, 0);
 
-                    s_TextureCache[texFilename.C_Str()] = textures[textureType];
-                }
+                textures[textureType] = texture;
+                s_TextureCache[texFilename.C_Str()] = texture;
             }
+        }
+        else
+        {
+            textures[textureType] = Renderer::GetWhiteTexture();
         }
     }
 
     void Material::CreateDefaultTextures()
     {
-        textures[MaterialTextureType::BaseColor] = CreateRef<MaterialTextureResource>(); textures[MaterialTextureType::BaseColor]->handle = Renderer::GetWhiteTexture()->GetHandle();
-        textures[MaterialTextureType::Specular] = CreateRef<MaterialTextureResource>(); textures[MaterialTextureType::Specular]->handle = Renderer::GetWhiteTexture()->GetHandle();
-        textures[MaterialTextureType::Emissive] = CreateRef<MaterialTextureResource>(); textures[MaterialTextureType::Emissive]->handle = Renderer::GetWhiteTexture()->GetHandle();
-        textures[MaterialTextureType::Roughness] = CreateRef<MaterialTextureResource>(); textures[MaterialTextureType::Roughness]->handle = Renderer::GetWhiteTexture()->GetHandle();
-        textures[MaterialTextureType::Normals] = CreateRef<MaterialTextureResource>(); textures[MaterialTextureType::Normals]->handle = Renderer::GetWhiteTexture()->GetHandle();
+        textures[MaterialTextureType::BaseColor] = Renderer::GetWhiteTexture();
+        textures[MaterialTextureType::Specular] = Renderer::GetWhiteTexture();
+        textures[MaterialTextureType::Emissive] = Renderer::GetWhiteTexture();
+        textures[MaterialTextureType::Roughness] = Renderer::GetWhiteTexture();
+        textures[MaterialTextureType::Normals] = Renderer::GetWhiteTexture();
 
         UpdateBindingSet();
-    }
-
-    void Material::CreateTextures()
-    {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-
-        // Create loaded textures
-        for (const auto &tex : textures | std::views::values)
-        {
-            // use white texture
-            if (tex->data == nullptr)
-            {
-                tex->handle = Renderer::GetWhiteTexture()->GetHandle();
-                continue;
-            }
-
-            // create texture
-            auto textureDesc = nvrhi::TextureDesc();
-            textureDesc.setDimension(nvrhi::TextureDimension::Texture2D);
-            textureDesc.setWidth(tex->width);
-            textureDesc.setHeight(tex->height);
-            textureDesc.setFormat(nvrhi::Format::RGBA8_UNORM);
-            textureDesc.setInitialState(nvrhi::ResourceStates::ShaderResource);
-            textureDesc.setKeepInitialState(true);
-            textureDesc.setMipLevels(mipLevels);
-            textureDesc.setDebugName("[Material] Embedded Texture");
-
-            tex->handle = device->createTexture(textureDesc);
-            LOG_ASSERT(tex->handle, "[Material] Failed to create texture!");
-        }
-
-        nvrhi::CommandListHandle commandList = device->createCommandList();
-        commandList->open();
-        WriteTexture(commandList);
-        commandList->close();
-        device->executeCommandList(commandList);
     }
 
     void Material::UpdateBindingSet()
@@ -242,11 +215,11 @@ namespace ignite
         
         auto desc = nvrhi::BindingSetDesc();
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_ConstantBuffer->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, textures[MaterialTextureType::BaseColor]->handle));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, textures[MaterialTextureType::Specular]->handle));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, textures[MaterialTextureType::Emissive]->handle));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, textures[MaterialTextureType::Roughness]->handle));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, textures[MaterialTextureType::Normals]->handle));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, textures[MaterialTextureType::BaseColor]->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, textures[MaterialTextureType::Specular]->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, textures[MaterialTextureType::Emissive]->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, textures[MaterialTextureType::Roughness]->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, textures[MaterialTextureType::Normals]->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, env->GetHDRTexture()->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Sampler(0, Renderer::GetWhiteTexture()->GetSampler()));
 
@@ -264,42 +237,17 @@ namespace ignite
         if (!texture)
             return;
 
-        textures[textureType]->handle = texture->GetHandle();
-
+        textures[textureType] = texture;
         UpdateBindingSet();
     }
 
-    void Material::WriteTexture(nvrhi::ICommandList *commandList)
+    void Material::WriteBuffer(nvrhi::ICommandList* cmd)
     {
-        for (auto& texture : textures | std::views::values)
-        {
-            if (!texture->data)
-                continue;
-
-            Material::UploadTextureWithMips(commandList, texture->handle, texture->data, texture->width, texture->height, texture->rowPitch, nvrhi::Format::RGBA8_UNORM, mipLevels);
-        }
-
-        UpdateBindingSet();
+        m_ConstantBuffer->SetData(cmd, Buffer(&params, sizeof(MaterialConstants)));
     }
-
-    void Material::WriteBuffer(nvrhi::ICommandList* commandList)
+    
+    Ref<Material> Material::Create(const aiScene *aiScene, aiMaterial *aiMat, const std::filesystem::path &baseFilepath)
     {
-        m_ConstantBuffer->SetData(commandList, Buffer(&params, sizeof(MaterialConstants)));
-    }
-
-    void Material::UploadTextureWithMips(nvrhi::ICommandList *commandList,
-                                         const nvrhi::TextureHandle &handle, const void *baseData,
-                                         uint32_t baseWidth, uint32_t baseHeight, uint32_t baseRowPitch,
-                                         nvrhi::Format format, uint32_t mipLevels)
-    {
-        // Generate all mip levels on CPU
-        auto mipChain = CPUMipGenerator::GenerateMipChain(baseData, baseWidth, baseHeight, baseRowPitch, format, mipLevels);
-
-        // Upload all mip levels
-        for (uint32_t mip = 0; mip < mipLevels && mip < mipChain.size(); ++mip)
-        {
-            const auto &mipData = mipChain[mip];
-            commandList->writeTexture(handle, 0, mip, mipData.data.data(), mipData.rowPitch);
-        }
+        return CreateRef<Material>(aiScene, aiMat, baseFilepath);
     }
 }

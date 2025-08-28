@@ -79,16 +79,9 @@ namespace ignite
 
         void OnRender(nvrhi::IFramebuffer *framebuffer) override;
         void OnGuiRender() override;
-
-        void SetActiveScene(const Ref<Scene> &scene);
-
-        Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
-        Project *GetActiveProject() const { return m_ActiveProject.get(); }
-        SceneRenderer *GetSceneRenderer() { return &m_SceneRenderer; }
-
-        EditorData &GetState() { return m_Data; }
-
-    private:
+        void OnScenePlay();
+        void OnSceneStop();
+        void OnSceneSimulate();
         void NewScene();
         void SaveScene();
         void SaveSceneAs();
@@ -101,10 +94,18 @@ namespace ignite
         Ref<Project> OpenProject();
         Ref<Project> OpenProject(const std::filesystem::path &filepath);
 
-        void OnScenePlay();
-        void OnSceneStop();
-        void OnSceneSimulate();
+        void SetActiveScene(const Ref<Scene> &scene);
 
+        Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
+        Ref<Project> GetActiveProject() const { return m_ActiveProject; }
+
+        SceneRenderer *GetSceneRenderer() { return &m_SceneRenderer; }
+
+        EditorData &GetState() { return m_Data; }
+
+        static EditorLayer *GetInstance();
+
+    private:
         void SettingsUI();
 
         Ref<ScenePanel> m_ScenePanel;
@@ -126,7 +127,5 @@ namespace ignite
         Ref<CommandList > m_CommandList;
             
         nvrhi::IDevice *m_Device = nullptr;
-
-        friend class ScenePanel;
     };
 }

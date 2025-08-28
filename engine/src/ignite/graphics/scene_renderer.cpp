@@ -46,18 +46,12 @@
 
 namespace ignite
 {
-    static SceneRenderer *s_SceneRenderer = nullptr;
-
-    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_GeometryPSOCache;
-    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_EnvironmentPSOCache;
-    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_CompositePSOCache;
-
     struct CompositeBindingKey
     {
-        nvrhi::IBindingLayout* layout = nullptr;
-        nvrhi::ITexture* sceneTex = nullptr;
-        nvrhi::ITexture* uiTex = nullptr;
-        bool operator==(const CompositeBindingKey& other) const noexcept
+        nvrhi::IBindingLayout *layout = nullptr;
+        nvrhi::ITexture *sceneTex = nullptr;
+        nvrhi::ITexture *uiTex = nullptr;
+        bool operator==(const CompositeBindingKey &other) const noexcept
         {
             return layout == other.layout && sceneTex == other.sceneTex && uiTex == other.uiTex;
         }
@@ -65,15 +59,20 @@ namespace ignite
 
     struct CompositeBindingKeyHash
     {
-        size_t operator()(const CompositeBindingKey& k) const noexcept
+        size_t operator()(const CompositeBindingKey &k) const noexcept
         {
-            size_t h = std::hash<const void*>{}(k.layout);
-            h ^= (std::hash<const void*>{}(k.sceneTex) + 0x9e3779b9 + (h<<6) + (h>>2));
-            h ^= (std::hash<const void*>{}(k.uiTex) + 0x9e3779b9 + (h<<6) + (h>>2));
+            size_t h = std::hash<const void *>{}(k.layout);
+            h ^= (std::hash<const void *>{}(k.sceneTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
+            h ^= (std::hash<const void *>{}(k.uiTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
             return h;
         }
     };
 
+    static SceneRenderer *s_SceneRenderer = nullptr;
+
+    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_GeometryPSOCache;
+    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_EnvironmentPSOCache;
+    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_CompositePSOCache;
     static std::unordered_map<CompositeBindingKey, nvrhi::BindingSetHandle, CompositeBindingKeyHash> s_CompositeBindingSetCache;
 
     // Helper to build a geometry pipeline for a framebuffer (once) and cache it.
@@ -82,7 +81,20 @@ namespace ignite
         auto key = MakeFramebufferKey(framebuffer, fillMode);
         auto it = s_GeometryPSOCache.find(key);
         if (it != s_GeometryPSOCache.end())
+        {
+            for (auto itErase = s_GeometryPSOCache.begin(); itErase != s_GeometryPSOCache.end();)
+            {
+                if (itErase != it)
+                {
+                    itErase = s_GeometryPSOCache.erase(itErase);
+                }
+                else
+                {
+                    ++itErase;
+                }
+            }
             return it->second;
+        }
 
         GraphicsPipelineParams params;
         params.enableBlend = true;
@@ -93,16 +105,16 @@ namespace ignite
         params.cullMode = nvrhi::RasterCullMode::None;
 
         auto attributes = VertexMesh_Anim::GetAttributes();
-        GraphicsPipelineCreateInfo pci;
-        pci.attributes = attributes.data();
-        pci.attributeCount = static_cast<uint32_t>(attributes.size());
+        GraphicsPipelineCreateInfo createInfo;
+        createInfo.attributes = attributes.data();
+        createInfo.attributeCount = static_cast<uint32_t>(attributes.size());
 
-        auto gp = GraphicsPipeline::Create(params, &pci);
+        auto gp = GraphicsPipeline::Create();
         gp->AddShader("mesh_anim.vertex.hlsl", nvrhi::ShaderType::Vertex)
-          .AddShader("mesh_anim.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
+          .AddShader("mesh_anim.pixel.hlsl", nvrhi::ShaderType::Pixel)
           .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
           .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
-          .Build(framebuffer);
+          .Build(framebuffer, params, createInfo);
 
         s_GeometryPSOCache.emplace(key, gp);
         return gp;
@@ -114,7 +126,20 @@ namespace ignite
         auto key = MakeFramebufferKey(framebuffer, fillMode);
         auto it = s_EnvironmentPSOCache.find(key);
         if (it != s_EnvironmentPSOCache.end())
+        {
+            for (auto itErase = s_EnvironmentPSOCache.begin(); itErase != s_EnvironmentPSOCache.end();)
+            {
+                if (itErase != it)
+                {
+                    itErase = s_EnvironmentPSOCache.erase(itErase);
+                }
+                else
+                {
+                    ++itErase;
+                }
+            }
             return it->second;
+        }
 
         GraphicsPipelineParams params;
         params.enableBlend = true;
@@ -126,15 +151,15 @@ namespace ignite
         params.comparison = nvrhi::ComparisonFunc::Always;
 
         auto attribute = Environment::GetAttribute();
-        GraphicsPipelineCreateInfo pci;
-        pci.attributes = &attribute;
-        pci.attributeCount = 1;
+        GraphicsPipelineCreateInfo createInfo;
+        createInfo.attributes = &attribute;
+        createInfo.attributeCount = 1;
 
-        auto gp = GraphicsPipeline::Create(params, &pci);
+        auto gp = GraphicsPipeline::Create();
         gp->AddShader("skybox.vertex.hlsl", nvrhi::ShaderType::Vertex)
-          .AddShader("skybox.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
+          .AddShader("skybox.pixel.hlsl", nvrhi::ShaderType::Pixel)
           .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT))
-          .Build(framebuffer);
+          .Build(framebuffer, params, createInfo);
         
         s_EnvironmentPSOCache.emplace(key, gp);
         return gp;
@@ -146,7 +171,20 @@ namespace ignite
         auto key = MakeFramebufferKey(framebuffer, fillMode);
         auto it = s_CompositePSOCache.find(key);
         if (it != s_CompositePSOCache.end())
+        {
+            for (auto itErase = s_CompositePSOCache.begin(); itErase != s_CompositePSOCache.end();)
+            {
+                if (itErase != it)
+                {
+                    itErase = s_CompositePSOCache.erase(itErase);
+                }
+                else
+                {
+                    ++itErase;
+                }
+            }
             return it->second;
+        }
 
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
@@ -167,28 +205,42 @@ namespace ignite
         params.cullMode = nvrhi::RasterCullMode::None;
 
         auto attributes = VertexScreen::GetAttributes();
-        GraphicsPipelineCreateInfo pci;
-        pci.attributes = attributes.data();
-        pci.attributeCount = static_cast<uint32_t>(attributes.size());
+        GraphicsPipelineCreateInfo createInfo;
+        createInfo.attributes = attributes.data();
+        createInfo.attributeCount = static_cast<uint32_t>(attributes.size());
 
         // Create pipeline
-        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create(params, &pci);
+        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
         gp->AddShader("composite.vertex.hlsl", nvrhi::ShaderType::Vertex)
-            .AddShader("composite.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
+            .AddShader("composite.pixel.hlsl", nvrhi::ShaderType::Pixel)
             .AddBindingLayout(bindingLayout)
-            .Build(framebuffer);
+            .Build(framebuffer, params, createInfo);
 
         s_CompositePSOCache.emplace(key, gp);
 
         return gp;
     }
 
-    static nvrhi::BindingSetHandle CreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, nvrhi::TextureHandle sceneTexture, nvrhi::TextureHandle uiTexture)
+    static nvrhi::BindingSetHandle CreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, nvrhi::ITexture *sceneTexture, nvrhi::ITexture *uiTexture)
     {
-        CompositeBindingKey key{ bindingLayout, sceneTexture.Get(), uiTexture.Get() };
+        CompositeBindingKey key{ bindingLayout, sceneTexture, uiTexture };
         auto it = s_CompositeBindingSetCache.find(key);
         if (it != s_CompositeBindingSetCache.end())
+        {
+            for (auto itErase = s_CompositeBindingSetCache.begin(); itErase != s_CompositeBindingSetCache.end();)
+            {
+                if (itErase != it)
+                {
+                    itErase = s_CompositeBindingSetCache.erase(itErase);
+                }
+                else
+                {
+                    ++itErase;
+                }
+            }
+
             return it->second;
+        }
         
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
@@ -199,7 +251,11 @@ namespace ignite
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, Renderer::GetWhiteTexture()->GetSampler()));
 
         nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
-        s_CompositeBindingSetCache.emplace(key, bindingSet);
+        LOG_ASSERT(bindingSet, "[Composite] Failed to create Composite Binding Set");
+        if (bindingSet)
+        {
+            s_CompositeBindingSetCache.emplace(key, bindingSet);
+        }
 
         return bindingSet;
     }
@@ -266,9 +322,13 @@ namespace ignite
         // setup camera constants
         CameraConstants cameraBuffer = { camera->GetViewProjectionMatrix(), glm::vec4(camera->position, 1.0f) };
 
-        // Scene Render Target
+        // Clear Render Targets
+        uiRT->ClearColorAttachmentFloat(cmd, 0);
+        uiRT->ClearDepthAttachment(cmd, 1.0f, 0);
+
         sceneRT->ClearColorAttachmentFloat(cmd, 0);
         sceneRT->ClearDepthAttachment(cmd, 1.0f, 0); // far depth = 1.0f == LessOrEqual
+        compositeRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f));
 
         nvrhi::IFramebuffer *framebuffer = sceneRT->GetFramebuffer();
 
@@ -379,7 +439,7 @@ namespace ignite
                 continue;
 
             Sprite2D &sprite = m_Scene->registry->get<Sprite2D>(e);
-            Ref<Texture> texture = Project::GetAsset<Texture>(sprite.handle);
+            Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(sprite.handle);
             m_Renderer2D->DrawQuad(tr.GetWorldMatrix(), sprite.color, texture, sprite.tilingFactor);
         }
 
@@ -392,20 +452,14 @@ namespace ignite
         m_Renderer2D->End();
 
         // UI Pass
-        {
-            uiRT->ClearColorAttachmentFloat(cmd, 0);
-            nvrhi::IFramebuffer *framebuffer = uiRT->GetFramebuffer();
-            m_UIRenderer->Render(cmd, framebuffer);
-        }
+        m_UIRenderer->Render(cmd, uiRT->GetFramebuffer());
 
         // Composite Pass
         {
-            compositeRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
             nvrhi::IFramebuffer *framebuffer = compositeRT->GetFramebuffer();
 
-            Ref<GraphicsPipeline> compositePipeline = GetCompositePipelineForFB(framebuffer, m_FillMode);
-            nvrhi::BindingSetHandle bindingSet = CreateCompositeBindingSet(compositePipeline->GetBindingLayout(0),
-                sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
+            Ref<GraphicsPipeline> compositePipeline = GetCompositePipelineForFB(framebuffer, nvrhi::RasterFillMode::Solid);
+            nvrhi::BindingSetHandle bindingSet = CreateCompositeBindingSet(compositePipeline->GetBindingLayout(0), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
 
             auto graphicsState = nvrhi::GraphicsState();
             graphicsState.pipeline = compositePipeline->GetHandle();
@@ -459,7 +513,7 @@ namespace ignite
 
                 auto commandList = m_Device->createCommandList();
                 commandList->open();
-                image->Write(commandList);
+                image->WriteData(commandList);
                 commandList->close();
                 m_Device->executeCommandList(commandList);
 
@@ -506,9 +560,9 @@ namespace ignite
         s_GeometryPSOCache.clear();
         s_EnvironmentPSOCache.clear();
         s_CompositePSOCache.clear();
-    s_CompositeBindingSetCache.clear();
+        s_CompositeBindingSetCache.clear();
 
-        m_Renderer2D->ClearPipelineCache();
+        m_Renderer2D->SetFillMode(mode);
     }
 
     void SceneRenderer::SetSelectedEntity(const Entity &entity)

@@ -101,14 +101,14 @@ namespace ignite {
         return YAML::Load(buffer.str());
     }
 
-    SceneSerializer::SceneSerializer(const Ref<Scene> &scene)
-        : m_Scene(scene)
+    SceneSerializer::SceneSerializer(const Ref<Scene> &scene, Project *project)
+        : m_Scene(scene), m_Project(project)
     {
     }
 
     bool SceneSerializer::Serialize(const std::filesystem::path &filepath)
     {
-        if (!m_Scene)
+        if (!m_Scene || !m_Project)
             return false;
 
         Serializer sr(filepath);
@@ -366,7 +366,7 @@ namespace ignite {
                         sr.AddKeyValue("ClassName", comp.className);
 
                         // Fields
-                        const Ref<ScriptClass> scriptClass = ScriptEngine::GetEntityClassesByName(comp.className);
+                        const Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(comp.className);
 
                         if (scriptClass)
                         {
@@ -374,7 +374,7 @@ namespace ignite {
 
                             if (!classFields.empty())
                             {
-                                auto &fields = ScriptEngine::GetScriptFieldMap(entity);
+                                auto &fields = ScriptEngine::GetInstance()->GetScriptFieldMap(entity);
 
                                 sr.BeginSequence("Fields");
                                 for (const auto &[fieldName, field] : classFields)
@@ -484,10 +484,11 @@ namespace ignite {
         return true;
     }
 
-    Ref<Scene> SceneSerializer::Deserialize(const std::filesystem::path &filepath)
+    Ref<Scene> SceneSerializer::Deserialize(const std::filesystem::path &filepath, Project *project)
     {
         LOG_ASSERT(std::filesystem::exists(filepath), "[Scene SR] File does not exists!\n{}", filepath.generic_string());
-
+        LOG_ASSERT(project,"[Scene SR] Invalid project");
+        
         YAML::Node sceneFileNode = Serializer::Deserialize(filepath);
         YAML::Node sceneNode = sceneFileNode["Scene"];
 
@@ -496,7 +497,7 @@ namespace ignite {
             return nullptr;
 
         std::string title = sceneNode["Title"].as<std::string>();
-        Ref<Scene> desScene = Scene::Create(title);
+        Ref<Scene> desScene = Scene::Create(project, title);
 
         for (YAML::Node entityNode : sceneNode["Entities"])
         {
@@ -671,7 +672,7 @@ namespace ignite {
             {
                 SkeletalMesh &skinnedMesh = desEntity.AddComponent<SkeletalMesh>();
                 skinnedMesh.meshHandle = AssetHandle(node["MeshHandle"].as<uint64_t>());
-                if (auto meshAsset = Project::GetAsset<MeshAsset>(skinnedMesh.meshHandle))
+                if (auto meshAsset = project->GetAsset<MeshAsset>(skinnedMesh.meshHandle))
                 {
                     skinnedMesh.meshes = meshAsset->Create();
                 }
@@ -683,7 +684,7 @@ namespace ignite {
                 WorldEnvironment &world = desEntity.AddComponent<WorldEnvironment>();
                 world.environment = Environment::Create();
                 world.imageHandle = AssetHandle(node["ImageHandle"].as<uint64_t>());
-                const AssetMetaData &metadata = Project::GetActive()->GetAssetManager().GetMetaData(world.imageHandle);
+                const AssetMetaData &metadata = project->GetAssetManager().GetMetaData(world.imageHandle);
                 if (metadata.type == AssetType::Texture)
                 {
                     world.environment->LoadTexture(metadata.filepath.generic_string());
@@ -698,10 +699,10 @@ namespace ignite {
 
                 if (YAML::Node classFieldsNode = node["Fields"])
                 {
-                    if (Ref<ScriptClass> scriptClass = ScriptEngine::GetEntityClassesByName(sc.className))
+                    if (Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(sc.className))
                     {
                         const auto &classFields = scriptClass->GetFields();
-                        ScriptFieldMap &fieldMap = ScriptEngine::GetScriptFieldMap(desEntity);
+                        ScriptFieldMap &fieldMap = ScriptEngine::GetInstance()->GetScriptFieldMap(desEntity);
 
                         for (YAML::Node fieldNode : classFieldsNode)
                         {
@@ -756,7 +757,7 @@ namespace ignite {
     }
 
 
-    ProjectSerializer::ProjectSerializer(const Ref<Project> &project)
+    ProjectSerializer::ProjectSerializer(Project *project)
         : m_Project(project)
     {
     }

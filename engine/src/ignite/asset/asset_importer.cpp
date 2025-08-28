@@ -61,7 +61,7 @@ namespace ignite {
     {
         // should be always importing with full filepath
         AssetMetaData metadataCopy = metadata;
-        metadataCopy.filepath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
+        metadataCopy.filepath = AssetManager::GetProject()->GetAssetFilepath(metadata.filepath);
 
         if (s_ImportFunctions.contains(metadataCopy.type))
             return s_ImportFunctions.at(metadataCopy.type)(handle, metadataCopy);
@@ -71,24 +71,26 @@ namespace ignite {
 
     void AssetImporter::ImportAsync(AssetHandle handle, const AssetMetaData &metadata, std::function<void(Ref<Asset>, AssetHandle)> callback)
     {
-        Project::GetActive()->GetAssetManager().SubmitJob([handle, metadata, callback]()
+        AssetManager::GetProject()->GetAssetManager().SubmitJob([handle, metadata, callback]()
         {
             // should be always importing with full filepath
             AssetMetaData metadataCopy = metadata;
-            metadataCopy.filepath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
+            metadataCopy.filepath = AssetManager::GetProject()->GetAssetFilepath(metadata.filepath);
 
             Ref<Asset> asset;
             if (s_ImportFunctions.contains(metadataCopy.type))
                 asset = s_ImportFunctions.at(metadataCopy.type)(handle, metadataCopy);
             
             if (asset)
+            {
                 callback(asset, handle);
+            }
         });
     }
 
     Ref<Scene> AssetImporter::ImportScene(AssetHandle handle, const AssetMetaData& metadata)
     {
-        Ref<Scene> scene = SceneSerializer::Deserialize(metadata.filepath);
+        Ref<Scene> scene = SceneSerializer::Deserialize(metadata.filepath, AssetManager::GetProject());
         if (scene)
         {
             scene->handle = handle;
@@ -111,7 +113,7 @@ namespace ignite {
             // writing texture data (capture the texture)
             Renderer::Submit([texture] (auto commandList)
             {
-                texture->Write(commandList);
+                texture->WriteData(commandList);
             });
         }
 
@@ -187,7 +189,9 @@ namespace ignite {
             std::string materialName = aiMat->GetName().data;
 
             if (materialName.empty())
+            {
                 continue;
+            }
 
             Ref<Material> mat;
             std::filesystem::path materialBinaryFilepath = containerDirectory / (materialName + ".ixmat");
@@ -197,19 +201,18 @@ namespace ignite {
             }
             else
             {
-                mat = CreateRef<Material>(assimpScene, aiMat, metadata.filepath);
+                mat = Material::Create(assimpScene, aiMat, metadata.filepath);
                 BinarySerializer::SerializeMaterial(mat, materialBinaryFilepath);
             }
 
             if (mat)
             {
-                mat->CreateTextures();
                 meshAsset->materials.push_back(mat);
                 
                 // Register with material manager
-                if (Project::GetActive())
+                if (AssetManager::GetProject())
                 {
-                    auto &materialManager = Project::GetActive()->GetMaterialManager();
+                    auto &materialManager = AssetManager::GetProject()->GetMaterialManager();
                     materialManager.AddMaterial(mat->name, mat);
                 }
             }
@@ -478,8 +481,6 @@ namespace ignite {
         if (mat)
         {
             mat->handle = handle;
-            mat->CreateTextures();
-            mat->UpdateBindingSet();
         }
 
         return mat;
@@ -489,7 +490,7 @@ namespace ignite {
     {
         (*outEnvironment) = Environment::Create();
 
-        Project::GetActive()->GetAssetManager().SubmitJob([outEnvironment, filepath]()
+        AssetManager::GetProject()->GetAssetManager().SubmitJob([outEnvironment, filepath]()
         {
             (*outEnvironment)->LoadTexture(filepath);
 

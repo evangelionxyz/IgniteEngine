@@ -146,7 +146,7 @@ namespace ignite {
     void Environment::WriteBuffer(nvrhi::ICommandList *commandList)
     {
         // write buffers
-        m_HDRTexture->Write(commandList);
+        m_HDRTexture->WriteData(commandList);
         m_VertexBuffer->SetData(commandList, Buffer(vertices.data(), sizeof(vertices)));
 
         // index buffer

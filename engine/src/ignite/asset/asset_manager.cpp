@@ -31,10 +31,13 @@
 namespace ignite {
 
     static AssetMetaData s_NullMetaData;
+    static Project *s_Project = nullptr;
 
-    AssetManager::AssetManager()
+    AssetManager::AssetManager(Project *project)
         : m_Running(true)
     {
+        s_Project = project;
+
         const uint32_t THREAD_COUNT = std::max(std::thread::hardware_concurrency() / 2u, 1u);
         LOG_WARN("[Asset Manager] Creating {} worker threads!", THREAD_COUNT);
 
@@ -213,6 +216,11 @@ namespace ignite {
         return static_cast<uint64_t>(handle) != 0 && m_AssetRegistry.contains(handle);
     }
 
+    Project *AssetManager::GetProject()
+    {
+        return s_Project;
+    }
+
     void AssetManager::WorkerLoop()
     {
         while (true)
@@ -269,7 +277,7 @@ namespace ignite {
                 Ref<Material> materialAsset = asset->As<Material>();
                 if (materialAsset)
                 {
-                    auto &materialManager = Project::GetActive()->GetMaterialManager();
+                    auto &materialManager = s_Project->GetMaterialManager();
                     materialManager.AddMaterial(materialAsset->name, materialAsset);
                 }
             }

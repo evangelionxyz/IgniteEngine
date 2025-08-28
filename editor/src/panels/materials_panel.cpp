@@ -28,6 +28,8 @@
 #include "ignite/asset/material_manager.hpp"
 #include "ignite/core/platform_utils.hpp"
 
+#include "editor_layer.hpp"
+
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <algorithm>
@@ -49,14 +51,14 @@ namespace ignite
 
         if (ImGui::Begin("Materials", &m_IsOpen))
         {
-            if (!Project::GetActive())
+            if (!Project::GetInstance())
             {
                 ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No project loaded");
                 ImGui::End();
                 return;
             }
 
-            auto& materialManager = Project::GetActive()->GetMaterialManager();
+            auto& materialManager = Project::GetInstance()->GetMaterialManager();
 
             // Toolbar
             if (ImGui::Button("New Material"))
@@ -206,9 +208,9 @@ namespace ignite
 
         if (ImGui::MenuItem("Make Unique"))
         {
-            if (Project::GetActive())
+            if (Project::GetInstance())
             {
-                auto& materialManager = Project::GetActive()->GetMaterialManager();
+                auto& materialManager = Project::GetInstance()->GetMaterialManager();
                 std::string uniqueName = materialName + "_Copy";
                 materialManager.CloneMaterial(materialName, uniqueName);
             }
@@ -237,9 +239,9 @@ namespace ignite
 
     void MaterialsPanel::CreateNewMaterial()
     {
-        if (Project::GetActive())
+        if (Project::GetInstance())
         {
-            auto& materialManager = Project::GetActive()->GetMaterialManager();
+            auto& materialManager = Project::GetInstance()->GetMaterialManager();
 
             std::filesystem::path folder = FileDialogs::SelectFolder();
             if (!folder.empty())
@@ -257,7 +259,7 @@ namespace ignite
                 {
                     std::filesystem::path materialSavePath = folder / (materialName + ".ixmat");
                     BinarySerializer::SerializeMaterial(newMaterial, materialSavePath);
-                    Project::GetActive()->GetAssetManager().ImportAsset(materialSavePath);
+                    Project::GetInstance()->GetAssetManager().ImportAsset(materialSavePath);
                 }
 
                 // Reset the name buffer
@@ -268,9 +270,9 @@ namespace ignite
 
     void MaterialsPanel::DuplicateMaterial(const std::string& materialName)
     {
-        if (Project::GetActive())
+        if (Project::GetInstance())
         {
-            auto& materialManager = Project::GetActive()->GetMaterialManager();
+            auto& materialManager = Project::GetInstance()->GetMaterialManager();
             std::string duplicateName = materialName + "_Copy";
             materialManager.CloneMaterial(materialName, duplicateName);
         }
@@ -278,9 +280,9 @@ namespace ignite
 
     void MaterialsPanel::DeleteMaterial(const std::string& materialName)
     {
-        if (Project::GetActive())
+        if (Project::GetInstance())
         {
-            auto& materialManager = Project::GetActive()->GetMaterialManager();
+            auto& materialManager = Project::GetInstance()->GetMaterialManager();
             materialManager.RemoveMaterial(materialName);
             
             // Clear selection if this was the selected material

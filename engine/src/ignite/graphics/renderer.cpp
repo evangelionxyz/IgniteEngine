@@ -63,6 +63,7 @@ namespace ignite
         }
 
         // compile at once
+        // m_DXILShaderContext->CompileShader(contexts);
         m_ShaderContext->CompileShader(contexts);
 
         // load to NVRHI Shader handle
@@ -71,15 +72,16 @@ namespace ignite
             for (auto &[type, shader] : shader)
             {
                 shader.handle = s_instance->m_Device->createShader(type,
-                    shader.context->blob.data.data(),
-                    shader.context->blob.dataSize());
+                    shader.context->blob.data.data(), shader.context->blob.dataSize());
             }
         }
     }
 
-    void ShaderLibrary::CompileShaders(const std::vector<Ref<ShaderMake::ShaderContext>> &contexts)
+    ShaderMake::CompileStatus ShaderLibrary::CompileShaders(const std::vector<Ref<ShaderMake::ShaderContext>> &contexts)
     {
-        m_ShaderContext->CompileShader(contexts);
+        // m_DXILShaderContext->CompileShader(contexts);
+        ShaderMake::CompileStatus status = m_ShaderContext->CompileShader(contexts);
+        return status;
     }
 
     void ShaderLibrary::Load(const std::string &name, const std::string &filepath)
@@ -101,13 +103,11 @@ namespace ignite
     std::unordered_map<nvrhi::ShaderType, ShaderHandleContext> ShaderLibrary::Get(const std::string &name)
     {
         if (Exists(name))
+        {
             return m_Shaders[name];
-        return {};
-    }
+        }
 
-    ShaderMake::Context *ShaderLibrary::GetContext() const
-    {
-        return m_ShaderContext.get();
+        return {};
     }
 
     Renderer::Renderer(DeviceManager *deviceManager, nvrhi::GraphicsAPI api)
@@ -121,23 +121,25 @@ namespace ignite
         auto cmd = m_CommandList->GetActiveHandle();
 
         {
-            TextureCreateInfo textureCI;
-            textureCI.format = nvrhi::Format::RGBA8_UNORM;
-            textureCI.dimension = nvrhi::TextureDimension::Texture2D;
-            textureCI.samplerMode = nvrhi::SamplerAddressMode::ClampToBorder;
-            textureCI.width = 1;
-            textureCI.height = 1;
-            textureCI.flip = false;
+            TextureCreateInfo textureCreateInfo;
+            textureCreateInfo.format = nvrhi::Format::RGBA8_UNORM;
+            textureCreateInfo.dimension = nvrhi::TextureDimension::Texture2D;
+            textureCreateInfo.samplerMode = nvrhi::SamplerAddressMode::ClampToBorder;
+            textureCreateInfo.width = 1;
+            textureCreateInfo.height = 1;
+            textureCreateInfo.flip = false;
+            const int rowPitch = textureCreateInfo.width * 4;
 
             m_CommandList->Begin();
 
             u32 white = 0xFFFFFFFF;
-            m_WhiteTexture = Texture::Create(Buffer(&white, sizeof(u32)), textureCI);
-            m_WhiteTexture->Write(cmd);
+            m_WhiteTexture = Texture::Create(textureCreateInfo);
+            m_WhiteTexture->SetData(cmd, Buffer(&white, sizeof(u32)), rowPitch, 0);
 
             u32 black = 0x00000000;
-            m_BlackTexture = Texture::Create(Buffer(&black, sizeof(u32)), textureCI);
-            m_BlackTexture->Write(cmd);
+            m_BlackTexture = Texture::Create(textureCreateInfo);
+            m_BlackTexture->SetData(cmd, Buffer(&black, sizeof(u32)), rowPitch, 0);
+            
             m_CommandList->Submit();
         }
 
