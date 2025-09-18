@@ -142,7 +142,7 @@ namespace ignite
         LOG_ASSERT(m_Handle, "Failed to create texture");
 
         nvrhi::SamplerDesc samplerDesc = nvrhi::SamplerDesc();
-        samplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Repeat);
+        samplerDesc.setAllAddressModes(createInfo.samplerMode);
         samplerDesc.setAllFilters(true);
 
         m_Sampler = device->createSampler(samplerDesc);

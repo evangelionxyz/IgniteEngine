@@ -82,7 +82,8 @@ if(WIN32)
     IGNITE_WITH_DX12
     IGNITE_WITH_VULKAN
     _CRT_SECURE_NO_WARNINGS
-    WIN32 _WINDOWS
+    _WINDOWS
+    WIN32
   )
 
   # Copy FMOD DLL, Resources folder, lib folder

@@ -83,8 +83,6 @@ namespace ignite {
 
     void Environment::Begin(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline)
     {
-        CameraConstants cameraConstants = { camera->GetViewProjectionMatrix(), glm::vec4(camera->position, 1.0f) };
-
         // write params buffer
         m_ParamsConstantBuffer->SetData(commandList, Buffer(&params, sizeof(EnvironmentParams)));
         m_DirLightConstantBuffer->SetData(commandList, Buffer(&dirLight, sizeof(DirLight)));
@@ -103,9 +101,6 @@ namespace ignite {
         }
 
         commandList->setGraphicsState(state);
-
-        // push camera constants
-        commandList->setPushConstants(&cameraConstants, sizeof(CameraConstants));
 
         nvrhi::DrawArguments args;
         args.setVertexCount(36);
@@ -134,7 +129,7 @@ namespace ignite {
 
         // create binding set after load the texture
         nvrhi::BindingSetDesc bsDesc;
-        bsDesc.addItem(nvrhi::BindingSetItem::PushConstants(0, sizeof(CameraConstants)));
+        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m_ParamsConstantBuffer->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_HDRTexture->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_HDRTexture->GetSampler()));
@@ -150,23 +145,22 @@ namespace ignite {
         m_VertexBuffer->SetData(commandList, Buffer(vertices.data(), sizeof(vertices)));
 
         // index buffer
-        u32 *indices = new u32[36];
-        u32 Offset = 0;
+		std::vector<uint32_t> indices(36);
+        u32 offset = 0;
         for (u32 i = 0; i < 36; i += 6)
         {
-            indices[i + 0] = Offset + 0;
-            indices[i + 1] = Offset + 1;
-            indices[i + 2] = Offset + 2;
+            indices[i + 0] = offset + 0;
+			indices[i + 1] = offset + 1;
+			indices[i + 2] = offset + 2;
 
-            indices[i + 3] = Offset + 2;
-            indices[i + 4] = Offset + 3;
-            indices[i + 5] = Offset + 0;
+			indices[i + 3] = offset + 2;
+			indices[i + 4] = offset + 3;
+			indices[i + 5] = offset + 0;
 
-            Offset += 4;
+			offset += 4;
         }
 
-        m_IndexBuffer->SetData(commandList, Buffer(indices, sizeof(uint32_t) * 36));
-        delete[] indices;
+        m_IndexBuffer->SetData(commandList, Buffer(indices.data(), sizeof(uint32_t) * indices.size()));
     }
 
     void Environment::SetSunDirection(float pitch, float yaw)
@@ -200,7 +194,7 @@ namespace ignite {
     {
         return nvrhi::BindingLayoutDesc()
             .setVisibility(nvrhi::ShaderType::All)
-            .addItem(nvrhi::BindingLayoutItem::PushConstants(0, sizeof(CameraConstants)))
+            .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0))
             .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1))
             .addItem(nvrhi::BindingLayoutItem::Texture_SRV(0))
             .addItem(nvrhi::BindingLayoutItem::Sampler(0));

@@ -97,7 +97,6 @@ namespace ignite
             }
         }
 
-        OpenProject();
 
         if (m_ActiveProject)
         {
@@ -105,7 +104,8 @@ namespace ignite
         }
         else
         {
-            Application::Shutdown();
+			if (!OpenProject())
+				Application::Shutdown();
         }
     }
 
@@ -173,7 +173,7 @@ namespace ignite
                 Entity entity = m_ScenePanel->GetSelectedEntity();
                 if (entity.IsValid())
                 {
-                    m_ScenePanel->GetViewportCamera().SetOrbitingTarget(entity.GetComponent<Transform>().translation);
+                    m_ScenePanel->GetViewportCamera().target = entity.GetComponent<Transform>().translation;
                 }
                 break;
             }

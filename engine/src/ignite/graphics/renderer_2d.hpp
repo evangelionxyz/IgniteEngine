@@ -74,8 +74,7 @@ namespace ignite
         Renderer2D();
         ~Renderer2D();
 
-        void Begin(nvrhi::ICommandList *cmd, const CameraConstants &cameraConstants);
-        void Begin(nvrhi::ICommandList *cmd, ICamera *camera);
+        void Begin(nvrhi::ICommandList *cmd);
         void Flush(nvrhi::IFramebuffer *framebuffer);
         void End();
 
@@ -105,7 +104,6 @@ namespace ignite
         nvrhi::ICommandList *m_Cmd;
         BatchRender<Vertex2DQuad> m_QuadBatch;
         BatchRender<Vertex2DLine> m_LineBatch;
-        CameraConstants m_CameraBuffer;
         nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
     };
 }

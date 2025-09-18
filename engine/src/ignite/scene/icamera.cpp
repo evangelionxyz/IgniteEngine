@@ -29,97 +29,42 @@ namespace ignite
 {
     ICamera::ICamera()
         : position({0.0f, 0.0f, 0.0f})
-        , m_AspectRatio(16.0f / 9.0f)
-        , zoom(5.0f)
-        , yaw(0.0f)
-        , pitch(0.0f)
-        , projectionMatrix(glm::mat4(1.0f))
-        , viewMatrix(glm::mat4(1.0f))
-        , nearClip(0.1f)
-        , farClip(300.0f)
-        , width(1280.0f)
-        , height(720.0f)
-        , fov(45.0f)
-        , projectionType(Type::Orthographic)
     {
     }
 
-    void ICamera::CreateOrthographic(f32 width, f32 height, f32 zoom, f32 nearClip, f32 farClip)
+    void ICamera::UpdateMatrices(float aspectRatio)
     {
-        projectionType = Type::Orthographic;
-
-        this->nearClip = nearClip;
-        this->farClip = farClip;
-        this->zoom = zoom;
-
-        SetSize(width, height);
-        UpdateProjectionMatrix();
-        UpdateViewMatrix();
-    }
-
-    void ICamera::CreatePerspective(f32 fov, f32 width, f32 height, f32 nearClip, f32 farClip)
-    {
-        projectionType = Type::Perspective;
-        this->fov = fov;
-        this->nearClip = nearClip;
-        this->farClip = farClip;
-
-        SetSize(width, height);
-        UpdateProjectionMatrix();
-        UpdateViewMatrix();
-    }
-    void ICamera::SetSize(const f32 w, const f32 h)
-    {
-        width = w;
-        height = h;
-        m_AspectRatio = width / height;
-    }
-
-    void ICamera::UpdateProjectionMatrix()
-    {
+		view = glm::lookAt(position, target, up);
         switch (projectionType)
         {
-            case Type::Orthographic:
+            case ProjectionType::Orthographic:
             {
-                f32 orthoWidth = zoom * m_AspectRatio / 2.0f;
-                f32 orthoHeight = zoom / 2.0f;
-                projectionMatrix = glm::orthoZO(-orthoWidth, orthoWidth, -orthoHeight, orthoHeight, nearClip, farClip);
+				const float halfH = orthoSize * 0.5f;
+				const float halfW = halfH * aspectRatio;
+				projection = glm::ortho(-halfW, halfW, -halfH, halfH, nearPlane, farPlane);
                 break;
             }
-            case Type::Perspective:
+            case ProjectionType::Perspective:
             default:
             {
-                projectionMatrix = glm::perspectiveZO(glm::radians(fov), m_AspectRatio, nearClip, farClip);
+				projection = glm::perspective(glm::radians(fov), aspectRatio, nearPlane, farPlane);
                 break;
             }
         }
     }
 
-    void ICamera::UpdateViewMatrix()
-    {
-        // Both orthographic and perspective cameras should use the same view matrix calculation
-        // The view matrix depends on position and rotation, not on projection type
-        viewMatrix = glm::translate(glm::mat4(1.0f), position) * glm::toMat4(glm::quat({ -pitch, -yaw, 0.0f }));
-        viewMatrix = glm::inverse(viewMatrix);
-    }
-
-    glm::vec2 ICamera::GetSize()
-    {
-        return { width, height };
-    }
-
     glm::vec3 ICamera::GetUpDirection() const
     {
-        return glm::rotate(glm::quat({ -pitch, -yaw, 0.0f }), { 0.0f, 1.0f, 0.0f });
+		return glm::normalize(glm::cross(GetRightDirection(), GetForwardDirection()));
     }
 
     glm::vec3 ICamera::GetRightDirection() const
     {
-        return glm::rotate(glm::quat({ -pitch, -yaw, 0.0f }), { 1.0f, 0.0f, 0.0f });
+		return glm::normalize(glm::cross(GetForwardDirection(), up));
     }
 
     glm::vec3 ICamera::GetForwardDirection() const
     {
-        return glm::rotate(glm::quat({ -pitch, -yaw, 0.0f }), { 0.0f, 0.0f, -1.0f });
+		return glm::normalize(target - position);
     }
 }

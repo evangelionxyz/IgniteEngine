@@ -37,6 +37,7 @@ namespace ignite
     class DeviceManager;
     class Texture;
     class Shader;
+	class ConstantBuffer;
 
     // vertex/pixel shader
     struct ShaderHandleContext
@@ -88,6 +89,8 @@ namespace ignite
 
         static ShaderLibrary &GetShaderLibrary();
 
+		static Ref<ConstantBuffer> GetCameraConstantBuffer();
+
     private:
         nvrhi::GraphicsAPI m_GraphicsAPI;
         ShaderLibrary m_ShaderLibrary;
@@ -97,6 +100,8 @@ namespace ignite
 
         Ref<Texture> m_WhiteTexture;
         Ref<Texture> m_BlackTexture;
+
+		Ref<ConstantBuffer> m_EditorCameraConstantBuffer;
 
         nvrhi::IDevice *m_Device;
         std::vector<std::function<void(nvrhi::ICommandList *)>> m_SubmitFuncs;

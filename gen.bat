@@ -14,7 +14,8 @@ if errorlevel 1 (
 )
 
 rem Configure (and build) with default VS 2022 generator
-python scripts\setup.py --with-build -c Debug
+rem python scripts\setup.py --with-build -c Debug
+python scripts\setup.py -c Debug
 set ERR=%ERRORLEVEL%
 popd
 

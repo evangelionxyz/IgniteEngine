@@ -35,50 +35,119 @@
 
 namespace ignite
 {
-    struct CameraConstants
-    {
-        glm::mat4 viewProjection;
-        glm::vec4 position;
-    };
+	enum class ProjectionType
+	{
+		Orthographic = 0, Perspective = 1
+	};
+
+	struct CameraBuffer
+	{
+		glm::mat4 viewProjection;
+		glm::mat4 view;
+		glm::vec4 position;
+	};
+
+	struct CameraMouseState
+	{
+		glm::vec2 position;
+		glm::vec2 lastPosition;
+		glm::ivec2 scroll{ 0, 0 };
+		bool leftButtonDown = false;
+		bool middleButtonDown = false;
+		bool rightButtonDown = false;
+	};
+
+	struct PostProcessing
+	{
+		// Toggles
+		bool enableVignette = true;
+		bool enableChromAb = true;
+		bool enableBloom = true;
+		bool enableSSAO = true; // Screen space ambient occlusion
+		bool debugSSAO = false; // Visualize raw AO buffer
+
+		// Vignette params
+		float vignetteRadius = 1.1f;
+		float vignetteSoftness = 0.7f;
+		float vignetteIntensity = 0.8f;
+		glm::vec3 vignetteColor = glm::vec3(0.0f);
+
+		// Chromatic aberration params
+		float chromAbAmount = 0.001f;
+		float chromAbRadial = 0.1f;
+
+		// SSAO params
+		float aoRadius = 0.5f;
+		float aoBias = 0.025f;
+		float aoIntensity = 1.0f; // blend strength when applied in post
+		float aoPower = 1.0f;     // curve/power for contrast
+	};
+
+	struct CameraLens
+	{
+		float focalLength = 120.0f;
+		float focalDistance = 5.5f;
+		float fStop = 1.4f;
+		float focusRange = 5.0f;
+		float blurAmount = 1.0f;
+		float exposure = 1.1f;
+		float gamma = 1.1f;
+		bool enabledDOF = true;
+	};
 
     class ICamera
     {
     public:
-        enum class Type
-        {
-            Orthographic, Perspective
-        };
 
         ICamera();
         ~ICamera() { }
 
-        void CreateOrthographic(f32 width, f32 height, f32 zoom, f32 nearClip, f32 farClip);
-        void CreatePerspective(f32 fov, f32 width, f32 height, f32 nearClip, f32 farClip);
-
-        void UpdateProjectionMatrix();
-        void UpdateViewMatrix();
-
-        void SetSize(f32 w, f32 h);
-        glm::vec2 GetSize();
-        glm::mat4 GetViewProjectionMatrix() const { return projectionMatrix * viewMatrix; }
-
+        void UpdateMatrices(float aspectRatio);
+       
+        glm::mat4 GetViewProjectionMatrix() const { return projection * view; }
         glm::vec3 GetUpDirection() const;
         glm::vec3 GetRightDirection() const;
         glm::vec3 GetForwardDirection() const;
-        f32 GetAspectRatio() const { return m_AspectRatio; }
-
-        f32 zoom, width, height;
-        f32 yaw, pitch, fov;
-        f32 nearClip, farClip;
 
         glm::vec3 position;
-        glm::mat4 viewMatrix;
-        glm::mat4 projectionMatrix;
-        Type projectionType;
+		glm::vec3 target;
+		glm::vec3 up = { 0.0f, 1.0f, 0.0f };
 
-    protected:
-        f32 m_MinOrthoZoom = 1.5f;
-        f32 m_MaxOrthoZoom = 100.0f;
-        f32 m_AspectRatio = 1.0f;
+		glm::mat4 view;
+		glm::mat4 projection;
+
+		float pitch = 0.0f; // rotation around X axis
+		float yaw = 0.0f; // rotation around Y axis
+		float distance = 1.0f;
+
+		float fov = 90.0f; // for perspective
+		float nearPlane = 0.01f;
+		float farPlane = 1000.0f;
+
+		float orthoSize = 10.0f;
+
+		glm::vec2 angularVelocity = glm::vec2(0.0f);
+		glm::vec2 panVelocity = glm::vec2(0.0f);
+		float zoomVelocity = 0.0f;
+
+		// Control settings
+		struct Controls
+		{
+			float mouseSensitivity = 0.003f;
+			float zoomSensitivity = 2.0f;
+			float panSensitivity = 0.001f;
+			float minDistance = 0.5f;
+			float maxDistance = 50.0f;
+			float minPitch = -glm::radians(89.0f);
+			float maxPitch = glm::radians(89.0f);
+			bool enableInertia = true;
+			float inertiaDamping = 0.9f;
+			float zoomDamping = 0.65f;
+		} controls;
+
+		CameraMouseState mouse;
+		CameraLens lens;
+		PostProcessing postProcessing;
+        ProjectionType projectionType;
     };
 }

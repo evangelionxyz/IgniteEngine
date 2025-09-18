@@ -40,7 +40,8 @@ def is_multi_config(generator: str) -> bool:
 
 def main(argv: list[str]) -> int:
     repo_root = Path(__file__).resolve().parents[1]
-    default_build = repo_root / "build"
+    # default_build = repo_root / "build"
+    default_build = repo_root
 
     parser = argparse.ArgumentParser(description="Configure CMake build for Ignite")
     parser.add_argument("--build-dir", default=str(default_build), help="Build directory (default: ./build)")

@@ -58,7 +58,9 @@ namespace ignite
         deviceCreateInfo.backBufferHeight = m_CreateInfo.height;
         deviceCreateInfo.startMaximized = m_CreateInfo.maximized;
         deviceCreateInfo.swapChainBufferCount = 3;
+        deviceCreateInfo.enableNvrhiValidationLayer = true;
         deviceCreateInfo.enablePerMonitorDPI = true;
+        deviceCreateInfo.enableGPUValidation = true;
         deviceCreateInfo.supportExplicitDisplayScaling = true;
 
         m_Window = CreateScope<Window>(m_CreateInfo.name.c_str(),  deviceCreateInfo, m_CreateInfo.graphicsApi );

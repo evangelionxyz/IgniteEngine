@@ -33,7 +33,7 @@ namespace ignite
 #define VERTEX_MAX_BONES 4
 #define MAX_BONES 100
 
-    struct SkinnedMeshConstants
+    struct SkinnedMeshBuffer
     {
         glm::mat4 transformation;
         glm::mat4 normal;
@@ -100,7 +100,7 @@ namespace ignite
                 .setRegisterSpace(0) // set 0
                 .setRegisterSpaceIsDescriptorSet(true)
                 .setVisibility(nvrhi::ShaderType::All)
-                .addItem(nvrhi::BindingLayoutItem::PushConstants(0, sizeof(CameraConstants))) // camera
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0)) // camera
                 .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1)) // model
                 .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(2)) // directional light
                 .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(3)); // environment

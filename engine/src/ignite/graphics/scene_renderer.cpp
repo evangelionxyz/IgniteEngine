@@ -170,6 +170,7 @@ namespace ignite
     {
         auto key = MakeFramebufferKey(framebuffer, fillMode);
         auto it = s_CompositePSOCache.find(key);
+                
         if (it != s_CompositePSOCache.end())
         {
             for (auto itErase = s_CompositePSOCache.begin(); itErase != s_CompositePSOCache.end();)
@@ -211,10 +212,12 @@ namespace ignite
 
         // Create pipeline
         Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
-        gp->AddShader("composite.vertex.hlsl", nvrhi::ShaderType::Vertex)
-            .AddShader("composite.pixel.hlsl", nvrhi::ShaderType::Pixel)
+        gp->AddShader("composite.vertex.hlsl", nvrhi::ShaderType::Vertex, "main", true)
+            .AddShader("composite.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
             .AddBindingLayout(bindingLayout)
             .Build(framebuffer, params, createInfo);
+
+        LOG_INFO("[Composite] Created new pipeline with forced shader recompilation");
 
         s_CompositePSOCache.emplace(key, gp);
 
@@ -320,7 +323,8 @@ namespace ignite
         auto cmd = m_CommandList->GetActiveHandle();
 
         // setup camera constants
-        CameraConstants cameraBuffer = { camera->GetViewProjectionMatrix(), glm::vec4(camera->position, 1.0f) };
+        CameraBuffer cameraBuffer = { camera->projection, camera->view, glm::vec4(camera->position, 1.0f) };
+		Renderer::GetCameraConstantBuffer()->SetData(cmd, Buffer(&cameraBuffer, sizeof(CameraBuffer)));
 
         // Clear Render Targets
         uiRT->ClearColorAttachmentFloat(cmd, 0);
@@ -328,7 +332,9 @@ namespace ignite
 
         sceneRT->ClearColorAttachmentFloat(cmd, 0);
         sceneRT->ClearDepthAttachment(cmd, 1.0f, 0); // far depth = 1.0f == LessOrEqual
-        compositeRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f));
+
+        compositeRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+        compositeRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
         nvrhi::IFramebuffer *framebuffer = sceneRT->GetFramebuffer();
 
@@ -360,10 +366,10 @@ namespace ignite
                         m->material->UpdateBindingSet();
                     }
 
-                    m->constant.transformation = tr.GetWorldMatrix();
+                    m->skinBuffer.transformation = tr.GetWorldMatrix();
                     // Compute normal matrix (inverse-transpose of upper-left 3x3)
-                    const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(m->constant.transformation)));
-                    m->constant.normal = glm::mat4(normalMat3);
+                    const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(m->skinBuffer.transformation)));
+					m->skinBuffer.normal = glm::mat4(normalMat3);
 
 #if 0
                     // Recalculate the AABB using the full world transform.
@@ -398,7 +404,7 @@ namespace ignite
                     worldAABB.max = transformedMax;
                     m_EntityBounds.push_back(worldAABB);
 #endif
-                    m->constantBuffer->SetData(cmd, Buffer(&m->constant, sizeof(m->constant)));
+                    m->constantBuffer->SetData(cmd, Buffer(&m->skinBuffer, sizeof(m->skinBuffer)));
                     m->material->WriteBuffer(cmd);
 
                     // render
@@ -416,9 +422,6 @@ namespace ignite
 
                     cmd->setGraphicsState(state);
 
-                    // push camera constants
-                    cmd->setPushConstants(&cameraBuffer, sizeof(CameraConstants));
-
                     nvrhi::DrawArguments args;
                     args.setVertexCount(m->mesh.GetIndicesCount());
                     args.instanceCount = 1;
@@ -430,7 +433,7 @@ namespace ignite
         }
 
         // 2D Pass
-        m_Renderer2D->Begin(cmd, cameraBuffer);
+        m_Renderer2D->Begin(cmd);
         auto object2DView = m_Scene->registry->view<Transform, Sprite2D>();
         for (entt::entity e : object2DView)
         {
@@ -456,16 +459,16 @@ namespace ignite
 
         // Composite Pass
         {
-            nvrhi::IFramebuffer *framebuffer = compositeRT->GetFramebuffer();
+            nvrhi::IFramebuffer *compositeFramebuffer = compositeRT->GetFramebuffer();
 
-            Ref<GraphicsPipeline> compositePipeline = GetCompositePipelineForFB(framebuffer, nvrhi::RasterFillMode::Solid);
+            Ref<GraphicsPipeline> compositePipeline = GetCompositePipelineForFB(compositeFramebuffer, nvrhi::RasterFillMode::Solid);
             nvrhi::BindingSetHandle bindingSet = CreateCompositeBindingSet(compositePipeline->GetBindingLayout(0), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
 
             auto graphicsState = nvrhi::GraphicsState();
             graphicsState.pipeline = compositePipeline->GetHandle();
-            graphicsState.framebuffer = framebuffer;
+            graphicsState.framebuffer = compositeFramebuffer;
             graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding { m_CompositeVertexBuffer->GetHandle(), 0, 0 } };
-            graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+            graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(compositeFramebuffer->getFramebufferInfo().getViewport());
             graphicsState.bindings = { bindingSet };
             cmd->setGraphicsState(graphicsState);
     

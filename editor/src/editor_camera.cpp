@@ -23,165 +23,230 @@
 
 #include "editor_camera.hpp"
 
+#include "ignite/core/application.hpp"
+
 namespace ignite
 {
-    EditorCamera::EditorCamera(std::string name)
+    EditorCamera::EditorCamera(const std::string &name)
         : m_Name(std::move(name))
     {
     }
 
-    void EditorCamera::SetOrbitingTarget(const glm::vec3& target)
-    {
-        m_OrbitTarget = target;
-        UpdateOrbitPosition();
-    }
+	void EditorCamera::UpdateMouseState()
+	{
+		auto window = Application::GetInstance()->GetWindow()->GetWindowHandle();
 
-    void EditorCamera::SetOrbitingDistance(float distance)
-    {
-        m_OrbitDistance = distance;
-        UpdateOrbitPosition();
-    }
+		double mouseX, mouseY;
+		glfwGetCursorPos(window, &mouseX, &mouseY);
 
-    void EditorCamera::ProcessKeyboardInput(float deltaTime, bool forward, bool backward, bool left, bool right, bool up, bool down)
-    {
-        float velocity = m_MovementSpeed * deltaTime;
+		// store last position before updating
+		mouse.lastPosition = mouse.position;
 
-        if (m_MovementMode == MovementMode::Flying)
-        {
-            if (forward)
-                position += GetForwardDirection() * velocity;
-            else if (backward)
-                position -= GetForwardDirection() * velocity;
+		// update current position
+		mouse.position = glm::vec2(static_cast<float>(mouseX), static_cast<float>(mouseY));
 
-            if (left)
-                position -= GetRightDirection() * velocity;
-            else if (right)
-                position += GetRightDirection() * velocity;
-            
-            if (up)
-                position += GetUpDirection() * velocity;
-            else if (down)
-                position -= GetUpDirection() * velocity;
+		// update button states
+		mouse.leftButtonDown = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+		mouse.middleButtonDown = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS;
+		mouse.rightButtonDown = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+	}
 
-            UpdateViewMatrix();
-        }
-        else if (m_MovementMode == MovementMode::Orbiting)
-        {
-            glm::vec3 forwardDirection = glm::normalize(m_OrbitTarget - position);
-            glm::vec3 rightDirection = glm::normalize(glm::cross(forwardDirection, glm::vec3(0.0f, 1.0f, 0.0f)));
+	void EditorCamera::UpdateSphericalPosition()
+	{
+		position.x = target.x + distance * cos(pitch) * cos(yaw);
+		position.y = target.y + distance * sin(pitch);
+		position.z = target.z + distance * cos(pitch) * sin(yaw);
+	}
 
-            if (forward)
-                m_OrbitTarget += forwardDirection * velocity;
-            else if (backward)
-                m_OrbitTarget -= forwardDirection * velocity;
+	void EditorCamera::HandleOrbit(float deltaTime)
+	{
+		auto window = Application::GetInstance()->GetWindow()->GetWindowHandle();
 
-            if (left)
-                m_OrbitTarget += rightDirection * velocity;
-            else if (right)
-                m_OrbitTarget -= rightDirection * velocity;
+		if (mouse.leftButtonDown)
+		{
+			glm::vec2 delta = mouse.position - mouse.lastPosition;
 
-            if (up)
-                m_OrbitTarget += glm::vec3(0.0f, 1.0f, 0.0f) * velocity;
-            else if (down)
-                m_OrbitTarget -= glm::vec3(0.0f, 1.0f, 0.0f) * velocity;
+			// handle zoom
+			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
+			{
+				delta.y *= -1.0f * 0.5f; // inverting mouse y
 
-            UpdateOrbitPosition();
-        }
-    }
+				if (delta.y != 0.0f)
+				{
+					// apply zoom velocity for smooth zooming
+					if (controls.enableInertia)
+					{
+						zoomVelocity += delta.y;
+					}
+					else
+					{
+						// direct zoom for imediate response
+						distance -= delta.y;
+						distance = glm::clamp(distance, controls.minDistance, controls.maxDistance);
+					}
+				}
 
-    void EditorCamera::ProcessMouseMovement(float deltaTime, float xOffset, float yOffset, bool constrainPitch)
-    {
-        if (projectionType == ICamera::Type::Perspective)
-        {
-            float rotationVelocity = m_RotationSpeed * deltaTime;
-            xOffset *= rotationVelocity;
-            yOffset *= rotationVelocity;
+				// apply zoom velocity
+				if (controls.enableInertia && abs(zoomVelocity) > 0.001f)
+				{
+					distance -= zoomVelocity * deltaTime;
+					distance = glm::clamp(distance, controls.minDistance, controls.maxDistance);
+					
+					// dampen zoom velocity
+					zoomVelocity *= controls.zoomDamping;
 
-            yaw += xOffset;
-            pitch += yOffset;
-            pitch = glm::clamp(pitch, glm::radians(-89.0f), glm::radians(89.0f));
+					// stop very small velocities
+					if (abs(zoomVelocity) < 0.001f)
+					{
+						zoomVelocity = 0.0f;
+					}
+				}
+			}
+			else // handle orbit
+			{
+				// apply mouse movement to angular velocity for inertia
+				if (controls.enableInertia)
+				{
+					angularVelocity.x += delta.x * controls.mouseSensitivity;
+					angularVelocity.y += delta.y * controls.mouseSensitivity;
+				}
 
-            if (m_MovementMode == MovementMode::Flying)
-            {
-                UpdateViewMatrix();
-            }
-            else if (m_MovementMode == MovementMode::Orbiting)
-            {
-                UpdateOrbitPosition();
-            }
-        }
-    }
+				// directly update angles for immediate response
+				yaw += delta.x * controls.mouseSensitivity;
+				pitch += delta.y * controls.mouseSensitivity;
 
-    void EditorCamera::ProcessMousePanning(float deltaTime, float xOffset, float yOffset)
-    {
-        float velocity = m_MovementSpeed * deltaTime;
+				// Clamp pitch to prevent camera flipping
+				pitch = glm::clamp(pitch, controls.minPitch, controls.maxPitch);
+			}
+		}
+	}
 
-        if (m_MovementMode == MovementMode::Flying)
-        {
-            position += GetUpDirection() * yOffset * velocity;
-            position += GetRightDirection() * xOffset * velocity;
-            UpdateViewMatrix();
-        }
-        else if (m_MovementMode == MovementMode::Orbiting)
-        {
-            glm::vec3 forwardDirection = glm::normalize(m_OrbitTarget - position);
-            glm::vec3 rightDirection = glm::normalize(glm::cross(forwardDirection, glm::vec3(0.0f, 1.0f, 0.0f)));
-            glm::vec3 upDirection = glm::cross(rightDirection, forwardDirection);
+	void EditorCamera::HandlePan(float deltaTime)
+	{
+		if (mouse.middleButtonDown)
+		{
+			const glm::vec2 delta = mouse.position - mouse.lastPosition;
 
-            const float distance = glm::length(m_OrbitTarget - position);
-            m_OrbitTarget += upDirection * -yOffset * (distance / m_MaxOrbitDistance) * velocity;
-            m_OrbitTarget += rightDirection * xOffset * (distance / m_MaxOrbitDistance) * velocity;
+			// calculate pan direction in camera space
+			const glm::vec3 right = GetRightDirection();
+			const glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
-            UpdateOrbitPosition();
-        }
-    }
+			// pan in the camera's right and world up directions
+			const float panSpeed = controls.panSensitivity * distance;
+			const glm::vec3 panVector = right * (-delta.x * panSpeed) + worldUp * (delta.y * panSpeed);
 
-    void EditorCamera::ProcessMouseScroll(float yOffset, bool zooming)
-    {
-        f32 zoomVelocity = m_ZoomSpeed;
+			// apply pan to target
+			target += panVector;
+			if (controls.enableInertia)
+			{
+				panVelocity = delta * controls.panSensitivity;
+			}
+		}
+	}
 
-        if (projectionType == ICamera::Type::Perspective)
-        {
-            if (m_MovementMode == MovementMode::Flying || !zooming)
-            {
-                // In flying mode, scroll wheel changes movement speed
-                m_MovementSpeed += yOffset * zoomVelocity;
-                m_MovementSpeed = std::max(0.1f, m_MovementSpeed); // Prevent negative or zero speed
-            }
-            else if (m_MovementMode == MovementMode::Orbiting && zooming)
-            {
-                // In orbiting mode, scroll wheel changes orbit distance (zoom)
-                m_OrbitDistance -= yOffset * zoomVelocity * (m_OrbitDistance / m_MaxOrbitDistance);
-                m_OrbitDistance = glm::clamp(m_OrbitDistance, m_MinOrbitDistance, m_MaxOrbitDistance);
-            }
-        }
-        else if (projectionType == ICamera::Type::Orthographic)
-        {
-            zoom -= yOffset * (zoom / m_MaxOrthoZoom) * 8.0f;
-            zoom = glm::clamp(zoom, m_MinOrthoZoom, m_MaxOrthoZoom);
+	void EditorCamera::HandleZoom(float deltaTime)
+	{
+		auto window = Application::GetInstance()->GetWindow()->GetWindowHandle();
 
-            UpdateProjectionMatrix();
-        }
+		float wheelDelta = 0.0f;
 
-        UpdateOrbitPosition();
-    }
+		// check for scroll wheel input
+		if (mouse.scroll.y != 0.0f)
+		{
+			wheelDelta = mouse.scroll.y;
 
-    void EditorCamera::UpdateOrbitPosition()
-    {
-        // Calculate the camera position based on spherical coordinates around the orbit target
-        f32 x = m_OrbitTarget.x + m_OrbitDistance * glm::cos(pitch) * glm::cos(yaw);
-        f32 y = m_OrbitTarget.y + m_OrbitDistance * glm::sin(pitch);
-        f32 z = m_OrbitTarget.z + m_OrbitDistance * glm::cos(pitch) * glm::sin(yaw);
+			// reset scroll after processing
+			mouse.scroll.y = 0.0f;
+		}
 
-        position = glm::vec3(x, y, z);
-       
-        // Look at the orbit target
-        viewMatrix = glm::lookAt(position, m_OrbitTarget, glm::vec3(0.0f, 1.0f, 0.0f));
-    }
+		// handle keyboard zoom controls
+		if (glfwGetKey(window, GLFW_KEY_EQUAL) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_ADD) == GLFW_PRESS)
+		{
+			wheelDelta -= controls.zoomSensitivity * deltaTime * 10.0f;
+		}
+		if (glfwGetKey(window, GLFW_KEY_MINUS) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_SUBTRACT) == GLFW_PRESS)
+		{
+			wheelDelta += controls.zoomSensitivity * deltaTime * 10.0f;
+		}
 
-    void EditorCamera::UpdateFlyingCamera()
-    {
-        UpdateViewMatrix();
-    }
+		if (wheelDelta != 0.0f)
+		{
+			// Apply zoom velocity for smooth zooming
+			if (controls.enableInertia)
+			{
+				zoomVelocity += wheelDelta * controls.zoomSensitivity;
+			}
+			else
+			{
+				// Direct zoom for immediate response
+				distance -= wheelDelta * controls.zoomSensitivity;
+				distance = glm::clamp(distance, controls.minDistance, controls.maxDistance);
+			}
+		}
 
+		// Apply zoom velocity
+		if (controls.enableInertia && abs(zoomVelocity) > 0.001f)
+		{
+			distance -= zoomVelocity * deltaTime * 10.0f;
+			distance = glm::clamp(distance, controls.minDistance, controls.maxDistance);
+
+			// Dampen zoom velocity
+			zoomVelocity *= controls.zoomDamping;
+
+			// Stop very small velocities
+			if (abs(zoomVelocity) < 0.001f)
+			{
+				zoomVelocity = 0.0f;
+			}
+		}
+	}
+
+	void EditorCamera::ApplyInertia(float deltaTime)
+	{
+		// apply angular intertia
+		if (glm::length(angularVelocity) > 0.001f)
+		{
+			yaw += angularVelocity.x * deltaTime;
+			pitch += angularVelocity.y * deltaTime;
+			pitch = glm::clamp(pitch, controls.minPitch, controls.maxPitch);
+
+			// dampen angular velocity
+			angularVelocity *= controls.inertiaDamping;
+
+			// stop very small velocities
+			if (glm::length(angularVelocity) < 0.001f)
+			{
+				angularVelocity = glm::vec2(0.0f);
+			}
+		}
+
+		// apply pan inertia
+		if (glm::length(panVelocity) > 0.001f)
+		{
+			const glm::vec3 right = GetRightDirection();
+			const glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+			const float panSpeed = distance;
+			const glm::vec3 panVector = right * (-panVelocity.x * panSpeed) + worldUp * (panVelocity.y * panSpeed);
+
+			target += panVector * deltaTime;
+
+			// dampen pan velocity
+			panVelocity *= controls.inertiaDamping;
+
+			// stop very small velocities
+			if (glm::length(panVelocity) < 0.001f)
+			{
+				panVelocity = glm::vec2(0.0f);
+			}
+		}
+	}
+
+	void EditorCamera::UpdateCameraPosition()
+	{
+		// update camera position based on spherical coordinates
+		UpdateSphericalPosition();
+
+		view = glm::lookAt(position, target, up);
+	}
 }

@@ -75,9 +75,8 @@ namespace ignite
         for (entt::entity entity : camView)
         {
             Camera &cam = camView.get<Camera>(entity);
-            cam.camera.SetSize(static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
-            cam.camera.UpdateProjectionMatrix();
-            cam.camera.UpdateViewMatrix();
+			const float aspectRatio = static_cast<float>(viewportWidth) / static_cast<float>(viewportHeight);
+			cam.camera.UpdateMatrices(aspectRatio);
         }
 
         // play on start audio
@@ -155,12 +154,12 @@ namespace ignite
             {
                 for (size_t i = 0; i < numBones; ++i)
                 {
-                    mesh->constant.boneTransforms[i] = sm.boneTransforms[i];
+                    mesh->skinBuffer.boneTransforms[i] = sm.boneTransforms[i];
                 }
 
                 for (size_t i = numBones; i < MAX_BONES; ++i)
                 {
-                    mesh->constant.boneTransforms[i] = glm::mat4(1.0f);
+                    mesh->skinBuffer.boneTransforms[i] = glm::mat4(1.0f);
                 }
             }
         }
@@ -199,8 +198,8 @@ namespace ignite
             if (cam.primary)
             {
                 cam.camera.position = transform.translation;
-                cam.camera.viewMatrix = glm::translate(glm::mat4(1.0f), transform.translation) * glm::toMat4(transform.rotation);
-                cam.camera.viewMatrix = glm::inverse(cam.camera.viewMatrix);
+                cam.camera.view = glm::translate(glm::mat4(1.0f), transform.translation) * glm::toMat4(transform.rotation);
+                cam.camera.view = glm::inverse(cam.camera.view);
             }
         }
         
@@ -228,8 +227,8 @@ namespace ignite
         for (entt::entity entity : camView)
         {
             Camera &cam = camView.get<Camera>(entity);
-            cam.camera.SetSize(static_cast<float>(width), static_cast<float>(height));
-            cam.camera.UpdateProjectionMatrix();
+			const float aspectRatio = static_cast<float>(viewportWidth) / static_cast<float>(viewportHeight);
+			cam.camera.UpdateMatrices(aspectRatio);
         }
     }
 
@@ -345,6 +344,5 @@ namespace ignite
     template<>
     void Scene::OnComponentAdded<Camera>(Entity entity, Camera &comp)
     {
-        comp.camera.CreatePerspective(45.0f, static_cast<float>(viewportWidth), static_cast<float>(viewportHeight), 0.1f, 450.0f);
     }
 }

@@ -15,6 +15,6 @@ float4 main(VSOutput input) : SV_Target
     float4 sceneColor = sceneTexture.SampleLevel(linearSampler, input.uv, 0.0f);
     float4 uiColor = uiTexture.SampleLevel(linearSampler, input.uv, 0.0f);
     
-    // float3 finalColor = lerp(sceneColor.rgb, uiColor.rgb, uiColor.a);
-    return sceneColor;
+    float3 finalColor = lerp(sceneColor.rgb, uiColor.rgb, uiColor.a);
+    return float4(finalColor, 1.0f);
 }

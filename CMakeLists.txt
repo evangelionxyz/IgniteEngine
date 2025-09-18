@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.23)
 
-project(IGN LANGUAGES C CXX CSharp)
+project(IGN LANGUAGES C CXX)
 
 # Enable solution folders in IDEs like Visual Studio
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -93,14 +93,9 @@ endif()
 add_subdirectory(thirdparty)
 add_subdirectory(engine)
 add_subdirectory(editor)
-add_subdirectory(editorV2)
+#add_subdirectory(editorV2)
 add_subdirectory(runtime)
-add_subdirectory(scriptcore)
-
-# Set startup project in Visual Studio
-if(MSVC)
-	set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT IgniteEditor)
-endif()
+#add_subdirectory(scriptcore)
 
 set(_IGN_RUNTIME_TARGETS IgniteEditor IgniteEditorV2 IgniteRuntime)
 foreach(_t IN LISTS _IGN_RUNTIME_TARGETS)

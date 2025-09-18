@@ -2,10 +2,11 @@
 #include "include/pbr.hlsli"
 #include "include/binding_helpers.hlsli"
 
-struct CameraConstants
+struct Camera
 {
-  float4x4 viewProjection;
-  float4 position;
+    float4x4 projection;
+    float4x4 view;
+    float4 position;
 };
 
 struct DirLight
@@ -42,7 +43,7 @@ struct Material
 // push constant buffers
 
 // set 0
-DECLARE_PUSH_CONSTANTS(CameraConstants, g_CameraConstants, 0, 0);
+cbuffer ObjectBuffer      : register(b0, space0) { Camera camera; }
 cbuffer ObjectBuffer      : register(b1, space0) { Object object; }
 cbuffer DirLightBuffer    : register(b2, space0) { DirLight dirLight; }
 cbuffer EnvironmentBuffer : register(b3, space0) { Environment env; }
@@ -105,7 +106,7 @@ PSOutput main(PSInput input)
     float3 nMap = normalize(normalMap * 2.0f - 1.0f);
     // Without tangents, approximate by re-normalizing geometric normal (acts as no normal map)
     float3 normal = normalize(lerp(nGeom, nGeom, 1.0f));
-    float3 viewDir = normalize(g_CameraConstants.position.xyz - input.worldPos);
+    float3 viewDir = normalize(camera.position.xyz - input.worldPos);
     // dirLight.direction assumed points from light to scene; use -direction for incoming light
     float3 lightDir = normalize(-dirLight.direction.xyz);
 

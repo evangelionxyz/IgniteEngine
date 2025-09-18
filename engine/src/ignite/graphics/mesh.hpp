@@ -108,7 +108,7 @@ namespace ignite {
     {
         Mesh mesh;
         Ref<Material> material;
-        SkinnedMeshConstants constant;
+        SkinnedMeshBuffer skinBuffer;
         Ref<ConstantBuffer> constantBuffer;
         nvrhi::BindingSetHandle bindingSet = nullptr;
 

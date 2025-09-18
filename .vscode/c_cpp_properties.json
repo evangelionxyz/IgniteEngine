@@ -11,8 +11,9 @@
                 "_DEBUG",
                 "UNICODE",
                 "_UNICODE",
-                "GLFW_EXPOSE_NATIVE_WIN32",
-                "IGNITE_PLATFORM_WINDOWS"
+                "PLATFORM_WINDOWS",
+                "IGNITE_WITH_VULKAN",
+                "GLFW_EXPOSE_NATIVE_WIN32"
             ],
             "windowsSdkVersion": "10.0.26100.0",
             "compilerPath": "cl.exe",
@@ -28,7 +29,7 @@
                 "/usr/include/"
             ],
             "defines": [
-                "IGNITE_PLATFORM_LINUX"
+                "PLATFORM_LINUX"
             ],
             "cStandard": "c17",
             "cppStandard": "gnu++23",

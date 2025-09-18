@@ -166,9 +166,8 @@ namespace ignite {
                     {
                         int projectionType = static_cast<int>(comp.camera.projectionType);
                         sr.AddKeyValue("ProjectionType", projectionType);
-                        sr.AddKeyValue("NearClip", comp.camera.nearClip);
-                        sr.AddKeyValue("FarClip", comp.camera.farClip);
-                        sr.AddKeyValue("Zoom", comp.camera.zoom);
+                        sr.AddKeyValue("NearClip", comp.camera.nearPlane);
+                        sr.AddKeyValue("FarClip", comp.camera.farPlane);
                         sr.AddKeyValue("Fov", comp.camera.fov);
                         sr.AddKeyValue("Primary", comp.primary);
                     }
@@ -526,10 +525,9 @@ namespace ignite {
             if (YAML::Node node = entityNode["Camera"])
             {
                 Camera &comp = desEntity.AddComponent<Camera>();
-                comp.camera.projectionType = static_cast<ICamera::Type>(node["ProjectionType"].as<int>());
-                comp.camera.nearClip = node["NearClip"].as<float>();
-                comp.camera.farClip = node["FarClip"].as<float>();
-                comp.camera.zoom = node["Zoom"].as<float>();
+                comp.camera.projectionType = static_cast<ProjectionType>(node["ProjectionType"].as<int>());
+                comp.camera.nearPlane = node["NearClip"].as<float>();
+                comp.camera.farPlane = node["FarClip"].as<float>();
                 comp.camera.fov = node["Fov"].as<float>();
                 comp.primary = node["Primary"].as<bool>();
             }

@@ -553,19 +553,22 @@ namespace ignite
             return false;
         }
 
-        LOG_INFO("Enabled Vulkan instance extensions: ");
+        LOG_WARN("Enabled Vulkan instance extensions: ");
         for (const auto &ext : enabledExtensions.instance)
         {
-            LOG_INFO("    {}", ext);
+            LOG_TRACE("    {}", ext);
         }
 
         std::unordered_set<std::string> requiredLayers = enabledExtensions.layers;
+		LOG_WARN("Available Vulkan Layers: ");
         for (const auto &layer : vk::enumerateInstanceLayerProperties())
         {
             const std::string name = layer.layerName;
-            LOG_WARN("{}", name);
-            if (optionalExtensions.layers.contains(name))
+			LOG_TRACE("    {}", name);
+			if (optionalExtensions.layers.contains(name))
+			{
                 enabledExtensions.layers.insert(name);
+			}
 
             requiredLayers.erase(name);
         }
@@ -580,10 +583,10 @@ namespace ignite
             return false;
         }
 
-        LOG_INFO("Enabled Vulkan layers: ");
+        LOG_WARN("Enabled Vulkan layers: ");
         for (const auto &layer : enabledExtensions.layers)
         {
-            LOG_INFO("    {}", layer.c_str());
+			LOG_TRACE("    {}", layer.c_str());
         }
 
         auto instanceExtVec = StringSetToVector(enabledExtensions.instance);
@@ -612,15 +615,15 @@ namespace ignite
                 VK_API_VERSION_MAJOR(minimumVulkanVersion),
                 VK_API_VERSION_MINOR(minimumVulkanVersion),
                 VK_API_VERSION_PATCH(minimumVulkanVersion)
-                );
+            );
             return false;
         }
 
         LOG_INFO("Vulkan API version supported on the system ({}.{}.{})",
-                VK_API_VERSION_MAJOR(applicationInfo.apiVersion),
-                VK_API_VERSION_MINOR(applicationInfo.apiVersion),
-                VK_API_VERSION_PATCH(applicationInfo.apiVersion)
-                );
+            VK_API_VERSION_MAJOR(applicationInfo.apiVersion),
+            VK_API_VERSION_MINOR(applicationInfo.apiVersion),
+            VK_API_VERSION_PATCH(applicationInfo.apiVersion)
+        );
 
         // spec says: a non zero variant indicates the API is a variant of the Vulkan API and applications will typically need to modified to run against it.
         if (VK_API_VERSION_VARIANT(applicationInfo.apiVersion) != 0)
@@ -677,7 +680,6 @@ namespace ignite
         vk::Extent2D requestedExtent(m_DeviceParams.backBufferWidth, m_DeviceParams.backBufferHeight);
 
         auto devices = m_VulkanInstance.enumeratePhysicalDevices();
-
         i32 adapterIndex = m_DeviceParams.adapterIndex;
 
         i32 firstDevice = 0;
@@ -793,8 +795,8 @@ namespace ignite
                         deviceIsGood = false;
                     }
 
-                    u32 canPresent = dev.getSurfaceSupportKHR(m_GraphicsQueueFamily, m_WindowSurface);
-                    if (!canPresent)
+                    const u32 canPresent = dev.getSurfaceSupportKHR(m_GraphicsQueueFamily, m_WindowSurface);
+                    if (canPresent == 0)
                     {
                         errorStream << '\n' << "  - cannot present";
                         deviceIsGood = false;
@@ -1263,5 +1265,4 @@ namespace ignite
             m_VulkanDevice.waitIdle();
         }
     }
-
 }

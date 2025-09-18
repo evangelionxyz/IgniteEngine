@@ -41,7 +41,7 @@ namespace ignite {
             m_GizmoInfo.viewRect.GetSize().x,
             m_GizmoInfo.viewRect.GetSize().y);
 
-        ImGuizmo::SetOrthographic(m_GizmoInfo.cameraType == ICamera::Type::Orthographic);
+        ImGuizmo::SetOrthographic(m_GizmoInfo.cameraType == ProjectionType::Orthographic);
     }
 
     void Gizmo::SetOperation(ImGuizmo::OPERATION op)

@@ -1,12 +1,16 @@
 #include "include/binding_helpers.hlsli"
 
-struct CameraConstants
+struct Camera
 {
-  float4x4 viewProjection;
-  float4 position;
+    float4x4 projection;
+    float4x4 view;
+    float4 position;
 };
 
-DECLARE_PUSH_CONSTANTS(CameraConstants, g_CameraConstants, 0, 0);
+cbuffer CamerBuffer : register(b0, space0)
+{
+    Camera camera;
+}
 
 struct VSInput
 {
@@ -23,7 +27,7 @@ PSInput main(VSInput input)
 {
     PSInput output;
     // Remove translation from the matrix: convert to mat3 and back
-    float3x3 vpRotOnly = (float3x3)g_CameraConstants.viewProjection;
+    float3x3 vpRotOnly = (float3x3) mul(camera.projection, camera.view);
 
     // Rebuild a float4x4 with zero translation
     float4x4 viewProjectionNoTranslation = {

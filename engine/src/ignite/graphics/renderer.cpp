@@ -25,6 +25,7 @@
 #include "renderer_2d.hpp"
 #include "texture.hpp"
 #include "shader.hpp"
+#include "constant_buffer.hpp"
 
 #include "environment.hpp"
 
@@ -117,6 +118,9 @@ namespace ignite
 
         s_instance->m_Device = deviceManager->GetDevice();
 
+		// non volatile constant buffer
+		m_EditorCameraConstantBuffer = ConstantBuffer::Create(sizeof(CameraBuffer), false, 1, "Camera Constant Buffer");
+
         m_CommandList = CommandList::Create();
         auto cmd = m_CommandList->GetActiveHandle();
 
@@ -124,7 +128,7 @@ namespace ignite
             TextureCreateInfo textureCreateInfo;
             textureCreateInfo.format = nvrhi::Format::RGBA8_UNORM;
             textureCreateInfo.dimension = nvrhi::TextureDimension::Texture2D;
-            textureCreateInfo.samplerMode = nvrhi::SamplerAddressMode::ClampToBorder;
+            textureCreateInfo.samplerMode = nvrhi::SamplerAddressMode::ClampToEdge;
             textureCreateInfo.width = 1;
             textureCreateInfo.height = 1;
             textureCreateInfo.flip = false;
@@ -204,6 +208,11 @@ namespace ignite
     {
         return s_instance->m_ShaderLibrary;
     }
+
+	Ref<ConstantBuffer> Renderer::GetCameraConstantBuffer()
+	{
+		return s_instance->m_EditorCameraConstantBuffer;
+	}
 
     Ref<Texture> Renderer::GetWhiteTexture()
     {

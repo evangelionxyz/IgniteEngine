@@ -71,16 +71,15 @@ namespace ignite
         float height = static_cast<float>(app->GetCreateInfo().height);
 
         m_Camera = EditorCamera("ScenePanel-Editor Camera");
-        m_Camera.CreateOrthographic(width, height, 8.0f, 0.1f, 350.0f);
-        // m_Camera.CreatePerspective(45.0f, width, height, 0.1f, 450.0f);
 
-        m_Camera.position = {0.0f, 0.0f, 3.0f};
-        m_Camera.yaw = glm::radians(90.0f);
-        // m_Camera.pitch = 0.410f;
-        m_Camera.UpdateOrbitPosition();
+		m_Camera.target = glm::vec3(0.0f);
+		m_Camera.distance = 5.5f;
+		m_Camera.yaw = glm::radians(90.0f);
+		m_Camera.pitch = 0.0f;
 
-        // m_Camera.UpdateViewMatrix();
-        m_Camera.UpdateProjectionMatrix();
+		float initialAspect = width / height;
+		m_Camera.UpdateSphericalPosition();
+		m_Camera.UpdateMatrices(initialAspect);
 
         // Load icons
         TextureCreateInfo createInfo;
@@ -114,10 +113,17 @@ namespace ignite
         m_UICameraRT = RenderTarget::Create(rtCreateInfo);
 
         // Composite render target
-        rtCreateInfo = {};
-        rtCreateInfo.attachments = { FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } }; // Main Color
-        m_CompositeViewportRT = RenderTarget::Create(rtCreateInfo);
-        m_CompositeCameraRT = RenderTarget::Create(rtCreateInfo);
+        {
+            RenderTargetCreateInfo rtCreateInfo = {};
+            rtCreateInfo.attachments =
+            {
+                //FramebufferAttachments{ nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }, // Depth
+                FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } // Main Color
+            };
+
+            m_CompositeViewportRT = RenderTarget::Create(rtCreateInfo);
+            m_CompositeCameraRT = RenderTarget::Create(rtCreateInfo);
+        }
     }
 
     ScenePanel::~ScenePanel()
@@ -936,8 +942,8 @@ namespace ignite
                         bool selected = false;
                         if (ImGui::Selectable(projectionTypeStr[i]))
                         {
-                            c.camera.projectionType = static_cast<ICamera::Type>(i);
-                            c.camera.UpdateProjectionMatrix();
+                            // c.camera.projectionType = static_cast<ICamera::Type>(i);
+                            // c.camera.UpdateMatrices();
 
                             selected = true;
                         }
@@ -952,22 +958,22 @@ namespace ignite
 
                 bool modified = false;
 
-                if (c.camera.projectionType == ICamera::Type::Perspective)
+                if (c.camera.projectionType == ProjectionType::Perspective)
                 {
                     modified |= ImGui::DragFloat("Fov", &c.camera.fov, 0.025f, 0.0f, FLT_MAX);
                 }
                 else
                 {
-                    modified |= ImGui::DragFloat("Zoom", &c.camera.zoom, 0.025f, 0.0f, FLT_MAX);
+                    // modified |= ImGui::DragFloat("Zoom", &c.camera.zoom, 0.025f, 0.0f, FLT_MAX);
                 }
 
-                modified |= ImGui::DragFloat("Near", &c.camera.nearClip, 0.025f, 0.0f, FLT_MAX);
-                modified |= ImGui::DragFloat("Far", &c.camera.farClip, 0.025f, 0.0f, FLT_MAX);
-                modified |= ImGui::Checkbox("Primary", &c.primary);
+                // modified |= ImGui::DragFloat("Near", &c.camera.nearPlane, 0.025f, 0.0f, FLT_MAX);
+                // modified |= ImGui::DragFloat("Far", &c.camera.farClip, 0.025f, 0.0f, FLT_MAX);
+                // modified |= ImGui::Checkbox("Primary", &c.primary);
 
                 if (modified)
                 {
-                    c.camera.UpdateProjectionMatrix();
+                    // c.camera.UpdateProjectionMatrix();
                 }
             });
             RenderComponent<BoxCollider2D>("Box Collider 2D", selectedEntity, [&]()
@@ -1598,7 +1604,8 @@ namespace ignite
             
             const uint32_t width = static_cast<uint32_t>(m_ViewportData.rect.GetSize().x);
             const uint32_t height = static_cast<uint32_t>(m_ViewportData.rect.GetSize().y);
-            
+			const float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
+
             m_SceneViewportRT->Resize(width, height);
             m_CompositeViewportRT->Resize(width, height);
             m_UIViewportRT->Resize(width, height);
@@ -1610,10 +1617,9 @@ namespace ignite
             EditorLayer::GetInstance()->GetSceneRenderer()->GetUIRenderer()->Resize(width, height);
 
             m_Scene->Resize(width, height);
-            
-            m_Camera.SetSize(static_cast<float>(width), static_cast<float>(height));
-            m_Camera.UpdateProjectionMatrix();
 
+			m_Camera.UpdateMatrices(aspectRatio);
+            
             if (isScenePlaying)
             {
                 EditorLayer::GetInstance()->OnSceneStop();
@@ -1650,6 +1656,9 @@ namespace ignite
             glm::vec2 vpSize = m_ViewportData.rect.GetSize();
             if (vpSize.x > 0.0f && vpSize.y > 0.0f)
             {
+				const float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
+
+
                 m_SceneViewportRT->Resize(width, height);
                 m_CompositeViewportRT->Resize(width, height);
                 m_UIViewportRT->Resize(width, height);
@@ -1662,8 +1671,7 @@ namespace ignite
 
                 m_Scene->Resize(width, height);
 
-                m_Camera.SetSize(static_cast<float>(width), static_cast<float>(height));
-                m_Camera.UpdateProjectionMatrix();
+				m_Camera.UpdateMatrices(aspectRatio);
             }
 
             if (isSceneSimulate)
@@ -1725,6 +1733,8 @@ namespace ignite
             if (const bool uiResize = m_UIViewportRT->ShouldResize(vpWidth, vpHeight);
                 !ImGui::IsMouseDown(ImGuiMouseButton_Left) && (sceneResize || compositeResize || uiResize))
             {
+				const float aspectRatio = vpSize.x / vpSize.y;
+
                 m_SceneViewportRT->Resize(vpWidth, vpHeight);
                 m_CompositeViewportRT->Resize(vpWidth, vpHeight);
                 m_UIViewportRT->Resize(vpWidth, vpHeight);
@@ -1737,8 +1747,7 @@ namespace ignite
 
                 EditorLayer::GetInstance()->GetSceneRenderer()->GetUIRenderer()->Resize(vpWidth, vpHeight);
 
-                m_Camera.SetSize(static_cast<float>(vpWidth), static_cast<float>(vpHeight));
-                m_Camera.UpdateProjectionMatrix();
+				m_Camera.UpdateMatrices(aspectRatio);
             }
         }
 
@@ -1769,8 +1778,8 @@ namespace ignite
         }
 
         GizmoInfo gizmoInfo;
-        gizmoInfo.cameraView = m_Camera.viewMatrix;
-        gizmoInfo.cameraProjection = m_Camera.projectionMatrix;
+        gizmoInfo.cameraView = m_Camera.view;
+        gizmoInfo.cameraProjection = m_Camera.projection;
         gizmoInfo.cameraType = m_Camera.projectionType;
 
         gizmoInfo.viewRect = m_ViewportData.rect;
@@ -1908,7 +1917,7 @@ namespace ignite
                 const float width = 256.0f;
                 const float height = width / (vpSize.x / vpSize.y);
 
-                ImGui::SetCursorPos({canvasSize.x - width - padding, canvasSize.y - height});
+                ImGui::SetCursorPos({ canvasSize.x - width - padding, canvasSize.y - height });
                 ImTextureID previewImage = reinterpret_cast<ImTextureID>(m_CompositeCameraRT->GetColorAttachment(0).Get());
                 ImGui::Image(previewImage, {width, height});
             }
@@ -1939,22 +1948,22 @@ namespace ignite
                 bool isSelected = strcmp(currentCameraModeStr, cameraModeStr[i]) == 0;
                 if (ImGui::Selectable(cameraModeStr[i], isSelected))
                 {
-                    m_Camera.projectionType = static_cast<ICamera::Type>(i);
+                    // m_Camera.projectionType = static_cast<ICamera::Type>(i);
 
-                    if (m_Camera.projectionType == ICamera::Type::Orthographic)
+                    // if (m_Camera.projectionType == ICamera::Type::Orthographic)
                     {
-                        m_CameraData.lastPosition = m_Camera.position;
+                        // m_CameraData.lastPosition = m_Camera.position;
 
-                        m_Camera.position = { 0.0f, 0.0f, 3.0f };
-                        m_Camera.zoom = 20.0f;
+                        // m_Camera.position = { 0.0f, 0.0f, 3.0f };
+                        // m_Camera.zoom = 20.0f;
                     }
-                    else
+                    // else
                     {
-                        m_Camera.position = m_CameraData.lastPosition;
+                        //m_Camera.position = m_CameraData.lastPosition;
                     }
 
-                    m_Camera.UpdateProjectionMatrix();
-                    m_Camera.UpdateViewMatrix();
+                    // m_Camera.UpdateProjectionMatrix();
+                    // m_Camera.UpdateViewMatrix();
                 }
 
                 if (isSelected)
@@ -1967,20 +1976,20 @@ namespace ignite
 
         ImGui::DragFloat3("Position", &m_Camera.position[0], 0.025f);
 
-        glm::vec2 yawPitch = { glm::degrees(m_Camera.yaw), glm::degrees(m_Camera.pitch) };
-        if (ImGui::DragFloat2("Yaw/Pitch", &yawPitch.x, 1.0f))
-        {
-            m_Camera.yaw = glm::radians(yawPitch.x);
-            m_Camera.pitch = glm::radians(yawPitch.y);
-
-            m_Camera.UpdateOrbitPosition();
-        }
-
-        if (m_Camera.projectionType == ICamera::Type::Orthographic)
-        {
-            ImGui::DragFloat("Zoom", &m_Camera.zoom, 0.025f);
-            m_Camera.UpdateProjectionMatrix();
-        }
+        // glm::vec2 yawPitch = { glm::degrees(m_Camera.yaw), glm::degrees(m_Camera.pitch) };
+        // if (ImGui::DragFloat2("Yaw/Pitch", &yawPitch.x, 1.0f))
+        // {
+        //     m_Camera.yaw = glm::radians(yawPitch.x);
+        //     m_Camera.pitch = glm::radians(yawPitch.y);
+		// 
+        //     m_Camera.UpdateOrbitPosition();
+        // }
+		// 
+        // if (m_Camera.projectionType == ICamera::Type::Orthographic)
+        // {
+        //     ImGui::DragFloat("Zoom", &m_Camera.zoom, 0.025f);
+        //     m_Camera.UpdateProjectionMatrix();
+        // }
     }
 
     template<typename T, typename UIFunction>
@@ -2040,7 +2049,7 @@ namespace ignite
     {
         if (m_IsHovered)
         {
-            m_Camera.ProcessMouseScroll(event.GetYOffset(), !Input::IsMouseButtonPressed(MOUSE_BUTTON_RIGHT));
+			m_Camera.mouse.scroll = { event.GetXOffset(), event.GetYOffset() };
         }
 
         return false;
@@ -2082,92 +2091,19 @@ namespace ignite
             m_Camera.position += m_Camera.GetForwardDirection() * deltaTime * m_CameraData.moveSpeed * -camMoveAxis.y;
             m_Camera.position += m_Camera.GetRightDirection() * deltaTime * m_CameraData.moveSpeed * camMoveAxis.x;
 
-            // m_CameraData.moveSpeed += l2r2.y * deltaTime * 0.1f + 1.0f;
-            // m_CameraData.moveSpeed -= l2r2.x * deltaTime * 0.1f + 1.0f;
 
             LOG_INFO(j->ToString());
         }
 
-        if (!m_IsHovered && !m_ViewportData.wantMouseDragging)
-            return;
-
-        bool mouseButtonDown = Input::IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) || Input::IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE);
-        m_ViewportData.wantMouseDragging = mouseButtonDown;
-
-        // Input::SetCursorMode(mouseButtonDown ? CursorMode::Disabled : CursorMode::Normal);
-
-        // Static to preserve state between frames
-        static glm::vec2 lastMousePos = Input::GetMousePosition();
-        glm::vec2 currentMousePos = Input::GetMousePosition();
-        glm::vec2 mouseDelta = { 0.0f, 0.0f };
-
-        if (mouseButtonDown)
-        {
-            const auto window = Application::GetInstance()->GetWindow();
-            const glm::vec2 windowPos = window->GetPosition();
-            const glm::vec2 framebufferSize = window->GetFramebufferSize();
-
-            const float offset = 20.0f;
-            bool clamped = false;
-            if (currentMousePos.x < windowPos.x + offset)
-            {
-                float newX = framebufferSize.x - offset;
-                Input::SetMousePosition(newX, currentMousePos.y);
-                currentMousePos = Input::GetMousePosition();
-                clamped = true;
-            }
-
-            if (currentMousePos.x > framebufferSize.x - offset)
-            {
-                float newX = windowPos.x + offset;
-                Input::SetMousePosition(newX, currentMousePos.y);
-                currentMousePos = Input::GetMousePosition();
-                clamped = true;
-            }
-
-            if (currentMousePos.y > framebufferSize.y - offset)
-            {
-                float newY = windowPos.y + offset;
-                Input::SetMousePosition(currentMousePos.x, newY);
-                currentMousePos = Input::GetMousePosition();
-                clamped = true;
-            }
-
-            if (currentMousePos.y < windowPos.y + offset)
-            {
-                float newY = framebufferSize.y - offset;
-                Input::SetMousePosition(currentMousePos.x, newY);
-                currentMousePos = Input::GetMousePosition();
-                clamped = true;
-            }
-
-            if (clamped)
-            {
-                // Reset lastMousePos to avoid an artificial delta jump
-                lastMousePos = currentMousePos;
-                mouseDelta = { 0.0f, 0.0f };
-            }
-            else
-            {
-                mouseDelta = currentMousePos - lastMousePos;
-            }
-
-            // Mouse input
-            if (Input::IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
-                m_Camera.ProcessMouseMovement(deltaTime, mouseDelta.x, mouseDelta.y);
-            else if (Input::IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE))
-                m_Camera.ProcessMousePanning(deltaTime, mouseDelta.x, mouseDelta.y);
-
-            // Key input
-            m_Camera.ProcessKeyboardInput(deltaTime, Input::IsKeyPressed(KEY_W), Input::IsKeyPressed(KEY_S), Input::IsKeyPressed(KEY_D), Input::IsKeyPressed(KEY_A), false, false);
-        }
-        else
-        {
-            mouseDelta = { 0.0f, 0.0f };
-        }
-
-        lastMousePos = currentMousePos;
-
+		m_Camera.UpdateMouseState();
+		if (m_IsHovered && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered())
+		{
+			m_Camera.HandleOrbit(deltaTime);
+			m_Camera.HandlePan(deltaTime);
+			m_Camera.HandleZoom(deltaTime);
+		}
+		m_Camera.ApplyInertia(deltaTime);
+		m_Camera.UpdateCameraPosition();
     }
 
     void ScenePanel::DestroyEntity(Entity entity)

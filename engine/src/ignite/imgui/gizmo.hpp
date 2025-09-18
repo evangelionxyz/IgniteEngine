@@ -36,7 +36,7 @@ namespace ignite {
     {
         glm::mat4 cameraView;
         glm::mat4 cameraProjection;
-        ICamera::Type cameraType;
+        ProjectionType cameraType;
 
         Rect viewRect;
         float snapValue = 0.25f;

@@ -61,7 +61,7 @@ namespace ignite
             .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
             .Build(m_RenderTarget->GetFramebuffer(), pipelineParams, pipelineInfo);
 
-        m_Camera.CreatePerspective(60.0f, 1280.0f, 720.0f, 0.1f, 100.0f);
+
 
         m_CommandList = CommandList::Create();
     }
@@ -96,8 +96,15 @@ namespace ignite
         if (!m_Model || !m_IsOpen)
             return;
 
-        m_Camera.UpdateProjectionMatrix();
-        m_Camera.UpdateViewMatrix();
+		if (!ImGui::GetIO().WantCaptureMouse)
+		{
+			m_Camera.UpdateMouseState();
+			m_Camera.HandleOrbit(deltaTime);
+			m_Camera.HandlePan(deltaTime);
+			m_Camera.HandleZoom(deltaTime);
+			m_Camera.ApplyInertia(deltaTime);
+			m_Camera.UpdateCameraPosition();
+		}
     }
 
     void ModelViewerPanel::OnRender()
@@ -108,7 +115,7 @@ namespace ignite
         m_CommandList->Begin();
         auto cmd = m_CommandList->GetActiveHandle();
 
-        CameraConstants cameraConstants = { m_Camera.GetViewProjectionMatrix(), glm::vec4(m_Camera.position, 1.0f) };
+        // CameraBuffer cameraBuffer = { m_Camera.projection, m_Camera.view, glm::vec4(m_Camera.position, 1.0f) };
 
         m_RenderTarget->ClearColorAttachmentFloat(cmd);
         m_RenderTarget->ClearDepthAttachment(cmd, 1.0f, 0);

@@ -50,20 +50,20 @@ namespace ignite
     void UIRenderer::Render(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
     {
         // 2D Pass
-        CameraConstants cc{ m_Projection, { 0.0f, 0.0f, 0.0f, 1.0f } };
-
-        // Begin 2D rendering
-        m_Renderer->Begin(cmd, cc);
-        
-        // Render UI widgets
-        RenderWidgets(cmd, framebuffer);
-
-        // Render layout grid first (background)
-        RenderLayoutGrid(cmd, framebuffer);
-
-        // Flush and end 2D rendering
-        m_Renderer->Flush(framebuffer);
-        m_Renderer->End();
+		// CameraConstants cc{ m_Projection, glm::translate(glm::mat4(1.0f), glm::vec3(0.0f)), { 0.0f, 0.0f, 0.0f, 1.0f } };
+		// 
+        // // Begin 2D rendering
+        // m_Renderer->Begin(cmd, cc);
+        // 
+        // // Render UI widgets
+        // RenderWidgets(cmd, framebuffer);
+		// 
+        // // Render layout grid first (background)
+        // RenderLayoutGrid(cmd, framebuffer);
+		// 
+        // // Flush and end 2D rendering
+        // m_Renderer->Flush(framebuffer);
+        // m_Renderer->End();
     }
 
     void UIRenderer::Resize(uint32_t width, uint32_t height)

@@ -5,14 +5,9 @@
 
 struct Camera
 {
-    float4x4 viewProjection;
+    float4x4 projection;
+    float4x4 view;
     float4 position;
-};
-
-struct CameraConstants
-{
-  float4x4 viewProjection;
-  float4 position;
 };
 
 struct Object
@@ -22,8 +17,15 @@ struct Object
     float4x4 boneTransforms[MAX_BONES];
 };
 
-DECLARE_PUSH_CONSTANTS(CameraConstants, g_CameraConstants, 0, 0);
-cbuffer ObjectBuffer : register(b1, space0) { Object object; }
+cbuffer CameraBuffer : register(b0, space0)
+{
+    Camera camera; 
+}
+
+cbuffer ObjectBuffer : register(b1, space0)
+{ 
+    Object object;
+}
 
 struct VSInput
 {
@@ -77,7 +79,7 @@ PSInput main(VSInput input)
     float4 worldPos    = mul(object.transformMatrix, posL);
     float3 worldNormal = normalize(mul((float3x3)object.normalMatrix, normalL));
 
-    output.position     = mul(g_CameraConstants.viewProjection, worldPos);
+    output.position = mul(mul(camera.projection, camera.view), worldPos);
     output.normal       = worldNormal;
     output.worldPos     = worldPos.xyz;
     output.UV           = input.UV;

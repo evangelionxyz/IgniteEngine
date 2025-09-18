@@ -153,7 +153,7 @@ namespace ignite
             if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
             {
                 ICamera *camera = &primaryCam.GetComponent<Camera>().camera;
-                m_SceneRenderer.RenderTo(camera, m_SceneRT, m_UIRT, m_CompositeRT, camera->projectionType == ICamera::Type::Perspective);
+                m_SceneRenderer.RenderTo(camera, m_SceneRT, m_UIRT, m_CompositeRT, camera->projectionType == ProjectionType::Perspective);
             }
 
             UpdateBindingSet();
@@ -262,11 +262,11 @@ namespace ignite
             nvrhi::BindingLayoutHandle bindingLayout = m_Device->createBindingLayout(layoutDesc);
 
             // Create pipeline
-            m_CompositePipeline = GraphicsPipeline::Create(params, &pci);
+            m_CompositePipeline = GraphicsPipeline::Create();
             m_CompositePipeline->AddShader("screen.vertex.hlsl", nvrhi::ShaderType::Vertex)
                 .AddShader("screen.pixel.hlsl", nvrhi::ShaderType::Pixel, "main")
                 .AddBindingLayout(bindingLayout)
-                .Build(framebuffer);
+                .Build(framebuffer, params, pci);
         }
     }
 
@@ -297,22 +297,20 @@ namespace ignite
 
     Ref<Project> RuntimeLayer::OpenProject(const std::filesystem::path &filepath)
     {
-        Ref<Project> openedProject = ProjectSerializer::Deserialize(filepath);
-        if (openedProject)
+        Ref<Project> project = ProjectSerializer::Deserialize(filepath);
+        if (project)
         {
-            m_ActiveProject = openedProject;
+            m_ActiveProject = project;
             m_CurrentProjectPath = filepath;
-
-            ScriptEngine::Init();
 
             // Get Project default scene
             if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
             {
-                if (Ref<Scene> activeScene = Project::GetAsset<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
+                if (Ref<Scene> activeScene = project->GetAsset<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
                 {
                     m_ActiveScene = SceneManager::Copy(activeScene);
-                    AssetMetaData metadata = Project::GetActive()->GetAssetManager().GetMetaData(activeScene->handle);
-                    m_CurrentScenePath = Project::GetActive()->GetAssetFilepath(metadata.filepath);
+                    AssetMetaData metadata = project->GetAssetManager().GetMetaData(activeScene->handle);
+                    m_CurrentScenePath = project->GetAssetFilepath(metadata.filepath);
                 }
             }
         }
@@ -323,6 +321,6 @@ namespace ignite
             m_ActiveProject = nullptr;
         }
 
-        return openedProject;
+        return project;
     }
 } // namespace ignite
