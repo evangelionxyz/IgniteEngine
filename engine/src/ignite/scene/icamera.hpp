@@ -104,22 +104,20 @@ namespace ignite
 
         void UpdateMatrices(float aspectRatio);
        
-        glm::mat4 GetViewProjectionMatrix() const { return projection * view; }
         glm::vec3 GetUpDirection() const;
         glm::vec3 GetRightDirection() const;
         glm::vec3 GetForwardDirection() const;
 
         glm::vec3 position;
 		glm::vec3 target;
-		glm::vec3 up = { 0.0f, 1.0f, 0.0f };
 
 		glm::mat4 view;
 		glm::mat4 projection;
 
 		float pitch = 0.0f; // rotation around X axis
 		float yaw = 0.0f; // rotation around Y axis
-		float distance = 1.0f;
 
+		float distance = 1.0f;
 		float fov = 90.0f; // for perspective
 		float nearPlane = 0.01f;
 		float farPlane = 1000.0f;
@@ -140,13 +138,13 @@ namespace ignite
 			float maxDistance = 50.0f;
 			float minPitch = -glm::radians(89.0f);
 			float maxPitch = glm::radians(89.0f);
-			bool enableInertia = true;
 			float inertiaDamping = 0.9f;
 			float zoomDamping = 0.65f;
+			bool enableInertia = true;
 		} controls;
 
-		CameraMouseState mouse;
 		CameraLens lens;
+		CameraMouseState mouse;
 		PostProcessing postProcessing;
         ProjectionType projectionType;
     };

@@ -247,6 +247,6 @@ namespace ignite
 		// update camera position based on spherical coordinates
 		UpdateSphericalPosition();
 
-		view = glm::lookAt(position, target, up);
+		view = glm::lookAt(position, target, { 0.0f, 1.0f, 0.0f });
 	}
 }

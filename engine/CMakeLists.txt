@@ -64,7 +64,7 @@ target_compile_definitions(IgniteEngine PUBLIC
 target_link_libraries(IgniteEngine PUBLIC
   IMGUI box2d GLFW STB JOLT SPDLOG ShaderMake
   ASSIMP NVRHI NVRHI_VULKAN ZLIB YAMLCPP
-  MSDF_ATLAS_GEN MSDFGEN
+  MSDF_ATLAS_GEN MSDFGEN TINYGLTF
 )
 
 if(WIN32)

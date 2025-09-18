@@ -2088,8 +2088,8 @@ namespace ignite
             m_Camera.yaw += deltaTime * camViewAxis.x;
             m_Camera.pitch += deltaTime * camViewAxis.y;
 
-            m_Camera.position += m_Camera.GetForwardDirection() * deltaTime * m_CameraData.moveSpeed * -camMoveAxis.y;
-            m_Camera.position += m_Camera.GetRightDirection() * deltaTime * m_CameraData.moveSpeed * camMoveAxis.x;
+            // m_Camera.position += m_Camera.GetForwardDirection() * deltaTime * m_CameraData.moveSpeed * -camMoveAxis.y;
+            // m_Camera.position += m_Camera.GetRightDirection() * deltaTime * m_CameraData.moveSpeed * camMoveAxis.x;
 
 
             LOG_INFO(j->ToString());

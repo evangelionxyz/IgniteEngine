@@ -34,7 +34,7 @@ namespace ignite
 
     void ICamera::UpdateMatrices(float aspectRatio)
     {
-		view = glm::lookAt(position, target, up);
+		view = glm::lookAt(position, target, { 0.0f, 1.0f, 0.0f });
         switch (projectionType)
         {
             case ProjectionType::Orthographic:
@@ -60,7 +60,7 @@ namespace ignite
 
     glm::vec3 ICamera::GetRightDirection() const
     {
-		return glm::normalize(glm::cross(GetForwardDirection(), up));
+		return glm::normalize(glm::cross(GetForwardDirection(), {0.0f, 1.0f, 0.0f}));
     }
 
     glm::vec3 ICamera::GetForwardDirection() const

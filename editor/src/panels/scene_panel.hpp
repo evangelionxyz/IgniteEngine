@@ -101,40 +101,15 @@ namespace ignite
         void RenderComponent(const std::string &name, Entity entity, UIFunction uiFunction, bool allowedToRemove = true);
 
     private:
-
         void DebugRender();
-
-        struct Data
-        {
-            bool settingsWindow = true;
-            bool isGizmoManipulating = false;
-            bool isGizmoBeingUse = false;
-        } m_Data;
 
         EditorCamera m_Camera;
         Ref<Scene> m_Scene;
         Gizmo m_Gizmo;
-
         std::unordered_map<UUID, Entity> m_SelectedEntities;
+        std::unordered_map<std::string, Ref<Texture>> m_Icons;
 
         static UUID m_TrackingSelectedEntity;
-
-        struct CameraData
-        {
-            f32 moveSpeed = 6.0f;
-            const f32 maxMoveSpeed = 500.0f;
-            const f32 rotationSpeed = 0.8f;
-            glm::vec3 lastPosition = { 0.0f, 0.0f, 0.0f };
-        } m_CameraData;
-
-        struct ViewportData
-        {
-            Rect rect = { 0, 0, 1, 1 };
-            glm::vec2 mousePos = glm::vec2(0.0f);
-            bool wantMouseDragging = false;
-        } m_ViewportData;
-
-        std::unordered_map<std::string, Ref<Texture>> m_Icons;
 
         // For viewport
         Ref<RenderTarget> m_SceneViewportRT;
@@ -145,5 +120,19 @@ namespace ignite
         Ref<RenderTarget> m_SceneCameraRT;
         Ref<RenderTarget> m_CompositeCameraRT;
         Ref<RenderTarget> m_UICameraRT;
+
+		struct ViewportData
+		{
+			Rect rect = { 0, 0, 1, 1 };
+			glm::vec2 mousePos = glm::vec2(0.0f);
+			bool wantMouseDragging = false;
+		} m_ViewportData;
+
+		struct Data
+		{
+			bool settingsWindow = true;
+			bool isGizmoManipulating = false;
+			bool isGizmoBeingUse = false;
+		} m_Data;
     };
 }
