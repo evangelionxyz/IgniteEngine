@@ -41,13 +41,13 @@ namespace ignite
             {
 				const float halfH = orthoSize * 0.5f;
 				const float halfW = halfH * aspectRatio;
-				projection = glm::ortho(-halfW, halfW, -halfH, halfH, nearPlane, farPlane);
+				projection = glm::orthoZO(-halfW, halfW, -halfH, halfH, nearPlane, farPlane);
                 break;
             }
             case ProjectionType::Perspective:
             default:
             {
-				projection = glm::perspective(glm::radians(fov), aspectRatio, nearPlane, farPlane);
+				projection = glm::perspectiveZO(glm::radians(fov), aspectRatio, nearPlane, farPlane);
                 break;
             }
         }
