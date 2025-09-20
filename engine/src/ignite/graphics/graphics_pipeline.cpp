@@ -90,11 +90,11 @@ namespace ignite
 
         LOG_ASSERT(m_Handle == nullptr, "[GraphicsPipeline] Should not re-create pipeline");
         
+        m_Params = params;
+
         // create graphics pipeline
         nvrhi::BlendState blendState;
         blendState.targets[0].blendEnable = m_Params.enableBlend;
-        // blendState.targets[1].blendEnable = false;
-        // blendState.targets[1].colorWriteMask = nvrhi::ColorMask::All;
 
         nvrhi::DepthStencilState depthStencilState;
         depthStencilState.depthWriteEnable = m_Params.depthWrite;
@@ -112,13 +112,13 @@ namespace ignite
 
         rasterState.cullMode = m_Params.cullMode;
         rasterState.fillMode = m_Params.fillMode;
-        rasterState.setFrontCounterClockwise(false);
-        rasterState.setMultisampleEnable(false);
+        rasterState.frontCounterClockwise = false;
+        rasterState.multisampleEnable = false;
 
         nvrhi::RenderState renderState;
-        renderState.setRasterState(rasterState);
-        renderState.setDepthStencilState(depthStencilState);
-        renderState.setBlendState(blendState);
+        renderState.rasterState = rasterState;
+        renderState.depthStencilState =depthStencilState;
+        renderState.blendState = blendState;
 
         nvrhi::GraphicsPipelineDesc pipelineDesc;
 
