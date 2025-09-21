@@ -23,55 +23,39 @@
 
 #pragma once
 
-#include "lighting.hpp"
-#include "texture.hpp"
+#include "ignite/graphics/texture.hpp"
 #include "ignite/asset/asset.hpp"
-
-#include "index_buffer.hpp"
-#include "vertex_buffer.hpp"
-#include "constant_buffer.hpp"
-
+#include "ignite/graphics/buffers/index_buffer.hpp"
+#include "ignite/graphics/buffers/vertex_buffer.hpp"
 #include <string>
 #include <filesystem>
-
-#include <vector>
 #include <nvrhi/nvrhi.h>
 
 namespace ignite {
 
     class GraphicsPipeline;
+    class Scene;
     class ICamera;
-
-    struct EnvironmentParams
-    {
-        float exposure = 1.0f;
-        float gamma = 2.2f;
-        float ambient = 0.5f;
-    };
 
     class Environment : public Asset
     {
     public:
-        Environment();
+        Environment(Scene *scene);
 
         void Begin(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline);
         void End();
 
+        void UpdateBindingSet();
+
         void LoadTexture(const std::string &filepath);
         void WriteBuffer(nvrhi::ICommandList *commandList);
-        void SetSunDirection(float pitch, float yaw);
 
-        static Ref<Environment> Create();
+        static Ref<Environment> Create(Scene *scene);
 
         static nvrhi::VertexAttributeDesc GetAttribute();
         static nvrhi::BindingLayoutDesc GetBindingLayoutDesc();
 
-        EnvironmentParams params;
-        DirLight dirLight;
-
         Ref<Texture> GetHDRTexture() { return m_HDRTexture; }
-        Ref<ConstantBuffer> GetParamsBuffer() { return m_ParamsConstantBuffer; }
-        Ref<ConstantBuffer> GetDirLightBuffer() { return m_DirLightConstantBuffer; }
 
         bool IsInvalidating() const { return m_Invalidating; }
 
@@ -80,9 +64,8 @@ namespace ignite {
 
         Ref<VertexBuffer> m_VertexBuffer;
         Ref<IndexBuffer> m_IndexBuffer;
-        Ref<ConstantBuffer> m_ParamsConstantBuffer;
-        Ref<ConstantBuffer> m_DirLightConstantBuffer;
         Ref<Texture> m_HDRTexture;
+        Scene* m_Scene;
 
         nvrhi::BindingSetHandle m_BindingSet;
     };

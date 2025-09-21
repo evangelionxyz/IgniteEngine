@@ -369,26 +369,29 @@ namespace ignite
         std::string debugName = "[Texture Class]";
         nvrhi::Format format;
         nvrhi::TextureDimension dimension = nvrhi::TextureDimension::Texture2D;
-        nvrhi::SamplerAddressMode samplerMode = nvrhi::SamplerAddressMode::ClampToEdge;
+        nvrhi::SamplerAddressMode samplerMode = nvrhi::SamplerAddressMode::Repeat;
     };
 
     class Texture : public Asset
     {
     public:
         Texture() = default;
+
         Texture(const TextureCreateInfo &createInfo);
+        Texture(Buffer buffer, const TextureCreateInfo &createInfo);
         Texture(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo);
 
         ~Texture();
 
-        static Ref<Texture> Create(const TextureCreateInfo &createInfo);
+        static Ref<Texture> Create(const TextureCreateInfo& createInfo);
+        static Ref<Texture> Create(Buffer buffer, const TextureCreateInfo &createInfo);
         static Ref<Texture> Create(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo);
+
+        void SetData(nvrhi::ICommandList *cmd, int rowPitch, int depthPitch);
 
         nvrhi::TextureHandle GetHandle() { return m_Handle; }
         nvrhi::SamplerHandle GetSampler() { return m_Sampler; }
 
-        void SetData(nvrhi::ICommandList *cmd, Buffer buffer, int rowPitch, int depthPitch);
-        void WriteData(nvrhi::ICommandList *cmd);
 
         int GetWidth() const { return m_CreateInfo.width; }
         int GetHeight() const { return m_CreateInfo.height; }
@@ -408,7 +411,7 @@ namespace ignite
         virtual AssetType GetType() override { return GetStaticType(); }
 
     private:
-        void CreateTextureHandle(const TextureCreateInfo &createInfo);
+        void CreateTextureHandle();
 
         Buffer m_Buffer;
         TextureCreateInfo m_CreateInfo;

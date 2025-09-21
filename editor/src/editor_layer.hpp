@@ -38,8 +38,6 @@ namespace ignite
     class ShaderFactory;
     class ScenePanel;
     class ContentBrowserPanel;
-    class ModelViewerPanel;
-    class MaterialEditorPanel;
     class MaterialsPanel;
 
     class EditorLayer final : public Layer
@@ -110,8 +108,6 @@ namespace ignite
 
         Ref<ScenePanel> m_ScenePanel;
         Ref<ContentBrowserPanel> m_ContentBrowserPanel;
-        Ref<ModelViewerPanel> m_ModelViewerPanel;
-        Ref<MaterialEditorPanel> m_MaterialEditorPanel;
         Ref<MaterialsPanel> m_MaterialsPanel;
         SceneRenderer m_SceneRenderer;
 

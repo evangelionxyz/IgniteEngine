@@ -24,16 +24,15 @@
 #pragma once
 
 #include "ipanel.hpp"
-
 #include "ignite/asset/asset.hpp"
+#include "ignite/graphics/texture.hpp"
 
 #include <filesystem>
 #include <stack>
 #include <map>
 
-#include "ignite/graphics/texture.hpp"
-
-namespace ignite {
+namespace ignite
+{
 
     class Project;
     class EditorLayer;

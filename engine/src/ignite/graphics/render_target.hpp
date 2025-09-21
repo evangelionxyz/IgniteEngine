@@ -24,7 +24,6 @@
 #pragma once
 
 #include "ignite/core/types.hpp"
-#include "shader.hpp"
 #include <nvrhi/nvrhi.h>
 #include <glm/glm.hpp>
 
@@ -32,6 +31,7 @@ namespace ignite
 {
     struct FramebufferAttachments
     {
+        std::string name = "[FramebufferAttachment]";
         nvrhi::Format format;
         nvrhi::ResourceStates state =  nvrhi::ResourceStates::Unknown;
     };
@@ -46,7 +46,7 @@ namespace ignite
     class RenderTarget
     {
     public:
-        RenderTarget(const RenderTargetCreateInfo &createInfo);
+        RenderTarget(const RenderTargetCreateInfo &createInfo, const std::string& debugName = "[RenderTarget]");
 
         void CreateFramebuffer();
         void Resize(const uint32_t width, const uint32_t height);
@@ -71,7 +71,7 @@ namespace ignite
         void ClearColorAttachmentUint(nvrhi::ICommandList *commandList, uint32_t attachmentIndex = 0, uint32_t clearColor = 0) const;
         void ClearDepthAttachment(nvrhi::ICommandList *commandList, float depth, uint32_t stencil) const;
 
-        static Ref<RenderTarget> Create(const RenderTargetCreateInfo &createInfo);
+        static Ref<RenderTarget> Create(const RenderTargetCreateInfo &createInfo, const std::string& debugName = "[RenderTarget]");
 
     private:
         std::vector<nvrhi::TextureHandle> m_ColorAttachments;

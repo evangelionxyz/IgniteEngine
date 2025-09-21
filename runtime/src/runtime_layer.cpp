@@ -29,6 +29,7 @@
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/graphics/ui_renderer.hpp"
+#include "ignite/graphics/renderer.hpp"
 
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/scripting/script_engine.hpp"
@@ -78,17 +79,17 @@ namespace ignite
             RenderTargetCreateInfo rtCreateInfo = {};
             rtCreateInfo.attachments =
             {
-                FramebufferAttachments{ nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }, // Depth
-                FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } // Main Color
+                FramebufferAttachments{ "[DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
+                FramebufferAttachments{ "[ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget} // Main Color
             };
 
-            m_SceneRT = RenderTarget::Create(rtCreateInfo);
-            m_UIRT = RenderTarget::Create(rtCreateInfo);
+            m_SceneRT = RenderTarget::Create(rtCreateInfo, "[SceneRT]");
+            m_UIRT = RenderTarget::Create(rtCreateInfo, "[UIRT]");
 
             // Composite render target
             rtCreateInfo = {};
-            rtCreateInfo.attachments = { FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } }; // Main Color
-            m_CompositeRT = RenderTarget::Create(rtCreateInfo);
+            rtCreateInfo.attachments = { FramebufferAttachments{ "[DepthAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}}; // Main Color
+            m_CompositeRT = RenderTarget::Create(rtCreateInfo, "[CompositeRT]");
 
             m_BindingSet = nullptr;
 

@@ -32,17 +32,14 @@
 
 #include "ignite/math/aabb.hpp"
 
-#include "vertex_buffer.hpp"
-#include "index_buffer.hpp"
-
-#include <unordered_map>
+#include "ignite/graphics/buffers/vertex_buffer.hpp"
+#include "ignite/graphics/buffers/index_buffer.hpp"
 
 namespace ignite
 {
     class GraphicsPipeline;
     class DeviceManager;
     class Texture;
-    class ICamera;
     class RenderTarget;
 
     template<typename VertexType>

@@ -44,20 +44,22 @@ namespace ignite
     {
         glm::vec3 position;
         glm::vec3 normal;
-        glm::vec2 texCoord;
-        glm::vec4 color;
+		glm::vec3 tangent;
+		glm::vec3 bitangent;
+        glm::vec2 uv;
     };
 
     struct VertexMesh_Anim
     {
         glm::vec3 position;
         glm::vec3 normal;
-        glm::vec2 texCoord;
-        glm::vec4 color;
+		glm::vec3 tangent;
+		glm::vec3 bitangent;
+        glm::vec2 uv;
         uint32_t boneIDs[VERTEX_MAX_BONES] = { 0 };
         float weights[VERTEX_MAX_BONES] = { 0.0f };
 
-        static std::array<nvrhi::VertexAttributeDesc, 6> GetAttributes()
+        static std::array<nvrhi::VertexAttributeDesc, 7> GetAttributes()
         {
             return
             {
@@ -72,14 +74,19 @@ namespace ignite
                     .setOffset(offsetof(VertexMesh_Anim, normal))
                     .setElementStride(sizeof(VertexMesh_Anim)),
                 nvrhi::VertexAttributeDesc()
-                    .setName("TEXCOORD")
-                    .setFormat(nvrhi::Format::RG32_FLOAT)
-                    .setOffset(offsetof(VertexMesh_Anim, texCoord))
+                    .setName("TANGENT")
+                    .setFormat(nvrhi::Format::RGB32_FLOAT)
+                    .setOffset(offsetof(VertexMesh_Anim, tangent))
                     .setElementStride(sizeof(VertexMesh_Anim)),
                 nvrhi::VertexAttributeDesc()
-                    .setName("COLOR")
-                    .setFormat(nvrhi::Format::RGBA32_FLOAT)
-                    .setOffset(offsetof(VertexMesh_Anim, color))
+                    .setName("BITANGENT")
+                    .setFormat(nvrhi::Format::RGB32_FLOAT)
+                    .setOffset(offsetof(VertexMesh_Anim, bitangent))
+                    .setElementStride(sizeof(VertexMesh_Anim)),
+                nvrhi::VertexAttributeDesc()
+                    .setName("TEXCOORD")
+                    .setFormat(nvrhi::Format::RG32_FLOAT)
+                    .setOffset(offsetof(VertexMesh_Anim, uv))
                     .setElementStride(sizeof(VertexMesh_Anim)),
                 nvrhi::VertexAttributeDesc()
                     .setName("BONEIDS")
@@ -101,25 +108,8 @@ namespace ignite
                 .setRegisterSpaceIsDescriptorSet(true)
                 .setVisibility(nvrhi::ShaderType::All)
                 .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0)) // camera
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1)) // model
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(2)) // directional light
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(3)); // environment
-        }
-
-        static nvrhi::BindingLayoutDesc GetMaterialBindingLayoutDesc()
-        {
-            return nvrhi::BindingLayoutDesc()
-                .setRegisterSpace(1) // set 1
-                .setRegisterSpaceIsDescriptorSet(true)
-                .setVisibility(nvrhi::ShaderType::All)
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)) // material
-                .addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)) // diffuse
-                .addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)) // specular
-                .addItem(nvrhi::BindingLayoutItem::Texture_SRV(2)) // emissive
-                .addItem(nvrhi::BindingLayoutItem::Texture_SRV(3)) // metallic roughness
-                .addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)) // normals
-                .addItem(nvrhi::BindingLayoutItem::Texture_SRV(5)) // texture cube
-                .addItem(nvrhi::BindingLayoutItem::Sampler(0)); // sampler
+                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1)) // object
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(2)); // scene
         }
     };
 

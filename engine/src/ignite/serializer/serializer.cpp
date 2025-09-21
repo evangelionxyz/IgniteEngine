@@ -30,13 +30,14 @@
 #include "ignite/scene/scene.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/core/logger.hpp"
-#include "ignite/graphics/environment.hpp"
+#include "ignite/graphics/objects/environment.hpp"
 
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/component.hpp"
 #include "ignite/scene/scene_manager.hpp"
 
 #include <fstream>
+#include <ranges>
 
 namespace ignite {
 
@@ -121,12 +122,12 @@ namespace ignite {
         sr.BeginSequence("Entities");
 
         // entities sequence
-        for (auto& e : m_Scene->entities | std::views::values)
+        for (const entt::entity e : m_Scene->entities | std::views::values)
         {
             Entity entity = { e, m_Scene.get() };
             const ID &idComp = entity.GetComponent<ID>();
 
-            bool isPrefab = idComp.IsInType(EntityType_Prefab);
+            const bool isPrefab = idComp.IsInType(EntityType_Prefab);
 
             if (isPrefab)
                 continue;
@@ -428,8 +429,8 @@ namespace ignite {
 
         sr.EndMap(); // END
 
-        // Example
 #if 0
+        // Example
         sr.BeginMap(); // START
 
         sr.BeginMap("Scene"); // scene file header
@@ -440,7 +441,7 @@ namespace ignite {
         sr.BeginSequence("Entities");
 
 
-        // entites sequence
+        // entities sequence
         for (int i = 0; i < 10; ++i)
         {
             sr.BeginMap(); // START Entity
@@ -657,30 +658,19 @@ namespace ignite {
             // Audio Source
             if (YAML::Node node = entityNode["AudioSource"])
             {
-                AudioSource &comp = desEntity.AddComponent<AudioSource>();
+                AudioSource& comp = desEntity.AddComponent<AudioSource>();
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
                 comp.volume = node["Volume"].as<float>();
-                comp.pitch= node["Pitch"].as<float>();
+                comp.pitch = node["Pitch"].as<float>();
                 comp.pan = node["Pan"].as<float>();
                 comp.playOnStart = node["PlayOnStart"].as<bool>();
-            }
-
-            // Skinned Mesh
-            if (YAML::Node node = entityNode["SkeletalMesh"])
-            {
-                SkeletalMesh &skinnedMesh = desEntity.AddComponent<SkeletalMesh>();
-                skinnedMesh.meshHandle = AssetHandle(node["MeshHandle"].as<uint64_t>());
-                if (auto meshAsset = project->GetAsset<MeshAsset>(skinnedMesh.meshHandle))
-                {
-                    skinnedMesh.meshes = meshAsset->Create();
-                }
             }
 
             // World Environment
             if (YAML::Node node = entityNode["WorldEnvironment"])
             {
                 WorldEnvironment &world = desEntity.AddComponent<WorldEnvironment>();
-                world.environment = Environment::Create();
+                world.environment = Environment::Create(desScene.get());
                 world.imageHandle = AssetHandle(node["ImageHandle"].as<uint64_t>());
                 const AssetMetaData &metadata = project->GetAssetManager().GetMetaData(world.imageHandle);
                 if (metadata.type == AssetType::Texture)

@@ -1,17 +1,17 @@
 /* MIT License
-* 
+*
 * Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
+*
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
 * in the Software without restriction, including without limitation the rights
 * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 * copies of the Software, and to permit persons to whom the Software is
 * furnished to do so, subject to the following conditions:
-* 
+*
 * The above copyright notice and this permission notice shall be included in all
 * copies or substantial portions of the Software.
-* 
+*
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -21,15 +21,48 @@
 * SOFTWARE.
 */
 
-#pragma once
+#include "model.hpp"
 
-#include "vertex_data.hpp"
-
-namespace ignite {
-
-    struct MeshFactory
+namespace ignite
+{
+    Model::Model(const std::string& filename)
     {
-        static std::array<VertexMesh, 24> CubeVertices;
-        static std::array<uint32_t, 36> CubeIndices;
-    };
+        m_Scene = MeshLoader::LoadSceneGraphFromGLTF(filename);
+    }
+
+    Model::~Model()
+    {
+    }
+
+    void Model::PlayAnimation(const std::string& name)
+    {
+        m_CurrentAnimation = name;
+    }
+
+    void Model::StopAnimation()
+    {
+    }
+
+    void Model::Update(float deltaTime)
+    {
+    }
+
+    void Model::UpdateBindingSet(Scene* scene)
+    {
+        for (auto& mesh : m_Scene.flatMeshes)
+        {
+            mesh->UpdateBindingSet(scene);
+        }
+    }
+
+    void Model::SetTransform(const glm::mat4& transform)
+    {
+        m_Transform = transform;
+    }
+
+    Ref<Model> Model::Create(const std::string& filename)
+    {
+        return CreateRef<Model>(filename);
+    }
+
 }

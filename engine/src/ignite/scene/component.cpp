@@ -22,7 +22,7 @@
 */
 
 #include "component.hpp"
-#include "ignite/graphics/mesh.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/scene_renderer.hpp"
 
 namespace ignite

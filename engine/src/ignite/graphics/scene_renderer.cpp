@@ -24,10 +24,8 @@
 #include "scene_renderer.hpp"
 #include "framebuffer_key.hpp"
 
-#include "mesh.hpp"
 #include "renderer.hpp"
 #include "renderer_2d.hpp"
-#include "environment.hpp"
 #include "ui_renderer.hpp"
 #include "ui/ui_manager.hpp"
 
@@ -37,7 +35,6 @@
 #include "ignite/scene/component.hpp"
 
 #include "ignite/core/application.hpp"
-#include "ignite/core/input/input.hpp"
 
 #include <ranges>
 #include <cstdlib>
@@ -97,12 +94,13 @@ namespace ignite
         }
 
         GraphicsPipelineParams params;
-        params.enableBlend = true;
+        params.enableBlend = false;
         params.depthWrite = true;
         params.depthTest = true;
         params.enableDepthStencil = false;
         params.fillMode = fillMode;
-        params.cullMode = nvrhi::RasterCullMode::None;
+        params.cullMode = nvrhi::RasterCullMode::Front;
+        params.comparison = nvrhi::ComparisonFunc::LessOrEqual;
 
         auto attributes = VertexMesh_Anim::GetAttributes();
         GraphicsPipelineCreateInfo createInfo;
@@ -110,8 +108,8 @@ namespace ignite
         createInfo.attributeCount = static_cast<uint32_t>(attributes.size());
 
         auto gp = GraphicsPipeline::Create();
-        gp->AddShader("mesh_anim.vertex.hlsl", nvrhi::ShaderType::Vertex)
-          .AddShader("mesh_anim.pixel.hlsl", nvrhi::ShaderType::Pixel)
+        gp->AddShader("mesh_anim.vertex.hlsl", nvrhi::ShaderType::Vertex, "main", true)
+          .AddShader("mesh_anim.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
           .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
           .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
           .Build(framebuffer, params, createInfo);
@@ -296,19 +294,29 @@ namespace ignite
 
         m_Device = Application::GetGraphicsDevice();
         
-        // Create Environment
-        CreateEnvironment();
-
         m_Renderer2D = Renderer2D::Create();
         m_UIRenderer = UIRenderer::Create(1280, 720);
         m_UIRenderer->SetUIManager(&UIManager::GetInstance());
 
-        CreateDemoUI();
+        // CreateDemoUI();
     }
 
     void SceneRenderer::SetActiveScene(const Ref<Scene> &scene)
     {
         m_Scene = scene;
+        if (m_Scene)
+        {
+            // create environment
+            m_Environment = Environment::Create(m_Scene.get());
+            m_Environment->LoadTexture("resources/hdr/klippad_sunrise_2_2k.hdr");
+            m_Environment->UpdateBindingSet();
+
+            auto commandList = m_CommandList->GetActiveHandle();
+            commandList->open();
+            m_Environment->WriteBuffer(commandList);
+            commandList->close();
+            m_Device->executeCommandList(commandList);
+        }
     }
 
     void SceneRenderer::RenderTo(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT, bool renderEnvironment)
@@ -322,18 +330,21 @@ namespace ignite
 
         auto cmd = m_CommandList->GetActiveHandle();
 
+        m_Scene->WriteBuffer(cmd);
+
         // setup camera constants
         CameraBuffer cameraBuffer = { camera->projection, camera->view, glm::vec4(camera->position, 1.0f) };
 		Renderer::GetCameraConstantBuffer()->SetData(cmd, Buffer(&cameraBuffer, sizeof(CameraBuffer)));
 
         // Clear Render Targets
+        // far depth = 1.0f == LessOrEqual
         uiRT->ClearColorAttachmentFloat(cmd, 0);
         uiRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
         sceneRT->ClearColorAttachmentFloat(cmd, 0);
-        sceneRT->ClearDepthAttachment(cmd, 1.0f, 0); // far depth = 1.0f == LessOrEqual
+        sceneRT->ClearDepthAttachment(cmd, 1.0f, 0); 
 
-        compositeRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+        compositeRT->ClearColorAttachmentFloat(cmd, 0);
         compositeRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
         nvrhi::IFramebuffer *framebuffer = sceneRT->GetFramebuffer();
@@ -344,94 +355,53 @@ namespace ignite
             m_Environment->Begin(cmd, camera, framebuffer, envPSO);
         }
 
-        auto skeletalMeshView = m_Scene->registry->view<Transform, SkeletalMesh>();
-        for (entt::entity e : skeletalMeshView)
+        Ref<GraphicsPipeline> geomPSO = GetGeomPipelineForFB(framebuffer, m_FillMode);
+        nvrhi::GraphicsState geomGState = nvrhi::GraphicsState();
+        geomGState.pipeline = geomPSO->GetHandle();
+        geomGState.framebuffer = framebuffer;
+        geomGState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+
+        auto meshView = m_Scene->registry->view<Transform, MeshComponent>();
+
+        for (entt::entity e : meshView)
         {
-            Transform &tr = m_Scene->registry->get<Transform>(e);
-            if (!tr.visible)
+            Transform& tr = m_Scene->registry->get<Transform>(e);
+            MeshComponent& mesh = m_Scene->registry->get<MeshComponent>(e);
+
+            if (!mesh.model)
                 continue;
 
-            SkeletalMesh &sm = m_Scene->registry->get<SkeletalMesh>(e);
+            MeshScene &meshScene = mesh.model->GetScene();
+            for (auto &mesh : meshScene.flatMeshes)
             {
-                // render each mesh
-                for (size_t i = 0; i < sm.meshes.size(); ++i)
-                {
-                    auto &m = sm.meshes[i];
-                    LOG_ASSERT(m, "[SceneRenderer] Mesh instance is null");
+                SkinnedMeshBuffer smBuffer;
+                smBuffer.transformation = tr.GetLocalMatrix() * mesh->local;
 
-                    // Reload environment data
-                    if (m_Environment->IsInvalidating())
-                    {
-                        m->UpdateBindingSet();
-                        m->material->UpdateBindingSet();
-                    }
+                const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(smBuffer.transformation)));
+                smBuffer.normal = glm::mat4(normalMat3);
 
-                    m->skinBuffer.transformation = tr.GetWorldMatrix();
-                    // Compute normal matrix (inverse-transpose of upper-left 3x3)
-                    const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(m->skinBuffer.transformation)));
-					m->skinBuffer.normal = glm::mat4(normalMat3);
+                std::fill(std::begin(smBuffer.boneTransforms),
+                    std::end(smBuffer.boneTransforms),
+                    glm::mat4(1.0f));
 
-#if 0
-                    // Recalculate the AABB using the full world transform.
-                    glm::mat4 worldMatrix = tr.GetWorldMatrix();
-                    glm::vec3 origMin = m->mesh.data.aabb.min;
-                    glm::vec3 origMax = m->mesh.data.aabb.max;
+                mesh->skinnedBuffer->SetData(cmd, Buffer(&smBuffer, sizeof(smBuffer)));
 
-                    glm::vec3 corners[8] =
-                    {
-                        glm::vec3(origMin.x, origMin.y, origMin.z),
-                        glm::vec3(origMax.x, origMin.y, origMin.z),
-                        glm::vec3(origMin.x, origMax.y, origMin.z),
-                        glm::vec3(origMax.x, origMax.y, origMin.z),
-                        glm::vec3(origMin.x, origMin.y, origMax.z),
-                        glm::vec3(origMax.x, origMin.y, origMax.z),
-                        glm::vec3(origMin.x, origMax.y, origMax.z),
-                        glm::vec3(origMax.x, origMax.y, origMax.z)
-                    };
+                mesh->material->UploadToGpu(cmd);
+                
+                geomGState.bindings = { mesh->GetBindingSet(), mesh->material->GetBindingSet()};
 
-                    glm::vec3 transformedMin(FLT_MAX);
-                    glm::vec3 transformedMax(-FLT_MAX);
+                geomGState.addVertexBuffer({ mesh->vertexBuffer->GetHandle(), 0, 0 });
+                geomGState.setIndexBuffer({ mesh->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
 
-                    for (const auto &corner : corners)
-                    {
-                        glm::vec3 worldPos = glm::vec3(worldMatrix * glm::vec4(corner, 1.0f));
-                        transformedMin = glm::min(transformedMin, worldPos);
-                        transformedMax = glm::max(transformedMax, worldPos);
-                    }
+                cmd->setGraphicsState(geomGState);
 
-                    AABB worldAABB;
-                    worldAABB.min = transformedMin;
-                    worldAABB.max = transformedMax;
-                    m_EntityBounds.push_back(worldAABB);
-#endif
-                    m->constantBuffer->SetData(cmd, Buffer(&m->skinBuffer, sizeof(m->skinBuffer)));
-                    m->material->WriteBuffer(cmd);
+                nvrhi::DrawArguments args;
+                args.setVertexCount(mesh->indexBuffer->GetCount());
+                args.instanceCount = 1;
 
-                    // render
-                    Ref<GraphicsPipeline> geomPSO = GetGeomPipelineForFB(framebuffer, m_FillMode);
-
-                    auto state = nvrhi::GraphicsState();
-                    state.pipeline = geomPSO->GetHandle();
-                    state.framebuffer = framebuffer;
-                    state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
-
-                    state.bindings = { m->bindingSet, m->material->bindingSet };
-
-                    state.addVertexBuffer({ m->mesh.GetVertexBuffer()->GetHandle(), 0, 0 });
-                    state.setIndexBuffer({ m->mesh.GetIndexBuffer()->GetHandle(), nvrhi::Format::R32_UINT });
-
-                    cmd->setGraphicsState(state);
-
-                    nvrhi::DrawArguments args;
-                    args.setVertexCount(m->mesh.GetIndicesCount());
-                    args.instanceCount = 1;
-
-                    cmd->drawIndexed(args);
-                }
+                cmd->drawIndexed(args);
             }
-
         }
-
         // 2D Pass
         m_Renderer2D->Begin(cmd);
         auto object2DView = m_Scene->registry->view<Transform, Sprite2D>();
@@ -513,13 +483,6 @@ namespace ignite
                 createInfo.format = nvrhi::Format::RGBA8_UNORM;
 
                 Ref<Texture> image = Texture::Create("resources/textures/cursor_128px.png", createInfo);
-
-                auto commandList = m_Device->createCommandList();
-                commandList->open();
-                image->WriteData(commandList);
-                commandList->close();
-                m_Device->executeCommandList(commandList);
-
                 auto button = uiManager.CreateButton("button", glm::vec2(0), glm::vec2(50.0f, 50.0f));
                 button->SetAlignment(alignment);
                 button->SetImage(image);
@@ -601,22 +564,6 @@ namespace ignite
     void SceneRenderer::ClearSelectedEntities()
     {
         m_SelectedEntities.clear();
-    }
-
-    void SceneRenderer::CreateEnvironment()
-    {
-        // create environment
-        m_Environment = Environment::Create();
-        m_Environment->LoadTexture("resources/hdr/klippad_sunrise_2_2k.hdr");
-
-        auto commandList = m_CommandList->GetActiveHandle();
-
-        commandList->open();
-        m_Environment->WriteBuffer(commandList);
-        commandList->close();
-        m_Device->executeCommandList(commandList);
-
-        m_Environment->SetSunDirection(50.0f, -27.0f);
     }
 
     SceneRenderer* SceneRenderer::GetActive()

@@ -22,13 +22,12 @@
 */
 
 #include "environment.hpp"
-#include "vertex_data.hpp"
-#include "graphics_pipeline.hpp"
-#include "renderer.hpp"
-
+#include "ignite/graphics/vertex_data.hpp"
+#include "ignite/graphics/graphics_pipeline.hpp"
+#include "ignite/graphics/renderer.hpp"
 #include "ignite/scene/icamera.hpp"
 #include "ignite/core/logger.hpp"
-#include "ignite/scene/icamera.hpp"
+#include "ignite/scene/scene.hpp"
 #include "ignite/core/application.hpp"
 
 #include <stb_image.h>
@@ -36,7 +35,8 @@
 namespace ignite {
 
     // clock wise
-    std::array<glm::vec3, 24> vertices = {
+    std::array<glm::vec3, 24> vertices =
+    {
 
         glm::vec3( 1.0f,  1.0f,  1.0f), // top right    front  
         glm::vec3( 1.0f,  1.0f, -1.0f), // top right    back
@@ -69,36 +69,28 @@ namespace ignite {
         glm::vec3( 1.0f, -1.0f,  1.0f), // bottom right front
     };
 
-    Environment::Environment()
+    Environment::Environment(Scene *scene)
+        : m_Scene(scene)
     {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
         // create vertex buffer
         m_VertexBuffer = VertexBuffer::Create(sizeof(vertices), "[Environment] Vertex Buffer");
         m_IndexBuffer = IndexBuffer::Create(sizeof(uint32_t) * 36, "[Environment] Index Buffer");
-
-        m_ParamsConstantBuffer = ConstantBuffer::Create(sizeof(EnvironmentParams), true, 16, "[Environment] EnvironmentParams constant buffer!");
-        m_DirLightConstantBuffer = ConstantBuffer::Create(sizeof(DirLight), true, 16, "[Environment] DirLight constant buffer!");
     }
 
     void Environment::Begin(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline)
     {
-        // write params buffer
-        m_ParamsConstantBuffer->SetData(commandList, Buffer(&params, sizeof(EnvironmentParams)));
-        m_DirLightConstantBuffer->SetData(commandList, Buffer(&dirLight, sizeof(DirLight)));
+        LOG_ASSERT(m_BindingSet, "[Environment] Invalid binding set");
 
         // render
         auto state = nvrhi::GraphicsState();
         state.pipeline = pipeline->GetHandle();
         state.framebuffer = framebuffer;
+        state.bindings = { m_BindingSet };
         state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
         state.addVertexBuffer({ m_VertexBuffer->GetHandle(), 0, 0 });
         state.indexBuffer = { m_IndexBuffer->GetHandle(), nvrhi::Format::R32_UINT };
-
-        if (m_BindingSet != nullptr)
-        {
-            state.addBindingSet(m_BindingSet);
-        }
 
         commandList->setGraphicsState(state);
 
@@ -106,7 +98,7 @@ namespace ignite {
         args.setVertexCount(36);
         args.instanceCount = 1;
 
-        // commandList->drawIndexed(args);
+        commandList->drawIndexed(args);
     }
 
     void Environment::End()
@@ -114,23 +106,14 @@ namespace ignite {
         m_Invalidating = false;
     }
 
-    void Environment::LoadTexture(const std::string &filepath)
+    void Environment::UpdateBindingSet()
     {
-        m_Invalidating = true;
-        
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-
-        TextureCreateInfo textureCI;
-        textureCI.dimension = nvrhi::TextureDimension::Texture2D;
-        textureCI.format = nvrhi::Format::RGBA32_FLOAT;
-        textureCI.flip = true; // usually HDR textures are flipped
-
-        m_HDRTexture = Texture::Create(filepath, textureCI);
+        nvrhi::IDevice* device = Application::GetGraphicsDevice();
 
         // create binding set after load the texture
         nvrhi::BindingSetDesc bsDesc;
         bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
-        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m_ParamsConstantBuffer->GetHandle()));
+        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m_Scene->GetConstantBuffer()->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_HDRTexture->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_HDRTexture->GetSampler()));
 
@@ -138,10 +121,20 @@ namespace ignite {
         LOG_ASSERT(m_BindingSet, "Failed to create binding set");
     }
 
+    void Environment::LoadTexture(const std::string& filepath)
+    {
+        m_Invalidating = true;
+        
+        TextureCreateInfo textureCI;
+        textureCI.dimension = nvrhi::TextureDimension::Texture2D;
+        textureCI.format = nvrhi::Format::RGBA32_FLOAT;
+        textureCI.flip = true;
+        m_HDRTexture = Texture::Create(filepath, textureCI);
+    }
+
     void Environment::WriteBuffer(nvrhi::ICommandList *commandList)
     {
         // write buffers
-        m_HDRTexture->WriteData(commandList);
         m_VertexBuffer->SetData(commandList, Buffer(vertices.data(), sizeof(vertices)));
 
         // index buffer
@@ -163,22 +156,9 @@ namespace ignite {
         m_IndexBuffer->SetData(commandList, Buffer(indices.data(), sizeof(uint32_t) * indices.size()));
     }
 
-    void Environment::SetSunDirection(float pitch, float yaw)
+    Ref<Environment> Environment::Create(Scene* scene)
     {
-        float pitchR = glm::radians(pitch); // elevation
-        float yawR = glm::radians(yaw); // azimuth
-
-        glm::vec3 dir;
-        dir.x = cos(pitchR) * sin(yawR);
-        dir.y = sin(pitchR);
-        dir.z = cos(pitchR) * cos(yawR);
-
-        dirLight.direction = glm::vec4(glm::normalize(dir), 0.0f);
-    }
-
-    Ref<Environment> Environment::Create()
-    {
-        return CreateRef<Environment>();
+        return CreateRef<Environment>(scene);
     }
 
     nvrhi::VertexAttributeDesc Environment::GetAttribute()
@@ -194,9 +174,9 @@ namespace ignite {
     {
         return nvrhi::BindingLayoutDesc()
             .setVisibility(nvrhi::ShaderType::All)
-            .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0))
-            .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1))
-            .addItem(nvrhi::BindingLayoutItem::Texture_SRV(0))
+            .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0)) // camera
+            .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(1)) // scene
+            .addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)) // texture
             .addItem(nvrhi::BindingLayoutItem::Sampler(0));
     }
 }

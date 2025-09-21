@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include "ignite/graphics/mesh.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
 #include "skeletal_animation.hpp"
 #include "ignite/core/types.hpp"
 

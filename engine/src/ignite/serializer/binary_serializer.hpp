@@ -27,7 +27,7 @@
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/animation/skeleton.hpp"
 
-#include "ignite/graphics/mesh.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
 
 #include <filesystem>
 #include <vector>
@@ -69,6 +69,7 @@ namespace ignite
         static std::vector<std::byte> SerializeMaterial(const Ref<Material> &mat, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
+#if 0
 
             nvrhi::IDevice *device = Application::GetGraphicsDevice();
             nvrhi::CommandListHandle cmd = device->createCommandList();
@@ -128,7 +129,7 @@ namespace ignite
             std::ofstream of(filepath, std::ios::binary);
             of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
             of.close();
-
+#endif
             return buffer;
         }
 
@@ -137,6 +138,7 @@ namespace ignite
             Ref<Material> mat = CreateRef<Material>();
             std::ifstream inFile(filepath, std::ios::binary);
 
+#if 0
             nvrhi::IDevice *device = Application::GetGraphicsDevice();
             nvrhi::CommandListHandle cmd = device->createCommandList();
             cmd->open();
@@ -165,7 +167,6 @@ namespace ignite
             for (uint32_t i = 0; i < textureCount; ++i)
             {
                 size_t width, height, rowPitch;
-                MaterialTextureType textureType;
                 inFile.read(reinterpret_cast<char *>(&textureType), sizeof(textureType));
                 
                 inFile.read(reinterpret_cast<char *>(&width), sizeof(width));
@@ -186,9 +187,7 @@ namespace ignite
                 createInfo.flip = false;
                 createInfo.format = nvrhi::Format::RGBA8_UNORM;
 
-                Ref<Texture> texture = Texture::Create(createInfo);
-                texture->SetData(cmd, buffer, rowPitch, 0);
-                mat->textures[textureType] = texture;
+                Ref<Texture> texture = Texture::Create(buffer, createInfo);
             }
 
             cmd->close();
@@ -197,10 +196,11 @@ namespace ignite
             mat->UpdateBindingSet();
 
             inFile.close();
-
+#endif
             return mat;
         }
 
+#if 0
         static std::vector<std::byte> SerializeMeshAsset(const Ref<MeshAsset> &sm, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
@@ -331,6 +331,7 @@ namespace ignite
 
             return buffer;
         }
+
 
         static Ref<MeshAsset> DeserializeMeshAsset(const std::filesystem::path &filepath)
         {
@@ -467,6 +468,7 @@ namespace ignite
             
             return meshAsset;
         }
+#endif
 
         static std::vector<std::byte> SerializeAnimation(const Ref<SkeletalAnimation> &anim, const std::filesystem::path &filepath)
         {

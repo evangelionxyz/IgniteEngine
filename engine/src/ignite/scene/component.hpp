@@ -28,19 +28,15 @@
 #include "icomponent.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/core/uuid.hpp"
-#include "ignite/graphics/material.hpp"
-#include "ignite/graphics/vertex_data.hpp"
-#include "ignite/graphics/mesh.hpp"
-#include "ignite/graphics/environment.hpp"
+#include "ignite/graphics/objects/material.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
+#include "ignite/graphics/objects/environment.hpp"
+#include "ignite/graphics/objects/model.hpp"
 #include "ignite/math/aabb.hpp"
 #include "scene_camera.hpp"
-
-#include <glm/glm.hpp>
-#include <glm/gtx/quaternion.hpp>
-#include <nvrhi/nvrhi.h>
-#include <string>
-
 #include "ignite/core/string_utils.hpp"
+#include <string>
+#include <glm/glm.hpp>
 
 // Forward declaration
 namespace JPH
@@ -326,7 +322,6 @@ namespace ignite
     {
     public:
         Ref<Environment> environment;
-        EnvironmentParams params;
         AssetHandle imageHandle;
 
         bool primary = false;
@@ -357,7 +352,7 @@ namespace ignite
          std::vector<glm::mat4> boneTransforms;
 
          // for rendering
-         std::vector<Ref<MeshInstance>> meshes;
+         // std::vector<Ref<MeshInstance>> meshes;
 
          SkeletalMesh() = default;
 
@@ -371,6 +366,17 @@ namespace ignite
         AssetHandle meshHandle = AssetHandle(0);
 
         StaticMesh() = default;
+
+        static CompType StaticType() { return CompType_StaticMesh; }
+        virtual CompType GetType() override { return StaticType(); }
+    };
+
+    class MeshComponent : public IComponent
+    {
+    public:
+        Ref<Model> model;
+
+        MeshComponent() = default;
 
         static CompType StaticType() { return CompType_StaticMesh; }
         virtual CompType GetType() override { return StaticType(); }

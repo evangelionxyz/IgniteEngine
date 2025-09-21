@@ -27,9 +27,10 @@
 
 #include <format>
 #include <algorithm>
+#include <ranges>
 
-namespace ignite {
-
+namespace ignite
+{
     ContentBrowserPanel::ContentBrowserPanel(const char *windowTitle)
         : IPanel(windowTitle)
     {
@@ -39,16 +40,6 @@ namespace ignite {
         m_Icons["unknown"] = Texture::Create("resources/ui/ic_file.png", createInfo);
 
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
-
-        nvrhi::CommandListHandle commandList = device->createCommandList();
-        commandList->open();
-        for (const Ref<Texture> &icon : m_Icons | std::views::values)
-        {
-            icon->WriteData(commandList);
-        }
-        
-        commandList->close();
-        device->executeCommandList(commandList);
     }
 
     void ContentBrowserPanel::LoadProjectFiles()
@@ -392,7 +383,7 @@ namespace ignite {
 
                         if (assetType == AssetType::Material)
                         {
-                            Project::GetInstance()->GetAsset<Material>(assetHandle);
+                            // Project::GetInstance()->GetAsset<Material>(assetHandle);
                         }
                     }
 

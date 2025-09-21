@@ -25,19 +25,13 @@
 
 #include "ignite/core/types.hpp"
 #include "ignite/core/logger.hpp"
-
 #include <spirv_cross/spirv_cross.hpp>
 #include <spirv_cross/spirv_glsl.hpp>
-#include <spirv_cross/spirv_hlsl.hpp>
-
+#include <ShaderMake/ShaderMake.h>
+#include <nvrhi/nvrhi.h>
+#include <initializer_list>
 #include <filesystem>
 #include <string>
-#include <vector>
-#include <ShaderMake/ShaderMake.h>
-#include <fstream>
-#include <nvrhi/nvrhi.h>
-
-#include <initializer_list>
 
 namespace ignite
 {

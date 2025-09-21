@@ -28,7 +28,7 @@
 
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/renderer_2d.hpp"
-#include "ignite/graphics/environment.hpp"
+#include "ignite/graphics/objects/environment.hpp"
 #include "ignite/physics/2d/physics_2d.hpp"
 #include "ignite/physics/jolt/jolt_physics.hpp"
 #include "ignite/math/math.hpp"
@@ -53,6 +53,8 @@ namespace ignite
         registry = new entt::registry();
         physics2D = CreateScope<Physics2D>(this);
         physics = CreateScope<JoltScene>(this);
+
+        m_ConstantBuffer = ConstantBuffer::Create(sizeof(SceneParameters), false, 1, "[SceneParameters]");
     }
 
     Scene::~Scene()
@@ -133,6 +135,7 @@ namespace ignite
 
     void Scene::UpdateTransforms(float deltaTime)
     {
+#if 0
         auto skeletalMeshView = registry->view<SkeletalMesh>();
         for (auto entity : skeletalMeshView)
         {
@@ -163,6 +166,7 @@ namespace ignite
                 }
             }
         }
+#endif
 
         auto view = registry->view<ID, Transform>();
         for (auto ent : view)
@@ -221,7 +225,8 @@ namespace ignite
 
     void Scene::Resize(uint32_t width, uint32_t height)
     {
-        this->viewportWidth = width; this->viewportHeight = height;
+        this->viewportWidth = width;
+        this->viewportHeight = height;
         
         auto camView = registry->view<Camera>();
         for (entt::entity entity : camView)
@@ -230,6 +235,11 @@ namespace ignite
 			const float aspectRatio = static_cast<float>(viewportWidth) / static_cast<float>(viewportHeight);
 			cam.camera.UpdateMatrices(aspectRatio);
         }
+    }
+
+    void Scene::WriteBuffer(nvrhi::ICommandList* cmd)
+    {
+        m_ConstantBuffer->SetData(cmd, Buffer((void*)&this->params, sizeof(SceneParameters)));
     }
 
     Entity Scene::GetPrimaryCamera()
@@ -338,6 +348,11 @@ namespace ignite
 
     template<>
     void Scene::OnComponentAdded<WorldEnvironment>(Entity entity, WorldEnvironment &comp)
+    {
+    }
+
+    template<>
+    void Scene::OnComponentAdded<MeshComponent>(Entity entity, MeshComponent& comp)
     {
     }
 

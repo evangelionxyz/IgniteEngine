@@ -30,6 +30,7 @@
 #include "ignite/core/uuid.hpp"
 #include "ignite/asset/asset.hpp"
 #include "ignite/math/aabb.hpp"
+#include "ignite/graphics/buffers/constant_buffer.hpp"
 
 #include <unordered_map>
 
@@ -42,6 +43,19 @@ namespace ignite
     class Environment;
     class SceneRenderer;
     class Project;
+
+    struct SceneParameters
+    {
+        glm::vec4 sunColor = glm::vec4(0.87f, 0.87f, 0.87f, 1.1f); // w = light intensity
+        glm::vec2 sungAngles =  glm::vec2(0.1f, 1.0f);
+        float sunAngularRadius = 0.5f;
+        int renderMode = 0;
+        
+        float exposure = 1.1f;
+        float gamma = 2.2f;
+        float ambient = 0.5f;
+        float padding;
+    };
 
     class Scene : public Asset
     {
@@ -60,6 +74,7 @@ namespace ignite
         void OnUpdateRuntimeSimulate(f32 deltaTime);
         void OnUpdateEdit(f32 deltaTime);
         void Resize(uint32_t width, uint32_t height);
+        void WriteBuffer(nvrhi::ICommandList* cmd);
 
         template<typename T>
         void OnComponentAdded(Entity entity, T &comp);
@@ -72,21 +87,25 @@ namespace ignite
         Scope<Physics2D> physics2D;
         Scope<JoltScene> physics;
         std::unordered_map<UUID, entt::entity> entities; // uuid to entity
+        SceneParameters params;
         
         bool IsPlaying() const { return m_Playing; }
         
         static Ref<Scene> Create(Project *project, const std::string &name);
         
-        static AssetType GetStaticType() { return AssetType::Scene; }
-        virtual AssetType GetType() override { return GetStaticType(); }
         Ref<SceneRenderer> GetSceneRenderer() { return m_SceneRenderer; }
+        Ref<ConstantBuffer> GetConstantBuffer() { return m_ConstantBuffer; }
 
         glm::vec3 physicsGravity{ 0.0f, -9.8f, 0.0f };
         float timeInSeconds = 0.0f;
         uint32_t viewportWidth = 1280, viewportHeight = 720;
 
+        static AssetType GetStaticType() { return AssetType::Scene; }
+        virtual AssetType GetType() override { return GetStaticType(); }
+
     private:
         Ref<SceneRenderer> m_SceneRenderer;
+        Ref<ConstantBuffer> m_ConstantBuffer;
         Project *m_Project;
 
         bool m_Playing = false;

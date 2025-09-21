@@ -46,6 +46,7 @@ namespace ignite
         CapsuleCollider,
         MeshCollider,
         AudioSource,
+        MeshComponent,
         Script,
         WorldEnvironment
     >; 

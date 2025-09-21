@@ -25,12 +25,14 @@
 #include "renderer_2d.hpp"
 #include "texture.hpp"
 #include "shader.hpp"
-#include "constant_buffer.hpp"
 
-#include "environment.hpp"
+#include "ignite/graphics/buffers/constant_buffer.hpp"
+#include "ignite/graphics/objects/material.hpp"
+#include "ignite/graphics/objects/environment.hpp"
 
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/application.hpp"
+
 #include <ranges>
 
 namespace ignite
@@ -132,19 +134,15 @@ namespace ignite
             textureCreateInfo.width = 1;
             textureCreateInfo.height = 1;
             textureCreateInfo.flip = false;
-            const int rowPitch = textureCreateInfo.width * 4;
 
-            m_CommandList->Begin();
+            uint32_t white = 0xFFFFFFFF;
+            m_WhiteTexture = Texture::Create(Buffer(&white, sizeof(u32)), textureCreateInfo);
 
-            u32 white = 0xFFFFFFFF;
-            m_WhiteTexture = Texture::Create(textureCreateInfo);
-            m_WhiteTexture->SetData(cmd, Buffer(&white, sizeof(u32)), rowPitch, 0);
+            uint32_t black = 0x00000000;
+            m_BlackTexture = Texture::Create(Buffer(&black, sizeof(uint32_t)), textureCreateInfo);
 
-            u32 black = 0x00000000;
-            m_BlackTexture = Texture::Create(textureCreateInfo);
-            m_BlackTexture->SetData(cmd, Buffer(&black, sizeof(u32)), rowPitch, 0);
-            
-            m_CommandList->Submit();
+            uint32_t magenta = 0xFFFF00FF;
+            m_MagentaTexture = Texture::Create(Buffer(&magenta, sizeof(uint32_t)), textureCreateInfo);
         }
 
         // Create shaders
@@ -161,8 +159,8 @@ namespace ignite
 
         // Create binding layouts
         m_BindingLayouts[GLayoutMap::MESH_ANIM] = s_instance->m_Device->createBindingLayout(VertexMesh_Anim::GetBindingLayoutDesc());
-        m_BindingLayouts[GLayoutMap::MATERIAL] = s_instance->m_Device->createBindingLayout(VertexMesh_Anim::GetMaterialBindingLayoutDesc());
         m_BindingLayouts[GLayoutMap::ENVIRONMENT] = s_instance->m_Device->createBindingLayout(Environment::GetBindingLayoutDesc());
+        m_BindingLayouts[GLayoutMap::MATERIAL] = s_instance->m_Device->createBindingLayout(Material::GetBindingLayoutDesc());
     }
 
     Renderer::~Renderer()
@@ -223,4 +221,10 @@ namespace ignite
     {
         return s_instance->m_BlackTexture;
     }
+
+    Ref<Texture> Renderer::GetMagentaTexture()
+    {
+        return s_instance->m_MagentaTexture;
+    }
+
 }

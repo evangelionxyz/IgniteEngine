@@ -34,7 +34,7 @@
 
 namespace ignite {
 
-    RenderTarget::RenderTarget(const RenderTargetCreateInfo &createInfo)
+    RenderTarget::RenderTarget(const RenderTargetCreateInfo &createInfo, const std::string &debugName)
         : m_CreateInfo(createInfo)
     {
         m_ClearDepth = { std::numeric_limits<float>::max(), std::numeric_limits<uint32_t>::max() };
@@ -54,7 +54,7 @@ namespace ignite {
                 depthDesc.setWidth(m_CreateInfo.width);
                 depthDesc.setHeight(m_CreateInfo.height);
                 depthDesc.setFormat(attachment.format);
-                depthDesc.setDebugName("Render target depth attachment");
+                depthDesc.setDebugName(std::format("{} - {} ", attachment.name, debugName));
                 depthDesc.setInitialState(attachment.state);
                 depthDesc.setIsRenderTarget(true);
                 depthDesc.setKeepInitialState(true);
@@ -74,7 +74,7 @@ namespace ignite {
                 colorDesc.setWidth(m_CreateInfo.width);
                 colorDesc.setHeight(m_CreateInfo.height);
                 colorDesc.setFormat(attachment.format);
-                colorDesc.setDebugName("Render target color attachment texture");
+                colorDesc.setDebugName(std::format("{} - {} ", attachment.name, debugName));
                 colorDesc.setInitialState(attachment.state);
                 colorDesc.setKeepInitialState(true);
                 colorDesc.setIsUAV(false);
@@ -252,8 +252,8 @@ namespace ignite {
         nvrhi::utils::ClearDepthStencilAttachment(commandList, m_FramebufferHandle, depth, stencil);
     }
 
-    Ref<RenderTarget> RenderTarget::Create(const RenderTargetCreateInfo &createInfo)
+    Ref<RenderTarget> RenderTarget::Create(const RenderTargetCreateInfo &createInfo, const std::string &debugName)
     {
-        return CreateRef<RenderTarget>(createInfo);
+        return CreateRef<RenderTarget>(createInfo, debugName);
     }
 }

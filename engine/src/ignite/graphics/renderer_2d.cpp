@@ -23,9 +23,8 @@
 
 #include "renderer_2d.hpp"
 #include "render_target.hpp"
-#include "ignite/scene/icamera.hpp"
 #include "framebuffer_key.hpp"
-#include "constant_buffer.hpp"
+#include "ignite/graphics/buffers/constant_buffer.hpp"
 
 #include "ignite/core/logger.hpp"
 #include "ignite/core/application.hpp"
@@ -35,6 +34,7 @@
 #include "texture.hpp"
 
 #include <stb_image.h>
+#include <unordered_map>
 
 namespace ignite
 {

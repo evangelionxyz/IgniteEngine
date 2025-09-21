@@ -28,15 +28,11 @@
 #include "ignite/graphics/render_target.hpp"
 #include "ignite/scene/entity.hpp"
 #include "ignite/core/uuid.hpp"
-#include "ignite/core/base.hpp"
 #include "ignite/core/types.hpp"
 #include "ignite/imgui/gizmo.hpp"
-
 #include "../editor_camera.hpp"
-
 #include <string>
 #include <glm/fwd.hpp>
-#include <nvrhi/nvrhi.h>
 
 namespace ignite
 {

@@ -32,7 +32,8 @@
 #include "ignite/core/uuid.hpp"
 
 #include "ignite/graphics/scene_renderer.hpp"
-#include "ignite/graphics/environment.hpp"
+#include "ignite/graphics/objects/environment.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/renderer.hpp"
 
 #include "ignite/math/math.hpp"
@@ -43,7 +44,7 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 
-#include "ignite/graphics/mesh.hpp"
+
 
 namespace ignite
 {    

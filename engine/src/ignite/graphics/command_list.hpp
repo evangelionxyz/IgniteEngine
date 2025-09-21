@@ -42,11 +42,6 @@ namespace ignite
 
         static Ref<CommandList> Create(uint32_t count = 0);
 
-        operator nvrhi::CommandListHandle() const
-        {
-            return GetActiveHandle();
-        }
-
     private:
         std::vector<nvrhi::CommandListHandle> m_CommandLists;
         nvrhi::IDevice* m_Device;

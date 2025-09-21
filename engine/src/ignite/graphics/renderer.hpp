@@ -34,6 +34,12 @@
 
 namespace ignite
 {
+#define RENDER_MODE_COLOR 0
+#define RENDER_MODE_DIFFUSE 1
+#define RENDER_MODE_NORMALS 2
+#define RENDER_MODE_METALLIC 3
+#define RENDER_MODE_ROUGHNESS 4
+
     class DeviceManager;
     class Texture;
     class Shader;
@@ -50,8 +56,8 @@ namespace ignite
     {
         MESH,
         MESH_ANIM, 
-        MATERIAL, 
-        ENVIRONMENT
+        MATERIAL,
+        ENVIRONMENT,
     };
 
     class ShaderLibrary
@@ -81,6 +87,8 @@ namespace ignite
         
         static Ref<Texture> GetWhiteTexture();
         static Ref<Texture> GetBlackTexture();
+        static Ref<Texture> GetMagentaTexture();
+
         static nvrhi::GraphicsAPI GetGraphicsAPI();
         static nvrhi::BindingLayoutHandle GetBindingLayout(GLayoutMap type);
 
@@ -100,6 +108,7 @@ namespace ignite
 
         Ref<Texture> m_WhiteTexture;
         Ref<Texture> m_BlackTexture;
+        Ref<Texture> m_MagentaTexture;
 
 		Ref<ConstantBuffer> m_EditorCameraConstantBuffer;
 

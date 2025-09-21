@@ -24,8 +24,6 @@
 #include "editor_layer.hpp"
 #include "panels/scene_panel.hpp"
 #include "panels/content_browser_panel.hpp"
-#include "panels/model_viewer_panel.hpp"
-#include "panels/material_editor_panel.hpp"
 #include "panels/materials_panel.hpp"
 
 #include "ignite/core/platform_utils.hpp"
@@ -41,7 +39,7 @@
 
 namespace ignite
 {
-    EditorLayer *editorLayerInstance = nullptr;
+    ignite::EditorLayer *editorLayerInstance = nullptr;
 
     EditorLayer *EditorLayer::GetInstance()
     {
@@ -56,6 +54,7 @@ namespace ignite
 
     EditorLayer::~EditorLayer()
     {
+        editorLayerInstance = nullptr;
     }
 
     void EditorLayer::OnAttach()
@@ -66,8 +65,6 @@ namespace ignite
 
         m_ScenePanel = CreateRef<ScenePanel>("Scene Panel");
         m_ContentBrowserPanel = CreateRef<ContentBrowserPanel>("Content Browser");
-        m_ModelViewerPanel = CreateRef<ModelViewerPanel>();
-        m_MaterialEditorPanel = CreateRef<MaterialEditorPanel>();
         m_MaterialsPanel = CreateRef<MaterialsPanel>();
 
         // Set up material panel callbacks
@@ -76,8 +73,7 @@ namespace ignite
         });
         
         m_MaterialsPanel->SetMaterialEditCallback([this](Ref<Material> material) {
-            m_MaterialEditorPanel->SetSelectedMaterial(material);
-            m_MaterialEditorPanel->SetOpen(true);
+
         });
 
         // create render target framebuffer
@@ -107,6 +103,23 @@ namespace ignite
 			if (!OpenProject())
 				Application::Shutdown();
         }
+
+        if (m_ActiveScene)
+        {
+            {
+                Entity modelEntity = SceneManager::CreateEntity(m_ActiveScene.get(), "Model 1", EntityType_Mesh);
+                MeshComponent& mc = modelEntity.AddComponent<MeshComponent>();
+                mc.model = Model::Create("resources/models/DamagedHelmet.gltf");
+                mc.model->UpdateBindingSet(m_ActiveScene.get());
+            }
+
+            {
+                Entity modelEntity = SceneManager::CreateEntity(m_ActiveScene.get(), "Model 2", EntityType_Mesh);
+                MeshComponent& mc = modelEntity.AddComponent<MeshComponent>();
+                mc.model = Model::Create("resources/scene.glb");
+                mc.model->UpdateBindingSet(m_ActiveScene.get());
+            }
+        }
     }
 
     void EditorLayer::OnDetach()
@@ -121,8 +134,6 @@ namespace ignite
         Renderer::OnUpdate();
 
         // update panels
-        // m_ModelViewerPanel->OnUpdate(deltaTime);
-
         if (m_ActiveScene)
         {
             // multi select entity
@@ -151,7 +162,6 @@ namespace ignite
     {
         Layer::OnEvent(e);
         m_ScenePanel->OnEvent(e);
-        // m_ModelViewerPanel->OnEvent(e);
 
         EventDispatcher dispatcher(e);
         dispatcher.Dispatch<KeyPressedEvent>(BIND_CLASS_EVENT_FN(EditorLayer::OnKeyPressedEvent));
@@ -471,11 +481,6 @@ namespace ignite
                     m_MaterialsPanel->SetOpen(!m_MaterialsPanel->IsOpen());
                 }
 
-                if (ImGui::MenuItem("Material Editor", nullptr, m_MaterialEditorPanel->IsOpen(), m_ActiveProject != nullptr))
-                {
-                    m_MaterialEditorPanel->SetOpen(!m_MaterialEditorPanel->IsOpen());
-                }
-
                 ImGui::EndMenu();
             }
 
@@ -591,15 +596,13 @@ namespace ignite
         }
 
 
-        // dockspace
+        // dock space
         ImGui::DockSpace(ImGui::GetID("main_dockspace"), ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
         {
-            // scene dockspace
+            // scene dock space
             m_ScenePanel->OnGuiRender();
             m_ContentBrowserPanel->OnGuiRender();
-            m_MaterialEditorPanel->OnImGuiRender();
             m_MaterialsPanel->OnImGuiRender();
-            // m_ModelViewerPanel->OnGuiRender();
 
             ImGui::Begin("Project");
 
@@ -619,7 +622,7 @@ namespace ignite
             SettingsUI();
         }
 
-        ImGui::End(); // end dockspace
+        ImGui::End(); // end dock space
     }
 
     void EditorLayer::SetActiveScene(const Ref<Scene> &scene)
@@ -627,6 +630,8 @@ namespace ignite
         m_ScenePanel->SetActiveScene(scene);
         m_SceneRenderer.SetActiveScene(scene);
         m_ActiveProject->SetActiveScene(scene);
+
+        m_ActiveScene = scene;
     }
 
     void EditorLayer::NewScene()
@@ -728,10 +733,8 @@ namespace ignite
 
     Ref<Project> EditorLayer::OpenProject()
     {
-        std::filesystem::path filepath = FileDialogs::OpenFile("Ignite Project (*.ixproj)\0*.ixproj\0");
-
+        const std::filesystem::path filepath = FileDialogs::OpenFile("Ignite Project (*.ixproj)\0*.ixproj\0");
         Ref<Project> openedProject;
-        
         if (!filepath.empty())
         {
             openedProject = OpenProject(filepath);
@@ -858,42 +861,51 @@ namespace ignite
 
         if (m_ActiveScene)
         {
-            // Environment
-            if (ImGui::TreeNodeEx("Environment"))
+            // Scene
+            if (ImGui::TreeNodeEx("Scene Data"))
             {
-                static glm::vec2 sunAngles = { 50, -27.0f }; // pitch (elevation), yaw (azimuth)
-
                 if (ImGui::Button("Load HDR Texture"))
                 {
                     std::string filepath = FileDialogs::OpenFile("HDR Files (*.hdr)\0*.hdr\0");
                     if (!filepath.empty())
                     {
-                        EnvironmentImporter::UpdateTexture(&m_SceneRenderer.GetEnvironment(), filepath);
+                        Renderer::Submit([&](auto cmd)
+                        {
+                            auto env = m_SceneRenderer.GetEnvironment();
+                            env->LoadTexture(filepath);
+                            env->UpdateBindingSet();
+                        });
                     }
                 }
 
                 ImGui::Separator();
             
-                ImGui::Text("Sun Angles");
+                ImGui::ColorEdit3("Color", &m_ActiveScene->params.sunColor.x);
+                ImGui::DragFloat("Intensity", &m_ActiveScene->params.sunColor.w, 0.025f, 0.0f, 10.0f);
 
-                if (ImGui::SliderFloat("Elevation", &sunAngles.x, 0.0f, 180.0f))
-                    m_SceneRenderer.GetEnvironment()->SetSunDirection(sunAngles.x, sunAngles.y);
-                if (ImGui::SliderFloat("Azimuth", &sunAngles.y, -180.0f, 180.0f))
-                    m_SceneRenderer.GetEnvironment()->SetSunDirection(sunAngles.x, sunAngles.y);
+                ImGui::SliderFloat("Azimuth", &m_ActiveScene->params.sungAngles.x, 0.0f, 2.0f * glm::pi<float>());
+                ImGui::SliderFloat("Elevation", &m_ActiveScene->params.sungAngles.y, -1.0f, 1.0f);
 
-                ImGui::Separator();
-                ImGui::ColorEdit4("Color", &m_SceneRenderer.GetEnvironment()->dirLight.color.x);
-                ImGui::SliderFloat("Intensity", &m_SceneRenderer.GetEnvironment()->dirLight.intensity, 0.01f, 1.0f);
-
-                float angularSize = glm::degrees(m_SceneRenderer.GetEnvironment()->dirLight.angularSize);
-                if (ImGui::SliderFloat("Angular Size", &angularSize, 0.1f, 90.0f))
+                float angularRadius = glm::degrees(m_ActiveScene->params.sunAngularRadius);
+                if (ImGui::SliderFloat("Angular Size", &angularRadius, 0.0f, 45.0f))
                 {
-                    m_SceneRenderer.GetEnvironment()->dirLight.angularSize = glm::radians(angularSize);
+                    m_ActiveScene->params.sunAngularRadius = glm::radians(angularRadius);
                 }
 
-                ImGui::DragFloat("Exposure", &m_SceneRenderer.GetEnvironment()->params.exposure, 0.005f, 0.1f, 10.0f);
-                ImGui::DragFloat("Gamma", &m_SceneRenderer.GetEnvironment()->params.gamma, 0.005f, 0.1f, 10.0f);
-                ImGui::DragFloat("Ambient", &m_SceneRenderer.GetEnvironment()->params.ambient, 0.005f, 0.01f, 100.0f);
+                ImGui::DragFloat("Exposure", &m_ActiveScene->params.exposure, 0.005f, 0.1f, 10.0f);
+                ImGui::DragFloat("Gamma", &m_ActiveScene->params.gamma, 0.005f, 0.1f, 10.0f);
+                ImGui::DragFloat("Ambient", &m_ActiveScene->params.ambient, 0.005f, 0.01f, 100.0f);
+
+                if (ImGui::CollapsingHeader("Render Mode", ImGuiTreeNodeFlags_DefaultOpen))
+                {
+                    int mode = (int)m_ActiveScene->params.renderMode;
+                    if (ImGui::RadioButton("Color", mode == RENDER_MODE_COLOR)) mode = RENDER_MODE_COLOR;
+                    if (ImGui::RadioButton("Diffuse", mode == RENDER_MODE_DIFFUSE)) mode = RENDER_MODE_DIFFUSE;
+                    if (ImGui::RadioButton("Normals", mode == RENDER_MODE_NORMALS)) mode = RENDER_MODE_NORMALS;
+                    if (ImGui::RadioButton("Metallic", mode == RENDER_MODE_METALLIC)) mode = RENDER_MODE_METALLIC;
+                    if (ImGui::RadioButton("Roughness", mode == RENDER_MODE_ROUGHNESS)) mode = RENDER_MODE_ROUGHNESS;
+                    m_ActiveScene->params.renderMode = mode;
+                }
 
                 ImGui::TreePop();
             }

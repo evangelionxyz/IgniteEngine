@@ -23,9 +23,7 @@
 
 #pragma once
 
-#include "ignite/core/base.hpp"
-#include "ignite/graphics/material.hpp"
-
+#include "ignite/graphics/objects/material.hpp"
 #include <string>
 #include <functional>
 
@@ -43,13 +41,13 @@ namespace ignite
         void SetOpen(bool open) { m_IsOpen = open; }
 
         // Callback for when a material is selected
-        void SetMaterialSelectionCallback(std::function<void(Ref<Material>)> callback) 
+        void SetMaterialSelectionCallback(const std::function<void(Ref<Material>)> &callback) 
         { 
             m_OnMaterialSelected = callback; 
         }
 
         // Callback for when a material should be edited
-        void SetMaterialEditCallback(std::function<void(Ref<Material>)> callback) 
+        void SetMaterialEditCallback(const std::function<void(Ref<Material>)> &callback) 
         { 
             m_OnMaterialEdit = callback; 
         }

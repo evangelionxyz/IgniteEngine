@@ -48,7 +48,6 @@ namespace ignite
         }
 
         Ref<Material> mat = CreateRef<Material>();
-        mat->CreateDefaultTextures();
 
         mat->name = name;
         m_Materials[name] = mat;
@@ -78,7 +77,7 @@ namespace ignite
 
         Ref<Material> clonedMat = CreateRef<Material>(*originalMat);
         clonedMat->name = newName;
-        clonedMat->handle = AssetHandle(); // Generate new handle
+        // clonedMat->handle = AssetHandle(); // Generate new handle
         m_Materials[newName] = clonedMat;
         
         return clonedMat;
@@ -140,7 +139,7 @@ namespace ignite
             return;
         }
 
-        material->handle = handle;
+        // material->handle = handle;
         m_AssetToMaterialMap[handle] = material->name;
         
         if (!HasMaterial(material->name))

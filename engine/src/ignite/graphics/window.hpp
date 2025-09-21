@@ -28,11 +28,7 @@
 
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/input/event.hpp"
-
-#include "ignite/core/types.hpp"
-
 #include <glm/glm.hpp>
-#include <list>
 
 namespace ignite
 {

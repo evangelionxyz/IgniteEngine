@@ -146,6 +146,6 @@ namespace ignite
 		CameraLens lens;
 		CameraMouseState mouse;
 		PostProcessing postProcessing;
-        ProjectionType projectionType;
+        ProjectionType projectionType = ProjectionType::Perspective;
     };
 }

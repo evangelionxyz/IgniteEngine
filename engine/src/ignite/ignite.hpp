@@ -57,8 +57,7 @@
 #include "graphics/renderer_2d.hpp"
 #include "graphics/shader_factory.hpp"
 #include "graphics/window.hpp"
-#include "graphics/mesh.hpp"
-#include "graphics/mesh_factory.hpp"
+#include "graphics/objects/mesh.hpp"
 
 #include "math/math.hpp"
 #include "math/aabb.hpp"

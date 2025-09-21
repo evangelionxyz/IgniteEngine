@@ -23,17 +23,15 @@
 
 #pragma once
 
-#include "environment.hpp"
+#include "ignite/graphics/objects/environment.hpp"
+#include "ignite/graphics/objects/model.hpp"
 #include "edge_detection.hpp"
 #include "graphics_pipeline.hpp"
 #include "render_target.hpp"
 #include "ignite/scene/entity.hpp"
 #include "command_list.hpp"
 
-#include "imgui.h"
-
 #include <nvrhi/nvrhi.h>
-#include <nvrhi/utils.h>
 
 namespace ignite
 {
@@ -42,7 +40,8 @@ namespace ignite
     class RenderTarget;
     class UIRenderer;
     class Renderer2D;
-        
+    class Mesh;
+
     class SceneRenderer
     {
     public:
@@ -67,7 +66,6 @@ namespace ignite
         Ref<UIRenderer> &GetUIRenderer() { return m_UIRenderer; }
 
     private:
-        void CreateEnvironment();
         void CreateDemoUI();
 
         Ref<Environment> m_Environment;

@@ -284,7 +284,8 @@ namespace ignite {
         std::vector<GridLine> GetGridLines() const
         {
             std::vector<GridLine> lines;
-            if (!m_Visible) return lines;
+            if (!m_Visible)
+                   return lines;
 
             // Vertical lines
             for (uint32_t x = 0; x <= m_ViewportWidth; x += m_GridSize)

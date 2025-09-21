@@ -26,18 +26,6 @@ namespace ignite
         commandList->writeBuffer(m_Handle, buffer.data, buffer.size, offset);
     }
 
-    void ConstantBuffer::SetData(Buffer buffer, const size_t offset)
-    {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-        const nvrhi::CommandListHandle commandList = device->createCommandList();
-
-        commandList->open();
-        commandList->writeBuffer(m_Handle, buffer.data, buffer.size, offset);
-
-        commandList->close();
-        device->executeCommandList(commandList);
-    }
-
     Ref<ConstantBuffer> ConstantBuffer::Create(const size_t size, bool isVolatile, const uint32_t maxVersion, const std::string &debugName)
     {
         return CreateRef<ConstantBuffer>(size, isVolatile, maxVersion, debugName);

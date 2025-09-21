@@ -35,20 +35,21 @@
 #include "ignite/core/platform_utils.hpp"
 #include "ignite/graphics/ui_renderer.hpp"
 #include "editor_layer.hpp"
-#include "ignite/graphics/mesh.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
 
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/script_field.hpp"
 #include "ignite/scripting/script_instance.hpp"
 #include "ignite/asset/asset_importer.hpp"
 
-#include "entt/entt.hpp"
+#include "ignite/scene/entity.hpp"
 #include "../states.hpp"
 
 #include <set>
 #include <unordered_map>
 #include <string>
 #include <algorithm>
+#include <ranges>
 
 #ifdef _WIN32
     #ifndef GLFW_EXPOSE_NATIVE_WIN32
@@ -91,38 +92,29 @@ namespace ignite
 
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
-        nvrhi::CommandListHandle commandList = device->createCommandList();
-        commandList->open();
-        for (const Ref<Texture> &icon : m_Icons | std::views::values)
-        {
-            icon->WriteData(commandList);
-        }
-        commandList->close();
-        device->executeCommandList(commandList);
-
         // Create scene render target
         RenderTargetCreateInfo rtCreateInfo = {};
         rtCreateInfo.attachments =
         {
-            FramebufferAttachments{ nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }, // Depth
-            FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } // Main Color
+            FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
+            FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget} // Main Color
         };
-        m_SceneViewportRT = RenderTarget::Create(rtCreateInfo);
-        m_SceneCameraRT = RenderTarget::Create(rtCreateInfo);
-        m_UIViewportRT = RenderTarget::Create(rtCreateInfo);
-        m_UICameraRT = RenderTarget::Create(rtCreateInfo);
+        m_SceneViewportRT = RenderTarget::Create(rtCreateInfo, "[SceneViewportRT]");
+        m_SceneCameraRT = RenderTarget::Create(rtCreateInfo, "[SceneCameraRT]");
+        m_UIViewportRT = RenderTarget::Create(rtCreateInfo, "[UIViewportRT]");
+        m_UICameraRT = RenderTarget::Create(rtCreateInfo, "[UICameraRT]");
 
         // Composite render target
         {
             RenderTargetCreateInfo rtCreateInfo = {};
             rtCreateInfo.attachments =
             {
-                //FramebufferAttachments{ nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }, // Depth
-                FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } // Main Color
+                //FramebufferAttachments{ "[Composite Depth Attachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }, // Depth
+                FramebufferAttachments{ "[Composite Color Attachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget} // Main Color
             };
 
-            m_CompositeViewportRT = RenderTarget::Create(rtCreateInfo);
-            m_CompositeCameraRT = RenderTarget::Create(rtCreateInfo);
+            m_CompositeViewportRT = RenderTarget::Create(rtCreateInfo, "[CompositeViewportRT]");
+            m_CompositeCameraRT = RenderTarget::Create(rtCreateInfo, "[CompositeCameraRT]");
         }
     }
 
@@ -473,390 +465,39 @@ namespace ignite
                 ImGui::DragFloat2("Tiling", &c.tilingFactor.x, 0.025f);
                 ImGui::ColorEdit4("Color", &c.color.x);
             });
-            RenderComponent<SkeletalMesh>("Skeletal Mesh", selectedEntity, [&]()
+
+            RenderComponent<MeshComponent>("Mesh Component", selectedEntity, [&]()
             {
-                SkeletalMesh &sm = selectedEntity.GetComponent<SkeletalMesh>();
-
-                if (ImGui::Button("Load"))
+                MeshComponent &mc = selectedEntity.GetComponent<MeshComponent>();
+                if (mc.model)
                 {
-                    std::string filepath = FileDialogs::OpenFile("3D Models (*.fbx;*.gltf;*.glb;)\0*.fbx;*.gltf;*.glb;");
-                    if (!filepath.empty())
+                    MeshScene& meshScene = mc.model->GetScene();
+                    for (auto& mesh : meshScene.flatMeshes)
                     {
-                        sm.meshHandle = AssetHandle();
-                        AssetMetaData metadata;
-                        metadata.filepath = filepath;
-                        metadata.type = AssetType::MeshSource;
-
-                        Ref<Asset> asset = MeshImporter::ImportMeshSource(sm.meshHandle, metadata);
-                        if (asset)
+                        ImGui::PushID(mesh->name.c_str());
+                        if (ImGui::TreeNode(mesh->name.c_str()))
                         {
-                            sm = {};
-                            sm.meshes = asset->As<MeshAsset>()->Create();
-                        }
-                    }
-                }
-
-                if (ImGui::BeginDragDropTarget())
-                {
-                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
-                    {
-                        LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                        AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                        AssetType type = Project::GetInstance()->GetAssetManager().GetAssetType(handle);
-                        if (type == AssetType::MeshSource)
-                        {
-                            sm.meshHandle = AssetHandle(handle);
-                            if (auto meshAsset = Project::GetInstance()->GetAsset<MeshAsset>(sm.meshHandle))
+                            if (Ref<Material> mat = mesh->material)
                             {
-                                sm.meshes = meshAsset->Create();
-                            }
-                        }
-                    }
-                    ImGui::EndDragDropTarget();
-                }
-
-                // Mesh
-                for (auto &mesh : sm.meshes)
-                {
-                    // Material control
-                    const std::string meshName = std::format("\"{}\"", mesh->mesh.data.name);
-
-                    auto checkerTex = m_Icons["checker128"]->GetHandle().Get();
-                    constexpr ImVec2 imageSize = { 72.0f, 72.0f };
-                    if (ImGui::TreeNodeEx(meshName.c_str()))
-                    {
-                        // Drag material here
-                        if (ImGui::Button("Material", {64.0f * ImGui::GetWindowDpiScale(), 64.0f * ImGui::GetWindowDpiScale()}))
-                        {
-                            std::string filepath = FileDialogs::OpenFile("Material (*.ixmat)\0*.ixmat;");
-                            if (!filepath.empty())
-                            {
-                                LOG_NOT_IMPLEMENTED;
-                            }
-                        }
-                        ImGui::SameLine();
-                        if (ImGui::BeginDragDropTarget())
-                        {
-                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
-                            {
-                                LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(handle);
-                                if (metadata.type == AssetType::Material)
+                                if (ImGui::TreeNode(mat->name.c_str()))
                                 {
-                                    Ref<Material> mat = Project::GetInstance()->GetAsset<Material>(handle);
-                                    if (mat)
-                                    {
-                                        mesh->material = mat;
-                                    }
+                                    ImGui::ColorEdit4("Base Color", &mat->params.baseColorFactor.x);
+                                    ImGui::ColorEdit4("Emissive", &mat->params.emissiveFactor.x);
+                                    ImGui::SliderFloat("Metallic", &mat->params.metallicFactor, 0.0f, 1.0f);
+                                    ImGui::SliderFloat("Roughness", &mat->params.roughnessFactor, 0.0f, 1.0f);
+                                    ImGui::SliderFloat("Occlusion Strength", &mat->params.occlusionStrength, 0.0f, 1.0f);
+
+                                    ImGui::TreePop();
                                 }
                             }
-                            ImGui::EndDragDropTarget();
-                        }
-
-                        ImGui::Text("%s", mesh->material->name.c_str());
-
-                        // Base color texture (Diffuse texture)
-                        if (ImGui::TreeNodeEx("BASE COLOR"))
-                        {
-                            ImGui::ColorEdit4("Color", &mesh->material->params.baseColor.x);
-
-                            constexpr MaterialTextureType texType = MaterialTextureType::BaseColor;
-
-                            auto baseColorTex = mesh->material->textures[texType]->handle ? mesh->material->textures[texType]->GetHandle().Get() : checkerTex;
-                            ImTextureID texId = reinterpret_cast<ImTextureID>(baseColorTex);
-                            if (ImGui::ImageButton("Texture", texId, imageSize))
-                            {
-                                const std::filesystem::path filepath = FileDialogs::OpenFile("Image Files (*.jpg,*.jpeg,*.png)\0*.jpg;*.jpeg;*.png");
-                                if (!filepath.empty())
-                                {
-                                    nvrhi::IDevice *device = Application::GetGraphicsDevice();
-
-                                    TextureCreateInfo createInfo;
-                                    createInfo.format = nvrhi::Format::RGBA8_UNORM;
-                                    Ref<Texture> texture = Texture::Create(filepath, createInfo);
-
-                                    nvrhi::CommandListHandle commandList = device->createCommandList();
-                                    commandList->open();
-                                    texture->WriteData(commandList);
-                                    commandList->close();
-                                    device->executeCommandList(commandList);
-
-                                    mesh->material->UpdateTexture(texture, texType);
-                                }
-                            }
-
-                            if (ImGui::BeginDragDropTarget())
-                            {
-                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
-                                {
-                                    if (payload->DataSize == sizeof(AssetHandle))
-                                    {
-                                        AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
-                                        if (handle && *handle != AssetHandle(0))
-                                        {
-                                            AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(*handle);
-                                            if (metadata.type == AssetType::Texture)
-                                            {
-                                                Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(*handle);
-                                                mesh->material->UpdateTexture(texture, texType);
-                                            }
-                                        }
-                                    }
-                                }
-
-                                ImGui::EndDragDropTarget();
-                            }
-                            ImGui::SameLine();
-                            ImGui::Text("Texture");
-
                             ImGui::TreePop();
                         }
 
-                        // Normal texture
-                        if (ImGui::TreeNodeEx("NORMALS"))
-                        {
-                            constexpr MaterialTextureType texType = MaterialTextureType::Normals;
-
-                            auto baseColorTex = mesh->material->textures[texType]->handle ? mesh->material->textures[texType]->GetHandle().Get() : checkerTex;
-                            ImTextureID texId = reinterpret_cast<ImTextureID>(baseColorTex);
-                            if (ImGui::ImageButton("Texture", texId, imageSize))
-                            {
-                                const std::filesystem::path filepath = FileDialogs::OpenFile("Image Files (*.jpg,*.jpeg,*.png)\0*.jpg;*.jpeg;*.png");
-                                if (!filepath.empty())
-                                {
-                                    nvrhi::IDevice *device = Application::GetGraphicsDevice();
-
-                                    TextureCreateInfo createInfo;
-                                    createInfo.format = nvrhi::Format::RGBA8_UNORM;
-                                    Ref<Texture> texture = Texture::Create(filepath, createInfo);
-
-                                    nvrhi::CommandListHandle commandList = device->createCommandList();
-                                    commandList->open();
-                                    texture->WriteData(commandList);
-                                    commandList->close();
-                                    device->executeCommandList(commandList);
-
-                                    mesh->material->UpdateTexture(texture, texType);
-                                }
-                            }
-
-                            if (ImGui::BeginDragDropTarget())
-                            {
-                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
-                                {
-                                    if (payload->DataSize == sizeof(AssetHandle))
-                                    {
-                                        AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
-                                        if (handle && *handle != AssetHandle(0))
-                                        {
-                                            AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(*handle);
-                                            if (metadata.type == AssetType::Texture)
-                                            {
-                                                Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(*handle);
-                                                mesh->material->UpdateTexture(texture, texType);
-                                            }
-                                        }
-                                    }
-                                }
-
-                                ImGui::EndDragDropTarget();
-                            }
-                            ImGui::SameLine();
-                            ImGui::Text("Texture");
-
-                            ImGui::TreePop();
-                        }
-
-                        // Specular texture
-                        if (ImGui::TreeNodeEx("SPECULAR"))
-                        {
-                            ImGui::DragFloat("Specular Factor", &mesh->material->params.specularFactor, 0.025f, 0.0f, 1.0f);
-
-                            constexpr MaterialTextureType texType = MaterialTextureType::Specular;
-
-                            auto baseColorTex = mesh->material->textures[texType]->handle ? mesh->material->textures[texType]->GetHandle().Get() : checkerTex;
-                            ImTextureID texId = reinterpret_cast<ImTextureID>(baseColorTex);
-                            if (ImGui::ImageButton("Texture", texId, imageSize))
-                            {
-                                const std::filesystem::path filepath = FileDialogs::OpenFile("Image Files (*.jpg,*.jpeg,*.png)\0*.jpg;*.jpeg;*.png");
-                                if (!filepath.empty())
-                                {
-                                    nvrhi::IDevice *device = Application::GetGraphicsDevice();
-
-                                    TextureCreateInfo createInfo;
-                                    createInfo.format = nvrhi::Format::RGBA8_UNORM;
-                                    Ref<Texture> texture = Texture::Create(filepath, createInfo);
-
-                                    nvrhi::CommandListHandle commandList = device->createCommandList();
-                                    commandList->open();
-                                    texture->WriteData(commandList);
-                                    commandList->close();
-                                    device->executeCommandList(commandList);
-
-                                    mesh->material->UpdateTexture(texture, texType);
-                                }
-                            }
-
-                            if (ImGui::BeginDragDropTarget())
-                            {
-                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
-                                {
-                                    if (payload->DataSize == sizeof(AssetHandle))
-                                    {
-                                        AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
-                                        if (handle && *handle != AssetHandle(0))
-                                        {
-                                            AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(*handle);
-                                            if (metadata.type == AssetType::Texture)
-                                            {
-                                                Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(*handle);
-                                                mesh->material->UpdateTexture(texture, texType);
-                                            }
-                                        }
-                                    }
-                                }
-
-                                ImGui::EndDragDropTarget();
-                            }
-                            ImGui::SameLine();
-                            ImGui::Text("Texture");
-
-                            ImGui::TreePop();
-                        }
-
-                        // Metalness and Roughness texture
-                        if (ImGui::TreeNodeEx("METALNESS & ROUGHNESS"))
-                        {
-                            ImGui::DragFloat("Metallic Factor", &mesh->material->params.metallicFactor, 0.025f, 0.0f, 1.0f);
-                            if (ImGui::IsItemHovered())
-                            {
-                                ImGui::BeginTooltip();
-                                ImGui::Text("B channel of texture");
-                                ImGui::EndTooltip();
-                            }
-
-                            ImGui::DragFloat("Roughness Factor", &mesh->material->params.roughnessFactor, 0.025f, 0.0f, 1.0f);
-                            if (ImGui::IsItemHovered())
-                            {
-                                ImGui::BeginTooltip();
-                                ImGui::Text("G channel of texture");
-                                ImGui::EndTooltip();
-                            }
-
-                            constexpr MaterialTextureType texType = MaterialTextureType::Roughness;
-
-                            auto baseColorTex = mesh->material->textures[texType]->handle ? mesh->material->textures[texType]->GetHandle().Get() : checkerTex;
-                            ImTextureID texId = reinterpret_cast<ImTextureID>(baseColorTex);
-                            if (ImGui::ImageButton("Texture", texId, imageSize))
-                            {
-                                const std::filesystem::path filepath = FileDialogs::OpenFile("Image Files (*.jpg,*.jpeg,*.png)\0*.jpg;*.jpeg;*.png");
-                                if (!filepath.empty())
-                                {
-                                    nvrhi::IDevice *device = Application::GetGraphicsDevice();
-
-                                    TextureCreateInfo createInfo;
-                                    createInfo.format = nvrhi::Format::RGBA8_UNORM;
-                                    Ref<Texture> texture = Texture::Create(filepath, createInfo);
-
-                                    nvrhi::CommandListHandle commandList = device->createCommandList();
-                                    commandList->open();
-                                    texture->WriteData(commandList);
-                                    commandList->close();
-                                    device->executeCommandList(commandList);
-
-                                    mesh->material->UpdateTexture(texture, texType);
-                                }
-                            }
-
-                            if (ImGui::BeginDragDropTarget())
-                            {
-                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
-                                {
-                                    if (payload->DataSize == sizeof(AssetHandle))
-                                    {
-                                        AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
-                                        if (handle && *handle != AssetHandle(0))
-                                        {
-                                            AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(*handle);
-                                            if (metadata.type == AssetType::Texture)
-                                            {
-                                                Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(*handle);
-                                                mesh->material->UpdateTexture(texture, texType);
-                                            }
-                                        }
-                                    }
-                                }
-
-                                ImGui::EndDragDropTarget();
-                            }
-                            ImGui::SameLine();
-                            ImGui::Text("Texture");
-
-                            ImGui::TreePop();
-                        }
-
-                        // Emissive texture
-                        if (ImGui::TreeNodeEx("EMISSIVE"))
-                    {
-                        ImGui::DragFloat("Emissive Factor", &mesh->material->params.emissiveFactor, 0.025f, 0.0f, 1.0f);
-
-                        constexpr MaterialTextureType texType = MaterialTextureType::Emissive;
-
-                        auto baseColorTex = mesh->material->textures[texType]->handle ? mesh->material->textures[texType]->GetHandle().Get() : checkerTex;
-                        ImTextureID texId = reinterpret_cast<ImTextureID>(baseColorTex);
-                        if (ImGui::ImageButton("Texture", texId, imageSize))
-                        {
-                            const std::filesystem::path filepath = FileDialogs::OpenFile("Image Files (*.jpg,*.jpeg,*.png)\0*.jpg;*.jpeg;*.png");
-                            if (!filepath.empty())
-                            {
-                                nvrhi::IDevice *device = Application::GetGraphicsDevice();
-
-                                TextureCreateInfo createInfo;
-                                createInfo.format = nvrhi::Format::RGBA8_UNORM;
-                                Ref<Texture> texture = Texture::Create(filepath, createInfo);
-
-                                nvrhi::CommandListHandle commandList = device->createCommandList();
-                                commandList->open();
-                                texture->WriteData(commandList);
-                                commandList->close();
-                                device->executeCommandList(commandList);
-
-                                mesh->material->UpdateTexture(texture, texType);
-                            }
-                        }
-
-                        if (ImGui::BeginDragDropTarget())
-                        {
-                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
-                            {
-                                if (payload->DataSize == sizeof(AssetHandle))
-                                {
-                                    AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
-                                    if (handle && *handle != AssetHandle(0))
-                                    {
-                                        AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(*handle);
-                                        if (metadata.type == AssetType::Texture)
-                                        {
-                                            Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(*handle);
-                                            mesh->material->UpdateTexture(texture, texType);
-                                        }
-                                    }
-                                }
-                            }
-
-                            ImGui::EndDragDropTarget();
-                        }
-                        ImGui::SameLine();
-                        ImGui::Text("Texture");
-
-                        ImGui::TreePop();
-                    }
-                    
-                        ImGui::TreePop();
+                        ImGui::PopID();
                     }
                 }
             });
+
             RenderComponent<Rigidbody2D>("Rigid Body 2D", selectedEntity, [&]()
             {
                 Rigidbody2D &c = selectedEntity.GetComponent<Rigidbody2D>();
@@ -942,8 +583,9 @@ namespace ignite
                         bool selected = false;
                         if (ImGui::Selectable(projectionTypeStr[i]))
                         {
-                            // c.camera.projectionType = static_cast<ICamera::Type>(i);
-                            // c.camera.UpdateMatrices();
+                            c.camera.projectionType = static_cast<ProjectionType>(i);
+                            float aspect = static_cast<float>(m_Scene->viewportWidth) / static_cast<float>(m_Scene->viewportHeight);
+                            c.camera.UpdateMatrices(aspect);
 
                             selected = true;
                         }
@@ -964,16 +606,17 @@ namespace ignite
                 }
                 else
                 {
-                    // modified |= ImGui::DragFloat("Zoom", &c.camera.zoom, 0.025f, 0.0f, FLT_MAX);
+                    modified |= ImGui::DragFloat("Zoom", &c.camera.distance, 0.025f, 0.0f, FLT_MAX);
                 }
 
-                // modified |= ImGui::DragFloat("Near", &c.camera.nearPlane, 0.025f, 0.0f, FLT_MAX);
-                // modified |= ImGui::DragFloat("Far", &c.camera.farClip, 0.025f, 0.0f, FLT_MAX);
-                // modified |= ImGui::Checkbox("Primary", &c.primary);
+                modified |= ImGui::DragFloat("Near", &c.camera.nearPlane, 0.025f, 0.0f, FLT_MAX);
+                modified |= ImGui::DragFloat("Far", &c.camera.farPlane, 0.025f, 0.0f, FLT_MAX);
+                modified |= ImGui::Checkbox("Primary", &c.primary);
 
                 if (modified)
                 {
-                    // c.camera.UpdateProjectionMatrix();
+                    float aspect = static_cast<float>(m_Scene->viewportWidth) / static_cast<float>(m_Scene->viewportHeight);
+                    c.camera.UpdateMatrices(aspect);
                 }
             });
             RenderComponent<BoxCollider2D>("Box Collider 2D", selectedEntity, [&]()
@@ -1477,7 +1120,7 @@ namespace ignite
                     }
                 }
 
-                static std::function addCompFunc = [=](Entity entity, CompType type)
+                static std::function<void(Entity, CompType)> addCompFunc = [=](Entity entity, CompType type)-> void
                 {
                     switch (type)
                     {
@@ -1579,7 +1222,7 @@ namespace ignite
         m_IsHovered = ImGui::IsWindowHovered();
 
         // TOOLBAR: 
-        const ImVec2 toolbarPadding = { 8.0f, 8.0f };
+        // const ImVec2 toolbarPadding = { 8.0f, 8.0f };
         // ImGui::SetCursorScreenPos({ window->DC.CursorStartPos.x + toolbarPadding.x, window->DC.CursorStartPos.y + toolbarPadding.y });
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 12.0f, 5.0f });
 
