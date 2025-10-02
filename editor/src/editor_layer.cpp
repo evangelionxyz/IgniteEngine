@@ -93,15 +93,12 @@ namespace ignite
             }
         }
 
-
-        if (m_ActiveProject)
+        if (!m_ActiveProject)
         {
-            Application::GetInstance()->GetWindow()->Show(); // Show window after initialization
-        }
-        else
-        {
-			if (!OpenProject())
+            if (!OpenProject())
+            {
 				Application::Shutdown();
+            }
         }
 
         if (m_ActiveScene)
@@ -120,6 +117,8 @@ namespace ignite
                 mc.model->UpdateBindingSet(m_ActiveScene.get());
             }
         }
+
+        Application::GetInstance()->GetWindow()->Show(); // Show window after initialization
     }
 
     void EditorLayer::OnDetach()

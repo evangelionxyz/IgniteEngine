@@ -21,14 +21,13 @@ include(shadermake.cmake)
 include(jolt.cmake)
 include(msdfatlasgen.cmake)
 include(msdfgen.cmake)
-include(freetype.cmake)
 include(tinygltf.cmake)
 
 # BOX2D (C sources)
 add_subdirectory(BOX2D)
 
 # Place all third-party targets under a single 'Dependencies' solution folder in Visual Studio
-set(_IGN_THIRDPARTY_TARGETS ZLIB GLFW STB SPDLOG IMGUI YAMLCPP ASSIMP JOLT MSDF_ATLAS_GEN MSDFGEN FREETYPE box2d)
+set(_IGN_THIRDPARTY_TARGETS ZLIB GLFW STB SPDLOG IMGUI YAMLCPP ASSIMP JOLT MSDF_ATLAS_GEN MSDFGEN FREETYPE TINYGLTF box2d)
 foreach(_t IN LISTS _IGN_THIRDPARTY_TARGETS)
   if(TARGET ${_t})
     set_property(TARGET ${_t} PROPERTY FOLDER "Dependencies")

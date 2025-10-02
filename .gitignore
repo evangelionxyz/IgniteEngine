@@ -5,6 +5,8 @@
 *.vcxproj.user
 *.csproj
 *.make
+*.dir
+*cmake_install.cmake
 
 CMakeFiles
 CMakeCache.txt
@@ -28,21 +30,6 @@ CMakeCache.txt
 /resources/shaders/bin
 /scripts/__pycache__
 /scripts/premake
-
-ASSIMP.dir
-GLFW.dir
-IMGUI.dir
-JOLT.dir
-MSDF_ATLAS_GEN.dir
-MSDFGEN.dir
-NVRHI.dir
-NVRHI_D3D12.dir
-NVRHI_VULKAN.dir
-ShaderMake.dir
-SPDLOG.dir
-STB.dir
-YAMLCPP.dir
-ZLIB.dir
 
 IGN.sln
 IGN.sln.DotSettings.user
