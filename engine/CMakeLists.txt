@@ -12,10 +12,11 @@ file(GLOB_RECURSE ENGINE_SRC CONFIGURE_DEPENDS
 )
 
 # utf-8 build options
-target_compile_options(IgniteEngine PRIVATE 
-    $<$<C_COMPILER_ID:MSVC>:/utf-8> 
+target_compile_options(IgniteEngine PRIVATE
+    $<$<C_COMPILER_ID:MSVC>:/utf-8>
     $<$<CXX_COMPILER_ID:MSVC>:/utf-8>
 )
+
 target_sources(IgniteEngine PRIVATE ${ENGINE_SRC})
 
 # Do not compile shader files
@@ -47,6 +48,7 @@ target_include_directories(IgniteEngine PUBLIC
   ${IncludeDir_YAMLCPP}
   ${IncludeDir_MSDF_ATLAS_GEN}
   ${IncludeDir_MSDFGEN}
+  ${IncludeDir_TINYGLTF}
   ${IncludeDir_FREETYPE}
 )
 
@@ -70,7 +72,7 @@ target_link_libraries(IgniteEngine PUBLIC
 if(WIN32)
   # Windows specific links and defines
   target_link_libraries(IgniteEngine PUBLIC
-    d3d12 dxgi d3dcompiler dxguid
+    d3d12.lib dxgi.lib d3dcompiler.lib dxguid.lib
     NVRHI_D3D12 NVRHI_VULKAN
     ${Library_winmm} ${Library_winsock} ${Library_winversion} ${Library_bcrypt}
     ${Library_vulkan} ${Library_mono} ${Library_FMOD}

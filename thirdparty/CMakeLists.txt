@@ -22,6 +22,7 @@ include(jolt.cmake)
 include(msdfatlasgen.cmake)
 include(msdfgen.cmake)
 include(freetype.cmake)
+include(tinygltf.cmake)
 
 # BOX2D (C sources)
 add_subdirectory(BOX2D)

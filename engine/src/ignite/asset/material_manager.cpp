@@ -22,7 +22,7 @@
 */
 
 #include "material_manager.hpp"
-#include "ignite/graphics/material.hpp"
+#include "ignite/graphics/objects/material.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/serializer/serializer.hpp"
 

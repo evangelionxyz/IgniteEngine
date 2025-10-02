@@ -34,6 +34,7 @@
 #include "ignite/core/application.hpp"
 
 #include <ranges>
+#include <filesystem>
 
 namespace ignite
 {
@@ -70,12 +71,12 @@ namespace ignite
         m_ShaderContext->CompileShader(contexts);
 
         // load to NVRHI Shader handle
-        for (auto& shader : m_Shaders | std::views::values)
+        for (auto& shaderMap : m_Shaders | std::views::values)
         {
-            for (auto &[type, shader] : shader)
+            for (auto &[type, shader] : shaderMap)
             {
-                shader.handle = s_instance->m_Device->createShader(type,
-                    shader.context->blob.data.data(), shader.context->blob.dataSize());
+                LOG_ASSERT(shader.context->blob.dataSize() != 0, "[Shader Compilation] Invalid shader");
+                shader.handle = s_instance->m_Device->createShader(type, shader.context->blob.data.data(), shader.context->blob.dataSize());
             }
         }
     }
@@ -91,6 +92,7 @@ namespace ignite
     {
         if (!Exists(name))
         {
+            LOG_TRACE("Loading shader: '{}'", std::filesystem::absolute(filepath).generic_string());
             std::unordered_map<nvrhi::ShaderType, ShaderHandleContext> shader;
             shader[nvrhi::ShaderType::Vertex] = { CreateRef<ShaderMake::ShaderContext>(filepath + ".vertex.hlsl", ShaderMake::ShaderType::Vertex), nullptr };
             shader[nvrhi::ShaderType::Pixel] = { CreateRef<ShaderMake::ShaderContext>(filepath + ".pixel.hlsl", ShaderMake::ShaderType::Pixel), nullptr };

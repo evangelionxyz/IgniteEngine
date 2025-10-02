@@ -5,7 +5,6 @@
 *.vcxproj.user
 *.csproj
 *.make
-*.cmake
 
 CMakeFiles
 CMakeCache.txt
