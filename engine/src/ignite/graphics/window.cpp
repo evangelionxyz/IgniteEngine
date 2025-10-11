@@ -31,11 +31,12 @@
 #include "ignite/core/input/joystick_event.hpp"
 
 #ifdef _WIN32
-#include <dwmapi.h>
-#include <ShellScalingApi.h>
-#pragma comment(lib, "Dwmapi.lib") // Link to DWM API
-#pragma comment(lib, "shcore.lib")
+    #include <dwmapi.h>
+    #include <ShellScalingApi.h>
+    #pragma comment(lib, "Dwmapi.lib") // Link to DWM API
+    #pragma comment(lib, "shcore.lib")
 #endif
+
 #include <ignite/core/input/joystick_codes.hpp>
 
 namespace ignite
@@ -95,7 +96,6 @@ namespace ignite
 #ifdef _DEBUG
         m_DeviceManager->m_DeviceParams.enableDebugRuntime = true;
         m_DeviceManager->m_DeviceParams.enableNvrhiValidationLayer= true;
-        glfwSetErrorCallback(GLFW_ErrorCallback);
 #endif
 
         // Create device instance
@@ -109,65 +109,63 @@ namespace ignite
         {
             if (info.format == m_DeviceManager->m_DeviceParams.swapChainFormat)
             {
-                glfwWindowHint(GLFW_RED_BITS, info.redBits);
-                glfwWindowHint(GLFW_GREEN_BITS, info.greenBits);
-                glfwWindowHint(GLFW_BLUE_BITS, info.blueBits);
-                glfwWindowHint(GLFW_ALPHA_BITS, info.alphaBits);
-                glfwWindowHint(GLFW_DEPTH_BITS, info.depthBits);
-                glfwWindowHint(GLFW_STENCIL_BITS, info.stencilBits);
                 result = true;
                 break;
             }
         }
-        LOG_ASSERT(result, "GLFW format not found\n");
+        LOG_ASSERT(result, "SDL3 format not found\n");
 
-        glfwWindowHint(GLFW_SAMPLES, m_DeviceManager->m_DeviceParams.swapChainSampleCount);
-        glfwWindowHint(GLFW_REFRESH_RATE, m_DeviceManager->m_DeviceParams.refreshRate);
-        glfwWindowHint(GLFW_SCALE_TO_MONITOR, m_DeviceManager->m_DeviceParams.resizeWindowWithDisplayScale);
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); // ignored for full screen
-        glfwWindowHint(GLFW_DECORATED, !m_DeviceManager->m_DeviceParams.startBorderless); // borderless window
+        // glfwWindowHint(GLFW_SAMPLES, m_DeviceManager->m_DeviceParams.swapChainSampleCount);
+        // glfwWindowHint(GLFW_REFRESH_RATE, m_DeviceManager->m_DeviceParams.refreshRate);
+        // glfwWindowHint(GLFW_SCALE_TO_MONITOR, m_DeviceManager->m_DeviceParams.resizeWindowWithDisplayScale);
+        // glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+        // glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); // ignored for full screen
+        // glfwWindowHint(GLFW_DECORATED, !m_DeviceManager->m_DeviceParams.startBorderless); // borderless window
 
-        m_DeviceManager->m_Window = glfwCreateWindow(
+        SDL_WindowFlags windowFlags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN;
+
+        switch (graphicsApi)
+        {
+        case nvrhi::GraphicsAPI::VULKAN:
+			windowFlags |= SDL_WINDOW_VULKAN;
+            break;
+        }
+
+        m_DeviceManager->m_Window = SDL_CreateWindow(
+            windowTitle,
             m_DeviceManager->m_DeviceParams.backBufferWidth,
             m_DeviceManager->m_DeviceParams.backBufferHeight,
-            windowTitle ? windowTitle : "",
-            m_DeviceManager->m_DeviceParams.startFullscreen ? glfwGetPrimaryMonitor() : nullptr,
-            nullptr);
-
+            windowFlags
+        );
         LOG_ASSERT(m_DeviceManager->m_Window, "Failed to create GLFW window\n");
 
-        JoystickManager::Init(this);
-
-        Hide(); // Hide window when initialization
+        SDL_SetWindowSurfaceVSync(m_DeviceManager->m_Window, m_DeviceManager->m_DeviceParams.vsyncEnable);
 
         if (m_DeviceManager->m_DeviceParams.startMaximized)
         {
-            glfwMaximizeWindow(m_DeviceManager->m_Window);
+			SDL_MaximizeWindow(m_DeviceManager->m_Window);
         }
 
         if (m_DeviceManager->m_DeviceParams.startFullscreen)
         {
-            glfwSetWindowMonitor(m_DeviceManager->m_Window, glfwGetPrimaryMonitor(),
-                0, 0,
-                m_DeviceManager->m_DeviceParams.backBufferWidth, m_DeviceManager->m_DeviceParams.backBufferHeight,
-                m_DeviceManager->m_DeviceParams.refreshRate);
+			SDL_SetWindowFullscreen(m_DeviceManager->m_Window, SDL_WINDOW_FULLSCREEN);
         }
         else
         {
             i32 fbWidth = 0, fbHeight = 0;
-            glfwGetFramebufferSize(m_DeviceManager->m_Window, &fbWidth, &fbHeight);
+			SDL_GetWindowSize(m_DeviceManager->m_Window, &fbWidth, &fbHeight);
             m_DeviceManager->m_DeviceParams.backBufferWidth = fbWidth;
             m_DeviceManager->m_DeviceParams.backBufferHeight = fbHeight;
         }
 
-        glfwSetWindowUserPointer(m_DeviceManager->m_Window, this);
-                                   
-        if (m_DeviceManager->m_DeviceParams.windowPosX != -1 && m_DeviceManager->m_DeviceParams.windowPosY != -1)
-            glfwSetWindowPos(m_DeviceManager->m_Window, m_DeviceManager->m_DeviceParams.windowPosX, m_DeviceManager->m_DeviceParams.windowPosY);
 
-#if _WIN32
-        HWND hwnd = glfwGetWin32Window(m_DeviceManager->m_Window);
+        if (m_DeviceManager->m_DeviceParams.windowPosX != -1 && m_DeviceManager->m_DeviceParams.windowPosY != -1)
+        {
+			SDL_SetWindowPosition(m_DeviceManager->m_Window, m_DeviceManager->m_DeviceParams.windowPosX, m_DeviceManager->m_DeviceParams.windowPosY);
+        }
+
+#if PLATFORM_WINDOWS
+		HWND hwnd = m_DeviceManager->GetNativeWindow();
         BOOL useDarkMode = TRUE;
         DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &useDarkMode, sizeof(useDarkMode));
 
@@ -178,7 +176,6 @@ namespace ignite
         // DWM_WINDOW_CORNER_PREFERENCE cornerPreference = DWMWCP_ROUNDSMALL;
         // DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &cornerPreference, sizeof(cornerPreference));
 #endif
-
 
         result = m_DeviceManager->CreateDevice();
         LOG_ASSERT(result, "Failed to create Device Instance\n");
@@ -193,8 +190,8 @@ namespace ignite
 
         if (m_DeviceManager->m_DeviceParams.enablePerMonitorDPI)
         {
-#ifdef _WIN32
-            HWND hwnd = glfwGetWin32Window(m_DeviceManager->m_Window);
+#ifdef PLATFORM_WINDOWS
+			HWND hwnd = m_DeviceManager->GetNativeWindow();
             HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
             u32 dpiX, dpiY;
             GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
@@ -207,13 +204,186 @@ namespace ignite
             glfwGetMonitorContentScale(monitor, &m_DeviceManager->m_DPIScaleFactorX, &m_DeviceManager->m_DPIScaleFactorY);
 #endif
         }
+
+        JoystickManager::Init(this);
     }
 
-    void Window::PollEvents()
+    void Window::PollEvents(const SDL_Event &event)
     {
-        glfwPollEvents();
-        
-        for (const Ref<Joystick> &j : JoystickManager::GetConnectedJoystick())
+        switch (event.type)
+        {
+        case SDL_EVENT_QUIT:
+        {
+			m_Looping = false;
+            break;
+        }
+
+        case SDL_EVENT_WINDOW_RESIZED:
+        {
+            WindowResizeEvent e(event.window.data1, event.window.data2);
+            m_Callback(e);
+
+            if (event.window.data1 == 0 || event.window.data2 == 0)
+            {
+                m_DeviceManager->m_WindowVisible = false;
+                break;
+            }
+
+			SDL_WindowFlags flags = SDL_GetWindowFlags(m_DeviceManager->m_Window);
+            // m_DeviceManager->m_WindowIsInFocus = (flags & SDL_WINDOW_INPUT_FOCUS) == 0;
+            m_DeviceManager->m_WindowVisible = true;
+
+            m_DeviceManager->m_DeviceParams.windowPosX = event.window.data1;
+            m_DeviceManager->m_DeviceParams.windowPosY = event.window.data2;
+            break;
+        }
+        case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+        {
+            FramebufferResizeEvent e(event.window.data1, event.window.data2);
+            m_Callback(e);
+
+            // window is not minimized, and the size has changed
+            if (event.window.data1 > 0 && event.window.data2 > 0)
+            {
+                m_DeviceManager->m_DeviceParams.backBufferWidth = event.window.data1;
+                m_DeviceManager->m_DeviceParams.backBufferHeight = event.window.data2;
+
+                m_DeviceManager->ResizeSwapChain();
+                m_DeviceManager->CreateBackBuffers();
+            }
+            break;
+        }
+        case SDL_EVENT_WINDOW_MAXIMIZED:
+        {
+            WindowMaximizedEvent e(true);
+            m_Callback(e);
+			break;
+        }
+        case SDL_EVENT_WINDOW_MINIMIZED:
+        {
+            WindowMinimizedEvent e(true);
+            m_Callback(e);
+            break;
+        }
+        case SDL_EVENT_WINDOW_RESTORED:
+        {
+            WindowMinimizedEvent event(false);
+            m_Callback(event);
+            break;
+		}
+        case SDL_EVENT_WINDOW_DESTROYED:
+        {
+            WindowCloseEvent e;
+            m_Callback(e);
+            break;
+        }
+        case SDL_EVENT_JOYSTICK_ADDED:
+        {
+            SDL_JoystickID jID = event.jdevice.which;
+			JoystickManager::ConnectJoystick(jID);
+
+            break;
+        }
+        case SDL_EVENT_JOYSTICK_REMOVED:
+        {
+			SDL_JoystickID jID = event.jdevice.which;
+            JoystickManager::DisconnectJoystick(jID);
+			break;
+        }
+        case SDL_EVENT_TEXT_INPUT:
+        {
+			/*KeyTypedEvent e(std::string(event.text.text));
+			m_Callback(e);*/
+            break;
+        }
+        case SDL_EVENT_KEY_DOWN:
+        {
+            if (event.key.repeat)
+            {
+                KeyPressedEvent e(event.key.key, 1);
+                m_Callback(e);
+            }
+            else
+            {
+                KeyPressedEvent e(event.key.key, 0);
+                m_Callback(e);
+            }
+            break;
+        }
+        case SDL_EVENT_KEY_UP:
+        {
+            KeyReleasedEvent e(event.key.key);
+            m_Callback(e);
+            break;
+        }
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        {
+            MouseButtonPressedEvent e(event.button.button);
+            m_Callback(e);
+			break;
+        }
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+        {
+            MouseButtonReleasedEvent e(event.button.button);
+            m_Callback(e);
+            break;
+        }
+        case SDL_EVENT_MOUSE_WHEEL:
+        {
+            MouseScrolledEvent e(static_cast<float>(event.wheel.x), static_cast<float>(event.wheel.y));
+            m_Callback(e);
+            break;
+		}
+        case SDL_EVENT_MOUSE_MOTION:
+        {
+            MouseMovedEvent e(static_cast<float>(event.motion.x), static_cast<float>(event.motion.y));
+            m_Callback(e);
+            break;
+		}
+        case SDL_EVENT_DROP_FILE:
+        {
+			// TODO: implement multiple file drop
+#if 0
+            std::vector<std::filesystem::path> filepaths(event.drop.reserved);
+
+            LOG_INFO("Paths: ");
+            for (uint32_t i = 0; i < static_cast<uint32_t>(filepaths.size()); i++)
+            {
+                filepaths[i] = std::filesystem::path(std::string(event.drop.data));
+                LOG_INFO(" {}", filepaths[i].generic_string().c_str());
+            }
+
+            WindowDropEvent e(std::move(filepaths));
+            m_Callback(e);
+#endif
+            break;
+        }
+        case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
+        {
+            if (m_DeviceManager->m_DeviceParams.enablePerMonitorDPI)
+            {
+                WindowDPIScaleChangedEvent e(static_cast<float>(event.display.data1), static_cast<float>(event.display.data2));
+                m_Callback(e);
+#ifdef _WIN32
+				HWND hwnd = m_DeviceManager->GetNativeWindow();
+                HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+                u32 dpiX, dpiY;
+                GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+                m_DeviceManager->m_DPIScaleFactorX = dpiX / 96.f;
+                m_DeviceManager->m_DPIScaleFactorY = dpiY / 96.f;
+#else
+                GLFWmonitor* monitor = glfwGetWindowMonitor(window);
+                if (!monitor) monitor = glfwGetPrimaryMonitor();
+                glfwGetMonitorContentScale(monitor, &win.m_DeviceManager->m_DPIScaleFactorX, &win.m_DeviceManager->m_DPIScaleFactorY);
+#endif
+            }
+
+            break;
+        }
+            
+        }
+
+        for (const Ref<Joystick>& j : JoystickManager::GetConnectedJoystick())
         {
             j->Update();
         }
@@ -223,29 +393,27 @@ namespace ignite
     {
         if (m_DeviceManager->m_Window)
         {
-            glfwDestroyWindow(m_DeviceManager->m_Window);
+			SDL_DestroyWindow(m_DeviceManager->m_Window);
             m_DeviceManager->m_Window = nullptr;
         }
-        glfwTerminate();
+
+		SDL_Quit();
     }
 
     void Window::SetTitle(const std::string &title) const
     {
-        glfwSetWindowTitle(m_DeviceManager->m_Window, title.c_str());
+		SDL_SetWindowTitle(m_DeviceManager->m_Window, title.c_str());
     }
 
     void Window::SetIcon(const std::string &filepath)
     {
-        GLFWimage image[1];
         int width, height, channels;
         uint8_t *pixels = stbi_load(filepath.c_str(), &width, &height, &channels, 4);
 
         if (pixels)
         {
-            image[0].width = width;
-            image[0].height = height;
-            image[0].pixels = pixels;
-            glfwSetWindowIcon(m_DeviceManager->m_Window, 1, image);
+            SDL_Surface *iconSurface = SDL_CreateSurfaceFrom(width, height, SDL_PIXELFORMAT_RGBA32, pixels, width * 4);
+            SDL_SetWindowIcon(m_DeviceManager->m_Window, nullptr);
         }
         else
         {
@@ -253,40 +421,60 @@ namespace ignite
         }
     }
 
-    void Window::Iconify() const
+    void Window::Minimize() const
     {
-        glfwIconifyWindow(m_DeviceManager->m_Window);
+		SDL_MinimizeWindow(m_DeviceManager->m_Window);
     }
 
     void Window::Maximize() const
     {
-        glfwMaximizeWindow(m_DeviceManager->m_Window);
+		SDL_MaximizeWindow(m_DeviceManager->m_Window);
     }
 
     void Window::Restore() const
     {
-        glfwRestoreWindow(m_DeviceManager->m_Window);
+		SDL_RestoreWindow(m_DeviceManager->m_Window);
     }
     
-    void Window::Shutdown() const
+    void Window::Shutdown()
     {
-        glfwSetWindowShouldClose(m_DeviceManager->m_Window, 1);
+		m_Looping = false;
     }
 
     void Window::Show()
     {
-        glfwShowWindow(m_DeviceManager->m_Window);
+        if (!m_DeviceManager->m_DeviceParams.startMaximized)
+        {
+			int width, height;
+			SDL_GetWindowSize(m_DeviceManager->m_Window, &width, &height);
+
+#if 0
+            int displayCount;
+            SDL_DisplayID *displayId = SDL_GetDisplays(&displayCount);
+#endif
+            SDL_Rect rect;
+			SDL_GetDisplayBounds(0, &rect);
+            
+            SDL_SetWindowPosition(m_DeviceManager->m_Window,
+                rect.w / 2 - width / 2,
+                rect.h / 2 - height / 2
+            );
+        }
+
+		m_DeviceManager->m_WindowVisible = true;
+		SDL_ShowWindow(m_DeviceManager->m_Window);
     }
 
     void Window::Hide()
     {
-        glfwHideWindow(m_DeviceManager->m_Window);
+		m_DeviceManager->m_WindowVisible = false;
+		SDL_HideWindow(m_DeviceManager->m_Window);
     }
 
     glm::vec2 Window::GetPosition()
     {
         int xPos, yPos;
-        glfwGetWindowPos(m_DeviceManager->m_Window, &xPos, &yPos);
+		SDL_GetWindowPosition(m_DeviceManager->m_Window, &xPos, &yPos);
         return { static_cast<float>(xPos), static_cast<float>(yPos) };
     }
 
@@ -297,197 +485,8 @@ namespace ignite
         return { width, height };
     }
 
-    void Window::SetCallbacks() const
-    {
-        glfwSetWindowPosCallback(m_DeviceManager->m_Window, [](GLFWwindow* window, i32 xpos, i32 ypos)
-        {
-            Window &win = *static_cast<Window *>(glfwGetWindowUserPointer(window));
-            win.m_DeviceManager->m_DeviceParams.windowPosX = xpos;
-            win.m_DeviceManager->m_DeviceParams.windowPosY = ypos;
-        });
-
-        // Add dedicated content scale callback for better DPI change detection
-        glfwSetWindowContentScaleCallback(m_DeviceManager->m_Window, [](GLFWwindow* window, float xscale, float yscale)
-        {
-            Window &win = *static_cast<Window *>(glfwGetWindowUserPointer(window));
-            
-            if (win.m_DeviceManager->m_DeviceParams.enablePerMonitorDPI)
-            {
-                WindowDPIScaleChangedEvent event(xscale, yscale);
-                win.m_Callback(event);
-#ifdef _WIN32
-                HWND hwnd = glfwGetWin32Window(window);
-                HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-                u32 dpiX, dpiY;
-                GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-                win.m_DeviceManager->m_DPIScaleFactorX = dpiX / 96.f;
-                win.m_DeviceManager->m_DPIScaleFactorY = dpiY / 96.f;
-#else
-                GLFWmonitor *monitor = glfwGetWindowMonitor(window);
-                if (!monitor) monitor = glfwGetPrimaryMonitor();
-                glfwGetMonitorContentScale(monitor, &win.m_DeviceManager->m_DPIScaleFactorX, &win.m_DeviceManager->m_DPIScaleFactorY);
-#endif
-            }
-        });
-
-        glfwSetFramebufferSizeCallback(m_DeviceManager->m_Window, [](GLFWwindow* window, i32 width, i32 height)
-        {
-            Window &win = *static_cast<Window *>(glfwGetWindowUserPointer(window));
-            FramebufferResizeEvent event(width, height);
-            win.m_Callback(event);
-
-            // window is not minimized, and the size has changed
-            if (width > 0 && height > 0)
-            {
-                win.m_DeviceManager->m_DeviceParams.backBufferWidth = width;
-                win.m_DeviceManager->m_DeviceParams.backBufferHeight = height;
-
-                win.m_DeviceManager->ResizeSwapChain();
-                win.m_DeviceManager->CreateBackBuffers();
-            }
-        });
-
-        glfwSetWindowSizeCallback(m_DeviceManager->m_Window, [](GLFWwindow* window, i32 width, i32 height)
-        {
-            Window &win = *static_cast<Window *>(glfwGetWindowUserPointer(window));
-            WindowResizeEvent event(width, height);
-            win.m_Callback(event);
-
-            if (width == 0 || height == 0)
-            {
-                win.m_DeviceManager->m_WindowVisible = false;
-                return;
-            }
-
-            win.m_DeviceManager->m_WindowVisible = true;
-            win.m_DeviceManager->m_WindowIsInFocus = glfwGetWindowAttrib(window, GLFW_FOCUSED) == 1;
-        });
-
-        glfwSetWindowCloseCallback(m_DeviceManager->m_Window, [](GLFWwindow* window)
-        {
-            Window &win = *static_cast<Window *>(glfwGetWindowUserPointer(window));
-            WindowCloseEvent event;
-            win.m_Callback(event);
-        });
-
-        glfwSetJoystickCallback([](int jid, int state)
-        {
-            if (state == GLFW_CONNECTED)
-                JoystickManager::ConnectJoystick(jid);
-            else if (state == GLFW_DISCONNECTED)
-                JoystickManager::DisconnectJoystick(jid);
-        });
-
-        glfwSetKeyCallback(m_DeviceManager->m_Window, [](GLFWwindow* window, i32 key, i32 scancode, i32 action, i32 mods)
-        {
-            Window &win = *static_cast<Window *>(glfwGetWindowUserPointer(window));
-            switch (action)
-            {
-            case GLFW_PRESS:
-            {
-                KeyPressedEvent event(key, 0);
-                win.m_Callback(event);
-                break;
-            }
-            case GLFW_RELEASE:
-            {
-                KeyReleasedEvent event(key);
-                win.m_Callback(event);
-                break;
-            }
-            case GLFW_REPEAT:
-            {
-                KeyPressedEvent event(key, 1);
-                win.m_Callback(event);
-                break;
-            }
-            default: break;
-            }
-        });
-
-        glfwSetCharCallback(m_DeviceManager->m_Window, [](GLFWwindow* window, u32 keycode)
-        {
-            Window &win = *static_cast<Window *>(glfwGetWindowUserPointer(window));
-            KeyTypedEvent event(keycode);
-            win.m_Callback(event);
-        });
-
-        glfwSetMouseButtonCallback(m_DeviceManager->m_Window, [](GLFWwindow* window, i32 button, i32 action, i32 mods)
-        {
-            Window &win = *static_cast<Window *>(glfwGetWindowUserPointer(window));
-            switch (action)
-            {
-            case GLFW_PRESS:
-            {
-                MouseButtonPressedEvent event(button);
-                win.m_Callback(event);
-                break;
-            }
-            case GLFW_RELEASE:
-            {
-                MouseButtonReleasedEvent event(button);
-                win.m_Callback(event);
-                break;
-            }
-            default: break;
-            }
-        });
-
-        glfwSetScrollCallback(m_DeviceManager->m_Window, [](GLFWwindow* window, f64 x_offset, f64 y_offset)
-        {
-            Window &win = *static_cast<Window *>(glfwGetWindowUserPointer(window));
-            MouseScrolledEvent event(static_cast<float>(x_offset), static_cast<float>(y_offset));
-            win.m_Callback(event);
-        });
-
-        glfwSetCursorPosCallback(m_DeviceManager->m_Window, [](GLFWwindow* window, f64 xPos, f64 yPos)
-        {
-            Window &win = *static_cast<Window *>(glfwGetWindowUserPointer(window));
-            MouseMovedEvent event(static_cast<float>(xPos), static_cast<float>(yPos));
-            win.m_Callback(event);
-        });
-
-        glfwSetDropCallback(m_DeviceManager->m_Window, [](GLFWwindow* window, i32 pathCount, const char* paths[])
-        {
-            Window &win = *static_cast<Window *>(glfwGetWindowUserPointer(window));
-            std::vector<std::filesystem::path> filepaths(pathCount);
-
-            LOG_INFO("Paths: ");
-            for (i32 i = 0; i < pathCount; i++)
-            {
-                filepaths[i] = paths[i];
-                LOG_INFO(" {}", filepaths[i].generic_string().c_str());
-            }
-
-            WindowDropEvent event(std::move(filepaths));
-            win.m_Callback(event);
-        });
-
-        glfwSetWindowMaximizeCallback(m_DeviceManager->m_Window, [](GLFWwindow* window, i32 maximized)
-        {
-            Window &win = *static_cast<Window *>(glfwGetWindowUserPointer(window));
-            WindowMaximizedEvent event(maximized ? true : false);
-            win.m_Callback(event);
-        });
-
-        glfwSetWindowIconifyCallback(m_DeviceManager->m_Window, [](GLFWwindow* window, i32 iconified)
-        {
-            Window &win = *static_cast<Window *>(glfwGetWindowUserPointer(window));
-            WindowMinimizedEvent event(iconified ? true : false);
-            win.m_Callback(event);
-        });
-
-        glfwSetWindowCloseCallback(m_DeviceManager->m_Window, [](GLFWwindow* window)
-        {
-            Window &win = *static_cast<Window *>(glfwGetWindowUserPointer(window));
-            WindowCloseEvent event;
-            win.m_Callback(event);
-        });
-    }
-
     void Window::SetEventCallback(const std::function<void(Event &)> &callback)
     {
         m_Callback = callback;
-        SetCallbacks();
     }
 }

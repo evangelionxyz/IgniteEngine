@@ -30,7 +30,8 @@
 #include "ignite/math/aabb.hpp"
 #include "material.hpp"
 
-#include <tinygltf.h>
+#include "../../thirdparty/TINYGLTF/include/tinygltf.h"
+
 #include <nvrhi/nvrhi.h>
 #include <filesystem>
 

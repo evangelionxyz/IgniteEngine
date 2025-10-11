@@ -27,6 +27,7 @@
 
 namespace ignite {
 
+#if 0
     AnimationChannel::AnimationChannel(const aiNodeAnim *animNode)
         : translation(0.0f), scale(1.0f), rotation({ 1.0f, 0.0f, 0.0f, 0.0f })
     {
@@ -83,5 +84,5 @@ namespace ignite {
             channels[nodeName] = AnimationChannel(animNode);
         }
     }
-
+#endif
 }

@@ -41,6 +41,7 @@ namespace ignite
     {
         ApplicationCreateInfo createInfo;
         createInfo.cmdLineArgs = args;
+		createInfo.name = "Ignite Runtime";
         createInfo.width = 1640;
         createInfo.height = 940;
         createInfo.useGui = true;

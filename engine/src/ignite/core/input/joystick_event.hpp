@@ -30,7 +30,6 @@
 
 #include <glm/glm.hpp>
 #include <spdlog/fmt/fmt.h>
-#include <glfw/glfw3.h>
 #include <list>
 
 namespace ignite {
@@ -54,6 +53,7 @@ namespace ignite {
 
         void Update() const
         {
+#if 0
             if (glfwJoystickIsGamepad(m_JoyId))
             {
                 const char *name = glfwGetGamepadName(m_JoyId);
@@ -78,6 +78,7 @@ namespace ignite {
                     m_Buttons[bt] = buttonState == GLFW_PRESS;
                 }
             }
+#endif
         }
 
         std::string ToString() const

@@ -23,8 +23,7 @@
 
 #pragma once
 
-#include <GLFW/glfw3.h>
-#include <GLFW/glfw3native.h>
+#include <SDL3/SDL.h>
 
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/input/event.hpp"
@@ -37,10 +36,10 @@ namespace ignite
     public:
         explicit Window(const char *windowTitle, const DeviceCreationParameters &createInfo, nvrhi::GraphicsAPI graphicsApi);
 
-        [[nodiscard]] GLFWwindow *GetWindowHandle() const { return m_DeviceManager->m_Window; }
-        [[nodiscard]] bool IsLooping() const { return glfwWindowShouldClose(m_DeviceManager->m_Window) == 0; };
+        [[nodiscard]] SDL_Window *GetWindowHandle() const { return m_DeviceManager->m_Window; }
+        [[nodiscard]] bool IsLooping() const { return m_Looping; };
 
-        void PollEvents();
+        void PollEvents(const SDL_Event &event);
         void Destroy();
 
         std::string &GetTitle() { return m_WindowTitle; }
@@ -53,11 +52,11 @@ namespace ignite
         void SetTitle(const std::string &title) const;
         void SetIcon(const std::string &filepath);
 
-        void Iconify() const;
+        void Minimize() const;
         void Maximize() const;
         void Restore() const;
 
-        void Shutdown() const;
+        void Shutdown();
 
         void Show();
         void Hide();
@@ -66,11 +65,10 @@ namespace ignite
         glm::vec2 GetFramebufferSize();
 
     private:
-        void SetCallbacks() const;
         DeviceManager *m_DeviceManager;
         std::string m_WindowTitle;
-        
         std::function<void(Event&)> m_Callback;
+        bool m_Looping = true;
 
         friend class JoystickManager;
     };

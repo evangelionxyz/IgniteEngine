@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 ROOT_DIR="${SCRIPT_DIR}"
 
 pushd "${ROOT_DIR}" >/dev/null
-python3 scripts/setup.py --with-build -c Debug
+# python3 scripts/setup.py --with-build -c Debug
 popd >/dev/null
 
 echo "Done. To build again: cmake --build build --config Debug"

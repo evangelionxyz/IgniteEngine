@@ -23,7 +23,7 @@
 
 #include "input.hpp"
 
-#include <GLFW/glfw3.h>
+#include <SDL3/SDL.h>
 #include "ignite/core/types.hpp"
 
 namespace ignite
@@ -32,7 +32,7 @@ namespace ignite
     {
         Input *input = nullptr;
         CursorMode cursorMode = CursorMode::Normal;
-        GLFWwindow *window;
+        SDL_Window *window;
     };
 
     static InputData s_InputData;
@@ -40,29 +40,35 @@ namespace ignite
     Input::Input(void *window)
     {
         s_InputData.input = this;
-        s_InputData.window = static_cast<GLFWwindow *>(window);
+        s_InputData.window = static_cast<SDL_Window *>(window);
     }
 
     bool Input::IsKeyPressed(KeyCode keycode)
     {
-        return glfwGetKey(s_InputData.window, keycode) == GLFW_PRESS;
+        const bool* keyboardState = SDL_GetKeyboardState(nullptr);
+        SDL_Keymod modState;
+        SDL_Scancode scancode = SDL_GetScancodeFromKey(keycode, &modState);
+        return keyboardState[scancode];
     }
 
     bool Input::IsMouseButtonPressed(MouseCode button)
     {
-        return glfwGetMouseButton(s_InputData.window, button) == GLFW_PRESS;
+        uint32_t mouseState = SDL_GetMouseState(nullptr, nullptr);
+        uint32_t mask = SDL_BUTTON_MASK(button);
+        bool result = (mouseState & mask) != 0;
+        return result;
     }
 
     glm::vec2 Input::GetMousePosition()
     {
-        f64 x, y;
-        glfwGetCursorPos(s_InputData.window, &x, &y);
+        float x, y;
+        SDL_GetMouseState(&x, &y);
         return glm::vec2(x, y);
     }
 
     void Input::SetMousePosition(float x, float y)
     {
-        glfwSetCursorPos(s_InputData.window, static_cast<double>(x), static_cast<double>(y));
+        SDL_WarpMouseInWindow(s_InputData.window, x, y);
     }
 
     void Input::SetCursorMode(CursorMode mode)
@@ -76,22 +82,26 @@ namespace ignite
         {
         case CursorMode::Normal:
         {
-            glfwSetInputMode(s_InputData.window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            SDL_SetWindowRelativeMouseMode(s_InputData.window, false);
+            SDL_ShowCursor();
             break;
         }
         case CursorMode::Hidden:
         {
-            glfwSetInputMode(s_InputData.window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+            SDL_SetWindowRelativeMouseMode(s_InputData.window, false);
+            SDL_HideCursor();
             break;
         }
         case CursorMode::Disabled:
         {
-            glfwSetInputMode(s_InputData.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            SDL_SetWindowRelativeMouseMode(s_InputData.window, true);
             break;
         }
         case CursorMode::Captured:
         {
-            glfwSetInputMode(s_InputData.window, GLFW_CURSOR, GLFW_CURSOR_CAPTURED);
+            SDL_SetWindowRelativeMouseMode(s_InputData.window, false);
+            SDL_CaptureMouse(true);
+            SDL_ShowCursor();
             break;
         }
         default:

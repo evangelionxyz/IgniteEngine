@@ -28,27 +28,22 @@
 namespace ignite
 {
     EditorCamera::EditorCamera(const std::string &name)
-        : m_Name(std::move(name))
+        : m_Name(name)
     {
     }
 
 	void EditorCamera::UpdateMouseState()
 	{
-		auto window = Application::GetInstance()->GetWindow()->GetWindowHandle();
-
-		double mouseX, mouseY;
-		glfwGetCursorPos(window, &mouseX, &mouseY);
-
 		// store last position before updating
 		mouse.lastPosition = mouse.position;
 
 		// update current position
-		mouse.position = glm::vec2(static_cast<float>(mouseX), static_cast<float>(mouseY));
+		mouse.position = Input::GetMousePosition();
 
 		// update button states
-		mouse.leftButtonDown = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
-		mouse.middleButtonDown = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS;
-		mouse.rightButtonDown = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+		mouse.leftButtonDown = Input::IsMouseButtonPressed(Mouse::ButtonLeft);
+		mouse.middleButtonDown = Input::IsMouseButtonPressed(Mouse::ButtonMiddle);
+		mouse.rightButtonDown = Input::IsMouseButtonPressed(Mouse::ButtonRight);
 	}
 
 	void EditorCamera::UpdateSphericalPosition()
@@ -67,7 +62,7 @@ namespace ignite
 			glm::vec2 delta = mouse.position - mouse.lastPosition;
 
 			// handle zoom
-			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
+			if (Input::IsKeyPressed(Key::LeftControl))
 			{
 				delta.y *= -1.0f * 0.5f; // inverting mouse y
 
@@ -160,11 +155,11 @@ namespace ignite
 		}
 
 		// handle keyboard zoom controls
-		if (glfwGetKey(window, GLFW_KEY_EQUAL) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_ADD) == GLFW_PRESS)
+		if (Input::IsKeyPressed(Key::Equal) || Input::IsKeyPressed(Key::KPAdd))
 		{
 			wheelDelta -= controls.zoomSensitivity * deltaTime * 10.0f;
 		}
-		if (glfwGetKey(window, GLFW_KEY_MINUS) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_SUBTRACT) == GLFW_PRESS)
+		if (Input::IsKeyPressed(Key::Minus) || Input::IsKeyPressed(Key::KPSubtract))
 		{
 			wheelDelta += controls.zoomSensitivity * deltaTime * 10.0f;
 		}

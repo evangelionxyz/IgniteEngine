@@ -74,6 +74,8 @@ namespace ignite
         void BeginFrame();
         void EndFrame(nvrhi::IFramebuffer* framebuffer);
 
+        void PollEvent(const SDL_Event &event);
+
         void OnEvent(Event &event) override;
         bool OnFramebufferResize(FramebufferResizeEvent &event) const;
         bool OnDPIScaleChanged(WindowDPIScaleChangedEvent &event);

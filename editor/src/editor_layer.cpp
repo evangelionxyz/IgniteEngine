@@ -118,7 +118,10 @@ namespace ignite
             }
         }
 
-        Application::GetInstance()->GetWindow()->Show(); // Show window after initialization
+        if (m_ActiveProject)
+        {
+            Application::GetInstance()->GetWindow()->Show(); // Show window after initialization
+        }
     }
 
     void EditorLayer::OnDetach()

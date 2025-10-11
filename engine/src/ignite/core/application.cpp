@@ -57,6 +57,10 @@ namespace ignite
         deviceCreateInfo.backBufferWidth = m_CreateInfo.width;
         deviceCreateInfo.backBufferHeight = m_CreateInfo.height;
         deviceCreateInfo.startMaximized = m_CreateInfo.maximized;
+		deviceCreateInfo.startBorderless = m_CreateInfo.borderless;
+#if _DEBUG
+        deviceCreateInfo.enableDebugRuntime = true;
+#endif
         deviceCreateInfo.swapChainBufferCount = 3;
         deviceCreateInfo.enableNvrhiValidationLayer = true;
         deviceCreateInfo.enablePerMonitorDPI = true;
@@ -79,8 +83,15 @@ namespace ignite
             // PushLayer(m_ImGuiLayer.get());
         }
 
-        FmodAudio::Init();
-        JoltPhysics::Init();
+        if (m_CreateInfo.useAudio)
+        {
+            FmodAudio::Init();
+        }
+
+        if (m_CreateInfo.usePhysics)
+        {
+            JoltPhysics::Init();
+        }
     }
 
     Application *Application::GetInstance()
@@ -150,17 +161,29 @@ namespace ignite
         DeviceManager *deviceManager = GetDeviceManager();
         nvrhi::IDevice *device = deviceManager->GetDevice();
         auto commandList = device->createCommandList();
-
+        
+        SDL_Event sdlEvent;
+        
         while (m_Window->IsLooping())
         {
-            m_Window->PollEvents();
+            while (SDL_PollEvent(&sdlEvent))
+            {
+                m_Window->PollEvents(sdlEvent);
+                if (m_CreateInfo.useGui)
+                {
+                    m_ImGuiLayer->PollEvent(sdlEvent);
+                }
+            }
 
-            const f64 currTime = glfwGetTime();
-            m_DeltaTime = static_cast<float>(currTime - m_PreviousTime);
+            const f64 currTime = SDL_GetTicks();
+            m_DeltaTime = static_cast<float>(currTime - m_PreviousTime) / 1000.0f;
 
             ProcessMainThreadSubmissions();
 
-            FmodAudio::Update(m_DeltaTime);
+            if (m_CreateInfo.useAudio)
+            {
+                FmodAudio::Update(m_DeltaTime);
+            }
 
             // update window title
             if (m_AverageFrameTime > 0)
@@ -262,8 +285,15 @@ namespace ignite
         deviceManager->Destroy();
         m_Window->Destroy();
 
-        JoltPhysics::Shutdown();
-        FmodAudio::Shutdown();
+        if (m_CreateInfo.usePhysics)
+        {
+            JoltPhysics::Shutdown();
+        }
+
+        if (m_CreateInfo.useAudio)
+        {
+            FmodAudio::Shutdown();
+        }
     }
 
     void Application::OnEvent(Event &e)
@@ -279,7 +309,7 @@ namespace ignite
 
     void Application::WindowIconify()
     {
-        GetInstance()->m_Window->Iconify();
+        GetInstance()->m_Window->Minimize();
     }
 
     void Application::WindowMaximize()

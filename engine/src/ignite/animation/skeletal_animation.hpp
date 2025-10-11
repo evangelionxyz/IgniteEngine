@@ -26,17 +26,24 @@
 #include "ignite/asset/asset.hpp"
 #include "keyframes.hpp"
 
-#include <assimp/anim.h>
 #include <string>
 #include <unordered_map>
 
 namespace ignite {
+
+    struct AnimationNode
+    {
+        std::string name;
+        glm::mat4 transformation;
+        AnimationNode *parent = nullptr;
+        std::vector<AnimationNode> children;
+	};
     
     class AnimationChannel
     {
     public:
         AnimationChannel() = default;
-        AnimationChannel(const aiNodeAnim *animNode);
+        AnimationChannel(const AnimationNode *animNode);
 
         // time in seconds * ticks per second
         // S * (T/S)
@@ -55,7 +62,6 @@ namespace ignite {
     {
     public:
         SkeletalAnimation() = default;
-        SkeletalAnimation(aiAnimation *anim);
 
         std::string name;
         float duration = 0;

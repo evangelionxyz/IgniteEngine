@@ -33,6 +33,7 @@
     #pragma comment(lib, "Dwmapi.lib") // Link to DWM API
     #pragma comment(lib, "shcore.lib")
 #endif
+
 #include "device_manager.hpp"
 #include "ignite/core/logger.hpp"
 #include <glm/glm.hpp>
@@ -114,7 +115,8 @@ namespace ignite
 #endif
         }
 
-        if (!glfwInit())
+		SDL_InitFlags sdlFlags = SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_JOYSTICK | SDL_INIT_HAPTIC | SDL_INIT_CAMERA;
+        if (!SDL_Init(sdlFlags))
         {
             return false;
         }
@@ -143,6 +145,15 @@ namespace ignite
     {
         m_DeviceParams.backBufferWidth = width;
         m_DeviceParams.backBufferHeight = height;
+    }
+
+    HWND DeviceManager::GetNativeWindow()
+    {
+        // Retrieve HWND
+        SDL_PropertiesID props = SDL_GetWindowProperties(m_Window);
+        HWND hwnd = (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
+
+		return hwnd;
     }
 
     void DeviceManager::CreateBackBuffers()

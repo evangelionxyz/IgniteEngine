@@ -1,5 +1,0 @@
-# STB (single translation unit wrapper)
-add_library(STB STATIC STB/stb_image.cpp)
-target_include_directories(STB PUBLIC ${THIRDPARTY_DIR}/STB/include)
-set_common_target_options(STB)
-set_target_properties(STB PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES)

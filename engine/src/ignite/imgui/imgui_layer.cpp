@@ -25,7 +25,7 @@
 #include "ignite/core/application.hpp"
 #include "ignite/core/logger.hpp"
 
-#include <backends/imgui_impl_glfw.h>
+#include <backends/imgui_impl_sdl3.h>
 #include <ImGuizmo.h>
 
 #ifdef PLATFORM_WINDOWS
@@ -243,10 +243,15 @@ namespace ignite
         io.ConfigWindowsMoveFromTitleBarOnly = true;
         io.ConfigViewportsNoDecoration = false;
 
-        ImGui_ImplGlfw_InitForOther(m_DeviceManager->GetWindow(), true);
+		
 
         switch (Renderer::GetGraphicsAPI())
         {
+            case nvrhi::GraphicsAPI::VULKAN:
+            {
+                ImGui_ImplSDL3_InitForVulkan(Application::GetDeviceManager()->GetWindow());
+                break;
+            }
             case nvrhi::GraphicsAPI::D3D12:
             {
 #ifdef PLATFORM_WINDOWS
@@ -373,7 +378,7 @@ namespace ignite
 
         imguiNVRHI->UpdateFontTexture();
 
-        ImGui_ImplGlfw_NewFrame();
+        ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
 
@@ -385,6 +390,11 @@ namespace ignite
         ImGui::Render();
         imguiNVRHI->Render(framebuffer);
         m_BeginFrameCalled = false;
+    }
+
+    void ImGuiLayer::PollEvent(const SDL_Event& event)
+    {
+        ImGui_ImplSDL3_ProcessEvent(&event);
     }
 
     void ImGuiLayer::OnDetach()
@@ -400,7 +410,7 @@ namespace ignite
             }
         }
 
-        ImGui_ImplGlfw_Shutdown();
+        ImGui_ImplSDL3_Shutdown();
         ImGui::DestroyContext();
 
         imguiNVRHI->Shutdown();

@@ -30,7 +30,7 @@ namespace ignite
 {
     IndexBuffer::IndexBuffer(size_t size, const std::string &debugName)
     {
-        m_Count = size / sizeof(uint32_t);
+        m_Count = static_cast<uint32_t>(size) / sizeof(uint32_t);
 
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
         nvrhi::BufferDesc desc;

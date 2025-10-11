@@ -52,10 +52,6 @@
 #include <ranges>
 
 #ifdef _WIN32
-    #ifndef GLFW_EXPOSE_NATIVE_WIN32
-        #define GLFW_EXPOSE_NATIVE_WIN32
-    #endif
-    #include <GLFW/glfw3native.h>
     #include <dwmapi.h>
 #endif
 
@@ -1242,9 +1238,7 @@ namespace ignite
         ImGui::SameLine();
         ImGui::Image(scenePlayStopID, buttonSize);
         if (ImGui::IsItemClicked())
-        {
-            GLFWwindow *glfwWindow = ignite::Application::GetDeviceManager()->GetWindow();
-            
+        {            
             const uint32_t width = static_cast<uint32_t>(m_ViewportData.rect.GetSize().x);
             const uint32_t height = static_cast<uint32_t>(m_ViewportData.rect.GetSize().y);
 			const float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
@@ -1267,7 +1261,7 @@ namespace ignite
             {
                 EditorLayer::GetInstance()->OnSceneStop();
 #if _WIN32
-                HWND hwnd = glfwGetWin32Window(glfwWindow);
+				HWND hwnd = Application::GetDeviceManager()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
 #endif
@@ -1276,7 +1270,7 @@ namespace ignite
             {
                 EditorLayer::GetInstance()->OnScenePlay();
 #if _WIN32
-                HWND hwnd = glfwGetWin32Window(glfwWindow);
+                HWND hwnd = Application::GetDeviceManager()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
 #endif
@@ -1290,9 +1284,7 @@ namespace ignite
         ImGui::SameLine();
         ImGui::Image(sceneSimulateID, buttonSize);
         if (ImGui::IsItemClicked())
-        {
-            GLFWwindow *glfwWindow = Application::GetDeviceManager()->GetWindow();
-            
+        {            
             const uint32_t width = static_cast<uint32_t>(m_ViewportData.rect.GetSize().x);
             const uint32_t height = static_cast<uint32_t>(m_ViewportData.rect.GetSize().y);
 
@@ -1321,7 +1313,7 @@ namespace ignite
             {
                 EditorLayer::GetInstance()->OnSceneStop();
 #if _WIN32
-                HWND hwnd = glfwGetWin32Window(glfwWindow);
+                HWND hwnd = Application::GetDeviceManager()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
 #endif
@@ -1330,7 +1322,7 @@ namespace ignite
             {
                 EditorLayer::GetInstance()->OnSceneSimulate();
 #if _WIN32
-                HWND hwnd = glfwGetWin32Window(glfwWindow);
+                HWND hwnd = Application::GetDeviceManager()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
 #endif

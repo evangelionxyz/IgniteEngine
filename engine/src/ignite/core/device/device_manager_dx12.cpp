@@ -30,7 +30,10 @@
 #include "ignite/core/logger.hpp"
 
 #include <Windows.h>
-#include <GLFW/glfw3native.h>
+
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_system.h>
+
 #include <array>
 #include <optional>
 
@@ -341,11 +344,12 @@ namespace ignite
 
         if (MoveWindowOntoAdapter(m_DxgiAdapter, rect))
         {
-            glfwSetWindowPos(m_Window, rect.left, rect.top);
+			SDL_SetWindowPosition(m_Window, rect.left, rect.top);
         }
 
-        m_Hwnd = glfwGetWin32Window(m_Window);
-
+        // Retrieve HWND
+        SDL_PropertiesID props = SDL_GetWindowProperties(m_Window);
+		HWND hwnd = (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
         HRESULT hr = E_FAIL;
 
         RECT clientRect;
@@ -540,16 +544,6 @@ namespace ignite
                 m_SwapChainDesc = newSwapChainDesc;
                 m_DeviceParams.backBufferWidth = newSwapChainDesc.Width;
                 m_DeviceParams.backBufferHeight = newSwapChainDesc.Height;
-
-                if (newFullScreenDesc.Windowed)
-                {
-                    glfwSetWindowMonitor(m_Window, nullptr,
-                        50, 50,
-                        newSwapChainDesc.Width,
-                        newSwapChainDesc.Height,
-                        GLFW_DONT_CARE
-                    );
-                }
 
                 ResizeSwapChain();
                 CreateBackBuffers();

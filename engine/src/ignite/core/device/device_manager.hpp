@@ -39,8 +39,7 @@
     #include <vulkan/vulkan.hpp>
 #endif
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
+#include <SDL3/SDL.h>
 
 #include <nvrhi/nvrhi.h>
 #include <optional>
@@ -153,6 +152,10 @@ namespace ignite
 
         void ResizeBackbuffer(uint32_t width, uint32_t height);
 
+#if defined(PLATFORM_WINDOWS)
+        HWND GetNativeWindow();
+#endif
+
     public:
         // device specific methods
         virtual bool CreateInstanceInternal() = 0;
@@ -175,7 +178,7 @@ namespace ignite
         virtual void ReportLiveObjects() { };
         void SetEnableRenderDuringWindowMovement(bool val) { m_EnableRenderDuringWindowMovement = val; }
 
-        [[nodiscard]] GLFWwindow *GetWindow() const { return m_Window; }
+        [[nodiscard]] SDL_Window *GetWindow() const { return m_Window; }
         [[nodiscard]] u32 GetFrameIndex() const { return m_FrameIndex; }
 
         virtual nvrhi::ITexture *GetCurrentBackBuffer() = 0;
@@ -205,7 +208,7 @@ namespace ignite
         bool m_WindowIsInFocus = true;
 
         DeviceCreationParameters m_DeviceParams;
-        GLFWwindow *m_Window = nullptr;
+        SDL_Window *m_Window = nullptr;
         bool m_EnableRenderDuringWindowMovement = false;
 
         bool m_IsNvidia = false;

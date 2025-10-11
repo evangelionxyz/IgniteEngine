@@ -26,7 +26,7 @@
 
 #include <string>
 
-#include <GLFW/glfw3.h>
+#include <SDL3/SDL_vulkan.h>
 
 // Define the Vulkan dynamic dispatcher - this needs to occur in exactly one cpp file in the program.
 
@@ -490,14 +490,8 @@ namespace ignite
     {
         if (!m_DeviceParams.headlessDevice)
         {
-            if (!glfwVulkanSupported())
-            {
-                LOG_ERROR("GLFW reports that Vulkan is not supported. Perhaps missing a call to glfwInit()");
-                return false;
-            }
-
             u32 glfwExtCount;
-            const char **glfwExt = glfwGetRequiredInstanceExtensions(&glfwExtCount);
+            const char* const* glfwExt = SDL_Vulkan_GetInstanceExtensions(&glfwExtCount);
             LOG_ASSERT(glfwExt, " Failed to get required instance extensions");
 
             for (u32 i = 0; i < glfwExtCount; ++i)
@@ -654,9 +648,10 @@ namespace ignite
 
     bool DeviceManager_VK::CreateWindowSurface()
     {
-        VkResult res = glfwCreateWindowSurface(m_VulkanInstance, m_Window, nullptr, (VkSurfaceKHR *)&m_WindowSurface);
-        LOG_ASSERT(res == VK_SUCCESS, "Failed to create GLFW window surface, error code: {}", nvrhi::vulkan::resultToString(res));
-        return true;
+        bool success = SDL_Vulkan_CreateSurface(m_Window, m_VulkanInstance, nullptr, (VkSurfaceKHR*)&m_WindowSurface);
+        LOG_ASSERT(success, "Failed to create SDL window surface, error code");
+
+        return success;
     }
 
     void DeviceManager_VK::InstallDebugCallback()
@@ -878,8 +873,7 @@ namespace ignite
 
             if (m_PresentQueueFamily == -1)
             {
-                if (queueFamily.queueCount > 0 &&
-                    glfwGetPhysicalDevicePresentationSupport(m_VulkanInstance, physicalDevice, i))
+                if (queueFamily.queueCount > 0 && SDL_Vulkan_GetPresentationSupport(m_VulkanInstance, physicalDevice, i))
                 {
                     m_PresentQueueFamily = i;
                 }

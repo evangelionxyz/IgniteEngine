@@ -82,7 +82,7 @@ namespace ignite
         optimize "On"
         symbols "Default"
 
-    filter "configurations:Dist"
+    filter "configurations:Shipping"
         optimize "Full"
         symbols "Off"
 )";
