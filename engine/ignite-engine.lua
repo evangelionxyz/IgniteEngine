@@ -13,8 +13,6 @@ project "IgniteEngine"
         "src/ignite/**.h",
     }
 
-    disablewarnings { "4099" }
-
     includedirs {
         "src",
         "%{IncludeDir.SDL3}",
@@ -88,11 +86,14 @@ project "IgniteEngine"
     }
 
     --windows
-    filter "system:windows"
-        systemversion "latest"
+    filter { "system:windows", "toolset:msc*"}
+        disablewarnings { "4099" }
         buildoptions {
             "/utf-8"
         }
+
+    filter "system:windows"
+        systemversion "latest"
         links {
             "d3d12.lib",
             "dxgi.lib",

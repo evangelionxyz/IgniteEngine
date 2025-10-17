@@ -59,10 +59,13 @@ project "IgniteEditor"
     --linux
 
     --windows
+     filter { "system:windows", "toolset:msc*"}
+        disablewarnings { "4099" }
+        buildoptions {
+            "/utf-8"
+        }
+
     filter "system:windows"
-    buildoptions {
-        "/utf-8"
-    }
     defines {
         "PLATFORM_WINDOWS",
         "IGNITE_WITH_DX12",

@@ -66,7 +66,8 @@ def run():
     if system_name == "Windows":
         premake_args.append("vs2022")
     else:
-        premake_args.append("gmake2")
+        premake_args.append("gmake")
+        premake_args.append("--cc=clang")
 
     subprocess.call(premake_args, cwd=ROOT_DIR)
 

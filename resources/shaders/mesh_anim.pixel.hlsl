@@ -137,11 +137,11 @@ PSOutput main(PSInput input)
         float3 specularColor = lerp(float3(0.04f, 0.04f, 0.04f), baseColor, metallic);
 
         // User normal mapping if available
-        float3 finalNormal = N;
-        if (length(normalMap) > 0.01)
-        {
-            finalNormal = GenNormalFromMap(TBN, input.uv);
-        }
+        float3 finalNormal = normalize(input.normal * normalMap);
+        // if (length(normalMap) > 0.01)
+        // {
+        //     finalNormal = GenNormalFromMap(TBN, input.uv);
+        // }
 
         float3 reflectDirection = reflect(-viewDirection, finalNormal);
         float3 reflectRadiance = SampleSphericalMap(environmentMapTexture, sampler0, reflectDirection);

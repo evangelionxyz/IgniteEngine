@@ -27,10 +27,12 @@ project "BOX2D"
 
     --windows
     filter "system:windows"
-    systemversion "latest"
-    buildoptions {
-        "/experimental:c11atomics",
-    }
+        systemversion "latest"
+
+    filter { "system:windows", "toolset:msc*" }
+        buildoptions {
+            "/experimental:c11atomics",
+        }
 
     filter "configurations:Ddebug"
         runtime "debug"

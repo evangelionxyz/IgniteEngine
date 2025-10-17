@@ -36,12 +36,13 @@ namespace ignite
 {
     static std::string GetShaderFolder(nvrhi::GraphicsAPI api)
     {
-        switch (api)
+        if (api == nvrhi::GraphicsAPI::D3D12)
         {
-            case nvrhi::GraphicsAPI::D3D12:
-                return "/shaders/dxil";
-            case nvrhi::GraphicsAPI::VULKAN:
-                return "/shaders/spirv";
+            return "/shaders/dxil";
+        }
+        else if (api == nvrhi::GraphicsAPI::VULKAN)
+        {
+            return "/shaders/spirv";
         }
         assert(false);
         return "Unsupported graphics API";
@@ -49,12 +50,13 @@ namespace ignite
 
     static std::string GetShaderExtension(nvrhi::GraphicsAPI api)
     {
-        switch (api)
+        if (api == nvrhi::GraphicsAPI::D3D12)
         {
-            case nvrhi::GraphicsAPI::D3D12:
-                return ".dxil";
-            case nvrhi::GraphicsAPI::VULKAN:
-                return ".spirv";
+            return ".dxil";
+        }
+        else if (api == nvrhi::GraphicsAPI::VULKAN)
+        {
+            return ".spirv";
         }
         assert(false);
         return "Unsupported graphics API";

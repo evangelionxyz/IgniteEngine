@@ -55,9 +55,9 @@ namespace ignite
 
 	void EditorCamera::HandleOrbit(float deltaTime)
 	{
-		auto window = Application::GetInstance()->GetWindow()->GetWindowHandle();
+		// auto window = Application::GetInstance()->GetWindow()->GetWindowHandle();
 
-		if (mouse.leftButtonDown)
+		if (mouse.rightButtonDown)
 		{
 			glm::vec2 delta = mouse.position - mouse.lastPosition;
 
@@ -141,8 +141,6 @@ namespace ignite
 
 	void EditorCamera::HandleZoom(float deltaTime)
 	{
-		auto window = Application::GetInstance()->GetWindow()->GetWindowHandle();
-
 		float wheelDelta = 0.0f;
 
 		// check for scroll wheel input
