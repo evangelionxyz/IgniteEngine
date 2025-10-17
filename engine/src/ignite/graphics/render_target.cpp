@@ -120,6 +120,8 @@ namespace ignite {
     {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
+        device->waitForIdle();
+
         m_CreateInfo.width = width;
         m_CreateInfo.height = height;
 

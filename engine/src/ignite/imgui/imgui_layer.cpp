@@ -99,7 +99,7 @@ namespace ignite
     ImGuiLayer::ImGuiLayer(DeviceManager *deviceManager)
         : Layer("ImGuiLayer")
         , m_DeviceManager(deviceManager)
-        , m_SupportExplicitDisplayScaling(deviceManager->GetDeviceParams().supportExplicitDisplayScaling)
+        , m_SupportExplicitDisplayScaling(deviceManager->GetDeviceParameters().supportExplicitDisplayScaling)
     {
 
         LOG_ASSERT(m_DeviceManager, "Invalid device manager");
@@ -249,7 +249,7 @@ namespace ignite
         {
             case nvrhi::GraphicsAPI::VULKAN:
             {
-                ImGui_ImplSDL3_InitForVulkan(Application::GetDeviceManager()->GetWindow());
+                ImGui_ImplSDL3_InitForVulkan(Application::GetInstance()->GetWindow()->GetWindowHandle());
                 break;
             }
             case nvrhi::GraphicsAPI::D3D12:
@@ -259,7 +259,7 @@ namespace ignite
                 ImGui_ImplDX12_InitInfo initInfo = {};
                 initInfo.Device = d3d12.m_Device12;
                 initInfo.CommandQueue = d3d12.m_GraphicsQueue;
-                initInfo.NumFramesInFlight = m_DeviceManager->GetDeviceParams().maxFramesInFlight;
+                initInfo.NumFramesInFlight = m_DeviceManager->GetDeviceParameters().maxFramesInFlight;
                 initInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
                 initInfo.DSVFormat = DXGI_FORMAT_UNKNOWN;
                 initInfo.SrvDescriptorHeap = d3d12.m_SrvDescHeap;

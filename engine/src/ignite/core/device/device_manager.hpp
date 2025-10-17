@@ -39,8 +39,6 @@
     #include <vulkan/vulkan.hpp>
 #endif
 
-#include <SDL3/SDL.h>
-
 #include <nvrhi/nvrhi.h>
 #include <optional>
 #include <array>
@@ -51,6 +49,8 @@
 
 namespace ignite
 {
+    class Window;
+
     struct DefaultMessageCallback final : public nvrhi::IMessageCallback
     {
         static DefaultMessageCallback &GetInstance();
@@ -77,22 +77,29 @@ namespace ignite
 
     };
 
-    struct DeviceCreationParameters : public InstanceParameters
+    struct DeviceParameters : public InstanceParameters
     {
         bool startMaximized = false;
         bool startFullscreen = false;
         bool startBorderless = false;
         bool allowModeSwitch = false;
+
         int windowPosX = -1; // -1 means use default placement
         int windowPosY = -1;
-        u32 backBufferWidth = 1080;
-        u32 backBufferHeight = 640;
-        u32 refreshRate = 0;
-        u32 swapChainBufferCount = 3;
+		int windowWidth = 1080;
+		int windowHeight = 640;
+
+        uint32_t backBufferWidth = 1080;
+        uint32_t backBufferHeight = 640;
+
+        uint32_t refreshRate = 0;
+        uint32_t swapChainBufferCount = 3;
+        uint32_t swapChainSampleCount = 1;
+        uint32_t swapChainSampleQuality = 0;
+        uint32_t maxFramesInFlight = 2;
+
         nvrhi::Format swapChainFormat = nvrhi::Format::RGBA8_UNORM;
-        u32 swapChainSampleCount = 1;
-        u32 swapChainSampleQuality = 0;
-        u32 maxFramesInFlight = 2;
+
         bool enableNvrhiValidationLayer = false;
         bool vsyncEnable = false;
         bool enableRayTracingExtensions = false; // for vulkan
@@ -101,6 +108,7 @@ namespace ignite
         int adapterIndex = -1;
         bool supportExplicitDisplayScaling = false;
         bool resizeWindowWithDisplayScale = false;
+        
         nvrhi::IMessageCallback *messageCallback = nullptr;
 
 #ifdef PLATFORM_WINDOWS
@@ -120,8 +128,8 @@ namespace ignite
     struct AdapterInfo
     {
         std::string name;
-        u32 vendorID = 0;
-        u32 deviceID = 0;
+        uint32_t vendorID = 0;
+        uint32_t deviceID = 0;
         uint64_t dedicatedVideoMemory = 0;
 
         std::optional<std::array<uint8_t, 16>> uuid;
@@ -140,21 +148,15 @@ namespace ignite
     class DeviceManager
     {
     public:
-        static DeviceManager *Create(nvrhi::GraphicsAPI api);
+        static DeviceManager *Create(Window *window, const DeviceParameters &params, nvrhi::GraphicsAPI api);
 
         bool CreateInstance(const InstanceParameters &params);
 
         virtual bool EnumerateAdapters(std::vector<AdapterInfo> &outAdapters) = 0;
         virtual void WaitForIdle() = 0;
-
         bool IsUpdateDPIScaleFactor();
         void GetDPIScaleInfo(float &x, float &y) const;
-
         void ResizeBackbuffer(uint32_t width, uint32_t height);
-
-#if defined(PLATFORM_WINDOWS)
-        HWND GetNativeWindow();
-#endif
 
     public:
         // device specific methods
@@ -166,30 +168,38 @@ namespace ignite
         virtual bool BeginFrame() = 0;
         virtual bool Present() = 0;
 
-        [[nodiscard]] virtual nvrhi::IDevice *GetDevice() const = 0;
-        [[nodiscard]] virtual const char *GetRendererString() const = 0;
-        [[nodiscard]] virtual nvrhi::GraphicsAPI GetGraphicsAPI() const = 0;
+        virtual nvrhi::IDevice *GetDevice() const = 0;
+        virtual const char *GetRendererString() const = 0;
+        virtual nvrhi::GraphicsAPI GetGraphicsAPI() const = 0;
 
-        const DeviceCreationParameters &GetDeviceParams();
-        [[nodiscard]] double GetAverageFrameTimeSeconds() const { return m_AverageFrameTime; }
-        [[nodiscard]] double GetPreviousFrameTimestamp() const { return m_PreviousFrameTimestamp; }
+        DeviceParameters &GetDeviceParameters() { return m_DeviceParameters; }
+        double GetAverageFrameTimeSeconds() const { return m_AverageFrameTime; }
+        double GetPreviousFrameTimestamp() const { return m_PreviousFrameTimestamp; }
+        
         void SetFrameTimeUpdateInterval(double seconds) { m_AverageTimeUpdateInterval = seconds; }
-        [[nodiscard]] bool IsVsyncEnabled() const { return m_DeviceParams.vsyncEnable; }
-        virtual void ReportLiveObjects() { };
         void SetEnableRenderDuringWindowMovement(bool val) { m_EnableRenderDuringWindowMovement = val; }
+        void SetDPISacaleFactors(float x, float y);
+		void SetHeadLessDevice(bool headless) { m_DeviceParameters.headlessDevice = headless; }
+        
+        bool IsVsyncEnabled() const { return m_DeviceParameters.vsyncEnable; }
 
-        [[nodiscard]] SDL_Window *GetWindow() const { return m_Window; }
-        [[nodiscard]] u32 GetFrameIndex() const { return m_FrameIndex; }
+        void CreateBackBuffers();
+
+        Window *GetWindow() const { return m_Window; }
+        uint32_t GetFrameIndex() const { return m_FrameIndex; }
 
         virtual nvrhi::ITexture *GetCurrentBackBuffer() = 0;
-        virtual nvrhi::ITexture *GetBackBuffer(u32 index) = 0;
-        virtual u32 GetCurrentBackBufferIndex() = 0;
-        virtual u32 GetBackBufferCount() = 0;
+        virtual nvrhi::ITexture *GetBackBuffer(uint32_t index) = 0;
+        virtual uint32_t GetCurrentBackBufferIndex() = 0;
+        virtual uint32_t GetBackBufferCount() = 0;
         nvrhi::IFramebuffer *GetCurrentFramebuffer();
-        nvrhi::IFramebuffer *GetFramebuffer(u32 index);
+        nvrhi::IFramebuffer *GetFramebuffer(uint32_t index);
+
 
         virtual void Destroy();
         virtual ~DeviceManager() = default;
+
+        virtual void ReportLiveObjects() {};
 
         virtual bool IsVulkanInstanceExtensionEnabled(const char *extensionName) const { return false; }
         virtual bool IsVulkanDeviceExtensionEnabled(const char *extensionName) const { return false; }
@@ -201,14 +211,10 @@ namespace ignite
     protected:
         DeviceManager();
 
-        void CreateBackBuffers();
-
         bool m_SkipRenderOnFirstFrame = false;
-        bool m_WindowVisible = false;
-        bool m_WindowIsInFocus = true;
 
-        DeviceCreationParameters m_DeviceParams;
-        SDL_Window *m_Window = nullptr;
+        DeviceParameters m_DeviceParameters;
+        Window *m_Window = nullptr;
         bool m_EnableRenderDuringWindowMovement = false;
 
         bool m_IsNvidia = false;
@@ -228,16 +234,13 @@ namespace ignite
         double m_FrameTimeSum = 0.0;
         int m_NumberOfAccumulatedFrames = 0;
 
-        u32 m_FrameIndex = 0;
+        uint32_t m_FrameIndex = 0;
 
         std::vector<nvrhi::FramebufferHandle> m_SwapChainFramebuffers;
 
-        friend class Window;
-        friend class Renderer;
-
     private:
-        static DeviceManager *CreateD3D12();
-        static DeviceManager *CreateVK();
+        static DeviceManager *CreateD3D12(Window *window, const DeviceParameters &params);
+        static DeviceManager *CreateVK(Window *window, const DeviceParameters& params);
 
         std::string m_WindowTitle;
     };

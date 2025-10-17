@@ -8,6 +8,8 @@ project "SPDLOG"
     targetdir (OUTPUT_DIR)
     objdir (INTOUTPUT_DIR)
 
+    disablewarnings { "4251", "4275" }
+
     files {
         "%{THIRDPARTY_DIR}/SPDLOG/src/async.cpp",
         "%{THIRDPARTY_DIR}/SPDLOG/src/bundled_fmtlib_format.cpp",

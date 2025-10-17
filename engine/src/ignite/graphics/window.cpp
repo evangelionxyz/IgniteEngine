@@ -30,6 +30,10 @@
 #include "ignite/core/input/mouse_event.hpp"
 #include "ignite/core/input/joystick_event.hpp"
 
+#include "ignite/core/input/input.hpp"
+
+#include <SDL3/SDL_video.h>
+
 #ifdef _WIN32
     #include <dwmapi.h>
     #include <ShellScalingApi.h>
@@ -80,34 +84,28 @@ namespace ignite
         { nvrhi::Format::RGBA32_UINT,       32, 32, 32, 32,  0,  0, },
         { nvrhi::Format::RGBA32_FLOAT,      32, 32, 32, 32,  0,  0, }
     };
-
-    static void GLFW_ErrorCallback(i32 error, const char *description)
-    {
-        LOG_ERROR("GLFW error: {}", description);
-        exit(1);
-    }
-
-    Window::Window(const char *windowTitle, const DeviceCreationParameters &deviceParams, nvrhi::GraphicsAPI graphicsApi)
+    Window::Window(const char *windowTitle, const DeviceParameters &params, nvrhi::GraphicsAPI graphicsApi)
         : m_WindowTitle(windowTitle)
     {
-        m_DeviceManager = DeviceManager::Create(graphicsApi);
+        m_DeviceManager = DeviceManager::Create(this, params, graphicsApi);
 
-        m_DeviceManager->m_DeviceParams = deviceParams;
+		DeviceParameters& deviceParams = m_DeviceManager->GetDeviceParameters();
+
 #ifdef _DEBUG
-        m_DeviceManager->m_DeviceParams.enableDebugRuntime = true;
-        m_DeviceManager->m_DeviceParams.enableNvrhiValidationLayer= true;
+        deviceParams.enableDebugRuntime = true;
+        deviceParams.enableNvrhiValidationLayer = true;
 #endif
 
         // Create device instance
-        bool result = m_DeviceManager->CreateInstance(m_DeviceManager->m_DeviceParams);
+        bool result = m_DeviceManager->CreateInstance(params);
         LOG_ASSERT(result, "Failed to create Instance");
 
-        m_DeviceManager->m_DeviceParams.headlessDevice = false;
+        m_DeviceManager->SetHeadLessDevice(false);
 
         result = false;
-        for (const auto &info : formatInfo)
+        for (const auto& info : formatInfo)
         {
-            if (info.format == m_DeviceManager->m_DeviceParams.swapChainFormat)
+            if (info.format == deviceParams.swapChainFormat)
             {
                 result = true;
                 break;
@@ -115,57 +113,36 @@ namespace ignite
         }
         LOG_ASSERT(result, "SDL3 format not found\n");
 
-        // glfwWindowHint(GLFW_SAMPLES, m_DeviceManager->m_DeviceParams.swapChainSampleCount);
-        // glfwWindowHint(GLFW_REFRESH_RATE, m_DeviceManager->m_DeviceParams.refreshRate);
-        // glfwWindowHint(GLFW_SCALE_TO_MONITOR, m_DeviceManager->m_DeviceParams.resizeWindowWithDisplayScale);
-        // glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        // glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); // ignored for full screen
-        // glfwWindowHint(GLFW_DECORATED, !m_DeviceManager->m_DeviceParams.startBorderless); // borderless window
-
         SDL_WindowFlags windowFlags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN;
-
-        switch (graphicsApi)
+        if (graphicsApi == nvrhi::GraphicsAPI::VULKAN)
         {
-        case nvrhi::GraphicsAPI::VULKAN:
-			windowFlags |= SDL_WINDOW_VULKAN;
-            break;
+		    windowFlags |= SDL_WINDOW_VULKAN;
         }
 
-        m_DeviceManager->m_Window = SDL_CreateWindow(
-            windowTitle,
-            m_DeviceManager->m_DeviceParams.backBufferWidth,
-            m_DeviceManager->m_DeviceParams.backBufferHeight,
-            windowFlags
-        );
-        LOG_ASSERT(m_DeviceManager->m_Window, "Failed to create GLFW window\n");
+        m_Window = SDL_CreateWindow(windowTitle, params.windowWidth, params.windowHeight, windowFlags);
+        LOG_ASSERT(m_Window, "Failed to create SDL3 window\n");
 
-        SDL_SetWindowSurfaceVSync(m_DeviceManager->m_Window, m_DeviceManager->m_DeviceParams.vsyncEnable);
-
-        if (m_DeviceManager->m_DeviceParams.startMaximized)
+        if (params.startMaximized)
         {
-			SDL_MaximizeWindow(m_DeviceManager->m_Window);
+            SDL_MaximizeWindow(m_Window);
         }
 
-        if (m_DeviceManager->m_DeviceParams.startFullscreen)
+        if (params.startFullscreen)
         {
-			SDL_SetWindowFullscreen(m_DeviceManager->m_Window, SDL_WINDOW_FULLSCREEN);
+            SDL_SetWindowFullscreen(m_Window, SDL_WINDOW_FULLSCREEN);
         }
         else
         {
-            i32 fbWidth = 0, fbHeight = 0;
-			SDL_GetWindowSize(m_DeviceManager->m_Window, &fbWidth, &fbHeight);
-            m_DeviceManager->m_DeviceParams.backBufferWidth = fbWidth;
-            m_DeviceManager->m_DeviceParams.backBufferHeight = fbHeight;
+            int width, height;
+            SDL_GetWindowSize(m_Window, &width, &height);
+            deviceParams.backBufferWidth = width;
+            deviceParams.backBufferHeight = height;
         }
 
-
-        if (m_DeviceManager->m_DeviceParams.windowPosX != -1 && m_DeviceManager->m_DeviceParams.windowPosY != -1)
-        {
-			SDL_SetWindowPosition(m_DeviceManager->m_Window, m_DeviceManager->m_DeviceParams.windowPosX, m_DeviceManager->m_DeviceParams.windowPosY);
-        }
+	    SDL_SetWindowPosition(m_Window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
 #if PLATFORM_WINDOWS
-		HWND hwnd = m_DeviceManager->GetNativeWindow();
+		HWND hwnd = GetNativeWindow();
         BOOL useDarkMode = TRUE;
         DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &useDarkMode, sizeof(useDarkMode));
 
@@ -183,25 +160,17 @@ namespace ignite
         result = m_DeviceManager->CreateSwapChain();
         LOG_ASSERT(result, "Failed to create Swap Chain\n");
 
-        m_DeviceManager->m_WindowVisible = true;
-        m_DeviceManager->m_WindowIsInFocus = true;
-
         m_DeviceManager->CreateBackBuffers();
 
-        if (m_DeviceManager->m_DeviceParams.enablePerMonitorDPI)
+        if (params.enablePerMonitorDPI)
         {
 #ifdef PLATFORM_WINDOWS
-			HWND hwnd = m_DeviceManager->GetNativeWindow();
+			HWND hwnd = GetNativeWindow();
             HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-            u32 dpiX, dpiY;
+            uint32_t dpiX, dpiY;
             GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-            m_DeviceManager->m_DPIScaleFactorX = dpiX / 96.f;
-            m_DeviceManager->m_DPIScaleFactorY = dpiY / 96.f;
+			m_DeviceManager->SetDPISacaleFactors(dpiX / 96.f, dpiY / 96.f);
 #else
-            GLFWmonitor *monitor = glfwGetWindowMonitor(window);
-            if (!monitor)
-                monitor = glfwGetPrimaryMonitor();
-            glfwGetMonitorContentScale(monitor, &m_DeviceManager->m_DPIScaleFactorX, &m_DeviceManager->m_DPIScaleFactorY);
 #endif
         }
 
@@ -210,6 +179,7 @@ namespace ignite
 
     void Window::PollEvents(const SDL_Event &event)
     {
+		DeviceParameters &deviceParams = m_DeviceManager->GetDeviceParameters();
         switch (event.type)
         {
         case SDL_EVENT_QUIT:
@@ -225,16 +195,16 @@ namespace ignite
 
             if (event.window.data1 == 0 || event.window.data2 == 0)
             {
-                m_DeviceManager->m_WindowVisible = false;
+                m_IsVisible = false;
                 break;
             }
 
-			SDL_WindowFlags flags = SDL_GetWindowFlags(m_DeviceManager->m_Window);
+			SDL_WindowFlags flags = SDL_GetWindowFlags(m_Window);
             // m_DeviceManager->m_WindowIsInFocus = (flags & SDL_WINDOW_INPUT_FOCUS) == 0;
-            m_DeviceManager->m_WindowVisible = true;
+            m_IsVisible = true;
 
-            m_DeviceManager->m_DeviceParams.windowPosX = event.window.data1;
-            m_DeviceManager->m_DeviceParams.windowPosY = event.window.data2;
+            deviceParams.windowWidth = event.window.data1;
+            deviceParams.windowHeight = event.window.data2;
             break;
         }
         case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
@@ -245,8 +215,8 @@ namespace ignite
             // window is not minimized, and the size has changed
             if (event.window.data1 > 0 && event.window.data2 > 0)
             {
-                m_DeviceManager->m_DeviceParams.backBufferWidth = event.window.data1;
-                m_DeviceManager->m_DeviceParams.backBufferHeight = event.window.data2;
+                deviceParams.backBufferWidth = event.window.data1;
+                deviceParams.backBufferHeight = event.window.data2;
 
                 m_DeviceManager->ResizeSwapChain();
                 m_DeviceManager->CreateBackBuffers();
@@ -298,6 +268,17 @@ namespace ignite
         }
         case SDL_EVENT_KEY_DOWN:
         {
+            Input::SetModifier(KeyMod::Shift, event.key.mod & SDL_KMOD_SHIFT);
+            Input::SetModifier(KeyMod::Control, event.key.mod & SDL_KMOD_CTRL);
+            Input::SetModifier(KeyMod::LeftAlt, event.key.mod & SDL_KMOD_LALT);
+            Input::SetModifier(KeyMod::RightAlt, event.key.mod & SDL_KMOD_RALT);
+            Input::SetModifier(KeyMod::LeftShift, event.key.mod & SDL_KMOD_LSHIFT);
+            Input::SetModifier(KeyMod::RightShift, event.key.mod & SDL_KMOD_RSHIFT);
+            Input::SetModifier(KeyMod::LeftControl, event.key.mod & SDL_KMOD_LCTRL);
+            Input::SetModifier(KeyMod::RightControl, event.key.mod & SDL_KMOD_RCTRL);
+
+			Input::SetKey(event.key.key, true);
+
             if (event.key.repeat)
             {
                 KeyPressedEvent e(event.key.key, 1);
@@ -312,18 +293,31 @@ namespace ignite
         }
         case SDL_EVENT_KEY_UP:
         {
+            Input::SetModifier(KeyMod::Shift, event.key.mod& SDL_KMOD_SHIFT);
+            Input::SetModifier(KeyMod::Control, event.key.mod& SDL_KMOD_CTRL);
+            Input::SetModifier(KeyMod::LeftAlt, event.key.mod& SDL_KMOD_LALT);
+            Input::SetModifier(KeyMod::RightAlt, event.key.mod& SDL_KMOD_RALT);
+            Input::SetModifier(KeyMod::LeftShift, event.key.mod& SDL_KMOD_LSHIFT);
+            Input::SetModifier(KeyMod::RightShift, event.key.mod& SDL_KMOD_RSHIFT);
+            Input::SetModifier(KeyMod::LeftControl, event.key.mod& SDL_KMOD_LCTRL);
+            Input::SetModifier(KeyMod::RightControl, event.key.mod& SDL_KMOD_RCTRL);
+
+            Input::SetKey(event.key.key, false);
+
             KeyReleasedEvent e(event.key.key);
             m_Callback(e);
             break;
         }
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         {
+			Input::SetMouseButton(event.button.button, true);
             MouseButtonPressedEvent e(event.button.button);
             m_Callback(e);
 			break;
         }
         case SDL_EVENT_MOUSE_BUTTON_UP:
         {
+            Input::SetMouseButton(event.button.button, false);
             MouseButtonReleasedEvent e(event.button.button);
             m_Callback(e);
             break;
@@ -336,6 +330,7 @@ namespace ignite
 		}
         case SDL_EVENT_MOUSE_MOTION:
         {
+			Input::SetMousePosition(static_cast<float>(event.motion.x), static_cast<float>(event.motion.y));
             MouseMovedEvent e(static_cast<float>(event.motion.x), static_cast<float>(event.motion.y));
             m_Callback(e);
             break;
@@ -360,24 +355,19 @@ namespace ignite
         }
         case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
         {
-            if (m_DeviceManager->m_DeviceParams.enablePerMonitorDPI)
+            if (deviceParams.enablePerMonitorDPI)
             {
                 WindowDPIScaleChangedEvent e(static_cast<float>(event.display.data1), static_cast<float>(event.display.data2));
                 m_Callback(e);
 #ifdef _WIN32
-				HWND hwnd = m_DeviceManager->GetNativeWindow();
+				HWND hwnd = GetNativeWindow();
                 HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-                u32 dpiX, dpiY;
+                uint32_t dpiX, dpiY;
                 GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-                m_DeviceManager->m_DPIScaleFactorX = dpiX / 96.f;
-                m_DeviceManager->m_DPIScaleFactorY = dpiY / 96.f;
+				m_DeviceManager->SetDPISacaleFactors(dpiX / 96.f, dpiY / 96.f);
 #else
-                GLFWmonitor* monitor = glfwGetWindowMonitor(window);
-                if (!monitor) monitor = glfwGetPrimaryMonitor();
-                glfwGetMonitorContentScale(monitor, &win.m_DeviceManager->m_DPIScaleFactorX, &win.m_DeviceManager->m_DPIScaleFactorY);
 #endif
             }
-
             break;
         }
             
@@ -391,10 +381,10 @@ namespace ignite
 
     void Window::Destroy()
     {
-        if (m_DeviceManager->m_Window)
+        if (m_Window)
         {
-			SDL_DestroyWindow(m_DeviceManager->m_Window);
-            m_DeviceManager->m_Window = nullptr;
+			SDL_DestroyWindow(m_Window);
+            m_Window = nullptr;
         }
 
 		SDL_Quit();
@@ -402,7 +392,7 @@ namespace ignite
 
     void Window::SetTitle(const std::string &title) const
     {
-		SDL_SetWindowTitle(m_DeviceManager->m_Window, title.c_str());
+		SDL_SetWindowTitle(m_Window, title.c_str());
     }
 
     void Window::SetIcon(const std::string &filepath)
@@ -413,7 +403,7 @@ namespace ignite
         if (pixels)
         {
             SDL_Surface *iconSurface = SDL_CreateSurfaceFrom(width, height, SDL_PIXELFORMAT_RGBA32, pixels, width * 4);
-            SDL_SetWindowIcon(m_DeviceManager->m_Window, nullptr);
+            SDL_SetWindowIcon(m_Window, nullptr);
         }
         else
         {
@@ -423,17 +413,17 @@ namespace ignite
 
     void Window::Minimize() const
     {
-		SDL_MinimizeWindow(m_DeviceManager->m_Window);
+		SDL_MinimizeWindow(m_Window);
     }
 
     void Window::Maximize() const
     {
-		SDL_MaximizeWindow(m_DeviceManager->m_Window);
+        SDL_MaximizeWindow(m_Window);
     }
 
     void Window::Restore() const
     {
-		SDL_RestoreWindow(m_DeviceManager->m_Window);
+		SDL_RestoreWindow(m_Window);
     }
     
     void Window::Shutdown()
@@ -443,46 +433,52 @@ namespace ignite
 
     void Window::Show()
     {
-        if (!m_DeviceManager->m_DeviceParams.startMaximized)
+        if (!m_DeviceManager->GetDeviceParameters().startMaximized)
         {
 			int width, height;
-			SDL_GetWindowSize(m_DeviceManager->m_Window, &width, &height);
+			SDL_GetWindowSize(m_Window, &width, &height);
 
-#if 0
-            int displayCount;
-            SDL_DisplayID *displayId = SDL_GetDisplays(&displayCount);
-#endif
             SDL_Rect rect;
 			SDL_GetDisplayBounds(0, &rect);
-            
-            SDL_SetWindowPosition(m_DeviceManager->m_Window,
-                rect.w / 2 - width / 2,
-                rect.h / 2 - height / 2
-            );
+            SDL_SetWindowPosition(m_Window, rect.w / 2 - width / 2, rect.h / 2 - height / 2);
         }
 
-		m_DeviceManager->m_WindowVisible = true;
-		SDL_ShowWindow(m_DeviceManager->m_Window);
+		m_IsVisible = true;
+		SDL_ShowWindow(m_Window);
     }
 
     void Window::Hide()
     {
-		m_DeviceManager->m_WindowVisible = false;
-		SDL_HideWindow(m_DeviceManager->m_Window);
+		m_IsVisible = false;
+		SDL_HideWindow(m_Window);
     }
 
-    glm::vec2 Window::GetPosition()
+    glm::ivec2 Window::GetPosition()
     {
-        int xPos, yPos;
-		SDL_GetWindowPosition(m_DeviceManager->m_Window, &xPos, &yPos);
-        return { static_cast<float>(xPos), static_cast<float>(yPos) };
+        int x, y;
+        SDL_GetWindowPosition(m_Window, &x, &y);
+        return { x, y };
     }
 
-    glm::vec2 Window::GetFramebufferSize()
+    glm::ivec2 Window::GetFramebufferSize()
     {
-        float width = static_cast<float>(m_DeviceManager->m_DeviceParams.backBufferWidth);
-        float height = static_cast<float>(m_DeviceManager->m_DeviceParams.backBufferHeight);
+		const auto &deviceParams = m_DeviceManager->GetDeviceParameters();
+        return { deviceParams.backBufferWidth, deviceParams.backBufferHeight };
+    }
+
+    glm::ivec2 Window::GetSize()
+    {
+		int width, height;
+		SDL_GetWindowSize(m_Window, &width, &height);
         return { width, height };
+    }
+
+    HWND Window::GetNativeWindow() const
+    {
+        // Retrieve HWND
+        SDL_PropertiesID props = SDL_GetWindowProperties(m_Window);
+        HWND hwnd = (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
+        return hwnd;
     }
 
     void Window::SetEventCallback(const std::function<void(Event &)> &callback)

@@ -24,38 +24,24 @@
 #pragma once
 #include <cstdint>
 
-namespace ignite
-{
-    using MouseCode = uint16_t;
-    namespace Mouse {
-        enum : MouseCode
-        {
-            Button0 = 0,
-            Button1 = 1,
-            Button2 = 2,
-            Button3 = 3,
-            Button4 = 4,
-            Button5 = 5,
-            Button6 = 6,
-            Button7 = 7,
+#define IGNITE_BUTTON_LEFT     1
+#define IGNITE_BUTTON_MIDDLE   2
+#define IGNITE_BUTTON_RIGHT    3
+#define IGNITE_BUTTON_X1       4
+#define IGNITE_BUTTON_X2       5
+#define IGNITE_BUTTON_MASK(X)  (1u << ((X)-1))
+#define IGNITE_BUTTON_LMASK    IGNITE_BUTTON_MASK(IGNITE_BUTTON_LEFT)
+#define IGNITE_BUTTON_MMASK    IGNITE_BUTTON_MASK(IGNITE_BUTTON_MIDDLE)
+#define IGNITE_BUTTON_RMASK    IGNITE_BUTTON_MASK(IGNITE_BUTTON_RIGHT)
+#define IGNITE_BUTTON_X1MASK   IGNITE_BUTTON_MASK(IGNITE_BUTTON_X1)
+#define IGNITE_BUTTON_X2MASK   IGNITE_BUTTON_MASK(IGNITE_BUTTON_X2)
 
-            ButtonLast = Button7,
-            ButtonLeft = Button0,
-            ButtonRight = Button1,
-            ButtonMiddle = Button2,
-        };
-    }
+using MouseCode = uint8_t;
+namespace ignite::Mouse {
+	enum : MouseCode
+	{
+		ButtonLeft = IGNITE_BUTTON_LEFT,
+		ButtonRight = IGNITE_BUTTON_RIGHT,
+		ButtonMiddle = IGNITE_BUTTON_MIDDLE
+	};
 }
-
-#define MOUSE_BUTTON_1         0
-#define MOUSE_BUTTON_2         1
-#define MOUSE_BUTTON_3         2
-#define MOUSE_BUTTON_4         3
-#define MOUSE_BUTTON_5         4
-#define MOUSE_BUTTON_6         5
-#define MOUSE_BUTTON_7         6
-#define MOUSE_BUTTON_8         7
-#define MOUSE_BUTTON_LAST      MOUSE_BUTTON_8
-#define MOUSE_BUTTON_LEFT      MOUSE_BUTTON_1
-#define MOUSE_BUTTON_RIGHT     MOUSE_BUTTON_2
-#define MOUSE_BUTTON_MIDDLE    MOUSE_BUTTON_3

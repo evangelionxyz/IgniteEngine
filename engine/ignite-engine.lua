@@ -12,6 +12,8 @@ project "IgniteEngine"
         "src/ignite/**.h",
     }
 
+    disablewarnings { "4099" }
+
     includedirs {
         "src",
         "%{IncludeDir.SDL3}",
@@ -45,7 +47,6 @@ project "IgniteEngine"
         "ShaderMake",
         "TINYGLTF",
         "NVRHI",
-        "NVRHI_VULKAN",
         "ZLIB",
         "YAMLCPP",
     }
@@ -85,7 +86,6 @@ project "IgniteEngine"
             "glib-2.0"
     }
 
-
     --windows
     filter "system:windows"
         systemversion "latest"
@@ -97,10 +97,6 @@ project "IgniteEngine"
             "dxgi.lib",
             "d3dcompiler",
             "dxguid",
-
-            "NVRHI_D3D12",
-            "NVRHI_VULKAN",
-
             "%{Library.winmm}",
             "%{Library.winsock}",
             "%{Library.winversion}",

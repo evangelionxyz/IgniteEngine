@@ -28,6 +28,8 @@
 #include "key_codes.hpp"
 #include "mouse_codes.hpp"
 
+#include "ignite/graphics/window.hpp"
+
 namespace ignite
 {
     enum class CursorMode
@@ -41,13 +43,29 @@ namespace ignite
     class Input
     {
     public:
-        Input() = default;
-        explicit Input(void *window);
+		Input(Window* window);
 
         static bool IsKeyPressed(KeyCode keycode);
+        static bool IsModifierPressed(KeyModCode modcode);
         static bool IsMouseButtonPressed(MouseCode button);
-        static glm::vec2 GetMousePosition();
-        static void SetMousePosition(float x, float y);
+
+        static glm::ivec2 GetMousePosition();
+        
+        static void SetMouseToCenter();
         static void SetCursorMode(CursorMode mode);
+        static void SetKey(SDL_Keycode key, bool pressed);
+		static void SetModifier(SDL_Keymod mod, bool pressed);
+        static void SetMouseButton(MouseCode button, bool pressed);
+		static void SetMousePosition(i32 x, i32 y);
+
+    private:
+		static std::unordered_map<KeyModCode, bool> modifierState;
+        static std::unordered_map<KeyCode, bool> keyState;
+		static std::unordered_map<MouseCode, bool> mouseButtonState;
+
+        static glm::ivec2 mousePosition;
+		static CursorMode cursorMode;
+
+        static Window *window;
     };
 }

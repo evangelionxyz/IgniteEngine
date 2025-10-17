@@ -47,6 +47,7 @@ project "IgniteEditor"
     }
 
     defines {
+        "NVRHI_SHARED_LIBRARY_INCLUDE",
         "SHADERMAKE_COLORS",
         "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
         "JPH_DEBUG_RENDERER",

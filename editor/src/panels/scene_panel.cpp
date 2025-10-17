@@ -1261,7 +1261,7 @@ namespace ignite
             {
                 EditorLayer::GetInstance()->OnSceneStop();
 #if _WIN32
-				HWND hwnd = Application::GetDeviceManager()->GetNativeWindow();
+				HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
 #endif
@@ -1270,7 +1270,7 @@ namespace ignite
             {
                 EditorLayer::GetInstance()->OnScenePlay();
 #if _WIN32
-                HWND hwnd = Application::GetDeviceManager()->GetNativeWindow();
+                HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
 #endif
@@ -1313,7 +1313,7 @@ namespace ignite
             {
                 EditorLayer::GetInstance()->OnSceneStop();
 #if _WIN32
-                HWND hwnd = Application::GetDeviceManager()->GetNativeWindow();
+                HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
 #endif
@@ -1322,7 +1322,7 @@ namespace ignite
             {
                 EditorLayer::GetInstance()->OnSceneSimulate();
 #if _WIN32
-                HWND hwnd = Application::GetDeviceManager()->GetNativeWindow();
+                HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
 #endif
@@ -1678,6 +1678,7 @@ namespace ignite
         dispatcher.Dispatch<MouseScrolledEvent>(BIND_CLASS_EVENT_FN(ScenePanel::OnMouseScrolledEvent));
         dispatcher.Dispatch<MouseMovedEvent>(BIND_CLASS_EVENT_FN(ScenePanel::OnMouseMovedEvent));
         dispatcher.Dispatch<JoystickConnectionEvent>(BIND_CLASS_EVENT_FN(ScenePanel::OnJoystickConnectionEvent));
+		dispatcher.Dispatch<MouseMovedEvent>(BIND_CLASS_EVENT_FN(ScenePanel::OnMouseMovedEvent));
     }
 
     bool ScenePanel::OnMouseScrolledEvent(MouseScrolledEvent &event)
@@ -1692,6 +1693,8 @@ namespace ignite
 
     bool ScenePanel::OnMouseMovedEvent(MouseMovedEvent &event)
     {
+        // glm::vec2 mouse = { event.GetX(), event.GetY() };
+		// LOG_INFO("Mouse Moved: {0}, {1}", mouse.x, mouse.y);
         return false;
     }
 

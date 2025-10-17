@@ -1,11 +1,11 @@
 project "NVRHI"
-    kind "StaticLib"
+    kind "SharedLib"
     language "C++"
     cppdialect "C++20"
     staticruntime "off"
     architecture "x64"
 
-    targetdir (THIRDPARTY_OUTPUT_DIR)
+    targetdir (OUTPUT_DIR)
     objdir (INTOUTPUT_DIR)
 
     files {
@@ -28,14 +28,26 @@ project "NVRHI"
         "%{THIRDPARTY_DIR}/NVRHI/src/validation/validation-backend.h",
         "%{THIRDPARTY_DIR}/NVRHI/src/validation/validation-commandlist.cpp",
         "%{THIRDPARTY_DIR}/NVRHI/src/validation/validation-device.cpp",
+
+        -- Vulkan
+        "%{THIRDPARTY_DIR}/NVRHI/include/nvrhi/vulkan.h",
+        "%{THIRDPARTY_DIR}/NVRHI/src/vulkan/**.cpp",
+        "%{THIRDPARTY_DIR}/NVRHI/src/vulkan/**.h",
     }
 
     includedirs {
         "%{THIRDPARTY_DIR}/NVRHI/include/",
+        "%{THIRDPARTY_DIR}/NVRHI/thirdparty/Vulkan-Headers/include/",
     }
 
     defines {
+        "NVRHI_SHARED_LIBRARY_BUILD",
         "NVRHI_WITH_VALIDATION",
+        "NVRHI_WITH_VULKAN", 
+        "VULKAN_HPP_STORAGE_SHARED",
+        "VULKAN_HPP_STORAGE_SHARED_EXPORT",
+
+        -- Vulkan
         "NVRHI_WITH_VULKAN", 
         "VULKAN_HPP_STORAGE_SHARED",
         "VULKAN_HPP_STORAGE_SHARED_EXPORT",
@@ -51,10 +63,22 @@ project "NVRHI"
 
     --windows
     filter "system:windows"
-        defines {
-            "NOMINMAX",
-        }
         files {
+            "%{THIRDPARTY_DIR}/NVRHI/include/nvrhi/d3d12.h",
+            "%{THIRDPARTY_DIR}/NVRHI/src/common/dxgi-format.h",
+            "%{THIRDPARTY_DIR}/NVRHI/src/common/dxgi-format.cpp",
+            "%{THIRDPARTY_DIR}/NVRHI/src/d3d12/**.cpp",
+            "%{THIRDPARTY_DIR}/NVRHI/src/d3d12/**.h",
             "%{THIRDPARTY_DIR}/NVRHI/include/common/nvrhiHLSL.h",
+        }
+        links {
+            "d3d12.lib",
+            "dxgi.lib",
+        }
+        defines {
+            "NVRHI_WITH_VALIDATION",
+            "NVRHI_WITH_DX12",
+            "VK_USE_PLATFORM_WIN32_KHR",
+            "NOMINMAX",
         }
 

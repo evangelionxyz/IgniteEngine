@@ -95,5 +95,6 @@
         "xtr1common": "cpp",
         "xtree": "cpp"
     },
-    "dotnet.preferCSharpExtension": true
+    "dotnet.preferCSharpExtension": true,
+    "cmake.ignoreCMakeListsMissing": true
 }

@@ -28,78 +28,73 @@
 
 namespace ignite
 {
-    struct InputData
-    {
-        Input *input = nullptr;
-        CursorMode cursorMode = CursorMode::Normal;
-        SDL_Window *window;
-    };
+    std::unordered_map<KeyModCode, bool> Input::modifierState;
+    std::unordered_map<KeyCode, bool> Input::keyState;
+    std::unordered_map<MouseCode, bool> Input::mouseButtonState;
+    glm::ivec2 Input::mousePosition = glm::ivec2(0);
+    CursorMode Input::cursorMode = CursorMode::Normal;
+	Window* Input::window = nullptr;
 
-    static InputData s_InputData;
-
-    Input::Input(void *window)
+    Input::Input(Window *window)
     {
-        s_InputData.input = this;
-        s_InputData.window = static_cast<SDL_Window *>(window);
+        Input::window = window;
     }
 
     bool Input::IsKeyPressed(KeyCode keycode)
     {
-        const bool* keyboardState = SDL_GetKeyboardState(nullptr);
-        SDL_Keymod modState;
-        SDL_Scancode scancode = SDL_GetScancodeFromKey(keycode, &modState);
-        return keyboardState[scancode];
+		return keyState[keycode];
+    }
+
+    bool Input::IsModifierPressed(KeyModCode modcode)
+    {
+		return modifierState[modcode];
     }
 
     bool Input::IsMouseButtonPressed(MouseCode button)
     {
-        uint32_t mouseState = SDL_GetMouseState(nullptr, nullptr);
-        uint32_t mask = SDL_BUTTON_MASK(button);
-        bool result = (mouseState & mask) != 0;
-        return result;
+		return mouseButtonState[button];
     }
 
-    glm::vec2 Input::GetMousePosition()
+    glm::ivec2 Input::GetMousePosition()
     {
-        float x, y;
-        SDL_GetMouseState(&x, &y);
-        return glm::vec2(x, y);
+        return Input::mousePosition;
     }
 
-    void Input::SetMousePosition(float x, float y)
+    void Input::SetMouseToCenter()
     {
-        SDL_WarpMouseInWindow(s_InputData.window, x, y);
+        const auto size = Input::window->GetSize();
+		SDL_WarpMouseInWindow(Input::window->GetWindowHandle(), size.x / 2.0f, size.y / 2.0f);
     }
 
     void Input::SetCursorMode(CursorMode mode)
     {
-        if (s_InputData.cursorMode == mode)
+        if (Input::cursorMode == mode)
             return;
 
-        s_InputData.cursorMode = mode;
+        Input::cursorMode = mode;
         
         switch (mode)
         {
         case CursorMode::Normal:
         {
-            SDL_SetWindowRelativeMouseMode(s_InputData.window, false);
+            SDL_SetWindowRelativeMouseMode(Input::window->GetWindowHandle(), false);
             SDL_ShowCursor();
             break;
         }
         case CursorMode::Hidden:
         {
-            SDL_SetWindowRelativeMouseMode(s_InputData.window, false);
+            SDL_SetWindowRelativeMouseMode(Input::window->GetWindowHandle(), false);
             SDL_HideCursor();
             break;
         }
         case CursorMode::Disabled:
         {
-            SDL_SetWindowRelativeMouseMode(s_InputData.window, true);
+            SDL_SetWindowRelativeMouseMode(Input::window->GetWindowHandle(), true);
             break;
         }
         case CursorMode::Captured:
         {
-            SDL_SetWindowRelativeMouseMode(s_InputData.window, false);
+            SDL_SetWindowRelativeMouseMode(Input::window->GetWindowHandle(), false);
             SDL_CaptureMouse(true);
             SDL_ShowCursor();
             break;
@@ -107,5 +102,25 @@ namespace ignite
         default:
             break;
         }
+    }
+
+    void Input::SetKey(SDL_Keycode key, bool pressed)
+    {
+		keyState[key] = pressed;
+    }
+
+    void Input::SetModifier(SDL_Keymod mod, bool pressed)
+    {
+		modifierState[mod] = pressed;
+    }
+
+    void Input::SetMouseButton(MouseCode button, bool pressed)
+    {
+		mouseButtonState[button] = pressed;
+    }
+
+    void Input::SetMousePosition(i32 x, i32 y)
+    {
+		mousePosition = { x, y };
     }
 }

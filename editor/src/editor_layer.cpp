@@ -139,7 +139,7 @@ namespace ignite
         if (m_ActiveScene)
         {
             // multi select entity
-            m_Data.multiSelect = Input::IsKeyPressed(Key::LeftShift);
+            m_Data.multiSelect = Input::IsModifierPressed(KeyMod::LeftShift);
 
             switch (m_Data.sceneState)
             {
@@ -172,8 +172,8 @@ namespace ignite
 
     bool EditorLayer::OnKeyPressedEvent(KeyPressedEvent &event)
     {
-        bool control = Input::IsKeyPressed(KEY_LEFT_CONTROL);
-        bool shift = Input::IsKeyPressed(KEY_LEFT_SHIFT);
+        bool control = Input::IsModifierPressed(KeyMod::Control);
+        bool shift = Input::IsModifierPressed(KeyMod::LeftShift);
 
         if (ImGui::GetIO().WantTextInput)
             return false;

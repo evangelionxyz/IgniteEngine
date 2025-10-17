@@ -62,7 +62,7 @@ namespace ignite
 			glm::vec2 delta = mouse.position - mouse.lastPosition;
 
 			// handle zoom
-			if (Input::IsKeyPressed(Key::LeftControl))
+			if (Input::IsModifierPressed(KeyMod::LeftControl))
 			{
 				delta.y *= -1.0f * 0.5f; // inverting mouse y
 

@@ -149,7 +149,7 @@ namespace ignite
                 m_CreateInfo.format, m_CreateInfo.mipLevels);
 
             // Upload all mip levels
-            for (uint32_t mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
+            for (int mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
             {
                 const auto &mipData = mipChain[mip];
                 cmd->writeTexture(m_Handle, 0, mip, mipData.data.data(), mipData.rowPitch);
@@ -171,7 +171,7 @@ namespace ignite
 
 
             // Upload all mip levels
-            for (uint32_t mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
+            for (int mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
             {
                 const auto &mipData = mipChain[mip];
                 cmd->writeTexture(m_Handle, 0, mip, mipData.data.data(), rowPitch * sizeof(float), depthPitch * sizeof(float));

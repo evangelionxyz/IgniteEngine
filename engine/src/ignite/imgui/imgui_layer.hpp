@@ -32,6 +32,8 @@
 
 #include "ignite/core/buffer.hpp"
 
+#include <SDL3/SDL.h>
+
 #include <filesystem>
 #include <optional>
 

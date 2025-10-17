@@ -25,6 +25,9 @@
 #include <iomanip>
 #include <thread>
 #include <sstream>
+
+#include "ignite/graphics/window.hpp"
+
 #include <nvrhi/utils.h>
 
 #ifdef PLATFORM_WINDOWS
@@ -80,7 +83,7 @@ namespace ignite
         if (m_InstanceCreated)
             return true;
 
-        static_cast<InstanceParameters &>(m_DeviceParams) = params;
+        static_cast<InstanceParameters &>(m_DeviceParameters) = params;
         if (!params.headlessDevice)
         {
 #ifdef PLATFORM_WINDOWS
@@ -143,32 +146,24 @@ namespace ignite
 
     void DeviceManager::ResizeBackbuffer(uint32_t width, uint32_t height)
     {
-        m_DeviceParams.backBufferWidth = width;
-        m_DeviceParams.backBufferHeight = height;
+        m_DeviceParameters.backBufferWidth = width;
+        m_DeviceParameters.backBufferHeight = height;
     }
 
-    HWND DeviceManager::GetNativeWindow()
+    void DeviceManager::SetDPISacaleFactors(float x, float y)
     {
-        // Retrieve HWND
-        SDL_PropertiesID props = SDL_GetWindowProperties(m_Window);
-        HWND hwnd = (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
-
-		return hwnd;
+        m_DPIScaleFactorX = x;
+		m_DPIScaleFactorY = y;
     }
 
     void DeviceManager::CreateBackBuffers()
     {
-        u32 backBufferCount = GetBackBufferCount();
+        const uint32_t backBufferCount = GetBackBufferCount();
         m_SwapChainFramebuffers.resize(backBufferCount);
-        for (u32 index = 0; index < backBufferCount; ++index)
+        for (uint32_t index = 0; index < backBufferCount; ++index)
         {
             m_SwapChainFramebuffers[index] = GetDevice()->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(GetBackBuffer(index)));
         }
-    }
-
-    const DeviceCreationParameters &DeviceManager::GetDeviceParams()
-    {
-        return m_DeviceParams;
     }
 
     DeviceManager::DeviceManager()
@@ -187,7 +182,7 @@ namespace ignite
         return GetFramebuffer(GetCurrentBackBufferIndex());
     }
 
-    nvrhi::IFramebuffer* DeviceManager::GetFramebuffer(u32 index)
+    nvrhi::IFramebuffer* DeviceManager::GetFramebuffer(uint32_t index)
     {
         if (index < m_SwapChainFramebuffers.size())
             return m_SwapChainFramebuffers[index];
@@ -196,17 +191,19 @@ namespace ignite
         return nullptr;
     }
 
-    DeviceManager* DeviceManager::Create(nvrhi::GraphicsAPI api)
+    DeviceManager* DeviceManager::Create(Window *window, const DeviceParameters &params, nvrhi::GraphicsAPI api)
     {
         switch (api)
         {
 #if IGNITE_WITH_DX12
-            case nvrhi::GraphicsAPI::D3D12: return CreateD3D12();
+            case nvrhi::GraphicsAPI::D3D12:
+                return CreateD3D12(window, params);
 #endif
 #if IGNITE_WITH_VULKAN
-            case nvrhi::GraphicsAPI::VULKAN: return CreateVK();
+            case nvrhi::GraphicsAPI::VULKAN:
+                return CreateVK(window, params);
 #endif
-            default: LOG_ASSERT(false, "Unsupported Graphics API {}", (u32)api);
+            default: LOG_ASSERT(false, "Unsupported Graphics API {}", (uint32_t)api);
             return nullptr;
         }
     }

@@ -7,6 +7,8 @@ project "ZLIB"
     targetdir (OUTPUT_DIR)
     objdir (INTOUTPUT_DIR)
 
+    disablewarnings { "4005", "4244" }
+
     files {
         "%{THIRDPARTY_DIR}/ZLIB/**.c",
         "%{THIRDPARTY_DIR}/ZLIB/**.h",

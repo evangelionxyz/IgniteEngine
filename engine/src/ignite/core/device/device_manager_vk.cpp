@@ -21,9 +21,10 @@
 * SOFTWARE.
 */
 
+#include "ignite/graphics/window.hpp"
+
 #include "device_manager_vk.hpp"
 #include "device_manager.hpp"
-
 #include <string>
 
 #include <SDL3/SDL_vulkan.h>
@@ -70,10 +71,10 @@ namespace ignite
         const char *msg,
         void *userData)
     {
-        const DeviceManager_VK *manager = (const DeviceManager_VK *)userData;
+        DeviceManager_VK *manager = (DeviceManager_VK *)userData;
         if (manager)
         {
-            const auto &ignored = manager->GetDeviceParams().ignoreVulkanValidationMessageLocations;
+            const auto &ignored = manager->GetDeviceParameters().ignoreVulkanValidationMessageLocations;
             const auto found = std::find(ignored.begin(), ignored.end(), location);
             if (found != ignored.end())
                 return VK_FALSE;
@@ -84,17 +85,36 @@ namespace ignite
         return VK_FALSE;
     }
 
-    static DeviceManager_VK *s_JoltInstance = nullptr;
+    static DeviceManager_VK *s_VulkanDeviceInstance = nullptr;
 
-    DeviceManager *DeviceManager::CreateVK()
+    nvrhi::IDevice* DeviceManager_VK::GetDevice() const
     {
-        s_JoltInstance = new DeviceManager_VK();
-        return s_JoltInstance;
+        if (m_ValidationLayer)
+            return m_ValidationLayer;
+
+        return m_NvrhiDevice;
+    }
+
+    nvrhi::GraphicsAPI DeviceManager_VK::GetGraphicsAPI() const
+    {
+        return nvrhi::GraphicsAPI::VULKAN;
+    }
+
+    DeviceManager *DeviceManager::CreateVK(Window *window, const DeviceParameters &params)
+    {
+        s_VulkanDeviceInstance = new DeviceManager_VK(window, params);
+        return s_VulkanDeviceInstance;
     }
 
     DeviceManager_VK *DeviceManager_VK::GetInstance()
     {
-        return s_JoltInstance;
+        return s_VulkanDeviceInstance;
+    }
+
+    DeviceManager_VK::DeviceManager_VK(Window* window, const DeviceParameters& params)
+    {
+        m_Window = window;
+        m_DeviceParameters = params;
     }
 
     bool DeviceManager_VK::EnumerateAdapters(std::vector<AdapterInfo> &outAdapters)
@@ -153,13 +173,13 @@ namespace ignite
 
     bool DeviceManager_VK::CreateInstanceInternal()
     {
-        if (m_DeviceParams.enableDebugRuntime)
+        if (m_DeviceParameters.enableDebugRuntime)
         {
             enabledExtensions.instance.insert("VK_EXT_debug_report");
             enabledExtensions.layers.insert("VK_LAYER_KHRONOS_validation");
         }
 
-        m_DynamicLoader = std::make_unique<VulkanDynamicLoader>(m_DeviceParams.vulkanLibraryName);
+        m_DynamicLoader = std::make_unique<VulkanDynamicLoader>(m_DeviceParameters.vulkanLibraryName);
 
         PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = m_DynamicLoader->getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
 
@@ -170,28 +190,28 @@ namespace ignite
 
     bool DeviceManager_VK::CreateDevice()
     {
-        if (m_DeviceParams.enableDebugRuntime)
+        if (m_DeviceParameters.enableDebugRuntime)
         {
             InstallDebugCallback();
         }
 
         // add device extensions requested by the user
-        for (const std::string &name : m_DeviceParams.requiredVulkanDeviceExtensions)
+        for (const std::string &name : m_DeviceParameters.requiredVulkanDeviceExtensions)
         {
             enabledExtensions.device.insert(name);
         }
-        for (const std::string &name : m_DeviceParams.optionalVulkanDeviceExtensions)
+        for (const std::string &name : m_DeviceParameters.optionalVulkanDeviceExtensions)
         {
             optionalExtensions.device.insert(name);
         }
 
-        if (!m_DeviceParams.headlessDevice)
+        if (!m_DeviceParameters.headlessDevice)
         {
             // Need to adjust the swap chain format before creating the device because it affects physical device selection
-            if (m_DeviceParams.swapChainFormat == nvrhi::Format::SRGBA8_UNORM)
-                m_DeviceParams.swapChainFormat = nvrhi::Format::SBGRA8_UNORM;
-            else if (m_DeviceParams.swapChainFormat == nvrhi::Format::RGBA8_UNORM)
-                m_DeviceParams.swapChainFormat = nvrhi::Format::BGRA8_UNORM;
+            if (m_DeviceParameters.swapChainFormat == nvrhi::Format::SRGBA8_UNORM)
+                m_DeviceParameters.swapChainFormat = nvrhi::Format::SBGRA8_UNORM;
+            else if (m_DeviceParameters.swapChainFormat == nvrhi::Format::RGBA8_UNORM)
+                m_DeviceParameters.swapChainFormat = nvrhi::Format::BGRA8_UNORM;
 
             CHECK(CreateWindowSurface())
         }
@@ -214,13 +234,13 @@ namespace ignite
         deviceDesc.graphicsQueue = m_GraphicsQueue;
         deviceDesc.graphicsQueueIndex = m_GraphicsQueueFamily;
 
-        if (m_DeviceParams.enableComputeQueue)
+        if (m_DeviceParameters.enableComputeQueue)
         {
             deviceDesc.computeQueue = m_ComputeQueue;
             deviceDesc.computeQueueIndex = m_ComputeQueueFamily;
         }
 
-        if (m_DeviceParams.enableCopyQueue)
+        if (m_DeviceParameters.enableCopyQueue)
         {
             deviceDesc.transferQueue = m_TransferQueue;
             deviceDesc.transferQueueIndex = m_TransferQueueFamily;
@@ -231,11 +251,11 @@ namespace ignite
         deviceDesc.deviceExtensions = vecDeviceExt.data();
         deviceDesc.numDeviceExtensions = vecDeviceExt.size();
         deviceDesc.bufferDeviceAddressSupported = m_BufferDeviceAddressSupported;
-        deviceDesc.vulkanLibraryName = m_DeviceParams.vulkanLibraryName;
+        deviceDesc.vulkanLibraryName = m_DeviceParameters.vulkanLibraryName;
 
         m_NvrhiDevice = nvrhi::vulkan::createDevice(deviceDesc);
 
-        if (m_DeviceParams.enableNvrhiValidationLayer)
+        if (m_DeviceParameters.enableNvrhiValidationLayer)
         {
             m_ValidationLayer = nvrhi::validation::createValidationLayer(m_NvrhiDevice);
         }
@@ -247,9 +267,9 @@ namespace ignite
     {
        CHECK(CreateVkSwapChain())
 
-       m_PresentSemaphores.reserve(m_DeviceParams.maxFramesInFlight + 1);
-       m_AcquireSemaphores.reserve(m_DeviceParams.maxFramesInFlight + 1);
-       for (uint32_t i = 0; i < m_DeviceParams.maxFramesInFlight + 1; ++i)
+       m_PresentSemaphores.reserve(m_DeviceParameters.maxFramesInFlight + 1);
+       m_AcquireSemaphores.reserve(m_DeviceParameters.maxFramesInFlight + 1);
+       for (uint32_t i = 0; i < m_DeviceParameters.maxFramesInFlight + 1; ++i)
        {
            m_PresentSemaphores.push_back(m_VulkanDevice.createSemaphore(vk::SemaphoreCreateInfo()));
            m_AcquireSemaphores.push_back(m_VulkanDevice.createSemaphore(vk::SemaphoreCreateInfo()));
@@ -412,7 +432,7 @@ namespace ignite
         m_PresentSemaphoreIndex = (m_PresentSemaphoreIndex + 1) % m_PresentSemaphores.size();
 
 #ifndef PLATFORM_WINDOWS
-        if (m_DeviceParams.vsyncEnable || m_DeviceParams.enableDebugRuntime)
+        if (m_DeviceParameters.vsyncEnable || m_DeviceParameters.enableDebugRuntime)
         {
             // according to vulkan-tutorial.com, "the validation layer implementation expects
             // the application to explicitly synchronize with the GPU"
@@ -420,7 +440,7 @@ namespace ignite
         }
 #endif
 
-        while (m_FramesInFlight.size() >= m_DeviceParams.maxFramesInFlight)
+        while (m_FramesInFlight.size() >= m_DeviceParameters.maxFramesInFlight)
         {
             auto query = m_FramesInFlight.front();
             m_FramesInFlight.pop();
@@ -488,7 +508,7 @@ namespace ignite
 
     bool DeviceManager_VK::CreateInstance()
     {
-        if (!m_DeviceParams.headlessDevice)
+        if (!m_DeviceParameters.headlessDevice)
         {
             u32 glfwExtCount;
             const char* const* glfwExt = SDL_Vulkan_GetInstanceExtensions(&glfwExtCount);
@@ -501,23 +521,23 @@ namespace ignite
         }
 
         // add instance extensions requested by the user
-        for (const std::string &name : m_DeviceParams.requiredVulkanInstanceExtensions)
+        for (const std::string &name : m_DeviceParameters.requiredVulkanInstanceExtensions)
         {
             enabledExtensions.instance.insert(name);
         }
 
-        for (const std::string &name : m_DeviceParams.optionalVulkanInstanceExtensions)
+        for (const std::string &name : m_DeviceParameters.optionalVulkanInstanceExtensions)
         {
             optionalExtensions.instance.insert(name);
         }
 
         // add layers requested by the user
-        for (const std::string &name : m_DeviceParams.requiredVulkanLayers)
+        for (const std::string &name : m_DeviceParameters.requiredVulkanLayers)
         {
             enabledExtensions.layers.insert(name);
         }
 
-        for (const std::string &name : m_DeviceParams.optionalVulkanLayers)
+        for (const std::string &name : m_DeviceParameters.optionalVulkanLayers)
         {
             optionalExtensions.layers.insert(name);
         }
@@ -648,7 +668,7 @@ namespace ignite
 
     bool DeviceManager_VK::CreateWindowSurface()
     {
-        bool success = SDL_Vulkan_CreateSurface(m_Window, m_VulkanInstance, nullptr, (VkSurfaceKHR*)&m_WindowSurface);
+        bool success = SDL_Vulkan_CreateSurface(m_Window->GetWindowHandle(), m_VulkanInstance, nullptr, (VkSurfaceKHR*)&m_WindowSurface);
         LOG_ASSERT(success, "Failed to create SDL window surface, error code");
 
         return success;
@@ -671,11 +691,11 @@ namespace ignite
 
     bool DeviceManager_VK::PickPhysicalDevice()
     {
-        VkFormat requestedFormat = nvrhi::vulkan::convertFormat(m_DeviceParams.swapChainFormat);
-        vk::Extent2D requestedExtent(m_DeviceParams.backBufferWidth, m_DeviceParams.backBufferHeight);
+        VkFormat requestedFormat = nvrhi::vulkan::convertFormat(m_DeviceParameters.swapChainFormat);
+        vk::Extent2D requestedExtent(m_DeviceParameters.backBufferWidth, m_DeviceParameters.backBufferHeight);
 
         auto devices = m_VulkanInstance.enumeratePhysicalDevices();
-        i32 adapterIndex = m_DeviceParams.adapterIndex;
+        i32 adapterIndex = m_DeviceParameters.adapterIndex;
 
         i32 firstDevice = 0;
         i32 lastDevice = i32(devices.size()) - 1;
@@ -756,10 +776,10 @@ namespace ignite
                     auto surfaceCaps = dev.getSurfaceCapabilitiesKHR(m_WindowSurface);
                     auto surfaceFmts = dev.getSurfaceFormatsKHR(m_WindowSurface);
 
-                    if (surfaceCaps.minImageCount > m_DeviceParams.swapChainBufferCount || (surfaceCaps.maxImageCount < m_DeviceParams.swapChainBufferCount && surfaceCaps.maxImageCount > 0))
+                    if (surfaceCaps.minImageCount > m_DeviceParameters.swapChainBufferCount || (surfaceCaps.maxImageCount < m_DeviceParameters.swapChainBufferCount && surfaceCaps.maxImageCount > 0))
                     {
                         errorStream << '\n' << "  - cannot support the requested swap chain image count:";
-                        errorStream << " requested " << m_DeviceParams.swapChainBufferCount << ", available " << surfaceCaps.minImageCount << " - " << surfaceCaps.maxImageCount;
+                        errorStream << " requested " << m_DeviceParameters.swapChainBufferCount << ", available " << surfaceCaps.minImageCount << " - " << surfaceCaps.maxImageCount;
 
                         deviceIsGood = false;
                     }
@@ -881,9 +901,9 @@ namespace ignite
         }
 
         if (m_GraphicsQueueFamily == -1 ||
-            (m_PresentQueueFamily == -1 && !m_DeviceParams.headlessDevice) ||
-            (m_ComputeQueueFamily == -1 && m_DeviceParams.enableComputeQueue) ||
-            (m_TransferQueueFamily == -1 && m_DeviceParams.enableCopyQueue))
+            (m_PresentQueueFamily == -1 && !m_DeviceParameters.headlessDevice) ||
+            (m_ComputeQueueFamily == -1 && m_DeviceParameters.enableComputeQueue) ||
+            (m_TransferQueueFamily == -1 && m_DeviceParameters.enableCopyQueue))
         {
             return false;
         }
@@ -900,19 +920,19 @@ namespace ignite
             const std::string name = ext.extensionName;
             if (optionalExtensions.device.contains(name))
             {
-                if (name == VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME && m_DeviceParams.headlessDevice)
+                if (name == VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME && m_DeviceParameters.headlessDevice)
                     continue;
 
                 enabledExtensions.device.insert(name);
             }
 
-            if (m_DeviceParams.enableRayTracingExtensions && m_RayTracingExtensions.contains(name))
+            if (m_DeviceParameters.enableRayTracingExtensions && m_RayTracingExtensions.contains(name))
             {
                 enabledExtensions.device.insert(name);
             }
         }
 
-        if (!m_DeviceParams.headlessDevice)
+        if (!m_DeviceParameters.headlessDevice)
         {
             enabledExtensions.device.insert(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
         }
@@ -975,7 +995,7 @@ namespace ignite
         auto aftermathPhysicalFeatures  = vk::PhysicalDeviceDiagnosticsConfigFeaturesNV();
 
         // put the user provided extension structure at the end of the chain
-        pNext = m_DeviceParams.physicalDeviceFeatures2Extensions;
+        pNext = m_DeviceParameters.physicalDeviceFeatures2Extensions;
         APPEND_EXTENSION(true, bufferDeviceAddressFeatures);
         APPEND_EXTENSION(maintenance4Supported, maintenance4Features);
         APPEND_EXTENSION(aftermathSupported, aftermathPhysicalFeatures);
@@ -987,13 +1007,13 @@ namespace ignite
             m_GraphicsQueueFamily
         };
 
-        if (!m_DeviceParams.headlessDevice)
+        if (!m_DeviceParameters.headlessDevice)
             uniqueQueueFamilies.insert(m_PresentQueueFamily);
         
-        if (m_DeviceParams.enableComputeQueue)
+        if (m_DeviceParameters.enableComputeQueue)
             uniqueQueueFamilies.insert(m_ComputeQueueFamily);
 
-        if (m_DeviceParams.enableCopyQueue)
+        if (m_DeviceParameters.enableCopyQueue)
             uniqueQueueFamilies.insert(m_TransferQueueFamily);
 
         f32 priority = 1.0f;
@@ -1092,8 +1112,8 @@ namespace ignite
             .setPpEnabledLayerNames(layerVec.data())
             .setPNext(&vulkan12features);
 
-        if (m_DeviceParams.deviceCreateInfoCallback)
-            m_DeviceParams.deviceCreateInfoCallback(deviceDesc);
+        if (m_DeviceParameters.deviceCreateInfoCallback)
+            m_DeviceParameters.deviceCreateInfoCallback(deviceDesc);
 
         const vk::Result res = m_VulkanPhysicalDevice.createDevice(&deviceDesc, nullptr, &m_VulkanDevice);
         if (res != vk::Result::eSuccess)
@@ -1104,11 +1124,11 @@ namespace ignite
         }
 
         m_VulkanDevice.getQueue(m_GraphicsQueueFamily, kGraphicsQueueIndex, &m_GraphicsQueue);
-        if (m_DeviceParams.enableComputeQueue)
+        if (m_DeviceParameters.enableComputeQueue)
             m_VulkanDevice.getQueue(m_ComputeQueueFamily, kComputeQueueIndex, &m_ComputeQueue);
-        if (m_DeviceParams.enableCopyQueue)
+        if (m_DeviceParameters.enableCopyQueue)
             m_VulkanDevice.getQueue(m_TransferQueueFamily, kTransferQueueIndex, &m_TransferQueue);
-        if (!m_DeviceParams.headlessDevice)
+        if (!m_DeviceParameters.headlessDevice)
             m_VulkanDevice.getQueue(m_PresentQueueFamily, kPresentQueueIndex, &m_PresentQueue);
 
         VULKAN_HPP_DEFAULT_DISPATCHER.init(m_VulkanDevice);
@@ -1126,11 +1146,11 @@ namespace ignite
         DestroySwapChain();
 
         m_SwapChainFormat = {
-            vk::Format(nvrhi::vulkan::convertFormat(m_DeviceParams.swapChainFormat)),
+            vk::Format(nvrhi::vulkan::convertFormat(m_DeviceParameters.swapChainFormat)),
             vk::ColorSpaceKHR::eSrgbNonlinear
         };
 
-        vk::Extent2D extent = vk::Extent2D(m_DeviceParams.backBufferWidth, m_DeviceParams.backBufferHeight);
+        vk::Extent2D extent = vk::Extent2D(m_DeviceParameters.backBufferWidth, m_DeviceParameters.backBufferHeight);
 
         std::unordered_set<u32> uniqueQueues = {
             u32(m_GraphicsQueueFamily),
@@ -1145,7 +1165,7 @@ namespace ignite
 
         auto desc = vk::SwapchainCreateInfoKHR()
             .setSurface(m_WindowSurface)
-            .setMinImageCount(m_DeviceParams.swapChainBufferCount)
+            .setMinImageCount(m_DeviceParameters.swapChainBufferCount)
             .setImageFormat(m_SwapChainFormat.format)
             .setImageColorSpace(m_SwapChainFormat.colorSpace)
             .setImageExtent(extent)
@@ -1157,7 +1177,7 @@ namespace ignite
             .setPQueueFamilyIndices(enableSwapChainSharing ? queues.data() : nullptr)
             .setPreTransform(capabilities.currentTransform)
             .setCompositeAlpha(vk::CompositeAlphaFlagBitsKHR::eOpaque)
-            .setPresentMode(m_DeviceParams.vsyncEnable ? vk::PresentModeKHR::eFifo : vk::PresentModeKHR::eImmediate)
+            .setPresentMode(m_DeviceParameters.vsyncEnable ? vk::PresentModeKHR::eFifo : vk::PresentModeKHR::eImmediate)
             .setClipped(VK_TRUE)
             .setOldSwapchain(VK_NULL_HANDLE);
 
@@ -1199,9 +1219,9 @@ namespace ignite
             sci.image = image;
 
             nvrhi::TextureDesc textureDesc;
-            textureDesc.width = m_DeviceParams.backBufferWidth;
-            textureDesc.height = m_DeviceParams.backBufferHeight;
-            textureDesc.format = m_DeviceParams.swapChainFormat;
+            textureDesc.width = m_DeviceParameters.backBufferWidth;
+            textureDesc.height = m_DeviceParameters.backBufferHeight;
+            textureDesc.format = m_DeviceParameters.swapChainFormat;
             textureDesc.debugName = "Swap chain image";
             textureDesc.initialState = nvrhi::ResourceStates::Present;
             textureDesc.keepInitialState = true;

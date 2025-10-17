@@ -53,25 +53,25 @@ namespace ignite
 
         m_CommandManager = CreateScope<CommandManager>();
 
-        DeviceCreationParameters deviceCreateInfo;
-        deviceCreateInfo.backBufferWidth = m_CreateInfo.width;
-        deviceCreateInfo.backBufferHeight = m_CreateInfo.height;
-        deviceCreateInfo.startMaximized = m_CreateInfo.maximized;
-		deviceCreateInfo.startBorderless = m_CreateInfo.borderless;
+        DeviceParameters deviceParams;
+        deviceParams.backBufferWidth = m_CreateInfo.width;
+        deviceParams.backBufferHeight = m_CreateInfo.height;
+        deviceParams.startMaximized = m_CreateInfo.maximized;
+		deviceParams.startBorderless = m_CreateInfo.borderless;
 #if _DEBUG
-        deviceCreateInfo.enableDebugRuntime = true;
+        deviceParams.enableDebugRuntime = true;
 #endif
-        deviceCreateInfo.swapChainBufferCount = 3;
-        deviceCreateInfo.enableNvrhiValidationLayer = true;
-        deviceCreateInfo.enablePerMonitorDPI = true;
-        deviceCreateInfo.enableGPUValidation = true;
-        deviceCreateInfo.supportExplicitDisplayScaling = true;
+        deviceParams.swapChainBufferCount = 3;
+        deviceParams.enableNvrhiValidationLayer = true;
+        deviceParams.enablePerMonitorDPI = true;
+        deviceParams.enableGPUValidation = true;
+        deviceParams.supportExplicitDisplayScaling = true;
 
-        m_Window = CreateScope<Window>(m_CreateInfo.name.c_str(),  deviceCreateInfo, m_CreateInfo.graphicsApi );
+        m_Window = CreateScope<Window>(m_CreateInfo.name.c_str(),  deviceParams, m_CreateInfo.graphicsApi );
         m_Window->SetEventCallback(BIND_CLASS_EVENT_FN(Application::OnEvent));
         m_Window->SetIcon("resources/icon.png");
 
-        m_Input = Input(m_Window->GetWindowHandle());
+        m_Input = CreateScope<Input>(m_Window.get());
 
         m_Renderer = CreateRef<Renderer>(m_Window->GetDeviceManager(), m_CreateInfo.graphicsApi);
         m_UIManager = CreateScope<UIManager>();
@@ -115,14 +115,14 @@ namespace ignite
         GetInstance()->m_Window->Shutdown();
     }
 
-    void Application::UpdateAverageTimeTime(f64 elapsedTime)
+    void Application::UpdateAverageTimeTime(float elapsedTime)
     {
         m_FrameTimeSum += elapsedTime;
         m_NumberOfAccumulatedFrames++;
 
         if (m_FrameTimeSum >= m_AverageTimeUpdateInterval && m_NumberOfAccumulatedFrames > 0)
         {
-            m_AverageFrameTime = m_FrameTimeSum / static_cast<f64>(m_NumberOfAccumulatedFrames);
+            m_AverageFrameTime = m_FrameTimeSum / static_cast<float>(m_NumberOfAccumulatedFrames);
             m_NumberOfAccumulatedFrames = 0;
             m_FrameTimeSum = 0.0;
         }
@@ -175,7 +175,7 @@ namespace ignite
                 }
             }
 
-            const f64 currTime = SDL_GetTicks();
+            const float currTime = static_cast<float>(SDL_GetTicks());
             m_DeltaTime = static_cast<float>(currTime - m_PreviousTime) / 1000.0f;
 
             ProcessMainThreadSubmissions();
@@ -191,7 +191,7 @@ namespace ignite
                 std::stringstream ss;
                 ss << m_CreateInfo.name;
                 ss << " (" << nvrhi::utils::GraphicsAPIToString(device->getGraphicsAPI());
-                if (deviceManager->GetDeviceParams().enableDebugRuntime)
+                if (deviceManager->GetDeviceParameters().enableDebugRuntime)
                 {
                     if (m_CreateInfo.graphicsApi == nvrhi::GraphicsAPI::VULKAN)
                         ss << ", VulkanValidationLayer";
@@ -199,11 +199,13 @@ namespace ignite
                         ss << ", DebugRuntime";
                 }
 
-                if (deviceManager->GetDeviceParams().enableNvrhiValidationLayer)
+                if (deviceManager->GetDeviceParameters().enableNvrhiValidationLayer)
+                {
                     ss << ", NvrhiValidationLayer";
+                }
                 ss << ")";
 
-                const f64 fps = 1.0 / m_AverageFrameTime;
+                const float fps = 1.0f / m_AverageFrameTime;
 
                 const i32 precision = (fps <= 20.0) ? 1 : 0;
 
@@ -261,8 +263,6 @@ namespace ignite
         }
 
         commandList = nullptr;
-        
-        
         device->waitForIdle();
         
         if (m_ImGuiLayer)
@@ -337,7 +337,7 @@ namespace ignite
         return GetInstance()->m_Window->GetDeviceManager()->GetDevice();
     }
 
-    f32 Application::GetDeltaTime()
+    float Application::GetDeltaTime()
     {
         return GetInstance()->m_DeltaTime;
     }

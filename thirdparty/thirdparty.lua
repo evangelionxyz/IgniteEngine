@@ -70,7 +70,5 @@ group ""
 
 group "NVIDIA"
     include "nvrhi.lua"
-    include "nvrhi-vk.lua"
-    include "nvrhi-d3d12.lua"
     include "shadermake.lua"
 group ""
