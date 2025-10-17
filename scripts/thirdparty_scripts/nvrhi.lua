@@ -1,4 +1,5 @@
 project "NVRHI"
+    location (THIRDPARTY_DIR)
     kind "SharedLib"
     language "C++"
     cppdialect "C++20"

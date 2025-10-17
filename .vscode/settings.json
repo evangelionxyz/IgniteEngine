@@ -96,5 +96,7 @@
         "xtree": "cpp"
     },
     "dotnet.preferCSharpExtension": true,
-    "cmake.ignoreCMakeListsMissing": true
+    "cmake.ignoreCMakeListsMissing": true,
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "python-envs.pythonProjects": []
 }

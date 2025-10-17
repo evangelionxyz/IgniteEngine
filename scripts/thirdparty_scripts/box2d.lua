@@ -1,4 +1,5 @@
 project "BOX2D"
+    location (THIRDPARTY_DIR)
     kind "StaticLib"
     language "C"
     cdialect "C17"

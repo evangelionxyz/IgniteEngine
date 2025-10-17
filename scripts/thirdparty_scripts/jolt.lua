@@ -1,4 +1,5 @@
 project "JOLT"
+    location (THIRDPARTY_DIR)
     kind "SharedLib"
     language "C++"
     cppdialect "C++17"

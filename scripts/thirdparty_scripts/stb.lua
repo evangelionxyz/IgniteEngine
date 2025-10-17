@@ -1,4 +1,5 @@
 project "STB"
+    location (THIRDPARTY_DIR)
     kind "StaticLib"
     language "C++"
     cppdialect "C++20"

@@ -1,4 +1,5 @@
 project "IgniteEditor"
+    location "%{wks.location}/editor"
     kind "ConsoleApp"
     staticruntime "off"
     architecture "x64"

@@ -1,4 +1,5 @@
 project "IMGUI"
+    location (THIRDPARTY_DIR)
     kind "StaticLib"
     language "C++"
     cppdialect "C++17"
@@ -26,11 +27,16 @@ project "IMGUI"
         "%{THIRDPARTY_DIR}/IMGUI/imstb_truetype.h",
 
         -- include imguizmo src to compile
-        "IMGUIZMO/ImGuizmo.cpp",
-        "IMGUIZMO/ImGradient.cpp",
-        "IMGUIZMO/GraphEditor.cpp",
-        "IMGUIZMO/ImCurveEdit.cpp",
-        "IMGUIZMO/ImSequencer.cpp",
+        "%{THIRDPARTY_DIR}/IMGUIZMO/ImGuizmo.cpp",
+        "%{THIRDPARTY_DIR}/IMGUIZMO/ImGuizmo.h",
+        "%{THIRDPARTY_DIR}/IMGUIZMO/ImGradient.cpp",
+        "%{THIRDPARTY_DIR}/IMGUIZMO/ImGradient.h",
+        "%{THIRDPARTY_DIR}/IMGUIZMO/GraphEditor.cpp",
+        "%{THIRDPARTY_DIR}/IMGUIZMO/GraphEditor.h",
+        "%{THIRDPARTY_DIR}/IMGUIZMO/ImCurveEdit.cpp",
+        "%{THIRDPARTY_DIR}/IMGUIZMO/ImCurveEdit.h",
+        "%{THIRDPARTY_DIR}/IMGUIZMO/ImSequencer.cpp",
+        "%{THIRDPARTY_DIR}/IMGUIZMO/ImSequencer.h",
     }
 
     includedirs {

@@ -1,26 +1,23 @@
-project "YAMLCPP"
-    kind "SharedLib"
+project "TINYGLTF"
+    location (THIRDPARTY_DIR)
+    kind "StaticLib"
     language "C++"
     cppdialect "C++20"
     staticruntime "off"
     architecture "x64"
 
-    targetdir (OUTPUT_DIR)
+    targetdir (THIRDPARTY_OUTPUT_DIR)
     objdir (INTOUTPUT_DIR)
 
     files {
-        "%{THIRDPARTY_DIR}/YAML/src/**.cpp",
-        "%{THIRDPARTY_DIR}/YAML/src/**.h",
-        "%{THIRDPARTY_DIR}/YAML/include/yaml-cpp/**.h"
-    }
-
-    defines {
-        "YAML_BUILD_SHARED_LIBS",
-        "yaml_cpp_EXPORTS"
+        "%{THIRDPARTY_DIR}/TINYGLTF/tinygltf.cpp",
+        "%{THIRDPARTY_DIR}/TINYGLTF/include/tinygltf.h"
     }
 
     includedirs {
-        "%{THIRDPARTY_DIR}/YAML/include/"
+        "%{THIRDPARTY_DIR}/STB/include",
+        "%{THIRDPARTY_DIR}/TINYGLTF/include",
+        "%{THIRDPARTY_DIR}/JSON"
     }
 
     filter "system:linux"

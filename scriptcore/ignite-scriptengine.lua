@@ -1,4 +1,5 @@
 project "IgniteScript"
+    location "%{wks.location}/scriptcore"
     kind "SharedLib"
     language "C#"
     dotnetframework "4.8"

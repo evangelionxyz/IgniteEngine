@@ -1,4 +1,5 @@
 project "ZLIB"
+    location (THIRDPARTY_DIR)
     kind "SharedLib"
     language "C"
     architecture "x64"

@@ -1,120 +1,74 @@
-import argparse
 import os
 import platform
-import shutil
-import subprocess
 import sys
+import ctypes
+import subprocess
 from pathlib import Path
-from typing import List, Optional
 
+import utils
 
-def run(cmd: List[str], cwd: Optional[Path] = None) -> int:
-    print(f":: Running: {' '.join(cmd)}")
-    return subprocess.call(cmd, cwd=str(cwd) if cwd else None)
+ROOT_DIR = Path(__file__).resolve().parent.parent
+SCRIPTS_DIR = ROOT_DIR / "scripts"
+DOWNLOADS_DIR = SCRIPTS_DIR / "downloads"
 
+def ensure_admin():
+    if os.name != "nt":
+        return
 
-def cmake_exists() -> bool:
     try:
-        out = subprocess.check_output(["cmake", "--version"], stderr=subprocess.STDOUT)
-        print(out.decode(errors="ignore").splitlines()[0])
-        return True
-    except (OSError, subprocess.CalledProcessError):
-        return False
+        is_admin = ctypes.windll.shell32.IsUserAnAdmin()
+    except AttributeError:
+        return
 
+    if not is_admin:
+        script = os.path.abspath(sys.argv[0])
+        params = " ".join([f'"{arg}"' for arg in sys.argv[1:]])
+        ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, f'"{script}" {params}'.strip(), None, 1)
+        sys.exit()
 
-def detect_default_generator() -> tuple[str, list[str]]:
-    system = platform.system()
-    if system == "Windows":
-        # Prefer Visual Studio 2022 on Windows
-        return "Visual Studio 17 2022", ["-A", "x64"]
-    # On Linux/macOS prefer Ninja Multi-Config when available, else fall back
-    if shutil.which("ninja"):
-        return "Ninja Multi-Config", []
-    return ("Unix Makefiles" if system != "Darwin" else "Xcode"), []
+def run():
+    ensure_admin()
 
+    system_name = platform.system()
+    premake_version = "5.0.0-beta7"
+    premake_link_windows = f"https://github.com/premake/premake-core/releases/download/v{premake_version}/premake-{premake_version}-windows.zip"
+    premake_link_linux = f"https://github.com/premake/premake-core/releases/download/v{premake_version}/premake-{premake_version}-linux.tar.gz"
+    premake_archive_path = DOWNLOADS_DIR / ("premake.zip" if system_name == "Windows" else "premake.tar.gz")
+    premake_download_url = premake_link_windows if system_name == "Windows" else premake_link_linux
 
-def is_multi_config(generator: str) -> bool:
-    g = generator.lower()
-    return any(k in g for k in ["visual studio", "multi-config", "xcode"])
+    vulkan_version = "1.4.328.1"
+    vulkan_sdk_link_windows = f"https://sdk.lunarg.com/sdk/download/{vulkan_version}/windows/vulkansdk-windows-X64-{vulkan_version}.exe"
+    vulkan_executable_path = DOWNLOADS_DIR / f"vulkansdk-{vulkan_version}.exe"
 
+    # check vulkan sdk
+    if system_name == "Windows":
+        if utils.get_env_variable("VULKAN_SDK") is None:
+            if not vulkan_executable_path.exists():
+                utils.download_file(vulkan_sdk_link_windows, str(vulkan_executable_path))
 
-def main(argv: list[str]) -> int:
-    repo_root = Path(__file__).resolve().parents[1]
-    # default_build = repo_root / "build"
-    default_build = repo_root
+            subprocess.call([str(vulkan_executable_path)])
+            print("Re-run this script after installing Vulkan SDK")
+        else:
+            print("Vulkan SDK Installed")
 
-    parser = argparse.ArgumentParser(description="Configure CMake build for Ignite")
-    parser.add_argument("--build-dir", default=str(default_build), help="Build directory (default: ./build)")
-    parser.add_argument("--generator", "-G", default=None, help="CMake generator to use")
-    parser.add_argument("--config", "-c", default="Debug", choices=["Debug", "Release", "RelWithDebInfo", "MinSizeRel"], help="Configuration (used for single-config generators at configure time)")
-    parser.add_argument("--with-build", action="store_true", help="Also run 'cmake --build' after configure")
-    parser.add_argument("--clean", action="store_true", help="Delete the build directory before configuring")
-    parser.add_argument("--extra", nargs=argparse.REMAINDER, help="Extra arguments passed to cmake after '--'")
+    # download premake and extract
+    print("Running premake5...")
+    premake_binary = DOWNLOADS_DIR / ("premake5.exe" if system_name == "Windows" else "premake5")
+    if not premake_binary.exists():
+        if not premake_archive_path.exists():
+            utils.download_file(premake_download_url, str(premake_archive_path))
+        utils.extract_archive(str(premake_archive_path), delete_after_extraction=True)
 
-    args = parser.parse_args(argv)
+    if not premake_binary.exists():
+        raise FileNotFoundError(f"Premake executable not found at {premake_binary}")
 
-    if not cmake_exists():
-        print("Error: CMake is not installed or not found in PATH.")
-        print("Please install CMake and try again.")
-        return 2
-
-    src_dir = repo_root
-    build_dir = Path(args.build_dir).resolve()
-
-    if args.clean and build_dir.exists():
-        print(f":: Removing build directory: {build_dir}")
-        shutil.rmtree(build_dir)
-
-    build_dir.mkdir(parents=True, exist_ok=True)
-
-    gen, gen_args = detect_default_generator()
-    if args.generator:
-        gen = args.generator
-        gen_args = []
-
-    cmake_cmd = [
-        "cmake",
-        "-S",
-        str(src_dir),
-        "-B",
-        str(build_dir),
-        "-G",
-        gen,
-    ] + gen_args
-
-    # Favor compile commands export when supported
-    if not is_multi_config(gen):
-        cmake_cmd += ["-D", f"CMAKE_BUILD_TYPE={args.config}"]
-        cmake_cmd += ["-D", "CMAKE_EXPORT_COMPILE_COMMANDS=ON"]
+    premake_args = [str(premake_binary), "--file=scripts/premake5.lua"]
+    if system_name == "Windows":
+        premake_args.append("vs2022")
     else:
-        # For multi-config generators, some support exporting compile commands via toolchains only.
-        pass
+        premake_args.append("gmake2")
 
-    if args.extra:
-        # Allow passing extra CMake cache entries after a '--'
-        # Example: -- -DOPTION=ON -DOTHER=OFF
-        cmake_cmd += [x for x in args.extra if x != "--"]
-
-    code = run(cmake_cmd)
-    if code != 0:
-        return code
-
-    if args.with_build:
-        build_cmd = [
-            "cmake",
-            "--build",
-            str(build_dir),
-        ]
-        # For multi-config generators, build the chosen config
-        if is_multi_config(gen):
-            build_cmd += ["--config", args.config]
-        return run(build_cmd)
-
-    print(":: CMake configuration completed.")
-    print(f"   Generator: {gen}")
-    print(f"   Build dir: {build_dir}")
-    return 0
-
+    subprocess.call(premake_args, cwd=ROOT_DIR)
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    run()

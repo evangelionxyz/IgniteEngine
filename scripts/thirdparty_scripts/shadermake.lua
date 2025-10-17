@@ -1,4 +1,5 @@
 project "ShaderMake"
+    location (THIRDPARTY_DIR)
     kind "StaticLib"
     language "c++"
     cppdialect "c++20"
