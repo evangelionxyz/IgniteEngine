@@ -30,12 +30,14 @@
 #include "ignite/scene/scene.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/graphics/objects/environment.hpp"
 
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/component.hpp"
 #include "ignite/scene/scene_manager.hpp"
 
 #include <fstream>
+#include <ranges>
 
 namespace ignite {
 
@@ -100,14 +102,14 @@ namespace ignite {
         return YAML::Load(buffer.str());
     }
 
-    SceneSerializer::SceneSerializer(const Ref<Scene> &scene)
-        : m_Scene(scene)
+    SceneSerializer::SceneSerializer(const Ref<Scene> &scene, Project *project)
+        : m_Scene(scene), m_Project(project)
     {
     }
 
     bool SceneSerializer::Serialize(const std::filesystem::path &filepath)
     {
-        if (!m_Scene)
+        if (!m_Scene || !m_Project)
             return false;
 
         Serializer sr(filepath);
@@ -120,15 +122,14 @@ namespace ignite {
         sr.BeginSequence("Entities");
 
         // entities sequence
-        for (auto& e : m_Scene->entities | std::views::values)
+        for (const entt::entity e : m_Scene->entities | std::views::values)
         {
             Entity entity = { e, m_Scene.get() };
             const ID &idComp = entity.GetComponent<ID>();
 
-            bool isPrefab = idComp.IsInType(EntityType_Prefab);
+            const bool isPrefab = idComp.IsInType(EntityType_Prefab);
 
-            // TODO: Mesh renderer (Skinned & Static Mesh)
-            if (isPrefab || entity.HasComponent<MeshRenderer>())
+            if (isPrefab)
                 continue;
 
             sr.BeginMap(); // START Entity
@@ -164,12 +165,11 @@ namespace ignite {
                     const Camera &comp = entity.GetComponent<Camera>();
                     sr.BeginMap("Camera");
                     {
-                        int projectionType = static_cast<int>(comp.projectionType);
+                        int projectionType = static_cast<int>(comp.camera.projectionType);
                         sr.AddKeyValue("ProjectionType", projectionType);
-                        sr.AddKeyValue("NearClip", comp.nearClip);
-                        sr.AddKeyValue("FarClip", comp.farClip);
-                        sr.AddKeyValue("Zoom", comp.zoom);
-                        sr.AddKeyValue("Fov", comp.fov);
+                        sr.AddKeyValue("NearClip", comp.camera.nearPlane);
+                        sr.AddKeyValue("FarClip", comp.camera.farPlane);
+                        sr.AddKeyValue("Fov", comp.camera.fov);
                         sr.AddKeyValue("Primary", comp.primary);
                     }
                     sr.EndMap();
@@ -242,17 +242,105 @@ namespace ignite {
                     sr.EndMap();
                 }
 
-                // Mesh Renderer
-                // if (entity.HasComponent<MeshRenderer>())
-                // {
-                //     const MeshRenderer &comp = entity.GetComponent<MeshRenderer>();
-                //     sr.BeginMap("MeshRenderer");
-                //     {
-                //         sr.AddKeyValue("Root", static_cast<uint64_t>(comp.root));
-                //         sr.AddKeyValue("MeshIndex", comp.meshIndex);
-                //     }
-                //     sr.EndMap();
-                // }
+                // Rigidbody
+                if (entity.HasComponent<Rigibody>())
+                {
+                    const Rigibody &comp = entity.GetComponent<Rigibody>();
+                    sr.BeginMap("Rigidbody");
+                    {
+                        sr.AddKeyValue("MotionQuality", static_cast<int>(comp.MotionQuality));
+                        sr.AddKeyValue("UseGravity", comp.useGravity);
+                        sr.AddKeyValue("RotateX", comp.rotateX);
+                        sr.AddKeyValue("RotateY", comp.rotateY);
+                        sr.AddKeyValue("RotateZ", comp.rotateZ);
+                        sr.AddKeyValue("MoveX", comp.moveX);
+                        sr.AddKeyValue("MoveY", comp.moveY);
+                        sr.AddKeyValue("MoveZ", comp.moveZ);
+                        sr.AddKeyValue("IsStatic", comp.isStatic);
+                        sr.AddKeyValue("Mass", comp.mass);
+                        sr.AddKeyValue("AllowSleeping", comp.allowSleeping);
+                        sr.AddKeyValue("RetainAcceleration", comp.retainAcceleration);
+                        sr.AddKeyValue("GravityFactor", comp.gravityFactor);
+                        sr.AddKeyValue("CenterMass", comp.centerMass);
+                    }
+                    sr.EndMap();
+                }
+
+                if (entity.HasComponent<BoxCollider>())
+                {
+                    const BoxCollider &comp = entity.GetComponent<BoxCollider>();
+                    sr.BeginMap("BoxCollider");
+                    {
+                        sr.AddKeyValue("Scale", comp.scale);
+                        sr.AddKeyValue("Friction", comp.friction);
+                        sr.AddKeyValue("StaticFriction", comp.staticFriction);
+                        sr.AddKeyValue("Restitution", comp.restitution);
+                        sr.AddKeyValue("Density", comp.density);
+                    }
+                    sr.EndMap();
+                }
+
+                // SphereCollider
+                if (entity.HasComponent<SphereCollider>())
+                {
+                    const SphereCollider &comp = entity.GetComponent<SphereCollider>();
+                    sr.BeginMap("SphereCollider");
+                    {
+                        sr.AddKeyValue("Radius", comp.radius);
+                        sr.AddKeyValue("Friction", comp.friction);
+                        sr.AddKeyValue("StaticFriction", comp.staticFriction);
+                        sr.AddKeyValue("Restitution", comp.restitution);
+                        sr.AddKeyValue("Density", comp.density);
+                    }
+                    sr.EndMap();
+                }
+
+                // CapsuleCollider
+                if (entity.HasComponent<CapsuleCollider>())
+                {
+                    const CapsuleCollider &comp = entity.GetComponent<CapsuleCollider>();
+                    sr.BeginMap("CapsuleCollider");
+                    {
+                        sr.AddKeyValue("Radius", comp.radius);
+                        sr.AddKeyValue("Height", comp.height);
+                        sr.AddKeyValue("Friction", comp.friction);
+                        sr.AddKeyValue("StaticFriction", comp.staticFriction);
+                        sr.AddKeyValue("Restitution", comp.restitution);
+                        sr.AddKeyValue("Density", comp.density);
+                    }
+                    sr.EndMap();
+                }
+
+                // MeshCollider
+                if (entity.HasComponent<MeshCollider>())
+                {
+                    const MeshCollider &comp = entity.GetComponent<MeshCollider>();
+                    sr.BeginMap("MeshCollider");
+                    {
+                        sr.AddKeyValue("Convex", comp.convex);
+                        sr.AddKeyValue("Friction", comp.friction);
+                        sr.AddKeyValue("StaticFriction", comp.staticFriction);
+                        sr.AddKeyValue("Restitution", comp.restitution);
+                        sr.AddKeyValue("Density", comp.density);
+                        
+                        // Serialize vertices
+                        sr.BeginSequence("Vertices");
+                        for (const auto &vertex : comp.vertices)
+                        {
+                            sr.AddValue(vertex);
+                        }
+                        sr.EndSequence();
+                        
+                        // Serialize indices
+                        sr.BeginSequence("Indices");
+                        for (const auto &index : comp.indices)
+                        {
+                            sr.AddValue(index);
+                        }
+                        sr.EndSequence();
+                    }
+                    sr.EndMap();
+                }
 
                 // Audio Source
                 if (entity.HasComponent<AudioSource>())
@@ -278,7 +366,7 @@ namespace ignite {
                         sr.AddKeyValue("ClassName", comp.className);
 
                         // Fields
-                        const Ref<ScriptClass> scriptClass = ScriptEngine::GetEntityClassesByName(comp.className);
+                        const Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(comp.className);
 
                         if (scriptClass)
                         {
@@ -286,7 +374,7 @@ namespace ignite {
 
                             if (!classFields.empty())
                             {
-                                auto &fields = ScriptEngine::GetScriptFieldMap(entity);
+                                auto &fields = ScriptEngine::GetInstance()->GetScriptFieldMap(entity);
 
                                 sr.BeginSequence("Fields");
                                 for (const auto &[fieldName, field] : classFields)
@@ -341,8 +429,8 @@ namespace ignite {
 
         sr.EndMap(); // END
 
-        // Example
 #if 0
+        // Example
         sr.BeginMap(); // START
 
         sr.BeginMap("Scene"); // scene file header
@@ -353,7 +441,7 @@ namespace ignite {
         sr.BeginSequence("Entities");
 
 
-        // entites sequence
+        // entities sequence
         for (int i = 0; i < 10; ++i)
         {
             sr.BeginMap(); // START Entity
@@ -396,10 +484,11 @@ namespace ignite {
         return true;
     }
 
-    Ref<Scene> SceneSerializer::Deserialize(const std::filesystem::path &filepath)
+    Ref<Scene> SceneSerializer::Deserialize(const std::filesystem::path &filepath, Project *project)
     {
         LOG_ASSERT(std::filesystem::exists(filepath), "[Scene SR] File does not exists!\n{}", filepath.generic_string());
-
+        LOG_ASSERT(project,"[Scene SR] Invalid project");
+        
         YAML::Node sceneFileNode = Serializer::Deserialize(filepath);
         YAML::Node sceneNode = sceneFileNode["Scene"];
 
@@ -408,7 +497,7 @@ namespace ignite {
             return nullptr;
 
         std::string title = sceneNode["Title"].as<std::string>();
-        Ref<Scene> desScene = Scene::Create(title);
+        Ref<Scene> desScene = Scene::Create(project, title);
 
         for (YAML::Node entityNode : sceneNode["Entities"])
         {
@@ -437,11 +526,10 @@ namespace ignite {
             if (YAML::Node node = entityNode["Camera"])
             {
                 Camera &comp = desEntity.AddComponent<Camera>();
-                comp.projectionType = static_cast<ICamera::Type>(node["ProjectionType"].as<int>());
-                comp.nearClip = node["NearClip"].as<float>();
-                comp.farClip = node["FarClip"].as<float>();
-                comp.zoom = node["Zoom"].as<float>();
-                comp.fov = node["Fov"].as<float>();
+                comp.camera.projectionType = static_cast<ProjectionType>(node["ProjectionType"].as<int>());
+                comp.camera.nearPlane = node["NearClip"].as<float>();
+                comp.camera.farPlane = node["FarClip"].as<float>();
+                comp.camera.fov = node["Fov"].as<float>();
                 comp.primary = node["Primary"].as<bool>();
             }
 
@@ -482,23 +570,113 @@ namespace ignite {
                 comp.isSensor = node["IsSensor"].as<bool>();
             }
 
+            // Rigidbody
+            if (YAML::Node node = entityNode["Rigidbody"])
+            {
+                Rigibody &comp = desEntity.AddComponent<Rigibody>();
+                comp.MotionQuality = static_cast<Rigibody::EMotionQuality>(node["MotionQuality"].as<int>());
+                comp.useGravity = node["UseGravity"].as<bool>();
+                comp.rotateX = node["RotateX"].as<bool>();
+                comp.rotateY = node["RotateY"].as<bool>();
+                comp.rotateZ = node["RotateZ"].as<bool>();
+                comp.moveX = node["MoveX"].as<bool>();
+                comp.moveY = node["MoveY"].as<bool>();
+                comp.moveZ = node["MoveZ"].as<bool>();
+                comp.isStatic = node["IsStatic"].as<bool>();
+                comp.mass = node["Mass"].as<float>();
+                comp.allowSleeping = node["AllowSleeping"].as<bool>();
+                comp.retainAcceleration = node["RetainAcceleration"].as<bool>();
+                comp.gravityFactor = node["GravityFactor"].as<float>();
+                comp.centerMass = node["CenterMass"].as<glm::vec3>();
+            }
+
+            // BoxCollider
+            if (YAML::Node node = entityNode["BoxCollider"])
+            {
+                BoxCollider &comp = desEntity.AddComponent<BoxCollider>();
+                comp.scale = node["Scale"].as<glm::vec3>();
+                comp.friction = node["Friction"].as<float>();
+                comp.staticFriction = node["StaticFriction"].as<float>();
+                comp.restitution = node["Restitution"].as<float>();
+                comp.density = node["Density"].as<float>();
+            }
+
+            // SphereCollider
+            if (YAML::Node node = entityNode["SphereCollider"])
+            {
+                SphereCollider &comp = desEntity.AddComponent<SphereCollider>();
+                comp.radius = node["Radius"].as<float>();
+                comp.friction = node["Friction"].as<float>();
+                comp.staticFriction = node["StaticFriction"].as<float>();
+                comp.restitution = node["Restitution"].as<float>();
+                comp.density = node["Density"].as<float>();
+            }
+
+            // CapsuleCollider
+            if (YAML::Node node = entityNode["CapsuleCollider"])
+            {
+                CapsuleCollider &comp = desEntity.AddComponent<CapsuleCollider>();
+                comp.radius = node["Radius"].as<float>();
+                comp.height = node["Height"].as<float>();
+                comp.friction = node["Friction"].as<float>();
+                comp.staticFriction = node["StaticFriction"].as<float>();
+                comp.restitution = node["Restitution"].as<float>();
+                comp.density = node["Density"].as<float>();
+            }
+
+            // MeshCollider
+            if (YAML::Node node = entityNode["MeshCollider"])
+            {
+                MeshCollider &comp = desEntity.AddComponent<MeshCollider>();
+                comp.convex = node["Convex"].as<bool>();
+                comp.friction = node["Friction"].as<float>();
+                comp.staticFriction = node["StaticFriction"].as<float>();
+                comp.restitution = node["Restitution"].as<float>();
+                comp.density = node["Density"].as<float>();
+                
+                // Deserialize vertices
+                if (YAML::Node verticesNode = node["Vertices"])
+                {
+                    comp.vertices.clear();
+                    for (const auto &vertexNode : verticesNode)
+                    {
+                        comp.vertices.push_back(vertexNode.as<glm::vec3>());
+                    }
+                }
+                
+                // Deserialize indices
+                if (YAML::Node indicesNode = node["Indices"])
+                {
+                    comp.indices.clear();
+                    for (const auto &indexNode : indicesNode)
+                    {
+                        comp.indices.push_back(indexNode.as<uint32_t>());
+                    }
+                }
+            }
+
             // Audio Source
             if (YAML::Node node = entityNode["AudioSource"])
             {
-                AudioSource &comp = desEntity.AddComponent<AudioSource>();
+                AudioSource& comp = desEntity.AddComponent<AudioSource>();
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
                 comp.volume = node["Volume"].as<float>();
-                comp.pitch= node["Pitch"].as<float>();
+                comp.pitch = node["Pitch"].as<float>();
                 comp.pan = node["Pan"].as<float>();
                 comp.playOnStart = node["PlayOnStart"].as<bool>();
             }
 
-            // Skinned Mesh
-            if (YAML::Node node = entityNode["SkeletalMesh"])
+            // World Environment
+            if (YAML::Node node = entityNode["WorldEnvironment"])
             {
-                SkeletalMesh &skinnedMesh = desEntity.AddComponent<SkeletalMesh>();
-                skinnedMesh.meshHandle = AssetHandle(node["MeshHandle"].as<uint64_t>());
-                Project::GetAsset<MeshAsset>(skinnedMesh.meshHandle);
+                WorldEnvironment &world = desEntity.AddComponent<WorldEnvironment>();
+                world.environment = Environment::Create(desScene.get());
+                world.imageHandle = AssetHandle(node["ImageHandle"].as<uint64_t>());
+                const AssetMetaData &metadata = project->GetAssetManager().GetMetaData(world.imageHandle);
+                if (metadata.type == AssetType::Texture)
+                {
+                    world.environment->LoadTexture(metadata.filepath.generic_string());
+                }
             }
 
             // Script
@@ -509,10 +687,10 @@ namespace ignite {
 
                 if (YAML::Node classFieldsNode = node["Fields"])
                 {
-                    if (Ref<ScriptClass> scriptClass = ScriptEngine::GetEntityClassesByName(sc.className))
+                    if (Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(sc.className))
                     {
                         const auto &classFields = scriptClass->GetFields();
-                        ScriptFieldMap &fieldMap = ScriptEngine::GetScriptFieldMap(desEntity);
+                        ScriptFieldMap &fieldMap = ScriptEngine::GetInstance()->GetScriptFieldMap(desEntity);
 
                         for (YAML::Node fieldNode : classFieldsNode)
                         {
@@ -567,7 +745,7 @@ namespace ignite {
     }
 
 
-    ProjectSerializer::ProjectSerializer(const Ref<Project> &project)
+    ProjectSerializer::ProjectSerializer(Project *project)
         : m_Project(project)
     {
     }

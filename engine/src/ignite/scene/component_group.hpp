@@ -40,11 +40,14 @@ namespace ignite
         Rigidbody2D,
         BoxCollider2D,
         SkeletalMesh,
-        MeshRenderer,
         Rigibody,
         BoxCollider,
+        SphereCollider,
+        CapsuleCollider,
+        MeshCollider,
         AudioSource,
+        MeshComponent,
         Script,
-        SphereCollider
+        WorldEnvironment
     >; 
 }

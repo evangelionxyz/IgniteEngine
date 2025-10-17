@@ -26,16 +26,14 @@
 #include "application.hpp"
 
 #ifdef PLATFORM_WINDOWS
-#   include <Windows.h>
-#   include <ShObjIdl.h>
-#   include <commdlg.h>
-#   include <GLFW/glfw3.h>
-#   include <GLFW/glfw3native.h>
+    #include <Windows.h>
+    #include <ShObjIdl.h>
+    #include <commdlg.h>
 #elif PLATFORM_LINUX
-#   include <iostream>
-#   include <memory>
-#   include <stdexcept>
-#   include <array>
+    #include <iostream>
+    #include <memory>
+    #include <stdexcept>
+    #include <array>
 #endif
 
 namespace ignite {
@@ -49,7 +47,7 @@ namespace ignite {
         CHAR currentDir[256] = { 0 };
         ZeroMemory(&ofn, sizeof(OPENFILENAME));
         ofn.lStructSize = sizeof(OPENFILENAME);
-        ofn.hwndOwner = glfwGetWin32Window(Application::GetInstance()->GetWindow()->GetWindowHandle());
+        ofn.hwndOwner = Application::GetInstance()->GetWindow()->GetNativeWindow();
         ofn.lpstrFile = szFile;
         ofn.nMaxFile = sizeof(szFile);
 
@@ -98,7 +96,7 @@ namespace ignite {
         CHAR currentDir[256] = { 0 };
         ZeroMemory(&ofn, sizeof(OPENFILENAME));
         ofn.lStructSize = sizeof(OPENFILENAME);
-        ofn.hwndOwner = glfwGetWin32Window(Application::GetInstance()->GetWindow()->GetWindowHandle());
+        ofn.hwndOwner = Application::GetInstance()->GetWindow()->GetNativeWindow();
         ofn.lpstrFile = szFile;
         ofn.nMaxFile = sizeof(szFile);
         if (GetCurrentDirectoryA(256, currentDir))
@@ -167,7 +165,7 @@ namespace ignite {
         CHAR currentDir[256] = { 0 };
         ZeroMemory(&ofn, sizeof(OPENFILENAME));
         ofn.lStructSize = sizeof(OPENFILENAME);
-        ofn.hwndOwner = glfwGetWin32Window(Application::GetInstance()->GetWindow()->GetWindowHandle());
+        ofn.hwndOwner = Application::GetInstance()->GetWindow()->GetNativeWindow();
         ofn.lpstrFile = szFile;
         ofn.nMaxFile = sizeof(szFile);
         if (GetCurrentDirectoryA(256, currentDir))

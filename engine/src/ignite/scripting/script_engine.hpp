@@ -27,6 +27,8 @@
 #include "ignite/scene/entity.hpp"
 #include "script_instance.hpp"
 
+#include "FileWatch.hpp"
+
 #include <filesystem>
 #include <string>
 #include <unordered_map>
@@ -45,46 +47,56 @@ extern "C"
 namespace ignite
 {
     using ScriptFieldMap = std::unordered_map<std::string, ScriptFieldInstance>;
+    class Project;
+    class Scene;
+
     class ScriptEngine
     {
     public:
-        static void Init();
-        static void Shutdown();
+        ScriptEngine(Project *project);
+        ~ScriptEngine();
 
-        static void RegisterCoreClassesAndFunctions();
+        void RegisterCoreClassesAndFunctions();
 
-        static bool LoadAssembly(const std::filesystem::path &filepath);
-        static bool LoadAppAssembly(const std::filesystem::path &filepath);
-        static void ReloadAssembly();
-        static void SetSceneContext(Scene *scene);
-        static void ClearSceneContext();
-        static bool FieldIsExposed(MonoClass *owner, MonoClassField *field, MonoClass *serializeFieldAttrClass);
+        bool LoadAssembly(const std::filesystem::path &filepath);
+        bool LoadAppAssembly(const std::filesystem::path &filepath);
+        void ReloadAssembly();
+        void SetSceneContext(Scene *scene);
+        void ClearSceneContext();
+        bool FieldIsExposed(MonoClass *owner, MonoClassField *field, MonoClass *serializeFieldAttrClass);
 
-        static bool EntityClassExists(const std::string &fullClassName);
+        
+        bool EntityClassExists(const std::string &fullClassName);
+        
+        void OnCreateEntity(Entity entity);
+        void OnUpdateEntity(Entity entity, float time);
+        
+        MonoString *CreateString(const char *string);
+        
+        ScriptClass *GetEntityClass();
+        std::shared_ptr<ScriptClass> GetEntityClassesByName(const std::string &name);
+        std::unordered_map<std::string, std::shared_ptr<ScriptClass>> GetEntityClasses();
+        ScriptFieldMap &GetScriptFieldMap(Entity entity);
+        
+        std::shared_ptr<ScriptInstance> GetEntityScriptInstance(UUID uuid);
+        std::vector<std::string> GetScriptClassStorage();
+        Scene *GetSceneContext();
+        MonoImage *GetCoreAssemblyImage();
+        MonoImage *GetAppAssemblyImage();
+        MonoObject *GetManagedInstance(UUID uuid);
 
-        static void OnCreateEntity(Entity entity);
-        static void OnUpdateEntity(Entity entity, float time);
-
-        static MonoString *CreateString(const char *string);
-
-        static ScriptClass *GetEntityClass();
-        static std::shared_ptr<ScriptClass> GetEntityClassesByName(const std::string &name);
-        static std::unordered_map<std::string, std::shared_ptr<ScriptClass>> GetEntityClasses();
-        static ScriptFieldMap &GetScriptFieldMap(Entity entity);
-
-        static std::shared_ptr<ScriptInstance> GetEntityScriptInstance(UUID uuid);
-        static std::vector<std::string> GetScriptClassStorage();
-        static Scene *GetSceneContext();
-        static MonoImage *GetCoreAssemblyImage();
-        static MonoImage *GetAppAssemblyImage();
-        static MonoObject *GetManagedInstance(UUID uuid);
+        static ScriptEngine *GetInstance();
 
     private:
-        static void InitMono();
-        static void ShutdownMono();
+        void InitMono();
+        void ShutdownMono();
+        static void OnAppAssemblyFileSystemEvent(const std::string &path, const filewatch::Event eventType);
 
-        static MonoObject *InstantiateObject(MonoClass *monoClass);
-        static void LoadAppAssemblyClasses();
+        MonoObject *InstantiateObject(MonoClass *monoClass);
+        void LoadAppAssemblyClasses();
+
+        Project *m_Project;
+        Scene *m_Scene;
 
         friend class ScriptClass;
     };

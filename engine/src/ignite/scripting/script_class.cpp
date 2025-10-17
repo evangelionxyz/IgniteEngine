@@ -32,12 +32,12 @@ namespace ignite
     ScriptClass::ScriptClass(const std::string &classNamespace, const std::string &className, bool core)
         : m_ClassNamespace(classNamespace), m_ClassName(className)
     {
-        m_MonoClass = mono_class_from_name(core ? ScriptEngine::GetCoreAssemblyImage() : ScriptEngine::GetAppAssemblyImage(), classNamespace.c_str(), className.c_str());
+        m_MonoClass = mono_class_from_name(core ? ScriptEngine::GetInstance()->GetCoreAssemblyImage() : ScriptEngine::GetInstance()->GetAppAssemblyImage(), classNamespace.c_str(), className.c_str());
     }
 
     MonoObject *ScriptClass::Instantiate()
     {
-        return ScriptEngine::InstantiateObject(m_MonoClass);
+        return ScriptEngine::GetInstance()->InstantiateObject(m_MonoClass);
     }
 
     MonoMethod *ScriptClass::GetMethod(const std::string &name, int parameterCount)

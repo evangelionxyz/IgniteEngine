@@ -24,16 +24,15 @@
 #pragma once
 
 #include "ipanel.hpp"
-
 #include "ignite/asset/asset.hpp"
+#include "ignite/graphics/texture.hpp"
 
 #include <filesystem>
 #include <stack>
 #include <map>
 
-#include "ignite/graphics/texture.hpp"
-
-namespace ignite {
+namespace ignite
+{
 
     class Project;
     class EditorLayer;
@@ -63,8 +62,9 @@ namespace ignite {
     {
     public:
         explicit ContentBrowserPanel(const char *windowTitle);
-        void SetActiveProject(const Ref<Project> &project);
         virtual void OnGuiRender() override;
+
+        void LoadProjectFiles();
 
     private:
         void RenderFileTree(FileTreeNode *node);
@@ -81,8 +81,6 @@ namespace ignite {
         void UpdateIndicesAfterDeletion(uint32_t deletedIndex);
         void CompactTree();
         std::filesystem::path GetFullPath(uint32_t nodeIndex) const;
-
-        Ref<Project> m_ActiveProject;
 
         std::vector<FileTreeNode> m_TreeNodes;
         int m_ThumbnailSize = 64;

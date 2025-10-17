@@ -24,6 +24,7 @@
 #include "project.hpp"
 #include "ignite/core/string_utils.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/scripting/script_engine.hpp"
 
 #include <fstream>
 #include <format>
@@ -81,7 +82,7 @@ namespace ignite
         optimize "On"
         symbols "Default"
 
-    filter "configurations:Dist"
+    filter "configurations:Shipping"
         optimize "Full"
         symbols "Off"
 )";
@@ -113,16 +114,22 @@ namespace {PROJECT_NAME}
 }
 )";
 
-    static Project *s_ActiveProject = nullptr;
+    Project *project = nullptr;
 
     Project::Project(const ProjectInfo &info)
         : m_Info(info)
     {
+        project = this;
         GenerateProject();
+
+        m_AssetManager = new AssetManager(this);
+        m_ScriptEngine = new ScriptEngine(this);
     }
 
     Project::~Project()
     {
+        delete m_ScriptEngine;
+        delete m_AssetManager;
     }
 
     std::filesystem::path Project::GetAssetRelativeFilepath(const std::filesystem::path &filepath) const
@@ -141,9 +148,14 @@ namespace {PROJECT_NAME}
         return std::filesystem::relative(filepath, m_Info.filepath.parent_path());
     }
 
-    void Project::SetActiveScene(Scene *scene)
+    void Project::SetActiveScene(const Ref<Scene> &scene)
     {
         m_ActiveScene = scene;
+    }
+
+    void Project::SetDefaultScene(AssetHandle handle)
+    {
+        m_Info.defaultSceneHandle = handle;
     }
 
     std::vector<std::pair<AssetHandle, AssetMetaData>> Project::ValidateAssetRegistry()
@@ -168,17 +180,14 @@ namespace {PROJECT_NAME}
         return invalidRegistry;
     }
 
-    Project *Project::GetActive()
+    Project *Project::GetInstance()
     {
-        return s_ActiveProject;
+        return project;
     }
 
     Ref<Project> Project::Create(const ProjectInfo &info)
     {
-        Ref<Project> project = CreateRef<Project>(info);
-        s_ActiveProject = project.get();
-
-        return project;
+        return CreateRef<Project>(info);
     }
 
     bool Project::BuildSolution()

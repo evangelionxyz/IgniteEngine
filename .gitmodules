@@ -1,6 +1,3 @@
-[submodule "thirdparty/GLFW"]
-	path = thirdparty/GLFW
-	url = https://github.com/glfw/glfw.git
 [submodule "thirdparty/SPDLOG"]
 	path = thirdparty/SPDLOG
 	url = https://github.com/gabime/spdlog.git
@@ -22,3 +19,9 @@
 [submodule "thirdparty/JOLT"]
 	path = thirdparty/JOLT
 	url = https://github.com/jrouwe/JoltPhysics.git
+[submodule "thirdparty/MSDFAtlasGen"]
+	path = thirdparty/MSDFAtlasGen
+	url = https://github.com/Chlumsky/msdf-atlas-gen.git
+[submodule "thirdparty/sdl"]
+	path = thirdparty/sdl
+	url = https://github.com/libsdl-org/SDL.git

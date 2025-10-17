@@ -39,33 +39,11 @@ namespace ignite {
     class AssetImporter
     {
     public:
-        static void SyncMainThread();
         static Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
+        static void ImportAsync(AssetHandle handle, const AssetMetaData &metadata, std::function<void(Ref<Asset>, AssetHandle)> callback);
+
         static Ref<Scene> ImportScene(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<FmodSound> ImportAudio(AssetHandle handle, const AssetMetaData &metadata);
-    };
-
-    class MeshImporter : public AssetImporter
-    {
-    public:
-        static Ref<Asset> ImportMeshSource(AssetHandle handle, const AssetMetaData &metadata);
-        static Ref<Asset> ImportSkeletalMesh(AssetHandle handle, const AssetMetaData &metadata);
-        static Ref<Asset> ImportSkeleton(AssetHandle handle, const AssetMetaData &metadata);
-        static Ref<Asset> ImportAnimation(AssetHandle handle, const AssetMetaData &metadata);
-        static Ref<Asset> ImportMaterial(AssetHandle handle, const AssetMetaData &metadata);
-    };
-
-    class EnvironmentImporter : public AssetImporter
-    {
-    public:
-        static void Import(Ref<Environment> *outEnvironment, const std::string &filepath);
-        static void UpdateTexture(Ref<Environment> *outEnvironment, const std::string &filepath);
-        static void SyncMainThread();
-
-    private:
-        static Ref<Environment> ImportAsync(Ref<Environment> *outEnvironment, const std::string &filepath);
-        static Ref<Environment> LoadTextureAsync(Ref<Environment> *outEnvironment, const std::string &filepath);
-        static std::future<Ref<Environment>> m_Future;
     };
 }

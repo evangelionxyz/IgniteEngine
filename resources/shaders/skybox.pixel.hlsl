@@ -1,12 +1,19 @@
 #include "include/helpers.hlsli"
 
-struct Environment
+struct Scene
 {
+    float4 lightColor;        // w component can store lightIntensity
+    float2 lightAngle;
+    float sunAngularRadius;
+    int renderMode;
+    
     float exposure;
     float gamma;
+    float ambient;
+    float padding;            // Explicit padding for 16-byte alignment
 };
 
-cbuffer ParamsConstants : register(b1) { Environment env; }
+cbuffer SceneBuffer : register(b1) { Scene scene; }
 
 struct PSInput
 {
@@ -20,7 +27,6 @@ SamplerState sampler0 : register(s0);
 struct PSOutput
 {
     float4 color : SV_TARGET0;
-    uint4 entityID : SV_TARGET1;
 };
 
 PSOutput main(PSInput input)
@@ -29,8 +35,7 @@ PSOutput main(PSInput input)
     float3 dir = normalize(input.UVW);
     float3 color = SampleSphericalMap(texture0, sampler0, dir);
 
-    result.color = float4(FilmicTonemap(color, env.exposure, env.gamma), 1.0f);
-    result.entityID = uint4(-1, -1, -1, -1);
+    result.color = float4(FilmicTonemap(color, scene.exposure, scene.gamma), 1.0f);
 
     return result;
 }

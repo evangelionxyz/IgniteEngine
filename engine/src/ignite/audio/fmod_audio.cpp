@@ -84,7 +84,7 @@ namespace ignite {
         FMOD_CHECK(result);
         result = s_fmod_audio->m_System->release();
         FMOD_CHECK(result);
-        
+
         delete s_fmod_audio;
     }
 

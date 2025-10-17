@@ -27,10 +27,6 @@
 
 #include "ignite/core/application.hpp"
 
-#include <spirv_cross/spirv_cross.hpp>
-#include <spirv_cross/spirv_glsl.hpp>
-#include <spirv_cross/spirv_hlsl.hpp>
-
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -87,21 +83,17 @@ namespace ignite
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
         CreateShaderCachedDirectoryIfNeeded();
 
-        ShaderMake::ShaderBlob blob = CompileOrGetShader(filepath, type, recompile);
-
+        ShaderMake::ShaderBlob blob = CompileOrGetShader(filepath, type, &m_Resources, recompile);
         LOG_ASSERT(blob.data.data(), "[Shader] Blob data is not valid");
 
         nvrhi::ShaderDesc shaderDesc;
         shaderDesc.shaderType = GetNVRHIShaderType(type);
 
         m_Handle = device->createShader(shaderDesc, blob.data.data(), blob.dataSize());
-
-        LOG_ASSERT(m_Handle, "Failed to create {} shader: {}",
-            ShaderStageToString(type),
-            filepath.generic_string());
+        LOG_ASSERT(m_Handle, "Failed to create {} shader: {}", ShaderStageToString(type), filepath.generic_string());
     }
 
-    ShaderMake::ShaderBlob Shader::CompileOrGetShader(const std::filesystem::path &filepath, ShaderMake::ShaderType type, bool recompile)
+    ShaderMake::ShaderBlob Shader::CompileOrGetShader(const std::filesystem::path &filepath, ShaderMake::ShaderType type, spirv_cross::ShaderResources *resources, bool recompile)
     {
         ShaderMake::ShaderBlob shaderBlob;
 
@@ -116,7 +108,7 @@ namespace ignite
 
             // filepath from filepathCopy
             Ref<ShaderMake::ShaderContext> shaderContext = CreateRef<ShaderMake::ShaderContext>(filepathCopy.generic_string(), type, shaderDesc, recompile);
-            ShaderMake::CompileStatus status = Renderer::GetShaderLibrary().GetContext()->CompileShader({ shaderContext });
+            ShaderMake::CompileStatus status = Renderer::GetShaderLibrary().CompileShaders({ shaderContext });
 
             bool success = status == ShaderMake::CompileStatus::Success;
             LOG_ASSERT(success, "[Shader] failed to get or compile shader");
@@ -128,29 +120,38 @@ namespace ignite
         // print reflect info (only SPIRV file)
         if (api == nvrhi::GraphicsAPI::VULKAN)
         {
-            SPIRVReflect(type, shaderBlob);
+            if (resources)
+            {
+                *resources = SPIRVReflect(type, shaderBlob);
+            }
+            else
+            {
+                SPIRVReflect(type, shaderBlob);
+            }
         }
 
         return shaderBlob;
     }
 
-    void Shader::SPIRVReflect(ShaderMake::ShaderType type, const ShaderMake::ShaderBlob &blob)
+    spirv_cross::ShaderResources Shader::SPIRVReflect(ShaderMake::ShaderType type, const ShaderMake::ShaderBlob &blob)
     {
         if (blob.data.size() % sizeof(uint32_t) != 0)
+        {
             throw std::runtime_error("Shader blob size is not aligned to 4 bytes");
+        }
 
         const uint32_t *ptr = reinterpret_cast<const uint32_t *>(blob.data.data());
         size_t wordCount = blob.data.size() / sizeof(uint32_t);
         std::vector<uint32_t> dataBlob(ptr, ptr + wordCount);
 
         spirv_cross::Compiler compiler(dataBlob);
-        spirv_cross::ShaderResources res = compiler.get_shader_resources();
+        spirv_cross::ShaderResources shaderResources = compiler.get_shader_resources();
 
-        LOG_WARN("Shader Reflect - {}", ShaderStageToString(type));
+        LOG_WARN("[Shader Reflect] {} Shader", ShaderStageToString(type));
 
         // --- Uniform Buffers ---
-        LOG_WARN("   {} uniform buffers", res.uniform_buffers.size());
-        for (const auto &ubo : res.uniform_buffers)
+        LOG_TRACE("   {} uniform buffers", shaderResources.uniform_buffers.size());
+        for (const auto &ubo : shaderResources.uniform_buffers)
         {
             const auto &type = compiler.get_type(ubo.base_type_id);
             u32 size = static_cast<u32>(compiler.get_declared_struct_size(type));
@@ -158,55 +159,59 @@ namespace ignite
             u32 set = compiler.get_decoration(ubo.id, spv::DecorationDescriptorSet);
             size_t memberCount = type.member_types.size();
 
-            LOG_INFO("  [UBO] Name: {}, Set: {}, Binding: {}, Size: {}, Members: {}", ubo.name, set, binding, size, memberCount);
+            LOG_TRACE("  [UBO] Name: {}, Set: {}, Binding: {}, Size: {}, Members: {}", ubo.name, set, binding, size, memberCount);
         }
 
         // --- Sampled Images (combined or separate textures) ---
-        LOG_WARN("   {} sampled images", res.sampled_images.size());
-        for (const auto &image : res.sampled_images)
+        LOG_TRACE("   {} sampled images", shaderResources.sampled_images.size());
+        for (const auto &image : shaderResources.sampled_images)
         {
             u32 binding = compiler.get_decoration(image.id, spv::DecorationBinding);
             u32 set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
 
-            LOG_INFO("  [Texture] Name: {}, Set: {}, Binding: {}", image.name, set, binding);
+            LOG_TRACE("  [Texture] Name: {}, Set: {}, Binding: {}", image.name, set, binding);
         }
 
         // --- Separate Samplers ---
-        LOG_WARN("   {} separate samplers", res.separate_samplers.size());
-        for (const auto &sampler : res.separate_samplers)
+        LOG_TRACE("   {} separate samplers", shaderResources.separate_samplers.size());
+        for (const auto &sampler : shaderResources.separate_samplers)
         {
             u32 binding = compiler.get_decoration(sampler.id, spv::DecorationBinding);
             u32 set = compiler.get_decoration(sampler.id, spv::DecorationDescriptorSet);
 
-            LOG_INFO("  [Sampler] Name: {}, Set: {}, Binding: {}", sampler.name, set, binding);
+            LOG_TRACE("  [Sampler] Name: {}, Set: {}, Binding: {}", sampler.name, set, binding);
         }
 
         // --- Separate Images (non-combined, i.e., texture2D) ---
-        LOG_WARN("   {} separate images", res.separate_images.size());
-        for (const auto &image : res.separate_images)
+        LOG_TRACE("   {} separate images", shaderResources.separate_images.size());
+        for (const auto &image : shaderResources.separate_images)
         {
             u32 binding = compiler.get_decoration(image.id, spv::DecorationBinding);
             u32 set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
 
-            LOG_INFO("  [Separate Image] Name: {}, Set: {}, Binding: {}", image.name, set, binding);
+            LOG_TRACE("  [Separate Image] Name: {}, Set: {}, Binding: {}", image.name, set, binding);
         }
 
         // --- Push Constants ---
-        LOG_WARN("   {} push constants", res.push_constant_buffers.size());
-        for (const auto &pcb : res.push_constant_buffers)
+        LOG_TRACE("   {} push constants", shaderResources.push_constant_buffers.size());
+        for (const auto &pcb : shaderResources.push_constant_buffers)
         {
             const auto &type = compiler.get_type(pcb.base_type_id);
             u32 size = static_cast<u32>(compiler.get_declared_struct_size(type));
 
-            LOG_INFO("  [PushConstant] Name: {}, Size: {}", pcb.name, size);
+            LOG_TRACE("  [PushConstant] Name: {}, Size: {}", pcb.name, size);
         }
+
+        return shaderResources;
     }
 
     Ref<Shader> Shader::Create(const std::filesystem::path &filepath, ShaderMake::ShaderType type, bool recompile)
     {
         Ref<Shader> returnShader = CreateRef<Shader>(filepath, type, recompile);
         if (returnShader->GetHandle() == nullptr)
+        {
             return nullptr;
+        }
 
         return returnShader;
     }

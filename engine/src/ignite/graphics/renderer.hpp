@@ -24,6 +24,7 @@
 #pragma once
 #include "ignite/core/types.hpp"
 #include "graphics_pipeline.hpp"
+#include "command_list.hpp"
 
 #include <nvrhi/nvrhi.h>
 #include <ShaderMake/ShaderMake.h>
@@ -33,9 +34,16 @@
 
 namespace ignite
 {
+#define RENDER_MODE_COLOR 0
+#define RENDER_MODE_DIFFUSE 1
+#define RENDER_MODE_NORMALS 2
+#define RENDER_MODE_METALLIC 3
+#define RENDER_MODE_ROUGHNESS 4
+
     class DeviceManager;
     class Texture;
     class Shader;
+	class ConstantBuffer;
 
     // vertex/pixel shader
     struct ShaderHandleContext
@@ -48,8 +56,8 @@ namespace ignite
     {
         MESH,
         MESH_ANIM, 
-        MATERIAL, 
-        ENVIRONMENT
+        MATERIAL,
+        ENVIRONMENT,
     };
 
     class ShaderLibrary
@@ -57,12 +65,11 @@ namespace ignite
     public:
         void Init(nvrhi::GraphicsAPI api);
         void Compile();
+        ShaderMake::CompileStatus CompileShaders(const std::vector<Ref<ShaderMake::ShaderContext>> &contexts);
         void Load(const std::string &name, const std::string &filepath);
         bool Exists(const std::string &name) const;
         
         std::unordered_map<nvrhi::ShaderType, ShaderHandleContext> Get(const std::string &name);
-
-        ShaderMake::Context *GetContext() const;
 
     private:
         std::unordered_map<std::string, std::unordered_map<nvrhi::ShaderType, ShaderHandleContext>> m_Shaders;
@@ -80,27 +87,31 @@ namespace ignite
         
         static Ref<Texture> GetWhiteTexture();
         static Ref<Texture> GetBlackTexture();
+        static Ref<Texture> GetMagentaTexture();
+
         static nvrhi::GraphicsAPI GetGraphicsAPI();
         static nvrhi::BindingLayoutHandle GetBindingLayout(GLayoutMap type);
 
         static void OnUpdate();
-        static void Submit(const std::function<void(nvrhi::ICommandList *)>& func);
+        static void Submit(const std::function<void(nvrhi::ICommandList *)> &func);
 
         static ShaderLibrary &GetShaderLibrary();
 
-        static nvrhi::BufferHandle GetCameraBufferHandle();
-        
+		static Ref<ConstantBuffer> GetCameraConstantBuffer();
+
     private:
         nvrhi::GraphicsAPI m_GraphicsAPI;
         ShaderLibrary m_ShaderLibrary;
 
         std::unordered_map<GLayoutMap, nvrhi::BindingLayoutHandle> m_BindingLayouts;
+        Ref<CommandList> m_CommandList;
 
         Ref<Texture> m_WhiteTexture;
         Ref<Texture> m_BlackTexture;
+        Ref<Texture> m_MagentaTexture;
 
-        nvrhi::BufferHandle m_CameraBufferHandle;
-        nvrhi::CommandListHandle m_CommandList;
+		Ref<ConstantBuffer> m_EditorCameraConstantBuffer;
+
         nvrhi::IDevice *m_Device;
         std::vector<std::function<void(nvrhi::ICommandList *)>> m_SubmitFuncs;
 

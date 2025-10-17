@@ -35,7 +35,7 @@ namespace ignite
     {
         m_Instance = scriptClass->Instantiate();
 
-        m_OnConstructor = ScriptEngine::GetEntityClass()->GetMethod(".ctor", 1);
+        m_OnConstructor = ScriptEngine::GetInstance()->GetEntityClass()->GetMethod(".ctor", 1);
         m_OnCreateMethod = scriptClass->GetMethod("OnCreate");
         m_OnUpdateMethod = scriptClass->GetMethod("OnUpdate", 1);
 

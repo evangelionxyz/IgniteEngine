@@ -1,83 +1,74 @@
 import os
 import platform
-import utils
+import sys
+import ctypes
 import subprocess
 from pathlib import Path
 
-class PermakeConfiguration:
-    premake_version = "5.0.0-beta6"
-    permake_license_url = "https://raw.githubusercontent.com/premake/premake-core/master/LICENSE.txt"
-    premake_directory = os.path.abspath("scripts/premake")
+import utils
 
-    if platform.system() == "Windows":
-        premake_archive_urls = f'https://github.com/premake/premake-core/releases/download/v{premake_version}/premake-{premake_version}-windows.zip'
-    elif platform.system() == "Linux":
-        premake_archive_urls = f"https://github.com/premake/premake-core/releases/download/v{premake_version}/premake-{premake_version}-linux.tar.gz"
+ROOT_DIR = Path(__file__).resolve().parent.parent
+SCRIPTS_DIR = ROOT_DIR / "scripts"
+DOWNLOADS_DIR = SCRIPTS_DIR / "downloads"
 
-    @classmethod
-    def validate(self):
-        if not self.is_premake_installed():
-            print("Premake is not installed. Please install it first.")
-            return False
-        return True
-    
-    @classmethod
-    def is_premake_installed(self):
-        if platform.system() == "Windows":
-            premake_exe = Path(f'{self.premake_directory}/premake5.exe')
-        elif platform.system() == "Linux":
-            premake_exe = Path(f'{self.premake_directory}/premake5')
-        
-        if not premake_exe.exists():
-            print(f"Premake executable not found at {premake_exe}. Please ensure it is installed correctly.")
-            return self.install_premake()
-        
-        return True
-    
-    @classmethod
-    def install_premake(self):
-        permission_granted = False
+def ensure_admin():
+    if os.name != "nt":
+        return
 
-        while not permission_granted:
-            reply = str(input("Premake is not installed. Do you want to install it? (y/n): ")).strip().lower()
-            if reply in ['y', 'yes']:
-                permission_granted = True
-                print("Installing Premake...")
-            elif reply in ['n', 'no']:
-                print("Premake installation cancelled.")
-                return False
-            
-        if platform.system() == "Windows":
-            premake_path = f'{self.premake_directory}/premake-{self.premake_version}-windows.zip'
-        elif platform.system() == "Linux":
-            premake_path = f'{self.premake_directory}/premake-{self.premake_version}-linux.tar.gz'
+    try:
+        is_admin = ctypes.windll.shell32.IsUserAnAdmin()
+    except AttributeError:
+        return
 
-        if not os.path.exists(premake_path):
-            print("Downloading premake5 to {0:s}".format(premake_path))
-            utils.download_file(self.premake_archive_urls, premake_path)
+    if not is_admin:
+        script = os.path.abspath(sys.argv[0])
+        params = " ".join([f'"{arg}"' for arg in sys.argv[1:]])
+        ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, f'"{script}" {params}'.strip(), None, 1)
+        sys.exit()
 
-            premake_license_path = f'{self.premake_directory}/LICENSE.txt'
-            print("Downloading Premake license to {0:s}".format(premake_license_path))
-            utils.download_file(self.permake_license_url, premake_license_path)
+def run():
+    ensure_admin()
 
-        print(f"Extracting Premake: {premake_path} to {self.premake_directory}")
-        utils.extract_archive(premake_path, delete_after_extraction=True)
-        
-        return True
+    system_name = platform.system()
+    premake_version = "5.0.0-beta7"
+    premake_link_windows = f"https://github.com/premake/premake-core/releases/download/v{premake_version}/premake-{premake_version}-windows.zip"
+    premake_link_linux = f"https://github.com/premake/premake-core/releases/download/v{premake_version}/premake-{premake_version}-linux.tar.gz"
+    premake_archive_path = DOWNLOADS_DIR / ("premake.zip" if system_name == "Windows" else "premake.tar.gz")
+    premake_download_url = premake_link_windows if system_name == "Windows" else premake_link_linux
 
+    vulkan_version = "1.4.328.1"
+    vulkan_sdk_link_windows = f"https://sdk.lunarg.com/sdk/download/{vulkan_version}/windows/vulkansdk-windows-X64-{vulkan_version}.exe"
+    vulkan_executable_path = DOWNLOADS_DIR / f"vulkansdk-{vulkan_version}.exe"
+
+    # check vulkan sdk
+    if system_name == "Windows":
+        if utils.get_env_variable("VULKAN_SDK") is None:
+            if not vulkan_executable_path.exists():
+                utils.download_file(vulkan_sdk_link_windows, str(vulkan_executable_path))
+
+            subprocess.call([str(vulkan_executable_path)])
+            print("Re-run this script after installing Vulkan SDK")
+        else:
+            print("Vulkan SDK Installed")
+
+    # download premake and extract
+    print("Running premake5...")
+    premake_binary = DOWNLOADS_DIR / ("premake5.exe" if system_name == "Windows" else "premake5")
+    if not premake_binary.exists():
+        if not premake_archive_path.exists():
+            utils.download_file(premake_download_url, str(premake_archive_path))
+        utils.extract_archive(str(premake_archive_path), delete_after_extraction=True)
+
+    if not premake_binary.exists():
+        raise FileNotFoundError(f"Premake executable not found at {premake_binary}")
+
+    premake_args = [str(premake_binary), "--file=scripts/premake5.lua"]
+    if system_name == "Windows":
+        premake_args.append("vs2022")
+    else:
+        premake_args.append("gmake2")
+
+    subprocess.call(premake_args, cwd=ROOT_DIR)
 
 if __name__ == "__main__":
-    premake_config = PermakeConfiguration()
-
-    print("Setting up Premake...")
-    if not premake_config.validate():
-        print("Premake validation failed. Exiting setup.")
-        exit(1)
-
-    print("Premake is installed and validated successfully.")
-
-    premake_path = f"{premake_config.premake_directory}/premake5"
-    arguments = ["vs2022", "--file=premake5.lua"] if platform.system() == "Windows" else ["gmake2", "--file=premake5.lua"]
-
-    # Execute premake5 with arguments
-    subprocess.run([premake_path] + arguments)
+    run()

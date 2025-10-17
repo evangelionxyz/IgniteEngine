@@ -23,57 +23,25 @@
 
 #pragma once
 
-#include "environment.hpp"
+#include "ignite/graphics/objects/environment.hpp"
+#include "ignite/graphics/objects/model.hpp"
+#include "edge_detection.hpp"
 #include "graphics_pipeline.hpp"
 #include "render_target.hpp"
 #include "ignite/scene/entity.hpp"
-
-#include "imgui.h"
+#include "command_list.hpp"
 
 #include <nvrhi/nvrhi.h>
-#include <nvrhi/utils.h>
 
 namespace ignite
 {
     class Scene;
     class ICamera;
     class RenderTarget;
+    class UIRenderer;
+    class Renderer2D;
+    class Mesh;
 
-    struct EdgeDetectionParams
-    {
-        glm::vec2 texelSize;
-        float edgeThreshold = 0.1f;
-        float outlineWidth = 2.0f;
-        glm::vec4 outlineColor = glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
-        float depthSensitivity = 100.0f;
-        int useObjectID = 1;
-        uint32_t selectedCount = 0;
-        uint32_t _padding;
-    };
-
-    struct SobelEdgeDetection
-    {
-        nvrhi::ShaderHandle computeShader;
-        nvrhi::ComputePipelineHandle computePipeline;
-
-        // Resources
-        nvrhi::BufferHandle constantBuffer;
-        nvrhi::BufferHandle selectedIDBuffer;
-        nvrhi::BindingLayoutHandle bindingLayout;
-        nvrhi::BindingSetHandle bindingSet;
-        nvrhi::SamplerHandle linearSampler;
-
-        // Textures
-        nvrhi::TextureHandle outputTexture;
-
-        void Initialize();
-        void CreateShaders();
-        void CreateOutputTexture(uint32_t width, uint32_t height);
-        void CreatePipeline();
-        void UpdateBindingSet(const nvrhi::TextureHandle& sceneTexture, const nvrhi::TextureHandle& depthTexture, const nvrhi::TextureHandle& objectIDTexture);
-        void ExecuteCompute(nvrhi::ICommandList *commandList, const EdgeDetectionParams &params, uint32_t width, uint32_t height);
-    };
-        
     class SceneRenderer
     {
     public:
@@ -81,45 +49,40 @@ namespace ignite
         ~SceneRenderer();
         
         void Create();
-        void SetActiveScene(Scene *scene);
-        bool ShouldResize() const;
-        void Resize(uint32_t width, uint32_t height);
-        void CreatePipelines() const;
-        void Render(const ICamera *camera, bool renderEnvironment = true);
-        void SetFillMode(nvrhi::RasterFillMode mode) const;
+        void SetActiveScene(const Ref<Scene> &scene);
+        void RenderTo(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT, bool renderEnvironment = true);
+        void SetFillMode(nvrhi::RasterFillMode mode);
 
         void SetSelectedEntity(const Entity& entity);
         void UnselectEntity(const Entity& entity);
         void ClearSelectedEntities();
 
-        void OnGuiRender();
+        // UI Input handling
+        void UpdateUIInput(const glm::vec2& viewportMousePos, const glm::vec2& viewportPos, const glm::vec2& viewportSize, bool mousePressed);
 
         static SceneRenderer *GetActive();
 
-        Ref<GraphicsPipeline> &GetEnvironmentPipeline() { return m_EnvironmentPipeline; }
-        Ref<GraphicsPipeline> &GetGeometryAnimPipeline() { return m_GeometryAnimPipeline; }
-        
         Ref<Environment> &GetEnvironment() { return m_Environment; }
-        Ref<RenderTarget> &GetRenderTarget() { return m_RenderTarget; }
-        SobelEdgeDetection &GetEdgeDetection() { return m_EdgeDetection; }
-
+        Ref<UIRenderer> &GetUIRenderer() { return m_UIRenderer; }
 
     private:
-        void CreateEnvironment();
+        void CreateDemoUI();
 
         Ref<Environment> m_Environment;
-        Ref<GraphicsPipeline> m_EnvironmentPipeline;
-        Ref<GraphicsPipeline> m_GeometryAnimPipeline;
-        Ref<RenderTarget> m_RenderTarget;
+        Ref<CommandList> m_CommandList;
+
+        // Composite
+        Ref<VertexBuffer> m_CompositeVertexBuffer;
+
+        Ref<Renderer2D> m_Renderer2D;
+        Ref<UIRenderer> m_UIRenderer;
 
         std::vector<uint32_t> m_SelectedEntities;
+        std::vector<AABB> m_EntityBounds;
+        
+        nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
 
-        EdgeDetectionParams m_EdgeDetectionParams;
-        SobelEdgeDetection m_EdgeDetection;
-
-        nvrhi::CommandListHandle m_CommandList;
         nvrhi::IDevice *m_Device = nullptr;
-
-        Scene *m_Scene = nullptr;
+        Ref<Scene> m_Scene;
     };
 }

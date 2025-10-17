@@ -21,14 +21,14 @@
 * SOFTWARE.
 */
 
- #include "scene.hpp"
+#include "scene.hpp"
 #include <entt/entt.hpp>
 
 #include "ignite/audio/fmod_sound.hpp"
 
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/renderer_2d.hpp"
-#include "ignite/graphics/environment.hpp"
+#include "ignite/graphics/objects/environment.hpp"
 #include "ignite/physics/2d/physics_2d.hpp"
 #include "ignite/physics/jolt/jolt_physics.hpp"
 #include "ignite/math/math.hpp"
@@ -47,13 +47,14 @@
 
 namespace ignite
 {
-    Scene::Scene(const std::string &_name)
-        : name(_name)
+    Scene::Scene(Project *project, const std::string &_name)
+        : m_Project(project), name(_name)
     {
         registry = new entt::registry();
-
         physics2D = CreateScope<Physics2D>(this);
         physics = CreateScope<JoltScene>(this);
+
+        m_ConstantBuffer = ConstantBuffer::Create(sizeof(SceneParameters), false, 1, "[SceneParameters]");
     }
 
     Scene::~Scene()
@@ -66,7 +67,7 @@ namespace ignite
     {
         m_Playing = true;
 
-        ScriptEngine::SetSceneContext(this);
+        ScriptEngine::GetInstance()->SetSceneContext(this);
 
         // reset time
         timeInSeconds = 0.0f;
@@ -76,8 +77,8 @@ namespace ignite
         for (entt::entity entity : camView)
         {
             Camera &cam = camView.get<Camera>(entity);
-            cam.camera.SetSize(static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
-            cam.camera.UpdateProjectionMatrix();
+			const float aspectRatio = static_cast<float>(viewportWidth) / static_cast<float>(viewportHeight);
+			cam.camera.UpdateMatrices(aspectRatio);
         }
 
         // play on start audio
@@ -87,7 +88,7 @@ namespace ignite
             AudioSource &as = audioView.get<AudioSource>(e);
             if (as.playOnStart)
             {
-                Ref<FmodSound> sound = Project::GetAsset<FmodSound>(as.handle);
+                Ref<FmodSound> sound = m_Project->GetAsset<FmodSound>(as.handle);
                 if (sound)
                 {
                     sound->Play();
@@ -101,7 +102,7 @@ namespace ignite
         registry->view<Script>().each([this](entt::entity e, Script &script)
         {
             Entity entity{ e, this };
-            ScriptEngine::OnCreateEntity(entity);
+            ScriptEngine::GetInstance()->OnCreateEntity(entity);
         });
 
         physics2D->SimulationStart();
@@ -119,14 +120,14 @@ namespace ignite
         for (entt::entity e : audioView)
         {
             AudioSource &as = audioView.get<AudioSource>(e);
-            Ref<FmodSound> sound = Project::GetAsset<FmodSound>(as.handle);
+            Ref<FmodSound> sound = m_Project->GetAsset<FmodSound>(as.handle);
             if (sound)
             {
                 sound->Stop();
             }
         }
 
-        ScriptEngine::ClearSceneContext();
+        ScriptEngine::GetInstance()->ClearSceneContext();
         
         physics2D->SimulationStop();
         physics->SimulationStop();
@@ -135,16 +136,33 @@ namespace ignite
     void Scene::UpdateTransforms(float deltaTime)
     {
 #if 0
-        auto skinnedMeshView = registry->view<SkeletalMesh>();
-        for (auto entity : skinnedMeshView)
+        auto skeletalMeshView = registry->view<SkeletalMesh>();
+        for (auto entity : skeletalMeshView)
         {
-            SkeletalMesh &skinnedMesh = skinnedMeshView.get<SkeletalMesh>(entity);
-            if (!skinnedMesh.animations.empty() && skinnedMesh.animations[skinnedMesh.activeAnimIndex].isPlaying)
+            SkeletalMesh &sm = skeletalMeshView.get<SkeletalMesh>(entity);
+            Ref<Skeleton> skeleton = m_Project->GetAsset<Skeleton>(sm.skeletonHandle);
+            Ref<SkeletalAnimation> anim = m_Project->GetAsset<SkeletalAnimation>(sm.activeAnimationHandle);
+
+            if (skeleton && anim && anim->isPlaying)
             {
-                if (AnimationSystem::UpdateSkeleton(skinnedMesh.skeleton, skinnedMesh.animations[skinnedMesh.activeAnimIndex], timeInSeconds))
+                if (AnimationSystem::UpdateSkeleton(skeleton, anim, timeInSeconds))
                 {
-                    AnimationSystem::ApplySkeletonToEntities(this, skinnedMesh.skeleton);
-                    skinnedMesh.boneTransforms = AnimationSystem::GetFinalJointTransforms(skinnedMesh.skeleton);
+                    AnimationSystem::ApplySkeletonToEntities(this, skeleton);
+                    sm.boneTransforms = AnimationSystem::GetFinalJointTransforms(skeleton);
+                }
+            }
+            
+            const size_t numBones = std::min(sm.boneTransforms.size(), static_cast<size_t>(MAX_BONES));
+            for (auto &mesh : sm.meshes)
+            {
+                for (size_t i = 0; i < numBones; ++i)
+                {
+                    mesh->skinBuffer.boneTransforms[i] = sm.boneTransforms[i];
+                }
+
+                for (size_t i = numBones; i < MAX_BONES; ++i)
+                {
+                    mesh->skinBuffer.boneTransforms[i] = glm::mat4(1.0f);
                 }
             }
         }
@@ -183,53 +201,12 @@ namespace ignite
             Camera &cam = entity.GetComponent<Camera>();
             if (cam.primary)
             {
-                cam.camera.viewMatrix = glm::translate(glm::mat4(1.0f), transform.translation) * glm::toMat4(transform.rotation);
-                cam.camera.viewMatrix = glm::inverse(cam.camera.viewMatrix);
                 cam.camera.position = transform.translation;
+                cam.camera.view = glm::translate(glm::mat4(1.0f), transform.translation) * glm::toMat4(transform.rotation);
+                cam.camera.view = glm::inverse(cam.camera.view);
             }
         }
         
-        // Special logic for MeshRenderer (e.g., skeletal animation)
-        if (entity.HasComponent<MeshRenderer>())
-        {
-            MeshRenderer &meshRenderer = entity.GetComponent<MeshRenderer>();
-
-            meshRenderer.transformData.transformation = worldMatrix;
-            glm::decompose(meshRenderer.transformData.transformation, transform.scale, transform.rotation, transform.translation, skew, perspective);
-
-            glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(meshRenderer.transformData.transformation)));
-            meshRenderer.transformData.normal = glm::mat4(normalMat3);
-            if (meshRenderer.root != UUID(0))
-            {
-                Entity rootNodeEntity = SceneManager::GetEntity(this, meshRenderer.root);
-                
-                if (!rootNodeEntity.IsValid())
-                {
-                    meshRenderer.root = UUID(0);
-                }
-
-                SkeletalMesh &skinnedMesh = rootNodeEntity.GetComponent<SkeletalMesh>();
-                
-                const size_t numBones = std::min(skinnedMesh.boneTransforms.size(), static_cast<size_t>(MAX_BONES));
-                for (size_t i = 0; i < numBones; ++i)
-                {
-                    meshRenderer.transformData.boneTransforms[i] = skinnedMesh.boneTransforms[i];
-                }
-                
-                for (size_t i = numBones; i < MAX_BONES; ++i)
-                {
-                    meshRenderer.transformData.boneTransforms[i] = glm::mat4(1.0f);
-                }
-            }
-            else
-            {
-                for (size_t i = 0; i < MAX_BONES; ++i)
-                {
-                    meshRenderer.transformData.boneTransforms[i] = glm::mat4(1.0f);
-                }
-            }
-        }
-
         transform.dirty = false;
 
         for (const UUID &childUUID : id.children)
@@ -248,15 +225,21 @@ namespace ignite
 
     void Scene::Resize(uint32_t width, uint32_t height)
     {
-        this->viewportWidth = width; this->viewportHeight = height;
+        this->viewportWidth = width;
+        this->viewportHeight = height;
         
         auto camView = registry->view<Camera>();
         for (entt::entity entity : camView)
         {
             Camera &cam = camView.get<Camera>(entity);
-            cam.camera.SetSize(static_cast<float>(width), static_cast<float>(height));
-            cam.camera.UpdateProjectionMatrix();
+			const float aspectRatio = static_cast<float>(viewportWidth) / static_cast<float>(viewportHeight);
+			cam.camera.UpdateMatrices(aspectRatio);
         }
+    }
+
+    void Scene::WriteBuffer(nvrhi::ICommandList* cmd)
+    {
+        m_ConstantBuffer->SetData(cmd, Buffer((void*)&this->params, sizeof(SceneParameters)));
     }
 
     Entity Scene::GetPrimaryCamera()
@@ -279,7 +262,7 @@ namespace ignite
         registry->view<Script>().each([this, deltaTime](entt::entity e, Script &sc)
         {
             Entity entity{ e, this };
-            ScriptEngine::OnUpdateEntity(entity, deltaTime);
+            ScriptEngine::GetInstance()->OnUpdateEntity(entity, deltaTime);
         });
 
         UpdateTransforms(deltaTime);
@@ -288,9 +271,9 @@ namespace ignite
         physics->Simulate(deltaTime);
     }
 
-    Ref<Scene> Scene::Create(const std::string &name)
+    Ref<Scene> Scene::Create(Project *project, const std::string &name)
     {
-        return CreateRef<Scene>(name);
+        return CreateRef<Scene>(project, name);
     }
 
     template<typename T>
@@ -315,11 +298,6 @@ namespace ignite
 
     template<>
     void Scene::OnComponentAdded<SkeletalMesh>(Entity entity, SkeletalMesh &comp)
-    {
-    }
-
-    template<>
-    void Scene::OnComponentAdded<MeshRenderer>(Entity entity, MeshRenderer &comp)
     {
     }
 
@@ -349,6 +327,16 @@ namespace ignite
     }
 
     template<>
+    void Scene::OnComponentAdded<CapsuleCollider>(Entity entity, CapsuleCollider &comp)
+    {
+    }
+
+    template<>
+    void Scene::OnComponentAdded<MeshCollider>(Entity entity, MeshCollider &comp)
+    {
+    }
+
+    template<>
     void Scene::OnComponentAdded<AudioSource>(Entity entity, AudioSource &comp)
     {
     }
@@ -359,21 +347,17 @@ namespace ignite
     }
 
     template<>
+    void Scene::OnComponentAdded<WorldEnvironment>(Entity entity, WorldEnvironment &comp)
+    {
+    }
+
+    template<>
+    void Scene::OnComponentAdded<MeshComponent>(Entity entity, MeshComponent& comp)
+    {
+    }
+
+    template<>
     void Scene::OnComponentAdded<Camera>(Entity entity, Camera &comp)
     {
-        comp.camera.projectionType = comp.projectionType;
-        switch (comp.projectionType)
-        {
-            case ICamera::Type::Perspective:
-            {
-                comp.camera.CreatePerspective(comp.fov, static_cast<float>(viewportWidth), static_cast<float>(viewportHeight), comp.nearClip, comp.farClip);
-                break;
-            }
-            case ICamera::Type::Orthographic:
-            {
-                comp.camera.CreateOrthographic(static_cast<float>(viewportWidth), static_cast<float>(viewportHeight), comp.zoom, comp.nearClip, comp.farClip);
-                break;
-            }
-        }
     }
 }

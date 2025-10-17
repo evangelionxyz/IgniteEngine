@@ -31,8 +31,6 @@
 #include "ignite/core/string_utils.hpp"
 #include "ignite/core/platform_utils.hpp"
 
-#include "FileWatch.hpp"
-
 #include <mono/jit/jit.h>
 #include <mono/metadata/assembly.h>
 #include <mono/metadata/object.h>
@@ -149,6 +147,11 @@ namespace ignite
         }
     }
 
+    struct ScriptData
+    {
+
+    };
+
     struct ScriptEngineData
     {
         MonoDomain *rootDomain = nullptr;
@@ -171,13 +174,13 @@ namespace ignite
         std::unique_ptr<filewatch::FileWatch<std::string>> appAssemblyFileWatcher;
         bool assemblyReloadingPending = false;
 
-        Scene *scene = nullptr;
-        std::unordered_map<std::string, std::shared_ptr<ScriptClass>> entityClasses;
-        std::unordered_map<UUID, std::shared_ptr<ScriptInstance>> entityInstances;
+        std::unordered_map<std::string, Ref<ScriptClass>> entityClasses;
+        std::unordered_map<UUID, Ref<ScriptInstance>> entityInstances;
         std::unordered_map<UUID, ScriptFieldMap> entityScriptFields;
     };
 
     ScriptEngineData *scriptEngineData = nullptr;
+    ScriptEngine *scriptEngine = nullptr;
 
     void ScriptEngine::InitMono()
     {
@@ -196,7 +199,6 @@ namespace ignite
 
         const char *mono_version = mono_get_runtime_build_info();
         LOG_WARN("[Script Engine] MONO Version: {}", mono_version);
-
     }
 
     void ScriptEngine::ShutdownMono()
@@ -218,9 +220,12 @@ namespace ignite
         LOG_WARN("[Script Engine] Mono Shutdown");
     }
 
-    void ScriptEngine::Init()
+    ScriptEngine::ScriptEngine(Project *project)
+        : m_Project(project)
     {
-        const auto appAssemblyPath = Project::GetActive()->GetDirectory() / Project::GetActive()->GetInfo().scriptModuleFilepath;
+        scriptEngine = this;
+
+        const auto appAssemblyPath = m_Project->GetDirectory() / m_Project->GetInfo().scriptModuleFilepath;
 
         if (scriptEngineData)
         {
@@ -234,7 +239,7 @@ namespace ignite
         InitMono();
 
         // Script Core Assembly
-        const std::filesystem::path coreAssemblyPath = "lib/IgniteScript.dll";
+        const std::filesystem::path coreAssemblyPath = m_Project->GetDirectory() / "bin/IgniteScript.dll";
         LOG_ASSERT(std::filesystem::exists(coreAssemblyPath), "[Script Engine] Script core assembly not found!");
         LoadAssembly(coreAssemblyPath);
 
@@ -251,7 +256,7 @@ namespace ignite
         LOG_WARN("[Script Engine] Initialized");
     }
 
-    void ScriptEngine::Shutdown()
+    ScriptEngine::~ScriptEngine()
     {
         ShutdownMono();
 
@@ -301,7 +306,7 @@ namespace ignite
         return true;
     }
 
-    static void OnAppAssemblyFileSystemEvent(const std::string &path, const filewatch::Event eventType)
+    void ScriptEngine::OnAppAssemblyFileSystemEvent(const std::string &path, const filewatch::Event eventType)
     {
         if (!scriptEngineData->assemblyReloadingPending && eventType == filewatch::Event::modified)
         {
@@ -309,11 +314,11 @@ namespace ignite
 
             Application::SubmitToMainThread([&]()
             {
-                if (scriptEngineData->scene && scriptEngineData->scene->IsPlaying())
+                if (scriptEngine->m_Scene && scriptEngine->m_Scene->IsPlaying())
                     return false;
                 
                 scriptEngineData->appAssemblyFileWatcher.reset();
-                ScriptEngine::ReloadAssembly();
+                scriptEngine->ReloadAssembly();
 
                 return true;
             });
@@ -324,7 +329,7 @@ namespace ignite
     {
         if (!exists(filepath))
         {
-            if (!Project::GetActive()->BuildSolution())
+            if (!m_Project->BuildSolution())
             {
                 return false;
             }
@@ -339,7 +344,7 @@ namespace ignite
         }
 
         scriptEngineData->appAssemblyImage = mono_assembly_get_image(scriptEngineData->appAssembly);
-        scriptEngineData->appAssemblyFileWatcher = std::make_unique<filewatch::FileWatch<std::string>>(filepath.string(), OnAppAssemblyFileSystemEvent);
+        scriptEngineData->appAssemblyFileWatcher = CreateScope<filewatch::FileWatch<std::string>>(filepath.string(), ScriptEngine::OnAppAssemblyFileSystemEvent);
         scriptEngineData->assemblyReloadingPending = false;
 
         return true;
@@ -370,12 +375,12 @@ namespace ignite
 
     void ScriptEngine::SetSceneContext(Scene *scene)
     {
-        scriptEngineData->scene = scene;
+        m_Scene = scene;
     }
 
     void ScriptEngine::ClearSceneContext()
     {
-        scriptEngineData->scene = nullptr;
+        m_Scene = nullptr;
         scriptEngineData->entityInstances.clear();
     }
 
@@ -518,7 +523,7 @@ namespace ignite
         return &scriptEngineData->entityClass;
     }
 
-    std::shared_ptr<ScriptClass> ScriptEngine::GetEntityClassesByName(const std::string &name)
+    Ref<ScriptClass> ScriptEngine::GetEntityClassesByName(const std::string &name)
     {
         if (!scriptEngineData)
             return nullptr;
@@ -529,7 +534,7 @@ namespace ignite
         return scriptEngineData->entityClasses.at(name);
     }
 
-    std::unordered_map<std::string, std::shared_ptr<ScriptClass>> ScriptEngine::GetEntityClasses()
+    std::unordered_map<std::string, Ref<ScriptClass>> ScriptEngine::GetEntityClasses()
     {
         return scriptEngineData->entityClasses;
     }
@@ -547,7 +552,7 @@ namespace ignite
         return scriptEngineData->entityScriptStorage;
     }
 
-    std::shared_ptr<ScriptInstance> ScriptEngine::GetEntityScriptInstance(UUID uuid)
+    Ref<ScriptInstance> ScriptEngine::GetEntityScriptInstance(UUID uuid)
     {
         const auto &it = scriptEngineData->entityInstances.find(uuid);
         if (it == scriptEngineData->entityInstances.end())
@@ -561,7 +566,7 @@ namespace ignite
 
     Scene *ScriptEngine::GetSceneContext()
     {
-        return scriptEngineData->scene;
+        return m_Scene;
     }
 
     MonoImage *ScriptEngine::GetCoreAssemblyImage()
@@ -582,6 +587,11 @@ namespace ignite
         }
 
         return scriptEngineData->entityInstances.at(uuid)->GetMonoObject();
+    }
+
+    ScriptEngine *ScriptEngine::GetInstance()
+    {
+        return scriptEngine;
     }
 
     MonoObject *ScriptEngine::InstantiateObject(MonoClass *monoClass)

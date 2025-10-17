@@ -23,6 +23,7 @@
 
 #include "asset_manager.hpp"
 #include "asset_importer.hpp"
+#include "ignite/project/project.hpp"
 
 #include "ignite/core/logger.hpp"
 #include <cstdint>
@@ -30,6 +31,36 @@
 namespace ignite {
 
     static AssetMetaData s_NullMetaData;
+    static Project *s_Project = nullptr;
+
+    AssetManager::AssetManager(Project *project)
+        : m_Running(true)
+    {
+        s_Project = project;
+
+        const uint32_t THREAD_COUNT = std::max(std::thread::hardware_concurrency() / 2u, 1u);
+        LOG_WARN("[Asset Manager] Creating {} worker threads!", THREAD_COUNT);
+
+        for (uint32_t i = 0; i < THREAD_COUNT; ++i)
+        {
+            m_Workers.emplace_back(&AssetManager::WorkerLoop, this);
+        }
+    }
+
+    AssetManager::~AssetManager()
+    {
+        {
+            std::unique_lock lock(m_Mutex);
+            m_Running = false;
+        }
+
+        // Notify other threads
+        m_ConditionVariable.notify_all();
+        for (std::thread &worker : m_Workers)
+        {
+            worker.join();
+        }
+    }
 
     AssetHandle AssetManager::ImportAsset(const std::filesystem::path &filepath)
     {
@@ -114,6 +145,16 @@ namespace ignite {
             m_AssetRegistry.erase(it);
     }
 
+    void AssetManager::SubmitJob(AssetJob job)
+    {
+        {
+            std::unique_lock lock(m_Mutex);
+            m_Jobs.push(std::move(job));
+        }
+
+        m_ConditionVariable.notify_one();
+    }
+
     Ref<Asset> AssetManager::GetAsset(AssetHandle handle)
     {
         if (!IsAssetHandleValid(handle))
@@ -161,6 +202,7 @@ namespace ignite {
             if (metadata.filepath == filepath)
                 return handle;
         }
+
         return AssetHandle(0);
     }
 
@@ -172,6 +214,36 @@ namespace ignite {
     bool AssetManager::IsAssetHandleValid(AssetHandle handle) const
     {
         return static_cast<uint64_t>(handle) != 0 && m_AssetRegistry.contains(handle);
+    }
+
+    Project *AssetManager::GetProject()
+    {
+        return s_Project;
+    }
+
+    void AssetManager::WorkerLoop()
+    {
+        while (true)
+        {
+            AssetJob job;
+            
+            {
+                std::unique_lock lock(m_Mutex);
+                m_ConditionVariable.wait(lock, [this]() { 
+                    return !m_Running || !m_Jobs.empty(); 
+                });
+
+                // stop the loop if engine is shutting down
+                if (!m_Running && m_Jobs.empty())
+                    return;
+
+                job = std::move(m_Jobs.front());
+                m_Jobs.pop();
+            }
+
+            // Execute job
+            job();
+        }
     }
 
     Ref<Asset> AssetManager::Import(AssetHandle handle, const AssetMetaData &metadata)
@@ -190,17 +262,41 @@ namespace ignite {
             return nullptr;
         }
 
+        case AssetType::Material:
         case AssetType::MeshSource:
         case AssetType::Skeleton:
         case AssetType::Scene:
         case AssetType::Texture:
-        case AssetType::Audio:
         {
             asset = AssetImporter::Import(handle, metadata);
             m_LoadedAssets[handle] = asset;
+            asset->SetReadyFlag(true);
+
+            if (asset && metadata.type == AssetType::Material)
+            {
+                Ref<Material> materialAsset = asset->As<Material>();
+                if (materialAsset)
+                {
+                    auto &materialManager = s_Project->GetMaterialManager();
+                    materialManager.AddMaterial(materialAsset->name, materialAsset);
+                }
+            }
+            break;
+        }
+        case AssetType::Audio:
+        {
+            m_LoadedAssets[handle] = asset;
+
+            AssetImporter::ImportAsync(handle, metadata, [&](Ref<Asset> assetResult, AssetHandle assetHandle)
+            {
+                assetResult->SetReadyFlag(true);
+                m_LoadedAssets[assetHandle] = assetResult;
+            });
+
             break;
         }
         }
+
         return asset;
     }
 

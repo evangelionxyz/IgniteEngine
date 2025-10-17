@@ -22,11 +22,12 @@
 */
 
 #include "scene_renderer.hpp"
+#include "framebuffer_key.hpp"
 
-#include "mesh.hpp"
 #include "renderer.hpp"
 #include "renderer_2d.hpp"
-#include "environment.hpp"
+#include "ui_renderer.hpp"
+#include "ui/ui_manager.hpp"
 
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/icamera.hpp"
@@ -36,146 +37,228 @@
 #include "ignite/core/application.hpp"
 
 #include <ranges>
+#include <cstdlib>
 
 #include "ignite/project/project.hpp"
 
 namespace ignite
 {
+    struct CompositeBindingKey
+    {
+        nvrhi::IBindingLayout *layout = nullptr;
+        nvrhi::ITexture *sceneTex = nullptr;
+        nvrhi::ITexture *uiTex = nullptr;
+        bool operator==(const CompositeBindingKey &other) const noexcept
+        {
+            return layout == other.layout && sceneTex == other.sceneTex && uiTex == other.uiTex;
+        }
+    };
+
+    struct CompositeBindingKeyHash
+    {
+        size_t operator()(const CompositeBindingKey &k) const noexcept
+        {
+            size_t h = std::hash<const void *>{}(k.layout);
+            h ^= (std::hash<const void *>{}(k.sceneTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
+            h ^= (std::hash<const void *>{}(k.uiTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
+            return h;
+        }
+    };
+
     static SceneRenderer *s_SceneRenderer = nullptr;
 
-    void SobelEdgeDetection::Initialize()
+    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_GeometryPSOCache;
+    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_EnvironmentPSOCache;
+    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_CompositePSOCache;
+    static std::unordered_map<CompositeBindingKey, nvrhi::BindingSetHandle, CompositeBindingKeyHash> s_CompositeBindingSetCache;
+
+    // Helper to build a geometry pipeline for a framebuffer (once) and cache it.
+    static Ref<GraphicsPipeline> GetGeomPipelineForFB(nvrhi::IFramebuffer* framebuffer, nvrhi::RasterFillMode fillMode)
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        auto key = MakeFramebufferKey(framebuffer, fillMode);
+        auto it = s_GeometryPSOCache.find(key);
+        if (it != s_GeometryPSOCache.end())
+        {
+            for (auto itErase = s_GeometryPSOCache.begin(); itErase != s_GeometryPSOCache.end();)
+            {
+                if (itErase != it)
+                {
+                    itErase = s_GeometryPSOCache.erase(itErase);
+                }
+                else
+                {
+                    ++itErase;
+                }
+            }
+            return it->second;
+        }
+
+        GraphicsPipelineParams params;
+        params.enableBlend = false;
+        params.depthWrite = true;
+        params.depthTest = true;
+        params.enableDepthStencil = false;
+        params.fillMode = fillMode;
+        params.cullMode = nvrhi::RasterCullMode::Front;
+        params.comparison = nvrhi::ComparisonFunc::LessOrEqual;
+
+        auto attributes = VertexMesh_Anim::GetAttributes();
+        GraphicsPipelineCreateInfo createInfo;
+        createInfo.attributes = attributes.data();
+        createInfo.attributeCount = static_cast<uint32_t>(attributes.size());
+
+        auto gp = GraphicsPipeline::Create();
+        gp->AddShader("mesh_anim.vertex.hlsl", nvrhi::ShaderType::Vertex, "main", true)
+          .AddShader("mesh_anim.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
+          .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
+          .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
+          .Build(framebuffer, params, createInfo);
+
+        s_GeometryPSOCache.emplace(key, gp);
+        return gp;
+    }
+
+    // Helper to build an environment pipeline per framebuffer (once)
+    static Ref<GraphicsPipeline> GetEnvPipelineForFB(nvrhi::IFramebuffer* framebuffer, nvrhi::RasterFillMode fillMode)
+    {
+        auto key = MakeFramebufferKey(framebuffer, fillMode);
+        auto it = s_EnvironmentPSOCache.find(key);
+        if (it != s_EnvironmentPSOCache.end())
+        {
+            for (auto itErase = s_EnvironmentPSOCache.begin(); itErase != s_EnvironmentPSOCache.end();)
+            {
+                if (itErase != it)
+                {
+                    itErase = s_EnvironmentPSOCache.erase(itErase);
+                }
+                else
+                {
+                    ++itErase;
+                }
+            }
+            return it->second;
+        }
+
+        GraphicsPipelineParams params;
+        params.enableBlend = true;
+        params.depthWrite = true;
+        params.depthTest = true;
+        params.enableDepthStencil = false;
+        params.fillMode = fillMode;
+        params.cullMode = nvrhi::RasterCullMode::Front;
+        params.comparison = nvrhi::ComparisonFunc::Always;
+
+        auto attribute = Environment::GetAttribute();
+        GraphicsPipelineCreateInfo createInfo;
+        createInfo.attributes = &attribute;
+        createInfo.attributeCount = 1;
+
+        auto gp = GraphicsPipeline::Create();
+        gp->AddShader("skybox.vertex.hlsl", nvrhi::ShaderType::Vertex)
+          .AddShader("skybox.pixel.hlsl", nvrhi::ShaderType::Pixel)
+          .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT))
+          .Build(framebuffer, params, createInfo);
         
-        auto bufferDesc = nvrhi::BufferDesc();
-        bufferDesc.byteSize = sizeof(EdgeDetectionParams);
-        bufferDesc.isConstantBuffer = true;
-        bufferDesc.isVolatile = true;
-        bufferDesc.debugName = "Edge detection constant buffer";
-        bufferDesc.initialState = nvrhi::ResourceStates::ConstantBuffer;
-        bufferDesc.keepInitialState = true;
-        bufferDesc.maxVersions = 16;
-        constantBuffer = device->createBuffer(bufferDesc);
+        s_EnvironmentPSOCache.emplace(key, gp);
+        return gp;
+    }
 
-        bufferDesc = nvrhi::BufferDesc();
-        bufferDesc.byteSize = sizeof(uint32_t) * 100; // allocate enough memory for selection
-        bufferDesc.structStride = sizeof(uint32_t);
-        bufferDesc.cpuAccess = nvrhi::CpuAccessMode::None;
-        bufferDesc.debugName = "Selected Object IDs";
-        bufferDesc.keepInitialState = true;
-        bufferDesc.initialState = nvrhi::ResourceStates::ShaderResource;
+    // Helper to build a composite pipeline per framebuffer (once)
+    static Ref<GraphicsPipeline> GetCompositePipelineForFB(nvrhi::IFramebuffer* framebuffer, nvrhi::RasterFillMode fillMode)
+    {
+        auto key = MakeFramebufferKey(framebuffer, fillMode);
+        auto it = s_CompositePSOCache.find(key);
+                
+        if (it != s_CompositePSOCache.end())
+        {
+            for (auto itErase = s_CompositePSOCache.begin(); itErase != s_CompositePSOCache.end();)
+            {
+                if (itErase != it)
+                {
+                    itErase = s_CompositePSOCache.erase(itErase);
+                }
+                else
+                {
+                    ++itErase;
+                }
+            }
+            return it->second;
+        }
 
-        selectedIDBuffer = device->createBuffer(bufferDesc);
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
-        // Create linear sampler
-        nvrhi::SamplerDesc samplerDesc;
-        samplerDesc.minFilter = true;
-        samplerDesc.magFilter = true;
-        samplerDesc.addressU = nvrhi::SamplerAddressMode::Clamp;
-        samplerDesc.addressV = nvrhi::SamplerAddressMode::Clamp;
-        linearSampler = device->createSampler(samplerDesc);
-
-        // Create binding layout
-        nvrhi::BindingLayoutDesc layoutDesc;
+        // Binding layout
+        nvrhi::BindingLayoutDesc layoutDesc = {};
         layoutDesc.visibility = nvrhi::ShaderType::All;
-        layoutDesc.bindings = 
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)); // scene
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)); // ui
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0)); // sampler
+        nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(layoutDesc);
+
+        GraphicsPipelineParams params;
+        params.enableBlend = false;
+        params.depthWrite = false;
+        params.depthTest = false;
+        params.enableDepthStencil = false;
+        params.fillMode = fillMode;
+        params.cullMode = nvrhi::RasterCullMode::None;
+
+        auto attributes = VertexScreen::GetAttributes();
+        GraphicsPipelineCreateInfo createInfo;
+        createInfo.attributes = attributes.data();
+        createInfo.attributeCount = static_cast<uint32_t>(attributes.size());
+
+        // Create pipeline
+        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
+        gp->AddShader("composite.vertex.hlsl", nvrhi::ShaderType::Vertex, "main", true)
+            .AddShader("composite.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
+            .AddBindingLayout(bindingLayout)
+            .Build(framebuffer, params, createInfo);
+
+        LOG_INFO("[Composite] Created new pipeline with forced shader recompilation");
+
+        s_CompositePSOCache.emplace(key, gp);
+
+        return gp;
+    }
+
+    static nvrhi::BindingSetHandle CreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, nvrhi::ITexture *sceneTexture, nvrhi::ITexture *uiTexture)
+    {
+        CompositeBindingKey key{ bindingLayout, sceneTexture, uiTexture };
+        auto it = s_CompositeBindingSetCache.find(key);
+        if (it != s_CompositeBindingSetCache.end())
         {
-            // constant buffer
-            nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
+            for (auto itErase = s_CompositeBindingSetCache.begin(); itErase != s_CompositeBindingSetCache.end();)
+            {
+                if (itErase != it)
+                {
+                    itErase = s_CompositeBindingSetCache.erase(itErase);
+                }
+                else
+                {
+                    ++itErase;
+                }
+            }
 
-            // Textures
-            nvrhi::BindingLayoutItem::Texture_SRV(0), // Scene texture
-            nvrhi::BindingLayoutItem::Texture_SRV(1), // Depth texture
-            nvrhi::BindingLayoutItem::Texture_SRV(2), // Object ID texture
-            nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3), // Object ID texture
-
-            // Sampler
-            nvrhi::BindingLayoutItem::Sampler(0),
-
-            // Output texture (for Compute)
-            nvrhi::BindingLayoutItem::Texture_UAV(0)
-        };
-
-        bindingLayout = device->createBindingLayout(layoutDesc);
-
-        CreateShaders();
-    }
-
-    void SobelEdgeDetection::CreateShaders()
-    {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-
-        ShaderMake::ShaderContextDesc desc;
-
-        Ref<ShaderMake::ShaderContext> computeContext = CreateRef<ShaderMake::ShaderContext>("sobel_edge_detection.compute.hlsl",
-            ShaderMake::ShaderType::Compute, desc, false);
-
-        Renderer::GetShaderLibrary().GetContext()->CompileShader({ computeContext });
-        computeShader = device->createShader(nvrhi::ShaderType::Compute, computeContext->blob.data.data(), computeContext->blob.dataSize());
-    }
-
-    void SobelEdgeDetection::CreateOutputTexture(const uint32_t width, const uint32_t height)
-    {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+            return it->second;
+        }
         
-        nvrhi::TextureDesc desc;
-        desc.width = width;
-        desc.height = height;
-        desc.format = nvrhi::Format::RGBA8_UNORM;
-        desc.initialState = nvrhi::ResourceStates::UnorderedAccess | nvrhi::ResourceStates::ShaderResource;
-        desc.isUAV = true;
-        desc.debugName = "SobelDetection Output Texture";
-        outputTexture = device->createTexture(desc);
-    }
-
-    void SobelEdgeDetection::CreatePipeline()
-    {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
-        // Create compute pipeline
-        nvrhi::ComputePipelineDesc computeDesc;
-        computeDesc.CS = computeShader;
-        computeDesc.bindingLayouts = { bindingLayout };
-        computePipeline = device->createComputePipeline(computeDesc);
-    }
+        // Composite Binding set
+        auto bindingSetDesc = nvrhi::BindingSetDesc();
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, sceneTexture));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, uiTexture));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, Renderer::GetWhiteTexture()->GetSampler()));
 
-    void SobelEdgeDetection::UpdateBindingSet(const nvrhi::TextureHandle& inSceneTexture, const nvrhi::TextureHandle& inDepthTexture, const nvrhi::TextureHandle& inObjectIDTexture)
-    {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-        
-        nvrhi::BindingSetDesc desc;
-        desc.bindings =
+        nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
+        LOG_ASSERT(bindingSet, "[Composite] Failed to create Composite Binding Set");
+        if (bindingSet)
         {
-            nvrhi::BindingSetItem::ConstantBuffer(0, this->constantBuffer),
+            s_CompositeBindingSetCache.emplace(key, bindingSet);
+        }
 
-            nvrhi::BindingSetItem::Texture_SRV(0, inSceneTexture),
-            nvrhi::BindingSetItem::Texture_SRV(1, inDepthTexture),
-            nvrhi::BindingSetItem::Texture_SRV(2, inObjectIDTexture),
-            nvrhi::BindingSetItem::StructuredBuffer_SRV(3, this->selectedIDBuffer),
-            nvrhi::BindingSetItem::Sampler(0, this->linearSampler),
-            nvrhi::BindingSetItem::Texture_UAV(0, outputTexture),
-        };
-
-        bindingSet = device->createBindingSet(desc, bindingLayout);
-        LOG_ASSERT(bindingSet, "[Scene renderer] Failed to create binding set");
-    }
-
-    void SobelEdgeDetection::ExecuteCompute(nvrhi::ICommandList *commandList, const EdgeDetectionParams& params,
-        const uint32_t width, const uint32_t height)
-    {
-        // Update constant buffer
-        commandList->writeBuffer(constantBuffer, &params, sizeof(params));
-
-        // Set compute pipeline
-        nvrhi::ComputeState computeState;
-        computeState.pipeline = computePipeline;
-        computeState.bindings = { bindingSet };
-        commandList->setComputeState(computeState);
-
-        // Dispatch compute shader
-        uint32_t groupsX = (width + 7) / 8; // 8x8 threads groups
-        uint32_t groupsY = (height + 7) / 8;
-        commandList->dispatch(groupsX, groupsY, 1);
+        return bindingSet;
     }
 
     SceneRenderer::SceneRenderer()
@@ -185,308 +268,302 @@ namespace ignite
 
     SceneRenderer::~SceneRenderer()
     {
+        s_GeometryPSOCache.clear();
+        s_EnvironmentPSOCache.clear();
+        s_CompositePSOCache.clear();
+        s_CompositeBindingSetCache.clear();
     }
 
     void SceneRenderer::Create()
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        m_CommandList = CommandList::Create();
 
-        GraphicsPipelineParams params;
-        params.enableBlend = true;
-        params.depthWrite = true;
-        params.depthTest = true;
-        params.enableDepthStencil = false;
-        params.fillMode = nvrhi::RasterFillMode::Solid;
-        params.cullMode = nvrhi::RasterCullMode::None;
-
-        // Geometry pipeline
+        VertexScreen vertices[]
         {
-            auto attributes = VertexMesh_Anim::GetAttributes();
-            GraphicsPiplineCreateInfo pci;
-            pci.attributes = attributes.data();
-            pci.attributeCount = static_cast<uint32_t>(attributes.size());
+            { { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+            { { -1.0f,  1.0f }, { 0.0f, 0.0f } },
+            { {  1.0f,  1.0f }, { 1.0f, 0.0f } },
 
-            m_GeometryAnimPipeline = GraphicsPipeline::Create(params, &pci);
-            m_GeometryAnimPipeline->AddShader("mesh_anim.vertex.hlsl", nvrhi::ShaderType::Vertex)
-                .AddShader("mesh_anim.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
-                .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
-                .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
-                .Build();
-        }
-
-        // Environment Pipeline
-        {
-            params.cullMode = nvrhi::RasterCullMode::Front;
-            params.comparison = nvrhi::ComparisonFunc::Always;
-
-            auto attribute = Environment::GetAttribute();
-            GraphicsPiplineCreateInfo pci;
-            pci.attributes = &attribute;
-            pci.attributeCount = 1;
-
-            m_EnvironmentPipeline = GraphicsPipeline::Create(params, &pci);
-            m_EnvironmentPipeline->AddShader("skybox.vertex.hlsl", nvrhi::ShaderType::Vertex)
-                .AddShader("skybox.pixel.hlsl", nvrhi::ShaderType::Pixel)
-                .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT))
-                .Build();
-        }
-
-        m_Device = Application::GetGraphicsDevice();
-        m_CommandList = m_Device->createCommandList();
-        
-        // Create Environment
-        CreateEnvironment();
-
-        // Create render target
-        RenderTargetCreateInfo createInfo = {};
-        createInfo.attachments = 
-        {
-            FramebufferAttachments{ nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }, // Depth
-            FramebufferAttachments{ nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget }, // Main Color
-            FramebufferAttachments{ nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget }, // Mouse picking
+            { {  1.0f,  1.0f }, { 1.0f, 0.0f } },
+            { {  1.0f, -1.0f }, { 1.0f, 1.0f } },
+            { { -1.0f, -1.0f }, { 0.0f, 1.0f } },
         };
 
-        m_RenderTarget = RenderTarget::Create(createInfo);
+        m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
+        m_CompositeVertexBuffer->SetData(Buffer(vertices, sizeof(vertices)));
 
-        CreatePipelines();
+        m_Device = Application::GetGraphicsDevice();
+        
+        m_Renderer2D = Renderer2D::Create();
+        m_UIRenderer = UIRenderer::Create(1280, 720);
+        m_UIRenderer->SetUIManager(&UIManager::GetInstance());
 
-        const uint32_t width = m_RenderTarget->GetWidth();
-        const uint32_t height = m_RenderTarget->GetHeight();
-
-        m_EdgeDetection.Initialize();
-        m_EdgeDetection.CreatePipeline();
-        m_EdgeDetection.CreateOutputTexture(width, height);
-        m_EdgeDetection.UpdateBindingSet(
-            m_RenderTarget->GetColorAttachment(0), 
-            m_RenderTarget->GetDepthAttachment(),
-            m_RenderTarget->GetColorAttachment(1));
-
-        m_SelectedEntities.reserve(100);
-
-        m_EdgeDetectionParams.texelSize.x = 1.0f / static_cast<float>(width);
-        m_EdgeDetectionParams.texelSize.y = 1.0f / static_cast<float>(height);
-
-        m_EdgeDetectionParams.edgeThreshold = 0.001f;
-        m_EdgeDetectionParams.outlineWidth = 1.0f;
-        m_EdgeDetectionParams.depthSensitivity = 1.0f;
-        m_EdgeDetectionParams.useObjectID = 1;
-        m_EdgeDetectionParams.selectedCount = static_cast<uint32_t>(m_SelectedEntities.size());
-        m_EdgeDetectionParams.outlineColor = { 1.0f, 0.75f, 0.0f, 1.0f };
+        // CreateDemoUI();
     }
 
-    void SceneRenderer::SetActiveScene(Scene* scene)
+    void SceneRenderer::SetActiveScene(const Ref<Scene> &scene)
     {
         m_Scene = scene;
+        if (m_Scene)
+        {
+            // create environment
+            m_Environment = Environment::Create(m_Scene.get());
+            m_Environment->LoadTexture("resources/hdr/klippad_sunrise_2_2k.hdr");
+            m_Environment->UpdateBindingSet();
+
+            auto commandList = m_CommandList->GetActiveHandle();
+            commandList->open();
+            m_Environment->WriteBuffer(commandList);
+            commandList->close();
+            m_Device->executeCommandList(commandList);
+        }
     }
 
-    bool SceneRenderer::ShouldResize() const
+    void SceneRenderer::RenderTo(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT, bool renderEnvironment)
     {
-        return m_RenderTarget->GetWidth() != m_Scene->viewportWidth || m_RenderTarget->GetHeight() != m_Scene->viewportHeight;
-    }
+        m_EntityBounds.clear();
 
-    void SceneRenderer::Resize(uint32_t width, uint32_t height)
-    {
-        m_RenderTarget->Resize(width, height);
-        m_Scene->Resize(width, height);
+        // Update UI system
+        m_UIRenderer->Update(0.016f); // Assuming ~60 FPS for now
 
-        m_EdgeDetection.CreateOutputTexture(width, height);
-        m_EdgeDetection.UpdateBindingSet(
-            m_RenderTarget->GetColorAttachment(0),
-            m_RenderTarget->GetDepthAttachment(),
-            m_RenderTarget->GetColorAttachment(1));
+        m_CommandList->Begin();
 
-        m_EdgeDetectionParams.texelSize.x = 1.0f / static_cast<float>(width);
-        m_EdgeDetectionParams.texelSize.y = 1.0f / static_cast<float>(height);
-    }
+        auto cmd = m_CommandList->GetActiveHandle();
 
-    void SceneRenderer::CreatePipelines() const
-    {
-        Renderer2D::CreatePipelines(m_RenderTarget->GetFramebuffer());
-        m_EnvironmentPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
-        m_GeometryAnimPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
-    }
+        m_Scene->WriteBuffer(cmd);
 
-    void SceneRenderer::Render(const ICamera *camera, bool renderEnvironment)
-    {
-        m_CommandList->open();
-        
-        CameraConstants cameraBuffer = { camera->GetViewProjectionMatrix(), glm::vec4(camera->position, 1.0f) };
-        m_CommandList->writeBuffer(Renderer::GetCameraBufferHandle(), &cameraBuffer, sizeof(cameraBuffer));
+        // setup camera constants
+        CameraBuffer cameraBuffer = { camera->projection, camera->view, glm::vec4(camera->position, 1.0f) };
+		Renderer::GetCameraConstantBuffer()->SetData(cmd, Buffer(&cameraBuffer, sizeof(CameraBuffer)));
 
-        m_RenderTarget->ClearColorAttachmentFloat(m_CommandList, 0);
-        m_RenderTarget->ClearColorAttachmentUint(m_CommandList, 1, 
-            static_cast<uint32_t>(-1));
+        // Clear Render Targets
+        // far depth = 1.0f == LessOrEqual
+        uiRT->ClearColorAttachmentFloat(cmd, 0);
+        uiRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
-        f32 farDepth = 1.0f; // LessOrEqual
-        m_CommandList->clearDepthStencilTexture(m_RenderTarget->GetDepthAttachment(), 
-            nvrhi::AllSubresources, 
-            true, // clear depth ?
-            farDepth, // depth
-            true, // clear stencil?
-            0 // stencil
-        );
+        sceneRT->ClearColorAttachmentFloat(cmd, 0);
+        sceneRT->ClearDepthAttachment(cmd, 1.0f, 0); 
 
-        nvrhi::IFramebuffer *framebuffer = m_RenderTarget->GetFramebuffer();
-        
+        compositeRT->ClearColorAttachmentFloat(cmd, 0);
+        compositeRT->ClearDepthAttachment(cmd, 1.0f, 0);
+
+        nvrhi::IFramebuffer *framebuffer = sceneRT->GetFramebuffer();
+
         if (renderEnvironment)
         {
-            if (m_Environment->isUpdatingTexture)
-            {
-                const auto &meshRendererView = m_Scene->registry->view<MeshRenderer>();
-                for (entt::entity e : meshRendererView)
-                {
-                    const MeshRenderer &mr = meshRendererView.get<MeshRenderer>(e);
-                    mr.material->UpdateBindingSet();
-                }
-
-                m_Environment->isUpdatingTexture = false;
-            }
-
-            m_Environment->Render(m_CommandList, framebuffer, m_EnvironmentPipeline);
+            Ref<GraphicsPipeline> envPSO = GetEnvPipelineForFB(framebuffer, m_FillMode);
+            m_Environment->Begin(cmd, camera, framebuffer, envPSO);
         }
-        
-        Renderer2D::Begin(m_CommandList, framebuffer);
 
-        for (entt::entity e : m_Scene->entities | std::views::values)
+        Ref<GraphicsPipeline> geomPSO = GetGeomPipelineForFB(framebuffer, m_FillMode);
+        nvrhi::GraphicsState geomGState = nvrhi::GraphicsState();
+        geomGState.pipeline = geomPSO->GetHandle();
+        geomGState.framebuffer = framebuffer;
+        geomGState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+
+        auto meshView = m_Scene->registry->view<Transform, MeshComponent>();
+
+        for (entt::entity e : meshView)
         {
-            Entity entity = { e, m_Scene };
-            auto &tr = entity.GetTransform();
+            Transform& tr = m_Scene->registry->get<Transform>(e);
+            MeshComponent& mesh = m_Scene->registry->get<MeshComponent>(e);
 
+            if (!mesh.model)
+                continue;
+
+            MeshScene &meshScene = mesh.model->GetScene();
+            for (auto &mesh : meshScene.flatMeshes)
+            {
+                SkinnedMeshBuffer smBuffer;
+                smBuffer.transformation = tr.GetLocalMatrix() * mesh->local;
+
+                const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(smBuffer.transformation)));
+                smBuffer.normal = glm::mat4(normalMat3);
+
+                std::fill(std::begin(smBuffer.boneTransforms),
+                    std::end(smBuffer.boneTransforms),
+                    glm::mat4(1.0f));
+
+                mesh->skinnedBuffer->SetData(cmd, Buffer(&smBuffer, sizeof(smBuffer)));
+
+                mesh->material->UploadToGpu(cmd);
+                
+                geomGState.bindings = { mesh->GetBindingSet(), mesh->material->GetBindingSet()};
+
+                geomGState.addVertexBuffer({ mesh->vertexBuffer->GetHandle(), 0, 0 });
+                geomGState.setIndexBuffer({ mesh->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+
+                cmd->setGraphicsState(geomGState);
+
+                nvrhi::DrawArguments args;
+                args.setVertexCount(mesh->indexBuffer->GetCount());
+                args.instanceCount = 1;
+
+                cmd->drawIndexed(args);
+            }
+        }
+        // 2D Pass
+        m_Renderer2D->Begin(cmd);
+        auto object2DView = m_Scene->registry->view<Transform, Sprite2D>();
+        for (entt::entity e : object2DView)
+        {
+            Transform &tr = m_Scene->registry->get<Transform>(e);
             if (!tr.visible)
                 continue;
 
-            if (entity.HasComponent<MeshRenderer>())
-            {
-                MeshRenderer &meshRenderer = entity.GetComponent<MeshRenderer>();
-                
-                // not loaded mesh
-                if (meshRenderer.mesh->data.meshIndex == -1)
-                    continue;
-
-                // write material constant buffer
-                meshRenderer.material->WriteBuffer(m_CommandList);
-                meshRenderer.WriteTransformBuffer(m_CommandList);
-
-                // render
-                auto state = nvrhi::GraphicsState();
-                state.pipeline = m_GeometryAnimPipeline->GetHandle();
-                state.framebuffer = framebuffer;
-                state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
-
-                state.bindings = { meshRenderer.bindingSet, meshRenderer.material->bindingSet };
-
-                state.addVertexBuffer({ meshRenderer.mesh->GetVertexBuffer()->GetHandle(), 0, 0});
-                state.setIndexBuffer({ meshRenderer.mesh->GetIndexBuffer()->GetHandle(), nvrhi::Format::R32_UINT});
-
-                m_CommandList->setGraphicsState(state);
-
-                nvrhi::DrawArguments args;
-                args.setVertexCount(static_cast<uint32_t>(meshRenderer.mesh->data.indices.size()));
-                args.instanceCount = 1;
-
-                m_CommandList->drawIndexed(args);
-            }
-
-            if (entity.HasComponent<Sprite2D>())
-            {
-                Sprite2D &sprite = entity.GetComponent<Sprite2D>();
-                Ref<Texture> texture = Project::GetAsset<Texture>(sprite.handle);
-                Renderer2D::DrawQuad(tr.GetWorldMatrix(), sprite.color, texture, sprite.tilingFactor, static_cast<u32>(e));
-            }
+            Sprite2D &sprite = m_Scene->registry->get<Sprite2D>(e);
+            Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(sprite.handle);
+            m_Renderer2D->DrawQuad(tr.GetWorldMatrix(), sprite.color, texture, sprite.tilingFactor);
         }
 
-        Renderer2D::Flush();
-        Renderer2D::End();
-
-        m_EdgeDetectionParams.useObjectID = 1;
-        m_EdgeDetectionParams.selectedCount = static_cast<uint32_t>(m_SelectedEntities.size());
-
-        if (!m_SelectedEntities.empty())
+        for (auto &aabb : m_EntityBounds)
         {
-            m_CommandList->writeBuffer(m_EdgeDetection.selectedIDBuffer, m_SelectedEntities.data(), m_SelectedEntities.size() * sizeof(uint32_t));
+            m_Renderer2D->DrawAABB(aabb, { 1.0f, 0.0f, 0.0f, 1.0f });
         }
 
-        const uint32_t width = m_RenderTarget->GetWidth();
-        const uint32_t height = m_RenderTarget->GetHeight();
-        m_EdgeDetection.ExecuteCompute(m_CommandList, m_EdgeDetectionParams, width, height);
+        m_Renderer2D->Flush(framebuffer);
+        m_Renderer2D->End();
 
-        m_CommandList->close();
-        m_Device->executeCommandList(m_CommandList);
+        // UI Pass
+        m_UIRenderer->Render(cmd, uiRT->GetFramebuffer());
+
+        // Composite Pass
+        {
+            nvrhi::IFramebuffer *compositeFramebuffer = compositeRT->GetFramebuffer();
+
+            Ref<GraphicsPipeline> compositePipeline = GetCompositePipelineForFB(compositeFramebuffer, nvrhi::RasterFillMode::Solid);
+            nvrhi::BindingSetHandle bindingSet = CreateCompositeBindingSet(compositePipeline->GetBindingLayout(0), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
+
+            auto graphicsState = nvrhi::GraphicsState();
+            graphicsState.pipeline = compositePipeline->GetHandle();
+            graphicsState.framebuffer = compositeFramebuffer;
+            graphicsState.vertexBuffers = { nvrhi::VertexBufferBinding { m_CompositeVertexBuffer->GetHandle(), 0, 0 } };
+            graphicsState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(compositeFramebuffer->getFramebufferInfo().getViewport());
+            graphicsState.bindings = { bindingSet };
+            cmd->setGraphicsState(graphicsState);
+    
+            auto args = nvrhi::DrawArguments();
+            args.instanceCount = 1;
+            args.vertexCount = 6;
+            cmd->draw(args);
+        }
+
+        if (renderEnvironment)
+        {
+            m_Environment->End();
+        }
+
+        m_CommandList->Submit();
     }
 
-    void SceneRenderer::SetFillMode(nvrhi::RasterFillMode mode) const
+    void SceneRenderer::UpdateUIInput(const glm::vec2 &viewportMousePos, const glm::vec2 &viewportPos, const glm::vec2 &viewportSize, bool mousePressed)
     {
-        Renderer2D::SetFillMode(mode);
-        Renderer2D::CreatePipelines(m_RenderTarget->GetFramebuffer());
-
-        m_GeometryAnimPipeline->GetParams().fillMode = mode;
-        m_GeometryAnimPipeline->CreatePipeline(m_RenderTarget->GetFramebuffer());
+        UIManager& uiManager = UIManager::GetInstance();
+        uiManager.SetMousePosition(viewportMousePos, viewportPos, viewportSize);
+        uiManager.HandleMouseClick(mousePressed);
     }
 
-    void SceneRenderer::SetSelectedEntity(const Entity& entity)
+    void SceneRenderer::CreateDemoUI()
+    {
+        UIManager& uiManager = UIManager::GetInstance();
+
+        // Enable layout grid
+        uiManager.SetLayoutGridVisible(false);
+        uiManager.SetLayoutGridSize(50);
+
+        for (int i = 0; i < static_cast<int>(UIAlignment::COUNT); ++i)
+        {
+            // Create demo buttons
+            const UIAlignment alignment = static_cast<UIAlignment>(i);
+
+            if (alignment == UIAlignment::CENTER)
+            {
+                TextureCreateInfo createInfo = {};
+                createInfo.mipLevels = 1;
+                createInfo.format = nvrhi::Format::RGBA8_UNORM;
+
+                Ref<Texture> image = Texture::Create("resources/textures/cursor_128px.png", createInfo);
+                auto button = uiManager.CreateButton("button", glm::vec2(0), glm::vec2(50.0f, 50.0f));
+                button->SetAlignment(alignment);
+                button->SetImage(image);
+
+                float r = 1.0f;
+                float g = 1.0f;
+                float b = 1.0f;
+    
+                button->SetColors(
+                    glm::vec4(r, g, b, 1.0f), // normal - green
+                    glm::vec4(r + 0.4f, g + 0.4f, b + 0.4f, 1.0f), // hover - lighter green
+                    glm::vec4(r - 0.4f, g - 0.4f, b - 0.4f, 1.0f)  // pressed - darker green
+                );
+            }
+            else
+            {
+                auto button = uiManager.CreateButton("button", glm::vec2(0), glm::vec2(100.0f, 50.0f));
+                button->SetAlignment(alignment);
+    
+                float r = static_cast<float>(rand()) / RAND_MAX * 0.5f + 0.2f;
+                float g = static_cast<float>(rand()) / RAND_MAX * 0.5f + 0.2f;
+                float b = static_cast<float>(rand()) / RAND_MAX * 0.5f + 0.2f;
+    
+                button->SetColors(
+                    glm::vec4(r, g, b, 1.0f), // normal - green
+                    glm::vec4(r + 0.4f, g + 0.4f, b + 0.4f, 1.0f), // hover - lighter green
+                    glm::vec4(r - 0.4f, g - 0.4f, b - 0.4f, 1.0f)  // pressed - darker green
+                );
+                button->SetOnClick([]() {
+                    LOG_INFO("Play button clicked!");
+                });
+            }
+        }
+    }
+
+    void SceneRenderer::SetFillMode(nvrhi::RasterFillMode mode)
+    {
+        m_FillMode = mode;
+
+        // Recreate pipeline
+        s_GeometryPSOCache.clear();
+        s_EnvironmentPSOCache.clear();
+        s_CompositePSOCache.clear();
+        s_CompositeBindingSetCache.clear();
+
+        m_Renderer2D->SetFillMode(mode);
+    }
+
+    void SceneRenderer::SetSelectedEntity(const Entity &entity)
     {
         const auto it = std::ranges::find_if(m_SelectedEntities,
-            [&](const uint32_t id)
-            {
-                return id == static_cast<uint32_t>(entity);
-            });
+        [&](const uint32_t id)
+        {
+            return id == static_cast<uint32_t>(entity);
+        });
 
         // push back if not found
         if (it == m_SelectedEntities.end())
+        {
             m_SelectedEntities.push_back(entity);
+        }
     }
 
-    void SceneRenderer::UnselectEntity(const Entity& entity)
+    void SceneRenderer::UnselectEntity(const Entity &entity)
     {
         auto it = std::ranges::find_if(m_SelectedEntities,
-            [&](const uint32_t id)
-            {
-                return id == static_cast<uint32_t>(entity);
-            });
+        [&](const uint32_t id)
+        {
+            return id == static_cast<uint32_t>(entity);
+        });
 
         // remove if found
         if (it != m_SelectedEntities.end())
+        {
             it = m_SelectedEntities.erase(it);
+        }
     }
 
     void SceneRenderer::ClearSelectedEntities()
     {
         m_SelectedEntities.clear();
-    }
-
-    void SceneRenderer::CreateEnvironment()
-    {
-        // create environment
-        m_Environment = Environment::Create();
-        m_Environment->LoadTexture("resources/hdr/klippad_sunrise_2_2k.hdr");
-
-        m_CommandList->open();
-        m_Environment->WriteBuffer(m_CommandList);
-        m_CommandList->close();
-        m_Device->executeCommandList(m_CommandList);
-
-        m_Environment->SetSunDirection(50.0f, -27.0f);
-    }
-
-    void SceneRenderer::OnGuiRender()
-    {
-        ImGui::Begin("Debug");
-       
-        if (m_EdgeDetection.outputTexture)
-        {
-            // ImTextureID tex = reinterpret_cast<ImTextureID>(m_EdgeDetection.outputTexture.Get());
-            // float width = ImGui::GetContentRegionAvail().x;
-            // float height = width / (16.0f / 9.0f);
-            // 
-            // ImGui::Image(tex, { width, height});
-
-            ImGui::DragFloat("Edge Threshold", &m_EdgeDetectionParams.edgeThreshold, 0.025f, 0.001f, 100.0f);
-            ImGui::DragFloat("Outline Width", &m_EdgeDetectionParams.outlineWidth, 0.025f, 0.0f, FLT_MAX);
-            ImGui::DragFloat("Depth Sensitivity", &m_EdgeDetectionParams.depthSensitivity, 0.025f, 0.0f, FLT_MAX);
-            ImGui::ColorEdit4("Color", &m_EdgeDetectionParams.outlineColor.x);
-        }
-
-        ImGui::End();
     }
 
     SceneRenderer* SceneRenderer::GetActive()

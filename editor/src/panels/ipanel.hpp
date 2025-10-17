@@ -36,13 +36,13 @@ namespace ignite
     class IPanel
     {
     public:
-        virtual ~IPanel() = default;
-
         IPanel() = default;
         explicit IPanel(const char *windowTitle)
             : m_WindowTitle(windowTitle)
         {
         }
+
+        virtual ~IPanel() = default;
 
         // from Layer class
         virtual void OnGuiRender() { }
@@ -57,7 +57,7 @@ namespace ignite
 
     protected:
         std::string m_WindowTitle;
-        bool m_IsOpen = false;
+        bool m_IsOpen = true;
         bool m_IsFocused = false;
         bool m_IsHovered = false;
     };

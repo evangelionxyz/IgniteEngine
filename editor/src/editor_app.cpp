@@ -41,6 +41,7 @@ namespace ignite
     {
         ApplicationCreateInfo createInfo;
         createInfo.cmdLineArgs = args;
+		createInfo.name = "Ignite Editor";
         createInfo.width = 1640;
         createInfo.height = 940;
         createInfo.useGui = true;

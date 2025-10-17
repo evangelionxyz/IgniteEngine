@@ -32,7 +32,7 @@
 
 namespace ignite {
 
-    struct GraphicsPiplineCreateInfo
+    struct GraphicsPipelineCreateInfo
     {
         nvrhi::VertexAttributeDesc *attributes;
         uint32_t attributeCount = 0;
@@ -62,14 +62,11 @@ namespace ignite {
     {
     public:
         GraphicsPipeline() = default;
-        GraphicsPipeline(const GraphicsPipelineParams &params, GraphicsPiplineCreateInfo *createInfo);
 
         GraphicsPipeline &AddBindingLayout(const nvrhi::BindingLayoutHandle &layout);
         GraphicsPipeline& AddShader(const std::string& filepath, nvrhi::ShaderType type, const std::string &entryPoint = "main", bool recompile = false);
         GraphicsPipeline& AddShader(nvrhi::ShaderHandle& handle, nvrhi::ShaderType type);
-        void Build();
-        void CreatePipeline(nvrhi::IFramebuffer *framebuffer);
-        void ResetHandle();
+        void Build(nvrhi::IFramebuffer *framebuffer, const GraphicsPipelineParams &params, const GraphicsPipelineCreateInfo &createInfo);
 
         nvrhi::BindingLayoutHandle GetBindingLayout(uint32_t index);
 
@@ -84,7 +81,7 @@ namespace ignite {
             return nullptr;
         }
 
-        static Ref<GraphicsPipeline> Create(const GraphicsPipelineParams &params, GraphicsPiplineCreateInfo *createInfo);
+        static Ref<GraphicsPipeline> Create();
 
         GraphicsPipelineParams &GetParams() { return m_Params; }
 
@@ -98,7 +95,6 @@ namespace ignite {
         std::vector<nvrhi::BindingLayoutHandle> m_BindingLayouts;
 
         GraphicsPipelineParams m_Params;
-        GraphicsPiplineCreateInfo *m_CreateInfo;
 
         bool m_NeedsToCompileShader = false;
     };

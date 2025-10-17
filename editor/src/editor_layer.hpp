@@ -26,6 +26,7 @@
 #include <nvrhi/nvrhi.h>
 #include "ignite/core/layer.hpp"
 #include "ignite/ignite.hpp"
+#include "ignite/graphics/command_list.hpp"
 #include "ignite/graphics/scene_renderer.hpp"
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/project/project.hpp"
@@ -37,6 +38,7 @@ namespace ignite
     class ShaderFactory;
     class ScenePanel;
     class ContentBrowserPanel;
+    class MaterialsPanel;
 
     class EditorLayer final : public Layer
     {
@@ -63,6 +65,7 @@ namespace ignite
 
     public:
         EditorLayer(const std::string &name);
+        ~EditorLayer();
 
         void OnAttach() override;
         void OnDetach() override;
@@ -71,18 +74,13 @@ namespace ignite
 
         bool OnKeyPressedEvent(KeyPressedEvent &event);
         bool OnMouseButtonPressed(MouseButtonPressedEvent &event);
+		bool OnMouseMovedEvent(MouseMovedEvent& event);
 
         void OnRender(nvrhi::IFramebuffer *framebuffer) override;
         void OnGuiRender() override;
-
-        void SetActiveScene(Scene *scene);
-
-        Scene *GetActiveScene() const { return m_ActiveScene.get(); }
-        Project *GetActiveProject() const { return m_ActiveProject.get(); }
-
-        EditorData &GetState() { return m_Data; }
-
-    private:
+        void OnScenePlay();
+        void OnSceneStop();
+        void OnSceneSimulate();
         void NewScene();
         void SaveScene();
         void SaveSceneAs();
@@ -92,17 +90,26 @@ namespace ignite
         
         void SaveProject();
         void SaveProjectAs();
-        void OpenProject();
-        void OpenProject(const std::filesystem::path &filepath);
+        Ref<Project> OpenProject();
+        Ref<Project> OpenProject(const std::filesystem::path &filepath);
 
-        void OnScenePlay();
-        void OnSceneStop();
-        void OnSceneSimulate();
+        void SetActiveScene(const Ref<Scene> &scene);
 
+        Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
+        Ref<Project> GetActiveProject() const { return m_ActiveProject; }
+
+        SceneRenderer *GetSceneRenderer() { return &m_SceneRenderer; }
+
+        EditorData &GetState() { return m_Data; }
+
+        static EditorLayer *GetInstance();
+
+    private:
         void SettingsUI();
 
         Ref<ScenePanel> m_ScenePanel;
         Ref<ContentBrowserPanel> m_ContentBrowserPanel;
+        Ref<MaterialsPanel> m_MaterialsPanel;
         SceneRenderer m_SceneRenderer;
 
         Ref<Scene> m_ActiveScene;
@@ -112,12 +119,10 @@ namespace ignite
 
         std::filesystem::path m_CurrentSceneFilePath;
         nvrhi::BufferHandle m_DebugRenderBuffer;
-        nvrhi::CommandListHandle m_CommandList;
         nvrhi::StagingTextureHandle m_MousePickingStagingTexture;
         nvrhi::StagingTextureHandle m_ScreenshotStagingTexture;
+        Ref<CommandList > m_CommandList;
             
         nvrhi::IDevice *m_Device = nullptr;
-
-        friend class ScenePanel;
     };
 }

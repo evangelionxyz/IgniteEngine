@@ -32,6 +32,8 @@
 
 #include "ignite/core/buffer.hpp"
 
+#include <SDL3/SDL.h>
+
 #include <filesystem>
 #include <optional>
 
@@ -68,14 +70,17 @@ namespace ignite
         virtual ~ImGuiLayer() = default;
 
         ImGuiLayer(DeviceManager *deviceManager);
-        bool Init();
-        void OnDetach();
+        void OnAttach() override;
+        void OnDetach() override;
 
         void BeginFrame();
         void EndFrame(nvrhi::IFramebuffer* framebuffer);
 
+        void PollEvent(const SDL_Event &event);
+
         void OnEvent(Event &event) override;
         bool OnFramebufferResize(FramebufferResizeEvent &event) const;
+        bool OnDPIScaleChanged(WindowDPIScaleChangedEvent &event);
 
     private:
         Scope<ImGui_NVRHI> imguiNVRHI;
@@ -84,5 +89,9 @@ namespace ignite
         bool m_SupportExplicitDisplayScaling;
         bool m_BeginFrameCalled = false;
         DeviceManager *m_DeviceManager = nullptr;
+        
+        // Store original style for proper scaling
+        ImGuiStyle m_OriginalStyle;
+        f32 m_CurrentDPIScale = 1.0f;
     };
 }

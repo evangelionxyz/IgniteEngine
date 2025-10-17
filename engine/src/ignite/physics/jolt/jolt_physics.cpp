@@ -55,6 +55,10 @@ namespace ignite
         s_JoltInstance->jobSystem = std::make_unique<JPH::JobSystemThreadPool>(cMaxPhysicsJobs, 8,
             std::thread::hardware_concurrency() - 1);
 
+        // Create collision listeners
+        s_JoltInstance->contactListener = std::make_unique<JoltContactListener>();
+        s_JoltInstance->bodyActivationListener = std::make_unique<JoltBodyActivationListener>();
+
         LOG_WARN("[Jolt Physics] Initalized");
     }
 
@@ -86,11 +90,12 @@ namespace ignite
     {
         m_PhysicsSystem.Init(cNumBodies, cNumBodyMutexes, cMaxBodyPairs,
             cMaxContactConstraints, s_JoltInstance->broadPhaseLayer,
-            s_JoltInstance->objectVsBroadPhaseLayerFilter,
-            s_JoltInstance->objectLayerPairFilter);
+            s_JoltInstance->objectVsBroadPhaseLayerFilter, s_JoltInstance->objectLayerPairFilter);
 
         // m_PhysicsSystem.SetBodyActivationListener(s_JoltInstance->bodyActivationListener.get());
         // m_PhysicsSystem.SetContactListener(s_JoltInstance->contactListener.get());
+        m_PhysicsSystem.SetBodyActivationListener(s_JoltInstance->bodyActivationListener.get());
+        m_PhysicsSystem.SetContactListener(s_JoltInstance->contactListener.get());
         m_PhysicsSystem.SetGravity(GlmToJoltVec3(m_Scene->physicsGravity));
         m_PhysicsSystem.OptimizeBroadPhase();
 
@@ -129,9 +134,7 @@ namespace ignite
             tc.rotation = tc.localRotation;
         }
 
-        m_PhysicsSystem.Update(deltaTime, 1, 
-            s_JoltInstance->tempAllocator.get(), 
-            s_JoltInstance->jobSystem.get());
+        m_PhysicsSystem.Update(deltaTime, 1, s_JoltInstance->tempAllocator.get(), s_JoltInstance->jobSystem.get());
     }
 
     void JoltScene::InstantiateEntity(Entity entity)
@@ -148,6 +151,16 @@ namespace ignite
             if (entity.HasComponent<SphereCollider>())
             {
                 CreateSphereCollider(entity);
+            }
+
+            if (entity.HasComponent<CapsuleCollider>())
+            {
+                CreateCapsuleCollider(entity);
+            }
+
+            if (entity.HasComponent<MeshCollider>())
+            {
+                CreateMeshCollider(entity);
             }
         }
     }
@@ -227,7 +240,30 @@ namespace ignite
 
     void JoltScene::CreateCapsuleCollider(Entity entity)
     {
+        auto &tc = entity.GetComponent<Transform>();
+        auto &rb = entity.GetComponent<Rigibody>();
+        auto &col = entity.GetComponent<CapsuleCollider>();
 
+        // Create capsule shape with radius and half height
+        float halfHeight = col.height * 0.5f;
+        JPH::CapsuleShapeSettings shapeSettings(halfHeight, col.radius);
+
+        JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
+        JPH::ShapeRefC shape = shapeResult.Get();
+
+        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation, tc.rotation);
+
+        JPH::Body *body = m_BodyInterface->CreateBody(bodySettings);
+        if (body)
+        {
+            JPH::BodyID bodyId = body->GetID();
+            m_BodyInterface->AddBody(bodyId, JPH::EActivation::Activate);
+            m_BodyInterface->SetFriction(bodyId, col.friction);
+            m_BodyInterface->SetRestitution(bodyId, col.restitution);
+            rb.body = body;
+        }
+
+        col.shape = (void *)shape.GetPtr();
     }
 
     void JoltScene::CreateSphereCollider(Entity entity)
@@ -240,6 +276,113 @@ namespace ignite
 
         JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
         JPH::ShapeRefC shape = shapeResult.Get();
+
+        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation, tc.rotation);
+
+        JPH::Body *body = m_BodyInterface->CreateBody(bodySettings);
+        if (body)
+        {
+            JPH::BodyID bodyId = body->GetID();
+            m_BodyInterface->AddBody(bodyId, JPH::EActivation::Activate);
+            m_BodyInterface->SetFriction(bodyId, col.friction);
+            m_BodyInterface->SetRestitution(bodyId, col.restitution);
+            rb.body = body;
+        }
+
+        col.shape = (void *)shape.GetPtr();
+    }
+
+    void JoltScene::CreateMeshCollider(Entity entity)
+    {
+        auto &tc = entity.GetComponent<Transform>();
+        auto &rb = entity.GetComponent<Rigibody>();
+        auto &col = entity.GetComponent<MeshCollider>();
+
+        if (col.vertices.empty())
+        {
+            LOG_WARN("[Jolt Physics] MeshCollider has no vertices, skipping creation");
+            return;
+        }
+
+        JPH::ShapeRefC shape;
+
+        if (col.convex)
+        {
+            // Create convex hull shape
+            JPH::Array<JPH::Vec3> vertices;
+            vertices.reserve(col.vertices.size());
+
+            for (const auto& vertex : col.vertices)
+            {
+                vertices.push_back(GlmToJoltVec3(vertex));
+            }
+
+            JPH::ConvexHullShapeSettings shapeSettings(vertices);
+            JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
+            shape = shapeResult.Get();
+        }
+        else
+        {
+            // Create triangle mesh shape
+            JPH::TriangleList triangles;
+
+            if (col.indices.empty())
+            {
+                // Generate triangles from vertices (assuming they're ordered as triangles)
+                if (col.vertices.size() % 3 == 0)
+                {
+                    for (size_t i = 0; i < col.vertices.size(); i += 3)
+                    {
+                        JPH::Triangle triangle(
+                            GlmToJoltVec3(col.vertices[i]),
+                            GlmToJoltVec3(col.vertices[i + 1]),
+                            GlmToJoltVec3(col.vertices[i + 2])
+                        );
+                        triangles.push_back(triangle);
+                    }
+                }
+                else
+                {
+                    LOG_ERROR("[Jolt Physics] MeshCollider vertices count is not divisible by 3 and no indices provided");
+                    return;
+                }
+            }
+            else
+            {
+                // Use indices to create triangles
+                for (size_t i = 0; i < col.indices.size(); i += 3)
+                {
+                    if (i + 2 < col.indices.size() &&
+                        col.indices[i] < col.vertices.size() &&
+                        col.indices[i + 1] < col.vertices.size() &&
+                        col.indices[i + 2] < col.vertices.size())
+                    {
+                        JPH::Triangle triangle(
+                            GlmToJoltVec3(col.vertices[col.indices[i]]),
+                            GlmToJoltVec3(col.vertices[col.indices[i + 1]]),
+                            GlmToJoltVec3(col.vertices[col.indices[i + 2]])
+                        );
+                        triangles.push_back(triangle);
+                    }
+                }
+            }
+
+            if (triangles.empty())
+            {
+                LOG_ERROR("[Jolt Physics] No valid triangles could be created from MeshCollider data");
+                return;
+            }
+
+            JPH::MeshShapeSettings shapeSettings(triangles);
+            JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
+            shape = shapeResult.Get();
+        }
+
+        if (!shape)
+        {
+            LOG_ERROR("[Jolt Physics] Failed to create mesh shape");
+            return;
+        }
 
         JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation, tc.rotation);
 
@@ -293,7 +436,7 @@ namespace ignite
 
     bool JoltScene::IsActive(const JPH::Body &body)
     {
-        return false; m_BodyInterface->IsActive(body.GetID());
+        return m_BodyInterface->IsActive(body.GetID());
     }
 
     void JoltScene::MoveKinematic(const JPH::Body &body, const glm::vec3 &targetPosition, const glm::vec3 &targetRotation, float deltaTime)

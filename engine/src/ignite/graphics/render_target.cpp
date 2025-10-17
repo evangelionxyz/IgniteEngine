@@ -30,13 +30,15 @@
 #include <ignite/core/types.hpp>
 #include <nvrhi/nvrhi.h>
 #include <nvrhi/utils.h>
-
+#include <limits>
 
 namespace ignite {
 
-    RenderTarget::RenderTarget(const RenderTargetCreateInfo &createInfo)
+    RenderTarget::RenderTarget(const RenderTargetCreateInfo &createInfo, const std::string &debugName)
         : m_CreateInfo(createInfo)
     {
+        m_ClearDepth = { std::numeric_limits<float>::max(), std::numeric_limits<uint32_t>::max() };
+
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
         
         for (auto &attachment : m_CreateInfo.attachments)
@@ -52,7 +54,7 @@ namespace ignite {
                 depthDesc.setWidth(m_CreateInfo.width);
                 depthDesc.setHeight(m_CreateInfo.height);
                 depthDesc.setFormat(attachment.format);
-                depthDesc.setDebugName("Render target depth attachment");
+                depthDesc.setDebugName(std::format("{} - {} ", attachment.name, debugName));
                 depthDesc.setInitialState(attachment.state);
                 depthDesc.setIsRenderTarget(true);
                 depthDesc.setKeepInitialState(true);
@@ -72,7 +74,7 @@ namespace ignite {
                 colorDesc.setWidth(m_CreateInfo.width);
                 colorDesc.setHeight(m_CreateInfo.height);
                 colorDesc.setFormat(attachment.format);
-                colorDesc.setDebugName("Render target color attachment texture");
+                colorDesc.setDebugName(std::format("{} - {} ", attachment.name, debugName));
                 colorDesc.setInitialState(attachment.state);
                 colorDesc.setKeepInitialState(true);
                 colorDesc.setIsUAV(false);
@@ -117,6 +119,8 @@ namespace ignite {
     void RenderTarget::Resize(const uint32_t width, const uint32_t height)
     {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
+
+        device->waitForIdle();
 
         m_CreateInfo.width = width;
         m_CreateInfo.height = height;
@@ -163,6 +167,11 @@ namespace ignite {
         CreateFramebuffer();
     }
 
+    bool RenderTarget::ShouldResize(const uint32_t width, const uint32_t height)
+    {
+        return m_CreateInfo.width != width || m_CreateInfo.height != height;
+    }
+
     nvrhi::TextureHandle RenderTarget::GetDepthAttachment()
     {
         return m_DepthAttachment;
@@ -187,38 +196,66 @@ namespace ignite {
         return m_ColorAttachments;
     }
 
-    void RenderTarget::ClearColorAttachmentFloat(nvrhi::CommandListHandle commandList, uint32_t attachmentIndex, const glm::vec3 &clearColor) const
+    void RenderTarget::ClearColorAndDepth(nvrhi::ICommandList *commandList)
     {
-        nvrhi::TextureHandle texture = m_ColorAttachments[attachmentIndex];
-        nvrhi::utils::ClearColorAttachment(commandList, m_FramebufferHandle, attachmentIndex,
-            nvrhi::Color(clearColor.x, clearColor.y, clearColor.z, 1.0f)
-        );
-    }
-
-    void RenderTarget::ClearColorAttachmentUint(nvrhi::CommandListHandle commandList, uint32_t attachmentIndex, uint32_t clearColor) const
-    {
-        if (attachmentIndex >= m_ColorAttachments.size())
+        // Float Color
+        for (auto &[attachmentIndex, clearColor] : m_FloatClearColors)
         {
-            attachmentIndex = glm::max(static_cast<int>(m_ColorAttachments.size()) - 1, 0);
-            LOG_ASSERT(false, "[Render target] Color attachments index out of bound!");
+            ClearColorAttachmentFloat(commandList, attachmentIndex, clearColor);
         }
 
-        nvrhi::TextureHandle texture = m_ColorAttachments[attachmentIndex];
-        const nvrhi::Format format = texture->getDesc().format;
+        // UINT Color
+        for (auto &[attachmentIndex, clearColor] : m_UintClearColors)
+        {
+            ClearColorAttachmentUint(commandList, attachmentIndex, clearColor);
+        }
 
-        bool isUint = format == nvrhi::Format::R32_UINT || format == nvrhi::Format::RGBA8_UINT || format == nvrhi::Format::R8_UINT;
+        auto [depth, stencil] = m_ClearDepth;
+        if (depth != std::numeric_limits<float>::max() && stencil != std::numeric_limits<uint32_t>::max() )
+        {
+            ClearDepthAttachment(commandList, depth, stencil);
+        }
+    }
+
+    void RenderTarget::SetClearColorAttachmentFloat(const glm::vec4 &clearColor, uint32_t attachmentIndex)
+    {
+        m_FloatClearColors[attachmentIndex] = clearColor;
+    }
+
+    void RenderTarget::SetClearColorAttachmentUint(uint32_t clearColor, uint32_t attachmentIndex)
+    {
+        m_UintClearColors[attachmentIndex] = clearColor;
+    }
+
+    void RenderTarget::SetClearDepthAttachment(float depth, uint32_t stencil)
+    {
+        m_ClearDepth = { depth, stencil };
+    }
+
+    void RenderTarget::ClearColorAttachmentFloat(nvrhi::ICommandList *commandList, uint32_t attachmentIndex, const glm::vec4 &clearColor) const
+    {
+        nvrhi::TextureHandle texture = m_ColorAttachments[attachmentIndex];
+        nvrhi::utils::ClearColorAttachment(commandList, m_FramebufferHandle, attachmentIndex, nvrhi::Color(clearColor.x, clearColor.y, clearColor.z, clearColor.w));
+    }
+
+    void RenderTarget::ClearColorAttachmentUint(nvrhi::ICommandList *commandList, uint32_t attachmentIndex, uint32_t clearColor) const
+    {
+        nvrhi::TextureHandle texture = m_ColorAttachments[attachmentIndex];
+
+        const nvrhi::Format format = texture->getDesc().format;
+        const bool isUint = format == nvrhi::Format::R32_UINT || format == nvrhi::Format::RGBA8_UINT || format == nvrhi::Format::R8_UINT;
         LOG_ASSERT(isUint, "[Render Target] Color attachment is not UINT type!");
 
         commandList->clearTextureUInt(texture, nvrhi::AllSubresources, clearColor);
     }
 
-    void RenderTarget::ClearDepthAttachment(nvrhi::CommandListHandle commandList, float depth, uint32_t stencil) const
+    void RenderTarget::ClearDepthAttachment(nvrhi::ICommandList *commandList, float depth, uint32_t stencil) const
     {
         nvrhi::utils::ClearDepthStencilAttachment(commandList, m_FramebufferHandle, depth, stencil);
     }
 
-    Ref<RenderTarget> RenderTarget::Create(const RenderTargetCreateInfo &createInfo)
+    Ref<RenderTarget> RenderTarget::Create(const RenderTargetCreateInfo &createInfo, const std::string &debugName)
     {
-        return CreateRef<RenderTarget>(createInfo);
+        return CreateRef<RenderTarget>(createInfo, debugName);
     }
 }

@@ -22,7 +22,6 @@
 */
 
 #include "application.hpp"
-
 #include "ignite/graphics/shader_factory.hpp"
 #include "input/app_event.hpp"
 #include "ignite/imgui/imgui_layer.hpp"
@@ -54,30 +53,45 @@ namespace ignite
 
         m_CommandManager = CreateScope<CommandManager>();
 
-        DeviceCreationParameters deviceCreateInfo;
-        deviceCreateInfo.backBufferWidth = m_CreateInfo.width;
-        deviceCreateInfo.backBufferHeight = m_CreateInfo.height;
-        deviceCreateInfo.startMaximized = m_CreateInfo.maximized;
+        DeviceParameters deviceParams;
+        deviceParams.backBufferWidth = m_CreateInfo.width;
+        deviceParams.backBufferHeight = m_CreateInfo.height;
+        deviceParams.startMaximized = m_CreateInfo.maximized;
+		deviceParams.startBorderless = m_CreateInfo.borderless;
+#if _DEBUG
+        deviceParams.enableDebugRuntime = true;
+#endif
+        deviceParams.swapChainBufferCount = 3;
+        deviceParams.enableNvrhiValidationLayer = true;
+        deviceParams.enablePerMonitorDPI = true;
+        deviceParams.enableGPUValidation = true;
+        deviceParams.supportExplicitDisplayScaling = true;
 
-        m_Window = CreateScope<Window>(
-            m_CreateInfo.name.c_str(),
-            deviceCreateInfo,
-            m_CreateInfo.graphicsApi
-        );
-
+        m_Window = CreateScope<Window>(m_CreateInfo.name.c_str(),  deviceParams, m_CreateInfo.graphicsApi );
         m_Window->SetEventCallback(BIND_CLASS_EVENT_FN(Application::OnEvent));
-        m_Input = Input(m_Window->GetWindowHandle());
+        m_Window->SetIcon("resources/icon.png");
+
+        m_Input = CreateScope<Input>(m_Window.get());
 
         m_Renderer = CreateRef<Renderer>(m_Window->GetDeviceManager(), m_CreateInfo.graphicsApi);
+        m_UIManager = CreateScope<UIManager>();
 
         if (createInfo.useGui)
         {
             m_ImGuiLayer = CreateScope<ImGuiLayer>(GetDeviceManager());
-            m_ImGuiLayer->Init();
+            m_ImGuiLayer->OnAttach();
+            // PushLayer(m_ImGuiLayer.get());
         }
 
-        FmodAudio::Init();
-        JoltPhysics::Init();
+        if (m_CreateInfo.useAudio)
+        {
+            FmodAudio::Init();
+        }
+
+        if (m_CreateInfo.usePhysics)
+        {
+            JoltPhysics::Init();
+        }
     }
 
     Application *Application::GetInstance()
@@ -96,14 +110,19 @@ namespace ignite
         GetInstance()->m_Window->SetTitle(title);
     }
 
-    void Application::UpdateAverageTimeTime(f64 elapsedTime)
+    void Application::Shutdown()
+    {
+        GetInstance()->m_Window->Shutdown();
+    }
+
+    void Application::UpdateAverageTimeTime(float elapsedTime)
     {
         m_FrameTimeSum += elapsedTime;
         m_NumberOfAccumulatedFrames++;
 
         if (m_FrameTimeSum >= m_AverageTimeUpdateInterval && m_NumberOfAccumulatedFrames > 0)
         {
-            m_AverageFrameTime = m_FrameTimeSum / static_cast<f64>(m_NumberOfAccumulatedFrames);
+            m_AverageFrameTime = m_FrameTimeSum / static_cast<float>(m_NumberOfAccumulatedFrames);
             m_NumberOfAccumulatedFrames = 0;
             m_FrameTimeSum = 0.0;
         }
@@ -141,18 +160,30 @@ namespace ignite
     {
         DeviceManager *deviceManager = GetDeviceManager();
         nvrhi::IDevice *device = deviceManager->GetDevice();
-        nvrhi::CommandListHandle commandList = device->createCommandList();
-
+        auto commandList = device->createCommandList();
+        
+        SDL_Event sdlEvent;
+        
         while (m_Window->IsLooping())
         {
-            m_Window->PollEvents();
+            while (SDL_PollEvent(&sdlEvent))
+            {
+                m_Window->PollEvents(sdlEvent);
+                if (m_CreateInfo.useGui)
+                {
+                    m_ImGuiLayer->PollEvent(sdlEvent);
+                }
+            }
 
-            const f64 currTime = glfwGetTime();
-            m_DeltaTime = static_cast<float>(currTime - m_PreviousTime);
+            const float currTime = static_cast<float>(SDL_GetTicks());
+            m_DeltaTime = static_cast<float>(currTime - m_PreviousTime) / 1000.0f;
 
             ProcessMainThreadSubmissions();
 
-            FmodAudio::Update(m_DeltaTime);
+            if (m_CreateInfo.useAudio)
+            {
+                FmodAudio::Update(m_DeltaTime);
+            }
 
             // update window title
             if (m_AverageFrameTime > 0)
@@ -160,7 +191,7 @@ namespace ignite
                 std::stringstream ss;
                 ss << m_CreateInfo.name;
                 ss << " (" << nvrhi::utils::GraphicsAPIToString(device->getGraphicsAPI());
-                if (deviceManager->GetDeviceParams().enableDebugRuntime)
+                if (deviceManager->GetDeviceParameters().enableDebugRuntime)
                 {
                     if (m_CreateInfo.graphicsApi == nvrhi::GraphicsAPI::VULKAN)
                         ss << ", VulkanValidationLayer";
@@ -168,11 +199,13 @@ namespace ignite
                         ss << ", DebugRuntime";
                 }
 
-                if (deviceManager->GetDeviceParams().enableNvrhiValidationLayer)
+                if (deviceManager->GetDeviceParameters().enableNvrhiValidationLayer)
+                {
                     ss << ", NvrhiValidationLayer";
+                }
                 ss << ")";
 
-                const f64 fps = 1.0 / m_AverageFrameTime;
+                const float fps = 1.0f / m_AverageFrameTime;
 
                 const i32 precision = (fps <= 20.0) ? 1 : 0;
 
@@ -194,7 +227,7 @@ namespace ignite
                     if (deviceManager->BeginFrame())
                     {
                         // Clearing framebuffer
-                        nvrhi::IFramebuffer *framebuffer = deviceManager->GetCurrentFramebuffer();
+                        nvrhi::IFramebuffer* framebuffer = deviceManager->GetCurrentFramebuffer();
                         commandList->open();
                         nvrhi::utils::ClearColorAttachment(commandList, framebuffer, 0, nvrhi::Color(0.0f, 0.0f, 0.0f, 1.0f));
                         commandList->close();
@@ -229,31 +262,38 @@ namespace ignite
             ++m_FrameIndex;
         }
 
-        commandList.Reset();
-
+        commandList = nullptr;
         device->waitForIdle();
-
+        
         if (m_ImGuiLayer)
         {
             m_ImGuiLayer->OnDetach();
             m_ImGuiLayer.reset();
         }
-
+        
         for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
         {
             (*it)->OnDetach();
             delete *it;
         }
-
-        // destroy renderer first
+        
+        // destroy
+        m_UIManager.reset();
         m_Renderer.reset();
 
         // destroy device
         deviceManager->Destroy();
         m_Window->Destroy();
 
-        JoltPhysics::Shutdown();
-        FmodAudio::Shutdown();
+        if (m_CreateInfo.usePhysics)
+        {
+            JoltPhysics::Shutdown();
+        }
+
+        if (m_CreateInfo.useAudio)
+        {
+            FmodAudio::Shutdown();
+        }
     }
 
     void Application::OnEvent(Event &e)
@@ -269,7 +309,7 @@ namespace ignite
 
     void Application::WindowIconify()
     {
-        GetInstance()->m_Window->Iconify();
+        GetInstance()->m_Window->Minimize();
     }
 
     void Application::WindowMaximize()
@@ -297,7 +337,7 @@ namespace ignite
         return GetInstance()->m_Window->GetDeviceManager()->GetDevice();
     }
 
-    f32 Application::GetDeltaTime()
+    float Application::GetDeltaTime()
     {
         return GetInstance()->m_DeltaTime;
     }

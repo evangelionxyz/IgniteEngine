@@ -30,10 +30,28 @@ namespace ignite
     class EditorCamera : public ICamera
     {
     public:
-        EditorCamera() = default;
-        EditorCamera(std::string name);
 
-    private:
-        std::string m_Name;
+        enum class MovementMode
+        {
+            Orbiting,
+            Flying
+        };
+
+        EditorCamera() = default;
+        EditorCamera(const std::string &name);
+
+		void UpdateMouseState();
+		void UpdateSphericalPosition();
+		void HandleOrbit(float deltaTime);
+		void HandlePan(float deltaTime);
+		void HandleZoom(float deltaTime);
+		void ApplyInertia(float deltaTime);
+		void UpdateCameraPosition();
+
+		const std::string& GetName() { return m_Name; }
+
+	private:
+
+		std::string m_Name;
     };
 }

@@ -4,6 +4,7 @@ import urllib
 import tarfile
 from zipfile import ZipFile
 import platform
+import time
 
 if platform.system() == "Windows":
     import winreg
@@ -21,15 +22,22 @@ def set_env_variable(variable_name, directory_path):
 
 def get_env_variable(name):
     if platform.system() == "Windows":
-        key = winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE, r"System\CurrentControlSet\Control\Session Manage\Environment")
         try:
-            return winreg.QueryValueEx(key, name)[0]
-        except:
+            with winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+                0,
+                winreg.KEY_READ,
+            ) as key:
+                return winreg.QueryValueEx(key, name)[0]
+        except FileNotFoundError:
+            return None
+        except OSError:
             return None
     elif platform.system() == "Linux":
         value = os.environ.get(name)
         if value is not None:
-            return True
+            return value
         try:
             with open('/etc/environment', 'r') as file:
                 for line in file:
@@ -81,16 +89,20 @@ def download_file(url, filepath):
                 return
             except urllib.error.URLError as e:
                 print(f"URL Error encountered: {e.reason}. Proceeding with backup...\n\n")
-                os.remove(filepath)
-                pass
+                if os.path.exists(filepath):
+                    os.remove(filepath)
             except urllib.error.HTTPError as e:
                 print(f"HTTP Error  encountered: {e.code}. Proceeding with backup...\n\n")
-                os.remove(filepath)
-                pass
-            except:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except requests.exceptions.RequestException as e:
+                print(f"Request error encountered: {e}. Proceeding with backup...\n\n")
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except Exception:
                 print(f"Something went wrong. Proceeding with backup...\n\n")
-                os.remove(filepath)
-                pass
+                if os.path.exists(filepath):
+                    os.remove(filepath)
         raise ValueError(f"Failed to download {filepath}")
     
     if (not(type(url) is str)):
@@ -98,15 +110,44 @@ def download_file(url, filepath):
     
     with open(filepath, 'wb') as f:
         headers = {'User-Agent': "Mozilla/5.0 (Macintosh Intel Mac Os X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36"}
-        response = requests.get(url, headers = headers, stream = True)
-        total = response.headers.get('content-length')
+        with requests.get(url, headers=headers, stream=True) as response:
+            response.raise_for_status()
+            total = response.headers.get('content-length')
+            total_bytes = int(total) if total is not None else None
+            chunk_size = max(int(total_bytes / 1000), 1024 * 1024) if total_bytes else 1024 * 1024
+            downloaded = 0
+            start_time = time.time()
+            has_output = False
 
-        if total is None:
-            f.write(response.content)
-        else:
-            total = int(total)
-            for data in response.iter_content(chunk_size = max(int(total / 1000), 1024 * 1024)):
+            for data in response.iter_content(chunk_size=chunk_size):
+                if not data:
+                    continue
+
                 f.write(data)
+                downloaded += len(data)
+
+                elapsed = time.time() - start_time
+                elapsed = elapsed if elapsed > 0 else 1e-6
+                speed = downloaded / elapsed
+
+                if total_bytes:
+                    percent = (downloaded / total_bytes) * 100
+                    status_line = (
+                        f"\rDownloading {os.path.basename(filepath)}: "
+                        f"{percent:6.2f}% | {downloaded / (1024 * 1024):.2f} MB / "
+                        f"{total_bytes / (1024 * 1024):.2f} MB | {speed / 1024:.2f} KB/s"
+                    )
+                else:
+                    status_line = (
+                        f"\rDownloading {os.path.basename(filepath)}: "
+                        f"{downloaded / (1024 * 1024):.2f} MB | {speed / 1024:.2f} KB/s"
+                    )
+
+                print(status_line, end='', flush=True)
+                has_output = True
+
+            if has_output:
+                print()
 
 def extract_archive(filepath, delete_after_extraction=True):
     arch_filepath = os.path.abspath(filepath)

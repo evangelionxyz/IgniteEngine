@@ -28,18 +28,15 @@
 #include "icomponent.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/core/uuid.hpp"
-#include "ignite/graphics/material.hpp"
-#include "ignite/graphics/vertex_data.hpp"
-#include "ignite/graphics/mesh.hpp"
+#include "ignite/graphics/objects/material.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
+#include "ignite/graphics/objects/environment.hpp"
+#include "ignite/graphics/objects/model.hpp"
 #include "ignite/math/aabb.hpp"
 #include "scene_camera.hpp"
-
-#include <glm/glm.hpp>
-#include <glm/gtx/quaternion.hpp>
-#include <nvrhi/nvrhi.h>
-#include <string>
-
 #include "ignite/core/string_utils.hpp"
+#include <string>
+#include <glm/glm.hpp>
 
 // Forward declaration
 namespace JPH
@@ -59,11 +56,12 @@ namespace ignite
         { "Rigid Body 2D", CompType_Rigidbody2D },
         { "Box Collider 2D", CompType_BoxCollider2D },
         { "Sprite 2D", CompType_Sprite2D},
-        { "Mesh Renderer", CompType_MeshRenderer },
         { "Skeletal Mesh", CompType_SkeletalMesh},
         { "Rigid Body", CompType_Rigidbody},
         { "Box Collider", CompType_BoxCollider},
         { "Sphere Collider", CompType_SphereCollider},
+        { "Capsule Collider", CompType_CapsuleCollider},
+        { "Mesh Collider", CompType_MeshCollider},
         { "Audio Source", CompType_AudioSource},
         { "C# Script", CompType_Script},
     };
@@ -76,6 +74,7 @@ namespace ignite
         EntityType_Prefab = BIT(3),
         EntityType_Joint = BIT(4),
         EntityType_Audio = BIT(5),
+        EntityType_WorldEnvironment = BIT(5),
         EntityType_Invalid = BIT(6)
     };
 
@@ -160,11 +159,12 @@ namespace ignite
             case CompType_Rigidbody2D: return "CompType_Rigidbody2D";
             case CompType_BoxCollider2D: return "CompType_BoxCollider2D";
             case CompType_Sprite2D: return "CompType_Sprite2D";
-            case CompType_MeshRenderer: return "CompType_MeshRenderer";
             case CompType_SkeletalMesh: return "CompType_SkeletalMesh";
             case CompType_Rigidbody: return "CompType_Rigidbody";
             case CompType_BoxCollider: return "CompType_BoxCollider";
             case CompType_SphereCollider: return "CompType_SphereCollider";
+            case CompType_CapsuleCollider: return "CompType_CapsuleCollider";
+            case CompType_MeshCollider: return "CompType_MeshCollider";
             case CompType_AudioSource: return "CompType_AudioSource";
             case CompType_Script: return "CompType_Script";
             case CompType_ID: return "CompType_ID";
@@ -222,13 +222,6 @@ namespace ignite
     {
     public:
         SceneCamera camera;
-        ICamera::Type projectionType = ICamera::Type::Perspective;
-
-        float fov = 45.0f;
-        float nearClip = 0.1f;
-        float farClip = 500.0f;
-        float zoom = 5.0f;
-        
         bool primary = true;
 
         Camera() = default;
@@ -325,6 +318,18 @@ namespace ignite
         virtual CompType GetType() override { return StaticType(); }
     };
 
+    class WorldEnvironment : public IComponent
+    {
+    public:
+        Ref<Environment> environment;
+        AssetHandle imageHandle;
+
+        bool primary = false;
+        
+        static CompType StaticType() { return CompType_WorldEnvironment; }
+        virtual CompType GetType() override { return StaticType(); }
+    };
+
     class Sprite2D : public IComponent
     {
     public:
@@ -341,10 +346,13 @@ namespace ignite
      public:
          AssetHandle meshHandle = AssetHandle(0); // Primitive Mesh data
          AssetHandle skeletonHandle = AssetHandle(0);
+         AssetHandle activeAnimationHandle = AssetHandle(0);
+
          std::vector<AssetHandle> animationHandle;
          std::vector<glm::mat4> boneTransforms;
 
-         i32 activeAnimIndex = 0;
+         // for rendering
+         // std::vector<Ref<MeshInstance>> meshes;
 
          SkeletalMesh() = default;
 
@@ -363,31 +371,14 @@ namespace ignite
         virtual CompType GetType() override { return StaticType(); }
     };
 
-    class MeshRenderer : public IComponent
+    class MeshComponent : public IComponent
     {
     public:
-        Ref<Mesh> mesh;
-        Ref<Material> material;
+        Ref<Model> model;
 
-        bool isSkinnedMesh = false;
+        MeshComponent() = default;
 
-        UUID root = UUID(0);
-
-        SkinnedMeshConstants transformData;
-        nvrhi::BindingSetHandle bindingSet;
-        nvrhi::BufferHandle transformBufferHandle;
-
-        nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::Front;
-        nvrhi::RasterFillMode fillMode = nvrhi::RasterFillMode::Solid;
-
-        MeshRenderer() = default;
-        MeshRenderer(const MeshRenderer &other);
-
-        void Create(bool _isSkinnedMesh);
-        void UpdateBindingSet();
-        void WriteTransformBuffer(nvrhi::ICommandList *commandList) const;
-
-        static CompType StaticType() { return CompType_MeshRenderer; }
+        static CompType StaticType() { return CompType_StaticMesh; }
         virtual CompType GetType() override { return StaticType(); }
     };
 
@@ -450,6 +441,31 @@ namespace ignite
         SphereCollider() = default;
 
         static CompType StaticType() { return CompType_SphereCollider; }
+        virtual CompType GetType() override { return StaticType(); }
+    };
+
+    class CapsuleCollider : public PhysicsCollider, public IComponent
+    {
+    public:
+        float radius = 0.5f;
+        float height = 1.0f;
+
+        CapsuleCollider() = default;
+
+        static CompType StaticType() { return CompType_CapsuleCollider; }
+        virtual CompType GetType() override { return StaticType(); }
+    };
+
+    class MeshCollider : public PhysicsCollider, public IComponent
+    {
+    public:
+        std::vector<glm::vec3> vertices;
+        std::vector<uint32_t> indices;
+        bool convex = false; // Whether to use convex hull or triangle mesh
+
+        MeshCollider() = default;
+
+        static CompType StaticType() { return CompType_MeshCollider; }
         virtual CompType GetType() override { return StaticType(); }
     };
 

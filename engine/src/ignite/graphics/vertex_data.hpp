@@ -25,6 +25,7 @@
 
 #include <nvrhi/nvrhi.h>
 #include <glm/glm.hpp>
+#include "ignite/scene/icamera.hpp"
 #include "ignite/core/types.hpp"
 
 namespace ignite
@@ -32,13 +33,7 @@ namespace ignite
 #define VERTEX_MAX_BONES 4
 #define MAX_BONES 100
 
-    struct CameraConstants
-    {
-        glm::mat4 viewProjection;
-        glm::vec4 position;
-    };
-
-    struct SkinnedMeshConstants
+    struct SkinnedMeshBuffer
     {
         glm::mat4 transformation;
         glm::mat4 normal;
@@ -49,24 +44,24 @@ namespace ignite
     {
         glm::vec3 position;
         glm::vec3 normal;
-        glm::vec2 texCoord;
-        glm::vec4 color;
-        uint32_t entityID;
+		glm::vec3 tangent;
+		glm::vec3 bitangent;
+        glm::vec2 uv;
     };
 
     struct VertexMesh_Anim
     {
         glm::vec3 position;
         glm::vec3 normal;
-        glm::vec2 texCoord;
-        glm::vec4 color;
+		glm::vec3 tangent;
+		glm::vec3 bitangent;
+        glm::vec2 uv;
         uint32_t boneIDs[VERTEX_MAX_BONES] = { 0 };
         float weights[VERTEX_MAX_BONES] = { 0.0f };
-        uint32_t entityID; // should not be serialized
 
         static std::array<nvrhi::VertexAttributeDesc, 7> GetAttributes()
         {
-            return 
+            return
             {
                 nvrhi::VertexAttributeDesc()
                     .setName("POSITION")
@@ -79,14 +74,19 @@ namespace ignite
                     .setOffset(offsetof(VertexMesh_Anim, normal))
                     .setElementStride(sizeof(VertexMesh_Anim)),
                 nvrhi::VertexAttributeDesc()
-                    .setName("TEXCOORD")
-                    .setFormat(nvrhi::Format::RG32_FLOAT)
-                    .setOffset(offsetof(VertexMesh_Anim, texCoord))
+                    .setName("TANGENT")
+                    .setFormat(nvrhi::Format::RGB32_FLOAT)
+                    .setOffset(offsetof(VertexMesh_Anim, tangent))
                     .setElementStride(sizeof(VertexMesh_Anim)),
                 nvrhi::VertexAttributeDesc()
-                    .setName("COLOR")
-                    .setFormat(nvrhi::Format::RGBA32_FLOAT)
-                    .setOffset(offsetof(VertexMesh_Anim, color))
+                    .setName("BITANGENT")
+                    .setFormat(nvrhi::Format::RGB32_FLOAT)
+                    .setOffset(offsetof(VertexMesh_Anim, bitangent))
+                    .setElementStride(sizeof(VertexMesh_Anim)),
+                nvrhi::VertexAttributeDesc()
+                    .setName("TEXCOORD")
+                    .setFormat(nvrhi::Format::RG32_FLOAT)
+                    .setOffset(offsetof(VertexMesh_Anim, uv))
                     .setElementStride(sizeof(VertexMesh_Anim)),
                 nvrhi::VertexAttributeDesc()
                     .setName("BONEIDS")
@@ -97,11 +97,6 @@ namespace ignite
                     .setName("WEIGHTS")
                     .setFormat(nvrhi::Format::RGBA32_FLOAT)
                     .setOffset(offsetof(VertexMesh_Anim, weights))
-                    .setElementStride(sizeof(VertexMesh_Anim)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("ENTITYID")
-                    .setFormat(nvrhi::Format::R32_UINT)
-                    .setOffset(offsetof(VertexMesh_Anim, entityID))
                     .setElementStride(sizeof(VertexMesh_Anim))
             };
         }
@@ -112,26 +107,32 @@ namespace ignite
                 .setRegisterSpace(0) // set 0
                 .setRegisterSpaceIsDescriptorSet(true)
                 .setVisibility(nvrhi::ShaderType::All)
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)) // camera
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1)) // model
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(2)) // directional light
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(3)); // environment
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0)) // camera
+                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1)) // object
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(2)); // scene
         }
+    };
 
-        static nvrhi::BindingLayoutDesc GetMaterialBindingLayoutDesc()
+    struct VertexScreen
+    {
+        glm::vec2 position;
+        glm::vec2 texCoord;
+
+        static std::array<nvrhi::VertexAttributeDesc, 2> GetAttributes()
         {
-            return nvrhi::BindingLayoutDesc()
-                .setRegisterSpace(1) // set 1
-                .setRegisterSpaceIsDescriptorSet(true)
-                .setVisibility(nvrhi::ShaderType::All)
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)) // material
-                .addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)) // diffuse
-                .addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)) // specular
-                .addItem(nvrhi::BindingLayoutItem::Texture_SRV(2)) // emissive
-                .addItem(nvrhi::BindingLayoutItem::Texture_SRV(3)) // metallic roughness
-                .addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)) // normals
-                .addItem(nvrhi::BindingLayoutItem::Texture_SRV(5)) // texture cube
-                .addItem(nvrhi::BindingLayoutItem::Sampler(0)); // sampler
+            return {
+                nvrhi::VertexAttributeDesc()
+                    .setName("POSITION")
+                    .setBufferIndex(0)
+                    .setFormat(nvrhi::Format::RG32_FLOAT)
+                    .setOffset(offsetof(VertexScreen, position))
+                    .setElementStride(sizeof(VertexScreen)),
+                nvrhi::VertexAttributeDesc()
+                    .setName("TEXCOORD")
+                    .setFormat(nvrhi::Format::RG32_FLOAT)
+                    .setOffset(offsetof(VertexScreen, texCoord))
+                    .setElementStride(sizeof(VertexScreen))
+            };
         }
     };
 
@@ -142,9 +143,8 @@ namespace ignite
         glm::vec2 tilingFactor;
         glm::vec4 color;
         u32 texIndex;
-        u32 entityID;
 
-        static std::array<nvrhi::VertexAttributeDesc, 6> GetAttributes()
+        static std::array<nvrhi::VertexAttributeDesc, 5> GetAttributes()
         {
             return
             {
@@ -173,11 +173,6 @@ namespace ignite
                     .setName("TEXINDEX")
                     .setFormat(nvrhi::Format::R32_UINT)
                     .setOffset(offsetof(Vertex2DQuad, texIndex))
-                    .setElementStride(sizeof(Vertex2DQuad)),
-                 nvrhi::VertexAttributeDesc()
-                    .setName("ENTITYID")
-                    .setFormat(nvrhi::Format::R32_UINT)
-                    .setOffset(offsetof(Vertex2DQuad, entityID))
                     .setElementStride(sizeof(Vertex2DQuad))
             };
         }
@@ -187,9 +182,8 @@ namespace ignite
     {
         glm::vec3 position;
         glm::vec4 color;
-        u32 entityID;
 
-        static std::array<nvrhi::VertexAttributeDesc, 3> GetAttributes()
+        static std::array<nvrhi::VertexAttributeDesc, 2> GetAttributes()
         {
             return
             {
@@ -203,11 +197,6 @@ namespace ignite
                     .setName("COLOR")
                     .setFormat(nvrhi::Format::RGBA32_FLOAT)
                     .setOffset(offsetof(Vertex2DLine, color))
-                    .setElementStride(sizeof(Vertex2DLine)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("ENTITYID")
-                    .setFormat(nvrhi::Format::R32_UINT)
-                    .setOffset(offsetof(Vertex2DLine, entityID))
                     .setElementStride(sizeof(Vertex2DLine))
             };
         }

@@ -5,7 +5,8 @@
 
 struct Camera
 {
-    float4x4 viewProjection;
+    float4x4 projection;
+    float4x4 view;
     float4 position;
 };
 
@@ -20,6 +21,7 @@ cbuffer CameraBuffer : register(b0)
 {
     Camera camera;
 }
+
 cbuffer ObjectBuffer : register(b1)
 {
     Object object;
@@ -60,6 +62,6 @@ PSInput main(VSInput input)
     }
 
     float4 worldPos = mul(object.transformMatrix, posL);
-    output.position = mul(camera.viewProjection, worldPos);
+    output.position = mul(mul(camera.projection, camera.view), worldPos);
     return output;
 }

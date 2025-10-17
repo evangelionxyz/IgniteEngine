@@ -30,58 +30,78 @@
 
 namespace ignite
 {
-    Texture::Texture(Buffer buffer, const TextureCreateInfo &createInfo)
-        : m_CreateInfo(createInfo), m_Data(buffer.data)
+    // Utility function to flip image buffer vertically
+    static void FlipImageBuffer(Buffer& buffer, int width, int height, int rowPitch)
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-        
-        LOG_ASSERT(m_Data && buffer.data, "[Texture] Pixel data is null");
+        if (!buffer)
+            return;
 
-        const auto &textureDesc = nvrhi::TextureDesc()
-            .setDimension(m_CreateInfo.dimension)
-            .setWidth(m_CreateInfo.width)
-            .setHeight(m_CreateInfo.height)
-            .setFormat(m_CreateInfo.format)
-            .setInitialState(nvrhi::ResourceStates::ShaderResource)
-            .setKeepInitialState(true)
-            .setMipLevels(m_CreateInfo.mipLevels)
-            .setDebugName("Geometry Texture");
-        
-        m_Handle = device->createTexture(textureDesc);
-        LOG_ASSERT(m_Handle, "Failed to create texture");
+        std::vector<uint8_t> flipped(buffer.size);
 
-        const auto samplerDesc = nvrhi::SamplerDesc()
-            .setAllAddressModes(nvrhi::SamplerAddressMode::Repeat)
-            .setAllFilters(true);
+        for (int y = 0; y < height; y++)
+        {
+            // Copy each row from bottom to top
+            memcpy(
+                flipped.data() + y * rowPitch,
+                buffer.data + (height - 1 - y) * rowPitch,
+                rowPitch
+            );
+        }
 
-        m_Sampler = device->createSampler(samplerDesc);
-        LOG_ASSERT(m_Sampler, "Failed to create texture sampler");
+        // Copy the flipped data back to the original buffer
+        memcpy(buffer.data, flipped.data(), flipped.size());
+    }
+
+
+    Texture::Texture(const TextureCreateInfo& createInfo)
+        : m_CreateInfo(createInfo)
+    {
+        CreateTextureHandle();
+    }
+
+    Texture::Texture(Buffer buffer, const TextureCreateInfo &createInfo)
+        : m_Buffer(buffer), m_CreateInfo(createInfo)
+    {
+        CreateTextureHandle();
+
+        const int channels = 4;
+        int rowPitch = m_CreateInfo.width * channels;
+        int depthPitch = rowPitch * m_CreateInfo.height;
+
+        {
+            auto device = Application::GetGraphicsDevice();
+            auto cmd = device->createCommandList();
+            cmd->open();
+            SetData(cmd, rowPitch, depthPitch);
+            cmd->close();
+            device->executeCommandList(cmd);
+        }
     }
 
     Texture::Texture(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo)
         : m_CreateInfo(createInfo), m_Filepath(filepath)
     {
-        m_WithSTBI = true;
-
         LOG_ASSERT(std::filesystem::exists(filepath), "File does not found!");
 
         // always use RGBA
-        i32 channels = 4;
-
-        stbi_set_flip_vertically_on_load(m_CreateInfo.flip ? 1 : 0);
+        const int channels = 4;
 
         switch (m_CreateInfo.format)
         {
             case nvrhi::Format::RGBA8_UNORM:
             {
-                m_Data = stbi_load(filepath.generic_string().c_str(), &m_CreateInfo.width, &m_CreateInfo.height, &channels, 4);
-                LOG_ASSERT(m_Data, "Failed to load texture data");
+                int channelsOut;
+                uint8_t *pixelData = stbi_load(filepath.generic_string().c_str(), &m_CreateInfo.width, &m_CreateInfo.height, &channelsOut, 4);
+                m_Buffer = Buffer(pixelData, m_CreateInfo.width * m_CreateInfo.height * channels);
+                LOG_ASSERT(m_Buffer, "Failed to load texture data");
                 break;
             }
             case nvrhi::Format::RGBA32_FLOAT:
             {
-                m_Data = stbi_loadf(filepath.generic_string().c_str(), &m_CreateInfo.width, &m_CreateInfo.height, &channels, 4);
-                LOG_ASSERT(m_Data, "Failed to load texture data");
+                int channelsOut;
+                float *pixelData = stbi_loadf(filepath.generic_string().c_str(), &m_CreateInfo.width, &m_CreateInfo.height, &channelsOut, 4);
+                m_Buffer = Buffer(pixelData, m_CreateInfo.width * m_CreateInfo.height * channels * sizeof(float));
+                LOG_ASSERT(m_Buffer, "Failed to load texture data");
                 break;
             }
             default:
@@ -91,85 +111,101 @@ namespace ignite
             }
         }
 
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        int rowPitch = m_CreateInfo.width * channels;
+        int depthPitch = rowPitch * m_CreateInfo.height;
 
-        const auto &textureDesc = nvrhi::TextureDesc()
-            .setDimension(m_CreateInfo.dimension)
-            .setWidth(m_CreateInfo.width)
-            .setHeight(m_CreateInfo.height)
-            .setFormat(m_CreateInfo.format)
-            .setInitialState(nvrhi::ResourceStates::ShaderResource)
-            .setKeepInitialState(true)
-            .setMipLevels(m_CreateInfo.mipLevels)
-            .setDebugName(filepath.generic_string());
+        CreateTextureHandle();
 
-        m_Handle = device->createTexture(textureDesc);
-        LOG_ASSERT(m_Handle, "Failed to create texture");
-
-        const auto samplerDesc = nvrhi::SamplerDesc()
-            .setAllAddressModes(nvrhi::SamplerAddressMode::Repeat)
-            .setAllFilters(true);
-
-        m_Sampler = device->createSampler(samplerDesc);
-        LOG_ASSERT(m_Sampler, "Failed to create texture sampler");
+        {
+            auto device = Application::GetGraphicsDevice();
+            auto cmd = device->createCommandList();
+            cmd->open();
+            SetData(cmd, rowPitch, depthPitch);
+            cmd->close();
+            device->executeCommandList(cmd);
+        }
     }
 
     Texture::~Texture()
     {
     }
 
-    void Texture::Write(nvrhi::ICommandList *commandList)
+    void Texture::SetData(nvrhi::ICommandList *cmd, int rowPitch, int depthPitch)
     {
-        LOG_ASSERT(m_Data, "[Texture] Pixel data is null");
-
-        // Generate all mip levels on CPU
-
-        // Row Pitch   = width * channels
-        // Depth pitch = Row Pitch * height (for 3D TEXTURE)
-
-        const int channels = 4; // always use RGBA
-        int rowPitch = m_CreateInfo.width * channels;
-        int depthPitch = rowPitch * m_CreateInfo.height;
+        LOG_ASSERT(m_Buffer.data, "[Texture] Pixel data is null");
 
         if (m_CreateInfo.format == nvrhi::Format::RGBA8_UNORM)
         {
             // char = 1 byte, 8 bit
-            uint8_t *byteData = static_cast<uint8_t *>(m_Data);
+            if (m_CreateInfo.flip)
+            {
+                FlipImageBuffer(m_Buffer, m_CreateInfo.width, m_CreateInfo.height, rowPitch);
+            }
+
+            uint8_t *byteData = static_cast<uint8_t *>(m_Buffer.data);
 
             auto mipChain = CPUMipGenerator::GenerateMipChain(byteData,
                 m_CreateInfo.width, m_CreateInfo.height, rowPitch,
                 m_CreateInfo.format, m_CreateInfo.mipLevels);
 
             // Upload all mip levels
-            for (uint32_t mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
+            for (int mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
             {
                 const auto &mipData = mipChain[mip];
-                commandList->writeTexture(m_Handle, 0, mip, mipData.data.data(), mipData.rowPitch);
+                cmd->writeTexture(m_Handle, 0, mip, mipData.data.data(), mipData.rowPitch);
             }
         }
         else if (m_CreateInfo.format == nvrhi::Format::RGBA32_FLOAT)
         {
             // float = 4 bytes, 32 bit, we need to multiply sizeof(float)
-            float *floatData = static_cast<float *>(m_Data);
+            if (m_CreateInfo.flip)
+            {
+                FlipImageBuffer(m_Buffer, m_CreateInfo.width, m_CreateInfo.height, rowPitch * sizeof(float));
+            }
+
+            float *floatData = reinterpret_cast<float *>(m_Buffer.data);
 
             auto mipChain = CPUMipGenerator::GenerateMipChain(floatData,
                 m_CreateInfo.width, m_CreateInfo.height, rowPitch * sizeof(float),
                 m_CreateInfo.format, m_CreateInfo.mipLevels);
 
+
             // Upload all mip levels
-            for (uint32_t mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
+            for (int mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
             {
                 const auto &mipData = mipChain[mip];
-                commandList->writeTexture(m_Handle, 0, mip, mipData.data.data(), rowPitch * sizeof(float), depthPitch * sizeof(float));
+                cmd->writeTexture(m_Handle, 0, mip, mipData.data.data(), rowPitch * sizeof(float), depthPitch * sizeof(float));
             }
         }
+    }
 
-        if (m_Data && m_WithSTBI)
-        {
-            // free if loaded with stbi
-            stbi_image_free(m_Data);
-            m_Data = nullptr;
-        }
+    void Texture::CreateTextureHandle()
+    {
+        nvrhi::TextureDesc textureDesc = nvrhi::TextureDesc();
+        textureDesc.setDimension(m_CreateInfo.dimension);
+        textureDesc.setWidth(m_CreateInfo.width);
+        textureDesc.setHeight(m_CreateInfo.height);
+        textureDesc.setFormat(m_CreateInfo.format);
+        textureDesc.setInitialState(nvrhi::ResourceStates::ShaderResource);
+        textureDesc.setKeepInitialState(true);
+        textureDesc.setMipLevels(m_CreateInfo.mipLevels);
+        textureDesc.setDebugName(m_CreateInfo.debugName);
+        
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        m_Handle = device->createTexture(textureDesc);
+        LOG_ASSERT(m_Handle, "Failed to create texture");
+
+        nvrhi::SamplerDesc samplerDesc = nvrhi::SamplerDesc();
+        samplerDesc.setAllAddressModes(m_CreateInfo.samplerMode);
+        samplerDesc.setAllFilters(true);
+
+        m_Sampler = device->createSampler(samplerDesc);
+        LOG_ASSERT(m_Sampler, "Failed to create texture sampler");
+    }
+
+    Ref<Texture> Texture::Create(const TextureCreateInfo& createInfo)
+    {
+        return CreateRef<Texture>(createInfo);
     }
 
     Ref<Texture> Texture::Create(Buffer buffer, const TextureCreateInfo &createInfo)

@@ -43,23 +43,9 @@ namespace ignite
     class DeviceManager_VK : public DeviceManager
     {
     public:
-        [[nodiscard]] nvrhi::IDevice *GetDevice() const override
-        {
-            if (m_ValidationLayer)
-                return m_ValidationLayer;
-
-            return m_NvrhiDevice;
-        }
-
-        [[nodiscard]] nvrhi::GraphicsAPI GetGraphicsAPI() const override
-        {
-            return nvrhi::GraphicsAPI::VULKAN;
-        }
-
-        static DeviceManager_VK *GetInstance();
+		DeviceManager_VK(Window* window, const DeviceParameters& params);
 
         bool EnumerateAdapters(std::vector<AdapterInfo> &outAdapters) override;
-        const DeviceCreationParameters &GetDeviceParams() const { return m_DeviceParams; }
 
         bool CreateInstanceInternal() override;
         bool CreateDevice() override;
@@ -96,6 +82,12 @@ namespace ignite
         void CreateDescriptorPool();
 
         void WaitForIdle() override;
+
+        nvrhi::IDevice* GetDevice() const override;
+        nvrhi::GraphicsAPI GetGraphicsAPI() const override;
+
+        static DeviceManager_VK* GetInstance();
+
 
         struct VulkanExtensionSet
         {
@@ -138,7 +130,8 @@ namespace ignite
              } 
         };
 
-        std::unordered_set<std::string> m_RayTracingExtensions = {
+        std::unordered_set<std::string> m_RayTracingExtensions =
+        {
             VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
             VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
             VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,

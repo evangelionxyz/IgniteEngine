@@ -138,4 +138,27 @@ namespace ignite
     private:
         bool m_Minimized = false;
     };
+
+    class WindowDPIScaleChangedEvent final : public Event
+    {
+    public:
+        WindowDPIScaleChangedEvent(float scaleX, float scaleY)
+            : m_ScaleX(scaleX), m_ScaleY(scaleY) {}
+
+        [[nodiscard]] float GetScaleX() const { return m_ScaleX; }
+        [[nodiscard]] float GetScaleY() const { return m_ScaleY; }
+
+        [[nodiscard]] std::string ToString() const override
+        {
+            std::stringstream ss;
+            ss << "WindowDPIScaleChangedEvent: " << m_ScaleX << "x" << m_ScaleY;
+            return ss.str();
+        }
+
+        EVENT_CLASS_TYPE(WindowDPIScaleChanged);
+        EVENT_CLASS_CATEGORY(EventCategoryApplication);
+
+    private:
+        float m_ScaleX, m_ScaleY;
+    };
 }

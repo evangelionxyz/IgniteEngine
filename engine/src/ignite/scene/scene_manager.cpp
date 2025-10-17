@@ -32,7 +32,8 @@
 #include "ignite/core/uuid.hpp"
 
 #include "ignite/graphics/scene_renderer.hpp"
-#include "ignite/graphics/environment.hpp"
+#include "ignite/graphics/objects/environment.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/renderer.hpp"
 
 #include "ignite/math/math.hpp"
@@ -43,7 +44,7 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 
-#include "ignite/graphics/mesh.hpp"
+
 
 namespace ignite
 {    
@@ -208,6 +209,44 @@ namespace ignite
         return createdEntity;
     }
 
+    Entity SceneManager::CreateWorldEnvironment(Scene *scene, const std::string &name, UUID uuid)
+    {
+        // create local storage for entity data
+        Entity createdEntity;
+
+        // prepare entity creation logic
+        std::function createFunc = [=, &createdEntity]() mutable
+        {
+            createdEntity = CreateEntity(scene, name, EntityType_WorldEnvironment, uuid);
+            createdEntity.AddComponent<WorldEnvironment>();
+        };
+
+        // immediately call createFunc to initialize createdEntity
+        createFunc();
+
+        // capture scene and entity by value to preserve the for undo
+        Scene *capturedScene = scene;
+        UUID capturedUUID = createdEntity.GetComponent<ID>().uuid;
+
+        std::function destroyFunc = [capturedScene, capturedUUID]()
+        {
+            if (Entity entityToDestroy = GetEntity(capturedScene, capturedUUID))
+            {
+                DestroyEntity(capturedScene, entityToDestroy);
+            }
+        };
+
+        CommandManager::AddCommand(
+            CreateScope<EntityManagerCommand>(
+                createFunc, 
+                destroyFunc, 
+                CommandState_Create
+            )
+        );
+
+        return createdEntity;
+    }
+
     void SceneManager::RenameEntity(Scene *scene, Entity entity, const std::string &newName)
     {
         scene->SetDirtyFlag(true);
@@ -263,15 +302,6 @@ namespace ignite
 
         // copy current entity's components to new entity
         SceneManager::CopyComponentIfExists(AllComponents{}, newEntity, entity);
-
-        if (newEntity.HasComponent<MeshRenderer>())
-        {
-            MeshRenderer &mr = newEntity.GetComponent<MeshRenderer>();
-            bool isSkinnedMesh = true;
-            mr.Create(isSkinnedMesh);
-            mr.mesh->CreateBuffers();
-            mr.mesh->WriteVertexBuffer(newEntity);
-        }
 
         // get new entity's ID Component
         ID &newEntityIDComp = newEntity.GetComponent<ID>();
@@ -399,7 +429,7 @@ namespace ignite
     Ref<Scene> SceneManager::Copy(Ref<Scene> &other)
     {
         // create new scene with other's name
-        Ref<Scene> newScene = CreateRef<Scene>(other->name);
+        Ref<Scene> newScene = CreateRef<Scene>(other->GetProject(), other->name);
 
         // create source and destination registry
         auto srcRegistry = other->registry;
@@ -438,7 +468,7 @@ namespace ignite
         // Do not copy registered comps
         // newScene->registeredComps = other->registeredComps;
 
-        auto mrView = destRegistry->view<MeshRenderer>();
+        /*auto mrView = destRegistry->view<MeshRenderer>();
         for (entt::entity e : mrView)
         {
             MeshRenderer &mr = mrView.get<MeshRenderer>(e);
@@ -446,7 +476,7 @@ namespace ignite
             mr.Create(isSkinnedMesh);
             mr.mesh->CreateBuffers();
             mr.mesh->WriteVertexBuffer(static_cast<uint32_t>(e));
-        }
+        }*/
 
         Application::GetDeviceManager()->WaitForIdle();
 

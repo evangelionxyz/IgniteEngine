@@ -1,11 +1,13 @@
+#include "include/binding_helpers.hlsli"
 
 struct Camera
 {
-    float4x4 viewProjection;
-    float3 position;
+  float4x4 projection;
+  float4x4 view;
+  float4 position;
 };
 
-cbuffer CameraBuffer : register(b0)
+cbuffer CameraBuffer : register(b0, space0)
 {
     Camera camera;
 }
@@ -23,6 +25,6 @@ struct PSInput
 PSInput main(VSInput input)
 {
     PSInput output;
-    output.position = mul(camera.viewProjection, float4(input.position.x, input.position.y, input.position.z, 1.0f));
+    output.position = mul(mul(camera.projection, camera.view), float4(input.position.x, input.position.y, input.position.z, 1.0f));
     return output;
 }

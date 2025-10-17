@@ -66,7 +66,7 @@ namespace ignite
 
     static bool Entity_HasComponent(UUID entityID, MonoReflectionType *componentType)
     {
-        Scene *scene = ScriptEngine::GetSceneContext();
+        Scene *scene = ScriptEngine::GetInstance()->GetSceneContext();
         LOG_ASSERT(scene, "[ScriptGlue] Invalid Scene");
         Entity entity = SceneManager::GetEntity(scene, entityID);
         if (entity.IsValid())
@@ -81,7 +81,7 @@ namespace ignite
 
     static void Entity_AddComponent(UUID entityID, MonoReflectionType *componentType)
     {
-        Scene *scene = ScriptEngine::GetSceneContext();
+        Scene *scene = ScriptEngine::GetInstance()->GetSceneContext();
         LOG_ASSERT(scene, "[ScriptGlue] Invalid Scene");
         Entity entity = SceneManager::GetEntity(scene, entityID);
         if (entity.IsValid())
@@ -94,7 +94,7 @@ namespace ignite
 
     static uint64_t Entity_FindEntityByName(MonoString *stringName)
     {
-        Scene *scene = ScriptEngine::GetSceneContext();
+        Scene *scene = ScriptEngine::GetInstance()->GetSceneContext();
         LOG_ASSERT(scene, "[ScriptGlue] Invalid Scene");
 
         std::string name = Utils::MonoStringToString(stringName);
@@ -108,7 +108,7 @@ namespace ignite
 
     static void Entity_SetVisibility(UUID entityID, bool value)
     {
-        Scene *scene = ScriptEngine::GetSceneContext();
+        Scene *scene = ScriptEngine::GetInstance()->GetSceneContext();
         LOG_ASSERT(scene, "[ScriptGlue] Invalid Scene");
 
         Entity entity = SceneManager::GetEntity(scene, entityID);
@@ -121,7 +121,7 @@ namespace ignite
 
     static void Entity_GetVisibility(UUID entityID, bool *value)
     {
-        Scene *scene = ScriptEngine::GetSceneContext();
+        Scene *scene = ScriptEngine::GetInstance()->GetSceneContext();
         LOG_ASSERT(scene, "[ScriptGlue] Invalid Scene");
 
         Entity entity = SceneManager::GetEntity(scene, entityID);
@@ -134,7 +134,7 @@ namespace ignite
 
     static uint64_t Entity_Instantiate(UUID entityID, glm::vec3 translation)
     {        
-        Scene *scene = ScriptEngine::GetSceneContext();
+        Scene *scene = ScriptEngine::GetInstance()->GetSceneContext();
         LOG_ASSERT(scene, "[ScriptGlue] Invalid Scene");
 
         Entity entity = SceneManager::GetEntity(scene, entityID);
@@ -153,7 +153,7 @@ namespace ignite
 
     static void Entity_Destroy(UUID entityID)
     {
-        Scene *scene = ScriptEngine::GetSceneContext();
+        Scene *scene = ScriptEngine::GetInstance()->GetSceneContext();
         LOG_ASSERT(scene, "[ScriptGlue] Invalid Scene");
 
         Entity entity = SceneManager::GetEntity(scene, entityID);
@@ -169,12 +169,12 @@ namespace ignite
     // Component
     static MonoObject *GetScriptInstance(UUID entityID)
     {
-        return ScriptEngine::GetManagedInstance(entityID);
+        return ScriptEngine::GetInstance()->GetManagedInstance(entityID);
     }
 
     static void TransformComponent_GetTranslation(UUID entityID, glm::vec3 *outTranslation)
     {
-        Scene *scene = ScriptEngine::GetSceneContext();
+        Scene *scene = ScriptEngine::GetInstance()->GetSceneContext();
         LOG_ASSERT(scene, "[ScriptGlue] Invalid Scene");
         Entity entity = SceneManager::GetEntity(scene, entityID);
         if (entity.IsValid())
@@ -185,7 +185,7 @@ namespace ignite
 
     static void TransformComponent_SetTranslation(UUID entityID, glm::vec3 translation)
     {
-        Scene *scene = ScriptEngine::GetSceneContext();
+        Scene *scene = ScriptEngine::GetInstance()->GetSceneContext();
         LOG_ASSERT(scene, "[ScriptGlue] Invalid Scene");
         Entity entity = SceneManager::GetEntity(scene, entityID);
         if (entity.IsValid())
@@ -196,7 +196,7 @@ namespace ignite
 
     static void TransformComponent_GetRotation(UUID entityID, glm::quat *outRotation)
     {
-        Scene *scene = ScriptEngine::GetSceneContext();
+        Scene *scene = ScriptEngine::GetInstance()->GetSceneContext();
         LOG_ASSERT(scene, "[ScriptGlue] Invalid Scene");
         Entity entity = SceneManager::GetEntity(scene, entityID);
 
@@ -208,7 +208,7 @@ namespace ignite
 
     static void TransformComponent_SetRotation(UUID entityID, glm::quat rotation)
     {
-        Scene *scene = ScriptEngine::GetSceneContext();
+        Scene *scene = ScriptEngine::GetInstance()->GetSceneContext();
         LOG_ASSERT(scene, "[ScriptGlue] Invalid Scene");
         Entity entity = SceneManager::GetEntity(scene, entityID);
 
@@ -220,7 +220,7 @@ namespace ignite
 
     static void TransformComponent_GetEulerAngles(UUID entityID, glm::vec3 *angle)
     {
-        Scene *scene = ScriptEngine::GetSceneContext();
+        Scene *scene = ScriptEngine::GetInstance()->GetSceneContext();
         LOG_ASSERT(scene, "[ScriptGlue] Invalid Scene");
         Entity entity = SceneManager::GetEntity(scene, entityID);
 
@@ -232,7 +232,7 @@ namespace ignite
 
     static void TransformComponent_SetEulerAngles(UUID entityID, glm::vec3 angle)
     {
-        Scene *scene = ScriptEngine::GetSceneContext();
+        Scene *scene = ScriptEngine::GetInstance()->GetSceneContext();
         LOG_ASSERT(scene, "[ScriptGlue] Invalid Scene");
         Entity entity = SceneManager::GetEntity(scene, entityID);
 
@@ -244,7 +244,7 @@ namespace ignite
 
     static void TransformComponent_GetScale(UUID entityID, glm::vec3 *outScale)
     {
-        Scene *scene = ScriptEngine::GetSceneContext();
+        Scene *scene = ScriptEngine::GetInstance()->GetSceneContext();
         LOG_ASSERT(scene, "[ScriptGlue] Invalid Scene");
         Entity entity = SceneManager::GetEntity(scene, entityID);
 
@@ -256,7 +256,7 @@ namespace ignite
 
     static void TransformComponent_SetScale(UUID entityID, glm::vec3 scale)
     {
-        Scene *scene = ScriptEngine::GetSceneContext();
+        Scene *scene = ScriptEngine::GetInstance()->GetSceneContext();
         LOG_ASSERT(scene, "[ScriptGlue] Invalid Scene");
         Entity entity = SceneManager::GetEntity(scene, entityID);
         if (entity.IsValid())
@@ -292,7 +292,7 @@ namespace ignite
                 structName = structName.substr(0, pos);
 
                 std::string managedTypename = std::format("Ignite.{}", structName);
-                MonoType *managedType = mono_reflection_type_from_name(managedTypename.data(), ScriptEngine::GetCoreAssemblyImage());
+                MonoType *managedType = mono_reflection_type_from_name(managedTypename.data(), ScriptEngine::GetInstance()->GetCoreAssemblyImage());
                 if (!managedType)
                 {
                     // LOG_ERROR("[Script Glue] Could not find component type {}", managedTypename);

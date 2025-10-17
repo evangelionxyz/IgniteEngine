@@ -28,17 +28,19 @@
 #include "graphics_pipeline.hpp"
 #include "renderer.hpp"
 #include "shader.hpp"
+#include "ignite/math/math.hpp"
 
-#include "vertex_buffer.hpp"
-#include "index_buffer.hpp"
+#include "ignite/math/aabb.hpp"
 
-#include <unordered_map>
+#include "ignite/graphics/buffers/vertex_buffer.hpp"
+#include "ignite/graphics/buffers/index_buffer.hpp"
 
 namespace ignite
 {
     class GraphicsPipeline;
     class DeviceManager;
     class Texture;
+    class RenderTarget;
 
     template<typename VertexType>
     struct BatchRender
@@ -54,8 +56,6 @@ namespace ignite
         VertexType*vertexBufferPtr = nullptr;
         Ref<VertexBuffer> vertexBuffer;
         Ref<IndexBuffer> indexBuffer;
-        Ref<GraphicsPipeline> pipeline;
-        nvrhi::BindingSetHandle bindingSet;
         std::vector<Ref<Texture>> textureSlots;
 
         ~BatchRender()
@@ -65,46 +65,42 @@ namespace ignite
         }
     };
 
-    struct Renderer2DData
-    {
-        BatchRender<Vertex2DQuad> quadBatch;
-        BatchRender<Vertex2DLine> lineBatch;
-        const uint8_t MAX_TEXTURE_COUNT = 32;
-
-        glm::vec4 quadPositions[4];
-    };
-
     class Renderer2D
     {
     public:
-        static void Init();
-        static void Shutdown();
-        static void CreatePipelines(nvrhi::IFramebuffer *framebuffer);
-        static void SetFillMode(nvrhi::RasterFillMode mode);
+        Renderer2D();
+        ~Renderer2D();
 
-        static void Begin(nvrhi::ICommandList *commandList, nvrhi::IFramebuffer* framebuffer);
-        static void Flush();
-        static void End();
+        void Begin(nvrhi::ICommandList *cmd);
+        void Flush(nvrhi::IFramebuffer *framebuffer);
+        void End();
 
-        static void DrawBox(const glm::mat4& transform, const glm::vec4& color = glm::vec4(1.0f), uint32_t entityID = 0);
-        static void DrawRect(const glm::mat4& transform, const glm::vec4& color = glm::vec4(1.0f), uint32_t entityID = 0);
-        static void DrawLine(const std::vector<glm::vec3>& positions, const glm::vec4& color = glm::vec4(1.0f), uint32_t entityID = 0);
-        static void DrawLine(const glm::vec3 &pos0, const glm::vec3 &pos1, const glm::vec4& color = glm::vec4(1.0f), uint32_t entityID = 0);
+        void SetFillMode(nvrhi::RasterFillMode mode) { m_FillMode = mode; ClearPipelineCache(); }
 
-        static void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t entityID = 0);
-        static void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t entityID = 0);
-        static void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t entityID = 0);
+        void DrawBox(const glm::mat4& transform, const glm::vec4& color = glm::vec4(1.0f));
+        void DrawRect(const glm::mat4& transform, const glm::vec4& color = glm::vec4(1.0f));
+        void DrawLine(const std::vector<glm::vec3>& positions, const glm::vec4& color = glm::vec4(1.0f));
+        void DrawLine(const glm::vec3 &pos0, const glm::vec3 &pos1, const glm::vec4& color = glm::vec4(1.0f));
+        void DrawAABB(const AABB& aabb, const glm::vec4& color = glm::vec4(1.0f));
 
-        static void InitQuadData();
-        static void InitLineData();
+        void DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
+        void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
+        void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
+        void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
 
-        static u32 GetOrInsertTexture(const Ref<Texture>& texture);
-        static void UpdateTextureBindings();
+        void InitQuadData();
+        void InitLineData();
 
+        void ClearPipelineCache();
+        
+        u32 GetOrInsertTexture(const Ref<Texture>& texture);
+        
+        static Ref<Renderer2D> Create();
+        
     private:
-        static nvrhi::ICommandList *renderCommandList;
-        static nvrhi::IFramebuffer *renderFramebuffer;
-
-        static Renderer2DData *s_Data;
+        nvrhi::ICommandList *m_Cmd;
+        BatchRender<Vertex2DQuad> m_QuadBatch;
+        BatchRender<Vertex2DLine> m_LineBatch;
+        nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
     };
 }

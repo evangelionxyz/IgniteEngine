@@ -23,10 +23,7 @@
 
 #include "shader_factory.hpp"
 #include "ignite/core/logger.hpp"
-
 #include "renderer.hpp"
-
-// #include <ShaderMake/ShaderBlob.h>
 
 namespace ignite
 {

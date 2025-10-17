@@ -25,6 +25,7 @@
 
 #include "ignite/asset/asset.hpp"
 #include "ignite/asset/asset_manager.hpp"
+#include "ignite/asset/material_manager.hpp"
 
 #include <string>
 #include <filesystem>
@@ -32,7 +33,8 @@
 namespace ignite
 {
     class Scene;
-
+    class ScriptEngine;
+    
     struct ProjectInfo
     {
         std::string name;
@@ -51,7 +53,6 @@ namespace ignite
     {
     public:
         Project() = default;
-
         Project(const ProjectInfo &info);
 
         ~Project() override;
@@ -60,10 +61,16 @@ namespace ignite
         std::filesystem::path GetAssetFilepath(const std::filesystem::path &filepath) const;
         std::filesystem::path GetRelativeFilepath(const std::filesystem::path &filepath) const;
         
-        void SetActiveScene(Scene *scene);
+        void SetActiveScene(const Ref<Scene> &scene);
+        void SetDefaultScene(AssetHandle handle);
         bool BuildSolution();
+
         std::vector<std::pair<AssetHandle, AssetMetaData>> ValidateAssetRegistry();
 
+        std::filesystem::path GetFilepath() const
+        {
+            return GetDirectory() / m_Info.filepath;
+        }
 
         std::filesystem::path GetDirectory() const
         {
@@ -85,39 +92,23 @@ namespace ignite
             return GetDirectory() / m_Info.scriptsDirectory;
         }
 
-        // Static methods
-        static std::filesystem::path GetActiveScriptsDirectory()
-        {
-            return GetActive()->GetScriptsDirectory();
-        }
-
-        static std::filesystem::path GetActiveSolutionFilepath()
-        {
-            return GetActive()->GetSolutionFilepath();
-        }
-
-        static std::filesystem::path GetActiveAssetDirectory()
-        {
-            return GetActive()->GetAssetDirectory();
-        }
-
-        static std::filesystem::path GetActiveProjectDirectory()
-        {
-            return GetActive()->GetDirectory();
-        }
-
         template<typename T>
-        static Ref<T> GetAsset(AssetHandle handle)
+        Ref<T> GetAsset(AssetHandle handle)
         {
-            Ref<Asset> asset = GetActive()->GetAssetManager().GetAsset(handle);
+            Ref<Asset> asset = m_AssetManager->GetAsset(handle);
             return std::static_pointer_cast<T>(asset);
         }
 
-        AssetManager &GetAssetManager() { return m_AssetManager; }
-        ProjectInfo &GetInfo() { return m_Info; }
-        Scene *GetActiveScene() const { return m_ActiveScene; }
+        AssetManager &GetAssetManager() { return *m_AssetManager; }
+        MaterialManager &GetMaterialManager() { return m_MaterialManager; }
 
-        static Project *GetActive();
+        ScriptEngine *GetScriptEngine() { return m_ScriptEngine; }
+
+        ProjectInfo &GetInfo() { return m_Info; }
+        Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
+
+        static Project *GetInstance();
+
         static Ref<Project> Create(const ProjectInfo &info);
 
         static AssetType GetStaticType() { return AssetType::Project; }
@@ -125,11 +116,12 @@ namespace ignite
 
     private:
         void GenerateProject();
-
-        Scene *m_ActiveScene = nullptr; // current active scene in editor
+        Ref<Scene> m_ActiveScene; // current active scene in editor
         ProjectInfo m_Info;
 
-        AssetManager m_AssetManager;
+        MaterialManager m_MaterialManager;
+        AssetManager *m_AssetManager = nullptr;
+        ScriptEngine *m_ScriptEngine = nullptr;
     };
 
 }

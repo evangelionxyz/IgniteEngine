@@ -74,3 +74,69 @@ float3 SampleSphericalMap(Texture2D tex, SamplerState samp, float3 dir)
     uv.y = asin(clamp(dir.y, -1.0f, 1.0f)) / 3.14159265f + 0.5f;
     return tex.Sample(samp, uv).rgb;
 }
+
+// Convert RGB to Luminance 
+float Luminance(float3 color)
+{
+    return dot(color, float3(0.299, 0.587, 0.114));
+}
+
+static const float sobelX[9] =
+{
+    -1, 0, 1,
+    -2, 0, 2,
+    -1, 0, 1
+};
+
+static const float sobelY[9] =
+{
+    -1, -2, -1,
+    0, 0, 0,
+    1, 2, 1
+};
+
+static const float2 offsets[9] =
+{
+    float2(-1, -1), float2(0, -1), float2(1, -1),
+    float2(-1, 0), float2(0, 0), float2(1, 0),
+    float2(-1, 1), float2(0, 1), float2(1, 1)
+};
+
+
+// Sobel edge detection on color/luminance
+float2 SobelColor(float2 uv, float2 texelSize, Texture2D <float4>tex, SamplerState s)
+{
+    float sobelXResult = 0.0f;
+    float sobelYResult = 0.0f;
+
+    [unroll]
+    for (int i = 0; i < 9; i++)
+    {
+        float2 sampleUV = uv + offsets[i] * texelSize;
+        float3 color = tex.SampleLevel(s, sampleUV, 0).rgb;
+        float luminance = Luminance(color);
+
+        sobelXResult += luminance * sobelX[i];
+        sobelYResult += luminance * sobelY[i];
+    }
+
+    return float2(sobelXResult, sobelYResult);
+}
+
+float2 SobelDepth(float2 uv, float2 texelSize, Texture2D <float>depthTex, SamplerState s)
+{
+    float sobelXResult = 0;
+    float sobelYResult = 0;
+    
+    [unroll]
+    for (int i = 0; i < 9; i++)
+    {
+        float2 sampleUV = uv + offsets[i] * texelSize;
+        float depth = depthTex.SampleLevel(s, sampleUV, 0).r;
+        
+        sobelXResult += depth * sobelX[i];
+        sobelYResult += depth * sobelY[i];
+    }
+
+    return float2(sobelXResult, sobelYResult);
+}

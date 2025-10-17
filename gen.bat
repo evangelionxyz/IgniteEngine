@@ -1,19 +1,19 @@
 @echo off
->nul 2>&1 "%SYSTEMROOT%\system32\cacls.exe" "%SYSTEMROOT%\system32\config\system"
 
-rem
-if not exist "%~dp0\Scripts\__pycache__" (
-    if %errorlevel% NEQ 0 (
-        powershell -Command "Start-Process -FilePath '%0' -Verb RunAs"
-        exit /b
-    )
-
-    python -m pip install requests
-    python -m pip install --upgrade pip
+rem ensure python requests module is available
+python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('requests') else 1)" >nul 2>&1
+if errorlevel 1 (
+	python -m pip install requests
+) else (
+	echo Python module 'requests' already installed.
 )
-rem
 
-pushd %~dp0
-python scripts\setup.py
+rem keep pip up to date
+python -m pip install --upgrade pip
+
+rem push directory to scripts dir
+rem and running setup.py scripts
+pushd %~dp0\scripts
+python setup.py
 popd
 pause

@@ -23,11 +23,15 @@
 
 #pragma once
 
+#include "stb_image_write.h"
+#include "ignite/animation/skeletal_animation.hpp"
+#include "ignite/animation/skeleton.hpp"
+
+#include "ignite/graphics/objects/mesh.hpp"
+
+#include <filesystem>
 #include <vector>
 #include <cinttypes>
-#include "stb_image_write.h"
-#include "ignite/animation/keyframes.hpp"
-#include "ignite/animation/skeleton.hpp"
 
 namespace ignite
 {
@@ -65,6 +69,10 @@ namespace ignite
         static std::vector<std::byte> SerializeMaterial(const Ref<Material> &mat, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
+#if 0
+
+            nvrhi::IDevice *device = Application::GetGraphicsDevice();
+            nvrhi::CommandListHandle cmd = device->createCommandList();
 
             // write name
             std::string nameCopy = mat->name;
@@ -86,19 +94,34 @@ namespace ignite
             uint32_t textureCount = static_cast<uint32_t>(mat->textures.size());
             AppendRaw(buffer, textureCount);
 
-            for (auto &[type, tex] : mat->textures)
+            for (auto &[type, texture] : mat->textures)
             {
+                size_t width = static_cast<size_t>(texture->GetWidth());
+                size_t height = static_cast<size_t>(texture->GetHeight());
+                size_t rowPitch = 0;
+                
+                cmd->open();
+                nvrhi::TextureDesc stagingDesc = texture->GetHandle()->getDesc();
+                stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
+                nvrhi::StagingTextureHandle stagingTexture = device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
+                cmd->copyTexture(stagingTexture, nvrhi::TextureSlice(), texture->GetHandle(), nvrhi::TextureSlice());
+                cmd->close();
+                device->executeCommandList(cmd);
+
+                // Map and read the pixel data
+                void *pixelData = device->mapStagingTexture(stagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch);
+
                 // write texture type
                 AppendRaw(buffer, type);
 
-                AppendRaw(buffer, tex->width);
-                AppendRaw(buffer, tex->height);
-                AppendRaw(buffer, tex->rowPitch);
+                AppendRaw(buffer, width);
+                AppendRaw(buffer, height);
+                AppendRaw(buffer, rowPitch);
 
-                const std::size_t pixelBytes = static_cast<std::size_t>(tex->height) * tex->rowPitch;
+                const size_t pixelBytes = height * rowPitch;
 
                 // write RGBA blob
-                const std::byte *begin = reinterpret_cast<const std::byte *>(tex->data);
+                const std::byte *begin = reinterpret_cast<const std::byte *>(pixelData);
                 buffer.insert(buffer.end(), begin, begin + pixelBytes);
             }
 
@@ -106,15 +129,19 @@ namespace ignite
             std::ofstream of(filepath, std::ios::binary);
             of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
             of.close();
-
+#endif
             return buffer;
         }
 
         static Ref<Material> DeserializeMaterial(const std::filesystem::path &filepath)
         {
             Ref<Material> mat = CreateRef<Material>();
-
             std::ifstream inFile(filepath, std::ios::binary);
+
+#if 0
+            nvrhi::IDevice *device = Application::GetGraphicsDevice();
+            nvrhi::CommandListHandle cmd = device->createCommandList();
+            cmd->open();
 
             if (!inFile)
             {
@@ -139,31 +166,41 @@ namespace ignite
 
             for (uint32_t i = 0; i < textureCount; ++i)
             {
-                Ref<MaterialTextureResource> tex = CreateRef<MaterialTextureResource>();
-
-                MaterialTextureType textureType;
+                size_t width, height, rowPitch;
                 inFile.read(reinterpret_cast<char *>(&textureType), sizeof(textureType));
-
-                inFile.read(reinterpret_cast<char *>(&tex->width), sizeof(tex->width));
-                inFile.read(reinterpret_cast<char *>(&tex->height), sizeof(tex->height));
-                inFile.read(reinterpret_cast<char *>(&tex->rowPitch), sizeof(tex->rowPitch));
-
-                const std::size_t pixelBytes = static_cast<std::size_t>(tex->height) * tex->rowPitch;
-                if (pixelBytes > 0)
-                {
-                    tex->data = new uint8_t[pixelBytes];
-                }
                 
+                inFile.read(reinterpret_cast<char *>(&width), sizeof(width));
+                inFile.read(reinterpret_cast<char *>(&height), sizeof(height));
+                inFile.read(reinterpret_cast<char *>(&rowPitch), sizeof(rowPitch));
+                
+                const size_t pixelBytes = height * rowPitch;
+                Buffer buffer(pixelBytes);
+
                 // read blob *into* the buffer, not into the pointer itself
-                inFile.read(reinterpret_cast<char *>(tex->data), pixelBytes);
-                mat->textures[textureType] = tex;
+                inFile.read(reinterpret_cast<char *>(buffer.data), pixelBytes);
+
+                TextureCreateInfo createInfo;
+                createInfo.dimension = nvrhi::TextureDimension::Texture2D;
+                createInfo.width = width;
+                createInfo.height = height;
+                createInfo.mipLevels = (width == 1 && height == 1) ? 1 : 4;
+                createInfo.flip = false;
+                createInfo.format = nvrhi::Format::RGBA8_UNORM;
+
+                Ref<Texture> texture = Texture::Create(buffer, createInfo);
             }
 
-            inFile.close();
+            cmd->close();
+            device->executeCommandList(cmd);
 
+            mat->UpdateBindingSet();
+
+            inFile.close();
+#endif
             return mat;
         }
 
+#if 0
         static std::vector<std::byte> SerializeMeshAsset(const Ref<MeshAsset> &sm, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
@@ -176,7 +213,7 @@ namespace ignite
             AppendRaw(buffer, nodeSizeInBytes);
 
             // write mesh vector info
-            uint32_t meshCount = static_cast<uint32_t>(sm->meshes.size());
+            uint32_t meshCount = static_cast<uint32_t>(sm->meshesData.size());
             AppendRaw(buffer, meshCount);
 
             uint32_t meshesSizeInBytes = meshCount * sizeof(MeshData);
@@ -237,7 +274,7 @@ namespace ignite
 
             // write mesh vector
 
-            for (auto &mesh : sm->meshes)
+            for (auto &mesh : sm->meshesData)
             {
                 AppendRaw(buffer, mesh.meshIndex);
                 AppendRaw(buffer, mesh.materialIndex);
@@ -294,6 +331,7 @@ namespace ignite
 
             return buffer;
         }
+
 
         static Ref<MeshAsset> DeserializeMeshAsset(const std::filesystem::path &filepath)
         {
@@ -375,10 +413,12 @@ namespace ignite
             }
 
             // read mesh vector
-            meshAsset->meshes.reserve(meshCount);
+            meshAsset->meshesData.reserve(meshCount);
             for (uint32_t meshIndex = 0; meshIndex < meshCount; ++meshIndex)
             {
                 MeshData mesh;
+                mesh.aabb.min = glm::vec3(FLT_MAX);
+                mesh.aabb.max = glm::vec3(-FLT_MAX);
 
                 inFile.read(reinterpret_cast<char *>(&mesh.meshIndex), sizeof(mesh.meshIndex));
                 inFile.read(reinterpret_cast<char *>(&mesh.materialIndex), sizeof(mesh.materialIndex));
@@ -410,6 +450,10 @@ namespace ignite
                     inFile.read(reinterpret_cast<char *>(vertex.boneIDs), sizeof(vertex.boneIDs));
                     inFile.read(reinterpret_cast<char *>(vertex.weights), sizeof(vertex.weights));
 
+                    // load aabb
+                    mesh.aabb.min = glm::min(mesh.aabb.min, vertex.position);
+                    mesh.aabb.max = glm::max(mesh.aabb.max, vertex.position);
+
                     mesh.vertices.push_back(vertex);
                 }
 
@@ -417,13 +461,14 @@ namespace ignite
                 mesh.indices.resize(indexCount);
                 inFile.read(reinterpret_cast<char *>(mesh.indices.data()), indexCount * sizeof(uint32_t));
 
-                meshAsset->meshes.push_back(mesh);
+                meshAsset->meshesData.push_back(mesh);
             }
 
             inFile.close();
-           
+            
             return meshAsset;
         }
+#endif
 
         static std::vector<std::byte> SerializeAnimation(const Ref<SkeletalAnimation> &anim, const std::filesystem::path &filepath)
         {

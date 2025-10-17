@@ -63,9 +63,12 @@ namespace ignite
 
         void Release()
         {
-            std::free(data);
-            data = nullptr;
-            size = 0;
+            if (data != nullptr)
+            {
+                std::free(data);
+                data = nullptr;
+                size = 0;
+            }
         }
 
         template<typename T>

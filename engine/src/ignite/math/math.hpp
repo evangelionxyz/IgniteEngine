@@ -40,8 +40,6 @@
 #include "imgui.h"
 #include "obb.hpp"
 
-#include <assimp/postprocess.h>
-
 namespace ignite
 {
     class Math
@@ -57,10 +55,6 @@ namespace ignite
         static glm::vec3 GetWorldPosition(const glm::vec4 &eyeCoords, const glm::mat4 &viewMatrix);
         static glm::vec3 GetRayFromScreenCoords(const glm::vec2 &coord, const glm::vec2 &screen, const glm::mat4 &projection, const glm::mat4 &view, bool isPerspective, glm::vec3 &rayOrigin);
         static bool RaySphereIntersection(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, const glm::vec3 &sphereCenter, float sphereRadius);
-
-        static glm::mat4 AssimpToGlmMatrix(aiMatrix4x4 mat);
-        static glm::vec3 AssimpToGlmVec3(aiVector3D vec);
-        static glm::quat AssimpToGlmQuat(aiQuaternion quat);
 
 #if 0
         static physx::PxVec3 GlmToPhysXVec3(const glm::vec3 &vec);

@@ -25,7 +25,7 @@
 #include "ignite/core/application.hpp"
 #include "ignite/core/logger.hpp"
 
-#include <backends/imgui_impl_glfw.h>
+#include <backends/imgui_impl_sdl3.h>
 #include <ImGuizmo.h>
 
 #ifdef PLATFORM_WINDOWS
@@ -99,7 +99,7 @@ namespace ignite
     ImGuiLayer::ImGuiLayer(DeviceManager *deviceManager)
         : Layer("ImGuiLayer")
         , m_DeviceManager(deviceManager)
-        , m_SupportExplicitDisplayScaling(deviceManager->GetDeviceParams().supportExplicitDisplayScaling)
+        , m_SupportExplicitDisplayScaling(deviceManager->GetDeviceParameters().supportExplicitDisplayScaling)
     {
 
         LOG_ASSERT(m_DeviceManager, "Invalid device manager");
@@ -231,6 +231,9 @@ namespace ignite
         style.AntiAliasedLines = true;
         style.AntiAliasedLinesUseTex = true;
 
+        // Store the original style for proper scaling
+        m_OriginalStyle = style;
+
         ImGuiIO &io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
@@ -240,10 +243,15 @@ namespace ignite
         io.ConfigWindowsMoveFromTitleBarOnly = true;
         io.ConfigViewportsNoDecoration = false;
 
-        ImGui_ImplGlfw_InitForOther(m_DeviceManager->GetWindow(), true);
+		
 
         switch (Renderer::GetGraphicsAPI())
         {
+            case nvrhi::GraphicsAPI::VULKAN:
+            {
+                ImGui_ImplSDL3_InitForVulkan(Application::GetInstance()->GetWindow()->GetWindowHandle());
+                break;
+            }
             case nvrhi::GraphicsAPI::D3D12:
             {
 #ifdef PLATFORM_WINDOWS
@@ -251,7 +259,7 @@ namespace ignite
                 ImGui_ImplDX12_InitInfo initInfo = {};
                 initInfo.Device = d3d12.m_Device12;
                 initInfo.CommandQueue = d3d12.m_GraphicsQueue;
-                initInfo.NumFramesInFlight = m_DeviceManager->GetDeviceParams().maxFramesInFlight;
+                initInfo.NumFramesInFlight = m_DeviceManager->GetDeviceParameters().maxFramesInFlight;
                 initInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
                 initInfo.DSVFormat = DXGI_FORMAT_UNKNOWN;
                 initInfo.SrvDescriptorHeap = d3d12.m_SrvDescHeap;
@@ -263,17 +271,18 @@ namespace ignite
                 {
                     return DeviceManager_DX12::GetInstance().m_SrvDescHeapAlloc.Free(cpu_handle, gpu_handle);
                 };
-                ImGui_ImplDX12_Init(&initInfo);
+				ImGui_ImplSDL3_InitForD3D(Application::GetInstance()->GetWindow()->GetWindowHandle());
+                // ImGui_ImplDX12_Init(&initInfo);
                 break;
 #endif
             }
         }
     }
 
-    bool ImGuiLayer::Init()
+    void ImGuiLayer::OnAttach()
     {
         imguiNVRHI = CreateScope<ImGui_NVRHI>();
-        return imguiNVRHI->Init(m_DeviceManager->GetDevice());
+        imguiNVRHI->Init(m_DeviceManager->GetDevice());
     }
 
     void ImGuiLayer::OnEvent(Event &event)
@@ -282,6 +291,7 @@ namespace ignite
 
         EventDispatcher dispatcher(event);
         dispatcher.Dispatch<FramebufferResizeEvent>(BIND_CLASS_EVENT_FN(ImGuiLayer::OnFramebufferResize));
+        dispatcher.Dispatch<WindowDPIScaleChangedEvent>(BIND_CLASS_EVENT_FN(ImGuiLayer::OnDPIScaleChanged));
     }
 
     bool ImGuiLayer::OnFramebufferResize(FramebufferResizeEvent &event) const
@@ -292,15 +302,36 @@ namespace ignite
         if (!m_SupportExplicitDisplayScaling)
             return false;
 
+        // Font and style will be updated in the next BeginFrame() call
+        // This just clears the current font texture
         ImGuiIO &io = ImGui::GetIO();
         io.Fonts->Clear();
         io.Fonts->TexID = 0;
 
         m_Font->ReleaseScaledFont();
 
-        ImGui::GetStyle() = ImGui::GetStyle();
-        ImGui::GetStyle().ScaleAllSizes(f32(event.GetWidth()));
+        return true;
+    }
 
+    bool ImGuiLayer::OnDPIScaleChanged(WindowDPIScaleChangedEvent &event)
+    {
+        if (!m_SupportExplicitDisplayScaling)
+            return false;
+
+        // Force immediate font and style update
+        ImGuiIO &io = ImGui::GetIO();
+        io.Fonts->Clear();
+        io.Fonts->TexID = 0;
+
+        m_Font->ReleaseScaledFont();
+        m_Font->CreateScaledFont(event.GetScaleX());
+
+        // Reset style to original and apply new scaling
+        ImGui::GetStyle() = m_OriginalStyle;
+        ImGui::GetStyle().ScaleAllSizes(event.GetScaleX());
+        m_CurrentDPIScale = event.GetScaleX();
+
+        LOG_INFO("ImGui DPI scaling updated to: {}", event.GetScaleX());
         return true;
     }
 
@@ -312,14 +343,43 @@ namespace ignite
         f32 scaleX, scaleY;
         m_DeviceManager->GetDPIScaleInfo(scaleX, scaleY);
 
+        // Check if DPI has changed and recreate font if necessary
+        if (m_DeviceManager->IsUpdateDPIScaleFactor() || m_CurrentDPIScale != scaleX)
+        {
+            if (m_Font->GetScaledFont())
+            {
+                // Clear existing font and recreate with new scale
+                ImGuiIO &io = ImGui::GetIO();
+                io.Fonts->Clear();
+                io.Fonts->TexID = 0;
+                
+                m_Font->ReleaseScaledFont();
+            }
+            
+            // Always recreate font with new scale
+            m_Font->CreateScaledFont(m_SupportExplicitDisplayScaling ? scaleX : 1.0f);
+            
+            // Reset style to original and apply new scaling
+            if (m_SupportExplicitDisplayScaling)
+            {
+                ImGui::GetStyle() = m_OriginalStyle;
+                ImGui::GetStyle().ScaleAllSizes(scaleX);
+                m_CurrentDPIScale = scaleX;
+            }
+        }
+
         if (!m_Font->GetScaledFont())
         {
             m_Font->CreateScaledFont(m_SupportExplicitDisplayScaling ? scaleX : 1.0f);
+            if (m_SupportExplicitDisplayScaling)
+            {
+                m_CurrentDPIScale = scaleX;
+            }
         }
 
         imguiNVRHI->UpdateFontTexture();
 
-        ImGui_ImplGlfw_NewFrame();
+        ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
 
@@ -333,20 +393,14 @@ namespace ignite
         m_BeginFrameCalled = false;
     }
 
+    void ImGuiLayer::PollEvent(const SDL_Event& event)
+    {
+        ImGui_ImplSDL3_ProcessEvent(&event);
+    }
+
     void ImGuiLayer::OnDetach()
     {
-        switch (Renderer::GetGraphicsAPI())
-        {
-            case nvrhi::GraphicsAPI::D3D12:
-            {
-#ifdef PLATFORM_WINDOWS
-                ImGui_ImplDX12_Shutdown();
-                break;
-#endif
-            }
-        }
-
-        ImGui_ImplGlfw_Shutdown();
+        ImGui_ImplSDL3_Shutdown();
         ImGui::DestroyContext();
 
         imguiNVRHI->Shutdown();

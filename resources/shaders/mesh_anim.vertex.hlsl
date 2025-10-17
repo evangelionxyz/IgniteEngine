@@ -1,11 +1,12 @@
 #include "include/binding_helpers.hlsli"
 
 #define VERTEX_MAX_BONES 4 // bone influences
-#define MAX_BONES 200
+#define MAX_BONES 100
 
 struct Camera
 {
-    float4x4 viewProjection;
+    float4x4 projection;
+    float4x4 view;
     float4 position;
 };
 
@@ -16,28 +17,35 @@ struct Object
     float4x4 boneTransforms[MAX_BONES];
 };
 
-cbuffer CameraBuffer : register(b0, space0) { Camera camera; }
-cbuffer ObjectBuffer : register(b1, space0) { Object object; }
+cbuffer CameraBuffer : register(b0, space0)
+{
+    Camera camera; 
+}
+
+cbuffer ObjectBuffer : register(b1, space0)
+{ 
+    Object object;
+}
 
 struct VSInput
 {
     float3 position     : POSITION;
     float3 normal       : NORMAL;
-    float2 UV           : TEXCOORD;
-    float4 color        : COLOR;
+    float3 tangent      : TANGENT;
+    float3 bitangent    : BITANGENT;
+    float2 uv           : TEXCOORD;
     uint4 boneIDs       : BONEIDS;
     float4 weights      : WEIGHTS;
-    uint entityID       : ENTITYID;
 };
 
 struct PSInput
 {
     float4 position     : SV_POSITION;
     float3 normal       : NORMAL;
+    float3 tangent      : TANGENT;
+    float3 bitangent    : BITANGENT;
     float3 worldPos     : WORLDPOS;
-    float2 UV           : TEXCOORD;
-    float4 color        : COLOR;
-    uint entityID       : ENTITYID;
+    float2 uv           : TEXCOORD;
 };
 
 PSInput main(VSInput input)
@@ -47,6 +55,8 @@ PSInput main(VSInput input)
     // Initialize with zero
     float4 posL = float4(0.0f, 0.0f, 0.0f, 0.0f);
     float3 normalL = float3(0.0f, 0.0f, 0.0f);
+    float3 tangentL = float3(0.0f, 0.0f, 0.0f);
+    float3 bitangentL = float3(0.0f, 0.0f, 0.0f);
 
     // Calculate skinned position and normal
     for (int i = 0; i < VERTEX_MAX_BONES; ++i)
@@ -59,6 +69,8 @@ PSInput main(VSInput input)
 
             posL += weight * mul(transform, float4(input.position, 1.0));
             normalL += weight * mul((float3x3)transform, input.normal);
+            tangentL += weight * mul((float3x3)transform, input.tangent);
+            bitangentL += weight * mul((float3x3)transform, input.bitangent);
         }
     }
 
@@ -68,16 +80,19 @@ PSInput main(VSInput input)
         // Fallback to no skinning if weights don't sum to a significant value
         posL = float4(input.position, 1.0f);
         normalL = input.normal;
+        tangentL = input.tangent;
+        bitangentL = input.bitangent;
     }
 
     float4 worldPos    = mul(object.transformMatrix, posL);
-    float3 worldNormal = normalize(mul((float3x3)object.normalMatrix, normalL));
 
-    output.position     = mul(camera.viewProjection, worldPos);
-    output.normal       = worldNormal;
+    output.position     = mul(mul(camera.projection, camera.view), worldPos);
+    // Use normal matrix for correct inverse-transpose transform of direction vectors
+    float3x3 N = (float3x3)object.normalMatrix;
+    output.normal       = normalize(mul(N, normalL));
+    output.tangent      = normalize(mul(N, tangentL));
+    output.bitangent    = normalize(mul(N, bitangentL));
     output.worldPos     = worldPos.xyz;
-    output.UV           = input.UV;
-    output.color        = input.color;
-    output.entityID     = input.entityID;
+    output.uv           = input.uv;
     return output;
 }

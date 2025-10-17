@@ -312,6 +312,12 @@ namespace ignite {
             m_Emitter << YAML::Key << keyName << YAML::Value << value;
         }
 
+        template<typename T>
+        void AddValue(T value)
+        {
+            m_Emitter << value;
+        }
+
         static YAML::Node Deserialize(const std::filesystem::path &filepath);
 
         const std::filesystem::path &GetFilepath() const { return m_Filepath; }
@@ -324,26 +330,26 @@ namespace ignite {
     class SceneSerializer
     {
     public:
-        SceneSerializer(const Ref<Scene> &scene);
-
+        SceneSerializer(const Ref<Scene> &scene, Project *project);
         bool Serialize(const std::filesystem::path &filepath);
 
-        static Ref<Scene> Deserialize(const std::filesystem::path &filepath);
+        static Ref<Scene> Deserialize(const std::filesystem::path &filepath, Project *project);
 
     private:
         Ref<Scene> m_Scene;
+        Project *m_Project;
     };
 
     class ProjectSerializer
     {
     public:
-        ProjectSerializer(const Ref<Project> &project);
+        ProjectSerializer(Project *project);
 
         bool Serialize(const std::filesystem::path &filepath);
         static Ref<Project> Deserialize(const std::filesystem::path &filepath);
 
     private:
-        Ref<Project> m_Project;
+        Project * m_Project;
     };
 
     class AnimationSerializer

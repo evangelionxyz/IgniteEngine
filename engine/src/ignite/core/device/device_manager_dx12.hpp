@@ -47,7 +47,7 @@ namespace ignite
         D3D12_CPU_DESCRIPTOR_HANDLE heapStartCpu;
         D3D12_GPU_DESCRIPTOR_HANDLE heapStartGpu;
         UINT heapHandleIncrement;
-        std::vector<i32> freeIndices;
+        std::vector<int> freeIndices;
 
         void Create(ID3D12Device *device, ID3D12DescriptorHeap *heap);
         void Destroy();
@@ -58,6 +58,8 @@ namespace ignite
     class DeviceManager_DX12 final : public DeviceManager
     {
     public:
+		DeviceManager_DX12(Window* window, const DeviceParameters& params);
+
         nvrhi::RefCountPtr<IDXGIFactory2> m_DxgiFactory2;
         nvrhi::RefCountPtr<ID3D12Device> m_Device12;
         nvrhi::RefCountPtr<ID3D12CommandQueue> m_GraphicsQueue;
@@ -72,7 +74,7 @@ namespace ignite
         nvrhi::RefCountPtr<IDXGIAdapter> m_DxgiAdapter;
         HWND m_Hwnd = nullptr;
         bool m_TearingSupported = false;
-        const i32 SRV_HEAP_SIZE = 64;
+        const int SRV_HEAP_SIZE = 64;
 
         std::vector<nvrhi::RefCountPtr<ID3D12Resource>> m_SwapChainBuffers;
         std::vector<nvrhi::TextureHandle> m_RhiSwapChainBuffers;
@@ -83,6 +85,9 @@ namespace ignite
         std::string m_RendererString;
 
     public:
+        void ReportLiveObjects() override;
+        bool EnumerateAdapters(std::vector<AdapterInfo>& outAdapters) override;
+
         static std::string GetAdapterName(DXGI_ADAPTER_DESC const &aDesc)
         {
             const size_t length = wcsnlen(aDesc.Description, _countof(aDesc.Description));
@@ -92,20 +97,17 @@ namespace ignite
             return name;
         }
 
-        [[nodiscard]] const char *GetRendererString() const override
+        const char* GetRendererString() const override
         {
             return m_RendererString.c_str();
         }
 
-        [[nodiscard]] nvrhi::IDevice *GetDevice() const override
+        nvrhi::IDevice* GetDevice() const override
         {
             return m_NvrhiDevice;
         }
 
-        void ReportLiveObjects() override;
-        bool EnumerateAdapters(std::vector<AdapterInfo> &outAdapters) override;
-
-        [[nodiscard]] nvrhi::GraphicsAPI GetGraphicsAPI() const override
+        nvrhi::GraphicsAPI GetGraphicsAPI() const override
         {
             return nvrhi::GraphicsAPI::D3D12;
         }

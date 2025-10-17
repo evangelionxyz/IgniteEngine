@@ -25,12 +25,17 @@
 #include <algorithm>
 #include <vector>
 
+#include "ignite/graphics/window.hpp"
+
 #include "device_manager.hpp"
 #include "device_manager_dx12.hpp"
 #include "ignite/core/logger.hpp"
 
 #include <Windows.h>
-#include <GLFW/glfw3native.h>
+
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_system.h>
+
 #include <array>
 #include <optional>
 
@@ -47,7 +52,7 @@ static bool IsNvDevice(const UINT ID) { return ID == 0x10DE; }
 
 namespace ignite
 {
-    static DeviceManager_DX12 *s_JoltInstance = nullptr;
+    static DeviceManager_DX12 *s_D3D12DeviceInstance = nullptr;
 
     void DescriptorHeapAllocator::Create(ID3D12Device *device, ID3D12DescriptorHeap *descriptorHeap)
     {
@@ -62,7 +67,7 @@ namespace ignite
 
         freeIndices.resize(0);
         freeIndices.reserve(desc.NumDescriptors);
-        for (i32 i = desc.NumDescriptors; i > 0; --i)
+        for (int i = desc.NumDescriptors; i > 0; --i)
             freeIndices.push_back(i - 1);
     }
 
@@ -125,6 +130,12 @@ namespace ignite
         return false;
     }
 
+    DeviceManager_DX12::DeviceManager_DX12(Window* window, const DeviceParameters& params)
+    {
+		m_Window = window;
+        m_DeviceParameters = params;
+    }
+
     void DeviceManager_DX12::ReportLiveObjects()
     {
         RefCountPtr<IDXGIDebug> pDebug;
@@ -145,7 +156,7 @@ namespace ignite
     {
         if (!m_DxgiFactory2)
         {
-            HRESULT hr = CreateDXGIFactory2(m_DeviceParams.enableDebugRuntime ? DXGI_CREATE_FACTORY_DEBUG : 0, IID_PPV_ARGS(&m_DxgiFactory2));
+            HRESULT hr = CreateDXGIFactory2(m_DeviceParameters.enableDebugRuntime ? DXGI_CREATE_FACTORY_DEBUG : 0, IID_PPV_ARGS(&m_DxgiFactory2));
             LOG_ASSERT(hr == S_OK, "Failed to create DXGIFactory2, for more info, get log from debug D3D Runtime");
             if (hr != S_OK)
                 return false;
@@ -163,7 +174,7 @@ namespace ignite
         while (true)
         {
             RefCountPtr<IDXGIAdapter> adapter;
-            HRESULT hr = m_DxgiFactory2->EnumAdapters(u32(outAdapters.size()), &adapter);
+            HRESULT hr = m_DxgiFactory2->EnumAdapters(static_cast<uint32_t>(outAdapters.size()), &adapter);
             if (FAILED(hr))
                 return true;
 
@@ -189,7 +200,7 @@ namespace ignite
 
     bool DeviceManager_DX12::CreateDevice()
     {
-        if (m_DeviceParams.enableDebugRuntime)
+        if (m_DeviceParameters.enableDebugRuntime)
         {
             RefCountPtr<ID3D12Debug> pDebug;
             const HRESULT hr = D3D12GetDebugInterface(IID_PPV_ARGS(&pDebug));
@@ -197,7 +208,7 @@ namespace ignite
             else printf("Cannot enable DX12 debug runtim, ID3D12Debug is not available.");
         }
 
-        if (m_DeviceParams.enableGPUValidation)
+        if (m_DeviceParameters.enableGPUValidation)
         {
             RefCountPtr<ID3D12Debug3> debugController3;
             const HRESULT hr = D3D12GetDebugInterface(IID_PPV_ARGS(&debugController3));
@@ -205,7 +216,7 @@ namespace ignite
             else printf("Cannot enable GPU-based validation, ID3D12Debug3 is not available.");
         }
 
-        int adapterIndex = m_DeviceParams.adapterIndex;
+        int adapterIndex = m_DeviceParameters.adapterIndex;
 
         if (adapterIndex < 0) adapterIndex = 0;
 
@@ -225,7 +236,7 @@ namespace ignite
 
         HRESULT hr = D3D12CreateDevice(
             m_DxgiAdapter,
-            m_DeviceParams.featureLevel,
+            m_DeviceParameters.featureLevel,
             IID_PPV_ARGS(&m_Device12)
         );
 
@@ -235,7 +246,7 @@ namespace ignite
             return false;
         }
 
-        if (m_DeviceParams.enableDebugRuntime)
+        if (m_DeviceParameters.enableDebugRuntime)
         {
             RefCountPtr<ID3D12InfoQueue> pInfoQueue;
             m_Device12->QueryInterface(&pInfoQueue);
@@ -243,8 +254,11 @@ namespace ignite
             if (pInfoQueue)
             {
 #ifdef _DEBUG
-                if (m_DeviceParams.enableWarningAsErrors)
+                if (m_DeviceParameters.enableWarningAsErrors)
+                {
                     pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true);
+                }
+
                 pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true);
                 pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
 #endif
@@ -266,7 +280,7 @@ namespace ignite
 
             D3D12_DESCRIPTOR_HEAP_DESC desc = {};
             desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-            desc.NumDescriptors = m_DeviceParams.maxFramesInFlight;
+            desc.NumDescriptors = m_DeviceParameters.maxFramesInFlight;
             desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
             desc.NodeMask = 1;
             hr = m_Device12->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_RtvDescHeap));
@@ -284,7 +298,6 @@ namespace ignite
             HR_RETURN(hr);
 
             m_SrvDescHeapAlloc.Create(m_Device12, m_SrvDescHeap);
-
         }
 
         D3D12_COMMAND_QUEUE_DESC queueDesc;
@@ -296,7 +309,7 @@ namespace ignite
         HR_RETURN(hr);
         m_GraphicsQueue->SetName(L"Graphics Queue");
 
-        if (m_DeviceParams.enableComputeQueue)
+        if (m_DeviceParameters.enableComputeQueue)
         {
             queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
             hr = m_Device12->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_ComputeQueue));
@@ -304,7 +317,7 @@ namespace ignite
             m_ComputeQueue->SetName(L"Compute Queue");
         }
 
-        if (m_DeviceParams.enableCopyQueue)
+        if (m_DeviceParameters.enableCopyQueue)
         {
             queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
             hr = m_Device12->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_CopyQueue));
@@ -313,39 +326,39 @@ namespace ignite
         }
 
         nvrhi::d3d12::DeviceDesc deviceDesc;
-        deviceDesc.errorCB = m_DeviceParams.messageCallback ? m_DeviceParams.messageCallback : &DefaultMessageCallback::GetInstance();
+        deviceDesc.errorCB = m_DeviceParameters.messageCallback ? m_DeviceParameters.messageCallback : &DefaultMessageCallback::GetInstance();
         deviceDesc.pDevice = m_Device12;
         deviceDesc.pGraphicsCommandQueue = m_GraphicsQueue;
         deviceDesc.pComputeCommandQueue = m_ComputeQueue;
         deviceDesc.pCopyCommandQueue =m_CopyQueue;
-        deviceDesc.logBufferLifetime = m_DeviceParams.logBufferLifetime;
-        deviceDesc.enableHeapDirectlyIndexed = m_DeviceParams.enableHeapDirectlyIndexed;
+        deviceDesc.logBufferLifetime = m_DeviceParameters.logBufferLifetime;
+        deviceDesc.enableHeapDirectlyIndexed = m_DeviceParameters.enableHeapDirectlyIndexed;
 
         m_NvrhiDevice = nvrhi::d3d12::createDevice(deviceDesc);
-        if (m_DeviceParams.enableNvrhiValidationLayer)
+        if (m_DeviceParameters.enableNvrhiValidationLayer)
+        {
             m_NvrhiDevice = nvrhi::validation::createValidationLayer(m_NvrhiDevice);
+        }
 
         return true;
     }
 
     bool DeviceManager_DX12::CreateSwapChain()
     {
-        UINT windowStyle = m_DeviceParams.startFullscreen
-            ? (WS_POPUP | WS_SYSMENU | WS_VISIBLE)
-            : m_DeviceParams.startMaximized
-                ? (WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_MAXIMIZE)
-                : (WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+        UINT windowStyle = m_DeviceParameters.startFullscreen
+            ? (WS_POPUP | WS_SYSMENU | WS_VISIBLE) : m_DeviceParameters.startMaximized
+            ? (WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_MAXIMIZE) : (WS_OVERLAPPEDWINDOW | WS_VISIBLE);
 
-        RECT rect = { 0, 0, LONG(m_DeviceParams.backBufferWidth), LONG(m_DeviceParams.backBufferHeight) };
+        RECT rect = { 0, 0, LONG(m_DeviceParameters.backBufferWidth), LONG(m_DeviceParameters.backBufferHeight) };
         AdjustWindowRect(&rect, windowStyle, false);
 
         if (MoveWindowOntoAdapter(m_DxgiAdapter, rect))
         {
-            glfwSetWindowPos(m_Window, rect.left, rect.top);
+			SDL_SetWindowPosition(m_Window->GetWindowHandle(), rect.left, rect.top);
         }
 
-        m_Hwnd = glfwGetWin32Window(m_Window);
-
+        // Retrieve HWND
+        m_Hwnd = m_Window->GetNativeWindow();
         HRESULT hr = E_FAIL;
 
         RECT clientRect;
@@ -355,18 +368,18 @@ namespace ignite
 
         m_SwapChainDesc.Width = width;
         m_SwapChainDesc.Height = height;
-        m_SwapChainDesc.SampleDesc.Count = m_DeviceParams.swapChainSampleCount;
+        m_SwapChainDesc.SampleDesc.Count = m_DeviceParameters.swapChainSampleCount;
         m_SwapChainDesc.SampleDesc.Quality = 0;
-        m_SwapChainDesc.BufferUsage = m_DeviceParams.swapChainUsage;
-        m_SwapChainDesc.BufferCount = m_DeviceParams.swapChainBufferCount;
+        m_SwapChainDesc.BufferUsage = m_DeviceParameters.swapChainUsage;
+        m_SwapChainDesc.BufferCount = m_DeviceParameters.swapChainBufferCount;
         m_SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-        m_SwapChainDesc.Flags = m_DeviceParams.allowModeSwitch ? DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH : 0;
+        m_SwapChainDesc.Flags = m_DeviceParameters.allowModeSwitch ? DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH : 0;
 
         // Special processing for sRGB swap chain formats.
         // DXGI will not create a swap chain with an sRGB format, but its contents will be interpreted as sRGB.
         // So we need to use a non-sRGB format here, but store the true sRGB format for later framebuffer creation.
 
-        switch (m_DeviceParams.swapChainFormat) // NOLINT(clang-diagnostic-switch-enum)
+        switch (m_DeviceParameters.swapChainFormat) // NOLINT(clang-diagnostic-switch-enum)
         {
             case nvrhi::Format::SRGBA8_UNORM:
                 m_SwapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -375,7 +388,7 @@ namespace ignite
                 m_SwapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
             break;
             default:
-                m_SwapChainDesc.Format = nvrhi::d3d12::convertFormat(m_DeviceParams.swapChainFormat);
+                m_SwapChainDesc.Format = nvrhi::d3d12::convertFormat(m_DeviceParameters.swapChainFormat);
             break;
         }
 
@@ -393,11 +406,11 @@ namespace ignite
         }
 
         m_FullScreenDesc = {};
-        m_FullScreenDesc.RefreshRate.Numerator = m_DeviceParams.refreshRate;
+        m_FullScreenDesc.RefreshRate.Numerator = m_DeviceParameters.refreshRate;
         m_FullScreenDesc.RefreshRate.Denominator = 1;
         m_FullScreenDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_PROGRESSIVE;
         m_FullScreenDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-        m_FullScreenDesc.Windowed = !m_DeviceParams.startFullscreen;
+        m_FullScreenDesc.Windowed = !m_DeviceParameters.startFullscreen;
 
         RefCountPtr<IDXGISwapChain1> pSwapChain1;
         hr = m_DxgiFactory2->CreateSwapChainForHwnd(m_GraphicsQueue, m_Hwnd, &m_SwapChainDesc, &m_FullScreenDesc, nullptr, &pSwapChain1);
@@ -409,7 +422,9 @@ namespace ignite
         HR_RETURN(hr);
 
         if (!CreateRenderTargets())
+        {
             return false;
+        }
 
         hr = m_Device12->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_FrameFence));
         HR_RETURN(hr);
@@ -435,15 +450,14 @@ namespace ignite
             CloseHandle(fenceEvent);
         }
 
-        m_FrameFenceEvents.clear();
 
         if (m_SwapChain)
         {
             m_SwapChain->SetFullscreenState(false, nullptr);
         }
 
+        m_FrameFenceEvents.clear();
         m_SwapChainBuffers.clear();
-
         m_SrvDescHeapAlloc.Destroy();
 
         m_RtvDescHeap = nullptr;
@@ -468,11 +482,11 @@ namespace ignite
             HR_RETURN(hr);
 
             nvrhi::TextureDesc textureDesc;
-            textureDesc.width = m_DeviceParams.backBufferWidth;
-            textureDesc.height = m_DeviceParams.backBufferHeight;
-            textureDesc.sampleCount = m_DeviceParams.swapChainSampleCount;
-            textureDesc.sampleQuality = m_DeviceParams.swapChainSampleQuality;
-            textureDesc.format = m_DeviceParams.swapChainFormat;
+            textureDesc.width = m_DeviceParameters.backBufferWidth;
+            textureDesc.height = m_DeviceParameters.backBufferHeight;
+            textureDesc.sampleCount = m_DeviceParameters.swapChainSampleCount;
+            textureDesc.sampleQuality = m_DeviceParameters.swapChainSampleQuality;
+            textureDesc.format = m_DeviceParameters.swapChainFormat;
             textureDesc.isRenderTarget = true;
             textureDesc.isUAV = false;
             textureDesc.initialState = nvrhi::ResourceStates::Present;
@@ -487,7 +501,9 @@ namespace ignite
     void DeviceManager_DX12::WaitForIdle()
     {
         if (m_NvrhiDevice)
+        {
             m_NvrhiDevice->waitForIdle();
+        }
     }
 
     void DeviceManager_DX12::ReleaseRenderTargets()
@@ -499,7 +515,9 @@ namespace ignite
         }
 
         for (auto event : m_FrameFenceEvents)
+        {
             SetEvent(event);
+        }
 
         m_RhiSwapChainBuffers.clear();
         m_SwapChainBuffers.clear();
@@ -514,12 +532,9 @@ namespace ignite
         if (!m_NvrhiDevice || !m_SwapChain)
             return;
 
-        const HRESULT hr = m_SwapChain->ResizeBuffers(
-            m_DeviceParams.swapChainBufferCount,
-            m_DeviceParams.backBufferWidth,
-            m_DeviceParams.backBufferHeight,
-            m_SwapChainDesc.Format,
-            m_SwapChainDesc.Flags);
+        const HRESULT hr = m_SwapChain->ResizeBuffers(m_DeviceParameters.swapChainBufferCount,
+            m_DeviceParameters.backBufferWidth, m_DeviceParameters.backBufferHeight,
+            m_SwapChainDesc.Format, m_SwapChainDesc.Flags);
 
         LOG_ASSERT(hr == S_OK, "ResizeBuffers failed");
 
@@ -538,25 +553,15 @@ namespace ignite
             {
                 m_FullScreenDesc = newFullScreenDesc;
                 m_SwapChainDesc = newSwapChainDesc;
-                m_DeviceParams.backBufferWidth = newSwapChainDesc.Width;
-                m_DeviceParams.backBufferHeight = newSwapChainDesc.Height;
-
-                if (newFullScreenDesc.Windowed)
-                {
-                    glfwSetWindowMonitor(m_Window, nullptr,
-                        50, 50,
-                        newSwapChainDesc.Width,
-                        newSwapChainDesc.Height,
-                        GLFW_DONT_CARE
-                    );
-                }
+                m_DeviceParameters.backBufferWidth = newSwapChainDesc.Width;
+                m_DeviceParameters.backBufferHeight = newSwapChainDesc.Height;
 
                 ResizeSwapChain();
                 CreateBackBuffers();
             }
         }
 
-        UINT bufferIndex = m_SwapChain->GetCurrentBackBufferIndex();
+        const UINT bufferIndex = m_SwapChain->GetCurrentBackBufferIndex();
         WaitForSingleObject(m_FrameFenceEvents[bufferIndex], INFINITE);
         return true;
     }
@@ -566,35 +571,35 @@ namespace ignite
         return m_RhiSwapChainBuffers[m_SwapChain->GetCurrentBackBufferIndex()];
     }
 
-    nvrhi::ITexture *DeviceManager_DX12::GetBackBuffer(u32 index)
+    nvrhi::ITexture *DeviceManager_DX12::GetBackBuffer(uint32_t index)
     {
         if (index < m_RhiSwapChainBuffers.size())
             return m_RhiSwapChainBuffers[index];
         return nullptr;
     }
 
-    u32 DeviceManager_DX12::GetCurrentBackBufferIndex()
+    uint32_t DeviceManager_DX12::GetCurrentBackBufferIndex()
     {
         return m_SwapChain->GetCurrentBackBufferIndex();
     }
 
-    u32 DeviceManager_DX12::GetBackBufferCount()
+    uint32_t DeviceManager_DX12::GetBackBufferCount()
     {
         return m_SwapChainDesc.BufferCount;
     }
 
     bool DeviceManager_DX12::Present()
     {
-        if (!m_WindowVisible)
+        if (!m_Window->IsVisible())
             return true;
 
-        UINT bufferIndex = m_SwapChain->GetCurrentBackBufferIndex();
+        const UINT bufferIndex = m_SwapChain->GetCurrentBackBufferIndex();
 
         UINT presentFlags = 0;
-        if (!m_DeviceParams.vsyncEnable && m_FullScreenDesc.Windowed && m_TearingSupported)
+        if (!m_DeviceParameters.vsyncEnable && m_FullScreenDesc.Windowed && m_TearingSupported)
             presentFlags |= DXGI_PRESENT_ALLOW_TEARING;
 
-        HRESULT hr = m_SwapChain->Present(m_DeviceParams.vsyncEnable ? 1 : 0, presentFlags);
+        HRESULT hr = m_SwapChain->Present(m_DeviceParameters.vsyncEnable ? 1 : 0, presentFlags);
 
         m_FrameFence->SetEventOnCompletion(m_FrameCount, m_FrameFenceEvents[bufferIndex]);
         m_GraphicsQueue->Signal(m_FrameFence, m_FrameCount);
@@ -610,20 +615,20 @@ namespace ignite
         m_DxgiAdapter = nullptr;
         m_DxgiFactory2 = nullptr;
 
-        if (m_DeviceParams.enableDebugRuntime)
+        if (m_DeviceParameters.enableDebugRuntime)
         {
             ReportLiveObjects();
         }
     }
 
-    DeviceManager *DeviceManager::CreateD3D12()
+    DeviceManager *DeviceManager::CreateD3D12(Window *window, const DeviceParameters& params)
     {
-        s_JoltInstance = new DeviceManager_DX12();
-        return s_JoltInstance;
+        s_D3D12DeviceInstance = new DeviceManager_DX12(window, params);
+        return s_D3D12DeviceInstance;
     }
 
     DeviceManager_DX12 &DeviceManager_DX12::GetInstance()
     {
-        return *s_JoltInstance;
+        return *s_D3D12DeviceInstance;
     }
 }

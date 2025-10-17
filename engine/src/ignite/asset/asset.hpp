@@ -42,8 +42,10 @@ namespace ignite {
         Project,
         Texture,
         Material,
+        Font,
         TextureCube,
         SkeletalAnimation,
+        Environment,
         Anim2D,
         Skeleton,
         MeshSource, // Mesh Source (contains vertices, indices, etc...)
@@ -60,6 +62,7 @@ namespace ignite {
             case ignite::AssetType::Material: return "Material";
             case ignite::AssetType::Audio: return "Audio";
             case ignite::AssetType::Model: return "Model";
+            case ignite::AssetType::Font: return "Font";
             case ignite::AssetType::Project: return "Project";
             case ignite::AssetType::TextureCube: return "TextureCube";
             case ignite::AssetType::Scene: return "Scene";
@@ -68,6 +71,7 @@ namespace ignite {
             case ignite::AssetType::MeshSource: return "MeshSource";
             case ignite::AssetType::Mesh: return "Mesh";
             case ignite::AssetType::Skeleton: return "Skeleton";
+            case ignite::AssetType::Environment: return "Environment";
             case ignite::AssetType::Invalid:
             default: return "Invalid";
         }
@@ -80,7 +84,9 @@ namespace ignite {
         { ".jpg", AssetType::Texture },
         { ".png", AssetType::Texture },
         { ".jpeg", AssetType::Texture },
-        { ".hdr", AssetType::TextureCube },
+        { ".hdr", AssetType::Texture },
+        { ".otf", AssetType::Font },
+        { ".ttf", AssetType::Font },
         { ".mp3", AssetType::Audio },
         { ".flac", AssetType::Audio },
         { ".wav", AssetType::Audio },
@@ -89,6 +95,8 @@ namespace ignite {
         { ".gltf", AssetType::MeshSource },
         { ".skel", AssetType::Skeleton},
         { ".mat", AssetType::Material},
+        { ".ixmat", AssetType::Material},
+        { ".ixenv", AssetType::Environment},
     };
 
     static AssetType AssetTypeFromString(const std::string &typeStr)
@@ -105,6 +113,8 @@ namespace ignite {
         if (typeStr == "MeshSource")  return AssetType::MeshSource;
         if (typeStr == "Skeleton")  return AssetType::Skeleton;
         if (typeStr == "Material")  return AssetType::Material;
+        if (typeStr == "Environment")  return AssetType::Environment;
+        if (typeStr == "Font")  return AssetType::Font;
         return AssetType::Invalid;
     }
 
@@ -122,32 +132,28 @@ namespace ignite {
         std::filesystem::path filepath;
     };
 
-    class Asset
+    class Asset : public std::enable_shared_from_this<Asset>
     {
     public:
-        virtual ~Asset() = default;
+        AssetHandle handle;
+        virtual ~Asset() { };
 
         template<typename T>
-        T *As()
+        Ref<T> As()
         {
-            return static_cast<T *>(this);
+            return std::dynamic_pointer_cast<T>(shared_from_this());
         }
 
         virtual AssetType GetType() { return AssetType::Invalid; }
 
-        void SetDirtyFlag(bool dirty) 
-        { 
-            m_IsDirty = dirty; 
-        }
+        void SetDirtyFlag(bool dirty)  { m_Dirty = dirty; }
+        bool IsDirty() const  { return m_Dirty; }
 
-        bool IsDirty() const 
-        { 
-            return m_IsDirty;
-        }
-
-        AssetHandle handle;
+        void SetReadyFlag(bool ready) { m_Ready = ready; }
+        bool IsReady() const { return m_Ready; }
 
     protected:
-        bool m_IsDirty = true;
+        bool m_Ready = false;
+        bool m_Dirty = true;
     };
 }

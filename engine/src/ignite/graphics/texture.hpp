@@ -33,7 +33,6 @@
 
 namespace ignite
 {
-
     struct MipLevelData
     {
         std::vector<uint8_t> data;
@@ -363,13 +362,14 @@ namespace ignite
 
     struct TextureCreateInfo
     {
-        i32 width = 1;
-        i32 height = 1;
-        uint32_t mipLevels = 1;
+        int width = 1;
+        int height = 1;
+        int mipLevels = 1;
         bool flip = false;
+        std::string debugName = "[Texture Class]";
         nvrhi::Format format;
         nvrhi::TextureDimension dimension = nvrhi::TextureDimension::Texture2D;
-        nvrhi::SamplerAddressMode samplerMode = nvrhi::SamplerAddressMode::ClampToEdge;
+        nvrhi::SamplerAddressMode samplerMode = nvrhi::SamplerAddressMode::Repeat;
     };
 
     class Texture : public Asset
@@ -377,21 +377,27 @@ namespace ignite
     public:
         Texture() = default;
 
+        Texture(const TextureCreateInfo &createInfo);
         Texture(Buffer buffer, const TextureCreateInfo &createInfo);
         Texture(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo);
 
         ~Texture();
 
+        static Ref<Texture> Create(const TextureCreateInfo& createInfo);
         static Ref<Texture> Create(Buffer buffer, const TextureCreateInfo &createInfo);
         static Ref<Texture> Create(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo);
 
+        void SetData(nvrhi::ICommandList *cmd, int rowPitch, int depthPitch);
+
         nvrhi::TextureHandle GetHandle() { return m_Handle; }
         nvrhi::SamplerHandle GetSampler() { return m_Sampler; }
-        void Write(nvrhi::ICommandList *commandList);
 
-        i32 GetWidth() const { return m_CreateInfo.width; }
-        i32 GetHeight() const { return m_CreateInfo.height; }
-        i32 GetChannels() const { return 4; }
+
+        int GetWidth() const { return m_CreateInfo.width; }
+        int GetHeight() const { return m_CreateInfo.height; }
+        int GetChannels() const { return 4; }
+        int GetMipLevel() const { return m_CreateInfo.mipLevels; }
+        nvrhi::Format GetFormat() const { return m_CreateInfo.format; }
 
         const std::filesystem::path &GetFilepath() { return m_Filepath; }
 
@@ -400,14 +406,14 @@ namespace ignite
             return m_Sampler.Get() == other.m_Sampler.Get() && m_Handle.Get() == other.m_Handle.Get();
         }
 
+        const Buffer &GetBuffer() { return m_Buffer; }
         static AssetType GetStaticType() { return AssetType::Texture; }
         virtual AssetType GetType() override { return GetStaticType(); }
 
     private:
+        void CreateTextureHandle();
 
-        void *m_Data = nullptr;
-        bool m_WithSTBI = false;
-
+        Buffer m_Buffer;
         TextureCreateInfo m_CreateInfo;
 
         std::filesystem::path m_Filepath;

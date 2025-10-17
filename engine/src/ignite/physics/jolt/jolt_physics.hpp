@@ -41,7 +41,11 @@
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+#include <Jolt/Geometry/Triangle.h>
 #include <Jolt/Physics/Body/BodyActivationListener.h>
+#include <Jolt/Physics/Collision/ContactListener.h>
 
 namespace ignite {
 
@@ -64,7 +68,6 @@ namespace ignite {
     {
         return glm::quat(q.GetW(), q.GetX(), q.GetY(), q.GetZ());
     }
-
 
     static void TraceImpl(const char *inFMT, ...)
     {
@@ -180,6 +183,47 @@ namespace ignite {
         }
     };
 
+    // Jolt Contact Listener for collision events
+    class JoltContactListener : public JPH::ContactListener
+    {
+    public:
+        virtual JPH::ValidateResult OnContactValidate(const JPH::Body &inBody1, const JPH::Body &inBody2, JPH::RVec3Arg inBaseOffset, const JPH::CollideShapeResult &inCollisionResult) override
+        {
+            // Allow all contacts by default
+            return JPH::ValidateResult::AcceptAllContactsForThisBodyPair;
+        }
+
+        virtual void OnContactAdded(const JPH::Body &inBody1, const JPH::Body &inBody2, const JPH::ContactManifold &inManifold, JPH::ContactSettings &ioSettings) override
+        {
+            LOG_INFO("[Jolt] Contact added between body {} and body {}", inBody1.GetID().GetIndex(), inBody2.GetID().GetIndex());
+        }
+
+        virtual void OnContactPersisted(const JPH::Body &inBody1, const JPH::Body &inBody2, const JPH::ContactManifold &inManifold, JPH::ContactSettings &ioSettings) override
+        {
+            // Handle persistent contact
+        }
+
+        virtual void OnContactRemoved(const JPH::SubShapeIDPair &inSubShapePair) override
+        {
+            LOG_INFO("[Jolt] Contact removed between shapes");
+        }
+    };
+
+    // Jolt Body Activation Listener
+    class JoltBodyActivationListener : public JPH::BodyActivationListener
+    {
+    public:
+        virtual void OnBodyActivated(const JPH::BodyID &inBodyID, uint64_t inBodyUserData) override
+        {
+            LOG_INFO("[Jolt] Body {} activated", inBodyID.GetIndex());
+        }
+
+        virtual void OnBodyDeactivated(const JPH::BodyID &inBodyID, uint64_t inBodyUserData) override
+        {
+            LOG_INFO("[Jolt] Body {} deactivated", inBodyID.GetIndex());
+        }
+    };
+
     class JoltPhysics
     {
     public:
@@ -218,6 +262,7 @@ namespace ignite {
         void CreateBoxCollider(Entity entity);
         void CreateCapsuleCollider(Entity entity);
         void CreateSphereCollider(Entity entity);
+        void CreateMeshCollider(Entity entity);
 
         void AddForce(const JPH::Body &body, const glm::vec3 &force);
         void AddTorque(const JPH::Body &body, const glm::vec3 &torque);

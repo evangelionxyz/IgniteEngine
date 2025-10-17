@@ -34,6 +34,7 @@
 #include "input/app_event.hpp"
 #include "input/input.hpp"
 #include "command.hpp"
+#include "ignite/graphics/ui/ui_manager.hpp"
 
 #include <queue>
 #include <filesystem>
@@ -65,8 +66,11 @@ namespace ignite
 
         u32 width = 1280;
         u32 height = 640;
+		bool borderless = false;
         bool maximized = false;
         bool useGui = true;
+        bool usePhysics = true;
+        bool useAudio = true;
     };
 
     class Application
@@ -91,9 +95,10 @@ namespace ignite
         static CommandManager *GetCommandManager();
         static nvrhi::IDevice *GetGraphicsDevice();
 
-        static f32 GetDeltaTime();
+        static float GetDeltaTime();
 
         static void SetWindowTitle(const std::string &title);
+        static void Shutdown();
 
         static void WindowIconify();
         static void WindowMaximize();
@@ -101,26 +106,27 @@ namespace ignite
         static void SubmitToMainThread(const std::function<bool()> func);
 
     private:
-        void UpdateAverageTimeTime(f64 elapsedTime);
+        void UpdateAverageTimeTime(float elapsedTime);
         void ProcessMainThreadSubmissions();
 
     protected:
         ApplicationCreateInfo m_CreateInfo;
         Scope<Window> m_Window;
         Scope<CommandManager> m_CommandManager;
+        Scope<UIManager> m_UIManager;
         LayerStack m_LayerStack;
         Ref<ImGuiLayer> m_ImGuiLayer;
-        Input m_Input;
+        Scope<Input> m_Input;
 
         Ref<Renderer> m_Renderer;
 
-        f64 m_PreviousTime = 0.0;
-        f64 m_FrameTimeSum = 0.0;
-        f64 m_AverageFrameTime = 0.0;
-        f32 m_DeltaTime = 0.0f;
-        const f64 m_AverageTimeUpdateInterval = 0.5;
-        i32 m_NumberOfAccumulatedFrames = 0;
-        i32 m_FrameIndex = 0;
+        float m_PreviousTime = 0.0f;
+        float m_FrameTimeSum = 0.0f;
+        float m_AverageFrameTime = 0.0f;
+        float m_DeltaTime = 0.0f;
+        const float m_AverageTimeUpdateInterval = 0.5f;
+        int32_t m_NumberOfAccumulatedFrames = 0;
+        int32_t m_FrameIndex = 0;
 
         std::queue<std::function<bool()>> m_ThreadFuncs;
     };
