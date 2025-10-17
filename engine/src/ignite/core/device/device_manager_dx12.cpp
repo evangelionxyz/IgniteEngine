@@ -358,8 +358,7 @@ namespace ignite
         }
 
         // Retrieve HWND
-        SDL_PropertiesID props = SDL_GetWindowProperties(m_Window->GetWindowHandle());
-		HWND hwnd = (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
+        m_Hwnd = m_Window->GetNativeWindow();
         HRESULT hr = E_FAIL;
 
         RECT clientRect;

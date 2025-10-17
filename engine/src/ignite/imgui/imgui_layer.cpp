@@ -271,7 +271,8 @@ namespace ignite
                 {
                     return DeviceManager_DX12::GetInstance().m_SrvDescHeapAlloc.Free(cpu_handle, gpu_handle);
                 };
-                ImGui_ImplDX12_Init(&initInfo);
+				ImGui_ImplSDL3_InitForD3D(Application::GetInstance()->GetWindow()->GetWindowHandle());
+                // ImGui_ImplDX12_Init(&initInfo);
                 break;
 #endif
             }
@@ -399,17 +400,6 @@ namespace ignite
 
     void ImGuiLayer::OnDetach()
     {
-        switch (Renderer::GetGraphicsAPI())
-        {
-            case nvrhi::GraphicsAPI::D3D12:
-            {
-#ifdef PLATFORM_WINDOWS
-                ImGui_ImplDX12_Shutdown();
-                break;
-#endif
-            }
-        }
-
         ImGui_ImplSDL3_Shutdown();
         ImGui::DestroyContext();
 

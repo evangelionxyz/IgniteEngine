@@ -79,7 +79,10 @@ namespace ignite
                 m_Shaders[shaderType] = device->createShader(shaderType, context->blob.data.data(), context->blob.dataSize());
                 LOG_ASSERT(m_Shaders[shaderType], "[Graphics Pipeline] Failed to create shader");
 
-                Shader::SPIRVReflect(context->GetType(), context->blob);
+                if (device->getGraphicsAPI() == nvrhi::GraphicsAPI::VULKAN)
+                {
+                    Shader::SPIRVReflect(context->GetType(), context->blob);
+                }
             }
 
             m_ShaderContexts.clear();
