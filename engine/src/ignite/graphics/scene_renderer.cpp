@@ -102,11 +102,6 @@ namespace ignite
         params.cullMode = nvrhi::RasterCullMode::Front;
         params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
 
-        auto attributes = VertexMesh_Anim::GetAttributes();
-        GraphicsPipelineCreateInfo createInfo;
-        createInfo.attributes = attributes.data();
-        createInfo.attributeCount = static_cast<uint32_t>(attributes.size());
-
         Ref<Shader> vertexShader = Shader::Create("resources/shaders/mesh_anim.vertex.hlsl", ShaderType::Vertex, true);
         Ref<Shader> pixelShader = Shader::Create("resources/shaders/mesh_anim.pixel.hlsl", ShaderType::Pixel, true);
 
@@ -114,7 +109,7 @@ namespace ignite
         gp->SetShaders({ vertexShader, pixelShader })
           .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
           .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
-          .Build(framebuffer, params, createInfo);
+          .Build(framebuffer, params);
 
         s_GeometryPSOCache.emplace(key, gp);
         return gp;
@@ -150,18 +145,13 @@ namespace ignite
         params.cullMode = nvrhi::RasterCullMode::Front;
         params.depthFunc = nvrhi::ComparisonFunc::Always;
 
-        auto attribute = Environment::GetAttribute();
-        GraphicsPipelineCreateInfo createInfo;
-        createInfo.attributes = &attribute;
-        createInfo.attributeCount = 1;
-
         Ref<Shader> vertexShader = Shader::Create("resources/shaders/skybox.vertex.hlsl", ShaderType::Vertex, true);
         Ref<Shader> pixelShader = Shader::Create("resources/shaders/skybox.pixel.hlsl", ShaderType::Pixel, true);
 
         auto gp = GraphicsPipeline::Create();
         gp->SetShaders({ vertexShader, pixelShader })
           .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT))
-          .Build(framebuffer, params, createInfo);
+          .Build(framebuffer, params);
         
         s_EnvironmentPSOCache.emplace(key, gp);
         return gp;
@@ -207,11 +197,6 @@ namespace ignite
         params.fillMode = fillMode;
         params.cullMode = nvrhi::RasterCullMode::None;
 
-        auto attributes = VertexScreen::GetAttributes();
-        GraphicsPipelineCreateInfo createInfo;
-        createInfo.attributes = attributes.data();
-        createInfo.attributeCount = static_cast<uint32_t>(attributes.size());
-
         // Create pipeline
         Ref<Shader> vertexShader = Shader::Create("resources/shaders/composite.vertex.hlsl", ShaderType::Vertex, true);
         Ref<Shader> pixelShader = Shader::Create("resources/shaders/composite.pixel.hlsl", ShaderType::Pixel, true);
@@ -219,7 +204,7 @@ namespace ignite
         auto gp = GraphicsPipeline::Create();
         gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(bindingLayout)
-            .Build(framebuffer, params, createInfo);
+            .Build(framebuffer, params);
 
         LOG_INFO("[Composite] Created new pipeline with forced shader recompilation");
 

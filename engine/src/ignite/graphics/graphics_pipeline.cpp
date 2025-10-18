@@ -51,12 +51,9 @@ namespace ignite
         return nullptr;
     }
 
-    void GraphicsPipeline::Build(nvrhi::IFramebuffer *framebuffer, const GraphicsPipelineParams &params, const GraphicsPipelineCreateInfo &createInfo)
+    void GraphicsPipeline::Build(nvrhi::IFramebuffer *framebuffer, const GraphicsPipelineParams &params)
     {
         nvrhi::IDevice* device = Application::GetGraphicsDevice();
-
-        m_InputLayout = device->createInputLayout(createInfo.attributes, createInfo.attributeCount, nullptr);
-        LOG_ASSERT(m_InputLayout, "[Graphics Pipeline] Failed to create input layout");
 
         LOG_ASSERT(m_Handle == nullptr, "[GraphicsPipeline] Should not re-create pipeline");
         
@@ -99,11 +96,25 @@ namespace ignite
 
         for (Ref<Shader> shader : m_Shaders)
         {
-            if (shader->GetType()  == ShaderType::Vertex) pipelineDesc.setVertexShader(shader->GetHandle());
-            else if (shader->GetType() == ShaderType::Pixel) pipelineDesc.setPixelShader(shader->GetHandle());
+            if (shader->GetType() == ShaderType::Vertex)
+            {
+                pipelineDesc.setVertexShader(shader->GetHandle());
+
+				const auto &vertexAttributes = shader->GetVertexAttributes();
+                m_InputLayout = device->createInputLayout(vertexAttributes.data(), static_cast<uint32_t>(vertexAttributes.size()), nullptr);
+                LOG_ASSERT(m_InputLayout, "[Graphics Pipeline] Failed to create input layout");
+            }
+            else if (shader->GetType() == ShaderType::Pixel)
+            {
+                pipelineDesc.setPixelShader(shader->GetHandle());
+            }
         }
 
-        pipelineDesc.setInputLayout(m_InputLayout);
+        if (m_InputLayout)
+        {
+            pipelineDesc.setInputLayout(m_InputLayout);
+        }
+        
         pipelineDesc.setRenderState(renderState);
         pipelineDesc.primType = m_Params.primitiveType;
 

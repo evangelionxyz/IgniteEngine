@@ -161,15 +161,6 @@ namespace ignite {
         return CreateRef<Environment>(scene);
     }
 
-    nvrhi::VertexAttributeDesc Environment::GetAttribute()
-    {
-        return nvrhi::VertexAttributeDesc()
-            .setName("POSITION")
-            .setFormat(nvrhi::Format::RGB32_FLOAT)
-            .setOffset(0)
-            .setElementStride(sizeof(glm::vec3));
-    }
-
     nvrhi::BindingLayoutDesc Environment::GetBindingLayoutDesc()
     {
         return nvrhi::BindingLayoutDesc()

@@ -51,8 +51,6 @@ namespace ignite {
         void WriteBuffer(nvrhi::ICommandList *commandList);
 
         static Ref<Environment> Create(Scene *scene);
-
-        static nvrhi::VertexAttributeDesc GetAttribute();
         static nvrhi::BindingLayoutDesc GetBindingLayoutDesc();
 
         Ref<Texture> GetHDRTexture() { return m_HDRTexture; }

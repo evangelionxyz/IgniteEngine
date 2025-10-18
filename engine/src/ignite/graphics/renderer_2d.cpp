@@ -80,18 +80,13 @@ namespace ignite
         params.cullMode = nvrhi::RasterCullMode::None;
         params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
 
-        auto attributes = Vertex2DQuad::GetAttributes();
-        GraphicsPipelineCreateInfo createInfo;
-        createInfo.attributes = attributes.data();
-        createInfo.attributeCount = static_cast<uint32_t>(attributes.size());
-
         Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_quad.vertex.hlsl", ShaderType::Vertex, true);
         Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_quad.pixel.hlsl", ShaderType::Pixel, true);
 
         Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
         gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(bindingLayout)
-            .Build(framebuffer, params, createInfo);
+            .Build(framebuffer, params);
 
         s_QuadPSOCache.emplace(key, gp);
 
@@ -118,11 +113,6 @@ namespace ignite
         params.cullMode = nvrhi::RasterCullMode::None;
         params.primitiveType = nvrhi::PrimitiveType::LineList;
 
-        auto attributes = Vertex2DLine::GetAttributes();
-        GraphicsPipelineCreateInfo createInfo;
-        createInfo.attributes = attributes.data();
-        createInfo.attributeCount = static_cast<uint32_t>(attributes.size());
-
         Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
         nvrhi::BindingLayoutDesc bindingLayoutDesc;
         bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
@@ -134,7 +124,7 @@ namespace ignite
 
         gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(bindingLayout)
-            .Build(framebuffer, params, createInfo);
+            .Build(framebuffer, params);
 
         s_LinePSOCache.emplace(key, gp);
 

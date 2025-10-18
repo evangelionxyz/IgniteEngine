@@ -32,12 +32,6 @@
 
 namespace ignite {
 
-    struct GraphicsPipelineCreateInfo
-    {
-        nvrhi::VertexAttributeDesc *attributes = nullptr;
-        uint32_t attributeCount = 0;
-    };
-
     struct GraphicsPipelineParams
     {
         nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::Front;
@@ -73,7 +67,7 @@ namespace ignite {
 
         GraphicsPipeline &AddBindingLayout(const nvrhi::BindingLayoutHandle &layout);
         GraphicsPipeline &SetShaders(const std::vector<Ref<Shader>> &shaders, bool recompile = false);
-        void Build(nvrhi::IFramebuffer *framebuffer, const GraphicsPipelineParams &params, const GraphicsPipelineCreateInfo &createInfo);
+        void Build(nvrhi::IFramebuffer *framebuffer, const GraphicsPipelineParams &params);
 
         nvrhi::BindingLayoutHandle GetBindingLayout(uint32_t index);
 

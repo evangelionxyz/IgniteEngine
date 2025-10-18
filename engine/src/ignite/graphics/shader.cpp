@@ -40,6 +40,7 @@ using Microsoft::WRL::ComPtr;
 
 namespace ignite
 {
+    
     std::string GetShaderCacheDirectory()
     {
         return "resources/shaders/bin/";
@@ -83,6 +84,8 @@ namespace ignite
         : m_Type(type)
     {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        const nvrhi::GraphicsAPI api = device->getGraphicsAPI();
+
         CreateShaderCachedDirectoryIfNeeded();
 
         std::vector<uint8_t> shaderCode = CompileOrGetShader(filepath, type, recompile);
@@ -91,11 +94,20 @@ namespace ignite
         nvrhi::ShaderDesc shaderDesc;
         shaderDesc.shaderType = GetNVRHIShaderType(type);
 
-        // TODO: 
-        // SPIRVReflect(type, shaderCode);
-
         m_Handle = device->createShader(shaderDesc, shaderCode.data(), shaderCode.size());
         LOG_ASSERT(m_Handle, "Failed to create {} shader: {}", GetShaderTypeString(type), filepath.generic_string());
+
+        if (!shaderCode.empty())
+        {
+            if (api == nvrhi::GraphicsAPI::VULKAN)
+            {
+                SPIRVReflect(type, shaderCode, m_VertexAttributes);
+            }
+            else if (api == nvrhi::GraphicsAPI::D3D12)
+            {
+                DXILReflect(type, shaderCode, m_VertexAttributes);
+            }
+        }
     }
 
     std::vector<uint8_t> Shader::CompileOrGetShader(const std::filesystem::path &filepath, ShaderType type, bool recompile)
@@ -137,7 +149,7 @@ namespace ignite
         return shaderCode;
     }
 
-    spirv_cross::ShaderResources Shader::SPIRVReflect(ShaderType type, const std::vector<uint8_t> &shaderCode)
+    void Shader::SPIRVReflect(ShaderType type, const std::vector<uint8_t> &shaderCode, std::vector<nvrhi::VertexAttributeDesc> &vertexAttributes)
     {
         if (shaderCode.size() % sizeof(uint32_t) != 0)
         {
@@ -149,13 +161,13 @@ namespace ignite
         std::vector<uint32_t> dataBlob(ptr, ptr + wordCount);
 
         spirv_cross::Compiler compiler(dataBlob);
-        spirv_cross::ShaderResources shaderResources = compiler.get_shader_resources();
+        spirv_cross::ShaderResources resources = compiler.get_shader_resources();
 
         LOG_WARN("[Shader Reflect] {} Shader", GetShaderTypeString(type));
 
         // --- Uniform Buffers ---
-        LOG_TRACE("   {} uniform buffers", shaderResources.uniform_buffers.size());
-        for (const auto &ubo : shaderResources.uniform_buffers)
+        LOG_TRACE("   {} uniform buffers", resources.uniform_buffers.size());
+        for (const auto &ubo : resources.uniform_buffers)
         {
             const auto &type = compiler.get_type(ubo.base_type_id);
             uint32_t size = static_cast<uint32_t>(compiler.get_declared_struct_size(type));
@@ -167,8 +179,8 @@ namespace ignite
         }
 
         // --- Sampled Images (combined or separate textures) ---
-        LOG_TRACE("   {} sampled images", shaderResources.sampled_images.size());
-        for (const auto &image : shaderResources.sampled_images)
+        LOG_TRACE("   {} sampled images", resources.sampled_images.size());
+        for (const auto &image : resources.sampled_images)
         {
             uint32_t binding = compiler.get_decoration(image.id, spv::DecorationBinding);
             uint32_t set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
@@ -177,8 +189,8 @@ namespace ignite
         }
 
         // --- Separate Samplers ---
-        LOG_TRACE("   {} separate samplers", shaderResources.separate_samplers.size());
-        for (const auto &sampler : shaderResources.separate_samplers)
+        LOG_TRACE("   {} separate samplers", resources.separate_samplers.size());
+        for (const auto &sampler : resources.separate_samplers)
         {
             uint32_t binding = compiler.get_decoration(sampler.id, spv::DecorationBinding);
             uint32_t set = compiler.get_decoration(sampler.id, spv::DecorationDescriptorSet);
@@ -187,8 +199,8 @@ namespace ignite
         }
 
         // --- Separate Images (non-combined, i.e., texture2D) ---
-        LOG_TRACE("   {} separate images", shaderResources.separate_images.size());
-        for (const auto &image : shaderResources.separate_images)
+        LOG_TRACE("   {} separate images", resources.separate_images.size());
+        for (const auto &image : resources.separate_images)
         {
             uint32_t binding = compiler.get_decoration(image.id, spv::DecorationBinding);
             uint32_t set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
@@ -197,8 +209,8 @@ namespace ignite
         }
 
         // --- Push Constants ---
-        LOG_TRACE("   {} push constants", shaderResources.push_constant_buffers.size());
-        for (const auto &pcb : shaderResources.push_constant_buffers)
+        LOG_TRACE("   {} push constants", resources.push_constant_buffers.size());
+        for (const auto &pcb : resources.push_constant_buffers)
         {
             const auto &type = compiler.get_type(pcb.base_type_id);
             uint32_t size = static_cast<uint32_t>(compiler.get_declared_struct_size(type));
@@ -206,10 +218,69 @@ namespace ignite
             LOG_TRACE("  [PushConstant] Name: {}, Size: {}", pcb.name, size);
         }
 
-        return shaderResources;
+		// Vertex inputs (only for vertex shaders)
+        if (type == ShaderType::Vertex)
+        {
+            vertexAttributes.clear();
+            
+            // Sort inputs by location to compute offsets consistently
+            struct InAttribute
+            {
+                uint32_t location; 
+                spirv_cross::ID id;
+            };
+
+            std::vector<InAttribute> inputs;
+            inputs.reserve(resources.stage_inputs.size());
+            for (const auto& in : resources.stage_inputs)
+            {
+				uint32_t location = compiler.get_decoration(in.id, spv::DecorationLocation);
+				inputs.push_back({ location, in.id });
+            }
+            
+            std::sort(inputs.begin(), inputs.end(), [](const InAttribute& a, const InAttribute& b) {
+                return a.location < b.location;
+			});
+
+            uint32_t offset = 0;
+            for (const auto& it : inputs)
+            {
+				const spirv_cross::SPIRType &type = compiler.get_type(compiler.get_type_from_variable(it.id).self);
+				nvrhi::Format format = MapSPIRVTypeToNVRHIFormat(type);
+                if (format == nvrhi::Format::UNKNOWN)
+                {
+                    LOG_WARN("  [Vertex Attribute] Unsupported format for input at location {}", it.location);
+                    continue;
+				}
+
+				const uint32_t componentSize = 4; // 32-bit float assumed
+				const uint32_t elementCount = std::max(type.vecsize, 1u);
+				const uint32_t attributeSize = componentSize * elementCount;
+
+                nvrhi::VertexAttributeDesc attr;
+                attr.name = compiler.get_name(it.id);
+                attr.format = format;
+                attr.offset = offset;
+                attr.bufferIndex = 0; // Assuming single vertex buffer for simplicity
+                attr.isInstanced = false;
+                // attr.elementStride; // calculated later
+
+				offset += attributeSize;
+                vertexAttributes.push_back(attr);
+
+				LOG_TRACE("  [Vertex Attribute] Name: {}, Location: {}, Format: {}, Offset: {}", 
+					attr.name, it.location, static_cast<uint32_t>(attr.format), attr.offset);
+            }
+
+			const uint32_t stride = offset;
+            for (auto& attr : vertexAttributes)
+            {
+                attr.elementStride = stride;
+			}
+        }
     }
 
-    void Shader::DXILReflect(ShaderType type, const std::vector<uint8_t>& shaderCode)
+    void Shader::DXILReflect(ShaderType type, const std::vector<uint8_t>& shaderCode, std::vector<nvrhi::VertexAttributeDesc> &vertexAttributes)
     {
 #ifdef PLATFORM_WINDOWS
         // Validate the blob first

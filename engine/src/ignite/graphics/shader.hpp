@@ -39,6 +39,45 @@ namespace ignite
     static std::string GetShaderCacheDirectory();
     static void CreateShaderCachedDirectoryIfNeeded();
 
+    static nvrhi::Format MapSPIRVTypeToNVRHIFormat(const spirv_cross::SPIRType& type)
+    {
+        using spirv_cross::SPIRType;
+        if (type.basetype == SPIRType::Float && type.columns == 1)
+        {
+            switch (type.vecsize)
+            {
+            case 1: return nvrhi::Format::R32_FLOAT;
+            case 2: return nvrhi::Format::RG32_FLOAT;
+            case 3: return nvrhi::Format::RGB32_FLOAT;
+            case 4: return nvrhi::Format::RGBA32_FLOAT;
+            default: break;
+            }
+        }
+        if (type.basetype == SPIRType::Int && type.columns == 1)
+        {
+            switch (type.vecsize)
+            {
+            case 1: return nvrhi::Format::R32_SINT;
+            case 2: return nvrhi::Format::RG32_SINT;
+            case 3: return nvrhi::Format::RGB32_SINT;
+            case 4: return nvrhi::Format::RGBA32_SINT;
+            default: break;
+            }
+        }
+        if (type.basetype == spirv_cross::SPIRType::UInt && type.columns == 1)
+        {
+            switch (type.vecsize)
+            {
+            case 1: return nvrhi::Format::R32_UINT;
+            case 2: return nvrhi::Format::RG32_UINT;
+            case 3: return nvrhi::Format::RGB32_UINT;
+            case 4: return nvrhi::Format::RGBA32_UINT;
+            default: break;
+            }
+        }
+        return nvrhi::Format::UNKNOWN;
+    }
+
     static nvrhi::ShaderType GetNVRHIShaderType(ShaderType type)
     {
         switch (type)
@@ -73,17 +112,19 @@ namespace ignite
         Shader() = default;
         Shader(const std::filesystem::path &filepath, ShaderType type, bool recompile = false);
 
+		const std::vector<nvrhi::VertexAttributeDesc> &GetVertexAttributes() { return m_VertexAttributes; }
         nvrhi::ShaderHandle GetHandle() { return m_Handle; }
         ShaderType GetType() const { return m_Type; }
 
         static std::vector<uint8_t> CompileOrGetShader(const std::filesystem::path &filepath, ShaderType type, bool recompile);
         static Ref<Shader> Create(const std::filesystem::path &filepath, ShaderType type, bool recompile = false);
 
-        static spirv_cross::ShaderResources SPIRVReflect(ShaderType type, const std::vector<uint8_t> &shaderCode);
-        static void DXILReflect(ShaderType type, const std::vector<uint8_t>& shaderCode);
+        static void SPIRVReflect(ShaderType type, const std::vector<uint8_t> &shaderCode, std::vector<nvrhi::VertexAttributeDesc> &vertexAttributes);
+        static void DXILReflect(ShaderType type, const std::vector<uint8_t>& shaderCode, std::vector<nvrhi::VertexAttributeDesc> &vertexAttributes);
     
     private:
         ShaderType m_Type;
+		std::vector<nvrhi::VertexAttributeDesc> m_VertexAttributes;
         nvrhi::ShaderHandle m_Handle = nullptr;
     };
 }
