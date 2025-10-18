@@ -54,7 +54,8 @@ namespace ignite
         physics2D = CreateScope<Physics2D>(this);
         physics = CreateScope<JoltScene>(this);
 
-        m_ConstantBuffer = ConstantBuffer::Create(sizeof(SceneParameters), false, 1, "[SceneParameters]");
+        m_SceneGPUDataBuffer = ConstantBuffer::Create(sizeof(Scene_GPUData), false, 1, "[Scene GPU Data]");
+		m_CSMGPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMap_GPUData), false, 1, "[CSM GPU Data]");
     }
 
     Scene::~Scene()
@@ -239,7 +240,7 @@ namespace ignite
 
     void Scene::WriteBuffer(nvrhi::ICommandList* cmd)
     {
-        m_ConstantBuffer->SetData(cmd, Buffer((void*)&this->params, sizeof(SceneParameters)));
+        m_SceneGPUDataBuffer->SetData(cmd, Buffer((void*)&this->gpuData, sizeof(Scene_GPUData)));
     }
 
     Entity Scene::GetPrimaryCamera()

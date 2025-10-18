@@ -30,7 +30,9 @@
 #include "ignite/core/uuid.hpp"
 #include "ignite/asset/asset.hpp"
 #include "ignite/math/aabb.hpp"
+
 #include "ignite/graphics/buffers/constant_buffer.hpp"
+#include "ignite/graphics/gpu_data.hpp"
 
 #include <unordered_map>
 
@@ -43,19 +45,6 @@ namespace ignite
     class Environment;
     class SceneRenderer;
     class Project;
-
-    struct SceneParameters
-    {
-        glm::vec4 sunColor = glm::vec4(0.87f, 0.87f, 0.87f, 1.1f); // w = light intensity
-        glm::vec2 sungAngles =  glm::vec2(0.1f, 1.0f);
-        float sunAngularRadius = 0.5f;
-        int renderMode = 0;
-        
-        float exposure = 1.1f;
-        float gamma = 2.2f;
-        float ambient = 0.5f;
-        float padding;
-    };
 
     class Scene : public Asset
     {
@@ -87,14 +76,15 @@ namespace ignite
         Scope<Physics2D> physics2D;
         Scope<JoltScene> physics;
         std::unordered_map<UUID, entt::entity> entities; // uuid to entity
-        SceneParameters params;
+        Scene_GPUData gpuData;
         
         bool IsPlaying() const { return m_Playing; }
         
         static Ref<Scene> Create(Project *project, const std::string &name);
         
         Ref<SceneRenderer> GetSceneRenderer() { return m_SceneRenderer; }
-        Ref<ConstantBuffer> GetConstantBuffer() { return m_ConstantBuffer; }
+        Ref<ConstantBuffer> GetSceneGPUDataBuffer() { return m_SceneGPUDataBuffer; }
+        Ref<ConstantBuffer> GetCSMGPUDataBuffer() { return m_CSMGPUDataBuffer; }
 
         glm::vec3 physicsGravity{ 0.0f, -9.8f, 0.0f };
         float timeInSeconds = 0.0f;
@@ -105,7 +95,9 @@ namespace ignite
 
     private:
         Ref<SceneRenderer> m_SceneRenderer;
-        Ref<ConstantBuffer> m_ConstantBuffer;
+        Ref<ConstantBuffer> m_SceneGPUDataBuffer;
+        Ref<ConstantBuffer> m_CSMGPUDataBuffer;
+
         Project *m_Project;
 
         bool m_Playing = false;

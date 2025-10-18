@@ -325,18 +325,18 @@ namespace ignite
         // Create staging texture for read-back
         if (m_Data.isPickingEntity && false) // FIXME: No mouse picking
         {
-            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(1)->getDesc();
+            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(1)->GetHandle()->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_MousePickingStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            cmd->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(1), nvrhi::TextureSlice());
+            cmd->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(1)->GetHandle(), nvrhi::TextureSlice());
         }
 
         if (m_Data.takeScreenshot)
         {
-            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(0)->getDesc();
+            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(0)->GetHandle()->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_ScreenshotStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            cmd->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(0), nvrhi::TextureSlice());
+            cmd->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(0)->GetHandle(), nvrhi::TextureSlice());
         }
 
         m_CommandList->Submit();
@@ -834,6 +834,41 @@ namespace ignite
         {
             m_ScenePanel->CameraSettingsUI();
 
+            ImGui::SeparatorText("Cascaded Shadow Maps");
+            
+            // Display each cascade individually in a 2x2 grid
+            const float imageSize = 200.0f;
+            
+            for (int i = 0; i < 4; ++i)
+            {
+                if (i % 2 != 0) ImGui::SameLine();
+                
+                ImGui::BeginGroup();
+                ImGui::Text("Cascade %d", i);
+                
+                // Get the texture handle for this specific cascade layer
+                if (m_SceneRenderer.GetActive() && m_SceneRenderer.GetActive()->GetCascadedShadowMap())
+                {
+                    // This will be implemented - for now showing placeholder
+                    ImTextureID tex = reinterpret_cast<ImTextureID>(
+                        m_SceneRenderer.GetCascadedShadowMap()->GetHandle().Get()
+                    );
+                    ImGui::Image(tex, ImVec2(imageSize, imageSize), ImVec2(0, 1), ImVec2(1, 0));
+                    
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("Cascade %d Shadow Map", i);
+                    }
+                }
+                else
+                {
+                    ImGui::Dummy(ImVec2(imageSize, imageSize));
+                    ImGui::Text("No shadow map");
+                }
+                
+                ImGui::EndGroup();
+            }
+
             ImGui::SeparatorText("Pipeline");
 
             // Raster settings
@@ -882,31 +917,31 @@ namespace ignite
 
                 ImGui::Separator();
             
-                ImGui::ColorEdit3("Color", &m_ActiveScene->params.sunColor.x);
-                ImGui::DragFloat("Intensity", &m_ActiveScene->params.sunColor.w, 0.025f, 0.0f, 10.0f);
+                ImGui::ColorEdit3("Color", &m_ActiveScene->gpuData.sunColor.x);
+                ImGui::DragFloat("Intensity", &m_ActiveScene->gpuData.sunColor.w, 0.025f, 0.0f, 10.0f);
 
-                ImGui::SliderFloat("Azimuth", &m_ActiveScene->params.sungAngles.x, 0.0f, 2.0f * glm::pi<float>());
-                ImGui::SliderFloat("Elevation", &m_ActiveScene->params.sungAngles.y, -1.0f, 1.0f);
+                ImGui::SliderFloat("Azimuth", &m_ActiveScene->gpuData.sungAngles.x, 0.0f, 2.0f * glm::pi<float>());
+                ImGui::SliderFloat("Elevation", &m_ActiveScene->gpuData.sungAngles.y, -1.0f, 1.0f);
 
-                float angularRadius = glm::degrees(m_ActiveScene->params.sunAngularRadius);
+                float angularRadius = glm::degrees(m_ActiveScene->gpuData.sunAngularRadius);
                 if (ImGui::SliderFloat("Angular Size", &angularRadius, 0.0f, 45.0f))
                 {
-                    m_ActiveScene->params.sunAngularRadius = glm::radians(angularRadius);
+                    m_ActiveScene->gpuData.sunAngularRadius = glm::radians(angularRadius);
                 }
 
-                ImGui::DragFloat("Exposure", &m_ActiveScene->params.exposure, 0.005f, 0.1f, 10.0f);
-                ImGui::DragFloat("Gamma", &m_ActiveScene->params.gamma, 0.005f, 0.1f, 10.0f);
-                ImGui::DragFloat("Ambient", &m_ActiveScene->params.ambient, 0.005f, 0.01f, 100.0f);
+                ImGui::DragFloat("Exposure", &m_ActiveScene->gpuData.exposure, 0.005f, 0.1f, 10.0f);
+                ImGui::DragFloat("Gamma", &m_ActiveScene->gpuData.gamma, 0.005f, 0.1f, 10.0f);
+                ImGui::DragFloat("Ambient", &m_ActiveScene->gpuData.ambient, 0.005f, 0.01f, 100.0f);
 
                 if (ImGui::CollapsingHeader("Render Mode", ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    int mode = (int)m_ActiveScene->params.renderMode;
+                    int mode = (int)m_ActiveScene->gpuData.renderMode;
                     if (ImGui::RadioButton("Color", mode == RENDER_MODE_COLOR)) mode = RENDER_MODE_COLOR;
                     if (ImGui::RadioButton("Diffuse", mode == RENDER_MODE_DIFFUSE)) mode = RENDER_MODE_DIFFUSE;
                     if (ImGui::RadioButton("Normals", mode == RENDER_MODE_NORMALS)) mode = RENDER_MODE_NORMALS;
                     if (ImGui::RadioButton("Metallic", mode == RENDER_MODE_METALLIC)) mode = RENDER_MODE_METALLIC;
                     if (ImGui::RadioButton("Roughness", mode == RENDER_MODE_ROUGHNESS)) mode = RENDER_MODE_ROUGHNESS;
-                    m_ActiveScene->params.renderMode = mode;
+                    m_ActiveScene->gpuData.renderMode = mode;
                 }
 
                 ImGui::TreePop();

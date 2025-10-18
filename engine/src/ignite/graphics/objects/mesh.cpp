@@ -73,7 +73,7 @@ namespace ignite
         vertexBuffer->SetData(Buffer((void *)vertices.data(), sizeof(VertexMesh_Anim) * vertices.size()));
         indexBuffer->SetData(Buffer((void *)indices.data(), sizeof(uint32_t) * indices.size()));
 
-        skinnedBuffer = ConstantBuffer::Create(sizeof(SkinnedMeshBuffer), true, 16, "[Mesh] Constant Buffer");
+        skinnedMeshGPUDataBuffer = ConstantBuffer::Create(sizeof(SkinnedMesh_GPUData), true, 16, "[Mesh] Constant Buffer");
     }
 
     void Mesh::UpdateBindingSet(Scene *scene)
@@ -84,8 +84,9 @@ namespace ignite
         const Ref<Environment> &env = SceneRenderer::GetActive()->GetEnvironment();
         auto desc = nvrhi::BindingSetDesc();
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, skinnedBuffer->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetConstantBuffer()->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, skinnedMeshGPUDataBuffer->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetSceneGPUDataBuffer()->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, scene->GetCSMGPUDataBuffer()->GetHandle()));
 
         const auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
         LOG_ASSERT(newBindingSet, "Failed to create binding set");
@@ -106,11 +107,11 @@ namespace ignite
 
             mesh->material = CreateRef<Material>();
             mesh->material->name = material.name;
-            mesh->material->params.baseColorFactor = { material.pbrMetallicRoughness.baseColorFactor[0], material.pbrMetallicRoughness.baseColorFactor[1], material.pbrMetallicRoughness.baseColorFactor[2], 1.0f };
-            mesh->material->params.emissiveFactor = { material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2], 1.0f };
-            mesh->material->params.metallicFactor = static_cast<float>(material.pbrMetallicRoughness.metallicFactor);
-            mesh->material->params.roughnessFactor = static_cast<float>(material.pbrMetallicRoughness.roughnessFactor);
-            mesh->material->params.occlusionStrength = static_cast<float>(material.occlusionTexture.strength);
+            mesh->material->gpuData.baseColorFactor = { material.pbrMetallicRoughness.baseColorFactor[0], material.pbrMetallicRoughness.baseColorFactor[1], material.pbrMetallicRoughness.baseColorFactor[2], 1.0f };
+            mesh->material->gpuData.emissiveFactor = { material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2], 1.0f };
+            mesh->material->gpuData.metallicFactor = static_cast<float>(material.pbrMetallicRoughness.metallicFactor);
+            mesh->material->gpuData.roughnessFactor = static_cast<float>(material.pbrMetallicRoughness.roughnessFactor);
+            mesh->material->gpuData.occlusionStrength = static_cast<float>(material.occlusionTexture.strength);
 
             // base color texture
             const int baseColorIndex = material.pbrMetallicRoughness.baseColorTexture.index;

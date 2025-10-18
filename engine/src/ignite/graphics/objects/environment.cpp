@@ -113,7 +113,7 @@ namespace ignite {
         // create binding set after load the texture
         nvrhi::BindingSetDesc bsDesc;
         bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
-        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m_Scene->GetConstantBuffer()->GetHandle()));
+        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m_Scene->GetSceneGPUDataBuffer()->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_HDRTexture->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_HDRTexture->GetSampler()));
 

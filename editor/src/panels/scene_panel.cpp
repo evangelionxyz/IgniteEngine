@@ -477,11 +477,11 @@ namespace ignite
                             {
                                 if (ImGui::TreeNode(mat->name.c_str()))
                                 {
-                                    ImGui::ColorEdit4("Base Color", &mat->params.baseColorFactor.x);
-                                    ImGui::ColorEdit4("Emissive", &mat->params.emissiveFactor.x);
-                                    ImGui::SliderFloat("Metallic", &mat->params.metallicFactor, 0.0f, 1.0f);
-                                    ImGui::SliderFloat("Roughness", &mat->params.roughnessFactor, 0.0f, 1.0f);
-                                    ImGui::SliderFloat("Occlusion Strength", &mat->params.occlusionStrength, 0.0f, 1.0f);
+                                    ImGui::ColorEdit4("Base Color", &mat->gpuData.baseColorFactor.x);
+                                    ImGui::ColorEdit4("Emissive", &mat->gpuData.emissiveFactor.x);
+                                    ImGui::SliderFloat("Metallic", &mat->gpuData.metallicFactor, 0.0f, 1.0f);
+                                    ImGui::SliderFloat("Roughness", &mat->gpuData.roughnessFactor, 0.0f, 1.0f);
+                                    ImGui::SliderFloat("Occlusion Strength", &mat->gpuData.occlusionStrength, 0.0f, 1.0f);
 
                                     ImGui::TreePop();
                                 }
@@ -1386,7 +1386,7 @@ namespace ignite
             }
         }
 
-        ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_SceneViewportRT->GetColorAttachment(0).Get());     // Test scene RT
+        ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_SceneViewportRT->GetColorAttachment(0)->GetHandle().Get());     // Test scene RT
         // ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_UIViewportRT->GetColorAttachment(0).Get());       // Test UI RT
         // ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_CompositeViewportRT->GetColorAttachment(0).Get()); // Current composite RT
         ImGui::Image(sceneImage, canvasSize);
@@ -1553,7 +1553,7 @@ namespace ignite
                 const float height = width / (vpSize.x / vpSize.y);
 
                 ImGui::SetCursorPos({ canvasSize.x - width - padding, canvasSize.y - height });
-                ImTextureID previewImage = reinterpret_cast<ImTextureID>(m_CompositeCameraRT->GetColorAttachment(0).Get());
+                ImTextureID previewImage = reinterpret_cast<ImTextureID>(m_CompositeCameraRT->GetColorAttachment(0)->GetHandle().Get());
                 ImGui::Image(previewImage, {width, height});
             }
         }

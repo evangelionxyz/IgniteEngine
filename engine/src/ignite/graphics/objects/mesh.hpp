@@ -52,7 +52,7 @@ namespace ignite {
 
         Ref<VertexBuffer> vertexBuffer;
         Ref<IndexBuffer> indexBuffer;
-        Ref<ConstantBuffer> skinnedBuffer;
+        Ref<ConstantBuffer> skinnedMeshGPUDataBuffer;
 
         std::string name;
         glm::mat4 local = glm::mat4(1.0f);

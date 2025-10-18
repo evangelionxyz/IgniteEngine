@@ -27,6 +27,8 @@
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/texture.hpp"
 
+#include "ignite/graphics/gpu_data.hpp"
+
 #include <glm/glm.hpp>
 #include <nvrhi/nvrhi.h>
 
@@ -45,16 +47,6 @@ namespace ignite
         Material();
 
         std::string name;
-
-        struct Params
-        {
-            glm::vec4 baseColorFactor = glm::vec4(1.0f);
-            glm::vec4 emissiveFactor = glm::vec4(0.0f);
-            float metallicFactor = 1.0f;
-            float roughnessFactor = 1.0f;
-            float occlusionStrength = 0.0f;
-        };
-
         Ref<Texture> baseColorTexture;
         Ref<Texture> emissiveTexture;
         Ref<Texture> metallicRoughnessTexture;
@@ -65,15 +57,15 @@ namespace ignite
         void UploadToGpu(nvrhi::ICommandList *cmd);
         
         nvrhi::BindingSetHandle GetBindingSet() { return m_BindingSet; }
-        Ref<ConstantBuffer> GetConstantBuffer() { return m_ConstantBuffer; }
+        Ref<ConstantBuffer> GetGPUDataBuffer() { return m_GPUDataBuffer; }
         MaterialType GetType() const { return m_Type; }
-		Params params;
+		Material_GPUData gpuData;
 
         static nvrhi::BindingLayoutDesc GetBindingLayoutDesc();
 
     private:
         MaterialType m_Type = MaterialType::Opaque;
-        Ref<ConstantBuffer> m_ConstantBuffer;
+        Ref<ConstantBuffer> m_GPUDataBuffer;
         nvrhi::BindingSetHandle m_BindingSet;
     };
 }

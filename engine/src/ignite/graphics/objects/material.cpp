@@ -38,7 +38,7 @@ namespace ignite
         normalTexture = Renderer::GetWhiteTexture();              // flat normal
         occlusionTexture = Renderer::GetWhiteTexture();           // full occlusion (no darkening)
 
-        m_ConstantBuffer = ConstantBuffer::Create(sizeof(this->params), false, 1, "Material Constant Buffer");
+        m_GPUDataBuffer = ConstantBuffer::Create(sizeof(Material_GPUData), false, 1, "Material Constant Buffer");
     }
 
     void Material::UpdateBindingSet()
@@ -46,13 +46,15 @@ namespace ignite
         auto device = Application::GetGraphicsDevice();
 
         nvrhi::BindingSetDesc desc = nvrhi::BindingSetDesc();
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_ConstantBuffer->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_GPUDataBuffer->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, baseColorTexture->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, emissiveTexture->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, metallicRoughnessTexture->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, normalTexture->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, occlusionTexture->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, SceneRenderer::GetActive()->GetEnvironment()->GetHDRTexture()->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, SceneRenderer::GetActive()->GetEnvironmentMap()->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, SceneRenderer::GetActive()->GetCascadedShadowMap()->GetHandle()));
+
         desc.addItem(nvrhi::BindingSetItem::Sampler(0, baseColorTexture->GetSampler()));
         
         auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MATERIAL));
@@ -66,7 +68,7 @@ namespace ignite
 
     void Material::UploadToGpu(nvrhi::ICommandList* cmd)
     {
-        m_ConstantBuffer->SetData(cmd, Buffer(&params, sizeof(params)));
+        m_GPUDataBuffer->SetData(cmd, Buffer(&gpuData, sizeof(Material_GPUData)));
     }
 
     nvrhi::BindingLayoutDesc Material::GetBindingLayoutDesc()
@@ -82,6 +84,7 @@ namespace ignite
             .addItem(nvrhi::BindingLayoutItem::Texture_SRV(3)) // normalMapTexture
             .addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)) // occlusionTexture
             .addItem(nvrhi::BindingLayoutItem::Texture_SRV(5)) // environmentMapTexture
+            .addItem(nvrhi::BindingLayoutItem::Texture_SRV(6)) // csm
             .addItem(nvrhi::BindingLayoutItem::Sampler(0)); // sampler
         return bindingLayoutDesc;
     }

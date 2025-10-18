@@ -120,7 +120,7 @@ namespace ignite
 		float distance = 1.0f;
 		float fov = 45.0f; // for perspective
 		float nearPlane = 0.01f;
-		float farPlane = 1000.0f;
+		float farPlane = 500.0f;
 
 		float orthoSize = 10.0f;
 

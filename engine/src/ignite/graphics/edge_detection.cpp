@@ -22,6 +22,7 @@
 */
 
 #include "edge_detection.hpp"
+#include "texture.hpp"
 
 #include "shader.hpp"
 
@@ -54,14 +55,6 @@ namespace ignite
         bufferDesc.keepInitialState = true;
         bufferDesc.initialState = nvrhi::ResourceStates::ShaderResource;
         m_SelectedIDBuffer = device->createBuffer(bufferDesc);
-
-        // Create linear sampler
-        nvrhi::SamplerDesc samplerDesc;
-        samplerDesc.minFilter = true;
-        samplerDesc.magFilter = true;
-        samplerDesc.addressU = nvrhi::SamplerAddressMode::Clamp;
-        samplerDesc.addressV = nvrhi::SamplerAddressMode::Clamp;
-        m_LinearSampler = device->createSampler(samplerDesc);
 
         // Create binding layout
         nvrhi::BindingLayoutDesc layoutDesc;
@@ -104,7 +97,7 @@ namespace ignite
         m_Pipeline = device->createComputePipeline(computeDesc);
     }
 
-    void EdgeDetection::UpdateBindingSet(const nvrhi::TextureHandle &sceneTexture, const nvrhi::TextureHandle &objectIDTexture, const nvrhi::TextureHandle &depth)
+    void EdgeDetection::UpdateBindingSet(const Ref<Texture> &sceneTexture, const Ref<Texture> &objectIDTexture, const Ref<Texture> &depth)
     {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
@@ -112,12 +105,12 @@ namespace ignite
         desc.bindings =
         {
             nvrhi::BindingSetItem::ConstantBuffer(0, m_ConstantBuffer),
-            nvrhi::BindingSetItem::Texture_SRV(0, sceneTexture),
-            nvrhi::BindingSetItem::Texture_SRV(1, objectIDTexture),
-            nvrhi::BindingSetItem::Texture_SRV(2, depth),
+            nvrhi::BindingSetItem::Texture_SRV(0, sceneTexture->GetHandle()),
+            nvrhi::BindingSetItem::Texture_SRV(1, objectIDTexture->GetHandle()),
+            nvrhi::BindingSetItem::Texture_SRV(2, depth->GetHandle()),
             nvrhi::BindingSetItem::StructuredBuffer_SRV(3, m_SelectedIDBuffer),
-            nvrhi::BindingSetItem::Sampler(0, m_LinearSampler),
-            nvrhi::BindingSetItem::Texture_UAV(0, m_OutputTexture),
+            nvrhi::BindingSetItem::Sampler(0, m_OutputTexture->GetSampler()),
+            nvrhi::BindingSetItem::Texture_UAV(0, m_OutputTexture->GetHandle()),
         };
 
         m_BindingSet = device->createBindingSet(desc, m_BindingLayout);
@@ -130,7 +123,7 @@ namespace ignite
         commandList->writeBuffer(m_ConstantBuffer, &params, sizeof(params));
 
         // Transition output texture to UAV state before compute
-        commandList->setTextureState(m_OutputTexture, nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::UnorderedAccess);
+        commandList->setTextureState(m_OutputTexture->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::UnorderedAccess);
         commandList->commitBarriers(); // commit the barriers
 
         // Set compute pipeline
@@ -145,7 +138,7 @@ namespace ignite
         commandList->dispatch(groupsX, groupsY, 1);
 
         // Transition edge detection output from UAV to ShaderResource for composite pass
-        commandList->setTextureState(m_OutputTexture, nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::ShaderResource);
+        commandList->setTextureState(m_OutputTexture->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::ShaderResource);
         commandList->commitBarriers(); // Commit the barrier before composite pass
     }
 
@@ -169,7 +162,7 @@ namespace ignite
         desc.initialState = nvrhi::ResourceStates::ShaderResource;
         desc.isUAV = true;
         desc.debugName = "SobelDetection Output Texture";
-        m_OutputTexture = device->createTexture(desc);
+        m_OutputTexture = Texture::Create(desc, nvrhi::SamplerAddressMode::Clamp);
     }
 
 }

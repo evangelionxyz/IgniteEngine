@@ -36,41 +36,21 @@
 
 #include "ignite/core/application.hpp"
 
+#include "objects/shadow_map.hpp"
+
 #include <ranges>
 #include <cstdlib>
+#include <algorithm>
 
 #include "ignite/project/project.hpp"
 
 namespace ignite
 {
-    struct CompositeBindingKey
-    {
-        nvrhi::IBindingLayout *layout = nullptr;
-        nvrhi::ITexture *sceneTex = nullptr;
-        nvrhi::ITexture *uiTex = nullptr;
-        bool operator==(const CompositeBindingKey &other) const noexcept
-        {
-            return layout == other.layout && sceneTex == other.sceneTex && uiTex == other.uiTex;
-        }
-    };
-
-    struct CompositeBindingKeyHash
-    {
-        size_t operator()(const CompositeBindingKey &k) const noexcept
-        {
-            size_t h = std::hash<const void *>{}(k.layout);
-            h ^= (std::hash<const void *>{}(k.sceneTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
-            h ^= (std::hash<const void *>{}(k.uiTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
-            return h;
-        }
-    };
-
     static SceneRenderer *s_SceneRenderer = nullptr;
 
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_GeometryPSOCache;
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_EnvironmentPSOCache;
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_CompositePSOCache;
-    static std::unordered_map<CompositeBindingKey, nvrhi::BindingSetHandle, CompositeBindingKeyHash> s_CompositeBindingSetCache;
 
     // Helper to build a geometry pipeline for a framebuffer (once) and cache it.
     static Ref<GraphicsPipeline> GetGeomPipelineForFB(nvrhi::IFramebuffer* framebuffer, nvrhi::RasterFillMode fillMode)
@@ -213,9 +193,32 @@ namespace ignite
         return gp;
     }
 
-    static nvrhi::BindingSetHandle CreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, nvrhi::ITexture *sceneTexture, nvrhi::ITexture *uiTexture)
+    struct CompositeBindingKey
     {
-        CompositeBindingKey key{ bindingLayout, sceneTexture, uiTexture };
+        nvrhi::IBindingLayout* layout = nullptr;
+        nvrhi::ITexture* sceneTex = nullptr;
+        nvrhi::ITexture* uiTex = nullptr;
+        bool operator==(const CompositeBindingKey& other) const noexcept
+        {
+            return layout == other.layout && sceneTex == other.sceneTex && uiTex == other.uiTex;
+        }
+    };
+
+    struct CompositeBindingKeyHash
+    {
+        size_t operator()(const CompositeBindingKey& k) const noexcept
+        {
+            size_t h = std::hash<const void*>{}(k.layout);
+            h ^= (std::hash<const void*>{}(k.sceneTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
+            h ^= (std::hash<const void*>{}(k.uiTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
+            return h;
+        }
+    };
+
+    static std::unordered_map<CompositeBindingKey, nvrhi::BindingSetHandle, CompositeBindingKeyHash> s_CompositeBindingSetCache;
+    static nvrhi::BindingSetHandle GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<Texture> sceneTexture, Ref<Texture> uiTexture)
+    {
+        CompositeBindingKey key{ bindingLayout, sceneTexture->GetHandle(), uiTexture->GetHandle() };
         auto it = s_CompositeBindingSetCache.find(key);
         if (it != s_CompositeBindingSetCache.end())
         {
@@ -238,8 +241,8 @@ namespace ignite
 
         // Composite Binding set
         auto bindingSetDesc = nvrhi::BindingSetDesc();
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, sceneTexture));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, uiTexture));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, sceneTexture->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, uiTexture->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, Renderer::GetWhiteTexture()->GetSampler()));
 
         nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
@@ -247,6 +250,61 @@ namespace ignite
         if (bindingSet)
         {
             s_CompositeBindingSetCache.emplace(key, bindingSet);
+        }
+
+        return bindingSet;
+    }
+
+    struct CSMBindingKey
+    {
+        nvrhi::IBindingLayout* layout = nullptr;
+        bool operator==(const CSMBindingKey& other) const noexcept { return layout == other.layout; }
+    };
+
+    struct CSMBindingKeyHash
+    {
+        size_t operator()(const CSMBindingKey& k) const noexcept
+        { 
+            size_t h = std::hash<const void*>{}(k.layout); 
+            return h;
+        }
+    };
+
+    static std::unordered_map<CSMBindingKey, nvrhi::BindingSetHandle, CSMBindingKeyHash> s_CSMBindingSetCache;
+
+    static nvrhi::BindingSetHandle GetOrCreateCSMBindingSet(nvrhi::IBindingLayout* bindingLayout, Ref<ConstantBuffer> skinnedMeshGPUDataBuffer, Ref<ConstantBuffer> csmGPUDataBuffer)
+    {
+        CSMBindingKey key{ bindingLayout };
+        auto it = s_CSMBindingSetCache.find(key);
+        if (it != s_CSMBindingSetCache.end())
+        {
+            for (auto itErase = s_CSMBindingSetCache.begin(); itErase != s_CSMBindingSetCache.end();)
+            {
+                if (itErase != it)
+                {
+                    itErase = s_CSMBindingSetCache.erase(itErase);
+                }
+                else
+                {
+                    ++itErase;
+                }
+            }
+
+            return it->second;
+        }
+
+        nvrhi::IDevice* device = Application::GetGraphicsDevice();
+
+        // Composite Binding set
+        auto bindingSetDesc = nvrhi::BindingSetDesc();
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, skinnedMeshGPUDataBuffer->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, csmGPUDataBuffer->GetHandle()));
+
+        nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
+        LOG_ASSERT(bindingSet, "[Composite] Failed to create Composite Binding Set");
+        if (bindingSet)
+        {
+            s_CSMBindingSetCache.emplace(key, bindingSet);
         }
 
         return bindingSet;
@@ -263,6 +321,9 @@ namespace ignite
         s_EnvironmentPSOCache.clear();
         s_CompositePSOCache.clear();
         s_CompositeBindingSetCache.clear();
+        s_CSMBindingSetCache.clear();
+
+		s_SceneRenderer = nullptr;
     }
 
     void SceneRenderer::Create()
@@ -288,6 +349,8 @@ namespace ignite
         m_Renderer2D = Renderer2D::Create();
         m_UIRenderer = UIRenderer::Create(1280, 720);
         m_UIRenderer->SetUIManager(&UIManager::GetInstance());
+
+		m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
 
         // CreateDemoUI();
     }
@@ -346,14 +409,93 @@ namespace ignite
             m_Environment->Begin(cmd, camera, framebuffer, envPSO);
         }
 
+        auto meshView = m_Scene->registry->view<Transform, MeshComponent>();
+
+        nvrhi::GraphicsState csmState = nvrhi::GraphicsState();
+        Ref<GraphicsPipeline> csmPipeline = m_CascadedShadowMap->GetPipeline();
+        csmState.pipeline = csmPipeline->GetHandle();
+
+        // Compute sun / light direction for shadows (matches shader code)
+        const float azimuth = m_Scene->gpuData.sungAngles.x;
+        const float elevation = m_Scene->gpuData.sungAngles.y;
+        const glm::vec3 sunDirection = {
+            cos(elevation) * cos(azimuth),
+            sin(elevation),
+            cos(elevation) * sin(azimuth)
+        };
+
+        const glm::vec3 lightDirection = glm::normalize(-sunDirection);
+        m_CascadedShadowMap->ComputeMatrices(camera, lightDirection);
+
+        // Share cascade data with the main scene pass (cascadeIndex is unused there)
+        CascadedShadowMap_GPUData sceneCascadeData = m_CascadedShadowMap->GetGPUData();
+        sceneCascadeData.cascadeIndex = -1;
+        m_Scene->GetCSMGPUDataBuffer()->SetData(cmd, Buffer(&sceneCascadeData, sizeof(sceneCascadeData)));
+
+        for (int i = 0; i < NUM_CASCADES; ++i)
+        {
+            CascadedShadowMap_GPUData cascadeGpuData = sceneCascadeData;
+            cascadeGpuData.cascadeIndex = i;
+            m_CascadedShadowMap->GetGPUDataBuffer()->SetData(cmd, Buffer(&cascadeGpuData, sizeof(cascadeGpuData)));
+
+            // Clear the specific array layer for this cascade
+            m_CascadedShadowMap->BeginCascade(cmd, i);
+
+            // Get the framebuffer for this specific cascade layer
+            nvrhi::IFramebuffer* csmFramebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(i);
+            csmState.framebuffer = csmFramebuffer;
+            
+            // Set viewport for this cascade
+            nvrhi::Viewport viewport = csmFramebuffer->getFramebufferInfo().getViewport();
+            csmState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
+
+            for (entt::entity e : meshView)
+            {
+                Transform& tr = m_Scene->registry->get<Transform>(e);
+                MeshComponent& mesh = m_Scene->registry->get<MeshComponent>(e);
+
+                if (!mesh.model)
+                    continue;
+
+                MeshScene& meshScene = mesh.model->GetScene();
+                for (auto& mesh : meshScene.flatMeshes)
+                {
+                    CascadedShadowMapModel_GPUData gpuData;
+                    gpuData.transformation = tr.GetLocalMatrix() * mesh->local;
+                    std::fill(std::begin(gpuData.boneTransforms), std::end(gpuData.boneTransforms), glm::mat4(1.0f));
+
+                    m_CascadedShadowMap->GetModelGPUDataBuffer()->SetData(cmd, Buffer(&gpuData, sizeof(CascadedShadowMapModel_GPUData)));
+                    nvrhi::BindingSetHandle bindingSet = GetOrCreateCSMBindingSet(csmPipeline->GetBindingLayout(0),
+                        m_CascadedShadowMap->GetModelGPUDataBuffer(), 
+                        m_CascadedShadowMap->GetGPUDataBuffer()
+                    );
+
+                    csmState.bindings = { bindingSet };
+                    csmState.vertexBuffers = { { mesh->vertexBuffer->GetHandle(), 0, 0 } };
+                    csmState.setIndexBuffer({ mesh->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+
+                    cmd->setGraphicsState(csmState);
+
+                    nvrhi::DrawArguments args;
+                    args.setVertexCount(mesh->indexBuffer->GetCount());
+                    args.instanceCount = 1;
+
+                    cmd->drawIndexed(args);
+                }
+            }
+
+            m_CascadedShadowMap->EndCascade();
+        }
+        
+        // Copy cascade layers to individual textures for visualization
+        m_CascadedShadowMap->CopyCascadeLayersForVisualization(cmd);
+
         Ref<GraphicsPipeline> geomPSO = GetGeomPipelineForFB(framebuffer, m_FillMode);
         nvrhi::GraphicsState geomGState = nvrhi::GraphicsState();
         geomGState.pipeline = geomPSO->GetHandle();
         geomGState.framebuffer = framebuffer;
         geomGState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
-
-        auto meshView = m_Scene->registry->view<Transform, MeshComponent>();
-
+        
         for (entt::entity e : meshView)
         {
             Transform& tr = m_Scene->registry->get<Transform>(e);
@@ -362,20 +504,20 @@ namespace ignite
             if (!mesh.model)
                 continue;
 
-            MeshScene &meshScene = mesh.model->GetScene();
-            for (auto &mesh : meshScene.flatMeshes)
+            MeshScene& meshScene = mesh.model->GetScene();
+            for (auto& mesh : meshScene.flatMeshes)
             {
-                SkinnedMeshBuffer smBuffer;
-                smBuffer.transformation = tr.GetLocalMatrix() * mesh->local;
+                SkinnedMesh_GPUData gpuData;
+                gpuData.transformation = tr.GetLocalMatrix() * mesh->local;
 
-                const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(smBuffer.transformation)));
-                smBuffer.normal = glm::mat4(normalMat3);
+                const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
+                gpuData.normal = glm::mat4(normalMat3);
 
-                std::fill(std::begin(smBuffer.boneTransforms),
-                    std::end(smBuffer.boneTransforms),
+                std::fill(std::begin(gpuData.boneTransforms),
+                    std::end(gpuData.boneTransforms),
                     glm::mat4(1.0f));
 
-                mesh->skinnedBuffer->SetData(cmd, Buffer(&smBuffer, sizeof(smBuffer)));
+                mesh->skinnedMeshGPUDataBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
 
                 mesh->material->UploadToGpu(cmd);
                 
@@ -393,6 +535,7 @@ namespace ignite
                 cmd->drawIndexed(args);
             }
         }
+
         // 2D Pass
         m_Renderer2D->Begin(cmd);
         auto object2DView = m_Scene->registry->view<Transform, Sprite2D>();
@@ -423,7 +566,7 @@ namespace ignite
             nvrhi::IFramebuffer *compositeFramebuffer = compositeRT->GetFramebuffer();
 
             Ref<GraphicsPipeline> compositePipeline = GetCompositePipelineForFB(compositeFramebuffer, nvrhi::RasterFillMode::Solid);
-            nvrhi::BindingSetHandle bindingSet = CreateCompositeBindingSet(compositePipeline->GetBindingLayout(0), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
+            nvrhi::BindingSetHandle bindingSet = GetOrCreateCompositeBindingSet(compositePipeline->GetBindingLayout(0), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
 
             auto graphicsState = nvrhi::GraphicsState();
             graphicsState.pipeline = compositePipeline->GetHandle();
@@ -452,6 +595,24 @@ namespace ignite
         UIManager& uiManager = UIManager::GetInstance();
         uiManager.SetMousePosition(viewportMousePos, viewportPos, viewportSize);
         uiManager.HandleMouseClick(mousePressed);
+    }
+
+    Ref<Texture> SceneRenderer::GetEnvironmentMap()
+    {
+        if (m_Environment)
+        {
+            return m_Environment->GetHDRTexture();
+        }
+		return nullptr;
+    }
+
+    Ref<Texture> SceneRenderer::GetCascadedShadowMap()
+    {
+        if (m_CascadedShadowMap)
+        {
+            return m_CascadedShadowMap->GetDepthTexture();
+		}
+        return nullptr;
     }
 
     void SceneRenderer::CreateDemoUI()

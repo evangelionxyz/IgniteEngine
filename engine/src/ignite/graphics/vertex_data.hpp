@@ -30,16 +30,6 @@
 
 namespace ignite
 {
-#define VERTEX_MAX_BONES 4
-#define MAX_BONES 100
-
-    struct SkinnedMeshBuffer
-    {
-        glm::mat4 transformation;
-        glm::mat4 normal;
-        glm::mat4 boneTransforms[MAX_BONES];
-    };
-
     struct VertexMesh
     {
         glm::vec3 position;
@@ -56,8 +46,8 @@ namespace ignite
 		glm::vec3 tangent;
 		glm::vec3 bitangent;
         glm::vec2 uv;
-        uint32_t boneIDs[VERTEX_MAX_BONES] = { 0 };
-        float weights[VERTEX_MAX_BONES] = { 0.0f };
+        uint32_t boneIDs[4] = { 0 };
+        float weights[4] = { 0.0f };
 
         static nvrhi::BindingLayoutDesc GetBindingLayoutDesc()
         {
@@ -65,9 +55,10 @@ namespace ignite
                 .setRegisterSpace(0) // set 0
                 .setRegisterSpaceIsDescriptorSet(true)
                 .setVisibility(nvrhi::ShaderType::All)
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0)) // camera
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1)) // object
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(2)); // scene
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0))         // Camera
+                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1)) // Object
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(2))        // Scene
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(3));        // CSM
         }
     };
 

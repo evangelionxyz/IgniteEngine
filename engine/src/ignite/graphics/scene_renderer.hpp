@@ -40,6 +40,7 @@ namespace ignite
     class RenderTarget;
     class UIRenderer;
     class Renderer2D;
+	class CascadedShadowMap;
     class Mesh;
 
     class SceneRenderer
@@ -60,6 +61,9 @@ namespace ignite
         // UI Input handling
         void UpdateUIInput(const glm::vec2& viewportMousePos, const glm::vec2& viewportPos, const glm::vec2& viewportSize, bool mousePressed);
 
+		Ref<Texture> GetEnvironmentMap();
+		Ref<Texture> GetCascadedShadowMap();
+
         static SceneRenderer *GetActive();
 
         Ref<Environment> &GetEnvironment() { return m_Environment; }
@@ -70,6 +74,7 @@ namespace ignite
 
         Ref<Environment> m_Environment;
         Ref<CommandList> m_CommandList;
+		Ref<CascadedShadowMap> m_CascadedShadowMap;
 
         // Composite
         Ref<VertexBuffer> m_CompositeVertexBuffer;

@@ -376,13 +376,14 @@ namespace ignite
     {
     public:
         Texture() = default;
-
+        Texture(const nvrhi::TextureDesc& desc, nvrhi::SamplerAddressMode wrapMode = nvrhi::SamplerAddressMode::Clamp);
         Texture(const TextureCreateInfo &createInfo);
         Texture(Buffer buffer, const TextureCreateInfo &createInfo);
         Texture(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo);
 
         ~Texture();
 
+		static Ref<Texture> Create(const nvrhi::TextureDesc& desc, nvrhi::SamplerAddressMode wrapMode = nvrhi::SamplerAddressMode::Clamp);
         static Ref<Texture> Create(const TextureCreateInfo& createInfo);
         static Ref<Texture> Create(Buffer buffer, const TextureCreateInfo &createInfo);
         static Ref<Texture> Create(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo);

@@ -29,11 +29,14 @@
 
 namespace ignite
 {
+    class Texture;
+
     struct FramebufferAttachments
     {
         std::string name = "[FramebufferAttachment]";
         nvrhi::Format format;
         nvrhi::ResourceStates state =  nvrhi::ResourceStates::Unknown;
+        uint32_t arrayLayers = 1;
     };
 
     struct RenderTargetCreateInfo
@@ -56,10 +59,10 @@ namespace ignite
 
         bool ShouldResize(const uint32_t width, const uint32_t height);
 
-        nvrhi::TextureHandle GetDepthAttachment();
+        Ref<Texture> GetDepthAttachment();
         nvrhi::FramebufferHandle GetFramebuffer();
-        nvrhi::TextureHandle GetColorAttachment(uint32_t index);
-        std::vector<nvrhi::TextureHandle> &GetColorAttachments();
+        Ref<Texture> GetColorAttachment(uint32_t index);
+        std::vector<Ref<Texture>> &GetColorAttachments();
 
         void ClearColorAndDepth(nvrhi::ICommandList *commandList);
 
@@ -74,10 +77,10 @@ namespace ignite
         static Ref<RenderTarget> Create(const RenderTargetCreateInfo &createInfo, const std::string& debugName = "[RenderTarget]");
 
     private:
-        std::vector<nvrhi::TextureHandle> m_ColorAttachments;
+        std::vector<Ref<Texture>> m_ColorAttachments;
         nvrhi::FramebufferHandle m_FramebufferHandle;
         nvrhi::FramebufferDesc m_FramebufferDesc;
-        nvrhi::TextureHandle m_DepthAttachment;
+        Ref<Texture> m_DepthAttachment;
         RenderTargetCreateInfo m_CreateInfo;
 
         std::unordered_map<uint32_t, glm::vec4> m_FloatClearColors;

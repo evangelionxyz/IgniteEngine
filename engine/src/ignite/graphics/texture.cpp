@@ -53,6 +53,20 @@ namespace ignite
     }
 
 
+    Texture::Texture(const nvrhi::TextureDesc& desc, nvrhi::SamplerAddressMode wrapMode)
+    {
+        nvrhi::IDevice* device = Application::GetGraphicsDevice();
+        m_Handle = device->createTexture(desc);
+        LOG_ASSERT(m_Handle, "Failed to create texture");
+
+        nvrhi::SamplerDesc samplerDesc = nvrhi::SamplerDesc();
+        samplerDesc.setAllAddressModes(wrapMode);
+        samplerDesc.setAllFilters(true);
+
+        m_Sampler = device->createSampler(samplerDesc);
+        LOG_ASSERT(m_Sampler, "Failed to create texture sampler");
+    }
+
     Texture::Texture(const TextureCreateInfo& createInfo)
         : m_CreateInfo(createInfo)
     {
@@ -201,6 +215,11 @@ namespace ignite
 
         m_Sampler = device->createSampler(samplerDesc);
         LOG_ASSERT(m_Sampler, "Failed to create texture sampler");
+    }
+
+    Ref<Texture> Texture::Create(const nvrhi::TextureDesc& desc, nvrhi::SamplerAddressMode wrapMode)
+    {
+        return CreateRef<Texture>(desc, wrapMode);
     }
 
     Ref<Texture> Texture::Create(const TextureCreateInfo& createInfo)
