@@ -37,24 +37,10 @@ namespace ignite
         return *this;
     }
 
-    GraphicsPipeline& GraphicsPipeline::AddShader(const std::string& filepath, nvrhi::ShaderType type, const std::string &entryPoint, bool recompile)
+    GraphicsPipeline& GraphicsPipeline::SetShaders(const std::vector<Ref<Shader>> &shaders, bool recompile)
     {
-        ShaderMake::ShaderType shaderType = GetShaderMakeShaderType(type);
-
-        ShaderMake::ShaderContextDesc desc;
-        desc.entryPoint = entryPoint;
-        
-        Ref<ShaderMake::ShaderContext> context = CreateRef<ShaderMake::ShaderContext>(filepath, shaderType, desc, recompile);
-        m_ShaderContexts.push_back(std::move(context));
-
+        m_Shaders = shaders;
         m_NeedsToCompileShader = true;
-
-        return *this;
-    }
-
-    GraphicsPipeline& GraphicsPipeline::AddShader(nvrhi::ShaderHandle& handle, nvrhi::ShaderType type)
-    {
-        m_Shaders[type] = handle;
         return *this;
     }
 
@@ -69,25 +55,6 @@ namespace ignite
     {
         nvrhi::IDevice* device = Application::GetGraphicsDevice();
 
-        if (m_NeedsToCompileShader)
-        {
-            Renderer::GetShaderLibrary().CompileShaders(m_ShaderContexts);
-
-            for (auto& context : m_ShaderContexts)
-            {
-                nvrhi::ShaderType shaderType = GetNVRHIShaderType(context->GetType());
-                m_Shaders[shaderType] = device->createShader(shaderType, context->blob.data.data(), context->blob.dataSize());
-                LOG_ASSERT(m_Shaders[shaderType], "[Graphics Pipeline] Failed to create shader");
-
-                if (device->getGraphicsAPI() == nvrhi::GraphicsAPI::VULKAN)
-                {
-                    Shader::SPIRVReflect(context->GetType(), context->blob);
-                }
-            }
-
-            m_ShaderContexts.clear();
-        }
-
         m_InputLayout = device->createInputLayout(createInfo.attributes, createInfo.attributeCount, nullptr);
         LOG_ASSERT(m_InputLayout, "[Graphics Pipeline] Failed to create input layout");
 
@@ -98,11 +65,15 @@ namespace ignite
         // create graphics pipeline
         nvrhi::BlendState blendState;
         blendState.targets[0].blendEnable = m_Params.enableBlend;
+        blendState.targets[0].srcBlend = m_Params.srcBlend;
+        blendState.targets[0].destBlend = m_Params.destBlend;
+        blendState.targets[0].srcBlendAlpha = m_Params.srcBlendAlpha;
+        blendState.targets[0].destBlendAlpha = m_Params.destBlendAlpha;
 
         nvrhi::DepthStencilState depthStencilState;
-        depthStencilState.depthWriteEnable = m_Params.depthWrite;
-        depthStencilState.depthTestEnable = m_Params.depthTest;
-        depthStencilState.depthFunc = m_Params.comparison;
+        depthStencilState.depthWriteEnable = m_Params.enableDepthWrite;
+        depthStencilState.depthTestEnable = m_Params.enableDepthTest;
+        depthStencilState.depthFunc = m_Params.depthFunc;
 
         depthStencilState.stencilEnable = m_Params.enableDepthStencil;
         depthStencilState.frontFaceStencil = m_Params.frontFaceStencilDesc;
@@ -112,9 +83,10 @@ namespace ignite
         depthStencilState.stencilRefValue = m_Params.stencilRefValue;
 
         nvrhi::RasterState rasterState;
-
         rasterState.cullMode = m_Params.cullMode;
         rasterState.fillMode = m_Params.fillMode;
+        rasterState.scissorEnable = m_Params.enableScissor;
+        rasterState.depthClipEnable = m_Params.enableDepthClip;
         rasterState.frontCounterClockwise = false;
         rasterState.multisampleEnable = false;
 
@@ -125,18 +97,20 @@ namespace ignite
 
         nvrhi::GraphicsPipelineDesc pipelineDesc;
 
-        for (auto& [type, shader] : m_Shaders)
+        for (Ref<Shader> shader : m_Shaders)
         {
-            if (type == nvrhi::ShaderType::Vertex) pipelineDesc.setVertexShader(shader);
-            else if (type == nvrhi::ShaderType::Pixel) pipelineDesc.setPixelShader(shader);
+            if (shader->GetType()  == ShaderType::Vertex) pipelineDesc.setVertexShader(shader->GetHandle());
+            else if (shader->GetType() == ShaderType::Pixel) pipelineDesc.setPixelShader(shader->GetHandle());
         }
 
         pipelineDesc.setInputLayout(m_InputLayout);
         pipelineDesc.setRenderState(renderState);
         pipelineDesc.primType = m_Params.primitiveType;
 
-        for (auto &layout : m_BindingLayouts)
+        for (auto& layout : m_BindingLayouts)
+        {
             pipelineDesc.addBindingLayout(layout);
+        }
 
         // create with the same framebuffer to be rendered
         m_Handle = device->createGraphicsPipeline(pipelineDesc, framebuffer);

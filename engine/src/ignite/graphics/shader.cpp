@@ -32,8 +32,9 @@
 #include <string>
 
 #ifdef PLATFORM_WINDOWS
-#   include <dxcapi.h>
-#   include <wrl/client.h>
+    #include <dxcapi.h>
+    #include <d3d12shader.h>
+    #include <wrl/client.h>
 using Microsoft::WRL::ComPtr;
 #endif
 
@@ -51,14 +52,14 @@ namespace ignite
             std::filesystem::create_directories(cachedDirectory);
     }
 
-    const char *ShaderStageToString(ShaderMake::ShaderType type)
+    const char* GetShaderTypeString(ShaderType type)
     {
         switch (type)
         {
-            case ShaderMake::ShaderType::Vertex: return "Vertex";
-            case ShaderMake::ShaderType::Pixel: return "Pixel";
-            case ShaderMake::ShaderType::Geometry: return "Geometry";
-            case ShaderMake::ShaderType::Compute: return "Compute";
+            case ShaderType::Vertex: return "Vertex";
+            case ShaderType::Pixel: return "Pixel";
+            case ShaderType::Geometry: return "Geometry";
+            case ShaderType::Compute: return "Compute";
         }
 
         LOG_ASSERT(false, "Invalid shader type");
@@ -78,85 +79,88 @@ namespace ignite
     }
 
 
-    Shader::Shader(const std::filesystem::path &filepath, ShaderMake::ShaderType type, bool recompile)
+    Shader::Shader(const std::filesystem::path &filepath, ShaderType type, bool recompile)
+        : m_Type(type)
     {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
         CreateShaderCachedDirectoryIfNeeded();
 
-        ShaderMake::ShaderBlob blob = CompileOrGetShader(filepath, type, &m_Resources, recompile);
-        LOG_ASSERT(blob.data.data(), "[Shader] Blob data is not valid");
+        std::vector<uint8_t> shaderCode = CompileOrGetShader(filepath, type, recompile);
+        LOG_ASSERT(shaderCode.data(), "[Shader] Blob data is not valid");
 
         nvrhi::ShaderDesc shaderDesc;
         shaderDesc.shaderType = GetNVRHIShaderType(type);
 
-        m_Handle = device->createShader(shaderDesc, blob.data.data(), blob.dataSize());
-        LOG_ASSERT(m_Handle, "Failed to create {} shader: {}", ShaderStageToString(type), filepath.generic_string());
+        // TODO: 
+        // SPIRVReflect(type, shaderCode);
+
+        m_Handle = device->createShader(shaderDesc, shaderCode.data(), shaderCode.size());
+        LOG_ASSERT(m_Handle, "Failed to create {} shader: {}", GetShaderTypeString(type), filepath.generic_string());
     }
 
-    ShaderMake::ShaderBlob Shader::CompileOrGetShader(const std::filesystem::path &filepath, ShaderMake::ShaderType type, spirv_cross::ShaderResources *resources, bool recompile)
+    std::vector<uint8_t> Shader::CompileOrGetShader(const std::filesystem::path &filepath, ShaderType type, bool recompile)
     {
-        ShaderMake::ShaderBlob shaderBlob;
+        LOG_ASSERT(std::filesystem::exists(filepath), "[Shader] File does not exists! '{}'", filepath.generic_string().c_str());
+        
+        const nvrhi::GraphicsAPI api = Application::GetInstance()->GetCreateInfo().graphicsApi;
 
-        std::filesystem::path filepathCopy = filepath.filename();
-        auto api = Application::GetInstance()->GetCreateInfo().graphicsApi;
-
-        LOG_ASSERT(std::filesystem::exists(filepath), "[Shader] File does not exists! {}", filepath.generic_string().c_str());
-
-        {
-            // get or compile shader
-            ShaderMake::ShaderContextDesc shaderDesc = ShaderMake::ShaderContextDesc();
-
-            // filepath from filepathCopy
-            Ref<ShaderMake::ShaderContext> shaderContext = CreateRef<ShaderMake::ShaderContext>(filepathCopy.generic_string(), type, shaderDesc, recompile);
-            ShaderMake::CompileStatus status = Renderer::GetShaderLibrary().CompileShaders({ shaderContext });
-
-            bool success = status == ShaderMake::CompileStatus::Success;
-            LOG_ASSERT(success, "[Shader] failed to get or compile shader");
-
-            // copy blob
-            shaderBlob = std::move(shaderContext->blob);
-        }
-
-        // print reflect info (only SPIRV file)
+        CompilerOptions opt = {};
+        opt.filepath = filepath;
+        opt.outputFilepath = filepath.parent_path() / "bin";
+        opt.platformType = api == nvrhi::GraphicsAPI::D3D12 ? ShaderPlatformType::DXIL : ShaderPlatformType::SPIRV;
+        opt.compilerType = CompilerType::DXC;
+        opt.shaderDesc.shaderType = type;
+        
+        // Important!!!!
         if (api == nvrhi::GraphicsAPI::VULKAN)
         {
-            if (resources)
-            {
-                *resources = SPIRVReflect(type, shaderBlob);
-            }
-            else
-            {
-                SPIRVReflect(type, shaderBlob);
-            }
+            opt.defines = { "SPIRV", "TARGET_VULKAN" };
         }
 
-        return shaderBlob;
+        std::vector<uint8_t> shaderCode;
+        std::filesystem::path cacheFilepath = opt.outputFilepath / filepath.filename().replace_extension(GetShaderExtension(api));
+        if (std::filesystem::exists(cacheFilepath) && !recompile)
+        {
+            std::ifstream file(cacheFilepath, std::ios::binary);
+            file.seekg(0, std::ios::end);
+            size_t fileSize = file.tellg();
+            file.seekg(0, std::ios::beg);
+
+            shaderCode.resize(fileSize);
+            file.read(reinterpret_cast<char*>(shaderCode.data()), fileSize);
+        }
+        else
+        {
+            shaderCode = ShaderCompiler::CompileDXC(Renderer::GetDXCInstance(), opt);
+        }
+
+        return shaderCode;
     }
 
-    spirv_cross::ShaderResources Shader::SPIRVReflect(ShaderMake::ShaderType type, const ShaderMake::ShaderBlob &blob)
+    spirv_cross::ShaderResources Shader::SPIRVReflect(ShaderType type, const std::vector<uint8_t> &shaderCode)
     {
-        if (blob.data.size() % sizeof(uint32_t) != 0)
+        if (shaderCode.size() % sizeof(uint32_t) != 0)
         {
             throw std::runtime_error("Shader blob size is not aligned to 4 bytes");
         }
 
-        const uint32_t *ptr = reinterpret_cast<const uint32_t *>(blob.data.data());
-        size_t wordCount = blob.data.size() / sizeof(uint32_t);
+        const uint32_t *ptr = reinterpret_cast<const uint32_t *>(shaderCode.data());
+        size_t wordCount = shaderCode.size() / sizeof(uint32_t);
         std::vector<uint32_t> dataBlob(ptr, ptr + wordCount);
 
         spirv_cross::Compiler compiler(dataBlob);
         spirv_cross::ShaderResources shaderResources = compiler.get_shader_resources();
 
-        LOG_WARN("[Shader Reflect] {} Shader", ShaderStageToString(type));
+        LOG_WARN("[Shader Reflect] {} Shader", GetShaderTypeString(type));
 
         // --- Uniform Buffers ---
         LOG_TRACE("   {} uniform buffers", shaderResources.uniform_buffers.size());
         for (const auto &ubo : shaderResources.uniform_buffers)
         {
             const auto &type = compiler.get_type(ubo.base_type_id);
-            u32 size = static_cast<u32>(compiler.get_declared_struct_size(type));
-            u32 binding = compiler.get_decoration(ubo.id, spv::DecorationBinding);
-            u32 set = compiler.get_decoration(ubo.id, spv::DecorationDescriptorSet);
+            uint32_t size = static_cast<uint32_t>(compiler.get_declared_struct_size(type));
+            uint32_t binding = compiler.get_decoration(ubo.id, spv::DecorationBinding);
+            uint32_t set = compiler.get_decoration(ubo.id, spv::DecorationDescriptorSet);
             size_t memberCount = type.member_types.size();
 
             LOG_TRACE("  [UBO] Name: {}, Set: {}, Binding: {}, Size: {}, Members: {}", ubo.name, set, binding, size, memberCount);
@@ -166,8 +170,8 @@ namespace ignite
         LOG_TRACE("   {} sampled images", shaderResources.sampled_images.size());
         for (const auto &image : shaderResources.sampled_images)
         {
-            u32 binding = compiler.get_decoration(image.id, spv::DecorationBinding);
-            u32 set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
+            uint32_t binding = compiler.get_decoration(image.id, spv::DecorationBinding);
+            uint32_t set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
 
             LOG_TRACE("  [Texture] Name: {}, Set: {}, Binding: {}", image.name, set, binding);
         }
@@ -176,8 +180,8 @@ namespace ignite
         LOG_TRACE("   {} separate samplers", shaderResources.separate_samplers.size());
         for (const auto &sampler : shaderResources.separate_samplers)
         {
-            u32 binding = compiler.get_decoration(sampler.id, spv::DecorationBinding);
-            u32 set = compiler.get_decoration(sampler.id, spv::DecorationDescriptorSet);
+            uint32_t binding = compiler.get_decoration(sampler.id, spv::DecorationBinding);
+            uint32_t set = compiler.get_decoration(sampler.id, spv::DecorationDescriptorSet);
 
             LOG_TRACE("  [Sampler] Name: {}, Set: {}, Binding: {}", sampler.name, set, binding);
         }
@@ -186,8 +190,8 @@ namespace ignite
         LOG_TRACE("   {} separate images", shaderResources.separate_images.size());
         for (const auto &image : shaderResources.separate_images)
         {
-            u32 binding = compiler.get_decoration(image.id, spv::DecorationBinding);
-            u32 set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
+            uint32_t binding = compiler.get_decoration(image.id, spv::DecorationBinding);
+            uint32_t set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
 
             LOG_TRACE("  [Separate Image] Name: {}, Set: {}, Binding: {}", image.name, set, binding);
         }
@@ -197,7 +201,7 @@ namespace ignite
         for (const auto &pcb : shaderResources.push_constant_buffers)
         {
             const auto &type = compiler.get_type(pcb.base_type_id);
-            u32 size = static_cast<u32>(compiler.get_declared_struct_size(type));
+            uint32_t size = static_cast<uint32_t>(compiler.get_declared_struct_size(type));
 
             LOG_TRACE("  [PushConstant] Name: {}, Size: {}", pcb.name, size);
         }
@@ -205,7 +209,241 @@ namespace ignite
         return shaderResources;
     }
 
-    Ref<Shader> Shader::Create(const std::filesystem::path &filepath, ShaderMake::ShaderType type, bool recompile)
+    void Shader::DXILReflect(ShaderType type, const std::vector<uint8_t>& shaderCode)
+    {
+#ifdef PLATFORM_WINDOWS
+        // Validate the blob first
+        if (shaderCode.empty() || shaderCode.size() < 4)
+        {
+            LOG_ERROR("[Shader Reflect] Invalid blob: empty or too small (size: {})", shaderCode.size());
+            return;
+        }
+
+        // Check for DXIL signature - DXIL files should start with "DXBC" header or have specific DXIL markers
+        const uint32_t* header = reinterpret_cast<const uint32_t*>(shaderCode.data());
+        if (shaderCode.size() >= 4)
+        {
+            // Check for DXBC signature (0x43425844 = "DXBC" in little endian)
+            if (header[0] != 0x43425844)
+            {
+                LOG_WARN("[Shader Reflect] Blob doesn't appear to be DXBC/DXIL format. First 4 bytes: 0x{:08X}", header[0]);
+                
+                // Some shader compilers might wrap the DXIL in different containers
+                // Try to find DXBC signature within the first few bytes
+                bool foundDXBC = false;
+                for (size_t offset = 0; offset < std::min(shaderCode.size() - 4, size_t(64)); offset += 4)
+                {
+                    const uint32_t* searchHeader = reinterpret_cast<const uint32_t*>(shaderCode.data() + offset);
+                    if (*searchHeader == 0x43425844)
+                    {
+                        LOG_INFO("[Shader Reflect] Found DXBC signature at offset {}", offset);
+                        foundDXBC = true;
+                        break;
+                    }
+                }
+                
+                if (!foundDXBC)
+                {
+                    LOG_ERROR("[Shader Reflect] No DXBC signature found in blob. This might not be a valid DXIL shader.");
+                    // Still continue - let D3DReflect decide
+                }
+            }
+        }
+
+        LOG_TRACE("[Shader Reflect] Attempting to reflect {} shader blob of size {} bytes", 
+            GetShaderTypeString(type), shaderCode.size());
+
+        ComPtr<ID3D12ShaderReflection> reflection;
+        HRESULT result = D3DReflect(shaderCode.data(), shaderCode.size(), IID_PPV_ARGS(reflection.GetAddressOf()));
+        
+        if (FAILED(result))
+        {
+            LOG_ERROR("[Shader Reflect] D3DReflect failed with HRESULT: 0x{:08X}", static_cast<uint32_t>(result));
+            
+            switch (result)
+            {
+                case E_INVALIDARG:
+                    LOG_ERROR("  - E_INVALIDARG: One or more arguments are invalid");
+                    LOG_ERROR("  - This usually means the blob is not valid DXIL/DXBC bytecode");
+                    LOG_ERROR("  - Blob size: {} bytes", shaderCode.size());
+                    LOG_ERROR("  - First 16 bytes: {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X}",
+                        shaderCode.size() > 0 ? shaderCode[0] : 0, shaderCode.size() > 1 ? shaderCode[1] : 0,
+                        shaderCode.size() > 2 ? shaderCode[2] : 0, shaderCode.size() > 3 ? shaderCode[3] : 0,
+                        shaderCode.size() > 4 ? shaderCode[4] : 0, shaderCode.size() > 5 ? shaderCode[5] : 0,
+                        shaderCode.size() > 6 ? shaderCode[6] : 0, shaderCode.size() > 7 ? shaderCode[7] : 0,
+                        shaderCode.size() > 8 ? shaderCode[8] : 0, shaderCode.size() > 9 ? shaderCode[9] : 0,
+                        shaderCode.size() > 10 ? shaderCode[10] : 0, shaderCode.size() > 11 ? shaderCode[11] : 0,
+                        shaderCode.size() > 12 ? shaderCode[12] : 0, shaderCode.size() > 13 ? shaderCode[13] : 0,
+                        shaderCode.size() > 14 ? shaderCode[14] : 0, shaderCode.size() > 15 ? shaderCode[15] : 0);
+                    break;
+                case E_OUTOFMEMORY:
+                    LOG_ERROR("  - E_OUTOFMEMORY: Out of memory");
+                    break;
+                case E_FAIL:
+                    LOG_ERROR("  - E_FAIL: General failure");
+                    break;
+                default:
+                    LOG_ERROR("  - Unknown error code: 0x{:08X}", static_cast<uint32_t>(result));
+                    break;
+            }
+            
+            LOG_ERROR("[Shader Reflect] Possible causes:");
+            LOG_ERROR("  1. ShaderMake might be producing a different format than DXIL");
+            LOG_ERROR("  2. The shader compilation might have failed silently");
+            LOG_ERROR("  3. The blob might be wrapped in an additional container");
+            LOG_ERROR("  4. Try checking if the shader files compile successfully first");
+            return;
+        }
+
+        if (!reflection)
+        {
+            LOG_ERROR("[Shader Reflect] D3DReflect succeeded but returned null reflection interface");
+            return;
+        }
+
+        D3D12_SHADER_DESC shaderDesc;
+        result = reflection->GetDesc(&shaderDesc);
+        if (FAILED(result))
+        {
+            LOG_ERROR("[Shader Reflect] Failed to get shader description. HRESULT: 0x{:08X}", static_cast<uint32_t>(result));
+            return;
+        }
+
+        LOG_WARN("[Shader Reflect] {} Shader", GetShaderTypeString(type));
+        
+        // Extract version info manually - D3D12 uses different version encoding
+        UINT majorVersion = (shaderDesc.Version >> 4) & 0xF;
+        UINT minorVersion = shaderDesc.Version & 0xF;
+        LOG_TRACE("   Shader version: {}.{}", majorVersion, minorVersion);
+        LOG_TRACE("   Creator: {}", shaderDesc.Creator ? shaderDesc.Creator : "unknown");
+
+        // --- Constant Buffers (Uniform Buffers) ---
+        LOG_TRACE("   {} constant buffers", shaderDesc.ConstantBuffers);
+        for (UINT i = 0; i < shaderDesc.ConstantBuffers; ++i)
+        {
+            ID3D12ShaderReflectionConstantBuffer* cbuffer = reflection->GetConstantBufferByIndex(i);
+            if (cbuffer)
+            {
+                D3D12_SHADER_BUFFER_DESC cbufferDesc;
+                result = cbuffer->GetDesc(&cbufferDesc);
+                if (SUCCEEDED(result))
+                {
+                    LOG_TRACE("  [CBV] Name: {}, Size: {}, Variables: {}", 
+                        cbufferDesc.Name ? cbufferDesc.Name : "unnamed", 
+                        cbufferDesc.Size, 
+                        cbufferDesc.Variables);
+                }
+            }
+        }
+
+        // --- Bound Resources (Textures, Samplers, UAVs, etc.) ---
+        LOG_TRACE("   {} bound resources", shaderDesc.BoundResources);
+        for (UINT i = 0; i < shaderDesc.BoundResources; ++i)
+        {
+            D3D12_SHADER_INPUT_BIND_DESC bindDesc;
+            result = reflection->GetResourceBindingDesc(i, &bindDesc);
+            if (SUCCEEDED(result))
+            {
+                const char* resourceType = "Unknown";
+                switch (bindDesc.Type)
+                {
+                    case D3D_SIT_CBUFFER:
+                        resourceType = "CBV (Constant Buffer)";
+                        break;
+                    case D3D_SIT_TBUFFER:
+                        resourceType = "TBuffer";
+                        break;
+                    case D3D_SIT_TEXTURE:
+                        resourceType = "SRV (Texture)";
+                        break;
+                    case D3D_SIT_SAMPLER:
+                        resourceType = "Sampler";
+                        break;
+                    case D3D_SIT_UAV_RWTYPED:
+                        resourceType = "UAV (RW Texture)";
+                        break;
+                    case D3D_SIT_STRUCTURED:
+                        resourceType = "SRV (Structured Buffer)";
+                        break;
+                    case D3D_SIT_UAV_RWSTRUCTURED:
+                        resourceType = "UAV (RW Structured Buffer)";
+                        break;
+                    case D3D_SIT_BYTEADDRESS:
+                        resourceType = "SRV (Byte Address Buffer)";
+                        break;
+                    case D3D_SIT_UAV_RWBYTEADDRESS:
+                        resourceType = "UAV (RW Byte Address Buffer)";
+                        break;
+                    case D3D_SIT_UAV_APPEND_STRUCTURED:
+                        resourceType = "UAV (Append Structured Buffer)";
+                        break;
+                    case D3D_SIT_UAV_CONSUME_STRUCTURED:
+                        resourceType = "UAV (Consume Structured Buffer)";
+                        break;
+                    case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
+                        resourceType = "UAV (RW Structured Buffer with Counter)";
+                        break;
+                    case D3D_SIT_RTACCELERATIONSTRUCTURE:
+                        resourceType = "SRV (Ray Tracing Acceleration Structure)";
+                        break;
+                    case D3D_SIT_UAV_FEEDBACKTEXTURE:
+                        resourceType = "UAV (Feedback Texture)";
+                        break;
+                }
+
+                LOG_TRACE("  [{}] Name: {}, Register: {}, Space: {}, Count: {}", 
+                    resourceType,
+                    bindDesc.Name ? bindDesc.Name : "unnamed",
+                    bindDesc.BindPoint,
+                    bindDesc.Space,
+                    bindDesc.BindCount);
+            }
+        }
+
+        // --- Input Parameters (Vertex Attributes, etc.) ---
+        LOG_TRACE("   {} input parameters", shaderDesc.InputParameters);
+        for (UINT i = 0; i < shaderDesc.InputParameters; ++i)
+        {
+            D3D12_SIGNATURE_PARAMETER_DESC paramDesc;
+            result = reflection->GetInputParameterDesc(i, &paramDesc);
+            if (SUCCEEDED(result))
+            {
+                LOG_TRACE("  [Input] Semantic: {}{}, Register: {}, Mask: 0x{:X}", 
+                    paramDesc.SemanticName ? paramDesc.SemanticName : "unknown",
+                    paramDesc.SemanticIndex,
+                    paramDesc.Register,
+                    paramDesc.Mask);
+            }
+        }
+
+        // --- Output Parameters ---
+        LOG_TRACE("   {} output parameters", shaderDesc.OutputParameters);
+        for (UINT i = 0; i < shaderDesc.OutputParameters; ++i)
+        {
+            D3D12_SIGNATURE_PARAMETER_DESC paramDesc;
+            result = reflection->GetOutputParameterDesc(i, &paramDesc);
+            if (SUCCEEDED(result))
+            {
+                LOG_TRACE("  [Output] Semantic: {}{}, Register: {}, Mask: 0x{:X}", 
+                    paramDesc.SemanticName ? paramDesc.SemanticName : "unknown",
+                    paramDesc.SemanticIndex,
+                    paramDesc.Register,
+                    paramDesc.Mask);
+            }
+        }
+
+        // Note: D3D12 doesn't have direct equivalent to Vulkan's push constants
+        // Push constants in D3D12 are typically implemented as root constants
+        // which can be detected by looking for constant buffers with special properties
+        // or by examining the root signature (not available through shader reflection alone)
+        
+        LOG_TRACE("   Root constants would need root signature analysis (not available in shader reflection)");
+#else
+        LOG_WARN("[Shader Reflect] DXIL reflection is only available on Windows platform");
+#endif
+    }
+
+    Ref<Shader> Shader::Create(const std::filesystem::path &filepath, ShaderType type, bool recompile)
     {
         Ref<Shader> returnShader = CreateRef<Shader>(filepath, type, recompile);
         if (returnShader->GetHandle() == nullptr)

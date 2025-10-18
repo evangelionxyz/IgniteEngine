@@ -41,6 +41,8 @@
 
 #include "ignite/graphics/renderer.hpp"
 
+#include <fstream>
+
 namespace ignite
 {
 

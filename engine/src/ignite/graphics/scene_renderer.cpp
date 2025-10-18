@@ -95,21 +95,23 @@ namespace ignite
 
         GraphicsPipelineParams params;
         params.enableBlend = false;
-        params.depthWrite = true;
-        params.depthTest = true;
+        params.enableDepthWrite = true;
+        params.enableDepthTest = true;
         params.enableDepthStencil = false;
         params.fillMode = fillMode;
         params.cullMode = nvrhi::RasterCullMode::Front;
-        params.comparison = nvrhi::ComparisonFunc::LessOrEqual;
+        params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
 
         auto attributes = VertexMesh_Anim::GetAttributes();
         GraphicsPipelineCreateInfo createInfo;
         createInfo.attributes = attributes.data();
         createInfo.attributeCount = static_cast<uint32_t>(attributes.size());
 
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/mesh_anim.vertex.hlsl", ShaderType::Vertex, true);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/mesh_anim.pixel.hlsl", ShaderType::Pixel, true);
+
         auto gp = GraphicsPipeline::Create();
-        gp->AddShader("mesh_anim.vertex.hlsl", nvrhi::ShaderType::Vertex, "main", true)
-          .AddShader("mesh_anim.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
+        gp->SetShaders({ vertexShader, pixelShader })
           .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
           .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
           .Build(framebuffer, params, createInfo);
@@ -141,21 +143,23 @@ namespace ignite
 
         GraphicsPipelineParams params;
         params.enableBlend = true;
-        params.depthWrite = true;
-        params.depthTest = true;
+        params.enableDepthWrite = true;
+        params.enableDepthTest = true;
         params.enableDepthStencil = false;
         params.fillMode = fillMode;
         params.cullMode = nvrhi::RasterCullMode::Front;
-        params.comparison = nvrhi::ComparisonFunc::Always;
+        params.depthFunc = nvrhi::ComparisonFunc::Always;
 
         auto attribute = Environment::GetAttribute();
         GraphicsPipelineCreateInfo createInfo;
         createInfo.attributes = &attribute;
         createInfo.attributeCount = 1;
 
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/skybox.vertex.hlsl", ShaderType::Vertex, true);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/skybox.pixel.hlsl", ShaderType::Pixel, true);
+
         auto gp = GraphicsPipeline::Create();
-        gp->AddShader("skybox.vertex.hlsl", nvrhi::ShaderType::Vertex)
-          .AddShader("skybox.pixel.hlsl", nvrhi::ShaderType::Pixel)
+        gp->SetShaders({ vertexShader, pixelShader })
           .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT))
           .Build(framebuffer, params, createInfo);
         
@@ -197,8 +201,8 @@ namespace ignite
 
         GraphicsPipelineParams params;
         params.enableBlend = false;
-        params.depthWrite = false;
-        params.depthTest = false;
+        params.enableDepthWrite = false;
+        params.enableDepthTest = false;
         params.enableDepthStencil = false;
         params.fillMode = fillMode;
         params.cullMode = nvrhi::RasterCullMode::None;
@@ -209,9 +213,11 @@ namespace ignite
         createInfo.attributeCount = static_cast<uint32_t>(attributes.size());
 
         // Create pipeline
-        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
-        gp->AddShader("composite.vertex.hlsl", nvrhi::ShaderType::Vertex, "main", true)
-            .AddShader("composite.pixel.hlsl", nvrhi::ShaderType::Pixel, "main", true)
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/composite.vertex.hlsl", ShaderType::Vertex, true);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/composite.pixel.hlsl", ShaderType::Pixel, true);
+
+        auto gp = GraphicsPipeline::Create();
+        gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(bindingLayout)
             .Build(framebuffer, params, createInfo);
 

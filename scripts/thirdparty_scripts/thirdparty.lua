@@ -22,7 +22,6 @@ IncludeDir["TINYGLTF"]         = "%{THIRDPARTY_DIR}/TINYGLTF/include"
 IncludeDir["FILEWATCHER"]      = "%{THIRDPARTY_DIR}/Filewatcher/include"
 IncludeDir["NVRHI_VULKAN_HPP"] = "%{THIRDPARTY_DIR}/NVRHI/thirdparty/Vulkan-Headers/include"
 IncludeDir["VULKAN_SDK"]       = "%{VULKAN_SDK_PATH}/Include"
-IncludeDir["SHADERMAKE"]       = "%{THIRDPARTY_DIR}/ShaderMake/ShaderMake/include"
 
 --library dirs
 LibraryDir = {}
@@ -70,5 +69,4 @@ group ""
 
 group "NVIDIA"
     include "nvrhi.lua"
-    include "shadermake.lua"
 group ""

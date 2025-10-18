@@ -21,13 +21,14 @@
 * SOFTWARE.
 */
 
-#pragma once
+#ifndef SHADER_HPP
+#define SHADER_HPP
 
 #include "ignite/core/types.hpp"
 #include "ignite/core/logger.hpp"
-#include <spirv_cross/spirv_cross.hpp>
-#include <spirv_cross/spirv_glsl.hpp>
-#include <ShaderMake/ShaderMake.h>
+
+#include "shader_compiler.hpp"
+
 #include <nvrhi/nvrhi.h>
 #include <initializer_list>
 #include <filesystem>
@@ -38,49 +39,53 @@ namespace ignite
     static std::string GetShaderCacheDirectory();
     static void CreateShaderCachedDirectoryIfNeeded();
 
-    static nvrhi::ShaderType GetNVRHIShaderType(ShaderMake::ShaderType type)
+    static nvrhi::ShaderType GetNVRHIShaderType(ShaderType type)
     {
         switch (type)
         {
-        case ShaderMake::ShaderType::Vertex: return nvrhi::ShaderType::Vertex;
-        case ShaderMake::ShaderType::Pixel: return nvrhi::ShaderType::Pixel;
-        case ShaderMake::ShaderType::Geometry: return nvrhi::ShaderType::Geometry;
-        case ShaderMake::ShaderType::Compute: return nvrhi::ShaderType::Compute;
+            case ShaderType::Vertex: return nvrhi::ShaderType::Vertex;
+            case ShaderType::Pixel: return nvrhi::ShaderType::Pixel;
+            case ShaderType::Geometry: return nvrhi::ShaderType::Geometry;
+            case ShaderType::Compute: return nvrhi::ShaderType::Compute;
         }
 
         LOG_ASSERT(false, "Invalid shader stage");
         return nvrhi::ShaderType::None;
     }
 
-    static ShaderMake::ShaderType GetShaderMakeShaderType(nvrhi::ShaderType type)
+    static ShaderType GetShaderType(nvrhi::ShaderType type)
     {
         switch (type)
         {
-        case nvrhi::ShaderType::Vertex: return ShaderMake::ShaderType::Vertex;
-        case nvrhi::ShaderType::Pixel: return ShaderMake::ShaderType::Pixel;
-        case nvrhi::ShaderType::Geometry: return ShaderMake::ShaderType::Geometry;
-        case nvrhi::ShaderType::Compute: return ShaderMake::ShaderType::Compute;
+            case nvrhi::ShaderType::Vertex: return ShaderType::Vertex;
+            case nvrhi::ShaderType::Pixel: return ShaderType::Pixel;
+            case nvrhi::ShaderType::Geometry: return ShaderType::Geometry;
+            case nvrhi::ShaderType::Compute: return ShaderType::Compute;
         }
 
         LOG_ASSERT(false, "Invalid shader stage");
-        return ShaderMake::ShaderType::Vertex;
+        return ShaderType::Vertex;
     }
 
     class Shader
     {
     public:
         Shader() = default;
-        Shader(const std::filesystem::path &filepath, ShaderMake::ShaderType type, bool recompile = false);
+        Shader(const std::filesystem::path &filepath, ShaderType type, bool recompile = false);
 
         nvrhi::ShaderHandle GetHandle() { return m_Handle; }
-        const spirv_cross::ShaderResources &GetResources() { return m_Resources; }
+        ShaderType GetType() const { return m_Type; }
 
-        static ShaderMake::ShaderBlob CompileOrGetShader(const std::filesystem::path &filepath, ShaderMake::ShaderType type, spirv_cross::ShaderResources *resources, bool recompile);
-        static Ref<Shader> Create(const std::filesystem::path &filepath, ShaderMake::ShaderType type, bool recompile = false);
-        static spirv_cross::ShaderResources SPIRVReflect(ShaderMake::ShaderType type, const ShaderMake::ShaderBlob &blob);
+        static std::vector<uint8_t> CompileOrGetShader(const std::filesystem::path &filepath, ShaderType type, bool recompile);
+        static Ref<Shader> Create(const std::filesystem::path &filepath, ShaderType type, bool recompile = false);
+
+        static spirv_cross::ShaderResources SPIRVReflect(ShaderType type, const std::vector<uint8_t> &shaderCode);
+        static void DXILReflect(ShaderType type, const std::vector<uint8_t>& shaderCode);
     
     private:
-        spirv_cross::ShaderResources m_Resources;
+        ShaderType m_Type;
         nvrhi::ShaderHandle m_Handle = nullptr;
     };
 }
+
+#endif

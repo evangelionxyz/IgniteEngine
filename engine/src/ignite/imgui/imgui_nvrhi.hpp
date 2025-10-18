@@ -39,6 +39,7 @@
 namespace ignite
 {
     class ShaderFactory;
+    class GraphicsPipeline;
 
     struct ImGui_NVRHI
     {
@@ -52,10 +53,7 @@ namespace ignite
         nvrhi::BufferHandle vertexBuffer;
         nvrhi::BufferHandle indexBuffer;
 
-        nvrhi::BindingLayoutHandle bindingLayout;
-        nvrhi::GraphicsPipelineDesc graphicsPipelineDesc;
-
-        nvrhi::GraphicsPipelineHandle graphicsPipeline;
+        Ref<GraphicsPipeline> graphicsPipeline;
         std::unordered_map<nvrhi::ITexture *, nvrhi::BindingSetHandle> bindingsCache;
 
         std::vector<ImDrawVert> imguiVertexBuffer;
@@ -69,8 +67,9 @@ namespace ignite
 
     private:
         bool ReallocateBuffer(nvrhi::BufferHandle &buffer, size_t requiredSize, size_t reallocateSize, bool isIndexBuffer);
-        nvrhi::IGraphicsPipeline *GetPSO(nvrhi::IFramebuffer *framebuffer);
-        nvrhi::IBindingSet *GetBindingSet(nvrhi::ITexture *texture);
+        Ref<GraphicsPipeline> GetPSO(nvrhi::IFramebuffer *framebuffer);
+        nvrhi::IBindingSet *GetBindingSet(nvrhi::ITexture *texture, nvrhi::BindingLayoutHandle bindingLayout);
         bool UpdateGeometry(nvrhi::ICommandList *commandList);
+
     };
 }

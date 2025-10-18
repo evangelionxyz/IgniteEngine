@@ -23,6 +23,8 @@
 
 #include "edge_detection.hpp"
 
+#include "shader.hpp"
+
 #include "renderer.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/logger.hpp"
@@ -84,14 +86,7 @@ namespace ignite
 
         m_BindingLayout = device->createBindingLayout(layoutDesc);
 
-        // Create shaders
-        ShaderMake::ShaderContextDesc desc;
-
-        Ref<ShaderMake::ShaderContext> csContext = CreateRef<ShaderMake::ShaderContext>("sobel_edge_detection.compute.hlsl",
-            ShaderMake::ShaderType::Compute, desc, true);
-
-        Renderer::GetShaderLibrary().CompileShaders({ csContext });
-        m_ComputeShader = device->createShader(nvrhi::ShaderType::Compute, csContext->blob.data.data(), csContext->blob.dataSize());
+        m_Shader = Shader::Create("resources/shaders/sobel_edge_detection.compute.hlsl", ShaderType::Compute);
     }
 
     EdgeDetection::~EdgeDetection()
@@ -104,7 +99,7 @@ namespace ignite
 
         // Create compute pipeline
         nvrhi::ComputePipelineDesc computeDesc;
-        computeDesc.CS = m_ComputeShader;
+        computeDesc.CS = m_Shader->GetHandle();
         computeDesc.bindingLayouts = { m_BindingLayout };
         m_Pipeline = device->createComputePipeline(computeDesc);
     }

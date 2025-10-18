@@ -58,8 +58,8 @@ namespace ignite
 
         GraphicsPipelineParams params;
         params.enableBlend = true;
-        params.depthWrite = true;
-        params.depthTest = true;
+        params.enableDepthWrite = true;
+        params.enableDepthTest = true;
         params.enableDepthStencil = false;
         params.fillMode = fillMode;
 
@@ -78,17 +78,18 @@ namespace ignite
 
         params.fillMode = nvrhi::RasterFillMode::Solid;
         params.cullMode = nvrhi::RasterCullMode::None;
-        params.comparison = nvrhi::ComparisonFunc::LessOrEqual;
+        params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
 
         auto attributes = Vertex2DQuad::GetAttributes();
         GraphicsPipelineCreateInfo createInfo;
         createInfo.attributes = attributes.data();
         createInfo.attributeCount = static_cast<uint32_t>(attributes.size());
 
-        auto shaderContext = Renderer::GetShaderLibrary().Get("batch_2d_quad");
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_quad.vertex.hlsl", ShaderType::Vertex, true);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_quad.pixel.hlsl", ShaderType::Pixel, true);
+
         Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
-        gp->AddShader(shaderContext[nvrhi::ShaderType::Vertex].handle, nvrhi::ShaderType::Vertex)
-            .AddShader(shaderContext[nvrhi::ShaderType::Pixel].handle, nvrhi::ShaderType::Pixel)
+        gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(bindingLayout)
             .Build(framebuffer, params, createInfo);
 
@@ -109,8 +110,8 @@ namespace ignite
 
         GraphicsPipelineParams params;
         params.enableBlend = true;
-        params.depthWrite = true;
-        params.depthTest = true;
+        params.enableDepthWrite = true;
+        params.enableDepthTest = true;
         params.enableDepthStencil = false;
 
         params.fillMode = nvrhi::RasterFillMode::Wireframe;
@@ -122,15 +123,16 @@ namespace ignite
         createInfo.attributes = attributes.data();
         createInfo.attributeCount = static_cast<uint32_t>(attributes.size());
 
-        auto shaderContext = Renderer::GetShaderLibrary().Get("batch_2d_line");
         Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
         nvrhi::BindingLayoutDesc bindingLayoutDesc;
         bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
         bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
         nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
 
-        gp->AddShader(shaderContext[nvrhi::ShaderType::Vertex].handle, nvrhi::ShaderType::Vertex)
-            .AddShader(shaderContext[nvrhi::ShaderType::Pixel].handle, nvrhi::ShaderType::Pixel)
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_line.vertex.hlsl", ShaderType::Vertex, true);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_line.pixel.hlsl", ShaderType::Pixel, true);
+
+        gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(bindingLayout)
             .Build(framebuffer, params, createInfo);
 
@@ -212,8 +214,6 @@ namespace ignite
 
     void Renderer2D::InitQuadData()
     {
-        nvrhi::IDevice* device = Application::GetGraphicsDevice();
-
         size_t vertAllocSize = m_QuadBatch.maxVertices * sizeof(Vertex2DQuad);
         m_QuadBatch.vertexBufferBase = new Vertex2DQuad[vertAllocSize];
 
@@ -251,8 +251,6 @@ namespace ignite
 
     void Renderer2D::InitLineData()
     {
-        nvrhi::IDevice* device = Application::GetGraphicsDevice();
-
         size_t vertAllocSize = m_LineBatch.maxVertices * sizeof(Vertex2DLine);
         m_LineBatch.vertexBufferBase = new Vertex2DLine[vertAllocSize];
         m_LineBatch.vertexBuffer = VertexBuffer::Create(vertAllocSize);

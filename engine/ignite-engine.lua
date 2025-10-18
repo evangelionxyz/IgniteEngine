@@ -30,7 +30,6 @@ project "IgniteEngine"
         "%{IncludeDir.NVRHI_VULKAN_HPP}",
         "%{IncludeDir.VULKAN_SDK}",
         "%{IncludeDir.FILEWATCHER}",
-        "%{IncludeDir.SHADERMAKE}",
         "%{IncludeDir.ZLIB}",
         "%{IncludeDir.YAMLCPP}",
         "%{IncludeDir.TINYGLTF}",
@@ -43,7 +42,6 @@ project "IgniteEngine"
         "STB",
         "JOLT",
         "SPDLOG",
-        "ShaderMake",
         "TINYGLTF",
         "NVRHI",
         "ZLIB",
@@ -51,7 +49,6 @@ project "IgniteEngine"
     }
 
     defines {
-        "SHADERMAKE_COLORS",
         "JPH_SHARED_LIBRARY",
         
         "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",

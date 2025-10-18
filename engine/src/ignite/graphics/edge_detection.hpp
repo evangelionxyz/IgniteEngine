@@ -30,6 +30,8 @@
 
 namespace ignite
 {
+    class Shader;
+
     struct EdgeDetectionParameter
     {
         glm::vec2 texelSize;
@@ -59,7 +61,7 @@ namespace ignite
         static Ref<EdgeDetection> Create();
 
     private:
-        nvrhi::ShaderHandle m_ComputeShader;
+        Ref<Shader> m_Shader;
         nvrhi::ComputePipelineHandle m_Pipeline;
 
         // Resources
