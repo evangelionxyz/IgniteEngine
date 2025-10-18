@@ -9,8 +9,6 @@ project "SPDLOG"
     targetdir (OUTPUT_DIR)
     objdir (INTOUTPUT_DIR)
 
-    disablewarnings { "4251", "4275" }
-
     files {
         "%{THIRDPARTY_DIR}/SPDLOG/src/async.cpp",
         "%{THIRDPARTY_DIR}/SPDLOG/src/bundled_fmtlib_format.cpp",
@@ -37,6 +35,9 @@ project "SPDLOG"
         defines {
             "WIN32", "_WINDOWS", "_UNICODE"
         }
+
+    filter { "system:windows", "toolset:msc*" }
+        disablewarnings { "4251", "4275" }
         buildoptions {
             "/utf-8", "/interface"
         }

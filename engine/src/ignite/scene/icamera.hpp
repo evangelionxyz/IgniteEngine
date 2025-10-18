@@ -118,7 +118,7 @@ namespace ignite
 		float yaw = 0.0f; // rotation around Y axis
 
 		float distance = 1.0f;
-		float fov = 90.0f; // for perspective
+		float fov = 45.0f; // for perspective
 		float nearPlane = 0.01f;
 		float farPlane = 1000.0f;
 

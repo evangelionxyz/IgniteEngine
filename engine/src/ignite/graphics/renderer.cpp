@@ -40,87 +40,14 @@ namespace ignite
 {
     Renderer *s_instance = nullptr;
 
-    void ShaderLibrary::Init(nvrhi::GraphicsAPI api)
-    {
-        m_ShaderMakeOptions.compilerType = ShaderMake::CompilerType_DXC;
-        m_ShaderMakeOptions.optimizationLevel = 3;
-        m_ShaderMakeOptions.baseDirectory = "resources/shaders/";
-        m_ShaderMakeOptions.outputDir = "bin";
-
-        if (api == nvrhi::GraphicsAPI::VULKAN)
-            m_ShaderMakeOptions.platformType = ShaderMake::PlatformType_SPIRV;
-        else if (api == nvrhi::GraphicsAPI::D3D12)
-            m_ShaderMakeOptions.platformType = ShaderMake::PlatformType_DXIL;
-
-        m_ShaderContext = CreateScope<ShaderMake::Context>(&m_ShaderMakeOptions);
-    }
-
-    void ShaderLibrary::Compile()
-    {
-        std::vector<Ref<ShaderMake::ShaderContext>> contexts;
-        for (auto &shader : m_Shaders | std::views::values)
-        {
-            for (auto & [context, handle] : shader | std::views::values)
-            {
-                contexts.push_back(context);
-            }
-        }
-
-        // compile at once
-        // m_DXILShaderContext->CompileShader(contexts);
-        m_ShaderContext->CompileShader(contexts);
-
-        // load to NVRHI Shader handle
-        for (auto& shaderMap : m_Shaders | std::views::values)
-        {
-            for (auto &[type, shader] : shaderMap)
-            {
-                LOG_ASSERT(shader.context->blob.dataSize() != 0, "[Shader Compilation] Invalid shader");
-                shader.handle = s_instance->m_Device->createShader(type, shader.context->blob.data.data(), shader.context->blob.dataSize());
-            }
-        }
-    }
-
-    ShaderMake::CompileStatus ShaderLibrary::CompileShaders(const std::vector<Ref<ShaderMake::ShaderContext>> &contexts)
-    {
-        // m_DXILShaderContext->CompileShader(contexts);
-        ShaderMake::CompileStatus status = m_ShaderContext->CompileShader(contexts);
-        return status;
-    }
-
-    void ShaderLibrary::Load(const std::string &name, const std::string &filepath)
-    {
-        if (!Exists(name))
-        {
-            LOG_TRACE("Loading shader: '{}'", std::filesystem::absolute(filepath).generic_string());
-            std::unordered_map<nvrhi::ShaderType, ShaderHandleContext> shader;
-            shader[nvrhi::ShaderType::Vertex] = { CreateRef<ShaderMake::ShaderContext>(filepath + ".vertex.hlsl", ShaderMake::ShaderType::Vertex), nullptr };
-            shader[nvrhi::ShaderType::Pixel] = { CreateRef<ShaderMake::ShaderContext>(filepath + ".pixel.hlsl", ShaderMake::ShaderType::Pixel), nullptr };
-            m_Shaders[name] = shader;
-        }
-    }
-
-    bool ShaderLibrary::Exists(const std::string &name) const
-    {
-        return m_Shaders.contains(name);
-    }
-
-    std::unordered_map<nvrhi::ShaderType, ShaderHandleContext> ShaderLibrary::Get(const std::string &name)
-    {
-        if (Exists(name))
-        {
-            return m_Shaders[name];
-        }
-
-        return {};
-    }
-
     Renderer::Renderer(DeviceManager *deviceManager, nvrhi::GraphicsAPI api)
     {
         s_instance = this;
         m_GraphicsAPI = api;
 
         s_instance->m_Device = deviceManager->GetDevice();
+
+        m_DxcInstance = ShaderCompiler::CreateDXCCompiler();
 
 		// non volatile constant buffer
 		m_EditorCameraConstantBuffer = ConstantBuffer::Create(sizeof(CameraBuffer), false, 1, "Camera Constant Buffer");
@@ -147,18 +74,6 @@ namespace ignite
             m_MagentaTexture = Texture::Create(Buffer(&magenta, sizeof(uint32_t)), textureCreateInfo);
         }
 
-        // Create shaders
-        {
-            m_ShaderLibrary.Init(m_GraphicsAPI);
-
-            m_ShaderLibrary.Load("batch_2d_quad", "batch_2d_quad");
-            m_ShaderLibrary.Load("batch_2d_line", "batch_2d_line");
-            m_ShaderLibrary.Load("imgui", "imgui");
-            m_ShaderLibrary.Load("skybox", "skybox");
-
-            m_ShaderLibrary.Compile();
-        }
-
         // Create binding layouts
         m_BindingLayouts[GLayoutMap::MESH_ANIM] = s_instance->m_Device->createBindingLayout(VertexMesh_Anim::GetBindingLayoutDesc());
         m_BindingLayouts[GLayoutMap::ENVIRONMENT] = s_instance->m_Device->createBindingLayout(Environment::GetBindingLayoutDesc());
@@ -167,6 +82,7 @@ namespace ignite
 
     Renderer::~Renderer()
     {
+        m_DxcInstance.reset();
         m_WhiteTexture.reset();
     }
 
@@ -204,9 +120,9 @@ namespace ignite
         s_instance->m_SubmitFuncs.push_back(func);
     }
 
-    ShaderLibrary &Renderer::GetShaderLibrary()
+    Ref<DXCInstance> Renderer::GetDXCInstance()
     {
-        return s_instance->m_ShaderLibrary;
+        return s_instance->m_DxcInstance;
     }
 
 	Ref<ConstantBuffer> Renderer::GetCameraConstantBuffer()

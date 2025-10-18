@@ -34,19 +34,24 @@ namespace ignite {
 
     struct GraphicsPipelineCreateInfo
     {
-        nvrhi::VertexAttributeDesc *attributes;
+        nvrhi::VertexAttributeDesc *attributes = nullptr;
         uint32_t attributeCount = 0;
     };
 
     struct GraphicsPipelineParams
     {
         nvrhi::RasterCullMode cullMode = nvrhi::RasterCullMode::Front;
-        nvrhi::ComparisonFunc comparison = nvrhi::ComparisonFunc::LessOrEqual;
         nvrhi::PrimitiveType primitiveType = nvrhi::PrimitiveType::TriangleList;
         nvrhi::RasterFillMode fillMode = nvrhi::RasterFillMode::Solid;
 
+        nvrhi::BlendFactor srcBlend = nvrhi::BlendFactor::One;
+        nvrhi::BlendFactor destBlend = nvrhi::BlendFactor::Zero;
+        nvrhi::BlendFactor srcBlendAlpha = nvrhi::BlendFactor::One;
+        nvrhi::BlendFactor destBlendAlpha = nvrhi::BlendFactor::Zero;
+
         nvrhi::DepthStencilState::StencilOpDesc frontFaceStencilDesc;
         nvrhi::DepthStencilState::StencilOpDesc backFaceStencilDesc;
+        nvrhi::ComparisonFunc depthFunc = nvrhi::ComparisonFunc::Always;
 
         uint8_t stencilReadMask = 0xff;
         uint8_t stencilWriteMask = 0xff;
@@ -54,8 +59,11 @@ namespace ignite {
 
         bool enableBlend = true;
         bool enableDepthStencil = false;
-        bool depthWrite = false;
-        bool depthTest = false;
+        bool enableDepthWrite = false;
+        bool enableDepthTest = false;
+
+        bool enableScissor = false;
+        bool enableDepthClip = false;
     };
 
     class GraphicsPipeline
@@ -64,8 +72,7 @@ namespace ignite {
         GraphicsPipeline() = default;
 
         GraphicsPipeline &AddBindingLayout(const nvrhi::BindingLayoutHandle &layout);
-        GraphicsPipeline& AddShader(const std::string& filepath, nvrhi::ShaderType type, const std::string &entryPoint = "main", bool recompile = false);
-        GraphicsPipeline& AddShader(nvrhi::ShaderHandle& handle, nvrhi::ShaderType type);
+        GraphicsPipeline &SetShaders(const std::vector<Ref<Shader>> &shaders, bool recompile = false);
         void Build(nvrhi::IFramebuffer *framebuffer, const GraphicsPipelineParams &params, const GraphicsPipelineCreateInfo &createInfo);
 
         nvrhi::BindingLayoutHandle GetBindingLayout(uint32_t index);
@@ -73,10 +80,17 @@ namespace ignite {
         nvrhi::GraphicsPipelineHandle GetHandle() { return m_Handle; }
         nvrhi::InputLayoutHandle GetInputLayout() { return m_InputLayout; }
 
-        nvrhi::ShaderHandle GetShader(nvrhi::ShaderType type)
+        Ref<Shader> GetShader(ShaderType type)
         {
-            if (m_Shaders.contains(type))
-                return m_Shaders[type];
+            auto it = std::find_if(m_Shaders.begin(), m_Shaders.end(), [type](Ref<Shader> shader)
+            {
+                return shader->GetType() == type;
+            });
+
+            if (it != m_Shaders.end())
+            {
+                return *it;
+            }
 
             return nullptr;
         }
@@ -87,10 +101,7 @@ namespace ignite {
 
     private:
         nvrhi::GraphicsPipelineHandle m_Handle;
-
-        std::unordered_map<nvrhi::ShaderType, nvrhi::ShaderHandle> m_Shaders;
-        std::vector<Ref<ShaderMake::ShaderContext>> m_ShaderContexts;
-
+        std::vector<Ref<Shader>> m_Shaders;
         nvrhi::InputLayoutHandle m_InputLayout;
         std::vector<nvrhi::BindingLayoutHandle> m_BindingLayouts;
 

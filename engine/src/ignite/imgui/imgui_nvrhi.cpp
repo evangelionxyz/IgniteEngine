@@ -25,6 +25,7 @@
 #include "ignite/core/logger.hpp"
 
 #include "ignite/graphics/renderer.hpp"
+#include "ignite/graphics/graphics_pipeline.hpp"
 
 namespace ignite
 {
@@ -73,59 +74,6 @@ namespace ignite
         m_Device = device;
         commandList = device->createCommandList();
 
-        auto shaderContext = Renderer::GetShaderLibrary().Get("imgui");
-
-        nvrhi::VertexAttributeDesc vertexAttribLayout[] =
-        {
-            {"POSITION", nvrhi::Format::RG32_FLOAT, 1, 0, offsetof(ImDrawVert, pos), sizeof(ImDrawVert), false},
-            {"TEXCOORD", nvrhi::Format::RG32_FLOAT, 1, 0, offsetof(ImDrawVert, uv), sizeof(ImDrawVert), false},
-            {"COLOR", nvrhi::Format::RGBA8_UNORM, 1, 0, offsetof(ImDrawVert, col), sizeof(ImDrawVert), false}
-        };
-
-        attributeLayout = device->createInputLayout(vertexAttribLayout, std::size(vertexAttribLayout), shaderContext[nvrhi::ShaderType::Vertex].handle);
-
-        // Create PSO (Pipeline State Object)
-        nvrhi::BlendState blendState;
-        blendState.targets[0].setBlendEnable(true)
-            .setSrcBlend(nvrhi::BlendFactor::SrcAlpha)
-            .setDestBlend(nvrhi::BlendFactor::InvSrcAlpha)
-            .setSrcBlendAlpha(nvrhi::BlendFactor::InvSrcAlpha)
-            .setDestBlendAlpha(nvrhi::BlendFactor::Zero);
-
-        auto rasterState = nvrhi::RasterState()
-            .setFillSolid()
-            .setCullNone()
-            .setScissorEnable(true)
-            .setDepthClipEnable(true);
-
-        auto depthStencilState = nvrhi::DepthStencilState()
-            .disableDepthTest()
-            .enableDepthWrite()
-            .disableStencil()
-            .setDepthFunc(nvrhi::ComparisonFunc::Always);
-
-        nvrhi::RenderState renderState;
-        renderState.blendState = blendState;
-        renderState.depthStencilState = depthStencilState;
-        renderState.rasterState = rasterState;
-
-        nvrhi::BindingLayoutDesc layoutDesc;
-        layoutDesc.visibility = nvrhi::ShaderType::All;
-        layoutDesc.bindings =
-        {
-            nvrhi::BindingLayoutItem::PushConstants(0, sizeof(f32) * 2),
-            nvrhi::BindingLayoutItem::Texture_SRV(0),
-            nvrhi::BindingLayoutItem::Sampler(0)
-        };
-
-        bindingLayout = device->createBindingLayout(layoutDesc);
-        graphicsPipelineDesc.primType = nvrhi::PrimitiveType::TriangleList;
-        graphicsPipelineDesc.inputLayout = attributeLayout;
-        graphicsPipelineDesc.VS = shaderContext[nvrhi::ShaderType::Vertex].handle;
-        graphicsPipelineDesc.PS = shaderContext[nvrhi::ShaderType::Pixel].handle;
-        graphicsPipelineDesc.renderState = renderState;
-        graphicsPipelineDesc.bindingLayouts = { bindingLayout };
-
         const auto desc = nvrhi::SamplerDesc()
             .setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
             .setAllFilters(true);
@@ -162,7 +110,8 @@ namespace ignite
         drawState.framebuffer = framebuffer;
         LOG_ASSERT(drawState.framebuffer, "Invalid framebuffer");
 
-        drawState.pipeline = GetPSO(drawState.framebuffer);
+        Ref<GraphicsPipeline> pipeline = GetPSO(drawState.framebuffer);
+        drawState.pipeline = pipeline->GetHandle();
 
         drawState.viewport.viewports.push_back(
             nvrhi::Viewport(
@@ -199,7 +148,7 @@ namespace ignite
                 }
                 else
                 {
-                    drawState.bindings = { GetBindingSet((nvrhi::ITexture *)pCmd->TextureId) };
+                    drawState.bindings = { GetBindingSet((nvrhi::ITexture *)pCmd->TextureId, pipeline->GetBindingLayout(0)) };
                     LOG_ASSERT(drawState.bindings[0], "Invalid draw state binding");
 
                     drawState.viewport.scissorRects[0] = nvrhi::Rect(
@@ -259,18 +208,64 @@ namespace ignite
         return true;
     }
 
-    nvrhi::IGraphicsPipeline *ImGui_NVRHI::GetPSO(nvrhi::IFramebuffer *framebuffer)
+    Ref<GraphicsPipeline> ImGui_NVRHI::GetPSO(nvrhi::IFramebuffer *framebuffer)
     {
         if (graphicsPipeline)
+        {
             return graphicsPipeline;
+        }
 
-        graphicsPipeline = m_Device->createGraphicsPipeline(graphicsPipelineDesc, framebuffer);
-        LOG_ASSERT(graphicsPipeline, "Failed to create ImGui PSO");
+        auto vertexShader = Shader::Create("resources/shaders/imgui.vertex.hlsl", ShaderType::Vertex);
+        auto pixelShader = Shader::Create("resources/shaders/imgui.pixel.hlsl", ShaderType::Pixel);
+
+        nvrhi::VertexAttributeDesc vertexAttribLayout[] =
+        {
+            { "POSITION", nvrhi::Format::RG32_FLOAT, 1, 0, offsetof(ImDrawVert, pos), sizeof(ImDrawVert), false },
+            { "TEXCOORD", nvrhi::Format::RG32_FLOAT, 1, 0, offsetof(ImDrawVert, uv), sizeof(ImDrawVert), false },
+            { "COLOR", nvrhi::Format::RGBA8_UNORM, 1, 0, offsetof(ImDrawVert, col), sizeof(ImDrawVert), false }
+        };
+
+        nvrhi::BindingLayoutDesc layoutDesc;
+        layoutDesc.visibility = nvrhi::ShaderType::All;
+        layoutDesc.bindings =
+        {
+            nvrhi::BindingLayoutItem::PushConstants(0, sizeof(f32) * 2),
+            nvrhi::BindingLayoutItem::Texture_SRV(0),
+            nvrhi::BindingLayoutItem::Sampler(0)
+        };
+
+        auto bindingLayout = m_Device->createBindingLayout(layoutDesc);
+
+        GraphicsPipelineCreateInfo createInfo;
+        createInfo.attributes = vertexAttribLayout;
+        createInfo.attributeCount = std::size(vertexAttribLayout);
+
+        GraphicsPipelineParams params;
+        params.fillMode = nvrhi::RasterFillMode::Solid;
+        params.cullMode = nvrhi::RasterCullMode::None;
+        
+        params.enableBlend = true; // Explicitly enable blending for ImGui
+        params.srcBlend = nvrhi::BlendFactor::SrcAlpha;
+        params.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
+        params.srcBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
+        params.destBlendAlpha = nvrhi::BlendFactor::Zero;
+
+        params.enableDepthClip = true;
+        params.enableDepthClip = true;
+
+        params.enableDepthTest = false;
+        params.enableDepthWrite = true;
+        params.enableDepthStencil = false;
+
+        graphicsPipeline = GraphicsPipeline::Create();
+        graphicsPipeline->SetShaders({ vertexShader, pixelShader })
+            .AddBindingLayout(bindingLayout)
+            .Build(framebuffer, params, createInfo);
 
         return graphicsPipeline;
     }
 
-    nvrhi::IBindingSet *ImGui_NVRHI::GetBindingSet(nvrhi::ITexture *texture)
+    nvrhi::IBindingSet *ImGui_NVRHI::GetBindingSet(nvrhi::ITexture *texture, nvrhi::BindingLayoutHandle bindingLayout)
     {
         auto iter = bindingsCache.find(texture);
         if (iter != bindingsCache.end())
@@ -319,8 +314,8 @@ namespace ignite
         for (i32 n = 0; n < drawData->CmdListsCount; ++n)
         {
             const ImDrawList *cmdList = drawData->CmdLists[n];
-            memcpy(vtxDst, cmdList->VtxBuffer.Data, cmdList->VtxBuffer.Size * sizeof(ImDrawVert));
-            memcpy(idxDst, cmdList->IdxBuffer.Data, cmdList->IdxBuffer.Size * sizeof(ImDrawIdx));
+            std::memcpy(vtxDst, cmdList->VtxBuffer.Data, cmdList->VtxBuffer.Size * sizeof(ImDrawVert));
+            std::memcpy(idxDst, cmdList->IdxBuffer.Data, cmdList->IdxBuffer.Size * sizeof(ImDrawIdx));
 
             vtxDst += cmdList->VtxBuffer.Size;
             idxDst += cmdList->IdxBuffer.Size;

@@ -38,7 +38,7 @@ namespace ignite
             : m_Width(width), m_Height(height) {}
         u32 GetWidth() const { return m_Width; }
         u32 GetHeight() const { return m_Height; }
-        [[nodiscard]] std::string ToString() const override
+        std::string ToString() const override
         {
             std::stringstream ss;
             ss << "WindowResizeEvent: " << m_Width << ", " << m_Height;
@@ -56,7 +56,7 @@ namespace ignite
     {
     public:
         WindowCloseEvent() = default;
-        [[nodiscard]] std::string ToString() const override
+        std::string ToString() const override
         {
             return "WindowCloseEvent: Window Closed!";
         }
@@ -70,9 +70,9 @@ namespace ignite
     public:
         FramebufferResizeEvent(int width, int height)
             : m_Width(width), m_Height(height) {}
-        [[nodiscard]] i32 GetWidth() const { return m_Width; }
-        [[nodiscard]] i32 GetHeight() const { return m_Height; }
-        [[nodiscard]] std::string ToString() const override
+        i32 GetWidth() const { return m_Width; }
+        i32 GetHeight() const { return m_Height; }
+        std::string ToString() const override
         {
             std::stringstream ss;
             ss << "FramebufferResizeEvent: " << m_Width << ", " << m_Height;
@@ -92,7 +92,7 @@ namespace ignite
         explicit WindowDropEvent(std::vector <std::filesystem::path> &&paths)
             : m_Paths(std::move(paths)) {}
 
-        [[nodiscard]] const std::vector<std::filesystem::path> &GetPaths() const { return m_Paths; }
+        const std::vector<std::filesystem::path> &GetPaths() const { return m_Paths; }
 
         EVENT_CLASS_TYPE(WindowDrop);
         EVENT_CLASS_CATEGORY(EventCategoryApplication);
@@ -106,12 +106,12 @@ namespace ignite
         explicit WindowMaximizedEvent(bool maximized)
             : m_Maximized(maximized) {}
 
-        [[nodiscard]] std::string ToString() const override
+        std::string ToString() const override
         {
-            return "WindowMaximizedEvent: " + m_Maximized ? "True" : "False";
+            return "WindowMaximizedEvent";
         }
 
-        [[nodiscard]] bool IsMaximized() const { return m_Maximized; }
+        bool IsMaximized() const { return m_Maximized; }
 
         EVENT_CLASS_TYPE(WindowMaximized);
         EVENT_CLASS_CATEGORY(EventCategoryApplication);
@@ -126,12 +126,12 @@ namespace ignite
         explicit WindowMinimizedEvent(bool minimized)
             : m_Minimized(minimized) {}
 
-        [[nodiscard]] std::string ToString() const override
+        std::string ToString() const override
         {
-            return "WindowMinimizedEvent: " + m_Minimized ? "True" : "False";
+            return "WindowMinimizedEvent";
         }
 
-        [[nodiscard]] bool IsMinimized() const { return m_Minimized; }
+        bool IsMinimized() const { return m_Minimized; }
 
         EVENT_CLASS_TYPE(WindowMinimized);
         EVENT_CLASS_CATEGORY(EventCategoryApplication);
@@ -145,10 +145,10 @@ namespace ignite
         WindowDPIScaleChangedEvent(float scaleX, float scaleY)
             : m_ScaleX(scaleX), m_ScaleY(scaleY) {}
 
-        [[nodiscard]] float GetScaleX() const { return m_ScaleX; }
-        [[nodiscard]] float GetScaleY() const { return m_ScaleY; }
+        float GetScaleX() const { return m_ScaleX; }
+        float GetScaleY() const { return m_ScaleY; }
 
-        [[nodiscard]] std::string ToString() const override
+        std::string ToString() const override
         {
             std::stringstream ss;
             ss << "WindowDPIScaleChangedEvent: " << m_ScaleX << "x" << m_ScaleY;

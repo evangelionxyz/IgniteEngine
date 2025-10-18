@@ -5,14 +5,6 @@ project "JOLT"
     cppdialect "C++17"
     staticruntime "off"
 
-    -- if (MSVC)
-    --     # MSVC specific option to enable PDB generation
-    --     set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} /DEBUG:FASTLINK")
-    -- else()
-    --     # Clang/GCC option to enable debug symbol generation
-    --     set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} -g")
-    -- endif()
-
     targetdir (OUTPUT_DIR)
     objdir (INTOUTPUT_DIR)
 
@@ -29,15 +21,6 @@ project "JOLT"
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
-
-        "JPH_USE_AVX2",
-        "JPH_USE_AVX",
-        "JPH_USE_SSE4_1",
-        "JPH_USE_SSE4_2",
-        "JPH_USE_LZCNT",
-        "JPH_USE_TZCNT",
-        "JPH_USE_F16C",
-        "JPH_USE_FMADD",
     }
 
     includedirs{
@@ -48,26 +31,49 @@ project "JOLT"
         systemversion "latest"
 
     filter "configurations:Debug"
-        runtime "Debug"
         optimize "off"
         symbols "on"
         defines {
-            "_WINDOWS",
             "_DEBUG",
+        }
+    filter { "system:windows", "configurations:Debug" }
+        defines {
+            "_WINDOWS",
+        }
+        links {
+            "ucrtd",
+            "vcruntimed",
+            "msvcrtd",
         }
 
     filter "configurations:Release"
-        runtime "Release"
         optimize "on"
         symbols "on"
         defines {
             "NDEBUG"
         }
+    filter { "system:windows", "configurations:Release" }
+        defines {
+            "_WINDOWS",
+        }
+        links {
+            "ucrt",
+            "vcruntime",
+            "msvcrt",
+        }
 
     filter "configurations:Shipping"
-        runtime "Release"
         optimize "on"
         symbols "off"
         defines {
             "NDEBUG"
+        }
+    filter { "system:windows", "configurations:Shipping" }
+        defines {
+            "_WINDOWS",
+        }
+        links {
+            "ucrt",
+            "vcruntime",
+            "msvcrt",
         }

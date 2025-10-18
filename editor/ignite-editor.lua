@@ -39,7 +39,6 @@ project "IgniteEditor"
         "%{IncludeDir.STB}",
         "%{IncludeDir.NVRHI_VULKAN_HPP}",
         "%{IncludeDir.VULKAN_SDK}",
-        "%{IncludeDir.SHADERMAKE}",
         "%{IncludeDir.FILEWATCHER}",
         "%{IncludeDir.ZLIB}",
         "%{IncludeDir.YAMLCPP}",
@@ -49,7 +48,6 @@ project "IgniteEditor"
 
     defines {
         "NVRHI_SHARED_LIBRARY_INCLUDE",
-        "SHADERMAKE_COLORS",
         "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
@@ -59,10 +57,13 @@ project "IgniteEditor"
     --linux
 
     --windows
+     filter { "system:windows", "toolset:msc*"}
+        disablewarnings { "4099" }
+        buildoptions {
+            "/utf-8"
+        }
+
     filter "system:windows"
-    buildoptions {
-        "/utf-8"
-    }
     defines {
         "PLATFORM_WINDOWS",
         "IGNITE_WITH_DX12",
@@ -72,6 +73,8 @@ project "IgniteEditor"
         "_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS",
         "_CRT_SECURE_NO_WARNINGS"
     }
+    
+    links { "d3dcompiler", "dxcompiler", "delayimp" }
 
     filter "configurations:Debug"
     runtime "Debug"

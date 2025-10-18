@@ -68,7 +68,7 @@
 #include "project/project.hpp"
 
 #include "scene/component.hpp"
-#include "scene/Icamera.hpp"
+#include "scene/icamera.hpp"
 #include "scene/entity.hpp"
 #include "scene/scene.hpp"
 #include "scene/scene_manager.hpp"

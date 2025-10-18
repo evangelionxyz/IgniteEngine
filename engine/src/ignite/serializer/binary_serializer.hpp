@@ -32,6 +32,7 @@
 #include <filesystem>
 #include <vector>
 #include <cinttypes>
+#include <fstream>
 
 namespace ignite
 {
