@@ -150,8 +150,8 @@ PSOutput main(PSInput input)
         float reflectionStrength = lerp(0.01f, 1.0f, metallic) * (1.0f - roughness);
         float3 F = SchlickFresnel(viewDirection, finalNormal, specularColor);
         float NdotR = saturate(dot(finalNormal, reflectDirection));
-        float3 reflectedSpecular = GGXReflect(finalNormal, reflectDirection, viewDirection, reflectRadiance, specularColor, roughness);
-        reflectedSpecular *= reflectionStrength * NdotR * F;
+        float3 reflectedSpecular = GGXReflect(finalNormal, reflectDirection, viewDirection, reflectRadiance, specularColor, roughness)
+            * reflectionStrength * NdotR * F;
 
         // direct light
         float3 irradiance = scene.lightColor.rgb * scene.lightColor.w;
@@ -174,7 +174,7 @@ PSOutput main(PSInput input)
             finalColor += emissiveColor * material.emissiveFactor.rgb * material.emissiveFactor.a;
         }
 
-        result.color = float4(finalColor, 1.0f);
+        result.color = float4(FilmicTonemap(finalColor, scene.exposure, scene.gamma), 1.0f);
     }
     else if (scene.renderMode == RENDER_MODE_DIFFUSE)
     {
@@ -183,10 +183,10 @@ PSOutput main(PSInput input)
     }
     else if (scene.renderMode == RENDER_MODE_NORMALS)
     {
-        float3 finalNormal = N * 0.5 + 0.5f;
+        float3 finalNormal = normalize(input.normal * normalMap) * 0.5 + 0.5f;
         if (length(normalMap) > 0.01)
         {
-            finalNormal = GenNormalFromMap(TBN, input.uv) * N * 0.5f + 0.5f;
+            //finalNormal = GenNormalFromMap(TBN, input.uv) * N * 0.5f + 0.5f;
         }
         result.color = float4(finalNormal, 1.0f);
     }
