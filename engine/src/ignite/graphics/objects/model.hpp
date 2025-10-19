@@ -21,7 +21,8 @@
 * SOFTWARE.
 */
 
-#pragma once
+#ifndef MODEL_HPP
+#define MODEL_HPP
 
 #include "mesh.hpp"
 
@@ -57,3 +58,5 @@ namespace ignite
         glm::mat4 m_Transform = glm::mat4(1.0f);
     };
 }
+
+#endif

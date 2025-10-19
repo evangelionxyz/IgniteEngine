@@ -33,12 +33,12 @@
 namespace ignite
 {
 	class ICamera;
-	enum class ShadowMapQuality
+	enum class ShadowMapQuality : uint32_t
 	{
-		LOW = 512,
-		MEDIUM = 1024,
-		HIGH = 2048,
-		ULTRA = 4096
+		LOW = 0,
+		MEDIUM = 1,
+		HIGH = 2,
+		ULTRA = 3
 	};
 
 	class CascadedShadowMap
@@ -49,31 +49,29 @@ namespace ignite
 
 		void Resize(ShadowMapQuality quality);
 		void BeginCascade(nvrhi::ICommandList *cmd, int cascadeIndex);
-		void EndCascade();
-		void CopyCascadeLayersForVisualization(nvrhi::ICommandList* cmd);
+		void EndCascade(nvrhi::ICommandList *cmd);
 
-		Ref<RenderTarget> GetRenderTarget() const { return m_RenderTarget; }
 		nvrhi::IFramebuffer* GetCascadeFramebuffer(int cascadeIndex) const;
 		Ref<ConstantBuffer> GetGPUDataBuffer() const { return m_GPUDataBuffer; }
 		Ref<ConstantBuffer> GetModelGPUDataBuffer() const { return m_ModelGPUDataBuffer; }
 		nvrhi::BindingLayoutHandle GetBindingLayout() const { return m_BindingLayout;  }
 
 		Ref<Texture> GetDepthTexture() const;
-		nvrhi::TextureHandle GetCascadeLayerTexture(int cascadeIndex) const;
 
 		Ref<GraphicsPipeline> GetPipeline() const { return m_Pipeline; }
 		CascadedShadowMap_GPUData& GetGPUData() { return m_GPUData; }
+		nvrhi::SamplerHandle GetDepthSampler() { return m_DepthSampler; }
 
-		void ComputeMatrices(ICamera *camera, const glm::vec3& lightDir);
+	    const ShadowMapQuality &GetQuality() const { return m_Quality; }
+
+		void ComputeMatrices(ICamera *camera, const glm::vec3& lightPosition);
 	private:
 		void CreatePipeline(nvrhi::IFramebuffer *framebuffer);
 		void CreateCascadeFramebuffers();
-		void CreateCascadeLayerViews();
-		void CreateDepthVisualizationPipeline(); // NEW: For compute shader
 
-		Ref<RenderTarget> m_RenderTarget;
+	    Ref<Texture> m_DepthTexture;
 		std::array<nvrhi::FramebufferHandle, NUM_CASCADES> m_CascadeFramebuffers;
-		std::array<nvrhi::TextureHandle, NUM_CASCADES> m_CascadeLayerViews;
+
 		Ref<ConstantBuffer> m_GPUDataBuffer;
 		Ref<ConstantBuffer> m_ModelGPUDataBuffer;
 		Ref<GraphicsPipeline> m_Pipeline;
@@ -92,6 +90,7 @@ namespace ignite
 		int m_Resolution = 0;
 		ShadowMapQuality m_Quality;
 		CascadedShadowMap_GPUData m_GPUData{};
+		nvrhi::SamplerHandle m_DepthSampler;
 	};
 }
 

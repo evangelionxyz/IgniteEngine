@@ -109,7 +109,7 @@ namespace ignite
         glm::vec3 GetForwardDirection() const;
 
         glm::vec3 position;
-		glm::vec3 target;
+		glm::vec3 target = { 0.0f, 0.0f, -1.0f };
 
 		glm::mat4 view;
 		glm::mat4 projection;
@@ -119,8 +119,9 @@ namespace ignite
 
 		float distance = 1.0f;
 		float fov = 45.0f; // for perspective
-		float nearPlane = 0.01f;
-		float farPlane = 500.0f;
+		float aspect = 1.778f;
+		float nearPlane = 0.1f;
+		float farPlane = 1000.0f;
 
 		float orthoSize = 10.0f;
 
@@ -135,7 +136,7 @@ namespace ignite
 			float zoomSensitivity = 2.0f;
 			float panSensitivity = 0.001f;
 			float minDistance = 0.5f;
-			float maxDistance = 50.0f;
+			float maxDistance = 1500.0f;
 			float minPitch = -glm::radians(89.0f);
 			float maxPitch = glm::radians(89.0f);
 			float inertiaDamping = 0.9f;

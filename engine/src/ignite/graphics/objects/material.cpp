@@ -25,6 +25,8 @@
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/scene_renderer.hpp"
 
+#include "ignite/graphics/objects/shadow_map.hpp"
+
 #include <stb_image.h>
 
 namespace ignite
@@ -41,6 +43,11 @@ namespace ignite
         m_GPUDataBuffer = ConstantBuffer::Create(sizeof(Material_GPUData), false, 1, "Material Constant Buffer");
     }
 
+    Material::~Material()
+    {
+		sampler = nullptr;
+    }
+
     void Material::UpdateBindingSet()
     {
         auto device = Application::GetGraphicsDevice();
@@ -52,10 +59,12 @@ namespace ignite
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, metallicRoughnessTexture->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, normalTexture->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, occlusionTexture->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, SceneRenderer::GetActive()->GetEnvironmentMap()->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, SceneRenderer::GetActive()->GetCascadedShadowMap()->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, SceneRenderer::GetActive()->GetEnvironmentMapColorTexture()->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, SceneRenderer::GetActive()->GetCascadedShadowMapDepthTexture()->GetHandle()));
 
-        desc.addItem(nvrhi::BindingSetItem::Sampler(0, baseColorTexture->GetSampler()));
+        // Sampler
+        desc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
+        desc.addItem(nvrhi::BindingSetItem::Sampler(1, SceneRenderer::GetActive()->GetCascadedShadowMap()->GetDepthSampler()));
         
         auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MATERIAL));
         LOG_ASSERT(newBindingSet, "Failed to create material binding set");
@@ -85,7 +94,8 @@ namespace ignite
             .addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)) // occlusionTexture
             .addItem(nvrhi::BindingLayoutItem::Texture_SRV(5)) // environmentMapTexture
             .addItem(nvrhi::BindingLayoutItem::Texture_SRV(6)) // csm
-            .addItem(nvrhi::BindingLayoutItem::Sampler(0)); // sampler
+            .addItem(nvrhi::BindingLayoutItem::Sampler(0)) // sampler
+            .addItem(nvrhi::BindingLayoutItem::Sampler(1)); // csm sampler
         return bindingLayoutDesc;
     }
 

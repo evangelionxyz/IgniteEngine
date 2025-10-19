@@ -21,7 +21,9 @@
 * SOFTWARE.
 */
 
-#pragma once
+#ifndef EDGE_DETECTION_HPP
+#define EDGE_DETECTION_HPP
+
 #include "ignite/core/types.hpp"
 
 #include <glm/glm.hpp>
@@ -73,5 +75,8 @@ namespace ignite
 
         // Texture
         Ref<Texture> m_OutputTexture;
+    	nvrhi::SamplerHandle m_Sampler;
     };
 }
+
+#endif

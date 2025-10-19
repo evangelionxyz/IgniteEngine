@@ -61,23 +61,27 @@ namespace ignite
         // UI Input handling
         void UpdateUIInput(const glm::vec2& viewportMousePos, const glm::vec2& viewportPos, const glm::vec2& viewportSize, bool mousePressed);
 
-		Ref<Texture> GetEnvironmentMap();
-		Ref<Texture> GetCascadedShadowMap();
+		Ref<Texture> GetEnvironmentMapColorTexture() const;
+		Ref<Texture> GetCascadedShadowMapDepthTexture() const;
 
+        Ref<CascadedShadowMap> GetCascadedShadowMap();
         static SceneRenderer *GetActive();
 
         Ref<Environment> &GetEnvironment() { return m_Environment; }
         Ref<UIRenderer> &GetUIRenderer() { return m_UIRenderer; }
-
     private:
-        void CreateDemoUI();
-
+        void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera);
+        void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer);
+        void CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture);
+        
+    private:
         Ref<Environment> m_Environment;
         Ref<CommandList> m_CommandList;
 		Ref<CascadedShadowMap> m_CascadedShadowMap;
 
         // Composite
         Ref<VertexBuffer> m_CompositeVertexBuffer;
+		nvrhi::SamplerHandle m_CompositeSampler;
 
         Ref<Renderer2D> m_Renderer2D;
         Ref<UIRenderer> m_UIRenderer;

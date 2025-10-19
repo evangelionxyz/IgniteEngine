@@ -32,10 +32,10 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/common.hpp>
 
+#include <array>
 #include <algorithm>
 #include <cmath>
 #include <limits>
-
 
 namespace ignite
 {
@@ -44,40 +44,45 @@ namespace ignite
         m_GPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMap_GPUData), true, 256, "Cascadded ShadowMap");
         m_ModelGPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMapModel_GPUData), true, 256, "Cascadded Model ShadowMap");
 
-		m_Resolution = static_cast<uint32_t>(quality);
-		
 		// Initialize shadow parameters with reasonable defaults
 		m_GPUData.shadowStrength = 0.8f;  // 80% shadow visibility
 		m_GPUData.minBias = 0.0001f;       // Minimum depth bias to prevent acne
 		m_GPUData.maxBias = 0.005f;        // Maximum depth bias for steep angles
-		m_GPUData.pcfRadius = 1.5f;        // PCF filter radius in texels
+		m_GPUData.pcfRadius = 0.3f;        // PCF filter radius in texels
 		
 		Resize(quality);
 	}
 
 	CascadedShadowMap::~CascadedShadowMap()
 	{
+		m_DepthSampler = nullptr;
 	}
 
 	void CascadedShadowMap::Resize(ShadowMapQuality quality)
 {
-        if (quality == m_Quality && m_RenderTarget)
+        if (quality == m_Quality)
             return;
 
-        RenderTargetCreateInfo rtCreateInfo;
-        rtCreateInfo.width = static_cast<uint32_t>(quality);
-        rtCreateInfo.height = static_cast<uint32_t>(quality);
-        rtCreateInfo.attachments =
-        {
-            { "Cascaded Shadow Map Depth", nvrhi::Format::D32, nvrhi::ResourceStates::DepthWrite, NUM_CASCADES }
-        };
+		m_Resolution = ShadowMapQuality::LOW == quality ? 512 :
+					   ShadowMapQuality::MEDIUM == quality ? 1024 :
+					   ShadowMapQuality::HIGH == quality ? 2048 :
+					   ShadowMapQuality::ULTRA == quality ? 4096 : 1024;
+		m_Quality = quality;
 
-        m_Quality = quality;
-		m_Resolution = static_cast<uint32_t>(quality);
-        m_RenderTarget = RenderTarget::Create(rtCreateInfo, "Cascaded ShadowMap RT");
+		// Configure depth texture sampler settings
+		nvrhi::IDevice* device = Application::GetGraphicsDevice();
+		
+		nvrhi::SamplerDesc samplerDesc;
+		samplerDesc.addressU = nvrhi::SamplerAddressMode::ClampToEdge;
+		samplerDesc.addressV = nvrhi::SamplerAddressMode::ClampToEdge;
+		samplerDesc.addressW = nvrhi::SamplerAddressMode::ClampToEdge;
+		samplerDesc.borderColor = nvrhi::Color(1.0f, 1.0f, 1.0f, 1.0f); // White border = lit
+        samplerDesc.setAllFilters(true);
+		
+		m_DepthSampler = device->createSampler(samplerDesc);
+		LOG_ASSERT(m_DepthSampler, "Failed to create depth sampler");
 
 		CreateCascadeFramebuffers();
-		CreateCascadeLayerViews();
 		CreatePipeline(m_CascadeFramebuffers[0]);
 	}
 
@@ -87,153 +92,186 @@ namespace ignite
 		if (cascadeIndex == 0)
 		{
 			nvrhi::TextureSubresourceSet subresources = nvrhi::AllSubresources;
-			cmd->clearDepthStencilTexture(m_RenderTarget->GetDepthAttachment()->GetHandle(), subresources, true, 1.0f, false, 0);
+			cmd->clearDepthStencilTexture(m_DepthTexture->GetHandle(), subresources, true, 1.0f, false, 0);
 		}
 	}
 
-	void CascadedShadowMap::EndCascade()
+	void CascadedShadowMap::EndCascade(nvrhi::ICommandList *cmd)
 	{
 		// Copy the current cascade layer to its individual visualization texture
 		// This needs to be done in the command list during rendering
-	}
 
-	void CascadedShadowMap::CopyCascadeLayersForVisualization(nvrhi::ICommandList* cmd)
-	{
-		// TODO: Implement compute shader-based copy from depth to color
-		// For now, remove the direct copy which causes Vulkan validation errors
-		
-		// The direct copyTexture doesn't work because:
-		// - Source is D32 (depth format with VK_IMAGE_ASPECT_DEPTH_BIT)
-		// - Destination is R32_FLOAT (color format with VK_IMAGE_ASPECT_COLOR_BIT)
-		// - Vulkan doesn't allow copying between different aspect masks
-		
-		// Proper solution: Use a compute shader that reads from depth texture
-		// and writes to color texture, or use a graphics pass with shader conversion
-		
-		// For debugging, you can temporarily display the main shadow map texture
-		// which works but shows all cascades overlapped
+		// for (int i = 0; i < NUM_CASCADES; ++i)
+		// {
+		// 	auto srcSlice = nvrhi::TextureSlice();
+		// 	srcSlice.arraySlice = i;
+		// 
+		// 	cmd->copyTexture(m_CascadeLayerViews[i]->GetHandle(),
+		// 		nvrhi::TextureSlice().resolve(m_CascadeLayerViews[i]->GetHandle()->getDesc()),
+		// 		m_DepthTexture->GetHandle(), srcSlice
+		// 	);
+		// }
 	}
 
     Ref<Texture> CascadedShadowMap::GetDepthTexture() const
     {
-		return m_RenderTarget->GetDepthAttachment();
+		return m_DepthTexture;
     }
 
-    void CascadedShadowMap::ComputeMatrices(ICamera *camera, const glm::vec3& lightDir)
+	void CascadedShadowMap::ComputeMatrices(ICamera *camera, const glm::vec3& lightPosition)
 	{
-		const float lambda = 0.7f;
-        const float nearPlane = camera->nearPlane;
-        const float farPlane = camera->farPlane;
-        const float clipRange = farPlane - nearPlane;
+		if (!camera)
+			return;
 
-        const float minZ = nearPlane;
-        const float maxZ = nearPlane + clipRange;
-        const float ratio = maxZ / minZ;
+		glm::vec3 lightDir = lightPosition;
+		if (glm::dot(lightDir, lightDir) < 1e-6f)
+		{
+			lightDir = glm::vec3(0.0f, -1.0f, 0.0f);
+		}
+		else
+		{
+			lightDir = -glm::normalize(lightDir);
+		}
 
-        std::array<float, NUM_CASCADES> cascadeEnds{};
-        for (int i = 0; i < NUM_CASCADES; ++i)
-        {
-            const float p = (i + 1) / static_cast<float>(NUM_CASCADES);
-            const float logd = minZ * std::pow(ratio, p);
-            const float lined = minZ + clipRange * p;
-            cascadeEnds[i] = glm::mix(lined, logd, lambda);
-        }
+		constexpr float splitLambda = 0.7f;
 
-        m_GPUData.cascadeSplits = glm::vec4(cascadeEnds[0], cascadeEnds[1], cascadeEnds[2], cascadeEnds[3]);
-        m_GPUData.cascadeIndex = -1;
+		const float nearPlane = glm::max(camera->nearPlane, 0.001f);
+		const float farPlane = glm::max(camera->farPlane, nearPlane + 1.0f);
+		const float clipRange = farPlane - nearPlane;
 
-        const glm::mat4 invViewProj = glm::inverse(camera->projection * camera->view);
+		const float minZ = nearPlane;
+		const float maxZ = nearPlane + clipRange;
+		const float range = maxZ - minZ;
+		const float ratio = maxZ / minZ;
 
-        std::array<glm::vec4, 8> frustumCorners =
-        {
-            glm::vec4(-1.0f,  1.0f, 0.0f, 1.0f),
-            glm::vec4( 1.0f,  1.0f, 0.0f, 1.0f),
-            glm::vec4( 1.0f, -1.0f, 0.0f, 1.0f),
-            glm::vec4(-1.0f, -1.0f, 0.0f, 1.0f),
-            glm::vec4(-1.0f,  1.0f, 1.0f, 1.0f),
-            glm::vec4( 1.0f,  1.0f, 1.0f, 1.0f),
-            glm::vec4( 1.0f, -1.0f, 1.0f, 1.0f),
-            glm::vec4(-1.0f, -1.0f, 1.0f, 1.0f)
-        };
+		std::array<float, NUM_CASCADES> cascadeSplits{};
+		for (int i = 0; i < NUM_CASCADES; ++i)
+		{
+			const float p = (i + 1) / static_cast<float>(NUM_CASCADES);
+			const float logSplit = minZ * std::pow(ratio, p);
+			const float uniformSplit = minZ + range * p;
+			const float dist = splitLambda * (logSplit - uniformSplit) + uniformSplit;
+			cascadeSplits[i] = dist;
+			m_GPUData.cascadeSplits[i] = dist;
+		}
 
-        for (auto& corner : frustumCorners)
-        {
-            glm::vec4 worldCorner = invViewProj * corner;
-            corner = worldCorner / worldCorner.w;
-        }
+		glm::mat4 invView = glm::inverse(camera->view);
 
-        float lastSplitDist = nearPlane;
-        const glm::vec3 lightDirection = glm::normalize(lightDir);
-        const glm::vec3 defaultUp(0.0f, 1.0f, 0.0f);
-        const glm::vec3 alternateUp(0.0f, 0.0f, 1.0f);
+		const float aspect = camera->aspect > 0.0f ? camera->aspect : 1.0f;
+		const float fovRadians = glm::radians(camera->fov);
+		const float tanHalfFovY = std::tan(fovRadians * 0.5f);
+		const float tanHalfFovX = tanHalfFovY * aspect;
 
-        for (int cascadeIndex = 0; cascadeIndex < NUM_CASCADES; ++cascadeIndex)
-        {
-            const float splitDist = cascadeEnds[cascadeIndex];
-            const float prevSplitNorm = (lastSplitDist - nearPlane) / clipRange;
-            const float splitNorm = (splitDist - nearPlane) / clipRange;
+		glm::vec3 upDir = camera->GetUpDirection();
+		if (std::abs(glm::dot(upDir, lightDir)) > 0.95f)
+			upDir = glm::vec3(0.0f, 0.0f, 1.0f);
 
-            std::array<glm::vec4, 8> cascadeCorners;
-            for (int i = 0; i < 4; ++i)
-            {
-                const glm::vec4 cornerRay = frustumCorners[i + 4] - frustumCorners[i];
-                cascadeCorners[i] = frustumCorners[i] + cornerRay * prevSplitNorm;
-                cascadeCorners[i + 4] = frustumCorners[i] + cornerRay * splitNorm;
-            }
+		float lastSplitDist = nearPlane;
 
-            glm::vec3 frustumCenter(0.0f);
-            for (const auto& corner : cascadeCorners)
-            {
-                frustumCenter += glm::vec3(corner);
-            }
-            frustumCenter /= 8.0f;
+		for (int cascadeIdx = 0; cascadeIdx < NUM_CASCADES; ++cascadeIdx)
+		{
+			const float splitDist = cascadeSplits[cascadeIdx];
+			const float nearDist = lastSplitDist;
+			const float farDist = splitDist;
 
-            float radius = 0.0f;
-            for (const auto& corner : cascadeCorners)
-            {
-                radius = std::max(radius, glm::length(glm::vec3(corner) - frustumCenter));
-            }
-            radius = std::ceil(radius * 16.0f) / 16.0f;
+			const float nearX = tanHalfFovX * nearDist;
+			const float nearY = tanHalfFovY * nearDist;
+			const float farX = tanHalfFovX * farDist;
+			const float farY = tanHalfFovY * farDist;
 
-            const glm::vec3 upVector = (std::abs(lightDirection.y) > 0.95f) ? alternateUp : defaultUp;
-            const glm::vec3 lightPosition = frustumCenter - lightDirection * (radius * 2.0f);
-            const glm::mat4 lightView = glm::lookAt(lightPosition, frustumCenter, upVector);
+			std::array<glm::vec3, 8> frustumCornersVS{
+				glm::vec3(-nearX, -nearY, -nearDist),
+				glm::vec3( nearX, -nearY, -nearDist),
+				glm::vec3( nearX,  nearY, -nearDist),
+				glm::vec3(-nearX,  nearY, -nearDist),
+				glm::vec3(-farX,  -farY,  -farDist),
+				glm::vec3( farX,  -farY,  -farDist),
+				glm::vec3( farX,   farY,  -farDist),
+				glm::vec3(-farX,   farY,  -farDist)
+			};
 
-            glm::vec3 cascadeMin(std::numeric_limits<float>::max());
-            glm::vec3 cascadeMax(std::numeric_limits<float>::lowest());
-            for (const auto& corner : cascadeCorners)
-            {
-                const glm::vec4 cornerLS = lightView * corner;
-                cascadeMin = glm::min(cascadeMin, glm::vec3(cornerLS));
-                cascadeMax = glm::max(cascadeMax, glm::vec3(cornerLS));
-            }
+			std::array<glm::vec3, 8> frustumCornersWS;
+			for (size_t iCorner = 0; iCorner < frustumCornersVS.size(); ++iCorner)
+			{
+				glm::vec4 worldCorner = invView * glm::vec4(frustumCornersVS[iCorner], 1.0f);
+				frustumCornersWS[iCorner] = glm::vec3(worldCorner);
+			}
 
-            const float depthPadding = 200.0f;
-            cascadeMin.z -= depthPadding;
-            cascadeMax.z += depthPadding;
+			glm::vec3 frustumCenter(0.0f);
+			for (const auto& corner : frustumCornersWS)
+				frustumCenter += corner;
+			frustumCenter /= static_cast<float>(frustumCornersWS.size());
 
-            float lightNear = std::max(0.1f, -cascadeMax.z);
-            float lightFar = std::max(lightNear + 1.0f, -cascadeMin.z);
+			float radius = 0.0f;
+			for (const auto& corner : frustumCornersWS)
+				radius = glm::max(radius, glm::length(corner - frustumCenter));
+			radius = std::ceil(radius * 16.0f) / 16.0f;
 
-            glm::mat4 lightProj = glm::orthoRH_ZO(cascadeMin.x, cascadeMax.x, cascadeMin.y, cascadeMax.y, lightNear, lightFar);
+			auto computeCascadeBounds = [&](const glm::mat4& lightViewMatrix, glm::vec3& outMin, glm::vec3& outMax)
+			{
+				outMin = glm::vec3(std::numeric_limits<float>::max());
+				outMax = glm::vec3(std::numeric_limits<float>::lowest());
+				for (const auto& corner : frustumCornersWS)
+				{
+					glm::vec4 cornerLS = lightViewMatrix * glm::vec4(corner, 1.0f);
+					outMin = glm::min(outMin, glm::vec3(cornerLS));
+					outMax = glm::max(outMax, glm::vec3(cornerLS));
+				}
+			};
 
-            glm::mat4 lightViewProj = lightProj * lightView;
-            glm::vec4 origin = lightViewProj * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-            origin /= origin.w;
-            origin = origin * 0.5f + 0.5f;
+			glm::vec3 cascadeCenter = frustumCenter;
+			glm::vec3 lightPos = cascadeCenter - lightDir * radius * 2.0f;
+			glm::mat4 lightView = glm::lookAt(lightPos, cascadeCenter, upDir);
 
-            glm::vec2 shadowPixel = glm::vec2(origin.x, origin.y) * static_cast<float>(m_Resolution);
-            glm::vec2 rounded = glm::round(shadowPixel);
-            glm::vec2 offset = (rounded - shadowPixel) / static_cast<float>(m_Resolution);
-            offset *= 2.0f;
+			glm::vec3 cascadeMin, cascadeMax;
+			computeCascadeBounds(lightView, cascadeMin, cascadeMax);
 
-            glm::mat4 texelAdjust(1.0f);
-            texelAdjust[3][0] += offset.x;
-            texelAdjust[3][1] += offset.y;
+			float extent = glm::max(cascadeMax.x - cascadeMin.x, cascadeMax.y - cascadeMin.y) * 0.5f;
+			extent = glm::max(extent, radius);
 
-            m_GPUData.lightViewProj[cascadeIndex] = texelAdjust * lightViewProj;
-            lastSplitDist = splitDist;
-        }
+			// float texelSize = (extent * 2.0f) / static_cast<float>(m_Resolution);
+			// if (texelSize <= 0.0f)
+			// 	texelSize = 1.0f / static_cast<float>(m_Resolution);
+
+			// glm::vec3 centerLS = glm::vec3(lightView * glm::vec4(cascadeCenter, 1.0f));
+			// centerLS.x = std::floor(centerLS.x / texelSize) * texelSize;
+			// centerLS.y = std::floor(centerLS.y / texelSize) * texelSize;
+
+			// glm::mat4 invLightView = glm::inverse(lightView);
+			// cascadeCenter = glm::vec3(invLightView * glm::vec4(centerLS, 1.0f));
+			// lightPos = cascadeCenter - lightDir * radius * 2.0f;
+			// lightView = glm::lookAt(lightPos, cascadeCenter, upDir);
+
+			computeCascadeBounds(lightView, cascadeMin, cascadeMax);
+			extent = glm::max(cascadeMax.x - cascadeMin.x, cascadeMax.y - cascadeMin.y) * 0.5f;
+			extent = glm::max(extent, radius);
+
+			cascadeMin.x = -extent;
+			cascadeMax.x = extent;
+			cascadeMin.y = -extent;
+			cascadeMax.y = extent;
+
+			const float zPadding = 100.0f;
+			cascadeMin.z -= zPadding;
+			cascadeMax.z += zPadding;
+
+			float nearPlaneLS = glm::max(0.001f, -cascadeMax.z);
+			float farPlaneLS = glm::max(nearPlaneLS + 1.0f, -cascadeMin.z);
+
+			glm::mat4 lightProj = glm::orthoZO(cascadeMin.x, cascadeMax.x, cascadeMin.y, cascadeMax.y, nearPlaneLS, farPlaneLS);
+
+			glm::mat4 lightViewProj = lightProj * lightView;
+			glm::vec4 shadowOrigin = lightViewProj * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+			shadowOrigin *= static_cast<float>(m_Resolution) / 2.0f;
+			glm::vec4 roundedOrigin = glm::round(shadowOrigin);
+			glm::vec4 roundOffset = (roundedOrigin - shadowOrigin) * 2.0f / static_cast<float>(m_Resolution);
+			lightProj[3][0] += roundOffset.x;
+			lightProj[3][1] += roundOffset.y;
+
+			m_GPUData.lightViewProj[cascadeIdx] = lightProj * lightView;
+
+			lastSplitDist = splitDist;
+		}
 	}
 
     void CascadedShadowMap::CreatePipeline(nvrhi::IFramebuffer* framebuffer)
@@ -244,7 +282,7 @@ namespace ignite
 		GraphicsPipelineParams params;
 		params.enableDepthWrite = true;
 		params.enableDepthTest = true;
-		params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
+		params.depthFunc = nvrhi::ComparisonFunc::Less;
 		params.cullMode = nvrhi::RasterCullMode::Front;
 		params.fillMode = nvrhi::RasterFillMode::Solid;
 
@@ -260,9 +298,7 @@ namespace ignite
         }
 		
         m_Pipeline = GraphicsPipeline::Create();
-		m_Pipeline->SetShaders({ m_VS, m_PS })
-			.AddBindingLayout(m_BindingLayout)
-			.Build(framebuffer, params);
+		m_Pipeline->SetShaders({ m_VS, m_PS }).AddBindingLayout(m_BindingLayout).Build(framebuffer, params);
     }
 
 	nvrhi::IFramebuffer* CascadedShadowMap::GetCascadeFramebuffer(int cascadeIndex) const
@@ -272,58 +308,57 @@ namespace ignite
 		return nullptr;
 	}
 
-	nvrhi::TextureHandle CascadedShadowMap::GetCascadeLayerTexture(int cascadeIndex) const
-	{
-		if (cascadeIndex >= 0 && cascadeIndex < NUM_CASCADES)
-			return m_CascadeLayerViews[cascadeIndex];
-		return nullptr;
-	}
-
 	void CascadedShadowMap::CreateCascadeFramebuffers()
 	{
 		nvrhi::IDevice* device = Application::GetGraphicsDevice();
-		
+
+	    // Create All depth map layers
+
+	    nvrhi::Format depthFormat = nvrhi::Format::D32;
+
+	    TextureCreateInfo depthCI;
+	    depthCI.debugName = "Cascaded Shadow Map Depth";
+	    depthCI.width = m_Resolution;
+	    depthCI.height = m_Resolution;
+		depthCI.isRenderTarget = true;
+	    depthCI.mipLevels = 1;
+	    depthCI.arraySize = NUM_CASCADES;
+	    depthCI.format = depthFormat;
+	    depthCI.dimension = nvrhi::TextureDimension::Texture2DArray;
+		depthCI.initialState = nvrhi::ResourceStates::RenderTarget;
+		depthCI.keepInitialState = true;
+
+	    m_DepthTexture = Texture::Create(depthCI);
+
 		// Create a framebuffer for each cascade layer
 		for (int i = 0; i < NUM_CASCADES; ++i)
 		{
-			nvrhi::FramebufferDesc fbDesc;
-			
-			// Create a view into the specific array layer
+#if 0
+		    TextureCreateInfo viewCI;
+		    viewCI.width = m_Resolution;
+		    viewCI.height = m_Resolution;
+		    viewCI.mipLevels = 1;
+		    viewCI.arraySize = 1;
+		    viewCI.format = nvrhi::Format::RGBA32_FLOAT; // Color format for ImGui
+		    viewCI.dimension = nvrhi::TextureDimension::Texture2D;
+		    viewCI.debugName = std::format("Cascade {} Layer View", i);
+		    viewCI.isRenderTarget = false;
+		    viewCI.isUAV = true; // Enable UAV for compute shader write
+		    viewCI.isTypeless = false;
+		    viewCI.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		    viewCI.keepInitialState = true;
+		    m_CascadeLayerViews[i] = Texture::Create(viewCI);
+#endif
+		    // Create framebuffer
+			auto fbDesc = nvrhi::FramebufferDesc();
 			nvrhi::FramebufferAttachment depthAttachment;
-			depthAttachment.texture = m_RenderTarget->GetDepthAttachment()->GetHandle();
+			depthAttachment.texture = m_DepthTexture->GetHandle();
 			depthAttachment.subresources = nvrhi::TextureSubresourceSet(0, 1, i, 1); // mip 0, array layer i
 			depthAttachment.format = nvrhi::Format::D32;
-			
+
 			fbDesc.setDepthAttachment(depthAttachment);
-			
 			m_CascadeFramebuffers[i] = device->createFramebuffer(fbDesc);
 			LOG_ASSERT(m_CascadeFramebuffers[i], "Failed to create cascade framebuffer for layer {}", i);
-		}
-	}
-
-	void CascadedShadowMap::CreateCascadeLayerViews()
-	{
-		nvrhi::IDevice* device = Application::GetGraphicsDevice();
-		
-		// Create color texture views for ImGui visualization
-		// These will be filled using a compute shader that reads depth
-		for (int i = 0; i < NUM_CASCADES; ++i)
-		{
-			nvrhi::TextureDesc viewDesc;
-			viewDesc.width = m_RenderTarget->GetDepthAttachment()->GetHandle()->getDesc().width;
-			viewDesc.height = m_RenderTarget->GetDepthAttachment()->GetHandle()->getDesc().height;
-			viewDesc.mipLevels = 1;
-			viewDesc.format = nvrhi::Format::R32_FLOAT; // Color format for ImGui
-			viewDesc.dimension = nvrhi::TextureDimension::Texture2D;
-			viewDesc.debugName = std::format("Cascade {} Layer View", i);
-			viewDesc.isRenderTarget = false;
-			viewDesc.isUAV = true; // Enable UAV for compute shader write
-			viewDesc.isTypeless = false;
-			viewDesc.initialState = nvrhi::ResourceStates::UnorderedAccess;
-			viewDesc.keepInitialState = false;
-			
-			m_CascadeLayerViews[i] = device->createTexture(viewDesc);
-			LOG_ASSERT(m_CascadeLayerViews[i], "Failed to create cascade layer view for layer {}", i);
 		}
 	}
 }

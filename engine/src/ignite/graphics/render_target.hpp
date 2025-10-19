@@ -21,7 +21,8 @@
 * SOFTWARE.
 */
 
-#pragma once
+#ifndef RENDER_TARGET_HPP
+#define RENDER_TARGET_HPP
 
 #include "ignite/core/types.hpp"
 #include <nvrhi/nvrhi.h>
@@ -57,7 +58,7 @@ namespace ignite
         uint32_t GetWidth() const { return m_CreateInfo.width; }
         uint32_t GetHeight() const { return m_CreateInfo.height; }
 
-        bool ShouldResize(const uint32_t width, const uint32_t height);
+        bool ShouldResize(const uint32_t width, const uint32_t height) const;
 
         Ref<Texture> GetDepthAttachment();
         nvrhi::FramebufferHandle GetFramebuffer();
@@ -88,3 +89,5 @@ namespace ignite
         std::pair<float, uint32_t> m_ClearDepth;
     };
 }
+
+#endif

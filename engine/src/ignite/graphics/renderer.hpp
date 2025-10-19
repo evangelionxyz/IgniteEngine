@@ -21,7 +21,9 @@
 * SOFTWARE.
 */
 
-#pragma once
+#ifndef RENDERER_HPP
+#define RENDERER_HPP
+
 #include "ignite/core/types.hpp"
 #include "graphics_pipeline.hpp"
 #include "command_list.hpp"
@@ -91,3 +93,6 @@ namespace ignite
         friend class ShaderLibrary;
     };
 }
+
+#endif
+

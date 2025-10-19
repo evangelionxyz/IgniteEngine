@@ -21,7 +21,8 @@
 * SOFTWARE.
 */
 
-#pragma once
+#ifndef GRAPHICS_PIPELINE_HPP
+#define GRAPHICS_PIPELINE_HPP
 
 #include "ignite/core/types.hpp"
 #include "shader.hpp"
@@ -104,3 +105,5 @@ namespace ignite {
         bool m_NeedsToCompileShader = false;
     };
 }
+
+#endif

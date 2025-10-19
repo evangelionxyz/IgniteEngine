@@ -81,6 +81,8 @@ namespace ignite
         // Load icons
         TextureCreateInfo createInfo;
         createInfo.format = nvrhi::Format::RGBA8_UNORM;
+    	createInfo.keepInitialState = true;
+    	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
         m_Icons["simulate"] = Texture::Create("resources/ui/ic_simulate.png", createInfo);
         m_Icons["play"] = Texture::Create("resources/ui/ic_play.png", createInfo);
         m_Icons["stop"] = Texture::Create("resources/ui/ic_stop.png", createInfo);

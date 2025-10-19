@@ -21,7 +21,8 @@
 * SOFTWARE.
 */
 
-#pragma once
+#ifndef FRAMEBUFFER_KEY_HPP
+#define FRAMEBUFFER_KEY_HPP
 
 #include <vector>
 #include <cstdint>
@@ -97,3 +98,5 @@ namespace ignite
         return key;
     }
 }
+
+#endif

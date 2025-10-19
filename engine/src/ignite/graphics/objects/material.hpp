@@ -45,6 +45,7 @@ namespace ignite
     {
     public:
         Material();
+    	~Material();
 
         std::string name;
         Ref<Texture> baseColorTexture;
@@ -52,6 +53,7 @@ namespace ignite
         Ref<Texture> metallicRoughnessTexture;
         Ref<Texture> normalTexture;
         Ref<Texture> occlusionTexture;
+        nvrhi::SamplerHandle sampler;
 
         void UpdateBindingSet();
         void UploadToGpu(nvrhi::ICommandList *cmd);

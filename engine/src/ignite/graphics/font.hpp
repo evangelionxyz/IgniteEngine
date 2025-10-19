@@ -21,7 +21,8 @@
 * SOFTWARE.
 */
 
-#pragma once
+#ifndef FONT_HPP
+#define FONT_HPP
 
 #include "ignite/asset/asset.hpp"
 #include "ignite/core/types.hpp"
@@ -51,3 +52,6 @@ namespace ignite
     private:
     };
 } // namespace ignite
+
+
+#endif

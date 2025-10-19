@@ -57,23 +57,23 @@ namespace ignite
 	struct Scene_GPUData
 	{
 		glm::vec4 sunColor = glm::vec4(0.87f, 0.87f, 0.87f, 1.1f); // w = light intensity
-		glm::vec2 sungAngles = glm::vec2(0.1f, 1.0f);
+		glm::vec2 sungAngles = glm::vec2(0.0f, 1.0f);
 		float sunAngularRadius = 0.5f;
 		int renderMode = 0;
+	    int debugShadow = 0;
 
 		float exposure = 1.1f;
 		float gamma = 2.2f;
 		float ambient = 0.5f;
-		float padding;
 	};
 
 	struct CascadedShadowMap_GPUData
 	{
 		glm::mat4 lightViewProj[NUM_CASCADES];
-		glm::vec4 cascadeSplits; // view-space distances to end of each cascade
+		float cascadeSplits[NUM_CASCADES]; // view-space distances to end of each cascade
 		float shadowStrength;
 		float minBias = 0.0f;
-		float maxBias = 0.0f;
+		float maxBias = 0.01f;
 		float pcfRadius = 0.3f; // in texels (multiplier)
 
 		int cascadeIndex;

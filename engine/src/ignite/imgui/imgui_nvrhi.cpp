@@ -216,13 +216,6 @@ namespace ignite
             return graphicsPipeline;
         }
 
-        nvrhi::VertexAttributeDesc vertexAttribLayout[] =
-        {
-            { "POSITION", nvrhi::Format::RG32_FLOAT, 1, 0, offsetof(ImGuiVertexData, position), sizeof(ImGuiVertexData), false },
-            { "TEXCOORD", nvrhi::Format::RG32_FLOAT, 1, 0, offsetof(ImGuiVertexData, texCoord), sizeof(ImGuiVertexData), false },
-            { "COLOR", nvrhi::Format::RGBA32_FLOAT, 1, 0, offsetof(ImGuiVertexData, color), sizeof(ImGuiVertexData), false }
-        };
-
         auto vertexShader = Shader::Create("resources/shaders/imgui.vertex.hlsl", ShaderType::Vertex);
         auto pixelShader = Shader::Create("resources/shaders/imgui.pixel.hlsl", ShaderType::Pixel);
 
@@ -255,10 +248,7 @@ namespace ignite
         params.enableDepthStencil = false;
 
         graphicsPipeline = GraphicsPipeline::Create();
-        graphicsPipeline->SetShaders({ vertexShader, pixelShader })
-            .AddBindingLayout(bindingLayout)
-            .Build(framebuffer, params);
-
+        graphicsPipeline->SetShaders({ vertexShader, pixelShader }).AddBindingLayout(bindingLayout).Build(framebuffer, params);
         return graphicsPipeline;
     }
 

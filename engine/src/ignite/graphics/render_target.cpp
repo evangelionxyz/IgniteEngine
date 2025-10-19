@@ -40,69 +40,66 @@ namespace ignite {
     {
         m_ClearDepth = { std::numeric_limits<float>::max(), std::numeric_limits<uint32_t>::max() };
 
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-        
         for (auto &attachment : m_CreateInfo.attachments)
         {
             const bool isDepthAttachment = attachment.format == nvrhi::Format::D32S8 || attachment.format == nvrhi::Format::D16 || attachment.format == nvrhi::Format::D24S8 || attachment.format == nvrhi::Format::D32;
             const bool isColorAttachment = attachment.format == nvrhi::Format::RGBA8_UNORM || attachment.format == nvrhi::Format::SRGBA8_UNORM || attachment.format == nvrhi::Format::R32_UINT;
-            const bool isRenderTarget = true;
+            constexpr bool isRenderTarget = true;
 
             // find depth attachment if framebuffer is not created yet
             if (isDepthAttachment && m_DepthAttachment == nullptr && m_FramebufferHandle == nullptr)
             {
-                nvrhi::TextureDesc depthDesc = nvrhi::TextureDesc();
-                depthDesc.setWidth(m_CreateInfo.width);
-                depthDesc.setHeight(m_CreateInfo.height);
-                depthDesc.setFormat(attachment.format);
-                depthDesc.setDebugName(std::format("{} - {} ", attachment.name, debugName));
-                depthDesc.setInitialState(attachment.state);
-                depthDesc.setIsRenderTarget(true);
-                depthDesc.setKeepInitialState(true);
-                depthDesc.setClearValue(nvrhi::Color(1.f));
-                depthDesc.setUseClearValue(true);
-                
+                TextureCreateInfo createInfo = {};
+                createInfo.width = m_CreateInfo.width;
+                createInfo.height = m_CreateInfo.height;
+                createInfo.depth = 1;
+                createInfo.isRenderTarget = isRenderTarget;
+                createInfo.format = attachment.format;
+                createInfo.debugName = std::format("{} - {} ", attachment.name, debugName);
+            	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+            	createInfo.keepInitialState = true;
+
                 // Set dimension and array size based on attachment configuration
                 if (attachment.arrayLayers > 1)
                 {
-                    depthDesc.setDimension(nvrhi::TextureDimension::Texture2DArray);
-                    depthDesc.setArraySize(attachment.arrayLayers);
+                    createInfo.dimension = nvrhi::TextureDimension::Texture2DArray;
+                    createInfo.arraySize = attachment.arrayLayers;
                 }
                 else
                 {
-                    depthDesc.setDimension(nvrhi::TextureDimension::Texture2D);
+                    createInfo.dimension = nvrhi::TextureDimension::Texture2D;
                 }
 
-                m_DepthAttachment = Texture::Create(depthDesc);
+                m_DepthAttachment = Texture::Create(createInfo);
             }
 
-            // create color attachment if color attachments are empty
+            // create a color attachment if color attachments are empty
             if (isColorAttachment)
             {
                 // create color attachment texture
-                nvrhi::TextureDesc colorDesc;
-                colorDesc.setWidth(m_CreateInfo.width);
-                colorDesc.setHeight(m_CreateInfo.height);
-                colorDesc.setFormat(attachment.format);
-                colorDesc.setDebugName(std::format("{} - {} ", attachment.name, debugName));
-                colorDesc.setInitialState(attachment.state);
-                colorDesc.setKeepInitialState(true);
-                colorDesc.setIsUAV(false);
-                colorDesc.setIsRenderTarget(isRenderTarget);
-                colorDesc.setIsTypeless(false);
-                colorDesc.setUseClearValue(true);
+                TextureCreateInfo createInfo = {};
+                createInfo.width = m_CreateInfo.width;
+                createInfo.height = m_CreateInfo.height;
+                createInfo.depth = 1;
+                createInfo.isRenderTarget = isRenderTarget;
+                createInfo.format = attachment.format;
+                createInfo.debugName = std::format("{} - {} ", attachment.name, debugName);
+                createInfo.isUAV = false;
+            	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+            	createInfo.keepInitialState = true;
 
+                // Set dimension and array size based on attachment configuration
                 if (attachment.arrayLayers > 1)
                 {
-                    colorDesc.setDimension(nvrhi::TextureDimension::Texture2DArray);
-                    colorDesc.setArraySize(attachment.arrayLayers);
+                    createInfo.dimension = nvrhi::TextureDimension::Texture2DArray;
+                    createInfo.arraySize = attachment.arrayLayers;
                 }
                 else
                 {
-                    colorDesc.setDimension(nvrhi::TextureDimension::Texture2D);
+                    createInfo.dimension = nvrhi::TextureDimension::Texture2D;
                 }
 
-                Ref<Texture> colorAttachment = Texture::Create(colorDesc);
+                Ref<Texture> colorAttachment = Texture::Create(createInfo);
                 m_ColorAttachments.push_back(colorAttachment);
             }
         }
@@ -149,32 +146,31 @@ namespace ignite {
         if (m_DepthAttachment)
         {
             // copy description
-            auto depthDesc = m_DepthAttachment->GetHandle()->getDesc();
-            depthDesc.width = width;
-            depthDesc.height = height;
+            auto createInfo = m_DepthAttachment->GetCreateInfo();
+            createInfo.width = width;
+            createInfo.height = height;
             
             m_DepthAttachment.reset();
 
-            m_DepthAttachment = Texture::Create(depthDesc);
+            m_DepthAttachment = Texture::Create(createInfo);
             LOG_ASSERT(m_DepthAttachment, "Failed to create render target depth attachment");
         }
 
         // recreate color attachments
-        std::vector<nvrhi::TextureDesc> colorDescs;
-
+        std::vector<TextureCreateInfo> colorCIs;
         // copy color descriptions
         for (auto &colorAttachment : m_ColorAttachments)
         {
-            auto colorDesc = colorAttachment->GetHandle()->getDesc();
+            auto colorDesc = colorAttachment->GetCreateInfo();
             colorDesc.width = width;
             colorDesc.height = height;
 
-            colorDescs.push_back(colorDesc);
+            colorCIs.push_back(colorDesc);
         }
 
         // create color attachments
         m_ColorAttachments.clear();
-        for (auto &colorDesc : colorDescs)
+        for (auto &colorDesc : colorCIs)
         {
             Ref<Texture> colorAttachment = Texture::Create(colorDesc);
             m_ColorAttachments.push_back(colorAttachment);
@@ -186,7 +182,7 @@ namespace ignite {
         CreateFramebuffer();
     }
 
-    bool RenderTarget::ShouldResize(const uint32_t width, const uint32_t height)
+    bool RenderTarget::ShouldResize(const uint32_t width, const uint32_t height) const
     {
         return m_CreateInfo.width != width || m_CreateInfo.height != height;
     }

@@ -97,7 +97,9 @@ namespace ignite
         }
     }
 
-    void MeshLoader::LoadMaterial(const Ref<Mesh>& mesh, const tinygltf::Primitive& primitive, const std::vector<tinygltf::Material>& materials, const std::vector<Ref<Texture>>& loadedTextures)
+    void MeshLoader::LoadMaterial(const Ref<Mesh>& mesh, const tinygltf::Primitive& primitive,
+        const std::vector<tinygltf::Material>& materials, const std::vector<Ref<Texture>>& loadedTextures,
+        const std::vector<nvrhi::SamplerHandle>& loadedSamplers)
     {
         mesh->materialIndex = primitive.material;
         if (primitive.material >= 0 && primitive.material < materials.size())
@@ -146,6 +148,20 @@ namespace ignite
             if (occlusionIndex >= 0 && occlusionIndex < loadedTextures.size())
             {
                 mesh->material->occlusionTexture = loadedTextures[occlusionIndex];
+            }
+
+            if (loadedSamplers.size() > 0)
+            {
+                mesh->material->sampler = loadedSamplers[0];
+            }
+            else
+            {
+                auto device = Application::GetGraphicsDevice();
+                auto desc = nvrhi::SamplerDesc();
+                desc.setAllFilters(true);
+                desc.setAllAddressModes(nvrhi::SamplerAddressMode::Repeat);
+                mesh->material->sampler = device->createSampler(desc);
+                LOG_ASSERT(mesh->material->sampler, "Failed to create sampler");
             }
 
             // update binding set
@@ -285,8 +301,9 @@ namespace ignite
         if (!ok)
             return scene;
 
-        // preload textures
+        // preload textures and samplers
         const auto textures = LoadTexturesFromGLTF(gltfModel);
+        const auto samplers = GetSamplersFromGLTF(gltfModel);
 
         // preserve nodes
         scene.nodes.resize(gltfModel.nodes.size());
@@ -335,7 +352,7 @@ namespace ignite
                 mesh->name = gltfMesh.name;
 
                 // material
-                LoadMaterial(mesh, primitive, gltfModel.materials, textures);
+                LoadMaterial(mesh, primitive, gltfModel.materials, textures, samplers);
 
                 scene.nodes[i].meshes.push_back(mesh);
                 scene.flatMeshes.push_back(mesh);
@@ -382,23 +399,10 @@ namespace ignite
                 createInfo.height = image.height;
                 createInfo.flip = false;
                 createInfo.format = nvrhi::Format::RGBA8_UNORM;
-
-                tinygltf::Sampler sampler = model.samplers[gltfTexture.sampler];
-                switch (sampler.wrapS)
-                {
-                case TINYGLTF_TEXTURE_WRAP_REPEAT:
-                    createInfo.samplerMode = nvrhi::SamplerAddressMode::Repeat;
-                    break;
-                case TINYGLTF_TEXTURE_WRAP_CLAMP_TO_EDGE:
-                    createInfo.samplerMode = nvrhi::SamplerAddressMode::ClampToEdge;
-                    break;
-                case TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT:
-                    createInfo.samplerMode = nvrhi::SamplerAddressMode::MirroredRepeat;
-                    break;
-                }
+            	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+            	createInfo.keepInitialState = true;
 
                 Ref<Texture> texture;
-
                 if (!image.image.empty())
                 {
                     texture = Texture::Create(Buffer((void*)image.image.data(), image.image.size() * sizeof(uint8_t)), createInfo);
@@ -411,11 +415,52 @@ namespace ignite
 
                 gltfTextures.push_back(texture);
             }
-
         }
 
-
         return gltfTextures;
+    }
+
+    std::vector<nvrhi::SamplerHandle> MeshLoader::GetSamplersFromGLTF(const tinygltf::Model& model)
+    {
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        std::vector<nvrhi::SamplerHandle> samplers;
+        for (size_t i = 0; i < model.textures.size(); ++i)
+        {
+            const tinygltf::Texture& gltfTexture = model.textures[i];
+            if (gltfTexture.source >= 0 && gltfTexture.source < model.images.size())
+            {
+                tinygltf::Sampler gltfSampler = model.samplers[gltfTexture.sampler];
+
+                gltfSampler.minFilter = TINYGLTF_TEXTURE_FILTER_LINEAR;
+                nvrhi::SamplerDesc desc;
+                desc.borderColor = nvrhi::Color(1.0f);
+
+                switch (gltfSampler.wrapS)
+                {
+                case TINYGLTF_TEXTURE_WRAP_REPEAT:
+                    desc.addressU = nvrhi::SamplerAddressMode::Repeat;
+                    desc.addressV = nvrhi::SamplerAddressMode::Repeat;
+                    desc.addressW = nvrhi::SamplerAddressMode::Repeat;
+                    break;
+                case TINYGLTF_TEXTURE_WRAP_CLAMP_TO_EDGE:
+                    desc.addressU = nvrhi::SamplerAddressMode::ClampToEdge;
+                    desc.addressV = nvrhi::SamplerAddressMode::ClampToEdge;
+                    desc.addressW = nvrhi::SamplerAddressMode::ClampToEdge;
+                    break;
+                case TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT:
+                    desc.addressU = nvrhi::SamplerAddressMode::MirroredRepeat;
+                    desc.addressV = nvrhi::SamplerAddressMode::MirroredRepeat;
+                    desc.addressW = nvrhi::SamplerAddressMode::MirroredRepeat;
+                    break;
+                }
+
+                nvrhi::SamplerHandle sampler = device->createSampler(desc);
+                LOG_ASSERT(sampler, "Failed to create sampler");
+                samplers.push_back(sampler);
+            }
+        }
+
+        return samplers;
     }
 
     const unsigned char* MeshLoader::GetBufferData(const tinygltf::Model& model, const tinygltf::Accessor& accessor)

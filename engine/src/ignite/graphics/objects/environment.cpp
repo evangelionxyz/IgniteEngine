@@ -79,6 +79,11 @@ namespace ignite {
         m_IndexBuffer = IndexBuffer::Create(sizeof(uint32_t) * 36, "[Environment] Index Buffer");
     }
 
+    Environment::~Environment()
+    {
+	    m_Sampler = nullptr;
+    }
+
     void Environment::Begin(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline)
     {
         LOG_ASSERT(m_BindingSet, "[Environment] Invalid binding set");
@@ -115,7 +120,7 @@ namespace ignite {
         bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m_Scene->GetSceneGPUDataBuffer()->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_HDRTexture->GetHandle()));
-        bsDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_HDRTexture->GetSampler()));
+        bsDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_Sampler));
 
         m_BindingSet = device->createBindingSet(bsDesc, Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT));
         LOG_ASSERT(m_BindingSet, "Failed to create binding set");
@@ -129,7 +134,14 @@ namespace ignite {
         textureCI.dimension = nvrhi::TextureDimension::Texture2D;
         textureCI.format = nvrhi::Format::RGBA32_FLOAT;
         textureCI.flip = true;
+    	textureCI.keepInitialState = true;
+    	textureCI.initialState = nvrhi::ResourceStates::ShaderResource;
         m_HDRTexture = Texture::Create(filepath, textureCI);
+
+    	auto samplerDesc = nvrhi::SamplerDesc();
+    	samplerDesc.addressU = nvrhi::SamplerAddressMode::Repeat;
+    	m_Sampler = Application::GetGraphicsDevice()->createSampler(samplerDesc);
+    	LOG_ASSERT(m_Sampler, "Failed to create sampler");
     }
 
     void Environment::WriteBuffer(nvrhi::ICommandList *commandList)

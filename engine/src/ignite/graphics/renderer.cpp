@@ -59,10 +59,11 @@ namespace ignite
             TextureCreateInfo textureCreateInfo;
             textureCreateInfo.format = nvrhi::Format::RGBA8_UNORM;
             textureCreateInfo.dimension = nvrhi::TextureDimension::Texture2D;
-            textureCreateInfo.samplerMode = nvrhi::SamplerAddressMode::ClampToEdge;
             textureCreateInfo.width = 1;
             textureCreateInfo.height = 1;
             textureCreateInfo.flip = false;
+        	textureCreateInfo.initialState = nvrhi::ResourceStates::Common;
+        	textureCreateInfo.keepInitialState = true;
 
             uint32_t white = 0xFFFFFFFF;
             m_WhiteTexture = Texture::Create(Buffer(&white, sizeof(u32)), textureCreateInfo);

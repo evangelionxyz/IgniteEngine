@@ -21,7 +21,8 @@
 * SOFTWARE.
 */
 
-#pragma once
+#ifndef COMMAND_LIST_HPP
+#define COMMAND_LIST_HPP
 
 #include "ignite/core/types.hpp"
 #include <nvrhi/nvrhi.h>
@@ -47,3 +48,5 @@ namespace ignite
         nvrhi::IDevice* m_Device;
     };
 }
+
+#endif

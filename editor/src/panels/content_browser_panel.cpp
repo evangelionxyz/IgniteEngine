@@ -36,6 +36,8 @@ namespace ignite
     {
         TextureCreateInfo createInfo;
         createInfo.format = nvrhi::Format::RGBA8_UNORM;
+    	createInfo.keepInitialState = true;
+    	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
         m_Icons["folder"] = Texture::Create("resources/ui/ic_folder.png", createInfo);
         m_Icons["unknown"] = Texture::Create("resources/ui/ic_file.png", createInfo);
 
