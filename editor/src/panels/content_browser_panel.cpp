@@ -92,7 +92,7 @@ namespace ignite
 
         if (opened && isDirectory)
         {
-            for (auto& nodeIndex : node->children | std::views::values)
+            for (const auto &nodeIndex : node->children | std::views::values)
             {
                 RenderFileTree(&m_TreeNodes[nodeIndex]);
             }
@@ -107,8 +107,8 @@ namespace ignite
 
         ImVec2 regionSize = ImGui::GetContentRegionAvail();
         const float &dpiScale = ImGui::GetWindowDpiScale();
-        const ImVec2 navbarBtSize = ImVec2(40.0f * dpiScale, 30.0f * dpiScale);
-        const ImVec2 navbarSize = ImVec2(regionSize.x, 45.0f * dpiScale);
+        const auto navbarBtSize = ImVec2(40.0f * dpiScale, 30.0f * dpiScale);
+        const auto navbarSize = ImVec2(regionSize.x, 45.0f * dpiScale);
         // Navigation bar
         ImGui::BeginChild("##NAV_BUTTON_BAR", navbarSize, ImGuiChildFlags_Borders);
 
@@ -582,8 +582,7 @@ namespace ignite
             // Update children indices
             for (auto& childIndex : node.children | std::views::values)
             {
-                auto it = indexMapping.find(childIndex);
-                if (it != indexMapping.end())
+                if (auto it = indexMapping.find(childIndex); it != indexMapping.end())
                 {
                     childIndex = it->second;
                 }
