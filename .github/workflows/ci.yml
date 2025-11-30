@@ -62,5 +62,9 @@ jobs:
       uses: microsoft/setup-msbuild@v2
 
     - name: Build Solution
-      run: msbuild IGN.sln /p:Configuration=Release /p:Platform=x64
+      env:
+        VULKAN_SDK: ${{ steps.vulkan.outputs.vulkan_sdk_path }}
+      run: |
+        echo "Using VULKAN_SDK=$env:VULKAN_SDK"
+        msbuild IGN.sln /p:Configuration=Release /p:Platform=x64
 
