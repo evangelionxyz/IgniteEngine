@@ -122,6 +122,8 @@ namespace ignite
         nvrhi::StagingTextureHandle m_MousePickingStagingTexture;
         nvrhi::StagingTextureHandle m_ScreenshotStagingTexture;
         Ref<CommandList > m_CommandList;
+
+        glm::vec2 m_CurrentFramebufferSize;
             
         nvrhi::IDevice *m_Device = nullptr;
     };

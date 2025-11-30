@@ -88,7 +88,7 @@ namespace ignite
 )";
 
     static std::string s_BatchScriptTemplate = R"(pushd %~dp0
-%IgniteEngine%\scripts\premake\premake5.exe vs2022
+premake5 vs2022
 dotnet msbuild {PROJECT_NAME}.sln
 popd
 )";
@@ -196,14 +196,18 @@ namespace {PROJECT_NAME}
         std::string buildCommand = (GetDirectory() / m_Info.batchScriptFilepath).generic_string();
         std::system(buildCommand.c_str());
 
+        m_Info.scriptModuleFilepath = std::format("bin/{}.dll", m_Info.name);
+
         bool success = std::filesystem::exists(GetDirectory() / m_Info.scriptModuleFilepath);
         // Validate .dll file
-        // LOG_ASSERT(success, "[Project] Failed to build Solution");
+        LOG_ASSERT(success, "[Project] Failed to build Solution");
         return success;
     }
 
     void Project::GenerateProject()
     {
+        std::filesystem::path projectDir = GetDirectory();
+
         std::filesystem::path assetDirectory = GetAssetDirectory();
         if (!std::filesystem::exists(assetDirectory))
             std::filesystem::create_directories(assetDirectory);
@@ -216,8 +220,6 @@ namespace {PROJECT_NAME}
         std::filesystem::path solutionFilepath = GetSolutionFilepath();
         if (!std::filesystem::exists(solutionFilepath))
         {
-            std::filesystem::path projectDir = GetDirectory();
-    
             // Create dummy c# script when there is no scripts (new project)
             std::filesystem::path defaultCSharpScriptFilepath = scriptDirectory / "Game.cs";
             if (!std::filesystem::exists(defaultCSharpScriptFilepath) || std::filesystem::is_empty(scriptDirectory))
@@ -243,10 +245,20 @@ namespace {PROJECT_NAME}
             outfile = std::fstream(GetDirectory() / m_Info.batchScriptFilepath, std::ios::out);
             outfile << batchScriptTemplate;
             outfile.close();
-
-            BuildSolution();
         }
 
-        m_Info.scriptModuleFilepath = std::format("bin/{}.dll", m_Info.name);
+        // copy IgniteScript.dll to project dir
+        std::filesystem::path projectBinDir = projectDir / "bin";
+        if (!std::filesystem::exists(projectBinDir))
+            std::filesystem::create_directory(projectBinDir);
+
+        std::filesystem::path scriptCoreDLLSource = std::filesystem::current_path() / "lib/IgniteScript.dll";
+        std::filesystem::path scriptCoreDLLDestination = projectBinDir / "IgniteScript.dll";
+        if (std::filesystem::exists(scriptCoreDLLSource) && !std::filesystem::exists(scriptCoreDLLDestination))
+        {
+            std::filesystem::copy_file(scriptCoreDLLSource, scriptCoreDLLDestination);
+        }
+
+        BuildSolution();
     }
 }

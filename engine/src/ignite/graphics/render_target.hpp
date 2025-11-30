@@ -55,10 +55,10 @@ namespace ignite
         void CreateFramebuffer();
         void Resize(const uint32_t width, const uint32_t height);
 
+        glm::uvec2 GetSize() { return { m_CreateInfo.width, m_CreateInfo.height }; }
+
         uint32_t GetWidth() const { return m_CreateInfo.width; }
         uint32_t GetHeight() const { return m_CreateInfo.height; }
-
-        bool ShouldResize(const uint32_t width, const uint32_t height) const;
 
         Ref<Texture> GetDepthAttachment();
         nvrhi::FramebufferHandle GetFramebuffer();

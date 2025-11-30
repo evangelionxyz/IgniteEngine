@@ -95,35 +95,7 @@ namespace ignite
             }
         }
 
-        if (!m_ActiveProject)
-        {
-            if (!OpenProject())
-            {
-				Application::Shutdown();
-            }
-        }
-
-        if (m_ActiveScene)
-        {
-            {
-                Entity modelEntity = SceneManager::CreateEntity(m_ActiveScene.get(), "Model 1", EntityType_Mesh);
-                MeshComponent& mc = modelEntity.AddComponent<MeshComponent>();
-                mc.model = Model::Create("resources/models/DamagedHelmet.gltf");
-                mc.model->UpdateBindingSet(m_ActiveScene.get());
-            }
-
-            {
-                Entity modelEntity = SceneManager::CreateEntity(m_ActiveScene.get(), "Model 2", EntityType_Mesh);
-                MeshComponent& mc = modelEntity.AddComponent<MeshComponent>();
-                mc.model = Model::Create("resources/scene.glb");
-                mc.model->UpdateBindingSet(m_ActiveScene.get());
-            }
-        }
-
-        if (m_ActiveProject)
-        {
-            Application::GetInstance()->GetWindow()->Show(); // Show window after initialization
-        }
+        Application::GetInstance()->GetWindow()->Show();
     }
 
     void EditorLayer::OnDetach()
@@ -282,6 +254,16 @@ namespace ignite
         if (!m_ActiveScene)
             return;
 
+        // Perform Resize
+        auto framebufferSize = m_ScenePanel->GetSceneViewportRT()->GetSize();
+        auto currentViewportSize = m_ScenePanel->GetViewportSize();
+        if (currentViewportSize.x > 0.0f && currentViewportSize.y > 0
+            && (framebufferSize.x != currentViewportSize.x || framebufferSize.y != currentViewportSize.y))
+        {
+            m_ScenePanel->ResizeFramebuffer(currentViewportSize.x, currentViewportSize.y);
+        }
+
+        // Scene Render
         switch (m_Data.sceneState)
         {
         case State::SceneSimulate:

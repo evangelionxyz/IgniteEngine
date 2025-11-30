@@ -1240,25 +1240,7 @@ namespace ignite
         ImGui::SameLine();
         ImGui::Image(scenePlayStopID, buttonSize);
         if (ImGui::IsItemClicked())
-        {            
-            const uint32_t width = static_cast<uint32_t>(m_ViewportData.rect.GetSize().x);
-            const uint32_t height = static_cast<uint32_t>(m_ViewportData.rect.GetSize().y);
-			const float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
-
-            m_SceneViewportRT->Resize(width, height);
-            m_CompositeViewportRT->Resize(width, height);
-            m_UIViewportRT->Resize(width, height);
-
-            m_UICameraRT->Resize(width, height);
-            m_SceneCameraRT->Resize(width, height);
-            m_CompositeCameraRT->Resize(width, height);
-
-            EditorLayer::GetInstance()->GetSceneRenderer()->GetUIRenderer()->Resize(width, height);
-
-            m_Scene->Resize(width, height);
-
-			m_Camera.UpdateMatrices(aspectRatio);
-            
+        {  
             if (isScenePlaying)
             {
                 EditorLayer::GetInstance()->OnSceneStop();
@@ -1287,30 +1269,6 @@ namespace ignite
         ImGui::Image(sceneSimulateID, buttonSize);
         if (ImGui::IsItemClicked())
         {            
-            const uint32_t width = static_cast<uint32_t>(m_ViewportData.rect.GetSize().x);
-            const uint32_t height = static_cast<uint32_t>(m_ViewportData.rect.GetSize().y);
-
-            glm::vec2 vpSize = m_ViewportData.rect.GetSize();
-            if (vpSize.x > 0.0f && vpSize.y > 0.0f)
-            {
-				const float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
-
-
-                m_SceneViewportRT->Resize(width, height);
-                m_CompositeViewportRT->Resize(width, height);
-                m_UIViewportRT->Resize(width, height);
-
-                m_UICameraRT->Resize(width, height);
-                m_SceneCameraRT->Resize(width, height);
-                m_CompositeCameraRT->Resize(width, height);
-
-                EditorLayer::GetInstance()->GetSceneRenderer()->GetUIRenderer()->Resize(width, height);
-
-                m_Scene->Resize(width, height);
-
-				m_Camera.UpdateMatrices(aspectRatio);
-            }
-
             if (isSceneSimulate)
             {
                 EditorLayer::GetInstance()->OnSceneStop();
@@ -1339,10 +1297,6 @@ namespace ignite
 
         m_ViewportData.rect.min = { canvasPos.x, canvasPos.y };
         m_ViewportData.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
-        glm::vec2 vpSize = m_ViewportData.rect.GetSize();
-
-        const auto vpWidth = static_cast<uint32_t>(vpSize.x);
-        const auto vpHeight = static_cast<uint32_t>(vpSize.y);
 
         // Mouse position in screen space
         const ImVec2 &mousePos = ImGui::GetMousePos();
@@ -1357,35 +1311,6 @@ namespace ignite
             bool mousePressed = ImGui::IsMouseDown(ImGuiMouseButton_Left);
             
             SceneRenderer::GetActive()->UpdateUIInput(screenMousePos, viewportPos, viewportSize, mousePressed);
-        }
-
-        // trigger resize
-        if (vpSize.x > 0.0f && vpSize.y > 0.0f)
-        {
-            // prevent resizing each frame
-            // just when the mouse is not resizing
-            const bool sceneResize = m_SceneViewportRT->ShouldResize(vpWidth, vpHeight);
-            const bool compositeResize = m_CompositeViewportRT->ShouldResize(vpWidth, vpHeight);
-
-            if (const bool uiResize = m_UIViewportRT->ShouldResize(vpWidth, vpHeight);
-                !ImGui::IsMouseDown(ImGuiMouseButton_Left) && (sceneResize || compositeResize || uiResize))
-            {
-				const float aspectRatio = vpSize.x / vpSize.y;
-
-                m_SceneViewportRT->Resize(vpWidth, vpHeight);
-                m_CompositeViewportRT->Resize(vpWidth, vpHeight);
-                m_UIViewportRT->Resize(vpWidth, vpHeight);
-
-                m_UICameraRT->Resize(vpWidth, vpHeight);
-                m_SceneCameraRT->Resize(vpWidth, vpHeight);
-                m_CompositeCameraRT->Resize(vpWidth, vpHeight);
-
-                m_Scene->Resize(vpWidth, vpHeight);
-
-                EditorLayer::GetInstance()->GetSceneRenderer()->GetUIRenderer()->Resize(vpWidth, vpHeight);
-
-				m_Camera.UpdateMatrices(aspectRatio);
-            }
         }
 
         ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_SceneViewportRT->GetColorAttachment(0)->GetHandle().Get());     // Test scene RT
@@ -1561,6 +1486,25 @@ namespace ignite
         }
 
         ImGui::End();
+    }
+
+    void ScenePanel::ResizeFramebuffer(uint32_t width, uint32_t height)
+    {
+        m_SceneViewportRT->Resize(width, height);
+        m_CompositeViewportRT->Resize(width, height);
+        m_UIViewportRT->Resize(width, height);
+
+        m_UICameraRT->Resize(width, height);
+        m_SceneCameraRT->Resize(width, height);
+        m_CompositeCameraRT->Resize(width, height);
+
+        if (m_Scene)
+        {
+            m_Scene->Resize(width, height);
+        }
+
+        const float aspectRatio = static_cast<float>(width) / height;
+        m_Camera.UpdateMatrices(aspectRatio);
     }
 
     void ScenePanel::DebugRender()

@@ -42,7 +42,7 @@ project "IMGUI"
     includedirs {
         "%{THIRDPARTY_DIR}/IMGUI/",
         "%{THIRDPARTY_DIR}/SDL3/include",
-        "%{IncludeDir.NVRHI_VULKAN_HPP}",
+        "%{IncludeDir.NVRHI_VULKAN_HEADERS}",
     }
 
     --windows

@@ -182,11 +182,6 @@ namespace ignite {
         CreateFramebuffer();
     }
 
-    bool RenderTarget::ShouldResize(const uint32_t width, const uint32_t height) const
-    {
-        return m_CreateInfo.width != width || m_CreateInfo.height != height;
-    }
-
     Ref<Texture> RenderTarget::GetDepthAttachment()
     {
         return m_DepthAttachment;

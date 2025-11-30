@@ -55,6 +55,8 @@ namespace ignite
         void OnGuiRender() override;
         void RenderViewport();
 
+        void ResizeFramebuffer(uint32_t width, uint32_t height);
+
         void OnEvent(Event &event);
         bool OnMouseScrolledEvent(MouseScrolledEvent &event);
         bool OnMouseMovedEvent(MouseMovedEvent &event);
@@ -82,6 +84,8 @@ namespace ignite
 
         Entity SetSelectedEntity(Entity entity);
         Entity GetSelectedEntity();
+
+        glm::vec2 GetViewportSize() const { return m_ViewportData.rect.GetSize(); }
 
         const std::unordered_map<UUID, Entity> &GetSelectedEntities() { return m_SelectedEntities; }
 
@@ -122,7 +126,9 @@ namespace ignite
 			Rect rect = { 0, 0, 1, 1 };
 			glm::vec2 mousePos = glm::vec2(0.0f);
 			bool wantMouseDragging = false;
-		} m_ViewportData;
+		};
+
+        ViewportData m_ViewportData;
 
 		struct Data
 		{
