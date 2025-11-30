@@ -1,4 +1,9 @@
 VULKAN_SDK_PATH = os.getenv("VULKAN_SDK")
+if not VULKAN_SDK_PATH then
+    print("Error: VULKAN_SDK environment variable is not set!")
+    -- You might want to error() here to stop generation, but for now let's print
+end
+print("VULKAN_SDK_PATH: " .. tostring(VULKAN_SDK_PATH))
 
 --includedirs
 IncludeDir = {}
