@@ -36,11 +36,26 @@
 #include "stb_image_write.h"
 
 #include <cinttypes>
+#include <SDL3/SDL_dialog.h>
 
 #include "ignite/graphics/objects/shadow_map.hpp"
 
 namespace ignite
 {
+
+    namespace
+    {
+        const SDL_DialogFileFilter kSceneFileFilters[] =
+        {
+            { "Ignite Scene", "ixscene" },
+        };
+
+        const SDL_DialogFileFilter kProjectFileFilters[] =
+        {
+            {"Ignite Project", "ixproj"}
+        };
+    }
+
     ignite::EditorLayer *editorLayerInstance = nullptr;
 
     EditorLayer *EditorLayer::GetInstance()
@@ -106,6 +121,8 @@ namespace ignite
     void EditorLayer::OnUpdate(f32 deltaTime)
     {
         Layer::OnUpdate(deltaTime);
+
+        ProcessPendingFileLoading();
 
         Renderer::OnUpdate();
 
@@ -657,21 +674,18 @@ namespace ignite
 
     void EditorLayer::SaveSceneAs()
     {
-        std::string filepath = FileDialogs::SaveFile("Ignite Scene (*.ixscene)\0*.ixscene\0");
-        if (!filepath.empty())
-        {
-            m_CurrentSceneFilePath = filepath;
-            SaveScene(filepath);
-        }
+        SDL_ShowSaveFileDialog(OnSceneSaveFileSelected, this,
+            Application::GetInstance()->GetWindow()->GetWindowHandle(),
+            kSceneFileFilters, IM_ARRAYSIZE(kSceneFileFilters),
+            nullptr);
     }
 
     void EditorLayer::OpenScene()
     {
-        std::string filepath = FileDialogs::OpenFile("Ignite Scene (*.ixscene)\0*.ixscene\0");
-        if (!filepath.empty())
-        {
-            OpenScene(filepath);
-        }
+        SDL_ShowOpenFileDialog(OnSceneOpenFileSelected, this,
+            Application::GetInstance()->GetWindow()->GetWindowHandle(),
+            kSceneFileFilters, IM_ARRAYSIZE(kSceneFileFilters),
+            nullptr, false);
     }
 
     void EditorLayer::OpenScene(const std::filesystem::path &filepath)
@@ -717,19 +731,15 @@ namespace ignite
     {
     }
 
-    Ref<Project> EditorLayer::OpenProject()
+    void EditorLayer::OpenProject()
     {
-        const std::filesystem::path filepath = FileDialogs::OpenFile("Ignite Project (*.ixproj)\0*.ixproj\0");
-        Ref<Project> openedProject;
-        if (!filepath.empty())
-        {
-            openedProject = OpenProject(filepath);
-        }
-
-        return openedProject;
+        SDL_ShowOpenFileDialog(OnProjectOpenFileSelected, this,
+            Application::GetInstance()->GetWindow()->GetWindowHandle(),
+            kProjectFileFilters, IM_ARRAYSIZE(kProjectFileFilters),
+            nullptr, false);
     }
 
-    Ref<Project> EditorLayer::OpenProject(const std::filesystem::path &filepath)
+    void EditorLayer::OpenProject(const std::filesystem::path &filepath)
     {
         Ref<Project> openedProject = ProjectSerializer::Deserialize(filepath);
         if (openedProject)
@@ -761,8 +771,6 @@ namespace ignite
                 NewScene();
             }
         }
-
-        return openedProject;
     }
 
     void EditorLayer::OnScenePlay()
@@ -810,6 +818,164 @@ namespace ignite
         SetActiveScene(m_ActiveScene);
     }
 
+    void EditorLayer::OnSceneSaveFileSelected(void* userData, const char* const* filelist, int filter)
+    {
+        EditorLayer* editor = static_cast<EditorLayer*>(userData);
+        if (!editor)
+            return;
+
+        // Check for errors
+        if (filelist == nullptr)
+        {
+            const char* error = SDL_GetError();
+            LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
+            return;
+        }
+
+        // Check if user canceled
+        if (*filelist == nullptr)
+        {
+            return;
+        }
+
+        // Get the selected file path
+        std::string filepath = filelist[0];
+        if (!filepath.empty())
+        {
+            // Ensure the file has the correct extension
+            if (!filepath.ends_with(".ixscene"))
+            {
+                filepath += ".ixscene";
+            }
+
+            editor->m_CurrentSceneFilePath = filepath;
+
+            PendingFileLoading pf = { PendingFileLoading::SceneSave, filepath };
+            editor->m_PendingFileLoading.push(pf);
+        }
+    }
+
+    void EditorLayer::OnSceneOpenFileSelected(void* userData, const char* const* filelist, int filter)
+    {
+        EditorLayer* editor = static_cast<EditorLayer*>(userData);
+        if (!editor)
+            return;
+
+        // Check for errors
+        if (filelist == nullptr)
+        {
+            const char* error = SDL_GetError();
+            LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
+            return;
+        }
+
+        // Check if user canceled
+        if (*filelist == nullptr)
+        {
+            return;
+        }
+
+        // Get the selected file path
+        std::string filepath = filelist[0];
+        if (!filepath.empty())
+        {
+            PendingFileLoading pf = { PendingFileLoading::SceneOpen, filepath };
+            editor->m_PendingFileLoading.push(pf);
+        }
+    }
+
+    void EditorLayer::OnProjectSaveFileSelected(void* userData, const char* const* filelist, int filter)
+    {
+        EditorLayer* editor = static_cast<EditorLayer*>(userData);
+        if (!editor)
+            return;
+
+        // Check for errors
+        if (filelist == nullptr)
+        {
+            const char* error = SDL_GetError();
+            LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
+            return;
+        }
+
+        // Check if user canceled
+        if (*filelist == nullptr)
+        {
+            return;
+        }
+
+        // Get the selected file path
+        std::string filepath = filelist[0];
+        if (!filepath.empty())
+        {
+            // Ensure the file has the correct extension
+            if (!filepath.ends_with(".ixproj"))
+            {
+                filepath += ".ixproj";
+            }
+
+            PendingFileLoading pf = { PendingFileLoading::ProjectOpen, filepath };
+            editor->m_PendingFileLoading.push(pf);
+        }
+    }
+
+    void EditorLayer::OnProjectOpenFileSelected(void* userData, const char* const* filelist, int filter)
+    {
+        EditorLayer* editor = static_cast<EditorLayer*>(userData);
+        if (!editor)
+            return;
+
+        // Check for errors
+        if (filelist == nullptr)
+        {
+            const char* error = SDL_GetError();
+            LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
+            return;
+        }
+
+        // Check if user canceled
+        if (*filelist == nullptr)
+        {
+            return;
+        }
+
+        std::string filepath = filelist[0];
+        if (!filepath.empty())
+        {
+            PendingFileLoading pf = { PendingFileLoading::ProjectOpen, filepath };
+            editor->m_PendingFileLoading.push(pf);
+        }
+    }
+
+    void EditorLayer::ProcessPendingFileLoading()
+    {
+        while (!m_PendingFileLoading.empty())
+        {
+            auto& p = m_PendingFileLoading.front();
+
+            switch (p.type)
+            {
+                case PendingFileLoading::SceneOpen:
+                {
+                    OpenScene(p.filepath);
+                    break;
+                }
+                case PendingFileLoading::SceneSave:
+                {
+                    SaveScene(p.filepath);
+                    break;
+                }
+                case PendingFileLoading::ProjectOpen:
+                {
+                    OpenProject(p.filepath);
+                    break;
+                }
+            }
+
+            m_PendingFileLoading.pop();
+        }
+    }
+
     void EditorLayer::SettingsUI()
     {
         ImGui::Begin("Settings", &m_Data.settingsWindow);
@@ -819,7 +985,7 @@ namespace ignite
             m_ScenePanel->CameraSettingsUI();
 
             // Raster settings
-            static const char *rasterFillStr[2] = { "Solid", "Wireframe" };
+            static std::array<const char *, 2>rasterFillStr = { "Solid", "Wireframe" };
             const char *currentFillMode = rasterFillStr[static_cast<i32>(m_Data.rasterFillMode)];
             if (ImGui::BeginCombo("Fill", currentFillMode))
             {

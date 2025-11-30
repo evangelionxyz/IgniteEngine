@@ -40,6 +40,21 @@ namespace ignite
     class ContentBrowserPanel;
     class MaterialsPanel;
 
+    struct PendingFileLoading
+    {
+        enum Type : uint8_t
+        {
+            None = 0,
+            SceneOpen,
+            SceneSave,
+            ProjectOpen,
+            ProjectSave,
+        };
+
+        Type type = None;
+        std::filesystem::path filepath;
+    };
+
     class EditorLayer final : public Layer
     {
     private:
@@ -90,8 +105,8 @@ namespace ignite
         
         void SaveProject();
         void SaveProjectAs();
-        Ref<Project> OpenProject();
-        Ref<Project> OpenProject(const std::filesystem::path &filepath);
+        void OpenProject();
+        void OpenProject(const std::filesystem::path &filepath);
 
         void SetActiveScene(const Ref<Scene> &scene);
 
@@ -105,6 +120,15 @@ namespace ignite
         static EditorLayer *GetInstance();
 
     private:
+
+        static void OnSceneSaveFileSelected(void* userData, const char* const* filelist, int filter);
+        static void OnSceneOpenFileSelected(void* userData, const char* const* filelist, int filter);
+
+        static void OnProjectSaveFileSelected(void* userData, const char* const* filelist, int filter);
+        static void OnProjectOpenFileSelected(void* userData, const char* const* filelist, int filter);
+
+        void ProcessPendingFileLoading();
+
         void SettingsUI();
 
         Ref<ScenePanel> m_ScenePanel;
@@ -122,6 +146,8 @@ namespace ignite
         nvrhi::StagingTextureHandle m_MousePickingStagingTexture;
         nvrhi::StagingTextureHandle m_ScreenshotStagingTexture;
         Ref<CommandList > m_CommandList;
+
+        std::queue<PendingFileLoading> m_PendingFileLoading;
 
         glm::vec2 m_CurrentFramebufferSize;
             

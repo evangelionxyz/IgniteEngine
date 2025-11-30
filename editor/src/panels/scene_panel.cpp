@@ -1220,17 +1220,7 @@ namespace ignite
         m_IsHovered = ImGui::IsWindowHovered();
 
         // TOOLBAR: 
-        // const ImVec2 toolbarPadding = { 8.0f, 8.0f };
-        // ImGui::SetCursorScreenPos({ window->DC.CursorStartPos.x + toolbarPadding.x, window->DC.CursorStartPos.y + toolbarPadding.y });
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 12.0f, 5.0f });
-
         constexpr ImVec2 buttonSize = { 24.0f, 24.0f };
-        auto mode = m_Gizmo.GetMode();
-        std::string gizmoModeStr = mode == ImGuizmo::MODE::LOCAL ? "LOCAL" : "WORLD";
-        if (ImGui::Button(gizmoModeStr.c_str(), buttonSize))
-        {
-            m_Gizmo.SetMode(mode == ImGuizmo::MODE::LOCAL ? ImGuizmo::MODE::WORLD : ImGuizmo::MODE::LOCAL);
-        }
 
         State sceneState = EditorLayer::GetInstance()->GetState().sceneState;
         const bool isScenePlaying = sceneState == ignite::State::ScenePlay;
@@ -1289,7 +1279,35 @@ namespace ignite
             }
         }
 
-        ImGui::PopStyleVar(1);
+        ImGui::SameLine();
+        ImGui::TextUnformatted("Operation");
+        ImGui::SameLine();
+        static std::array<const char*, 3> kGizmoOperationLabels = { "Translate", "Rotate", "Scale" };
+        int operationIndex = 0;
+        switch (m_Gizmo.GetOperation())
+        {
+            case ImGuizmo::ROTATE: operationIndex = 1; break;
+            case ImGuizmo::SCALE: operationIndex = 2; break;
+            default: operationIndex = 0; break;
+        }
+        ImGui::SetNextItemWidth(140.0f);
+        if (ImGui::Combo("##GizmoOperation", &operationIndex, kGizmoOperationLabels.data(), kGizmoOperationLabels.size()))
+        {
+            auto op = operationIndex == 0 ? ImGuizmo::TRANSLATE : operationIndex == 1 ? ImGuizmo::ROTATE : ImGuizmo::SCALE;
+            m_Gizmo.SetOperation(op);
+        }
+        ImGui::SameLine();
+
+        ImGui::TextUnformatted("Mode");
+        ImGui::SameLine();
+        static std::array<const char *, 2> kGizmoModeLabels = { "Local", "World" };
+        int modeIndex = m_Gizmo.GetMode() == ImGuizmo::LOCAL ? 0 : 1;
+        ImGui::SetNextItemWidth(120.0f);
+        if (ImGui::Combo("##GizmoMode", &modeIndex, kGizmoModeLabels.data(), kGizmoModeLabels.size()))
+        {
+            auto mode = modeIndex == 0 ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
+            m_Gizmo.SetMode(mode);
+        }
 
         // Calculating Scene Viewport location
         const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
@@ -1313,9 +1331,9 @@ namespace ignite
             SceneRenderer::GetActive()->UpdateUIInput(screenMousePos, viewportPos, viewportSize, mousePressed);
         }
 
-        ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_SceneViewportRT->GetColorAttachment(0)->GetHandle().Get());     // Test scene RT
+        //ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_SceneViewportRT->GetColorAttachment(0)->GetHandle().Get());     // Test scene RT
         // ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_UIViewportRT->GetColorAttachment(0).Get());       // Test UI RT
-        // ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_CompositeViewportRT->GetColorAttachment(0).Get()); // Current composite RT
+        ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_CompositeViewportRT->GetColorAttachment(0)->GetHandle().Get()); // Current composite RT
         ImGui::Image(sceneImage, canvasSize);
         if (ImGui::BeginDragDropTarget())
         {
@@ -1520,7 +1538,7 @@ namespace ignite
 
         // =================================
         // Camera settings
-        static const char *cameraModeStr[2] = { "Orthographic", "Perspective" };
+        static std::array<const char *, 2> cameraModeStr = { "Orthographic", "Perspective" };
         const char *currentCameraModeStr = cameraModeStr[static_cast<i32>(m_Camera.projectionType)];
         if (ImGui::BeginCombo("Mode", currentCameraModeStr))
         {
@@ -1529,22 +1547,6 @@ namespace ignite
                 bool isSelected = strcmp(currentCameraModeStr, cameraModeStr[i]) == 0;
                 if (ImGui::Selectable(cameraModeStr[i], isSelected))
                 {
-                    // m_Camera.projectionType = static_cast<ICamera::Type>(i);
-
-                    // if (m_Camera.projectionType == ICamera::Type::Orthographic)
-                    {
-                        // m_CameraData.lastPosition = m_Camera.position;
-
-                        // m_Camera.position = { 0.0f, 0.0f, 3.0f };
-                        // m_Camera.zoom = 20.0f;
-                    }
-                    // else
-                    {
-                        //m_Camera.position = m_CameraData.lastPosition;
-                    }
-
-                    // m_Camera.UpdateProjectionMatrix();
-                    // m_Camera.UpdateViewMatrix();
                 }
 
                 if (isSelected)
@@ -1556,21 +1558,6 @@ namespace ignite
         }
 
         ImGui::DragFloat3("Position", &m_Camera.position[0], 0.025f);
-
-        // glm::vec2 yawPitch = { glm::degrees(m_Camera.yaw), glm::degrees(m_Camera.pitch) };
-        // if (ImGui::DragFloat2("Yaw/Pitch", &yawPitch.x, 1.0f))
-        // {
-        //     m_Camera.yaw = glm::radians(yawPitch.x);
-        //     m_Camera.pitch = glm::radians(yawPitch.y);
-		// 
-        //     m_Camera.UpdateOrbitPosition();
-        // }
-		// 
-        // if (m_Camera.projectionType == ICamera::Type::Orthographic)
-        // {
-        //     ImGui::DragFloat("Zoom", &m_Camera.zoom, 0.025f);
-        //     m_Camera.UpdateProjectionMatrix();
-        // }
     }
 
     template<typename T, typename UIFunction>
