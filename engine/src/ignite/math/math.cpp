@@ -26,22 +26,54 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 
+#include "ignite/scene/component.hpp"
+
 namespace ignite
 {
-    bool Math::DecomposeTransform(const glm::mat4 &in_transform, glm::vec3 &translation, glm::quat &out_orientation, glm::vec3 &out_scale)
+    glm::mat4 Math::ComposeTransformComponent(const Transform &transform)
+    {
+        const glm::mat4 translation = glm::translate(glm::mat4(1.0f), transform.translation);
+        const glm::mat4 rotation = glm::toMat4(transform.rotation);
+        const glm::mat4 scale = glm::scale(glm::mat4(1.0f), transform.scale);
+        return translation * rotation * scale;
+    }
+
+    void Math::DecomposeTransformComponent(const glm::mat4 &matrix, Transform &outTransform)
+    {
+        glm::vec3 scale;
+        glm::vec3 skew;
+        glm::vec4 perspective;
+        glm::quat orientation;
+        glm::vec3 translation;
+
+        if (!glm::decompose(matrix, scale, orientation, translation, skew, perspective))
+        {
+            translation = glm::vec3(0.0f);
+            orientation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+            scale = glm::vec3(1.0f);
+        }
+
+        orientation = glm::normalize(orientation);
+
+        outTransform.translation = translation;
+        outTransform.scale = scale;
+        outTransform.rotation = orientation;
+    }
+
+    bool Math::DecomposeTransform(const glm::mat4 &transform, glm::vec3 &translation, glm::quat &outOrientation, glm::vec3 &outScale)
     {
         // From glm::decompose in matrix_decompose.inl
 
         using namespace glm;
         using T = float;
 
-        mat4 LocalMatrix(in_transform);
+        mat4 LocalMatrix(transform);
 
         // Normalize the matrix.
         if (epsilonEqual(LocalMatrix[3][3], static_cast<float>(0), epsilon<T>()))
             return false;
 
-        // First, isolate perspective.  This is the messiest.
+        // First, isolate perspective. This is the messiest.
         if (
             epsilonNotEqual(LocalMatrix[0][3], static_cast<T>(0), epsilon<T>()) ||
             epsilonNotEqual(LocalMatrix[1][3], static_cast<T>(0), epsilon<T>()) ||
@@ -64,11 +96,11 @@ namespace ignite
                 Row[i][j] = LocalMatrix[i][j];
 
         // Compute X scale factor and normalize first row.
-        out_scale.x = length(Row[0]);
+        outScale.x = length(Row[0]);
         Row[0] = detail::scale(Row[0], static_cast<T>(1));
-        out_scale.y = length(Row[1]);
+        outScale.y = length(Row[1]);
         Row[1] = detail::scale(Row[1], static_cast<T>(1));
-        out_scale.z = length(Row[2]);
+        outScale.z = length(Row[2]);
         Row[2] = detail::scale(Row[2], static_cast<T>(1));
 
         // At this point, the matrix (in rows[]) is orthonormal.
@@ -86,23 +118,23 @@ namespace ignite
         }
     #endif
 
-        out_orientation.y = asin(-Row[0][2]);
-        if (cos(out_orientation.y) != 0)
+        outOrientation.y = asin(-Row[0][2]);
+        if (cos(outOrientation.y) != 0)
         {
-            out_orientation.x = atan2(Row[1][2], Row[2][2]);
-            out_orientation.z = atan2(Row[0][1], Row[0][0]);
+            outOrientation.x = atan2(Row[1][2], Row[2][2]);
+            outOrientation.z = atan2(Row[0][1], Row[0][0]);
         }
         else
         {
-            out_orientation.x = atan2(-Row[2][0], Row[1][1]);
-            out_orientation.z = 0;
+            outOrientation.x = atan2(-Row[2][0], Row[1][1]);
+            outOrientation.z = 0;
         }
 
 
         return true;
     }
 
-    bool Math::DecomposeTransformEuler(const glm::mat4 &transform, glm::vec3 &out_translation, glm::vec3 &out_rotation, glm::vec3 &out_scale)
+    bool Math::DecomposeTransformEuler(const glm::mat4 &transform, glm::vec3 &out_translation, glm::vec3 &out_rotation, glm::vec3 &outScale)
     {
         // From glm::decompose in matrix_decompose.inl
 
@@ -138,11 +170,11 @@ namespace ignite
                 Row[i][j] = LocalMatrix[i][j];
 
         // Compute X scale factor and normalize first row.
-        out_scale.x = length(Row[0]);
+        outScale.x = length(Row[0]);
         Row[0] = detail::scale(Row[0], static_cast<T>(1));
-        out_scale.y = length(Row[1]);
+        outScale.y = length(Row[1]);
         Row[1] = detail::scale(Row[1], static_cast<T>(1));
-        out_scale.z = length(Row[2]);
+        outScale.z = length(Row[2]);
         Row[2] = detail::scale(Row[2], static_cast<T>(1));
 
         // At this point, the matrix (in rows[]) is orthonormal.
@@ -247,77 +279,6 @@ namespace ignite
         return (discriminant > 0);
     }
 
-#if 0
-    physx::PxVec3 Math::GlmToPhysXVec3(const glm::vec3 &vec)
-    {
-        return physx::PxVec3{ vec.x, vec.y, vec.z };
-    }
-
-    physx::PxQuat Math::GlmToPhysXQuat(const glm::quat &quat)
-    {
-        return physx::PxQuat{ quat.x, quat.y, quat.z, quat.w };
-    }
-
-    glm::vec3 Math::PhysXToGlmVec3(const physx::PxVec3 &vec)
-    {
-        return glm::vec3{ vec.x, vec.y, vec.z };
-    }
-
-    glm::quat Math::PhysXToGlmQuat(const physx::PxQuat quat)
-    {
-        return glm::quat{ quat.w, quat.x, quat.y, quat.z };
-    }
-
-    physx::PxTransform Math::GlmToPhysXMatrix(const glm::mat4 &transform)
-    {
-        glm::vec3 position, rotation, scale;
-        Math::DecomposeTransformEuler(transform, position, rotation, scale);
-        return physx::PxTransform(GlmToPhysXVec3(position), GlmToPhysXQuat(rotation));
-    }
-
-    glm::vec3 Math::PhysXQuatToGlmVec3(const physx::PxQuat &quat)
-    {
-        glm::vec3 rotation;
-
-        using namespace glm;
-        using T = float;
-
-        mat4 LocalMatrix(toMat4(glm::quat(quat.w, quat.x, quat.y, quat.z)));
-        if (
-            epsilonNotEqual(LocalMatrix[0][3], static_cast<T>(0), epsilon<T>()) ||
-            epsilonNotEqual(LocalMatrix[1][3], static_cast<T>(0), epsilon<T>()) ||
-            epsilonNotEqual(LocalMatrix[2][3], static_cast<T>(0), epsilon<T>()))
-        {
-            LocalMatrix[0][3] = LocalMatrix[1][3] = LocalMatrix[2][3] = static_cast<T>(0);
-            LocalMatrix[3][3] = static_cast<T>(1);
-        }
-
-        vec3 Row[3];
-
-        for (length_t i = 0; i < 3; ++i)
-            for (length_t j = 0; j < 3; ++j)
-                Row[i][j] = LocalMatrix[i][j];
-
-        Row[0] = detail::scale(Row[0], static_cast<T>(1));
-        Row[1] = detail::scale(Row[1], static_cast<T>(1));
-        Row[2] = detail::scale(Row[2], static_cast<T>(1));
-
-        rotation.y = asin(-Row[0][2]);
-        if (cos(rotation.y) != 0)
-        {
-            rotation.x = atan2(Row[1][2], Row[2][2]);
-            rotation.z = atan2(Row[0][1], Row[0][0]);
-        }
-        else
-        {
-            rotation.x = atan2(-Row[2][0], Row[1][1]);
-            rotation.z = 0;
-        }
-
-        return rotation;
-    }
-#endif
-
     glm::mat4 Math::RemoveScale(const glm::mat4 &matrix)
     {
         glm::vec3 scale(
@@ -341,44 +302,45 @@ namespace ignite
         return lambda * log_split + (1.0f - lambda) * linear_split;
     }
 
-    void Math::ComputeCascadeMatrices(const glm::vec3 &camera_pos, const glm::mat4 &camera_view, const glm::mat4 &camera_projection, const glm::vec3 light_direction, i32 cascade_count, const std::vector<f32> &cascade_splits, std::vector<glm::mat4> &cascade_light_matrices)
+    void Math::ComputeCascadeMatrices(const glm::vec3 &cameraPos, const glm::mat4 &cameraView, const glm::mat4 &cameraProjection, const glm::vec3 lightDirection, i32 cascadedCount, const std::vector<f32> &cascedSplits, std::vector<glm::mat4> &cascadeLightMatrices)
     {
-        glm::mat4 light_view_matrix = glm::lookAt(-light_direction * 1000.0f, glm::vec3(0.0f), glm::vec3(0, 1, 0));
+        glm::mat4 light_view_matrix = glm::lookAt(-lightDirection * 1000.0f, glm::vec3(0.0f), glm::vec3(0, 1, 0));
 
-        for (i32 i = 0; i < cascade_count; ++i)
+        for (i32 i = 0; i < cascadedCount; ++i)
         {
-            glm::vec4 frustum_corners[8];
-            ExtractFrustumCorners(camera_view, camera_projection, cascade_splits[i - 1], cascade_splits[i], frustum_corners);
+            std::array<glm::vec4, 8> frustumCorners;
+            ExtractFrustumCorners(cameraView, cameraProjection, cascedSplits[i - 1], cascedSplits[i], frustumCorners.data());
 
-            glm::vec3 min_bounds = glm::vec3(FLT_MAX);
-            glm::vec3 max_bounds = glm::vec3(-FLT_MAX);
+            auto min_bounds = glm::vec3(FLT_MAX);
+            auto max_bounds = glm::vec3(-FLT_MAX);
 
             for (i32 j = 0; j < 8; ++j)
             {
-                glm::vec3 corner_light_space = glm::vec3(light_view_matrix * frustum_corners[j]);
+                glm::vec3 corner_light_space = glm::vec3(light_view_matrix * frustumCorners[j]);
                 min_bounds = glm::min(min_bounds, corner_light_space);
                 max_bounds = glm::min(max_bounds, corner_light_space);
             }
 
             glm::mat4 light_projection_matrix = glm::ortho(min_bounds.x, max_bounds.x, min_bounds.y, max_bounds.y, min_bounds.z, max_bounds.z);
-            cascade_light_matrices[i] = light_projection_matrix * light_view_matrix;
+            cascadeLightMatrices[i] = light_projection_matrix * light_view_matrix;
         }
     }
 
-    void Math::ExtractFrustumCorners(const glm::mat4 &view, const glm::mat4 &projection, f32 near_plane, f32 far_plane, glm::vec4 out_corners[8])
+    void Math::ExtractFrustumCorners(const glm::mat4 &view, const glm::mat4 &projection, f32 nearPlane, f32 farPlane, glm::vec4 outCorners[8])
     {
         glm::mat4 inverse_view_projection = glm::inverse(projection * view);
 
-        glm::vec4 ndc_corners[8] = {
-            {-1, -1, 0, 1}, {1, -1, 0, 1}, {-1, 1, 0, 1}, {1, 1, 0, 1},
-            {-1, -1, 1, 1}, {1, -1, 1, 1}, {-1, 1, 1, 1}, {1, 1, 1, 1},
+        std::array<glm::vec4, 8> ndcCorners =
+        {
+            glm::vec4{-1, -1, 0, 1}, {1, -1, 0, 1}, {-1, 1, 0, 1}, {1, 1, 0, 1},
+            glm::vec4{-1, -1, 1, 1}, {1, -1, 1, 1}, {-1, 1, 1, 1}, {1, 1, 1, 1},
         };
 
-        for (int i = 0; i < 8; i++)
+        for (size_t i = 0; i < ndcCorners.size(); i++)
         {
-            glm::vec4 world_corner = inverse_view_projection * ndc_corners[i];
+            glm::vec4 world_corner = inverse_view_projection * ndcCorners[i];
             world_corner /= world_corner.w;
-            out_corners[i] = world_corner;
+            outCorners[i] = world_corner;
         }
     }
 

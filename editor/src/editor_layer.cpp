@@ -1012,10 +1012,12 @@ namespace ignite
     {
         ImGui::Begin("Settings", &m_Data.settingsWindow);
 
-        if (ImGui::TreeNodeEx("Pipeline"))
-        {
-            m_ScenePanel->CameraSettingsUI();
+        constexpr ImGuiTreeNodeFlags treeFlags = ImGuiTreeNodeFlags_DefaultOpen;
+        
+        m_ScenePanel->UISettings();
 
+        if (ImGui::TreeNodeEx("Pipeline", treeFlags))
+        {
             // Raster settings
             static std::array<const char *, 2>rasterFillStr = { "Solid", "Wireframe" };
             const char *currentFillMode = rasterFillStr[static_cast<i32>(m_Data.rasterFillMode)];
@@ -1033,7 +1035,6 @@ namespace ignite
                     if (isSelected)
                     {
                         ImGui::SetItemDefaultFocus();
-                        break;
                     }
                 }
                 ImGui::EndCombo();
@@ -1045,7 +1046,7 @@ namespace ignite
         if (m_ActiveScene)
         {
             // Scene
-            if (ImGui::TreeNodeEx("Scene Data"))
+            if (ImGui::TreeNodeEx("Scene Data", treeFlags))
             {
                 if (ImGui::Button("Load HDR Texture"))
                 {

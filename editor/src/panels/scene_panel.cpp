@@ -64,8 +64,8 @@ namespace ignite
     {
         Application* app = Application::GetInstance();
 
-        float width = static_cast<float>(app->GetCreateInfo().width);
-        float height = static_cast<float>(app->GetCreateInfo().height);
+        auto width = static_cast<float>(app->GetCreateInfo().width);
+        auto height = static_cast<float>(app->GetCreateInfo().height);
 
         m_Camera = EditorCamera("ScenePanel-Editor Camera");
 
@@ -137,7 +137,6 @@ namespace ignite
         }
         
         RenderViewport();
-        DebugRender();
     }
 
     void ScenePanel::OnUpdate(f32 deltaTime)
@@ -483,20 +482,20 @@ namespace ignite
             {
                 Rigidbody2D &c = selectedEntity.GetComponent<Rigidbody2D>();
 
-                const char *bodyTypeStr[3] = { "Static", "Dynamic", "Kinematic" };
+                std::array<const char *, 3> bodyTypeStr = { "Static", "Dynamic", "Kinematic" };
                 const char *currentBodyType = bodyTypeStr[static_cast<i32>(c.type)];
 
                 if (ImGui::BeginCombo("Body Type", currentBodyType))
                 {
-                    for (i32 i = 0; i < std::size(bodyTypeStr); ++i)
+                    for (size_t i = 0; i < bodyTypeStr.size(); ++i)
                     {
-                        if (ImGui::Selectable(bodyTypeStr[i]))
+                        bool isSelected = strcmp(bodyTypeStr[i], currentBodyType) == 0;
+                        if (ImGui::Selectable(bodyTypeStr[i], isSelected))
                         {
                             c.type = static_cast<Body2DType>(i);
-                            break;
                         }
 
-                        if ((strcmp(bodyTypeStr[i], currentBodyType) == 0))
+                        if (isSelected)
                         {
                             ImGui::SetItemDefaultFocus();
                         }
@@ -522,10 +521,6 @@ namespace ignite
                     if (ImGui::DragFloat("Angular Damping", &c.angularDamping, 0.025f))
                         b2Body_SetAngularDamping(c.bodyId, c.angularDamping);
 
-
-                    if (ImGui::Checkbox("Fixed Rotation", &c.fixedRotation))
-                        b2Body_SetFixedRotation(c.bodyId, c.fixedRotation);
-
                     if (ImGui::Checkbox("Awake", &c.isAwake))
                         b2Body_SetAwake(c.bodyId, c.isAwake);
 
@@ -544,7 +539,6 @@ namespace ignite
                     ImGui::DragFloat("Gravity", &c.gravityScale, 0.025f, FLT_MIN, FLT_MAX);
                     ImGui::DragFloat("Linear Damping", &c.linearDamping, 0.0f, FLT_MAX);
                     ImGui::DragFloat("Angular Damping", &c.angularDamping, 0.025f, 0.0f, FLT_MAX);
-                    ImGui::Checkbox("Fixed Rotation", &c.fixedRotation);
                     ImGui::Checkbox("Awake", &c.isAwake);
                     ImGui::Checkbox("Enabled", &c.isEnabled);
                     ImGui::Checkbox("Sleep", &c.isEnableSleep);
@@ -561,17 +555,15 @@ namespace ignite
                 {
                     for (size_t i = 0; i < std::size(projectionTypeStr); ++i)
                     {
-                        bool selected = false;
-                        if (ImGui::Selectable(projectionTypeStr[i]))
+                        bool isSelected = false;
+                        if (ImGui::Selectable(projectionTypeStr[i], &isSelected))
                         {
                             c.camera.projectionType = static_cast<ProjectionType>(i);
                             float aspect = static_cast<float>(m_Scene->viewportWidth) / static_cast<float>(m_Scene->viewportHeight);
                             c.camera.UpdateMatrices(aspect);
-
-                            selected = true;
                         }
 
-                        if (selected)
+                        if (isSelected)
                         {
                             ImGui::SetItemDefaultFocus();
                         }
@@ -740,7 +732,7 @@ namespace ignite
                 Script &c = selectedEntity.GetComponent<Script>();
 
                 bool scriptClassExist = ScriptEngine::GetInstance()->EntityClassExists(c.className);
-                bool is_selected = false;
+                bool isSelected = false;
 
                 if (!scriptClassExist)
                 {
@@ -753,15 +745,18 @@ namespace ignite
                 // drop-down
                 if (ImGui::BeginCombo("Script Class", currentScriptClasses.c_str()))
                 {
-                    for (int i = 0; i < scriptStorage.size(); i++)
+                    for (size_t i = 0; i < scriptStorage.size(); i++)
                     {
-                        is_selected = currentScriptClasses == scriptStorage[i];
-                        if (ImGui::Selectable(scriptStorage[i].c_str(), is_selected))
+                        isSelected = currentScriptClasses == scriptStorage[i];
+                        if (ImGui::Selectable(scriptStorage[i].c_str(), isSelected))
                         {
                             currentScriptClasses = scriptStorage[i];
                             c.className = scriptStorage[i];
                         }
-                        if (is_selected) ImGui::SetItemDefaultFocus();
+                        if (isSelected)
+                        {
+                            ImGui::SetItemDefaultFocus();
+                        }
                     }
                     ImGui::EndCombo();
                 }
@@ -769,7 +764,7 @@ namespace ignite
                 if (ImGui::Button("Detach"))
                 {
                     c.className = "Detached";
-                    is_selected = false;
+                    isSelected = false;
                 }
 
                 bool detached = c.className == "Detached";
@@ -1287,7 +1282,7 @@ namespace ignite
             default: operationIndex = 0; break;
         }
         ImGui::SetNextItemWidth(140.0f);
-        if (ImGui::Combo("##GizmoOperation", &operationIndex, kGizmoOperationLabels.data(), kGizmoOperationLabels.size()))
+        if (ImGui::Combo("##GizmoOperation", &operationIndex, kGizmoOperationLabels.data(), static_cast<int>(kGizmoOperationLabels.size())))
         {
             auto op = operationIndex == 0 ? ImGuizmo::TRANSLATE : operationIndex == 1 ? ImGuizmo::ROTATE : ImGuizmo::SCALE;
             m_Gizmo.SetOperation(op);
@@ -1299,7 +1294,7 @@ namespace ignite
         static std::array<const char *, 2> kGizmoModeLabels = { "Local", "World" };
         int modeIndex = m_Gizmo.GetMode() == ImGuizmo::LOCAL ? 0 : 1;
         ImGui::SetNextItemWidth(120.0f);
-        if (ImGui::Combo("##GizmoMode", &modeIndex, kGizmoModeLabels.data(), kGizmoModeLabels.size()))
+        if (ImGui::Combo("##GizmoMode", &modeIndex, kGizmoModeLabels.data(), static_cast<int>(kGizmoModeLabels.size())))
         {
             auto mode = modeIndex == 0 ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
             m_Gizmo.SetMode(mode);
@@ -1521,39 +1516,68 @@ namespace ignite
         m_Camera.UpdateMatrices(aspectRatio);
     }
 
-    void ScenePanel::DebugRender()
+    void ScenePanel::UISettings()
     {
-        /*ImGui::Begin("Debug Render");
+        // ImGui::Text("Mouse Pos: %.2f, %.2f Entity: (%d)", m_ViewportData.mousePos.x, m_ViewportData.mousePos.y, static_cast<entt::entity>(GetSelectedEntity()));
 
-        ImGui::End();*/
-    }
-
-    void ScenePanel::CameraSettingsUI()
-    {
-        ImGui::Text("Mouse Pos: %.2f, %.2f Entity: (%d)", m_ViewportData.mousePos.x, m_ViewportData.mousePos.y, static_cast<entt::entity>(GetSelectedEntity()));
-
-        // =================================
-        // Camera settings
-        static std::array<const char *, 2> cameraModeStr = { "Orthographic", "Perspective" };
-        const char *currentCameraModeStr = cameraModeStr[static_cast<i32>(m_Camera.projectionType)];
-        if (ImGui::BeginCombo("Mode", currentCameraModeStr))
+        if (ImGui::TreeNodeEx("Camera", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            for (size_t i = 0; i < std::size(cameraModeStr); ++i)
+            static std::array<const char *, 2> cameraModeStr = { "Orthographic", "Perspective" };
+            const char *currentCameraModeStr = cameraModeStr[static_cast<i32>(m_Camera.projectionType)];
+            if (ImGui::BeginCombo("Mode", currentCameraModeStr))
             {
-                bool isSelected = strcmp(currentCameraModeStr, cameraModeStr[i]) == 0;
-                if (ImGui::Selectable(cameraModeStr[i], isSelected))
+                for (size_t i = 0; i < std::size(cameraModeStr); ++i)
                 {
-                }
+                    bool isSelected = strcmp(currentCameraModeStr, cameraModeStr[i]) == 0;
+                    if (ImGui::Selectable(cameraModeStr[i], isSelected))
+                    {
+                        // Set projection type
+                        m_Camera.projectionType = static_cast<ProjectionType>(i);
 
-                if (isSelected)
+                        // Recalculate matrices
+                        const glm::vec2 &size = m_ViewportData.rect.GetSize();
+                        const float aspectRatio = size.x / size.y;
+                        m_Camera.UpdateMatrices(aspectRatio);
+                    }
+
+                    if (isSelected)
+                    {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
+            ImGui::DragFloat3("Position", &m_Camera.position[0], 0.025f);
+
+            glm::vec2 yawPitch = { m_Camera.yaw, m_Camera.pitch };
+            if (ImGui::DragFloat2("Yaw/Pitch", &yawPitch.x, 0.025f, -89.0f, 89.0f))
+            {
+                m_Camera.yaw = yawPitch.x;
+                m_Camera.pitch = yawPitch.y;
+            }
+
+            if (m_Camera.projectionType == ProjectionType::Perspective)
+            {
+                ImGui::DragFloat("FOV", &m_Camera.fov, 0.25f, 20.0f, 120.0f);
+                ImGui::DragFloat("Distance", &m_Camera.distance, 0.025f);
+
+                const glm::vec2 &size = m_ViewportData.rect.GetSize();
+                const float aspectRatio = size.x / size.y;
+                m_Camera.UpdateMatrices(aspectRatio);
+            }
+            else if (m_Camera.projectionType == ProjectionType::Orthographic)
+            {
+                if (ImGui::DragFloat("Ortho size", &m_Camera.orthoSize, 0.025f))
                 {
-                    ImGui::SetItemDefaultFocus();
+                    const glm::vec2 &size = m_ViewportData.rect.GetSize();
+                    const float aspectRatio = size.x / size.y;
+                    m_Camera.UpdateMatrices(aspectRatio);
                 }
             }
-            ImGui::EndCombo();
-        }
 
-        ImGui::DragFloat3("Position", &m_Camera.position[0], 0.025f);
+            ImGui::TreePop();
+        }
     }
 
     template<typename T, typename UIFunction>
@@ -1569,7 +1593,7 @@ namespace ignite
 
             ImGui::PushID(static_cast<int>(compID));
 
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2 { 0.5f, 6.0f });
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2 { 0.0f, 2.5f });
             ImGui::Separator();
 
             const bool open = ImGui::TreeNodeEx((const char *)(uint32_t *)(uint64_t *)&compID, treeNdeFlags, name.c_str());
@@ -1657,7 +1681,6 @@ namespace ignite
 
             // m_Camera.position += m_Camera.GetForwardDirection() * deltaTime * m_CameraData.moveSpeed * -camMoveAxis.y;
             // m_Camera.position += m_Camera.GetRightDirection() * deltaTime * m_CameraData.moveSpeed * camMoveAxis.x;
-
 
             LOG_INFO(j->ToString());
         }

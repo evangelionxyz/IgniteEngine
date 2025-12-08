@@ -200,7 +200,6 @@ namespace ignite {
                         sr.AddKeyValue("GravityScale", comp.gravityScale);
                         sr.AddKeyValue("LinearDamping", comp.linearDamping);
                         sr.AddKeyValue("AngularDamping", comp.angularDamping);
-                        sr.AddKeyValue("FixedRotation", comp.fixedRotation);
                         sr.AddKeyValue("IsAwake", comp.isAwake);
                         sr.AddKeyValue("IsEnabled", comp.isEnabled);
                         sr.AddKeyValue("IsEnableSleep", comp.isEnableSleep);
@@ -552,7 +551,6 @@ namespace ignite {
                 comp.gravityScale = node["GravityScale"].as<float>();
                 comp.linearDamping = node["LinearDamping"].as<float>();
                 comp.angularDamping = node["AngularDamping"].as<float>();
-                comp.fixedRotation = node["FixedRotation"].as<bool>();
                 comp.isAwake = node["IsAwake"].as<bool>();
                 comp.isEnabled = node["IsEnabled"].as<bool>();
                 comp.isEnableSleep = node["IsEnableSleep"].as<bool>();

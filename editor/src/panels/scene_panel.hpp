@@ -76,7 +76,7 @@ namespace ignite
         void RenderEntityNode(Entity entity);
         
         void RenderInspector();
-        void CameraSettingsUI();
+        void UISettings();
         void UpdateCameraInput(f32 deltaTime);
         void DestroyEntity(Entity entity);
         void DuplicateSelectedEntity();
@@ -101,8 +101,6 @@ namespace ignite
         void RenderComponent(const std::string &name, Entity entity, UIFunction uiFunction, bool allowedToRemove = true);
 
     private:
-        void DebugRender();
-
         EditorCamera m_Camera;
         Ref<Scene> m_Scene;
         Gizmo m_Gizmo;

@@ -70,7 +70,6 @@ namespace ignite
             bodyDef.linearDamping    = rb.linearDamping;
             bodyDef.isEnabled        = rb.isEnabled;
             bodyDef.isAwake          = rb.isAwake;
-            bodyDef.fixedRotation    = rb.fixedRotation;
 
             rb.bodyId = b2CreateBody(m_WorldId, &bodyDef);
             b2Body_SetUserData(rb.bodyId, static_cast<void *>(&e));
@@ -120,7 +119,6 @@ namespace ignite
         bodyDef.linearDamping    = rb.linearDamping;
         bodyDef.isEnabled        = rb.isEnabled;
         bodyDef.isAwake          = rb.isAwake;
-        bodyDef.fixedRotation    = rb.fixedRotation;
 
         rb.bodyId = b2CreateBody(m_WorldId, &bodyDef);
         b2Body_SetUserData(rb.bodyId, static_cast<void *>(&e));

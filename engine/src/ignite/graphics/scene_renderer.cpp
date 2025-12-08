@@ -335,7 +335,7 @@ namespace ignite {
 	{
 		m_CommandList = CommandList::Create();
 
-		std::array<VertexScreen, 6> vertices
+		std::array vertices
 		{
 			VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
 			VertexScreen{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },
