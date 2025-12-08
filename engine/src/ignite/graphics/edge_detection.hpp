@@ -21,7 +21,9 @@
 * SOFTWARE.
 */
 
-#pragma once
+#ifndef EDGE_DETECTION_HPP
+#define EDGE_DETECTION_HPP
+
 #include "ignite/core/types.hpp"
 
 #include <glm/glm.hpp>
@@ -31,6 +33,7 @@
 namespace ignite
 {
     class Shader;
+    class Texture;
 
     struct EdgeDetectionParameter
     {
@@ -51,12 +54,12 @@ namespace ignite
         ~EdgeDetection();
 
         void CreatePipeline();
-        void UpdateBindingSet(const nvrhi::TextureHandle &sceneTexture, const nvrhi::TextureHandle &objectIDTexture, const nvrhi::TextureHandle &depth);
+        void UpdateBindingSet(const Ref<Texture> &sceneTexture, const Ref<Texture> &objectIDTexture, const Ref<Texture> &depth);
         void ExecuteCompute(nvrhi::ICommandList *commandList, const EdgeDetectionParameter &params, uint32_t width, uint32_t height);
         void CreateOutputTexture(uint32_t width, uint32_t height);
 
         nvrhi::BufferHandle GetSelectedIDBuffer() { return m_SelectedIDBuffer; }
-        nvrhi::TextureHandle GetOutputTexture() const { return m_OutputTexture; }
+        Ref<Texture> GetOutputTexture() const { return m_OutputTexture; }
 
         static Ref<EdgeDetection> Create();
 
@@ -69,9 +72,11 @@ namespace ignite
         nvrhi::BufferHandle m_SelectedIDBuffer;
         nvrhi::BindingLayoutHandle m_BindingLayout;
         nvrhi::BindingSetHandle m_BindingSet;
-        nvrhi::SamplerHandle m_LinearSampler;
 
         // Texture
-        nvrhi::TextureHandle m_OutputTexture;
+        Ref<Texture> m_OutputTexture;
+    	nvrhi::SamplerHandle m_Sampler;
     };
 }
+
+#endif

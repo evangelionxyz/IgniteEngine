@@ -12,7 +12,6 @@ project "NVRHI"
     files {
         "%{THIRDPARTY_DIR}/NVRHI/src/common/format-info.cpp",
         "%{THIRDPARTY_DIR}/NVRHI/src/common/misc.cpp",
-        "%{THIRDPARTY_DIR}/NVRHI/src/common/sparse-bitset.cpp",
         "%{THIRDPARTY_DIR}/NVRHI/src/common/state-tracking.cpp",
         "%{THIRDPARTY_DIR}/NVRHI/src/common/utils.cpp",
         "%{THIRDPARTY_DIR}/NVRHI/src/common/aftermath.cpp",
@@ -38,7 +37,8 @@ project "NVRHI"
 
     includedirs {
         "%{THIRDPARTY_DIR}/NVRHI/include/",
-        "%{THIRDPARTY_DIR}/NVRHI/thirdparty/Vulkan-Headers/include/",
+        "%{IncludeDir.NVRHI_VULKAN_HEADERS}",
+        "%{IncludeDir.NVRHI_DIRECTX_HEADERS}",
     }
 
     defines {

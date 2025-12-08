@@ -8,6 +8,8 @@
 #define RENDER_MODE_METALLIC 3
 #define RENDER_MODE_ROUGHNESS 4
 
+#define NUM_CASCADES 4
+
 struct Camera
 {
     float4x4 projection;
@@ -21,11 +23,10 @@ struct Scene
     float2 lightAngle;
     float sunAngularRadius;
     int renderMode;
-    
+    int debugShadow;
     float exposure;
     float gamma;
     float ambient;
-    float padding;            // Explicit padding for 16-byte alignment
 };
 
 struct Object
@@ -43,23 +44,41 @@ struct Material
     float occlusionStrength;
 };
 
+struct CascadesShadows
+{
+    float4x4 lightViewProjection[NUM_CASCADES];
+    
+    float4 cascadeSplits; // view-space distances (camera space z positive forward magnitude)
+    
+    float shadowStrength;
+    float minBias;
+    float maxBias;
+    float pcfRadius;
+
+    int cascadeIndex;
+    float padding[3];
+};
+
 // push constant buffers
 
 // set 0
 cbuffer CameraBuffer      : register(b0, space0) { Camera camera; }
 cbuffer ObjectBuffer      : register(b1, space0) { Object object; }
-
 cbuffer SceneBuffer       : register(b2, space0) { Scene scene; }
+cbuffer CascadesBuffer    : register(b3, space0) { CascadesShadows csm; }
 
 // set 1
 cbuffer MaterialBuffer    : register(b0, space1) { Material material; }
+
 Texture2D baseColorTexture         : register(t0, space1);
 Texture2D emissiveTexture          : register(t1, space1);
 Texture2D metallicRoughnessTexture : register(t2, space1);
 Texture2D normalMapTexture         : register(t3, space1);
 Texture2D occlusionTexture         : register(t4, space1);
 Texture2D environmentMapTexture    : register(t5, space1);
+Texture2DArray shadowMap           : register(t6, space1);
 SamplerState sampler0              : register(s0, space1);
+SamplerState sampler1              : register(s1, space1);
 
 struct PSInput
 {
@@ -76,52 +95,88 @@ struct PSOutput
     float4 color : SV_TARGET0;
 };
 
-float3 CalcDirLight(float3 ldirection, float3 lcolor, float3 normal, float3 viewDirection, float3 diffTexColor, float shadow)
-{
-    float3 lightDirection = normalize(-ldirection);
-    float3 normalizedViewDir = normalize(viewDirection);
-    float ambientStrength = 0.1f;
-    float3 ambientColor = ambientStrength * lcolor;
-    float diffuse = max(dot(normal, lightDirection), 0.0f);
-    float3 diffuseColor = diffuse * lcolor;
-
-    float specularStrength = 0.5f;
-    float3 reflectDir = reflect(-lightDirection, normal);
-    float specular = pow(max(dot(normalizedViewDir, reflectDir), 0.0f), 32.0f);
-    float3 specularColor = specularStrength * specular * lcolor;
-    return (ambientColor + diffuseColor + specularColor) * diffTexColor;
-}
-
 float3 GenNormalFromMap(float3x3 TBN, float2 uv)
 {
     float3 normalMap = normalMapTexture.Sample(sampler0, uv).rgb * 2.0f - 1.0f;
     return normalize(mul(TBN, normalMap));
 }
 
+int GetCascadeIndex(float viewDepth)
+{
+    if (viewDepth < csm.cascadeSplits.x) return 0;
+    if (viewDepth < csm.cascadeSplits.y) return 1;
+    if (viewDepth < csm.cascadeSplits.z) return 2;
+    return 3;
+}
+
+float SampleShadow(float3 worldPos, float3 normal, float3 lightDirection)
+{
+    float3 viewPos = mul(camera.view, float4(worldPos, 1.0f)).xyz;
+    float viewDepth = -viewPos.z;
+    int cascadeIdx = GetCascadeIndex(viewDepth);
+    cascadeIdx = clamp(cascadeIdx, 0, NUM_CASCADES - 1);
+
+    float4 lightSpace = mul(csm.lightViewProjection[cascadeIdx], float4(worldPos, 1.0f));
+    float3 ndc = lightSpace.xyz / lightSpace.w;
+    float2 shadowUV = ndc.xy * 0.5f + 0.5f;
+#if defined(TARGET_VULKAN) || defined(SPIRV)
+    shadowUV.y = 1.0f - shadowUV.y;
+    float shadowDepth = ndc.z;
+#else
+    float shadowDepth = ndc.z * 0.5f + 0.5f;
+#endif
+    float3 shadowCoord = float3(shadowUV, shadowDepth);
+
+    if (shadowCoord.x < 0.0f || shadowCoord.x > 1.0f ||
+        shadowCoord.y < 0.0f || shadowCoord.y > 1.0f)
+    {
+        return 1.0f;
+    }
+
+    float cosTheta = saturate(dot(normal, -lightDirection));
+    float bias = lerp(csm.maxBias, csm.minBias, cosTheta);
+
+    uint width, height, layers;
+    shadowMap.GetDimensions(width, height, layers);
+    float2 texelSize = 1.0f / float2(width, height);
+    float sampleRadius = max(csm.pcfRadius, 0.0f);
+    int kernelRadius = max(2, (int)ceil(sampleRadius));
+
+    float visibility = 0.0f;
+    float sampleCount = 0.0f;
+
+    for (int x = -kernelRadius; x <= kernelRadius; ++x)
+    {
+        for (int y = -kernelRadius; y <= kernelRadius; ++y)
+        {
+            float2 offset = float2(x, y) * texelSize * sampleRadius;
+            float2 sampleUV = clamp(shadowCoord.xy + offset, 0.0f, 1.0f);
+            float depth = shadowMap.SampleLevel(sampler0, float3(sampleUV, cascadeIdx), 0.0f).r;
+            visibility += (shadowCoord.z - bias <= depth) ? 1.0f : 0.0f;
+            sampleCount += 1.0f;
+        }
+    }
+
+    visibility /= max(sampleCount, 1.0f);
+    return saturate(lerp(1.0f, visibility, csm.shadowStrength));
+}
+
 PSOutput main(PSInput input)
 {
     PSOutput result;
-    
-    float3 N = normalize(input.normal);
-    float3 T = normalize(input.tangent);
-    float3 B = normalize(input.bitangent);
-    
-    float3x3 TBN = transpose(float3x3(T, B, N));
 
+    float3 N = normalize(input.normal);
     float3 viewDirection = normalize(camera.position.xyz - input.worldPos);
 
-    // calculate sun direction
     float azimuth = scene.lightAngle.x;
     float elevation = scene.lightAngle.y;
     float3 sunDirection = float3(
-        cos(elevation) * cos(azimuth),
+        cos(elevation) * sin(azimuth),
         sin(elevation),
-        cos(elevation) * sin(azimuth)
+        cos(elevation) * cos(azimuth)
     );
 
     float3 lightDirection = normalize(sunDirection);
-    float sunAngularRadius = scene.sunAngularRadius;
-    float sunSolidAngle = 2.0 * M_PI * (1.0 - cos(sunAngularRadius)); // steradians
 
     float3 emissiveColor = emissiveTexture.Sample(sampler0, input.uv).rgb * material.emissiveFactor.rgb;
     float3 metallicRoughnessColor = metallicRoughnessTexture.Sample(sampler0, input.uv).rgb;
@@ -136,12 +191,7 @@ PSOutput main(PSInput input)
         float3 diffuseColor = baseColor * (1.0f - metallic);
         float3 specularColor = lerp(float3(0.04f, 0.04f, 0.04f), baseColor, metallic);
 
-        // User normal mapping if available
-        float3 finalNormal = normalize(input.normal * normalMap);
-        // if (length(normalMap) > 0.01)
-        // {
-        //     finalNormal = GenNormalFromMap(TBN, input.uv);
-        // }
+        float3 finalNormal = normalize(N * normalMap);
 
         float3 reflectDirection = reflect(-viewDirection, finalNormal);
         float3 reflectRadiance = SampleSphericalMap(environmentMapTexture, sampler0, reflectDirection);
@@ -150,10 +200,9 @@ PSOutput main(PSInput input)
         float reflectionStrength = lerp(0.01f, 1.0f, metallic) * (1.0f - roughness);
         float3 F = SchlickFresnel(viewDirection, finalNormal, specularColor);
         float NdotR = saturate(dot(finalNormal, reflectDirection));
-        float3 reflectedSpecular = GGXReflect(finalNormal, reflectDirection, viewDirection, reflectRadiance, specularColor, roughness);
-        reflectedSpecular *= reflectionStrength * NdotR * F;
+        float3 reflectedSpecular = GGXReflect(finalNormal, reflectDirection, viewDirection,
+            reflectRadiance, specularColor, roughness) * reflectionStrength * NdotR * F;
 
-        // direct light
         float3 irradiance = scene.lightColor.rgb * scene.lightColor.w;
         float3 directLighting = GGX(
             finalNormal,
@@ -165,16 +214,42 @@ PSOutput main(PSInput input)
             roughness
         );
 
-        // Ambient lighting
-        float3 ambient = diffuseColor * scene.ambient;
+        float shadowTerm = SampleShadow(input.worldPos, finalNormal, lightDirection);
+        directLighting *= shadowTerm;
+
+        float baseAmbient = 0.03f;
+        float occScale = 0.35f;
+        float shadowAmbientFactor = lerp(0.0f, 1.0f, shadowTerm);
+
+        float3 ambient = diffuseColor * (baseAmbient + occScale) * shadowAmbientFactor;
+        reflectedSpecular *= shadowTerm;
 
         float3 finalColor = directLighting + ambient + reflectedSpecular;
+
         if (length(emissiveColor) > 0.01f)
         {
             finalColor += emissiveColor * material.emissiveFactor.rgb * material.emissiveFactor.a;
         }
 
-        result.color = float4(finalColor, 1.0f);
+        if (scene.debugShadow == 2)
+        {
+            result.color = float4(shadowTerm, shadowTerm, shadowTerm, 1.0f);
+            return result;
+        }
+
+        if (scene.debugShadow == 1)
+        {
+            float3 viewPos = mul(camera.view, float4(input.worldPos, 1.0f)).xyz;
+            float viewDepth = -viewPos.z;
+            int ci = GetCascadeIndex(viewDepth);
+            float3 dbg = ci == 0 ? float3(1.0f, 0.0f, 0.0f)
+                : (ci == 1 ? float3(0.0f, 1.0f, 0.0f)
+                : (ci == 2 ? float3(0.0f, 0.0f, 1.0f)
+                : float3(1.0f, 1.0f, 0.0f)));
+            finalColor *= dbg;
+        }
+
+        result.color = float4(FilmicTonemap(finalColor, scene.exposure, scene.gamma), 1.0f);
     }
     else if (scene.renderMode == RENDER_MODE_DIFFUSE)
     {
@@ -183,22 +258,18 @@ PSOutput main(PSInput input)
     }
     else if (scene.renderMode == RENDER_MODE_NORMALS)
     {
-        float3 finalNormal = N * 0.5 + 0.5f;
-        if (length(normalMap) > 0.01)
-        {
-            finalNormal = GenNormalFromMap(TBN, input.uv) * N * 0.5f + 0.5f;
-        }
+        float3 finalNormal = normalize(N * normalMap) * 0.5f + 0.5f;
         result.color = float4(finalNormal, 1.0f);
     }
     else if (scene.renderMode == RENDER_MODE_METALLIC)
     {
-        float metallic = metallicRoughnessTexture.Sample(sampler0, input.uv).b;
-        result.color = float4(metallic, metallic, metallic, 1.0f);
+        float metallicValue = metallicRoughnessTexture.Sample(sampler0, input.uv).b;
+        result.color = float4(metallicValue, metallicValue, metallicValue, 1.0f);
     }
     else if (scene.renderMode == RENDER_MODE_ROUGHNESS)
     {
-        float roughness = metallicRoughnessTexture.Sample(sampler0, input.uv).g;
-        result.color = float4(roughness, roughness, roughness, 1.0f);
+        float roughnessValue = metallicRoughnessTexture.Sample(sampler0, input.uv).g;
+        result.color = float4(roughnessValue, roughnessValue, roughnessValue, 1.0f);
     }
 
     return result;

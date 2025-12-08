@@ -54,7 +54,8 @@ namespace ignite
         physics2D = CreateScope<Physics2D>(this);
         physics = CreateScope<JoltScene>(this);
 
-        m_ConstantBuffer = ConstantBuffer::Create(sizeof(SceneParameters), false, 1, "[SceneParameters]");
+        m_SceneGPUDataBuffer = ConstantBuffer::Create(sizeof(Scene_GPUData), false, 1, "[Scene GPU Data]");
+		m_CSMGPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMap_GPUData), false, 1, "[CSM GPU Data]");
     }
 
     Scene::~Scene()
@@ -239,7 +240,7 @@ namespace ignite
 
     void Scene::WriteBuffer(nvrhi::ICommandList* cmd)
     {
-        m_ConstantBuffer->SetData(cmd, Buffer((void*)&this->params, sizeof(SceneParameters)));
+        m_SceneGPUDataBuffer->SetData(cmd, Buffer((void*)&this->gpuData, sizeof(Scene_GPUData)));
     }
 
     Entity Scene::GetPrimaryCamera()
@@ -297,11 +298,6 @@ namespace ignite
     }
 
     template<>
-    void Scene::OnComponentAdded<SkeletalMesh>(Entity entity, SkeletalMesh &comp)
-    {
-    }
-
-    template<>
     void Scene::OnComponentAdded<Rigidbody2D>(Entity entity, Rigidbody2D &comp)
     {
     }
@@ -352,7 +348,12 @@ namespace ignite
     }
 
     template<>
-    void Scene::OnComponentAdded<MeshComponent>(Entity entity, MeshComponent& comp)
+    void Scene::OnComponentAdded<MeshFilter>(Entity entity, MeshFilter &comp)
+    {
+    }
+
+    template<>
+    void Scene::OnComponentAdded<StaticMeshRenderer>(Entity entity, StaticMeshRenderer& comp)
     {
     }
 

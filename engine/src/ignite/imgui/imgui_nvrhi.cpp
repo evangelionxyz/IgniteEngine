@@ -27,6 +27,12 @@
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/graphics_pipeline.hpp"
 
+// ImGui color channel shifts for ImU32 RGBA packed format
+#define IM_COL32_R_SHIFT    0
+#define IM_COL32_G_SHIFT    8
+#define IM_COL32_B_SHIFT    16
+#define IM_COL32_A_SHIFT    24
+
 namespace ignite
 {
     bool ImGui_NVRHI::UpdateFontTexture()
@@ -121,12 +127,7 @@ namespace ignite
 
         drawState.viewport.scissorRects.resize(1);
 
-        nvrhi::VertexBufferBinding vbufBinding;
-        vbufBinding.buffer = vertexBuffer;
-        vbufBinding.slot = 0;
-        vbufBinding.offset = 0;
-        drawState.vertexBuffers.push_back(vbufBinding);
-
+        drawState.vertexBuffers = { { vertexBuffer, 0, 0 } };
         drawState.indexBuffer.buffer = indexBuffer;
         drawState.indexBuffer.format = sizeof(ImDrawIdx) == 2 ? nvrhi::Format::R16_UINT : nvrhi::Format::R32_UINT;
         drawState.indexBuffer.offset = 0;
@@ -218,13 +219,6 @@ namespace ignite
         auto vertexShader = Shader::Create("resources/shaders/imgui.vertex.hlsl", ShaderType::Vertex);
         auto pixelShader = Shader::Create("resources/shaders/imgui.pixel.hlsl", ShaderType::Pixel);
 
-        nvrhi::VertexAttributeDesc vertexAttribLayout[] =
-        {
-            { "POSITION", nvrhi::Format::RG32_FLOAT, 1, 0, offsetof(ImDrawVert, pos), sizeof(ImDrawVert), false },
-            { "TEXCOORD", nvrhi::Format::RG32_FLOAT, 1, 0, offsetof(ImDrawVert, uv), sizeof(ImDrawVert), false },
-            { "COLOR", nvrhi::Format::RGBA8_UNORM, 1, 0, offsetof(ImDrawVert, col), sizeof(ImDrawVert), false }
-        };
-
         nvrhi::BindingLayoutDesc layoutDesc;
         layoutDesc.visibility = nvrhi::ShaderType::All;
         layoutDesc.bindings =
@@ -235,10 +229,6 @@ namespace ignite
         };
 
         auto bindingLayout = m_Device->createBindingLayout(layoutDesc);
-
-        GraphicsPipelineCreateInfo createInfo;
-        createInfo.attributes = vertexAttribLayout;
-        createInfo.attributeCount = std::size(vertexAttribLayout);
 
         GraphicsPipelineParams params;
         params.fillMode = nvrhi::RasterFillMode::Solid;
@@ -258,10 +248,7 @@ namespace ignite
         params.enableDepthStencil = false;
 
         graphicsPipeline = GraphicsPipeline::Create();
-        graphicsPipeline->SetShaders({ vertexShader, pixelShader })
-            .AddBindingLayout(bindingLayout)
-            .Build(framebuffer, params, createInfo);
-
+        graphicsPipeline->SetShaders({ vertexShader, pixelShader }).AddBindingLayout(bindingLayout).Build(framebuffer, params);
         return graphicsPipeline;
     }
 
@@ -291,8 +278,11 @@ namespace ignite
     {
         ImDrawData *drawData = ImGui::GetDrawData();
 
-        if (!ReallocateBuffer(vertexBuffer, drawData->TotalVtxCount * sizeof(ImDrawVert),
-            (drawData->TotalVtxCount + 5000) * sizeof(ImDrawVert),
+        // Calculate size needed for expanded vertices
+        size_t expandedVertexSize = drawData->TotalVtxCount * sizeof(ImGuiVertexData);
+        
+        if (!ReallocateBuffer(vertexBuffer, expandedVertexSize,
+            (drawData->TotalVtxCount + 5000) * sizeof(ImGuiVertexData),
             false))
         {
             return false;
@@ -305,24 +295,41 @@ namespace ignite
             return false;
         }
 
-        imguiVertexBuffer.resize(vertexBuffer->getDesc().byteSize / sizeof(ImDrawVert));
+        // Resize buffers to match expanded vertex format
+        imguiVertexBuffer.resize(vertexBuffer->getDesc().byteSize / sizeof(ImGuiVertexData));
         imguiIndexBuffer.resize(indexBuffer->getDesc().byteSize / sizeof(ImDrawIdx));
 
-        ImDrawVert *vtxDst = &imguiVertexBuffer[0];
-        ImDrawIdx *idxDst = &imguiIndexBuffer[0];
+        ImGuiVertexData *vtxDst = imguiVertexBuffer.data();
+        ImDrawIdx *idxDst = imguiIndexBuffer.data();
 
         for (i32 n = 0; n < drawData->CmdListsCount; ++n)
         {
             const ImDrawList *cmdList = drawData->CmdLists[n];
-            std::memcpy(vtxDst, cmdList->VtxBuffer.Data, cmdList->VtxBuffer.Size * sizeof(ImDrawVert));
+            
+            // Convert ImDrawVert to ImGuiVertexData (expand ImU32 color to float4)
+            for (i32 i = 0; i < cmdList->VtxBuffer.Size; ++i)
+            {
+                const ImDrawVert& src = cmdList->VtxBuffer[i];
+                ImGuiVertexData& dst = vtxDst[i];
+                
+                dst.position = glm::vec2(src.pos.x, src.pos.y);
+                dst.texCoord = glm::vec2(src.uv.x, src.uv.y);
+                
+                // Convert packed RGBA ImU32 to float4
+                dst.color.r = ((src.col >> IM_COL32_R_SHIFT) & 0xFF) / 255.0f;
+                dst.color.g = ((src.col >> IM_COL32_G_SHIFT) & 0xFF) / 255.0f;
+                dst.color.b = ((src.col >> IM_COL32_B_SHIFT) & 0xFF) / 255.0f;
+                dst.color.a = ((src.col >> IM_COL32_A_SHIFT) & 0xFF) / 255.0f;
+            }
+            
             std::memcpy(idxDst, cmdList->IdxBuffer.Data, cmdList->IdxBuffer.Size * sizeof(ImDrawIdx));
 
             vtxDst += cmdList->VtxBuffer.Size;
             idxDst += cmdList->IdxBuffer.Size;
         }
 
-        commandList->writeBuffer(vertexBuffer, &imguiVertexBuffer[0], vertexBuffer->getDesc().byteSize);
-        commandList->writeBuffer(indexBuffer, &imguiIndexBuffer[0], indexBuffer->getDesc().byteSize);
+        commandList->writeBuffer(vertexBuffer, imguiVertexBuffer.data(), vertexBuffer->getDesc().byteSize);
+        commandList->writeBuffer(indexBuffer, imguiIndexBuffer.data(), indexBuffer->getDesc().byteSize);
 
         return true;
     }

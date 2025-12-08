@@ -36,25 +36,58 @@
 #include "stb_image_write.h"
 
 #include <cinttypes>
+#include <SDL3/SDL_dialog.h>
+
+#include "ignite/graphics/objects/shadow_map.hpp"
 
 namespace ignite
 {
-    ignite::EditorLayer *editorLayerInstance = nullptr;
+    namespace
+    {
+        const SDL_DialogFileFilter kSceneFileFilters[] =
+        {
+            { "Ignite Scene (ixscene)", "ixscene" },
+        };
+
+        const SDL_DialogFileFilter kProjectFileFilters[] =
+        {
+            {"Ignite Project (ixproj)", "ixproj"}
+        };
+
+        const SDL_DialogFileFilter kMeshFileFilters[] =
+        {
+            { "3D Model Files (gltf;glb)", "gltf;glb" }
+        };
+    }
+
+    ignite::EditorLayer *s_EditorLayerInstance = nullptr;
 
     EditorLayer *EditorLayer::GetInstance()
     {
-        return editorLayerInstance;
+        return s_EditorLayerInstance;
+    }
+
+    void EditorLayer::OnDialogLoadMesh(Ref<MeshInstance> &outMesh)
+    {
+        SDL_ShowOpenFileDialog(OnMeshFileSelected,
+            &outMesh,
+            Application::GetInstance()->GetWindow()->GetWindowHandle(),
+            kMeshFileFilters,
+            std::size(kMeshFileFilters),
+            nullptr,
+            false
+        );
     }
 
     EditorLayer::EditorLayer(const std::string &name)
         : Layer(name)
     {
-        editorLayerInstance = this;
+        s_EditorLayerInstance = this;
     }
 
     EditorLayer::~EditorLayer()
     {
-        editorLayerInstance = nullptr;
+        s_EditorLayerInstance = nullptr;
     }
 
     void EditorLayer::OnAttach()
@@ -85,7 +118,7 @@ namespace ignite
         {
             std::string args = cmdArgs[i];
 
-            char projectArgs[] = "-project=";
+            char projectArgs[] = "--project=";
             if (args.find(projectArgs) != std::string::npos)
             {
                 std::string projectFilepath = args.substr(std::size(projectArgs) - 1, args.size() - std::size(projectArgs) + 1);
@@ -93,35 +126,7 @@ namespace ignite
             }
         }
 
-        if (!m_ActiveProject)
-        {
-            if (!OpenProject())
-            {
-				Application::Shutdown();
-            }
-        }
-
-        if (m_ActiveScene)
-        {
-            {
-                Entity modelEntity = SceneManager::CreateEntity(m_ActiveScene.get(), "Model 1", EntityType_Mesh);
-                MeshComponent& mc = modelEntity.AddComponent<MeshComponent>();
-                mc.model = Model::Create("resources/models/DamagedHelmet.gltf");
-                mc.model->UpdateBindingSet(m_ActiveScene.get());
-            }
-
-            {
-                Entity modelEntity = SceneManager::CreateEntity(m_ActiveScene.get(), "Model 2", EntityType_Mesh);
-                MeshComponent& mc = modelEntity.AddComponent<MeshComponent>();
-                mc.model = Model::Create("resources/scene.glb");
-                mc.model->UpdateBindingSet(m_ActiveScene.get());
-            }
-        }
-
-        if (m_ActiveProject)
-        {
-            Application::GetInstance()->GetWindow()->Show(); // Show window after initialization
-        }
+        Application::GetInstance()->GetWindow()->Show();
     }
 
     void EditorLayer::OnDetach()
@@ -129,9 +134,11 @@ namespace ignite
         Layer::OnDetach();
     }
 
-    void EditorLayer::OnUpdate(f32 deltaTime)
+    void EditorLayer::OnUpdate(float deltaTime)
     {
         Layer::OnUpdate(deltaTime);
+
+        ProcessPendingFileLoading();
 
         Renderer::OnUpdate();
 
@@ -280,6 +287,16 @@ namespace ignite
         if (!m_ActiveScene)
             return;
 
+        // Perform Resize
+        auto framebufferSize = m_ScenePanel->GetSceneViewportRT()->GetSize();
+        auto currentViewportSize = m_ScenePanel->GetViewportSize();
+        if (currentViewportSize.x > 0.0f && currentViewportSize.y > 0
+            && (framebufferSize.x != currentViewportSize.x || framebufferSize.y != currentViewportSize.y))
+        {
+            m_ScenePanel->ResizeFramebuffer(currentViewportSize.x, currentViewportSize.y);
+        }
+
+        // Scene Render
         switch (m_Data.sceneState)
         {
         case State::SceneSimulate:
@@ -325,18 +342,18 @@ namespace ignite
         // Create staging texture for read-back
         if (m_Data.isPickingEntity && false) // FIXME: No mouse picking
         {
-            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(1)->getDesc();
+            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(1)->GetHandle()->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_MousePickingStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            cmd->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(1), nvrhi::TextureSlice());
+            cmd->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(1)->GetHandle(), nvrhi::TextureSlice());
         }
 
         if (m_Data.takeScreenshot)
         {
-            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(0)->getDesc();
+            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(0)->GetHandle()->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_ScreenshotStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            cmd->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(0), nvrhi::TextureSlice());
+            cmd->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(0)->GetHandle(), nvrhi::TextureSlice());
         }
 
         m_CommandList->Submit();
@@ -621,7 +638,8 @@ namespace ignite
             ImGui::End();
             
             // Render GUI
-            SettingsUI();
+            UISettings();
+            UIImportMeshes();
         }
 
         ImGui::End(); // end dock space
@@ -673,21 +691,18 @@ namespace ignite
 
     void EditorLayer::SaveSceneAs()
     {
-        std::string filepath = FileDialogs::SaveFile("Ignite Scene (*.ixscene)\0*.ixscene\0");
-        if (!filepath.empty())
-        {
-            m_CurrentSceneFilePath = filepath;
-            SaveScene(filepath);
-        }
+        SDL_ShowSaveFileDialog(OnSceneSaveFileSelected, this,
+            Application::GetInstance()->GetWindow()->GetWindowHandle(),
+            kSceneFileFilters, IM_ARRAYSIZE(kSceneFileFilters),
+            nullptr);
     }
 
     void EditorLayer::OpenScene()
     {
-        std::string filepath = FileDialogs::OpenFile("Ignite Scene (*.ixscene)\0*.ixscene\0");
-        if (!filepath.empty())
-        {
-            OpenScene(filepath);
-        }
+        SDL_ShowOpenFileDialog(OnSceneOpenFileSelected, this,
+            Application::GetInstance()->GetWindow()->GetWindowHandle(),
+            kSceneFileFilters, IM_ARRAYSIZE(kSceneFileFilters),
+            nullptr, false);
     }
 
     void EditorLayer::OpenScene(const std::filesystem::path &filepath)
@@ -733,19 +748,15 @@ namespace ignite
     {
     }
 
-    Ref<Project> EditorLayer::OpenProject()
+    void EditorLayer::OpenProject()
     {
-        const std::filesystem::path filepath = FileDialogs::OpenFile("Ignite Project (*.ixproj)\0*.ixproj\0");
-        Ref<Project> openedProject;
-        if (!filepath.empty())
-        {
-            openedProject = OpenProject(filepath);
-        }
-
-        return openedProject;
+        SDL_ShowOpenFileDialog(OnProjectOpenFileSelected, this,
+            Application::GetInstance()->GetWindow()->GetWindowHandle(),
+            kProjectFileFilters, IM_ARRAYSIZE(kProjectFileFilters),
+            nullptr, false);
     }
 
-    Ref<Project> EditorLayer::OpenProject(const std::filesystem::path &filepath)
+    void EditorLayer::OpenProject(const std::filesystem::path &filepath)
     {
         Ref<Project> openedProject = ProjectSerializer::Deserialize(filepath);
         if (openedProject)
@@ -777,8 +788,6 @@ namespace ignite
                 NewScene();
             }
         }
-
-        return openedProject;
     }
 
     void EditorLayer::OnScenePlay()
@@ -826,7 +835,180 @@ namespace ignite
         SetActiveScene(m_ActiveScene);
     }
 
-    void EditorLayer::SettingsUI()
+    void EditorLayer::OnSceneSaveFileSelected(void* userData, const char* const* filelist, int filter)
+    {
+        // Check for errors
+        if (filelist == nullptr)
+        {
+            const char* error = SDL_GetError();
+            LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
+            return;
+        }
+
+        // Check if user canceled
+        if (*filelist == nullptr)
+        {
+            return;
+        }
+
+        // Get the selected file path
+        std::string filepath = filelist[0];
+        if (!filepath.empty())
+        {
+            // Ensure the file has the correct extension
+            if (!filepath.ends_with(".ixscene"))
+            {
+                filepath += ".ixscene";
+            }
+
+            s_EditorLayerInstance->m_CurrentSceneFilePath = filepath;
+
+            PendingFileLoading pf = { PendingFileLoading::SceneSave, filepath };
+            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
+        }
+    }
+
+    void EditorLayer::OnSceneOpenFileSelected(void* userData, const char* const* filelist, int filter)
+    {
+        // Check for errors
+        if (filelist == nullptr)
+        {
+            const char* error = SDL_GetError();
+            LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
+            return;
+        }
+
+        // Check if user canceled
+        if (*filelist == nullptr)
+        {
+            return;
+        }
+
+        // Get the selected file path
+        std::string filepath = filelist[0];
+        if (!filepath.empty())
+        {
+            PendingFileLoading pf = { PendingFileLoading::SceneOpen, filepath };
+            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
+        }
+    }
+
+    void EditorLayer::OnProjectSaveFileSelected(void* userData, const char* const* filelist, int filter)
+    {
+        // Check for errors
+        if (filelist == nullptr)
+        {
+            const char* error = SDL_GetError();
+            LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
+            return;
+        }
+
+        // Check if user canceled
+        if (*filelist == nullptr)
+        {
+            return;
+        }
+
+        // Get the selected file path
+        std::string filepath = filelist[0];
+        if (!filepath.empty())
+        {
+            // Ensure the file has the correct extension
+            if (!filepath.ends_with(".ixproj"))
+            {
+                filepath += ".ixproj";
+            }
+
+            PendingFileLoading pf = { PendingFileLoading::ProjectOpen, filepath, userData };
+            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
+        }
+    }
+
+    void EditorLayer::OnProjectOpenFileSelected(void *userData, const char *const *filelist, int filter)
+    {
+        // Check for errors
+        if (filelist == nullptr)
+        {
+            const char* error = SDL_GetError();
+            LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
+            return;
+        }
+
+        // Check if user canceled
+        if (*filelist == nullptr)
+        {
+            return;
+        }
+
+        std::string filepath = filelist[0];
+        if (!filepath.empty())
+        {
+            PendingFileLoading pf = { PendingFileLoading::ProjectOpen, filepath, userData };
+            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
+        }
+    }
+
+    void EditorLayer::OnMeshFileSelected(void *userData, const char *const *filelist, int filter)
+    {
+        if (filelist == nullptr)
+        {
+            const char *error = SDL_GetError();
+            LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
+            return;
+        }
+
+        if (*filelist == nullptr)
+        {
+            return;
+        }
+
+        std::string filepath = filelist[0];
+        if (!filepath.empty())
+        {
+            PendingFileLoading pf = { PendingFileLoading::MeshLoad, filepath, userData };
+            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
+        }
+    }
+
+    void EditorLayer::ProcessPendingFileLoading()
+    {
+        while (!m_PendingFileLoading.empty())
+        {
+            auto& p = m_PendingFileLoading.front();
+
+            switch (p.type)
+            {
+                case PendingFileLoading::SceneOpen:
+                {
+                    OpenScene(p.filepath);
+                    break;
+                }
+                case PendingFileLoading::SceneSave:
+                {
+                    SaveScene(p.filepath);
+                    break;
+                }
+                case PendingFileLoading::ProjectOpen:
+                {
+                    OpenProject(p.filepath);
+                    break;
+                }
+                case PendingFileLoading::MeshLoad:
+                {
+                    if (p.userData)
+                    {
+                        m_MeshInstanceData = p.userData;
+                        m_LoadedMeshScene = MeshLoader::LoadSceneGraphFromGLTF(p.filepath.generic_string());
+                    }
+                    break;
+                }
+            }
+
+            m_PendingFileLoading.pop();
+        }
+    }
+
+    void EditorLayer::UISettings()
     {
         ImGui::Begin("Settings", &m_Data.settingsWindow);
 
@@ -834,10 +1016,8 @@ namespace ignite
         {
             m_ScenePanel->CameraSettingsUI();
 
-            ImGui::SeparatorText("Pipeline");
-
             // Raster settings
-            static const char *rasterFillStr[2] = { "Solid", "Wireframe" };
+            static std::array<const char *, 2>rasterFillStr = { "Solid", "Wireframe" };
             const char *currentFillMode = rasterFillStr[static_cast<i32>(m_Data.rasterFillMode)];
             if (ImGui::BeginCombo("Fill", currentFillMode))
             {
@@ -853,6 +1033,7 @@ namespace ignite
                     if (isSelected)
                     {
                         ImGui::SetItemDefaultFocus();
+                        break;
                     }
                 }
                 ImGui::EndCombo();
@@ -880,33 +1061,77 @@ namespace ignite
                     }
                 }
 
+            	ImGui::SeparatorText("Cascaded Shadow Maps");
+
+            	// Display each cascade individually in a 2x2 grid
+            	const float imageSize = ImGui::GetContentRegionAvail().x;
+            	// Get the texture handle for this specific cascade layer
+            	Ref<Texture> depthTex = m_SceneRenderer.GetActive()->GetCascadedShadowMapDepthTexture();
+            	if (m_SceneRenderer.GetActive() && depthTex)
+            	{
+            		// This will be implemented - for now showing placeholder
+            		ImTextureID tex = reinterpret_cast<ImTextureID>(depthTex->GetHandle().Get());
+            		ImGui::Image(tex, ImVec2(imageSize, imageSize), ImVec2(0, 1), ImVec2(1, 0));
+            	}
+            	else
+            	{
+            		ImGui::Dummy(ImVec2(imageSize, imageSize));
+            		ImGui::Text("No shadow map");
+            	}
                 ImGui::Separator();
+                auto &sceneData = m_ActiveScene->gpuData;
             
-                ImGui::ColorEdit3("Color", &m_ActiveScene->params.sunColor.x);
-                ImGui::DragFloat("Intensity", &m_ActiveScene->params.sunColor.w, 0.025f, 0.0f, 10.0f);
-
-                ImGui::SliderFloat("Azimuth", &m_ActiveScene->params.sungAngles.x, 0.0f, 2.0f * glm::pi<float>());
-                ImGui::SliderFloat("Elevation", &m_ActiveScene->params.sungAngles.y, -1.0f, 1.0f);
-
-                float angularRadius = glm::degrees(m_ActiveScene->params.sunAngularRadius);
+                ImGui::ColorEdit3("Color", &sceneData.sunColor.x);
+                ImGui::DragFloat("Intensity", &sceneData.sunColor.w, 0.025f, 0.0f, 10.0f);
+                ImGui::SliderFloat("Azimuth", &sceneData.sungAngles.x, -glm::radians(90.0f), glm::radians(90.0f));
+                ImGui::SliderFloat("Elevation", &sceneData.sungAngles.y, 0.0f, glm::radians(90.0f));
+                float angularRadius = glm::degrees(sceneData.sunAngularRadius);
                 if (ImGui::SliderFloat("Angular Size", &angularRadius, 0.0f, 45.0f))
                 {
-                    m_ActiveScene->params.sunAngularRadius = glm::radians(angularRadius);
+                    sceneData.sunAngularRadius = glm::radians(angularRadius);
                 }
+                ImGui::DragFloat("Exposure", &sceneData.exposure, 0.005f, 0.1f, 10.0f);
+                ImGui::DragFloat("Gamma", &sceneData.gamma, 0.005f, 0.1f, 10.0f);
+                ImGui::DragFloat("Ambient", &sceneData.ambient, 0.005f, 0.01f, 100.0f);
 
-                ImGui::DragFloat("Exposure", &m_ActiveScene->params.exposure, 0.005f, 0.1f, 10.0f);
-                ImGui::DragFloat("Gamma", &m_ActiveScene->params.gamma, 0.005f, 0.1f, 10.0f);
-                ImGui::DragFloat("Ambient", &m_ActiveScene->params.ambient, 0.005f, 0.01f, 100.0f);
+                ImGui::SeparatorText("Shadows");
+                {
+                    auto csm = m_SceneRenderer.GetCascadedShadowMap();
+                    auto &data = csm->GetGPUData();
+                    ImGui::SliderFloat("Strength", &data.shadowStrength, 0.0f, 1.0f);
+                    ImGui::DragFloat("Min Bias", &data.minBias, 0.0001f, 0.0f, 0.1f, "%.6f");
+                    ImGui::DragFloat("Max Bias", &data.maxBias, 0.0001f, 0.0f, 0.1f, "%.6f");
+                    ImGui::SliderFloat("PCF Radius", &data.pcfRadius, 0.1f, 4.0f);
+
+                    static const char* resolutionLabels[] = {"Low - 512px", "Medium - 1024px", "High - 2048px", "Ultra - 4096px"};
+                    int cascadeQualityIndex = static_cast<int>(csm->GetQuality());
+
+                    if (ImGui::Combo("Resolution", &cascadeQualityIndex, resolutionLabels, IM_ARRAYSIZE(resolutionLabels)))
+                    {
+                        auto quality = static_cast<ShadowMapQuality>(cascadeQualityIndex);
+                        csm->Resize(quality);
+                    }
+
+                    ImGui::Separator();
+                    ImGui::Text("Shadow Debug");
+                    ImGui::RadioButton("Off##ShadowDbg", &sceneData.debugShadow, 0); ImGui::SameLine();
+                    ImGui::SameLine();
+                    ImGui::RadioButton("Cascades", &sceneData.debugShadow, 1); ImGui::SameLine();
+                    ImGui::SameLine();
+                    ImGui::RadioButton("Visibility", &sceneData.debugShadow, 2);
+                }
 
                 if (ImGui::CollapsingHeader("Render Mode", ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    int mode = (int)m_ActiveScene->params.renderMode;
-                    if (ImGui::RadioButton("Color", mode == RENDER_MODE_COLOR)) mode = RENDER_MODE_COLOR;
-                    if (ImGui::RadioButton("Diffuse", mode == RENDER_MODE_DIFFUSE)) mode = RENDER_MODE_DIFFUSE;
-                    if (ImGui::RadioButton("Normals", mode == RENDER_MODE_NORMALS)) mode = RENDER_MODE_NORMALS;
-                    if (ImGui::RadioButton("Metallic", mode == RENDER_MODE_METALLIC)) mode = RENDER_MODE_METALLIC;
-                    if (ImGui::RadioButton("Roughness", mode == RENDER_MODE_ROUGHNESS)) mode = RENDER_MODE_ROUGHNESS;
-                    m_ActiveScene->params.renderMode = mode;
+                    if (ImGui::RadioButton("Color", sceneData.renderMode == RENDER_MODE_COLOR)) sceneData.renderMode = RENDER_MODE_COLOR;
+                    ImGui::SameLine();
+                    if (ImGui::RadioButton("Diffuse", sceneData.renderMode == RENDER_MODE_DIFFUSE)) sceneData.renderMode = RENDER_MODE_DIFFUSE;
+                    ImGui::SameLine();
+                    if (ImGui::RadioButton("Normals", sceneData.renderMode == RENDER_MODE_NORMALS)) sceneData.renderMode = RENDER_MODE_NORMALS;
+                    ImGui::SameLine();
+                    if (ImGui::RadioButton("Metallic", sceneData.renderMode == RENDER_MODE_METALLIC)) sceneData.renderMode = RENDER_MODE_METALLIC;
+                    ImGui::SameLine();
+                    if (ImGui::RadioButton("Roughness", sceneData.renderMode == RENDER_MODE_ROUGHNESS)) sceneData.renderMode = RENDER_MODE_ROUGHNESS;
                 }
 
                 ImGui::TreePop();
@@ -1057,4 +1282,69 @@ namespace ignite
             ImGui::End();
         }
     }
+
+    void EditorLayer::UIImportMeshes()
+    {
+        if (m_LoadedMeshScene.has_value())
+        {
+            ImGui::Begin("Import Mesh");
+
+            std::vector<const char *> meshNames;
+            meshNames.reserve(m_LoadedMeshScene->flatMeshes.size());
+            for (size_t i = 0; i < m_LoadedMeshScene->flatMeshes.size(); ++i)
+            {
+                meshNames.push_back(m_LoadedMeshScene->flatMeshes[i]->GetName().c_str());
+            }
+
+            const char *currentMeshName = meshNames[m_SelectedMesh];
+
+            if (ImGui::BeginCombo("Mesh", currentMeshName))
+            {
+                for (size_t i = 0; i < meshNames.size(); ++i)
+                {
+                    bool isSelected = std::strcmp(currentMeshName, meshNames[i]) == 0;
+                    if (ImGui::Selectable(meshNames[i], isSelected))
+                    {
+                        m_SelectedMesh = i;
+                    }
+
+                    if (isSelected)
+                    {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+
+                ImGui::EndCombo();
+            }
+
+            if (ImGui::Button("Cancel"))
+            {
+                m_SelectedMesh = 0;
+                m_LoadedMeshScene.reset();
+                m_MeshInstanceData = nullptr;
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button("Import"))
+            {
+                Ref<MeshInstance> &mInstance = *static_cast<Ref<MeshInstance> *>(m_MeshInstanceData);
+                mInstance = m_LoadedMeshScene->flatMeshes[m_SelectedMesh];
+                mInstance->SetMeshIndex(m_SelectedMesh);
+
+                Application::SubmitToMainThread([mesh = mInstance, scene = m_ActiveScene]()
+                {
+                    mesh->UpdateBindingSet(scene.get());
+                    return true;
+                });
+
+                m_SelectedMesh = 0;
+                m_LoadedMeshScene.reset();
+                m_MeshInstanceData = nullptr;
+            }
+
+            ImGui::End();
+        }
+
+    }
+
 }

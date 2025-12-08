@@ -22,3 +22,6 @@
 [submodule "thirdparty/sdl"]
 	path = thirdparty/sdl
 	url = https://github.com/libsdl-org/SDL.git
+[submodule "thirdparty/IGNSERVER"]
+	path = thirdparty/IGNSERVER
+	url = https://github.com/evangelionxyz/Ignite-Server.git

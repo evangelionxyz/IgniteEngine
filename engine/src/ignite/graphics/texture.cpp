@@ -21,12 +21,13 @@
 * SOFTWARE.
 */
 
+#include "mip_generator.hpp"
+
 #include "texture.hpp"
+
 #include "ignite/core/logger.hpp"
-
-#include <stb_image.h>
-
 #include "ignite/core/application.hpp"
+#include <stb_image.h>
 
 namespace ignite
 {
@@ -52,7 +53,6 @@ namespace ignite
         memcpy(buffer.data, flipped.data(), flipped.size());
     }
 
-
     Texture::Texture(const TextureCreateInfo& createInfo)
         : m_CreateInfo(createInfo)
     {
@@ -64,9 +64,9 @@ namespace ignite
     {
         CreateTextureHandle();
 
-        const int channels = 4;
-        int rowPitch = m_CreateInfo.width * channels;
-        int depthPitch = rowPitch * m_CreateInfo.height;
+        const uint32_t channels = 4;
+        const uint32_t rowPitch = m_CreateInfo.width * channels;
+        uint32_t depthPitch = rowPitch * m_CreateInfo.height;
 
         {
             auto device = Application::GetGraphicsDevice();
@@ -90,17 +90,23 @@ namespace ignite
         {
             case nvrhi::Format::RGBA8_UNORM:
             {
-                int channelsOut;
-                uint8_t *pixelData = stbi_load(filepath.generic_string().c_str(), &m_CreateInfo.width, &m_CreateInfo.height, &channelsOut, 4);
-                m_Buffer = Buffer(pixelData, m_CreateInfo.width * m_CreateInfo.height * channels);
+                int width, height, channelsOut;
+                uint8_t *pixelData = stbi_load(filepath.generic_string().c_str(), &width, &height, &channelsOut, 4);
+                m_Buffer = Buffer(pixelData, width * height * channels);
+
+                m_CreateInfo.width = static_cast<uint32_t>(width);
+                m_CreateInfo.height = static_cast<uint32_t>(height);
                 LOG_ASSERT(m_Buffer, "Failed to load texture data");
                 break;
             }
             case nvrhi::Format::RGBA32_FLOAT:
             {
-                int channelsOut;
-                float *pixelData = stbi_loadf(filepath.generic_string().c_str(), &m_CreateInfo.width, &m_CreateInfo.height, &channelsOut, 4);
-                m_Buffer = Buffer(pixelData, m_CreateInfo.width * m_CreateInfo.height * channels * sizeof(float));
+                int width, height, channelsOut;
+                float *pixelData = stbi_loadf(filepath.generic_string().c_str(), &width, &height, &channelsOut, 4);
+                m_Buffer = Buffer(pixelData, width * height * channels * sizeof(float));
+
+                m_CreateInfo.width = static_cast<uint32_t>(width);
+                m_CreateInfo.height = static_cast<uint32_t>(height);
                 LOG_ASSERT(m_Buffer, "Failed to load texture data");
                 break;
             }
@@ -111,8 +117,8 @@ namespace ignite
             }
         }
 
-        int rowPitch = m_CreateInfo.width * channels;
-        int depthPitch = rowPitch * m_CreateInfo.height;
+        const uint32_t rowPitch = m_CreateInfo.width * channels;
+        const uint32_t depthPitch = rowPitch * m_CreateInfo.height;
 
         CreateTextureHandle();
 
@@ -130,7 +136,7 @@ namespace ignite
     {
     }
 
-    void Texture::SetData(nvrhi::ICommandList *cmd, int rowPitch, int depthPitch)
+    void Texture::SetData(nvrhi::ICommandList *cmd, uint32_t rowPitch, uint32_t depthPitch)
     {
         LOG_ASSERT(m_Buffer.data, "[Texture] Pixel data is null");
 
@@ -181,7 +187,10 @@ namespace ignite
 
     void Texture::CreateTextureHandle()
     {
-        nvrhi::TextureDesc textureDesc = nvrhi::TextureDesc();
+    	LOG_ASSERT(m_CreateInfo.dimension != nvrhi::TextureDimension::Unknown, "[Texture] Dimension must be set");
+    	LOG_ASSERT(m_CreateInfo.initialState != nvrhi::ResourceStates::Unknown, "[Texture] State must be set");
+
+        auto textureDesc = nvrhi::TextureDesc();
         textureDesc.setDimension(m_CreateInfo.dimension);
         textureDesc.setWidth(m_CreateInfo.width);
         textureDesc.setHeight(m_CreateInfo.height);
@@ -190,17 +199,19 @@ namespace ignite
         textureDesc.setKeepInitialState(true);
         textureDesc.setMipLevels(m_CreateInfo.mipLevels);
         textureDesc.setDebugName(m_CreateInfo.debugName);
+        textureDesc.setArraySize(m_CreateInfo.arraySize);
+        textureDesc.setSampleQuality(m_CreateInfo.sampleQuality);
+        textureDesc.setSampleCount(m_CreateInfo.sampleCount);
+        textureDesc.setDepth(m_CreateInfo.depth);
+        textureDesc.setIsUAV(m_CreateInfo.isUAV);
+        textureDesc.setIsRenderTarget(m_CreateInfo.isRenderTarget);
+        textureDesc.setIsTypeless(m_CreateInfo.isTypeless);
+        textureDesc.setKeepInitialState(m_CreateInfo.keepInitialState);
+        textureDesc.isShadingRateSurface = m_CreateInfo.isShadingRateSurface;
         
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
         m_Handle = device->createTexture(textureDesc);
         LOG_ASSERT(m_Handle, "Failed to create texture");
-
-        nvrhi::SamplerDesc samplerDesc = nvrhi::SamplerDesc();
-        samplerDesc.setAllAddressModes(m_CreateInfo.samplerMode);
-        samplerDesc.setAllFilters(true);
-
-        m_Sampler = device->createSampler(samplerDesc);
-        LOG_ASSERT(m_Sampler, "Failed to create texture sampler");
     }
 
     Ref<Texture> Texture::Create(const TextureCreateInfo& createInfo)

@@ -324,14 +324,14 @@ namespace ignite
         }
         case SDL_EVENT_MOUSE_WHEEL:
         {
-            MouseScrolledEvent e(static_cast<float>(event.wheel.x), static_cast<float>(event.wheel.y));
+            MouseScrolledEvent e(event.wheel.x, event.wheel.y);
             m_Callback(e);
             break;
 		}
         case SDL_EVENT_MOUSE_MOTION:
         {
-			Input::SetMousePosition(static_cast<float>(event.motion.x), static_cast<float>(event.motion.y));
-            MouseMovedEvent e(static_cast<float>(event.motion.x), static_cast<float>(event.motion.y));
+			Input::SetMousePosition((int)event.motion.x, (int)event.motion.y);
+            MouseMovedEvent e((int)event.motion.x, (int)event.motion.y);
             m_Callback(e);
             break;
 		}

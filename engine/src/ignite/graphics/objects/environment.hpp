@@ -41,6 +41,7 @@ namespace ignite {
     {
     public:
         Environment(Scene *scene);
+    	~Environment();
 
         void Begin(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline);
         void End();
@@ -51,8 +52,6 @@ namespace ignite {
         void WriteBuffer(nvrhi::ICommandList *commandList);
 
         static Ref<Environment> Create(Scene *scene);
-
-        static nvrhi::VertexAttributeDesc GetAttribute();
         static nvrhi::BindingLayoutDesc GetBindingLayoutDesc();
 
         Ref<Texture> GetHDRTexture() { return m_HDRTexture; }
@@ -65,6 +64,7 @@ namespace ignite {
         Ref<VertexBuffer> m_VertexBuffer;
         Ref<IndexBuffer> m_IndexBuffer;
         Ref<Texture> m_HDRTexture;
+    	nvrhi::SamplerHandle m_Sampler;
         Scene* m_Scene;
 
         nvrhi::BindingSetHandle m_BindingSet;

@@ -30,16 +30,6 @@
 
 namespace ignite
 {
-#define VERTEX_MAX_BONES 4
-#define MAX_BONES 100
-
-    struct SkinnedMeshBuffer
-    {
-        glm::mat4 transformation;
-        glm::mat4 normal;
-        glm::mat4 boneTransforms[MAX_BONES];
-    };
-
     struct VertexMesh
     {
         glm::vec3 position;
@@ -56,50 +46,8 @@ namespace ignite
 		glm::vec3 tangent;
 		glm::vec3 bitangent;
         glm::vec2 uv;
-        uint32_t boneIDs[VERTEX_MAX_BONES] = { 0 };
-        float weights[VERTEX_MAX_BONES] = { 0.0f };
-
-        static std::array<nvrhi::VertexAttributeDesc, 7> GetAttributes()
-        {
-            return
-            {
-                nvrhi::VertexAttributeDesc()
-                    .setName("POSITION")
-                    .setFormat(nvrhi::Format::RGB32_FLOAT)
-                    .setOffset(offsetof(VertexMesh_Anim, position))
-                    .setElementStride(sizeof(VertexMesh_Anim)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("NORMAL")
-                    .setFormat(nvrhi::Format::RGB32_FLOAT)
-                    .setOffset(offsetof(VertexMesh_Anim, normal))
-                    .setElementStride(sizeof(VertexMesh_Anim)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("TANGENT")
-                    .setFormat(nvrhi::Format::RGB32_FLOAT)
-                    .setOffset(offsetof(VertexMesh_Anim, tangent))
-                    .setElementStride(sizeof(VertexMesh_Anim)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("BITANGENT")
-                    .setFormat(nvrhi::Format::RGB32_FLOAT)
-                    .setOffset(offsetof(VertexMesh_Anim, bitangent))
-                    .setElementStride(sizeof(VertexMesh_Anim)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("TEXCOORD")
-                    .setFormat(nvrhi::Format::RG32_FLOAT)
-                    .setOffset(offsetof(VertexMesh_Anim, uv))
-                    .setElementStride(sizeof(VertexMesh_Anim)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("BONEIDS")
-                    .setFormat(nvrhi::Format::RGBA32_UINT)
-                    .setOffset(offsetof(VertexMesh_Anim, boneIDs))
-                    .setElementStride(sizeof(VertexMesh_Anim)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("WEIGHTS")
-                    .setFormat(nvrhi::Format::RGBA32_FLOAT)
-                    .setOffset(offsetof(VertexMesh_Anim, weights))
-                    .setElementStride(sizeof(VertexMesh_Anim))
-            };
-        }
+        uint32_t boneIDs[4] = { 0 };
+        float weights[4] = { 0.0f };
 
         static nvrhi::BindingLayoutDesc GetBindingLayoutDesc()
         {
@@ -107,9 +55,10 @@ namespace ignite
                 .setRegisterSpace(0) // set 0
                 .setRegisterSpaceIsDescriptorSet(true)
                 .setVisibility(nvrhi::ShaderType::All)
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0)) // camera
-                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1)) // object
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(2)); // scene
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0))         // Camera
+                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1)) // Object
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(2))        // Scene
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(3));        // CSM
         }
     };
 
@@ -117,23 +66,6 @@ namespace ignite
     {
         glm::vec2 position;
         glm::vec2 texCoord;
-
-        static std::array<nvrhi::VertexAttributeDesc, 2> GetAttributes()
-        {
-            return {
-                nvrhi::VertexAttributeDesc()
-                    .setName("POSITION")
-                    .setBufferIndex(0)
-                    .setFormat(nvrhi::Format::RG32_FLOAT)
-                    .setOffset(offsetof(VertexScreen, position))
-                    .setElementStride(sizeof(VertexScreen)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("TEXCOORD")
-                    .setFormat(nvrhi::Format::RG32_FLOAT)
-                    .setOffset(offsetof(VertexScreen, texCoord))
-                    .setElementStride(sizeof(VertexScreen))
-            };
-        }
     };
 
     struct Vertex2DQuad
@@ -143,63 +75,12 @@ namespace ignite
         glm::vec2 tilingFactor;
         glm::vec4 color;
         u32 texIndex;
-
-        static std::array<nvrhi::VertexAttributeDesc, 5> GetAttributes()
-        {
-            return
-            {
-                nvrhi::VertexAttributeDesc()
-                    .setName("POSITION")
-                    .setBufferIndex(0)
-                    .setFormat(nvrhi::Format::RGB32_FLOAT)
-                    .setOffset(offsetof(Vertex2DQuad, position))
-                    .setElementStride(sizeof(Vertex2DQuad)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("TEXCOORD")
-                    .setFormat(nvrhi::Format::RG32_FLOAT)
-                    .setOffset(offsetof(Vertex2DQuad, texCoord))
-                    .setElementStride(sizeof(Vertex2DQuad)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("TILINGFACTOR")
-                    .setFormat(nvrhi::Format::RG32_FLOAT)
-                    .setOffset(offsetof(Vertex2DQuad, tilingFactor))
-                    .setElementStride(sizeof(Vertex2DQuad)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("COLOR")
-                    .setFormat(nvrhi::Format::RGBA32_FLOAT)
-                    .setOffset(offsetof(Vertex2DQuad, color))
-                    .setElementStride(sizeof(Vertex2DQuad)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("TEXINDEX")
-                    .setFormat(nvrhi::Format::R32_UINT)
-                    .setOffset(offsetof(Vertex2DQuad, texIndex))
-                    .setElementStride(sizeof(Vertex2DQuad))
-            };
-        }
     };
 
     struct Vertex2DLine
     {
         glm::vec3 position;
         glm::vec4 color;
-
-        static std::array<nvrhi::VertexAttributeDesc, 2> GetAttributes()
-        {
-            return
-            {
-                nvrhi::VertexAttributeDesc()
-                    .setName("POSITION")
-                    .setBufferIndex(0)
-                    .setFormat(nvrhi::Format::RGB32_FLOAT)
-                    .setOffset(offsetof(Vertex2DLine, position))
-                    .setElementStride(sizeof(Vertex2DLine)),
-                nvrhi::VertexAttributeDesc()
-                    .setName("COLOR")
-                    .setFormat(nvrhi::Format::RGBA32_FLOAT)
-                    .setOffset(offsetof(Vertex2DLine, color))
-                    .setElementStride(sizeof(Vertex2DLine))
-            };
-        }
     };
 
 }

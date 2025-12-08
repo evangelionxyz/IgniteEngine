@@ -27,13 +27,14 @@ project "IgniteEngine"
         "%{IncludeDir.MONO}",
         "%{IncludeDir.NVRHI}",
         "%{IncludeDir.STB}",
-        "%{IncludeDir.NVRHI_VULKAN_HPP}",
+        "%{IncludeDir.NVRHI_VULKAN_HEADERS}",
+        "%{IncludeDir.NVRHI_DIRECTX_HEADERS}",
         "%{IncludeDir.VULKAN_SDK}",
         "%{IncludeDir.FILEWATCHER}",
         "%{IncludeDir.ZLIB}",
         "%{IncludeDir.YAMLCPP}",
         "%{IncludeDir.TINYGLTF}",
-        "%{IncludeDir.JSON}"
+        "%{IncludeDir.JSON}",
     }
 
     links {
@@ -118,7 +119,8 @@ project "IgniteEngine"
 
         postbuildcommands {
             '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll" "%{cfg.targetdir}"',
-            '{COPYFILE} "%{THIRDPARTY_DIR}/SDL3/lib/windows/x64/SDL3.dll" "%{cfg.targetdir}"'
+            '{COPYFILE} "%{THIRDPARTY_DIR}/SDL3/lib/windows/x64/SDL3.dll" "%{cfg.targetdir}"',
+            '{COPYDIR} "%{wks.location}/resources" "%{cfg.targetdir}/resources"',
         }
 
         filter "configurations:Debug"

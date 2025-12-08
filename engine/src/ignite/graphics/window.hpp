@@ -21,7 +21,8 @@
 * SOFTWARE.
 */
 
-#pragma once
+#ifndef WINDOW_HPP
+#define WINDOW_HPP
 
 #include <SDL3/SDL.h>
 
@@ -82,3 +83,5 @@ namespace ignite
         friend class JoystickManager;
     };
 }
+
+#endif

@@ -4,7 +4,6 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "${workspaceFolder}/THIRDPARTY/GLFW/include/",
                 "${VULKAN_SDK}/include"
             ],
             "defines": [

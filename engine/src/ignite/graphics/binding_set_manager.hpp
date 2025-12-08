@@ -21,39 +21,12 @@
 * SOFTWARE.
 */
 
-#pragma once
-
-#include "mesh.hpp"
-
-#include <string>
-#include <memory>
-#include <glm/glm.hpp>
+#ifndef BINDING_SET_MANAGER_HPP
+#define BINDING_SET_MANAGER_HPP
 
 namespace ignite
 {
-    class Model
-    {
-    public:
 
-        Model(const std::string& filename);
-        ~Model();
-
-        void PlayAnimation(const std::string& name);
-        void StopAnimation();
-        
-        void Update(float deltaTime);
-        void UpdateBindingSet(Scene* scene);
-
-        void SetTransform(const glm::mat4& transform);
-
-        static Ref<Model> Create(const std::string& filename);
-
-        MeshScene& GetScene() { return m_Scene; }
-        glm::mat4& GetTransform() { return m_Transform; }
-
-    private:
-        MeshScene m_Scene;
-        std::string m_CurrentAnimation;
-        glm::mat4 m_Transform = glm::mat4(1.0f);
-    };
 }
+
+#endif

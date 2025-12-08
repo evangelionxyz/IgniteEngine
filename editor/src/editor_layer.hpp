@@ -31,7 +31,9 @@
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/project/project.hpp"
 #include "states.hpp"
+
 #include <future>
+#include <optional>
 
 namespace ignite
 {
@@ -39,6 +41,23 @@ namespace ignite
     class ScenePanel;
     class ContentBrowserPanel;
     class MaterialsPanel;
+
+    struct PendingFileLoading
+    {
+        enum Type : uint8_t
+        {
+            None = 0,
+            SceneOpen,
+            SceneSave,
+            ProjectOpen,
+            ProjectSave,
+            MeshLoad,
+        };
+
+        Type type = None;
+        std::filesystem::path filepath;
+        void *userData = nullptr;
+    };
 
     class EditorLayer final : public Layer
     {
@@ -69,12 +88,12 @@ namespace ignite
 
         void OnAttach() override;
         void OnDetach() override;
-        void OnUpdate(f32 deltaTime) override;
-        void OnEvent(Event& e) override;
+        void OnUpdate(float deltaTime) override;
+        void OnEvent(Event &e) override;
 
         bool OnKeyPressedEvent(KeyPressedEvent &event);
         bool OnMouseButtonPressed(MouseButtonPressedEvent &event);
-		bool OnMouseMovedEvent(MouseMovedEvent& event);
+		bool OnMouseMovedEvent(MouseMovedEvent &event);
 
         void OnRender(nvrhi::IFramebuffer *framebuffer) override;
         void OnGuiRender() override;
@@ -90,8 +109,8 @@ namespace ignite
         
         void SaveProject();
         void SaveProjectAs();
-        Ref<Project> OpenProject();
-        Ref<Project> OpenProject(const std::filesystem::path &filepath);
+        void OpenProject();
+        void OpenProject(const std::filesystem::path &filepath);
 
         void SetActiveScene(const Ref<Scene> &scene);
 
@@ -104,8 +123,22 @@ namespace ignite
 
         static EditorLayer *GetInstance();
 
+    public:
+        void OnDialogLoadMesh(Ref<MeshInstance> &outMesh);
+
     private:
-        void SettingsUI();
+        static void OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter);
+        static void OnSceneOpenFileSelected(void *userData, const char *const *filelist, int filter);
+
+        static void OnProjectSaveFileSelected(void *userData, const char *const *filelist, int filter);
+        static void OnProjectOpenFileSelected(void *userData, const char *const *filelist, int filter);
+
+        static void OnMeshFileSelected(void *userData, const char *const *filelist, int filter);
+
+        void ProcessPendingFileLoading();
+
+        void UISettings();
+        void UIImportMeshes();
 
         Ref<ScenePanel> m_ScenePanel;
         Ref<ContentBrowserPanel> m_ContentBrowserPanel;
@@ -122,7 +155,17 @@ namespace ignite
         nvrhi::StagingTextureHandle m_MousePickingStagingTexture;
         nvrhi::StagingTextureHandle m_ScreenshotStagingTexture;
         Ref<CommandList > m_CommandList;
+
+        std::queue<PendingFileLoading> m_PendingFileLoading;
+
+        glm::vec2 m_CurrentFramebufferSize;
             
         nvrhi::IDevice *m_Device = nullptr;
+
+        int m_SelectedMesh = 0;
+        void *m_MeshInstanceData = nullptr;
+        std::optional<MeshScene> m_LoadedMeshScene;
+
+        friend class ScenePanel;
     };
 }

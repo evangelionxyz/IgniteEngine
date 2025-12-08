@@ -27,8 +27,11 @@
 #include "ignite/core/uuid.hpp"
 #include "ignite/math/math.hpp"
 
+#pragma warning(push)
+#pragma warning(disable : 4275 4251)
 #include <yaml-cpp/yaml.h>
 #include <yaml-cpp/node/convert.h>
+#pragma warning(pop)
 
 #include <glm/glm.hpp>
 #include <string>

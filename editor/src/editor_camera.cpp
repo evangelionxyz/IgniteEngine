@@ -144,12 +144,12 @@ namespace ignite
 		float wheelDelta = 0.0f;
 
 		// check for scroll wheel input
-		if (mouse.scroll.y != 0.0f)
+		if (mouse.scroll.y != 0)
 		{
-			wheelDelta = mouse.scroll.y;
+			wheelDelta = static_cast<float>(mouse.scroll.y);
 
 			// reset scroll after processing
-			mouse.scroll.y = 0.0f;
+			mouse.scroll.y = 0;
 		}
 
 		// handle keyboard zoom controls

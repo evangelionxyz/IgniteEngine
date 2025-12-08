@@ -32,23 +32,23 @@ namespace ignite
 	class MouseMovedEvent final : public Event
 	{
 	public:
-		MouseMovedEvent(const float x, const float y)
+		MouseMovedEvent(const int x, const int y)
 			: m_MouseX(x), m_MouseY(y) {}
 
-		float GetX() const { return m_MouseX; }
-		float GetY() const { return m_MouseY; }
+		int GetX() const { return m_MouseX; }
+		int GetY() const { return m_MouseY; }
 
 		std::string ToString() const override
 		{
 			std::stringstream ss;
-			ss << "MouseMovedEvent: " << m_MouseX << ", " << m_MouseY;
+			ss << GetName() << m_MouseX << ", " << m_MouseY;
 			return ss.str();
 		}
 
 		EVENT_CLASS_TYPE(MouseMoved)
 		EVENT_CLASS_CATEGORY(EventCategoryMouse | EventCategoryInput)
 	private:
-		float m_MouseX, m_MouseY;
+		int m_MouseX, m_MouseY;
 	};
 
 	class MouseScrolledEvent final : public Event
@@ -63,12 +63,12 @@ namespace ignite
 		std::string ToString() const override
 		{
 			std::stringstream ss;
-			ss << "MouseScrolledEvent: " << GetXOffset() << ", " << GetYOffset();
+			ss << GetName() << GetXOffset() << ", " << GetYOffset();
 			return ss.str();
 		}
 
 		EVENT_CLASS_TYPE(MouseScrolled)
-			EVENT_CLASS_CATEGORY(EventCategoryMouse | EventCategoryInput)
+		EVENT_CLASS_CATEGORY(EventCategoryMouse | EventCategoryInput)
 	private:
 		float m_XOffset, m_YOffset;
 	};
@@ -96,7 +96,7 @@ namespace ignite
 		std::string ToString() const override
 		{
 			std::stringstream ss;
-			ss << "MouseButtonPressedEvent: " << m_Button;
+			ss << GetName() << m_Button;
 			return ss.str();
 		}
 
@@ -112,7 +112,7 @@ namespace ignite
 		std::string ToString() const override
 		{
 			std::stringstream ss;
-			ss << "MouseButtonReleasedEvent: " << m_Button;
+			ss << GetName() << m_Button;
 			return ss.str();
 		}
 

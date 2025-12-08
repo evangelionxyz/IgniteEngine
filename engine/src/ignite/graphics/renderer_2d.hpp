@@ -21,7 +21,8 @@
 * SOFTWARE.
 */
 
-#pragma once
+#ifndef RENDERER_2D_HPP
+#define RENDERER_2D_HPP
 
 #include "ignite/core/types.hpp"
 #include "vertex_data.hpp"
@@ -104,3 +105,5 @@ namespace ignite
         nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
     };
 }
+
+#endif

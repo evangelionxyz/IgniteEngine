@@ -21,7 +21,8 @@
 * SOFTWARE.
 */
 
-#pragma once
+#ifndef RENDER_PASS_HPP
+#define RENDER_PASS_HPP
 
 namespace ignite
 {
@@ -33,3 +34,5 @@ namespace ignite
 
     };
 }
+
+#endif

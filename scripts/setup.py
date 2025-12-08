@@ -68,7 +68,7 @@ def run():
     else:
         premake_args.append("gmake")
         premake_args.append("--cc=clang")
-
+    premake_args.append("pause")
     subprocess.call(premake_args, cwd=ROOT_DIR)
 
 if __name__ == "__main__":

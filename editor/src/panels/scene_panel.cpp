@@ -81,6 +81,8 @@ namespace ignite
         // Load icons
         TextureCreateInfo createInfo;
         createInfo.format = nvrhi::Format::RGBA8_UNORM;
+    	createInfo.keepInitialState = true;
+    	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
         m_Icons["simulate"] = Texture::Create("resources/ui/ic_simulate.png", createInfo);
         m_Icons["play"] = Texture::Create("resources/ui/ic_play.png", createInfo);
         m_Icons["stop"] = Texture::Create("resources/ui/ic_stop.png", createInfo);
@@ -462,36 +464,19 @@ namespace ignite
                 ImGui::ColorEdit4("Color", &c.color.x);
             });
 
-            RenderComponent<MeshComponent>("Mesh Component", selectedEntity, [&]()
+            RenderComponent<MeshFilter>("Mesh Filter", selectedEntity, [&]()
             {
-                MeshComponent &mc = selectedEntity.GetComponent<MeshComponent>();
-                if (mc.model)
-                {
-                    MeshScene& meshScene = mc.model->GetScene();
-                    for (auto& mesh : meshScene.flatMeshes)
+                    MeshFilter &mfilter = selectedEntity.GetComponent<MeshFilter>();
+                    if (ImGui::Button("Load Mesh"))
                     {
-                        ImGui::PushID(mesh->name.c_str());
-                        if (ImGui::TreeNode(mesh->name.c_str()))
-                        {
-                            if (Ref<Material> mat = mesh->material)
-                            {
-                                if (ImGui::TreeNode(mat->name.c_str()))
-                                {
-                                    ImGui::ColorEdit4("Base Color", &mat->params.baseColorFactor.x);
-                                    ImGui::ColorEdit4("Emissive", &mat->params.emissiveFactor.x);
-                                    ImGui::SliderFloat("Metallic", &mat->params.metallicFactor, 0.0f, 1.0f);
-                                    ImGui::SliderFloat("Roughness", &mat->params.roughnessFactor, 0.0f, 1.0f);
-                                    ImGui::SliderFloat("Occlusion Strength", &mat->params.occlusionStrength, 0.0f, 1.0f);
-
-                                    ImGui::TreePop();
-                                }
-                            }
-                            ImGui::TreePop();
-                        }
-
-                        ImGui::PopID();
+                        EditorLayer::GetInstance()->OnDialogLoadMesh(mfilter.mesh);
                     }
-                }
+
+                    ImGui::SameLine();
+                    if (mfilter.mesh)
+                    {
+                        ImGui::Text("Mesh: %s", mfilter.mesh->GetName().c_str());
+                    }
             });
 
             RenderComponent<Rigidbody2D>("Rigid Body 2D", selectedEntity, [&]()
@@ -615,6 +600,7 @@ namespace ignite
                     c.camera.UpdateMatrices(aspect);
                 }
             });
+
             RenderComponent<BoxCollider2D>("Box Collider 2D", selectedEntity, [&]()
             {
                 BoxCollider2D &c = selectedEntity.GetComponent<BoxCollider2D>();
@@ -625,11 +611,13 @@ namespace ignite
                 ImGui::DragFloat("Density", &c.density, 0.025f);
                 ImGui::Checkbox("Is Sensor", &c.isSensor);
             });
+
             RenderComponent<Rigibody>("Rigid Body", selectedEntity, [&]()
             {
                 Rigibody &c = selectedEntity.GetComponent<Rigibody>();
                 ImGui::Checkbox("Static", &c.isStatic);
             });
+
             RenderComponent<BoxCollider>("Box Collider", selectedEntity, [&]()
             {
                 BoxCollider &c = selectedEntity.GetComponent<BoxCollider>();
@@ -639,6 +627,7 @@ namespace ignite
                 ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
                 ImGui::DragFloat("Density", &c.density, 0.025f);
             });
+
             RenderComponent<SphereCollider>("Sphere Collider", selectedEntity, [&]()
             {
                 SphereCollider &c = selectedEntity.GetComponent<SphereCollider>();
@@ -648,6 +637,7 @@ namespace ignite
                 ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
                 ImGui::DragFloat("Density", &c.density, 0.025f);
             });
+
             RenderComponent<CapsuleCollider>("Capsule Collider", selectedEntity, [&]()
             {
                 CapsuleCollider &c = selectedEntity.GetComponent<CapsuleCollider>();
@@ -658,6 +648,7 @@ namespace ignite
                 ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
                 ImGui::DragFloat("Density", &c.density, 0.025f);
             });
+
             RenderComponent<MeshCollider>("Mesh Collider", selectedEntity, [&]()
             {
                 MeshCollider &c = selectedEntity.GetComponent<MeshCollider>();
@@ -674,6 +665,7 @@ namespace ignite
                     c.indices.clear();
                 }
             });
+
             RenderComponent<AudioSource>("Audio Source", selectedEntity, [&]()
             {
                 AudioSource &c = selectedEntity.GetComponent<AudioSource>();
@@ -1132,9 +1124,15 @@ namespace ignite
                     case CompType_BoxCollider2D:
                         entity.AddComponent<BoxCollider2D>();
                         break;
-                    case CompType_SkeletalMesh:
-                        entity.AddComponent<SkeletalMesh>();
+                    case CompType_MeshFilter:
+                        entity.AddComponent<MeshFilter>();
                         break;
+                    case CompType_StaticMeshRenderer:
+                        entity.AddComponent<StaticMeshRenderer>();
+                        break;
+                        // case CompType_SkeletalMeshRenderer:
+                        //     entity.AddComponent<SkeletalMeshRenderer>();
+                        //     break;
                     case CompType_Rigidbody:
                         entity.AddComponent<Rigibody>();
                         break;
@@ -1218,17 +1216,7 @@ namespace ignite
         m_IsHovered = ImGui::IsWindowHovered();
 
         // TOOLBAR: 
-        // const ImVec2 toolbarPadding = { 8.0f, 8.0f };
-        // ImGui::SetCursorScreenPos({ window->DC.CursorStartPos.x + toolbarPadding.x, window->DC.CursorStartPos.y + toolbarPadding.y });
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 12.0f, 5.0f });
-
         constexpr ImVec2 buttonSize = { 24.0f, 24.0f };
-        auto mode = m_Gizmo.GetMode();
-        std::string gizmoModeStr = mode == ImGuizmo::MODE::LOCAL ? "LOCAL" : "WORLD";
-        if (ImGui::Button(gizmoModeStr.c_str(), buttonSize))
-        {
-            m_Gizmo.SetMode(mode == ImGuizmo::MODE::LOCAL ? ImGuizmo::MODE::WORLD : ImGuizmo::MODE::LOCAL);
-        }
 
         State sceneState = EditorLayer::GetInstance()->GetState().sceneState;
         const bool isScenePlaying = sceneState == ignite::State::ScenePlay;
@@ -1238,25 +1226,7 @@ namespace ignite
         ImGui::SameLine();
         ImGui::Image(scenePlayStopID, buttonSize);
         if (ImGui::IsItemClicked())
-        {            
-            const uint32_t width = static_cast<uint32_t>(m_ViewportData.rect.GetSize().x);
-            const uint32_t height = static_cast<uint32_t>(m_ViewportData.rect.GetSize().y);
-			const float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
-
-            m_SceneViewportRT->Resize(width, height);
-            m_CompositeViewportRT->Resize(width, height);
-            m_UIViewportRT->Resize(width, height);
-
-            m_UICameraRT->Resize(width, height);
-            m_SceneCameraRT->Resize(width, height);
-            m_CompositeCameraRT->Resize(width, height);
-
-            EditorLayer::GetInstance()->GetSceneRenderer()->GetUIRenderer()->Resize(width, height);
-
-            m_Scene->Resize(width, height);
-
-			m_Camera.UpdateMatrices(aspectRatio);
-            
+        {  
             if (isScenePlaying)
             {
                 EditorLayer::GetInstance()->OnSceneStop();
@@ -1285,30 +1255,6 @@ namespace ignite
         ImGui::Image(sceneSimulateID, buttonSize);
         if (ImGui::IsItemClicked())
         {            
-            const uint32_t width = static_cast<uint32_t>(m_ViewportData.rect.GetSize().x);
-            const uint32_t height = static_cast<uint32_t>(m_ViewportData.rect.GetSize().y);
-
-            glm::vec2 vpSize = m_ViewportData.rect.GetSize();
-            if (vpSize.x > 0.0f && vpSize.y > 0.0f)
-            {
-				const float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
-
-
-                m_SceneViewportRT->Resize(width, height);
-                m_CompositeViewportRT->Resize(width, height);
-                m_UIViewportRT->Resize(width, height);
-
-                m_UICameraRT->Resize(width, height);
-                m_SceneCameraRT->Resize(width, height);
-                m_CompositeCameraRT->Resize(width, height);
-
-                EditorLayer::GetInstance()->GetSceneRenderer()->GetUIRenderer()->Resize(width, height);
-
-                m_Scene->Resize(width, height);
-
-				m_Camera.UpdateMatrices(aspectRatio);
-            }
-
             if (isSceneSimulate)
             {
                 EditorLayer::GetInstance()->OnSceneStop();
@@ -1329,7 +1275,35 @@ namespace ignite
             }
         }
 
-        ImGui::PopStyleVar(1);
+        ImGui::SameLine();
+        ImGui::TextUnformatted("Operation");
+        ImGui::SameLine();
+        static std::array<const char*, 3> kGizmoOperationLabels = { "Translate", "Rotate", "Scale" };
+        int operationIndex = 0;
+        switch (m_Gizmo.GetOperation())
+        {
+            case ImGuizmo::ROTATE: operationIndex = 1; break;
+            case ImGuizmo::SCALE: operationIndex = 2; break;
+            default: operationIndex = 0; break;
+        }
+        ImGui::SetNextItemWidth(140.0f);
+        if (ImGui::Combo("##GizmoOperation", &operationIndex, kGizmoOperationLabels.data(), kGizmoOperationLabels.size()))
+        {
+            auto op = operationIndex == 0 ? ImGuizmo::TRANSLATE : operationIndex == 1 ? ImGuizmo::ROTATE : ImGuizmo::SCALE;
+            m_Gizmo.SetOperation(op);
+        }
+        ImGui::SameLine();
+
+        ImGui::TextUnformatted("Mode");
+        ImGui::SameLine();
+        static std::array<const char *, 2> kGizmoModeLabels = { "Local", "World" };
+        int modeIndex = m_Gizmo.GetMode() == ImGuizmo::LOCAL ? 0 : 1;
+        ImGui::SetNextItemWidth(120.0f);
+        if (ImGui::Combo("##GizmoMode", &modeIndex, kGizmoModeLabels.data(), kGizmoModeLabels.size()))
+        {
+            auto mode = modeIndex == 0 ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
+            m_Gizmo.SetMode(mode);
+        }
 
         // Calculating Scene Viewport location
         const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
@@ -1337,10 +1311,6 @@ namespace ignite
 
         m_ViewportData.rect.min = { canvasPos.x, canvasPos.y };
         m_ViewportData.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
-        glm::vec2 vpSize = m_ViewportData.rect.GetSize();
-
-        const auto vpWidth = static_cast<uint32_t>(vpSize.x);
-        const auto vpHeight = static_cast<uint32_t>(vpSize.y);
 
         // Mouse position in screen space
         const ImVec2 &mousePos = ImGui::GetMousePos();
@@ -1357,38 +1327,9 @@ namespace ignite
             SceneRenderer::GetActive()->UpdateUIInput(screenMousePos, viewportPos, viewportSize, mousePressed);
         }
 
-        // trigger resize
-        if (vpSize.x > 0.0f && vpSize.y > 0.0f)
-        {
-            // prevent resizing each frame
-            // just when the mouse is not resizing
-            const bool sceneResize = m_SceneViewportRT->ShouldResize(vpWidth, vpHeight);
-            const bool compositeResize = m_CompositeViewportRT->ShouldResize(vpWidth, vpHeight);
-
-            if (const bool uiResize = m_UIViewportRT->ShouldResize(vpWidth, vpHeight);
-                !ImGui::IsMouseDown(ImGuiMouseButton_Left) && (sceneResize || compositeResize || uiResize))
-            {
-				const float aspectRatio = vpSize.x / vpSize.y;
-
-                m_SceneViewportRT->Resize(vpWidth, vpHeight);
-                m_CompositeViewportRT->Resize(vpWidth, vpHeight);
-                m_UIViewportRT->Resize(vpWidth, vpHeight);
-
-                m_UICameraRT->Resize(vpWidth, vpHeight);
-                m_SceneCameraRT->Resize(vpWidth, vpHeight);
-                m_CompositeCameraRT->Resize(vpWidth, vpHeight);
-
-                m_Scene->Resize(vpWidth, vpHeight);
-
-                EditorLayer::GetInstance()->GetSceneRenderer()->GetUIRenderer()->Resize(vpWidth, vpHeight);
-
-				m_Camera.UpdateMatrices(aspectRatio);
-            }
-        }
-
-        ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_SceneViewportRT->GetColorAttachment(0).Get());     // Test scene RT
+        //ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_SceneViewportRT->GetColorAttachment(0)->GetHandle().Get());     // Test scene RT
         // ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_UIViewportRT->GetColorAttachment(0).Get());       // Test UI RT
-        // ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_CompositeViewportRT->GetColorAttachment(0).Get()); // Current composite RT
+        ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_CompositeViewportRT->GetColorAttachment(0)->GetHandle().Get()); // Current composite RT
         ImGui::Image(sceneImage, canvasSize);
         if (ImGui::BeginDragDropTarget())
         {
@@ -1553,12 +1494,31 @@ namespace ignite
                 const float height = width / (vpSize.x / vpSize.y);
 
                 ImGui::SetCursorPos({ canvasSize.x - width - padding, canvasSize.y - height });
-                ImTextureID previewImage = reinterpret_cast<ImTextureID>(m_CompositeCameraRT->GetColorAttachment(0).Get());
+                ImTextureID previewImage = reinterpret_cast<ImTextureID>(m_CompositeCameraRT->GetColorAttachment(0)->GetHandle().Get());
                 ImGui::Image(previewImage, {width, height});
             }
         }
 
         ImGui::End();
+    }
+
+    void ScenePanel::ResizeFramebuffer(uint32_t width, uint32_t height)
+    {
+        m_SceneViewportRT->Resize(width, height);
+        m_CompositeViewportRT->Resize(width, height);
+        m_UIViewportRT->Resize(width, height);
+
+        m_UICameraRT->Resize(width, height);
+        m_SceneCameraRT->Resize(width, height);
+        m_CompositeCameraRT->Resize(width, height);
+
+        if (m_Scene)
+        {
+            m_Scene->Resize(width, height);
+        }
+
+        const float aspectRatio = static_cast<float>(width) / height;
+        m_Camera.UpdateMatrices(aspectRatio);
     }
 
     void ScenePanel::DebugRender()
@@ -1574,7 +1534,7 @@ namespace ignite
 
         // =================================
         // Camera settings
-        static const char *cameraModeStr[2] = { "Orthographic", "Perspective" };
+        static std::array<const char *, 2> cameraModeStr = { "Orthographic", "Perspective" };
         const char *currentCameraModeStr = cameraModeStr[static_cast<i32>(m_Camera.projectionType)];
         if (ImGui::BeginCombo("Mode", currentCameraModeStr))
         {
@@ -1583,22 +1543,6 @@ namespace ignite
                 bool isSelected = strcmp(currentCameraModeStr, cameraModeStr[i]) == 0;
                 if (ImGui::Selectable(cameraModeStr[i], isSelected))
                 {
-                    // m_Camera.projectionType = static_cast<ICamera::Type>(i);
-
-                    // if (m_Camera.projectionType == ICamera::Type::Orthographic)
-                    {
-                        // m_CameraData.lastPosition = m_Camera.position;
-
-                        // m_Camera.position = { 0.0f, 0.0f, 3.0f };
-                        // m_Camera.zoom = 20.0f;
-                    }
-                    // else
-                    {
-                        //m_Camera.position = m_CameraData.lastPosition;
-                    }
-
-                    // m_Camera.UpdateProjectionMatrix();
-                    // m_Camera.UpdateViewMatrix();
                 }
 
                 if (isSelected)
@@ -1610,21 +1554,6 @@ namespace ignite
         }
 
         ImGui::DragFloat3("Position", &m_Camera.position[0], 0.025f);
-
-        // glm::vec2 yawPitch = { glm::degrees(m_Camera.yaw), glm::degrees(m_Camera.pitch) };
-        // if (ImGui::DragFloat2("Yaw/Pitch", &yawPitch.x, 1.0f))
-        // {
-        //     m_Camera.yaw = glm::radians(yawPitch.x);
-        //     m_Camera.pitch = glm::radians(yawPitch.y);
-		// 
-        //     m_Camera.UpdateOrbitPosition();
-        // }
-		// 
-        // if (m_Camera.projectionType == ICamera::Type::Orthographic)
-        // {
-        //     ImGui::DragFloat("Zoom", &m_Camera.zoom, 0.025f);
-        //     m_Camera.UpdateProjectionMatrix();
-        // }
     }
 
     template<typename T, typename UIFunction>
@@ -1646,8 +1575,8 @@ namespace ignite
             const bool open = ImGui::TreeNodeEx((const char *)(uint32_t *)(uint64_t *)&compID, treeNdeFlags, name.c_str());
             ImGui::PopStyleVar();
 
-            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 24.0f);
-            if (ImGui::Button("+", {24.0f, 24.0f}))
+            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 20.0f);
+            if (ImGui::Button("...", {24.0f, 0.0f}))
                 ImGui::OpenPopup("comp_settings");
 
             bool componentRemoved = false;

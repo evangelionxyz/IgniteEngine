@@ -1,0 +1,66 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ "master", "dev" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install Vulkan SDK
+      id: vulkan
+      uses: humbletim/install-vulkan-sdk@v1.2
+      with:
+        version: 1.4.309.0
+        cache: true
+
+    - name: Download Premake5
+      shell: python
+      run: |
+        import urllib.request
+        import zipfile
+        import os
+        
+        # Create downloads directory
+        os.makedirs('scripts/downloads', exist_ok=True)
+        
+        # Download Premake5
+        version = "5.0.0-beta7"
+        url = f"https://github.com/premake/premake-core/releases/download/v{version}/premake-{version}-windows.zip"
+        zip_path = 'scripts/downloads/premake.zip'
+        
+        print(f"Downloading {url}...")
+        urllib.request.urlretrieve(url, zip_path)
+        
+        print("Extracting...")
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall('scripts/downloads')
+            
+        print("Done.")
+
+    - name: Generate Project Files
+      run: |
+        echo "VULKAN_SDK=$env:VULKAN_SDK"
+        ./scripts/downloads/premake5.exe --file=scripts/premake5.lua vs2022
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Build Solution
+      run: |
+        echo "Using VULKAN_SDK=$env:VULKAN_SDK"
+        msbuild IGN.sln /p:Configuration=Release /p:Platform=x64
+

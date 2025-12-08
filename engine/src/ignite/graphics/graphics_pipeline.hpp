@@ -21,7 +21,8 @@
 * SOFTWARE.
 */
 
-#pragma once
+#ifndef GRAPHICS_PIPELINE_HPP
+#define GRAPHICS_PIPELINE_HPP
 
 #include "ignite/core/types.hpp"
 #include "shader.hpp"
@@ -31,12 +32,6 @@
 #include <unordered_map>
 
 namespace ignite {
-
-    struct GraphicsPipelineCreateInfo
-    {
-        nvrhi::VertexAttributeDesc *attributes = nullptr;
-        uint32_t attributeCount = 0;
-    };
 
     struct GraphicsPipelineParams
     {
@@ -73,7 +68,7 @@ namespace ignite {
 
         GraphicsPipeline &AddBindingLayout(const nvrhi::BindingLayoutHandle &layout);
         GraphicsPipeline &SetShaders(const std::vector<Ref<Shader>> &shaders, bool recompile = false);
-        void Build(nvrhi::IFramebuffer *framebuffer, const GraphicsPipelineParams &params, const GraphicsPipelineCreateInfo &createInfo);
+        void Build(nvrhi::IFramebuffer *framebuffer, const GraphicsPipelineParams &params);
 
         nvrhi::BindingLayoutHandle GetBindingLayout(uint32_t index);
 
@@ -110,3 +105,5 @@ namespace ignite {
         bool m_NeedsToCompileShader = false;
     };
 }
+
+#endif

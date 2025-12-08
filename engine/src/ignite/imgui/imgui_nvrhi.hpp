@@ -30,6 +30,7 @@
 #include <vector>
 #include <unordered_map>
 #include <stdint.h>
+#include <glm/glm.hpp>
 
 #include <nvrhi/nvrhi.h>
 
@@ -40,6 +41,13 @@ namespace ignite
 {
     class ShaderFactory;
     class GraphicsPipeline;
+
+    struct ImGuiVertexData
+    {
+        glm::vec2 position;
+        glm::vec2 texCoord;
+        glm::vec4 color;
+    };
 
     struct ImGui_NVRHI
     {
@@ -56,7 +64,7 @@ namespace ignite
         Ref<GraphicsPipeline> graphicsPipeline;
         std::unordered_map<nvrhi::ITexture *, nvrhi::BindingSetHandle> bindingsCache;
 
-        std::vector<ImDrawVert> imguiVertexBuffer;
+        std::vector<ImGuiVertexData> imguiVertexBuffer;
         std::vector<ImDrawIdx> imguiIndexBuffer;
 
         bool Init(nvrhi::IDevice *device);

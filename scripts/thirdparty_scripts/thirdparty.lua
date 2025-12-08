@@ -1,4 +1,9 @@
 VULKAN_SDK_PATH = os.getenv("VULKAN_SDK")
+if not VULKAN_SDK_PATH then
+    print("Error: VULKAN_SDK environment variable is not set!")
+    -- You might want to error() here to stop generation, but for now let's print
+end
+print("VULKAN_SDK_PATH: " .. tostring(VULKAN_SDK_PATH))
 
 --includedirs
 IncludeDir = {}
@@ -20,7 +25,8 @@ IncludeDir["SDL3"]             = "%{THIRDPARTY_DIR}/SDL3/include"
 IncludeDir["JSON"]             = "%{THIRDPARTY_DIR}/JSON"
 IncludeDir["TINYGLTF"]         = "%{THIRDPARTY_DIR}/TINYGLTF/include"
 IncludeDir["FILEWATCHER"]      = "%{THIRDPARTY_DIR}/Filewatcher/include"
-IncludeDir["NVRHI_VULKAN_HPP"] = "%{THIRDPARTY_DIR}/NVRHI/thirdparty/Vulkan-Headers/include"
+IncludeDir["NVRHI_VULKAN_HEADERS"] = "%{THIRDPARTY_DIR}/NVRHI/thirdparty/Vulkan-Headers/include"
+IncludeDir["NVRHI_DIRECTX_HEADERS"] = "%{THIRDPARTY_DIR}/NVRHI/thirdparty/DirectX-Headers/include"
 IncludeDir["VULKAN_SDK"]       = "%{VULKAN_SDK_PATH}/Include"
 
 --library dirs

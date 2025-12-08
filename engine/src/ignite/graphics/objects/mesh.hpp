@@ -42,28 +42,46 @@ namespace ignite {
     class GraphicsPipeline;
     class Scene;
 
-    class Mesh
+    // Primitive Mesh
+    struct MeshPrimitive
     {
-    public:
-        Mesh() = default;
-        Mesh(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices);
-    
-        void UpdateBindingSet(Scene *scene);
-
+        MeshPrimitive() = default;
+        MeshPrimitive(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices);
         Ref<VertexBuffer> vertexBuffer;
         Ref<IndexBuffer> indexBuffer;
-        Ref<ConstantBuffer> skinnedBuffer;
 
-        std::string name;
+        static Ref<MeshPrimitive> Create(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices);
+    };
+
+    class MeshInstance
+    {
+    public:
+        MeshInstance(const std::string &name, const Ref<MeshPrimitive> &mesh, const Ref<Material> &material, int meshIndex = -1, int materialIndex = -1);
+
         glm::mat4 local = glm::mat4(1.0f);
         glm::mat4 global = glm::mat4(1.0f);
-        Ref<Material> material;
-        int materialIndex = -1;
+
+        void UpdateBindingSet(Scene *scene);
+        void SetMeshIndex(int index) { m_MeshIndex = index; }
+        void SetMaterialIndex(int index) { m_MaterialIndex = index; }
+
+        static Ref<MeshInstance> Create(const std::string &name, const Ref<MeshPrimitive> &mesh, const Ref<Material> &material, int meshIndex = -1, int materialIndex = -1);
 
         nvrhi::BindingSetHandle GetBindingSet() { return m_BindingSet; }
-
+        const Ref<MeshPrimitive> &GetPrimitive() const { return m_Primitive; }
+        const Ref<Material> &GetMaterial() const { return m_Material; }
+        const Ref<ConstantBuffer> &GetGPUDataBuffer() const { return m_SkinnedMeshGPUDataBuffer; }
+        const std::string &GetName() const { return m_Name; }
+    
     private:
+        std::string m_Name;
+        Ref<MeshPrimitive> m_Primitive;
+        Ref<Material> m_Material;
+        Ref<ConstantBuffer> m_SkinnedMeshGPUDataBuffer;
         nvrhi::BindingSetHandle m_BindingSet;
+        
+        int m_MeshIndex;
+        int m_MaterialIndex;
     };
 
     // scene graph structures
@@ -74,20 +92,21 @@ namespace ignite {
         std::vector<int> children;
         glm::mat4 local = glm::mat4(1.0f);
         glm::mat4 global = glm::mat4(1.0f);
-        std::vector<Ref<Mesh>> meshes;
+        std::vector<Ref<MeshInstance>> meshes;
     };
 
     struct MeshScene
     {
         std::vector<MeshNode> nodes;
         std::vector<int> roots;
-        std::vector<Ref<Mesh>> flatMeshes;
+        std::vector<Ref<MeshInstance>> flatMeshes;
     };
 
     class MeshLoader
     {
     public:
-        static void LoadMaterial(const Ref<Mesh>& mesh, const tinygltf::Primitive& primitive, const std::vector<tinygltf::Material>& materials, const std::vector<Ref<Texture>> &loadedTextures);
+        static Ref<Material> LoadMaterials(const tinygltf::Primitive& primitive, const std::vector<tinygltf::Material>& materials,
+            const std::vector<Ref<Texture>> &loadedTextures, const std::vector<nvrhi::SamplerHandle> &loadedSamplers, int *materialIndex);
         static void LoadVertexData(std::vector<VertexMesh_Anim>& vertices, const tinygltf::Primitive& primitive, const tinygltf::Model& model);
         static void LoadIndicesData(std::vector<uint32_t>& indices, const tinygltf::Primitive& primitive, const tinygltf::Model& model);
 
@@ -95,6 +114,7 @@ namespace ignite {
 
     private:
         static std::vector<Ref<Texture>> LoadTexturesFromGLTF(const tinygltf::Model& model);
+        static std::vector<nvrhi::SamplerHandle> GetSamplersFromGLTF(const tinygltf::Model& model);
         static const unsigned char* GetBufferData(const tinygltf::Model& model, const tinygltf::Accessor& accessor);
     };
 }

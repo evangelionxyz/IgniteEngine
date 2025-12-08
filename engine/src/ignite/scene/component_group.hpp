@@ -39,14 +39,15 @@ namespace ignite
         Sprite2D,
         Rigidbody2D,
         BoxCollider2D,
-        SkeletalMesh,
+        MeshFilter,
+        StaticMeshRenderer,
+        // SkeletalMeshRenderer,
         Rigibody,
         BoxCollider,
         SphereCollider,
         CapsuleCollider,
         MeshCollider,
         AudioSource,
-        MeshComponent,
         Script,
         WorldEnvironment
     >; 

@@ -137,7 +137,7 @@ namespace ignite
         }
 
         ImGuiStyle &style = ImGui::GetStyle();
-
+#if 0
         ImVec4 *colors = style.Colors;
         colors[ImGuiCol_Text] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
         colors[ImGuiCol_TextDisabled] = ImVec4(0.60f, 0.60f, 0.60f, 1.00f);
@@ -233,6 +233,8 @@ namespace ignite
         style.AntiAliasedLines = true;
         style.AntiAliasedLinesUseTex = true;
 
+#endif
+
         // Store the original style for proper scaling
         m_OriginalStyle = style;
 
@@ -244,8 +246,6 @@ namespace ignite
 
         io.ConfigWindowsMoveFromTitleBarOnly = true;
         io.ConfigViewportsNoDecoration = false;
-
-		
 
         switch (Renderer::GetGraphicsAPI())
         {
