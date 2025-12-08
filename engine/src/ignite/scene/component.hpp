@@ -31,7 +31,6 @@
 #include "ignite/graphics/objects/material.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/objects/environment.hpp"
-#include "ignite/graphics/objects/model.hpp"
 #include "ignite/math/aabb.hpp"
 #include "scene_camera.hpp"
 #include "ignite/core/string_utils.hpp"
@@ -46,24 +45,32 @@ namespace JPH
 
 namespace ignite
 {
+    struct MeshPrimitive;
+    class MeshInstance;
     class Texture;
-    class Mesh;
     class Skeleton;
+
+#define COMPONENT_CLASS_TYPE(Type) \
+    static const char *GetName() { return #Type; } \
+    static CompType StaticType() { return Type; } \
+    virtual CompType GetType() override { return StaticType(); }
 
     static std::unordered_map<std::string, CompType> s_ComponentsName =
     {
         { "Camera", CompType_Camera },
         { "Rigid Body 2D", CompType_Rigidbody2D },
         { "Box Collider 2D", CompType_BoxCollider2D },
-        { "Sprite 2D", CompType_Sprite2D},
-        { "Skeletal Mesh", CompType_SkeletalMesh},
-        { "Rigid Body", CompType_Rigidbody},
-        { "Box Collider", CompType_BoxCollider},
-        { "Sphere Collider", CompType_SphereCollider},
-        { "Capsule Collider", CompType_CapsuleCollider},
-        { "Mesh Collider", CompType_MeshCollider},
-        { "Audio Source", CompType_AudioSource},
-        { "C# Script", CompType_Script},
+        { "Sprite 2D", CompType_Sprite2D },
+        { "Mesh Filter", CompType_MeshFilter },
+        { "Static Mesh Renderer", CompType_StaticMeshRenderer },
+        { "Skeletal Mesh Renderer", CompType_SkeletalMeshRenderer },
+        { "Rigid Body", CompType_Rigidbody },
+        { "Box Collider", CompType_BoxCollider },
+        { "Sphere Collider", CompType_SphereCollider },
+        { "Capsule Collider", CompType_CapsuleCollider },
+        { "Mesh Collider", CompType_MeshCollider },
+        { "Audio Source", CompType_AudioSource },
+        { "C# Script", CompType_Script },
     };
 
     enum EntityType : uint8_t
@@ -159,7 +166,9 @@ namespace ignite
             case CompType_Rigidbody2D: return "CompType_Rigidbody2D";
             case CompType_BoxCollider2D: return "CompType_BoxCollider2D";
             case CompType_Sprite2D: return "CompType_Sprite2D";
-            case CompType_SkeletalMesh: return "CompType_SkeletalMesh";
+            case CompType_MeshFilter: return "CompType_MeshFilter";
+            case CompType_SkeletalMeshRenderer: return "CompType_SkeletalMeshRenderer";
+            case CompType_StaticMeshRenderer: return "CompType_StaticMeshRenderer";
             case CompType_Rigidbody: return "CompType_Rigidbody";
             case CompType_BoxCollider: return "CompType_BoxCollider";
             case CompType_SphereCollider: return "CompType_SphereCollider";
@@ -169,7 +178,6 @@ namespace ignite
             case CompType_Script: return "CompType_Script";
             case CompType_ID: return "CompType_ID";
             case CompType_Transform: return "CompType_Transform";
-            case CompType_StaticMesh: return "CompType_StaticMesh";
             case CompType_Invalid:
             default: return "Invalid Component";
         }
@@ -214,8 +222,7 @@ namespace ignite
         {
         }
 
-        static CompType StaticType() { return CompType_ID; }
-        virtual CompType GetType() override { return StaticType(); }
+        COMPONENT_CLASS_TYPE(CompType_ID)
     };
 
     class Camera : public IComponent
@@ -226,8 +233,7 @@ namespace ignite
 
         Camera() = default;
 
-        static CompType StaticType() { return CompType_Camera; }
-        virtual CompType GetType() override { return StaticType(); }
+        COMPONENT_CLASS_TYPE(CompType_Camera)
     };
 
     class Transform : public IComponent
@@ -314,8 +320,7 @@ namespace ignite
             return glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale);
         }
 
-        static CompType StaticType() { return CompType_Transform; }
-        virtual CompType GetType() override { return StaticType(); }
+        COMPONENT_CLASS_TYPE(CompType_Transform)
     };
 
     class WorldEnvironment : public IComponent
@@ -326,8 +331,8 @@ namespace ignite
 
         bool primary = false;
         
-        static CompType StaticType() { return CompType_WorldEnvironment; }
-        virtual CompType GetType() override { return StaticType(); }
+
+        COMPONENT_CLASS_TYPE(CompType_WorldEnvironment)
     };
 
     class Sprite2D : public IComponent
@@ -337,49 +342,26 @@ namespace ignite
         glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
         glm::vec2 tilingFactor = { 1.0f, 1.0f };
 
-        static CompType StaticType() { return CompType_Sprite2D; }
-        virtual CompType GetType() override { return StaticType(); }
+        COMPONENT_CLASS_TYPE(CompType_Sprite2D)
     };
 
-     class SkeletalMesh : public IComponent
-     {
-     public:
-         AssetHandle meshHandle = AssetHandle(0); // Primitive Mesh data
-         AssetHandle skeletonHandle = AssetHandle(0);
-         AssetHandle activeAnimationHandle = AssetHandle(0);
-
-         std::vector<AssetHandle> animationHandle;
-         std::vector<glm::mat4> boneTransforms;
-
-         // for rendering
-         // std::vector<Ref<MeshInstance>> meshes;
-
-         SkeletalMesh() = default;
-
-         static CompType StaticType() { return CompType_SkeletalMesh; }
-         virtual CompType GetType() override { return StaticType(); }
-     };
-
-    class StaticMesh : public IComponent
+    class MeshFilter : public IComponent
     {
     public:
-        AssetHandle meshHandle = AssetHandle(0);
+        Ref<MeshInstance> mesh; // TODO: Replace with AssetHandle
+        int meshIndex = -1;
 
-        StaticMesh() = default;
+        MeshFilter() = default;
 
-        static CompType StaticType() { return CompType_StaticMesh; }
-        virtual CompType GetType() override { return StaticType(); }
+        COMPONENT_CLASS_TYPE(CompType_MeshFilter)
     };
 
-    class MeshComponent : public IComponent
+    class StaticMeshRenderer : public IComponent
     {
     public:
-        Ref<Model> model;
+        StaticMeshRenderer() = default;
 
-        MeshComponent() = default;
-
-        static CompType StaticType() { return CompType_StaticMesh; }
-        virtual CompType GetType() override { return StaticType(); }
+        COMPONENT_CLASS_TYPE(CompType_StaticMeshRenderer)
     };
 
     class Rigibody : public IComponent
@@ -407,8 +389,7 @@ namespace ignite
 
         Rigibody() = default;
 
-        static CompType StaticType() { return CompType_Rigidbody; }
-        virtual CompType GetType() override { return StaticType(); }
+        COMPONENT_CLASS_TYPE(CompType_Rigidbody)
     };
 
     class PhysicsCollider
@@ -429,8 +410,8 @@ namespace ignite
 
         BoxCollider() = default;
 
-        static CompType StaticType() { return CompType_BoxCollider; }
-        virtual CompType GetType() override { return StaticType(); }
+
+        COMPONENT_CLASS_TYPE(CompType_BoxCollider)
     };
 
     class SphereCollider: public PhysicsCollider, public IComponent
@@ -440,8 +421,7 @@ namespace ignite
 
         SphereCollider() = default;
 
-        static CompType StaticType() { return CompType_SphereCollider; }
-        virtual CompType GetType() override { return StaticType(); }
+        COMPONENT_CLASS_TYPE(CompType_SphereCollider)
     };
 
     class CapsuleCollider : public PhysicsCollider, public IComponent
@@ -452,8 +432,7 @@ namespace ignite
 
         CapsuleCollider() = default;
 
-        static CompType StaticType() { return CompType_CapsuleCollider; }
-        virtual CompType GetType() override { return StaticType(); }
+        COMPONENT_CLASS_TYPE(CompType_CapsuleCollider)
     };
 
     class MeshCollider : public PhysicsCollider, public IComponent
@@ -465,8 +444,7 @@ namespace ignite
 
         MeshCollider() = default;
 
-        static CompType StaticType() { return CompType_MeshCollider; }
-        virtual CompType GetType() override { return StaticType(); }
+        COMPONENT_CLASS_TYPE(CompType_MeshCollider)
     };
 
     class AudioSource : public IComponent
@@ -481,8 +459,7 @@ namespace ignite
 
         AudioSource() = default;
 
-        static CompType StaticType() { return CompType_AudioSource; }
-        virtual CompType GetType() override { return StaticType(); }
+        COMPONENT_CLASS_TYPE(CompType_AudioSource)
     };
 
     class Script : public IComponent
@@ -491,7 +468,7 @@ namespace ignite
         std::string className = "EMPTY";
         Script() = default;
 
-        static CompType StaticType() { return CompType_Script; }
-        virtual CompType GetType() override { return StaticType(); }
+
+        COMPONENT_CLASS_TYPE(CompType_Script)
     };
 }

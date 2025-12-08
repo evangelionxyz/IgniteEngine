@@ -464,36 +464,19 @@ namespace ignite
                 ImGui::ColorEdit4("Color", &c.color.x);
             });
 
-            RenderComponent<MeshComponent>("Mesh Component", selectedEntity, [&]()
+            RenderComponent<MeshFilter>("Mesh Filter", selectedEntity, [&]()
             {
-                MeshComponent &mc = selectedEntity.GetComponent<MeshComponent>();
-                if (mc.model)
-                {
-                    MeshScene& meshScene = mc.model->GetScene();
-                    for (auto& mesh : meshScene.flatMeshes)
+                    MeshFilter &mfilter = selectedEntity.GetComponent<MeshFilter>();
+                    if (ImGui::Button("Load Mesh"))
                     {
-                        ImGui::PushID(mesh->name.c_str());
-                        if (ImGui::TreeNode(mesh->name.c_str()))
-                        {
-                            if (Ref<Material> mat = mesh->material)
-                            {
-                                if (ImGui::TreeNode(mat->name.c_str()))
-                                {
-                                    ImGui::ColorEdit4("Base Color", &mat->gpuData.baseColorFactor.x);
-                                    ImGui::ColorEdit4("Emissive", &mat->gpuData.emissiveFactor.x);
-                                    ImGui::SliderFloat("Metallic", &mat->gpuData.metallicFactor, 0.0f, 1.0f);
-                                    ImGui::SliderFloat("Roughness", &mat->gpuData.roughnessFactor, 0.0f, 1.0f);
-                                    ImGui::SliderFloat("Occlusion Strength", &mat->gpuData.occlusionStrength, 0.0f, 1.0f);
-
-                                    ImGui::TreePop();
-                                }
-                            }
-                            ImGui::TreePop();
-                        }
-
-                        ImGui::PopID();
+                        EditorLayer::GetInstance()->OnDialogLoadMesh(mfilter.mesh);
                     }
-                }
+
+                    ImGui::SameLine();
+                    if (mfilter.mesh)
+                    {
+                        ImGui::Text("Mesh: %s", mfilter.mesh->GetName().c_str());
+                    }
             });
 
             RenderComponent<Rigidbody2D>("Rigid Body 2D", selectedEntity, [&]()
@@ -617,6 +600,7 @@ namespace ignite
                     c.camera.UpdateMatrices(aspect);
                 }
             });
+
             RenderComponent<BoxCollider2D>("Box Collider 2D", selectedEntity, [&]()
             {
                 BoxCollider2D &c = selectedEntity.GetComponent<BoxCollider2D>();
@@ -627,11 +611,13 @@ namespace ignite
                 ImGui::DragFloat("Density", &c.density, 0.025f);
                 ImGui::Checkbox("Is Sensor", &c.isSensor);
             });
+
             RenderComponent<Rigibody>("Rigid Body", selectedEntity, [&]()
             {
                 Rigibody &c = selectedEntity.GetComponent<Rigibody>();
                 ImGui::Checkbox("Static", &c.isStatic);
             });
+
             RenderComponent<BoxCollider>("Box Collider", selectedEntity, [&]()
             {
                 BoxCollider &c = selectedEntity.GetComponent<BoxCollider>();
@@ -641,6 +627,7 @@ namespace ignite
                 ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
                 ImGui::DragFloat("Density", &c.density, 0.025f);
             });
+
             RenderComponent<SphereCollider>("Sphere Collider", selectedEntity, [&]()
             {
                 SphereCollider &c = selectedEntity.GetComponent<SphereCollider>();
@@ -650,6 +637,7 @@ namespace ignite
                 ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
                 ImGui::DragFloat("Density", &c.density, 0.025f);
             });
+
             RenderComponent<CapsuleCollider>("Capsule Collider", selectedEntity, [&]()
             {
                 CapsuleCollider &c = selectedEntity.GetComponent<CapsuleCollider>();
@@ -660,6 +648,7 @@ namespace ignite
                 ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
                 ImGui::DragFloat("Density", &c.density, 0.025f);
             });
+
             RenderComponent<MeshCollider>("Mesh Collider", selectedEntity, [&]()
             {
                 MeshCollider &c = selectedEntity.GetComponent<MeshCollider>();
@@ -676,6 +665,7 @@ namespace ignite
                     c.indices.clear();
                 }
             });
+
             RenderComponent<AudioSource>("Audio Source", selectedEntity, [&]()
             {
                 AudioSource &c = selectedEntity.GetComponent<AudioSource>();
@@ -1134,9 +1124,15 @@ namespace ignite
                     case CompType_BoxCollider2D:
                         entity.AddComponent<BoxCollider2D>();
                         break;
-                    case CompType_SkeletalMesh:
-                        entity.AddComponent<SkeletalMesh>();
+                    case CompType_MeshFilter:
+                        entity.AddComponent<MeshFilter>();
                         break;
+                    case CompType_StaticMeshRenderer:
+                        entity.AddComponent<StaticMeshRenderer>();
+                        break;
+                        // case CompType_SkeletalMeshRenderer:
+                        //     entity.AddComponent<SkeletalMeshRenderer>();
+                        //     break;
                     case CompType_Rigidbody:
                         entity.AddComponent<Rigibody>();
                         break;
@@ -1579,8 +1575,8 @@ namespace ignite
             const bool open = ImGui::TreeNodeEx((const char *)(uint32_t *)(uint64_t *)&compID, treeNdeFlags, name.c_str());
             ImGui::PopStyleVar();
 
-            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 24.0f);
-            if (ImGui::Button("+", {24.0f, 24.0f}))
+            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 20.0f);
+            if (ImGui::Button("...", {24.0f, 0.0f}))
                 ImGui::OpenPopup("comp_settings");
 
             bool componentRemoved = false;

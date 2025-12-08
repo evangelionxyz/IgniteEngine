@@ -41,6 +41,7 @@
 #include <ranges>
 #include <cstdlib>
 #include <algorithm>
+#include <array>
 
 #include "ignite/project/project.hpp"
 
@@ -334,19 +335,19 @@ namespace ignite {
 	{
 		m_CommandList = CommandList::Create();
 
-		VertexScreen vertices[]
+		std::array<VertexScreen, 6> vertices
 		{
-			{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
-			{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },
-			{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
+			VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+			VertexScreen{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },
+			VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
 
-			{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
-			{ {  1.0f, -1.0f }, { 1.0f, 1.0f } },
-			{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+			VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
+			VertexScreen{ {  1.0f, -1.0f }, { 1.0f, 1.0f } },
+            VertexScreen { { -1.0f, -1.0f }, { 0.0f, 1.0f } },
 		};
 
 		m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
-		m_CompositeVertexBuffer->SetData(Buffer(vertices, sizeof(vertices)));
+		m_CompositeVertexBuffer->SetData(Buffer(vertices.data(), sizeof(vertices)));
 
 		m_Device = Application::GetGraphicsDevice();
 
@@ -406,7 +407,7 @@ namespace ignite {
 		nvrhi::IFramebuffer *framebuffer = sceneRT->GetFramebuffer();
 
 		// CSM Pass
-		ShadowPass(cmd, camera);
+		// ShadowPass(cmd, camera);
 
 		if (renderEnvironment)
 		{
@@ -435,7 +436,7 @@ namespace ignite {
 
 	void SceneRenderer::ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera)
 	{
-		auto meshView = m_Scene->registry->view<Transform, MeshComponent>();
+		auto meshView = m_Scene->registry->view<Transform, StaticMeshRenderer, MeshFilter>();
 
 		nvrhi::GraphicsState csmState = nvrhi::GraphicsState();
 		Ref<GraphicsPipeline> csmPipeline = m_CascadedShadowMap->GetPipeline();
@@ -483,8 +484,9 @@ namespace ignite {
 			for (entt::entity e : meshView)
 			{
 				Transform& tr = m_Scene->registry->get<Transform>(e);
-				MeshComponent& mesh = m_Scene->registry->get<MeshComponent>(e);
-
+				MeshFilter& mesh = m_Scene->registry->get<MeshFilter>(e);
+                StaticMeshRenderer mrenderer = m_Scene->registry->get<StaticMeshRenderer>(e);
+#if 0
 				if (!mesh.model)
 					continue;
 
@@ -513,13 +515,14 @@ namespace ignite {
 
 					cmd->drawIndexed(args);
 				}
+#endif
 			}
 		}
 	}
 
 	void SceneRenderer::ColorPass(nvrhi::ICommandList* cmd, ICamera* camera, nvrhi::IFramebuffer *framebuffer)
 	{
-		auto meshView = m_Scene->registry->view<Transform, MeshComponent>();
+		auto meshView = m_Scene->registry->view<Transform, MeshFilter, StaticMeshRenderer>();
 		Ref<GraphicsPipeline> geomPSO = GetGeomPipelineForFB(framebuffer, m_FillMode);
 		nvrhi::GraphicsState geomGState = nvrhi::GraphicsState();
 		geomGState.pipeline = geomPSO->GetHandle();
@@ -528,42 +531,42 @@ namespace ignite {
 
 		for (entt::entity e : meshView)
 		{
-			Transform& tr = m_Scene->registry->get<Transform>(e);
-			MeshComponent& meshComponent = m_Scene->registry->get<MeshComponent>(e);
+			Transform &tr = m_Scene->registry->get<Transform>(e);
+			MeshFilter &mfilter = m_Scene->registry->get<MeshFilter>(e);
+            StaticMeshRenderer &mrenderer = m_Scene->registry->get<StaticMeshRenderer>(e);
 
-			if (!meshComponent.model)
+			if (!mfilter.mesh)
 				continue;
 
-			MeshScene& meshScene = meshComponent.model->GetScene();
-			for (auto& mesh : meshScene.flatMeshes)
-			{
-				SkinnedMesh_GPUData gpuData;
-				gpuData.transformation = tr.GetLocalMatrix() * mesh->local;
+            auto &mesh = mfilter.mesh;
+            auto &primitive = mesh->GetPrimitive();
 
-				const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
-				gpuData.normal = glm::mat4(normalMat3);
+            SkinnedMesh_GPUData gpuData;
+            gpuData.transformation = tr.GetLocalMatrix();// *mesh->local;
 
-				std::fill(std::begin(gpuData.boneTransforms),
-					std::end(gpuData.boneTransforms),
-					glm::mat4(1.0f));
+            const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
+            gpuData.normal = glm::mat4(normalMat3);
 
-				mesh->skinnedMeshGPUDataBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
+            std::fill(std::begin(gpuData.boneTransforms),
+                std::end(gpuData.boneTransforms),
+                glm::mat4(1.0f));
 
-				mesh->material->UploadToGpu(cmd);
+            mesh->GetGPUDataBuffer()->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
 
-				geomGState.bindings = { mesh->GetBindingSet(), mesh->material->GetBindingSet()};
+            mesh->GetMaterial()->UploadToGpu(cmd);
 
-				geomGState.addVertexBuffer({ mesh->vertexBuffer->GetHandle(), 0, 0 });
-				geomGState.setIndexBuffer({ mesh->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+            geomGState.bindings = { mfilter.mesh->GetBindingSet(), mfilter.mesh->GetMaterial()->GetBindingSet()};
 
-				cmd->setGraphicsState(geomGState);
+            geomGState.addVertexBuffer({ primitive->vertexBuffer->GetHandle(), 0, 0 });
+            geomGState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
 
-				nvrhi::DrawArguments args;
-				args.setVertexCount(mesh->indexBuffer->GetCount());
-				args.instanceCount = 1;
+            cmd->setGraphicsState(geomGState);
 
-				cmd->drawIndexed(args);
-			}
+            nvrhi::DrawArguments args;
+            args.setVertexCount(primitive->indexBuffer->GetCount());
+            args.instanceCount = 1;
+
+            cmd->drawIndexed(args);
 		}
 
 		// 2D Pass

@@ -24,7 +24,6 @@
 #pragma once
 
 #include "ignite/graphics/objects/environment.hpp"
-#include "ignite/graphics/objects/model.hpp"
 #include "edge_detection.hpp"
 #include "graphics_pipeline.hpp"
 #include "render_target.hpp"
@@ -41,7 +40,7 @@ namespace ignite
     class UIRenderer;
     class Renderer2D;
 	class CascadedShadowMap;
-    class Mesh;
+    class MeshPrimitive;
 
     class SceneRenderer
     {

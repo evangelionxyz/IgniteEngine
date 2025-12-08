@@ -225,22 +225,22 @@ namespace ignite {
                 }
 
                 // skinned mesh
-                if (entity.HasComponent<SkeletalMesh>())
-                {
-                    const SkeletalMesh &comp = entity.GetComponent<SkeletalMesh>();
-                    sr.BeginMap("SkeletalMesh");
-                    sr.AddKeyValue("MeshHandle", static_cast<uint64_t>(comp.meshHandle));
-                    sr.AddKeyValue("SkeletonHandle", static_cast<uint64_t>(comp.skeletonHandle));
-                    sr.BeginSequence("Animations");
-                    for (const auto &anim : comp.animationHandle)
-                    {
-                        sr.BeginMap("Anim");
-                        sr.AddKeyValue("Handle", static_cast<uint64_t>(anim));
-                        sr.EndMap();
-                    }
-                    sr.EndSequence();
-                    sr.EndMap();
-                }
+                // if (entity.HasComponent<SkeletalMesh>())
+                // {
+                //     const SkeletalMesh &comp = entity.GetComponent<SkeletalMesh>();
+                //     sr.BeginMap("SkeletalMesh");
+                //     sr.AddKeyValue("MeshHandle", static_cast<uint64_t>(comp.meshHandle));
+                //     sr.AddKeyValue("SkeletonHandle", static_cast<uint64_t>(comp.skeletonHandle));
+                //     sr.BeginSequence("Animations");
+                //     for (const auto &anim : comp.animationHandle)
+                //     {
+                //         sr.BeginMap("Anim");
+                //         sr.AddKeyValue("Handle", static_cast<uint64_t>(anim));
+                //         sr.EndMap();
+                //     }
+                //     sr.EndSequence();
+                //     sr.EndMap();
+                // }
 
                 // Rigidbody
                 if (entity.HasComponent<Rigibody>())

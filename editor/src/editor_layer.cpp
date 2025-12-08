@@ -42,36 +42,52 @@
 
 namespace ignite
 {
-
     namespace
     {
         const SDL_DialogFileFilter kSceneFileFilters[] =
         {
-            { "Ignite Scene", "ixscene" },
+            { "Ignite Scene (ixscene)", "ixscene" },
         };
 
         const SDL_DialogFileFilter kProjectFileFilters[] =
         {
-            {"Ignite Project", "ixproj"}
+            {"Ignite Project (ixproj)", "ixproj"}
+        };
+
+        const SDL_DialogFileFilter kMeshFileFilters[] =
+        {
+            { "3D Model Files (gltf;glb)", "gltf;glb" }
         };
     }
 
-    ignite::EditorLayer *editorLayerInstance = nullptr;
+    ignite::EditorLayer *s_EditorLayerInstance = nullptr;
 
     EditorLayer *EditorLayer::GetInstance()
     {
-        return editorLayerInstance;
+        return s_EditorLayerInstance;
+    }
+
+    void EditorLayer::OnDialogLoadMesh(Ref<MeshInstance> &outMesh)
+    {
+        SDL_ShowOpenFileDialog(OnMeshFileSelected,
+            &outMesh,
+            Application::GetInstance()->GetWindow()->GetWindowHandle(),
+            kMeshFileFilters,
+            std::size(kMeshFileFilters),
+            nullptr,
+            false
+        );
     }
 
     EditorLayer::EditorLayer(const std::string &name)
         : Layer(name)
     {
-        editorLayerInstance = this;
+        s_EditorLayerInstance = this;
     }
 
     EditorLayer::~EditorLayer()
     {
-        editorLayerInstance = nullptr;
+        s_EditorLayerInstance = nullptr;
     }
 
     void EditorLayer::OnAttach()
@@ -102,7 +118,7 @@ namespace ignite
         {
             std::string args = cmdArgs[i];
 
-            char projectArgs[] = "-project=";
+            char projectArgs[] = "--project=";
             if (args.find(projectArgs) != std::string::npos)
             {
                 std::string projectFilepath = args.substr(std::size(projectArgs) - 1, args.size() - std::size(projectArgs) + 1);
@@ -118,7 +134,7 @@ namespace ignite
         Layer::OnDetach();
     }
 
-    void EditorLayer::OnUpdate(f32 deltaTime)
+    void EditorLayer::OnUpdate(float deltaTime)
     {
         Layer::OnUpdate(deltaTime);
 
@@ -622,7 +638,8 @@ namespace ignite
             ImGui::End();
             
             // Render GUI
-            SettingsUI();
+            UISettings();
+            UIImportMeshes();
         }
 
         ImGui::End(); // end dock space
@@ -820,10 +837,6 @@ namespace ignite
 
     void EditorLayer::OnSceneSaveFileSelected(void* userData, const char* const* filelist, int filter)
     {
-        EditorLayer* editor = static_cast<EditorLayer*>(userData);
-        if (!editor)
-            return;
-
         // Check for errors
         if (filelist == nullptr)
         {
@@ -848,19 +861,15 @@ namespace ignite
                 filepath += ".ixscene";
             }
 
-            editor->m_CurrentSceneFilePath = filepath;
+            s_EditorLayerInstance->m_CurrentSceneFilePath = filepath;
 
             PendingFileLoading pf = { PendingFileLoading::SceneSave, filepath };
-            editor->m_PendingFileLoading.push(pf);
+            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
         }
     }
 
     void EditorLayer::OnSceneOpenFileSelected(void* userData, const char* const* filelist, int filter)
     {
-        EditorLayer* editor = static_cast<EditorLayer*>(userData);
-        if (!editor)
-            return;
-
         // Check for errors
         if (filelist == nullptr)
         {
@@ -880,16 +889,12 @@ namespace ignite
         if (!filepath.empty())
         {
             PendingFileLoading pf = { PendingFileLoading::SceneOpen, filepath };
-            editor->m_PendingFileLoading.push(pf);
+            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
         }
     }
 
     void EditorLayer::OnProjectSaveFileSelected(void* userData, const char* const* filelist, int filter)
     {
-        EditorLayer* editor = static_cast<EditorLayer*>(userData);
-        if (!editor)
-            return;
-
         // Check for errors
         if (filelist == nullptr)
         {
@@ -914,17 +919,13 @@ namespace ignite
                 filepath += ".ixproj";
             }
 
-            PendingFileLoading pf = { PendingFileLoading::ProjectOpen, filepath };
-            editor->m_PendingFileLoading.push(pf);
+            PendingFileLoading pf = { PendingFileLoading::ProjectOpen, filepath, userData };
+            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
         }
     }
 
-    void EditorLayer::OnProjectOpenFileSelected(void* userData, const char* const* filelist, int filter)
+    void EditorLayer::OnProjectOpenFileSelected(void *userData, const char *const *filelist, int filter)
     {
-        EditorLayer* editor = static_cast<EditorLayer*>(userData);
-        if (!editor)
-            return;
-
         // Check for errors
         if (filelist == nullptr)
         {
@@ -942,8 +943,30 @@ namespace ignite
         std::string filepath = filelist[0];
         if (!filepath.empty())
         {
-            PendingFileLoading pf = { PendingFileLoading::ProjectOpen, filepath };
-            editor->m_PendingFileLoading.push(pf);
+            PendingFileLoading pf = { PendingFileLoading::ProjectOpen, filepath, userData };
+            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
+        }
+    }
+
+    void EditorLayer::OnMeshFileSelected(void *userData, const char *const *filelist, int filter)
+    {
+        if (filelist == nullptr)
+        {
+            const char *error = SDL_GetError();
+            LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
+            return;
+        }
+
+        if (*filelist == nullptr)
+        {
+            return;
+        }
+
+        std::string filepath = filelist[0];
+        if (!filepath.empty())
+        {
+            PendingFileLoading pf = { PendingFileLoading::MeshLoad, filepath, userData };
+            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
         }
     }
 
@@ -970,13 +993,22 @@ namespace ignite
                     OpenProject(p.filepath);
                     break;
                 }
+                case PendingFileLoading::MeshLoad:
+                {
+                    if (p.userData)
+                    {
+                        m_MeshInstanceData = p.userData;
+                        m_LoadedMeshScene = MeshLoader::LoadSceneGraphFromGLTF(p.filepath.generic_string());
+                    }
+                    break;
+                }
             }
 
             m_PendingFileLoading.pop();
         }
     }
 
-    void EditorLayer::SettingsUI()
+    void EditorLayer::UISettings()
     {
         ImGui::Begin("Settings", &m_Data.settingsWindow);
 
@@ -1001,6 +1033,7 @@ namespace ignite
                     if (isSelected)
                     {
                         ImGui::SetItemDefaultFocus();
+                        break;
                     }
                 }
                 ImGui::EndCombo();
@@ -1249,4 +1282,69 @@ namespace ignite
             ImGui::End();
         }
     }
+
+    void EditorLayer::UIImportMeshes()
+    {
+        if (m_LoadedMeshScene.has_value())
+        {
+            ImGui::Begin("Import Mesh");
+
+            std::vector<const char *> meshNames;
+            meshNames.reserve(m_LoadedMeshScene->flatMeshes.size());
+            for (size_t i = 0; i < m_LoadedMeshScene->flatMeshes.size(); ++i)
+            {
+                meshNames.push_back(m_LoadedMeshScene->flatMeshes[i]->GetName().c_str());
+            }
+
+            const char *currentMeshName = meshNames[m_SelectedMesh];
+
+            if (ImGui::BeginCombo("Mesh", currentMeshName))
+            {
+                for (size_t i = 0; i < meshNames.size(); ++i)
+                {
+                    bool isSelected = std::strcmp(currentMeshName, meshNames[i]) == 0;
+                    if (ImGui::Selectable(meshNames[i], isSelected))
+                    {
+                        m_SelectedMesh = i;
+                    }
+
+                    if (isSelected)
+                    {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+
+                ImGui::EndCombo();
+            }
+
+            if (ImGui::Button("Cancel"))
+            {
+                m_SelectedMesh = 0;
+                m_LoadedMeshScene.reset();
+                m_MeshInstanceData = nullptr;
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button("Import"))
+            {
+                Ref<MeshInstance> &mInstance = *static_cast<Ref<MeshInstance> *>(m_MeshInstanceData);
+                mInstance = m_LoadedMeshScene->flatMeshes[m_SelectedMesh];
+                mInstance->SetMeshIndex(m_SelectedMesh);
+
+                Application::SubmitToMainThread([mesh = mInstance, scene = m_ActiveScene]()
+                {
+                    mesh->UpdateBindingSet(scene.get());
+                    return true;
+                });
+
+                m_SelectedMesh = 0;
+                m_LoadedMeshScene.reset();
+                m_MeshInstanceData = nullptr;
+            }
+
+            ImGui::End();
+        }
+
+    }
+
 }

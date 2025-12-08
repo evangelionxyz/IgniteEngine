@@ -298,11 +298,6 @@ namespace ignite
     }
 
     template<>
-    void Scene::OnComponentAdded<SkeletalMesh>(Entity entity, SkeletalMesh &comp)
-    {
-    }
-
-    template<>
     void Scene::OnComponentAdded<Rigidbody2D>(Entity entity, Rigidbody2D &comp)
     {
     }
@@ -353,7 +348,12 @@ namespace ignite
     }
 
     template<>
-    void Scene::OnComponentAdded<MeshComponent>(Entity entity, MeshComponent& comp)
+    void Scene::OnComponentAdded<MeshFilter>(Entity entity, MeshFilter &comp)
+    {
+    }
+
+    template<>
+    void Scene::OnComponentAdded<StaticMeshRenderer>(Entity entity, StaticMeshRenderer& comp)
     {
     }
 
