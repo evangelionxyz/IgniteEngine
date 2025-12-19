@@ -151,6 +151,8 @@ namespace ignite
         EditorData m_Data;
 
         std::filesystem::path m_CurrentSceneFilePath;
+    	std::filesystem::path m_CurrentProjectFilepath;
+
         nvrhi::BufferHandle m_DebugRenderBuffer;
         nvrhi::StagingTextureHandle m_MousePickingStagingTexture;
         nvrhi::StagingTextureHandle m_ScreenshotStagingTexture;

@@ -20,6 +20,7 @@ project "IgniteEditor"
         "JOLT",
         "ZLIB",
         "YAMLCPP",
+        "MochiSharp.Native"
     }
 
     includedirs {
@@ -45,6 +46,7 @@ project "IgniteEditor"
         "%{IncludeDir.YAMLCPP}",
         "%{IncludeDir.TINYGLTF}",
         "%{IncludeDir.JSON}",
+        "%{IncludeDir.MochiSharpNative}"
     }
 
     defines {
@@ -78,10 +80,6 @@ project "IgniteEditor"
     links { "d3dcompiler", "dxcompiler", "delayimp" }
 
     filter "configurations:Debug"
-    runtime "Debug"
-    symbols "on"
-
-    filter "configurations:Debug"
         runtime "Debug"
         optimize "off"
         symbols "on"
@@ -93,7 +91,7 @@ project "IgniteEditor"
     filter "configurations:Release"
         runtime "Release"
         optimize "on"
-        symbols "off"
+        symbols "on"
         defines {
             "NDEBUG"
         }

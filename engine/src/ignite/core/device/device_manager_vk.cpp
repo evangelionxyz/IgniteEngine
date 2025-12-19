@@ -1119,7 +1119,6 @@ namespace ignite
         if (res != vk::Result::eSuccess)
         {
             LOG_ERROR("Failed to create a Vulkan physical device, error code: {}", nvrhi::vulkan::resultToString(VkResult(res)));
-
             return false;
         }
 

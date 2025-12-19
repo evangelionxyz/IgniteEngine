@@ -465,17 +465,35 @@ namespace ignite
 
             RenderComponent<MeshFilter>("Mesh Filter", selectedEntity, [&]()
             {
-                    MeshFilter &mfilter = selectedEntity.GetComponent<MeshFilter>();
-                    if (ImGui::Button("Load Mesh"))
-                    {
-                        EditorLayer::GetInstance()->OnDialogLoadMesh(mfilter.mesh);
-                    }
+                MeshFilter &mfilter = selectedEntity.GetComponent<MeshFilter>();
+                if (ImGui::Button("Import Mesh"))
+                {
+                    EditorLayer::GetInstance()->OnDialogLoadMesh(mfilter.mesh);
+                }
 
-                    ImGui::SameLine();
-                    if (mfilter.mesh)
-                    {
-                        ImGui::Text("Mesh: %s", mfilter.mesh->GetName().c_str());
-                    }
+                ImGui::SameLine();
+                if (mfilter.mesh)
+                {
+                    ImGui::Text("Mesh: %s", mfilter.mesh->GetName().c_str());
+                }
+            });
+
+            RenderComponent<StaticMeshRenderer>("Static Mesh Renderer", selectedEntity, [&]()
+            {
+                if (!selectedEntity.HasComponent<MeshFilter>())
+                {
+                    ImGui::TextColored(ImVec4(1.0f, 0.1f, 0.1f, 1.0f), "Require Mesh Filter Component");
+                    return;
+                }
+
+
+                // TODO: Material
+                if (ImGui::BeginDragDropTarget())
+                {
+                    ImGui::EndDragDropTarget();
+                }
+
+                ImGui::Button("Material");
             });
 
             RenderComponent<Rigidbody2D>("Rigid Body 2D", selectedEntity, [&]()
@@ -1211,12 +1229,12 @@ namespace ignite
         m_IsHovered = ImGui::IsWindowHovered();
 
         // TOOLBAR: 
-        constexpr ImVec2 buttonSize = { 24.0f, 24.0f };
+        constexpr ImVec2 buttonSize = { 24.0f, 0.0f };
 
         State sceneState = EditorLayer::GetInstance()->GetState().sceneState;
         const bool isScenePlaying = sceneState == ignite::State::ScenePlay;
         Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
-        ImTextureID scenePlayStopID = reinterpret_cast<ImTextureID>(scenePlayStopTex->GetHandle().Get());
+        ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
 
         ImGui::SameLine();
         ImGui::Image(scenePlayStopID, buttonSize);
@@ -1244,7 +1262,7 @@ namespace ignite
 
         const bool isSceneSimulate = sceneState == ignite::State::SceneSimulate;
         Ref<Texture> sceneSimulateTex = isSceneSimulate ? m_Icons["stop"] : m_Icons["simulate"];
-        ImTextureID sceneSimulateID = reinterpret_cast<ImTextureID>(sceneSimulateTex->GetHandle().Get());
+        ImTextureID sceneSimulateID = (ImTextureID)sceneSimulateTex->GetHandle().Get();
 
         ImGui::SameLine();
         ImGui::Image(sceneSimulateID, buttonSize);
@@ -1322,9 +1340,9 @@ namespace ignite
             SceneRenderer::GetActive()->UpdateUIInput(screenMousePos, viewportPos, viewportSize, mousePressed);
         }
 
-        //ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_SceneViewportRT->GetColorAttachment(0)->GetHandle().Get());     // Test scene RT
-        // ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_UIViewportRT->GetColorAttachment(0).Get());       // Test UI RT
-        ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_CompositeViewportRT->GetColorAttachment(0)->GetHandle().Get()); // Current composite RT
+        //ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_SceneViewportRT->GetColorAttachment(0)->GetHandle().Get()); // Test scene RT
+        // ImTextureID sceneImage = reinterpret_cast<ImTextureID>(m_UIViewportRT->GetColorAttachment(0).Get());                // Test UI RT
+        ImTextureID sceneImage = (ImTextureID)m_CompositeViewportRT->GetColorAttachment(0)->GetHandle().Get();                 // Current composite RT
         ImGui::Image(sceneImage, canvasSize);
         if (ImGui::BeginDragDropTarget())
         {
@@ -1489,7 +1507,7 @@ namespace ignite
                 const float height = width / (vpSize.x / vpSize.y);
 
                 ImGui::SetCursorPos({ canvasSize.x - width - padding, canvasSize.y - height });
-                ImTextureID previewImage = reinterpret_cast<ImTextureID>(m_CompositeCameraRT->GetColorAttachment(0)->GetHandle().Get());
+                ImTextureID previewImage = (ImTextureID)m_CompositeCameraRT->GetColorAttachment(0)->GetHandle().Get();
                 ImGui::Image(previewImage, {width, height});
             }
         }
@@ -1585,8 +1603,8 @@ namespace ignite
     {
         if (entity.HasComponent<T>())
         {
-            constexpr ImGuiTreeNodeFlags treeNdeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth
-                | ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_FramePadding;
+            constexpr ImGuiTreeNodeFlags treeNdeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed
+                | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_FramePadding;
 
             T &comp = entity.GetComponent<T>();
             UUID compID = comp.GetCompID();
@@ -1607,7 +1625,7 @@ namespace ignite
 
             if (ImGui::BeginPopup("comp_settings"))
             {
-                if (allowedToRemove && ImGui::MenuItem("Remove")) 
+                if (allowedToRemove && ImGui::MenuItem("Remove"))
                     componentRemoved = true;
                 ImGui::EndPopup();
             }
@@ -1619,7 +1637,9 @@ namespace ignite
             }
 
             if (componentRemoved)
+            {
                 entity.RemoveComponent<T>();
+            }
 
             ImGui::PopID();
         }

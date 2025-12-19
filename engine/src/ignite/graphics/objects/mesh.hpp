@@ -105,7 +105,7 @@ namespace ignite {
     class MeshLoader
     {
     public:
-        static Ref<Material> LoadMaterials(const tinygltf::Primitive& primitive, const std::vector<tinygltf::Material>& materials,
+        static Ref<Material> LoadMaterial(const tinygltf::Primitive& primitive, const std::vector<tinygltf::Material>& materials,
             const std::vector<Ref<Texture>> &loadedTextures, const std::vector<nvrhi::SamplerHandle> &loadedSamplers, int *materialIndex);
         static void LoadVertexData(std::vector<VertexMesh_Anim>& vertices, const tinygltf::Primitive& primitive, const tinygltf::Model& model);
         static void LoadIndicesData(std::vector<uint32_t>& indices, const tinygltf::Primitive& primitive, const tinygltf::Model& model);

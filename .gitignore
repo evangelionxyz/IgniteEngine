@@ -36,6 +36,9 @@ CMakeCache.txt
 
 IGN.sln
 IGN.sln.DotSettings.user
+IGN-Managed.sln
+IGN-Managed.DotSettings.user
+
 scriptcore/Makefile
 engine/Makefile
 editor/Makefile

@@ -40,6 +40,13 @@ namespace ignite
         normalTexture = Renderer::GetWhiteTexture();              // flat normal
         occlusionTexture = Renderer::GetWhiteTexture();           // full occlusion (no darkening)
 
+        auto device = Application::GetGraphicsDevice();
+        auto desc = nvrhi::SamplerDesc();
+        desc.setAllFilters(true);
+        desc.setAllAddressModes(nvrhi::SamplerAddressMode::Repeat);
+        sampler = device->createSampler(desc);
+        LOG_ASSERT(sampler, "Failed to create sampler");
+
         m_GPUDataBuffer = ConstantBuffer::Create(sizeof(Material_GPUData), false, 1, "Material Constant Buffer");
     }
 

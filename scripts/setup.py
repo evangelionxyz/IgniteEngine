@@ -62,14 +62,19 @@ def run():
     if not premake_binary.exists():
         raise FileNotFoundError(f"Premake executable not found at {premake_binary}")
 
-    premake_args = [str(premake_binary), "--file=scripts/premake5.lua"]
-    if system_name == "Windows":
-        premake_args.append("vs2022")
-    else:
-        premake_args.append("gmake")
-        premake_args.append("--cc=clang")
-    premake_args.append("pause")
-    subprocess.call(premake_args, cwd=ROOT_DIR)
+    # generate Solution for premake native and managed
+    premake_scripts = ["premake5.lua", "premake5-managed.lua"]
+    for script in premake_scripts:
+        premake_args = [str(premake_binary), f"--file=scripts/{script}"]
+        if system_name == "Windows":
+            premake_args.append("vs2022")
+        else:
+            premake_args.append("gmake")
+            premake_args.append("--cc=clang")
+        premake_args.append("pause")
+        subprocess.call(premake_args, cwd=ROOT_DIR)
 
+    pause_input = input("Press any key to continue")
+    
 if __name__ == "__main__":
     run()

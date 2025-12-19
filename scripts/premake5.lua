@@ -1,6 +1,5 @@
 workspace "IGN"
     location "../"
-    architecture "x64"
     flags { "MultiProcessorCompile" }
     configurations {
         "Debug",
@@ -18,5 +17,6 @@ workspace "IGN"
     group "Engine"
         include "../editor/ignite-editor.lua"
         include "../engine/ignite-engine.lua"
-        include "../scriptcore/ignite-scriptengine.lua"
+        include "mochisharp-managed.lua"
+        include "mochisharp-native.lua"
     group ""

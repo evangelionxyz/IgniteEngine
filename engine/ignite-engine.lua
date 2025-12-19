@@ -35,6 +35,7 @@ project "IgniteEngine"
         "%{IncludeDir.YAMLCPP}",
         "%{IncludeDir.TINYGLTF}",
         "%{IncludeDir.JSON}",
+        "%{IncludeDir.MochiSharpNative}"
     }
 
     links {
@@ -47,6 +48,7 @@ project "IgniteEngine"
         "NVRHI",
         "ZLIB",
         "YAMLCPP",
+        "MochiSharp.Native"
     }
 
     defines {
@@ -118,9 +120,13 @@ project "IgniteEngine"
         }
 
         postbuildcommands {
+            '{COPYDIR} "%{wks.location}/resources" "%{cfg.targetdir}/resources"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll" "%{cfg.targetdir}"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/SDL3/lib/windows/x64/SDL3.dll" "%{cfg.targetdir}"',
-            '{COPYDIR} "%{wks.location}/resources" "%{cfg.targetdir}/resources"',
+
+            -- Copying dotnet libraries
+            '{COPYFILE} "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.dll\" "%{cfg.targetdir}\"',
+            '{COPYFILE} "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/hostfxr.dll\" "%{cfg.targetdir}\"'
         }
 
         filter "configurations:Debug"
@@ -158,7 +164,7 @@ project "IgniteEngine"
 
         filter "configurations:Shipping"
             runtime "release"
-            optimize "on"
+            optimize "speed"
             symbols "off" -- without debug info
             defines {
                 "NDEBUG"

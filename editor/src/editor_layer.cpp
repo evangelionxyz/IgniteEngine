@@ -60,7 +60,7 @@ namespace ignite
         };
     }
 
-    ignite::EditorLayer *s_EditorLayerInstance = nullptr;
+    EditorLayer *s_EditorLayerInstance = nullptr;
 
     EditorLayer *EditorLayer::GetInstance()
     {
@@ -758,10 +758,13 @@ namespace ignite
 
     void EditorLayer::OpenProject(const std::filesystem::path &filepath)
     {
-        Ref<Project> openedProject = ProjectSerializer::Deserialize(filepath);
-        if (openedProject)
+    	if (filepath == m_CurrentProjectFilepath)
+    		return;
+
+        if (const Ref<Project> openedProject = ProjectSerializer::Deserialize(filepath))
         {
             m_ActiveProject = openedProject;
+        	m_CurrentProjectFilepath = filepath;
 
             // Reload project files
             m_ContentBrowserPanel->LoadProjectFiles();
@@ -777,17 +780,21 @@ namespace ignite
                     m_ActiveScene = m_EditorScene;
                     SetActiveScene(m_ActiveScene);
 
-                    AssetMetaData metadata = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
-                    auto scenePath = m_ActiveProject->GetAssetFilepath(metadata.filepath);
-                    m_CurrentSceneFilePath = scenePath;
+                    const auto &[type, filepath] = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
+                    m_CurrentSceneFilePath = m_ActiveProject->GetAssetFilepath(filepath);
                 }
             }
             else
             {
-                // Create default scene
+                // Create a default scene
                 NewScene();
             }
         }
+    }
+
+    bool EditorLayer::OnMouseMovedEvent(MouseMovedEvent& event)
+    {
+	    return false;
     }
 
     void EditorLayer::OnScenePlay()
@@ -1062,24 +1069,6 @@ namespace ignite
                     }
                 }
 
-            	ImGui::SeparatorText("Cascaded Shadow Maps");
-
-            	// Display each cascade individually in a 2x2 grid
-            	const float imageSize = ImGui::GetContentRegionAvail().x;
-            	// Get the texture handle for this specific cascade layer
-            	Ref<Texture> depthTex = m_SceneRenderer.GetActive()->GetCascadedShadowMapDepthTexture();
-            	if (m_SceneRenderer.GetActive() && depthTex)
-            	{
-            		// This will be implemented - for now showing placeholder
-            		ImTextureID tex = reinterpret_cast<ImTextureID>(depthTex->GetHandle().Get());
-            		ImGui::Image(tex, ImVec2(imageSize, imageSize), ImVec2(0, 1), ImVec2(1, 0));
-            	}
-            	else
-            	{
-            		ImGui::Dummy(ImVec2(imageSize, imageSize));
-            		ImGui::Text("No shadow map");
-            	}
-                ImGui::Separator();
                 auto &sceneData = m_ActiveScene->gpuData;
             
                 ImGui::ColorEdit3("Color", &sceneData.sunColor.x);
@@ -1145,8 +1134,9 @@ namespace ignite
         {
             AssetRegistry assetRegistry = m_ActiveProject->GetAssetManager().GetAssetAssetRegistry();
 
-            struct AssetPairCompare {
-                bool operator()(const std::pair<AssetHandle, AssetMetaData>& lhs, const std::pair<AssetHandle, AssetMetaData>& rhs) const
+            struct AssetPairCompare
+            {
+                bool operator()(const std::pair<AssetHandle, AssetMetaData> &lhs, const std::pair<AssetHandle, AssetMetaData> &rhs) const
                 {
                     return lhs.first < rhs.first;
                 }
@@ -1175,8 +1165,7 @@ namespace ignite
                     const std::string &typeStr = stringutils::ToLower(AssetTypeToString(metadata.type));
                     const std::string &filepathStr = stringutils::ToLower(std::filesystem::absolute(m_ActiveProject->GetAssetFilepath(metadata.filepath)).generic_string());
 
-                    if (handleStr.find(findKey) != std::string::npos ||
-                        typeStr.find(findKey) != std::string::npos ||
+                    if (handleStr.find(findKey) != std::string::npos || typeStr.find(findKey) != std::string::npos ||
                         filepathStr.find(findKey) != std::string::npos)
                     {
                         filteredAssets.insert({handle, metadata});             
@@ -1345,7 +1334,5 @@ namespace ignite
 
             ImGui::End();
         }
-
     }
-
 }

@@ -359,6 +359,9 @@ namespace ignite
     class StaticMeshRenderer : public IComponent
     {
     public:
+        Ref<Material> material;
+        int materialIndex = -1;
+
         StaticMeshRenderer() = default;
 
         COMPONENT_CLASS_TYPE(CompType_StaticMeshRenderer)
