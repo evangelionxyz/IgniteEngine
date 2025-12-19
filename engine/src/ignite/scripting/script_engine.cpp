@@ -74,6 +74,7 @@ namespace ignite
 
         std::vector<std::string> entityScriptStorage;
 
+        std::filesystem::path mochiSharpAssemblyFilepath;
         std::filesystem::path coreAssemblyFilepath;
         std::filesystem::path appAssemblyFilepath;
 
@@ -109,9 +110,6 @@ namespace ignite
             LOG_ERROR("[Script Engine] Failed to initialize HostFXR");
             return;
         }
-
-        // Register method signatures
-        scriptEngineData->scriptHost->RegisterSignatures();
 
         LOG_WARN("[Script Engine] HostFXR Initialized");
     }
@@ -154,10 +152,22 @@ namespace ignite
             return;
         }
 
+        scriptEngineData->mochiSharpAssemblyFilepath = mochiSharpPath;
+        if (!scriptEngineData->scriptHost->LoadAssembly(mochiSharpPath))
+        {
+            LOG_ERROR("[Script Engine] Failed to load MochiSharp.Managed.dll");
+            return;
+        }
+        LOG_INFO("[Script Engine] Loaded MochiSharp.Managed.dll");
+
         // Script Core Assembly (IgniteScriptEngine.dll)
         const std::filesystem::path coreAssemblyPath = m_Project->GetScriptBinDirectory() / "IgniteScriptEngine.dll";
         LOG_ASSERT(std::filesystem::exists(coreAssemblyPath), "[Script Engine] Script core assembly not found!");
         LoadCoreAssembly(coreAssemblyPath);
+
+        // Register method signatures AFTER assemblies are loaded
+        scriptEngineData->scriptHost->RegisterSignatures();
+        LOG_INFO("[Script Engine] Registered method signatures");
 
         LoadAppAssembly(appAssemblyPath);
         LoadAppAssemblyClasses();
@@ -389,20 +399,19 @@ namespace ignite
     {
         scriptEngineData->entityClasses.clear();
 
-        // TODO: Implement class discovery via C# reflection
-        // Option 1: Add methods to IgniteScriptEngine.dll that use System.Reflection
-        //           to enumerate types derived from Entity, get their fields, etc.
-        // Option 2: Load class metadata from a generated manifest file
-        // Option 3: Discover classes at runtime when first instantiated
+        // TODO: Implement class discovery via C# reflection bridge
+        // You need to add a C# method in IgniteScriptEngine.dll or MochiSharp.Managed.dll that:
+        // 1. Takes an assembly path as input
+        // 2. Uses System.Reflection to enumerate all types derived from Entity
+        // 3. Returns a list of types with their metadata (namespace, class name, assembly name, fields)
+        // 
+        // Example C# signature:
+        // public static string[] GetEntityDerivedTypes(string assemblyPath)
+        // public static FieldInfo[] GetTypeFields(string typeName, string assemblyName)
+        //
+        // Then call these methods from C++ via ScriptHost to populate scriptEngineData->entityClasses
+        // When creating ScriptClass instances, pass the assembly name to the constructor
 
-        // For now, this is a placeholder
-        // Classes will be discovered when CreateInstance is called
         LOG_WARN("[Script Engine] Class discovery needs C# reflection bridge implementation");
-
-        // Temporary: Just log that we need to implement this
-        // In full implementation, you would call C# methods like:
-        // - GetEntityDerivedTypes() -> returns list of type names
-        // - GetTypeFields(typeName) -> returns field metadata
-        // Then populate scriptEngineData->entityClasses based on that
     }
 }

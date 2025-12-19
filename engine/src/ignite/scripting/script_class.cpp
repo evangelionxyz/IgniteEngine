@@ -38,6 +38,18 @@ namespace ignite
         m_ScriptHost = ScriptEngine::GetInstance()->GetScriptHost();
     }
 
+    ScriptClass::ScriptClass(const std::string &classNamespace, const std::string &className, const std::string &assemblyName)
+        : m_ClassNamespace(classNamespace), m_ClassName(className), m_AssemblyName(assemblyName), m_IsCore(false)
+    {
+        m_FullName = m_ClassName;
+        if (!m_ClassNamespace.empty())
+        {
+            m_FullName = m_ClassNamespace + "." + m_ClassName;
+        }
+
+        m_ScriptHost = ScriptEngine::GetInstance()->GetScriptHost();
+    }
+
     int ScriptClass::BindInstanceMethod(const std::string &instanceGuid, const std::string &methodName, ScriptMethodSignature signature)
     {
         if (!m_ScriptHost)
