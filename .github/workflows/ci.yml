@@ -62,5 +62,5 @@ jobs:
     - name: Build Solution
       run: |
         echo "Using VULKAN_SDK=$env:VULKAN_SDK"
-        msbuild IGN.sln /p:Configuration=Release /p:Platform=x64
+        msbuild IGN.sln /p:Configuration=Release /p:Platform="Mixed Platforms"
 
