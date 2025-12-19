@@ -4,7 +4,7 @@ project "IgniteEditor"
     staticruntime "off"
     architecture "x64"
     language "c++"
-    cppdialect "c++20"
+    cppdialect "c++23"
 
     targetdir (OUTPUT_DIR)
     objdir (INTOUTPUT_DIR)
@@ -19,8 +19,7 @@ project "IgniteEditor"
         "IgniteEngine",
         "JOLT",
         "ZLIB",
-        "YAMLCPP",
-        "MochiSharp.Native"
+        "YAMLCPP"
     }
 
     includedirs {
@@ -50,6 +49,7 @@ project "IgniteEditor"
     }
 
     defines {
+        "VULKAN_HPP_NO_SPACESHIP_OPERATOR",
         "NVRHI_SHARED_LIBRARY_INCLUDE",
         "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
         "JPH_DEBUG_RENDERER",

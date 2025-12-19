@@ -1,6 +1,7 @@
 project "IgniteEngine"
     location "%{wks.location}/engine"
     kind "StaticLib"
+    architecture "x64"
     language "C++"
     cppdialect "C++23"
 
@@ -52,8 +53,8 @@ project "IgniteEngine"
     }
 
     defines {
+        "VULKAN_HPP_NO_SPACESHIP_OPERATOR",
         "JPH_SHARED_LIBRARY",
-        
         "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
