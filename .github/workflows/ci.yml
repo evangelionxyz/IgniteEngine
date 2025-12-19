@@ -59,6 +59,10 @@ jobs:
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2
 
+    - name: Restore NuGet packages
+      shell: pwsh
+      run: msbuild $env:IGN.sln /t:Restore /p:Configuration=Release /p:Platform="Mixed Platforms"
+
     - name: Build Solution
       run: |
         echo "Using VULKAN_SDK=$env:VULKAN_SDK"
