@@ -36,7 +36,8 @@ project "IgniteEngine"
         "%{IncludeDir.YAMLCPP}",
         "%{IncludeDir.TINYGLTF}",
         "%{IncludeDir.JSON}",
-        "%{IncludeDir.MochiSharpNative}"
+        "%{IncludeDir.MochiSharpNative}",
+        "%{IncludeDir.Hostfxr}"
     }
 
     links {
@@ -124,6 +125,7 @@ project "IgniteEngine"
             '{COPYDIR} "%{wks.location}/resources" "%{cfg.targetdir}/resources"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll" "%{cfg.targetdir}"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/SDL3/lib/windows/x64/SDL3.dll" "%{cfg.targetdir}"',
+            '{COPYFILE} "%{LibraryDir.VULKAN_SDK_BIN}/dxcompiler.dll" "%{cfg.targetdir}"',
 
             -- Copying dotnet libraries
             '{COPYFILE} "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.dll\" "%{cfg.targetdir}\"',

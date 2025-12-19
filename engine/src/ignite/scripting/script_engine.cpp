@@ -24,18 +24,13 @@
 #include "script_engine.hpp"
 #include "script_glue.hpp"
 #include "script_class.hpp"
+#include "script_host.hpp"
 
 #include "ignite/scene/component.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/string_utils.hpp"
 #include "ignite/core/platform_utils.hpp"
-
-#include <mono/jit/jit.h>
-#include <mono/metadata/assembly.h>
-#include <mono/metadata/object.h>
-#include <mono/metadata/tabledefs.h>
-#include <mono/metadata/debug-helpers.h>
 
 #include <cstdlib>
 #include <format>
@@ -56,95 +51,16 @@ namespace ignite
         {"System.UInt32",  ScriptFieldType::UInt},
         {"System.UInt64",  ScriptFieldType::ULong},
         {"System.UInt",    ScriptFieldType::UByte},
-        {"Ignite.Vector2", ScriptFieldType::Vector2},
-        {"Ignite.Vector3", ScriptFieldType::Vector3},
-        {"Ignite.Vector4", ScriptFieldType::Vector4},
-        {"Ignite.Entity",  ScriptFieldType::Entity},
+        {"IgniteEngine.Vector2", ScriptFieldType::Vector2},
+        {"IgniteEngine.Vector3", ScriptFieldType::Vector3},
+        {"IgniteEngine.Vector4", ScriptFieldType::Vector4},
+        {"IgniteEngine.Entity",  ScriptFieldType::Entity},
     };
 
     namespace Utils
     {
-        static char *ReadBytes(const std::filesystem::path &filepath, uint32_t *out_size)
-        {
-            std::ifstream stream(filepath, std::ios::binary | std::ios::ate);
-
-            // failed to open file
-            if (!stream)
-                return nullptr;
-
-            const size_t end = stream.tellg();
-            stream.seekg(0, std::ios::beg);
-
-            const u32 size = static_cast<u32>(end - stream.tellg());
-
-            // file is empty
-            if (!size)
-            {
-                return nullptr;
-            }
-
-            char *buffer = new char[size];
-            stream.read(static_cast<std::istream::char_type *>(reinterpret_cast<void *>(buffer)), size);
-
-            *out_size = size;
-            return buffer;
-        }
-
-        static MonoAssembly *LoadMonoAssembly(const std::filesystem::path &filepath)
-        {
-            uint32_t fileSize = 0;
-            char *file_data = ReadBytes(filepath, &fileSize);
-
-            MonoImageOpenStatus status;
-            MonoImage *image = mono_image_open_from_data_full(file_data, fileSize, 1, &status, 0);
-
-            if (status != MONO_IMAGE_OK)
-            {
-                const char *error_message = mono_image_strerror(status);
-                LOG_ERROR("{}", error_message);
-                return nullptr;
-            }
-
-            const std::string &assembly_path = filepath.generic_string();
-            MonoAssembly *assembly = mono_assembly_load_from_full(image, assembly_path.c_str(), &status, 0);
-            mono_image_close(image);
-
-            // don't forget to free the file data
-            delete[] file_data;
-
-            return assembly;
-        }
-
-        void PrintAssemblyTypes(MonoAssembly *assembly)
-        {
-            MonoImage *image = mono_assembly_get_image(assembly);
-            const MonoTableInfo *type_definition_table = mono_image_get_table_info(image, MONO_TABLE_TYPEDEF);
-            const i32 num_types = mono_table_info_get_rows(type_definition_table);
-
-            for (i32 i = 0; i < num_types; i++)
-            {
-                u32 cols[MONO_TYPEDEF_SIZE];
-                mono_metadata_decode_row(type_definition_table, i, cols, MONO_TYPEDEF_SIZE);
-
-                const char *nameSpace = mono_metadata_string_heap(image, cols[MONO_TYPEDEF_NAMESPACE]);
-                const char *name = mono_metadata_string_heap(image, cols[MONO_TYPEDEF_NAME]);
-
-                LOG_WARN("{0}.{1}", nameSpace, name);
-            }
-        }
-
-        ScriptFieldType MonoTypeToScriptFieldType(MonoType *mono_type)
-        {
-            std::string type_name = mono_type_get_name(mono_type);
-
-            const auto it = s_ScriptFieldTypeMap.find(type_name);
-            if (it == s_ScriptFieldTypeMap.end())
-            {
-                LOG_ERROR("Unkown Field Type : {}", type_name);
-                return ScriptFieldType::Invalid;
-            }
-            return it->second;
-        }
+        // TODO: With HostFXR, type mapping will be done in managed code
+        // For now, this is placeholder
     }
 
     struct ScriptData
@@ -154,17 +70,7 @@ namespace ignite
 
     struct ScriptEngineData
     {
-        MonoDomain *rootDomain = nullptr;
-        MonoDomain *appDomain = nullptr;
-
-        MonoAssembly *coreAssembly = nullptr;
-        MonoImage *coreAssemblyImage = nullptr;
-
-        MonoAssembly *appAssembly = nullptr;
-        MonoImage *appAssemblyImage = nullptr;
-
-        ScriptClass entityClass;
-        ScriptClass serializeFieldClass;
+        std::unique_ptr<ScriptHost> scriptHost;
 
         std::vector<std::string> entityScriptStorage;
 
@@ -182,42 +88,44 @@ namespace ignite
     ScriptEngineData *scriptEngineData = nullptr;
     ScriptEngine *scriptEngine = nullptr;
 
-    void ScriptEngine::InitMono()
+    void ScriptEngine::InitHostFxr()
     {
-#ifdef _WIN32
-        mono_set_assemblies_path("lib");
-#elif __linux__
-        mono_set_assemblies_path("/usr/lib");
-        mono_set_dirs("/usr/lib", "/etc/mono");
-        setenv("LD_LIBRARY_PATH", "/usr/lib", 1);
-#endif
-        MonoDomain *root_domain = mono_jit_init("IgniteJITRuntime");
-        LOG_ASSERT(root_domain, "[Script Engine] Mono Domain is NULL!");
+        if (!scriptEngineData->scriptHost)
+        {
+            scriptEngineData->scriptHost = std::make_unique<ScriptHost>();
+        }
 
-        scriptEngineData->rootDomain = root_domain;
-        LOG_WARN("[Script Engine] MONO Initialized");
+        // Find the runtimeconfig.json for MochiSharp.Managed
+        const std::filesystem::path configPath = m_Project->GetDirectory() / "Bin/MochiSharp.Managed.runtimeconfig.json";
+        
+        if (!std::filesystem::exists(configPath))
+        {
+            LOG_ERROR("[Script Engine] HostFXR config not found: {}", configPath.generic_string());
+            return;
+        }
 
-        const char *mono_version = mono_get_runtime_build_info();
-        LOG_WARN("[Script Engine] MONO Version: {}", mono_version);
+        if (!scriptEngineData->scriptHost->Init(configPath))
+        {
+            LOG_ERROR("[Script Engine] Failed to initialize HostFXR");
+            return;
+        }
+
+        // Register method signatures
+        scriptEngineData->scriptHost->RegisterSignatures();
+
+        LOG_WARN("[Script Engine] HostFXR Initialized");
     }
 
-    void ScriptEngine::ShutdownMono()
+    void ScriptEngine::ShutdownHostFxr()
     {
         if (!scriptEngineData)
         {
             return;
         }
 
-        mono_domain_set(mono_get_root_domain(), false);
+        scriptEngineData->scriptHost.reset();
 
-        mono_domain_unload(scriptEngineData->appDomain);
-        scriptEngineData->appDomain = nullptr;
-        scriptEngineData->coreAssembly = nullptr;
-
-        mono_jit_cleanup(scriptEngineData->rootDomain);
-        scriptEngineData->rootDomain = nullptr;
-
-        LOG_WARN("[Script Engine] Mono Shutdown");
+        LOG_WARN("[Script Engine] HostFXR Shutdown");
     }
 
     ScriptEngine::ScriptEngine(Project *project)
@@ -225,7 +133,7 @@ namespace ignite
     {
         scriptEngine = this;
 
-        const auto appAssemblyPath = m_Project->GetDirectory() / m_Project->GetInfo().scriptModuleFilepath;
+        const auto appAssemblyPath = m_Project->GetScriptModulePath();
 
         if (scriptEngineData)
         {
@@ -236,12 +144,20 @@ namespace ignite
 
         scriptEngineData = new ScriptEngineData();
 
-        InitMono();
+        InitHostFxr();
 
-        // Script Core Assembly
-        const std::filesystem::path coreAssemblyPath = m_Project->GetDirectory() / "bin/IgniteScript.dll";
+        // Load MochiSharp.Managed core
+        const std::filesystem::path mochiSharpPath = m_Project->GetScriptBinDirectory() / "MochiSharp.Managed.dll";
+        if (!std::filesystem::exists(mochiSharpPath))
+        {
+            LOG_ERROR("[Script Engine] MochiSharp.Managed.dll not found!");
+            return;
+        }
+
+        // Script Core Assembly (IgniteScriptEngine.dll)
+        const std::filesystem::path coreAssemblyPath = m_Project->GetScriptBinDirectory() / "IgniteScriptEngine.dll";
         LOG_ASSERT(std::filesystem::exists(coreAssemblyPath), "[Script Engine] Script core assembly not found!");
-        LoadAssembly(coreAssemblyPath);
+        LoadCoreAssembly(coreAssemblyPath);
 
         LoadAppAssembly(appAssemblyPath);
         LoadAppAssemblyClasses();
@@ -258,7 +174,7 @@ namespace ignite
 
     ScriptEngine::~ScriptEngine()
     {
-        ShutdownMono();
+        ShutdownHostFxr();
 
         if (!scriptEngineData)
         {
@@ -269,40 +185,32 @@ namespace ignite
         scriptEngineData->entityInstances.clear();
 
         delete scriptEngineData;
+        scriptEngineData = nullptr;
 
         LOG_WARN("[Script Engine] Shutdown");
     }
 
     void ScriptEngine::RegisterCoreClassesAndFunctions()
     {
-        scriptEngineData->entityClass = ScriptClass("Ignite", "Entity", true);
-        scriptEngineData->serializeFieldClass = ScriptClass("Ignite", "SerializeFieldAttribute", true);
-
+        // Register glue functions and components via HostFXR
         ScriptGlue::RegisterFunctions();
         ScriptGlue::RegisterComponents();
     }
 
-    bool ScriptEngine::LoadAssembly(const std::filesystem::path &filepath)
+    bool ScriptEngine::LoadCoreAssembly(const std::filesystem::path &filepath)
     {
-        char *domain_name = new char[20];
-        strcpy(domain_name, "IgniteScriptRuntime");
-        scriptEngineData->appDomain = mono_domain_create_appdomain(domain_name, nullptr);
-        delete[] domain_name;
-
-        mono_domain_set(scriptEngineData->appDomain, true);
-
         scriptEngineData->coreAssemblyFilepath = filepath;
 
-        scriptEngineData->coreAssembly = Utils::LoadMonoAssembly(filepath);
-        if (scriptEngineData->coreAssembly == nullptr)
+        if (!scriptEngineData->scriptHost->LoadAssembly(filepath))
         {
+            LOG_ERROR("[Script Engine] Failed to load core assembly: {}", filepath.generic_string());
             return false;
         }
 
-        scriptEngineData->coreAssemblyImage = mono_assembly_get_image(scriptEngineData->coreAssembly);
-
+        // Register glue functions and components
         RegisterCoreClassesAndFunctions();
 
+        LOG_INFO("[Script Engine] Core assembly loaded: {}", filepath.generic_string());
         return true;
     }
 
@@ -336,27 +244,26 @@ namespace ignite
         }
 
         scriptEngineData->appAssemblyFilepath = filepath;
-        scriptEngineData->appAssembly = Utils::LoadMonoAssembly(filepath);
-        if (!scriptEngineData->appAssembly)
+        
+        if (!scriptEngineData->scriptHost->LoadAssembly(filepath))
         {
-            LOG_ASSERT(false, "[Script Engine] App Assembly is empty {}", filepath.generic_string());
+            LOG_ERROR("[Script Engine] Failed to load app assembly: {}", filepath.generic_string());
             return false;
         }
 
-        scriptEngineData->appAssemblyImage = mono_assembly_get_image(scriptEngineData->appAssembly);
         scriptEngineData->appAssemblyFileWatcher = CreateScope<filewatch::FileWatch<std::string>>(filepath.string(), ScriptEngine::OnAppAssemblyFileSystemEvent);
         scriptEngineData->assemblyReloadingPending = false;
 
+        LOG_INFO("[Script Engine] App assembly loaded: {}", filepath.generic_string());
         return true;
     }
 
     void ScriptEngine::ReloadAssembly()
     {
-        mono_domain_set(mono_get_root_domain(), false);
+        // Clear existing instances
+        scriptEngineData->entityInstances.clear();
 
-        mono_domain_unload(scriptEngineData->appDomain);
-        LoadAssembly(scriptEngineData->coreAssemblyFilepath);
-
+        // Reload app assembly (MochiSharp handles unloading through collectible context)
         if (LoadAppAssembly(scriptEngineData->appAssemblyFilepath))
         {
             LoadAppAssemblyClasses();
@@ -369,7 +276,7 @@ namespace ignite
                 scriptEngineData->entityScriptStorage.emplace_back(it.first);
             }
 
-            LOG_INFO("[Script Engine] Aap Assembly Reloaded '{}'", scriptEngineData->appAssemblyFilepath.generic_string());
+            LOG_INFO("[Script Engine] App Assembly Reloaded '{}'", scriptEngineData->appAssemblyFilepath.generic_string());
         }
     }
 
@@ -382,22 +289,6 @@ namespace ignite
     {
         m_Scene = nullptr;
         scriptEngineData->entityInstances.clear();
-    }
-
-    bool ScriptEngine::FieldIsExposed(MonoClass *owner, MonoClassField *field, MonoClass *serializeFieldAttrClass)
-    {
-        // public field are always exposed
-        if (mono_field_get_flags(field) & FIELD_ATTRIBUTE_PUBLIC)
-            return true;
-
-        // otherwise look for [SerializeField] (or any other attribute you care about)
-        MonoCustomAttrInfo *attrs = mono_custom_attrs_from_field(owner, field);
-        if (!attrs)
-            return false;
-
-        bool hasAttr = mono_custom_attrs_has_attr(attrs, serializeFieldAttrClass) != 0;
-        mono_custom_attrs_free(attrs);
-        return hasAttr;
     }
 
     bool ScriptEngine::EntityClassExists(const std::string &fullClassName)
@@ -416,84 +307,9 @@ namespace ignite
             const auto instance = std::make_shared<ScriptInstance>(scriptEngineData->entityClasses[sc.className], entity);
             scriptEngineData->entityInstances[uuid] = instance;
 
-            // Copy Fields Value from Editor to Runtime
-            if (scriptEngineData->entityScriptFields.contains(uuid))
-            {
-                ScriptFieldMap &fieldMap = scriptEngineData->entityScriptFields.at(uuid);
-                const auto classFields = instance->GetScriptClass()->GetFields();
-
-                if (fieldMap.size() != classFields.size())
-                {
-                    // find any private members
-                    std::vector<std::string> keysToRemove;
-                    for (const auto &[fieldName, field] : fieldMap)
-                    {
-                        if (!classFields.contains(fieldName))
-                        {
-                            keysToRemove.push_back(fieldName);
-                        }
-                    }
-
-                    // remove if they are there
-                    for (const auto &key : keysToRemove)
-                    {
-                        fieldMap.erase(key);
-                    }
-                }
-
-                for (auto &[name, fieldInstance] : fieldMap)
-                {
-                    // Check invalid type
-                    if (fieldInstance.Field.Type == ScriptFieldType::Invalid)
-                    {
-                        const ScriptFieldType type = instance->GetScriptClass()->GetFields()[name].Type;
-                        fieldInstance.Field.Type = type;
-                        LOG_WARN("[Script Engine] Checking invalid type {}", name);
-                    }
-
-                    switch (fieldInstance.Field.Type)
-                    {
-                    case ScriptFieldType::Entity:
-                    {
-                        uint64_t uuid = *reinterpret_cast<uint64_t *>(fieldInstance.m_Buffer);
-                        if (uuid == 0)
-                        {
-                            LOG_ERROR("[Script Engine] Field '{}' (Entity class) is not assigned yet", name);
-                            continue;
-                        }
-
-                        MonoMethod *ctorMethod = scriptEngineData->entityClass.GetMethod(".ctor", 1);
-                        if (!ctorMethod)
-                        {
-                            LOG_ERROR("[Script Engine] Failed to find constructor {}", name);
-                            continue;
-                        }
-
-                        // Create new instance
-                        MonoObject *entityInstance = ScriptEngine::InstantiateObject(scriptEngineData->entityClass.GetMonoClass());
-                        if (!entityInstance)
-                        {
-                            LOG_ERROR("[Script Engine] Failed to create Entity instance. {}", name);
-                            continue;
-                        }
-
-                        // Set the entity ID
-                        void *param = &uuid;
-                        mono_runtime_invoke(ctorMethod, entityInstance, &param, nullptr);
-
-                        // set the new instance into the app class's field
-                        instance->SetFieldValueInternal(name, entityInstance);
-                        break;
-                    }
-                    case ScriptFieldType::Invalid:
-                        LOG_ASSERT(false, "[Script Engine] Null Object Field {}", name);
-                        return;
-                    default:
-                        instance->SetFieldValueInternal(name, fieldInstance.m_Buffer);
-                        break;
-                    }
-                }
-            }
+            // TODO: Field value copying for HostFXR
+            // For now, we'll handle basic fields in ScriptInstance
+            // Complex types (Entity references) need C# bridge methods
 
             // C# On Create Function
             instance->InvokeOnCreate();
@@ -511,16 +327,6 @@ namespace ignite
 
         const auto instance = scriptEngineData->entityInstances.at(uuid);
         instance->InvokeOnUpdate(time);
-    }
-
-    MonoString *ScriptEngine::CreateString(const char *string)
-    {
-        return mono_string_new(scriptEngineData->appDomain, string);
-    }
-
-    ScriptClass *ScriptEngine::GetEntityClass()
-    {
-        return &scriptEngineData->entityClass;
     }
 
     Ref<ScriptClass> ScriptEngine::GetEntityClassesByName(const std::string &name)
@@ -569,24 +375,9 @@ namespace ignite
         return m_Scene;
     }
 
-    MonoImage *ScriptEngine::GetCoreAssemblyImage()
+    ScriptHost *ScriptEngine::GetScriptHost()
     {
-        return scriptEngineData->coreAssemblyImage;
-    }
-
-    MonoImage *ScriptEngine::GetAppAssemblyImage()
-    {
-        return scriptEngineData->appAssemblyImage;
-    }
-
-    MonoObject *ScriptEngine::GetManagedInstance(UUID uuid)
-    {
-        if (!scriptEngineData->entityInstances.contains(uuid))
-        {
-            LOG_ASSERT(false, "[Script Engine] Invalid Script Instance {}", static_cast<uint64_t>(uuid));
-        }
-
-        return scriptEngineData->entityInstances.at(uuid)->GetMonoObject();
+        return scriptEngineData ? scriptEngineData->scriptHost.get() : nullptr;
     }
 
     ScriptEngine *ScriptEngine::GetInstance()
@@ -594,74 +385,24 @@ namespace ignite
         return scriptEngine;
     }
 
-    MonoObject *ScriptEngine::InstantiateObject(MonoClass *monoClass)
-    {
-        MonoObject *instance = mono_object_new(scriptEngineData->appDomain, monoClass);
-        if (!instance)
-        {
-            return nullptr;
-        }
-
-        mono_runtime_object_init(instance);
-        return instance;
-    }
-
     void ScriptEngine::LoadAppAssemblyClasses()
     {
         scriptEngineData->entityClasses.clear();
 
-        const MonoTableInfo *typeDefinitionTable = mono_image_get_table_info(scriptEngineData->appAssemblyImage,
-            MONO_TABLE_TYPEDEF);
+        // TODO: Implement class discovery via C# reflection
+        // Option 1: Add methods to IgniteScriptEngine.dll that use System.Reflection
+        //           to enumerate types derived from Entity, get their fields, etc.
+        // Option 2: Load class metadata from a generated manifest file
+        // Option 3: Discover classes at runtime when first instantiated
 
-        const i32 num_types = mono_table_info_get_rows(typeDefinitionTable);
-        MonoClass *entity_class = mono_class_from_name(scriptEngineData->coreAssemblyImage, "Ignite", "Entity");
+        // For now, this is a placeholder
+        // Classes will be discovered when CreateInstance is called
+        LOG_WARN("[Script Engine] Class discovery needs C# reflection bridge implementation");
 
-        for (i32 i = 0; i < num_types; i++)
-        {
-            u32 cols[MONO_TYPEDEF_SIZE];
-            mono_metadata_decode_row(typeDefinitionTable, i, cols, MONO_TYPEDEF_SIZE);
-
-            const char *nameSpace = mono_metadata_string_heap(scriptEngineData->appAssemblyImage, cols[MONO_TYPEDEF_NAMESPACE]);
-            const char *className = mono_metadata_string_heap(scriptEngineData->appAssemblyImage, cols[MONO_TYPEDEF_NAME]);
-
-            std::string fullName = className;
-
-            if (strlen(nameSpace) != 0)
-            {
-                fullName = std::format("{}.{}", nameSpace, className);
-            }
-
-            MonoClass *monoClass = mono_class_from_name(scriptEngineData->appAssemblyImage, nameSpace, className);
-            if (monoClass == entity_class)
-            {
-                continue;
-            }
-
-            if (const bool is_entity_master_class = mono_class_is_subclass_of(monoClass,
-                entity_class, false); !is_entity_master_class)
-            {
-                continue;
-            }
-
-            // Create class
-            const Ref<ScriptClass> scriptClass = CreateRef<ScriptClass>(nameSpace, className);
-
-            // Register PUBLIC fields
-            void *iter = nullptr;
-            while (MonoClassField *field = mono_class_get_fields(monoClass, &iter))
-            {
-                if (!FieldIsExposed(monoClass, field, scriptEngineData->serializeFieldClass.GetMonoClass()))
-                    continue; // skip private fields without [SerializeField]
-
-                const char *fieldName = mono_field_get_name(field);
-                MonoType *type = mono_field_get_type(field);
-                const ScriptFieldType fieldType = Utils::MonoTypeToScriptFieldType(type);
-                scriptClass->InsertField(fieldName, ScriptField{ fieldType, fieldName, field });
-            }
-
-            scriptEngineData->entityClasses[fullName] = scriptClass;
-        }
-
-        auto &entityClasses = scriptEngineData->entityClasses;
+        // Temporary: Just log that we need to implement this
+        // In full implementation, you would call C# methods like:
+        // - GetEntityDerivedTypes() -> returns list of type names
+        // - GetTypeFields(typeName) -> returns field metadata
+        // Then populate scriptEngineData->entityClasses based on that
     }
 }

@@ -32,8 +32,13 @@ public class Entity
         ID = id;
     }
 
-    public readonly ulong ID;
+    public ulong ID { get; internal set; }
     protected Entity() { ID = 0; }
+
+    internal void SetID(ulong id)
+    {
+        ID = id;
+    }
 
     public Vector3 Translation
     {

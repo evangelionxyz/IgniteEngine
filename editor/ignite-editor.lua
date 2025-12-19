@@ -45,7 +45,8 @@ project "IgniteEditor"
         "%{IncludeDir.YAMLCPP}",
         "%{IncludeDir.TINYGLTF}",
         "%{IncludeDir.JSON}",
-        "%{IncludeDir.MochiSharpNative}"
+        "%{IncludeDir.MochiSharpNative}",
+        "%{IncludeDir.Hostfxr}"
     }
 
     defines {

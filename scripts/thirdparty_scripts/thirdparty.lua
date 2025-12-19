@@ -33,7 +33,8 @@ IncludeDir["Hostfxr"]          = "%{THIRDPARTY_DIR}/MochiSharp/NetCore/include"
 
 --library dirs
 LibraryDir = {}
-LibraryDir["VULKAN_SDK"] = "%{VULKAN_SDK_PATH}/Lib"
+LibraryDir["VULKAN_SDK"]     = "%{VULKAN_SDK_PATH}/Lib"
+LibraryDir["VULKAN_SDK_BIN"] = "%{VULKAN_SDK_PATH}/Bin"
 
 -- =============== WINDOWS ONLY ===============
 Library                                = {}
