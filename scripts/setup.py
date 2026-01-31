@@ -67,7 +67,7 @@ def run():
     for script in premake_scripts:
         premake_args = [str(premake_binary), f"--file=scripts/{script}"]
         if system_name == "Windows":
-            premake_args.append("vs2022")
+            premake_args.append("vs2026")
         else:
             premake_args.append("gmake")
             premake_args.append("--cc=clang")

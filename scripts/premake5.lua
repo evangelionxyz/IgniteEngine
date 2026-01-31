@@ -1,11 +1,12 @@
 workspace "IGN"
     location "../"
-    flags { "MultiProcessorCompile" }
     configurations {
         "Debug",
         "Release",
         "Shipping"
     }
+
+    multiprocessorcompile "On"
 
     BUILD_DIR = "%{wks.location}/bin"
     OUTPUT_DIR = "%{BUILD_DIR}/%{cfg.buildcfg}"
