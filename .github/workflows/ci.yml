@@ -54,17 +54,17 @@ jobs:
     - name: Generate Project Files
       run: |
         echo "VULKAN_SDK=$env:VULKAN_SDK"
-        ./scripts/downloads/premake5.exe --file=scripts/premake5.lua vs2026
+        ./scripts/downloads/premake5.exe --file=scripts/premake5.lua vs2022
 
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2
 
     - name: Restore NuGet packages
       shell: pwsh
-      run: msbuild $env:IGN.slnx /t:Restore /p:Configuration=Release /p:Platform="x64"
+      run: msbuild $env:IGN.sln /t:Restore /p:Configuration=Release /p:Platform="x64"
 
     - name: Build Solution
       run: |
         echo "Using VULKAN_SDK=$env:VULKAN_SDK"
-        msbuild IGN.slnx /p:Configuration=Release /p:Platform="x64"
+        msbuild IGN.sln /p:Configuration=Release /p:Platform="x64"
 
