@@ -8,7 +8,9 @@ project "IgniteScriptEngine"
     objdir (INTOUTPUT_DIR)
 
     files {
-        "**.cs"
+        "Core/**.cs",
+        "Math/**.cs",
+        "Properties/**.cs"
     }
 
     links {
@@ -26,7 +28,21 @@ project "IgniteScriptEngine"
         
     filter "configurations:Debug"
         symbols "on"
+        vsprops {
+            OutputPath = "..\\bin\\Debug\\",
+            IntermediateOutputPath = "..\\bin\\objs\\Debug\\IgniteScriptEngine\\"
+        }
 
     filter "configurations:Release"
         optimize "on"
         symbols "off"
+        vsprops {
+            OutputPath = "..\\bin\\Release\\",
+            IntermediateOutputPath = "..\\bin\\objs\\Release\\IgniteScriptEngine\\"
+        }
+    
+    filter "configurations:Shipping"
+        vsprops {
+            OutputPath = "..\\bin\\Shipping\\",
+            IntermediateOutputPath = "..\\bin\\objs\\Shipping\\IgniteScriptEngine\\"
+        }

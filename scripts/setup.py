@@ -30,7 +30,7 @@ def run():
     ensure_admin()
 
     system_name = platform.system()
-    premake_version = "5.0.0-beta7"
+    premake_version = "5.0.0-beta8"
     premake_link_windows = f"https://github.com/premake/premake-core/releases/download/v{premake_version}/premake-{premake_version}-windows.zip"
     premake_link_linux = f"https://github.com/premake/premake-core/releases/download/v{premake_version}/premake-{premake_version}-linux.tar.gz"
     premake_archive_path = DOWNLOADS_DIR / ("premake.zip" if system_name == "Windows" else "premake.tar.gz")
