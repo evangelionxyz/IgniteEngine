@@ -66,7 +66,7 @@ namespace ignite
                         for (auto [uuid, destEntity] : entityMap)
                         {
                             // key (UUID)
-                            if (uuid == srcRegistry->get<ID>(srcEntity).uuid)
+                            if (uuid == srcRegistry->get<IDComponent>(srcEntity).uuid)
                             {
                                 destRegistry->emplace_or_replace<Component>(destEntity, srcRegistry->get<Component>(srcEntity));
                             }

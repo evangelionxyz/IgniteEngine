@@ -51,7 +51,7 @@ namespace ignite
         virtual bool IsOpen() { return m_IsOpen; }
         virtual bool IsFocused() { return m_IsFocused; }
         virtual bool IsHovered() { return m_IsHovered; }
-        virtual void OnUpdate(f32 deltaTime) { }
+        virtual void OnUpdate(float deltaTime) { }
 
         std::string &GetTitle() { return m_WindowTitle; }
 

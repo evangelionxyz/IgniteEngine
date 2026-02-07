@@ -116,7 +116,7 @@ namespace ignite
         }
 
         // create with the same framebuffer to be rendered
-        m_Handle = device->createGraphicsPipeline(pipelineDesc, framebuffer);
+        m_Handle = device->createGraphicsPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
         LOG_ASSERT(m_Handle, "Failed to create graphics pipeline")
     }
 

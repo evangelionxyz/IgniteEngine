@@ -61,7 +61,7 @@ namespace ignite
 
     }
 
-    Ref<VertexBuffer> VertexBuffer::Create(uint64_t size, const std::string &debugName)
+    Ref<VertexBuffer> VertexBuffer::Create(size_t size, const std::string &debugName)
     {
         return CreateRef<VertexBuffer>(size, debugName);
     }

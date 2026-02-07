@@ -56,9 +56,6 @@ namespace ignite
         template<typename T, typename... Args>
         T &AddOrReplaceComponent(Args &&... args)
         {
-            if (HasComponent<T>())
-                return GetComponent<T>();
-
             T &comp = m_Scene->registry->emplace_or_replace<T>(m_Handle, std::forward<Args>(args)...);
 
             if (std::is_base_of_v<IComponent, T>)
@@ -105,10 +102,10 @@ namespace ignite
         bool operator==(const Entity &other) const { return other.m_Handle == m_Handle && other.m_Scene == m_Scene; }
         bool operator!=(const Entity &other) const { return !(*this == other); }
 
-        UUID GetUUID() { return GetComponent<ID>().uuid; }
-        UUID GetParentUUID() { return GetComponent<ID>().parent; }
-        Transform &GetTransform() { return GetComponent<Transform>(); }
-        const std::string &GetName() { return GetComponent<ID>().name; }
+        UUID GetUUID() { return GetComponent<IDComponent>().uuid; }
+        UUID GetParentUUID() { return GetComponent<IDComponent>().parent; }
+        TransformComponent &GetTransform() { return GetComponent<TransformComponent>(); }
+        const std::string &GetName() { return GetComponent<IDComponent>().name; }
 
     private:
         entt::entity m_Handle;

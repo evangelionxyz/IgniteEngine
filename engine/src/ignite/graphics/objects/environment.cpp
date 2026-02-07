@@ -126,7 +126,7 @@ namespace ignite {
         LOG_ASSERT(m_BindingSet, "Failed to create binding set");
     }
 
-    void Environment::LoadTexture(const std::string& filepath)
+    void Environment::LoadTexture(const std::string& filepath, nvrhi::ICommandList *cmd)
     {
         m_Invalidating = true;
         
@@ -136,7 +136,7 @@ namespace ignite {
         textureCI.flip = true;
     	textureCI.keepInitialState = true;
     	textureCI.initialState = nvrhi::ResourceStates::ShaderResource;
-        m_HDRTexture = Texture::Create(filepath, textureCI);
+        m_HDRTexture = Texture::Create(filepath, textureCI, cmd);
 
     	auto samplerDesc = nvrhi::SamplerDesc();
     	samplerDesc.addressU = nvrhi::SamplerAddressMode::Repeat;
@@ -144,10 +144,10 @@ namespace ignite {
     	LOG_ASSERT(m_Sampler, "Failed to create sampler");
     }
 
-    void Environment::WriteBuffer(nvrhi::ICommandList *commandList)
+	void Environment::WriteBuffer(nvrhi::ICommandList *cmd)
     {
         // write buffers
-        m_VertexBuffer->SetData(commandList, Buffer(vertices.data(), sizeof(vertices)));
+        m_VertexBuffer->SetData(cmd, Buffer(vertices.data(), sizeof(vertices)));
 
         // index buffer
 		std::vector<uint32_t> indices(36);
@@ -165,7 +165,7 @@ namespace ignite {
 			offset += 4;
         }
 
-        m_IndexBuffer->SetData(commandList, Buffer(indices.data(), sizeof(uint32_t) * indices.size()));
+        m_IndexBuffer->SetData(cmd, Buffer(indices.data(), sizeof(uint32_t) * indices.size()));
     }
 
     Ref<Environment> Environment::Create(Scene* scene)

@@ -42,11 +42,16 @@
 
 namespace ignite
 {
+    class TransformComponent;
+
     class Math
     {
     public:
-        static bool DecomposeTransform(const glm::mat4 &in_transform, glm::vec3 &out_translation, glm::quat &out_orientation, glm::vec3 &out_scale);
-        static bool DecomposeTransformEuler(const glm::mat4 &transform, glm::vec3 &out_translation, glm::vec3 &out_rotation, glm::vec3 &out_scale);
+        static glm::mat4 ComposeTransformComponent(const TransformComponent &transform);
+        static void DecomposeTransformComponent(const glm::mat4 &matrix, TransformComponent &outTransform);
+
+        static bool DecomposeTransform(const glm::mat4 &transform, glm::vec3 &outTranslation, glm::quat &outRotation, glm::vec3 &out_scale);
+        static bool DecomposeTransformEuler(const glm::mat4 &transform, glm::vec3 &outTranslation, glm::vec3 &outRotation, glm::vec3 &out_scale);
 
         static glm::vec3 Normalize(const glm::vec3 &v);
         static glm::vec3 WorldToScreen(const glm::vec3 &world_position, const glm::mat4 &model_transform, const glm::mat4 &view_projection, const glm::vec2 &screen_size);
@@ -56,14 +61,6 @@ namespace ignite
         static glm::vec3 GetRayFromScreenCoords(const glm::vec2 &coord, const glm::vec2 &screen, const glm::mat4 &projection, const glm::mat4 &view, bool isPerspective, glm::vec3 &rayOrigin);
         static bool RaySphereIntersection(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, const glm::vec3 &sphereCenter, float sphereRadius);
 
-#if 0
-        static physx::PxVec3 GlmToPhysXVec3(const glm::vec3 &vec);
-        static physx::PxQuat GlmToPhysXQuat(const glm::quat &quat);
-        static glm::vec3 PhysXToGlmVec3(const physx::PxVec3 &vec);
-        static glm::quat PhysXToGlmQuat(const physx::PxQuat quat);
-        static physx::PxTransform GlmToPhysXMatrix(const glm::mat4 &transform);
-        static glm::vec3 PhysXQuatToGlmVec3(const physx::PxQuat &quat);
-#endif
         static glm::mat4 RemoveScale(const glm::mat4 &matrix);
 
         static float CascadeSplit(i32 index, i32 cascade_count, f32 near_plane, f32 far_plane, f32 lambda);

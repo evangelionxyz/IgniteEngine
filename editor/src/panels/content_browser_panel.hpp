@@ -25,6 +25,7 @@
 
 #include "ipanel.hpp"
 #include "ignite/asset/asset.hpp"
+#include "ignite/asset/asset_importer.hpp"
 #include "ignite/graphics/texture.hpp"
 
 #include <filesystem>
@@ -64,6 +65,8 @@ namespace ignite
         explicit ContentBrowserPanel(const char *windowTitle);
         virtual void OnGuiRender() override;
 
+        virtual void OnUpdate(float deltaTime) override;
+
         void LoadProjectFiles();
 
     private:
@@ -80,9 +83,14 @@ namespace ignite
         void DeleteSingleNode(uint32_t nodeIndex);
         void UpdateIndicesAfterDeletion(uint32_t deletedIndex);
         void CompactTree();
+
+        static void OnImportAssetDialog(void *userData, const char * const *fileList, int filter);
+
         std::filesystem::path GetFullPath(uint32_t nodeIndex) const;
 
         std::vector<FileTreeNode> m_TreeNodes;
+        std::queue<PendingFileLoading> m_PendingAssetLoading;
+
         int m_ThumbnailSize = 64;
 
         std::filesystem::path m_BaseDirectory;

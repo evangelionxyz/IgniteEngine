@@ -74,19 +74,18 @@ namespace ignite
         timeInSeconds = 0.0f;
 
         // resize
-        auto camView = registry->view<Camera>();
+        auto camView = registry->view<CameraComponent>();
         for (entt::entity entity : camView)
         {
-            Camera &cam = camView.get<Camera>(entity);
-			const float aspectRatio = static_cast<float>(viewportWidth) / static_cast<float>(viewportHeight);
-			cam.camera.UpdateMatrices(aspectRatio);
+            CameraComponent &cam = camView.get<CameraComponent>(entity);
+			cam.camera.UpdateMatrices(static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
         }
 
         // play on start audio
-        auto audioView = registry->view<AudioSource>();
+        auto audioView = registry->view<AudioSourceComponent>();
         for (entt::entity e : audioView)
         {
-            AudioSource &as = audioView.get<AudioSource>(e);
+            AudioSourceComponent &as = audioView.get<AudioSourceComponent>(e);
             if (as.playOnStart)
             {
                 Ref<FmodSound> sound = m_Project->GetAsset<FmodSound>(as.handle);
@@ -100,7 +99,7 @@ namespace ignite
             }
         }
 
-        registry->view<Script>().each([this](entt::entity e, Script &script)
+        registry->view<ScriptComponent>().each([this](entt::entity e, ScriptComponent &script)
         {
             Entity entity{ e, this };
             ScriptEngine::GetInstance()->OnCreateEntity(entity);
@@ -117,10 +116,10 @@ namespace ignite
         timeInSeconds = 0.0f;
 
         // play on start audio
-        auto audioView = registry->view<AudioSource>();
+        auto audioView = registry->view<AudioSourceComponent>();
         for (entt::entity e : audioView)
         {
-            AudioSource &as = audioView.get<AudioSource>(e);
+            AudioSourceComponent &as = audioView.get<AudioSourceComponent>(e);
             Ref<FmodSound> sound = m_Project->GetAsset<FmodSound>(as.handle);
             if (sound)
             {
@@ -169,10 +168,10 @@ namespace ignite
         }
 #endif
 
-        auto view = registry->view<ID, Transform>();
+        auto view = registry->view<IDComponent, TransformComponent>();
         for (auto ent : view)
         {
-            const auto &[id, transform] = view.get<ID, Transform>(ent);
+            const auto &[id, transform] = view.get<IDComponent, TransformComponent>(ent);
             if (id.parent == 0)
             {
                 UpdateTransformRecursive(Entity { ent, this }, glm::mat4(1.0f));
@@ -182,8 +181,8 @@ namespace ignite
 
     void Scene::UpdateTransformRecursive(Entity entity, const glm::mat4 &parentWorldTransform)
     {
-        Transform &transform = entity.GetTransform();
-        ID &id = entity.GetComponent<ID>();
+        TransformComponent &transform = entity.GetTransform();
+        IDComponent &id = entity.GetComponent<IDComponent>();
 
         glm::vec3 skew;
         glm::vec4 perspective;
@@ -197,9 +196,9 @@ namespace ignite
             skew,
             perspective);
 
-        if (entity.HasComponent<Camera>())
+        if (entity.HasComponent<CameraComponent>())
         {
-            Camera &cam = entity.GetComponent<Camera>();
+            CameraComponent &cam = entity.GetComponent<CameraComponent>();
             if (cam.primary)
             {
                 cam.camera.position = transform.translation;
@@ -229,12 +228,11 @@ namespace ignite
         this->viewportWidth = width;
         this->viewportHeight = height;
         
-        auto camView = registry->view<Camera>();
+        auto camView = registry->view<CameraComponent>();
         for (entt::entity entity : camView)
         {
-            Camera &cam = camView.get<Camera>(entity);
-			const float aspectRatio = static_cast<float>(viewportWidth) / static_cast<float>(viewportHeight);
-			cam.camera.UpdateMatrices(aspectRatio);
+            CameraComponent &cam = camView.get<CameraComponent>(entity);
+			cam.camera.UpdateMatrices(static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
         }
     }
 
@@ -245,10 +243,10 @@ namespace ignite
 
     Entity Scene::GetPrimaryCamera()
     {
-        auto camView = registry->view<Camera>();
+        auto camView = registry->view<CameraComponent>();
         for (entt::entity entity : camView)
         {
-            Camera &cam = camView.get<Camera>(entity);
+            CameraComponent &cam = camView.get<CameraComponent>(entity);
             if (cam.primary)
                 return Entity { entity, this };
         }
@@ -260,7 +258,7 @@ namespace ignite
     {
         timeInSeconds += deltaTime;
 
-        registry->view<Script>().each([this, deltaTime](entt::entity e, Script &sc)
+        registry->view<ScriptComponent>().each([this, deltaTime](entt::entity e, ScriptComponent &sc)
         {
             Entity entity{ e, this };
             ScriptEngine::GetInstance()->OnUpdateEntity(entity, deltaTime);
@@ -283,62 +281,62 @@ namespace ignite
     }
 
     template<>
-    void Scene::OnComponentAdded<ID>(Entity entity, ID &comp)
+    void Scene::OnComponentAdded<IDComponent>(Entity entity, IDComponent &comp)
     {
     }
 
     template<>
-    void Scene::OnComponentAdded<Transform>(Entity entity, Transform &comp)
+    void Scene::OnComponentAdded<TransformComponent>(Entity entity, TransformComponent &comp)
     {
     }
 
     template<>
-    void Scene::OnComponentAdded<Sprite2D>(Entity entity, Sprite2D &comp)
+    void Scene::OnComponentAdded<Sprite2DComponent>(Entity entity, Sprite2DComponent &comp)
     {
     }
 
     template<>
-    void Scene::OnComponentAdded<Rigidbody2D>(Entity entity, Rigidbody2D &comp)
+    void Scene::OnComponentAdded<Rigidbody2DComponent>(Entity entity, Rigidbody2DComponent &comp)
     {
     }
 
     template<>
-    void Scene::OnComponentAdded<BoxCollider2D>(Entity entity, BoxCollider2D &comp)
+    void Scene::OnComponentAdded<BoxCollider2DComponent>(Entity entity, BoxCollider2DComponent &comp)
     {
     }
 
     template<>
-    void Scene::OnComponentAdded<Rigibody>(Entity entity, Rigibody &comp)
+    void Scene::OnComponentAdded<RigibodyComponent>(Entity entity, RigibodyComponent &comp)
     {
     }
 
     template<>
-    void Scene::OnComponentAdded<BoxCollider>(Entity entity, BoxCollider &comp)
+    void Scene::OnComponentAdded<BoxColliderComponent>(Entity entity, BoxColliderComponent &comp)
     {
     }
 
     template<>
-    void Scene::OnComponentAdded<SphereCollider>(Entity entity, SphereCollider &comp)
+    void Scene::OnComponentAdded<SphereColliderComponent>(Entity entity, SphereColliderComponent &comp)
     {
     }
 
     template<>
-    void Scene::OnComponentAdded<CapsuleCollider>(Entity entity, CapsuleCollider &comp)
+    void Scene::OnComponentAdded<CapsuleColliderComponent>(Entity entity, CapsuleColliderComponent &comp)
     {
     }
 
     template<>
-    void Scene::OnComponentAdded<MeshCollider>(Entity entity, MeshCollider &comp)
+    void Scene::OnComponentAdded<MeshColliderComponent>(Entity entity, MeshColliderComponent &comp)
     {
     }
 
     template<>
-    void Scene::OnComponentAdded<AudioSource>(Entity entity, AudioSource &comp)
+    void Scene::OnComponentAdded<AudioSourceComponent>(Entity entity, AudioSourceComponent &comp)
     {
     }
 
     template<>
-    void Scene::OnComponentAdded<Script>(Entity entity, Script &comp)
+    void Scene::OnComponentAdded<ScriptComponent>(Entity entity, ScriptComponent &comp)
     {
     }
 
@@ -348,17 +346,17 @@ namespace ignite
     }
 
     template<>
-    void Scene::OnComponentAdded<MeshFilter>(Entity entity, MeshFilter &comp)
+    void Scene::OnComponentAdded<StaticMeshComponent>(Entity entity, StaticMeshComponent& comp)
     {
     }
 
-    template<>
-    void Scene::OnComponentAdded<StaticMeshRenderer>(Entity entity, StaticMeshRenderer& comp)
-    {
-    }
+	template<>
+	void Scene::OnComponentAdded<SkeletalMeshComponent>(Entity entity, SkeletalMeshComponent& comp)
+	{
+	}
 
     template<>
-    void Scene::OnComponentAdded<Camera>(Entity entity, Camera &comp)
+    void Scene::OnComponentAdded<CameraComponent>(Entity entity, CameraComponent &comp)
     {
     }
 }

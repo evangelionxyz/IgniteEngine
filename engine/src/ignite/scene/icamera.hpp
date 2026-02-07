@@ -102,7 +102,7 @@ namespace ignite
         ICamera();
         ~ICamera() { }
 
-        void UpdateMatrices(float aspectRatio);
+        void UpdateMatrices(float width, float height);
        
         glm::vec3 GetUpDirection() const;
         glm::vec3 GetRightDirection() const;
@@ -119,9 +119,10 @@ namespace ignite
 
 		float distance = 1.0f;
 		float fov = 45.0f; // for perspective
-		float aspect = 1.778f;
 		float nearPlane = 0.1f;
 		float farPlane = 1000.0f;
+		float width = 1920;
+		float height = 1080;
 
 		float orthoSize = 10.0f;
 
@@ -137,6 +138,8 @@ namespace ignite
 			float panSensitivity = 0.001f;
 			float minDistance = 0.5f;
 			float maxDistance = 1500.0f;
+			float minOrthoSize = 0.0001f;
+			float maxOrthoSize = 1000.0f;
 			float minPitch = -glm::radians(89.0f);
 			float maxPitch = glm::radians(89.0f);
 			float inertiaDamping = 0.9f;

@@ -36,6 +36,9 @@ CMakeCache.txt
 
 IGN.sln
 IGN.sln.DotSettings.user
+IGN-Managed.sln
+IGN-Managed.DotSettings.user
+
 scriptcore/Makefile
 engine/Makefile
 editor/Makefile
@@ -47,3 +50,6 @@ runtime/ignite_runtime_icon.rc
 editor/ignite_editor_icon.rc
 runtime/IgniteRuntime.dir
 thirdparty/TINYGLTF.dir
+*.slnx
+scriptengine/obj
+scriptengine/bin

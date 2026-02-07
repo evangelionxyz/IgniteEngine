@@ -34,14 +34,20 @@ namespace ignite
     ContentBrowserPanel::ContentBrowserPanel(const char *windowTitle)
         : IPanel(windowTitle)
     {
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        
+        nvrhi::CommandListHandle cmd = device->createCommandList();
+        cmd->open();
+
         TextureCreateInfo createInfo;
         createInfo.format = nvrhi::Format::RGBA8_UNORM;
     	createInfo.keepInitialState = true;
     	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
-        m_Icons["folder"] = Texture::Create("resources/ui/ic_folder.png", createInfo);
-        m_Icons["unknown"] = Texture::Create("resources/ui/ic_file.png", createInfo);
+        m_Icons["folder"] = Texture::Create("resources/ui/ic_folder.png", createInfo, cmd);
+        m_Icons["unknown"] = Texture::Create("resources/ui/ic_file.png", createInfo, cmd);
 
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        cmd->close();
+        device->executeCommandList(cmd);
     }
 
     void ContentBrowserPanel::LoadProjectFiles()
@@ -140,6 +146,22 @@ namespace ignite
             PruneMissingNodes(0, Project::GetInstance()->GetAssetDirectory());
             RefreshAssetTree();
             CompactTree();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("+Import", { 0, navbarBtSize.y }))
+        {
+            static SDL_DialogFileFilter kFilters[]
+            {
+                {"All Files (*)", "*"}
+            };
+
+            bool allowMany = true;
+
+			SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+				Application::GetInstance()->GetWindow()->GetWindowHandle(),
+				kFilters, IM_ARRAYSIZE(kFilters),
+				nullptr, allowMany);
         }
 
         ImGui::EndChild();
@@ -323,7 +345,30 @@ namespace ignite
         ImGui::End();
     }
 
-    void ContentBrowserPanel::RefreshEntryPathList()
+	void ContentBrowserPanel::OnUpdate(float deltaTime)
+	{
+        while (!m_PendingAssetLoading.empty())
+        {
+            auto &[assetType, assetMetaData, _] = m_PendingAssetLoading.front();
+
+            if (assetType == PendingFileLoading::ImportAssets)
+            {
+                Ref<Asset> asset = Project::GetInstance()->GetAssetManager().Import(AssetHandle(), assetMetaData);
+
+                if (asset)
+                {
+				    Project::GetInstance()->ValidateAssetRegistry();
+				    PruneMissingNodes(0, Project::GetInstance()->GetAssetDirectory());
+				    RefreshAssetTree();
+				    CompactTree();
+                }
+            }
+
+            m_PendingAssetLoading.pop();
+        }
+	}
+
+	void ContentBrowserPanel::RefreshEntryPathList()
     {
         m_PathEntryList.erase(m_PathEntryList.begin() + 1, m_PathEntryList.end());
 
@@ -595,7 +640,6 @@ namespace ignite
                 {
                     //it = node.children.erase(it);
                     ++it;
-                    
                 }
                 else
                 {
@@ -607,7 +651,34 @@ namespace ignite
         m_TreeNodes = std::move(newNodes);
     }
 
-    std::filesystem::path ContentBrowserPanel::GetFullPath(uint32_t nodeIndex) const
+	void ContentBrowserPanel::OnImportAssetDialog(void *userData, const char *const *filelist, int filter)
+	{
+        ContentBrowserPanel *cb = (ContentBrowserPanel *)userData;
+        if (!cb)
+        {
+            LOG_ERROR("Import Asset Dialog: Content browser data");
+            return;
+        }
+
+        if (filelist == nullptr)
+        {
+            const char *error = SDL_GetError();
+            LOG_ERROR("Import Asset Dialog Error: {0}", error ? error : "Unknown error");
+            return;
+        }
+
+        for (const char *const *file = filelist; *file != nullptr; file++)
+        {
+            std::filesystem::path filepath = std::string(*file);
+
+            AssetType assetType = GetAssetTypeFromExtension(filepath.extension().string());
+
+            PendingFileLoading pf = { PendingFileLoading::ImportAssets, AssetMetaData(filepath, assetType), userData };
+            cb->m_PendingAssetLoading.push(pf);
+        }
+	}
+
+	std::filesystem::path ContentBrowserPanel::GetFullPath(uint32_t nodeIndex) const
     {
         std::filesystem::path result;
         while (nodeIndex != 0)

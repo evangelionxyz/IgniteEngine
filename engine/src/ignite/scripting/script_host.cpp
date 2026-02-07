@@ -1,0 +1,260 @@
+/* MIT License
+* 
+* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* 
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+* 
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+* 
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
+*/
+
+#include "script_host.hpp"
+#include "ignite/core/logger.hpp"
+
+namespace ignite
+{
+    ScriptHost::ScriptHost()
+    {
+        m_Host = std::make_unique<MochiSharp::DotNetHost>();
+    }
+
+    ScriptHost::~ScriptHost()
+    {
+        m_Host.reset();
+        m_Initialized = false;
+    }
+
+    bool ScriptHost::Init(const std::filesystem::path &configPath)
+    {
+        if (m_Initialized)
+        {
+            LOG_WARN("[Script Host] Already initialized");
+            return true;
+        }
+
+        std::wstring wConfigPath = configPath.wstring();
+        if (!m_Host->Init(wConfigPath))
+        {
+            LOG_ERROR("[Script Host] Failed to initialize HostFXR with config: {}", configPath.generic_string());
+            return false;
+        }
+
+        m_BaseDir = configPath.parent_path();
+        m_Initialized = true;
+
+        LOG_INFO("[Script Host] Initialized with config: {}", configPath.generic_string());
+        return true;
+    }
+
+    bool ScriptHost::LoadAssembly(const std::filesystem::path &assemblyPath)
+    {
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot load assembly - host not initialized");
+            return false;
+        }
+
+        std::string path = assemblyPath.string();
+        if (!m_Host->LoadAssembly(path.c_str()))
+        {
+            LOG_ERROR("[Script Host] Failed to load assembly: {}", assemblyPath.generic_string());
+            return false;
+        }
+
+        LOG_INFO("[Script Host] Loaded assembly: {}", assemblyPath.generic_string());
+        return true;
+    }
+
+    void ScriptHost::RegisterSignatures()
+    {
+        // Void signatures
+        m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void), 
+            "System.Void", nullptr, 0);
+
+        // Void with float parameter
+        {
+            const char *params[] = { "System.Single" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_Float), 
+                "System.Void", params, 1);
+        }
+
+        // Void with UInt64 parameter
+        {
+            const char *params[] = { "System.UInt64" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64), 
+                "System.Void", params, 1);
+        }
+
+        // Bool with Type parameter
+        {
+            const char *params[] = { "System.Type" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Bool_Type), 
+                "System.Boolean", params, 1);
+        }
+
+        // Void with UInt64 and Type parameters
+        {
+            const char *params[] = { "System.UInt64", "System.Type" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_Type), 
+                "System.Void", params, 2);
+        }
+
+        // UInt64 with String parameter
+        {
+            const char *params[] = { "System.String" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::UInt64_String), 
+                "System.UInt64", params, 1);
+        }
+
+        // UInt64 with UInt64 and Vector3 parameters
+        {
+            const char *params[] = { "System.UInt64", "IgniteEngine.Vector3, IgniteScriptEngine" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::UInt64_UInt64_Vec3), 
+                "System.UInt64", params, 2);
+        }
+
+        // Void with UInt64 and Bool parameters
+        {
+            const char *params[] = { "System.UInt64", "System.Boolean" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_Bool), 
+                "System.Void", params, 2);
+        }
+
+        // Void with UInt64 and out Bool
+        {
+            const char *params[] = { "System.UInt64", "System.Boolean&" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_OutBool), 
+                "System.Void", params, 2);
+        }
+
+        // Void with UInt64 and out Vector3
+        {
+            const char *params[] = { "System.UInt64", "IgniteEngine.Vector3&, IgniteScriptEngine" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_OutVec3), 
+                "System.Void", params, 2);
+        }
+
+        // Void with UInt64 and Vector3
+        {
+            const char *params[] = { "System.UInt64", "IgniteEngine.Vector3, IgniteScriptEngine" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_Vec3), 
+                "System.Void", params, 2);
+        }
+
+        // Void with UInt64 and out Quaternion
+        {
+            const char *params[] = { "System.UInt64", "IgniteEngine.Quaternion&, IgniteScriptEngine" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_OutQuat), 
+                "System.Void", params, 2);
+        }
+
+        // Void with UInt64 and Quaternion
+        {
+            const char *params[] = { "System.UInt64", "IgniteEngine.Quaternion, IgniteScriptEngine" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_Quat), 
+                "System.Void", params, 2);
+        }
+
+        // Object with UInt64
+        {
+            const char *params[] = { "System.UInt64" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Object_UInt64), 
+                "System.Object", params, 1);
+        }
+
+        LOG_INFO("[Script Host] Registered method signatures");
+    }
+
+    bool ScriptHost::CreateInstance(const std::string &guid, const std::string &typeName)
+    {
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot create instance - host not initialized");
+            return false;
+        }
+
+        if (!m_Host->CreateInstanceGuid(typeName.c_str(), guid.c_str()))
+        {
+            LOG_ERROR("[Script Host] Failed to create instance {} of type {}", guid, typeName);
+            return false;
+        }
+
+        LOG_TRACE("[Script Host] Created instance {} of type {}", guid, typeName);
+        return true;
+    }
+
+    void ScriptHost::DestroyInstance(const std::string &guid)
+    {
+        if (!m_Initialized)
+        {
+            return;
+        }
+
+        m_Host->DestroyInstanceGuid(guid.c_str());
+        LOG_TRACE("[Script Host] Destroyed instance {}", guid);
+    }
+
+    int ScriptHost::BindInstanceMethod(const std::string &guid, const std::string &methodName, ScriptMethodSignature signature)
+    {
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot bind method - host not initialized");
+            return 0;
+        }
+
+        int methodId = m_Host->BindInstanceMethodGuid(guid.c_str(), methodName.c_str(), static_cast<int>(signature));
+        if (methodId == 0)
+        {
+            LOG_WARN("[Script Host] Failed to bind instance method {}.{}", guid, methodName);
+        }
+
+        return methodId;
+    }
+
+    int ScriptHost::BindStaticMethod(const std::string &typeName, const std::string &methodName, ScriptMethodSignature signature)
+    {
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot bind static method - host not initialized");
+            return 0;
+        }
+
+        int methodId = m_Host->BindStaticMethod(typeName.c_str(), methodName.c_str(), static_cast<int>(signature));
+        if (methodId == 0)
+        {
+            LOG_ERROR("[Script Host] Failed to bind static method {}.{}", typeName, methodName);
+        }
+
+        return methodId;
+    }
+
+    bool ScriptHost::Invoke(int methodId, const void *argsPtr, int argCount, void *returnPtr)
+    {
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot invoke - host not initialized");
+            return false;
+        }
+
+        if (methodId == 0)
+        {
+            LOG_ERROR("[Script Host] Invalid method ID");
+            return false;
+        }
+
+        return m_Host->Invoke(methodId, argsPtr, argCount, returnPtr);
+    }
+}

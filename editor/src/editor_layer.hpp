@@ -24,6 +24,7 @@
 #pragma once
 
 #include <nvrhi/nvrhi.h>
+#include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/layer.hpp"
 #include "ignite/ignite.hpp"
 #include "ignite/graphics/command_list.hpp"
@@ -41,23 +42,6 @@ namespace ignite
     class ScenePanel;
     class ContentBrowserPanel;
     class MaterialsPanel;
-
-    struct PendingFileLoading
-    {
-        enum Type : uint8_t
-        {
-            None = 0,
-            SceneOpen,
-            SceneSave,
-            ProjectOpen,
-            ProjectSave,
-            MeshLoad,
-        };
-
-        Type type = None;
-        std::filesystem::path filepath;
-        void *userData = nullptr;
-    };
 
     class EditorLayer final : public Layer
     {
@@ -133,8 +117,6 @@ namespace ignite
         static void OnProjectSaveFileSelected(void *userData, const char *const *filelist, int filter);
         static void OnProjectOpenFileSelected(void *userData, const char *const *filelist, int filter);
 
-        static void OnMeshFileSelected(void *userData, const char *const *filelist, int filter);
-
         void ProcessPendingFileLoading();
 
         void UISettings();
@@ -151,6 +133,8 @@ namespace ignite
         EditorData m_Data;
 
         std::filesystem::path m_CurrentSceneFilePath;
+    	std::filesystem::path m_CurrentProjectFilepath;
+
         nvrhi::BufferHandle m_DebugRenderBuffer;
         nvrhi::StagingTextureHandle m_MousePickingStagingTexture;
         nvrhi::StagingTextureHandle m_ScreenshotStagingTexture;

@@ -26,23 +26,13 @@
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/entity.hpp"
 #include "script_instance.hpp"
+#include "script_host.hpp"
 
 #include "FileWatch.hpp"
 
 #include <filesystem>
 #include <string>
 #include <unordered_map>
-
-extern "C"
-{
-    typedef struct _MonoClass MonoClass;
-    typedef struct _MonoMethod MonoMethod;
-    typedef struct _MonoObject MonoObject;
-    typedef struct _MonoAssembly MonoAssembly;
-    typedef struct _MonoImage MonoImage;
-    typedef struct _MonoClassField MonoClassField;
-    typedef struct _MonoString MonoString;
-}
 
 namespace ignite
 {
@@ -58,22 +48,17 @@ namespace ignite
 
         void RegisterCoreClassesAndFunctions();
 
-        bool LoadAssembly(const std::filesystem::path &filepath);
+        bool LoadCoreAssembly(const std::filesystem::path &filepath);
         bool LoadAppAssembly(const std::filesystem::path &filepath);
         void ReloadAssembly();
         void SetSceneContext(Scene *scene);
         void ClearSceneContext();
-        bool FieldIsExposed(MonoClass *owner, MonoClassField *field, MonoClass *serializeFieldAttrClass);
-
         
         bool EntityClassExists(const std::string &fullClassName);
         
         void OnCreateEntity(Entity entity);
         void OnUpdateEntity(Entity entity, float time);
         
-        MonoString *CreateString(const char *string);
-        
-        ScriptClass *GetEntityClass();
         std::shared_ptr<ScriptClass> GetEntityClassesByName(const std::string &name);
         std::unordered_map<std::string, std::shared_ptr<ScriptClass>> GetEntityClasses();
         ScriptFieldMap &GetScriptFieldMap(Entity entity);
@@ -81,18 +66,15 @@ namespace ignite
         std::shared_ptr<ScriptInstance> GetEntityScriptInstance(UUID uuid);
         std::vector<std::string> GetScriptClassStorage();
         Scene *GetSceneContext();
-        MonoImage *GetCoreAssemblyImage();
-        MonoImage *GetAppAssemblyImage();
-        MonoObject *GetManagedInstance(UUID uuid);
+        ScriptHost *GetScriptHost();
 
         static ScriptEngine *GetInstance();
 
     private:
-        void InitMono();
-        void ShutdownMono();
+        void InitHostFxr();
+        void ShutdownHostFxr();
         static void OnAppAssemblyFileSystemEvent(const std::string &path, const filewatch::Event eventType);
 
-        MonoObject *InstantiateObject(MonoClass *monoClass);
         void LoadAppAssemblyClasses();
 
         Project *m_Project;

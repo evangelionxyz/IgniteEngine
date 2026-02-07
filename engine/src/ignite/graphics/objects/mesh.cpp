@@ -121,7 +121,7 @@ namespace ignite
         return CreateRef<MeshInstance>(name, mesh, material, meshIndex, materialIndex);
     }
 
-    Ref<Material> MeshLoader::LoadMaterials(const tinygltf::Primitive &primitive, const std::vector<tinygltf::Material>& gltfMaterials,
+    Ref<Material> MeshLoader::LoadMaterial(const tinygltf::Primitive &primitive, const std::vector<tinygltf::Material>& gltfMaterials,
         const std::vector<Ref<Texture>>& loadedTextures, const std::vector<nvrhi::SamplerHandle>& loadedSamplers, int *materialIndex)
     {
         Ref<Material> material;
@@ -181,25 +181,6 @@ namespace ignite
             {
                 material->sampler = loadedSamplers[0];
             }
-            else
-            {
-                auto device = Application::GetGraphicsDevice();
-                auto desc = nvrhi::SamplerDesc();
-                desc.setAllFilters(true);
-                desc.setAllAddressModes(nvrhi::SamplerAddressMode::Repeat);
-                material->sampler = device->createSampler(desc);
-                LOG_ASSERT(material->sampler, "Failed to create sampler");
-            }
-
-            // update binding set
-            material->UpdateBindingSet();
-
-            auto device = Application::GetGraphicsDevice();
-            auto cmd = device->createCommandList();
-            cmd->open();
-            material->UploadToGpu(cmd);
-            cmd->close();
-            device->executeCommandList(cmd);
         }
 
         return material;
@@ -322,16 +303,19 @@ namespace ignite
         std::string err, warn;
 
         bool ok = false;
-        if (filename.ends_with(".glb"))
-            ok = loader.LoadBinaryFromFile(&gltfModel, &err, &warn, filename);
-        else
-            ok = loader.LoadASCIIFromFile(&gltfModel, &err, &warn, filename);
+        if (filename.ends_with(".glb")) ok = loader.LoadBinaryFromFile(&gltfModel, &err, &warn, filename);
+        else ok = loader.LoadASCIIFromFile(&gltfModel, &err, &warn, filename);
 
-        if (!ok)
-            return scene;
+        if (!ok) return scene;
 
         // pre-load textures and samplers
-        const auto textures = LoadTexturesFromGLTF(gltfModel);
+        auto device = Application::GetGraphicsDevice();
+        nvrhi::CommandListHandle cmd = device->createCommandList();
+        cmd->open();
+        const auto textures = LoadTexturesFromGLTF(gltfModel, cmd);
+        cmd->close();
+        device->executeCommandList(cmd);
+
         const auto samplers = GetSamplersFromGLTF(gltfModel);
 
         // preserve nodes
@@ -381,7 +365,22 @@ namespace ignite
 
                 // material
                 int materialIndex = -1;
-                Ref<Material> material = LoadMaterials(primitive, gltfModel.materials, textures, samplers, &materialIndex);
+                Ref<Material> material = LoadMaterial(primitive, gltfModel.materials, textures, samplers, &materialIndex);
+                if (!material)
+                {
+                    // Create fallback
+                    material = CreateRef<Material>();
+                }
+
+                // update binding set
+                material->UpdateBindingSet();
+
+                auto device = Application::GetGraphicsDevice();
+                auto cmd = device->createCommandList();
+                cmd->open();
+                material->UploadToGpu(cmd);
+                cmd->close();
+                device->executeCommandList(cmd);
 
                 Ref<MeshInstance> meshInstance = MeshInstance::Create(gltfMesh.name, mesh, material, node.mesh, materialIndex);
 
@@ -412,7 +411,7 @@ namespace ignite
         return scene;
     }
 
-    std::vector<Ref<Texture>> MeshLoader::LoadTexturesFromGLTF(const tinygltf::Model& model)
+    std::vector<Ref<Texture>> MeshLoader::LoadTexturesFromGLTF(const tinygltf::Model& model, nvrhi::ICommandList *cmd)
     {
         std::vector<Ref<Texture>> gltfTextures;
         LOG_TRACE("Loading {} textures from glTF", model.textures.size());
@@ -437,7 +436,7 @@ namespace ignite
                 Ref<Texture> texture;
                 if (!image.image.empty())
                 {
-                    texture = Texture::Create(Buffer((void*)image.image.data(), image.image.size() * sizeof(uint8_t)), createInfo);
+                    texture = Texture::Create(Buffer((void*)image.image.data(), image.image.size() * sizeof(uint8_t)), createInfo, cmd);
                     LOG_TRACE(" Loaded embedded texture");
                 }
                 else if (!image.uri.empty())

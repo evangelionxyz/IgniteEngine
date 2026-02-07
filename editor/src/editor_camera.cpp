@@ -171,17 +171,43 @@ namespace ignite
 			}
 			else
 			{
-				// Direct zoom for immediate response
-				distance -= wheelDelta * controls.zoomSensitivity;
-				distance = glm::clamp(distance, controls.minDistance, controls.maxDistance);
+				if (projectionType == ProjectionType::Perspective)
+				{
+					// Direct zoom for immediate response
+					distance -= wheelDelta * controls.zoomSensitivity;
+					distance = glm::clamp(distance, controls.minDistance, controls.maxDistance);
+				}
+				else if (projectionType == ProjectionType::Orthographic)
+				{
+					orthoSize -= wheelDelta * controls.zoomSensitivity * 0.5f;
+					orthoSize = glm::clamp(orthoSize, controls.minOrthoSize, controls.maxOrthoSize);
+
+					if (this->width > 0.0f && this->height > 0.0f)
+					{
+						UpdateMatrices(this->width, this->height);
+					}
+				}
 			}
 		}
 
 		// Apply zoom velocity
 		if (controls.enableInertia && abs(zoomVelocity) > 0.001f)
 		{
-			distance -= zoomVelocity * deltaTime * 10.0f;
-			distance = glm::clamp(distance, controls.minDistance, controls.maxDistance);
+			if (projectionType == ProjectionType::Perspective)
+			{
+				distance -= zoomVelocity * deltaTime * 10.0f;
+				distance = glm::clamp(distance, controls.minDistance, controls.maxDistance);
+			}
+			else if (projectionType == ProjectionType::Orthographic)
+			{
+				orthoSize -= wheelDelta * controls.zoomSensitivity * 0.5f;
+				orthoSize = glm::clamp(orthoSize, controls.minOrthoSize, controls.maxOrthoSize);
+				
+				if (this->width > 0.0f && this->height > 0.0f)
+				{
+					UpdateMatrices(this->width, this->height);
+				}
+			}
 
 			// Dampen zoom velocity
 			zoomVelocity *= controls.zoomDamping;

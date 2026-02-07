@@ -26,108 +26,68 @@
 #include "ignite/scene/entity.hpp"
 #include "script_class.hpp"
 
-#include <mono/jit/jit.h>
-
 namespace ignite
 {
     ScriptInstance::ScriptInstance(Ref<ScriptClass> scriptClass, Entity entity)
         : m_ScriptClass(scriptClass)
     {
-        m_Instance = scriptClass->Instantiate();
+        m_ScriptHost = ScriptEngine::GetInstance()->GetScriptHost();
+        LOG_ASSERT(m_ScriptHost, "[Script Instance] ScriptHost is null");
 
-        m_OnConstructor = ScriptEngine::GetInstance()->GetEntityClass()->GetMethod(".ctor", 1);
-        m_OnCreateMethod = scriptClass->GetMethod("OnCreate");
-        m_OnUpdateMethod = scriptClass->GetMethod("OnUpdate", 1);
+        // Use entity UUID as GUID key for the managed instance
+        m_InstanceGuid = std::to_string(static_cast<uint64_t>(entity.GetUUID()));
 
-        // Entity Constructor
+        // Create managed instance
+        if (!m_ScriptHost->CreateInstance(m_InstanceGuid, scriptClass->GetFullName()))
         {
-            UUID entityID = entity.GetUUID();
-            void *param = &entityID;
-            m_ScriptClass->InvokeMethod(m_Instance, m_OnConstructor, &param);
+            LOG_ERROR("[Script Instance] Failed to create managed instance {}", m_InstanceGuid);
+            return;
+        }
+
+        // Bind lifecycle methods
+        m_OnCreateMethodId = scriptClass->BindInstanceMethod(m_InstanceGuid, "OnCreate", ScriptMethodSignature::Void);
+        m_OnUpdateMethodId = scriptClass->BindInstanceMethod(m_InstanceGuid, "OnUpdate", ScriptMethodSignature::Void_Float);
+
+        // Set Entity ID on managed instance if available
+        const int setIdMethod = scriptClass->BindInstanceMethod(m_InstanceGuid, "SetID", ScriptMethodSignature::Void_UInt64);
+        if (setIdMethod)
+        {
+            const uint64_t entityId = static_cast<uint64_t>(entity.GetUUID());
+            void *args[] = { const_cast<uint64_t *>(&entityId) };
+            m_ScriptHost->Invoke(setIdMethod, args, 1, nullptr);
         }
     }
 
     void ScriptInstance::InvokeOnCreate()
     {
-        if (m_OnCreateMethod)
+        if (m_OnCreateMethodId)
         {
-            m_ScriptClass->InvokeMethod(m_Instance, m_OnCreateMethod);
+            m_ScriptHost->Invoke(m_OnCreateMethodId, nullptr, 0, nullptr);
         }
     }
 
     void ScriptInstance::InvokeOnUpdate(float time)
     {
-        if (m_OnUpdateMethod)
+        if (m_OnUpdateMethodId)
         {
-            void *param = &time;
-            m_ScriptClass->InvokeMethod(m_Instance, m_OnUpdateMethod, &param);
+            void *args[] = { &time };
+            m_ScriptHost->Invoke(m_OnUpdateMethodId, args, 1, nullptr);
         }
     }
 
     bool ScriptInstance::GetFieldValueInternal(const std::string &name, void *buffer)
     {
-        const auto &fields = m_ScriptClass->GetFields();
-
-        auto it = fields.find(name);
-        if (it == fields.end())
-        {
-            LOG_ERROR("[Script Instance] Failed to Get Internal Value");
-            return false;
-        }
-
-        const ScriptField &field = it->second;
-        if (field.Type == ScriptFieldType::Entity)
-        {
-            // Get Entity Field from App Class
-            MonoObject *fieldValue = nullptr;
-            mono_field_get_value(m_Instance, field.ClassField, &fieldValue);
-            if (!fieldValue || !fieldValue->vtable)
-            {
-                LOG_ERROR("[Script Instance] Could not get field '{}' in class", name);
-                return false;
-            }
-
-            // get the ID from field's class
-            MonoClass *klass = mono_object_get_class(fieldValue);
-            MonoClassField *idField = mono_class_get_field_from_name(klass, "ID");
-            if (!idField)
-            {
-                LOG_ERROR("[Script Instance] Failed to find field '{}' in Entity class", name);
-                return false;
-            }
-
-            mono_field_get_value(fieldValue, idField, buffer);
-        }
-        else
-        {
-            mono_field_get_value(m_Instance, field.ClassField, buffer);
-        }
-
-        return true;
+        (void)name;
+        (void)buffer;
+        LOG_WARN("[Script Instance] GetFieldValueInternal not implemented for HostFXR yet");
+        return false;
     }
 
     bool ScriptInstance::SetFieldValueInternal(const std::string &name, const void *value)
     {
-        const auto &fields = m_ScriptClass->GetFields();
-        auto it = fields.find(name);
-        if (it == fields.end())
-        {
-            LOG_ERROR("[Script Instance] Failed to set field '{}' value", name);
-            return false;
-        }
-
-        const ScriptField &field = it->second;
-
-        if (field.Type == ScriptFieldType::Entity)
-        {
-            MonoObject *object = static_cast<MonoObject *>(const_cast<void *>(value));
-            mono_field_set_value(m_Instance, field.ClassField, object);
-        }
-        else
-        {
-            mono_field_set_value(m_Instance, field.ClassField, (void *)value);
-        }
-
-        return true;
+        (void)name;
+        (void)value;
+        LOG_WARN("[Script Instance] SetFieldValueInternal not implemented for HostFXR yet");
+        return false;
     }
 }

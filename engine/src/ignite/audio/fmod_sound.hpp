@@ -47,8 +47,8 @@ namespace ignite {
         void SetVolume(float volume) const;
         void SetPitch(float pitch) const;
         void SetMode(FMOD_MODE mode) const;
-        void SetFadeIn(u32 fade_in_start_ms, u32 fade_in_end_ms);
-        void SetFadeOut(u32 fade_out_start_ms, u32 fade_out_end_ms);
+        void SetFadeIn(uint32_t fade_in_start_ms, uint32_t fade_in_end_ms);
+        void SetFadeOut(uint32_t fade_out_start_ms, uint32_t fade_out_end_ms);
         void AddToChannelGroup(FMOD::ChannelGroup *channel_group);
 
         void Release();
@@ -64,8 +64,8 @@ namespace ignite {
         const std::string &GetName() const;
         bool IsPlaying() const;
         bool IsPaused() const;
-        u32 GetLengthMs() const;
-        u32 GetPositionMs() const;
+        uint32_t GetLengthMs() const;
+        uint32_t GetPositionMs() const;
         FMOD::ChannelGroup *GetChannelGroup() const;
 
         static Ref<FmodSound> Create(const std::string &name, const std::string &filepath, FMOD_MODE mode = FMOD_DEFAULT | FMOD_LOOP_OFF);
@@ -81,11 +81,11 @@ namespace ignite {
         FMOD::Channel *m_Channel;
         std::string m_Name;
 
-        u32 m_FadeInStartMs;
-        u32 m_FadeInEndMs;
+        uint32_t m_FadeInStartMs;
+        uint32_t m_FadeInEndMs;
 
-        u32 m_FadeOutStartMs;
-        u32 m_FadeOutEndMs;
+        uint32_t m_FadeOutStartMs;
+        uint32_t m_FadeOutEndMs;
 
         FMOD::ChannelGroup *m_ChannelGroup;
         std::vector<FMOD::DSP *> m_DSPs;

@@ -25,15 +25,9 @@
 
 #include "script_field.hpp"
 #include "script_class.hpp"
+#include "script_host.hpp"
 
 #include "ignite/core/types.hpp"
-
-extern "C"
-{
-    typedef struct _MonoMethod MonoMethod;
-    typedef struct _MonoObject MonoObject;
-    typedef struct _MonoClassField MonoClassField;
-}
 
 namespace ignite
 {
@@ -79,7 +73,7 @@ namespace ignite
         void InvokeOnUpdate(float time);
 
         Ref<ScriptClass> GetScriptClass() { return m_ScriptClass; }
-        MonoObject *GetMonoObject() { return m_Instance; }
+        const std::string &GetInstanceGuid() const { return m_InstanceGuid; }
 
         template<typename T>
         T GetFieldValue(const std::string &name)
@@ -106,11 +100,11 @@ namespace ignite
 
     private:
         Ref<ScriptClass> m_ScriptClass;
+        ScriptHost *m_ScriptHost = nullptr;
 
-        MonoObject *m_Instance = nullptr;
-        MonoMethod *m_OnConstructor = nullptr;
-        MonoMethod *m_OnCreateMethod = nullptr;
-        MonoMethod *m_OnUpdateMethod = nullptr;
+        std::string m_InstanceGuid;
+        int m_OnCreateMethodId = 0;
+        int m_OnUpdateMethodId = 0;
 
         inline static char s_FieldValueBuffer[24];
         friend class ScriptEngine;

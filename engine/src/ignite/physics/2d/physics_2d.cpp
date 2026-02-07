@@ -45,12 +45,12 @@ namespace ignite
         m_WorldId = b2CreateWorld(&worldDef);
 
         entt::registry *reg = m_Scene->registry;
-        auto view = reg->view<Rigidbody2D>();
+        auto view = reg->view<Rigidbody2DComponent>();
         for (entt::entity e : view)
         {
-            ID &id          = reg->get<ID>(e);
-            Rigidbody2D &rb = reg->get<Rigidbody2D>(e);
-            Transform &tr   = reg->get<Transform>(e);
+            IDComponent &id          = reg->get<IDComponent>(e);
+            Rigidbody2DComponent &rb = reg->get<Rigidbody2DComponent>(e);
+            TransformComponent &tr   = reg->get<TransformComponent>(e);
 
             // first, calculate the transformed matrix from parent
             if (id.parent != 0)
@@ -70,15 +70,14 @@ namespace ignite
             bodyDef.linearDamping    = rb.linearDamping;
             bodyDef.isEnabled        = rb.isEnabled;
             bodyDef.isAwake          = rb.isAwake;
-            bodyDef.fixedRotation    = rb.fixedRotation;
 
             rb.bodyId = b2CreateBody(m_WorldId, &bodyDef);
             b2Body_SetUserData(rb.bodyId, static_cast<void *>(&e));
 
             // create box collider
-            if (reg->any_of<BoxCollider2D>(e))
+            if (reg->any_of<BoxCollider2DComponent>(e))
             {
-                auto &bc = reg->get<BoxCollider2D>(e);
+                auto &bc = reg->get<BoxCollider2DComponent>(e);
                 CreateBoxCollider(&bc, rb.bodyId, b2Vec2(bc.size.x * tr.scale.x, bc.size.y * tr.scale.y));
                 b2Shape_SetUserData(bc.shapeId, static_cast<void *>(&e));
             }
@@ -97,8 +96,8 @@ namespace ignite
     {
         entt::registry *reg = m_Scene->registry;
 
-        ID &id = reg->get<ID>(e);
-        Transform &tr      = reg->get<Transform>(e);
+        IDComponent &id = reg->get<IDComponent>(e);
+        TransformComponent &tr      = reg->get<TransformComponent>(e);
 
         // first, calculate the transformed matrix from parent
         if (id.parent != 0)
@@ -106,7 +105,7 @@ namespace ignite
             // SceneManager::CalculateParentTransform(m_Scene, tr, id.parent);
         }
 
-        Rigidbody2D &rb          = reg->get<Rigidbody2D>(e);
+        Rigidbody2DComponent &rb          = reg->get<Rigidbody2DComponent>(e);
 
         b2BodyDef bodyDef        = b2DefaultBodyDef();
         bodyDef.type             = GetB2BodyType(rb.type);
@@ -120,15 +119,14 @@ namespace ignite
         bodyDef.linearDamping    = rb.linearDamping;
         bodyDef.isEnabled        = rb.isEnabled;
         bodyDef.isAwake          = rb.isAwake;
-        bodyDef.fixedRotation    = rb.fixedRotation;
 
         rb.bodyId = b2CreateBody(m_WorldId, &bodyDef);
         b2Body_SetUserData(rb.bodyId, static_cast<void *>(&e));
 
         // create box collider
-        if (reg->any_of<BoxCollider2D>(e))
+        if (reg->any_of<BoxCollider2DComponent>(e))
         {
-            auto &bc = reg->get<BoxCollider2D>(e);
+            auto &bc = reg->get<BoxCollider2DComponent>(e);
             CreateBoxCollider(&bc, rb.bodyId, b2Vec2(bc.size.x * tr.scale.x, bc.size.y * tr.scale.y));
             b2Shape_SetUserData(bc.shapeId, static_cast<void *>(&e));
         }
@@ -137,11 +135,11 @@ namespace ignite
     void Physics2D::DestroyBody(entt::entity e)
     {
         entt::registry *reg = m_Scene->registry;
-        if (reg->any_of<Rigidbody2D>(e))
+        if (reg->any_of<Rigidbody2DComponent>(e))
         {
-            if (reg->any_of<BoxCollider2D>(e))
+            if (reg->any_of<BoxCollider2DComponent>(e))
             {
-                auto &bc = reg->get<BoxCollider2D>(e);
+                auto &bc = reg->get<BoxCollider2DComponent>(e);
 
                 // check b2world is already created
                 if (bc.shapeId.world0 != 0)
@@ -151,7 +149,7 @@ namespace ignite
                 
             }
 
-            Rigidbody2D &rb = reg->get<Rigidbody2D>(e);
+            Rigidbody2DComponent &rb = reg->get<Rigidbody2DComponent>(e);
 
             // check b2world is already created
             if (rb.bodyId.world0 != 0)
@@ -167,15 +165,15 @@ namespace ignite
         b2World_Step(m_WorldId, deltaTime, subStepCount);
 
         const auto reg = m_Scene->registry;
-        for (const auto e : reg->view<Rigidbody2D>())
+        for (const auto e : reg->view<Rigidbody2DComponent>())
         {
-            ID &id = reg->get<ID>(e);
-            Transform &tr = reg->get<Transform>(e);
-            Rigidbody2D &rb = reg->get<Rigidbody2D>(e);
+            IDComponent &id = reg->get<IDComponent>(e);
+            TransformComponent &tr = reg->get<TransformComponent>(e);
+            Rigidbody2DComponent &rb = reg->get<Rigidbody2DComponent>(e);
 
-            if (reg->any_of<BoxCollider2D>(e))
+            if (reg->any_of<BoxCollider2DComponent>(e))
             {
-                BoxCollider2D &bc = reg->get<BoxCollider2D>(e);
+                BoxCollider2DComponent &bc = reg->get<BoxCollider2DComponent>(e);
                 b2Shape_SetFriction(bc.shapeId, bc.friction);
                 b2Shape_SetDensity(bc.shapeId, bc.density, true);
                 b2Shape_SetRestitution(bc.shapeId, bc.restitution);
@@ -200,7 +198,7 @@ namespace ignite
         }
     }
 
-    void Physics2D::CreateBoxCollider(BoxCollider2D *box, b2BodyId bodyId, b2Vec2 size)
+    void Physics2D::CreateBoxCollider(BoxCollider2DComponent *box, b2BodyId bodyId, b2Vec2 size)
     {
         f32 width = glm::abs(size.x);
         f32 height = glm::abs(size.y);
@@ -219,7 +217,7 @@ namespace ignite
         box->shapeId                  = b2CreatePolygonShape(bodyId, &shapeDef, &boxShape);
     }
 
-    void Physics2D::ApplyForce(Rigidbody2D *body, const glm::vec2 &force, const glm::vec2 &point, bool wake)
+    void Physics2D::ApplyForce(Rigidbody2DComponent *body, const glm::vec2 &force, const glm::vec2 &point, bool wake)
     {
         b2Body_ApplyForce(body->bodyId, {force.x, force.y}, {point.x, point.y}, wake);
     }

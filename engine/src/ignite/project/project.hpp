@@ -46,7 +46,6 @@ namespace ignite
         std::filesystem::path scriptsDirectory = "Scripts";
         std::filesystem::path assetRegistryFilepath = "AssetRegistry.ixreg";
         std::filesystem::path premakeFilepath = "premake5.lua";
-        std::filesystem::path batchScriptFilepath = "build.bat";
     };
 
     class Project : public Asset
@@ -92,6 +91,16 @@ namespace ignite
             return GetDirectory() / m_Info.scriptsDirectory;
         }
 
+        std::filesystem::path GetScriptBinDirectory() const
+        {
+            return GetDirectory() / "Bin";
+        }
+
+        std::filesystem::path GetScriptModulePath() const
+        {
+            return GetDirectory() / m_Info.scriptModuleFilepath;
+        }
+
         template<typename T>
         Ref<T> GetAsset(AssetHandle handle)
         {
@@ -116,6 +125,8 @@ namespace ignite
 
     private:
         void GenerateProject();
+        void CopyManagedAssemblies();
+
         Ref<Scene> m_ActiveScene; // current active scene in editor
         ProjectInfo m_Info;
 

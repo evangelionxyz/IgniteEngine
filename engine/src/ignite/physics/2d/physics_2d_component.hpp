@@ -65,7 +65,7 @@ namespace ignite
         return Body2DType_Static;
     }
 
-    class Rigidbody2D : public IComponent
+    class Rigidbody2DComponent : public IComponent
     {
     public:
         Body2DType type          = Body2DType_Static;
@@ -74,7 +74,6 @@ namespace ignite
         f32 gravityScale         = 1.0f;
         f32 linearDamping        = 0.6f;
         f32 angularDamping       = 0.2f;
-        bool fixedRotation       = false;
         bool isAwake             = true;
         bool isEnabled           = true;
         bool isEnableSleep       = false;
@@ -84,7 +83,7 @@ namespace ignite
         virtual CompType GetType() override { return StaticType(); }
     };
 
-    class BoxCollider2D : public IComponent
+    class BoxCollider2DComponent : public IComponent
     {
     public:
         glm::vec2 size        = {0.5f, 0.5f};

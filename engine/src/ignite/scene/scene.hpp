@@ -38,7 +38,7 @@
 
 namespace ignite
 {
-    class Camera;
+    class CameraComponent;
     class Physics2D;
     class JoltScene;
     class Entity;

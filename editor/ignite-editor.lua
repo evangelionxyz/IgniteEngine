@@ -4,7 +4,7 @@ project "IgniteEditor"
     staticruntime "off"
     architecture "x64"
     language "c++"
-    cppdialect "c++20"
+    cppdialect "c++23"
 
     targetdir (OUTPUT_DIR)
     objdir (INTOUTPUT_DIR)
@@ -19,7 +19,7 @@ project "IgniteEditor"
         "IgniteEngine",
         "JOLT",
         "ZLIB",
-        "YAMLCPP",
+        "YAMLCPP"
     }
 
     includedirs {
@@ -45,9 +45,12 @@ project "IgniteEditor"
         "%{IncludeDir.YAMLCPP}",
         "%{IncludeDir.TINYGLTF}",
         "%{IncludeDir.JSON}",
+        "%{IncludeDir.MochiSharpNative}",
+        "%{IncludeDir.Hostfxr}"
     }
 
     defines {
+        "VULKAN_HPP_NO_SPACESHIP_OPERATOR",
         "NVRHI_SHARED_LIBRARY_INCLUDE",
         "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
         "JPH_DEBUG_RENDERER",
@@ -78,10 +81,6 @@ project "IgniteEditor"
     links { "d3dcompiler", "dxcompiler", "delayimp" }
 
     filter "configurations:Debug"
-    runtime "Debug"
-    symbols "on"
-
-    filter "configurations:Debug"
         runtime "Debug"
         optimize "off"
         symbols "on"
@@ -93,7 +92,7 @@ project "IgniteEditor"
     filter "configurations:Release"
         runtime "Release"
         optimize "on"
-        symbols "off"
+        symbols "on"
         defines {
             "NDEBUG"
         }

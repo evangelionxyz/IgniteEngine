@@ -27,11 +27,14 @@ IncludeDir["TINYGLTF"]         = "%{THIRDPARTY_DIR}/TINYGLTF/include"
 IncludeDir["FILEWATCHER"]      = "%{THIRDPARTY_DIR}/Filewatcher/include"
 IncludeDir["NVRHI_VULKAN_HEADERS"] = "%{THIRDPARTY_DIR}/NVRHI/thirdparty/Vulkan-Headers/include"
 IncludeDir["NVRHI_DIRECTX_HEADERS"] = "%{THIRDPARTY_DIR}/NVRHI/thirdparty/DirectX-Headers/include"
+IncludeDir["MochiSharpNative"] = "%{THIRDPARTY_DIR}/MochiSharp/MochiSharp.Native/Source"
 IncludeDir["VULKAN_SDK"]       = "%{VULKAN_SDK_PATH}/Include"
+IncludeDir["Hostfxr"]          = "%{THIRDPARTY_DIR}/MochiSharp/NetCore/include"
 
 --library dirs
 LibraryDir = {}
-LibraryDir["VULKAN_SDK"] = "%{VULKAN_SDK_PATH}/Lib"
+LibraryDir["VULKAN_SDK"]     = "%{VULKAN_SDK_PATH}/Lib"
+LibraryDir["VULKAN_SDK_BIN"] = "%{VULKAN_SDK_PATH}/Bin"
 
 -- =============== WINDOWS ONLY ===============
 Library                                = {}
@@ -41,6 +44,7 @@ Library["winversion"]                  = "version.lib"
 Library["bcrypt"]                      = "bcrypt.lib"
 Library["vulkan"]                      = "%{LibraryDir.VULKAN_SDK}/vulkan-1.lib"
 Library["mono"]                        = "%{THIRDPARTY_DIR}/Mono/lib/windows/libmono-static-sgen.lib"
+Library["Hostfxr"]                     = "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.lib"
 
 Library["FMOD"]                        = "%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod_vc.lib"
 Library["SDL3"]                        = "%{THIRDPARTY_DIR}/SDL3/lib/windows/x64/SDL3.lib"

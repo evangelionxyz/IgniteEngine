@@ -61,9 +61,8 @@ namespace ignite
         { "Rigid Body 2D", CompType_Rigidbody2D },
         { "Box Collider 2D", CompType_BoxCollider2D },
         { "Sprite 2D", CompType_Sprite2D },
-        { "Mesh Filter", CompType_MeshFilter },
-        { "Static Mesh Renderer", CompType_StaticMeshRenderer },
-        { "Skeletal Mesh Renderer", CompType_SkeletalMeshRenderer },
+        { "Static Mesh", CompType_StaticMesh },
+        { "Skeletal Mesh", CompType_SkeletalMesh },
         { "Rigid Body", CompType_Rigidbody },
         { "Box Collider", CompType_BoxCollider },
         { "Sphere Collider", CompType_SphereCollider },
@@ -166,9 +165,8 @@ namespace ignite
             case CompType_Rigidbody2D: return "CompType_Rigidbody2D";
             case CompType_BoxCollider2D: return "CompType_BoxCollider2D";
             case CompType_Sprite2D: return "CompType_Sprite2D";
-            case CompType_MeshFilter: return "CompType_MeshFilter";
-            case CompType_SkeletalMeshRenderer: return "CompType_SkeletalMeshRenderer";
-            case CompType_StaticMeshRenderer: return "CompType_StaticMeshRenderer";
+            case CompType_SkeletalMesh: return "CompType_SkeletalMesh";
+            case CompType_StaticMesh: return "CompType_StaticMesh";
             case CompType_Rigidbody: return "CompType_Rigidbody";
             case CompType_BoxCollider: return "CompType_BoxCollider";
             case CompType_SphereCollider: return "CompType_SphereCollider";
@@ -183,7 +181,7 @@ namespace ignite
         }
     }
 
-    class ID final : public IComponent
+    class IDComponent final : public IComponent
     {
     public:
         std::string name;
@@ -215,7 +213,7 @@ namespace ignite
             return (this->type & type) != 0;
         }
 
-        ID(const std::string &_name,  EntityType _type, const UUID &_uuid = UUID())
+        IDComponent(const std::string &_name,  EntityType _type, const UUID &_uuid = UUID())
             : name(_name)
             , type(_type)
             , uuid(_uuid)
@@ -225,18 +223,18 @@ namespace ignite
         COMPONENT_CLASS_TYPE(CompType_ID)
     };
 
-    class Camera : public IComponent
+    class CameraComponent : public IComponent
     {
     public:
         SceneCamera camera;
         bool primary = true;
 
-        Camera() = default;
+        CameraComponent() = default;
 
         COMPONENT_CLASS_TYPE(CompType_Camera)
     };
 
-    class Transform : public IComponent
+    class TransformComponent : public IComponent
     {
     public:
         // world transforms
@@ -250,9 +248,9 @@ namespace ignite
         bool isAnimated = false;
         bool visible = true;
 
-        Transform() = default;
+        TransformComponent() = default;
 
-        Transform(const glm::vec3 &_translation)
+        TransformComponent(const glm::vec3 &_translation)
             : translation(_translation)
             , rotation(glm::quat(1.0f, 0.0f, 0.0f, 0.0f))
             , scale(glm::vec3(1.0f))
@@ -262,7 +260,7 @@ namespace ignite
         {
         }
 
-        Transform(const glm::vec3 &_translation, const glm::quat &_rotation, const glm::vec3 _scale)
+        TransformComponent(const glm::vec3 &_translation, const glm::quat &_rotation, const glm::vec3 _scale)
             : translation(_translation)
             , rotation(_rotation)
             , scale(_scale)
@@ -335,7 +333,7 @@ namespace ignite
         COMPONENT_CLASS_TYPE(CompType_WorldEnvironment)
     };
 
-    class Sprite2D : public IComponent
+    class Sprite2DComponent : public IComponent
     {
     public:
         AssetHandle handle = AssetHandle(0); // Texture handle
@@ -345,26 +343,24 @@ namespace ignite
         COMPONENT_CLASS_TYPE(CompType_Sprite2D)
     };
 
-    class MeshFilter : public IComponent
+    class StaticMeshComponent : public IComponent
     {
     public:
-        Ref<MeshInstance> mesh; // TODO: Replace with AssetHandle
-        int meshIndex = -1;
+        std::vector<Ref<MeshInstance>> meshInstance;
 
-        MeshFilter() = default;
+        StaticMeshComponent() = default;
 
-        COMPONENT_CLASS_TYPE(CompType_MeshFilter)
+		COMPONENT_CLASS_TYPE(CompType_StaticMesh)
     };
 
-    class StaticMeshRenderer : public IComponent
-    {
-    public:
-        StaticMeshRenderer() = default;
+	class SkeletalMeshComponent : public IComponent
+	{
+	public:
+        SkeletalMeshComponent() = default;
+		COMPONENT_CLASS_TYPE(CompType_SkeletalMesh)
+	};
 
-        COMPONENT_CLASS_TYPE(CompType_StaticMeshRenderer)
-    };
-
-    class Rigibody : public IComponent
+    class RigibodyComponent : public IComponent
     {
     public:
         enum class EMotionQuality
@@ -387,12 +383,12 @@ namespace ignite
 
         JPH::Body *body = nullptr;
 
-        Rigibody() = default;
+        RigibodyComponent() = default;
 
         COMPONENT_CLASS_TYPE(CompType_Rigidbody)
     };
 
-    class PhysicsCollider
+    class PhysicsColliderComponent
     {
     public:
         float friction = 0.6f;
@@ -403,51 +399,51 @@ namespace ignite
         void *shape = nullptr;
     };
 
-    class BoxCollider : public PhysicsCollider, public IComponent
+    class BoxColliderComponent : public PhysicsColliderComponent, public IComponent
     {
     public:
         glm::vec3 scale = { 1.0f, 1.0f, 1.0f };
 
-        BoxCollider() = default;
+        BoxColliderComponent() = default;
 
 
         COMPONENT_CLASS_TYPE(CompType_BoxCollider)
     };
 
-    class SphereCollider: public PhysicsCollider, public IComponent
+    class SphereColliderComponent: public PhysicsColliderComponent, public IComponent
     {
     public:
         float radius = 0.5f;
 
-        SphereCollider() = default;
+        SphereColliderComponent() = default;
 
         COMPONENT_CLASS_TYPE(CompType_SphereCollider)
     };
 
-    class CapsuleCollider : public PhysicsCollider, public IComponent
+    class CapsuleColliderComponent : public PhysicsColliderComponent, public IComponent
     {
     public:
         float radius = 0.5f;
         float height = 1.0f;
 
-        CapsuleCollider() = default;
+        CapsuleColliderComponent() = default;
 
         COMPONENT_CLASS_TYPE(CompType_CapsuleCollider)
     };
 
-    class MeshCollider : public PhysicsCollider, public IComponent
+    class MeshColliderComponent : public PhysicsColliderComponent, public IComponent
     {
     public:
         std::vector<glm::vec3> vertices;
         std::vector<uint32_t> indices;
         bool convex = false; // Whether to use convex hull or triangle mesh
 
-        MeshCollider() = default;
+        MeshColliderComponent() = default;
 
         COMPONENT_CLASS_TYPE(CompType_MeshCollider)
     };
 
-    class AudioSource : public IComponent
+    class AudioSourceComponent : public IComponent
     {
     public:
         AssetHandle handle = AssetHandle(0);
@@ -457,16 +453,16 @@ namespace ignite
         float pan = 0.0f;
         bool playOnStart = false;
 
-        AudioSource() = default;
+        AudioSourceComponent() = default;
 
         COMPONENT_CLASS_TYPE(CompType_AudioSource)
     };
 
-    class Script : public IComponent
+    class ScriptComponent : public IComponent
     {
     public:
         std::string className = "EMPTY";
-        Script() = default;
+        ScriptComponent() = default;
 
 
         COMPONENT_CLASS_TYPE(CompType_Script)

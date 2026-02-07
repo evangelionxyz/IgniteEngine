@@ -263,7 +263,7 @@ namespace ignite {
         }
 
         case AssetType::Material:
-        case AssetType::MeshSource:
+        case AssetType::StaticMesh:
         case AssetType::Skeleton:
         case AssetType::Scene:
         case AssetType::Texture:
@@ -286,13 +286,11 @@ namespace ignite {
         case AssetType::Audio:
         {
             m_LoadedAssets[handle] = asset;
-
             AssetImporter::ImportAsync(handle, metadata, [&](Ref<Asset> assetResult, AssetHandle assetHandle)
             {
                 assetResult->SetReadyFlag(true);
                 m_LoadedAssets[assetHandle] = assetResult;
             });
-
             break;
         }
         }

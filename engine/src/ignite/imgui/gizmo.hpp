@@ -39,7 +39,7 @@ namespace ignite {
         ProjectionType cameraType;
 
         Rect viewRect;
-        float snapValue = 0.25f;
+        float snapValue = 0.05f;
         bool isSnapping = true;
     };
 

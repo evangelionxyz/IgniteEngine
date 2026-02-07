@@ -1,6 +1,7 @@
 project "IgniteEngine"
     location "%{wks.location}/engine"
     kind "StaticLib"
+    architecture "x64"
     language "C++"
     cppdialect "C++23"
 
@@ -35,6 +36,8 @@ project "IgniteEngine"
         "%{IncludeDir.YAMLCPP}",
         "%{IncludeDir.TINYGLTF}",
         "%{IncludeDir.JSON}",
+        "%{IncludeDir.MochiSharpNative}",
+        "%{IncludeDir.Hostfxr}"
     }
 
     links {
@@ -47,11 +50,12 @@ project "IgniteEngine"
         "NVRHI",
         "ZLIB",
         "YAMLCPP",
+        "MochiSharp.Native"
     }
 
     defines {
+        "VULKAN_HPP_NO_SPACESHIP_OPERATOR",
         "JPH_SHARED_LIBRARY",
-        
         "JPH_FLOATING_POINT_EXCEPTIONS_ENABLED",
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
@@ -118,9 +122,14 @@ project "IgniteEngine"
         }
 
         postbuildcommands {
+            '{COPYDIR} "%{wks.location}/resources" "%{cfg.targetdir}/resources"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll" "%{cfg.targetdir}"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/SDL3/lib/windows/x64/SDL3.dll" "%{cfg.targetdir}"',
-            '{COPYDIR} "%{wks.location}/resources" "%{cfg.targetdir}/resources"',
+            '{COPYFILE} "%{LibraryDir.VULKAN_SDK_BIN}/dxcompiler.dll" "%{cfg.targetdir}"',
+
+            -- Copying dotnet libraries
+            '{COPYFILE} "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.dll\" "%{cfg.targetdir}\"',
+            '{COPYFILE} "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/hostfxr.dll\" "%{cfg.targetdir}\"'
         }
 
         filter "configurations:Debug"
@@ -158,7 +167,7 @@ project "IgniteEngine"
 
         filter "configurations:Shipping"
             runtime "release"
-            optimize "on"
+            optimize "speed"
             symbols "off" -- without debug info
             defines {
                 "NDEBUG"

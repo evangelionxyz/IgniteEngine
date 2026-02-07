@@ -38,7 +38,7 @@ jobs:
         os.makedirs('scripts/downloads', exist_ok=True)
         
         # Download Premake5
-        version = "5.0.0-beta7"
+        version = "5.0.0-beta8"
         url = f"https://github.com/premake/premake-core/releases/download/v{version}/premake-{version}-windows.zip"
         zip_path = 'scripts/downloads/premake.zip'
         
@@ -59,8 +59,12 @@ jobs:
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2
 
+    - name: Restore NuGet packages
+      shell: pwsh
+      run: msbuild $env:IGN.sln /t:Restore /p:Configuration=Release /p:Platform="x64"
+
     - name: Build Solution
       run: |
         echo "Using VULKAN_SDK=$env:VULKAN_SDK"
-        msbuild IGN.sln /p:Configuration=Release /p:Platform=x64
+        msbuild IGN.sln /p:Configuration=Release /p:Platform="x64"
 

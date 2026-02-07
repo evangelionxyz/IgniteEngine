@@ -114,8 +114,8 @@ namespace ignite
     {
         scene->SetDirtyFlag(true);
         Entity entity = Entity { scene->registry->create(), scene };
-        entity.AddComponent<ID>(name, type, uuid);
-        entity.AddComponent<Transform>(Transform({0.0f, 0.0f, 0.0f}));
+        entity.AddComponent<IDComponent>(name, type, uuid);
+        entity.AddComponent<TransformComponent>(TransformComponent({0.0f, 0.0f, 0.0f}));
         scene->entities[uuid] = entity;
         return entity;
     }
@@ -129,7 +129,7 @@ namespace ignite
         std::function createFunc = [=, &createdEntity]() mutable
         {
             createdEntity = CreateEntity(scene, name, EntityType_Node, uuid);
-            createdEntity.AddComponent<Sprite2D>();
+            createdEntity.AddComponent<Sprite2DComponent>();
         };
 
         // immediately call createFunc to initialize createdEntity
@@ -137,7 +137,7 @@ namespace ignite
 
         // capture scene and entity by value to preserve the for undo
         Scene *capturedScene = scene;
-        UUID capturedUUID = createdEntity.GetComponent<ID>().uuid;
+        UUID capturedUUID = createdEntity.GetComponent<IDComponent>().uuid;
 
         std::function destroyFunc = [capturedScene, capturedUUID]()
         {
@@ -163,8 +163,8 @@ namespace ignite
         scene->SetDirtyFlag(true);
 
         Entity entity = Entity { scene->registry->create(), scene };
-        entity.AddComponent<ID>(name, EntityType_Node, uuid);
-        entity.AddComponent<Transform>(Transform({ 0.0f, 0.0f, 0.0f }));
+        entity.AddComponent<IDComponent>(name, EntityType_Node, uuid);
+        entity.AddComponent<TransformComponent>(TransformComponent({ 0.0f, 0.0f, 0.0f }));
 
         scene->entities[uuid] = entity;
 
@@ -180,7 +180,7 @@ namespace ignite
         std::function createFunc = [=, &createdEntity]() mutable
         {
             createdEntity = CreateEntity(scene, name, EntityType_Camera, uuid);
-            createdEntity.AddComponent<Camera>();
+            createdEntity.AddComponent<CameraComponent>();
         };
 
         // immediately call createFunc to initialize createdEntity
@@ -188,7 +188,7 @@ namespace ignite
 
         // capture scene and entity by value to preserve the for undo
         Scene *capturedScene = scene;
-        UUID capturedUUID = createdEntity.GetComponent<ID>().uuid;
+        UUID capturedUUID = createdEntity.GetComponent<IDComponent>().uuid;
 
         std::function destroyFunc = [capturedScene, capturedUUID]()
         {
@@ -226,7 +226,7 @@ namespace ignite
 
         // capture scene and entity by value to preserve the for undo
         Scene *capturedScene = scene;
-        UUID capturedUUID = createdEntity.GetComponent<ID>().uuid;
+        UUID capturedUUID = createdEntity.GetComponent<IDComponent>().uuid;
 
         std::function destroyFunc = [capturedScene, capturedUUID]()
         {
@@ -254,7 +254,7 @@ namespace ignite
         if (newName.empty())
             return;
 
-        ID &idComp = entity.GetComponent<ID>();
+        IDComponent &idComp = entity.GetComponent<IDComponent>();
         idComp.name = newName;
     }
 
@@ -265,12 +265,12 @@ namespace ignite
         if (!scene || !scene->registry->valid(entity))
             return;
 
-        ID idComp = entity.GetComponent<ID>();
+        IDComponent idComp = entity.GetComponent<IDComponent>();
 
         // recursively destroy children
         for (UUID childId : idComp.children)
         {
-            entity.GetComponent<ID>().RemoveChild(childId);
+            entity.GetComponent<IDComponent>().RemoveChild(childId);
             DestroyEntity(scene, GetEntity(scene, childId));
         }
 
@@ -282,7 +282,7 @@ namespace ignite
         if (idComp.parent != UUID(0))
         {
             Entity parent = SceneManager::GetEntity(scene, idComp.parent);
-            parent.GetComponent<ID>().RemoveChild(idComp.uuid);
+            parent.GetComponent<IDComponent>().RemoveChild(idComp.uuid);
         }
     }
 
@@ -296,7 +296,7 @@ namespace ignite
         scene->SetDirtyFlag(true);
 
         // first, get current entity's ID Component
-        ID &idComp = entity.GetComponent<ID>();
+        IDComponent &idComp = entity.GetComponent<IDComponent>();
 
         Entity newEntity = SceneManager::CreateEntity(scene, idComp.name, idComp.type);
 
@@ -304,14 +304,14 @@ namespace ignite
         SceneManager::CopyComponentIfExists(AllComponents{}, newEntity, entity);
 
         // get new entity's ID Component
-        ID &newEntityIDComp = newEntity.GetComponent<ID>();
+        IDComponent &newEntityIDComp = newEntity.GetComponent<IDComponent>();
 
         // create its children
         for (UUID cid : idComp.children)
         {
             Entity newChildEntity = DuplicateEntity(scene, GetEntity(scene, cid), false); // add to parent false
 
-            ID &childId = newChildEntity.GetComponent<ID>();
+            IDComponent &childId = newChildEntity.GetComponent<IDComponent>();
             
             // add this child to new entity
             newEntityIDComp.AddChild(childId.uuid);
@@ -325,7 +325,7 @@ namespace ignite
         {
             // get the current entity's parent
             Entity parent = GetEntity(scene, idComp.parent);
-            ID &parentIDComp = parent.GetComponent<ID>();
+            IDComponent &parentIDComp = parent.GetComponent<IDComponent>();
 
             // set new entity parent to this parent
             newEntityIDComp.parent = parentIDComp.uuid;
@@ -347,10 +347,10 @@ namespace ignite
 
     Entity SceneManager::GetEntity(Scene *scene, const std::string &name)
     {
-        auto view = scene->registry->view<ID>();
+        auto view = scene->registry->view<IDComponent>();
         for (entt::entity e : view)
         {
-            const ID &id = view.get<ID>(e);
+            const IDComponent &id = view.get<IDComponent>(e);
             if (id.name == name)
             {
                 return Entity{ e, scene };
@@ -363,8 +363,8 @@ namespace ignite
     {
         scene->SetDirtyFlag(true);
 
-        ID &destIDComp = destination.GetComponent<ID>();
-        ID &sourceIDComp = source.GetComponent<ID>();
+        IDComponent &destIDComp = destination.GetComponent<IDComponent>();
+        IDComponent &sourceIDComp = source.GetComponent<IDComponent>();
 
         if (!IsParent(scene, destIDComp.uuid, sourceIDComp.uuid))
         {
@@ -372,7 +372,7 @@ namespace ignite
             if (sourceIDComp.parent != 0)
             {
                 Entity currentParent = GetEntity(scene, sourceIDComp.parent);
-                currentParent.GetComponent<ID>().RemoveChild(sourceIDComp.uuid);
+                currentParent.GetComponent<IDComponent>().RemoveChild(sourceIDComp.uuid);
             }
 
             // add to target parent
@@ -383,8 +383,8 @@ namespace ignite
 
     bool SceneManager::ChildExists(Scene *scene, Entity destination, Entity source)
     {
-        ID &destIDComp = destination.GetComponent<ID>();
-        ID &sourceIDComp = source.GetComponent<ID>();
+        IDComponent &destIDComp = destination.GetComponent<IDComponent>();
+        IDComponent &sourceIDComp = source.GetComponent<IDComponent>();
 
         // source parent is the destination
         if (sourceIDComp.parent == destIDComp.uuid)
@@ -406,7 +406,7 @@ namespace ignite
         if (!destParent.IsValid())
             return false;
 
-        const ID &destIDComp = destParent.GetComponent<ID>();
+        const IDComponent &destIDComp = destParent.GetComponent<IDComponent>();
 
         if (target == source)
             return true;
@@ -419,7 +419,7 @@ namespace ignite
 
     Entity SceneManager::FindChild(Scene *scene, Entity parent, UUID uuid)
     {
-        UUID parentUUID = parent.GetComponent<ID>().uuid;
+        UUID parentUUID = parent.GetComponent<IDComponent>().uuid;
         if (IsParent(scene, parentUUID, uuid))
             return GetEntity(scene, uuid);
 
@@ -438,16 +438,16 @@ namespace ignite
         EntityMap entityMap;
 
         // create entities for new new scene
-        auto view = srcRegistry->view<ID>();
+        auto view = srcRegistry->view<IDComponent>();
         for (auto e : view)
         {
             // get src entity component
             Entity srcEntity = { e, other.get() };
-            ID &srcIdComp = srcEntity.GetComponent<ID>();
+            IDComponent &srcIdComp = srcEntity.GetComponent<IDComponent>();
 
             // store src entity component to new entity (destination entity)
             Entity newEntity = SceneManager::CreateEntity(newScene.get(), srcIdComp.name, srcIdComp.type, srcIdComp.uuid);
-            ID &newEntityIdComp = newEntity.GetComponent<ID>();
+            IDComponent &newEntityIdComp = newEntity.GetComponent<IDComponent>();
             newEntityIdComp.parent = srcIdComp.parent;
             newEntityIdComp.children = srcIdComp.children;
             newEntityIdComp.type = srcIdComp.type;

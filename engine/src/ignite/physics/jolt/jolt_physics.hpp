@@ -257,7 +257,7 @@ namespace ignite {
         void InstantiateEntity(Entity entity);
         void DestroyEntity(Entity entity);
 
-        JPH::BodyCreationSettings CreateBody(JPH::ShapeRefC shape, Rigibody &rb, const glm::vec3 &position, const glm::quat &rotation);
+        JPH::BodyCreationSettings CreateBody(JPH::ShapeRefC shape, RigibodyComponent &rb, const glm::vec3 &position, const glm::quat &rotation);
 
         void CreateBoxCollider(Entity entity);
         void CreateCapsuleCollider(Entity entity);

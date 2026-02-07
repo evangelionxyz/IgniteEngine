@@ -77,21 +77,21 @@ namespace ignite
         freeIndices.clear();
     }
 
-    void DescriptorHeapAllocator::Alloc(D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_desc_handle)
+    void DescriptorHeapAllocator::Alloc(D3D12_CPU_DESCRIPTOR_HANDLE *outCpuDescHandle, D3D12_GPU_DESCRIPTOR_HANDLE *outGpuDescHandle)
     {
         assert(freeIndices.size() > 0);
-        int idx = freeIndices.back();
+        const int idx = freeIndices.back();
         freeIndices.pop_back();
-        out_cpu_desc_handle->ptr = heapStartCpu.ptr + (idx * heapHandleIncrement);
-        out_gpu_desc_handle->ptr = heapStartGpu.ptr + (idx * heapHandleIncrement);
+        outCpuDescHandle->ptr = heapStartCpu.ptr + (idx * heapHandleIncrement);
+        outGpuDescHandle->ptr = heapStartGpu.ptr + (idx * heapHandleIncrement);
     }
 
-    void DescriptorHeapAllocator::Free(D3D12_CPU_DESCRIPTOR_HANDLE cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE gpu_desc_handle)
+    void DescriptorHeapAllocator::Free(D3D12_CPU_DESCRIPTOR_HANDLE cpuDescHandle, D3D12_GPU_DESCRIPTOR_HANDLE gpuDescHandle)
     {
-        int cpu_idx = (int)((cpu_desc_handle.ptr - heapStartCpu.ptr) / heapHandleIncrement);
-        int gpu_idx = (int)((gpu_desc_handle.ptr - heapStartGpu.ptr) / heapHandleIncrement);
-        assert(cpu_idx == gpu_idx);
-        freeIndices.push_back(cpu_idx);
+        const int cpuIdx = (int)((cpuDescHandle.ptr - heapStartCpu.ptr) / heapHandleIncrement);
+		const int gpuIdx = (int)((gpuDescHandle.ptr - heapStartGpu.ptr) / heapHandleIncrement);
+        assert(cpuIdx == gpuIdx);
+        freeIndices.push_back(cpuIdx);
     }
 
     static bool MoveWindowOntoAdapter(IDXGIAdapter *targetAdapter, RECT &rect)
@@ -99,7 +99,7 @@ namespace ignite
         assert(targetAdapter != NULL);
 
         HRESULT hr = S_OK;
-        unsigned int outputNo = 0;
+        uint32_t outputNo = 0;
         while (SUCCEEDED(hr))
         {
             RefCountPtr<IDXGIOutput> pOutput;

@@ -59,7 +59,7 @@ namespace ignite
         CreateTextureHandle();
     }
 
-    Texture::Texture(Buffer buffer, const TextureCreateInfo &createInfo)
+    Texture::Texture(Buffer buffer, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd)
         : m_Buffer(buffer), m_CreateInfo(createInfo)
     {
         CreateTextureHandle();
@@ -70,15 +70,11 @@ namespace ignite
 
         {
             auto device = Application::GetGraphicsDevice();
-            auto cmd = device->createCommandList();
-            cmd->open();
             SetData(cmd, rowPitch, depthPitch);
-            cmd->close();
-            device->executeCommandList(cmd);
         }
     }
 
-    Texture::Texture(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo)
+    Texture::Texture(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd)
         : m_CreateInfo(createInfo), m_Filepath(filepath)
     {
         LOG_ASSERT(std::filesystem::exists(filepath), "File does not found!");
@@ -124,11 +120,7 @@ namespace ignite
 
         {
             auto device = Application::GetGraphicsDevice();
-            auto cmd = device->createCommandList();
-            cmd->open();
             SetData(cmd, rowPitch, depthPitch);
-            cmd->close();
-            device->executeCommandList(cmd);
         }
     }
 
@@ -155,7 +147,7 @@ namespace ignite
                 m_CreateInfo.format, m_CreateInfo.mipLevels);
 
             // Upload all mip levels
-            for (int mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
+            for (uint32_t mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
             {
                 const auto &mipData = mipChain[mip];
                 cmd->writeTexture(m_Handle, 0, mip, mipData.data.data(), mipData.rowPitch);
@@ -177,7 +169,7 @@ namespace ignite
 
 
             // Upload all mip levels
-            for (int mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
+            for (uint32_t mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
             {
                 const auto &mipData = mipChain[mip];
                 cmd->writeTexture(m_Handle, 0, mip, mipData.data.data(), rowPitch * sizeof(float), depthPitch * sizeof(float));
@@ -195,8 +187,8 @@ namespace ignite
         textureDesc.setWidth(m_CreateInfo.width);
         textureDesc.setHeight(m_CreateInfo.height);
         textureDesc.setFormat(m_CreateInfo.format);
-        textureDesc.setInitialState(nvrhi::ResourceStates::ShaderResource);
-        textureDesc.setKeepInitialState(true);
+        textureDesc.setInitialState(m_CreateInfo.initialState);
+        textureDesc.setKeepInitialState(m_CreateInfo.keepInitialState);
         textureDesc.setMipLevels(m_CreateInfo.mipLevels);
         textureDesc.setDebugName(m_CreateInfo.debugName);
         textureDesc.setArraySize(m_CreateInfo.arraySize);
@@ -205,8 +197,7 @@ namespace ignite
         textureDesc.setDepth(m_CreateInfo.depth);
         textureDesc.setIsUAV(m_CreateInfo.isUAV);
         textureDesc.setIsRenderTarget(m_CreateInfo.isRenderTarget);
-        textureDesc.setIsTypeless(m_CreateInfo.isTypeless);
-        textureDesc.setKeepInitialState(m_CreateInfo.keepInitialState);
+		textureDesc.setIsTypeless(m_CreateInfo.isTypeless);
         textureDesc.isShadingRateSurface = m_CreateInfo.isShadingRateSurface;
         
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
@@ -219,13 +210,13 @@ namespace ignite
         return CreateRef<Texture>(createInfo);
     }
 
-    Ref<Texture> Texture::Create(Buffer buffer, const TextureCreateInfo &createInfo)
+    Ref<Texture> Texture::Create(Buffer buffer, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd)
     {
-        return CreateRef<Texture>(buffer, createInfo);
+        return CreateRef<Texture>(buffer, createInfo, cmd);
     }
 
-    Ref<Texture> Texture::Create(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo)
+    Ref<Texture> Texture::Create(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd)
     {
-        return CreateRef<Texture>(filepath, createInfo);
+        return CreateRef<Texture>(filepath, createInfo, cmd);
     }
 }

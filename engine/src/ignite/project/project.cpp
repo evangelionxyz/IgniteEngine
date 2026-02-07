@@ -31,87 +31,75 @@
 
 namespace ignite
 {
-    static std::string s_PremakeTemplate = R"(workspace "{PROJECT_NAME}"
-    architecture "x64"
-    configurations { "Debug", "Release", "Dist" }
+    static std::string s_PremakeTemplate =
+R"(workspace "{PROJECT_NAME}"
+    configurations { "Release" }
     flags { "MultiProcessorCompile" }
+
     startproject "{PROJECT_NAME}"
+
     project "{PROJECT_NAME}"
-    kind "SharedLib"
-    language "C#"
-    dotnetframework "4.8"
-    location "%{wks.location}"
+        kind "SharedLib"
+        language "C#"
+        dotnetframework "net9.0"
+        location "%{wks.location}"
 
-    targetdir ( "%{prj.location}/bin" )
-    objdir    ( "%{prj.location}/bin/objs" )
-    files     { "%{prj.location}/Scripts/**.cs" }
+        targetdir ( "%{prj.location}/Bin" )
+        objdir    ( "%{prj.location}/Bin/Objs" )
+        files     { "%{prj.location}/Scripts/**.cs" }
 
-    --
-    -- Tell Premake to reference the already‑built IgniteScript.dll
-    -- (one line per configuration keeps the HintPath correct)
-    --
-    filter { "configurations:Debug" }
-        local igniteBin = path.join(os.getenv("IgniteEngine"), "bin/Debug")
-        links     { path.join(igniteBin, "/lib/IgniteScript.dll") }
-        -- copylocal { path.join(igniteBin, "/lib/IgniteScript.dll") }   -- optional
+        links { 
+            "Bin/IgniteScriptEngine.dll",
+            "Bin/MochiSharp.Managed.dll"
+        }
 
-    filter { "configurations:Release" }
-        local igniteBin = path.join(os.getenv("IgniteEngine"), "bin/Release")
-        links     { path.join(igniteBin, "/lib/IgniteScript.dll") }
-        -- copylocal { path.join(igniteBin, "/lib/IgniteScript.dll") }
+        filter { "action:vs* or system:windows" }
+            vsprops {
+                AppendTargetFrameworkToOutputPath = "false",
+                Nullable = "enable",
+                CopyLocalLockFileAssemblies = "true",
+                EnableDynamicLoading = "true",
+                ImplicitUsing = "enable"
+            }
 
-    filter { "configurations:Dist" }
-        local igniteBin = path.join(os.getenv("IgniteEngine"), "bin/Dist")
-        links     { path.join(igniteBin, "/lib/IgniteScript.dll") }
-        -- copylocal { path.join(igniteBin, "/lib/IgniteScript.dll") }
+        filter {}
 
-    filter {}            -- clear filters
-
-
-    filter "system:linux"
-        pic "On"
+        filter "system:linux"
+            pic "On"
             
-    filter "system:windows"
-        systemversion "latest"
+        filter "system:windows"
+            systemversion "latest"
 
-    filter "configurations:Debug"
-        optimize "Off"
-        symbols "Default"
+        filter "configurations:Debug"
+            optimize "Off"
+            symbols "Default"
 
-    filter "configurations:Release"
-        optimize "On"
-        symbols "Default"
+        filter "configurations:Release"
+            optimize "On"
+            symbols "Default"
 
-    filter "configurations:Shipping"
-        optimize "Full"
-        symbols "Off"
+        filter "configurations:Shipping"
+            optimize "Full"
+            symbols "Off"
 )";
 
-    static std::string s_BatchScriptTemplate = R"(pushd %~dp0
-premake5 vs2022
-dotnet msbuild {PROJECT_NAME}.sln
-popd
-)";
-
-    static std::string s_CSSharpScriptTemplate = R"(using Ignite;
+    static std::string s_CSSharpScriptTemplate =
+R"(using IgniteEngine;
 using System;
 
-namespace {PROJECT_NAME}
+namespace {PROJECT_NAME};
+public class Game : Entity
 {
-    public class Game : Entity
+    public void OnCreate()
     {
-        public void OnCreate()
-        {
-            // Initialize you object here
-            Console.WriteLine("Hello From C#!");
-        }
-
-        public void OnUpdate(float deltaTime)
-        {
-            // Update loop
-        }
+        // Initialize you object here
+        Console.WriteLine("Hello From C#!");
     }
-}
+
+    public void OnUpdate(float deltaTime)
+    {
+        // Update loop
+    }
 )";
 
     Project *project = nullptr;
@@ -193,12 +181,13 @@ namespace {PROJECT_NAME}
     bool Project::BuildSolution()
     {
         // execute build.batch
-        std::string buildCommand = (GetDirectory() / m_Info.batchScriptFilepath).generic_string();
+        std::string buildCommand = "msbuild " + GetSolutionFilepath().generic_string();
         std::system(buildCommand.c_str());
 
-        m_Info.scriptModuleFilepath = std::format("bin/{}.dll", m_Info.name);
+        m_Info.scriptModuleFilepath = std::format("{}/{}.dll", GetScriptBinDirectory().string(), m_Info.name);
 
         bool success = std::filesystem::exists(GetDirectory() / m_Info.scriptModuleFilepath);
+
         // Validate .dll file
         LOG_ASSERT(success, "[Project] Failed to build Solution");
         return success;
@@ -238,22 +227,15 @@ namespace {PROJECT_NAME}
             std::fstream outfile = std::fstream(GetDirectory() / m_Info.premakeFilepath, std::ios::out);
             outfile << premakeTemplate;
             outfile.close();
-
-            // copy template
-            std::string batchScriptTemplate = s_BatchScriptTemplate;
-            stringutils::ReplaceWith(batchScriptTemplate, "{PROJECT_NAME}", m_Info.name);
-            outfile = std::fstream(GetDirectory() / m_Info.batchScriptFilepath, std::ios::out);
-            outfile << batchScriptTemplate;
-            outfile.close();
         }
 
         // copy IgniteScript.dll to project dir
-        std::filesystem::path projectBinDir = projectDir / "bin";
+        std::filesystem::path projectBinDir = GetScriptBinDirectory();
         if (!std::filesystem::exists(projectBinDir))
             std::filesystem::create_directory(projectBinDir);
 
-        std::filesystem::path scriptCoreDLLSource = std::filesystem::current_path() / "lib/IgniteScript.dll";
-        std::filesystem::path scriptCoreDLLDestination = projectBinDir / "IgniteScript.dll";
+        std::filesystem::path scriptCoreDLLSource = std::filesystem::current_path() / "Bin/IgniteScriptEngine.dll";
+        std::filesystem::path scriptCoreDLLDestination = projectBinDir / "IgniteScriptEngine.dll";
         if (std::filesystem::exists(scriptCoreDLLSource) && !std::filesystem::exists(scriptCoreDLLDestination))
         {
             std::filesystem::copy_file(scriptCoreDLLSource, scriptCoreDLLDestination);
@@ -261,4 +243,10 @@ namespace {PROJECT_NAME}
 
         BuildSolution();
     }
+
+    void Project::CopyManagedAssemblies()
+    {
+
+    }
+
 }

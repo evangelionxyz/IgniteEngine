@@ -25,11 +25,6 @@
 
 #include <string>
 
-extern "C" 
-{
-    typedef struct _MonoClassField MonoClassField;
-}
-
 namespace ignite
 {
     enum class ScriptFieldType
@@ -57,7 +52,5 @@ namespace ignite
     {
         ScriptFieldType Type = ScriptFieldType::Invalid;
         std::string Name;
-
-        MonoClassField *ClassField = nullptr;
     };
 }
