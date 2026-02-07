@@ -364,15 +364,14 @@ namespace ignite {
 		if (m_Scene)
 		{
 			// create environment
+			auto cmd = m_CommandList->GetActiveHandle();
+			cmd->open();
 			m_Environment = Environment::Create(m_Scene.get());
-			m_Environment->LoadTexture("resources/hdr/klippad_sunrise_2_2k.hdr");
+			m_Environment->LoadTexture("resources/hdr/klippad_sunrise_2_2k.hdr", cmd);
 			m_Environment->UpdateBindingSet();
-
-			auto commandList = m_CommandList->GetActiveHandle();
-			commandList->open();
-			m_Environment->WriteBuffer(commandList);
-			commandList->close();
-			m_Device->executeCommandList(commandList);
+			m_Environment->WriteBuffer(cmd);
+			cmd->close();
+			m_Device->executeCommandList(cmd);
 		}
 	}
 
@@ -429,14 +428,14 @@ namespace ignite {
 			m_Environment->End();
 		}
 
-		m_CascadedShadowMap->EndCascade(cmd);
+		// m_CascadedShadowMap->EndCascade(cmd);
 
 		m_CommandList->Submit();
 	}
 
 	void SceneRenderer::ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera)
 	{
-		auto meshView = m_Scene->registry->view<Transform, StaticMeshRenderer, MeshFilter>();
+		auto meshView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
 
 		nvrhi::GraphicsState csmState = nvrhi::GraphicsState();
 		Ref<GraphicsPipeline> csmPipeline = m_CascadedShadowMap->GetPipeline();
@@ -483,9 +482,8 @@ namespace ignite {
 
 			for (entt::entity e : meshView)
 			{
-				Transform& tr = m_Scene->registry->get<Transform>(e);
-				MeshFilter& mesh = m_Scene->registry->get<MeshFilter>(e);
-                StaticMeshRenderer mrenderer = m_Scene->registry->get<StaticMeshRenderer>(e);
+				auto& tr = m_Scene->registry->get<TransformComponent>(e);
+				auto& smc = m_Scene->registry->get<StaticMeshComponent>(e);
 #if 0
 				if (!mesh.model)
 					continue;
@@ -522,7 +520,7 @@ namespace ignite {
 
 	void SceneRenderer::ColorPass(nvrhi::ICommandList* cmd, ICamera* camera, nvrhi::IFramebuffer *framebuffer)
 	{
-		auto meshView = m_Scene->registry->view<Transform, MeshFilter, StaticMeshRenderer>();
+		auto meshView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
 		Ref<GraphicsPipeline> geomPSO = GetGeomPipelineForFB(framebuffer, m_FillMode);
 		nvrhi::GraphicsState geomGState = nvrhi::GraphicsState();
 		geomGState.pipeline = geomPSO->GetHandle();
@@ -531,11 +529,10 @@ namespace ignite {
 
 		for (entt::entity e : meshView)
 		{
-			Transform &tr = m_Scene->registry->get<Transform>(e);
-			MeshFilter &mfilter = m_Scene->registry->get<MeshFilter>(e);
-            StaticMeshRenderer &mrenderer = m_Scene->registry->get<StaticMeshRenderer>(e);
-
-			if (!mfilter.mesh)
+			TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+			auto &smc = m_Scene->registry->get<StaticMeshComponent>(e);
+#if 0
+			if (!s.mesh)
 				continue;
 
             auto &mesh = mfilter.mesh;
@@ -567,18 +564,19 @@ namespace ignite {
             args.instanceCount = 1;
 
             cmd->drawIndexed(args);
+#endif
 		}
 
 		// 2D Pass
 		m_Renderer2D->Begin(cmd);
-		auto object2DView = m_Scene->registry->view<Transform, Sprite2D>();
+		auto object2DView = m_Scene->registry->view<TransformComponent, Sprite2DComponent>();
 		for (entt::entity e : object2DView)
 		{
-			Transform &tr = m_Scene->registry->get<Transform>(e);
+			TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
 			if (!tr.visible)
 				continue;
 
-			Sprite2D &sprite = m_Scene->registry->get<Sprite2D>(e);
+			Sprite2DComponent &sprite = m_Scene->registry->get<Sprite2DComponent>(e);
 			Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(sprite.handle);
 			m_Renderer2D->DrawQuad(tr.GetWorldMatrix(), sprite.color, texture, sprite.tilingFactor);
 		}

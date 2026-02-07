@@ -47,14 +47,14 @@ namespace ignite
     static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_LineBindingSetCache;
 
     // Helper to build a quad pipeline for a framebuffer (once) and cache it.
-    static Ref<GraphicsPipeline> GetQuadPipelineForFB(nvrhi::IFramebuffer* framebuffer, nvrhi::RasterFillMode fillMode)
+    static Ref<GraphicsPipeline> GetQuadPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
     {
         auto key = MakeFramebufferKey(framebuffer);
         auto it = s_QuadPSOCache.find(key);
         if (it != s_QuadPSOCache.end())
             return it->second;
-        
-        nvrhi::IDevice* device = Application::GetGraphicsDevice();
+
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
         GraphicsPipelineParams params;
         params.enableBlend = true;
@@ -94,14 +94,14 @@ namespace ignite
     }
 
     // Helper to build a line pipeline for a framebuffer (once) and cache it.
-    static Ref<GraphicsPipeline> GetLinePipelineForFB(nvrhi::IFramebuffer* framebuffer)
+    static Ref<GraphicsPipeline> GetLinePipelineForFB(nvrhi::IFramebuffer *framebuffer)
     {
         auto key = MakeFramebufferKey(framebuffer);
         auto it = s_LinePSOCache.find(key);
         if (it != s_LinePSOCache.end())
             return it->second;
-        
-        nvrhi::IDevice* device = Application::GetGraphicsDevice();
+
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
         GraphicsPipelineParams params;
         params.enableBlend = true;
@@ -137,7 +137,7 @@ namespace ignite
         if (it != s_QuadBindingSetCache.end())
             return it->second;
 
-        nvrhi::IDevice* device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
         // then add textures
         const auto samplerDesc = nvrhi::SamplerDesc()
@@ -169,7 +169,7 @@ namespace ignite
         if (it != s_LineBindingSetCache.end())
             return it->second;
 
-        nvrhi::IDevice* device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
         // create binding set
         nvrhi::BindingSetDesc bindingSetDesc;
@@ -197,7 +197,7 @@ namespace ignite
     {
         s_QuadPSOCache.clear();
         s_LinePSOCache.clear();
-        
+
         s_QuadBindingSetCache.clear();
         s_LineBindingSetCache.clear();
     }
@@ -232,10 +232,10 @@ namespace ignite
         }
 
         m_QuadBatch.indexBuffer->SetData(Buffer(indices.data(), indices.size() * sizeof(uint32_t)));
-        
-        QUAD_POSITIONS[0] = {-0.5f, -0.5f, 0.0f, 1.0f }; // bottom-left
+
+        QUAD_POSITIONS[0] = { -0.5f, -0.5f, 0.0f, 1.0f }; // bottom-left
         QUAD_POSITIONS[1] = { 0.5f,  0.5f, 0.0f, 1.0f }; // top-right
-        QUAD_POSITIONS[2] = {-0.5f,  0.5f, 0.0f, 1.0f }; // top-left
+        QUAD_POSITIONS[2] = { -0.5f,  0.5f, 0.0f, 1.0f }; // top-left
         QUAD_POSITIONS[3] = { 0.5f, -0.5f, 0.0f, 1.0f }; // bottom-right
     }
 
@@ -252,7 +252,7 @@ namespace ignite
         s_QuadPSOCache.clear();
     }
 
-    void Renderer2D::Begin(nvrhi::ICommandList* cmd)
+    void Renderer2D::Begin(nvrhi::ICommandList *cmd)
     {
         // Quad data
         m_QuadBatch.indexCount = 0;
@@ -271,9 +271,9 @@ namespace ignite
     {
         const nvrhi::Viewport &viewport = framebuffer->getFramebufferInfo().getViewport();
 
-         if (m_LineBatch.indexCount > 0)
+        if (m_LineBatch.indexCount > 0)
         {
-            const size_t bufferSize = reinterpret_cast<uint8_t*>(m_LineBatch.vertexBufferPtr) - reinterpret_cast<uint8_t*>(m_LineBatch.vertexBufferBase);
+            const size_t bufferSize = reinterpret_cast<uint8_t *>(m_LineBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_LineBatch.vertexBufferBase);
             m_LineBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_LineBatch.vertexBufferBase, bufferSize));
 
             Ref<GraphicsPipeline> gp = GetLinePipelineForFB(framebuffer);
@@ -284,7 +284,7 @@ namespace ignite
                 .setFramebuffer(framebuffer)
                 .addBindingSet(bindingSet)
                 .setViewport(nvrhi::ViewportState().addViewportAndScissorRect(viewport))
-                .addVertexBuffer(nvrhi::VertexBufferBinding{ m_LineBatch.vertexBuffer->GetHandle(), 0, 0});
+                .addVertexBuffer(nvrhi::VertexBufferBinding{ m_LineBatch.vertexBuffer->GetHandle(), 0, 0 });
             m_Cmd->setGraphicsState(graphicsState);
 
             nvrhi::DrawArguments args;
@@ -296,7 +296,7 @@ namespace ignite
 
         if (m_QuadBatch.indexCount > 0)
         {
-            const size_t bufferSize = reinterpret_cast<uint8_t*>(m_QuadBatch.vertexBufferPtr) - reinterpret_cast<uint8_t*>(m_QuadBatch.vertexBufferBase);
+            const size_t bufferSize = reinterpret_cast<uint8_t *>(m_QuadBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_QuadBatch.vertexBufferBase);
             m_QuadBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_QuadBatch.vertexBufferBase, bufferSize));
 
             Ref<GraphicsPipeline> gp = GetQuadPipelineForFB(framebuffer, m_FillMode);
@@ -307,8 +307,8 @@ namespace ignite
                 .setFramebuffer(framebuffer)
                 .addBindingSet(bindingSet)
                 .setViewport(nvrhi::ViewportState().addViewportAndScissorRect(viewport))
-                .addVertexBuffer(nvrhi::VertexBufferBinding{ m_QuadBatch.vertexBuffer->GetHandle(), 0, 0})
-                .setIndexBuffer({ m_QuadBatch.indexBuffer->GetHandle(), nvrhi::Format::R32_UINT});
+                .addVertexBuffer(nvrhi::VertexBufferBinding{ m_QuadBatch.vertexBuffer->GetHandle(), 0, 0 })
+                .setIndexBuffer({ m_QuadBatch.indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
             m_Cmd->setGraphicsState(graphicsState);
 
             nvrhi::DrawArguments args;
@@ -327,8 +327,8 @@ namespace ignite
         m_LineBatch.indexCount = 0;
         m_LineBatch.count = 0;
     }
-    
-    void Renderer2D::DrawBox(const glm::mat4& transform, const glm::vec4& color)
+
+    void Renderer2D::DrawBox(const glm::mat4 &transform, const glm::vec4 &color)
     {
         if (m_LineBatch.count >= m_LineBatch.maxCount)
             Renderer2D::End();
@@ -367,7 +367,7 @@ namespace ignite
         m_LineBatch.count++;
     }
 
-    void Renderer2D::DrawRect(const glm::mat4& transform, const glm::vec4& color)
+    void Renderer2D::DrawRect(const glm::mat4 &transform, const glm::vec4 &color)
     {
         if (m_LineBatch.count >= m_LineBatch.maxCount)
             Renderer2D::End();
@@ -395,12 +395,12 @@ namespace ignite
         m_LineBatch.count++;
     }
 
-    void Renderer2D::DrawLine(const std::vector<glm::vec3>& positions, const glm::vec4& color)
+    void Renderer2D::DrawLine(const std::vector<glm::vec3> &positions, const glm::vec4 &color)
     {
         if (m_LineBatch.count >= m_LineBatch.maxCount)
             Renderer2D::End();
 
-        for (auto& pos : positions)
+        for (auto &pos : positions)
         {
             m_LineBatch.vertexBufferPtr->position = pos;
             m_LineBatch.vertexBufferPtr->color = color;
@@ -412,7 +412,7 @@ namespace ignite
         m_LineBatch.count++;
     }
 
-    void Renderer2D::DrawLine(const glm::vec3& pos0, const glm::vec3& pos1, const glm::vec4& color)
+    void Renderer2D::DrawLine(const glm::vec3 &pos0, const glm::vec3 &pos1, const glm::vec4 &color)
     {
         if (m_LineBatch.count >= m_LineBatch.maxCount)
             Renderer2D::End();
@@ -429,7 +429,7 @@ namespace ignite
         m_LineBatch.count++;
     }
 
-    void Renderer2D::DrawAABB(const AABB& aabb, const glm::vec4& color /*= glm::vec4(1.0f)*/)
+    void Renderer2D::DrawAABB(const AABB &aabb, const glm::vec4 &color /*= glm::vec4(1.0f)*/)
     {
         // Bottom face
         DrawLine({ {aabb.min.x, aabb.min.y, aabb.min.z}, {aabb.max.x, aabb.min.y, aabb.min.z} }, color);
@@ -476,11 +476,11 @@ namespace ignite
 
         for (uint32_t i = 0; i < quadVertexCount; ++i)
         {
-            m_QuadBatch.vertexBufferPtr->position     = positions[i];
-            m_QuadBatch.vertexBufferPtr->texCoord     = textureCoords[i];
+            m_QuadBatch.vertexBufferPtr->position = positions[i];
+            m_QuadBatch.vertexBufferPtr->texCoord = textureCoords[i];
             m_QuadBatch.vertexBufferPtr->tilingFactor = tilingFactor;
-            m_QuadBatch.vertexBufferPtr->color        = color;
-            m_QuadBatch.vertexBufferPtr->texIndex     = texIndex;
+            m_QuadBatch.vertexBufferPtr->color = color;
+            m_QuadBatch.vertexBufferPtr->texIndex = texIndex;
             m_QuadBatch.vertexBufferPtr++;
         }
 
@@ -488,21 +488,21 @@ namespace ignite
         m_QuadBatch.count++;
     }
 
-    void Renderer2D::DrawQuad(const glm::vec3& position, const glm::vec2& size, f32 rotation, const glm::vec4& color, const Ref<Texture>& texture, const glm::vec2& tilingFactor)
+    void Renderer2D::DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &tilingFactor)
     {
-        glm::mat4 transform = glm::translate(glm::mat4(1.0f), position) 
-            * glm::rotate(glm::mat4(1.0f), rotation, {0.0f, 0.0f, 1.0f })
+        glm::mat4 transform = glm::translate(glm::mat4(1.0f), position)
+            * glm::rotate(glm::mat4(1.0f), rotation, { 0.0f, 0.0f, 1.0f })
             * glm::scale(glm::mat4(1.0f), { size.x, size.y, 1.0f });
         DrawQuad(transform, color, texture, tilingFactor);
     }
 
-    void Renderer2D::DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture>& texture, const glm::vec2 &tilingFactor)
+    void Renderer2D::DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &tilingFactor)
     {
         glm::mat4 transform = glm::translate(glm::mat4(1.0f), position) * glm::scale(glm::mat4(1.0f), { size.x, size.y, 1.0f });
         DrawQuad(transform, color, texture, tilingFactor);
     }
-    
-    void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture>& texture, const glm::vec2 &tilingFactor)
+
+    void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &tilingFactor)
     {
         if (m_QuadBatch.count >= m_QuadBatch.maxCount)
             Renderer2D::End();
@@ -519,11 +519,11 @@ namespace ignite
 
         for (uint32_t i = 0; i < quadVertexCount; ++i)
         {
-            m_QuadBatch.vertexBufferPtr->position     = transform * QUAD_POSITIONS[i];
-            m_QuadBatch.vertexBufferPtr->texCoord     = textureCoords[i];
+            m_QuadBatch.vertexBufferPtr->position = transform * QUAD_POSITIONS[i];
+            m_QuadBatch.vertexBufferPtr->texCoord = textureCoords[i];
             m_QuadBatch.vertexBufferPtr->tilingFactor = tilingFactor;
-            m_QuadBatch.vertexBufferPtr->color        = color;
-            m_QuadBatch.vertexBufferPtr->texIndex     = texIndex;
+            m_QuadBatch.vertexBufferPtr->color = color;
+            m_QuadBatch.vertexBufferPtr->texIndex = texIndex;
             m_QuadBatch.vertexBufferPtr++;
         }
 
@@ -531,9 +531,9 @@ namespace ignite
         m_QuadBatch.count++;
     }
 
-    uint32_t Renderer2D::GetOrInsertTexture(const Ref<Texture>& texture)
+    uint32_t Renderer2D::GetOrInsertTexture(const Ref<Texture> &texture)
     {
-        if (texture == nullptr)
+        if (texture == nullptr || (texture && !texture->GetHandle()))
             return 0;
 
         uint32_t textureIndex = 0;
@@ -556,7 +556,7 @@ namespace ignite
                 End();
                 return MAX_TEXTURE_BATCH_COUNT;
             }
-            
+
             textureIndex = m_QuadBatch.textureSlotIndex;
             m_QuadBatch.textureSlots[m_QuadBatch.textureSlotIndex] = texture;
             m_QuadBatch.textureSlotIndex++;

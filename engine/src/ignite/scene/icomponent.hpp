@@ -36,10 +36,8 @@ namespace ignite
         CompType_Transform,
         CompType_Sprite2D,
 
-        // Mesh Component
-        CompType_MeshFilter,
-        CompType_SkeletalMeshRenderer,
-        CompType_StaticMeshRenderer, // Containing Materials, Lighting
+        CompType_SkeletalMesh,
+        CompType_StaticMesh,
         
         CompType_BoxCollider2D,
         CompType_Rigidbody2D,

@@ -113,7 +113,7 @@ namespace ignite {
         static MeshScene LoadSceneGraphFromGLTF(const std::string& filename);
 
     private:
-        static std::vector<Ref<Texture>> LoadTexturesFromGLTF(const tinygltf::Model& model);
+        static std::vector<Ref<Texture>> LoadTexturesFromGLTF(const tinygltf::Model& model, nvrhi::ICommandList *cmd);
         static std::vector<nvrhi::SamplerHandle> GetSamplersFromGLTF(const tinygltf::Model& model);
         static const unsigned char* GetBufferData(const tinygltf::Model& model, const tinygltf::Accessor& accessor);
     };

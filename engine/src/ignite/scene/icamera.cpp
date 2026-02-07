@@ -32,9 +32,15 @@ namespace ignite
     {
     }
 
-    void ICamera::UpdateMatrices(float aspectRatio)
+    void ICamera::UpdateMatrices(float width, float height)
     {
-		view = glm::lookAt(position, target, { 0.0f, 1.0f, 0.0f });
+        this->width = width;
+        this->height = height;
+
+        const float aspectRatio = width / height;
+		
+        view = glm::lookAt(position, target, { 0.0f, 1.0f, 0.0f });
+        
         switch (projectionType)
         {
             case ProjectionType::Orthographic:

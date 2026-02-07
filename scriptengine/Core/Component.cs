@@ -21,7 +21,7 @@
 * SOFTWARE.
 */
 
-﻿using System;
+using System;
 namespace IgniteEngine;
 
 public abstract class Component

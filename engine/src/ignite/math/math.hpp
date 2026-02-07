@@ -42,13 +42,13 @@
 
 namespace ignite
 {
-    class Transform;
+    class TransformComponent;
 
     class Math
     {
     public:
-        static glm::mat4 ComposeTransformComponent(const Transform &transform);
-        static void DecomposeTransformComponent(const glm::mat4 &matrix, Transform &outTransform);
+        static glm::mat4 ComposeTransformComponent(const TransformComponent &transform);
+        static void DecomposeTransformComponent(const glm::mat4 &matrix, TransformComponent &outTransform);
 
         static bool DecomposeTransform(const glm::mat4 &transform, glm::vec3 &outTranslation, glm::quat &outRotation, glm::vec3 &out_scale);
         static bool DecomposeTransformEuler(const glm::mat4 &transform, glm::vec3 &outTranslation, glm::vec3 &outRotation, glm::vec3 &out_scale);

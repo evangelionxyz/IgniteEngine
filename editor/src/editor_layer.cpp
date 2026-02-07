@@ -53,11 +53,6 @@ namespace ignite
         {
             {"Ignite Project (ixproj)", "ixproj"}
         };
-
-        const SDL_DialogFileFilter kMeshFileFilters[] =
-        {
-            { "3D Model Files (gltf;glb)", "gltf;glb" }
-        };
     }
 
     EditorLayer *s_EditorLayerInstance = nullptr;
@@ -65,18 +60,6 @@ namespace ignite
     EditorLayer *EditorLayer::GetInstance()
     {
         return s_EditorLayerInstance;
-    }
-
-    void EditorLayer::OnDialogLoadMesh(Ref<MeshInstance> &outMesh)
-    {
-        SDL_ShowOpenFileDialog(OnMeshFileSelected,
-            &outMesh,
-            Application::GetInstance()->GetWindow()->GetWindowHandle(),
-            kMeshFileFilters,
-            std::size(kMeshFileFilters),
-            nullptr,
-            false
-        );
     }
 
     EditorLayer::EditorLayer(const std::string &name)
@@ -140,6 +123,11 @@ namespace ignite
 
         ProcessPendingFileLoading();
 
+        if (m_ContentBrowserPanel)
+        {
+            m_ContentBrowserPanel->OnUpdate(deltaTime);
+        }
+
         Renderer::OnUpdate();
 
         // update panels
@@ -192,7 +180,7 @@ namespace ignite
                 Entity entity = m_ScenePanel->GetSelectedEntity();
                 if (entity.IsValid())
                 {
-                    m_ScenePanel->GetViewportCamera().target = entity.GetComponent<Transform>().translation;
+                    m_ScenePanel->GetViewportCamera().target = entity.GetComponent<TransformComponent>().translation;
                 }
                 break;
             }
@@ -313,7 +301,7 @@ namespace ignite
             ICamera *camera = &m_ScenePanel->GetViewportCamera();
             if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
             {
-                camera = &primaryCam.GetComponent<Camera>().camera;
+				camera = &primaryCam.GetComponent<CameraComponent>().camera;
             }
             m_SceneRenderer.RenderTo(camera,
                 m_ScenePanel->GetSceneViewportRT(),
@@ -325,9 +313,9 @@ namespace ignite
 
         if (Entity selectedEntity = m_ScenePanel->GetSelectedEntity())
         {
-            if (selectedEntity.HasComponent<Camera>())
+            if (selectedEntity.HasComponent<CameraComponent>())
             {
-                ICamera *camera = &selectedEntity.GetComponent<Camera>().camera;
+                ICamera *camera = &selectedEntity.GetComponent<CameraComponent>().camera;
                 m_SceneRenderer.RenderTo(camera,
                     m_ScenePanel->GetSceneCameraRT(),
                     m_ScenePanel->GetUICameratRT(),
@@ -392,7 +380,7 @@ namespace ignite
                 m_Data.hoveredEntity = pixelData[pixelY * (rowPitch / sizeof(uint32_t)) + pixelX];
 
                 bool found = false;
-                auto view = m_ActiveScene->registry->view<Transform>();
+                auto view = m_ActiveScene->registry->view<TransformComponent>();
                 for (entt::entity e : view)
                 {
                     if (uint32_t eId = static_cast<uint32_t>(e); eId == m_Data.hoveredEntity)
@@ -758,8 +746,11 @@ namespace ignite
 
     void EditorLayer::OpenProject(const std::filesystem::path &filepath)
     {
-    	if (filepath == m_CurrentProjectFilepath)
+        if (filepath == m_CurrentProjectFilepath)
+        {
+            LOG_TRACE("Dismiss opening current project {0}", filepath.generic_string());
     		return;
+        }
 
         if (const Ref<Project> openedProject = ProjectSerializer::Deserialize(filepath))
         {
@@ -780,8 +771,8 @@ namespace ignite
                     m_ActiveScene = m_EditorScene;
                     SetActiveScene(m_ActiveScene);
 
-                    const auto &[type, filepath] = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
-                    m_CurrentSceneFilePath = m_ActiveProject->GetAssetFilepath(filepath);
+                    const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
+                    m_CurrentSceneFilePath = m_ActiveProject->GetAssetFilepath(assetFilepath);
                 }
             }
             else
@@ -870,7 +861,7 @@ namespace ignite
 
             s_EditorLayerInstance->m_CurrentSceneFilePath = filepath;
 
-            PendingFileLoading pf = { PendingFileLoading::SceneSave, filepath };
+            PendingFileLoading pf = { PendingFileLoading::Save, AssetMetaData(filepath, AssetType::Scene), userData };
             s_EditorLayerInstance->m_PendingFileLoading.push(pf);
         }
     }
@@ -895,7 +886,7 @@ namespace ignite
         std::string filepath = filelist[0];
         if (!filepath.empty())
         {
-            PendingFileLoading pf = { PendingFileLoading::SceneOpen, filepath };
+            PendingFileLoading pf = { PendingFileLoading::Open, AssetMetaData(filepath, AssetType::Scene), userData };
             s_EditorLayerInstance->m_PendingFileLoading.push(pf);
         }
     }
@@ -926,7 +917,7 @@ namespace ignite
                 filepath += ".ixproj";
             }
 
-            PendingFileLoading pf = { PendingFileLoading::ProjectOpen, filepath, userData };
+            PendingFileLoading pf = { PendingFileLoading::Open, AssetMetaData(filepath, AssetType::Project), userData };
             s_EditorLayerInstance->m_PendingFileLoading.push(pf);
         }
     }
@@ -950,29 +941,7 @@ namespace ignite
         std::string filepath = filelist[0];
         if (!filepath.empty())
         {
-            PendingFileLoading pf = { PendingFileLoading::ProjectOpen, filepath, userData };
-            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
-        }
-    }
-
-    void EditorLayer::OnMeshFileSelected(void *userData, const char *const *filelist, int filter)
-    {
-        if (filelist == nullptr)
-        {
-            const char *error = SDL_GetError();
-            LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
-            return;
-        }
-
-        if (*filelist == nullptr)
-        {
-            return;
-        }
-
-        std::string filepath = filelist[0];
-        if (!filepath.empty())
-        {
-            PendingFileLoading pf = { PendingFileLoading::MeshLoad, filepath, userData };
+            PendingFileLoading pf = { PendingFileLoading::Open, AssetMetaData(filepath, AssetType::Project), userData };
             s_EditorLayerInstance->m_PendingFileLoading.push(pf);
         }
     }
@@ -981,32 +950,26 @@ namespace ignite
     {
         while (!m_PendingFileLoading.empty())
         {
-            auto& p = m_PendingFileLoading.front();
+            auto& pf = m_PendingFileLoading.front();
 
-            switch (p.type)
+            switch (pf.type)
             {
-                case PendingFileLoading::SceneOpen:
+                case PendingFileLoading::Open:
                 {
-                    OpenScene(p.filepath);
+                    if (pf.metadata.type == AssetType::Scene)
+                        OpenScene(pf.metadata.filepath);
+                    else if (pf.metadata.type == AssetType::Project)
+                        OpenProject(pf.metadata.filepath);
+
                     break;
                 }
-                case PendingFileLoading::SceneSave:
+                case PendingFileLoading::Save:
                 {
-                    SaveScene(p.filepath);
-                    break;
-                }
-                case PendingFileLoading::ProjectOpen:
-                {
-                    OpenProject(p.filepath);
-                    break;
-                }
-                case PendingFileLoading::MeshLoad:
-                {
-                    if (p.userData)
-                    {
-                        m_MeshInstanceData = p.userData;
-                        m_LoadedMeshScene = MeshLoader::LoadSceneGraphFromGLTF(p.filepath.generic_string());
-                    }
+                    if (pf.metadata.type == AssetType::Scene)
+                        SaveScene(pf.metadata.filepath);
+                    else if (pf.metadata.type == AssetType::Project)
+                        SaveProjectAs();
+                    
                     break;
                 }
             }
@@ -1060,10 +1023,10 @@ namespace ignite
                     std::string filepath = FileDialogs::OpenFile("HDR Files (*.hdr)\0*.hdr\0");
                     if (!filepath.empty())
                     {
-                        Renderer::Submit([&](auto cmd)
+                        Renderer::Submit([&](nvrhi::ICommandList *cmd)
                         {
                             auto env = m_SceneRenderer.GetEnvironment();
-                            env->LoadTexture(filepath);
+                            env->LoadTexture(filepath, cmd);
                             env->UpdateBindingSet();
                         });
                     }

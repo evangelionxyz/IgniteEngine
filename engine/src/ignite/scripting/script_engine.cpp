@@ -310,7 +310,7 @@ namespace ignite
 
     void ScriptEngine::OnCreateEntity(Entity entity)
     {
-        if (const auto &sc = entity.GetComponent<Script>(); EntityClassExists(sc.className))
+        if (const auto &sc = entity.GetComponent<ScriptComponent>(); EntityClassExists(sc.className))
         {
             const UUID uuid = entity.GetUUID();
 

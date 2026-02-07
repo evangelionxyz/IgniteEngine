@@ -2,15 +2,14 @@
 
 struct Scene
 {
-    float4 lightColor;        // w component can store lightIntensity
+    float4 lightColor; // w component can store lightIntensity
     float2 lightAngle;
     float sunAngularRadius;
     int renderMode;
-    
+    int debugShadow;
     float exposure;
     float gamma;
     float ambient;
-    float padding;            // Explicit padding for 16-byte alignment
 };
 
 cbuffer SceneBuffer : register(b1) { Scene scene; }

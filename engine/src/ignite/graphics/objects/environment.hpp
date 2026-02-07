@@ -48,8 +48,8 @@ namespace ignite {
 
         void UpdateBindingSet();
 
-        void LoadTexture(const std::string &filepath);
-        void WriteBuffer(nvrhi::ICommandList *commandList);
+        void LoadTexture(const std::string &filepath, nvrhi::ICommandList *cmd);
+        void WriteBuffer(nvrhi::ICommandList *cmd);
 
         static Ref<Environment> Create(Scene *scene);
         static nvrhi::BindingLayoutDesc GetBindingLayoutDesc();

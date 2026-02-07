@@ -30,7 +30,7 @@
 
 namespace ignite
 {
-    glm::mat4 Math::ComposeTransformComponent(const Transform &transform)
+    glm::mat4 Math::ComposeTransformComponent(const TransformComponent &transform)
     {
         const glm::mat4 translation = glm::translate(glm::mat4(1.0f), transform.translation);
         const glm::mat4 rotation = glm::toMat4(transform.rotation);
@@ -38,7 +38,7 @@ namespace ignite
         return translation * rotation * scale;
     }
 
-    void Math::DecomposeTransformComponent(const glm::mat4 &matrix, Transform &outTransform)
+    void Math::DecomposeTransformComponent(const glm::mat4 &matrix, TransformComponent &outTransform)
     {
         glm::vec3 scale;
         glm::vec3 skew;

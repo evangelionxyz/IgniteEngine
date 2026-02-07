@@ -34,21 +34,20 @@ namespace ignite
 
     using AllComponents = ComponentGroup<
         // ID, // do not copy ID component
-        Transform, 
-        Camera, 
-        Sprite2D,
-        Rigidbody2D,
-        BoxCollider2D,
-        MeshFilter,
-        StaticMeshRenderer,
-        // SkeletalMeshRenderer,
-        Rigibody,
-        BoxCollider,
-        SphereCollider,
-        CapsuleCollider,
-        MeshCollider,
-        AudioSource,
-        Script,
+        TransformComponent, 
+        CameraComponent, 
+        Sprite2DComponent,
+        Rigidbody2DComponent,
+        BoxCollider2DComponent,
+        StaticMeshComponent,
+        SkeletalMeshComponent,
+        RigibodyComponent,
+        BoxColliderComponent,
+        SphereColliderComponent,
+        CapsuleColliderComponent,
+        MeshColliderComponent,
+        AudioSourceComponent,
+        ScriptComponent,
         WorldEnvironment
     >; 
 }

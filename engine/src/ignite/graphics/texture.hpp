@@ -60,14 +60,14 @@ namespace ignite
     public:
         Texture() = default;
         Texture(const TextureCreateInfo &createInfo);
-        Texture(Buffer buffer, const TextureCreateInfo &createInfo);
-        Texture(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo);
+        Texture(Buffer buffer, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd);
+        Texture(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd);
 
         ~Texture() override;
 
         static Ref<Texture> Create(const TextureCreateInfo& createInfo);
-        static Ref<Texture> Create(Buffer buffer, const TextureCreateInfo &createInfo);
-        static Ref<Texture> Create(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo);
+        static Ref<Texture> Create(Buffer buffer, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd);
+        static Ref<Texture> Create(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd);
 
         void SetData(nvrhi::ICommandList *cmd, uint32_t rowPitch, uint32_t depthPitch);
 

@@ -1108,8 +1108,6 @@ namespace ignite
             .setPEnabledFeatures(&deviceFeatures)
             .setEnabledExtensionCount(static_cast<uint32_t>(extVec.size()))
             .setPpEnabledExtensionNames(extVec.data())
-            .setEnabledLayerCount(static_cast<uint32_t>(layerVec.size()))
-            .setPpEnabledLayerNames(layerVec.data())
             .setPNext(&vulkan12features);
 
         if (m_DeviceParameters.deviceCreateInfoCallback)

@@ -34,13 +34,31 @@ namespace ignite {
     struct FmodSound;
     class Environment;
     class GraphicsPipeline;
+    class AssetStaticMesh;
     class Scene;
+
+	struct PendingFileLoading
+	{
+		enum Type : uint8_t
+		{
+			None = 0,
+			Open,
+			Save,
+			ImportAssets,
+		};
+
+		Type type = None;
+		AssetMetaData metadata;
+		void *userData = nullptr;
+	};
 
     class AssetImporter
     {
     public:
         static Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
         static void ImportAsync(AssetHandle handle, const AssetMetaData &metadata, std::function<void(Ref<Asset>, AssetHandle)> callback);
+
+        static Ref<AssetStaticMesh> ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata);
 
         static Ref<Scene> ImportScene(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata);

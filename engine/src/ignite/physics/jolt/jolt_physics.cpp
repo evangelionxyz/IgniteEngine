@@ -101,7 +101,7 @@ namespace ignite
 
         m_BodyInterface = &m_PhysicsSystem.GetBodyInterface();
 
-        for (entt::entity e : m_Scene->registry->view<Rigibody>())
+        for (entt::entity e : m_Scene->registry->view<RigibodyComponent>())
         {
             InstantiateEntity(Entity{ e, m_Scene });
         }
@@ -109,7 +109,7 @@ namespace ignite
 
     void JoltScene::SimulationStop()
     {
-        for (entt::entity e : m_Scene->registry->view<Rigibody>())
+        for (entt::entity e : m_Scene->registry->view<RigibodyComponent>())
         {
             DestroyEntity(Entity{ e, m_Scene });
         }
@@ -117,12 +117,12 @@ namespace ignite
 
     void JoltScene::Simulate(float deltaTime)
     {
-        for (const auto id : m_Scene->registry->view<Rigibody>())
+        for (const auto id : m_Scene->registry->view<RigibodyComponent>())
         {
             Entity entity = { id, m_Scene };
-            const Rigibody &rb = entity.GetComponent<Rigibody>();
-            Transform &tc = entity.GetComponent<Transform>();
-            ID &idc = entity.GetComponent<ID>();
+            const RigibodyComponent &rb = entity.GetComponent<RigibodyComponent>();
+            TransformComponent &tc = entity.GetComponent<TransformComponent>();
+            IDComponent &idc = entity.GetComponent<IDComponent>();
 
             if (!rb.body)
                 continue;
@@ -139,26 +139,26 @@ namespace ignite
 
     void JoltScene::InstantiateEntity(Entity entity)
     {
-        if (entity.HasComponent<Rigibody>())
+        if (entity.HasComponent<RigibodyComponent>())
         {
-            auto &rb = entity.GetComponent<Rigibody>();
+            auto &rb = entity.GetComponent<RigibodyComponent>();
 
-            if (entity.HasComponent<BoxCollider>())
+            if (entity.HasComponent<BoxColliderComponent>())
             {
                 CreateBoxCollider(entity);
             }
 
-            if (entity.HasComponent<SphereCollider>())
+            if (entity.HasComponent<SphereColliderComponent>())
             {
                 CreateSphereCollider(entity);
             }
 
-            if (entity.HasComponent<CapsuleCollider>())
+            if (entity.HasComponent<CapsuleColliderComponent>())
             {
                 CreateCapsuleCollider(entity);
             }
 
-            if (entity.HasComponent<MeshCollider>())
+            if (entity.HasComponent<MeshColliderComponent>())
             {
                 CreateMeshCollider(entity);
             }
@@ -167,9 +167,9 @@ namespace ignite
 
     void JoltScene::DestroyEntity(Entity entity)
     {
-        if (entity.HasComponent<Rigibody>())
+        if (entity.HasComponent<RigibodyComponent>())
         {
-            auto &rb = entity.GetComponent<Rigibody>();
+            auto &rb = entity.GetComponent<RigibodyComponent>();
             if (rb.body)
             {
                 m_BodyInterface->RemoveBody(rb.body->GetID());
@@ -179,7 +179,7 @@ namespace ignite
         }
     }
 
-    JPH::BodyCreationSettings JoltScene::CreateBody(JPH::ShapeRefC shape, Rigibody &rb, const glm::vec3 &position, const glm::quat &rotation)
+    JPH::BodyCreationSettings JoltScene::CreateBody(JPH::ShapeRefC shape, RigibodyComponent &rb, const glm::vec3 &position, const glm::quat &rotation)
     {
         JPH::BodyCreationSettings bodySettings(shape, GlmToJoltVec3(position), GlmToJoltQuat(rotation),
             rb.isStatic ? JPH::EMotionType::Static : JPH::EMotionType::Dynamic,
@@ -195,10 +195,10 @@ namespace ignite
 
         switch (rb.MotionQuality)
         {
-        case Rigibody::EMotionQuality::Discrete:
+        case RigibodyComponent::EMotionQuality::Discrete:
             bodySettings.mMotionQuality = JPH::EMotionQuality::Discrete;
             break;
-        case Rigibody::EMotionQuality::LinearCast:
+        case RigibodyComponent::EMotionQuality::LinearCast:
             bodySettings.mMotionQuality = JPH::EMotionQuality::LinearCast;
             break;
         }
@@ -213,9 +213,9 @@ namespace ignite
 
     void JoltScene::CreateBoxCollider(Entity entity)
     {
-        auto &tc = entity.GetComponent<Transform>();
-        auto &rb = entity.GetComponent<Rigibody>();
-        auto &col = entity.GetComponent<BoxCollider>();
+        auto &tc = entity.GetComponent<TransformComponent>();
+        auto &rb = entity.GetComponent<RigibodyComponent>();
+        auto &col = entity.GetComponent<BoxColliderComponent>();
 
         glm::vec3 halfExtents = col.scale * tc.scale;
         JPH::BoxShapeSettings shapeSettings(GlmToJoltVec3(halfExtents));
@@ -240,9 +240,9 @@ namespace ignite
 
     void JoltScene::CreateCapsuleCollider(Entity entity)
     {
-        auto &tc = entity.GetComponent<Transform>();
-        auto &rb = entity.GetComponent<Rigibody>();
-        auto &col = entity.GetComponent<CapsuleCollider>();
+        auto &tc = entity.GetComponent<TransformComponent>();
+        auto &rb = entity.GetComponent<RigibodyComponent>();
+        auto &col = entity.GetComponent<CapsuleColliderComponent>();
 
         // Create capsule shape with radius and half height
         float halfHeight = col.height * 0.5f;
@@ -268,9 +268,9 @@ namespace ignite
 
     void JoltScene::CreateSphereCollider(Entity entity)
     {
-        auto &tc = entity.GetComponent<Transform>();
-        auto &rb = entity.GetComponent<Rigibody>();
-        auto &col = entity.GetComponent<SphereCollider>();
+        auto &tc = entity.GetComponent<TransformComponent>();
+        auto &rb = entity.GetComponent<RigibodyComponent>();
+        auto &col = entity.GetComponent<SphereColliderComponent>();
 
         JPH::SphereShapeSettings shapeSettings(col.radius * 2.0f);
 
@@ -294,9 +294,9 @@ namespace ignite
 
     void JoltScene::CreateMeshCollider(Entity entity)
     {
-        auto &tc = entity.GetComponent<Transform>();
-        auto &rb = entity.GetComponent<Rigibody>();
-        auto &col = entity.GetComponent<MeshCollider>();
+        auto &tc = entity.GetComponent<TransformComponent>();
+        auto &rb = entity.GetComponent<RigibodyComponent>();
+        auto &col = entity.GetComponent<MeshColliderComponent>();
 
         if (col.vertices.empty())
         {

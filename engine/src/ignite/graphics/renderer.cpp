@@ -54,6 +54,7 @@ namespace ignite
 
         m_CommandList = CommandList::Create();
         auto cmd = m_CommandList->GetActiveHandle();
+        cmd->open();
 
         {
             TextureCreateInfo textureCreateInfo;
@@ -62,18 +63,21 @@ namespace ignite
             textureCreateInfo.width = 1;
             textureCreateInfo.height = 1;
             textureCreateInfo.flip = false;
-        	textureCreateInfo.initialState = nvrhi::ResourceStates::Common;
+        	textureCreateInfo.initialState = nvrhi::ResourceStates::ShaderResource;
         	textureCreateInfo.keepInitialState = true;
 
             uint32_t white = 0xFFFFFFFF;
-            m_WhiteTexture = Texture::Create(Buffer(&white, sizeof(u32)), textureCreateInfo);
+            m_WhiteTexture = Texture::Create(Buffer(&white, sizeof(u32)), textureCreateInfo, cmd);
 
             uint32_t black = 0x00000000;
-            m_BlackTexture = Texture::Create(Buffer(&black, sizeof(uint32_t)), textureCreateInfo);
+            m_BlackTexture = Texture::Create(Buffer(&black, sizeof(uint32_t)), textureCreateInfo, cmd);
 
             uint32_t magenta = 0xFFFF00FF;
-            m_MagentaTexture = Texture::Create(Buffer(&magenta, sizeof(uint32_t)), textureCreateInfo);
+            m_MagentaTexture = Texture::Create(Buffer(&magenta, sizeof(uint32_t)), textureCreateInfo, cmd);
         }
+
+        cmd->close();
+        s_instance->m_Device->executeCommandList(cmd);
 
         // Create binding layouts
         m_BindingLayouts[GLayoutMap::MESH_ANIM] = s_instance->m_Device->createBindingLayout(VertexMesh_Anim::GetBindingLayoutDesc());
@@ -109,7 +113,9 @@ namespace ignite
         auto cmd = s_instance->m_CommandList->GetActiveHandle();
 
         for (const auto &func : s_instance->m_SubmitFuncs)
+        {
             func(cmd);
+        }
         
         s_instance->m_CommandList->Submit();
 

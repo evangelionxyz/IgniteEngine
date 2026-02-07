@@ -22,6 +22,7 @@
 */
 
 #include "asset_importer.hpp"
+#include "asset_static_mesh.hpp"
 
 #include "ignite/audio/fmod_audio.hpp"
 #include "ignite/audio/fmod_sound.hpp"
@@ -31,6 +32,7 @@
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/graphics/scene_renderer.hpp"
 #include "ignite/graphics/objects/environment.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/scene/scene.hpp"
 
@@ -41,6 +43,7 @@ namespace ignite {
         { AssetType::Scene, AssetImporter::ImportScene },
         { AssetType::Texture, AssetImporter::ImportTexture },
         { AssetType::Audio, AssetImporter::ImportAudio },
+        { AssetType::StaticMesh, AssetImporter::ImportStaticMesh }
     };
 
     Ref<Asset> AssetImporter::Import(AssetHandle handle, const AssetMetaData &metadata)
@@ -50,7 +53,9 @@ namespace ignite {
         metadataCopy.filepath = AssetManager::GetProject()->GetAssetFilepath(metadata.filepath);
 
         if (s_ImportFunctions.contains(metadataCopy.type))
+        {
             return s_ImportFunctions.at(metadataCopy.type)(handle, metadataCopy);
+        }
 
         return nullptr;
     }
@@ -74,7 +79,17 @@ namespace ignite {
         });
     }
 
-    Ref<Scene> AssetImporter::ImportScene(AssetHandle handle, const AssetMetaData& metadata)
+	Ref<AssetStaticMesh> AssetImporter::ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata)
+	{
+        // Generate folders
+        auto meshScene = MeshLoader::LoadSceneGraphFromGLTF(metadata.filepath.generic_string());
+
+        Ref<MeshInstance> mesh;
+
+        return nullptr;
+	}
+
+	Ref<Scene> AssetImporter::ImportScene(AssetHandle handle, const AssetMetaData &metadata)
     {
         Ref<Scene> scene = SceneSerializer::Deserialize(metadata.filepath, AssetManager::GetProject());
         if (scene)
@@ -87,13 +102,15 @@ namespace ignite {
     Ref<Texture> AssetImporter::ImportTexture(AssetHandle handle, const AssetMetaData &metadata)
     {
         Ref<Texture> result = CreateRef<Texture>();
-        Renderer::Submit([result, metadata, h = handle] (nvrhi::ICommandList *commandList) mutable
+        Renderer::Submit([result, metadata, h = handle] (nvrhi::ICommandList *cmd) mutable
         {
             TextureCreateInfo createInfo;
             createInfo.format = nvrhi::Format::RGBA8_UNORM;
             createInfo.mipLevels = 4;
+            createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+            createInfo.keepInitialState = true; // should keep initial state
 
-            Ref<Texture> t = Texture::Create(metadata.filepath, createInfo);
+            Ref<Texture> t = Texture::Create(metadata.filepath, createInfo, cmd);
             t->handle = h;
 
             *result = *t;

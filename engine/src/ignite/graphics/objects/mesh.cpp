@@ -309,7 +309,13 @@ namespace ignite
         if (!ok) return scene;
 
         // pre-load textures and samplers
-        const auto textures = LoadTexturesFromGLTF(gltfModel);
+        auto device = Application::GetGraphicsDevice();
+        nvrhi::CommandListHandle cmd = device->createCommandList();
+        cmd->open();
+        const auto textures = LoadTexturesFromGLTF(gltfModel, cmd);
+        cmd->close();
+        device->executeCommandList(cmd);
+
         const auto samplers = GetSamplersFromGLTF(gltfModel);
 
         // preserve nodes
@@ -405,7 +411,7 @@ namespace ignite
         return scene;
     }
 
-    std::vector<Ref<Texture>> MeshLoader::LoadTexturesFromGLTF(const tinygltf::Model& model)
+    std::vector<Ref<Texture>> MeshLoader::LoadTexturesFromGLTF(const tinygltf::Model& model, nvrhi::ICommandList *cmd)
     {
         std::vector<Ref<Texture>> gltfTextures;
         LOG_TRACE("Loading {} textures from glTF", model.textures.size());
@@ -430,7 +436,7 @@ namespace ignite
                 Ref<Texture> texture;
                 if (!image.image.empty())
                 {
-                    texture = Texture::Create(Buffer((void*)image.image.data(), image.image.size() * sizeof(uint8_t)), createInfo);
+                    texture = Texture::Create(Buffer((void*)image.image.data(), image.image.size() * sizeof(uint8_t)), createInfo, cmd);
                     LOG_TRACE(" Loaded embedded texture");
                 }
                 else if (!image.uri.empty())

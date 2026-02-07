@@ -48,9 +48,8 @@ namespace ignite {
         Environment,
         Anim2D,
         Skeleton,
-        MeshSource, // Mesh Source (contains vertices, indices, etc...)
-        SkeletalMesh, // Skeletal Mesh Asset
-        Mesh, // Mesh Asset
+        SkeletalMesh,
+        StaticMesh,
         Scene
     };
 
@@ -68,8 +67,8 @@ namespace ignite {
             case ignite::AssetType::Scene: return "Scene";
             case ignite::AssetType::SkeletalAnimation: return "SkeletalAnimation";
             case ignite::AssetType::Anim2D: return "Anim2D";
-            case ignite::AssetType::MeshSource: return "MeshSource";
-            case ignite::AssetType::Mesh: return "Mesh";
+			case ignite::AssetType::SkeletalMesh: return "SkeletalMesh";
+            case ignite::AssetType::StaticMesh: return "StaticMesh";
             case ignite::AssetType::Skeleton: return "Skeleton";
             case ignite::AssetType::Environment: return "Environment";
             case ignite::AssetType::Invalid:
@@ -90,9 +89,9 @@ namespace ignite {
         { ".mp3", AssetType::Audio },
         { ".flac", AssetType::Audio },
         { ".wav", AssetType::Audio },
-        { ".fbx", AssetType::MeshSource },
-        { ".glb", AssetType::MeshSource },
-        { ".gltf", AssetType::MeshSource },
+
+        { ".gltf", AssetType::StaticMesh },
+
         { ".skel", AssetType::Skeleton},
         { ".mat", AssetType::Material},
         { ".ixmat", AssetType::Material},
@@ -109,8 +108,8 @@ namespace ignite {
         if (typeStr == "Model") return AssetType::Model;
         if (typeStr == "SkeletalAnimation") return AssetType::SkeletalAnimation;
         if (typeStr == "Anim2D")  return AssetType::Anim2D;
-        if (typeStr == "Mesh")  return AssetType::Mesh;
-        if (typeStr == "MeshSource")  return AssetType::MeshSource;
+        if (typeStr == "StaticMesh")  return AssetType::StaticMesh;
+        if (typeStr == "SkeletalMesh")  return AssetType::SkeletalMesh;
         if (typeStr == "Skeleton")  return AssetType::Skeleton;
         if (typeStr == "Material")  return AssetType::Material;
         if (typeStr == "Environment")  return AssetType::Environment;
@@ -128,14 +127,20 @@ namespace ignite {
 
     struct AssetMetaData
     {
-        AssetType type = AssetType::Invalid;
+        AssetMetaData() = default;
+        AssetMetaData(const std::filesystem::path &filepath, const AssetType type)
+            : filepath(filepath), type(type)
+        {}
+
         std::filesystem::path filepath;
+        AssetType type = AssetType::Invalid;
     };
 
     class Asset : public std::enable_shared_from_this<Asset>
     {
     public:
         AssetHandle handle;
+
         virtual ~Asset() { };
 
         template<typename T>

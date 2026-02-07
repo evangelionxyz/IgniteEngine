@@ -1,17 +1,17 @@
 /* MIT License
-* 
+*
 * Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
+*
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
 * in the Software without restriction, including without limitation the rights
 * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 * copies of the Software, and to permit persons to whom the Software is
 * furnished to do so, subject to the following conditions:
-* 
+*
 * The above copyright notice and this permission notice shall be included in all
 * copies or substantial portions of the Software.
-* 
+*
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -23,44 +23,28 @@
 
 #pragma once
 
-#include <imgui.h>
-#include <imgui_internal.h>
-#include <string>
-#include "ignite/core/logger.hpp"
-#include "ignite/core/types.hpp"
-
-#include "states.hpp"
+#include "asset.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
+#include <vector>
 
 namespace ignite
 {
-    class IPanel
-    {
-    public:
-        IPanel() = default;
-        explicit IPanel(const char *windowTitle)
-            : m_WindowTitle(windowTitle)
-        {
-        }
+	class AssetStaticMesh : public Asset
+	{
+	public:
+		AssetStaticMesh() = default;
+		virtual ~AssetStaticMesh() = default;
 
-        virtual ~IPanel() = default;
+		static Ref<AssetStaticMesh> Create();
+		static AssetType GetStaticType() { return AssetType::StaticMesh; }
+		virtual AssetType GetType() const { return GetStaticType(); }
+		
+		const std::vector<Ref<MeshInstance>>& GetMeshInstances() const { return m_MeshInstances; }
+		void SetMeshInstance(const std::vector<Ref<MeshInstance>>& meshInstances) { m_MeshInstances = meshInstances; }
+		void AddMeshInstance(const Ref<MeshInstance>& meshInstance) { m_MeshInstances.push_back(meshInstance); }
 
-        // from Layer class
-        virtual void OnGuiRender() { }
+	private:
+		std::vector<Ref<MeshInstance>> m_MeshInstances;
 
-        // to child class
-        virtual bool IsOpen() { return m_IsOpen; }
-        virtual bool IsFocused() { return m_IsFocused; }
-        virtual bool IsHovered() { return m_IsHovered; }
-        virtual void OnUpdate(float deltaTime) { }
-
-        std::string &GetTitle() { return m_WindowTitle; }
-
-    protected:
-        std::string m_WindowTitle;
-        bool m_IsOpen = true;
-        bool m_IsFocused = false;
-        bool m_IsHovered = false;
-    };
+	};
 }
-
-

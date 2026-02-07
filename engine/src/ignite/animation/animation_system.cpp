@@ -48,13 +48,13 @@ namespace ignite {
 
             Entity entity = SceneManager::GetEntity(scene, it->second);
 
-            if (!entity.IsValid() || !entity.HasComponent<Transform>())
+            if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
                 continue;
             
             glm::vec3 skew;
             glm::vec4 perspective;
 
-            Transform& transform = entity.GetTransform();
+            TransformComponent& transform = entity.GetTransform();
             glm::decompose(skeleton->joints[i].localTransform,
                 transform.localScale,
                 transform.localRotation,

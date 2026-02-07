@@ -125,7 +125,7 @@ namespace ignite {
         for (const entt::entity e : m_Scene->entities | std::views::values)
         {
             Entity entity = { e, m_Scene.get() };
-            const ID &idComp = entity.GetComponent<ID>();
+            const IDComponent &idComp = entity.GetComponent<IDComponent>();
 
             const bool isPrefab = idComp.IsInType(EntityType_Prefab);
 
@@ -141,9 +141,9 @@ namespace ignite {
                 sr.AddKeyValue("Parent", idComp.parent);
 
                 // Transform Component
-                if (entity.HasComponent<Transform>())
+                if (entity.HasComponent<TransformComponent>())
                 {
-                    const Transform &comp = entity.GetComponent<Transform>();
+                    const TransformComponent &comp = entity.GetComponent<TransformComponent>();
                     sr.BeginMap("Transform");
                     {
                         sr.AddKeyValue("WorldTranslation", comp.translation);
@@ -160,9 +160,9 @@ namespace ignite {
                 }
 
                 // Camera
-                if (entity.HasComponent<Camera>())
+                if (entity.HasComponent<CameraComponent>())
                 {
-                    const Camera &comp = entity.GetComponent<Camera>();
+                    const CameraComponent &comp = entity.GetComponent<CameraComponent>();
                     sr.BeginMap("Camera");
                     {
                         int projectionType = static_cast<int>(comp.camera.projectionType);
@@ -176,9 +176,9 @@ namespace ignite {
                 }
 
                 // Sprite component
-                if (entity.HasComponent<Sprite2D>())
+                if (entity.HasComponent<Sprite2DComponent>())
                 {
-                    const Sprite2D &comp = entity.GetComponent<Sprite2D>();
+                    const Sprite2DComponent &comp = entity.GetComponent<Sprite2DComponent>();
                     sr.BeginMap("Sprite2D");
                     {
                         sr.AddKeyValue("Handle", comp.handle);
@@ -189,9 +189,9 @@ namespace ignite {
                 }
 
                 // Rigidbody 2D
-                if (entity.HasComponent<Rigidbody2D>())
+                if (entity.HasComponent<Rigidbody2DComponent>())
                 {
-                    const Rigidbody2D &comp = entity.GetComponent<Rigidbody2D>();
+                    const Rigidbody2DComponent &comp = entity.GetComponent<Rigidbody2DComponent>();
                     sr.BeginMap("Rigidbody2D");
                     {
                         sr.AddKeyValue("Type", BodyTypeToString(comp.type));
@@ -208,9 +208,9 @@ namespace ignite {
                 }
 
                 // Box collider 2D
-                if (entity.HasComponent<BoxCollider2D>())
+                if (entity.HasComponent<BoxCollider2DComponent>())
                 {
-                    const BoxCollider2D &comp = entity.GetComponent<BoxCollider2D>();
+                    const BoxCollider2DComponent &comp = entity.GetComponent<BoxCollider2DComponent>();
                     sr.BeginMap("BoxCollider2D");
                     {
                         sr.AddKeyValue("Size", comp.size);
@@ -242,9 +242,9 @@ namespace ignite {
                 // }
 
                 // Rigidbody
-                if (entity.HasComponent<Rigibody>())
+                if (entity.HasComponent<RigibodyComponent>())
                 {
-                    const Rigibody &comp = entity.GetComponent<Rigibody>();
+                    const RigibodyComponent &comp = entity.GetComponent<RigibodyComponent>();
                     sr.BeginMap("Rigidbody");
                     {
                         sr.AddKeyValue("MotionQuality", static_cast<int>(comp.MotionQuality));
@@ -265,9 +265,9 @@ namespace ignite {
                     sr.EndMap();
                 }
 
-                if (entity.HasComponent<BoxCollider>())
+                if (entity.HasComponent<BoxColliderComponent>())
                 {
-                    const BoxCollider &comp = entity.GetComponent<BoxCollider>();
+                    const BoxColliderComponent &comp = entity.GetComponent<BoxColliderComponent>();
                     sr.BeginMap("BoxCollider");
                     {
                         sr.AddKeyValue("Scale", comp.scale);
@@ -280,9 +280,9 @@ namespace ignite {
                 }
 
                 // SphereCollider
-                if (entity.HasComponent<SphereCollider>())
+                if (entity.HasComponent<SphereColliderComponent>())
                 {
-                    const SphereCollider &comp = entity.GetComponent<SphereCollider>();
+                    const SphereColliderComponent &comp = entity.GetComponent<SphereColliderComponent>();
                     sr.BeginMap("SphereCollider");
                     {
                         sr.AddKeyValue("Radius", comp.radius);
@@ -295,9 +295,9 @@ namespace ignite {
                 }
 
                 // CapsuleCollider
-                if (entity.HasComponent<CapsuleCollider>())
+                if (entity.HasComponent<CapsuleColliderComponent>())
                 {
-                    const CapsuleCollider &comp = entity.GetComponent<CapsuleCollider>();
+                    const CapsuleColliderComponent &comp = entity.GetComponent<CapsuleColliderComponent>();
                     sr.BeginMap("CapsuleCollider");
                     {
                         sr.AddKeyValue("Radius", comp.radius);
@@ -311,9 +311,9 @@ namespace ignite {
                 }
 
                 // MeshCollider
-                if (entity.HasComponent<MeshCollider>())
+                if (entity.HasComponent<MeshColliderComponent>())
                 {
-                    const MeshCollider &comp = entity.GetComponent<MeshCollider>();
+                    const MeshColliderComponent &comp = entity.GetComponent<MeshColliderComponent>();
                     sr.BeginMap("MeshCollider");
                     {
                         sr.AddKeyValue("Convex", comp.convex);
@@ -342,9 +342,9 @@ namespace ignite {
                 }
 
                 // Audio Source
-                if (entity.HasComponent<AudioSource>())
+                if (entity.HasComponent<AudioSourceComponent>())
                 {
-                    const AudioSource &comp = entity.GetComponent<AudioSource>();
+                    const AudioSourceComponent &comp = entity.GetComponent<AudioSourceComponent>();
                     sr.BeginMap("AudioSource");
                     {
                         sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
@@ -357,9 +357,9 @@ namespace ignite {
                 }
 
                 // Script
-                if (entity.HasComponent<Script>())
+                if (entity.HasComponent<ScriptComponent>())
                 {
-                    const Script &comp = entity.GetComponent<Script>();
+                    const ScriptComponent &comp = entity.GetComponent<ScriptComponent>();
                     sr.BeginMap("Script");
                     {
                         sr.AddKeyValue("ClassName", comp.className);
@@ -498,6 +498,11 @@ namespace ignite {
         std::string title = sceneNode["Title"].as<std::string>();
         Ref<Scene> desScene = Scene::Create(project, title);
 
+        // Open commandlist for asset deserialization
+        auto device = Application::GetGraphicsDevice();
+        nvrhi::CommandListHandle cmd = device->createCommandList();
+        cmd->open();
+
         for (YAML::Node entityNode : sceneNode["Entities"])
         {
             UUID uuid = UUID(entityNode["ID"].as<uint64_t>());
@@ -506,12 +511,12 @@ namespace ignite {
 
             Entity desEntity = SceneManager::CreateEntity(desScene.get(), name, type, uuid);
             UUID parent = UUID(entityNode["Parent"].as<uint64_t>());
-            desEntity.GetComponent<ID>().parent = parent;
+            desEntity.GetComponent<IDComponent>().parent = parent;
 
             // Transform component
             if (YAML::Node node = entityNode["Transform"])
             {
-                Transform &comp = desEntity.AddComponent<Transform>();
+                TransformComponent &comp = desEntity.AddComponent<TransformComponent>();
                 comp.translation = node["WorldTranslation"].as<glm::vec3>();
                 comp.rotation = node["WorldRotation"].as<glm::quat>();
                 comp.scale = node["WorldScale"].as<glm::vec3>();
@@ -524,7 +529,7 @@ namespace ignite {
             // Camera component
             if (YAML::Node node = entityNode["Camera"])
             {
-                Camera &comp = desEntity.AddComponent<Camera>();
+                CameraComponent &comp = desEntity.AddComponent<CameraComponent>();
                 comp.camera.projectionType = static_cast<ProjectionType>(node["ProjectionType"].as<int>());
                 comp.camera.nearPlane = node["NearClip"].as<float>();
                 comp.camera.farPlane = node["FarClip"].as<float>();
@@ -535,7 +540,7 @@ namespace ignite {
             // Sprite2D component
             if (YAML::Node node = entityNode["Sprite2D"])
             {
-                Sprite2D &comp = desEntity.AddComponent<Sprite2D>();
+                Sprite2DComponent &comp = desEntity.AddComponent<Sprite2DComponent>();
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
                 comp.color = node["Color"].as<glm::vec4>();
                 comp.tilingFactor = node["TilingFactor"].as<glm::vec2>();
@@ -544,7 +549,7 @@ namespace ignite {
             // Rigidbody 2D
             if (YAML::Node node = entityNode["Rigidbody2D"])
             {
-                Rigidbody2D &comp = desEntity.AddComponent<Rigidbody2D>();
+                Rigidbody2DComponent &comp = desEntity.AddComponent<Rigidbody2DComponent>();
                 comp.type = BodyTypeFromString(node["Type"].as<std::string>());
                 comp.linearVelocity = node["LinearVelocity"].as<glm::vec2>();
                 comp.angularVelocity = node["AngularVelocity"].as<float>();
@@ -559,7 +564,7 @@ namespace ignite {
             // BoxCollider 2D
             if (YAML::Node node = entityNode["BoxCollider2D"])
             {
-                BoxCollider2D &comp = desEntity.AddComponent<BoxCollider2D>();
+                BoxCollider2DComponent &comp = desEntity.AddComponent<BoxCollider2DComponent>();
                 comp.size = node["Size"].as<glm::vec2>();
                 comp.offset = node["Offset"].as<glm::vec2>();
                 comp.restitution = node["Restitution"].as<float>();
@@ -571,8 +576,8 @@ namespace ignite {
             // Rigidbody
             if (YAML::Node node = entityNode["Rigidbody"])
             {
-                Rigibody &comp = desEntity.AddComponent<Rigibody>();
-                comp.MotionQuality = static_cast<Rigibody::EMotionQuality>(node["MotionQuality"].as<int>());
+                RigibodyComponent &comp = desEntity.AddComponent<RigibodyComponent>();
+                comp.MotionQuality = static_cast<RigibodyComponent::EMotionQuality>(node["MotionQuality"].as<int>());
                 comp.useGravity = node["UseGravity"].as<bool>();
                 comp.rotateX = node["RotateX"].as<bool>();
                 comp.rotateY = node["RotateY"].as<bool>();
@@ -591,7 +596,7 @@ namespace ignite {
             // BoxCollider
             if (YAML::Node node = entityNode["BoxCollider"])
             {
-                BoxCollider &comp = desEntity.AddComponent<BoxCollider>();
+                BoxColliderComponent &comp = desEntity.AddComponent<BoxColliderComponent>();
                 comp.scale = node["Scale"].as<glm::vec3>();
                 comp.friction = node["Friction"].as<float>();
                 comp.staticFriction = node["StaticFriction"].as<float>();
@@ -602,7 +607,7 @@ namespace ignite {
             // SphereCollider
             if (YAML::Node node = entityNode["SphereCollider"])
             {
-                SphereCollider &comp = desEntity.AddComponent<SphereCollider>();
+                SphereColliderComponent &comp = desEntity.AddComponent<SphereColliderComponent>();
                 comp.radius = node["Radius"].as<float>();
                 comp.friction = node["Friction"].as<float>();
                 comp.staticFriction = node["StaticFriction"].as<float>();
@@ -613,7 +618,7 @@ namespace ignite {
             // CapsuleCollider
             if (YAML::Node node = entityNode["CapsuleCollider"])
             {
-                CapsuleCollider &comp = desEntity.AddComponent<CapsuleCollider>();
+                CapsuleColliderComponent &comp = desEntity.AddComponent<CapsuleColliderComponent>();
                 comp.radius = node["Radius"].as<float>();
                 comp.height = node["Height"].as<float>();
                 comp.friction = node["Friction"].as<float>();
@@ -625,7 +630,7 @@ namespace ignite {
             // MeshCollider
             if (YAML::Node node = entityNode["MeshCollider"])
             {
-                MeshCollider &comp = desEntity.AddComponent<MeshCollider>();
+                MeshColliderComponent &comp = desEntity.AddComponent<MeshColliderComponent>();
                 comp.convex = node["Convex"].as<bool>();
                 comp.friction = node["Friction"].as<float>();
                 comp.staticFriction = node["StaticFriction"].as<float>();
@@ -656,7 +661,7 @@ namespace ignite {
             // Audio Source
             if (YAML::Node node = entityNode["AudioSource"])
             {
-                AudioSource& comp = desEntity.AddComponent<AudioSource>();
+                AudioSourceComponent& comp = desEntity.AddComponent<AudioSourceComponent>();
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
                 comp.volume = node["Volume"].as<float>();
                 comp.pitch = node["Pitch"].as<float>();
@@ -673,14 +678,14 @@ namespace ignite {
                 const AssetMetaData &metadata = project->GetAssetManager().GetMetaData(world.imageHandle);
                 if (metadata.type == AssetType::Texture)
                 {
-                    world.environment->LoadTexture(metadata.filepath.generic_string());
+                    world.environment->LoadTexture(metadata.filepath.generic_string(), cmd);
                 }
             }
 
             // Script
             if (YAML::Node node = entityNode["Script"])
             {
-                Script &sc = desEntity.AddComponent<Script>();
+                ScriptComponent &sc = desEntity.AddComponent<ScriptComponent>();
                 sc.className = node["ClassName"].as<std::string>();
 
                 if (YAML::Node classFieldsNode = node["Fields"])
@@ -726,6 +731,10 @@ namespace ignite {
                 }
             }
         }
+
+        // Close commandlist after deserialization
+        cmd->close();
+        device->executeCommandList(cmd);
         
         // attach each node to it's parent
         for (auto [uuid, e] : desScene->entities)
