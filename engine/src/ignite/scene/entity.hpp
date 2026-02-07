@@ -56,9 +56,6 @@ namespace ignite
         template<typename T, typename... Args>
         T &AddOrReplaceComponent(Args &&... args)
         {
-            if (HasComponent<T>())
-                return GetComponent<T>();
-
             T &comp = m_Scene->registry->emplace_or_replace<T>(m_Handle, std::forward<Args>(args)...);
 
             if (std::is_base_of_v<IComponent, T>)

@@ -1023,10 +1023,10 @@ namespace ignite
                     std::string filepath = FileDialogs::OpenFile("HDR Files (*.hdr)\0*.hdr\0");
                     if (!filepath.empty())
                     {
-                        Renderer::Submit([&](nvrhi::ICommandList *cmd)
+                        Renderer::Submit([f = filepath, sr = m_SceneRenderer](nvrhi::ICommandList *cmd) mutable
                         {
-                            auto env = m_SceneRenderer.GetEnvironment();
-                            env->LoadTexture(filepath, cmd);
+                            auto env = sr.GetEnvironment();
+                            env->LoadTexture(f, cmd);
                             env->UpdateBindingSet();
                         });
                     }

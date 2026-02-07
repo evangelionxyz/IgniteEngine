@@ -1711,12 +1711,14 @@ namespace ignite
 
     Entity ScenePanel::SetSelectedEntity(Entity entity)
     {
+        auto sceneRenderer = SceneRenderer::GetActive();
+
         if (!entity.IsValid())
         {
             m_SelectedEntities.clear();
             m_TrackingSelectedEntity = UUID(0);
 
-            SceneRenderer::GetActive()->ClearSelectedEntities();
+            sceneRenderer->ClearSelectedEntities();
             return {};
         }
 
@@ -1726,30 +1728,30 @@ namespace ignite
             if (auto it = m_SelectedEntities.find(entity.GetUUID()); it != m_SelectedEntities.end())
             {
                 // de-select
-                SceneRenderer::GetActive()->UnselectEntity(it->second);
+                sceneRenderer->UnselectEntity(it->second);
                 it = m_SelectedEntities.erase(it);
-                
+
                 if (!m_SelectedEntities.empty())
                 {
                     m_TrackingSelectedEntity = m_SelectedEntities.begin()->first;
-                    SceneRenderer::GetActive()->SetSelectedEntity(m_SelectedEntities.begin()->second);
-                    
+                    sceneRenderer->SetSelectedEntity(m_SelectedEntities.begin()->second);
+
                     return m_SelectedEntities.begin()->second;
                 }
             }
             else
             {
                 m_SelectedEntities[entity.GetUUID()] = entity;
-                SceneRenderer::GetActive()->SetSelectedEntity(entity);
+                sceneRenderer->SetSelectedEntity(entity);
             }
         }
         else // single select
         {
             m_SelectedEntities.clear();
-            SceneRenderer::GetActive()->ClearSelectedEntities();
+            sceneRenderer->ClearSelectedEntities();
 
             m_SelectedEntities[entity.GetUUID()] = entity;
-            SceneRenderer::GetActive()->SetSelectedEntity(entity);
+            sceneRenderer->SetSelectedEntity(entity);
         }
 
         if (m_SelectedEntities.empty())
