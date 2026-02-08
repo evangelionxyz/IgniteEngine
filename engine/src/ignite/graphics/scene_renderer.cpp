@@ -532,18 +532,21 @@ namespace ignite {
 		geomGState.framebuffer = framebuffer;
 		geomGState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
-#if 0
 		for (entt::entity e : meshView)
 		{
 			TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
 			auto &smc = m_Scene->registry->get<StaticMeshComponent>(e);
 
 			if (smc.handle == AssetHandle(0))
+			{
 				continue;
+			}
 
 			Ref<StaticMesh> sm = Project::GetInstance()->GetAsset<StaticMesh>(smc.handle);
 			if (!sm)
+			{
 				continue;
+			}
 
 			for (auto &m : sm->GetMeshInstances())
 			{
@@ -566,38 +569,36 @@ namespace ignite {
 
 				m->GetGPUDataBuffer()->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
 
-				// Ref<Material> material = Project::GetInstance()->GetAsset<Material>(m->GetMaterialHandle());
-				// if (!material)
-				// {
-				// 	continue;
-				// }
-				// 
-				// if (!material->GetBindingSet())
-				// {
-				// 	material->UpdateBindingSet();
-				// }
-				// 
-				// material->UploadToGpu(cmd);
-				// 
-				// if (m->GetBindingSet() && material->GetBindingSet())
+				Ref<Material> material = Project::GetInstance()->GetAsset<Material>(m->GetMaterialHandle());
+				if (!material)
 				{
-					// geomGState.bindings = { m->GetBindingSet(), material->GetBindingSet() };
-					// 
-					// geomGState.addVertexBuffer({ primitive->vertexBuffer->GetHandle(), 0, 0 });
-					// geomGState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
-					// 
-					// cmd->setGraphicsState(geomGState);
-					// 
-					// nvrhi::DrawArguments args;
-					// args.setVertexCount(primitive->indexBuffer->GetCount());
-					// args.instanceCount = 1;
-					// 
-					// cmd->drawIndexed(args);
+					continue;
+				}
+				
+				if (!material->GetBindingSet())
+				{
+					material->UpdateBindingSet();
+				}
+				
+				material->UploadToGpu(cmd);
+				
+				if (m->GetBindingSet() && material->GetBindingSet() && primitive->vertexBuffer && primitive->indexBuffer)
+				{
+					geomGState.bindings = { m->GetBindingSet(), material->GetBindingSet() };
+
+					geomGState.addVertexBuffer({ primitive->vertexBuffer->GetHandle(), 0, 0 });
+					geomGState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+
+					cmd->setGraphicsState(geomGState);
+
+					nvrhi::DrawArguments args;
+					args.setVertexCount(primitive->indexBuffer->GetCount());
+					args.instanceCount = 1;
+
+					cmd->drawIndexed(args);
 				}
 			}
 		}
-
-#endif
 
 		// 2D Pass
 		m_Renderer2D->Begin(cmd);
