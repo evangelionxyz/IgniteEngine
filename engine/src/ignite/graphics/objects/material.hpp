@@ -26,7 +26,6 @@
 #include "ignite/core/application.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/texture.hpp"
-
 #include "ignite/graphics/gpu_data.hpp"
 
 #include <glm/glm.hpp>
@@ -41,22 +40,28 @@ namespace ignite
         Masked
     };
 
-    class Material
+    class Material : public Asset
     {
     public:
         Material();
     	~Material();
 
         std::string name;
+
+        // TODO: Use asset handle instead of actual resource
         Ref<Texture> baseColorTexture;
         Ref<Texture> emissiveTexture;
         Ref<Texture> metallicRoughnessTexture;
         Ref<Texture> normalTexture;
         Ref<Texture> occlusionTexture;
+
         nvrhi::SamplerHandle sampler;
 
         void UpdateBindingSet();
         void UploadToGpu(nvrhi::ICommandList *cmd);
+        void SetTextureData(nvrhi::ICommandList *cmd);
+
+        void SetType(MaterialType type) { m_Type = type; }
         
         nvrhi::BindingSetHandle GetBindingSet() { return m_BindingSet; }
         Ref<ConstantBuffer> GetGPUDataBuffer() { return m_GPUDataBuffer; }

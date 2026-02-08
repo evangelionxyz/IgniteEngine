@@ -46,7 +46,17 @@ namespace ignite {
 
         Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
         AssetHandle ImportAsset(const std::filesystem::path &filepath);
-        void InsertMetaData(AssetHandle handle, const AssetMetaData &metadata);
+        void AssignMetaData(AssetHandle handle, const AssetMetaData &metadata);
+
+        template<typename T>
+        void AssignAsset(AssetHandle handle, const Ref<T> &asset)
+        {
+            if (asset && std::is_base_of_v<Asset, T>)
+            {
+                m_LoadedAssets[handle] = asset;
+            }
+        }
+
         void RemoveAsset(AssetHandle handle);
 
         void SubmitJob(AssetJob job);

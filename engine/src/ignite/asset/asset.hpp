@@ -91,9 +91,9 @@ namespace ignite {
         { ".wav", AssetType::Audio },
 
         { ".gltf", AssetType::StaticMesh },
+        { ".ixsm", AssetType::StaticMesh },
 
-        { ".skel", AssetType::Skeleton},
-        { ".mat", AssetType::Material},
+        { ".ixskel", AssetType::Skeleton},
         { ".ixmat", AssetType::Material},
         { ".ixenv", AssetType::Environment},
     };
@@ -117,10 +117,26 @@ namespace ignite {
         return AssetType::Invalid;
     }
 
+    // Binary Extensions
+    static std::string GetAssetExtensionFromType(const AssetType type)
+    {
+        switch (type)
+        {
+        case AssetType::StaticMesh: return ".ixsm";
+        case AssetType::Scene: return ".ixscene";
+        case AssetType::Project: return ".ixproj";
+        case AssetType::Material: return ".ixmat";
+        case AssetType::Environment: return ".ixenv";
+        default: return ".invalid";
+        }
+    }
+
     static AssetType GetAssetTypeFromExtension(const std::string &ext)
     {
         if (s_AssetExtensionMap.contains(ext))
+        {
             return s_AssetExtensionMap.at(ext);
+        }
 
         return AssetType::Invalid;
     }

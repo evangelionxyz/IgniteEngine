@@ -38,8 +38,8 @@
 
 #include <filesystem>
 
-namespace YAML {
-
+namespace YAML
+{
     template<>
     struct convert<ignite::UUID>
     {
@@ -251,7 +251,9 @@ namespace YAML {
         }
     };
 }
-namespace ignite {
+
+namespace ignite
+{
     static YAML::Emitter &operator<<(YAML::Emitter &out, const Rect &rect)
     {
         out << YAML::Flow;
@@ -288,7 +290,8 @@ namespace ignite {
     }
 }
 
-namespace ignite {
+namespace ignite
+{
 
     class Scene;
     class Project;

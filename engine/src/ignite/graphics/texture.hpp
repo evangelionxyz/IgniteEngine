@@ -33,8 +33,6 @@ namespace ignite
 {
     struct TextureCreateInfo
     {
-        std::string debugName = "[Texture Class]";
-
         uint32_t width = 1;
         uint32_t height = 1;
         uint32_t depth = 1;
@@ -59,20 +57,23 @@ namespace ignite
     {
     public:
         Texture() = default;
-        Texture(const TextureCreateInfo &createInfo);
-        Texture(Buffer buffer, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd);
-        Texture(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd);
+		Texture(TextureCreateInfo createInfo);
+        Texture(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd);
+        Texture(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd);
 
         ~Texture() override;
 
-        static Ref<Texture> Create(const TextureCreateInfo& createInfo);
-        static Ref<Texture> Create(Buffer buffer, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd);
-        static Ref<Texture> Create(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd);
+        static Ref<Texture> Create(TextureCreateInfo createInfo);
+        static Ref<Texture> Create(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd);
+        static Ref<Texture> Create(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd);
 
+        void SetData(nvrhi::ICommandList *cmd, uint32_t channelCount);
         void SetData(nvrhi::ICommandList *cmd, uint32_t rowPitch, uint32_t depthPitch);
 
-        const TextureCreateInfo &GetCreateInfo() const { return m_CreateInfo; }
+        TextureCreateInfo GetCreateInfo() const { return m_CreateInfo; }
         nvrhi::TextureHandle GetHandle() { return m_Handle; }
+
+        static void *GetPixelData(Ref<Texture> texture, size_t *outRowPitch, nvrhi::ICommandList *cmd, nvrhi::IDevice *device);
 
         int GetWidth() const { return m_CreateInfo.width; }
         int GetHeight() const { return m_CreateInfo.height; }

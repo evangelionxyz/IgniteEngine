@@ -335,6 +335,8 @@ namespace ignite {
 	{
 		m_CommandList = CommandList::Create();
 
+		auto cmd = m_CommandList->GetActiveHandle();
+
 		std::array vertices
 		{
 			VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
@@ -347,7 +349,10 @@ namespace ignite {
 		};
 
 		m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
-		m_CompositeVertexBuffer->SetData(Buffer(vertices.data(), sizeof(vertices)));
+
+		m_CommandList->Begin();
+		m_CompositeVertexBuffer->SetData(cmd, Buffer(vertices.data(), sizeof(vertices)));
+		m_CommandList->Submit();
 
 		m_Device = Application::GetGraphicsDevice();
 
@@ -527,45 +532,72 @@ namespace ignite {
 		geomGState.framebuffer = framebuffer;
 		geomGState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
+#if 0
 		for (entt::entity e : meshView)
 		{
 			TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
 			auto &smc = m_Scene->registry->get<StaticMeshComponent>(e);
-#if 0
-			if (!s.mesh)
+
+			if (smc.handle == AssetHandle(0))
 				continue;
 
-            auto &mesh = mfilter.mesh;
-            auto &primitive = mesh->GetPrimitive();
+			Ref<StaticMesh> sm = Project::GetInstance()->GetAsset<StaticMesh>(smc.handle);
+			if (!sm)
+				continue;
 
-            SkinnedMesh_GPUData gpuData;
-            gpuData.transformation = tr.GetLocalMatrix();// *mesh->local;
+			for (auto &m : sm->GetMeshInstances())
+			{
+				auto &primitive = m->GetPrimitive();
 
-            const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
-            gpuData.normal = glm::mat4(normalMat3);
+				SkinnedMesh_GPUData gpuData;
+				gpuData.transformation = tr.GetLocalMatrix();// *mesh->local;
 
-            std::fill(std::begin(gpuData.boneTransforms),
-                std::end(gpuData.boneTransforms),
-                glm::mat4(1.0f));
+				const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
+				gpuData.normal = glm::mat4(normalMat3);
 
-            mesh->GetGPUDataBuffer()->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
+				std::fill(std::begin(gpuData.boneTransforms),
+					std::end(gpuData.boneTransforms),
+					glm::mat4(1.0f));
 
-            mesh->GetMaterial()->UploadToGpu(cmd);
+				if (!m->GetGPUDataBuffer())
+				{
+					m->UpdateBindingSet(m_Scene.get());
+				}
 
-            geomGState.bindings = { mfilter.mesh->GetBindingSet(), mfilter.mesh->GetMaterial()->GetBindingSet()};
+				m->GetGPUDataBuffer()->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
 
-            geomGState.addVertexBuffer({ primitive->vertexBuffer->GetHandle(), 0, 0 });
-            geomGState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
-
-            cmd->setGraphicsState(geomGState);
-
-            nvrhi::DrawArguments args;
-            args.setVertexCount(primitive->indexBuffer->GetCount());
-            args.instanceCount = 1;
-
-            cmd->drawIndexed(args);
-#endif
+				// Ref<Material> material = Project::GetInstance()->GetAsset<Material>(m->GetMaterialHandle());
+				// if (!material)
+				// {
+				// 	continue;
+				// }
+				// 
+				// if (!material->GetBindingSet())
+				// {
+				// 	material->UpdateBindingSet();
+				// }
+				// 
+				// material->UploadToGpu(cmd);
+				// 
+				// if (m->GetBindingSet() && material->GetBindingSet())
+				{
+					// geomGState.bindings = { m->GetBindingSet(), material->GetBindingSet() };
+					// 
+					// geomGState.addVertexBuffer({ primitive->vertexBuffer->GetHandle(), 0, 0 });
+					// geomGState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+					// 
+					// cmd->setGraphicsState(geomGState);
+					// 
+					// nvrhi::DrawArguments args;
+					// args.setVertexCount(primitive->indexBuffer->GetCount());
+					// args.instanceCount = 1;
+					// 
+					// cmd->drawIndexed(args);
+				}
+			}
 		}
+
+#endif
 
 		// 2D Pass
 		m_Renderer2D->Begin(cmd);

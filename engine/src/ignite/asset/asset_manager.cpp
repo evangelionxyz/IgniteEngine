@@ -67,13 +67,12 @@ namespace ignite {
         bool foundInAssetRegistry = false;
 
         AssetHandle handle = AssetHandle(0);
-        
         std::string fileExtension = filepath.extension().generic_string();
 
         // create metadata
         AssetMetaData metadata;
 
-        // ixasset means it is part of the project
+        // .ixasset means it is part of the project
         // so we need to check from the asset registry
         if (fileExtension == ".ixasset")
         {
@@ -116,7 +115,7 @@ namespace ignite {
         {
             handle = AssetHandle();
             Import(handle, metadata);
-            m_AssetRegistry[handle] = metadata;
+            AssignMetaData(handle, metadata);
         }
         else
         {
@@ -124,21 +123,20 @@ namespace ignite {
             Ref<Asset> asset = GetAsset(handle);
             if (!asset)
             {
-                m_AssetRegistry[handle] = metadata;
-                m_LoadedAssets[handle] = asset;
+                AssignMetaData(handle, metadata);
+                AssignAsset(handle, asset);
             }
         }
-
 
         return handle;
     }
 
-    void AssetManager::InsertMetaData(AssetHandle handle, const AssetMetaData &metadata)
+    void AssetManager::AssignMetaData(AssetHandle handle, const AssetMetaData &metadata)
     {
         m_AssetRegistry[handle] = metadata;
     }
 
-    void AssetManager::RemoveAsset(AssetHandle handle)
+	void AssetManager::RemoveAsset(AssetHandle handle)
     {
         auto it = m_AssetRegistry.find(handle);
         if (it != m_AssetRegistry.end())
@@ -200,7 +198,9 @@ namespace ignite {
         for (const auto &[handle, metadata] : m_AssetRegistry)
         {
             if (metadata.filepath == filepath)
+            {
                 return handle;
+            }
         }
 
         return AssetHandle(0);
@@ -229,13 +229,13 @@ namespace ignite {
             
             {
                 std::unique_lock lock(m_Mutex);
-                m_ConditionVariable.wait(lock, [this]() { 
-                    return !m_Running || !m_Jobs.empty(); 
-                });
+                m_ConditionVariable.wait(lock, [this]() { return !m_Running || !m_Jobs.empty(); });
 
                 // stop the loop if engine is shutting down
                 if (!m_Running && m_Jobs.empty())
+                {
                     return;
+                }
 
                 job = std::move(m_Jobs.front());
                 m_Jobs.pop();
@@ -264,35 +264,34 @@ namespace ignite {
 
         case AssetType::Material:
         case AssetType::StaticMesh:
+        {
+            asset = AssetImporter::Import(handle, metadata);
+            AssignAsset(handle, asset);
+            break;
+        }
         case AssetType::Skeleton:
         case AssetType::Scene:
         case AssetType::Texture:
         {
             asset = AssetImporter::Import(handle, metadata);
-            m_LoadedAssets[handle] = asset;
-            asset->SetReadyFlag(true);
-
-            if (asset && metadata.type == AssetType::Material)
-            {
-                Ref<Material> materialAsset = asset->As<Material>();
-                if (materialAsset)
-                {
-                    auto &materialManager = s_Project->GetMaterialManager();
-                    materialManager.AddMaterial(materialAsset->name, materialAsset);
-                }
-            }
+            AssignAsset(handle, asset);
             break;
         }
         case AssetType::Audio:
         {
-            m_LoadedAssets[handle] = asset;
+            AssignAsset(handle, asset);
             AssetImporter::ImportAsync(handle, metadata, [&](Ref<Asset> assetResult, AssetHandle assetHandle)
             {
                 assetResult->SetReadyFlag(true);
-                m_LoadedAssets[assetHandle] = assetResult;
+                AssignAsset(assetHandle, assetResult);
             });
             break;
         }
+        }
+
+        if (asset)
+        {
+            asset->SetReadyFlag(true);
         }
 
         return asset;

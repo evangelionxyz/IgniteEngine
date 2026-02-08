@@ -162,7 +162,7 @@ namespace ignite
         createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
         createInfo.isUAV = true;
         
-        createInfo.debugName = "SobelDetection Output Texture";
+        // createInfo.debugName = "SobelDetection Output Texture";
         m_OutputTexture = Texture::Create(createInfo);
 
     	auto samplerDesc = nvrhi::SamplerDesc();

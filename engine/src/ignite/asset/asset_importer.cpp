@@ -22,7 +22,6 @@
 */
 
 #include "asset_importer.hpp"
-#include "asset_static_mesh.hpp"
 
 #include "ignite/audio/fmod_audio.hpp"
 #include "ignite/audio/fmod_sound.hpp"
@@ -30,6 +29,7 @@
 #include "ignite/core/application.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/serializer/serializer.hpp"
+#include "ignite/serializer/binary_serializer.hpp"
 #include "ignite/graphics/scene_renderer.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
@@ -43,7 +43,8 @@ namespace ignite {
         { AssetType::Scene, AssetImporter::ImportScene },
         { AssetType::Texture, AssetImporter::ImportTexture },
         { AssetType::Audio, AssetImporter::ImportAudio },
-        { AssetType::StaticMesh, AssetImporter::ImportStaticMesh }
+        { AssetType::StaticMesh, AssetImporter::ImportStaticMesh },
+        { AssetType::Material, AssetImporter::ImportMaterial }
     };
 
     Ref<Asset> AssetImporter::Import(AssetHandle handle, const AssetMetaData &metadata)
@@ -70,7 +71,9 @@ namespace ignite {
 
             Ref<Asset> asset;
             if (s_ImportFunctions.contains(metadataCopy.type))
+            {
                 asset = s_ImportFunctions.at(metadataCopy.type)(handle, metadataCopy);
+            }
             
             if (asset)
             {
@@ -79,14 +82,161 @@ namespace ignite {
         });
     }
 
-	Ref<AssetStaticMesh> AssetImporter::ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata)
+	Ref<StaticMesh> AssetImporter::ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata)
 	{
-        // Generate folders
-        auto meshScene = MeshLoader::LoadSceneGraphFromGLTF(metadata.filepath.generic_string());
+        if (!std::filesystem::exists(metadata.filepath))
+        {
+            LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
+            return nullptr;
+        }
 
-        Ref<MeshInstance> mesh;
+		static auto staticMeshBinExt = GetAssetExtensionFromType(AssetType::StaticMesh);
+		static auto materialBinExt = GetAssetExtensionFromType(AssetType::Material);
 
-        return nullptr;
+		Ref<StaticMesh> asset;
+
+		// Load the mesh from .ixsm
+        if (metadata.filepath.extension() == staticMeshBinExt)
+        {
+		    asset = BinarySerializer::DeserializeStaticMesh(metadata.filepath);
+        }
+
+        if (asset)
+        {
+			for (auto &m : asset->GetMeshInstances())
+			{
+			    // Load materials
+				AssetHandle materialHandle = m->GetMaterialHandle();
+				AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(materialHandle);
+				if (metadata.type == AssetType::Material)
+				{
+					const auto &materialFilepath = Project::GetInstance()->GetAssetFilepath(metadata.filepath);
+					Ref<Material> mat = BinarySerializer::DeserializeMaterial(materialFilepath);
+                    Project::GetInstance()->GetAssetManager().AssignAsset(materialHandle, mat);
+
+                    Renderer::Submit([material = mat, mesh = m](nvrhi::ICommandList *cmd)
+                    {
+				        // Create buffer
+					    mesh->GetPrimitive()->CreateBuffer(cmd);
+                        material->SetTextureData(cmd);
+                    });
+				}
+			}
+
+            return asset;
+        }
+
+        const std::filesystem::path parentPath = metadata.filepath.parent_path();
+        
+        // Get project asset directory
+        const std::filesystem::path projectAssetPath = Project::GetInstance()->GetAssetDirectory();
+        
+        const std::filesystem::path filename = metadata.filepath.stem();
+        const std::filesystem::path outputDirectory = projectAssetPath / filename; // inside project asset directory
+        const std::filesystem::path meshDirectory = outputDirectory / "StaticMesh";
+        const std::filesystem::path materialDirectory = outputDirectory / "Material";
+        const std::filesystem::path textureDirectory = outputDirectory / "Textures";
+
+        // Create Output Directory
+        if (!std::filesystem::exists(outputDirectory))
+        {
+            std::filesystem::create_directory(outputDirectory);
+        }
+
+        // Create Mesh Directory
+        if (!std::filesystem::exists(meshDirectory))
+        {
+            std::filesystem::create_directory(meshDirectory);
+        }
+
+        // Create Material Directory
+        if (!std::filesystem::exists(materialDirectory))
+        {
+            std::filesystem::create_directory(materialDirectory);
+        }
+
+        // Create Texture Directory
+        if (!std::filesystem::exists(textureDirectory))
+        {
+			std::filesystem::create_directory(textureDirectory);
+        }
+
+		std::filesystem::path meshBinaryFilename = filename;
+		meshBinaryFilename = meshBinaryFilename.replace_extension(staticMeshBinExt);
+		std::filesystem::path meshBinaryFullpath = meshDirectory / meshBinaryFilename;
+
+        if (!asset)
+        {
+			// Generate folders
+			MeshScene meshScene;
+			MeshLoader::LoadSceneGraphFromGLTF(metadata.filepath.generic_string(), meshScene);
+
+            // Import and store material first
+			for (Ref<Material> &mat : meshScene.materials)
+			{
+                const std::string materialFilename = mat->name+materialBinExt;
+                std::filesystem::path materialBinFullPath = materialDirectory / materialFilename;
+                BinarySerializer::SerializeMaterial(mat, materialBinFullPath);
+
+                AssetHandle materialHandle = AssetHandle();
+                mat->handle = materialHandle; // assign handle
+
+                AssetMetaData materialMD;
+                materialMD.filepath = Project::GetInstance()->GetAssetRelativeFilepath(materialBinFullPath); // relative path
+                // materialMD.filepath = materialBinFullPath;
+                materialMD.type = AssetType::Material;
+
+                Project::GetInstance()->GetAssetManager().AssignAsset(materialHandle, mat);
+                Project::GetInstance()->GetAssetManager().AssignMetaData(materialHandle, materialMD);
+			}
+
+			asset = CreateRef<StaticMesh>();
+			for (size_t meshIdx = 0; meshIdx < meshScene.flatMeshes.size(); ++meshIdx)
+			{
+                // Resolve material handle
+                const int matIdx = meshScene.materialMap[(int)meshIdx];
+                Ref<Material> mat = meshScene.materials[matIdx];
+
+                Ref<MeshInstance> m = meshScene.flatMeshes[meshIdx];
+                m->SetMaterial(mat->handle);
+
+				asset->AddMeshInstance(m);
+			}
+
+			BinarySerializer::SerializeStaticMesh(asset, meshBinaryFullpath);
+        }
+
+        if (asset)
+        {
+            asset->handle = handle;
+
+            auto relativePath = Project::GetInstance()->GetAssetRelativeFilepath(meshBinaryFullpath);
+        }
+
+        return asset;
+	}
+
+	Ref<Material> AssetImporter::ImportMaterial(AssetHandle handle, const AssetMetaData &metadata)
+	{
+        Ref<Material> asset;
+
+        if (asset)
+        {
+            asset->handle = handle;
+        }
+
+        // TODO: Add to material manager
+		/*if (metadata.type == AssetType::Material)
+		{
+			Ref<Material> materialAsset = asset->As<Material>();
+			if (materialAsset)
+			{
+				auto &materialManager = Project::GetInstance()->GetMaterialManager();
+				materialManager.AddMaterial(materialAsset->name, materialAsset);
+			}
+		}*/
+
+        return asset;
 	}
 
 	Ref<Scene> AssetImporter::ImportScene(AssetHandle handle, const AssetMetaData &metadata)

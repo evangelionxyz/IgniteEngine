@@ -34,7 +34,7 @@ namespace ignite
     Material::Material()
     {
         // Neutral defaults per glTF PBR spec when a texture is absent
-        baseColorTexture = Renderer::GetMagentaTexture();           // baseColorFactor will tint
+        baseColorTexture = Renderer::GetMagentaTexture();         // baseColorFactor will tint
         emissiveTexture = Renderer::GetWhiteTexture();            // no emissive
         metallicRoughnessTexture = Renderer::GetBlackTexture();   // will be overridden if texture present; factors supply values
         normalTexture = Renderer::GetWhiteTexture();              // flat normal
@@ -58,6 +58,11 @@ namespace ignite
     void Material::UpdateBindingSet()
     {
         auto device = Application::GetGraphicsDevice();
+
+        if (!m_GPUDataBuffer)
+        {
+            m_GPUDataBuffer = ConstantBuffer::Create(sizeof(Material_GPUData), false, 1, "Material Constant Buffer");
+        }
 
         nvrhi::BindingSetDesc desc = nvrhi::BindingSetDesc();
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_GPUDataBuffer->GetHandle()));
@@ -87,7 +92,17 @@ namespace ignite
         m_GPUDataBuffer->SetData(cmd, Buffer(&gpuData, sizeof(Material_GPUData)));
     }
 
-    nvrhi::BindingLayoutDesc Material::GetBindingLayoutDesc()
+	void Material::SetTextureData(nvrhi::ICommandList *cmd)
+	{
+        const uint32_t channelCount = 4;
+		baseColorTexture->SetData(cmd, channelCount);
+        emissiveTexture->SetData(cmd, channelCount);
+		metallicRoughnessTexture->SetData(cmd, channelCount);
+        normalTexture->SetData(cmd, channelCount);
+        occlusionTexture->SetData(cmd, channelCount);
+	}
+
+	nvrhi::BindingLayoutDesc Material::GetBindingLayoutDesc()
     {
         auto bindingLayoutDesc = nvrhi::BindingLayoutDesc()
             .setRegisterSpace(1) // set 1
@@ -105,5 +120,4 @@ namespace ignite
             .addItem(nvrhi::BindingLayoutItem::Sampler(1)); // csm sampler
         return bindingLayoutDesc;
     }
-
 }

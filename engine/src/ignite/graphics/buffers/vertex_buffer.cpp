@@ -22,7 +22,7 @@
 */
 
 #include "vertex_buffer.hpp"
-
+#include "ignite/graphics/renderer.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/logger.hpp"
 
@@ -43,22 +43,9 @@ namespace ignite
         LOG_ASSERT(m_Handle, "[Vertex Buffer] Failed to create handle!");
     }
 
-    void VertexBuffer::SetData(nvrhi::ICommandList* commandList, const Buffer buffer, const size_t offset) const
+	void VertexBuffer::SetData(nvrhi::ICommandList *cmd, const Buffer buffer, const size_t offset) const
     {
-        commandList->writeBuffer(m_Handle, buffer.data, buffer.size, offset);
-    }
-
-    void VertexBuffer::SetData(const Buffer buffer, const size_t offset) const
-    {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-        const nvrhi::CommandListHandle commandList = device->createCommandList();
-
-        commandList->open();
-        commandList->writeBuffer(m_Handle, buffer.data, buffer.size, offset);
-
-        commandList->close();
-        device->executeCommandList(commandList);
-
+        cmd->writeBuffer(m_Handle, buffer.data, buffer.size, offset);
     }
 
     Ref<VertexBuffer> VertexBuffer::Create(size_t size, const std::string &debugName)

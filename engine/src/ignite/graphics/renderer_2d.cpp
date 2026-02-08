@@ -231,7 +231,12 @@ namespace ignite
             offset += 4;
         }
 
-        m_QuadBatch.indexBuffer->SetData(Buffer(indices.data(), indices.size() * sizeof(uint32_t)));
+        auto device = Application::GetGraphicsDevice();
+        nvrhi::CommandListHandle cmd = device->createCommandList();
+        cmd->open();
+        m_QuadBatch.indexBuffer->SetData(cmd, Buffer(indices.data(), indices.size() * sizeof(uint32_t)));
+        cmd->close();
+        device->executeCommandList(cmd);
 
         QUAD_POSITIONS[0] = { -0.5f, -0.5f, 0.0f, 1.0f }; // bottom-left
         QUAD_POSITIONS[1] = { 0.5f,  0.5f, 0.0f, 1.0f }; // top-right

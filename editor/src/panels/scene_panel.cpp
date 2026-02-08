@@ -428,13 +428,13 @@ namespace ignite
 
                 bool isTextureLoaded = c.handle != AssetHandle(0);
 
-                std::string imageButtonLabel = "Load Texture";
+                std::string btLabel = "Load Texture";
                 if (isTextureLoaded)
                 {
-                    imageButtonLabel = "Loaded";
+                    btLabel = "Loaded";
                 }
 
-                if (ImGui::Button(imageButtonLabel.c_str()))
+                if (ImGui::Button(btLabel.c_str()))
                 {
                 }
 
@@ -472,13 +472,63 @@ namespace ignite
 
             RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [&]()
             {
-                // TODO: Material
-                if (ImGui::BeginDragDropTarget())
-                {
-                    ImGui::EndDragDropTarget();
-                }
+                    StaticMeshComponent &c = selectedEntity.GetComponent<StaticMeshComponent>();
 
-                ImGui::Button("Material");
+					bool isMeshLoaded = c.handle != AssetHandle(0);
+
+					std::string imageButtonLabel = "Load Mesh";
+					if (isMeshLoaded)
+					{
+						imageButtonLabel = "Loaded";
+					}
+
+					if (ImGui::Button(imageButtonLabel.c_str()))
+					{
+					}
+
+					if (ImGui::BeginDragDropTarget())
+					{
+						if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+						{
+							LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+							AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+							AssetType type = Project::GetInstance()->GetAssetManager().GetAssetType(handle);
+							if (type == AssetType::StaticMesh)
+							{
+								c.handle = handle;
+							}
+						}
+
+						ImGui::EndDragDropTarget();
+					}
+
+					if (isMeshLoaded)
+					{
+						ImGui::SameLine();
+						if (ImGui::Button("X"))
+						{
+							c.handle = AssetHandle(0); // reset the texture handle
+						}
+
+						ImGui::SameLine();
+						ImGui::Text("Handle: %llu", static_cast<u64>(c.handle));
+
+                        Ref<StaticMesh> sm = Project::GetInstance()->GetAsset<StaticMesh>(c.handle);
+                        if (sm)
+                        {
+                            for (auto &m : sm->GetMeshInstances())
+                            {
+                                ImGui::Text(m->GetName().c_str());
+
+                                ImGui::SeparatorText("Material");
+                                Ref<Material> mat = Project::GetInstance()->GetAsset<Material>(m->GetMaterialHandle());
+                                if (mat)
+                                {
+                                    ImGui::Button(mat->name.c_str());
+                                }
+                            }
+                        }
+					}
             });
 
 			RenderComponent<Rigidbody2DComponent>("Rigid Body 2D", selectedEntity, [&]()

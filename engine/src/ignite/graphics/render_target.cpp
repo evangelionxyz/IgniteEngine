@@ -55,7 +55,7 @@ namespace ignite {
                 createInfo.depth = 1;
                 createInfo.isRenderTarget = isRenderTarget;
                 createInfo.format = attachment.format;
-                createInfo.debugName = std::format("{} - {} ", attachment.name, debugName);
+                // createInfo.debugName = std::format("{} - {} ", attachment.name, debugName);
             	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
             	createInfo.keepInitialState = true;
 
@@ -83,7 +83,7 @@ namespace ignite {
                 createInfo.depth = 1;
                 createInfo.isRenderTarget = isRenderTarget;
                 createInfo.format = attachment.format;
-                createInfo.debugName = std::format("{} - {} ", attachment.name, debugName);
+                // createInfo.debugName = std::format("{} - {} ", attachment.name, debugName);
                 createInfo.isUAV = false;
             	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
             	createInfo.keepInitialState = true;

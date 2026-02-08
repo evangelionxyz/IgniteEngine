@@ -22,7 +22,7 @@
 */
 
 #include "index_buffer.hpp"
-
+#include "ignite/graphics/renderer.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/logger.hpp"
 
@@ -44,21 +44,9 @@ namespace ignite
         LOG_ASSERT(m_Handle, "[Index Buffer] Failed to create handle!");
     }
 
-    void IndexBuffer::SetData(nvrhi::ICommandList *commandList, Buffer buffer, size_t offset) const
+    void IndexBuffer::SetData(nvrhi::ICommandList *cmd, Buffer buffer, size_t offset) const
     {
-        commandList->writeBuffer(m_Handle, buffer.data, buffer.size, offset);
-    }
-
-    void IndexBuffer::SetData(Buffer buffer, size_t offset) const
-    {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-        const nvrhi::CommandListHandle commandList = device->createCommandList();
-
-        commandList->open();
-        commandList->writeBuffer(m_Handle, buffer.data, buffer.size, offset);
-
-        commandList->close();
-        device->executeCommandList(commandList);
+        cmd->writeBuffer(m_Handle, buffer.data, buffer.size, offset);
     }
 
     Ref<IndexBuffer> IndexBuffer::Create(size_t size, const std::string &debugName)

@@ -425,7 +425,7 @@ namespace ignite
                             AssetMetaData metadata;
                             metadata.type = assetType;
                             metadata.filepath = relPath;
-                            Project::GetInstance()->GetAssetManager().InsertMetaData(assetHandle, metadata);
+                            Project::GetInstance()->GetAssetManager().AssignMetaData(assetHandle, metadata);
                         }
 
                         if (assetType == AssetType::Material)

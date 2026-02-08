@@ -346,7 +346,7 @@ namespace ignite
     class StaticMeshComponent : public IComponent
     {
     public:
-        std::vector<Ref<MeshInstance>> meshInstance;
+        AssetHandle handle = AssetHandle(0);
 
         StaticMeshComponent() = default;
 

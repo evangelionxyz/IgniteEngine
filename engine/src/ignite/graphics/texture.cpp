@@ -53,28 +53,28 @@ namespace ignite
         memcpy(buffer.data, flipped.data(), flipped.size());
     }
 
-    Texture::Texture(const TextureCreateInfo& createInfo)
+    Texture::Texture(TextureCreateInfo createInfo)
         : m_CreateInfo(createInfo)
     {
         CreateTextureHandle();
     }
 
-    Texture::Texture(Buffer buffer, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd)
+    Texture::Texture(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd)
         : m_Buffer(buffer), m_CreateInfo(createInfo)
     {
         CreateTextureHandle();
 
-        const uint32_t channels = 4;
-        const uint32_t rowPitch = m_CreateInfo.width * channels;
-        uint32_t depthPitch = rowPitch * m_CreateInfo.height;
-
+        if (cmd)
         {
-            auto device = Application::GetGraphicsDevice();
+			const uint32_t channels = 4;
+			const uint32_t rowPitch = m_CreateInfo.width * channels;
+			uint32_t depthPitch = rowPitch * m_CreateInfo.height;
+
             SetData(cmd, rowPitch, depthPitch);
         }
     }
 
-    Texture::Texture(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd)
+    Texture::Texture(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd)
         : m_CreateInfo(createInfo), m_Filepath(filepath)
     {
         LOG_ASSERT(std::filesystem::exists(filepath), "File does not found!");
@@ -87,7 +87,7 @@ namespace ignite
             case nvrhi::Format::RGBA8_UNORM:
             {
                 int width, height, channelsOut;
-                uint8_t *pixelData = stbi_load(filepath.generic_string().c_str(), &width, &height, &channelsOut, 4);
+                uint8_t *pixelData = stbi_load(filepath.generic_string().c_str(), &width, &height, &channelsOut, channels);
                 m_Buffer = Buffer(pixelData, width * height * channels);
 
                 m_CreateInfo.width = static_cast<uint32_t>(width);
@@ -98,7 +98,7 @@ namespace ignite
             case nvrhi::Format::RGBA32_FLOAT:
             {
                 int width, height, channelsOut;
-                float *pixelData = stbi_loadf(filepath.generic_string().c_str(), &width, &height, &channelsOut, 4);
+                float *pixelData = stbi_loadf(filepath.generic_string().c_str(), &width, &height, &channelsOut, channels);
                 m_Buffer = Buffer(pixelData, width * height * channels * sizeof(float));
 
                 m_CreateInfo.width = static_cast<uint32_t>(width);
@@ -113,13 +113,12 @@ namespace ignite
             }
         }
 
-        const uint32_t rowPitch = m_CreateInfo.width * channels;
-        const uint32_t depthPitch = rowPitch * m_CreateInfo.height;
-
         CreateTextureHandle();
 
+        if (cmd)
         {
-            auto device = Application::GetGraphicsDevice();
+			const uint32_t rowPitch = m_CreateInfo.width * channels;
+			const uint32_t depthPitch = rowPitch * m_CreateInfo.height;
             SetData(cmd, rowPitch, depthPitch);
         }
     }
@@ -177,7 +176,29 @@ namespace ignite
         }
     }
 
-    void Texture::CreateTextureHandle()
+	void Texture::SetData(nvrhi::ICommandList *cmd, uint32_t channelCount)
+	{
+		const uint32_t rowPitch = m_CreateInfo.width * channelCount;
+		const uint32_t depthPitch = rowPitch * m_CreateInfo.height;
+		SetData(cmd, rowPitch, depthPitch);
+	}
+
+	void *Texture::GetPixelData(Ref<Texture> texture, size_t *outRowPitch, nvrhi::ICommandList *cmd, nvrhi::IDevice *device)
+	{
+		cmd->open();
+		nvrhi::TextureDesc stagingDesc = texture->GetHandle()->getDesc();
+		stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
+		nvrhi::StagingTextureHandle stagingTexture = device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
+		cmd->copyTexture(stagingTexture, nvrhi::TextureSlice(), texture->GetHandle(), nvrhi::TextureSlice());
+		cmd->close();
+		device->executeCommandList(cmd);
+
+		// Map and read the pixel data
+		void *pixelData = device->mapStagingTexture(stagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, outRowPitch);
+        return pixelData;
+	}
+
+	void Texture::CreateTextureHandle()
     {
     	LOG_ASSERT(m_CreateInfo.dimension != nvrhi::TextureDimension::Unknown, "[Texture] Dimension must be set");
     	LOG_ASSERT(m_CreateInfo.initialState != nvrhi::ResourceStates::Unknown, "[Texture] State must be set");
@@ -190,7 +211,7 @@ namespace ignite
         textureDesc.setInitialState(m_CreateInfo.initialState);
         textureDesc.setKeepInitialState(m_CreateInfo.keepInitialState);
         textureDesc.setMipLevels(m_CreateInfo.mipLevels);
-        textureDesc.setDebugName(m_CreateInfo.debugName);
+        // textureDesc.setDebugName(m_CreateInfo.debugName);
         textureDesc.setArraySize(m_CreateInfo.arraySize);
         textureDesc.setSampleQuality(m_CreateInfo.sampleQuality);
         textureDesc.setSampleCount(m_CreateInfo.sampleCount);
@@ -205,17 +226,17 @@ namespace ignite
         LOG_ASSERT(m_Handle, "Failed to create texture");
     }
 
-    Ref<Texture> Texture::Create(const TextureCreateInfo& createInfo)
+    Ref<Texture> Texture::Create(TextureCreateInfo createInfo)
     {
         return CreateRef<Texture>(createInfo);
     }
 
-    Ref<Texture> Texture::Create(Buffer buffer, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd)
+    Ref<Texture> Texture::Create(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd)
     {
         return CreateRef<Texture>(buffer, createInfo, cmd);
     }
 
-    Ref<Texture> Texture::Create(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd)
+    Ref<Texture> Texture::Create(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd)
     {
         return CreateRef<Texture>(filepath, createInfo, cmd);
     }

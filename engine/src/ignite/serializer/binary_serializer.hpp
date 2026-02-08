@@ -26,7 +26,7 @@
 #include "stb_image_write.h"
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/animation/skeleton.hpp"
-
+#include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 
 #include <filesystem>
@@ -70,12 +70,11 @@ namespace ignite
         static std::vector<std::byte> SerializeMaterial(const Ref<Material> &mat, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
-#if 0
 
             nvrhi::IDevice *device = Application::GetGraphicsDevice();
             nvrhi::CommandListHandle cmd = device->createCommandList();
 
-            // write name
+            // Write name
             std::string nameCopy = mat->name;
             nameCopy += '\0';
             uint32_t nameSize = static_cast<uint32_t>(nameCopy.size());
@@ -86,51 +85,44 @@ namespace ignite
                 reinterpret_cast<const std::byte *>(nameCopy.data()) + nameSize
             );
 
-            AppendRaw(buffer, mat->params);
-            AppendRaw(buffer, mat->type);
-            AppendRaw(buffer, mat->blendMode);
-            AppendRaw(buffer, mat->mipLevels);
+            MaterialType matType = mat->GetType();
+            AppendRaw(buffer, matType);
 
-            // write texture
-            uint32_t textureCount = static_cast<uint32_t>(mat->textures.size());
-            AppendRaw(buffer, textureCount);
-
-            for (auto &[type, texture] : mat->textures)
+            // NOTE: WRITE RAW TEXTURE DIRECTLY
+            // Should use AssetHandle instead
+            auto writeTextureFunc = [&](Ref<Texture> texture)
             {
-                size_t width = static_cast<size_t>(texture->GetWidth());
-                size_t height = static_cast<size_t>(texture->GetHeight());
-                size_t rowPitch = 0;
-                
-                cmd->open();
-                nvrhi::TextureDesc stagingDesc = texture->GetHandle()->getDesc();
-                stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
-                nvrhi::StagingTextureHandle stagingTexture = device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-                cmd->copyTexture(stagingTexture, nvrhi::TextureSlice(), texture->GetHandle(), nvrhi::TextureSlice());
-                cmd->close();
-                device->executeCommandList(cmd);
+                const TextureCreateInfo &texCreateInfo = texture->GetCreateInfo();
 
-                // Map and read the pixel data
-                void *pixelData = device->mapStagingTexture(stagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch);
+				size_t width = static_cast<size_t>(texture->GetWidth());
+				size_t height = static_cast<size_t>(texture->GetHeight());
+				size_t rowPitch = 0;
 
-                // write texture type
-                AppendRaw(buffer, type);
+				// Map and read the pixel data
+				void *pixelData = Texture::GetPixelData(texture, &rowPitch, cmd, device);
 
-                AppendRaw(buffer, width);
-                AppendRaw(buffer, height);
-                AppendRaw(buffer, rowPitch);
+				// Write texture create info
+				AppendRaw(buffer, texCreateInfo);
+				AppendRaw(buffer, rowPitch);
 
-                const size_t pixelBytes = height * rowPitch;
+				const size_t pixelBytes = height * rowPitch;
 
-                // write RGBA blob
-                const std::byte *begin = reinterpret_cast<const std::byte *>(pixelData);
-                buffer.insert(buffer.end(), begin, begin + pixelBytes);
-            }
+				// Write RGBA blob
+				const std::byte *begin = reinterpret_cast<const std::byte *>(pixelData);
+				buffer.insert(buffer.end(), begin, begin + pixelBytes);
+            };
+            
+            writeTextureFunc(mat->baseColorTexture);
+            writeTextureFunc(mat->emissiveTexture);
+            writeTextureFunc(mat->metallicRoughnessTexture);
+            writeTextureFunc(mat->normalTexture);
+            writeTextureFunc(mat->occlusionTexture);
 
             // Write to file
             std::ofstream of(filepath, std::ios::binary);
             of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
             of.close();
-#endif
+      
             return buffer;
         }
 
@@ -139,190 +131,117 @@ namespace ignite
             Ref<Material> mat = CreateRef<Material>();
             std::ifstream inFile(filepath, std::ios::binary);
 
-#if 0
-            nvrhi::IDevice *device = Application::GetGraphicsDevice();
-            nvrhi::CommandListHandle cmd = device->createCommandList();
-            cmd->open();
-
             if (!inFile)
             {
-                throw std::runtime_error("Cannot open material file " + filepath.string());
+                LOG_ASSERT("Filed does not exists {0}", filepath.generic_string());
+                return nullptr;
             }
 
-            // read name
+            // Read name
             uint32_t nameSize = 0;
             inFile.read(reinterpret_cast<char *>(&nameSize), sizeof(nameSize));
             std::vector<char> stringBytes(nameSize); // owns the bytes
             inFile.read(stringBytes.data(), nameSize);
             mat->name = std::string(stringBytes.data());
 
-            inFile.read(reinterpret_cast<char *>(&mat->params), sizeof(mat->params));
-            inFile.read(reinterpret_cast<char *>(&mat->type), sizeof(mat->type));
-            inFile.read(reinterpret_cast<char *>(&mat->blendMode), sizeof(mat->blendMode));
-            inFile.read(reinterpret_cast<char *>(&mat->mipLevels), sizeof(mat->mipLevels));
+            // Read type
+            MaterialType matType;
+            inFile.read(reinterpret_cast<char *>(&matType), sizeof(matType));
+            mat->SetType(matType);
 
-            // write texture
-            uint32_t textureCount = 0;
-            inFile.read(reinterpret_cast<char *>(&textureCount), sizeof(textureCount));
-
-            for (uint32_t i = 0; i < textureCount; ++i)
+            // Read texture
+            auto readTextureFunc = [&]() -> Ref<Texture>
             {
-                size_t width, height, rowPitch;
-                inFile.read(reinterpret_cast<char *>(&textureType), sizeof(textureType));
-                
-                inFile.read(reinterpret_cast<char *>(&width), sizeof(width));
-                inFile.read(reinterpret_cast<char *>(&height), sizeof(height));
-                inFile.read(reinterpret_cast<char *>(&rowPitch), sizeof(rowPitch));
-                
-                const size_t pixelBytes = height * rowPitch;
-                Buffer buffer(pixelBytes);
+                TextureCreateInfo texCreateInfo;
+				inFile.read(reinterpret_cast<char *>(&texCreateInfo), sizeof(texCreateInfo));
 
-                // read blob *into* the buffer, not into the pointer itself
-                inFile.read(reinterpret_cast<char *>(buffer.data), pixelBytes);
+				size_t rowPitch;
+				inFile.read(reinterpret_cast<char *>(&rowPitch), sizeof(rowPitch));
 
-                TextureCreateInfo createInfo;
-                createInfo.dimension = nvrhi::TextureDimension::Texture2D;
-                createInfo.width = width;
-                createInfo.height = height;
-                createInfo.mipLevels = (width == 1 && height == 1) ? 1 : 4;
-                createInfo.flip = false;
-                createInfo.format = nvrhi::Format::RGBA8_UNORM;
+				const size_t pixelBytes = texCreateInfo.height * rowPitch;
+				Buffer buffer(pixelBytes);
 
-                Ref<Texture> texture = Texture::Create(buffer, createInfo);
-            }
+				// read blob *into* the buffer, not into the pointer itself
+				inFile.read(reinterpret_cast<char *>(buffer.data), pixelBytes);
 
-            cmd->close();
-            device->executeCommandList(cmd);
+                auto tex = Texture::Create(buffer, texCreateInfo, nullptr);
+                return tex;
+            };
 
-            mat->UpdateBindingSet();
+			mat->baseColorTexture = readTextureFunc();
+			mat->emissiveTexture = readTextureFunc();
+			mat->metallicRoughnessTexture = readTextureFunc();
+			mat->normalTexture = readTextureFunc();
+			mat->occlusionTexture = readTextureFunc();
 
             inFile.close();
-#endif
             return mat;
         }
 
-#if 0
-        static std::vector<std::byte> SerializeMeshAsset(const Ref<MeshAsset> &sm, const std::filesystem::path &filepath)
+        static std::vector<std::byte> SerializeStaticMesh(const Ref<StaticMesh> &sm, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
-
-            // write nodes vector
-            uint32_t nodeCount = static_cast<uint32_t>(sm->nodes.size());
-            AppendRaw(buffer, nodeCount);
-
-            uint32_t nodeSizeInBytes = nodeCount * sizeof(NodeInfo);
-            AppendRaw(buffer, nodeSizeInBytes);
-
-            // write mesh vector info
-            uint32_t meshCount = static_cast<uint32_t>(sm->meshesData.size());
-            AppendRaw(buffer, meshCount);
-
-            uint32_t meshesSizeInBytes = meshCount * sizeof(MeshData);
-            AppendRaw(buffer, meshesSizeInBytes);
-
-            for (const auto &node : sm->nodes)
-            {
-                AppendRaw(buffer, node.id);            // id
-                AppendRaw(buffer, node.parentID);      // parentID
-                AppendRaw(buffer, node.materialIndex); // material index
-                AppendRaw(buffer, node.isJoint);       // joint flag
-
-                // write children vector
-                uint32_t childrenIDCount = static_cast<uint32_t>(node.childrenIDs.size());
-                AppendRaw(buffer, childrenIDCount);
-
-                // write referenced mesh indices
-                uint32_t meshIndicesCount = static_cast<uint32_t>(node.meshIndices.size());
-                AppendRaw(buffer, meshIndicesCount);
-                
-                // write name
-                std::string nameCopy = node.name;
-                nameCopy += '\0';
-                // name size in bytes including null-terminated
-                uint32_t nameSize = static_cast<uint32_t>(nameCopy.size());
-                AppendRaw(buffer, nameSize);
-
-                buffer.insert(buffer.end(),
-                    reinterpret_cast<const std::byte *>(nameCopy.data()),
-                    reinterpret_cast<const std::byte *>(nameCopy.data() + nameSize)
-                );
-
-                // write local transform
-                for (int i = 0; i < 4; ++i)
-                {
-                    AppendRaw(buffer, node.localTransform[i].x);
-                    AppendRaw(buffer, node.localTransform[i].y);
-                    AppendRaw(buffer, node.localTransform[i].z);
-                    AppendRaw(buffer, node.localTransform[i].w);
-                }
-
-                // ---------------------------
-                // SKIPPED WORLD TRANSFORM
-                // ---------------------------
-
-                // write children vector
-                for (int id : node.childrenIDs)
-                {
-                    AppendRaw(buffer, id);
-                }
-
-                // write referenced mesh indices
-                for (int index : node.meshIndices)
-                {
-                    AppendRaw(buffer, index);
-                }
-            }
+            const std::vector<Ref<MeshInstance>> &meshInstances = sm->GetMeshInstances();
 
             // write mesh vector
+            uint32_t meshCount = static_cast<uint32_t>(meshInstances.size());
+            AppendRaw(buffer, meshCount);
 
-            for (auto &mesh : sm->meshesData)
+            for (auto &m : meshInstances)
             {
-                AppendRaw(buffer, mesh.meshIndex);
-                AppendRaw(buffer, mesh.materialIndex);
-                AppendRaw(buffer, mesh.nodeParentID);
-                AppendRaw(buffer, mesh.nodeID);
-
-                // write vertex data
-                uint32_t vertexCount = static_cast<uint32_t>(mesh.vertices.size());
-                AppendRaw(buffer, vertexCount);
-
-                // write indices data
-                uint32_t indicesCount = static_cast<uint32_t>(mesh.indices.size());
+                auto &primitive = m->GetPrimitive();
+                
+                // Write vertices and indices count
+                uint32_t verticesCount = static_cast<uint32_t>(primitive->vertices.size());
+                uint32_t indicesCount = static_cast<uint32_t>(primitive->indices.size());
+                AppendRaw(buffer, verticesCount);
                 AppendRaw(buffer, indicesCount);
 
-                // write name
-                std::string nameCopy = mesh.name;
-                nameCopy += '\0';
-                // name size in bytes including null-terminated
-                uint32_t nameSize = static_cast<uint32_t>(nameCopy.size());
-                AppendRaw(buffer, nameSize);
+				// Write vertices
+				for (VertexMesh_Anim &vertex : primitive->vertices)
+				{
+					AppendRaw(buffer, vertex.position);
+					AppendRaw(buffer, vertex.normal);
+					AppendRaw(buffer, vertex.tangent);
+					AppendRaw(buffer, vertex.bitangent);
+					AppendRaw(buffer, vertex.uv);
 
-                buffer.insert(buffer.end(),
-                    reinterpret_cast<const std::byte *>(nameCopy.data()),
-                    reinterpret_cast<const std::byte *>(nameCopy.data() + nameSize)
-                );
+					AppendRaw(buffer, vertex.boneIDs);
+					AppendRaw(buffer, vertex.weights);
+				}
 
-                // write vertices
-                for (auto &vertex : mesh.vertices)
-                {
-                    AppendRaw(buffer, vertex.position);
-                    AppendRaw(buffer, vertex.normal);
-                    AppendRaw(buffer, vertex.texCoord);
-                    AppendRaw(buffer, vertex.color);
+				// write indices
+				buffer.insert
+                (
+                    buffer.end(),
+					reinterpret_cast<const std::byte *>(primitive->indices.data()),
+					reinterpret_cast<const std::byte *>(primitive->indices.data()) + indicesCount * sizeof(uint32_t)
+				);
 
-                    AppendRaw(buffer, vertex.boneIDs);
-                    AppendRaw(buffer, vertex.weights);
+				// Write name
+				std::string nameCopy = m->GetName();
+				nameCopy += '\0';
+				// name size in bytes including null-terminated
+				uint32_t nameSize = static_cast<uint32_t>(nameCopy.size());
+				AppendRaw(buffer, nameSize);
 
-                    // ---------------------------
-                    // SKIPPED ENTITY ID
-                    // ---------------------------
-                }
+				buffer.insert(buffer.end(),
+					reinterpret_cast<const std::byte *>(nameCopy.data()),
+					reinterpret_cast<const std::byte *>(nameCopy.data() + nameSize)
+				);
 
-                // write indices
-                buffer.insert(buffer.end(),
-                    reinterpret_cast<const std::byte *>(mesh.indices.data()),
-                    reinterpret_cast<const std::byte *>(mesh.indices.data()) + indicesCount * sizeof(uint32_t)
-                );
+				// Write local transform
+				for (int i = 0; i < 4; ++i)
+				{
+					AppendRaw(buffer, m->local[i].x);
+					AppendRaw(buffer, m->local[i].y);
+					AppendRaw(buffer, m->local[i].z);
+					AppendRaw(buffer, m->local[i].w);
+				}
+
+                // Write material reference
+                uint64_t materialHandle = m->GetMaterialHandle();
+                AppendRaw(buffer, materialHandle);
             }
 
             // Write to file
@@ -333,143 +252,83 @@ namespace ignite
             return buffer;
         }
 
-
-        static Ref<MeshAsset> DeserializeMeshAsset(const std::filesystem::path &filepath)
+        static Ref<StaticMesh> DeserializeStaticMesh(const std::filesystem::path &filepath)
         {
-            Ref<MeshAsset> meshAsset = CreateRef<MeshAsset>();
+            Ref<StaticMesh> staticMesh = CreateRef<StaticMesh>();
 
             std::ifstream inFile(filepath, std::ios::binary);
 
             if (!inFile)
             {
-                throw std::runtime_error("Cannot open skeletal mesh file " + filepath.string());
-            }
-
-            // write nodes vector
-            uint32_t nodeCount = 0;
-            inFile.read(reinterpret_cast<char *>(&nodeCount), sizeof(nodeCount));
-
-            uint32_t nodeSizeInBytes = 0;
-            inFile.read(reinterpret_cast<char *>(&nodeSizeInBytes), sizeof(nodeSizeInBytes));
-
-            // write mesh vector
-            uint32_t meshCount = 0;
-            inFile.read(reinterpret_cast<char *>(&meshCount), sizeof(meshCount));
-
-            uint32_t meshesSizeInBytes = 0;
-            inFile.read(reinterpret_cast<char *>(&meshesSizeInBytes), sizeof(meshesSizeInBytes));
-
-            meshAsset->nodes.reserve(nodeCount);
-            for (uint32_t nodeIndex = 0; nodeIndex < nodeCount; ++nodeIndex)
-            {
-                NodeInfo node;
-
-                inFile.read(reinterpret_cast<char *>(&node.id), sizeof(node.id));
-                inFile.read(reinterpret_cast<char *>(&node.parentID), sizeof(node.parentID));
-                inFile.read(reinterpret_cast<char *>(&node.materialIndex), sizeof(node.materialIndex));
-                inFile.read(reinterpret_cast<char *>(&node.isJoint), sizeof(node.isJoint));
-
-                // read children count
-                uint32_t childrenIDCount = 0;
-                inFile.read(reinterpret_cast<char *>(&childrenIDCount), sizeof(childrenIDCount));
-
-                // read mesh count
-                uint32_t meshIndicesCount = 0;
-                inFile.read(reinterpret_cast<char *>(&meshIndicesCount), sizeof(meshIndicesCount));
-
-                // read name
-                uint32_t nameSize = 0;
-                inFile.read(reinterpret_cast<char *>(&nameSize), sizeof(nameSize));
-                std::vector<char> stringBytes(nameSize); // owns the bytes
-                inFile.read(stringBytes.data(), nameSize);
-                node.name = std::string(stringBytes.data());
-
-                // read local transform
-                for (int i = 0; i < 4; ++i)
-                {
-                    inFile.read(reinterpret_cast<char *>(&node.localTransform[i].x), sizeof(float));
-                    inFile.read(reinterpret_cast<char *>(&node.localTransform[i].y), sizeof(float));
-                    inFile.read(reinterpret_cast<char *>(&node.localTransform[i].z), sizeof(float));
-                    inFile.read(reinterpret_cast<char *>(&node.localTransform[i].w), sizeof(float));
-                }
-
-                // read children ids
-                node.childrenIDs.reserve(childrenIDCount);
-                for (uint32_t childIndex = 0; childIndex < childrenIDCount; ++childIndex)
-                {
-                    int index = -1;
-                    inFile.read(reinterpret_cast<char *>(&index), sizeof(int));
-                    node.childrenIDs.push_back(index);
-                }
-
-                // read mesh indices
-                for (uint32_t meshIndex = 0; meshIndex < meshIndicesCount; ++meshIndex)
-                {
-                    int index = -1;
-                    inFile.read(reinterpret_cast<char *>(&index), sizeof(index));
-                    node.meshIndices.push_back(index);
-                }
-
-                meshAsset->nodes.push_back(node);
+                return nullptr;
             }
 
             // read mesh vector
-            meshAsset->meshesData.reserve(meshCount);
-            for (uint32_t meshIndex = 0; meshIndex < meshCount; ++meshIndex)
+            uint32_t meshCount = 0;
+            inFile.read(reinterpret_cast<char *>(&meshCount), sizeof(meshCount));
+
+            for (uint32_t i = 0; i < meshCount; ++i)
             {
-                MeshData mesh;
-                mesh.aabb.min = glm::vec3(FLT_MAX);
-                mesh.aabb.max = glm::vec3(-FLT_MAX);
+                uint32_t verticesCount = 0, indicesCount = 0;
+                inFile.read(reinterpret_cast<char *>(&verticesCount), sizeof(verticesCount));
+                inFile.read(reinterpret_cast<char *>(&indicesCount), sizeof(indicesCount));
 
-                inFile.read(reinterpret_cast<char *>(&mesh.meshIndex), sizeof(mesh.meshIndex));
-                inFile.read(reinterpret_cast<char *>(&mesh.materialIndex), sizeof(mesh.materialIndex));
-                inFile.read(reinterpret_cast<char *>(&mesh.nodeParentID), sizeof(mesh.nodeParentID));
-                inFile.read(reinterpret_cast<char *>(&mesh.nodeID), sizeof(mesh.nodeID));
+                Ref<MeshInstance> meshInstance = CreateRef<MeshInstance>();
+                auto &name = meshInstance->GetName();
+                auto &primitive = meshInstance->GetPrimitive();
+            
+                // Read vertices
+                primitive->vertices.reserve(verticesCount);
+				for (uint32_t vertexIndex = 0; vertexIndex < verticesCount; ++vertexIndex)
+				{
+					VertexMesh_Anim vertex;
+					inFile.read(reinterpret_cast<char *>(&vertex.position), sizeof(vertex.position));
+					inFile.read(reinterpret_cast<char *>(&vertex.normal), sizeof(vertex.normal));
+					inFile.read(reinterpret_cast<char *>(&vertex.tangent), sizeof(vertex.tangent));
+					inFile.read(reinterpret_cast<char *>(&vertex.bitangent), sizeof(vertex.bitangent));
+					inFile.read(reinterpret_cast<char *>(&vertex.uv), sizeof(vertex.uv));
 
-                uint32_t vertexCount = 0;
-                inFile.read(reinterpret_cast<char *>(&vertexCount), sizeof(vertexCount));
+					inFile.read(reinterpret_cast<char *>(vertex.boneIDs), sizeof(vertex.boneIDs));
+					inFile.read(reinterpret_cast<char *>(vertex.weights), sizeof(vertex.weights));
 
-                uint32_t indexCount = 0;
-                inFile.read(reinterpret_cast<char *>(&indexCount), sizeof(indexCount));
+                    primitive->vertices.push_back(vertex);
+				}
 
-                // read name
-                uint32_t nameSize = 0;
-                inFile.read(reinterpret_cast<char *>(&nameSize), sizeof(nameSize));
-                std::vector<char> stringBytes(nameSize); // owns the bytes
-                inFile.read(stringBytes.data(), nameSize);
-                mesh.name = std::string(stringBytes.data());
+                // Read indices
+                primitive->indices.resize(indicesCount);
+				inFile.read(reinterpret_cast<char *>(primitive->indices.data()), indicesCount * sizeof(uint32_t));
 
-                // read vertices
-                mesh.vertices.reserve(vertexCount);
-                for (uint32_t vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex)
+				// Read name
+				uint32_t nameSize = 0;
+				inFile.read(reinterpret_cast<char *>(&nameSize), sizeof(nameSize));
+				std::vector<char> stringBytes(nameSize); // owns the bytes
+				inFile.read(stringBytes.data(), nameSize);
+				name = std::string(stringBytes.data());
+
+				// Read local transform
+				for (int i = 0; i < 4; ++i)
+				{
+					inFile.read(reinterpret_cast<char *>(&meshInstance->local[i].x), sizeof(float));
+					inFile.read(reinterpret_cast<char *>(&meshInstance->local[i].y), sizeof(float));
+					inFile.read(reinterpret_cast<char *>(&meshInstance->local[i].z), sizeof(float));
+					inFile.read(reinterpret_cast<char *>(&meshInstance->local[i].w), sizeof(float));
+				}
+
+                // Read material
+                uint64_t materialHandle = 0;
+                inFile.read(reinterpret_cast<char *>(&materialHandle), sizeof(materialHandle));
+                if (materialHandle != 0)
                 {
-                    VertexMesh_Anim vertex;
-                    inFile.read(reinterpret_cast<char *>(&vertex.position), sizeof(vertex.position));
-                    inFile.read(reinterpret_cast<char *>(&vertex.normal), sizeof(vertex.normal));
-                    inFile.read(reinterpret_cast<char *>(&vertex.texCoord), sizeof(vertex.texCoord));
-                    inFile.read(reinterpret_cast<char *>(&vertex.color), sizeof(vertex.color));
-                    inFile.read(reinterpret_cast<char *>(vertex.boneIDs), sizeof(vertex.boneIDs));
-                    inFile.read(reinterpret_cast<char *>(vertex.weights), sizeof(vertex.weights));
-
-                    // load aabb
-                    mesh.aabb.min = glm::min(mesh.aabb.min, vertex.position);
-                    mesh.aabb.max = glm::max(mesh.aabb.max, vertex.position);
-
-                    mesh.vertices.push_back(vertex);
+                    meshInstance->SetMaterial(AssetHandle(materialHandle));
                 }
 
-                // read indices
-                mesh.indices.resize(indexCount);
-                inFile.read(reinterpret_cast<char *>(mesh.indices.data()), indexCount * sizeof(uint32_t));
-
-                meshAsset->meshesData.push_back(mesh);
+				// Pushback
+                staticMesh->AddMeshInstance(meshInstance);
             }
 
             inFile.close();
-            
-            return meshAsset;
+            return staticMesh;
         }
-#endif
 
         static std::vector<std::byte> SerializeAnimation(const Ref<SkeletalAnimation> &anim, const std::filesystem::path &filepath)
         {

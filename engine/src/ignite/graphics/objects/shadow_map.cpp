@@ -317,7 +317,7 @@ namespace ignite
 	    nvrhi::Format depthFormat = nvrhi::Format::D32;
 
 	    TextureCreateInfo depthCI;
-	    depthCI.debugName = "Cascaded Shadow Map Depth";
+	    // depthCI.debugName = "Cascaded Shadow Map Depth";
 	    depthCI.width = m_Resolution;
 	    depthCI.height = m_Resolution;
 		depthCI.isRenderTarget = true;

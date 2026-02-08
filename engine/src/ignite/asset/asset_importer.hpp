@@ -34,7 +34,7 @@ namespace ignite {
     struct FmodSound;
     class Environment;
     class GraphicsPipeline;
-    class AssetStaticMesh;
+    class StaticMesh;
     class Scene;
 
 	struct PendingFileLoading
@@ -58,7 +58,8 @@ namespace ignite {
         static Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
         static void ImportAsync(AssetHandle handle, const AssetMetaData &metadata, std::function<void(Ref<Asset>, AssetHandle)> callback);
 
-        static Ref<AssetStaticMesh> ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata);
+        static Ref<StaticMesh> ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata);
+        static Ref<Material> ImportMaterial(AssetHandle handle, const AssetMetaData &metadata);
 
         static Ref<Scene> ImportScene(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata);

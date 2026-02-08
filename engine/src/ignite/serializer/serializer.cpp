@@ -223,6 +223,17 @@ namespace ignite {
                     sr.EndMap();
                 }
 
+				// Static Mesh
+				if (entity.HasComponent<StaticMeshComponent>())
+				{
+					const StaticMeshComponent &comp = entity.GetComponent<StaticMeshComponent>();
+					sr.BeginMap("StaticMesh");
+					{
+						sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
+					}
+					sr.EndMap();
+				}
+
                 // skinned mesh
                 // if (entity.HasComponent<SkeletalMesh>())
                 // {
@@ -501,7 +512,6 @@ namespace ignite {
         // Open commandlist for asset deserialization
         auto device = Application::GetGraphicsDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
-        cmd->open();
 
         for (YAML::Node entityNode : sceneNode["Entities"])
         {
@@ -678,9 +688,24 @@ namespace ignite {
                 const AssetMetaData &metadata = project->GetAssetManager().GetMetaData(world.imageHandle);
                 if (metadata.type == AssetType::Texture)
                 {
+                    cmd->open();
                     world.environment->LoadTexture(metadata.filepath.generic_string(), cmd);
+					cmd->close();
+					device->executeCommandList(cmd);
                 }
             }
+
+			// Static Mesh
+			if (YAML::Node node = entityNode["StaticMesh"])
+			{
+				StaticMeshComponent &comp = desEntity.AddComponent<StaticMeshComponent>();
+				comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
+                const AssetMetaData &metadata = project->GetAssetManager().GetMetaData(comp.handle);
+                if (metadata.type == AssetType::StaticMesh)
+                {
+                    // Project::GetInstance()->GetAsset<StaticMesh>(comp.handle);
+                }
+			}
 
             // Script
             if (YAML::Node node = entityNode["Script"])
@@ -732,10 +757,6 @@ namespace ignite {
             }
         }
 
-        // Close commandlist after deserialization
-        cmd->close();
-        device->executeCommandList(cmd);
-        
         // attach each node to it's parent
         for (auto [uuid, e] : desScene->entities)
         {
@@ -857,7 +878,7 @@ namespace ignite {
                 metadata.type = AssetTypeFromString(assetNode["Type"].as<std::string>());
                 metadata.filepath = assetNode["Filepath"].as<std::string>();
 
-                assetManager.InsertMetaData(handle, metadata);
+                assetManager.AssignMetaData(handle, metadata);
             }
         }
 

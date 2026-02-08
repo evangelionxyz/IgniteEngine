@@ -23,6 +23,7 @@
 
 #include "mesh.hpp"
 #include "environment.hpp"
+#include "ignite/project/project.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/scene_renderer.hpp"
 
@@ -36,13 +37,10 @@ namespace ignite
             if (!node.matrix.empty())
             {
                 // glTF supplies 16 values column-major. Construct manually.
-                return
-                    glm::mat4(
-                        (float)node.matrix[0], (float)node.matrix[1], (float)node.matrix[2], (float)node.matrix[3],
+                return glm::mat4((float)node.matrix[0], (float)node.matrix[1], (float)node.matrix[2], (float)node.matrix[3],
                         (float)node.matrix[4], (float)node.matrix[5], (float)node.matrix[6], (float)node.matrix[7],
                         (float)node.matrix[8], (float)node.matrix[9], (float)node.matrix[10], (float)node.matrix[11],
-                        (float)node.matrix[12], (float)node.matrix[13], (float)node.matrix[14], (float)node.matrix[15]
-                    );
+                        (float)node.matrix[12], (float)node.matrix[13], (float)node.matrix[14], (float)node.matrix[15]);
             }
 
             glm::vec3 translation(0.0f);
@@ -67,15 +65,11 @@ namespace ignite
             return glm::translate(glm::mat4(1.0f), translation) * glm::toMat4(rotation) * glm::scale(glm::mat4(1.0f), scale);
         }
     }
-    
+
 
     MeshPrimitive::MeshPrimitive(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices)
+        : vertices(vertices), indices(indices)
     {
-        vertexBuffer = VertexBuffer::Create(sizeof(VertexMesh_Anim) * vertices.size());
-        indexBuffer = IndexBuffer::Create(sizeof(uint32_t) * indices.size());
-
-        vertexBuffer->SetData(Buffer((void *)vertices.data(), sizeof(VertexMesh_Anim) * vertices.size()));
-        indexBuffer->SetData(Buffer((void *)indices.data(), sizeof(uint32_t) * indices.size()));
     }
 
     Ref<MeshPrimitive> MeshPrimitive::Create(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices)
@@ -83,11 +77,31 @@ namespace ignite
         return CreateRef<MeshPrimitive>(vertices, indices);
     }
 
-    
-    // Mesh Instance class
-    MeshInstance::MeshInstance(const std::string &name, const Ref<MeshPrimitive> &mesh, const Ref<Material> &material, int meshIndex, int materialIndex)
-        : m_Name(name), m_Primitive(mesh), m_Material(material), m_MeshIndex(meshIndex), m_MaterialIndex(materialIndex)
+
+    void MeshPrimitive::CreateBuffer(nvrhi::ICommandList *cmd)
     {
+        vertexBuffer = VertexBuffer::Create(sizeof(VertexMesh_Anim) * vertices.size());
+        indexBuffer = IndexBuffer::Create(sizeof(uint32_t) * indices.size());
+
+        vertexBuffer->SetData(cmd, Buffer((void *)vertices.data(), sizeof(VertexMesh_Anim) * vertices.size()));
+        indexBuffer->SetData(cmd, Buffer((void *)indices.data(), sizeof(uint32_t) * indices.size()));
+    }
+
+    void MeshPrimitive::ClearPrimitivesData()
+    {
+        vertices.clear();
+        indices.clear();
+    }
+
+    // Mesh Instance class
+    MeshInstance::MeshInstance(const std::string &name, const Ref<MeshPrimitive> &mesh)
+        : m_Name(name), m_Primitive(mesh)
+    {
+    }
+
+    MeshInstance::MeshInstance()
+    {
+        m_Primitive = CreateRef<MeshPrimitive>();
     }
 
     void MeshInstance::UpdateBindingSet(Scene *scene)
@@ -116,13 +130,29 @@ namespace ignite
         }
     }
 
-    Ref<MeshInstance> MeshInstance::Create(const std::string &name, const Ref<MeshPrimitive> &mesh, const Ref<Material> &material, int meshIndex /*= -1*/, int materialIndex /*= -1*/)
+    void MeshInstance::SetMaterial(AssetHandle assetHandle)
     {
-        return CreateRef<MeshInstance>(name, mesh, material, meshIndex, materialIndex);
+        m_MaterialHandle = assetHandle;
     }
 
-    Ref<Material> MeshLoader::LoadMaterial(const tinygltf::Primitive &primitive, const std::vector<tinygltf::Material>& gltfMaterials,
-        const std::vector<Ref<Texture>>& loadedTextures, const std::vector<nvrhi::SamplerHandle>& loadedSamplers, int *materialIndex)
+    Ref<MeshInstance> MeshInstance::Create(const std::string &name, const Ref<MeshPrimitive> &mesh)
+    {
+        return CreateRef<MeshInstance>(name, mesh);
+    }
+
+    // 
+    // ==== Static Mesh ====
+    // 
+    Ref<StaticMesh> StaticMesh::Create()
+    {
+        return CreateRef<StaticMesh>();
+    }
+
+    // 
+    // ==== Mesh Loader ====
+    // 
+    Ref<Material> MeshLoader::LoadMaterial(const tinygltf::Primitive &primitive, const std::vector<tinygltf::Material> &gltfMaterials,
+        const std::vector<Ref<Texture>> &loadedTextures, const std::vector<nvrhi::SamplerHandle> &loadedSamplers, int *materialIndex)
     {
         Ref<Material> material;
         *materialIndex = -1;
@@ -131,7 +161,7 @@ namespace ignite
         {
             *materialIndex = primitive.material;
 
-            const tinygltf::Material& gltfMaterial = gltfMaterials[primitive.material];
+            const tinygltf::Material &gltfMaterial = gltfMaterials[primitive.material];
             LOG_TRACE("Loading material: {}", gltfMaterial.name);
 
             material = CreateRef<Material>();
@@ -183,44 +213,49 @@ namespace ignite
             }
         }
 
+        if (material)
+        {
+            material->UpdateBindingSet();
+        }
+
         return material;
     }
 
-    void MeshLoader::LoadVertexData(std::vector<VertexMesh_Anim>& vertices, const tinygltf::Primitive& primitive, const tinygltf::Model& model)
+    void MeshLoader::LoadVertexData(std::vector<VertexMesh_Anim> &vertices, const tinygltf::Primitive &primitive, const tinygltf::Model &model)
     {
         // Get vertex positions
-        glm::vec3* positions = nullptr;
+        glm::vec3 *positions = nullptr;
         size_t positionCount = 0;
 
         if (primitive.attributes.contains("POSITION"))
         {
-            const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.at("POSITION")];
-            positions = (glm::vec3*)GetBufferData(model, accessor);
+            const tinygltf::Accessor &accessor = model.accessors[primitive.attributes.at("POSITION")];
+            positions = (glm::vec3 *)GetBufferData(model, accessor);
             positionCount = accessor.count;
         }
 
         // Get vertex normals (optional)
-        glm::vec3* normals = nullptr;
+        glm::vec3 *normals = nullptr;
         if (primitive.attributes.contains("NORMAL"))
         {
-            const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.at("NORMAL")];
-            normals = (glm::vec3*)GetBufferData(model, accessor);
+            const tinygltf::Accessor &accessor = model.accessors[primitive.attributes.at("NORMAL")];
+            normals = (glm::vec3 *)GetBufferData(model, accessor);
         }
 
         // Get vertex tangents (optional)
-        glm::vec4* tangents = nullptr;
+        glm::vec4 *tangents = nullptr;
         if (primitive.attributes.contains("TANGENT"))
         {
-            const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.at("TANGENT")];
-            tangents = (glm::vec4*)GetBufferData(model, accessor);
+            const tinygltf::Accessor &accessor = model.accessors[primitive.attributes.at("TANGENT")];
+            tangents = (glm::vec4 *)GetBufferData(model, accessor);
         }
 
         // Get texture coordinates (optional)
-        glm::vec2* texCoords = nullptr;
+        glm::vec2 *texCoords = nullptr;
         if (primitive.attributes.contains("TEXCOORD_0"))
         {
-            const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.at("TEXCOORD_0")];
-            texCoords = (glm::vec2*)GetBufferData(model, accessor);
+            const tinygltf::Accessor &accessor = model.accessors[primitive.attributes.at("TEXCOORD_0")];
+            texCoords = (glm::vec2 *)GetBufferData(model, accessor);
         }
 
         // Build vertices
@@ -258,19 +293,19 @@ namespace ignite
         }
     }
 
-    void MeshLoader::LoadIndicesData(std::vector<uint32_t>& indices, const tinygltf::Primitive& primitive, const tinygltf::Model& model)
+    void MeshLoader::LoadIndicesData(std::vector<uint32_t> &indices, const tinygltf::Primitive &primitive, const tinygltf::Model &model)
     {
         if (primitive.indices >= 0)
         {
-            const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
-            const unsigned char* indexData = GetBufferData(model, indexAccessor);
+            const tinygltf::Accessor &indexAccessor = model.accessors[primitive.indices];
+            const unsigned char *indexData = GetBufferData(model, indexAccessor);
 
             LOG_INFO("Found {} indices", indexAccessor.count);
 
             // Handle different index types
             if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)
             {
-                const auto indexPtr = reinterpret_cast<const uint16_t*>(indexData);
+                const auto indexPtr = reinterpret_cast<const uint16_t *>(indexData);
                 for (size_t i = 0; i < indexAccessor.count; ++i)
                 {
                     indices.push_back(indexPtr[i]);
@@ -278,7 +313,7 @@ namespace ignite
             }
             else if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)
             {
-                const auto indexPtr = reinterpret_cast<const uint32_t*>(indexData);
+                const auto indexPtr = reinterpret_cast<const uint32_t *>(indexData);
                 for (size_t i = 0; i < indexAccessor.count; ++i)
                 {
                     indices.push_back(indexPtr[i]);
@@ -295,9 +330,8 @@ namespace ignite
         }
     }
 
-    MeshScene MeshLoader::LoadSceneGraphFromGLTF(const std::string& filename)
+    void MeshLoader::LoadSceneGraphFromGLTF(const std::string &filename, MeshScene &outScene)
     {
-        MeshScene scene;
         tinygltf::Model gltfModel;
         tinygltf::TinyGLTF loader;
         std::string err, warn;
@@ -306,7 +340,10 @@ namespace ignite
         if (filename.ends_with(".glb")) ok = loader.LoadBinaryFromFile(&gltfModel, &err, &warn, filename);
         else ok = loader.LoadASCIIFromFile(&gltfModel, &err, &warn, filename);
 
-        if (!ok) return scene;
+        if (!ok)
+        {
+            return;
+        }
 
         // pre-load textures and samplers
         auto device = Application::GetGraphicsDevice();
@@ -319,110 +356,103 @@ namespace ignite
         const auto samplers = GetSamplersFromGLTF(gltfModel);
 
         // preserve nodes
-        scene.nodes.resize(gltfModel.nodes.size());
+        outScene.nodes.resize(gltfModel.nodes.size());
 
         // build raw node relationships and local transforms
         for (size_t i = 0; i < gltfModel.nodes.size(); ++i)
         {
-            const tinygltf::Node& node = gltfModel.nodes[i];
+            const tinygltf::Node &node = gltfModel.nodes[i];
 
-            MeshNode& meshNode = scene.nodes[i];
+            MeshNode &meshNode = outScene.nodes[i];
             meshNode.name = node.name;
             meshNode.local = BuildNodeLocalMatrix(node);
             for (int c : node.children)
             {
                 meshNode.children.push_back(c);
-                scene.nodes[c].parent = static_cast<int>(i);
+                outScene.nodes[c].parent = static_cast<int>(i);
             }
         }
 
         // identify roots
-        for (size_t i = 0; i < scene.nodes.size(); ++i)
+        for (size_t i = 0; i < outScene.nodes.size(); ++i)
         {
-            if (scene.nodes[i].parent < 0)
+            if (outScene.nodes[i].parent < 0)
             {
-                scene.roots.push_back(static_cast<int>(i));
+                outScene.roots.push_back(static_cast<int>(i));
             }
         }
 
         // load meshes referenced by nodes
         for (size_t i = 0; i < gltfModel.nodes.size(); ++i)
         {
-            const tinygltf::Node& node = gltfModel.nodes[i];
+            const tinygltf::Node &node = gltfModel.nodes[i];
             if (node.mesh < 0 || node.mesh >= (int)gltfModel.meshes.size())
                 continue;
 
-            const tinygltf::Mesh& gltfMesh = gltfModel.meshes[node.mesh];
-            for (const auto& primitive : gltfMesh.primitives)
+            nvrhi::IDevice *device = Application::GetGraphicsDevice();
+            nvrhi::CommandListHandle cmd = device->createCommandList();
+
+            const tinygltf::Mesh &gltfMesh = gltfModel.meshes[node.mesh];
+            for (const auto &gltfPrim : gltfMesh.primitives)
             {
                 std::vector<VertexMesh_Anim> vertices;
                 std::vector<uint32_t> indices;
 
                 // get vertices and indices
-                LoadVertexData(vertices, primitive, gltfModel);
-                LoadIndicesData(indices, primitive, gltfModel);
-                Ref<MeshPrimitive> mesh = CreateRef<MeshPrimitive>(vertices, indices);
+                LoadVertexData(vertices, gltfPrim, gltfModel);
+                LoadIndicesData(indices, gltfPrim, gltfModel);
+                Ref<MeshPrimitive> primitive = CreateRef<MeshPrimitive>(vertices, indices);
 
                 // material
                 int materialIndex = -1;
-                Ref<Material> material = LoadMaterial(primitive, gltfModel.materials, textures, samplers, &materialIndex);
-                if (!material)
-                {
-                    // Create fallback
-                    material = CreateRef<Material>();
-                }
-
-                // update binding set
-                material->UpdateBindingSet();
-
-                auto device = Application::GetGraphicsDevice();
-                auto cmd = device->createCommandList();
                 cmd->open();
-                material->UploadToGpu(cmd);
+                primitive->CreateBuffer(cmd);
+                Ref<Material> material = LoadMaterial(gltfPrim, gltfModel.materials, textures, samplers, &materialIndex);
                 cmd->close();
                 device->executeCommandList(cmd);
 
-                Ref<MeshInstance> meshInstance = MeshInstance::Create(gltfMesh.name, mesh, material, node.mesh, materialIndex);
+                Ref<MeshInstance> meshInstance = MeshInstance::Create(gltfMesh.name, primitive);
 
-                scene.nodes[i].meshes.push_back(meshInstance);
-                scene.flatMeshes.push_back(meshInstance);
+                outScene.nodes[i].meshes.push_back(meshInstance);
+                outScene.flatMeshes.push_back(meshInstance);
+                outScene.materials.push_back(material);
+
+                // Assign Mesh and Material Index
+                outScene.materialMap[node.mesh] = materialIndex;
             }
-
         }
 
         // compute global transform via DFS
-        std::function<void(int, const glm::mat4&)> recurse = [&](const int nodeIndex, const glm::mat4& parentGlobal)
-        {
-            MeshNode& node = scene.nodes[nodeIndex];
-            node.global = parentGlobal * node.local;
-            for (const auto& m : node.meshes)
+        std::function<void(int, const glm::mat4 &)> recurse = [&](const int nodeIndex, const glm::mat4 &parentGlobal)
             {
-                m->local = node.local;
-                m->global = node.global;
-            }
+                MeshNode &node = outScene.nodes[nodeIndex];
+                node.global = parentGlobal * node.local;
+                for (const auto &m : node.meshes)
+                {
+                    m->local = node.local;
+                    m->global = node.global;
+                }
 
-            for (const int c : node.children)
-                recurse(c, node.global);
-        };
+                for (const int c : node.children)
+                    recurse(c, node.global);
+            };
 
-        for (const int root : scene.roots)
+        for (const int root : outScene.roots)
             recurse(root, glm::mat4(1.0f));
-
-        return scene;
     }
 
-    std::vector<Ref<Texture>> MeshLoader::LoadTexturesFromGLTF(const tinygltf::Model& model, nvrhi::ICommandList *cmd)
+    std::vector<Ref<Texture>> MeshLoader::LoadTexturesFromGLTF(const tinygltf::Model &model, nvrhi::ICommandList *cmd)
     {
         std::vector<Ref<Texture>> gltfTextures;
         LOG_TRACE("Loading {} textures from glTF", model.textures.size());
 
         for (size_t i = 0; i < model.textures.size(); ++i)
         {
-            const tinygltf::Texture& gltfTexture = model.textures[i];
+            const tinygltf::Texture &gltfTexture = model.textures[i];
 
             if (gltfTexture.source >= 0 && gltfTexture.source < model.images.size())
             {
-                const tinygltf::Image& image = model.images[gltfTexture.source];
+                const tinygltf::Image &image = model.images[gltfTexture.source];
                 LOG_TRACE(" Texture {}: {} ({}x{})", i, image.name, image.width, image.height);
 
                 TextureCreateInfo createInfo;
@@ -430,13 +460,13 @@ namespace ignite
                 createInfo.height = image.height;
                 createInfo.flip = false;
                 createInfo.format = nvrhi::Format::RGBA8_UNORM;
-            	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
-            	createInfo.keepInitialState = true;
+                createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+                createInfo.keepInitialState = true;
 
                 Ref<Texture> texture;
                 if (!image.image.empty())
                 {
-                    texture = Texture::Create(Buffer((void*)image.image.data(), image.image.size() * sizeof(uint8_t)), createInfo, cmd);
+                    texture = Texture::Create(Buffer((void *)image.image.data(), image.image.size() * sizeof(uint8_t)), createInfo, cmd);
                     LOG_TRACE(" Loaded embedded texture");
                 }
                 else if (!image.uri.empty())
@@ -451,13 +481,13 @@ namespace ignite
         return gltfTextures;
     }
 
-    std::vector<nvrhi::SamplerHandle> MeshLoader::GetSamplersFromGLTF(const tinygltf::Model& model)
+    std::vector<nvrhi::SamplerHandle> MeshLoader::GetSamplersFromGLTF(const tinygltf::Model &model)
     {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
         std::vector<nvrhi::SamplerHandle> samplers;
         for (size_t i = 0; i < model.textures.size(); ++i)
         {
-            const tinygltf::Texture& gltfTexture = model.textures[i];
+            const tinygltf::Texture &gltfTexture = model.textures[i];
             if (gltfTexture.source >= 0 && gltfTexture.source < model.images.size())
             {
                 tinygltf::Sampler gltfSampler = model.samplers[gltfTexture.sampler];
@@ -494,10 +524,10 @@ namespace ignite
         return samplers;
     }
 
-    const unsigned char* MeshLoader::GetBufferData(const tinygltf::Model& model, const tinygltf::Accessor& accessor)
+    const unsigned char *MeshLoader::GetBufferData(const tinygltf::Model &model, const tinygltf::Accessor &accessor)
     {
-        const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
-        const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
+        const tinygltf::BufferView &bufferView = model.bufferViews[accessor.bufferView];
+        const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
         return &buffer.data[accessor.byteOffset + bufferView.byteOffset];
     }
 }
