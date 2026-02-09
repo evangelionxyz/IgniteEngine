@@ -865,7 +865,9 @@ namespace ignite
                     SetActiveScene(m_EditorScene);
 
                     const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
+
                     m_CurrentSceneFilePath = m_ActiveProject->GetAssetFilepath(assetFilepath);
+                    m_CurrentSceneHandle = activeScene->handle;
                 }
 				else
 				{
@@ -1081,7 +1083,7 @@ namespace ignite
         ImGui::Begin("Settings", &m_Data.settingsWindow);
 
         constexpr ImGuiTreeNodeFlags treeFlags = ImGuiTreeNodeFlags_DefaultOpen;
-        
+
         m_ScenePanel->UISettings();
 
         if (ImGui::TreeNodeEx("Pipeline", treeFlags))
@@ -1122,16 +1124,16 @@ namespace ignite
                     if (!filepath.empty())
                     {
                         Renderer::Submit([f = filepath, sr = m_SceneRenderer](nvrhi::ICommandList *cmd) mutable
-                        {
-                            auto env = sr.GetEnvironment();
-                            env->LoadTexture(f, cmd);
-                            env->UpdateBindingSet();
-                        });
+                            {
+                                auto env = sr.GetEnvironment();
+                                env->LoadTexture(f, cmd);
+                                env->UpdateBindingSet();
+                            });
                     }
                 }
 
                 auto &sceneData = m_ActiveScene->gpuData;
-            
+
                 ImGui::ColorEdit3("Color", &sceneData.sunColor.x);
                 ImGui::DragFloat("Intensity", &sceneData.sunColor.w, 0.025f, 0.0f, 10.0f);
                 ImGui::SliderFloat("Azimuth", &sceneData.sungAngles.x, -glm::radians(90.0f), glm::radians(90.0f));
@@ -1154,7 +1156,7 @@ namespace ignite
                     ImGui::DragFloat("Max Bias", &data.maxBias, 0.0001f, 0.0f, 0.1f, "%.6f");
                     ImGui::SliderFloat("PCF Radius", &data.pcfRadius, 0.1f, 4.0f);
 
-                    static const char* resolutionLabels[] = {"Low - 512px", "Medium - 1024px", "High - 2048px", "Ultra - 4096px"};
+                    static const char *resolutionLabels[] = { "Low - 512px", "Medium - 1024px", "High - 2048px", "Ultra - 4096px" };
                     int cascadeQualityIndex = static_cast<int>(csm->GetQuality());
 
                     if (ImGui::Combo("Resolution", &cascadeQualityIndex, resolutionLabels, IM_ARRAYSIZE(resolutionLabels)))
@@ -1190,10 +1192,11 @@ namespace ignite
         }
 
         ImGui::End();
-        
+
         if (m_Data.assetRegistryWindow)
         {
             AssetRegistry assetRegistry = m_ActiveProject->GetAssetManager().GetAssetAssetRegistry();
+            const auto &loadedAssets = m_ActiveProject->GetAssetManager().GetLoadedAssets();
 
             struct AssetPairCompare
             {
@@ -1202,129 +1205,370 @@ namespace ignite
                     return lhs.first < rhs.first;
                 }
             };
-            
+
             static std::string assetRegistryFilterResultStr;
             static std::set<std::pair<AssetHandle, AssetMetaData>, AssetPairCompare> filteredAssets;
-            
             static bool showFullPath = false;
-            ImGui::Begin("Asset Registry", &m_Data.assetRegistryWindow);
+            static AssetType selectedTypeFilter = AssetType::Invalid; // All types
+            static int sortColumn = 0; // 0=Handle, 1=Type, 2=Filepath, 3=Status
+            static bool sortAscending = true;
 
-            static char buffer[256] = { 0 };
-            ImGui::Text("Filter");
-            ImGui::SameLine();
-            
-            ImGui::InputTextWithHint("##asset_registry_filter", "AssetHandle, Type, Filepath", buffer, sizeof(buffer) + 1, ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_NoHorizontalScroll);
-            assetRegistryFilterResultStr = std::string(buffer);
+            ImGui::SetNextWindowSize(ImVec2(1200, 700), ImGuiCond_FirstUseEver);
+            ImGui::Begin("Asset Registry & Memory Monitor", &m_Data.assetRegistryWindow);
+
+            // === STATISTICS PANEL ===
+			ImGui::Text("Asset Statistics & Memory Usage");
+			ImGui::Separator();
+
+			// Calculate statistics
+			std::unordered_map<AssetType, int> registeredCounts;
+			std::unordered_map<AssetType, int> loadedCounts;
+			std::unordered_map<AssetType, size_t> memoryUsage;
+
+			for (const auto &[handle, metadata] : assetRegistry)
+			{
+				registeredCounts[metadata.type]++;
+			}
+
+			for (const auto &[handle, asset] : loadedAssets)
+			{
+				if (asset)
+				{
+					AssetType type = m_ActiveProject->GetAssetManager().GetAssetType(handle);
+					loadedCounts[type]++;
+					// Estimate memory usage (this is approximate)
+					memoryUsage[type] += asset.use_count() * 8; // Basic pointer overhead
+				}
+			}
+
+			// Display statistics in columns
+			ImGui::Columns(2, "stats_columns", true);
+
+			// Left column - Asset counts
+			ImGui::Text("REGISTERED ASSETS");
+			ImGui::Separator();
+			int totalRegistered = 0;
+			for (const auto &[type, count] : registeredCounts)
+			{
+				if (type != AssetType::Invalid)
+				{
+					ImGui::Text("%s: %d", AssetTypeToString(type).c_str(), count);
+					totalRegistered += count;
+				}
+			}
+			ImGui::Separator();
+			ImGui::Text("Total Registered: %d", totalRegistered);
+
+			ImGui::NextColumn();
+
+			// Right column - Loaded assets & memory
+			ImGui::Text("LOADED IN MEMORY");
+			ImGui::Separator();
+			int totalLoaded = 0;
+			for (const auto &[type, count] : loadedCounts)
+			{
+				if (type != AssetType::Invalid)
+				{
+					float percentage = registeredCounts[type] > 0
+						? (float)count / registeredCounts[type] * 100.0f
+						: 0.0f;
+
+					// Color code by type
+					ImVec4 color = ImVec4(0.5f, 0.8f, 0.5f, 1.0f);
+					if (type == AssetType::Texture) color = ImVec4(0.9f, 0.5f, 0.5f, 1.0f);
+					else if (type == AssetType::StaticMesh) color = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
+					else if (type == AssetType::Material) color = ImVec4(0.9f, 0.9f, 0.5f, 1.0f);
+
+					ImGui::TextColored(color, "%s: %d (%.1f%%)",
+						AssetTypeToString(type).c_str(), count, percentage);
+
+					// Memory bar
+					if (memoryUsage[type] > 0)
+					{
+						ImGui::SameLine();
+						ImGui::Text("~%zu KB", memoryUsage[type] / 1024);
+					}
+
+					totalLoaded += count;
+				}
+			}
+			ImGui::Separator();
+			ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Total Loaded: %d", totalLoaded);
+
+			ImGui::Columns(1);
+
+			// Memory usage bar
+			ImGui::Spacing();
+			float loadRatio = totalRegistered > 0 ? (float)totalLoaded / totalRegistered : 0.0f;
+			ImGui::ProgressBar(loadRatio, ImVec2(-1, 0),
+				std::string("Memory Load: " + std::to_string((int)(loadRatio * 100)) + "%").c_str());
+
+            // === FILTERS & CONTROLS ===
+			ImGui::AlignTextToFramePadding();
+			ImGui::Text("Search:");
+			ImGui::SameLine();
+
+			static char buffer[256] = { 0 };
+			ImGui::SetNextItemWidth(300);
+			if (ImGui::InputTextWithHint("##asset_registry_filter", "Handle, Type, or Filepath...",
+				buffer, sizeof(buffer), ImGuiInputTextFlags_EscapeClearsAll))
+			{
+				assetRegistryFilterResultStr = std::string(buffer);
+			}
+
+			ImGui::SameLine();
+			ImGui::Text("Type Filter:");
+			ImGui::SameLine();
+
+			// Type filter dropdown
+			const char *typeNames[] = { "All", "Scene", "Texture", "Material", "StaticMesh", "Audio", "Skeleton" };
+			const AssetType typeValues[] = {
+				AssetType::Invalid, AssetType::Scene, AssetType::Texture,
+				AssetType::Material, AssetType::StaticMesh, AssetType::Audio, AssetType::Skeleton
+			};
+
+			int currentTypeIndex = 0;
+			for (int i = 0; i < IM_ARRAYSIZE(typeValues); i++)
+			{
+				if (typeValues[i] == selectedTypeFilter)
+				{
+					currentTypeIndex = i;
+					break;
+				}
+			}
+
+			ImGui::SetNextItemWidth(150);
+			if (ImGui::Combo("##type_filter", &currentTypeIndex, typeNames, IM_ARRAYSIZE(typeNames)))
+			{
+				selectedTypeFilter = typeValues[currentTypeIndex];
+			}
+
+			ImGui::SameLine();
+			ImGui::Checkbox("Full Path", &showFullPath);
+
+			ImGui::SameLine();
+			if (ImGui::Button("Refresh Registry"))
+			{
+				m_ActiveProject->ValidateAssetRegistry();
+			}
+
+			ImGui::SameLine();
+			if (ImGui::Button("Unload Unused Assets"))
+			{
+				m_ActiveProject->GetAssetManager().UnloadUnusedAssets();
+			}
+
+            ImGui::Spacing();
+
+            // === ASSET TABLE ===
+            // Apply filters
             filteredAssets.clear();
+            const std::string findKey = stringutils::ToLower(assetRegistryFilterResultStr);
 
-            if (!assetRegistryFilterResultStr.empty())
+            for (const auto &[handle, metadata] : assetRegistry)
             {
-                const std::string findKey = stringutils::ToLower(assetRegistryFilterResultStr);
-                for (const auto &[handle, metadata] : assetRegistry)
+                // Type filter
+                if (selectedTypeFilter != AssetType::Invalid && metadata.type != selectedTypeFilter)
+                    continue;
+
+                // Text search filter
+                if (!assetRegistryFilterResultStr.empty())
                 {
                     const std::string &handleStr = std::to_string(handle);
                     const std::string &typeStr = stringutils::ToLower(AssetTypeToString(metadata.type));
-                    const std::string &filepathStr = stringutils::ToLower(std::filesystem::absolute(m_ActiveProject->GetAssetFilepath(metadata.filepath)).generic_string());
+                    const std::string &filepathStr = stringutils::ToLower(
+                        std::filesystem::absolute(m_ActiveProject->GetAssetFilepath(metadata.filepath)).generic_string());
 
-                    if (handleStr.find(findKey) != std::string::npos || typeStr.find(findKey) != std::string::npos ||
-                        filepathStr.find(findKey) != std::string::npos)
+                    if (handleStr.find(findKey) == std::string::npos &&
+                        typeStr.find(findKey) == std::string::npos &&
+                        filepathStr.find(findKey) == std::string::npos)
                     {
-                        filteredAssets.insert({handle, metadata});             
+                        continue;
                     }
                 }
-            }
-            
-            ImGui::SameLine();
-            ImGui::Text("Full path");
-            ImGui::SameLine();
-            ImGui::Checkbox("##fullpath", &showFullPath);
 
-            ImGui::SameLine();
-            if (ImGui::Button("Refresh"))
-            {
-                m_ActiveProject->ValidateAssetRegistry();
+                filteredAssets.insert({ handle, metadata });
             }
 
-            ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX;
-            if (ImGui::BeginTable("asset_registry_table", 3, tableFlags))
+            // Display table
+            ImGuiTableFlags tableFlags = ImGuiTableFlags_Sortable | ImGuiTableFlags_RowBg |
+                ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV |
+                ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY;
+
+            if (ImGui::BeginTable("asset_registry_table", 5, tableFlags))
             {
-                // setup table 3 columns
-                // AssetHandle, Type, Filepath
                 ImGui::TableSetupScrollFreeze(0, 1);
-                ImGui::TableSetupColumn("AssetHandle", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-                ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthStretch, 0.5f);
-                ImGui::TableSetupColumn("Filepath", ImGuiTableColumnFlags_WidthStretch, 1.5f);
+                ImGui::TableSetupColumn("Handle", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthFixed, 100.0f, 0);
+                ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 100.0f, 1);
+                ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 80.0f, 2);
+                ImGui::TableSetupColumn("Refs", ImGuiTableColumnFlags_WidthFixed, 50.0f, 3);
+                ImGui::TableSetupColumn("Filepath", ImGuiTableColumnFlags_WidthStretch, 0.0f, 4);
                 ImGui::TableHeadersRow();
 
-                if (filteredAssets.empty())
+                // Handle sorting
+                ImGuiTableSortSpecs *sortSpecs = ImGui::TableGetSortSpecs();
+                if (sortSpecs && sortSpecs->SpecsDirty)
                 {
-                    for (auto &[handle, metadata] : assetRegistry)
+                    sortColumn = sortSpecs->Specs[0].ColumnUserID;
+                    sortAscending = sortSpecs->Specs[0].SortDirection == ImGuiSortDirection_Ascending;
+                    sortSpecs->SpecsDirty = false;
+                }
+
+                // Determine which assets to display
+                bool useFiltered = !filteredAssets.empty() || !assetRegistryFilterResultStr.empty() || selectedTypeFilter != AssetType::Invalid;
+                
+                // Iterate through appropriate asset collection
+                if (useFiltered)
+                {
+                    for (const auto &[handle, metadata] : filteredAssets)
                     {
                         ImGui::TableNextRow();
+
+                        // Column 0: Handle
                         ImGui::TableNextColumn();
                         ImGui::Text("%llu", static_cast<uint64_t>(handle));
 
+                        // Column 1: Type with color coding
                         ImGui::TableNextColumn();
+                        ImVec4 typeColor = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+                        if (metadata.type == AssetType::Texture) typeColor = ImVec4(0.9f, 0.5f, 0.5f, 1.0f);
+                        else if (metadata.type == AssetType::StaticMesh) typeColor = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
+                        else if (metadata.type == AssetType::Material) typeColor = ImVec4(0.9f, 0.9f, 0.5f, 1.0f);
+                        else if (metadata.type == AssetType::Scene) typeColor = ImVec4(0.5f, 0.9f, 0.9f, 1.0f);
 
                         std::string assetTypeStr = AssetTypeToString(metadata.type);
-                        ImGui::TextWrapped("%s", assetTypeStr.c_str());
+                        ImGui::TextColored(typeColor, "%s", assetTypeStr.c_str());
 
+                        // Column 2: Load Status
                         ImGui::TableNextColumn();
-                        if (showFullPath)
+                        bool isLoaded = loadedAssets.find(handle) != loadedAssets.end();
+                        if (isLoaded)
                         {
-                            assetTypeStr = std::filesystem::absolute(m_ActiveProject->GetAssetFilepath(metadata.filepath)).generic_string();
-                            ImGui::TextWrapped("%s", assetTypeStr.c_str());
+                            ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "LOADED");
                         }
                         else
                         {
-                            assetTypeStr = metadata.filepath.generic_string();
-                            ImGui::TextWrapped("%s", assetTypeStr.c_str());
+                            ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Disk");
                         }
 
+                        // Column 3: Reference count
+                        ImGui::TableNextColumn();
+                        if (isLoaded)
+                        {
+                            auto it = loadedAssets.find(handle);
+                            if (it != loadedAssets.end() && it->second)
+                            {
+                                long refCount = it->second.use_count();
+                                ImVec4 refColor = refCount == 1 ? ImVec4(1.0f, 0.5f, 0.3f, 1.0f) : ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+                                ImGui::TextColored(refColor, "%ld", refCount);
+                            }
+                        }
+                        else
+                        {
+                            ImGui::Text("-");
+                        }
+
+                        // Column 4: Filepath
+                        ImGui::TableNextColumn();
+                        std::string displayPath;
+                        if (showFullPath)
+                        {
+                            displayPath = std::filesystem::absolute(m_ActiveProject->GetAssetFilepath(metadata.filepath)).generic_string();
+                        }
+                        else
+                        {
+                            displayPath = metadata.filepath.generic_string();
+                        }
+                        ImGui::TextWrapped("%s", displayPath.c_str());
+
+                        // Actions for Scene assets
                         if (metadata.type == AssetType::Scene)
                         {
                             ImGui::SameLine();
-                            if (ImGui::Button("Set as default"))
+                            ImGui::PushID(static_cast<int>(handle));
+                            if (ImGui::SmallButton("Default"))
                             {
                                 m_ActiveProject->GetInfo().defaultSceneHandle = handle;
                                 SaveProject();
                             }
+                            ImGui::PopID();
                         }
                     }
                 }
                 else
                 {
-                    for (auto &[handle, metadata] : filteredAssets)
+                    for (const auto &[handle, metadata] : assetRegistry)
                     {
                         ImGui::TableNextRow();
+
+                        // Column 0: Handle
                         ImGui::TableNextColumn();
                         ImGui::Text("%llu", static_cast<uint64_t>(handle));
 
+                        // Column 1: Type with color coding
                         ImGui::TableNextColumn();
+                        ImVec4 typeColor = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+                        if (metadata.type == AssetType::Texture) typeColor = ImVec4(0.9f, 0.5f, 0.5f, 1.0f);
+                        else if (metadata.type == AssetType::StaticMesh) typeColor = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
+                        else if (metadata.type == AssetType::Material) typeColor = ImVec4(0.9f, 0.9f, 0.5f, 1.0f);
+                        else if (metadata.type == AssetType::Scene) typeColor = ImVec4(0.5f, 0.9f, 0.9f, 1.0f);
 
                         std::string assetTypeStr = AssetTypeToString(metadata.type);
-                        ImGui::TextWrapped("%s", assetTypeStr.c_str());
+                        ImGui::TextColored(typeColor, "%s", assetTypeStr.c_str());
 
+                        // Column 2: Load Status
                         ImGui::TableNextColumn();
-                        if (showFullPath)
+                        bool isLoaded = loadedAssets.find(handle) != loadedAssets.end();
+                        if (isLoaded)
                         {
-                            assetTypeStr = std::filesystem::absolute(m_ActiveProject->GetAssetFilepath(metadata.filepath)).generic_string();
-                            ImGui::TextWrapped("%s", assetTypeStr.c_str());
+                            ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "LOADED");
                         }
                         else
                         {
-                            assetTypeStr = metadata.filepath.generic_string();
-                            ImGui::TextWrapped("%s", assetTypeStr.c_str());
+                            ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Disk");
                         }
 
+                        // Column 3: Reference count
+                        ImGui::TableNextColumn();
+                        if (isLoaded)
+                        {
+                            auto it = loadedAssets.find(handle);
+                            if (it != loadedAssets.end() && it->second)
+                            {
+                                long refCount = it->second.use_count();
+                                ImVec4 refColor = refCount == 1 ? ImVec4(1.0f, 0.5f, 0.3f, 1.0f) : ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+                                ImGui::TextColored(refColor, "%ld", refCount);
+                            }
+                        }
+                        else
+                        {
+                            ImGui::Text("-");
+                        }
+
+                        // Column 4: Filepath
+                        ImGui::TableNextColumn();
+                        std::string displayPath;
+                        if (showFullPath)
+                        {
+                            displayPath = std::filesystem::absolute(m_ActiveProject->GetAssetFilepath(metadata.filepath)).generic_string();
+                        }
+                        else
+                        {
+                            displayPath = metadata.filepath.generic_string();
+                        }
+                        ImGui::TextWrapped("%s", displayPath.c_str());
+
+                        // Actions for Scene assets
                         if (metadata.type == AssetType::Scene)
                         {
                             ImGui::SameLine();
-                            if (ImGui::Button("Set as default"))
+                            ImGui::PushID(static_cast<int>(handle));
+                            if (ImGui::SmallButton("Set as default"))
                             {
                                 m_ActiveProject->GetInfo().defaultSceneHandle = handle;
                                 SaveProject();
                             }
+                            ImGui::PopID();
                         }
                     }
                 }

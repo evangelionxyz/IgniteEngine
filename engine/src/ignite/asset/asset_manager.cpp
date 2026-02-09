@@ -65,54 +65,19 @@ namespace ignite {
 
     AssetHandle AssetManager::ImportAsset(const std::filesystem::path &filepath)
     {
-        bool foundInAssetRegistry = false;
-
-        AssetHandle handle = AssetHandle(0);
-        std::string fileExtension = filepath.extension().generic_string();
-
-        // create metadata
-        AssetMetaData metadata;
-
-        // .ixasset means it is part of the project
-        // so we need to check from the asset registry
-        if (fileExtension == ".ixasset")
-        {
-            metadata = GetMetaData(filepath, handle);
-            foundInAssetRegistry = metadata.type != AssetType::Invalid && handle != AssetHandle(0);
-        }
-
-        if (!foundInAssetRegistry)
-        {
-            metadata.filepath = filepath;
-            metadata.type = GetAssetTypeFromExtension(fileExtension);
-        }
-
         // Invalid 
-        if (metadata.type == AssetType::Invalid)
+        if (GetAssetTypeFromExtension(filepath.extension().generic_string()) == AssetType::Invalid)
         {
             LOG_ERROR("[Asset Manager] Invalid asset type '{}'", filepath.generic_string());
             return AssetHandle(0);
         }
 
         // Find in registered asset first
-        if (!foundInAssetRegistry)
-        {
-            for (const auto &[assetHandle, assetMetaData] : m_AssetRegistry)
-            {
-                if (metadata.filepath == assetMetaData.filepath)
-                {
-                    // found it
-                    handle = assetHandle;
-                    metadata = assetMetaData;
-
-                    foundInAssetRegistry = true;
-                    break;
-                }
-            }
-        }
+        AssetHandle handle = AssetHandle(0);
+        AssetMetaData metadata = GetMetaData(filepath, handle);
 
         // generate handle for new asset
-        if (!foundInAssetRegistry)
+        if (handle == AssetHandle(0))
         {
             handle = AssetHandle();
             Import(handle, metadata);
@@ -242,16 +207,8 @@ namespace ignite {
 
     const AssetMetaData &AssetManager::GetMetaData(const std::filesystem::path &filepath, AssetHandle &outHandle)
     {
-        for (const auto &[handle, metadata] : m_AssetRegistry)
-        {
-            if (metadata.filepath == filepath)
-            {
-                // found it
-                outHandle = handle;
-                return metadata;
-            }
-        }
-        return s_NullMetaData;
+        outHandle = GetAssetHandle(filepath);
+        return m_AssetRegistry.at(outHandle);;
     }
 
     const AssetMetaData &AssetManager::GetMetaData(AssetHandle handle) const
@@ -260,7 +217,6 @@ namespace ignite {
         {
             return m_AssetRegistry.at(handle);
         }
-
         return s_NullMetaData;
     }
 
@@ -296,7 +252,7 @@ namespace ignite {
         return static_cast<uint64_t>(handle) != 0 && m_AssetRegistry.contains(handle);
     }
 
-    Project *AssetManager::GetProject()
+	Project *AssetManager::GetProject()
     {
         return s_Project;
     }

@@ -84,6 +84,8 @@ namespace ignite
         void UpdateIndicesAfterDeletion(uint32_t deletedIndex);
         void CompactTree();
 
+        void DragDropSource(const std::filesystem::path &filepath);
+
         static void OnImportAssetDialog(void *userData, const char * const *fileList, int filter);
 
         std::filesystem::path GetFullPath(uint32_t nodeIndex) const;

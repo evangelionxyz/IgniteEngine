@@ -70,11 +70,23 @@ namespace ignite
         if (node->path.empty())
             return;
 
-        const std::filesystem::path &filepath = Project::GetInstance()->GetAssetFilepath(node->path);
-        const std::string filename = filepath.filename().string();
-        const bool isDirectory = std::filesystem::is_directory(filepath);
+        // Get the node's index in the tree
+        uint32_t nodeIndex = static_cast<uint32_t>(node - m_TreeNodes.data());
+        
+        // Build full path using helper function
+        const std::filesystem::path assetDir = Project::GetInstance()->GetAssetDirectory();
+        const std::filesystem::path relativePath = GetFullPath(nodeIndex);
+        const std::filesystem::path fullPath = assetDir / relativePath;
+        const std::string filename = node->path.filename().string();
+        
+        // Check if path exists and is a directory
+        bool isDirectory = false;
+        if (std::filesystem::exists(fullPath))
+        {
+            isDirectory = std::filesystem::is_directory(fullPath);
+        }
 
-        ImGuiTreeNodeFlags flags = (m_SelectedFileTree == filepath ? ImGuiTreeNodeFlags_Selected : 0)
+        ImGuiTreeNodeFlags flags = (m_SelectedFileTree == fullPath ? ImGuiTreeNodeFlags_Selected : 0)
             | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_SpanFullWidth;
 
         if (!isDirectory)
@@ -84,6 +96,8 @@ namespace ignite
 
         const bool opened = ImGui::TreeNodeEx(filename.c_str(), flags, "%s", filename.c_str());
 
+        DragDropSource(fullPath);
+
         if (ImGui::IsItemHovered())
         {
             if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
@@ -91,16 +105,19 @@ namespace ignite
                 if (isDirectory)
                 {
                     m_BackwardPathStack.push(m_CurrentDirectory);
-                    m_SelectedFileTree = m_CurrentDirectory = filepath;
+                    m_SelectedFileTree = m_CurrentDirectory = fullPath;
                 }
             }
         }
 
         if (opened && isDirectory)
         {
-            for (const auto &nodeIndex : node->children | std::views::values)
+            for (const auto &childNodeIndex : node->children | std::views::values)
             {
-                RenderFileTree(&m_TreeNodes[nodeIndex]);
+                if (childNodeIndex < m_TreeNodes.size())
+                {
+                    RenderFileTree(&m_TreeNodes[childNodeIndex]);
+                }
             }
             
             ImGui::TreePop();
@@ -111,12 +128,15 @@ namespace ignite
     {
         ImGui::Begin("Content Browser");
 
-        ImVec2 regionSize = ImGui::GetContentRegionAvail();
         const float &dpiScale = ImGui::GetWindowDpiScale();
-        const auto navbarBtSize = ImVec2(40.0f * dpiScale, 30.0f * dpiScale);
-        const auto navbarSize = ImVec2(regionSize.x, 45.0f * dpiScale);
+        const auto navbarBtSize = ImVec2(40.0f * dpiScale, 24.0f * dpiScale);
+        
+        // Calculate navbar height based on button size + padding
+        const ImGuiStyle& style = ImGui::GetStyle();
+        const float navbarHeight = navbarBtSize.y + style.FramePadding.y * 2.0f + style.WindowPadding.y * 2.0f;
+
         // Navigation bar
-        ImGui::BeginChild("##NAV_BUTTON_BAR", navbarSize, ImGuiChildFlags_Borders);
+        ImGui::BeginChild("##NAV_BUTTON_BAR", ImVec2(0, navbarHeight), ImGuiChildFlags_Borders);
 
         if (ImGui::Button("<-", navbarBtSize))
         {
@@ -149,7 +169,7 @@ namespace ignite
         }
 
         ImGui::SameLine();
-        if (ImGui::Button("+Import", { 0, navbarBtSize.y }))
+        if (ImGui::Button("+Import", ImVec2(80.0f * dpiScale, navbarBtSize.y)))
         {
             static SDL_DialogFileFilter kFilters[]
             {
@@ -287,20 +307,7 @@ namespace ignite
                     ImGui::EndPopup();
                 }
 
-                if (ImGui::BeginDragDropSource())
-                {
-                    if (!std::filesystem::is_directory(item))
-                    {
-                        const std::filesystem::path filepath = Project::GetInstance()->GetAssetRelativeFilepath(m_CurrentDirectory / item);
-                        AssetHandle handle = Project::GetInstance()->GetAssetManager().GetAssetHandle(filepath);
-                        if (handle != AssetHandle(0))
-                        {
-                            ImGui::SetDragDropPayload("content_browser_item", &handle, sizeof(AssetHandle));
-                        }
-                    }
-
-                    ImGui::EndDragDropSource();
-                }
+                DragDropSource(m_CurrentDirectory / item);
                 
                 ImGui::PopStyleColor();
                 ImGui::TextWrapped("%s", filenameStr.c_str());
@@ -651,6 +658,23 @@ namespace ignite
         m_TreeNodes = std::move(newNodes);
     }
 
+	void ContentBrowserPanel::DragDropSource(const std::filesystem::path &filepath)
+	{
+		if (ImGui::BeginDragDropSource())
+		{
+			if (!std::filesystem::is_directory(filepath))
+			{
+				AssetHandle handle = Project::GetInstance()->GetAssetManager().GetAssetHandle(filepath);
+				if (handle != AssetHandle(0))
+				{
+					ImGui::SetDragDropPayload("content_browser_item", &handle, sizeof(AssetHandle));
+				}
+			}
+
+			ImGui::EndDragDropSource();
+		}
+	}
+
 	void ContentBrowserPanel::OnImportAssetDialog(void *userData, const char *const *filelist, int filter)
 	{
         ContentBrowserPanel *cb = (ContentBrowserPanel *)userData;
@@ -680,16 +704,24 @@ namespace ignite
 
 	std::filesystem::path ContentBrowserPanel::GetFullPath(uint32_t nodeIndex) const
     {
+        if (nodeIndex == 0 || nodeIndex >= m_TreeNodes.size())
+            return std::filesystem::path();
+
         std::filesystem::path result;
-        while (nodeIndex != 0)
+        uint32_t currentIndex = nodeIndex;
+        
+        // Build path from leaf to root
+        while (currentIndex != 0 && currentIndex < m_TreeNodes.size())
         {
-            const FileTreeNode &node = m_TreeNodes[nodeIndex];
-
-            if (node.path.has_extension())
-                return node.path;
-
-            result = node.path / result;
-            nodeIndex = node.parent;
+            const FileTreeNode &node = m_TreeNodes[currentIndex];
+            
+            // Avoid using operator/ with empty path to prevent trailing separators
+            if (result.empty())
+                result = node.path;
+            else
+                result = node.path / result;
+                
+            currentIndex = node.parent;
         }
 
         return result;
