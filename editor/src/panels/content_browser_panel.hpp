@@ -88,7 +88,7 @@ namespace ignite
 
         static void OnImportAssetDialog(void *userData, const char * const *fileList, int filter);
 
-        std::filesystem::path GetFullPath(uint32_t nodeIndex) const;
+        std::filesystem::path GetNodeFullpath(uint32_t nodeIndex) const;
 
         std::vector<FileTreeNode> m_TreeNodes;
         std::queue<PendingFileLoading> m_PendingAssetLoading;

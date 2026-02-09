@@ -105,6 +105,15 @@ namespace ignite
         Ref<T> GetAsset(AssetHandle handle)
         {
             Ref<Asset> asset = m_AssetManager->GetAsset(handle);
+            if (!asset) return nullptr;
+            return std::static_pointer_cast<T>(asset);
+        }
+
+        template<typename T>
+        Ref<T> GetAssetImmediate(AssetHandle handle)
+        {
+            Ref<Asset> asset = m_AssetManager->GetAssetImmediate(handle);
+            if (!asset) return nullptr;
             return std::static_pointer_cast<T>(asset);
         }
 

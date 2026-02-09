@@ -26,6 +26,7 @@
 #include "asset.hpp"
 
 #include <map>
+#include <unordered_set>
 #include <vector>
 #include <thread>
 #include <functional>
@@ -62,6 +63,7 @@ namespace ignite {
         void SubmitJob(AssetJob job);
 
         Ref<Asset> GetAsset(AssetHandle handle);
+        Ref<Asset> GetAssetImmediate(AssetHandle handle); // Synchronous load - blocks until complete
         AssetType GetAssetType(AssetHandle handle) const;
 
         const AssetMetaData &GetMetaData(const std::filesystem::path &filepath, AssetHandle &outHandle);
@@ -78,6 +80,7 @@ namespace ignite {
         void UnloadUnusedAssets();
         size_t GetLoadedAssetCount() const { return m_LoadedAssets.size(); }
         bool IsAssetLoaded(AssetHandle handle) const { return m_LoadedAssets.contains(handle); }
+        bool IsAssetLoading(AssetHandle handle) const { return m_LoadingAssets.contains(handle); }
         const std::unordered_map<AssetHandle, Ref<Asset>>& GetLoadedAssets() const { return m_LoadedAssets; }
     
         AssetRegistry &GetAssetAssetRegistry() { return m_AssetRegistry; }
@@ -89,6 +92,7 @@ namespace ignite {
 
         AssetRegistry m_AssetRegistry;
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
+        std::unordered_set<AssetHandle> m_LoadingAssets; // Track assets currently being loaded
 
         std::condition_variable m_ConditionVariable;
         std::vector<std::thread> m_Workers;

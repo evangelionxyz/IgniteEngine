@@ -114,11 +114,15 @@ namespace ignite {
 					Ref<Material> mat = BinarySerializer::DeserializeMaterial(materialFilepath);
                     Project::GetInstance()->GetAssetManager().AssignAsset(materialHandle, mat);
 
-                    Renderer::Submit([material = mat, mesh = m](nvrhi::ICommandList *cmd)
-                    {
-				        // Create buffer
-					    mesh->GetPrimitive()->CreateBuffer(cmd);
-                        material->SetTextureData(cmd);
+                    // Submit GPU operations to main thread to avoid Vulkan threading errors
+                    Application::SubmitToMainThread([mat, m]() {
+                        Renderer::Submit([material = mat, mesh = m](nvrhi::ICommandList *cmd)
+                        {
+				            // Create buffer
+					        mesh->GetPrimitive()->CreateBuffer(cmd);
+                            material->SetTextureData(cmd);
+                        });
+                        return true;
                     });
 				}
 			}

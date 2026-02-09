@@ -130,12 +130,25 @@ namespace ignite
 
     void Application::ProcessMainThreadSubmissions()
     {
-        while (!m_ThreadFuncs.empty())
+        // Process all pending submissions
+        while (true)
         {
-            auto func = m_ThreadFuncs.front();
+            std::function<bool()> func;
+            
+            {
+                std::lock_guard lock(m_ThreadFuncsMutex);
+                if (m_ThreadFuncs.empty())
+                    break;
+                
+                func = m_ThreadFuncs.front();
+            }
+            
+            // Execute outside lock
             if (func())
             {
-                m_ThreadFuncs.pop();
+                std::lock_guard lock(m_ThreadFuncsMutex);
+                if (!m_ThreadFuncs.empty())
+                    m_ThreadFuncs.pop();
             }
             else
             {
@@ -324,6 +337,7 @@ namespace ignite
 
     void Application::SubmitToMainThread(const std::function<bool()> func)
     {
+        std::lock_guard lock(GetInstance()->m_ThreadFuncsMutex);
         GetInstance()->m_ThreadFuncs.push(func);
     }
 

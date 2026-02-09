@@ -36,7 +36,9 @@
 #include "command.hpp"
 #include "ignite/graphics/ui/ui_manager.hpp"
 
+
 #include <queue>
+#include <mutex>
 #include <filesystem>
 
 namespace ignite
@@ -129,6 +131,7 @@ namespace ignite
         int32_t m_FrameIndex = 0;
 
         std::queue<std::function<bool()>> m_ThreadFuncs;
+        std::mutex m_ThreadFuncsMutex;
     };
 
     Application *CreateApplication(ApplicationCommandLineArgs args);

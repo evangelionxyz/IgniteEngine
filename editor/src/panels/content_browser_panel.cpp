@@ -75,7 +75,7 @@ namespace ignite
         
         // Build full path using helper function
         const std::filesystem::path assetDir = Project::GetInstance()->GetAssetDirectory();
-        const std::filesystem::path relativePath = GetFullPath(nodeIndex);
+        const std::filesystem::path relativePath = GetNodeFullpath(nodeIndex);
         const std::filesystem::path fullPath = assetDir / relativePath;
         const std::string filename = node->path.filename().string();
         
@@ -475,7 +475,7 @@ namespace ignite
                 continue;
             }
 
-            std::filesystem::path fullPath = basePath / GetFullPath(childIndex);
+            std::filesystem::path fullPath = basePath / GetNodeFullpath(childIndex);
 
             if (!std::filesystem::exists(fullPath))
             {
@@ -518,7 +518,7 @@ namespace ignite
 
         for (auto& childIndex : node.children | std::views::values)
         {
-            std::filesystem::path fullPath = basePath / GetFullPath(childIndex);
+            std::filesystem::path fullPath = basePath / GetNodeFullpath(childIndex);
             if (!std::filesystem::exists(fullPath))
             {
                 CollectNodeAndDescendants(childIndex, nodesToDelete);
@@ -702,7 +702,7 @@ namespace ignite
         }
 	}
 
-	std::filesystem::path ContentBrowserPanel::GetFullPath(uint32_t nodeIndex) const
+	std::filesystem::path ContentBrowserPanel::GetNodeFullpath(uint32_t nodeIndex) const
     {
         if (nodeIndex == 0 || nodeIndex >= m_TreeNodes.size())
             return std::filesystem::path();

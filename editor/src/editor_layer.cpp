@@ -553,7 +553,8 @@ namespace ignite
 
                         if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
                         {
-                            if (Ref<Scene> activeScene = m_ActiveProject->GetAsset<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
+                            // Use GetAssetImmediate since we're in modal and need synchronous load
+                            if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
                             {
                                 m_EditorScene = SceneManager::Copy(activeScene);
                                 m_EditorScene->SetDirtyFlag(false);
@@ -826,22 +827,22 @@ namespace ignite
         if (filepath == m_CurrentProjectFilepath)
         {
             LOG_TRACE("Dismiss opening current project {0}", filepath.generic_string());
-    		return;
+            return;
         }
 
         // Clear old project's loaded assets before opening new project
         if (m_ActiveProject)
         {
             SetActiveScene(nullptr);
-            
+
             if (m_Device)
             {
                 m_Device->waitForIdle();
             }
-            
+
             m_EditorScene.reset();
             m_ActiveScene.reset();
-            
+
             // Clear all assets from old project
             m_ActiveProject->GetAssetManager().ClearAllLoadedAssets();
         }
@@ -849,15 +850,16 @@ namespace ignite
         if (const Ref<Project> openedProject = ProjectSerializer::Deserialize(filepath))
         {
             m_ActiveProject = openedProject;
-        	m_CurrentProjectFilepath = filepath;
+            m_CurrentProjectFilepath = filepath;
 
             // Reload project files
             m_ContentBrowserPanel->LoadProjectFiles();
 
-            // Get Project default scene
+            // Get Project default scene (use immediate load for synchronous path)
             if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
             {
-                if (Ref<Scene> activeScene = m_ActiveProject->GetAsset<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
+                // Use GetAssetImmediate since we're on main thread and need synchronous load
+                if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
                 {
                     m_EditorScene = SceneManager::Copy(activeScene);
                     m_EditorScene->SetDirtyFlag(false);
@@ -869,11 +871,11 @@ namespace ignite
                     m_CurrentSceneFilePath = m_ActiveProject->GetAssetFilepath(assetFilepath);
                     m_CurrentSceneHandle = activeScene->handle;
                 }
-				else
-				{
-					// Create a default scene
-					NewScene();
-				}
+                else
+                {
+                    // Create a default scene if load failed
+                    NewScene();
+                }
             }
             else
             {
@@ -1044,7 +1046,8 @@ namespace ignite
     {
         while (!m_PendingFileLoading.empty())
         {
-            auto& pf = m_PendingFileLoading.front();
+            auto pf = m_PendingFileLoading.front();
+            m_PendingFileLoading.pop();
 
             switch (pf.type)
             {
@@ -1052,11 +1055,138 @@ namespace ignite
                 {
                     if (pf.metadata.type == AssetType::Scene)
                     {
-                        OpenScene(pf.metadata.filepath);
+                        // Submit scene loading to asset worker
+                        std::filesystem::path filepath = pf.metadata.filepath;
+                        AssetHandle sceneHandle = m_ActiveProject->GetAssetManager().GetAssetHandle(filepath);
+                        
+                        if (m_CurrentSceneHandle == sceneHandle)
+                            break;
+                        
+                        m_CurrentSceneHandle = sceneHandle;
+                        
+                        // Submit heavy I/O work to asset worker
+                        m_ActiveProject->GetAssetManager().SubmitJob([this, filepath, sceneHandle]() {
+                            // Load scene on worker thread (I/O happens here)
+                            Ref<Scene> loadedScene = SceneSerializer::Deserialize(filepath, m_ActiveProject.get());
+                            if (loadedScene)
+                            {
+                                // Submit UI update back to main thread
+                                Application::SubmitToMainThread([this, loadedScene, filepath]() mutable {
+                                    if (m_EditorScene)
+                                    {
+                                        m_EditorScene->OnStop();
+                                    }
+                                    
+                                    if (m_Data.sceneState == State::ScenePlay)
+                                    {
+                                        OnSceneStop();
+                                    }
+                                    
+                                    // Clear active scene references
+                                    SetActiveScene(nullptr);
+                                    
+                                    // Wait for GPU
+                                    if (m_Device)
+                                    {
+                                        m_Device->waitForIdle();
+                                    }
+                                    
+                                    // Reset old scene
+                                    m_EditorScene.reset();
+                                    m_ActiveScene.reset();
+                                    
+                                    // Unload unused assets
+                                    if (m_ActiveProject)
+                                    {
+                                        m_ActiveProject->GetAssetManager().UnloadUnusedAssets();
+                                    }
+                                    
+                                    // Copy and activate new scene
+                                    m_EditorScene = SceneManager::Copy(loadedScene);
+                                    m_EditorScene->SetDirtyFlag(false);
+                                    SetActiveScene(m_EditorScene);
+                                    m_CurrentSceneFilePath = filepath;
+                                    
+                                    return true;
+                                });
+                            }
+                            else
+                            {
+                                LOG_ERROR("[Editor] Failed to load scene: {}", filepath.generic_string());
+                            }
+                        });
                     }
                     else if (pf.metadata.type == AssetType::Project)
                     {
-                        OpenProject(pf.metadata.filepath);
+                        // Submit project loading to asset worker
+                        std::filesystem::path filepath = pf.metadata.filepath;
+                        
+                        if (filepath == m_CurrentProjectFilepath)
+                        {
+                            LOG_TRACE("Dismiss opening current project {0}", filepath.generic_string());
+                            break;
+                        }
+                        
+                        // Submit heavy I/O work to asset worker
+                        m_ActiveProject->GetAssetManager().SubmitJob([this, filepath]() {
+                            // Load project on worker thread
+                            Ref<Project> loadedProject = ProjectSerializer::Deserialize(filepath);
+                            if (loadedProject)
+                            {
+                                // Submit UI update back to main thread
+                                Application::SubmitToMainThread([this, loadedProject, filepath]() mutable {
+                                    // Clear old project's assets
+                                    if (m_ActiveProject)
+                                    {
+                                        SetActiveScene(nullptr);
+                                        
+                                        if (m_Device)
+                                        {
+                                            m_Device->waitForIdle();
+                                        }
+                                        
+                                        m_EditorScene.reset();
+                                        m_ActiveScene.reset();
+                                        m_ActiveProject->GetAssetManager().ClearAllLoadedAssets();
+                                    }
+                                    
+                                    m_ActiveProject = loadedProject;
+                                    m_CurrentProjectFilepath = filepath;
+                                    
+                                    // Reload content browser
+                                    m_ContentBrowserPanel->LoadProjectFiles();
+                                    
+                                    // Load default scene
+                                    if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
+                                    {
+                                        if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
+                                        {
+                                            m_EditorScene = SceneManager::Copy(activeScene);
+                                            m_EditorScene->SetDirtyFlag(false);
+                                            SetActiveScene(m_EditorScene);
+                                            
+                                            const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
+                                            m_CurrentSceneFilePath = m_ActiveProject->GetAssetFilepath(assetFilepath);
+                                            m_CurrentSceneHandle = activeScene->handle;
+                                        }
+                                        else
+                                        {
+                                            NewScene();
+                                        }
+                                    }
+                                    else
+                                    {
+                                        NewScene();
+                                    }
+                                    
+                                    return true;
+                                });
+                            }
+                            else
+                            {
+                                LOG_ERROR("[Editor] Failed to load project: {}", filepath.generic_string());
+                            }
+                        });
                     }
                     break;
                 }
@@ -1064,7 +1194,15 @@ namespace ignite
                 {
                     if (pf.metadata.type == AssetType::Scene)
                     {
-                        SaveScene(pf.metadata.filepath);
+                        // Submit scene save to asset worker
+                        std::filesystem::path filepath = pf.metadata.filepath;
+                        
+                        m_ActiveProject->GetAssetManager().SubmitJob([this, filepath]() {
+                            SceneSerializer serializer(m_ActiveScene, m_ActiveProject.get());
+                            serializer.Serialize(filepath);
+                            
+                            LOG_INFO("[Editor] Scene saved: {}", filepath.generic_string());
+                        });
                     }
                     else if (pf.metadata.type == AssetType::Project)
                     {
@@ -1073,8 +1211,6 @@ namespace ignite
                     break;
                 }
             }
-
-            m_PendingFileLoading.pop();
         }
     }
 

@@ -107,9 +107,6 @@ namespace ignite
 
         static EditorLayer *GetInstance();
 
-    public:
-        void OnDialogLoadMesh(Ref<MeshInstance> &outMesh);
-
     private:
         static void OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter);
         static void OnSceneOpenFileSelected(void *userData, const char *const *filelist, int filter);
@@ -140,8 +137,6 @@ namespace ignite
         nvrhi::StagingTextureHandle m_ScreenshotStagingTexture;
         Ref<CommandList > m_CommandList;
 
-        std::queue<PendingFileLoading> m_PendingFileLoading;
-
         glm::vec2 m_CurrentFramebufferSize;
             
         nvrhi::IDevice *m_Device = nullptr;
@@ -151,6 +146,8 @@ namespace ignite
         std::optional<MeshScene> m_LoadedMeshScene;
 
         AssetHandle m_CurrentSceneHandle = AssetHandle(0);
+
+        std::queue<PendingFileLoading> m_PendingFileLoading;
 
         friend class ScenePanel;
     };
