@@ -71,6 +71,13 @@ namespace ignite {
         
         const std::filesystem::path &GetFilepath(AssetHandle handle) const;
         bool IsAssetHandleValid(AssetHandle handle) const;
+        
+        // Asset lifecycle management
+        void ClearAllLoadedAssets();
+        void UnloadAsset(AssetHandle handle);
+        void UnloadUnusedAssets();
+        size_t GetLoadedAssetCount() const { return m_LoadedAssets.size(); }
+        bool IsAssetLoaded(AssetHandle handle) const { return m_LoadedAssets.contains(handle); }
     
         AssetRegistry &GetAssetAssetRegistry() { return m_AssetRegistry; }
 

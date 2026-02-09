@@ -46,6 +46,7 @@ namespace ignite {
     struct MeshPrimitive
     {
         MeshPrimitive() = default;
+        ~MeshPrimitive();
 
         MeshPrimitive(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices);
         
@@ -65,6 +66,7 @@ namespace ignite {
     {
     public:
         MeshInstance();
+        ~MeshInstance();
 
         MeshInstance(const std::string &name, const Ref<MeshPrimitive> &mesh);
 
@@ -121,7 +123,7 @@ namespace ignite {
 	{
 	public:
 		StaticMesh() = default;
-		virtual ~StaticMesh() = default;
+		virtual ~StaticMesh();
 
 		static Ref<StaticMesh> Create();
 		static AssetType GetStaticType() { return AssetType::StaticMesh; }

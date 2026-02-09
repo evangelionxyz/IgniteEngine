@@ -72,11 +72,31 @@ namespace ignite
     {
     }
 
+    MeshPrimitive::~MeshPrimitive()
+    {
+        LOG_TRACE("MeshPrimitive::~MeshPrimitive() - Destroying mesh primitive");
+        
+        // Wait for GPU to ensure buffers are not in use
+        if (auto* device = Application::GetGraphicsDevice())
+        {
+            device->waitForIdle();
+        }
+        
+        // Clear GPU buffers
+        vertexBuffer.reset();
+        indexBuffer.reset();
+        
+        // Clear CPU data
+        vertices.clear();
+        indices.clear();
+        
+        LOG_TRACE("MeshPrimitive::~MeshPrimitive() - Mesh primitive destroyed");
+    }
+
     Ref<MeshPrimitive> MeshPrimitive::Create(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices)
     {
         return CreateRef<MeshPrimitive>(vertices, indices);
     }
-
 
     void MeshPrimitive::CreateBuffer(nvrhi::ICommandList *cmd)
     {
@@ -102,6 +122,28 @@ namespace ignite
     MeshInstance::MeshInstance()
     {
         m_Primitive = CreateRef<MeshPrimitive>();
+    }
+
+    MeshInstance::~MeshInstance()
+    {
+        LOG_TRACE("MeshInstance::~MeshInstance() - Destroying mesh instance: {}", m_Name);
+        
+        // Wait for GPU to ensure resources are not in use
+        if (auto* device = Application::GetGraphicsDevice())
+        {
+            device->waitForIdle();
+        }
+        
+        // Clear binding set first (it references other resources)
+        m_BindingSet = nullptr;
+        
+        // Clear GPU data buffer
+        m_SkinnedMeshGPUDataBuffer.reset();
+        
+        // Clear primitive (vertex/index buffers)
+        m_Primitive.reset();
+        
+        LOG_TRACE("MeshInstance::~MeshInstance() - Mesh instance destroyed: {}", m_Name);
     }
 
     void MeshInstance::UpdateBindingSet(Scene *scene)
@@ -146,6 +188,22 @@ namespace ignite
     Ref<StaticMesh> StaticMesh::Create()
     {
         return CreateRef<StaticMesh>();
+    }
+
+    StaticMesh::~StaticMesh()
+    {
+        LOG_TRACE("StaticMesh::~StaticMesh() - Destroying static mesh (MeshInstances: {})", m_MeshInstances.size());
+        
+        // Wait for GPU to ensure meshes are not in use
+        if (auto* device = Application::GetGraphicsDevice())
+        {
+            device->waitForIdle();
+        }
+        
+        // Clear all mesh instances
+        m_MeshInstances.clear();
+        
+        LOG_TRACE("StaticMesh::~StaticMesh() - Static mesh destroyed");
     }
 
     // 
@@ -352,6 +410,9 @@ namespace ignite
         const auto textures = LoadTexturesFromGLTF(gltfModel, cmd);
         cmd->close();
         device->executeCommandList(cmd);
+        
+        // Wait for texture loading to complete
+        device->waitForIdle();
 
         const auto samplers = GetSamplersFromGLTF(gltfModel);
 

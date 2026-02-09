@@ -150,6 +150,8 @@ namespace ignite
         void *m_MeshInstanceData = nullptr;
         std::optional<MeshScene> m_LoadedMeshScene;
 
+        AssetHandle m_CurrentSceneHandle = AssetHandle(0);
+
         friend class ScenePanel;
     };
 }

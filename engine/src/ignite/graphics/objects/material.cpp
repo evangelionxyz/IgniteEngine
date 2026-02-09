@@ -52,7 +52,31 @@ namespace ignite
 
     Material::~Material()
     {
-		sampler = nullptr;
+        LOG_TRACE("Material::~Material() - Destroying material: {}", name);
+        
+        // Wait for GPU to ensure material is not in use
+        if (auto* device = Application::GetGraphicsDevice())
+        {
+            device->waitForIdle();
+        }
+        
+        // Clear binding set first (references other resources)
+        m_BindingSet = nullptr;
+        
+        // Clear GPU data buffer
+        m_GPUDataBuffer.reset();
+        
+        // Clear sampler
+        sampler = nullptr;
+        
+        // Clear textures
+        baseColorTexture.reset();
+        emissiveTexture.reset();
+        metallicRoughnessTexture.reset();
+        normalTexture.reset();
+        occlusionTexture.reset();
+        
+        LOG_TRACE("Material::~Material() - Material destroyed: {}", name);
     }
 
     void Material::UpdateBindingSet()

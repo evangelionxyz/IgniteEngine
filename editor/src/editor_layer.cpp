@@ -680,6 +680,8 @@ namespace ignite
 
         m_CurrentSceneFilePath.clear();
 
+        m_CurrentSceneHandle = AssetHandle(0);
+
         // Clear active scene first to release references in renderer and panels
         SetActiveScene(nullptr);
         
@@ -692,6 +694,12 @@ namespace ignite
         // Reset scenes - this should trigger destructors
         m_EditorScene.reset();
         m_ActiveScene.reset();
+        
+        // Unload unused assets (assets not referenced by anything else)
+        if (m_ActiveProject)
+        {
+            m_ActiveProject->GetAssetManager().UnloadUnusedAssets();
+        }
         
         // Force a brief wait to allow cleanup
         m_Device->waitForIdle();
@@ -739,6 +747,13 @@ namespace ignite
 
     void EditorLayer::OpenScene(const std::filesystem::path &filepath)
     {
+        AssetHandle openSceneHandle = m_ActiveProject->GetAssetManager().GetAssetHandle(filepath);
+
+        if (m_CurrentSceneHandle == openSceneHandle)
+            return;
+
+        m_CurrentSceneHandle = openSceneHandle;
+
         if (m_EditorScene)
         {
             m_EditorScene->OnStop();
@@ -751,6 +766,25 @@ namespace ignite
 
         if (Ref<Scene> openScene = SceneSerializer::Deserialize(filepath, m_ActiveProject.get()))
         {
+            // Clear active scene references before loading new one
+            SetActiveScene(nullptr);
+            
+            // Wait for GPU
+            if (m_Device)
+            {
+                m_Device->waitForIdle();
+            }
+            
+            // Reset old scene
+            m_EditorScene.reset();
+            m_ActiveScene.reset();
+            
+            // Unload unused assets from previous scene
+            if (m_ActiveProject)
+            {
+                m_ActiveProject->GetAssetManager().UnloadUnusedAssets();
+            }
+            
             m_EditorScene = SceneManager::Copy(openScene);
             m_EditorScene->SetDirtyFlag(false);
 
@@ -793,6 +827,23 @@ namespace ignite
         {
             LOG_TRACE("Dismiss opening current project {0}", filepath.generic_string());
     		return;
+        }
+
+        // Clear old project's loaded assets before opening new project
+        if (m_ActiveProject)
+        {
+            SetActiveScene(nullptr);
+            
+            if (m_Device)
+            {
+                m_Device->waitForIdle();
+            }
+            
+            m_EditorScene.reset();
+            m_ActiveScene.reset();
+            
+            // Clear all assets from old project
+            m_ActiveProject->GetAssetManager().ClearAllLoadedAssets();
         }
 
         if (const Ref<Project> openedProject = ProjectSerializer::Deserialize(filepath))
@@ -998,19 +1049,25 @@ namespace ignite
                 case PendingFileLoading::Open:
                 {
                     if (pf.metadata.type == AssetType::Scene)
+                    {
                         OpenScene(pf.metadata.filepath);
+                    }
                     else if (pf.metadata.type == AssetType::Project)
+                    {
                         OpenProject(pf.metadata.filepath);
-
+                    }
                     break;
                 }
                 case PendingFileLoading::Save:
                 {
                     if (pf.metadata.type == AssetType::Scene)
+                    {
                         SaveScene(pf.metadata.filepath);
+                    }
                     else if (pf.metadata.type == AssetType::Project)
+                    {
                         SaveProjectAs();
-                    
+                    }
                     break;
                 }
             }

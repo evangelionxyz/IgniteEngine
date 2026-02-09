@@ -24,6 +24,7 @@
 #include "asset_manager.hpp"
 #include "asset_importer.hpp"
 #include "ignite/project/project.hpp"
+#include "ignite/core/application.hpp"
 
 #include "ignite/core/logger.hpp"
 #include <cstdint>
@@ -143,6 +144,76 @@ namespace ignite {
             m_AssetRegistry.erase(it);
     }
 
+    void AssetManager::ClearAllLoadedAssets()
+    {
+        LOG_TRACE("[Asset Manager] Clearing all loaded assets (Count: {})", m_LoadedAssets.size());
+        
+        // Wait for GPU operations to complete before releasing assets
+        if (auto* device = Application::GetGraphicsDevice())
+        {
+            device->waitForIdle();
+        }
+        
+        m_LoadedAssets.clear();
+        
+        LOG_TRACE("[Asset Manager] All loaded assets cleared");
+    }
+
+    void AssetManager::UnloadAsset(AssetHandle handle)
+    {
+        auto it = m_LoadedAssets.find(handle);
+        if (it != m_LoadedAssets.end())
+        {
+            LOG_TRACE("[Asset Manager] Unloading asset: {}", static_cast<uint64_t>(handle));
+            
+            // Wait for GPU to ensure asset is not in use
+            if (auto* device = Application::GetGraphicsDevice())
+            {
+                device->waitForIdle();
+            }
+            
+            m_LoadedAssets.erase(it);
+        }
+    }
+
+    void AssetManager::UnloadUnusedAssets()
+    {
+        LOG_TRACE("[Asset Manager] Checking for unused assets (Loaded: {})", m_LoadedAssets.size());
+        
+        std::vector<AssetHandle> assetsToUnload;
+        
+        // Find assets that are only referenced by m_LoadedAssets (use_count == 1)
+        for (const auto& [handle, asset] : m_LoadedAssets)
+        {
+            if (asset && asset.use_count() == 1)
+            {
+                assetsToUnload.push_back(handle);
+            }
+        }
+        
+        if (!assetsToUnload.empty())
+        {
+            LOG_TRACE("[Asset Manager] Unloading {} unused assets", assetsToUnload.size());
+            
+            // Wait for GPU to ensure assets are not in use
+            if (auto* device = Application::GetGraphicsDevice())
+            {
+                device->waitForIdle();
+            }
+            
+            for (AssetHandle handle : assetsToUnload)
+            {
+                m_LoadedAssets.erase(handle);
+            }
+            
+            LOG_TRACE("[Asset Manager] Unused assets unloaded. Remaining: {}", m_LoadedAssets.size());
+        }
+        else
+        {
+            LOG_TRACE("[Asset Manager] No unused assets found");
+        }
+    }
+
     void AssetManager::SubmitJob(AssetJob job)
     {
         {
@@ -195,9 +266,18 @@ namespace ignite {
 
     AssetHandle AssetManager::GetAssetHandle(const std::filesystem::path& filepath)
     {
+        // Normalize the input filepath to absolute path for comparison
+        std::filesystem::path absoluteFilepath = std::filesystem::absolute(s_Project->GetAssetFilepath(filepath));
+
         for (const auto &[handle, metadata] : m_AssetRegistry)
         {
-            if (metadata.filepath == filepath)
+            // Convert metadata filepath (relative) to absolute using project base path
+            std::filesystem::path absoluteMetadataPath = s_Project 
+                ? std::filesystem::absolute(s_Project->GetAssetFilepath(metadata.filepath))
+                : std::filesystem::absolute(metadata.filepath);
+            
+            // Compare normalized absolute paths
+            if (absoluteFilepath == absoluteMetadataPath)
             {
                 return handle;
             }
