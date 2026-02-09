@@ -123,12 +123,12 @@ namespace ignite
 			const glm::vec2 delta = mouse.position - mouse.lastPosition;
 
 			// calculate pan direction in camera space
-			const glm::vec3 right = GetRightDirection();
-			const glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
+			const glm::vec3 rightVector = GetRightDirection();
+			const glm::vec3 upVector = GetUpDirection();
 
-			// pan in the camera's right and world up directions
+			// pan in the camera's right vector and up vector
 			const float panSpeed = controls.panSensitivity * distance;
-			const glm::vec3 panVector = right * (-delta.x * panSpeed) + worldUp * (delta.y * panSpeed);
+			const glm::vec3 panVector = rightVector * (-delta.x * panSpeed) + upVector * (delta.y * panSpeed);
 
 			// apply pan to target
 			target += panVector;
