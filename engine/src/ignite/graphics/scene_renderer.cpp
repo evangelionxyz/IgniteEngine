@@ -564,32 +564,54 @@ namespace ignite {
 				continue;
 			}
 
+			// Create per entity buffer (once per entity)
+			if (!smc.perEntityBuffer)
+			{
+				smc.perEntityBuffer = ConstantBuffer::Create(
+					sizeof(SkinnedMesh_GPUData),
+					true,
+					16,
+					"Per-Entity Transform Buffer"
+				);
+			}
+
+			// Create binding set (once per entity) - only if buffer handles changed
+			if (!smc.meshBindingSet)
+			{
+				nvrhi::IDevice *device = Application::GetGraphicsDevice();
+				auto desc = nvrhi::BindingSetDesc();
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, smc.perEntityBuffer->GetHandle()));
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, m_Scene->GetSceneGPUDataBuffer()->GetHandle()));
+				desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, m_Scene->GetCSMGPUDataBuffer()->GetHandle()));
+
+				smc.meshBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
+				LOG_ASSERT(smc.meshBindingSet, "Failed to create mesh binding set");
+			}
+
 			Ref<StaticMesh> sm = Project::GetInstance()->GetAsset<StaticMesh>(smc.handle);
 			if (!sm)
 			{
 				continue;
 			}
 
+			// Update per entity transform data (every frame)
+			SkinnedMesh_GPUData gpuData;
+			gpuData.transformation = tr.GetLocalMatrix();// *mesh->local;
+
+			const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
+			gpuData.normal = glm::mat4(normalMat3);
+
+			std::fill(std::begin(gpuData.boneTransforms),
+				std::end(gpuData.boneTransforms),
+				glm::mat4(1.0f));
+
+			// Write updated transform to buffer (every frame)
+			smc.perEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
+
 			for (auto &m : sm->GetMeshInstances())
 			{
 				auto &primitive = m->GetPrimitive();
-
-				SkinnedMesh_GPUData gpuData;
-				gpuData.transformation = tr.GetLocalMatrix();// *mesh->local;
-
-				const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
-				gpuData.normal = glm::mat4(normalMat3);
-
-				std::fill(std::begin(gpuData.boneTransforms),
-					std::end(gpuData.boneTransforms),
-					glm::mat4(1.0f));
-
-				if (!m->GetGPUDataBuffer())
-				{
-					m->UpdateBindingSet(m_Scene.get());
-				}
-
-				m->GetGPUDataBuffer()->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
 
 				Ref<Material> material = Project::GetInstance()->GetAsset<Material>(m->GetMaterialHandle());
 				if (!material)
@@ -604,9 +626,9 @@ namespace ignite {
 				
 				material->UploadToGpu(cmd);
 				
-				if (m->GetBindingSet() && material->GetBindingSet() && primitive->vertexBuffer && primitive->indexBuffer)
+				if (smc.meshBindingSet && material->GetBindingSet() && primitive->vertexBuffer && primitive->indexBuffer)
 				{
-					geomGState.bindings = { m->GetBindingSet(), material->GetBindingSet() };
+					geomGState.bindings = { smc.meshBindingSet, material->GetBindingSet() };
 
 					geomGState.addVertexBuffer({ primitive->vertexBuffer->GetHandle(), 0, 0 });
 					geomGState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });

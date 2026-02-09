@@ -134,9 +134,6 @@ namespace ignite
             device->waitForIdle();
         }
         
-        // Clear binding set first (it references other resources)
-        m_BindingSet = nullptr;
-        
         // Clear GPU data buffer
         m_SkinnedMeshGPUDataBuffer.reset();
         
@@ -144,32 +141,6 @@ namespace ignite
         m_Primitive.reset();
         
         LOG_TRACE("MeshInstance::~MeshInstance() - Mesh instance destroyed: {}", m_Name);
-    }
-
-    void MeshInstance::UpdateBindingSet(Scene *scene)
-    {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-
-        if (!m_SkinnedMeshGPUDataBuffer)
-        {
-            m_SkinnedMeshGPUDataBuffer = ConstantBuffer::Create(sizeof(SkinnedMesh_GPUData), true, 16, "[Mesh] Constant Buffer");
-        }
-
-        // Create binding set
-        const Ref<Environment> &env = SceneRenderer::GetActive()->GetEnvironment();
-        auto desc = nvrhi::BindingSetDesc();
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m_SkinnedMeshGPUDataBuffer->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetSceneGPUDataBuffer()->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, scene->GetCSMGPUDataBuffer()->GetHandle()));
-
-        const auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
-        LOG_ASSERT(newBindingSet, "Failed to create binding set");
-
-        if (newBindingSet)
-        {
-            m_BindingSet = newBindingSet;
-        }
     }
 
     void MeshInstance::SetMaterial(AssetHandle assetHandle)

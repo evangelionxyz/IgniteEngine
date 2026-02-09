@@ -73,15 +73,12 @@ namespace ignite {
         glm::mat4 local = glm::mat4(1.0f);
         glm::mat4 global = glm::mat4(1.0f);
 
-        void UpdateBindingSet(Scene *scene);
         void SetName(const std::string &name) { m_Name = name; }
         void SetMaterial(AssetHandle assetHandle);
 
         static Ref<MeshInstance> Create(const std::string &name, const Ref<MeshPrimitive> &mesh);
 
-        nvrhi::BindingSetHandle GetBindingSet() { return m_BindingSet; }
         Ref<MeshPrimitive> &GetPrimitive() { return m_Primitive; }
-        Ref<ConstantBuffer> &GetGPUDataBuffer() { return m_SkinnedMeshGPUDataBuffer; }
         std::string &GetName() { return m_Name; }
     
         AssetHandle GetMaterialHandle() const { return m_MaterialHandle; }
@@ -90,8 +87,6 @@ namespace ignite {
         std::string m_Name;
         Ref<MeshPrimitive> m_Primitive;
         Ref<ConstantBuffer> m_SkinnedMeshGPUDataBuffer;
-        nvrhi::BindingSetHandle m_BindingSet;
-        
         AssetHandle m_MaterialHandle = AssetHandle(0);
     };
 

@@ -1761,12 +1761,6 @@ namespace ignite
                 Ref<MeshInstance> &mInstance = *static_cast<Ref<MeshInstance> *>(m_MeshInstanceData);
                 mInstance = m_LoadedMeshScene->flatMeshes[m_SelectedMesh];
 
-                Application::SubmitToMainThread([mesh = mInstance, scene = m_ActiveScene]()
-                {
-                    mesh->UpdateBindingSet(scene.get());
-                    return true;
-                });
-
                 m_SelectedMesh = 0;
                 m_LoadedMeshScene.reset();
                 m_MeshInstanceData = nullptr;
