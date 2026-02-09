@@ -1050,6 +1050,7 @@ namespace ignite
             .setAttachmentFragmentShadingRate(true);
         auto vulkan13features = vk::PhysicalDeviceVulkan13Features()
             .setSynchronization2(synchronization2Supported)
+			.setDynamicRendering(true)
             .setShaderDemoteToHelperInvocation(true)
             .setMaintenance4(maintenance4Features.maintenance4);
         auto aftermathFeatures = vk::DeviceDiagnosticsConfigCreateInfoNV()
