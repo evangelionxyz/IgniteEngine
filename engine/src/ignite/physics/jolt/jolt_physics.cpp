@@ -86,6 +86,11 @@ namespace ignite
     {
     }
 
+    JoltScene::~JoltScene()
+    {
+        SimulationStop();
+    }
+
     void JoltScene::SimulationStart()
     {
         m_PhysicsSystem.Init(cNumBodies, cNumBodyMutexes, cMaxBodyPairs,
@@ -109,10 +114,17 @@ namespace ignite
 
     void JoltScene::SimulationStop()
     {
+		if (!m_BodyInterface)
+		{
+			return;
+		}
+
         for (entt::entity e : m_Scene->registry->view<RigibodyComponent>())
         {
             DestroyEntity(Entity{ e, m_Scene });
         }
+
+		m_BodyInterface = nullptr;
     }
 
     void JoltScene::Simulate(float deltaTime)

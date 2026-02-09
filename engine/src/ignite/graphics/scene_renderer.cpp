@@ -365,18 +365,32 @@ namespace ignite {
 
 	void SceneRenderer::SetActiveScene(const Ref<Scene> &scene)
 	{
-		Application::GetGraphicsDevice()->waitForIdle();
-
-		// Clean up old scene resources before setting new scene
-		if (m_Scene)
+		if (m_Scene == scene)
 		{
-			m_Environment = nullptr;
+			return;
 		}
 
 		m_Scene = scene;
+
 		if (m_Scene)
 		{
-			// create environment
+			// Wait for GPU to finish all operations before releasing resources
+			Application::GetGraphicsDevice()->waitForIdle();
+			
+			// Clear environment-related caches to release GPU resources
+			s_GeometryPSOCache.clear();
+			s_EnvironmentPSOCache.clear();
+			s_CompositePSOCache.clear();
+			s_CompositeBindingSetCache.clear();
+			s_CSMBindingSetCache.clear();
+			
+			// Release environment resources
+			m_Environment.reset();
+			
+			// Wait again to ensure environment destruction completes
+			Application::GetGraphicsDevice()->waitForIdle();
+
+			// Create environment
 			auto cmd = m_CommandList->GetActiveHandle();
 			cmd->open();
 			m_Environment = Environment::Create(m_Scene.get());

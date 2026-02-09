@@ -50,6 +50,7 @@ namespace ignite
     Scene::Scene(Project *project, const std::string &_name)
         : m_Project(project), name(_name)
     {
+        LOG_TRACE("Scene::Scene() - Creating scene: {0}", name);
         registry = new entt::registry();
         physics2D = CreateScope<Physics2D>(this);
         physics = CreateScope<JoltScene>(this);
@@ -60,8 +61,39 @@ namespace ignite
 
     Scene::~Scene()
     {
+		LOG_TRACE("Scene::~Scene() - Destroying scene: {0}", name);
+
+		// Stop physics simulations first
+		if (physics2D)
+		{
+			physics2D->SimulationStop();
+		}
+		if (physics)
+		{
+			physics->SimulationStop();
+		}
+
+		// Clear all entities from registry before deletion
         if (registry)
+        {
+			LOG_TRACE("Scene::~Scene() - Clearing entities from registry");
+			registry->clear();
             delete registry;
+			registry = nullptr;
+        }
+
+		// Clear entity map
+		entities.clear();
+
+		// Release GPU buffers explicitly
+		m_SceneGPUDataBuffer.reset();
+		m_CSMGPUDataBuffer.reset();
+
+		// Release physics systems
+		physics2D.reset();
+		physics.reset();
+
+		LOG_TRACE("Scene::~Scene() - Scene destroyed: {0}", name);
     }
 
     void Scene::OnStart()

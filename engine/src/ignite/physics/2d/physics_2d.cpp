@@ -37,6 +37,7 @@ namespace ignite
 
     Physics2D::~Physics2D()
     {
+		SimulationStop();
     }
 
     void Physics2D::SimulationStart()

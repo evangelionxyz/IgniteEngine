@@ -558,8 +558,7 @@ namespace ignite
                                 m_EditorScene = SceneManager::Copy(activeScene);
                                 m_EditorScene->SetDirtyFlag(false);
 
-                                m_ActiveScene = m_EditorScene;
-                                SetActiveScene(m_ActiveScene);
+                                SetActiveScene(m_EditorScene);
 
                                 AssetMetaData metadata = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
                                 auto scenePath = m_ActiveProject->GetAssetFilepath(metadata.filepath);
@@ -636,11 +635,35 @@ namespace ignite
 
     void EditorLayer::SetActiveScene(const Ref<Scene> &scene)
     {
-        m_ScenePanel->SetActiveScene(scene);
-        m_SceneRenderer.SetActiveScene(scene);
-        m_ActiveProject->SetActiveScene(scene);
+		if (m_ActiveScene == scene)
+		{
+			return;
+		}
 
-        m_ActiveScene = scene;
+		// Clear references in all systems before changing active scene
+		if (m_ScenePanel)
+		{
+			m_ScenePanel->SetActiveScene(nullptr);
+		}
+		m_SceneRenderer.SetActiveScene(nullptr);
+		if (m_ActiveProject)
+		{
+			m_ActiveProject->SetActiveScene(nullptr);
+		}
+
+		// Set new scene
+		m_ActiveScene = scene;
+
+		// Update all systems with new scene
+		if (m_ScenePanel)
+		{
+			m_ScenePanel->SetActiveScene(scene);
+		}
+		m_SceneRenderer.SetActiveScene(scene);
+		if (m_ActiveProject)
+		{
+			m_ActiveProject->SetActiveScene(scene);
+		}
     }
 
     void EditorLayer::NewScene()
@@ -657,12 +680,27 @@ namespace ignite
 
         m_CurrentSceneFilePath.clear();
 
-        // create editor scene
+        // Clear active scene first to release references in renderer and panels
+        SetActiveScene(nullptr);
+        
+        // Wait for GPU operations to complete
+        if (m_Device)
+        {
+            m_Device->waitForIdle();
+        }
+
+        // Reset scenes - this should trigger destructors
+        m_EditorScene.reset();
+        m_ActiveScene.reset();
+        
+        // Force a brief wait to allow cleanup
+        m_Device->waitForIdle();
+        
+        // Create new editor scene
         m_EditorScene = CreateRef<Scene>(m_ActiveProject.get(), "New Scene");
 
-        // pass to active scene
-        m_ActiveScene = m_EditorScene;
-        SetActiveScene(m_ActiveScene);
+        // Set as active scene
+        SetActiveScene(m_EditorScene);
     }
 
     void EditorLayer::SaveScene()
@@ -716,8 +754,7 @@ namespace ignite
             m_EditorScene = SceneManager::Copy(openScene);
             m_EditorScene->SetDirtyFlag(false);
 
-            m_ActiveScene = m_EditorScene;
-            SetActiveScene(m_ActiveScene);
+            SetActiveScene(m_EditorScene);
 
             m_CurrentSceneFilePath = filepath;
         }
@@ -774,12 +811,16 @@ namespace ignite
                     m_EditorScene = SceneManager::Copy(activeScene);
                     m_EditorScene->SetDirtyFlag(false);
 
-                    m_ActiveScene = m_EditorScene;
-                    SetActiveScene(m_ActiveScene);
+                    SetActiveScene(m_EditorScene);
 
                     const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
                     m_CurrentSceneFilePath = m_ActiveProject->GetAssetFilepath(assetFilepath);
                 }
+				else
+				{
+					// Create a default scene
+					NewScene();
+				}
             }
             else
             {
@@ -809,10 +850,8 @@ namespace ignite
         m_Data.sceneState = State::ScenePlay;
 
         // copy initial components to new scene
-        m_ActiveScene = SceneManager::Copy(m_EditorScene);
+        SetActiveScene(SceneManager::Copy(m_EditorScene));
         m_ActiveScene->OnStart();
-
-        SetActiveScene(m_ActiveScene);
     }
 
     void EditorLayer::OnSceneStop()
@@ -820,8 +859,6 @@ namespace ignite
         m_Data.sceneState = State::SceneEdit;
         
         m_ActiveScene->OnStop();
-        m_ActiveScene = m_EditorScene;
-
         SetActiveScene(m_EditorScene);
     }
 
@@ -833,10 +870,8 @@ namespace ignite
         m_Data.sceneState = State::SceneSimulate;
 
         // copy initial components to new scene
-        m_ActiveScene = SceneManager::Copy(m_EditorScene);
+        SetActiveScene(SceneManager::Copy(m_EditorScene));
         m_ActiveScene->OnStart();
-
-        SetActiveScene(m_ActiveScene);
     }
 
     void EditorLayer::OnSceneSaveFileSelected(void* userData, const char* const* filelist, int filter)

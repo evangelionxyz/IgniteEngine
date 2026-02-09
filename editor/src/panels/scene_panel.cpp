@@ -1565,9 +1565,8 @@ namespace ignite
         if (m_Scene)
         {
             m_Scene->Resize(width, height);
+            m_Camera.UpdateMatrices(static_cast<float>(m_Scene->viewportWidth), static_cast<float>(m_Scene->viewportHeight));
         }
-
-        m_Camera.UpdateMatrices(static_cast<float>(m_Scene->viewportWidth), static_cast<float>(m_Scene->viewportHeight));
     }
 
     void ScenePanel::UISettings()

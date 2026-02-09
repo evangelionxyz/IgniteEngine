@@ -81,11 +81,26 @@ namespace ignite {
 
     Environment::~Environment()
     {
+        LOG_TRACE("Environment::~Environment() - Destroying environment");
+        
+        // Wait for GPU operations to complete before releasing resources
+        if (auto* device = Application::GetGraphicsDevice())
+        {
+            device->waitForIdle();
+        }
+        
+        // Clear binding set first (it references other resources)
         m_BindingSet = nullptr;
+        
+        // Clear sampler
         m_Sampler = nullptr;
+        
+        // Clear texture and buffers
         m_HDRTexture.reset();
         m_VertexBuffer.reset();
         m_IndexBuffer.reset();
+        
+        LOG_TRACE("Environment::~Environment() - Environment destroyed");
     }
 
     void Environment::Begin(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline)
