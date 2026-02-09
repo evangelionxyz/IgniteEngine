@@ -81,7 +81,11 @@ namespace ignite {
 
     Environment::~Environment()
     {
-	    m_Sampler = nullptr;
+        m_BindingSet = nullptr;
+        m_Sampler = nullptr;
+        m_HDRTexture.reset();
+        m_VertexBuffer.reset();
+        m_IndexBuffer.reset();
     }
 
     void Environment::Begin(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline)

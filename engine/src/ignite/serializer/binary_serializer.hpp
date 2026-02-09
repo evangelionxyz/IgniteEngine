@@ -23,7 +23,8 @@
 
 #pragma once
 
-#include "stb_image_write.h"
+#include <stb_image.h>
+#include <stb_image_write.h>
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/graphics/renderer.hpp"
@@ -33,6 +34,7 @@
 #include <vector>
 #include <cinttypes>
 #include <fstream>
+#include <cstdlib>
 
 namespace ignite
 {
@@ -88,7 +90,7 @@ namespace ignite
             MaterialType matType = mat->GetType();
             AppendRaw(buffer, matType);
 
-            // NOTE: WRITE RAW TEXTURE DIRECTLY
+            // NOTE: WRITE COMPRESSED TEXTURE DATA (PNG)
             // Should use AssetHandle instead
             auto writeTextureFunc = [&](Ref<Texture> texture)
             {
@@ -101,15 +103,36 @@ namespace ignite
 				// Map and read the pixel data
 				void *pixelData = Texture::GetPixelData(texture, &rowPitch, cmd, device);
 
+			    // Compress pixel data to PNG format
+			    // Use stbi_write_png_to_func with a custom callback to write to memory
+			    std::vector<unsigned char> compressedData;
+			
+			    auto writeCallback = [](void *context, void *data, int size)
+			    {
+				    auto *vec = static_cast<std::vector<unsigned char> *>(context);
+				    const unsigned char *bytes = static_cast<const unsigned char *>(data);
+				    vec->insert(vec->end(), bytes, bytes + size);
+			    };
+
+			    stbi_write_png_to_func(
+				    writeCallback,
+				    &compressedData,
+				    static_cast<int>(width),
+				    static_cast<int>(height),
+				    4, // RGBA = 4 channels
+				    pixelData,
+				    static_cast<int>(rowPitch)
+			    );
+
 				// Write texture create info
 				AppendRaw(buffer, texCreateInfo);
-				AppendRaw(buffer, rowPitch);
+				
+			    // Write compressed data size and compressed data
+			    uint32_t compressedSize = static_cast<uint32_t>(compressedData.size());
+			    AppendRaw(buffer, compressedSize);
 
-				const size_t pixelBytes = height * rowPitch;
-
-				// Write RGBA blob
-				const std::byte *begin = reinterpret_cast<const std::byte *>(pixelData);
-				buffer.insert(buffer.end(), begin, begin + pixelBytes);
+			    const std::byte *begin = reinterpret_cast<const std::byte *>(compressedData.data());
+			    buffer.insert(buffer.end(), begin, begin + compressedSize);
             };
             
             writeTextureFunc(mat->baseColorTexture);
@@ -155,14 +178,38 @@ namespace ignite
                 TextureCreateInfo texCreateInfo;
 				inFile.read(reinterpret_cast<char *>(&texCreateInfo), sizeof(texCreateInfo));
 
-				size_t rowPitch;
-				inFile.read(reinterpret_cast<char *>(&rowPitch), sizeof(rowPitch));
+				// Read compressed data size
+				uint32_t compressedSize = 0;
+				inFile.read(reinterpret_cast<char *>(&compressedSize), sizeof(compressedSize));
 
-				const size_t pixelBytes = texCreateInfo.height * rowPitch;
+				// Read compressed data
+				std::vector<unsigned char> compressedData(compressedSize);
+				inFile.read(reinterpret_cast<char *>(compressedData.data()), compressedSize);
+
+				// Decompress using stbi
+				int width, height, channels;
+				unsigned char *decompressedData = stbi_load_from_memory(
+					compressedData.data(),
+					static_cast<int>(compressedSize),
+					&width,
+					&height,
+					&channels,
+					4 // force RGBA
+				);
+
+				if (!decompressedData)
+				{
+					LOG_ASSERT(false, "Failed to decompress texture data");
+					return nullptr;
+				}
+
+				// Calculate the size needed for Buffer
+				const size_t pixelBytes = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
 				Buffer buffer(pixelBytes);
+				std::memcpy(buffer.data, decompressedData, pixelBytes);
 
-				// read blob *into* the buffer, not into the pointer itself
-				inFile.read(reinterpret_cast<char *>(buffer.data), pixelBytes);
+				// Free decompressed data
+				stbi_image_free(decompressedData);
 
                 auto tex = Texture::Create(buffer, texCreateInfo, nullptr);
                 return tex;

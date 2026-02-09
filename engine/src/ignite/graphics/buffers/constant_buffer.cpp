@@ -21,9 +21,9 @@ namespace ignite
         LOG_ASSERT(m_Handle, "Failed to create constant buffer!");
     }
     
-    void ConstantBuffer::SetData(nvrhi::ICommandList *commandList, Buffer buffer, const size_t offset)
+	void ConstantBuffer::SetData(nvrhi::ICommandList *cmd, Buffer buffer, const size_t offset)
     {
-        commandList->writeBuffer(m_Handle, buffer.data, buffer.size, offset);
+        cmd->writeBuffer(m_Handle, buffer.data, buffer.size, offset);
     }
 
     Ref<ConstantBuffer> ConstantBuffer::Create(const size_t size, bool isVolatile, const uint32_t maxVersion, const std::string &debugName)

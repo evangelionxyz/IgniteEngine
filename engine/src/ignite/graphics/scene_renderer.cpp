@@ -365,6 +365,14 @@ namespace ignite {
 
 	void SceneRenderer::SetActiveScene(const Ref<Scene> &scene)
 	{
+		Application::GetGraphicsDevice()->waitForIdle();
+
+		// Clean up old scene resources before setting new scene
+		if (m_Scene)
+		{
+			m_Environment = nullptr;
+		}
+
 		m_Scene = scene;
 		if (m_Scene)
 		{

@@ -70,7 +70,6 @@ namespace ignite
 
     EditorLayer::~EditorLayer()
     {
-        s_EditorLayerInstance = nullptr;
     }
 
     void EditorLayer::OnAttach()
@@ -115,6 +114,8 @@ namespace ignite
     void EditorLayer::OnDetach()
     {
         Layer::OnDetach();
+
+		s_EditorLayerInstance = nullptr;
     }
 
     void EditorLayer::OnUpdate(float deltaTime)
@@ -647,6 +648,11 @@ namespace ignite
         if (m_EditorScene)
         {
             m_EditorScene->OnStop();
+        }
+
+        if (m_Data.sceneState == State::ScenePlay)
+        {
+            OnSceneStop();
         }
 
         m_CurrentSceneFilePath.clear();
