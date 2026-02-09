@@ -1065,13 +1065,15 @@ namespace ignite
                         m_CurrentSceneHandle = sceneHandle;
                         
                         // Submit heavy I/O work to asset worker
-                        m_ActiveProject->GetAssetManager().SubmitJob([this, filepath, sceneHandle]() {
+                        m_ActiveProject->GetAssetManager().SubmitJob([this, filepath, sceneHandle]()
+                        {
                             // Load scene on worker thread (I/O happens here)
                             Ref<Scene> loadedScene = SceneSerializer::Deserialize(filepath, m_ActiveProject.get());
                             if (loadedScene)
                             {
                                 // Submit UI update back to main thread
-                                Application::SubmitToMainThread([this, loadedScene, filepath]() mutable {
+                                Application::SubmitToMainThread([this, loadedScene, filepath]() mutable
+                                {
                                     if (m_EditorScene)
                                     {
                                         m_EditorScene->OnStop();

@@ -192,6 +192,15 @@ namespace ignite {
 
                 Project::GetInstance()->GetAssetManager().AssignAsset(materialHandle, mat);
                 Project::GetInstance()->GetAssetManager().AssignMetaData(materialHandle, materialMD);
+
+				// Submit GPU operations to main thread to avoid Vulkan threading errors
+				// Application::SubmitToMainThread([mat]() {
+				//     Renderer::Submit([material = mat](nvrhi::ICommandList *cmd)
+				//     {
+				// 	    material->SetTextureData(cmd);
+				//     });
+				//     return true;
+				// });
 			}
 
 			asset = CreateRef<StaticMesh>();
@@ -228,18 +237,6 @@ namespace ignite {
         {
             asset->handle = handle;
         }
-
-        // TODO: Add to material manager
-		/*if (metadata.type == AssetType::Material)
-		{
-			Ref<Material> materialAsset = asset->As<Material>();
-			if (materialAsset)
-			{
-				auto &materialManager = Project::GetInstance()->GetMaterialManager();
-				materialManager.AddMaterial(materialAsset->name, materialAsset);
-			}
-		}*/
-
         return asset;
 	}
 

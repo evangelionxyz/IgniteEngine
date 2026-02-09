@@ -356,22 +356,35 @@ namespace ignite
 	{
         while (!m_PendingAssetLoading.empty())
         {
-            auto &[assetType, assetMetaData, _] = m_PendingAssetLoading.front();
+            auto [assetType, assetMetaData, _] = m_PendingAssetLoading.front();
+			m_PendingAssetLoading.pop();
 
             if (assetType == PendingFileLoading::ImportAssets)
             {
-                Ref<Asset> asset = Project::GetInstance()->GetAssetManager().Import(AssetHandle(), assetMetaData);
-
-                if (asset)
+                Project::GetInstance()->GetAssetManager().SubmitJob([this, assetType, assetMetaData]()
                 {
-				    Project::GetInstance()->ValidateAssetRegistry();
-				    PruneMissingNodes(0, Project::GetInstance()->GetAssetDirectory());
-				    RefreshAssetTree();
-				    CompactTree();
-                }
-            }
+					Ref<Asset> asset = Project::GetInstance()->GetAssetManager().Import(AssetHandle(), assetMetaData);
 
-            m_PendingAssetLoading.pop();
+					if (asset)
+					{
+                        Application::SubmitToMainThread([this]() mutable
+                        {
+							m_NeedsRefresh = true;
+                            return true;
+                        });
+					}
+                });
+            }
+        }
+
+        // Perform refresh once per frame if needed, avoiding overlapping command lists
+        if (m_NeedsRefresh)
+        {
+            m_NeedsRefresh = false;
+            Project::GetInstance()->ValidateAssetRegistry();
+            PruneMissingNodes(0, Project::GetInstance()->GetAssetDirectory());
+            RefreshAssetTree();
+            CompactTree();
         }
 	}
 

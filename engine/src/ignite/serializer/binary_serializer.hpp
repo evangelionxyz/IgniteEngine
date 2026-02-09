@@ -110,9 +110,6 @@ namespace ignite
         {
             std::vector<std::byte> buffer;
 
-            nvrhi::IDevice *device = Application::GetGraphicsDevice();
-            nvrhi::CommandListHandle cmd = device->createCommandList();
-
             // Write name
             uint32_t strSize = 0;
             AppendString(buffer, mat->name, strSize);
@@ -124,44 +121,55 @@ namespace ignite
             // Should use AssetHandle instead
             auto writeTextureFunc = [&](Ref<Texture> texture)
             {
-                const TextureCreateInfo &texCreateInfo = texture->GetCreateInfo();
 
-				size_t width = static_cast<size_t>(texture->GetWidth());
-				size_t height = static_cast<size_t>(texture->GetHeight());
-				size_t rowPitch = 0;
-
-				// Map and read the pixel data
-				void *pixelData = Texture::GetPixelData(texture, &rowPitch, cmd, device);
-
-			    // Compress pixel data to PNG format
-			    // Use stbi_write_png_to_func with a custom callback to write to memory
-			    std::vector<unsigned char> compressedData;
-			
-			    auto writeCallback = [](void *context, void *data, int size)
-			    {
-				    auto *vec = static_cast<std::vector<unsigned char> *>(context);
-				    const unsigned char *bytes = static_cast<const unsigned char *>(data);
-				    vec->insert(vec->end(), bytes, bytes + size);
-			    };
-
-			    stbi_write_png_to_func(
-				    writeCallback,
-				    &compressedData,
-				    static_cast<int>(width),
-				    static_cast<int>(height),
-				    4, // RGBA = 4 channels
-				    pixelData,
-				    static_cast<int>(rowPitch)
-			    );
-
+				const TextureCreateInfo &texCreateInfo = texture->GetCreateInfo();
 				// Write texture create info
 				AppendRaw(buffer, texCreateInfo);
-				
-			    // Write compressed data size and compressed data
-			    uint32_t compressedSize = static_cast<uint32_t>(compressedData.size());
-			    AppendRaw(buffer, compressedSize);
 
-			AppendBytes(buffer, compressedData.data(), compressedSize);
+				bool hasTexture = texture->GetBuffer(); // store flag
+
+                if (!hasTexture)
+                {
+                    AppendRaw(buffer, hasTexture);
+                }
+                else
+                {
+					AppendRaw(buffer, hasTexture);
+
+					size_t width = static_cast<size_t>(texture->GetWidth());
+					size_t height = static_cast<size_t>(texture->GetHeight());
+					size_t rowPitch = width * texture->GetChannels();
+
+					// Map and read the pixel data
+					void *pixelData = texture->GetBuffer().data; 
+
+					// Compress pixel data to PNG format
+					// Use stbi_write_png_to_func with a custom callback to write to memory
+					std::vector<unsigned char> compressedData;
+
+					auto writeCallback = [](void *context, void *data, int size)
+					{
+						auto *vec = static_cast<std::vector<unsigned char> *>(context);
+						const unsigned char *bytes = static_cast<const unsigned char *>(data);
+						vec->insert(vec->end(), bytes, bytes + size);
+					};
+
+					stbi_write_png_to_func(
+						writeCallback,
+						&compressedData,
+						static_cast<int>(width),
+						static_cast<int>(height),
+						4, // RGBA = 4 channels
+						pixelData,
+						static_cast<int>(rowPitch)
+					);
+
+					// Write compressed data size and compressed data
+					uint32_t compressedSize = static_cast<uint32_t>(compressedData.size());
+					AppendRaw(buffer, compressedSize);
+
+					AppendBytes(buffer, compressedData.data(), compressedSize);
+                }
             };
             
             writeTextureFunc(mat->baseColorTexture);
@@ -201,53 +209,63 @@ namespace ignite
             mat->SetType(matType);
 
             // Read texture
-            auto readTextureFunc = [&]() -> Ref<Texture>
+            auto readTextureFunc = [&](Ref<Texture> fallbackTexture) -> Ref<Texture>
             {
-                TextureCreateInfo texCreateInfo;
-                ReadRaw(inFile, &texCreateInfo);
+				TextureCreateInfo texCreateInfo;
+				ReadRaw(inFile, &texCreateInfo);
 
-				// Read compressed data size
-				uint32_t compressedSize = 0;
-                ReadRaw(inFile, &compressedSize);
+                bool hasTexture = false;
+                ReadRaw(inFile, &hasTexture);
 
-				// Read compressed data
-				std::vector<unsigned char> compressedData(compressedSize);
-				ReadRaw(inFile, compressedData.data(), compressedSize);
+                if (hasTexture)
+                {
+				    // Read compressed data size
+				    uint32_t compressedSize = 0;
+                    ReadRaw(inFile, &compressedSize);
 
-				// Decompress using stbi
-				int width, height, channels;
-				unsigned char *decompressedData = stbi_load_from_memory(
-					compressedData.data(),
-					static_cast<int>(compressedSize),
-					&width,
-					&height,
-					&channels,
-					4 // force RGBA
-				);
+				    // Read compressed data
+				    std::vector<unsigned char> compressedData(compressedSize);
+				    ReadRaw(inFile, compressedData.data(), compressedSize);
 
-				if (!decompressedData)
-				{
-					LOG_ASSERT(false, "Failed to decompress texture data");
-					return nullptr;
-				}
+				    // Decompress using stbi
+				    int width, height, channels;
+				    unsigned char *decompressedData = stbi_load_from_memory(
+					    compressedData.data(),
+					    static_cast<int>(compressedSize),
+					    &width,
+					    &height,
+					    &channels,
+					    4 // force RGBA
+				    );
 
-				// Calculate the size needed for Buffer
-				const size_t pixelBytes = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
-				Buffer buffer(pixelBytes);
-				std::memcpy(buffer.data, decompressedData, pixelBytes);
+				    if (!decompressedData)
+				    {
+					    LOG_ASSERT(false, "Failed to decompress texture data");
+					    return nullptr;
+				    }
 
-				// Free decompressed data
-				stbi_image_free(decompressedData);
+				    // Calculate the size needed for Buffer
+				    const size_t pixelBytes = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
+				    Buffer buffer(pixelBytes);
+				    std::memcpy(buffer.data, decompressedData, pixelBytes);
 
-                auto tex = Texture::Create(buffer, texCreateInfo, nullptr);
-                return tex;
+				    // Free decompressed data
+				    stbi_image_free(decompressedData);
+
+                    auto tex = Texture::Create(buffer, texCreateInfo, nullptr);
+                    return tex;
+                }
+                else
+                {
+                    return fallbackTexture;
+                }
             };
 
-			mat->baseColorTexture = readTextureFunc();
-			mat->emissiveTexture = readTextureFunc();
-			mat->metallicRoughnessTexture = readTextureFunc();
-			mat->normalTexture = readTextureFunc();
-			mat->occlusionTexture = readTextureFunc();
+			mat->baseColorTexture = readTextureFunc(Renderer::GetWhiteTexture());
+			mat->emissiveTexture = readTextureFunc(Renderer::GetBlackTexture());
+			mat->metallicRoughnessTexture = readTextureFunc(Renderer::GetBlackTexture());
+			mat->normalTexture = readTextureFunc(Renderer::GetWhiteTexture());
+			mat->occlusionTexture = readTextureFunc(Renderer::GetWhiteTexture());
 
             inFile.close();
             return mat;

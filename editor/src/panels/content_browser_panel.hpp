@@ -104,5 +104,7 @@ namespace ignite
         std::vector<std::filesystem::path> m_PathEntryList;
 
         std::unordered_map<std::string, Ref<Texture>> m_Icons;
+        
+        bool m_NeedsRefresh = false;
     };
 }

@@ -27,6 +27,8 @@
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/scene_renderer.hpp"
 
+#include <mutex>
+
 namespace ignite
 {
     namespace
@@ -375,15 +377,7 @@ namespace ignite
         }
 
         // pre-load textures and samplers
-        auto device = Application::GetGraphicsDevice();
-        nvrhi::CommandListHandle cmd = device->createCommandList();
-        cmd->open();
-        const auto textures = LoadTexturesFromGLTF(gltfModel, cmd);
-        cmd->close();
-        device->executeCommandList(cmd);
-        
-        // Wait for texture loading to complete
-        device->waitForIdle();
+        const auto textures = LoadTexturesFromGLTF(gltfModel);
 
         const auto samplers = GetSamplersFromGLTF(gltfModel);
 
@@ -421,9 +415,6 @@ namespace ignite
             if (node.mesh < 0 || node.mesh >= (int)gltfModel.meshes.size())
                 continue;
 
-            nvrhi::IDevice *device = Application::GetGraphicsDevice();
-            nvrhi::CommandListHandle cmd = device->createCommandList();
-
             const tinygltf::Mesh &gltfMesh = gltfModel.meshes[node.mesh];
             for (const auto &gltfPrim : gltfMesh.primitives)
             {
@@ -437,11 +428,7 @@ namespace ignite
 
                 // material
                 int materialIndex = -1;
-                cmd->open();
-                primitive->CreateBuffer(cmd);
                 Ref<Material> material = LoadMaterial(gltfPrim, gltfModel.materials, textures, samplers, &materialIndex);
-                cmd->close();
-                device->executeCommandList(cmd);
 
                 Ref<MeshInstance> meshInstance = MeshInstance::Create(gltfMesh.name, primitive);
 
@@ -473,7 +460,7 @@ namespace ignite
             recurse(root, glm::mat4(1.0f));
     }
 
-    std::vector<Ref<Texture>> MeshLoader::LoadTexturesFromGLTF(const tinygltf::Model &model, nvrhi::ICommandList *cmd)
+    std::vector<Ref<Texture>> MeshLoader::LoadTexturesFromGLTF(const tinygltf::Model &model)
     {
         std::vector<Ref<Texture>> gltfTextures;
         LOG_TRACE("Loading {} textures from glTF", model.textures.size());
@@ -498,7 +485,7 @@ namespace ignite
                 Ref<Texture> texture;
                 if (!image.image.empty())
                 {
-                    texture = Texture::Create(Buffer((void *)image.image.data(), image.image.size() * sizeof(uint8_t)), createInfo, cmd);
+                    texture = Texture::Create(Buffer((void *)image.image.data(), image.image.size() * sizeof(uint8_t)), createInfo, nullptr);
                     LOG_TRACE(" Loaded embedded texture");
                 }
                 else if (!image.uri.empty())

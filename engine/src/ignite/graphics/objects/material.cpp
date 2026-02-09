@@ -35,7 +35,7 @@ namespace ignite
     {
         // Neutral defaults per glTF PBR spec when a texture is absent
         baseColorTexture = Renderer::GetMagentaTexture();         // baseColorFactor will tint
-        emissiveTexture = Renderer::GetWhiteTexture();            // no emissive
+        emissiveTexture = Renderer::GetBlackTexture();            // no emissive (black = 0,0,0)
         metallicRoughnessTexture = Renderer::GetBlackTexture();   // will be overridden if texture present; factors supply values
         normalTexture = Renderer::GetWhiteTexture();              // flat normal
         occlusionTexture = Renderer::GetWhiteTexture();           // full occlusion (no darkening)
