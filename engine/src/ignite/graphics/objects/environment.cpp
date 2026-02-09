@@ -75,8 +75,8 @@ namespace ignite {
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
 
         // create vertex buffer
-        m_VertexBuffer = VertexBuffer::Create(sizeof(vertices), "[Environment] Vertex Buffer");
-        m_IndexBuffer = IndexBuffer::Create(sizeof(uint32_t) * 36, "[Environment] Index Buffer");
+        m_VertexBuffer = VertexBuffer::Create(sizeof(vertices), "Environment Vertex Buffer");
+        m_IndexBuffer = IndexBuffer::Create(sizeof(uint32_t) * 36, "Environment Index Buffer");
     }
 
     Environment::~Environment()
@@ -140,7 +140,7 @@ namespace ignite {
         textureCI.flip = true;
     	textureCI.keepInitialState = true;
     	textureCI.initialState = nvrhi::ResourceStates::ShaderResource;
-        m_HDRTexture = Texture::Create(filepath, textureCI, cmd);
+        m_HDRTexture = Texture::Create(filepath, textureCI, cmd, "Environment HDR");
 
     	auto samplerDesc = nvrhi::SamplerDesc();
     	samplerDesc.addressU = nvrhi::SamplerAddressMode::Repeat;

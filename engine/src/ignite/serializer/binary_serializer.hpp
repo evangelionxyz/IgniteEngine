@@ -63,10 +63,47 @@ namespace ignite
     {
     public:
         template<typename T>
-        static void AppendRaw(std::vector<std::byte> &out, const T &value)
+        static void AppendRaw(std::vector<std::byte> &out, const T &value, size_t sizeInBytes = 0)
         {
             const std::byte *raw = reinterpret_cast<const std::byte *>(&value);
-            out.insert(out.end(), raw, raw + sizeof(T));
+            const size_t bytesToCopy = sizeInBytes ? sizeInBytes : sizeof(T);
+            const size_t oldSize = out.size();
+            out.resize(oldSize + bytesToCopy);
+            std::memcpy(out.data() + oldSize, raw, bytesToCopy);
+        }
+
+		static void AppendBytes(std::vector<std::byte> &out, const void *data, size_t sizeInBytes)
+		{
+			const auto *raw = static_cast<const std::byte *>(data);
+			const size_t oldSize = out.size();
+			out.resize(oldSize + sizeInBytes);
+			std::memcpy(out.data() + oldSize, raw, sizeInBytes);
+		}
+
+		static void AppendString(std::vector<std::byte> &out, const std::string &str, uint32_t &outStrSize)
+        {
+			std::string strCopy = str;
+            strCopy += '\0';
+			
+            outStrSize = static_cast<uint32_t>(strCopy.size());
+			AppendRaw(out, outStrSize);
+
+			AppendBytes(out, strCopy.data(), outStrSize);
+        }
+
+        template<typename T>
+        static void ReadRaw(std::ifstream &stream, T *outData, size_t sizeInBytes = 0)
+        {
+            stream.read(reinterpret_cast<char *>(outData), sizeInBytes ? sizeInBytes : sizeof(T));
+        }
+
+        static std::string ReadString(std::ifstream &stream, uint32_t strSize)
+        {
+            std::vector<char> stringBytes(strSize); // owns the bytes
+            stream.read(stringBytes.data(), strSize);
+
+            std::string result = std::string(stringBytes.data());
+            return result;
         }
 
         static std::vector<std::byte> SerializeMaterial(const Ref<Material> &mat, const std::filesystem::path &filepath)
@@ -77,15 +114,8 @@ namespace ignite
             nvrhi::CommandListHandle cmd = device->createCommandList();
 
             // Write name
-            std::string nameCopy = mat->name;
-            nameCopy += '\0';
-            uint32_t nameSize = static_cast<uint32_t>(nameCopy.size());
-            AppendRaw(buffer, nameSize);
-
-            buffer.insert(buffer.end(),
-                reinterpret_cast<const std::byte *>(nameCopy.data()),
-                reinterpret_cast<const std::byte *>(nameCopy.data()) + nameSize
-            );
+            uint32_t strSize = 0;
+            AppendString(buffer, mat->name, strSize);
 
             MaterialType matType = mat->GetType();
             AppendRaw(buffer, matType);
@@ -131,8 +161,7 @@ namespace ignite
 			    uint32_t compressedSize = static_cast<uint32_t>(compressedData.size());
 			    AppendRaw(buffer, compressedSize);
 
-			    const std::byte *begin = reinterpret_cast<const std::byte *>(compressedData.data());
-			    buffer.insert(buffer.end(), begin, begin + compressedSize);
+			AppendBytes(buffer, compressedData.data(), compressedSize);
             };
             
             writeTextureFunc(mat->baseColorTexture);
@@ -162,29 +191,28 @@ namespace ignite
 
             // Read name
             uint32_t nameSize = 0;
-            inFile.read(reinterpret_cast<char *>(&nameSize), sizeof(nameSize));
-            std::vector<char> stringBytes(nameSize); // owns the bytes
-            inFile.read(stringBytes.data(), nameSize);
-            mat->name = std::string(stringBytes.data());
+            ReadRaw(inFile, &nameSize);
+            
+            mat->name = ReadString(inFile, nameSize);
 
             // Read type
             MaterialType matType;
-            inFile.read(reinterpret_cast<char *>(&matType), sizeof(matType));
+			ReadRaw(inFile, &matType);
             mat->SetType(matType);
 
             // Read texture
             auto readTextureFunc = [&]() -> Ref<Texture>
             {
                 TextureCreateInfo texCreateInfo;
-				inFile.read(reinterpret_cast<char *>(&texCreateInfo), sizeof(texCreateInfo));
+                ReadRaw(inFile, &texCreateInfo);
 
 				// Read compressed data size
 				uint32_t compressedSize = 0;
-				inFile.read(reinterpret_cast<char *>(&compressedSize), sizeof(compressedSize));
+                ReadRaw(inFile, &compressedSize);
 
 				// Read compressed data
 				std::vector<unsigned char> compressedData(compressedSize);
-				inFile.read(reinterpret_cast<char *>(compressedData.data()), compressedSize);
+				ReadRaw(inFile, compressedData.data(), compressedSize);
 
 				// Decompress using stbi
 				int width, height, channels;
@@ -258,24 +286,11 @@ namespace ignite
 				}
 
 				// write indices
-				buffer.insert
-                (
-                    buffer.end(),
-					reinterpret_cast<const std::byte *>(primitive->indices.data()),
-					reinterpret_cast<const std::byte *>(primitive->indices.data()) + indicesCount * sizeof(uint32_t)
-				);
+				AppendBytes(buffer, primitive->indices.data(), indicesCount * sizeof(uint32_t));
 
 				// Write name
-				std::string nameCopy = m->GetName();
-				nameCopy += '\0';
-				// name size in bytes including null-terminated
-				uint32_t nameSize = static_cast<uint32_t>(nameCopy.size());
-				AppendRaw(buffer, nameSize);
-
-				buffer.insert(buffer.end(),
-					reinterpret_cast<const std::byte *>(nameCopy.data()),
-					reinterpret_cast<const std::byte *>(nameCopy.data() + nameSize)
-				);
+                uint32_t nameSize = 0;
+                AppendString(buffer, m->GetName(), nameSize);
 
 				// Write local transform
 				for (int i = 0; i < 4; ++i)
@@ -312,13 +327,13 @@ namespace ignite
 
             // read mesh vector
             uint32_t meshCount = 0;
-            inFile.read(reinterpret_cast<char *>(&meshCount), sizeof(meshCount));
+            ReadRaw(inFile, &meshCount);
 
             for (uint32_t i = 0; i < meshCount; ++i)
             {
                 uint32_t verticesCount = 0, indicesCount = 0;
-                inFile.read(reinterpret_cast<char *>(&verticesCount), sizeof(verticesCount));
-                inFile.read(reinterpret_cast<char *>(&indicesCount), sizeof(indicesCount));
+                ReadRaw(inFile, &verticesCount);
+                ReadRaw(inFile, &indicesCount);
 
                 Ref<MeshInstance> meshInstance = CreateRef<MeshInstance>();
                 auto &name = meshInstance->GetName();
@@ -329,41 +344,39 @@ namespace ignite
 				for (uint32_t vertexIndex = 0; vertexIndex < verticesCount; ++vertexIndex)
 				{
 					VertexMesh_Anim vertex;
-					inFile.read(reinterpret_cast<char *>(&vertex.position), sizeof(vertex.position));
-					inFile.read(reinterpret_cast<char *>(&vertex.normal), sizeof(vertex.normal));
-					inFile.read(reinterpret_cast<char *>(&vertex.tangent), sizeof(vertex.tangent));
-					inFile.read(reinterpret_cast<char *>(&vertex.bitangent), sizeof(vertex.bitangent));
-					inFile.read(reinterpret_cast<char *>(&vertex.uv), sizeof(vertex.uv));
+					ReadRaw(inFile, &vertex.position);
+					ReadRaw(inFile, &vertex.normal);
+					ReadRaw(inFile, &vertex.tangent);
+					ReadRaw(inFile, &vertex.bitangent);
+					ReadRaw(inFile, &vertex.uv);
 
-					inFile.read(reinterpret_cast<char *>(vertex.boneIDs), sizeof(vertex.boneIDs));
-					inFile.read(reinterpret_cast<char *>(vertex.weights), sizeof(vertex.weights));
+					ReadRaw(inFile, &vertex.boneIDs);
+					ReadRaw(inFile, &vertex.weights);
 
                     primitive->vertices.push_back(vertex);
 				}
 
                 // Read indices
                 primitive->indices.resize(indicesCount);
-				inFile.read(reinterpret_cast<char *>(primitive->indices.data()), indicesCount * sizeof(uint32_t));
+                ReadRaw(inFile, primitive->indices.data(), indicesCount * sizeof(uint32_t));
 
-				// Read name
+                // Read name
 				uint32_t nameSize = 0;
-				inFile.read(reinterpret_cast<char *>(&nameSize), sizeof(nameSize));
-				std::vector<char> stringBytes(nameSize); // owns the bytes
-				inFile.read(stringBytes.data(), nameSize);
-				name = std::string(stringBytes.data());
+				ReadRaw(inFile, &nameSize);
+                name = ReadString(inFile, nameSize);
 
 				// Read local transform
 				for (int i = 0; i < 4; ++i)
 				{
-					inFile.read(reinterpret_cast<char *>(&meshInstance->local[i].x), sizeof(float));
-					inFile.read(reinterpret_cast<char *>(&meshInstance->local[i].y), sizeof(float));
-					inFile.read(reinterpret_cast<char *>(&meshInstance->local[i].z), sizeof(float));
-					inFile.read(reinterpret_cast<char *>(&meshInstance->local[i].w), sizeof(float));
+					ReadRaw(inFile, &meshInstance->local[i].x);
+					ReadRaw(inFile, &meshInstance->local[i].y);
+					ReadRaw(inFile, &meshInstance->local[i].z);
+                    ReadRaw(inFile, &meshInstance->local[i].w);
 				}
 
                 // Read material
                 uint64_t materialHandle = 0;
-                inFile.read(reinterpret_cast<char *>(&materialHandle), sizeof(materialHandle));
+                ReadRaw(inFile, &materialHandle);
                 if (materialHandle != 0)
                 {
                     meshInstance->SetMaterial(AssetHandle(materialHandle));
@@ -386,15 +399,9 @@ namespace ignite
             AppendRaw(buffer, anim->ticksPerSeconds);
 
             // write name size and name
-            std::string nameCopy = anim->name;
-            nameCopy += '\0';
-            uint32_t nameSize = static_cast<uint32_t>(nameCopy.size());
-            AppendRaw(buffer, nameSize);
 
-            buffer.insert(buffer.end(),
-                reinterpret_cast<const std::byte *>(nameCopy.data()),
-                reinterpret_cast<const std::byte *>(nameCopy.data() + nameSize)
-            );
+            uint32_t nameSize = 0;
+            AppendString(buffer, anim->name, nameSize);
 
             // write channels
             uint32_t channelCount = static_cast<uint32_t>(anim->channels.size());
@@ -402,15 +409,7 @@ namespace ignite
 
             for (const auto &[channelName, channel] : anim->channels)
             {
-                // write uint32_t name size
-                nameCopy = channelName;
-                nameCopy += '\0';
-                uint32_t channelNameSize = static_cast<uint32_t>(nameCopy.size());
-                AppendRaw(buffer, channelNameSize);
-
-                buffer.insert(buffer.end(),
-                    reinterpret_cast<const std::byte *>(nameCopy.data()),
-                    reinterpret_cast<const std::byte *>(nameCopy.data() + channelNameSize));
+                AppendString(buffer, channelName, nameSize);
 
                 uint32_t translationFrameCount = static_cast<uint32_t>(channel.translationKeys.frames.size());
                 uint32_t rotationFrameCount = static_cast<uint32_t>(channel.rotationKeys.frames.size());
@@ -450,7 +449,6 @@ namespace ignite
                     AppendRaw(buffer, frame.Value);
                     AppendRaw(buffer, frame.Timestamp);
                 }
-
             }
 
             // Write to file
@@ -473,49 +471,46 @@ namespace ignite
             }
 
             // read animation duration and ticks per second
-            inFile.read(reinterpret_cast<char *>(&anim->duration), sizeof(anim->duration));
-            inFile.read(reinterpret_cast<char *>(&anim->ticksPerSeconds), sizeof(anim->ticksPerSeconds));
+            ReadRaw(inFile, &anim->duration);
+            ReadRaw(inFile, &anim->ticksPerSeconds);
 
             // read name size and name
             uint32_t nameSize = 0;
-            inFile.read(reinterpret_cast<char *>(&nameSize), sizeof(nameSize));
-            std::vector<char> stringBytes(nameSize); // owns the bytes
-            inFile.read(stringBytes.data(), nameSize);
-            anim->name = std::string(stringBytes.data());
+            ReadRaw(inFile, &nameSize);
+            anim->name = ReadString(inFile, nameSize);
 
             // read channel count
             uint32_t channelCount = 0;
-            inFile.read(reinterpret_cast<char *>(&channelCount), sizeof(channelCount));
+            ReadRaw(inFile, &channelCount);
 
             anim->channels.reserve(channelCount);
 
             for (uint32_t channelIdx = 0; channelIdx < channelCount; ++channelIdx)
             {
                 // read channel name
-                inFile.read(reinterpret_cast<char *>(&nameSize), sizeof(nameSize));
-                stringBytes.resize(nameSize);
-                inFile.read(stringBytes.data(), nameSize);
-                std::string channelName = std::string(stringBytes.data());
+				ReadRaw(inFile, &nameSize);
+                std::string channelName = ReadString(inFile, nameSize);
 
                 AnimationChannel channel{};
 
-
                 // read total frame data in bytes (translation + rotation + scale) for validation
                 uint32_t expectedTotalSize = 0;
-                inFile.read(reinterpret_cast<char *>(&expectedTotalSize), sizeof(expectedTotalSize));
+                ReadRaw(inFile, &expectedTotalSize);
+
                 uint32_t totalChannelByteSize = 0;
 
                 // process translation keys
                 uint32_t translationFrameCount = 0;
-                inFile.read(reinterpret_cast<char *>(&translationFrameCount), sizeof(translationFrameCount));
+                ReadRaw(inFile, &translationFrameCount);
 
                 channel.translationKeys.frames.reserve(translationFrameCount);
                 for (uint32_t frameIdx = 0; frameIdx < translationFrameCount; ++frameIdx)
                 {
                     KeyFrame<glm::vec3> frame{};
 
-                    inFile.read(reinterpret_cast<char *>(&frame.Value.x), sizeof(frame.Value));
-                    inFile.read(reinterpret_cast<char *>(&frame.Timestamp), sizeof(frame.Timestamp));
+					ReadRaw(inFile, &frame.Value);
+					ReadRaw(inFile, &frame.Timestamp);
+
                     totalChannelByteSize += sizeof(frame);
 
                     channel.translationKeys.frames.push_back(frame);
@@ -523,15 +518,16 @@ namespace ignite
 
                 // process rotation keys
                 uint32_t rotationFrameCount = 0;
-                inFile.read(reinterpret_cast<char *>(&rotationFrameCount), sizeof(rotationFrameCount));
+				ReadRaw(inFile, &rotationFrameCount);
 
                 channel.rotationKeys.frames.reserve(rotationFrameCount);
                 for (uint32_t frameIdx = 0; frameIdx < rotationFrameCount; ++frameIdx)
                 {
                     KeyFrame<glm::quat> frame{};
 
-                    inFile.read(reinterpret_cast<char *>(&frame.Value.x), sizeof(frame.Value));
-                    inFile.read(reinterpret_cast<char *>(&frame.Timestamp), sizeof(frame.Timestamp));
+					ReadRaw(inFile, &frame.Value);
+					ReadRaw(inFile, &frame.Timestamp);
+
                     totalChannelByteSize += sizeof(frame);
 
                     channel.rotationKeys.frames.push_back(frame);
@@ -539,15 +535,16 @@ namespace ignite
 
                 // process scale keys
                 uint32_t scaleFrameCount = 0;
-                inFile.read(reinterpret_cast<char *>(&scaleFrameCount), sizeof(scaleFrameCount));
+                ReadRaw(inFile, &scaleFrameCount);
 
                 channel.scaleKeys.frames.reserve(scaleFrameCount);
                 for (uint32_t frameIdx = 0; frameIdx < scaleFrameCount; ++frameIdx)
                 {
                     KeyFrame<glm::vec3> frame{};
 
-                    inFile.read(reinterpret_cast<char *>(&frame.Value.x), sizeof(frame.Value));
-                    inFile.read(reinterpret_cast<char *>(&frame.Timestamp), sizeof(frame.Timestamp));
+					ReadRaw(inFile, &frame.Value);
+					ReadRaw(inFile, &frame.Timestamp);
+
                     totalChannelByteSize += sizeof(frame);
 
                     channel.scaleKeys.frames.push_back(frame);
@@ -606,11 +603,7 @@ namespace ignite
             uint32_t stringSize = static_cast<uint32_t>(stringTable.size());
             AppendRaw(buffer, stringSize);
 
-            buffer.insert(
-                buffer.end(),
-                reinterpret_cast<const std::byte *>(stringTable.data()),
-                reinterpret_cast<const std::byte *>(stringTable.data() + stringSize)
-            );
+			AppendBytes(buffer, stringTable.data(), stringSize);
 
             // Write to file
             std::ofstream of(filepath, std::ios::binary);
@@ -633,18 +626,18 @@ namespace ignite
 
             // read joint count
             uint32_t jointCount = 0;
-            inFile.read(reinterpret_cast<char *>(&jointCount), sizeof(uint32_t));
+            ReadRaw(inFile, &jointCount);
 
             // read disk joint array
             std::vector<DiskJoint> diskJoints(jointCount);
-            inFile.read(reinterpret_cast<char *>(diskJoints.data()), sizeof(DiskJoint) * jointCount);
+			ReadRaw(inFile, diskJoints.data(), sizeof(DiskJoint) * jointCount);
 
             // read string table
             uint32_t stringTableSize = 0;
-            inFile.read(reinterpret_cast<char *>(&stringTableSize), sizeof(stringTableSize));
+            ReadRaw(inFile, &stringTableSize);
 
             std::vector<char> stringTable(stringTableSize); // owns the bytes
-            inFile.read(stringTable.data(), stringTableSize);
+            ReadRaw(inFile, stringTable.data(), stringTableSize);
 
             skeleton->joints.reserve(jointCount);
 

@@ -46,6 +46,7 @@ namespace ignite
         bool isTypeless = false;
         bool isUAV = false;
         bool isShadingRateSurface = false;
+        bool keepCpuData = false;
 
         bool keepInitialState = false;
         nvrhi::Format format = nvrhi::Format::UNKNOWN;
@@ -57,15 +58,15 @@ namespace ignite
     {
     public:
         Texture() = default;
-		Texture(TextureCreateInfo createInfo);
-        Texture(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd);
-        Texture(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd);
+		Texture(TextureCreateInfo createInfo, const std::string &debugName = "Texture Class");
+        Texture(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
+        Texture(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
 
         ~Texture() override;
 
-        static Ref<Texture> Create(TextureCreateInfo createInfo);
-        static Ref<Texture> Create(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd);
-        static Ref<Texture> Create(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd);
+        static Ref<Texture> Create(TextureCreateInfo createInfo, const std::string &debugName = "Texture Class");
+        static Ref<Texture> Create(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
+        static Ref<Texture> Create(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
 
         void SetData(nvrhi::ICommandList *cmd, uint32_t channelCount);
         void SetData(nvrhi::ICommandList *cmd, uint32_t rowPitch, uint32_t depthPitch);
@@ -81,17 +82,14 @@ namespace ignite
         int GetMipLevel() const { return m_CreateInfo.mipLevels; }
         nvrhi::Format GetFormat() const { return m_CreateInfo.format; }
 
+        const std::string &GetDebugName() const { return m_DebugName; }
         const std::filesystem::path &GetFilepath() { return m_Filepath; }
-
-        bool operator ==(const Texture &other) const 
-        { 
-            return m_Handle.Get() == other.m_Handle.Get();
-        }
 
         const Buffer &GetBuffer() { return m_Buffer; }
         static AssetType GetStaticType() { return AssetType::Texture; }
         virtual AssetType GetType() override { return GetStaticType(); }
 
+        bool operator ==(const Texture &other) const  { return m_Handle.Get() == other.m_Handle.Get(); }
     private:
         void CreateTextureHandle();
 
@@ -99,6 +97,8 @@ namespace ignite
         TextureCreateInfo m_CreateInfo;
         std::filesystem::path m_Filepath;
         nvrhi::TextureHandle m_Handle;
+        std::string m_DebugName;
+        bool m_HasUploaded = false;
     };
 
 }

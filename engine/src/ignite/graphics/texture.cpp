@@ -32,7 +32,7 @@
 namespace ignite
 {
     // Utility function to flip image buffer vertically
-    static void FlipImageBuffer(Buffer& buffer, int width, int height, int rowPitch)
+    static void FlipImageBuffer(Buffer &buffer, int width, int height, int rowPitch)
     {
         if (!buffer)
             return;
@@ -53,15 +53,20 @@ namespace ignite
         memcpy(buffer.data, flipped.data(), flipped.size());
     }
 
-    Texture::Texture(TextureCreateInfo createInfo)
-        : m_CreateInfo(createInfo)
+    Texture::Texture(TextureCreateInfo createInfo, const std::string &debugName)
+        : m_CreateInfo(createInfo), m_DebugName(debugName)
     {
         CreateTextureHandle();
     }
 
-    Texture::Texture(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd)
-        : m_Buffer(buffer), m_CreateInfo(createInfo)
+    Texture::Texture(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName)
+        : m_CreateInfo(createInfo), m_DebugName(debugName)
     {
+        if (buffer.data && buffer.size)
+        {
+            m_Buffer = Buffer::Copy(buffer);
+        }
+
         CreateTextureHandle();
 
         if (cmd)
@@ -74,7 +79,7 @@ namespace ignite
         }
     }
 
-    Texture::Texture(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd)
+    Texture::Texture(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName)
         : m_CreateInfo(createInfo), m_Filepath(filepath)
     {
         LOG_ASSERT(std::filesystem::exists(filepath), "File does not found!");
@@ -88,7 +93,11 @@ namespace ignite
             {
                 int width, height, channelsOut;
                 uint8_t *pixelData = stbi_load(filepath.generic_string().c_str(), &width, &height, &channelsOut, channels);
-                m_Buffer = Buffer(pixelData, width * height * channels);
+                const uint64_t dataSize = static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * channels;
+                Buffer buffer(dataSize);
+                memcpy(buffer.data, pixelData, dataSize);
+                stbi_image_free(pixelData);
+                m_Buffer = buffer;
 
                 m_CreateInfo.width = static_cast<uint32_t>(width);
                 m_CreateInfo.height = static_cast<uint32_t>(height);
@@ -99,7 +108,11 @@ namespace ignite
             {
                 int width, height, channelsOut;
                 float *pixelData = stbi_loadf(filepath.generic_string().c_str(), &width, &height, &channelsOut, channels);
-                m_Buffer = Buffer(pixelData, width * height * channels * sizeof(float));
+                const uint64_t dataSize = static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * channels * sizeof(float);
+                Buffer buffer(dataSize);
+                memcpy(buffer.data, pixelData, dataSize);
+                stbi_image_free(pixelData);
+                m_Buffer = buffer;
 
                 m_CreateInfo.width = static_cast<uint32_t>(width);
                 m_CreateInfo.height = static_cast<uint32_t>(height);
@@ -129,7 +142,10 @@ namespace ignite
 
     void Texture::SetData(nvrhi::ICommandList *cmd, uint32_t rowPitch, uint32_t depthPitch)
     {
-        LOG_ASSERT(m_Buffer.data, "[Texture] Pixel data is null");
+        if (m_HasUploaded || !m_Buffer.data)
+        {
+            return;
+        }
 
         if (m_CreateInfo.format == nvrhi::Format::RGBA8_UNORM)
         {
@@ -174,6 +190,12 @@ namespace ignite
                 cmd->writeTexture(m_Handle, 0, mip, mipData.data.data(), rowPitch * sizeof(float), depthPitch * sizeof(float));
             }
         }
+
+        m_HasUploaded = true;
+        if (!m_CreateInfo.keepCpuData)
+        {
+            m_Buffer.Release();
+        }
     }
 
 	void Texture::SetData(nvrhi::ICommandList *cmd, uint32_t channelCount)
@@ -211,7 +233,7 @@ namespace ignite
         textureDesc.setInitialState(m_CreateInfo.initialState);
         textureDesc.setKeepInitialState(m_CreateInfo.keepInitialState);
         textureDesc.setMipLevels(m_CreateInfo.mipLevels);
-        // textureDesc.setDebugName(m_CreateInfo.debugName);
+        textureDesc.setDebugName(m_DebugName);
         textureDesc.setArraySize(m_CreateInfo.arraySize);
         textureDesc.setSampleQuality(m_CreateInfo.sampleQuality);
         textureDesc.setSampleCount(m_CreateInfo.sampleCount);
@@ -226,18 +248,18 @@ namespace ignite
         LOG_ASSERT(m_Handle, "Failed to create texture");
     }
 
-    Ref<Texture> Texture::Create(TextureCreateInfo createInfo)
+    Ref<Texture> Texture::Create(TextureCreateInfo createInfo, const std::string &debugName)
     {
-        return CreateRef<Texture>(createInfo);
+        return CreateRef<Texture>(createInfo, debugName);
     }
 
-    Ref<Texture> Texture::Create(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd)
+    Ref<Texture> Texture::Create(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName)
     {
-        return CreateRef<Texture>(buffer, createInfo, cmd);
+        return CreateRef<Texture>(buffer, createInfo, cmd, debugName);
     }
 
-    Ref<Texture> Texture::Create(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd)
+    Ref<Texture> Texture::Create(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName)
     {
-        return CreateRef<Texture>(filepath, createInfo, cmd);
+        return CreateRef<Texture>(filepath, createInfo, cmd, debugName);
     }
 }
