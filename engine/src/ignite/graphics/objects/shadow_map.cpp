@@ -325,7 +325,7 @@ namespace ignite
 	    depthCI.arraySize = NUM_CASCADES;
 	    depthCI.format = depthFormat;
 	    depthCI.dimension = nvrhi::TextureDimension::Texture2DArray;
-		depthCI.initialState = nvrhi::ResourceStates::RenderTarget;
+		depthCI.initialState = nvrhi::ResourceStates::DepthWrite;
 		depthCI.keepInitialState = true;
 
 	    m_DepthTexture = Texture::Create(depthCI);

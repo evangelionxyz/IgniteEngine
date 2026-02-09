@@ -56,7 +56,9 @@ namespace ignite {
                 createInfo.isRenderTarget = isRenderTarget;
                 createInfo.format = attachment.format;
                 // createInfo.debugName = std::format("{} - {} ", attachment.name, debugName);
-            	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+				createInfo.initialState = attachment.state != nvrhi::ResourceStates::Unknown
+					? attachment.state
+					: nvrhi::ResourceStates::DepthWrite;
             	createInfo.keepInitialState = true;
 
                 // Set dimension and array size based on attachment configuration
@@ -85,7 +87,9 @@ namespace ignite {
                 createInfo.format = attachment.format;
                 // createInfo.debugName = std::format("{} - {} ", attachment.name, debugName);
                 createInfo.isUAV = false;
-            	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+				createInfo.initialState = attachment.state != nvrhi::ResourceStates::Unknown
+					? attachment.state
+					: nvrhi::ResourceStates::RenderTarget;
             	createInfo.keepInitialState = true;
 
                 // Set dimension and array size based on attachment configuration
@@ -244,13 +248,25 @@ namespace ignite {
 
     void RenderTarget::ClearColorAttachmentFloat(nvrhi::ICommandList *commandList, uint32_t attachmentIndex, const glm::vec4 &clearColor) const
     {
-        nvrhi::TextureHandle texture = m_ColorAttachments[attachmentIndex]->GetHandle();
+		if (attachmentIndex >= m_ColorAttachments.size())
+		{
+			LOG_WARN("[Render Target] Color attachment index {} is out of range", attachmentIndex);
+			return;
+		}
+
+		nvrhi::TextureHandle texture = m_ColorAttachments[attachmentIndex]->GetHandle();
         nvrhi::utils::ClearColorAttachment(commandList, m_FramebufferHandle, attachmentIndex, nvrhi::Color(clearColor.x, clearColor.y, clearColor.z, clearColor.w));
     }
 
     void RenderTarget::ClearColorAttachmentUint(nvrhi::ICommandList *commandList, uint32_t attachmentIndex, uint32_t clearColor) const
     {
-        nvrhi::TextureHandle texture = m_ColorAttachments[attachmentIndex]->GetHandle();
+		if (attachmentIndex >= m_ColorAttachments.size())
+		{
+			LOG_WARN("[Render Target] Color attachment index {} is out of range", attachmentIndex);
+			return;
+		}
+
+		nvrhi::TextureHandle texture = m_ColorAttachments[attachmentIndex]->GetHandle();
 
         const nvrhi::Format format = texture->getDesc().format;
         const bool isUint = format == nvrhi::Format::R32_UINT || format == nvrhi::Format::RGBA8_UINT || format == nvrhi::Format::R8_UINT;
@@ -261,6 +277,11 @@ namespace ignite {
 
     void RenderTarget::ClearDepthAttachment(nvrhi::ICommandList *commandList, float depth, uint32_t stencil) const
     {
+		if (!m_DepthAttachment)
+		{
+			return;
+		}
+
         nvrhi::utils::ClearDepthStencilAttachment(commandList, m_FramebufferHandle, depth, stencil);
     }
 
