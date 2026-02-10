@@ -68,12 +68,33 @@ namespace ignite
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, textures->metallicRoughness->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, textures->normal->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, textures->occlusion->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, sceneRenderer->GetEnvironmentMapColorTexture()->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, sceneRenderer->GetCascadedShadowMapDepthTexture()->GetHandle()));
+        Ref<Texture> environmentTexture = sceneRenderer ? sceneRenderer->GetEnvironmentMapColorTexture() : nullptr;
+        if (!environmentTexture)
+        {
+            environmentTexture = Renderer::GetBlackTexture();
+        }
+
+        Ref<Texture> shadowTexture = sceneRenderer ? sceneRenderer->GetCascadedShadowMapDepthTexture() : nullptr;
+        if (!shadowTexture)
+        {
+            shadowTexture = Renderer::GetWhiteTexture();
+        }
+
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, environmentTexture->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, shadowTexture->GetHandle()));
 
         // Sampler
         desc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
-        desc.addItem(nvrhi::BindingSetItem::Sampler(1, sceneRenderer->GetCascadedShadowMap()->GetDepthSampler()));
+        nvrhi::SamplerHandle shadowSampler = sampler;
+        if (sceneRenderer)
+        {
+            if (auto cascadedShadowMap = sceneRenderer->GetCascadedShadowMap())
+            {
+                shadowSampler = cascadedShadowMap->GetDepthSampler();
+            }
+        }
+
+        desc.addItem(nvrhi::BindingSetItem::Sampler(1, shadowSampler));
         
         auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MATERIAL));
         LOG_ASSERT(newBindingSet, "Failed to create material binding set");
@@ -81,6 +102,7 @@ namespace ignite
         if (newBindingSet)
         {
             m_BindingSet = newBindingSet;
+            m_BindingSetDirty = false;
         }
     }
 

@@ -178,8 +178,6 @@ namespace ignite
             ImGui::EndDragDropTarget();
         }
 
-        ImGui::Text("Entity count: %zu", m_Scene->entities.size());
-
         ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable;
 
         if (ImGui::BeginTable("entity_hierarchy_table", 3, tableFlags))
@@ -197,14 +195,28 @@ namespace ignite
             ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, { 0.000f, 0.243f, 0.408f, 1.000f });
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 2.0f, 0.0f });
 
-            // Render root entity
-			m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const IDComponent &id)
+            std::vector<Entity> rootEntities;
+            m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const IDComponent &id)
             {
                 if (id.parent == UUID(0))
                 {
-                    RenderEntityNode(Entity{ e, m_Scene.get()});
+                    rootEntities.emplace_back(e, m_Scene.get());
                 }
             });
+
+            std::ranges::sort(rootEntities, [](const Entity &a, const Entity &b)
+            {
+                if (a.GetName() == b.GetName())
+                {
+                    return static_cast<u64>(a) < static_cast<u64>(b);
+                }
+                return a.GetName() < b.GetName();
+            });
+
+            for (const Entity &entity : rootEntities)
+            {
+                RenderEntityNode(entity);
+            }
 
             ImGui::PopStyleVar();
             ImGui::PopStyleColor(3);
@@ -393,9 +405,8 @@ namespace ignite
 
             ImGui::SameLine();
 
-            ImVec2 addCompBtSize = ImGui::CalcTextSize("Add Component");
-            //if (ImGui::Button("Add Component", { ImGui::GetContentRegionAvail().x, addCompBtSize.y + addCompBtSize.y / 2.0f }))
-            if (ImGui::Button("Add Component", { ImGui::GetContentRegionAvail().x, 25.0f * ImGui::GetWindowDpiScale() }))
+            ImVec2 addCompBtSize = ImGui::CalcTextSize("Add");
+            if (ImGui::Button("Add", { ImGui::GetContentRegionAvail().x, 25.0f * ImGui::GetWindowDpiScale() }))
             {
                 ImGui::OpenPopup("##add_component_context");
             }
@@ -468,7 +479,6 @@ namespace ignite
                 ImGui::DragFloat2("Tiling", &c.tilingFactor.x, 0.025f);
                 ImGui::ColorEdit4("Color", &c.color.x);
             });
-
 
 			RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [&]()
 			{
@@ -597,7 +607,8 @@ namespace ignite
 
                                     auto renderTexturePreview = [](const char *label, AssetHandle handle)
                                         {
-                                            ImGui::PushID((int)handle);
+                                            ImGui::PushID(label);
+                                            ImGui::PushID(static_cast<int>(static_cast<uint64_t>(handle)));
                                             Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(handle);
 
                                             if (texture && texture->GetHandle())
@@ -621,6 +632,7 @@ namespace ignite
                                                 ImGui::TextWrapped("%s", label);
                                                 ImGui::EndGroup();
                                             }
+                                            ImGui::PopID();
                                             ImGui::PopID();
                                         };
 
@@ -1578,7 +1590,7 @@ namespace ignite
                 glm::vec3 deltaTranslation, deltaScale, deltaRotation;
                 Math::DecomposeTransformEuler(gizmoDelta, deltaTranslation, deltaRotation, deltaScale);
 
-                for (auto [uuid, entity] : m_SelectedEntities)
+                for (auto &[uuid, entity] : m_SelectedEntities)
                 {
                     // Get the live transform component to apply changes to it
                     TransformComponent &tr = entity.GetTransform();
@@ -1765,14 +1777,18 @@ namespace ignite
 
             ImGui::PushID(static_cast<int>(compID));
 
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2 { 0.0f, 2.5f });
+            // ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2 { 6.0f, 3.0f });
             ImGui::Separator();
 
             const bool open = ImGui::TreeNodeEx((const char *)(uint32_t *)(uint64_t *)&compID, treeNdeFlags, name.c_str());
-            ImGui::PopStyleVar();
+            // ImGui::PopStyleVar();
 
-            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 20.0f);
-            if (ImGui::Button("...", {24.0f, 0.0f}))
+            const float buttonSize = ImGui::GetFrameHeight();
+            const float cursorX = ImGui::GetCursorPosX();
+            const float available = ImGui::GetContentRegionAvail().x;
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(cursorX + available - buttonSize);
+            if (ImGui::Button("...", { buttonSize, buttonSize }))
                 ImGui::OpenPopup("comp_settings");
 
             bool componentRemoved = false;

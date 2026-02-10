@@ -36,6 +36,13 @@
     #include <d3d12shader.h>
     #include <wrl/client.h>
 using Microsoft::WRL::ComPtr;
+
+    #ifndef DXC_PART_DXIL
+        #define DXC_PART_DXIL (('D') | ('X' << 8) | ('I' << 16) | ('L' << 24))
+    #endif
+    #ifndef DXC_PART_DXBC
+        #define DXC_PART_DXBC (('D') | ('X' << 8) | ('B' << 16) | ('C' << 24))
+    #endif
 #endif
 
 #ifndef SHADER_REFLECT_VERBOSE
@@ -330,7 +337,41 @@ namespace ignite
             GetShaderTypeString(type), shaderCode.size());
 
         ComPtr<ID3D12ShaderReflection> reflection;
-        HRESULT result = D3DReflect(shaderCode.data(), shaderCode.size(), IID_PPV_ARGS(reflection.GetAddressOf()));
+        HRESULT result = E_FAIL;
+
+        ComPtr<IDxcUtils> utils;
+        ComPtr<IDxcContainerReflection> containerReflection;
+        ComPtr<IDxcBlobEncoding> blob;
+        result = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(utils.GetAddressOf()));
+        if (SUCCEEDED(result))
+        {
+            result = utils->CreateBlob(shaderCode.data(), static_cast<UINT32>(shaderCode.size()), CP_ACP, &blob);
+        }
+        if (SUCCEEDED(result))
+        {
+            result = DxcCreateInstance(CLSID_DxcContainerReflection, IID_PPV_ARGS(containerReflection.GetAddressOf()));
+        }
+        if (SUCCEEDED(result))
+        {
+            result = containerReflection->Load(blob.Get());
+        }
+        if (SUCCEEDED(result))
+        {
+            UINT32 partIndex = 0;
+            if (SUCCEEDED(containerReflection->FindFirstPartKind(DXC_PART_DXIL, &partIndex)))
+            {
+                result = containerReflection->GetPartReflection(partIndex, IID_PPV_ARGS(reflection.GetAddressOf()));
+            }
+            else
+            {
+                result = E_FAIL;
+            }
+        }
+
+        if (FAILED(result) || !reflection)
+        {
+            result = D3DReflect(shaderCode.data(), shaderCode.size(), IID_PPV_ARGS(reflection.GetAddressOf()));
+        }
         
         if (FAILED(result))
         {
@@ -478,6 +519,21 @@ namespace ignite
 
         // --- Input Parameters (Vertex Attributes, etc.) ---
         LOG_TRACE("   {} input parameters", shaderDesc.InputParameters);
+        struct InputAttribute
+        {
+            UINT registerIndex;
+            std::string semanticName;
+            UINT semanticIndex;
+            UINT mask;
+            D3D_REGISTER_COMPONENT_TYPE componentType;
+        };
+
+        std::vector<InputAttribute> inputs;
+        if (type == ShaderType::Vertex)
+        {
+            inputs.reserve(shaderDesc.InputParameters);
+        }
+
         for (UINT i = 0; i < shaderDesc.InputParameters; ++i)
         {
             D3D12_SIGNATURE_PARAMETER_DESC paramDesc;
@@ -489,6 +545,109 @@ namespace ignite
                     paramDesc.SemanticIndex,
                     paramDesc.Register,
                     paramDesc.Mask);
+
+                if (type == ShaderType::Vertex)
+                {
+                    std::string semantic = paramDesc.SemanticName ? paramDesc.SemanticName : "unknown";
+                    inputs.push_back({ paramDesc.Register, std::move(semantic), paramDesc.SemanticIndex, paramDesc.Mask, paramDesc.ComponentType });
+                }
+            }
+        }
+
+        if (type == ShaderType::Vertex && !inputs.empty())
+        {
+            std::sort(inputs.begin(), inputs.end(), [](const InputAttribute& a, const InputAttribute& b) {
+                return a.registerIndex < b.registerIndex;
+            });
+
+            auto countMask = [](UINT mask)
+            {
+                uint32_t count = 0;
+                while (mask != 0)
+                {
+                    count += (mask & 0x1) ? 1u : 0u;
+                    mask >>= 1;
+                }
+                return std::max(count, 1u);
+            };
+
+            auto mapFormat = [](D3D_REGISTER_COMPONENT_TYPE componentType, uint32_t elementCount)
+            {
+                switch (componentType)
+                {
+                    case D3D_REGISTER_COMPONENT_FLOAT32:
+                        switch (elementCount)
+                        {
+                            case 1: return nvrhi::Format::R32_FLOAT;
+                            case 2: return nvrhi::Format::RG32_FLOAT;
+                            case 3: return nvrhi::Format::RGB32_FLOAT;
+                            case 4: return nvrhi::Format::RGBA32_FLOAT;
+                            default: break;
+                        }
+                        break;
+                    case D3D_REGISTER_COMPONENT_SINT32:
+                        switch (elementCount)
+                        {
+                            case 1: return nvrhi::Format::R32_SINT;
+                            case 2: return nvrhi::Format::RG32_SINT;
+                            case 3: return nvrhi::Format::RGB32_SINT;
+                            case 4: return nvrhi::Format::RGBA32_SINT;
+                            default: break;
+                        }
+                        break;
+                    case D3D_REGISTER_COMPONENT_UINT32:
+                        switch (elementCount)
+                        {
+                            case 1: return nvrhi::Format::R32_UINT;
+                            case 2: return nvrhi::Format::RG32_UINT;
+                            case 3: return nvrhi::Format::RGB32_UINT;
+                            case 4: return nvrhi::Format::RGBA32_UINT;
+                            default: break;
+                        }
+                        break;
+                    default:
+                        break;
+                }
+
+                return nvrhi::Format::UNKNOWN;
+            };
+
+            vertexAttributes.clear();
+
+            uint32_t offset = 0;
+            for (const auto& input : inputs)
+            {
+                const uint32_t elementCount = countMask(input.mask);
+                const nvrhi::Format format = mapFormat(input.componentType, elementCount);
+                if (format == nvrhi::Format::UNKNOWN)
+                {
+                    LOG_WARN("  [Vertex Attribute] Unsupported format for input {}{} (mask: 0x{:X})", input.semanticName, input.semanticIndex, input.mask);
+                    continue;
+                }
+
+                std::string name = input.semanticName;
+                if (input.semanticIndex > 0)
+                {
+                    name += std::to_string(input.semanticIndex);
+                }
+
+                nvrhi::VertexAttributeDesc attr;
+                attr.name = name;
+                attr.format = format;
+                attr.offset = offset;
+                attr.bufferIndex = 0;
+                attr.isInstanced = false;
+
+                const uint32_t componentSize = 4;
+                const uint32_t attributeSize = componentSize * elementCount;
+                offset += attributeSize;
+                vertexAttributes.push_back(attr);
+            }
+
+            const uint32_t stride = offset;
+            for (auto& attr : vertexAttributes)
+            {
+                attr.elementStride = stride;
             }
         }
 
