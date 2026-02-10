@@ -57,6 +57,7 @@ namespace ignite
     {
         Ref<Texture> thumbnail;
         uint64_t timestamp = 0;
+        uint64_t lastFrameUsed = 0;
     };
 
     class ContentBrowserPanel : public IPanel
@@ -93,6 +94,8 @@ namespace ignite
         bool IsImageFile(const std::filesystem::path &filepath) const;
         Ref<Texture> GetOrCreateThumbnail(const std::filesystem::path &filepath);
         ImVec2 CalculateThumbnailDisplaySize(Ref<Texture> texture, float maxSize) const;
+        void StartThumbnailLoad(const std::filesystem::path &filepath);
+        void UnloadUnusedThumbnails();
         void ClearThumbnails();
 
         std::vector<FileTreeNode> m_TreeNodes;
@@ -111,6 +114,10 @@ namespace ignite
 
         std::unordered_map<std::string, Ref<Texture>> m_Icons;
         std::unordered_map<std::filesystem::path, FileThumbnail> m_Thumbnails;
+        std::queue<std::filesystem::path> m_PendingThumbnailLoads;
+        
+        uint64_t m_CurrentFrame = 0;
+        static constexpr uint64_t s_ThumbnailUnloadFrameThreshold = 300; // Unload after 5 seconds at 60fps
         
         bool m_NeedsRefresh = false;
     };

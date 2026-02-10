@@ -375,6 +375,9 @@ namespace ignite
 
 	void ContentBrowserPanel::OnUpdate(float deltaTime)
 	{
+        // Increment frame counter
+        m_CurrentFrame++;
+
         while (!m_PendingAssetLoading.empty())
         {
             auto [assetType, assetMetaData, _] = m_PendingAssetLoading.front();
@@ -413,6 +416,26 @@ namespace ignite
         {
             ClearThumbnails();
             m_LastThumbnailSize = m_ThumbnailSize;
+        }
+
+        // Load only 1 thumbnail per frame
+        if (!m_PendingThumbnailLoads.empty() && m_CurrentFrame % 3 == 0)
+        {
+            std::filesystem::path filepath = m_PendingThumbnailLoads.front();
+            m_PendingThumbnailLoads.pop();
+            
+            // Check if still needs loading (not already loaded)
+            auto it = m_Thumbnails.find(filepath);
+            if (it != m_Thumbnails.end() && it->second.thumbnail == nullptr)
+            {
+                StartThumbnailLoad(filepath);
+            }
+        }
+
+        // Unload unused thumbnails every 60 frames (once per second at 60fps)
+        if (m_CurrentFrame % 60 == 0)
+        {
+            UnloadUnusedThumbnails();
         }
 	}
 
@@ -815,6 +838,8 @@ namespace ignite
         auto it = m_Thumbnails.find(filepath);
         if (it != m_Thumbnails.end())
         {
+            // Mark as used this frame
+            it->second.lastFrameUsed = m_CurrentFrame;
             return it->second.thumbnail;
         }
 
@@ -822,8 +847,17 @@ namespace ignite
         FileThumbnail placeholder;
         placeholder.thumbnail = nullptr;
         placeholder.timestamp = 0;
+        placeholder.lastFrameUsed = m_CurrentFrame;
         m_Thumbnails[filepath] = placeholder;
 
+        // Add to loading queue instead of starting immediately
+        m_PendingThumbnailLoads.push(filepath);
+
+        return nullptr;
+    }
+
+    void ContentBrowserPanel::StartThumbnailLoad(const std::filesystem::path &filepath)
+    {
         // Capture by value to avoid dangling references
         std::filesystem::path capturedPath = filepath;
         int thumbnailSize = m_ThumbnailSize;
@@ -856,6 +890,7 @@ namespace ignite
 
                     FileThumbnail ft;
                     ft.thumbnail = loadedTexture;
+                    ft.lastFrameUsed = m_CurrentFrame;
                     
                     if (std::filesystem::exists(capturedPath))
                     {
@@ -877,12 +912,37 @@ namespace ignite
                 return true;
             });
         });
+    }
 
-        return nullptr;
+    void ContentBrowserPanel::UnloadUnusedThumbnails()
+    {
+        std::vector<std::filesystem::path> toUnload;
+        
+        for (const auto& [path, thumbnail] : m_Thumbnails)
+        {
+            // Only unload if it has a loaded texture and hasn't been used recently
+            if (thumbnail.thumbnail && 
+                (m_CurrentFrame - thumbnail.lastFrameUsed) > s_ThumbnailUnloadFrameThreshold)
+            {
+                toUnload.push_back(path);
+            }
+        }
+        
+        // Unload the thumbnails
+        for (const auto& path : toUnload)
+        {
+            m_Thumbnails.erase(path);
+        }
     }
 
     void ContentBrowserPanel::ClearThumbnails()
     {
         m_Thumbnails.clear();
+        
+        // Clear the pending load queue
+        while (!m_PendingThumbnailLoads.empty())
+        {
+            m_PendingThumbnailLoads.pop();
+        }
     }
 }
