@@ -25,14 +25,16 @@
 
 #include <fmod.hpp>
 #include <fmod_common.h>
+#include <fmod_errors.h>
 
 #include <string>
 #include <unordered_map>
 
 #include "ignite/core/base.hpp"
 #include "ignite/core/types.hpp"
+#include "ignite/core/logger.hpp"
 
-#define FMOD_CHECK(x) if ((x) != FMOD_OK) DEBUGBREAK()
+#define FMOD_CHECK(x) do { FMOD_RESULT _fmod_result = (x); if (_fmod_result != FMOD_OK) { LOG_ERROR("[FMOD] {}", FMOD_ErrorString(_fmod_result)); DEBUGBREAK(); } } while (false)
 
 namespace ignite
 {

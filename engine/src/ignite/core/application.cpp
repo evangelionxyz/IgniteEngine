@@ -473,6 +473,14 @@ namespace ignite
 
     void Application::SubmitToRenderThread(const std::function<void()> func)
     {
+        if (!GetInstance()->m_RenderThreadRunning.load())
+        {
+            if (func)
+            {
+                func();
+            }
+            return;
+        }
         {
             std::lock_guard lock(GetInstance()->m_RenderThreadFuncsMutex);
             GetInstance()->m_RenderThreadFuncs.push(func);
@@ -500,6 +508,11 @@ namespace ignite
     nvrhi::IDevice* Application::GetGraphicsDevice()
     {
         return GetInstance()->m_Window->GetDeviceManager()->GetDevice();
+    }
+
+    bool Application::IsRenderThreadRunning()
+    {
+        return GetInstance()->m_RenderThreadRunning.load();
     }
 
     float Application::GetDeltaTime()

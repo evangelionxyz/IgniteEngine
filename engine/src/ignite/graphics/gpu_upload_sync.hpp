@@ -67,24 +67,24 @@ namespace ignite
         {
             auto *app = Application::GetInstance();
             const std::thread *renderThread = app ? app->GetRenderThread() : nullptr;
-            if (renderThread && std::this_thread::get_id() != renderThread->get_id())
+            if (renderThread && Application::IsRenderThreadRunning() && std::this_thread::get_id() != renderThread->get_id())
             {
                 std::mutex waitMutex;
                 std::condition_variable waitCv;
                 bool done = false;
 
                 Application::SubmitToRenderThread([&]()
-                {
                     {
-                        std::scoped_lock lock(GetWaitIdleMutex(), GetQueueMutex());
-                        device->waitForIdle();
-                    }
-                    {
-                        std::lock_guard<std::mutex> guard(waitMutex);
-                        done = true;
-                    }
-                    waitCv.notify_one();
-                });
+                        {
+                            std::scoped_lock lock(GetWaitIdleMutex(), GetQueueMutex());
+                            device->waitForIdle();
+                        }
+                        {
+                            std::lock_guard<std::mutex> guard(waitMutex);
+                            done = true;
+                        }
+                        waitCv.notify_one();
+                    });
 
                 std::unique_lock<std::mutex> waitLock(waitMutex);
                 waitCv.wait(waitLock, [&]() { return done; });

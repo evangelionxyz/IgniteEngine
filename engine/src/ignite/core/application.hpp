@@ -96,6 +96,7 @@ namespace ignite
         static DeviceManager *GetDeviceManager();
         static CommandManager *GetCommandManager();
         static nvrhi::IDevice *GetGraphicsDevice();
+        static bool IsRenderThreadRunning();
 
         static float GetDeltaTime();
 
