@@ -241,11 +241,6 @@ namespace ignite
                 std::filesystem::path path = m_CurrentDirectory / item;
                 bool isDirectory = std::filesystem::is_directory(path);
 
-                // float thumbnailHeight = m_ThumbnailSize * (thumbnail->GetHeight() / thumbnail->GetWidth());
-                const float thumbnailHeight = static_cast<float>(m_ThumbnailSize) * ImGui::GetWindowDpiScale() * (320.0f / 540.0f);
-                const float diff = static_cast<float>(m_ThumbnailSize) - thumbnailHeight;
-                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + diff);
-
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
 
                 Ref<Texture> icon;
@@ -263,9 +258,20 @@ namespace ignite
                 {
                     icon = m_Icons["unknown"];
                 }
+
+                // Calculate display size with aspect ratio
+                float maxSize = static_cast<float>(m_ThumbnailSize);
+                ImVec2 displaySize = CalculateThumbnailDisplaySize(icon, maxSize);
+                
+                // Center the thumbnail vertically
+                float diff = maxSize - displaySize.y;
+                if (diff > 0)
+                {
+                    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + diff * 0.5f);
+                }
                 
                 ImTextureID iconId = reinterpret_cast<ImTextureID>( icon->GetHandle().Get());
-                ImGui::ImageButton(item.string().c_str(), iconId, { static_cast<float>(m_ThumbnailSize), static_cast<float>(m_ThumbnailSize) });
+                ImGui::ImageButton(item.string().c_str(), iconId, displaySize);
 
                 if (ImGui::IsItemHovered())
                 {
@@ -772,6 +778,36 @@ namespace ignite
         
         return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || 
                ext == ".bmp" || ext == ".tga" || ext == ".hdr";
+    }
+
+    ImVec2 ContentBrowserPanel::CalculateThumbnailDisplaySize(Ref<Texture> texture, float maxSize) const
+    {
+        if (!texture)
+            return ImVec2(maxSize, maxSize);
+
+        float textureWidth = static_cast<float>(texture->GetWidth());
+        float textureHeight = static_cast<float>(texture->GetHeight());
+        
+        if (textureWidth <= 0 || textureHeight <= 0)
+            return ImVec2(maxSize, maxSize);
+
+        float aspectRatio = textureWidth / textureHeight;
+        ImVec2 displaySize;
+        
+        if (aspectRatio > 1.0f)
+        {
+            // Wider than tall
+            displaySize.x = maxSize;
+            displaySize.y = maxSize / aspectRatio;
+        }
+        else
+        {
+            // Taller than wide
+            displaySize.x = maxSize * aspectRatio;
+            displaySize.y = maxSize;
+        }
+        
+        return displaySize;
     }
 
     Ref<Texture> ContentBrowserPanel::GetOrCreateThumbnail(const std::filesystem::path &filepath)

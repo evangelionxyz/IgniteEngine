@@ -92,6 +92,7 @@ namespace ignite
         
         bool IsImageFile(const std::filesystem::path &filepath) const;
         Ref<Texture> GetOrCreateThumbnail(const std::filesystem::path &filepath);
+        ImVec2 CalculateThumbnailDisplaySize(Ref<Texture> texture, float maxSize) const;
         void ClearThumbnails();
 
         std::vector<FileTreeNode> m_TreeNodes;
