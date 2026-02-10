@@ -127,6 +127,10 @@ namespace ignite
     {
         Layer::OnDetach();
 
+        m_ScenePanel.reset();
+        m_ContentBrowserPanel.reset();
+        m_MaterialsPanel.reset();
+
 		s_EditorLayerInstance = nullptr;
     }
 

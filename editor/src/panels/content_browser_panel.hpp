@@ -64,8 +64,9 @@ namespace ignite
     {
     public:
         explicit ContentBrowserPanel(const char *windowTitle);
-        virtual void OnGuiRender() override;
+        virtual ~ContentBrowserPanel() override;
 
+        virtual void OnGuiRender() override;
         virtual void OnUpdate(float deltaTime) override;
 
         void LoadProjectFiles();

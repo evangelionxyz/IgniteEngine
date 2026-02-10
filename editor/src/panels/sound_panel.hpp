@@ -31,6 +31,7 @@ namespace ignite
     {
     public:
         SoundPanel(const char *windowTitle);
+        virtual ~SoundPanel() override;
         
         virtual void OnGuiRender() override;
         virtual void OnUpdate(f32 deltaTime) override;

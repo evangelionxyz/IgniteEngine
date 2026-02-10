@@ -50,7 +50,11 @@ namespace ignite
         // device->executeCommandList(cmd);
     }
 
-    void ContentBrowserPanel::LoadProjectFiles()
+	ContentBrowserPanel::~ContentBrowserPanel()
+	{
+	}
+
+	void ContentBrowserPanel::LoadProjectFiles()
     {
         // clear directories
         m_PathEntryList.clear();
