@@ -192,6 +192,8 @@ namespace ignite
         }
 
         m_HasUploaded = true;
+        SetReadyFlag(m_HasUploaded);
+
         if (!m_CreateInfo.keepCpuData)
         {
             m_Buffer.Release();

@@ -248,7 +248,22 @@ namespace ignite
 
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
 
-                Ref<Texture> icon = isDirectory ? m_Icons["folder"] : m_Icons["unknown"];
+                Ref<Texture> icon;
+                if (isDirectory)
+                {
+                    icon = m_Icons["folder"];
+                }
+                else if (IsImageFile(path))
+                {
+                    icon = GetOrCreateThumbnail(path);
+                    if (!icon)
+                        icon = m_Icons["unknown"];
+                }
+                else
+                {
+                    icon = m_Icons["unknown"];
+                }
+                
                 ImTextureID iconId = reinterpret_cast<ImTextureID>( icon->GetHandle().Get());
                 ImGui::ImageButton(item.string().c_str(), iconId, { static_cast<float>(m_ThumbnailSize), static_cast<float>(m_ThumbnailSize) });
 
@@ -385,6 +400,13 @@ namespace ignite
             PruneMissingNodes(0, Project::GetInstance()->GetAssetDirectory());
             RefreshAssetTree();
             CompactTree();
+        }
+
+        // Check if thumbnail size changed and clear thumbnails if needed
+        if (m_ThumbnailSize != m_LastThumbnailSize)
+        {
+            ClearThumbnails();
+            m_LastThumbnailSize = m_ThumbnailSize;
         }
 	}
 
@@ -738,5 +760,93 @@ namespace ignite
         }
 
         return result;
+    }
+
+    bool ContentBrowserPanel::IsImageFile(const std::filesystem::path &filepath) const
+    {
+        if (!std::filesystem::exists(filepath))
+            return false;
+
+        std::string ext = filepath.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        
+        return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || 
+               ext == ".bmp" || ext == ".tga" || ext == ".hdr";
+    }
+
+    Ref<Texture> ContentBrowserPanel::GetOrCreateThumbnail(const std::filesystem::path &filepath)
+    {
+        auto it = m_Thumbnails.find(filepath);
+        if (it != m_Thumbnails.end())
+        {
+            return it->second.thumbnail;
+        }
+
+        // Create placeholder entry to prevent duplicate jobs
+        FileThumbnail placeholder;
+        placeholder.thumbnail = nullptr;
+        placeholder.timestamp = 0;
+        m_Thumbnails[filepath] = placeholder;
+
+        // Capture by value to avoid dangling references
+        std::filesystem::path capturedPath = filepath;
+        int thumbnailSize = m_ThumbnailSize;
+
+        Project::GetInstance()->GetAssetManager().SubmitJob([this, capturedPath, thumbnailSize]()
+        {
+            TextureCreateInfo createInfo;
+            createInfo.format = nvrhi::Format::RGBA8_UNORM;
+            createInfo.keepInitialState = true;
+            createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+            createInfo.width = thumbnailSize;
+            createInfo.height = thumbnailSize;
+
+            // Load texture data on worker thread (no command list yet)
+            Ref<Texture> loadedTexture = Texture::Create(capturedPath.string().c_str(), createInfo, nullptr);
+
+            // Submit to main thread to create command list and finalize GPU upload
+            Application::SubmitToMainThread([this, capturedPath, loadedTexture]() mutable
+            {
+                if (loadedTexture)
+                {
+                    nvrhi::IDevice *device = Application::GetGraphicsDevice();
+                    nvrhi::CommandListHandle cmd = device->createCommandList();
+                    cmd->open();
+                    
+                    loadedTexture->SetData(cmd, 4);
+                    
+                    cmd->close();
+                    Application::SubmitWorkerCommandList(cmd);
+
+                    FileThumbnail ft;
+                    ft.thumbnail = loadedTexture;
+                    
+                    if (std::filesystem::exists(capturedPath))
+                    {
+                        ft.timestamp = std::filesystem::last_write_time(capturedPath).time_since_epoch().count();
+                    }
+                    else
+                    {
+                        ft.timestamp = 0;
+                    }
+                    
+                    m_Thumbnails[capturedPath] = ft;
+                }
+                else
+                {
+                    // Remove placeholder if loading failed
+                    m_Thumbnails.erase(capturedPath);
+                }
+
+                return true;
+            });
+        });
+
+        return nullptr;
+    }
+
+    void ContentBrowserPanel::ClearThumbnails()
+    {
+        m_Thumbnails.clear();
     }
 }

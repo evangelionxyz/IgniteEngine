@@ -89,11 +89,16 @@ namespace ignite
         static void OnImportAssetDialog(void *userData, const char * const *fileList, int filter);
 
         std::filesystem::path GetNodeFullpath(uint32_t nodeIndex) const;
+        
+        bool IsImageFile(const std::filesystem::path &filepath) const;
+        Ref<Texture> GetOrCreateThumbnail(const std::filesystem::path &filepath);
+        void ClearThumbnails();
 
         std::vector<FileTreeNode> m_TreeNodes;
         std::queue<PendingFileLoading> m_PendingAssetLoading;
 
         int m_ThumbnailSize = 64;
+        int m_LastThumbnailSize = 64;
 
         std::filesystem::path m_BaseDirectory;
         std::filesystem::path m_CurrentDirectory;
@@ -104,6 +109,7 @@ namespace ignite
         std::vector<std::filesystem::path> m_PathEntryList;
 
         std::unordered_map<std::string, Ref<Texture>> m_Icons;
+        std::unordered_map<std::filesystem::path, FileThumbnail> m_Thumbnails;
         
         bool m_NeedsRefresh = false;
     };
