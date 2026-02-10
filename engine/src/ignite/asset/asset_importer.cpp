@@ -258,16 +258,18 @@ namespace ignite {
 		createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
 		createInfo.keepInitialState = true; // should keep initial state
 
-        Ref<Texture> result;
-        
-        // Create texture on main thread, submit upload via render thread
-        nvrhi::CommandListHandle cmd = Application::GetGraphicsDevice()->createCommandList();
-        cmd->open();
-		result = Texture::Create(metadata.filepath, createInfo, cmd);
-        cmd->close();
-        
-        // Submit to render thread's queue (thread-safe)
-        Application::SubmitWorkerCommandList(cmd);
+        Ref<Texture> result = Texture::Create(metadata.filepath, createInfo, nullptr);
+
+        Application::SubmitToMainThread([texture = result]()
+        {
+            nvrhi::CommandListHandle cmd = Application::GetGraphicsDevice()->createCommandList();
+            cmd->open();
+            texture->SetData(cmd, 4);
+            cmd->close();
+            // Submit to render thread's queue (thread-safe)
+            Application::SubmitWorkerCommandList(cmd);
+            return true;
+        });
 
         return result;
     }
@@ -275,12 +277,10 @@ namespace ignite {
     Ref<FmodSound> AssetImporter::ImportAudio(AssetHandle handle, const AssetMetaData &metadata)
     {
         Ref<FmodSound> sound = FmodSound::Create(metadata.filepath.filename().string(), metadata.filepath.generic_string(), FMOD_DEFAULT);
-        
         if (sound)
         {
             sound->handle = handle;
         }
-
         return sound;
     }
 }
