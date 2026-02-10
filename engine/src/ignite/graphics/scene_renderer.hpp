@@ -63,10 +63,12 @@ namespace ignite
 		Ref<Texture> GetCascadedShadowMapDepthTexture() const;
 
         Ref<CascadedShadowMap> GetCascadedShadowMap();
-        static SceneRenderer *GetActive();
 
         Ref<Environment> &GetEnvironment() { return m_Environment; }
         Ref<UIRenderer> &GetUIRenderer() { return m_UIRenderer; }
+
+        void OnEnvironmentTextureChanged();
+
     private:
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer);
@@ -87,6 +89,8 @@ namespace ignite
         std::vector<AABB> m_EntityBounds;
         
         nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
+
+        bool m_EnvironmentDirty = false;
 
         nvrhi::IDevice *m_Device = nullptr;
         Ref<Scene> m_Scene;

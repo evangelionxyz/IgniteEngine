@@ -130,7 +130,7 @@ namespace ignite
         static Ref<Project> Create(const ProjectInfo &info);
 
         static AssetType GetStaticType() { return AssetType::Project; }
-        virtual AssetType GetType() override { return GetStaticType(); }
+        virtual AssetType GetAssetType() override { return GetStaticType(); }
 
     private:
         void GenerateProject();

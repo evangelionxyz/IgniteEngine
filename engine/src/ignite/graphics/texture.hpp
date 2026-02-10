@@ -87,7 +87,7 @@ namespace ignite
 
         const Buffer &GetBuffer() { return m_Buffer; }
         static AssetType GetStaticType() { return AssetType::Texture; }
-        virtual AssetType GetType() override { return GetStaticType(); }
+        virtual AssetType GetAssetType() override { return GetStaticType(); }
 
         bool operator ==(const Texture &other) const  { return m_Handle.Get() == other.m_Handle.Get(); }
     private:

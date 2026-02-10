@@ -79,7 +79,7 @@ namespace ignite
         LOG_TRACE("Material::~Material() - Material destroyed: {}", name);
     }
 
-    void Material::UpdateBindingSet()
+    void Material::UpdateBindingSet(SceneRenderer *sceneRenderer)
     {
         auto device = Application::GetGraphicsDevice();
 
@@ -95,12 +95,12 @@ namespace ignite
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, metallicRoughnessTexture->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, normalTexture->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, occlusionTexture->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, SceneRenderer::GetActive()->GetEnvironmentMapColorTexture()->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, SceneRenderer::GetActive()->GetCascadedShadowMapDepthTexture()->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, sceneRenderer->GetEnvironmentMapColorTexture()->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, sceneRenderer->GetCascadedShadowMapDepthTexture()->GetHandle()));
 
         // Sampler
         desc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
-        desc.addItem(nvrhi::BindingSetItem::Sampler(1, SceneRenderer::GetActive()->GetCascadedShadowMap()->GetDepthSampler()));
+        desc.addItem(nvrhi::BindingSetItem::Sampler(1, sceneRenderer->GetCascadedShadowMap()->GetDepthSampler()));
         
         auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MATERIAL));
         LOG_ASSERT(newBindingSet, "Failed to create material binding set");

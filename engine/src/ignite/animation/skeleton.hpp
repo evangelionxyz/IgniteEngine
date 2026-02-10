@@ -68,7 +68,7 @@ namespace ignite
         MeshBoneMapping boneMapping;
 
         static AssetType GetStaticType() { return AssetType::Skeleton; }
-        virtual AssetType GetType() override { return GetStaticType(); }
+        virtual AssetType GetAssetType() override { return GetStaticType(); }
     };
 
 }

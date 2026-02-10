@@ -1484,14 +1484,15 @@ namespace ignite
         m_ViewportData.mousePos = { mousePos.x - canvasPos.x, mousePos.y - canvasPos.y };
 
         // Update UI input handling
-        if (SceneRenderer::GetActive())
+        auto sceneRenderer = m_Scene->GetSceneRenderer();
+        if (sceneRenderer)
         {
             glm::vec2 viewportPos = { canvasPos.x, canvasPos.y };
             glm::vec2 viewportSize = { canvasSize.x, canvasSize.y };
             glm::vec2 screenMousePos = { mousePos.x, mousePos.y };
             bool mousePressed = ImGui::IsMouseDown(ImGuiMouseButton_Left);
             
-            SceneRenderer::GetActive()->UpdateUIInput(screenMousePos, viewportPos, viewportSize, mousePressed);
+            sceneRenderer->UpdateUIInput(screenMousePos, viewportPos, viewportSize, mousePressed);
         }
 
         // ImTextureID sceneImage = (ImTextureID)m_SceneViewportRT->GetColorAttachment(0)->GetHandle().Get(); // Test scene RT
@@ -1877,7 +1878,7 @@ namespace ignite
 
     Entity ScenePanel::SetSelectedEntity(Entity entity)
     {
-        auto sceneRenderer = SceneRenderer::GetActive();
+		auto sceneRenderer = m_Scene->GetSceneRenderer();
 
         if (!entity.IsValid())
         {

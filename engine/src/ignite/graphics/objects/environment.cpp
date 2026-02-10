@@ -103,7 +103,7 @@ namespace ignite {
         LOG_TRACE("Environment::~Environment() - Environment destroyed");
     }
 
-    void Environment::Begin(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline)
+    void Environment::Draw(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline)
     {
         LOG_ASSERT(m_BindingSet, "[Environment] Invalid binding set");
 
@@ -125,10 +125,6 @@ namespace ignite {
         commandList->drawIndexed(args);
     }
 
-    void Environment::End()
-    {
-        m_Invalidating = false;
-    }
 
     void Environment::UpdateBindingSet()
     {
@@ -145,17 +141,15 @@ namespace ignite {
         LOG_ASSERT(m_BindingSet, "Failed to create binding set");
     }
 
-    void Environment::LoadTexture(const std::string& filepath, nvrhi::ICommandList *cmd)
+    void Environment::LoadTexture(const std::string& filepath)
     {
-        m_Invalidating = true;
-        
         TextureCreateInfo textureCI;
         textureCI.dimension = nvrhi::TextureDimension::Texture2D;
         textureCI.format = nvrhi::Format::RGBA32_FLOAT;
         textureCI.flip = true;
     	textureCI.keepInitialState = true;
     	textureCI.initialState = nvrhi::ResourceStates::ShaderResource;
-        m_HDRTexture = Texture::Create(filepath, textureCI, cmd, "Environment HDR");
+        m_HDRTexture = Texture::Create(filepath, textureCI, nullptr, "Environment HDR");
 
     	auto samplerDesc = nvrhi::SamplerDesc();
     	samplerDesc.addressU = nvrhi::SamplerAddressMode::Repeat;

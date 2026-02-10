@@ -165,7 +165,7 @@ namespace ignite {
             return std::dynamic_pointer_cast<T>(shared_from_this());
         }
 
-        virtual AssetType GetType() { return AssetType::Invalid; }
+        virtual AssetType GetAssetType() { return AssetType::Invalid; }
 
         void SetDirtyFlag(bool dirty)  { m_Dirty = dirty; }
         bool IsDirty() const  { return m_Dirty; }

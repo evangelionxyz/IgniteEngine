@@ -122,7 +122,7 @@ namespace ignite {
 
 		static Ref<StaticMesh> Create();
 		static AssetType GetStaticType() { return AssetType::StaticMesh; }
-		virtual AssetType GetType() const { return GetStaticType(); }
+		virtual AssetType GetAssetType() const { return GetStaticType(); }
 
 		const std::vector<Ref<MeshInstance>> &GetMeshInstances() const { return m_MeshInstances; }
 		void SetMeshInstance(const std::vector<Ref<MeshInstance>> &meshInstances) { m_MeshInstances = meshInstances; }

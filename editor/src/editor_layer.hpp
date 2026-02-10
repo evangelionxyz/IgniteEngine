@@ -100,7 +100,7 @@ namespace ignite
         Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
         Ref<Project> GetActiveProject() const { return m_ActiveProject; }
 
-        SceneRenderer *GetSceneRenderer() { return &m_SceneRenderer; }
+        SceneRenderer *GetSceneRenderer() { return m_SceneRenderer.get(); }
 
         EditorData &GetState() { return m_Data; }
 
@@ -113,6 +113,10 @@ namespace ignite
         static void OnProjectSaveFileSelected(void *userData, const char *const *filelist, int filter);
         static void OnProjectOpenFileSelected(void *userData, const char *const *filelist, int filter);
 
+        static void OnScreenshotSaveFileSelected(void *userData, const char *const *filelist, int filter);
+        static void OnProjectFolderSelected(void *userData, const char *const *filelist, int filter);
+        static void OnLoadHDRTextureSelected(void *userData, const char *const *filelist, int filter);
+
         void ProcessPendingFileLoading();
 
         void UISettings();
@@ -121,7 +125,7 @@ namespace ignite
         Ref<ScenePanel> m_ScenePanel;
         Ref<ContentBrowserPanel> m_ContentBrowserPanel;
         Ref<MaterialsPanel> m_MaterialsPanel;
-        SceneRenderer m_SceneRenderer;
+        Ref<SceneRenderer> m_SceneRenderer;
 
         Ref<Scene> m_ActiveScene;
         Ref<Scene> m_EditorScene;
@@ -130,6 +134,10 @@ namespace ignite
 
         std::filesystem::path m_CurrentSceneFilePath;
     	std::filesystem::path m_CurrentProjectFilepath;
+
+        std::vector<uint8_t> m_ScreenshotPixelData;
+        int m_ScreenshotWidth = 0;
+        int m_ScreenshotHeight = 0;
 
         nvrhi::BufferHandle m_DebugRenderBuffer;
         nvrhi::StagingTextureHandle m_MousePickingStagingTexture;

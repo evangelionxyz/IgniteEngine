@@ -688,10 +688,7 @@ namespace ignite {
                 const AssetMetaData &metadata = project->GetAssetManager().GetMetaData(world.imageHandle);
                 if (metadata.type == AssetType::Texture)
                 {
-                    cmd->open();
-                    world.environment->LoadTexture(metadata.filepath.generic_string(), cmd);
-					cmd->close();
-					device->executeCommandList(cmd);
+                    world.environment->LoadTexture(metadata.filepath.generic_string());
                 }
             }
 

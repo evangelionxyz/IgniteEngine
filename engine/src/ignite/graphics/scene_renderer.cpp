@@ -45,9 +45,8 @@
 
 #include "ignite/project/project.hpp"
 
-namespace ignite {
-	static SceneRenderer *s_SceneRenderer = nullptr;
-
+namespace ignite
+{
 	static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_GeometryPSOCache;
 	static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_EnvironmentPSOCache;
 	static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_CompositePSOCache;
@@ -311,28 +310,12 @@ namespace ignite {
 
 	SceneRenderer::SceneRenderer()
 	{
-		s_SceneRenderer = this;
-
 		auto device = Application::GetGraphicsDevice();
 		auto samplerDesc = nvrhi::SamplerDesc();
 		samplerDesc.setAllFilters(true);
 		samplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp);
 		m_CompositeSampler = device->createSampler(samplerDesc);
-	}
 
-	SceneRenderer::~SceneRenderer()
-	{
-		s_GeometryPSOCache.clear();
-		s_EnvironmentPSOCache.clear();
-		s_CompositePSOCache.clear();
-		s_CompositeBindingSetCache.clear();
-		s_CSMBindingSetCache.clear();
-
-		s_SceneRenderer = nullptr;
-	}
-
-	void SceneRenderer::Create()
-	{
 		m_Device = Application::GetGraphicsDevice();
 		nvrhi::CommandListHandle cmd = m_Device->createCommandList();
 
@@ -344,7 +327,7 @@ namespace ignite {
 
 			VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
 			VertexScreen{ {  1.0f, -1.0f }, { 1.0f, 1.0f } },
-            VertexScreen { { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+			VertexScreen { { -1.0f, -1.0f }, { 0.0f, 1.0f } },
 		};
 
 		m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
@@ -359,6 +342,15 @@ namespace ignite {
 		m_UIRenderer->SetUIManager(&UIManager::GetInstance());
 
 		m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
+	}
+
+	SceneRenderer::~SceneRenderer()
+	{
+		s_GeometryPSOCache.clear();
+		s_EnvironmentPSOCache.clear();
+		s_CompositePSOCache.clear();
+		s_CompositeBindingSetCache.clear();
+		s_CSMBindingSetCache.clear();
 	}
 
 	void SceneRenderer::SetActiveScene(const Ref<Scene> &scene)
@@ -389,19 +381,17 @@ namespace ignite {
 			Application::GetGraphicsDevice()->waitForIdle();
 
 			// Create environment
-			nvrhi::CommandListHandle cmd = m_Device->createCommandList();
-			cmd->open();
-			m_Environment = Environment::Create(m_Scene.get());
-			m_Environment->LoadTexture("resources/hdr/klippad_sunrise_2_2k.hdr", cmd);
-			m_Environment->UpdateBindingSet();
-			m_Environment->WriteBuffer(cmd);
-			cmd->close();
 			
-			// Execute immediately and wait for completion
-			m_Device->executeCommandList(cmd);
-			m_Device->waitForIdle();
+			m_Environment = Environment::Create(m_Scene.get());
+			m_Environment->LoadTexture("resources/hdr/klippad_sunrise_2_2k.hdr");
+			m_Environment->UpdateBindingSet();
 		}
 	}
+
+    void SceneRenderer::OnEnvironmentTextureChanged()
+    {
+        m_EnvironmentDirty = true;
+    }
 
 	void SceneRenderer::RenderTo(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT, bool renderEnvironment)
 	{
@@ -409,6 +399,35 @@ namespace ignite {
 
 		// Update UI system
 		m_UIRenderer->Update(0.016f); // Assuming ~60 FPS for now
+
+		if (renderEnvironment || m_EnvironmentDirty)
+		{
+			nvrhi::CommandListHandle cmd = m_Device->createCommandList();
+			cmd->open();
+			m_Environment->GetHDRTexture()->SetData(cmd, 4);
+			m_Environment->WriteBuffer(cmd);
+			m_Environment->UpdateBindingSet();
+			cmd->close();
+			m_Device->executeCommandList(cmd);
+
+            if (m_EnvironmentDirty)
+            {
+                // Clear all material binding sets so they are recreated with the new environment texture
+                const auto& assets = Project::GetInstance()->GetAssetManager().GetLoadedAssets();
+                for (const auto& [handle, asset] : assets)
+                {
+                    if (asset->GetAssetType() == AssetType::Material)
+                    {
+                        Ref<Material> material = std::static_pointer_cast<Material>(asset);
+						if (material)
+						{
+                            material->UpdateBindingSet(this);
+						}
+                    }
+                }
+                m_EnvironmentDirty = false;
+            }
+		}
 
 		// Create fresh command list for this frame
 		nvrhi::CommandListHandle cmd = m_Device->createCommandList();
@@ -439,7 +458,7 @@ namespace ignite {
 		if (renderEnvironment)
 		{
 			const Ref<GraphicsPipeline> envPSO = GetEnvPipelineForFB(framebuffer, m_FillMode);
-			m_Environment->Begin(cmd, camera, framebuffer, envPSO);
+			m_Environment->Draw(cmd, camera, framebuffer, envPSO);
 		}
 
 		// Color pass
@@ -450,11 +469,6 @@ namespace ignite {
 
 		// Composite Pass
 		CompositePass(cmd, compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
-
-		if (renderEnvironment)
-		{
-			m_Environment->End();
-		}
 
 		cmd->close();
 		Application::SubmitWorkerCommandList(cmd);
@@ -621,7 +635,7 @@ namespace ignite {
 				
 				if (!material->GetBindingSet())
 				{
-					material->UpdateBindingSet();
+					material->UpdateBindingSet(this);
 				}
 				
 				material->UploadToGpu(cmd);
@@ -763,10 +777,5 @@ namespace ignite {
 	void SceneRenderer::ClearSelectedEntities()
 	{
 		m_SelectedEntities.clear();
-	}
-
-	SceneRenderer* SceneRenderer::GetActive()
-	{
-		return s_SceneRenderer;
 	}
 }

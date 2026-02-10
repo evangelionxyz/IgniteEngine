@@ -48,7 +48,7 @@ namespace ignite
         static Ref<Font> Create(const FontCreateInfo &createInfo, const std::filesystem::path &filepath);
 
         static AssetType GetStaticType() { return AssetType::Font; }
-        AssetType GetType() override { return GetStaticType(); }
+        AssetType GetAssetType() override { return GetStaticType(); }
     private:
     };
 } // namespace ignite

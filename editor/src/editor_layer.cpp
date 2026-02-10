@@ -53,6 +53,16 @@ namespace ignite
         {
             {"Ignite Project (ixproj)", "ixproj"}
         };
+
+        const SDL_DialogFileFilter kScreenshotFileFilters[] =
+        {
+            { "PNG Image (png)", "png" }
+        };
+
+        const SDL_DialogFileFilter kHDRFileFilters[] =
+        {
+            { "HDR Image (hdr)", "hdr" }
+        };
     }
 
     EditorLayer *s_EditorLayerInstance = nullptr;
@@ -92,7 +102,7 @@ namespace ignite
         });
 
         // create render target framebuffer
-        m_SceneRenderer.Create();
+        m_SceneRenderer = CreateRef<SceneRenderer>();
 
         m_Cmd = m_Device->createCommandList();
 
@@ -290,7 +300,7 @@ namespace ignite
         case State::SceneSimulate:
         case State::SceneEdit:
         {
-            m_SceneRenderer.RenderTo(&m_ScenePanel->GetViewportCamera(),
+            m_SceneRenderer->RenderTo(&m_ScenePanel->GetViewportCamera(),
                 m_ScenePanel->GetSceneViewportRT(),
                 m_ScenePanel->GetUIViewportRT(),
                 m_ScenePanel->GetCompositeViewportRT());
@@ -303,7 +313,7 @@ namespace ignite
             {
 				camera = &primaryCam.GetComponent<CameraComponent>().camera;
             }
-            m_SceneRenderer.RenderTo(camera,
+			m_SceneRenderer->RenderTo(camera,
                 m_ScenePanel->GetSceneViewportRT(),
                 m_ScenePanel->GetUIViewportRT(),
                 m_ScenePanel->GetCompositeViewportRT());
@@ -316,7 +326,7 @@ namespace ignite
             if (selectedEntity.HasComponent<CameraComponent>())
             {
                 ICamera *camera = &selectedEntity.GetComponent<CameraComponent>().camera;
-                m_SceneRenderer.RenderTo(camera,
+                m_SceneRenderer->RenderTo(camera,
                     m_ScenePanel->GetSceneCameraRT(),
                     m_ScenePanel->GetUICameratRT(),
                     m_ScenePanel->GetCompositeCameraRT());
@@ -350,15 +360,26 @@ namespace ignite
             size_t rowPitch = 0;
             if (void *mappedData = m_Device->mapStagingTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch))
             {
-                const void *pixelData = mappedData;
-                std::string filepath = FileDialogs::SaveFile("PNG (*.png)\0*.png");
-                if (!filepath.empty())
+                m_ScreenshotWidth = static_cast<int>(m_ScreenshotStagingTexture->getDesc().width);
+                m_ScreenshotHeight = static_cast<int>(m_ScreenshotStagingTexture->getDesc().height);
+
+                size_t packedStride = m_ScreenshotWidth * 4;
+                m_ScreenshotPixelData.resize(m_ScreenshotHeight * packedStride);
+
+                const uint8_t* src = static_cast<const uint8_t*>(mappedData);
+                uint8_t* dst = m_ScreenshotPixelData.data();
+
+                for (int y = 0; y < m_ScreenshotHeight; ++y)
                 {
-                    const int channels = 4;
-                    const int width = static_cast<int>(m_ScreenshotStagingTexture->getDesc().width);
-                    const int height = static_cast<int>(m_ScreenshotStagingTexture->getDesc().height);
-                    stbi_write_png(filepath.c_str(), width, height, channels, pixelData, static_cast<int>(rowPitch));
+                    memcpy(dst + y * packedStride, src + y * rowPitch, packedStride);
                 }
+
+                m_Device->unmapStagingTexture(m_ScreenshotStagingTexture);
+
+                SDL_ShowSaveFileDialog(OnScreenshotSaveFileSelected, this,
+                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
+                    kScreenshotFileFilters, IM_ARRAYSIZE(kScreenshotFileFilters),
+                    "Screenshot.png");
             }
             m_Data.takeScreenshot = false;
         }
@@ -509,6 +530,13 @@ namespace ignite
             }
 
             static char filepathBuffer[256] = {};
+            if (!m_Data.projectCreateInfo.filepath.empty())
+            {
+                std::string filepathCopy = m_Data.projectCreateInfo.filepath.generic_string();
+                if (filepathCopy.length() < sizeof(filepathBuffer))
+                    memcpy(filepathBuffer, filepathCopy.c_str(), filepathCopy.length() + 1);
+            }
+
             if (ImGui::InputText("Location", filepathBuffer, sizeof(filepathBuffer), ImGuiInputTextFlags_ReadOnly))
             {
                 m_Data.projectCreateInfo.filepath = std::string(filepathBuffer);
@@ -517,13 +545,9 @@ namespace ignite
             ImGui::SameLine();
             if (ImGui::Button("..."))
             {
-                m_Data.projectCreateInfo.filepath = FileDialogs::SelectFolder();
-
-                if (!m_Data.projectCreateInfo.filepath.empty())
-                {
-                    std::string filepathCopy = m_Data.projectCreateInfo.filepath.generic_string();
-                    memcpy(filepathBuffer, filepathCopy.c_str(), sizeof(filepathBuffer));
-                }
+                SDL_ShowOpenFolderDialog(OnProjectFolderSelected, this,
+                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
+                    nullptr, false);
             }
 
             if (ImGui::Button("Create"))
@@ -643,7 +667,7 @@ namespace ignite
 		{
 			m_ScenePanel->SetActiveScene(nullptr);
 		}
-		m_SceneRenderer.SetActiveScene(nullptr);
+		m_SceneRenderer->SetActiveScene(nullptr);
 		if (m_ActiveProject)
 		{
 			m_ActiveProject->SetActiveScene(nullptr);
@@ -657,7 +681,7 @@ namespace ignite
 		{
 			m_ScenePanel->SetActiveScene(scene);
 		}
-		m_SceneRenderer.SetActiveScene(scene);
+		m_SceneRenderer->SetActiveScene(scene);
 		if (m_ActiveProject)
 		{
 			m_ActiveProject->SetActiveScene(scene);
@@ -1039,6 +1063,65 @@ namespace ignite
         }
     }
 
+    void EditorLayer::OnScreenshotSaveFileSelected(void* userData, const char* const* filelist, int filter)
+    {
+        if (filelist == nullptr || *filelist == nullptr) return;
+
+        std::string filepath = filelist[0];
+        if (!filepath.empty())
+        {
+            if (!filepath.ends_with(".png"))
+            {
+                filepath += ".png";
+            }
+
+            EditorLayer* editor = static_cast<EditorLayer*>(userData);
+            if (!editor->m_ScreenshotPixelData.empty())
+            {
+                const int channels = 4;
+                // stride is width * 4 because we packed it
+                stbi_write_png(filepath.c_str(), editor->m_ScreenshotWidth, editor->m_ScreenshotHeight, channels, editor->m_ScreenshotPixelData.data(), editor->m_ScreenshotWidth * 4);
+                
+                editor->m_ScreenshotPixelData.clear();
+                editor->m_ScreenshotPixelData.shrink_to_fit();
+            }
+        }
+    }
+
+    void EditorLayer::OnProjectFolderSelected(void* userData, const char* const* filelist, int filter)
+    {
+        if (filelist == nullptr || *filelist == nullptr) return;
+
+        std::string filepath = filelist[0];
+        if (!filepath.empty())
+        {
+            EditorLayer* editor = static_cast<EditorLayer*>(userData);
+            editor->m_Data.projectCreateInfo.filepath = std::filesystem::path(filepath);
+        }
+    }
+
+    void EditorLayer::OnLoadHDRTextureSelected(void* userData, const char* const* filelist, int filter)
+    {
+        if (filelist == nullptr || *filelist == nullptr) return;
+
+        std::string filepath = filelist[0];
+        if (!filepath.empty())
+        {
+            EditorLayer* editor = static_cast<EditorLayer*>(userData);
+            Project::GetInstance()->GetAssetManager().SubmitJob([editor, f = filepath, sr = editor->m_SceneRenderer]() mutable
+            {
+                auto &env = sr->GetEnvironment();
+                env->LoadTexture(f);
+                
+                // Signal the renderer on the main thread that the environment has changed
+                Application::SubmitToMainThread([sr]() {
+                    sr->OnEnvironmentTextureChanged();
+                    return true;
+                });
+            });
+        }
+    }
+
     void EditorLayer::ProcessPendingFileLoading()
     {
         while (!m_PendingFileLoading.empty())
@@ -1234,7 +1317,7 @@ namespace ignite
                     if (ImGui::Selectable(rasterFillStr[i], isSelected))
                     {
                         m_Data.rasterFillMode = static_cast<nvrhi::RasterFillMode>(i);
-                        m_SceneRenderer.SetFillMode(m_Data.rasterFillMode);
+                        m_SceneRenderer->SetFillMode(m_Data.rasterFillMode);
                     }
 
                     if (isSelected)
@@ -1255,20 +1338,10 @@ namespace ignite
             {
                 if (ImGui::Button("Load HDR Texture"))
                 {
-                    std::string filepath = FileDialogs::OpenFile("HDR Files (*.hdr)\0*.hdr\0");
-                    if (!filepath.empty())
-                    {
-                        Project::GetInstance()->GetAssetManager().SubmitJob([this, f = filepath, sr = m_SceneRenderer] () mutable
-                        {
-                            nvrhi::CommandListHandle cmd = Application::GetGraphicsDevice()->createCommandList();
-                            cmd->open();
-						    auto env = sr.GetEnvironment();
-						    env->LoadTexture(f, cmd);
-						    env->UpdateBindingSet();
-                            cmd->close();
-                            Application::SubmitWorkerCommandList(cmd);
-                        });
-                    }
+                    SDL_ShowOpenFileDialog(OnLoadHDRTextureSelected, this,
+                        Application::GetInstance()->GetWindow()->GetWindowHandle(),
+                        kHDRFileFilters, IM_ARRAYSIZE(kHDRFileFilters),
+                        nullptr, false);
                 }
 
                 auto &sceneData = m_ActiveScene->gpuData;
@@ -1288,7 +1361,7 @@ namespace ignite
 
                 ImGui::SeparatorText("Shadows");
                 {
-                    auto csm = m_SceneRenderer.GetCascadedShadowMap();
+                    auto csm = m_SceneRenderer->GetCascadedShadowMap();
                     auto &data = csm->GetGPUData();
                     ImGui::SliderFloat("Strength", &data.shadowStrength, 0.0f, 1.0f);
                     ImGui::DragFloat("Min Bias", &data.minBias, 0.0001f, 0.0f, 0.1f, "%.6f");
@@ -1487,7 +1560,7 @@ namespace ignite
 
 			ImGui::SameLine();
 			if (ImGui::Button("Refresh Registry"))
-			{
+		 {
 				m_ActiveProject->ValidateAssetRegistry();
 			}
 

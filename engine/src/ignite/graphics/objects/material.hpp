@@ -33,6 +33,8 @@
 
 namespace ignite
 {
+    class SceneRenderer;
+
     enum class MaterialType
     {
         Opaque = 0,
@@ -57,7 +59,7 @@ namespace ignite
 
         nvrhi::SamplerHandle sampler;
 
-        void UpdateBindingSet();
+        void UpdateBindingSet(SceneRenderer *sceneRenderer);
         void UploadToGpu(nvrhi::ICommandList *cmd);
         void SetTextureData(nvrhi::ICommandList *cmd);
 
@@ -69,6 +71,9 @@ namespace ignite
 		Material_GPUData gpuData;
 
         static nvrhi::BindingLayoutDesc GetBindingLayoutDesc();
+
+		static AssetType GetStaticType() { return AssetType::Material; }
+		virtual AssetType GetAssetType() override { return GetStaticType(); }
 
     private:
         MaterialType m_Type = MaterialType::Opaque;

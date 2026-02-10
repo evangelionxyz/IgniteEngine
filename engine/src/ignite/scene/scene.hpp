@@ -91,7 +91,7 @@ namespace ignite
         uint32_t viewportWidth = 1280, viewportHeight = 720;
 
         static AssetType GetStaticType() { return AssetType::Scene; }
-        virtual AssetType GetType() override { return GetStaticType(); }
+        virtual AssetType GetAssetType() override { return GetStaticType(); }
 
     private:
         Ref<SceneRenderer> m_SceneRenderer;

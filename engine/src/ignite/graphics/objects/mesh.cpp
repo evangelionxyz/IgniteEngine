@@ -244,11 +244,6 @@ namespace ignite
             }
         }
 
-        if (material)
-        {
-            material->UpdateBindingSet();
-        }
-
         return material;
     }
 
