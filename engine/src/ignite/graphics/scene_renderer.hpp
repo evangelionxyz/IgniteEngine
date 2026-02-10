@@ -28,7 +28,6 @@
 #include "graphics_pipeline.hpp"
 #include "render_target.hpp"
 #include "ignite/scene/entity.hpp"
-#include "command_list.hpp"
 
 #include <nvrhi/nvrhi.h>
 
@@ -75,7 +74,6 @@ namespace ignite
         
     private:
         Ref<Environment> m_Environment;
-        Ref<CommandList> m_CommandList;
 		Ref<CascadedShadowMap> m_CascadedShadowMap;
 
         // Composite

@@ -27,7 +27,6 @@
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/layer.hpp"
 #include "ignite/ignite.hpp"
-#include "ignite/graphics/command_list.hpp"
 #include "ignite/graphics/scene_renderer.hpp"
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/project/project.hpp"
@@ -135,8 +134,7 @@ namespace ignite
         nvrhi::BufferHandle m_DebugRenderBuffer;
         nvrhi::StagingTextureHandle m_MousePickingStagingTexture;
         nvrhi::StagingTextureHandle m_ScreenshotStagingTexture;
-        Ref<CommandList > m_CommandList;
-
+        nvrhi::CommandListHandle m_Cmd;
         glm::vec2 m_CurrentFramebufferSize;
             
         nvrhi::IDevice *m_Device = nullptr;

@@ -52,8 +52,7 @@ namespace ignite
 		// non volatile constant buffer
 		m_EditorCameraConstantBuffer = ConstantBuffer::Create(sizeof(CameraBuffer), false, 1, "Camera Constant Buffer");
 
-        m_CommandList = CommandList::Create();
-        auto cmd = m_CommandList->GetActiveHandle();
+        nvrhi::CommandListHandle cmd = Application::GetGraphicsDevice()->createCommandList();
         cmd->open();
 
         {
@@ -77,7 +76,7 @@ namespace ignite
         }
 
         cmd->close();
-        s_instance->m_Device->executeCommandList(cmd);
+        Application::SubmitWorkerCommandList(cmd);
 
         // Create binding layouts
         m_BindingLayouts[GLayoutMap::MESH_ANIM] = s_instance->m_Device->createBindingLayout(VertexMesh_Anim::GetBindingLayoutDesc());
@@ -102,29 +101,6 @@ namespace ignite
             return s_instance->m_BindingLayouts[type];
 
         return nullptr;
-    }
-
-    void Renderer::OnUpdate()
-    {
-        if (s_instance->m_SubmitFuncs.empty())
-            return;
-
-        s_instance->m_CommandList->Begin();
-        auto cmd = s_instance->m_CommandList->GetActiveHandle();
-
-        for (const auto &func : s_instance->m_SubmitFuncs)
-        {
-            func(cmd);
-        }
-        
-        s_instance->m_CommandList->Submit();
-
-        s_instance->m_SubmitFuncs.clear();
-    }
-
-    void Renderer::Submit(const std::function<void(nvrhi::ICommandList*)>& func)
-    {
-        s_instance->m_SubmitFuncs.push_back(func);
     }
 
     Ref<DXCInstance> Renderer::GetDXCInstance()

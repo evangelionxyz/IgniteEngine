@@ -38,7 +38,6 @@ namespace ignite
         
         nvrhi::CommandListHandle cmd = device->createCommandList();
         cmd->open();
-
         TextureCreateInfo createInfo;
         createInfo.format = nvrhi::Format::RGBA8_UNORM;
     	createInfo.keepInitialState = true;
@@ -47,7 +46,8 @@ namespace ignite
         m_Icons["unknown"] = Texture::Create("resources/ui/ic_file.png", createInfo, cmd);
 
         cmd->close();
-        device->executeCommandList(cmd);
+        Application::SubmitWorkerCommandList(cmd);
+        // device->executeCommandList(cmd);
     }
 
     void ContentBrowserPanel::LoadProjectFiles()

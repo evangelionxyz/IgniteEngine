@@ -106,10 +106,13 @@ namespace ignite
         static void WindowMaximize();
         static void WindowRestore();
         static void SubmitToMainThread(const std::function<bool()> func);
+        static void SubmitWorkerCommandList(nvrhi::CommandListHandle commandList);
 
     private:
         void UpdateAverageTimeTime(float elapsedTime);
         void ProcessMainThreadSubmissions();
+
+        void RenderThreadFunc();
 
     protected:
         ApplicationCreateInfo m_CreateInfo;
@@ -132,6 +135,31 @@ namespace ignite
 
         std::queue<std::function<bool()>> m_ThreadFuncs;
         std::mutex m_ThreadFuncsMutex;
+
+        // Rendering thread
+        Scope<std::thread> m_RenderThread;
+        std::atomic<bool> m_RenderThreadRunning{ false };
+        std::atomic<bool> m_CurrentFrameReady{ false };
+        std::atomic<bool> m_RenderComplete{ false };
+
+        // Synchronization
+        std::mutex m_CommandListMutex;
+        std::vector<nvrhi::CommandListHandle> m_PendingCommandLists;
+
+        // Frame synchronization
+        std::condition_variable m_FrameCV;
+        std::mutex m_FrameMutex;
+        uint64_t m_FrameCounter{ 0 };
+
+        // Per-frame resources (triple buffered)
+        static constexpr uint32_t FRAMES_IN_FLIGHT = 3;
+        struct FrameResources
+        {
+            nvrhi::CommandListHandle commandList;
+            std::vector<nvrhi::CommandListHandle> workerCommandLists;
+        };
+
+        std::array<FrameResources, FRAMES_IN_FLIGHT> m_FrameResources;
     };
 
     Application *CreateApplication(ApplicationCommandLineArgs args);

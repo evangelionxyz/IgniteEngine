@@ -93,7 +93,8 @@ namespace ignite
 
         // create render target framebuffer
         m_SceneRenderer.Create();
-        m_CommandList = CommandList::Create();
+
+        m_Cmd = m_Device->createCommandList();
 
         const auto &cmdArgs = Application::GetInstance()->GetCreateInfo().cmdLineArgs;
         for (int i = 0; i < cmdArgs.count; ++i)
@@ -128,8 +129,6 @@ namespace ignite
         {
             m_ContentBrowserPanel->OnUpdate(deltaTime);
         }
-
-        Renderer::OnUpdate();
 
         // update panels
         if (m_ActiveScene)
@@ -276,14 +275,14 @@ namespace ignite
         if (!m_ActiveScene)
             return;
 
-        // Perform Resize
-        auto framebufferSize = m_ScenePanel->GetSceneViewportRT()->GetSize();
-        auto currentViewportSize = m_ScenePanel->GetViewportSize();
-        if (currentViewportSize.x > 0.0f && currentViewportSize.y > 0
-            && (framebufferSize.x != currentViewportSize.x || framebufferSize.y != currentViewportSize.y))
-        {
-            m_ScenePanel->ResizeFramebuffer(currentViewportSize.x, currentViewportSize.y);
-        }
+		// Perform Resize
+		auto framebufferSize = m_ScenePanel->GetSceneViewportRT()->GetSize();
+		auto currentViewportSize = m_ScenePanel->GetViewportSize();
+		if (currentViewportSize.x > 0.0f && currentViewportSize.y > 0
+			&& (framebufferSize.x != currentViewportSize.x || framebufferSize.y != currentViewportSize.y))
+		{
+			m_ScenePanel->ResizeFramebuffer(currentViewportSize.x, currentViewportSize.y);
+		}
 
         // Scene Render
         switch (m_Data.sceneState)
@@ -324,17 +323,14 @@ namespace ignite
             }
         }
 
-        m_CommandList->Begin();
-
-        auto cmd = m_CommandList->GetActiveHandle();
-
+        m_Cmd->open();
         // Create staging texture for read-back
         if (m_Data.isPickingEntity && false) // FIXME: No mouse picking
         {
             nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(1)->GetHandle()->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_MousePickingStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            cmd->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(1)->GetHandle(), nvrhi::TextureSlice());
+            m_Cmd->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(1)->GetHandle(), nvrhi::TextureSlice());
         }
 
         if (m_Data.takeScreenshot)
@@ -342,10 +338,11 @@ namespace ignite
             nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(0)->GetHandle()->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_ScreenshotStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            cmd->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(0)->GetHandle(), nvrhi::TextureSlice());
+            m_Cmd->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(0)->GetHandle(), nvrhi::TextureSlice());
         }
 
-        m_CommandList->Submit();
+        m_Cmd->close();
+        Application::SubmitWorkerCommandList(m_Cmd);
 
         if (m_Data.takeScreenshot)
         {
@@ -1261,12 +1258,16 @@ namespace ignite
                     std::string filepath = FileDialogs::OpenFile("HDR Files (*.hdr)\0*.hdr\0");
                     if (!filepath.empty())
                     {
-                        Renderer::Submit([f = filepath, sr = m_SceneRenderer](nvrhi::ICommandList *cmd) mutable
-                            {
-                                auto env = sr.GetEnvironment();
-                                env->LoadTexture(f, cmd);
-                                env->UpdateBindingSet();
-                            });
+                        Project::GetInstance()->GetAssetManager().SubmitJob([this, f = filepath, sr = m_SceneRenderer] () mutable
+                        {
+                            nvrhi::CommandListHandle cmd = Application::GetGraphicsDevice()->createCommandList();
+                            cmd->open();
+						    auto env = sr.GetEnvironment();
+						    env->LoadTexture(f, cmd);
+						    env->UpdateBindingSet();
+                            cmd->close();
+                            Application::SubmitWorkerCommandList(cmd);
+                        });
                     }
                 }
 

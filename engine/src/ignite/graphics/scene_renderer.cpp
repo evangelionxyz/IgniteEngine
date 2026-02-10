@@ -333,9 +333,8 @@ namespace ignite {
 
 	void SceneRenderer::Create()
 	{
-		m_CommandList = CommandList::Create();
-
-		auto cmd = m_CommandList->GetActiveHandle();
+		m_Device = Application::GetGraphicsDevice();
+		nvrhi::CommandListHandle cmd = m_Device->createCommandList();
 
 		std::array vertices
 		{
@@ -350,11 +349,10 @@ namespace ignite {
 
 		m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
 
-		m_CommandList->Begin();
+		cmd->open();
 		m_CompositeVertexBuffer->SetData(cmd, Buffer(vertices.data(), sizeof(vertices)));
-		m_CommandList->Submit();
-
-		m_Device = Application::GetGraphicsDevice();
+		cmd->close();
+		Application::SubmitWorkerCommandList(cmd);
 
 		m_Renderer2D = Renderer2D::Create();
 		m_UIRenderer = UIRenderer::Create(1280, 720);
@@ -391,14 +389,17 @@ namespace ignite {
 			Application::GetGraphicsDevice()->waitForIdle();
 
 			// Create environment
-			auto cmd = m_CommandList->GetActiveHandle();
+			nvrhi::CommandListHandle cmd = m_Device->createCommandList();
 			cmd->open();
 			m_Environment = Environment::Create(m_Scene.get());
 			m_Environment->LoadTexture("resources/hdr/klippad_sunrise_2_2k.hdr", cmd);
 			m_Environment->UpdateBindingSet();
 			m_Environment->WriteBuffer(cmd);
 			cmd->close();
+			
+			// Execute immediately and wait for completion
 			m_Device->executeCommandList(cmd);
+			m_Device->waitForIdle();
 		}
 	}
 
@@ -409,9 +410,9 @@ namespace ignite {
 		// Update UI system
 		m_UIRenderer->Update(0.016f); // Assuming ~60 FPS for now
 
-		m_CommandList->Begin();
-
-		auto cmd = m_CommandList->GetActiveHandle();
+		// Create fresh command list for this frame
+		nvrhi::CommandListHandle cmd = m_Device->createCommandList();
+		cmd->open();
 
 		m_Scene->WriteBuffer(cmd);
 
@@ -455,9 +456,8 @@ namespace ignite {
 			m_Environment->End();
 		}
 
-		// m_CascadedShadowMap->EndCascade(cmd);
-
-		m_CommandList->Submit();
+		cmd->close();
+		Application::SubmitWorkerCommandList(cmd);
 	}
 
 	void SceneRenderer::ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera)

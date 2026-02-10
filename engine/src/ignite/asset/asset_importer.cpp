@@ -36,6 +36,10 @@
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/scene/scene.hpp"
 
+#include <mutex>
+#include <condition_variable>
+#include <chrono>
+
 namespace ignite {
 
     static std::unordered_map<AssetType, std::function<Ref<Asset>(AssetHandle, const AssetMetaData &)>> s_ImportFunctions =
@@ -103,27 +107,32 @@ namespace ignite {
 
         if (asset)
         {
-			for (auto &m : asset->GetMeshInstances())
+			for (auto &mesh : asset->GetMeshInstances())
 			{
 			    // Load materials
-				AssetHandle materialHandle = m->GetMaterialHandle();
+				AssetHandle materialHandle = mesh->GetMaterialHandle();
 				AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(materialHandle);
 				if (metadata.type == AssetType::Material)
 				{
 					const auto &materialFilepath = Project::GetInstance()->GetAssetFilepath(metadata.filepath);
-					Ref<Material> mat = BinarySerializer::DeserializeMaterial(materialFilepath);
-                    Project::GetInstance()->GetAssetManager().AssignAsset(materialHandle, mat);
+					Ref<Material> material = BinarySerializer::DeserializeMaterial(materialFilepath);
+                    Project::GetInstance()->GetAssetManager().AssignAsset(materialHandle, material);
 
-                    // Submit GPU operations to main thread to avoid Vulkan threading errors
-                    Application::SubmitToMainThread([mat, m]() {
-                        Renderer::Submit([material = mat, mesh = m](nvrhi::ICommandList *cmd)
+                    // Submit GPU upload command list to render thread (thread-safe)
+                    Application::SubmitToMainThread([m = mesh, mat = material]()
                         {
-				            // Create buffer
-					        mesh->GetPrimitive()->CreateBuffer(cmd);
-                            material->SetTextureData(cmd);
+                            nvrhi::IDevice* device = Application::GetGraphicsDevice();
+                            nvrhi::CommandListHandle cmd = device->createCommandList();
+                            cmd->open();
+					        m->GetPrimitive()->CreateBuffer(cmd);
+					        mat->SetTextureData(cmd);
+                            cmd->close();
+                            
+                            // Submit to render thread's queue (thread-safe)
+                            Application::SubmitWorkerCommandList(cmd);
+
+                            return true;
                         });
-                        return true;
-                    });
 				}
 			}
 
@@ -192,15 +201,6 @@ namespace ignite {
 
                 Project::GetInstance()->GetAssetManager().AssignAsset(materialHandle, mat);
                 Project::GetInstance()->GetAssetManager().AssignMetaData(materialHandle, materialMD);
-
-				// Submit GPU operations to main thread to avoid Vulkan threading errors
-				// Application::SubmitToMainThread([mat]() {
-				//     Renderer::Submit([material = mat](nvrhi::ICommandList *cmd)
-				//     {
-				// 	    material->SetTextureData(cmd);
-				//     });
-				//     return true;
-				// });
 			}
 
 			asset = CreateRef<StaticMesh>();
@@ -252,20 +252,22 @@ namespace ignite {
 
     Ref<Texture> AssetImporter::ImportTexture(AssetHandle handle, const AssetMetaData &metadata)
     {
-        Ref<Texture> result = CreateRef<Texture>();
-        Renderer::Submit([result, metadata, h = handle] (nvrhi::ICommandList *cmd) mutable
-        {
-            TextureCreateInfo createInfo;
-            createInfo.format = nvrhi::Format::RGBA8_UNORM;
-            createInfo.mipLevels = 4;
-            createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
-            createInfo.keepInitialState = true; // should keep initial state
+		TextureCreateInfo createInfo;
+		createInfo.format = nvrhi::Format::RGBA8_UNORM;
+		createInfo.mipLevels = 4;
+		createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+		createInfo.keepInitialState = true; // should keep initial state
 
-            Ref<Texture> t = Texture::Create(metadata.filepath, createInfo, cmd);
-            t->handle = h;
-
-            *result = *t;
-        });
+        Ref<Texture> result;
+        
+        // Create texture on main thread, submit upload via render thread
+        nvrhi::CommandListHandle cmd = Application::GetGraphicsDevice()->createCommandList();
+        cmd->open();
+		result = Texture::Create(metadata.filepath, createInfo, cmd);
+        cmd->close();
+        
+        // Submit to render thread's queue (thread-safe)
+        Application::SubmitWorkerCommandList(cmd);
 
         return result;
     }

@@ -26,7 +26,6 @@
 
 #include "ignite/core/types.hpp"
 #include "graphics_pipeline.hpp"
-#include "command_list.hpp"
 
 #include <nvrhi/nvrhi.h>
 #include <string>
@@ -68,9 +67,6 @@ namespace ignite
         static nvrhi::GraphicsAPI GetGraphicsAPI();
         static nvrhi::BindingLayoutHandle GetBindingLayout(GLayoutMap type);
 
-        static void OnUpdate();
-        static void Submit(const std::function<void(nvrhi::ICommandList *)> &func);
-
         static Ref<DXCInstance> GetDXCInstance();
 		static Ref<ConstantBuffer> GetCameraConstantBuffer();
 
@@ -79,7 +75,6 @@ namespace ignite
         Ref<DXCInstance> m_DxcInstance;
 
         std::unordered_map<GLayoutMap, nvrhi::BindingLayoutHandle> m_BindingLayouts;
-        Ref<CommandList> m_CommandList;
 
         Ref<Texture> m_WhiteTexture;
         Ref<Texture> m_BlackTexture;
