@@ -43,6 +43,12 @@ namespace ignite
             return s_Mutex;
         }
 
+        static std::mutex &GetQueueMutex()
+        {
+            static std::mutex s_QueueMutex;
+            return s_QueueMutex;
+        }
+
         static std::atomic<bool> &GetInProgressFlag()
         {
             static std::atomic<bool> s_InProgress{ false };
@@ -59,17 +65,34 @@ namespace ignite
         // Thread-safe wrapper for device->waitForIdle()
         static void DeviceWaitIdle(nvrhi::IDevice *device)
         {
-            std::lock_guard<std::mutex> lock(GetWaitIdleMutex());
-            device->waitForIdle();
-
-            if (Application::GetInstance()->GetRenderThread())
+            auto *app = Application::GetInstance();
+            const std::thread *renderThread = app ? app->GetRenderThread() : nullptr;
+            if (renderThread && std::this_thread::get_id() != renderThread->get_id())
             {
-                auto t = Application::GetInstance()->GetRenderThread();
-                if (std::this_thread::get_id() != t->get_id())
+                std::mutex waitMutex;
+                std::condition_variable waitCv;
+                bool done = false;
+
+                Application::SubmitToRenderThread([&]()
                 {
-                    LOG_ERROR("[Wrong thread]");
-                }
+                    {
+                        std::scoped_lock lock(GetWaitIdleMutex(), GetQueueMutex());
+                        device->waitForIdle();
+                    }
+                    {
+                        std::lock_guard<std::mutex> guard(waitMutex);
+                        done = true;
+                    }
+                    waitCv.notify_one();
+                });
+
+                std::unique_lock<std::mutex> waitLock(waitMutex);
+                waitCv.wait(waitLock, [&]() { return done; });
+                return;
             }
+
+            std::scoped_lock lock(GetWaitIdleMutex(), GetQueueMutex());
+            device->waitForIdle();
         }
 
         // Helper to wait for any in-progress upload to complete

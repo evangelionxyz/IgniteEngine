@@ -27,6 +27,7 @@
 
 #include "ignite/core/logger.hpp"
 #include "ignite/core/application.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 #include <stb_image.h>
 
 namespace ignite
@@ -226,7 +227,10 @@ namespace ignite
 		nvrhi::StagingTextureHandle stagingTexture = device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
 		cmd->copyTexture(stagingTexture, nvrhi::TextureSlice(), texture->GetHandle(), nvrhi::TextureSlice());
 		cmd->close();
+	{
+		std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
 		device->executeCommandList(cmd);
+	}
 
 		// Map and read the pixel data
 		void *pixelData = device->mapStagingTexture(stagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, outRowPitch);

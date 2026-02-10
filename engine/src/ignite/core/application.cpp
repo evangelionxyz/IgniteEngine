@@ -28,6 +28,7 @@
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/audio/fmod_audio.hpp"
 #include "ignite/physics/jolt/jolt_physics.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 
 #include <nvrhi/utils.h>
 
@@ -224,7 +225,10 @@ namespace ignite
             renderCommandList->open();
             nvrhi::utils::ClearColorAttachment(renderCommandList, framebuffer, 0, nvrhi::Color(0.0f, 0.0f, 0.0f, 1.0f));
             renderCommandList->close();
-            device->executeCommandList(renderCommandList);
+            {
+                std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
+                device->executeCommandList(renderCommandList);
+            }
 
             // Render layers
             for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
@@ -250,7 +254,10 @@ namespace ignite
 					for (auto &workerCL : m_PendingCommandLists)
 						workerLists.push_back(workerCL);
 
-					device->executeCommandLists(workerLists.data(), workerLists.size());
+					{
+						std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+						device->executeCommandLists(workerLists.data(), workerLists.size());
+					}
 					m_PendingCommandLists.clear();
 				}
 			}
@@ -348,7 +355,13 @@ namespace ignite
                 // Begin frame acquisition on main thread (required for swap chain)
                 if (m_FrameIndex > 0)
                 {
-                    if (deviceManager->BeginFrame())
+                    bool frameBegan = false;
+                    {
+                        std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                        frameBegan = deviceManager->BeginFrame();
+                    }
+
+                    if (frameBegan)
                     {
                         // Signal render thread to start rendering
                         {
@@ -366,7 +379,13 @@ namespace ignite
                         }
                         
                         // Present on main thread
-                        if (!deviceManager->Present())
+                        bool presented = false;
+                        {
+                            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                            presented = deviceManager->Present();
+                        }
+
+                        if (!presented)
                             continue;
                     }
                 }
@@ -387,7 +406,7 @@ namespace ignite
         if (m_RenderThread && m_RenderThread->joinable())
             m_RenderThread->join();
         
-        device->waitForIdle();
+		GPUUploadSync::DeviceWaitIdle(device);
         
         if (m_ImGuiLayer)
         {

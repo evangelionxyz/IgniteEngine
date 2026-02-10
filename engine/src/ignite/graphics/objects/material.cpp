@@ -29,6 +29,7 @@
 #include "ignite/graphics/scene_renderer.hpp"
 #include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/graphics/texture.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 
 #include <stb_image.h>
 
@@ -42,7 +43,7 @@ namespace ignite
     {
         if (auto* device = Application::GetGraphicsDevice())
         {
-            device->waitForIdle();
+            GPUUploadSync::DeviceWaitIdle(device);
         }
         
         // Clear binding set first (references other resources)

@@ -25,6 +25,7 @@
 #include "asset_importer.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/core/application.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 
 #include "ignite/core/logger.hpp"
 #include <cstdint>
@@ -128,7 +129,7 @@ namespace ignite {
         // Wait for GPU operations to complete before releasing assets
         if (auto* device = Application::GetGraphicsDevice())
         {
-            device->waitForIdle();
+            GPUUploadSync::DeviceWaitIdle(device);
         }
         
         {
@@ -156,7 +157,7 @@ namespace ignite {
             // Wait for GPU to ensure asset is not in use (outside lock)
             if (auto* device = Application::GetGraphicsDevice())
             {
-                device->waitForIdle();
+                GPUUploadSync::DeviceWaitIdle(device);
             }
             
             // asset will be destroyed here when going out of scope
@@ -200,7 +201,7 @@ namespace ignite {
             // Wait for GPU to ensure assets are not in use
             if (auto* device = Application::GetGraphicsDevice())
             {
-                device->waitForIdle();
+                GPUUploadSync::DeviceWaitIdle(device);
             }
             
             assetsToDestroy.clear();

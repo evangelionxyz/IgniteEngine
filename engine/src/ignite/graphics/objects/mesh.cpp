@@ -27,6 +27,7 @@
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/scene_renderer.hpp"
 #include "ignite/core/application.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 
 #include <mutex>
 
@@ -80,7 +81,7 @@ namespace ignite
         // Wait for GPU to ensure buffers are not in use
         if (auto *device = Application::GetGraphicsDevice())
         {
-            device->waitForIdle();
+            GPUUploadSync::DeviceWaitIdle(device);
         }
 
         // Clear GPU buffers
