@@ -385,5 +385,11 @@ namespace ignite
     template<>
     void Scene::OnComponentAdded<CameraComponent>(Entity entity, CameraComponent &comp)
     {
+		auto camView = registry->view<CameraComponent>();
+		for (entt::entity entity : camView)
+		{
+			CameraComponent &cam = camView.get<CameraComponent>(entity);
+			cam.camera.UpdateMatrices(static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
+		}
     }
 }
