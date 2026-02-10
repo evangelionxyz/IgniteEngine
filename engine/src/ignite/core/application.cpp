@@ -128,31 +128,50 @@ namespace ignite
         }
     }
 
+	void Application::ProcessRenderThreadSubmissions()
+	{
+		std::queue<std::function<void()>> pending;
+		{
+			std::lock_guard lock(m_RenderThreadFuncsMutex);
+			pending.swap(m_RenderThreadFuncs);
+			m_RenderThreadHasTasks = !pending.empty();
+		}
+
+		while (!pending.empty())
+		{
+			auto func = std::move(pending.front());
+			pending.pop();
+			if (func)
+			{
+				func();
+			}
+		}
+
+		{
+			std::lock_guard lock(m_RenderThreadFuncsMutex);
+			m_RenderThreadHasTasks = !m_RenderThreadFuncs.empty();
+		}
+	}
+
     void Application::ProcessMainThreadSubmissions()
     {
         // Process all pending submissions
-        while (true)
+        if (!m_ThreadFuncs.empty())
         {
-            std::function<bool()> func;
-            
+            std::function<void()> func;
+
             {
                 std::lock_guard lock(m_ThreadFuncsMutex);
-                if (m_ThreadFuncs.empty())
-                    break;
-                
                 func = m_ThreadFuncs.front();
             }
             
             // Execute outside lock
-            if (func())
+            if (func)
             {
+                func();
+
                 std::lock_guard lock(m_ThreadFuncsMutex);
-                if (!m_ThreadFuncs.empty())
-                    m_ThreadFuncs.pop();
-            }
-            else
-            {
-                break;
+                m_ThreadFuncs.pop();
             }
         }
     }
@@ -171,9 +190,24 @@ namespace ignite
             nvrhi::IFramebuffer *framebuffer = nullptr;
             {
                 std::unique_lock<std::mutex> lock(m_FrameMutex);
-                m_FrameCV.wait(lock, [this] { return m_CurrentFrameReady.load() || !m_RenderThreadRunning.load(); });
+                m_FrameCV.wait(lock, [this]
+                {
+                    return m_CurrentFrameReady.load() || !m_RenderThreadRunning.load() || m_RenderThreadHasTasks.load();
+                });
 
                 if (!m_RenderThreadRunning) break;
+
+                if (m_RenderThreadHasTasks.load())
+                {
+                    lock.unlock();
+                    ProcessRenderThreadSubmissions();
+                    lock.lock();
+
+                    if (!m_CurrentFrameReady.load())
+                    {
+                        continue;
+                    }
+                }
 
                 currentFrame = m_FrameCounter;
                 m_CurrentFrameReady = false;
@@ -412,10 +446,20 @@ namespace ignite
         GetInstance()->m_Window->Restore();
     }
 
-    void Application::SubmitToMainThread(const std::function<bool()> func)
+    void Application::SubmitToMainThread(const std::function<void()> func)
     {
         std::lock_guard lock(GetInstance()->m_ThreadFuncsMutex);
         GetInstance()->m_ThreadFuncs.push(func);
+    }
+
+    void Application::SubmitToRenderThread(const std::function<void()> func)
+    {
+        {
+            std::lock_guard lock(GetInstance()->m_RenderThreadFuncsMutex);
+            GetInstance()->m_RenderThreadFuncs.push(func);
+            GetInstance()->m_RenderThreadHasTasks = true;
+        }
+        GetInstance()->m_FrameCV.notify_all();
     }
 
     void Application::SubmitWorkerCommandList(nvrhi::CommandListHandle commandList)
@@ -424,7 +468,12 @@ namespace ignite
         GetInstance()->m_PendingCommandLists.push_back(commandList);
     }
 
-    CommandManager *Application::GetCommandManager()
+	const std::thread *Application::GetRenderThread() const
+	{
+        return m_RenderThread.get();
+	}
+
+	CommandManager *Application::GetCommandManager()
     {
         return GetInstance()->m_CommandManager.get();
     }

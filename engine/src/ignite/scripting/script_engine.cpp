@@ -233,12 +233,10 @@ namespace ignite
             Application::SubmitToMainThread([&]()
             {
                 if (scriptEngine->m_Scene && scriptEngine->m_Scene->IsPlaying())
-                    return false;
+                    return;
                 
                 scriptEngineData->appAssemblyFileWatcher.reset();
                 scriptEngine->ReloadAssembly();
-
-                return true;
             });
         }
     }

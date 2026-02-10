@@ -56,7 +56,10 @@ namespace ignite
     Texture::Texture(TextureCreateInfo createInfo, const std::string &debugName)
         : m_CreateInfo(createInfo), m_DebugName(debugName)
     {
-        CreateTextureHandle();
+        if (!m_CreateInfo.deferGpuCreate)
+        {
+            CreateTextureHandle();
+        }
     }
 
     Texture::Texture(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName)
@@ -67,7 +70,10 @@ namespace ignite
             m_Buffer = Buffer::Copy(buffer);
         }
 
-        CreateTextureHandle();
+        if (!m_CreateInfo.deferGpuCreate)
+        {
+            CreateTextureHandle();
+        }
 
         if (cmd)
         {
@@ -126,7 +132,10 @@ namespace ignite
             }
         }
 
-        CreateTextureHandle();
+        if (!m_CreateInfo.deferGpuCreate)
+        {
+            CreateTextureHandle();
+        }
 
         if (cmd)
         {
@@ -146,6 +155,8 @@ namespace ignite
         {
             return;
         }
+
+        EnsureTextureHandle();
 
         if (m_CreateInfo.format == nvrhi::Format::RGBA8_UNORM)
         {
@@ -224,6 +235,11 @@ namespace ignite
 
 	void Texture::CreateTextureHandle()
     {
+		if (m_Handle)
+		{
+			return;
+		}
+
     	LOG_ASSERT(m_CreateInfo.dimension != nvrhi::TextureDimension::Unknown, "[Texture] Dimension must be set");
     	LOG_ASSERT(m_CreateInfo.initialState != nvrhi::ResourceStates::Unknown, "[Texture] State must be set");
 
@@ -248,6 +264,14 @@ namespace ignite
         nvrhi::IDevice *device = Application::GetGraphicsDevice();
         m_Handle = device->createTexture(textureDesc);
         LOG_ASSERT(m_Handle, "Failed to create texture");
+    }
+
+    void Texture::EnsureTextureHandle()
+    {
+        if (!m_Handle)
+        {
+            CreateTextureHandle();
+        }
     }
 
     Ref<Texture> Texture::Create(TextureCreateInfo createInfo, const std::string &debugName)

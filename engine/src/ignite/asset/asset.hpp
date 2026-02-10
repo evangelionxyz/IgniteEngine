@@ -91,6 +91,7 @@ namespace ignite {
         { ".wav", AssetType::Audio },
 
         { ".gltf", AssetType::StaticMesh },
+        { ".bin", AssetType::StaticMesh },
         { ".ixsm", AssetType::StaticMesh },
 
         { ".ixskel", AssetType::Skeleton},

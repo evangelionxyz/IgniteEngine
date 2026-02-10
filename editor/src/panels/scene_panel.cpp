@@ -595,8 +595,11 @@ namespace ignite
                                     constexpr float thumbnailSize = 64.0f;
                                     constexpr float spacing = 8.0f;
 
-                                    auto renderTexturePreview = [](const char *label, Ref<Texture> texture)
+                                    auto renderTexturePreview = [](const char *label, AssetHandle handle)
                                         {
+                                            ImGui::PushID((int)handle);
+                                            Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(handle);
+
                                             if (texture && texture->GetHandle())
                                             {
                                                 ImGui::BeginGroup();
@@ -618,19 +621,20 @@ namespace ignite
                                                 ImGui::TextWrapped("%s", label);
                                                 ImGui::EndGroup();
                                             }
+                                            ImGui::PopID();
                                         };
 
                                     // First row of textures
-                                    renderTexturePreview("Base Color", mat->baseColorTexture);
+                                    renderTexturePreview("Base Color", mat->baseColorTextureHandle);
                                     ImGui::SameLine(0.0f, spacing);
-                                    renderTexturePreview("Normal", mat->normalTexture);
+                                    renderTexturePreview("Normal", mat->normalTextureHandle);
                                     ImGui::SameLine(0.0f, spacing);
-                                    renderTexturePreview("Metallic/Rough", mat->metallicRoughnessTexture);
+                                    renderTexturePreview("Metallic/Rough", mat->metallicRoughnessTextureHandle);
 
                                     // Second row of textures
-                                    renderTexturePreview("Emissive", mat->emissiveTexture);
+                                    renderTexturePreview("Emissive", mat->emissiveTextureHandle);
                                     ImGui::SameLine(0.0f, spacing);
-                                    renderTexturePreview("Occlusion", mat->occlusionTexture);
+                                    renderTexturePreview("Occlusion", mat->occlusionTextureHandle);
                                 }
                                 else
                                 {

@@ -31,7 +31,9 @@
 
 namespace ignite {
 
-    static AssetMetaData s_NullMetaData;
+	static std::mutex s_AssetThreadMutex;
+	static AssetMetaData s_NullMetaData;
+
     static Project *s_Project = nullptr;
 
     AssetManager::AssetManager(Project *project)
@@ -46,12 +48,22 @@ namespace ignite {
         {
             m_Workers.emplace_back(&AssetManager::WorkerLoop, this);
         }
+
+		for (uint32_t i = 0; i < THREAD_COUNT; ++i)
+        {
+            std::stringstream ss;
+            ss << m_Workers[i].get_id();
+            unsigned long long id = std::stoull(ss.str());
+            LOG_WARN("[Asset Manager] Worker [{0}]: {1}", i, id);
+        }
+
+        LOG_WARN("\n");
     }
 
     AssetManager::~AssetManager()
     {
         {
-            std::unique_lock lock(m_Mutex);
+            std::unique_lock lock(s_AssetThreadMutex);
             m_Running = false;
         }
 
@@ -120,7 +132,7 @@ namespace ignite {
         }
         
         {
-            std::unique_lock lock(m_Mutex);
+            std::unique_lock lock(s_AssetThreadMutex);
             m_LoadedAssets.clear();
         }
         
@@ -129,7 +141,7 @@ namespace ignite {
 
     void AssetManager::UnloadAsset(AssetHandle handle)
     {
-        std::unique_lock lock(m_Mutex);
+        std::unique_lock lock(s_AssetThreadMutex);
         
         auto it = m_LoadedAssets.find(handle);
         if (it != m_LoadedAssets.end())
@@ -160,7 +172,7 @@ namespace ignite {
         
         // Find assets that are only referenced by m_LoadedAssets (use_count == 1)
         {
-            std::unique_lock lock(m_Mutex);
+            std::unique_lock lock(s_AssetThreadMutex);
             
             for (const auto& [handle, asset] : m_LoadedAssets)
             {
@@ -204,7 +216,7 @@ namespace ignite {
     void AssetManager::SubmitJob(AssetJob job)
     {
         {
-            std::unique_lock lock(m_Mutex);
+            std::unique_lock lock(s_AssetThreadMutex);
             m_Jobs.push(std::move(job));
         }
 
@@ -220,7 +232,7 @@ namespace ignite {
 
         // Quick check if already loaded (no lock needed for read)
         {
-            std::unique_lock lock(m_Mutex);
+            std::unique_lock lock(s_AssetThreadMutex);
             
             // Return immediately if loaded
             if (m_LoadedAssets.contains(handle))
@@ -251,7 +263,11 @@ namespace ignite {
                 
                 if (asset)
                 {
-                    LOG_TRACE("[Asset Manager] Asset loaded on worker thread: {} ({})", 
+					std::stringstream ss;
+					ss << std::this_thread::get_id();
+					unsigned long long threadId = std::stoull(ss.str());
+                    LOG_TRACE("[Asset Manager] Asset loaded on worker thread [{0}]: {1} ({2})",
+                        threadId,
                         static_cast<uint64_t>(handle), 
                         metadata.filepath.generic_string());
                 }
@@ -264,7 +280,7 @@ namespace ignite {
             
             // Remove from loading set
             {
-                std::unique_lock lock(m_Mutex);
+                std::unique_lock lock(s_AssetThreadMutex);
                 m_LoadingAssets.erase(handle);
             }
         });
@@ -283,7 +299,7 @@ namespace ignite {
 
         // Check if already loaded
         {
-            std::unique_lock lock(m_Mutex);
+            std::unique_lock lock(s_AssetThreadMutex);
             if (m_LoadedAssets.contains(handle))
             {
                 return m_LoadedAssets[handle];
@@ -355,14 +371,14 @@ namespace ignite {
         return s_Project;
     }
 
-    void AssetManager::WorkerLoop()
+	void AssetManager::WorkerLoop()
     {
         while (true)
         {
             AssetJob job;
             
             {
-                std::unique_lock lock(m_Mutex);
+                std::unique_lock lock(s_AssetThreadMutex);
                 m_ConditionVariable.wait(lock, [this]() { return !m_Running || !m_Jobs.empty(); });
 
                 // stop the loop if engine is shutting down
@@ -395,7 +411,7 @@ namespace ignite {
     {
         // Check if already loaded (thread-safe read)
         {
-            std::unique_lock lock(m_Mutex);
+            std::unique_lock lock(s_AssetThreadMutex);
             if (m_LoadedAssets.contains(handle))
             {
                 return m_LoadedAssets[handle];
@@ -418,7 +434,7 @@ namespace ignite {
             
             // Thread-safe assignment
             {
-                std::unique_lock lock(m_Mutex);
+                std::unique_lock lock(s_AssetThreadMutex);
                 // Double-check if another thread loaded it while we were importing
                 if (m_LoadedAssets.contains(handle))
                 {
@@ -436,7 +452,7 @@ namespace ignite {
             
             // Thread-safe assignment
             {
-                std::unique_lock lock(m_Mutex);
+                std::unique_lock lock(s_AssetThreadMutex);
                 // Double-check if another thread loaded it while we were importing
                 if (m_LoadedAssets.contains(handle))
                 {
@@ -449,20 +465,20 @@ namespace ignite {
         case AssetType::Audio:
         {
             {
-                std::unique_lock lock(m_Mutex);
+                std::unique_lock lock(s_AssetThreadMutex);
                 AssignAsset(handle, asset);
             }
             AssetImporter::ImportAsync(handle, metadata, [&](Ref<Asset> assetResult, AssetHandle assetHandle)
             {
                 assetResult->SetReadyFlag(true);
-                std::unique_lock lock(m_Mutex);
+                std::unique_lock lock(s_AssetThreadMutex);
                 AssignAsset(assetHandle, assetResult);
             });
             break;
         }
         }
 
-        if (asset)
+        if (asset && asset->GetAssetType() != AssetType::Texture)
         {
             asset->SetReadyFlag(true);
         }

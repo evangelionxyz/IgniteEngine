@@ -177,6 +177,7 @@ namespace ignite
         {
             enabledExtensions.instance.insert("VK_EXT_debug_report");
             enabledExtensions.layers.insert("VK_LAYER_KHRONOS_validation");
+            enabledExtensions.layers.insert("VK_LAYER_KHRONOS_synchronization2");
         }
 
         m_DynamicLoader = std::make_unique<VulkanDynamicLoader>(m_DeviceParameters.vulkanLibraryName);

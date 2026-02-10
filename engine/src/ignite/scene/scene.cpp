@@ -61,8 +61,6 @@ namespace ignite
 
     Scene::~Scene()
     {
-		LOG_TRACE("Scene::~Scene() - Destroying scene: {0}", name);
-
 		// Stop physics simulations first
 		if (physics2D)
 		{
@@ -76,7 +74,6 @@ namespace ignite
 		// Clear all entities from registry before deletion
         if (registry)
         {
-			LOG_TRACE("Scene::~Scene() - Clearing entities from registry");
 			registry->clear();
             delete registry;
 			registry = nullptr;
@@ -92,8 +89,6 @@ namespace ignite
 		// Release physics systems
 		physics2D.reset();
 		physics.reset();
-
-		LOG_TRACE("Scene::~Scene() - Scene destroyed: {0}", name);
     }
 
     void Scene::OnStart()

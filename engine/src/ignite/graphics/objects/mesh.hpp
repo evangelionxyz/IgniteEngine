@@ -35,7 +35,8 @@
 #include <nvrhi/nvrhi.h>
 #include <filesystem>
 
-namespace ignite {
+namespace ignite
+{
 
     class Shader;
     class Environment;
@@ -110,8 +111,17 @@ namespace ignite {
         std::vector<Ref<MeshInstance>> flatMeshes;
         std::vector<Ref<Material>> materials;
 
+        struct MaterialTextureMap
+        {
+            int textureIndex = -1;
+            Ref<Texture> texture;
+        };
+
+        std::vector<std::array<MaterialTextureMap, 5>> materialTextureMap;
+
         // Mesh to Material
         std::unordered_map<int, int> materialMap;
+
     };
 
 	class StaticMesh : public Asset
@@ -136,7 +146,7 @@ namespace ignite {
     {
     public:
         static Ref<Material> LoadMaterial(const tinygltf::Primitive& primitive, const std::vector<tinygltf::Material>& materials,
-            const std::vector<Ref<Texture>> &loadedTextures, const std::vector<nvrhi::SamplerHandle> &loadedSamplers, int *materialIndex);
+            const std::vector<Ref<Texture>> &loadedTextures, std::array<MeshScene::MaterialTextureMap, 5> &textureMap, const std::vector<nvrhi::SamplerDesc> &loadedSamplers, int *materialIndex);
         static void LoadVertexData(std::vector<VertexMesh_Anim>& vertices, const tinygltf::Primitive& primitive, const tinygltf::Model& model);
         static void LoadIndicesData(std::vector<uint32_t>& indices, const tinygltf::Primitive& primitive, const tinygltf::Model& model);
 
@@ -144,7 +154,7 @@ namespace ignite {
 
     private:
         static std::vector<Ref<Texture>> LoadTexturesFromGLTF(const tinygltf::Model& model);
-        static std::vector<nvrhi::SamplerHandle> GetSamplersFromGLTF(const tinygltf::Model& model);
+        static std::vector<nvrhi::SamplerDesc> GetSamplersFromGLTF(const tinygltf::Model& model);
         static const unsigned char* GetBufferData(const tinygltf::Model& model, const tinygltf::Accessor& accessor);
     };
 }

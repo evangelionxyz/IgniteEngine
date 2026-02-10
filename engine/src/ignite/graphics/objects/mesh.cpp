@@ -26,6 +26,7 @@
 #include "ignite/project/project.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/scene_renderer.hpp"
+#include "ignite/core/application.hpp"
 
 #include <mutex>
 
@@ -40,9 +41,9 @@ namespace ignite
             {
                 // glTF supplies 16 values column-major. Construct manually.
                 return glm::mat4((float)node.matrix[0], (float)node.matrix[1], (float)node.matrix[2], (float)node.matrix[3],
-                        (float)node.matrix[4], (float)node.matrix[5], (float)node.matrix[6], (float)node.matrix[7],
-                        (float)node.matrix[8], (float)node.matrix[9], (float)node.matrix[10], (float)node.matrix[11],
-                        (float)node.matrix[12], (float)node.matrix[13], (float)node.matrix[14], (float)node.matrix[15]);
+                    (float)node.matrix[4], (float)node.matrix[5], (float)node.matrix[6], (float)node.matrix[7],
+                    (float)node.matrix[8], (float)node.matrix[9], (float)node.matrix[10], (float)node.matrix[11],
+                    (float)node.matrix[12], (float)node.matrix[13], (float)node.matrix[14], (float)node.matrix[15]);
             }
 
             glm::vec3 translation(0.0f);
@@ -76,23 +77,19 @@ namespace ignite
 
     MeshPrimitive::~MeshPrimitive()
     {
-        LOG_TRACE("MeshPrimitive::~MeshPrimitive() - Destroying mesh primitive");
-        
         // Wait for GPU to ensure buffers are not in use
-        if (auto* device = Application::GetGraphicsDevice())
+        if (auto *device = Application::GetGraphicsDevice())
         {
             device->waitForIdle();
         }
-        
+
         // Clear GPU buffers
         vertexBuffer.reset();
         indexBuffer.reset();
-        
+
         // Clear CPU data
         vertices.clear();
         indices.clear();
-        
-        LOG_TRACE("MeshPrimitive::~MeshPrimitive() - Mesh primitive destroyed");
     }
 
     Ref<MeshPrimitive> MeshPrimitive::Create(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices)
@@ -128,21 +125,17 @@ namespace ignite
 
     MeshInstance::~MeshInstance()
     {
-        LOG_TRACE("MeshInstance::~MeshInstance() - Destroying mesh instance: {}", m_Name);
-        
         // Wait for GPU to ensure resources are not in use
-        if (auto* device = Application::GetGraphicsDevice())
+        if (auto *device = Application::GetGraphicsDevice())
         {
             device->waitForIdle();
         }
-        
+
         // Clear GPU data buffer
         m_SkinnedMeshGPUDataBuffer.reset();
-        
+
         // Clear primitive (vertex/index buffers)
         m_Primitive.reset();
-        
-        LOG_TRACE("MeshInstance::~MeshInstance() - Mesh instance destroyed: {}", m_Name);
     }
 
     void MeshInstance::SetMaterial(AssetHandle assetHandle)
@@ -165,25 +158,20 @@ namespace ignite
 
     StaticMesh::~StaticMesh()
     {
-        LOG_TRACE("StaticMesh::~StaticMesh() - Destroying static mesh (MeshInstances: {})", m_MeshInstances.size());
-        
         // Wait for GPU to ensure meshes are not in use
-        if (auto* device = Application::GetGraphicsDevice())
+        if (auto *device = Application::GetGraphicsDevice())
         {
             device->waitForIdle();
         }
-        
+
         // Clear all mesh instances
         m_MeshInstances.clear();
-        
-        LOG_TRACE("StaticMesh::~StaticMesh() - Static mesh destroyed");
     }
 
     // 
     // ==== Mesh Loader ====
     // 
-    Ref<Material> MeshLoader::LoadMaterial(const tinygltf::Primitive &primitive, const std::vector<tinygltf::Material> &gltfMaterials,
-        const std::vector<Ref<Texture>> &loadedTextures, const std::vector<nvrhi::SamplerHandle> &loadedSamplers, int *materialIndex)
+    Ref<Material> MeshLoader::LoadMaterial(const tinygltf::Primitive &primitive, const std::vector<tinygltf::Material> &gltfMaterials, const std::vector<Ref<Texture>> &loadedTextures, std::array<MeshScene::MaterialTextureMap, 5> &textureMap, const std::vector<nvrhi::SamplerDesc> &loadedSamplers, int *materialIndex)
     {
         Ref<Material> material;
         *materialIndex = -1;
@@ -197,50 +185,87 @@ namespace ignite
 
             material = CreateRef<Material>();
             material->name = gltfMaterial.name;
-            material->gpuData.baseColorFactor = { gltfMaterial.pbrMetallicRoughness.baseColorFactor[0], gltfMaterial.pbrMetallicRoughness.baseColorFactor[1], gltfMaterial.pbrMetallicRoughness.baseColorFactor[2], 1.0f };
-            material->gpuData.emissiveFactor = { gltfMaterial.emissiveFactor[0], gltfMaterial.emissiveFactor[1], gltfMaterial.emissiveFactor[2], 1.0f };
+            
+            material->gpuData.baseColorFactor =
+            {
+                gltfMaterial.pbrMetallicRoughness.baseColorFactor[0],
+                gltfMaterial.pbrMetallicRoughness.baseColorFactor[1],
+                gltfMaterial.pbrMetallicRoughness.baseColorFactor[2],
+                1.0f
+            };
+
+            material->gpuData.emissiveFactor =
+            {
+                gltfMaterial.emissiveFactor[0],
+                gltfMaterial.emissiveFactor[1],
+                gltfMaterial.emissiveFactor[2],
+                1.0f
+            };
+            
             material->gpuData.metallicFactor = static_cast<float>(gltfMaterial.pbrMetallicRoughness.metallicFactor);
+
             material->gpuData.roughnessFactor = static_cast<float>(gltfMaterial.pbrMetallicRoughness.roughnessFactor);
+            
             material->gpuData.occlusionStrength = static_cast<float>(gltfMaterial.occlusionTexture.strength);
 
             // base color texture
             const int baseColorIndex = gltfMaterial.pbrMetallicRoughness.baseColorTexture.index;
             if (baseColorIndex >= 0 && baseColorIndex < loadedTextures.size())
             {
-                material->baseColorTexture = loadedTextures[baseColorIndex];
+                textureMap[0] = { baseColorIndex, loadedTextures[baseColorIndex] };
+            }
+            else
+            {
+                textureMap[0] = { -1, nullptr };
             }
 
             // emissive texture
             const int emissiveIndex = gltfMaterial.emissiveTexture.index;
             if (emissiveIndex >= 0 && emissiveIndex < loadedTextures.size())
             {
-                material->emissiveTexture = loadedTextures[emissiveIndex];
+                textureMap[1] = { emissiveIndex, loadedTextures[emissiveIndex] };
+            }
+            else
+            {
+                textureMap[1] = { -1, nullptr };
             }
 
             // metallic roughness texture
             const int metallicRoughnessIndex = gltfMaterial.pbrMetallicRoughness.metallicRoughnessTexture.index;
             if (metallicRoughnessIndex >= 0 && metallicRoughnessIndex < loadedTextures.size())
             {
-                material->metallicRoughnessTexture = loadedTextures[metallicRoughnessIndex];
+                textureMap[2] = { metallicRoughnessIndex, loadedTextures[metallicRoughnessIndex] };
+            }
+            else
+            {
+                textureMap[2] = { -1, nullptr };
             }
 
             // normal texture
             const int normalIndex = gltfMaterial.normalTexture.index;
             if (normalIndex >= 0 && normalIndex < loadedTextures.size())
             {
-                material->normalTexture = loadedTextures[normalIndex];
+                textureMap[3] = { normalIndex, loadedTextures[normalIndex] };
+            }
+            else
+            {
+                textureMap[3] = { -1, nullptr };
             }
 
             // occlusion texture
             const int occlusionIndex = gltfMaterial.occlusionTexture.index;
             if (occlusionIndex >= 0 && occlusionIndex < loadedTextures.size())
             {
-                material->occlusionTexture = loadedTextures[occlusionIndex];
+                textureMap[4] = { occlusionIndex, loadedTextures[occlusionIndex] };
+            }
+            else
+            {
+                textureMap[4] = { -1, nullptr };
             }
 
             if (!loadedSamplers.empty())
             {
-                material->sampler = loadedSamplers[0];
+                material->SetSamplerDesc(loadedSamplers[0]);
             }
         }
 
@@ -311,8 +336,7 @@ namespace ignite
 
             if (texCoords)
             {
-                // vertex.uv = { texCoords[i].x, 1.0f - texCoords[i].y };
-                vertex.uv = texCoords[i]; //{ texCoords[i].x, 1.0f - texCoords[i].y };
+                vertex.uv = texCoords[i];
             }
 
             vertices.push_back(vertex);
@@ -331,7 +355,7 @@ namespace ignite
             // Handle different index types
             if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)
             {
-                const auto indexPtr = reinterpret_cast<const uint16_t *>(indexData);
+                const auto indexPtr = (uint16_t *)indexData;
                 for (size_t i = 0; i < indexAccessor.count; ++i)
                 {
                     indices.push_back(indexPtr[i]);
@@ -339,7 +363,7 @@ namespace ignite
             }
             else if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)
             {
-                const auto indexPtr = reinterpret_cast<const uint32_t *>(indexData);
+                const auto indexPtr = (uint32_t *)indexData;
                 for (size_t i = 0; i < indexAccessor.count; ++i)
                 {
                     indices.push_back(indexPtr[i]);
@@ -373,7 +397,6 @@ namespace ignite
 
         // pre-load textures and samplers
         const auto textures = LoadTexturesFromGLTF(gltfModel);
-
         const auto samplers = GetSamplersFromGLTF(gltfModel);
 
         // preserve nodes
@@ -422,14 +445,18 @@ namespace ignite
                 Ref<MeshPrimitive> primitive = CreateRef<MeshPrimitive>(vertices, indices);
 
                 // material
+
+                std::array<MeshScene::MaterialTextureMap, 5> materialTextureMap;
+
                 int materialIndex = -1;
-                Ref<Material> material = LoadMaterial(gltfPrim, gltfModel.materials, textures, samplers, &materialIndex);
+                Ref<Material> material = LoadMaterial(gltfPrim, gltfModel.materials, textures, materialTextureMap, samplers, &materialIndex);
 
                 Ref<MeshInstance> meshInstance = MeshInstance::Create(gltfMesh.name, primitive);
 
                 outScene.nodes[i].meshes.push_back(meshInstance);
                 outScene.flatMeshes.push_back(meshInstance);
                 outScene.materials.push_back(material);
+                outScene.materialTextureMap.push_back(materialTextureMap);
 
                 // Assign Mesh and Material Index
                 outScene.materialMap[node.mesh] = materialIndex;
@@ -448,11 +475,15 @@ namespace ignite
                 }
 
                 for (const int c : node.children)
+                {
                     recurse(c, node.global);
+                }
             };
 
         for (const int root : outScene.roots)
+        {
             recurse(root, glm::mat4(1.0f));
+        }
     }
 
     std::vector<Ref<Texture>> MeshLoader::LoadTexturesFromGLTF(const tinygltf::Model &model)
@@ -476,12 +507,23 @@ namespace ignite
                 createInfo.format = nvrhi::Format::RGBA8_UNORM;
                 createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
                 createInfo.keepInitialState = true;
+                createInfo.deferGpuCreate = true;
 
                 Ref<Texture> texture;
                 if (!image.image.empty())
                 {
                     texture = Texture::Create(Buffer((void *)image.image.data(), image.image.size() * sizeof(uint8_t)), createInfo, nullptr);
                     LOG_TRACE(" Loaded embedded texture");
+
+                    Application::SubmitToRenderThread([texture]()
+                        {
+                            nvrhi::CommandListHandle cmd = Application::GetGraphicsDevice()->createCommandList();
+                            cmd->open();
+                            texture->SetData(cmd, 4);
+                            cmd->close();
+
+                            Application::SubmitWorkerCommandList(cmd);
+                        });
                 }
                 else if (!image.uri.empty())
                 {
@@ -495,10 +537,9 @@ namespace ignite
         return gltfTextures;
     }
 
-    std::vector<nvrhi::SamplerHandle> MeshLoader::GetSamplersFromGLTF(const tinygltf::Model &model)
+    std::vector<nvrhi::SamplerDesc> MeshLoader::GetSamplersFromGLTF(const tinygltf::Model &model)
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-        std::vector<nvrhi::SamplerHandle> samplers;
+        std::vector<nvrhi::SamplerDesc> samplers;
         for (size_t i = 0; i < model.textures.size(); ++i)
         {
             const tinygltf::Texture &gltfTexture = model.textures[i];
@@ -529,9 +570,7 @@ namespace ignite
                     break;
                 }
 
-                nvrhi::SamplerHandle sampler = device->createSampler(desc);
-                LOG_ASSERT(sampler, "Failed to create sampler");
-                samplers.push_back(sampler);
+                samplers.push_back(desc);
             }
         }
 

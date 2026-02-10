@@ -34,6 +34,7 @@
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/renderer.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/scene/scene.hpp"
 
 #include <mutex>
@@ -119,20 +120,16 @@ namespace ignite {
                     Project::GetInstance()->GetAssetManager().AssignAsset(materialHandle, material);
 
                     // Submit GPU upload command list to render thread (thread-safe)
-                    Application::SubmitToMainThread([m = mesh, mat = material]()
-                        {
-                            nvrhi::IDevice* device = Application::GetGraphicsDevice();
-                            nvrhi::CommandListHandle cmd = device->createCommandList();
-                            cmd->open();
-					        m->GetPrimitive()->CreateBuffer(cmd);
-					        mat->SetTextureData(cmd);
-                            cmd->close();
+                    Application::SubmitToRenderThread([m = mesh]()
+                    {
+                        nvrhi::IDevice* device = Application::GetGraphicsDevice();
+                        nvrhi::CommandListHandle cmd = device->createCommandList();
+                        cmd->open();
+					    m->GetPrimitive()->CreateBuffer(cmd);
+                        cmd->close();
                             
-                            // Submit to render thread's queue (thread-safe)
-                            Application::SubmitWorkerCommandList(cmd);
-
-                            return true;
-                        });
+                        Application::SubmitWorkerCommandList(cmd);
+                    });
 				}
 			}
 
@@ -184,19 +181,67 @@ namespace ignite {
 			MeshScene meshScene;
 			MeshLoader::LoadSceneGraphFromGLTF(metadata.filepath.generic_string(), meshScene);
 
-            // Import and store material first
-			for (Ref<Material> &mat : meshScene.materials)
+            // Prepare AssetHandle map for texture material textures
+            // we need 5 textures
+            std::vector<std::array<AssetHandle, 5>> materialTextureHandles;
+            materialTextureHandles.resize(meshScene.materials.size());
+
+            // Import and store textures
+            for (size_t i = 0; i < meshScene.materialTextureMap.size(); ++i)
+            {
+                auto &textureHandles = materialTextureHandles[i];
+
+                // Set the default value to be 0
+                std::fill(textureHandles.begin(), textureHandles.end(), AssetHandle(0));
+
+                for (size_t j = 0; j < meshScene.materialTextureMap[i].size(); ++j)
+                {
+                    auto &[idx, texture] = meshScene.materialTextureMap[i][j];
+
+                    // no texture
+                    if (idx < 0)
+                        continue;
+
+					const std::string textureFilename = filename.stem().string() + std::format("_{0}_{1}", idx, ".png");
+					std::filesystem::path texturePNGFullPath = textureDirectory / textureFilename;
+					BinarySerializer::SerializeTextureToPNG(texture, texturePNGFullPath);
+
+					AssetHandle textureHandle = AssetHandle();
+					texture->handle = textureHandle;
+
+					AssetMetaData textureMD;
+					textureMD.filepath = Project::GetInstance()->GetAssetRelativeFilepath(texturePNGFullPath);
+					textureMD.type = AssetType::Texture;
+
+					Project::GetInstance()->GetAssetManager().AssignAsset(textureHandle, texture);
+					Project::GetInstance()->GetAssetManager().AssignMetaData(textureHandle, textureMD);
+
+                    // If the texture has been stored, then assign AssetHandle
+                    textureHandles[j] = textureHandle;
+                }
+            }
+
+            // Import and store material
+			for (size_t i = 0; i < meshScene.materials.size(); ++i)
 			{
+                Ref<Material> &mat = meshScene.materials[i];
+
+                // First store the texture handles
+				mat->baseColorTextureHandle = materialTextureHandles[i][0];
+				mat->emissiveTextureHandle = materialTextureHandles[i][1];
+				mat->metallicRoughnessTextureHandle = materialTextureHandles[i][2];
+				mat->normalTextureHandle = materialTextureHandles[i][3];
+				mat->occlusionTextureHandle = materialTextureHandles[i][4];
+
                 const std::string materialFilename = mat->name+materialBinExt;
                 std::filesystem::path materialBinFullPath = materialDirectory / materialFilename;
                 BinarySerializer::SerializeMaterial(mat, materialBinFullPath);
 
                 AssetHandle materialHandle = AssetHandle();
-                mat->handle = materialHandle; // assign handle
+                mat->handle = materialHandle; // assign material handle
 
                 AssetMetaData materialMD;
-                materialMD.filepath = Project::GetInstance()->GetAssetRelativeFilepath(materialBinFullPath); // relative path
-                // materialMD.filepath = materialBinFullPath;
+                materialMD.filepath = Project::GetInstance()->GetAssetRelativeFilepath(materialBinFullPath);
                 materialMD.type = AssetType::Material;
 
                 Project::GetInstance()->GetAssetManager().AssignAsset(materialHandle, mat);
@@ -216,6 +261,7 @@ namespace ignite {
 				asset->AddMeshInstance(m);
 			}
 
+            // Serialize the mesh
 			BinarySerializer::SerializeStaticMesh(asset, meshBinaryFullpath);
         }
 
@@ -232,7 +278,6 @@ namespace ignite {
 	Ref<Material> AssetImporter::ImportMaterial(AssetHandle handle, const AssetMetaData &metadata)
 	{
         Ref<Material> asset;
-
         if (asset)
         {
             asset->handle = handle;
@@ -257,18 +302,20 @@ namespace ignite {
 		createInfo.mipLevels = 4;
 		createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
 		createInfo.keepInitialState = true; // should keep initial state
+        createInfo.deferGpuCreate = true;
 
+        // Load texture pixel data on worker thread (no GPU operations)
         Ref<Texture> result = Texture::Create(metadata.filepath, createInfo, nullptr);
 
-        Application::SubmitToMainThread([texture = result]()
+        // Submit GPU upload to main thread with proper synchronization
+        Application::SubmitToRenderThread([texture = result]()
         {
             nvrhi::CommandListHandle cmd = Application::GetGraphicsDevice()->createCommandList();
             cmd->open();
             texture->SetData(cmd, 4);
             cmd->close();
-            // Submit to render thread's queue (thread-safe)
+            
             Application::SubmitWorkerCommandList(cmd);
-            return true;
         });
 
         return result;

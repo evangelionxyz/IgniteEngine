@@ -21,11 +21,14 @@
 * SOFTWARE.
 */
 
+#include "ignite/asset/asset_manager.hpp"
+#include "ignite/project/project.hpp"
+
 #include "material.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/scene_renderer.hpp"
-
 #include "ignite/graphics/objects/shadow_map.hpp"
+#include "ignite/graphics/texture.hpp"
 
 #include <stb_image.h>
 
@@ -33,28 +36,10 @@ namespace ignite
 {
     Material::Material()
     {
-        // Neutral defaults per glTF PBR spec when a texture is absent
-        baseColorTexture = Renderer::GetMagentaTexture();         // baseColorFactor will tint
-        emissiveTexture = Renderer::GetBlackTexture();            // no emissive (black = 0,0,0)
-        metallicRoughnessTexture = Renderer::GetBlackTexture();   // will be overridden if texture present; factors supply values
-        normalTexture = Renderer::GetWhiteTexture();              // flat normal
-        occlusionTexture = Renderer::GetWhiteTexture();           // full occlusion (no darkening)
-
-        auto device = Application::GetGraphicsDevice();
-        auto desc = nvrhi::SamplerDesc();
-        desc.setAllFilters(true);
-        desc.setAllAddressModes(nvrhi::SamplerAddressMode::Repeat);
-        sampler = device->createSampler(desc);
-        LOG_ASSERT(sampler, "Failed to create sampler");
-
-        m_GPUDataBuffer = ConstantBuffer::Create(sizeof(Material_GPUData), false, 1, "Material Constant Buffer");
     }
 
     Material::~Material()
     {
-        LOG_TRACE("Material::~Material() - Destroying material: {}", name);
-        
-        // Wait for GPU to ensure material is not in use
         if (auto* device = Application::GetGraphicsDevice())
         {
             device->waitForIdle();
@@ -68,33 +53,20 @@ namespace ignite
         
         // Clear sampler
         sampler = nullptr;
-        
-        // Clear textures
-        baseColorTexture.reset();
-        emissiveTexture.reset();
-        metallicRoughnessTexture.reset();
-        normalTexture.reset();
-        occlusionTexture.reset();
-        
-        LOG_TRACE("Material::~Material() - Material destroyed: {}", name);
     }
 
-    void Material::UpdateBindingSet(SceneRenderer *sceneRenderer)
+    void Material::UpdateBindingSet(SceneRenderer *sceneRenderer, MaterialTextures *textures)
     {
+        EnsureGpuResources();
         auto device = Application::GetGraphicsDevice();
-
-        if (!m_GPUDataBuffer)
-        {
-            m_GPUDataBuffer = ConstantBuffer::Create(sizeof(Material_GPUData), false, 1, "Material Constant Buffer");
-        }
 
         nvrhi::BindingSetDesc desc = nvrhi::BindingSetDesc();
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_GPUDataBuffer->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, baseColorTexture->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, emissiveTexture->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, metallicRoughnessTexture->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, normalTexture->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, occlusionTexture->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, textures->baseColor->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, textures->emissive->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, textures->metallicRoughness->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, textures->normal->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, textures->occlusion->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, sceneRenderer->GetEnvironmentMapColorTexture()->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, sceneRenderer->GetCascadedShadowMapDepthTexture()->GetHandle()));
 
@@ -113,17 +85,70 @@ namespace ignite
 
     void Material::UploadToGpu(nvrhi::ICommandList* cmd)
     {
+        EnsureGpuResources();
         m_GPUDataBuffer->SetData(cmd, Buffer(&gpuData, sizeof(Material_GPUData)));
     }
 
-	void Material::SetTextureData(nvrhi::ICommandList *cmd)
+    void Material::SetSamplerDesc(const nvrhi::SamplerDesc &desc)
+    {
+        m_SamplerDesc = desc;
+        m_HasSamplerDesc = true;
+    }
+
+	void Material::RetrieveTextures(AssetManager *assetManager, MaterialTextures *textures) const
 	{
-        const uint32_t channelCount = 4;
-		baseColorTexture->SetData(cmd, channelCount);
-        emissiveTexture->SetData(cmd, channelCount);
-		metallicRoughnessTexture->SetData(cmd, channelCount);
-        normalTexture->SetData(cmd, channelCount);
-        occlusionTexture->SetData(cmd, channelCount);
+        textures->baseColor = RetrieveTexture(assetManager, baseColorTextureHandle, Renderer::GetWhiteTexture());
+        textures->emissive = RetrieveTexture(assetManager, emissiveTextureHandle, Renderer::GetBlackTexture());
+        textures->metallicRoughness = RetrieveTexture(assetManager, metallicRoughnessTextureHandle, Renderer::GetBlackTexture());
+        textures->normal = RetrieveTexture(assetManager, normalTextureHandle, Renderer::GetWhiteTexture());
+        textures->occlusion = RetrieveTexture(assetManager, occlusionTextureHandle, Renderer::GetWhiteTexture());
+	}
+
+	bool Material::IsNeedToInvalidate()
+	{
+        // Check if any texture handles have changed and are newly loaded
+        auto* assetManager = &Project::GetInstance()->GetAssetManager();
+        
+        bool needsInvalidation = false;
+        
+        // Check each texture to see if it was recently loaded
+        if (baseColorTextureHandle != 0 && assetManager->IsAssetLoaded(baseColorTextureHandle))
+        {
+            needsInvalidation = true;
+        }
+        if (emissiveTextureHandle != 0 && assetManager->IsAssetLoaded(emissiveTextureHandle))
+        {
+            needsInvalidation = true;
+        }
+        if (metallicRoughnessTextureHandle != 0 && assetManager->IsAssetLoaded(metallicRoughnessTextureHandle))
+        {
+            needsInvalidation = true;
+        }
+        if (normalTextureHandle != 0 && assetManager->IsAssetLoaded(normalTextureHandle))
+        {
+            needsInvalidation = true;
+        }
+        if (occlusionTextureHandle != 0 && assetManager->IsAssetLoaded(occlusionTextureHandle))
+        {
+            needsInvalidation = true;
+        }
+
+        return needsInvalidation && m_BindingSetDirty;
+	}
+
+	Ref<Texture> Material::RetrieveTexture(AssetManager *assetManager, AssetHandle handle, Ref<Texture> fallback)
+	{
+		if (handle == 0)
+		{
+			return fallback;
+		}
+
+		Ref<Texture> result = assetManager->GetProject()->GetAsset<Texture>(handle);
+		if (result && result->IsReady())
+		{
+			return result;
+		}
+		return fallback;
 	}
 
 	nvrhi::BindingLayoutDesc Material::GetBindingLayoutDesc()
@@ -143,5 +168,27 @@ namespace ignite
             .addItem(nvrhi::BindingLayoutItem::Sampler(0)) // sampler
             .addItem(nvrhi::BindingLayoutItem::Sampler(1)); // csm sampler
         return bindingLayoutDesc;
+    }
+
+    void Material::EnsureGpuResources()
+    {
+        if (!sampler)
+        {
+            auto device = Application::GetGraphicsDevice();
+            nvrhi::SamplerDesc desc = m_HasSamplerDesc ? m_SamplerDesc : nvrhi::SamplerDesc();
+            if (!m_HasSamplerDesc)
+            {
+                desc.setAllFilters(true);
+                desc.setAllAddressModes(nvrhi::SamplerAddressMode::Repeat);
+            }
+
+            sampler = device->createSampler(desc);
+            LOG_ASSERT(sampler, "Failed to create sampler");
+        }
+
+        if (!m_GPUDataBuffer)
+        {
+            m_GPUDataBuffer = ConstantBuffer::Create(sizeof(Material_GPUData), false, 1, "Material Constant Buffer");
+        }
     }
 }

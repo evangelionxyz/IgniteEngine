@@ -37,7 +37,6 @@ namespace ignite {
     // clock wise
     std::array<glm::vec3, 24> vertices =
     {
-
         glm::vec3( 1.0f,  1.0f,  1.0f), // top right    front  
         glm::vec3( 1.0f,  1.0f, -1.0f), // top right    back
         glm::vec3( 1.0f, -1.0f, -1.0f), // bottom right back
@@ -77,30 +76,32 @@ namespace ignite {
         // create vertex buffer
         m_VertexBuffer = VertexBuffer::Create(sizeof(vertices), "Environment Vertex Buffer");
         m_IndexBuffer = IndexBuffer::Create(sizeof(uint32_t) * 36, "Environment Index Buffer");
+
+        m_HDRTexture = Renderer::GetBlackTexture();
+
+		auto samplerDesc = nvrhi::SamplerDesc();
+		samplerDesc.addressU = nvrhi::SamplerAddressMode::Repeat;
+		m_Sampler = Application::GetGraphicsDevice()->createSampler(samplerDesc);
+		LOG_ASSERT(m_Sampler, "Failed to create sampler");
     }
 
     Environment::~Environment()
     {
-        LOG_TRACE("Environment::~Environment() - Destroying environment");
-        
-        // Wait for GPU operations to complete before releasing resources
         if (auto* device = Application::GetGraphicsDevice())
         {
             device->waitForIdle();
         }
         
         // Clear binding set first (it references other resources)
-        m_BindingSet = nullptr;
+        m_BindingSet.Reset();
         
         // Clear sampler
-        m_Sampler = nullptr;
+        m_Sampler.Reset();
         
         // Clear texture and buffers
         m_HDRTexture.reset();
         m_VertexBuffer.reset();
         m_IndexBuffer.reset();
-        
-        LOG_TRACE("Environment::~Environment() - Environment destroyed");
     }
 
     void Environment::Draw(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline)
@@ -150,11 +151,6 @@ namespace ignite {
     	textureCI.keepInitialState = true;
     	textureCI.initialState = nvrhi::ResourceStates::ShaderResource;
         m_HDRTexture = Texture::Create(filepath, textureCI, nullptr, "Environment HDR");
-
-    	auto samplerDesc = nvrhi::SamplerDesc();
-    	samplerDesc.addressU = nvrhi::SamplerAddressMode::Repeat;
-    	m_Sampler = Application::GetGraphicsDevice()->createSampler(samplerDesc);
-    	LOG_ASSERT(m_Sampler, "Failed to create sampler");
     }
 
 	void Environment::WriteBuffer(nvrhi::ICommandList *cmd)

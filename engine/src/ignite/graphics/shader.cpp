@@ -38,6 +38,10 @@
 using Microsoft::WRL::ComPtr;
 #endif
 
+#ifndef SHADER_REFLECT_VERBOSE
+// #define SHADER_REFLECT_VERBOSE
+#endif
+
 namespace ignite
 {
     
@@ -163,6 +167,7 @@ namespace ignite
         spirv_cross::Compiler compiler(dataBlob);
         spirv_cross::ShaderResources resources = compiler.get_shader_resources();
 
+#if defined(SHADER_REFLECT_VERBOSE)
         LOG_WARN("[Shader Reflect] {} Shader", GetShaderTypeString(type));
 
         // --- Uniform Buffers ---
@@ -218,6 +223,7 @@ namespace ignite
             LOG_TRACE("  [PushConstant] Name: {}, Size: {}", pcb.name, size);
         }
 
+#endif
 		// Vertex inputs (only for vertex shaders)
         if (type == ShaderType::Vertex)
         {
@@ -268,8 +274,7 @@ namespace ignite
 				offset += attributeSize;
                 vertexAttributes.push_back(attr);
 
-				LOG_TRACE("  [Vertex Attribute] Name: {}, Location: {}, Format: {}, Offset: {}", 
-					attr.name, it.location, static_cast<uint32_t>(attr.format), attr.offset);
+				// LOG_TRACE("  [Vertex Attribute] Name: {}, Location: {}, Format: {}, Offset: {}",  attr.name, it.location, static_cast<uint32_t>(attr.format), attr.offset);
             }
 
 			const uint32_t stride = offset;

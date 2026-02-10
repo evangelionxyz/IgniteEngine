@@ -21,7 +21,8 @@
 * SOFTWARE.
 */
 
-#pragma once
+#ifndef MATERIAL_HPP
+#define MATERIAL_HPP
 
 #include "ignite/core/application.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
@@ -34,12 +35,23 @@
 namespace ignite
 {
     class SceneRenderer;
+    class AssetManager;
+    class Project;
 
     enum class MaterialType
     {
         Opaque = 0,
         Transparent,
         Masked
+    };
+
+    struct MaterialTextures
+    {
+		Ref<Texture> baseColor;
+	    Ref<Texture> emissive;
+	    Ref<Texture> metallicRoughness;
+	    Ref<Texture> normal;
+        Ref<Texture> occlusion;
     };
 
     class Material : public Asset
@@ -50,20 +62,24 @@ namespace ignite
 
         std::string name;
 
-        // TODO: Use asset handle instead of actual resource
-        Ref<Texture> baseColorTexture;
-        Ref<Texture> emissiveTexture;
-        Ref<Texture> metallicRoughnessTexture;
-        Ref<Texture> normalTexture;
-        Ref<Texture> occlusionTexture;
+        AssetHandle baseColorTextureHandle = AssetHandle(0);
+        AssetHandle emissiveTextureHandle = AssetHandle(0);
+        AssetHandle metallicRoughnessTextureHandle = AssetHandle(0);
+        AssetHandle normalTextureHandle = AssetHandle(0);
+		AssetHandle occlusionTextureHandle = AssetHandle(0);
 
         nvrhi::SamplerHandle sampler;
+        void SetSamplerDesc(const nvrhi::SamplerDesc &desc);
 
-        void UpdateBindingSet(SceneRenderer *sceneRenderer);
+        void UpdateBindingSet(SceneRenderer *sceneRenderer, MaterialTextures *textures);
         void UploadToGpu(nvrhi::ICommandList *cmd);
-        void SetTextureData(nvrhi::ICommandList *cmd);
-
         void SetType(MaterialType type) { m_Type = type; }
+		void RetrieveTextures(AssetManager *assetManager, MaterialTextures *textures) const;
+
+        bool IsNeedToInvalidate();
+        void InvalidateBindingSet() { m_BindingSetDirty = true; m_BindingSet = nullptr; }
+        bool IsBindingSetDirty() const { return m_BindingSetDirty; }
+        void SetBindingSetClean() { m_BindingSetDirty = false; }
         
         nvrhi::BindingSetHandle GetBindingSet() { return m_BindingSet; }
         Ref<ConstantBuffer> GetGPUDataBuffer() { return m_GPUDataBuffer; }
@@ -75,9 +91,17 @@ namespace ignite
 		static AssetType GetStaticType() { return AssetType::Material; }
 		virtual AssetType GetAssetType() override { return GetStaticType(); }
 
+        static Ref<Texture> RetrieveTexture(AssetManager *assetManager, AssetHandle handle, Ref<Texture> fallback);
+
     private:
+        void EnsureGpuResources();
         MaterialType m_Type = MaterialType::Opaque;
         Ref<ConstantBuffer> m_GPUDataBuffer;
         nvrhi::BindingSetHandle m_BindingSet;
+        bool m_BindingSetDirty = true;
+        nvrhi::SamplerDesc m_SamplerDesc{};
+        bool m_HasSamplerDesc = false;
     };
 }
+
+#endif

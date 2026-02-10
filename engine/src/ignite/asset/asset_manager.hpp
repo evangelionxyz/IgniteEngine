@@ -21,7 +21,8 @@
 * SOFTWARE.
 */
 
-#pragma once
+#ifndef ASSET_MANAGER_HPP
+#define ASSET_MANAGER_HPP
 
 #include "asset.hpp"
 
@@ -33,10 +34,13 @@
 #include <condition_variable>
 #include <queue>
 
-namespace ignite {
+namespace ignite
+{
 
     using AssetRegistry = std::map<AssetHandle, AssetMetaData>;
+	using AssetLoadedCallback = std::function<void(AssetHandle, AssetType)>;
     using AssetJob = std::function<void()>;
+
     class Project;
 
     class AssetManager
@@ -55,10 +59,22 @@ namespace ignite {
             if (asset && std::is_base_of_v<Asset, T>)
             {
                 m_LoadedAssets[handle] = asset;
+                
+                // Notify listeners that asset was loaded
+                for (const auto &callback : m_LoadedCallbacks)
+                {
+                    callback(handle, asset->GetAssetType());
+                }
             }
         }
 
         void RemoveAsset(AssetHandle handle);
+        
+        // Register callback to be notified when assets are loaded
+        void RegisterAssetLoadedCallback(AssetLoadedCallback callback)
+        {
+            m_LoadedCallbacks.push_back(callback);
+        }
 
         void SubmitJob(AssetJob job);
 
@@ -93,12 +109,14 @@ namespace ignite {
         AssetRegistry m_AssetRegistry;
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
         std::unordered_set<AssetHandle> m_LoadingAssets; // Track assets currently being loaded
+        std::vector<AssetLoadedCallback> m_LoadedCallbacks;
 
         std::condition_variable m_ConditionVariable;
         std::vector<std::thread> m_Workers;
-        std::mutex m_Mutex;
         std::queue<AssetJob> m_Jobs;
         bool m_Running;
     };
 
 }
+
+#endif

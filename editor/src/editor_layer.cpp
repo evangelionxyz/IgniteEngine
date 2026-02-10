@@ -913,6 +913,37 @@ namespace ignite
                 // Create a default scene
                 NewScene();
             }
+
+			// Register callback for when textures are loaded to invalidate material binding sets
+			openedProject->GetAssetManager().RegisterAssetLoadedCallback(
+				[this](AssetHandle handle, AssetType type)
+				{
+					if (type == AssetType::Texture)
+					{
+						// Find all materials that use this texture and mark them dirty
+						const auto &assets = Project::GetInstance()->GetAssetManager().GetLoadedAssets();
+						for (const auto &[matHandle, asset] : assets)
+						{
+							if (asset->GetAssetType() == AssetType::Material)
+							{
+								Ref<Material> material = std::static_pointer_cast<Material>(asset);
+								if (material)
+								{
+									// Check if this material uses the loaded texture
+									if (material->baseColorTextureHandle == handle ||
+										material->emissiveTextureHandle == handle ||
+										material->metallicRoughnessTextureHandle == handle ||
+										material->normalTextureHandle == handle ||
+										material->occlusionTextureHandle == handle)
+									{
+										material->InvalidateBindingSet();
+									}
+								}
+							}
+						}
+					}
+				}
+			);
         }
     }
 
@@ -1090,7 +1121,7 @@ namespace ignite
             {
                 const int channels = 4;
                 // stride is width * 4 because we packed it
-                stbi_write_png(filepath.c_str(), editor->m_ScreenshotWidth, editor->m_ScreenshotHeight, channels, editor->m_ScreenshotPixelData.data(), editor->m_ScreenshotWidth * 4);
+                stbi_write_png(filepath.c_str(), editor->m_ScreenshotWidth, editor->m_ScreenshotHeight, channels, editor->m_ScreenshotPixelData.data(), editor->m_ScreenshotWidth * channels);
                 
                 editor->m_ScreenshotPixelData.clear();
                 editor->m_ScreenshotPixelData.shrink_to_fit();
@@ -1124,9 +1155,9 @@ namespace ignite
                 env->LoadTexture(f);
                 
                 // Signal the renderer on the main thread that the environment has changed
-                Application::SubmitToMainThread([sr]() {
+                Application::SubmitToMainThread([sr]()
+                {
                     sr->OnEnvironmentTextureChanged();
-                    return true;
                 });
             });
         }
@@ -1198,8 +1229,6 @@ namespace ignite
                                     m_EditorScene->SetDirtyFlag(false);
                                     SetActiveScene(m_EditorScene);
                                     m_CurrentSceneFilePath = filepath;
-                                    
-                                    return true;
                                 });
                             }
                             else
@@ -1270,8 +1299,6 @@ namespace ignite
                                     {
                                         NewScene();
                                     }
-                                    
-                                    return true;
                                 });
                             }
                             else
@@ -1822,7 +1849,7 @@ namespace ignite
                     bool isSelected = std::strcmp(currentMeshName, meshNames[i]) == 0;
                     if (ImGui::Selectable(meshNames[i], isSelected))
                     {
-                        m_SelectedMesh = i;
+                        m_SelectedMesh = (int)i;
                     }
 
                     if (isSelected)

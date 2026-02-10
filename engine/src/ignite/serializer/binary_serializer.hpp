@@ -106,6 +106,24 @@ namespace ignite
             return result;
         }
 
+
+        static bool SerializeTextureToPNG(Ref<Texture> &texture, const std::filesystem::path &filepath)
+        {
+            if (!texture)
+                return false;
+
+			// Map and read the pixel data
+			void *pixelData = texture->GetBuffer().data;
+            if (!pixelData)
+                return false;
+
+            const int channels = 4;
+            const int width = static_cast<int>(texture->GetWidth());
+            const int height = static_cast<int>(texture->GetHeight());
+            int result = stbi_write_png(filepath.generic_string().c_str(), width, height, channels, pixelData, width * channels);
+            return result == 1;
+        }
+
         static std::vector<std::byte> SerializeMaterial(const Ref<Material> &mat, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
@@ -117,66 +135,13 @@ namespace ignite
             MaterialType matType = mat->GetType();
             AppendRaw(buffer, matType);
 
-            // NOTE: WRITE COMPRESSED TEXTURE DATA (PNG)
-            // Should use AssetHandle instead
-            auto writeTextureFunc = [&](Ref<Texture> texture)
-            {
+            AppendRaw(buffer, mat->baseColorTextureHandle);
+            AppendRaw(buffer, mat->emissiveTextureHandle);
+            AppendRaw(buffer, mat->metallicRoughnessTextureHandle);
+            AppendRaw(buffer, mat->normalTextureHandle);
+            AppendRaw(buffer, mat->occlusionTextureHandle);
 
-				const TextureCreateInfo &texCreateInfo = texture->GetCreateInfo();
-				// Write texture create info
-				AppendRaw(buffer, texCreateInfo);
-
-				bool hasTexture = texture->GetBuffer(); // store flag
-
-                if (!hasTexture)
-                {
-                    AppendRaw(buffer, hasTexture);
-                }
-                else
-                {
-					AppendRaw(buffer, hasTexture);
-
-					size_t width = static_cast<size_t>(texture->GetWidth());
-					size_t height = static_cast<size_t>(texture->GetHeight());
-					size_t rowPitch = width * texture->GetChannels();
-
-					// Map and read the pixel data
-					void *pixelData = texture->GetBuffer().data; 
-
-					// Compress pixel data to PNG format
-					// Use stbi_write_png_to_func with a custom callback to write to memory
-					std::vector<unsigned char> compressedData;
-
-					auto writeCallback = [](void *context, void *data, int size)
-					{
-						auto *vec = static_cast<std::vector<unsigned char> *>(context);
-						const unsigned char *bytes = static_cast<const unsigned char *>(data);
-						vec->insert(vec->end(), bytes, bytes + size);
-					};
-
-					stbi_write_png_to_func(
-						writeCallback,
-						&compressedData,
-						static_cast<int>(width),
-						static_cast<int>(height),
-						4, // RGBA = 4 channels
-						pixelData,
-						static_cast<int>(rowPitch)
-					);
-
-					// Write compressed data size and compressed data
-					uint32_t compressedSize = static_cast<uint32_t>(compressedData.size());
-					AppendRaw(buffer, compressedSize);
-
-					AppendBytes(buffer, compressedData.data(), compressedSize);
-                }
-            };
-            
-            writeTextureFunc(mat->baseColorTexture);
-            writeTextureFunc(mat->emissiveTexture);
-            writeTextureFunc(mat->metallicRoughnessTexture);
-            writeTextureFunc(mat->normalTexture);
-            writeTextureFunc(mat->occlusionTexture);
+            AppendRaw(buffer, mat->gpuData);
 
             // Write to file
             std::ofstream of(filepath, std::ios::binary);
@@ -208,64 +173,13 @@ namespace ignite
 			ReadRaw(inFile, &matType);
             mat->SetType(matType);
 
-            // Read texture
-            auto readTextureFunc = [&](Ref<Texture> fallbackTexture) -> Ref<Texture>
-            {
-				TextureCreateInfo texCreateInfo;
-				ReadRaw(inFile, &texCreateInfo);
+			ReadRaw(inFile, &mat->baseColorTextureHandle);
+			ReadRaw(inFile, &mat->emissiveTextureHandle);
+			ReadRaw(inFile, &mat->metallicRoughnessTextureHandle);
+			ReadRaw(inFile, &mat->normalTextureHandle);
+            ReadRaw(inFile, &mat->occlusionTextureHandle);
 
-                bool hasTexture = false;
-                ReadRaw(inFile, &hasTexture);
-
-                if (hasTexture)
-                {
-				    // Read compressed data size
-				    uint32_t compressedSize = 0;
-                    ReadRaw(inFile, &compressedSize);
-
-				    // Read compressed data
-				    std::vector<unsigned char> compressedData(compressedSize);
-				    ReadRaw(inFile, compressedData.data(), compressedSize);
-
-				    // Decompress using stbi
-				    int width, height, channels;
-				    unsigned char *decompressedData = stbi_load_from_memory(
-					    compressedData.data(),
-					    static_cast<int>(compressedSize),
-					    &width,
-					    &height,
-					    &channels,
-					    4 // force RGBA
-				    );
-
-				    if (!decompressedData)
-				    {
-					    LOG_ASSERT(false, "Failed to decompress texture data");
-					    return nullptr;
-				    }
-
-				    // Calculate the size needed for Buffer
-				    const size_t pixelBytes = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
-				    Buffer buffer(pixelBytes);
-				    std::memcpy(buffer.data, decompressedData, pixelBytes);
-
-				    // Free decompressed data
-				    stbi_image_free(decompressedData);
-
-                    auto tex = Texture::Create(buffer, texCreateInfo, nullptr);
-                    return tex;
-                }
-                else
-                {
-                    return fallbackTexture;
-                }
-            };
-
-			mat->baseColorTexture = readTextureFunc(Renderer::GetWhiteTexture());
-			mat->emissiveTexture = readTextureFunc(Renderer::GetBlackTexture());
-			mat->metallicRoughnessTexture = readTextureFunc(Renderer::GetBlackTexture());
-			mat->normalTexture = readTextureFunc(Renderer::GetWhiteTexture());
-			mat->occlusionTexture = readTextureFunc(Renderer::GetWhiteTexture());
+            ReadRaw(inFile, &mat->gpuData);
 
             inFile.close();
             return mat;

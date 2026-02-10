@@ -24,6 +24,7 @@
 #include "content_browser_panel.hpp"
 #include "ignite/project/project.hpp"
 #include "editor_layer.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 
 #include <format>
 #include <algorithm>
@@ -47,7 +48,6 @@ namespace ignite
 
         cmd->close();
         Application::SubmitWorkerCommandList(cmd);
-        // device->executeCommandList(cmd);
     }
 
 	ContentBrowserPanel::~ContentBrowserPanel()
@@ -398,7 +398,6 @@ namespace ignite
                         Application::SubmitToMainThread([this]() mutable
                         {
 							m_NeedsRefresh = true;
-                            return true;
                         });
 					}
                 });
@@ -413,6 +412,11 @@ namespace ignite
             PruneMissingNodes(0, Project::GetInstance()->GetAssetDirectory());
             RefreshAssetTree();
             CompactTree();
+
+            ProjectSerializer serializer(Project::GetInstance());
+
+            auto f = Project::GetInstance()->GetFilepath();
+            serializer.Serialize(f);
         }
 
         // Check if thumbnail size changed and clear thumbnails if needed
@@ -912,8 +916,6 @@ namespace ignite
                     // Remove placeholder if loading failed
                     m_Thumbnails.erase(capturedPath);
                 }
-
-                return true;
             });
         });
     }
@@ -925,8 +927,7 @@ namespace ignite
         for (const auto& [path, thumbnail] : m_Thumbnails)
         {
             // Only unload if it has a loaded texture and hasn't been used recently
-            if (thumbnail.thumbnail && 
-                (m_CurrentFrame - thumbnail.lastFrameUsed) > s_ThumbnailUnloadFrameThreshold)
+            if (thumbnail.thumbnail && (m_CurrentFrame - thumbnail.lastFrameUsed) > s_ThumbnailUnloadFrameThreshold)
             {
                 toUnload.push_back(path);
             }

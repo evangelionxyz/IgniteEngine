@@ -47,6 +47,7 @@ namespace ignite
         bool isUAV = false;
         bool isShadingRateSurface = false;
         bool keepCpuData = false;
+        bool deferGpuCreate = false;
 
         bool keepInitialState = false;
         nvrhi::Format format = nvrhi::Format::UNKNOWN;
@@ -92,6 +93,7 @@ namespace ignite
         bool operator ==(const Texture &other) const  { return m_Handle.Get() == other.m_Handle.Get(); }
     private:
         void CreateTextureHandle();
+        void EnsureTextureHandle();
 
         Buffer m_Buffer;
         TextureCreateInfo m_CreateInfo;
