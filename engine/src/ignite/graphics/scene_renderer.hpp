@@ -47,7 +47,6 @@ namespace ignite
         SceneRenderer();
         ~SceneRenderer();
         
-        void Create();
         void SetActiveScene(const Ref<Scene> &scene);
         void RenderTo(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT, bool renderEnvironment = true);
         void SetFillMode(nvrhi::RasterFillMode mode);

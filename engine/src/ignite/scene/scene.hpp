@@ -64,6 +64,7 @@ namespace ignite
         void OnUpdateEdit(f32 deltaTime);
         void Resize(uint32_t width, uint32_t height);
         void WriteBuffer(nvrhi::ICommandList* cmd);
+        void SetSceneRenderer(SceneRenderer *sceneRenderer) { m_SceneRenderer = sceneRenderer; }
 
         template<typename T>
         void OnComponentAdded(Entity entity, T &comp);
@@ -82,7 +83,7 @@ namespace ignite
         
         static Ref<Scene> Create(Project *project, const std::string &name);
         
-        Ref<SceneRenderer> GetSceneRenderer() { return m_SceneRenderer; }
+        SceneRenderer *GetSceneRenderer() { return m_SceneRenderer; }
         Ref<ConstantBuffer> GetSceneGPUDataBuffer() { return m_SceneGPUDataBuffer; }
         Ref<ConstantBuffer> GetCSMGPUDataBuffer() { return m_CSMGPUDataBuffer; }
 
@@ -94,7 +95,7 @@ namespace ignite
         virtual AssetType GetAssetType() override { return GetStaticType(); }
 
     private:
-        Ref<SceneRenderer> m_SceneRenderer;
+        SceneRenderer *m_SceneRenderer;
         Ref<ConstantBuffer> m_SceneGPUDataBuffer;
         Ref<ConstantBuffer> m_CSMGPUDataBuffer;
 

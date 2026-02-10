@@ -36,6 +36,7 @@
 #include "stb_image_write.h"
 
 #include <cinttypes>
+#include <cmath>
 #include <SDL3/SDL_dialog.h>
 
 #include "ignite/graphics/objects/shadow_map.hpp"
@@ -285,14 +286,19 @@ namespace ignite
         if (!m_ActiveScene)
             return;
 
-		// Perform Resize
-		auto framebufferSize = m_ScenePanel->GetSceneViewportRT()->GetSize();
-		auto currentViewportSize = m_ScenePanel->GetViewportSize();
-		if (currentViewportSize.x > 0.0f && currentViewportSize.y > 0
-			&& (framebufferSize.x != currentViewportSize.x || framebufferSize.y != currentViewportSize.y))
-		{
-			m_ScenePanel->ResizeFramebuffer(currentViewportSize.x, currentViewportSize.y);
-		}
+        // Perform Resize (use integer sizes to avoid continuous resizing from fractional values)
+        auto framebufferSize = m_ScenePanel->GetSceneViewportRT()->GetSize();
+        glm::vec2 currentViewportSize = m_ScenePanel->GetViewportSize();
+        glm::uvec2 desiredSize{
+            static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.x))),
+            static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.y)))
+        };
+
+        if (desiredSize.x > 0u && desiredSize.y > 0u &&
+            (framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y))
+        {
+            m_ScenePanel->ResizeFramebuffer(desiredSize.x, desiredSize.y);
+        }
 
         // Scene Render
         switch (m_Data.sceneState)

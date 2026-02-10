@@ -361,9 +361,10 @@ namespace ignite
 		}
 
 		m_Scene = scene;
-
 		if (m_Scene)
 		{
+			m_Scene->SetSceneRenderer(this);
+
 			// Wait for GPU to finish all operations before releasing resources
 			Application::GetGraphicsDevice()->waitForIdle();
 			
@@ -396,6 +397,7 @@ namespace ignite
 	void SceneRenderer::RenderTo(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT, bool renderEnvironment)
 	{
 		m_EntityBounds.clear();
+
 
 		// Update UI system
 		m_UIRenderer->Update(0.016f); // Assuming ~60 FPS for now
@@ -471,7 +473,8 @@ namespace ignite
 		CompositePass(cmd, compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
 
 		cmd->close();
-		Application::SubmitWorkerCommandList(cmd);
+		m_Device->executeCommandList(cmd);
+		// Application::SubmitWorkerCommandList(cmd);
 	}
 
 	void SceneRenderer::ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera)
