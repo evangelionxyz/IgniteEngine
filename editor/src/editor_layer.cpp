@@ -1462,8 +1462,9 @@ namespace ignite
             static int sortColumn = 0; // 0=Handle, 1=Type, 2=Filepath, 3=Status
             static bool sortAscending = true;
 
-            ImGui::SetNextWindowSize(ImVec2(1200, 700), ImGuiCond_FirstUseEver);
-            ImGui::Begin("Asset Registry & Memory Monitor", &m_Data.assetRegistryWindow);
+			ImGui::SetNextWindowSize(ImVec2(1200, 700), ImGuiCond_FirstUseEver);
+			ImGui::Begin("Asset Registry & Memory Monitor", &m_Data.assetRegistryWindow);
+			ImGui::BeginChild("asset_registry_scroll", ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_HorizontalScrollbar);
 
             // === STATISTICS PANEL ===
 			ImGui::Text("Asset Statistics & Memory Usage");
@@ -1552,59 +1553,65 @@ namespace ignite
 			ImGui::ProgressBar(loadRatio, ImVec2(-1, 0),
 				std::string("Memory Load: " + std::to_string((int)(loadRatio * 100)) + "%").c_str());
 
-            // === FILTERS & CONTROLS ===
-			ImGui::AlignTextToFramePadding();
-			ImGui::Text("Search:");
-			ImGui::SameLine();
-
-			static char buffer[256] = { 0 };
-			ImGui::SetNextItemWidth(300);
-			if (ImGui::InputTextWithHint("##asset_registry_filter", "Handle, Type, or Filepath...",
-				buffer, sizeof(buffer), ImGuiInputTextFlags_EscapeClearsAll))
+			// === FILTERS & CONTROLS ===
+			if (ImGui::BeginTable("asset_registry_controls", 2, ImGuiTableFlags_SizingStretchProp))
 			{
-				assetRegistryFilterResultStr = std::string(buffer);
-			}
+				ImGui::TableNextRow();
+				ImGui::TableNextColumn();
+				ImGui::AlignTextToFramePadding();
+				ImGui::Text("Search:");
+				ImGui::SameLine();
 
-			ImGui::SameLine();
-			ImGui::Text("Type Filter:");
-			ImGui::SameLine();
-
-			// Type filter dropdown
-			const char *typeNames[] = { "All", "Scene", "Texture", "Material", "StaticMesh", "Audio", "Skeleton" };
-			const AssetType typeValues[] = {
-				AssetType::Invalid, AssetType::Scene, AssetType::Texture,
-				AssetType::Material, AssetType::StaticMesh, AssetType::Audio, AssetType::Skeleton
-			};
-
-			int currentTypeIndex = 0;
-			for (int i = 0; i < IM_ARRAYSIZE(typeValues); i++)
-			{
-				if (typeValues[i] == selectedTypeFilter)
+				static char buffer[256] = { 0 };
+				ImGui::SetNextItemWidth(300);
+				if (ImGui::InputTextWithHint("##asset_registry_filter", "Handle, Type, or Filepath...",
+					buffer, sizeof(buffer), ImGuiInputTextFlags_EscapeClearsAll))
 				{
-					currentTypeIndex = i;
-					break;
+					assetRegistryFilterResultStr = std::string(buffer);
 				}
-			}
 
-			ImGui::SetNextItemWidth(150);
-			if (ImGui::Combo("##type_filter", &currentTypeIndex, typeNames, IM_ARRAYSIZE(typeNames)))
-			{
-				selectedTypeFilter = typeValues[currentTypeIndex];
-			}
+				ImGui::SameLine();
+				ImGui::Text("Type Filter:");
+				ImGui::SameLine();
 
-			ImGui::SameLine();
-			ImGui::Checkbox("Full Path", &showFullPath);
+				// Type filter dropdown
+				const char *typeNames[] = { "All", "Scene", "Texture", "Material", "StaticMesh", "Audio", "Skeleton" };
+				const AssetType typeValues[] = {
+					AssetType::Invalid, AssetType::Scene, AssetType::Texture,
+					AssetType::Material, AssetType::StaticMesh, AssetType::Audio, AssetType::Skeleton
+				};
 
-			ImGui::SameLine();
-			if (ImGui::Button("Refresh Registry"))
-		 {
-				m_ActiveProject->ValidateAssetRegistry();
-			}
+				int currentTypeIndex = 0;
+				for (int i = 0; i < IM_ARRAYSIZE(typeValues); i++)
+				{
+					if (typeValues[i] == selectedTypeFilter)
+					{
+						currentTypeIndex = i;
+						break;
+					}
+				}
 
-			ImGui::SameLine();
-			if (ImGui::Button("Unload Unused Assets"))
-			{
-				m_ActiveProject->GetAssetManager().UnloadUnusedAssets();
+				ImGui::SetNextItemWidth(150);
+				if (ImGui::Combo("##type_filter", &currentTypeIndex, typeNames, IM_ARRAYSIZE(typeNames)))
+				{
+					selectedTypeFilter = typeValues[currentTypeIndex];
+				}
+
+				ImGui::SameLine();
+				ImGui::Checkbox("Full Path", &showFullPath);
+
+				ImGui::TableNextColumn();
+				ImGui::BeginGroup();
+				if (ImGui::SmallButton("Refresh Registry"))
+				{
+					m_ActiveProject->ValidateAssetRegistry();
+				}
+				if (ImGui::SmallButton("Unload Unused Assets"))
+				{
+					m_ActiveProject->GetAssetManager().UnloadUnusedAssets();
+				}
+				ImGui::EndGroup();
+				ImGui::EndTable();
 			}
 
             ImGui::Spacing();
@@ -1823,7 +1830,8 @@ namespace ignite
                 }
                 ImGui::EndTable();
             }
-            ImGui::End();
+			ImGui::EndChild();
+			ImGui::End();
         }
     }
 
