@@ -118,9 +118,7 @@ namespace ignite
         static void OnLoadHDRTextureSelected(void *userData, const char *const *filelist, int filter);
 
         void ProcessPendingFileLoading();
-
         void UISettings();
-        void UIImportMeshes();
 
         Ref<ScenePanel> m_ScenePanel;
         Ref<ContentBrowserPanel> m_ContentBrowserPanel;

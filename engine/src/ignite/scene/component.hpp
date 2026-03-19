@@ -325,10 +325,9 @@ namespace ignite
     {
     public:
         Ref<Environment> environment;
-        AssetHandle imageHandle;
+        AssetHandle hdrHandle;
 
         bool primary = false;
-        
 
         COMPONENT_CLASS_TYPE(CompType_WorldEnvironment)
     };
@@ -408,7 +407,6 @@ namespace ignite
 
         BoxColliderComponent() = default;
 
-
         COMPONENT_CLASS_TYPE(CompType_BoxCollider)
     };
 
@@ -469,4 +467,5 @@ namespace ignite
 
         COMPONENT_CLASS_TYPE(CompType_Script)
     };
+
 }

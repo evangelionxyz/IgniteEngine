@@ -57,6 +57,9 @@ namespace ignite
         void OnStart();
         void OnStop();
 
+        void Pause();
+        void Step(int frame);
+
         void UpdateTransforms(float deltaTime);
         void UpdateTransformRecursive(Entity entity, const glm::mat4 &parentWorldTransform);
         
@@ -79,17 +82,22 @@ namespace ignite
         std::unordered_map<UUID, entt::entity> entities; // uuid to entity
         Scene_GPUData gpuData;
         
-        bool IsPlaying() const { return m_Playing; }
+		bool IsPaused() const { return m_IsPaused; }
+        bool IsRunning() const { return m_IsPlaying; }
         
         static Ref<Scene> Create(Project *project, const std::string &name);
         
         SceneRenderer *GetSceneRenderer() { return m_SceneRenderer; }
+        Environment *GetEnvironment();
+
+		uint32_t GetViewportWidth() const { return m_ViewportWidth; }
+		uint32_t GetViewportHeight() const { return m_ViewportHeight; }
+
         Ref<ConstantBuffer> GetSceneGPUDataBuffer() { return m_SceneGPUDataBuffer; }
         Ref<ConstantBuffer> GetCSMGPUDataBuffer() { return m_CSMGPUDataBuffer; }
 
         glm::vec3 physicsGravity{ 0.0f, -9.8f, 0.0f };
         float timeInSeconds = 0.0f;
-        uint32_t viewportWidth = 1280, viewportHeight = 720;
 
         static AssetType GetStaticType() { return AssetType::Scene; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }
@@ -100,7 +108,15 @@ namespace ignite
         Ref<ConstantBuffer> m_CSMGPUDataBuffer;
 
         Project *m_Project;
+        
+        uint32_t m_ViewportWidth;
+        uint32_t m_ViewportHeight;
 
-        bool m_Playing = false;
+		uint64_t m_StepFrame = 0;
+        
+        bool m_IsPaused = false;
+        bool m_IsPlaying = false;
+
+        friend class SceneManager;
     };
 }

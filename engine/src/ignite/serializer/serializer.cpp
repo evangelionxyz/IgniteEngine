@@ -367,6 +367,17 @@ namespace ignite {
                     sr.EndMap();
                 }
 
+				// World Environment
+				if (entity.HasComponent<WorldEnvironment>())
+				{
+					const WorldEnvironment &comp = entity.GetComponent<WorldEnvironment>();
+					sr.BeginMap("AudioSource");
+					{
+						sr.AddKeyValue("HDRHandle", static_cast<uint64_t>(comp.hdrHandle));
+					}
+					sr.EndMap();
+				}
+
                 // Script
                 if (entity.HasComponent<ScriptComponent>())
                 {
@@ -684,12 +695,7 @@ namespace ignite {
             {
                 WorldEnvironment &world = desEntity.AddComponent<WorldEnvironment>();
                 world.environment = Environment::Create(desScene.get());
-                world.imageHandle = AssetHandle(node["ImageHandle"].as<uint64_t>());
-                const AssetMetaData &metadata = project->GetAssetManager().GetMetaData(world.imageHandle);
-                if (metadata.type == AssetType::Texture)
-                {
-                    world.environment->LoadTexture(metadata.filepath.generic_string());
-                }
+                world.hdrHandle = AssetHandle(node["HDRHandle"].as<uint64_t>());
             }
 
 			// Static Mesh
@@ -697,11 +703,6 @@ namespace ignite {
 			{
 				StaticMeshComponent &comp = desEntity.AddComponent<StaticMeshComponent>();
 				comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
-                const AssetMetaData &metadata = project->GetAssetManager().GetMetaData(comp.handle);
-                if (metadata.type == AssetType::StaticMesh)
-                {
-                    // Project::GetInstance()->GetAsset<StaticMesh>(comp.handle);
-                }
 			}
 
             // Script
@@ -755,7 +756,7 @@ namespace ignite {
         }
 
         // attach each node to it's parent
-        for (auto [uuid, e] : desScene->entities)
+        for (auto &[uuid, e] : desScene->entities)
         {
             Entity entity{ e, desScene.get() };
 

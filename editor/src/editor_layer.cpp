@@ -26,20 +26,17 @@
 #include "panels/content_browser_panel.hpp"
 #include "panels/materials_panel.hpp"
 
-#include "ignite/core/platform_utils.hpp"
 #include "ignite/core/command.hpp"
 #include "ignite/graphics/renderer_2d.hpp"
-#include "ignite/imgui/gui_function.hpp"
 #include "ignite/asset/asset.hpp"
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/scripting/script_engine.hpp"
+#include "ignite/graphics/objects/shadow_map.hpp"
+
 #include "stb_image_write.h"
 
-#include <cinttypes>
 #include <cmath>
 #include <SDL3/SDL_dialog.h>
-
-#include "ignite/graphics/objects/shadow_map.hpp"
 
 namespace ignite
 {
@@ -291,17 +288,34 @@ namespace ignite
             return;
 
         // Perform Resize (use integer sizes to avoid continuous resizing from fractional values)
-        auto framebufferSize = m_ScenePanel->GetSceneViewportRT()->GetSize();
-        glm::vec2 currentViewportSize = m_ScenePanel->GetViewportSize();
-        glm::uvec2 desiredSize{
+        const glm::uvec2 framebufferSize = m_ScenePanel->GetSceneViewportRT()->GetSize();
+        const glm::vec2 currentViewportSize = m_ScenePanel->GetViewportSize();
+        const glm::uvec2 desiredSize
+        {
             static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.x))),
             static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.y)))
         };
 
-        if (desiredSize.x > 0u && desiredSize.y > 0u &&
-            (framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y))
+        const glm::uvec2 sceneSize
         {
-            m_ScenePanel->ResizeFramebuffer(desiredSize.x, desiredSize.y);
+            m_ActiveScene->GetViewportWidth(),
+            m_ActiveScene->GetViewportHeight()
+        };
+
+        const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
+        const bool sceneNeedsResize = sceneSize.x != desiredSize.x || sceneSize.y != desiredSize.y;
+
+        if (desiredSize.x > 0u && desiredSize.y > 0u)
+        {
+            if (framebufferNeedsResize)
+            {
+                m_ScenePanel->ResizeFramebuffer(desiredSize.x, desiredSize.y);
+            }
+
+            if (sceneNeedsResize)
+            {
+                m_ActiveScene->Resize(desiredSize.x, desiredSize.y);
+            }
         }
 
         // Scene Render
@@ -330,19 +344,7 @@ namespace ignite
             break;
         }
         }
-
-        if (Entity selectedEntity = m_ScenePanel->GetSelectedEntity())
-        {
-            if (selectedEntity.HasComponent<CameraComponent>())
-            {
-                ICamera *camera = &selectedEntity.GetComponent<CameraComponent>().camera;
-                m_SceneRenderer->RenderTo(camera,
-                    m_ScenePanel->GetSceneCameraRT(),
-                    m_ScenePanel->GetUICameratRT(),
-                    m_ScenePanel->GetCompositeCameraRT());
-            }
-        }
-
+		
         m_Cmd->open();
         // Create staging texture for read-back
         if (m_Data.isPickingEntity && false) // FIXME: No mouse picking
@@ -659,7 +661,6 @@ namespace ignite
             
             // Render GUI
             UISettings();
-            UIImportMeshes();
         }
 
         ImGui::End(); // end dock space
@@ -717,12 +718,6 @@ namespace ignite
         // Clear active scene first to release references in renderer and panels
         SetActiveScene(nullptr);
         
-        // Wait for GPU operations to complete
-        if (m_Device)
-        {
-            m_Device->waitForIdle();
-        }
-
         // Reset scenes - this should trigger destructors
         m_EditorScene.reset();
         m_ActiveScene.reset();
@@ -865,11 +860,6 @@ namespace ignite
         if (m_ActiveProject)
         {
             SetActiveScene(nullptr);
-
-            if (m_Device)
-            {
-                m_Device->waitForIdle();
-            }
 
             m_EditorScene.reset();
             m_ActiveScene.reset();
@@ -1832,62 +1822,6 @@ namespace ignite
             }
 			ImGui::EndChild();
 			ImGui::End();
-        }
-    }
-
-    void EditorLayer::UIImportMeshes()
-    {
-        if (m_LoadedMeshScene.has_value())
-        {
-            ImGui::Begin("Import Mesh");
-
-            std::vector<const char *> meshNames;
-            meshNames.reserve(m_LoadedMeshScene->flatMeshes.size());
-            for (size_t i = 0; i < m_LoadedMeshScene->flatMeshes.size(); ++i)
-            {
-                meshNames.push_back(m_LoadedMeshScene->flatMeshes[i]->GetName().c_str());
-            }
-
-            const char *currentMeshName = meshNames[m_SelectedMesh];
-
-            if (ImGui::BeginCombo("Mesh", currentMeshName))
-            {
-                for (size_t i = 0; i < meshNames.size(); ++i)
-                {
-                    bool isSelected = std::strcmp(currentMeshName, meshNames[i]) == 0;
-                    if (ImGui::Selectable(meshNames[i], isSelected))
-                    {
-                        m_SelectedMesh = (int)i;
-                    }
-
-                    if (isSelected)
-                    {
-                        ImGui::SetItemDefaultFocus();
-                    }
-                }
-
-                ImGui::EndCombo();
-            }
-
-            if (ImGui::Button("Cancel"))
-            {
-                m_SelectedMesh = 0;
-                m_LoadedMeshScene.reset();
-                m_MeshInstanceData = nullptr;
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button("Import"))
-            {
-                Ref<MeshInstance> &mInstance = *static_cast<Ref<MeshInstance> *>(m_MeshInstanceData);
-                mInstance = m_LoadedMeshScene->flatMeshes[m_SelectedMesh];
-
-                m_SelectedMesh = 0;
-                m_LoadedMeshScene.reset();
-                m_MeshInstanceData = nullptr;
-            }
-
-            ImGui::End();
         }
     }
 }

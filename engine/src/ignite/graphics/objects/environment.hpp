@@ -43,7 +43,7 @@ namespace ignite {
         Environment(Scene *scene);
     	~Environment();
 
-        void Draw(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline);
+        void Draw(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *fb, const Ref<GraphicsPipeline> &gp);
 
         void UpdateBindingSet();
 

@@ -232,7 +232,7 @@ namespace ignite
 
             Application::SubmitToMainThread([&]()
             {
-                if (scriptEngine->m_Scene && scriptEngine->m_Scene->IsPlaying())
+                if (scriptEngine->m_Scene && scriptEngine->m_Scene->IsRunning())
                     return;
                 
                 scriptEngineData->appAssemblyFileWatcher.reset();

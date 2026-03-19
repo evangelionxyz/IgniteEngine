@@ -1,6 +1,6 @@
 workspace "IGN-Managed"
     location "../"
-    flags { "MultiProcessorCompile" }
+    multiprocessorcompile("On")
     configurations { "Debug", "Release" }
 
     BUILD_DIR = "%{wks.location}/bin"

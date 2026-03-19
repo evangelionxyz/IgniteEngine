@@ -295,7 +295,7 @@ namespace ignite
         
         ImGui::PopStyleColor(3);
 
-        if (!m_Scene->IsPlaying() || true)
+        if (!m_Scene->IsRunning() || true)
         {
             ImGui::PushID((int)imguiPushId);
             if (ImGui::BeginPopupContextItem(idComp.name.c_str()))
@@ -689,7 +689,7 @@ namespace ignite
                     ImGui::EndCombo();
                 }
 
-                if (m_Scene->IsPlaying())
+                if (m_Scene->IsRunning())
                 {
                     if (ImGui::DragFloat2("Linear Vel", &c.linearVelocity.x, 0.025f))
                         b2Body_SetLinearVelocity(c.bodyId, { c.linearVelocity.x, c.linearVelocity.y });
@@ -745,7 +745,7 @@ namespace ignite
                         if (ImGui::Selectable(projectionTypeStr[i], &isSelected))
                         {
                             c.camera.projectionType = static_cast<ProjectionType>(i);
-                            c.camera.UpdateMatrices(static_cast<float>(m_Scene->viewportWidth), static_cast<float>(m_Scene->viewportHeight));
+                            c.camera.UpdateMatrices(static_cast<float>(m_Scene->GetViewportWidth()), static_cast<float>(m_Scene->GetViewportHeight()));
                         }
 
                         if (isSelected)
@@ -773,7 +773,7 @@ namespace ignite
 
                 if (modified)
                 {
-                    c.camera.UpdateMatrices(static_cast<float>(m_Scene->viewportWidth), static_cast<float>(m_Scene->viewportHeight));
+                    c.camera.UpdateMatrices(static_cast<float>(m_Scene->GetViewportWidth()), static_cast<float>(m_Scene->GetViewportHeight()));
                 }
             });
 
@@ -954,7 +954,7 @@ namespace ignite
                 bool detached = c.className == "Detached";
 
                 // classFields
-                bool isRunning = m_Scene->IsPlaying();
+                bool isRunning = m_Scene->IsRunning();
 
                 // Editable classFields (edit mode)
                 if (isRunning && !detached)
@@ -1511,8 +1511,6 @@ namespace ignite
             sceneRenderer->UpdateUIInput(screenMousePos, viewportPos, viewportSize, mousePressed);
         }
 
-        // ImTextureID sceneImage = (ImTextureID)m_SceneViewportRT->GetColorAttachment(0)->GetHandle().Get(); // Test scene RT
-        // ImTextureID sceneImage = (ImTextureID)m_UIViewportRT->GetColorAttachment(0)->GetHandle().Get(); // Test UI RT
         ImTextureID sceneImage = (ImTextureID)m_CompositeViewportRT->GetColorAttachment(0)->GetHandle().Get(); // Current composite RT
         ImGui::Image(sceneImage, canvasSize);
         if (ImGui::BeginDragDropTarget())
@@ -1668,18 +1666,29 @@ namespace ignite
             }
         }
 
+        // Preview camera
         if (Entity cameraEntity = GetSelectedEntity())
         {
             if (cameraEntity.HasComponent<CameraComponent>())
             {
-                const ImVec2 vpSize = { static_cast<float>(m_Scene->viewportWidth), static_cast<float>(m_Scene->viewportHeight) };
-                const float padding = 8.0f;
-                const float width = 256.0f;
-                const float height = width / (vpSize.x / vpSize.y);
+                const glm::uvec2 previewRtSize = m_CompositeCameraRT->GetSize();
+                ICamera previewCamera = cameraEntity.GetComponent<CameraComponent>().camera;
+                if (auto sceneRenderer = m_Scene->GetSceneRenderer(); sceneRenderer && previewRtSize.x > 0u && previewRtSize.y > 0u)
+                {
+                    const float aspect = static_cast<float>(previewRtSize.x) / static_cast<float>(previewRtSize.y);
+                    const float padding = 8.0f;
+                    const float width = 256.0f;
+                    const float height = width / aspect;
 
-                ImGui::SetCursorPos({ canvasSize.x - width - padding, canvasSize.y - height });
-                ImTextureID previewImage = (ImTextureID)m_CompositeCameraRT->GetColorAttachment(0)->GetHandle().Get();
-                ImGui::Image(previewImage, {width, height});
+                    sceneRenderer->RenderTo(&previewCamera,
+                        GetSceneCameraRT(),
+                        GetUICameratRT(),
+                        GetCompositeCameraRT());
+
+                    ImGui::SetCursorPos({ canvasSize.x - width - padding, canvasSize.y - height + padding });
+                    ImTextureID previewImage = (ImTextureID)m_CompositeCameraRT->GetColorAttachment(0)->GetHandle().Get();
+                    ImGui::Image(previewImage, {width, height});
+                }
             }
         }
 
@@ -1699,7 +1708,7 @@ namespace ignite
         if (m_Scene)
         {
             m_Scene->Resize(width, height);
-            m_Camera.UpdateMatrices(static_cast<float>(m_Scene->viewportWidth), static_cast<float>(m_Scene->viewportHeight));
+            m_Camera.UpdateMatrices(static_cast<float>(width), static_cast<float>(height));
         }
     }
 

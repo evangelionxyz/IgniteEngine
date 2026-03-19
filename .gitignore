@@ -6,14 +6,17 @@
 *.csproj
 *.make
 *.dir
+*.ninja
+*.sln
+*.slnx
 *cmake_install.cmake
 
 Makefile
 CMakeFiles
 CMakeCache.txt
+imgui.ini
 
 /editor/*.sln
-/editorV2/*.sln
 /ignite_hub/*.sln
 /engine/*.sln
 /runtime/*.sln
@@ -33,11 +36,8 @@ CMakeCache.txt
 /scripts/__pycache__
 /scripts/premake
 /scripts/downloads
-
-IGN.sln
-IGN.sln.DotSettings.user
-IGN-Managed.sln
-IGN-Managed.DotSettings.user
+/scriptengine/obj
+/scriptengine/bin
 
 scriptcore/Makefile
 engine/Makefile
@@ -50,6 +50,4 @@ runtime/ignite_runtime_icon.rc
 editor/ignite_editor_icon.rc
 runtime/IgniteRuntime.dir
 thirdparty/TINYGLTF.dir
-*.slnx
-scriptengine/obj
-scriptengine/bin
+
