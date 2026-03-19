@@ -142,7 +142,7 @@ namespace ignite
 		std::vector<Ref<MeshInstance>> m_MeshInstances;
 	};
 
-    class MeshLoader
+    class GLTFMeshLoader
     {
     public:
         static Ref<Material> LoadMaterial(const tinygltf::Primitive& primitive, const std::vector<tinygltf::Material>& materials,
@@ -156,5 +156,17 @@ namespace ignite
         static std::vector<Ref<Texture>> LoadTexturesFromGLTF(const tinygltf::Model& model);
         static std::vector<nvrhi::SamplerDesc> GetSamplersFromGLTF(const tinygltf::Model& model);
         static const unsigned char* GetBufferData(const tinygltf::Model& model, const tinygltf::Accessor& accessor);
+    };
+
+    class FBXMeshLoader
+    {
+    public:
+        static void LoadSceneGraphFromFBX(const std::string &filename, MeshScene &outScene);
+    };
+
+    class MeshLoader
+    {
+    public:
+        static void LoadSceneGraph(const std::string &filename, MeshScene &outScene);
     };
 }

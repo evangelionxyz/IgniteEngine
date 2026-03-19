@@ -90,6 +90,7 @@ namespace ignite {
         { ".flac", AssetType::Audio },
         { ".wav", AssetType::Audio },
 
+        { ".fbx", AssetType::StaticMesh },
         { ".gltf", AssetType::StaticMesh },
         { ".bin", AssetType::StaticMesh },
         { ".ixsm", AssetType::StaticMesh },

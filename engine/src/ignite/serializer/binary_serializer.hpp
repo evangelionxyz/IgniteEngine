@@ -107,20 +107,53 @@ namespace ignite
         }
 
 
-        static bool SerializeTextureToPNG(Ref<Texture> &texture, const std::filesystem::path &filepath)
+        static bool SerializeTextureToPNG(const Ref<Texture> &texture, const std::filesystem::path &filepath)
         {
             if (!texture)
-                return false;
-
-			// Map and read the pixel data
-			void *pixelData = texture->GetBuffer().data;
-            if (!pixelData)
                 return false;
 
             const int channels = 4;
             const int width = static_cast<int>(texture->GetWidth());
             const int height = static_cast<int>(texture->GetHeight());
-            int result = stbi_write_png(filepath.generic_string().c_str(), width, height, channels, pixelData, width * channels);
+
+            if (width <= 0 || height <= 0)
+                return false;
+
+            const size_t bytesPerPixel = channels * sizeof(uint8_t);
+            const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * bytesPerPixel;
+
+            std::vector<uint8_t> pixelCopy;
+            pixelCopy.resize(expectedSize);
+
+            const Buffer &buffer = texture->GetBuffer();
+            if (buffer.data && buffer.size >= expectedSize)
+            {
+                std::memcpy(pixelCopy.data(), buffer.data, expectedSize);
+            }
+            else
+            {
+                const std::filesystem::path &sourceFilepath = texture->GetFilepath();
+                if (sourceFilepath.empty() || !std::filesystem::exists(sourceFilepath))
+                    return false;
+
+                int sourceWidth = 0;
+                int sourceHeight = 0;
+                int sourceChannels = 0;
+                stbi_uc *sourceData = stbi_load(sourceFilepath.generic_string().c_str(), &sourceWidth, &sourceHeight, &sourceChannels, channels);
+                if (!sourceData)
+                    return false;
+
+                if (sourceWidth != width || sourceHeight != height)
+                {
+                    stbi_image_free(sourceData);
+                    return false;
+                }
+
+                std::memcpy(pixelCopy.data(), sourceData, expectedSize);
+                stbi_image_free(sourceData);
+            }
+
+            int result = stbi_write_png(filepath.generic_string().c_str(), width, height, channels, pixelCopy.data(), width * channels);
             return result == 1;
         }
 

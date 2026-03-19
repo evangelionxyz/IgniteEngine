@@ -177,9 +177,9 @@ namespace ignite {
 
         if (!asset)
         {
-			// Generate folders
-			MeshScene meshScene;
-			MeshLoader::LoadSceneGraphFromGLTF(metadata.filepath.generic_string(), meshScene);
+         // Generate folders
+            MeshScene meshScene;
+            MeshLoader::LoadSceneGraph(metadata.filepath.generic_string(), meshScene);
 
             // Prepare AssetHandle map for texture material textures
             // we need 5 textures
@@ -268,6 +268,31 @@ namespace ignite {
         if (asset)
         {
             asset->handle = handle;
+
+			for (auto &mesh : asset->GetMeshInstances())
+			{
+				// Load materials
+				AssetHandle materialHandle = mesh->GetMaterialHandle();
+				AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(materialHandle);
+				if (metadata.type == AssetType::Material)
+				{
+					const auto &materialFilepath = Project::GetInstance()->GetAssetFilepath(metadata.filepath);
+					Ref<Material> material = BinarySerializer::DeserializeMaterial(materialFilepath);
+					Project::GetInstance()->GetAssetManager().AssignAsset(materialHandle, material);
+
+					// Submit GPU upload command list to render thread (thread-safe)
+					Application::SubmitToRenderThread([m = mesh]()
+						{
+							nvrhi::IDevice *device = Application::GetGraphicsDevice();
+							nvrhi::CommandListHandle cmd = device->createCommandList();
+							cmd->open();
+							m->GetPrimitive()->CreateBuffer(cmd);
+							cmd->close();
+
+							Application::SubmitWorkerCommandList(cmd);
+						});
+				}
+			}
 
             auto relativePath = Project::GetInstance()->GetAssetRelativeFilepath(meshBinaryFullpath);
         }

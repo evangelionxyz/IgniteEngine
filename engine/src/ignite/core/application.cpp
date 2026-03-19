@@ -34,12 +34,12 @@
 
 namespace ignite
 {
-    static Application *s_JoltInstance = nullptr;
+    static Application *s_AppInstance = nullptr;
 
     Application::Application(const ApplicationCreateInfo &createInfo)
         : m_CreateInfo(createInfo)
     {
-        s_JoltInstance = this;
+        s_AppInstance = this;
 
         if (m_CreateInfo.cmdLineArgs.count > 1)
         {
@@ -97,8 +97,8 @@ namespace ignite
 
     Application *Application::GetInstance()
     {
-        LOG_ASSERT(s_JoltInstance, "Application has not been created!");
-        return s_JoltInstance;
+        LOG_ASSERT(s_AppInstance, "Application has not been created!");
+        return s_AppInstance;
     }
 
     DeviceManager * Application::GetDeviceManager()
