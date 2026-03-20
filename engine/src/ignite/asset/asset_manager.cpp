@@ -24,7 +24,7 @@
 #include "asset_manager.hpp"
 #include "asset_importer.hpp"
 #include "ignite/project/project.hpp"
-#include "ignite/core/application.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 
 #include "ignite/core/logger.hpp"
@@ -127,7 +127,7 @@ namespace ignite {
         LOG_TRACE("[Asset Manager] Clearing all loaded assets (Count: {})", m_LoadedAssets.size());
         
         // Wait for GPU operations to complete before releasing assets
-        if (auto* device = Application::GetGraphicsDevice())
+        if (auto* device = DeviceManager::GetInstance()->GetDevice())
         {
             GPUUploadSync::DeviceWaitIdle(device);
         }
@@ -155,11 +155,11 @@ namespace ignite {
             lock.unlock();
             
             // Wait for GPU to ensure asset is not in use (outside lock)
-            if (auto* device = Application::GetGraphicsDevice())
+            if (auto* device = DeviceManager::GetInstance()->GetDevice())
             {
                 GPUUploadSync::DeviceWaitIdle(device);
             }
-            
+
             // asset will be destroyed here when going out of scope
         }
     }
@@ -167,15 +167,15 @@ namespace ignite {
     void AssetManager::UnloadUnusedAssets()
     {
         LOG_TRACE("[Asset Manager] Checking for unused assets (Loaded: {})", m_LoadedAssets.size());
-        
+
         std::vector<AssetHandle> assetsToUnload;
         std::vector<Ref<Asset>> assetsToDestroy;
-        
+
         // Find assets that are only referenced by m_LoadedAssets (use_count == 1)
         {
             std::unique_lock lock(s_AssetThreadMutex);
-            
-            for (const auto& [handle, asset] : m_LoadedAssets)
+
+            for (const auto &[handle, asset] : m_LoadedAssets)
             {
                 if (asset && asset.use_count() == 1)
                 {
@@ -183,23 +183,23 @@ namespace ignite {
                     assetsToDestroy.push_back(asset);
                 }
             }
-            
+
             if (!assetsToUnload.empty())
             {
                 LOG_TRACE("[Asset Manager] Unloading {} unused assets", assetsToUnload.size());
-                
+
                 for (AssetHandle handle : assetsToUnload)
                 {
                     m_LoadedAssets.erase(handle);
                 }
             }
         }
-        
+
         // GPU sync and asset destruction outside lock
         if (!assetsToUnload.empty())
         {
             // Wait for GPU to ensure assets are not in use
-            if (auto* device = Application::GetGraphicsDevice())
+            if (auto *device = DeviceManager::GetInstance()->GetDevice())
             {
                 GPUUploadSync::DeviceWaitIdle(device);
             }

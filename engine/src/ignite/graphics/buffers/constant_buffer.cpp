@@ -1,12 +1,12 @@
 #include "constant_buffer.hpp"
-
-#include "ignite/core/application.hpp"
+#include "ignite/core/device/device_manager.hpp"
+#include "ignite/core/logger.hpp"
 
 namespace ignite
 {
     ConstantBuffer::ConstantBuffer(const size_t size, bool isVolatile, const uint32_t maxVersion, const std::string &debugName)
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         nvrhi::BufferDesc cbDesc;
         cbDesc.byteSize = size;

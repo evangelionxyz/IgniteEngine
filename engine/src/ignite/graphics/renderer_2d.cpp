@@ -27,7 +27,6 @@
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 
 #include "ignite/core/logger.hpp"
-#include "ignite/core/application.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "graphics_pipeline.hpp"
 
@@ -54,7 +53,7 @@ namespace ignite
         if (it != s_QuadPSOCache.end())
             return it->second;
 
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         GraphicsPipelineParams params;
         params.enableBlend = true;
@@ -101,7 +100,7 @@ namespace ignite
         if (it != s_LinePSOCache.end())
             return it->second;
 
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         GraphicsPipelineParams params;
         params.enableBlend = true;
@@ -137,7 +136,7 @@ namespace ignite
         if (it != s_QuadBindingSetCache.end())
             return it->second;
 
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         // then add textures
         const auto samplerDesc = nvrhi::SamplerDesc()
@@ -169,7 +168,7 @@ namespace ignite
         if (it != s_LineBindingSetCache.end())
             return it->second;
 
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         // create binding set
         nvrhi::BindingSetDesc bindingSetDesc;
@@ -231,7 +230,7 @@ namespace ignite
             offset += 4;
         }
 
-        auto device = Application::GetGraphicsDevice();
+        auto device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
         cmd->open();
         m_QuadBatch.indexBuffer->SetData(cmd, Buffer(indices.data(), indices.size() * sizeof(uint32_t)));

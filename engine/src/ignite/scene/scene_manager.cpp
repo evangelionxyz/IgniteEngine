@@ -28,7 +28,7 @@
 
 #include "ignite/physics/2d/physics_2d.hpp"
 
-#include "ignite/core/application.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/uuid.hpp"
 
 #include "ignite/graphics/scene_renderer.hpp"
@@ -475,7 +475,7 @@ namespace ignite
             mr.mesh->WriteVertexBuffer(static_cast<uint32_t>(e));
         }*/
 
-        Application::GetDeviceManager()->WaitForIdle();
+        DeviceManager::GetInstance()->WaitForIdle();
 
         return newScene;
     }

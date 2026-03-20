@@ -26,7 +26,7 @@
 #include <vector>
 
 #include "device_manager.hpp"
-
+#include "ignite/graphics/render_target.hpp"
 #include "ignite/core/types.hpp"
 
 #ifdef PLATFORM_WINDOWS
@@ -77,7 +77,8 @@ namespace ignite
         const int SRV_HEAP_SIZE = 64;
 
         std::vector<nvrhi::RefCountPtr<ID3D12Resource>> m_SwapChainBuffers;
-        std::vector<nvrhi::TextureHandle> m_RhiSwapChainBuffers;
+        std::vector<Ref<RenderTarget>> m_SwapChainRenderTargets;
+
         nvrhi::RefCountPtr<ID3D12Fence> m_FrameFence;
         std::vector<HANDLE> m_FrameFenceEvents;
         uint64_t m_FrameCount = 1;
@@ -122,10 +123,13 @@ namespace ignite
         bool CreateSwapChain() override;
         void DestroyDeviceAndSwapChain() override;
         void ResizeSwapChain() override;
+        
         nvrhi::ITexture *GetCurrentBackBuffer() override;
-        nvrhi::ITexture *GetBackBuffer(u32 index) override;
-        u32 GetCurrentBackBufferIndex() override;
-        u32 GetBackBufferCount() override;
+        nvrhi::ITexture *GetBackBuffer(uint32_t index) override;
+        nvrhi::ITexture *GetBackDepthBuffer(uint32_t index) override;
+
+        uint32_t GetCurrentBackBufferIndex() override;
+        uint32_t GetBackBufferCount() override;
         bool BeginFrame() override;
         bool Present() override;
         void Destroy() override;

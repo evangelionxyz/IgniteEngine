@@ -27,7 +27,7 @@
 
 #include "shadow_map.hpp"
 #include "ignite/scene/icamera.hpp"
-#include "ignite/core/application.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/common.hpp>
@@ -70,15 +70,15 @@ namespace ignite
 		m_Quality = quality;
 
 		// Configure depth texture sampler settings
-		nvrhi::IDevice* device = Application::GetGraphicsDevice();
-		
+		nvrhi::IDevice* device = DeviceManager::GetInstance()->GetDevice();
+
 		nvrhi::SamplerDesc samplerDesc;
 		samplerDesc.addressU = nvrhi::SamplerAddressMode::ClampToEdge;
 		samplerDesc.addressV = nvrhi::SamplerAddressMode::ClampToEdge;
 		samplerDesc.addressW = nvrhi::SamplerAddressMode::ClampToEdge;
 		samplerDesc.borderColor = nvrhi::Color(1.0f, 1.0f, 1.0f, 1.0f); // White border = lit
-        samplerDesc.setAllFilters(true);
-		
+		samplerDesc.setAllFilters(true);
+
 		m_DepthSampler = device->createSampler(samplerDesc);
 		LOG_ASSERT(m_DepthSampler, "Failed to create depth sampler");
 
@@ -113,12 +113,12 @@ namespace ignite
 		// }
 	}
 
-    Ref<Texture> CascadedShadowMap::GetDepthTexture() const
-    {
+	Ref<Texture> CascadedShadowMap::GetDepthTexture() const
+	{
 		return m_DepthTexture;
-    }
+	}
 
-	void CascadedShadowMap::ComputeMatrices(ICamera *camera, const glm::vec3& lightPosition)
+	void CascadedShadowMap::ComputeMatrices(ICamera *camera, const glm::vec3 &lightPosition)
 	{
 		if (!camera)
 			return;
@@ -181,12 +181,12 @@ namespace ignite
 
 			std::array<glm::vec3, 8> frustumCornersVS{
 				glm::vec3(-nearX, -nearY, -nearDist),
-				glm::vec3( nearX, -nearY, -nearDist),
-				glm::vec3( nearX,  nearY, -nearDist),
+				glm::vec3(nearX, -nearY, -nearDist),
+				glm::vec3(nearX,  nearY, -nearDist),
 				glm::vec3(-nearX,  nearY, -nearDist),
 				glm::vec3(-farX,  -farY,  -farDist),
-				glm::vec3( farX,  -farY,  -farDist),
-				glm::vec3( farX,   farY,  -farDist),
+				glm::vec3(farX,  -farY,  -farDist),
+				glm::vec3(farX,   farY,  -farDist),
 				glm::vec3(-farX,   farY,  -farDist)
 			};
 
@@ -198,26 +198,26 @@ namespace ignite
 			}
 
 			glm::vec3 frustumCenter(0.0f);
-			for (const auto& corner : frustumCornersWS)
+			for (const auto &corner : frustumCornersWS)
 				frustumCenter += corner;
 			frustumCenter /= static_cast<float>(frustumCornersWS.size());
 
 			float radius = 0.0f;
-			for (const auto& corner : frustumCornersWS)
+			for (const auto &corner : frustumCornersWS)
 				radius = glm::max(radius, glm::length(corner - frustumCenter));
 			radius = std::ceil(radius * 16.0f) / 16.0f;
 
-			auto computeCascadeBounds = [&](const glm::mat4& lightViewMatrix, glm::vec3& outMin, glm::vec3& outMax)
-			{
-				outMin = glm::vec3(std::numeric_limits<float>::max());
-				outMax = glm::vec3(std::numeric_limits<float>::lowest());
-				for (const auto& corner : frustumCornersWS)
+			auto computeCascadeBounds = [&](const glm::mat4 &lightViewMatrix, glm::vec3 &outMin, glm::vec3 &outMax)
 				{
-					glm::vec4 cornerLS = lightViewMatrix * glm::vec4(corner, 1.0f);
-					outMin = glm::min(outMin, glm::vec3(cornerLS));
-					outMax = glm::max(outMax, glm::vec3(cornerLS));
-				}
-			};
+					outMin = glm::vec3(std::numeric_limits<float>::max());
+					outMax = glm::vec3(std::numeric_limits<float>::lowest());
+					for (const auto &corner : frustumCornersWS)
+					{
+						glm::vec4 cornerLS = lightViewMatrix * glm::vec4(corner, 1.0f);
+						outMin = glm::min(outMin, glm::vec3(cornerLS));
+						outMax = glm::max(outMax, glm::vec3(cornerLS));
+					}
+				};
 
 			glm::vec3 cascadeCenter = frustumCenter;
 			glm::vec3 lightPos = cascadeCenter - lightDir * radius * 2.0f;
@@ -274,10 +274,10 @@ namespace ignite
 		}
 	}
 
-    void CascadedShadowMap::CreatePipeline(nvrhi::IFramebuffer* framebuffer)
-    {
-        if (!m_VS) m_VS = Shader::Create("resources/shaders/cascaded_shadow_depth.vertex.hlsl", ShaderType::Vertex, true);
-        if (!m_PS) m_PS = Shader::Create("resources/shaders/cascaded_shadow_depth.pixel.hlsl", ShaderType::Pixel, true);
+	void CascadedShadowMap::CreatePipeline(nvrhi::IFramebuffer *framebuffer)
+	{
+		if (!m_VS) m_VS = Shader::Create("resources/shaders/cascaded_shadow_depth.vertex.hlsl", ShaderType::Vertex, true);
+		if (!m_PS) m_PS = Shader::Create("resources/shaders/cascaded_shadow_depth.pixel.hlsl", ShaderType::Pixel, true);
 
 		GraphicsPipelineParams params;
 		params.enableDepthWrite = true;
@@ -291,17 +291,17 @@ namespace ignite
 		layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
 		layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1));
 
-        if (!m_BindingLayout)
-        {
-            auto device = Application::GetInstance()->GetGraphicsDevice();
-            m_BindingLayout = device->createBindingLayout(layoutDesc);
-        }
-		
-        m_Pipeline = GraphicsPipeline::Create();
-		m_Pipeline->SetShaders({ m_VS, m_PS }).AddBindingLayout(m_BindingLayout).Build(framebuffer, params);
-    }
+		if (!m_BindingLayout)
+		{
+			auto device = DeviceManager::GetInstance()->GetDevice();
+			m_BindingLayout = device->createBindingLayout(layoutDesc);
+		}
 
-	nvrhi::IFramebuffer* CascadedShadowMap::GetCascadeFramebuffer(int cascadeIndex) const
+		m_Pipeline = GraphicsPipeline::Create();
+		m_Pipeline->SetShaders({ m_VS, m_PS }).AddBindingLayout(m_BindingLayout).Build(framebuffer, params);
+	}
+
+	nvrhi::IFramebuffer *CascadedShadowMap::GetCascadeFramebuffer(int cascadeIndex) const
 	{
 		if (cascadeIndex >= 0 && cascadeIndex < NUM_CASCADES)
 			return m_CascadeFramebuffers[cascadeIndex];
@@ -310,7 +310,7 @@ namespace ignite
 
 	void CascadedShadowMap::CreateCascadeFramebuffers()
 	{
-		nvrhi::IDevice* device = Application::GetGraphicsDevice();
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
 	    // Create All depth map layers
 

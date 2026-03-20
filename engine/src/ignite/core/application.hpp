@@ -93,9 +93,7 @@ namespace ignite
         Window *GetWindow() { return m_Window.get(); }
 
         static Application *GetInstance();
-        static DeviceManager *GetDeviceManager();
         static CommandManager *GetCommandManager();
-        static nvrhi::IDevice *GetGraphicsDevice();
         static bool IsRenderThreadRunning();
 
         static float GetDeltaTime();

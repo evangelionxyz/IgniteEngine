@@ -62,13 +62,12 @@ namespace ignite
 		Ref<Texture> GetCascadedShadowMapDepthTexture() const;
 
         Ref<CascadedShadowMap> GetCascadedShadowMap();
-
         Ref<Environment> &GetEnvironment() { return m_Environment; }
         Ref<UIRenderer> &GetUIRenderer() { return m_UIRenderer; }
+        Ref<Renderer2D> &GetRenderer2D() { return m_Renderer2D; }
 
         void OnEnvironmentTextureChanged();
 
-    private:
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer);
         void CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture);

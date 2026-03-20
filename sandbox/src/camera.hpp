@@ -1,6 +1,7 @@
+#pragma once
 /* MIT License
 *
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -21,35 +22,29 @@
 * SOFTWARE.
 */
 
-#include "vertex_buffer.hpp"
-#include "ignite/graphics/renderer.hpp"
-#include "ignite/core/device/device_manager.hpp"
-#include "ignite/core/logger.hpp"
+#pragma once
+
+#include "ignite/scene/icamera.hpp"
 
 namespace ignite
 {
-    VertexBuffer::VertexBuffer(const size_t size, const std::string &debugName)
-    {
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+	class BasicCamera : public ICamera
+	{
+	public:
+		enum class MovementMode
+		{
+			Orbiting,
+			Flying
+		};
 
-        nvrhi::BufferDesc desc;
-        desc.byteSize = size;
-        desc.isVertexBuffer = true;
-        desc.keepInitialState = true;
-        desc.initialState = nvrhi::ResourceStates::VertexBuffer;
-        desc.debugName = debugName;
+		BasicCamera() = default;
 
-        m_Handle = device->createBuffer(desc);
-        LOG_ASSERT(m_Handle, "[Vertex Buffer] Failed to create handle!");
-    }
-
-	void VertexBuffer::SetData(nvrhi::ICommandList *cmd, const Buffer buffer, const size_t offset) const
-    {
-        cmd->writeBuffer(m_Handle, buffer.data, buffer.size, offset);
-    }
-
-    Ref<VertexBuffer> VertexBuffer::Create(size_t size, const std::string &debugName)
-    {
-        return CreateRef<VertexBuffer>(size, debugName);
-    }
+		void UpdateMouseState();
+		void UpdateSphericalPosition();
+		void HandleOrbit(float deltaTime);
+		void HandlePan(float deltaTime);
+		void HandleZoom(float deltaTime);
+		void ApplyInertia(float deltaTime);
+		void UpdateCameraPosition();
+	};
 }

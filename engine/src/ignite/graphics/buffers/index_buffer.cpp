@@ -23,7 +23,7 @@
 
 #include "index_buffer.hpp"
 #include "ignite/graphics/renderer.hpp"
-#include "ignite/core/application.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
 
 namespace ignite
@@ -32,7 +32,7 @@ namespace ignite
     {
         m_Count = static_cast<uint32_t>(size) / sizeof(uint32_t);
 
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::BufferDesc desc;
         desc.byteSize = size;
         desc.isIndexBuffer = true;

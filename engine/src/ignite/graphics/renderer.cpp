@@ -29,9 +29,7 @@
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/objects/material.hpp"
 #include "ignite/graphics/objects/environment.hpp"
-
 #include "ignite/core/device/device_manager.hpp"
-#include "ignite/core/application.hpp"
 
 #include <ranges>
 #include <filesystem>
@@ -52,7 +50,7 @@ namespace ignite
 		// non volatile constant buffer
 		m_EditorCameraConstantBuffer = ConstantBuffer::Create(sizeof(CameraBuffer), false, 1, "Camera Constant Buffer");
 
-        nvrhi::CommandListHandle cmd = Application::GetGraphicsDevice()->createCommandList();
+        nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
         cmd->open();
 
         {

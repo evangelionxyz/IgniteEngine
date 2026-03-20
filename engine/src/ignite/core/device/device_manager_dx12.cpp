@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "ignite/graphics/window.hpp"
+#include "ignite/graphics/texture.hpp"
 
 #include "device_manager.hpp"
 #include "device_manager_dx12.hpp"
@@ -205,7 +206,7 @@ namespace ignite
             RefCountPtr<ID3D12Debug> pDebug;
             const HRESULT hr = D3D12GetDebugInterface(IID_PPV_ARGS(&pDebug));
             if (SUCCEEDED(hr)) pDebug->EnableDebugLayer();
-            else printf("Cannot enable DX12 debug runtim, ID3D12Debug is not available.");
+            else printf("Cannot enable DX12 debug runtime, ID3D12Debug is not available.");
         }
 
         if (m_DeviceParameters.enableGPUValidation)
@@ -439,7 +440,7 @@ namespace ignite
 
     void DeviceManager_DX12::DestroyDeviceAndSwapChain()
     {
-        m_RhiSwapChainBuffers.clear();
+        m_SwapChainRenderTargets.clear();
         m_RendererString.clear();
 
         ReleaseRenderTargets();
@@ -449,7 +450,6 @@ namespace ignite
             WaitForSingleObject(fenceEvent, INFINITE);
             CloseHandle(fenceEvent);
         }
-
 
         if (m_SwapChain)
         {
@@ -474,25 +474,36 @@ namespace ignite
     bool DeviceManager_DX12::CreateRenderTargets()
     {
         m_SwapChainBuffers.resize(m_SwapChainDesc.BufferCount);
-        m_RhiSwapChainBuffers.resize(m_SwapChainDesc.BufferCount);
+        m_SwapChainRenderTargets.reserve(m_SwapChainDesc.BufferCount);
 
         for (UINT n = 0; n < m_SwapChainDesc.BufferCount; n++)
         {
             const HRESULT hr = m_SwapChain->GetBuffer(n, IID_PPV_ARGS(&m_SwapChainBuffers[n]));
             HR_RETURN(hr);
 
-            nvrhi::TextureDesc textureDesc;
-            textureDesc.width = m_DeviceParameters.backBufferWidth;
-            textureDesc.height = m_DeviceParameters.backBufferHeight;
-            textureDesc.sampleCount = m_DeviceParameters.swapChainSampleCount;
-            textureDesc.sampleQuality = m_DeviceParameters.swapChainSampleQuality;
-            textureDesc.format = m_DeviceParameters.swapChainFormat;
-            textureDesc.isRenderTarget = true;
-            textureDesc.isUAV = false;
-            textureDesc.initialState = nvrhi::ResourceStates::Present;
-            textureDesc.keepInitialState = true;
+            RenderTargetCreateInfo createInfo;
+            createInfo.width = m_DeviceParameters.backBufferWidth;
+            createInfo.height = m_DeviceParameters.backBufferHeight;
+            createInfo.sampleCount = m_DeviceParameters.swapChainSampleCount;
+            createInfo.sampleQuality = m_DeviceParameters.swapChainSampleQuality;
+            createInfo.attachments =
+            {
+                FramebufferAttachments {
+                    .name = "Swapchain RT",
+                    .format = nvrhi::Format::D32S8,
+                    .state = nvrhi::ResourceStates::DepthWrite
+                },
+                FramebufferAttachments {
+                    .name = "Swapchain RT",
+                    .format = m_DeviceParameters.swapChainFormat,
+                    .state = nvrhi::ResourceStates::Present,
+                    .nativeObjectPtr = m_SwapChainBuffers[n],
+                    .isNativeObject = true,
+                    .nativeObjectType = nvrhi::ObjectTypes::D3D12_Resource
+                }
+            };
 
-            m_RhiSwapChainBuffers[n] = m_NvrhiDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(m_SwapChainBuffers[n]), textureDesc);
+            m_SwapChainRenderTargets.emplace_back(RenderTarget::Create(createInfo, "Swapchain RT"));
         }
 
         return true;
@@ -519,7 +530,7 @@ namespace ignite
             SetEvent(event);
         }
 
-        m_RhiSwapChainBuffers.clear();
+        m_SwapChainRenderTargets.clear();
         m_SwapChainBuffers.clear();
     }
 
@@ -568,17 +579,25 @@ namespace ignite
 
     nvrhi::ITexture *DeviceManager_DX12::GetCurrentBackBuffer()
     {
-        return m_RhiSwapChainBuffers[m_SwapChain->GetCurrentBackBufferIndex()];
+        return m_SwapChainRenderTargets[m_SwapChain->GetCurrentBackBufferIndex()]->GetColorAttachment(0)->GetHandle().Get();
     }
 
     nvrhi::ITexture *DeviceManager_DX12::GetBackBuffer(uint32_t index)
     {
-        if (index < m_RhiSwapChainBuffers.size())
-            return m_RhiSwapChainBuffers[index];
+        if (index < m_SwapChainRenderTargets.size())
+            return m_SwapChainRenderTargets[index]->GetColorAttachment(0)->GetHandle().Get();
         return nullptr;
     }
 
-    uint32_t DeviceManager_DX12::GetCurrentBackBufferIndex()
+    // TODO: Use render target
+	nvrhi::ITexture *DeviceManager_DX12::GetBackDepthBuffer(uint32_t index)
+	{
+		if (index < m_SwapChainRenderTargets.size())
+			return m_SwapChainRenderTargets[index]->GetDepthAttachment()->GetHandle().Get();
+		return nullptr;
+	}
+
+	uint32_t DeviceManager_DX12::GetCurrentBackBufferIndex()
     {
         return m_SwapChain->GetCurrentBackBufferIndex();
     }

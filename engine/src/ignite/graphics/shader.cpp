@@ -25,7 +25,8 @@
 
 #include "renderer.hpp"
 
-#include "ignite/core/application.hpp"
+#include "ignite/core/device/device_manager.hpp"
+#include "ignite/core/logger.hpp"
 
 #include <fstream>
 #include <iterator>
@@ -94,7 +95,7 @@ namespace ignite
     Shader::Shader(const std::filesystem::path &filepath, ShaderType type, bool recompile)
         : m_Type(type)
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         const nvrhi::GraphicsAPI api = device->getGraphicsAPI();
 
         CreateShaderCachedDirectoryIfNeeded();
@@ -125,7 +126,7 @@ namespace ignite
     {
         LOG_ASSERT(std::filesystem::exists(filepath), "[Shader] File does not exists! '{}'", filepath.generic_string().c_str());
         
-        const nvrhi::GraphicsAPI api = Application::GetInstance()->GetCreateInfo().graphicsApi;
+        const nvrhi::GraphicsAPI api = DeviceManager::GetInstance()->GetGraphicsAPI();
 
         CompilerOptions opt = {};
         opt.filepath = filepath;

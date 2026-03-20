@@ -84,7 +84,7 @@ namespace ignite
     {
         Layer::OnAttach();
 
-        m_Device = Application::GetGraphicsDevice();
+        m_Device = DeviceManager::GetInstance()->GetDevice();
 
         m_ScenePanel = CreateRef<ScenePanel>("Scene Panel");
         m_ContentBrowserPanel = CreateRef<ContentBrowserPanel>("Content Browser");

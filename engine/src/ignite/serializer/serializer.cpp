@@ -29,6 +29,7 @@
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/project/project.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 
@@ -521,7 +522,7 @@ namespace ignite {
         Ref<Scene> desScene = Scene::Create(project, title);
 
         // Open commandlist for asset deserialization
-        auto device = Application::GetGraphicsDevice();
+        auto device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
 
         for (YAML::Node entityNode : sceneNode["Entities"])

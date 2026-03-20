@@ -79,7 +79,7 @@ namespace ignite
 
         if (createInfo.useGui)
         {
-            m_ImGuiLayer = CreateScope<ImGuiLayer>(GetDeviceManager());
+            m_ImGuiLayer = CreateScope<ImGuiLayer>(m_Window->GetDeviceManager());
             m_ImGuiLayer->OnAttach();
             // PushLayer(m_ImGuiLayer.get());
         }
@@ -99,11 +99,6 @@ namespace ignite
     {
         LOG_ASSERT(s_AppInstance, "Application has not been created!");
         return s_AppInstance;
-    }
-
-    DeviceManager * Application::GetDeviceManager()
-    {
-        return GetInstance()->m_Window->GetDeviceManager();
     }
 
     void Application::SetWindowTitle(const std::string &title)
@@ -179,8 +174,8 @@ namespace ignite
 
 	void Application::RenderThreadFunc()
 	{
-		nvrhi::IDevice *device = GetGraphicsDevice();
-		DeviceManager *deviceManager = GetDeviceManager();
+		DeviceManager *deviceManager = m_Window->GetDeviceManager();
+        nvrhi::IDevice *device = deviceManager->GetDevice();
 
 		// Create per-thread command list
 		auto renderCommandList = device->createCommandList();
@@ -285,7 +280,7 @@ namespace ignite
 
     void Application::Run()
     {
-        DeviceManager *deviceManager = GetDeviceManager();
+        DeviceManager *deviceManager = m_Window->GetDeviceManager();
         nvrhi::IDevice *device = deviceManager->GetDevice();
         
         // Start render thread
@@ -503,11 +498,6 @@ namespace ignite
 	CommandManager *Application::GetCommandManager()
     {
         return GetInstance()->m_CommandManager.get();
-    }
-
-    nvrhi::IDevice* Application::GetGraphicsDevice()
-    {
-        return GetInstance()->m_Window->GetDeviceManager()->GetDevice();
     }
 
     bool Application::IsRenderThreadRunning()
