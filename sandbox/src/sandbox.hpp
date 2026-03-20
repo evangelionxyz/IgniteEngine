@@ -83,9 +83,8 @@ namespace ignite
 
 		struct
 		{
-			glm::vec2 position;
-			glm::vec2 size;
-			glm::vec2 mousePosition;
+			Rect rect;
+			glm::vec2 mouse;
 		} m_ViewportData;
 	};
 }

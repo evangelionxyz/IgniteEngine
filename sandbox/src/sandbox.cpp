@@ -32,6 +32,8 @@
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/renderer_2d.hpp"
 
+#include "imgui_internal.h"
+
 #include "sandbox.hpp"
 
 class SandboxApp final : public ignite::Application
@@ -85,9 +87,10 @@ namespace ignite
 		{
 			m_Camera = BasicCamera();
 			m_Camera.distance = 5.5f;
+			m_Camera.position = glm::vec3(0.0f, 0.0f, 8.0f);
 			m_Camera.yaw = glm::radians(90.0f);
 			m_Camera.pitch = 0.0f;
-			m_Camera.projectionType = ProjectionType::Perspective;
+			m_Camera.projectionType = ProjectionType::Orthographic;
 
 			m_Camera.UpdateSphericalPosition();
 			m_Camera.UpdateMatrices(width, height);
@@ -152,9 +155,10 @@ namespace ignite
 		// 2D Pass
 		m_SceneRenderer->GetRenderer2D()->Begin(m_Cmd);
 
-		m_SceneRenderer->GetRenderer2D()->DrawQuad(glm::mat4(1.0f), glm::vec4(1.0f));
+		m_SceneRenderer->GetRenderer2D()->DrawQuad(glm::translate(glm::vec3(1.0f, 2.0f, 0.0f)), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+		m_SceneRenderer->GetRenderer2D()->DrawQuad(glm::translate(glm::vec3(0.0f)), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
 
-		m_SceneRenderer->GetRenderer2D()->Flush(mainFramebuffer);
+		m_SceneRenderer->GetRenderer2D()->Flush(sceneFB);
 		m_SceneRenderer->GetRenderer2D()->End();
 
 		// Composite Pass
@@ -170,7 +174,56 @@ namespace ignite
 
 	void SandboxLayer::OnGuiRender()
 	{
-		ImGui::ShowDemoWindow();
+		constexpr ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse
+			| ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+
+		const ImGuiViewport *viewport = ImGui::GetMainViewport();
+		ImGui::SetNextWindowPos(viewport->Pos);
+		ImGui::SetNextWindowSize(viewport->Size);
+		ImGui::SetNextWindowViewport(viewport->ID);
+
+		ImGui::Begin("##main_dockspace", nullptr, windowFlags);
+		ImGuiWindow *window = ImGui::GetCurrentWindow();
+		window->DC.LayoutType = ImGuiLayoutType_Horizontal;
+		window->DC.NavLayerCurrent = ImGuiNavLayer_Menu;
+
+		// dock space
+		ImGui::DockSpace(ImGui::GetID("main_dockspace"), ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+		{
+			ImGui::Begin("Scene");
+			
+			{
+				// Calculating Scene Viewport location
+				const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
+				const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
+
+				m_ViewportData.rect.min = { canvasPos.x, canvasPos.y };
+				m_ViewportData.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
+
+				// Mouse position in screen space
+				const ImVec2 &mousePos = ImGui::GetMousePos();
+				m_ViewportData.mouse = { mousePos.x - canvasPos.x, mousePos.y - canvasPos.y };
+
+				// Update UI input handling
+				auto sceneRenderer = m_Scene->GetSceneRenderer();
+				if (sceneRenderer)
+				{
+					glm::vec2 viewportPos = { canvasPos.x, canvasPos.y };
+					glm::vec2 viewportSize = { canvasSize.x, canvasSize.y };
+					glm::vec2 screenMousePos = { mousePos.x, mousePos.y };
+					bool mousePressed = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+
+					sceneRenderer->UpdateUIInput(screenMousePos, viewportPos, viewportSize, mousePressed);
+				}
+
+				ImTextureID sceneImage = (ImTextureID)m_CompositeRT->GetColorAttachment(0)->GetHandle().Get(); // Current composite RT
+				ImGui::Image(sceneImage, canvasSize);
+			}
+			ImGui::End();
+
+		}
+
+		ImGui::End(); // end dock space
 	}
 
 	// Events
@@ -214,8 +267,8 @@ namespace ignite
 		RenderTargetCreateInfo rtCreateInfo = {};
 		rtCreateInfo.attachments =
 		{
-			FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
-			FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget} // Main Color
+			FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }, // Depth
+			FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget } // Main Color
 		};
 		m_SceneRT = RenderTarget::Create(rtCreateInfo, "[SceneViewportRT]");
 		m_UIRT = RenderTarget::Create(rtCreateInfo, "[UIViewportRT]");

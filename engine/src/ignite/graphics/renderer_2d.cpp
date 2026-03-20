@@ -55,10 +55,13 @@ namespace ignite
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
+		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+
         GraphicsPipelineParams params;
         params.enableBlend = true;
-        params.enableDepthWrite = true;
-        params.enableDepthTest = true;
+		params.enableDepthWrite = hasDepthAttachment;
+		params.enableDepthTest = hasDepthAttachment;
         params.enableDepthStencil = false;
         params.fillMode = fillMode;
 
@@ -102,12 +105,14 @@ namespace ignite
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
-        GraphicsPipelineParams params;
-        params.enableBlend = true;
-        params.enableDepthWrite = true;
-        params.enableDepthTest = true;
-        params.enableDepthStencil = false;
+		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
 
+		GraphicsPipelineParams params;
+		params.enableBlend = true;
+		params.enableDepthWrite = hasDepthAttachment;
+		params.enableDepthTest = hasDepthAttachment;
+		params.enableDepthStencil = false;
         params.fillMode = nvrhi::RasterFillMode::Wireframe;
         params.cullMode = nvrhi::RasterCullMode::None;
         params.primitiveType = nvrhi::PrimitiveType::LineList;
