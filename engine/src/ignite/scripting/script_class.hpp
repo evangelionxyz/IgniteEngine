@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#pragma once
+#ifndef SCRIPT_CLASS_HPP
+#define SCRIPT_CLASS_HPP
 
 #include "script_field.hpp"
 #include "script_host.hpp"
@@ -43,3 +44,5 @@ namespace ignite
         std::unordered_map<std::string, ScriptField> m_Fields;
     };
 }
+
+#endif

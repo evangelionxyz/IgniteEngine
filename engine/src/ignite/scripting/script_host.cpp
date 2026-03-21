@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "script_host.hpp"
 #include "ignite/core/logger.hpp"
@@ -88,92 +67,79 @@ namespace ignite
         // Void with float parameter
         {
             const char *params[] = { "System.Single" };
-            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_Float), 
-                "System.Void", params, 1);
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_Float), "System.Void", params, 1);
         }
 
         // Void with UInt64 parameter
         {
             const char *params[] = { "System.UInt64" };
-            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64), 
-                "System.Void", params, 1);
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64), "System.Void", params, 1);
         }
 
         // Bool with Type parameter
         {
             const char *params[] = { "System.Type" };
-            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Bool_Type), 
-                "System.Boolean", params, 1);
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Bool_Type), "System.Boolean", params, 1);
         }
 
         // Void with UInt64 and Type parameters
         {
             const char *params[] = { "System.UInt64", "System.Type" };
-            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_Type), 
-                "System.Void", params, 2);
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_Type), "System.Void", params, 2);
         }
 
         // UInt64 with String parameter
         {
             const char *params[] = { "System.String" };
-            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::UInt64_String), 
-                "System.UInt64", params, 1);
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::UInt64_String), "System.UInt64", params, 1);
         }
 
         // UInt64 with UInt64 and Vector3 parameters
         {
-            const char *params[] = { "System.UInt64", "IgniteScriptEngine.Vector3, IgniteScriptEngine" };
-            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::UInt64_UInt64_Vec3), 
-                "System.UInt64", params, 2);
+            const char *params[] = { "System.UInt64", "Ignite.Vector3, Ignite" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::UInt64_UInt64_Vec3), "System.UInt64", params, 2);
         }
 
         // Void with UInt64 and Bool parameters
         {
             const char *params[] = { "System.UInt64", "System.Boolean" };
-            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_Bool), 
-                "System.Void", params, 2);
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_Bool), "System.Void", params, 2);
         }
 
         // Void with UInt64 and out Bool
         {
             const char *params[] = { "System.UInt64", "System.Boolean&" };
-            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_OutBool), 
-                "System.Void", params, 2);
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_OutBool), "System.Void", params, 2);
         }
 
         // Void with UInt64 and out Vector3
         {
-			const char *params[] = { "System.UInt64", "IgniteScriptEngine.Vector3&, IgniteScriptEngine" };
-            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_OutVec3), 
-                "System.Void", params, 2);
+			const char *params[] = { "System.UInt64", "Ignite.Vector3&, Ignite" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_OutVec3), "System.Void", params, 2);
         }
 
         // Void with UInt64 and Vector3
         {
-            const char *params[] = { "System.UInt64", "IgniteScriptEngine.Vector3, IgniteScriptEngine" };
-            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_Vec3), 
-                "System.Void", params, 2);
+            const char *params[] = { "System.UInt64", "Ignite.Vector3, Ignite" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_Vec3), "System.Void", params, 2);
         }
 
         // Void with UInt64 and out Quaternion
         {
-            const char *params[] = { "System.UInt64", "IgniteScriptEngine.Quaternion&, IgniteScriptEngine" };
-            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_OutQuat), 
-                "System.Void", params, 2);
+            const char *params[] = { "System.UInt64", "Ignite.Quaternion&, Ignite" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_OutQuat), "System.Void", params, 2);
         }
 
         // Void with UInt64 and Quaternion
         {
-            const char *params[] = { "System.UInt64", "IgniteScriptEngine.Quaternion, IgniteScriptEngine" };
-            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_Quat), 
-                "System.Void", params, 2);
+            const char *params[] = { "System.UInt64", "Ignite.Quaternion, Ignite" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_Quat), "System.Void", params, 2);
         }
 
         // Object with UInt64
         {
             const char *params[] = { "System.UInt64" };
-            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Object_UInt64), 
-                "System.Object", params, 1);
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Object_UInt64), "System.Object", params, 1);
         }
 
         LOG_INFO("[Script Host] Registered method signatures");
@@ -190,17 +156,17 @@ namespace ignite
         const auto *api = ScriptGlue::GetAPI();
         const uint64_t apiPtr = reinterpret_cast<uint64_t>(api);
 
-        const int methodId = m_Host->BindStaticMethod("IgniteScriptEngine.InternalCalls", "Initialize", static_cast<int>(ScriptMethodSignature::Void_UInt64));
+        const int methodId = m_Host->BindStaticMethod("Ignite.InternalCalls", "Initialize", static_cast<int>(ScriptMethodSignature::Void_UInt64));
         if (methodId == 0)
         {
-            LOG_ERROR("[Script Host] Failed to bind IgniteScriptEngine.InternalCalls.Initialize");
+            LOG_ERROR("[Script Host] Failed to bind Ignite.InternalCalls.Initialize");
             return false;
         }
 
         void *args[] = { const_cast<uint64_t *>(&apiPtr) };
         if (!m_Host->Invoke(methodId, args, 1, nullptr))
         {
-            LOG_ERROR("[Script Host] Failed to invoke IgniteScriptEngine.InternalCalls.Initialize");
+            LOG_ERROR("[Script Host] Failed to invoke Ignite.InternalCalls.Initialize");
             return false;
         }
 

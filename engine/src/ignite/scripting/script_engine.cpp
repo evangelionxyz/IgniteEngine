@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "script_engine.hpp"
 #include "script_glue.hpp"
@@ -42,6 +21,18 @@ namespace ignite
 {
     namespace
     {
+        static bool TryGetAssemblyWriteTime(const std::filesystem::path &filepath, std::filesystem::file_time_type &outTime)
+        {
+            std::error_code ec;
+            if (!std::filesystem::exists(filepath, ec) || ec)
+            {
+                return false;
+            }
+
+            outTime = std::filesystem::last_write_time(filepath, ec);
+            return !ec;
+        }
+
         static bool WaitForAssemblyFileReady(const std::filesystem::path &filepath)
         {
             using namespace std::chrono_literals;
@@ -108,6 +99,24 @@ namespace ignite
 
             return false;
         }
+
+        static bool WaitForAssemblyNewerThan(const std::filesystem::path &filepath, const std::filesystem::file_time_type &previousWriteTime)
+        {
+            using namespace std::chrono_literals;
+
+            for (int i = 0; i < 120; i++)
+            {
+                std::filesystem::file_time_type currentWriteTime{};
+                if (TryGetAssemblyWriteTime(filepath, currentWriteTime) && currentWriteTime > previousWriteTime)
+                {
+                    return true;
+                }
+
+                std::this_thread::sleep_for(25ms);
+            }
+
+            return false;
+        }
     }
 
     static std::unordered_map<std::string, ScriptFieldType> s_ScriptFieldTypeMap =
@@ -124,10 +133,10 @@ namespace ignite
         {"System.UInt32",  ScriptFieldType::UInt},
         {"System.UInt64",  ScriptFieldType::ULong},
         {"System.UInt",    ScriptFieldType::UByte},
-        {"IgniteScriptEngine.Vector2", ScriptFieldType::Vector2},
-        {"IgniteScriptEngine.Vector3", ScriptFieldType::Vector3},
-        {"IgniteScriptEngine.Vector4", ScriptFieldType::Vector4},
-        {"IgniteScriptEngine.Entity",  ScriptFieldType::Entity},
+        {"Ignite.Vector2", ScriptFieldType::Vector2},
+        {"Ignite.Vector3", ScriptFieldType::Vector3},
+        {"Ignite.Vector4", ScriptFieldType::Vector4},
+		{"Ignite.Entity",  ScriptFieldType::Entity},
     };
 
     struct ScriptEngineData
@@ -142,6 +151,9 @@ namespace ignite
 
         std::unique_ptr<filewatch::FileWatch<std::string>> appAssemblyFileWatcher;
         bool assemblyReloadingPending = false;
+        bool assemblyReloadDeferred = false;
+        std::filesystem::file_time_type appAssemblyLastWriteTime{};
+        bool hasAppAssemblyLastWriteTime = false;
 
         std::unordered_map<std::string, Ref<ScriptClass>> entityClasses;
         std::unordered_map<UUID, Ref<ScriptInstance>> entityInstances;
@@ -295,10 +307,16 @@ namespace ignite
             Application::SubmitToMainThread([&]()
             {
                 if (scriptEngine->m_Scene && scriptEngine->m_Scene->IsRunning())
+                {
+                    scriptEngineData->assemblyReloadDeferred = true;
+                    scriptEngineData->assemblyReloadingPending = false;
+                    LOG_INFO("[Script Engine] App assembly change detected during play. Reload deferred until scene stops.");
                     return;
+                }
                 
                 scriptEngineData->appAssemblyFileWatcher.reset();
                 scriptEngine->ReloadAssembly();
+                scriptEngineData->assemblyReloadingPending = false;
             });
         }
     }
@@ -314,6 +332,14 @@ namespace ignite
         }
 
         scriptEngineData->appAssemblyFilepath = filepath;
+
+        if (scriptEngineData->hasAppAssemblyLastWriteTime)
+        {
+            if (!WaitForAssemblyNewerThan(filepath, scriptEngineData->appAssemblyLastWriteTime))
+            {
+                LOG_WARN("[Script Engine] App assembly timestamp did not advance before reload: {}", filepath.generic_string());
+            }
+        }
 
         if (!WaitForAssemblyFileReady(filepath))
         {
@@ -334,6 +360,13 @@ namespace ignite
 
         scriptEngineData->appAssemblyFileWatcher = CreateScope<filewatch::FileWatch<std::string>>(filepath.string(), ScriptEngine::OnAppAssemblyFileSystemEvent);
         scriptEngineData->assemblyReloadingPending = false;
+
+        std::filesystem::file_time_type currentWriteTime{};
+        if (TryGetAssemblyWriteTime(filepath, currentWriteTime))
+        {
+            scriptEngineData->appAssemblyLastWriteTime = currentWriteTime;
+            scriptEngineData->hasAppAssemblyLastWriteTime = true;
+        }
 
         LOG_INFO("[Script Engine] App assembly loaded: {}", filepath.generic_string());
         return true;
@@ -376,6 +409,13 @@ namespace ignite
         }
 
         scriptEngineData->entityInstances.clear();
+
+        if (scriptEngineData->assemblyReloadDeferred)
+        {
+            scriptEngineData->assemblyReloadDeferred = false;
+            scriptEngineData->appAssemblyFileWatcher.reset();
+            ReloadAssembly();
+        }
     }
 
     bool ScriptEngine::EntityClassExists(const std::string &fullClassName)
@@ -477,7 +517,7 @@ namespace ignite
         scriptEngineData->entityClasses.clear();
 
         const std::string appAssemblyName = scriptEngineData->appAssemblyFilepath.stem().string();
-        std::string derivedTypes = scriptEngineData->scriptHost->GetDerivedTypes(scriptEngineData->appAssemblyFilepath, "IgniteScriptEngine.Entity");
+        std::string derivedTypes = scriptEngineData->scriptHost->GetDerivedTypes(scriptEngineData->appAssemblyFilepath, "Ignite.Entity");
         
         if (derivedTypes.empty())
         {

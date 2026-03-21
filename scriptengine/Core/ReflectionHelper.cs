@@ -2,7 +2,7 @@
 using System.Linq;
 using System.Reflection;
 
-namespace IgniteScriptEngine;
+namespace Ignite;
 
 public struct FieldMetadata
 {

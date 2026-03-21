@@ -22,7 +22,9 @@
 */
 
 #pragma once
+#include "box2d/box2d.h"
 #include "box2d/types.h"
+
 #include "ignite/scene/icomponent.hpp"
 
 #include <string>
@@ -68,16 +70,18 @@ namespace ignite
     class Rigidbody2DComponent : public IComponent
     {
     public:
-        Body2DType type          = Body2DType_Static;
+        Body2DType type = Body2DType_Static;
         glm::vec2 linearVelocity = { 0.0f, 0.0f };
-        f32 angularVelocity      = 0.0f;
-        f32 gravityScale         = 1.0f;
-        f32 linearDamping        = 0.6f;
-        f32 angularDamping       = 0.2f;
-        bool isAwake             = true;
-        bool isEnabled           = true;
-        bool isEnableSleep       = false;
-        b2BodyId bodyId          = {};
+        f32 angularVelocity = 0.0f;
+        f32 gravityScale = 1.0f;
+        f32 linearDamping = 0.6f;
+        f32 angularDamping = 0.2f;
+        bool isAwake = true;
+        bool isEnabled = true;
+        bool isEnableSleep = false;
+        bool allowFastRotation = true;
+        bool fixedRotation = false;
+        b2BodyId bodyId = {};
 
         static CompType StaticType() { return CompType_Rigidbody2D; }
         virtual CompType GetType() override { return StaticType(); }

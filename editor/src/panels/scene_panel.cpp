@@ -728,6 +728,12 @@ namespace ignite
                     ImGui::Checkbox("Awake", &c.isAwake);
                     ImGui::Checkbox("Enabled", &c.isEnabled);
                     ImGui::Checkbox("Sleep", &c.isEnableSleep);
+                    ImGui::Checkbox("Fixed Rotation", &c.fixedRotation);
+                    
+                    if (!c.fixedRotation)
+                    {
+                        ImGui::Checkbox("Fast Rotation", &c.allowFastRotation);
+                    }
                 }
             });
             RenderComponent<CameraComponent>("Camera", selectedEntity, [&]()
