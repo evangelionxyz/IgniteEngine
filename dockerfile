@@ -40,6 +40,7 @@ RUN Write-Host \"[MSVC] Downloading Visual Studio Build Tools...\"; \
              '--quiet', '--wait', '--norestart', '--nocache', \
              '--installPath', 'C:\BuildTools', \
              '--add', 'Microsoft.VisualStudio.Workload.VCTools', \
+             '--add', 'Microsoft.VisualStudio.Workload.ManagedDesktopBuildTools', \
              '--includeRecommended' \
            ) \
            -NoNewWindow -PassThru -Wait; \
@@ -48,6 +49,23 @@ RUN Write-Host \"[MSVC] Downloading Visual Studio Build Tools...\"; \
     }; \
     Remove-Item C:\vs_buildtools.exe -Force; \
     Write-Host \"[MSVC] Done.\"
+
+#### .NET SDK 8 #################################
+# Required for SDK-style C# projects (.csproj with Microsoft.NET.Sdk).
+# ManagedDesktopBuildTools above adds targeting packs, but the full SDK
+# (dotnet.exe + MSBuild resolvers) must be installed separately.
+RUN Write-Host \"[.NET] Installing .NET SDK 8.0...\"; \
+    Invoke-WebRequest \
+      -Uri \"https://dot.net/v1/dotnet-install.ps1\" \
+      -OutFile C:\dotnet-install.ps1 \
+      -UseBasicParsing; \
+    & C:\dotnet-install.ps1 -Channel 8.0 -InstallDir C:\dotnet -NoPath; \
+    Remove-Item C:\dotnet-install.ps1 -Force; \
+    if (-not (Test-Path 'C:\dotnet\dotnet.exe')) { throw '[.NET] dotnet.exe not found after install' }; \
+    Write-Host \"[.NET] Done.\"
+
+ENV DOTNET_ROOT="C:\dotnet"
+
 
 #### Vulkan SDK #################################
 RUN $url = \"https://sdk.lunarg.com/sdk/download/${env:VULKAN_VERSION}/windows/VulkanSDK-${env:VULKAN_VERSION}-Installer.exe\"; \
@@ -90,21 +108,29 @@ RUN $url = \"https://github.com/premake/premake-core/releases/download/v${env:PR
     if (-not (Test-Path 'C:\tools\premake5\premake5.exe')) { throw '[Premake] premake5.exe not found after extraction' }; \
     Write-Host \"[Premake] Done.\"
 
-#### Environment Variables ###############################
 ENV VULKAN_SDK="C:\VulkanSDK\1.4.309.0"
-ENV FBX_SDK_PATH="C:\FBX_SDK\2020.3.7"
+# FBX SDK installer places files directly at the /D= target (no version subdir added by installer)
+ENV FBX_SDK_PATH="C:\FBX_SDK"
 
-#### Add MSBuild, Premake, and Vulkan glslc to PATH
+
+#### Add MSBuild, Premake, Vulkan glslc, and .NET SDK to PATH
 RUN $current = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine'); \
+    $msvcToolsRoot = 'C:\BuildTools\VC\Tools\MSVC'; \
+    $msvcBin = if (Test-Path $msvcToolsRoot) { \
+      $ver = Get-ChildItem $msvcToolsRoot | Sort-Object Name -Descending | Select-Object -First 1; \
+      if ($ver) { Join-Path $ver.FullName 'bin\Hostx64\x64' } else { $null } \
+    } else { $null }; \
     $additions = @( \
         'C:\BuildTools\MSBuild\Current\Bin', \
-        'C:\BuildTools\VC\Tools\MSVC\14.43.34808\bin\Hostx64\x64', \
+        'C:\dotnet', \
         'C:\tools\premake5', \
         \"C:\VulkanSDK\${env:VULKAN_VERSION}\Bin\" \
-    ) | Where-Object { $_ -notin ($current -split ';') }; \
+    ); \
+    if ($msvcBin) { $additions += $msvcBin }; \
+    $additions = $additions | Where-Object { $_ -and $_ -notin ($current -split ';') }; \
     $newPath = ($current + ';' + ($additions -join ';')).TrimStart(';'); \
     [System.Environment]::SetEnvironmentVariable('PATH', $newPath, 'Machine'); \
-    Write-Host \"[PATH] Updated.\"
+    Write-Host \"[PATH] Updated. MSVC bin: $msvcBin\"
 
 #### Final verification #################################
 RUN Write-Host \"--- Build container verification ---\"; \
