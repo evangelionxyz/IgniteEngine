@@ -21,6 +21,18 @@ namespace ignite
 {
     namespace
     {
+        static bool TryGetAssemblyWriteTime(const std::filesystem::path &filepath, std::filesystem::file_time_type &outTime)
+        {
+            std::error_code ec;
+            if (!std::filesystem::exists(filepath, ec) || ec)
+            {
+                return false;
+            }
+
+            outTime = std::filesystem::last_write_time(filepath, ec);
+            return !ec;
+        }
+
         static bool WaitForAssemblyFileReady(const std::filesystem::path &filepath)
         {
             using namespace std::chrono_literals;
@@ -87,6 +99,24 @@ namespace ignite
 
             return false;
         }
+
+        static bool WaitForAssemblyNewerThan(const std::filesystem::path &filepath, const std::filesystem::file_time_type &previousWriteTime)
+        {
+            using namespace std::chrono_literals;
+
+            for (int i = 0; i < 120; i++)
+            {
+                std::filesystem::file_time_type currentWriteTime{};
+                if (TryGetAssemblyWriteTime(filepath, currentWriteTime) && currentWriteTime > previousWriteTime)
+                {
+                    return true;
+                }
+
+                std::this_thread::sleep_for(25ms);
+            }
+
+            return false;
+        }
     }
 
     static std::unordered_map<std::string, ScriptFieldType> s_ScriptFieldTypeMap =
@@ -121,6 +151,9 @@ namespace ignite
 
         std::unique_ptr<filewatch::FileWatch<std::string>> appAssemblyFileWatcher;
         bool assemblyReloadingPending = false;
+        bool assemblyReloadDeferred = false;
+        std::filesystem::file_time_type appAssemblyLastWriteTime{};
+        bool hasAppAssemblyLastWriteTime = false;
 
         std::unordered_map<std::string, Ref<ScriptClass>> entityClasses;
         std::unordered_map<UUID, Ref<ScriptInstance>> entityInstances;
@@ -274,10 +307,16 @@ namespace ignite
             Application::SubmitToMainThread([&]()
             {
                 if (scriptEngine->m_Scene && scriptEngine->m_Scene->IsRunning())
+                {
+                    scriptEngineData->assemblyReloadDeferred = true;
+                    scriptEngineData->assemblyReloadingPending = false;
+                    LOG_INFO("[Script Engine] App assembly change detected during play. Reload deferred until scene stops.");
                     return;
+                }
                 
                 scriptEngineData->appAssemblyFileWatcher.reset();
                 scriptEngine->ReloadAssembly();
+                scriptEngineData->assemblyReloadingPending = false;
             });
         }
     }
@@ -293,6 +332,14 @@ namespace ignite
         }
 
         scriptEngineData->appAssemblyFilepath = filepath;
+
+        if (scriptEngineData->hasAppAssemblyLastWriteTime)
+        {
+            if (!WaitForAssemblyNewerThan(filepath, scriptEngineData->appAssemblyLastWriteTime))
+            {
+                LOG_WARN("[Script Engine] App assembly timestamp did not advance before reload: {}", filepath.generic_string());
+            }
+        }
 
         if (!WaitForAssemblyFileReady(filepath))
         {
@@ -313,6 +360,13 @@ namespace ignite
 
         scriptEngineData->appAssemblyFileWatcher = CreateScope<filewatch::FileWatch<std::string>>(filepath.string(), ScriptEngine::OnAppAssemblyFileSystemEvent);
         scriptEngineData->assemblyReloadingPending = false;
+
+        std::filesystem::file_time_type currentWriteTime{};
+        if (TryGetAssemblyWriteTime(filepath, currentWriteTime))
+        {
+            scriptEngineData->appAssemblyLastWriteTime = currentWriteTime;
+            scriptEngineData->hasAppAssemblyLastWriteTime = true;
+        }
 
         LOG_INFO("[Script Engine] App assembly loaded: {}", filepath.generic_string());
         return true;
@@ -355,6 +409,13 @@ namespace ignite
         }
 
         scriptEngineData->entityInstances.clear();
+
+        if (scriptEngineData->assemblyReloadDeferred)
+        {
+            scriptEngineData->assemblyReloadDeferred = false;
+            scriptEngineData->appAssemblyFileWatcher.reset();
+            ReloadAssembly();
+        }
     }
 
     bool ScriptEngine::EntityClassExists(const std::string &fullClassName)

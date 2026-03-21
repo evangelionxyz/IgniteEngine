@@ -858,7 +858,7 @@ namespace ignite {
         info.assetDirectory = projectNode["AssetPath"].as<std::string>();
         info.assetRegistryFilepath = projectNode["AssetRegistry"].as<std::string>();
         info.defaultSceneHandle = AssetHandle(projectNode["DefaultSceneHandle"].as<uint64_t>());
-        info.scriptModuleFilepath = projectNode["ScriptModele"].as<std::string>();
+        info.scriptModuleFilepath = projectNode["ScriptModule"].as<std::string>();
 
         Ref<Project> project = Project::Create(info);
 
