@@ -43,6 +43,9 @@
 
 namespace ignite
 {
+
+    DeviceManager *s_DeviceManagerInstance = nullptr;
+
     DefaultMessageCallback &DefaultMessageCallback::GetInstance()
     {
         static DefaultMessageCallback *instance = nullptr;
@@ -162,7 +165,11 @@ namespace ignite
         m_SwapChainFramebuffers.resize(backBufferCount);
         for (uint32_t index = 0; index < backBufferCount; ++index)
         {
-            m_SwapChainFramebuffers[index] = GetDevice()->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(GetBackBuffer(index)));
+		   m_SwapChainFramebuffers[index] = GetDevice()->createFramebuffer(
+               nvrhi::FramebufferDesc()
+               .addColorAttachment(GetBackBuffer(index))
+			   .setDepthAttachment(GetBackDepthBuffer(index))
+           );
         }
     }
 
@@ -197,14 +204,22 @@ namespace ignite
         {
 #if IGNITE_WITH_DX12
             case nvrhi::GraphicsAPI::D3D12:
-                return CreateD3D12(window, params);
+                s_DeviceManagerInstance = CreateD3D12(window, params);
+                return s_DeviceManagerInstance;
 #endif
 #if IGNITE_WITH_VULKAN
             case nvrhi::GraphicsAPI::VULKAN:
-                return CreateVK(window, params);
+                s_DeviceManagerInstance = CreateVK(window, params);
+                return s_DeviceManagerInstance;
 #endif
             default: LOG_ASSERT(false, "Unsupported Graphics API {}", (uint32_t)api);
             return nullptr;
         }
     }
+
+	DeviceManager *DeviceManager::GetInstance()
+	{
+        return s_DeviceManagerInstance;
+	}
+
 }

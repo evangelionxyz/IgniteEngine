@@ -57,14 +57,16 @@ namespace ignite
     {
         Ref<Texture> thumbnail;
         uint64_t timestamp = 0;
+        uint64_t lastFrameUsed = 0;
     };
 
     class ContentBrowserPanel : public IPanel
     {
     public:
         explicit ContentBrowserPanel(const char *windowTitle);
-        virtual void OnGuiRender() override;
+        virtual ~ContentBrowserPanel() override;
 
+        virtual void OnGuiRender() override;
         virtual void OnUpdate(float deltaTime) override;
 
         void LoadProjectFiles();
@@ -84,14 +86,24 @@ namespace ignite
         void UpdateIndicesAfterDeletion(uint32_t deletedIndex);
         void CompactTree();
 
+        void DragDropSource(const std::filesystem::path &filepath);
+
         static void OnImportAssetDialog(void *userData, const char * const *fileList, int filter);
 
-        std::filesystem::path GetFullPath(uint32_t nodeIndex) const;
+        std::filesystem::path GetNodeFullpath(uint32_t nodeIndex) const;
+        
+        bool IsImageFile(const std::filesystem::path &filepath) const;
+        Ref<Texture> GetOrCreateThumbnail(const std::filesystem::path &filepath);
+        ImVec2 CalculateThumbnailDisplaySize(Ref<Texture> texture, float maxSize) const;
+        void StartThumbnailLoad(const std::filesystem::path &filepath);
+        void UnloadUnusedThumbnails();
+        void ClearThumbnails();
 
         std::vector<FileTreeNode> m_TreeNodes;
         std::queue<PendingFileLoading> m_PendingAssetLoading;
 
         int m_ThumbnailSize = 64;
+        int m_LastThumbnailSize = 64;
 
         std::filesystem::path m_BaseDirectory;
         std::filesystem::path m_CurrentDirectory;
@@ -102,5 +114,12 @@ namespace ignite
         std::vector<std::filesystem::path> m_PathEntryList;
 
         std::unordered_map<std::string, Ref<Texture>> m_Icons;
+        std::unordered_map<std::filesystem::path, FileThumbnail> m_Thumbnails;
+        std::queue<std::filesystem::path> m_PendingThumbnailLoads;
+        
+        uint64_t m_CurrentFrame = 0;
+        static constexpr uint64_t s_ThumbnailUnloadFrameThreshold = 300; // Unload after 5 seconds at 60fps
+        
+        bool m_NeedsRefresh = false;
     };
 }

@@ -1,6 +1,6 @@
 /* MIT License
 *
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -21,30 +21,17 @@
 * SOFTWARE.
 */
 
-#pragma once
-
-#include "asset.hpp"
-#include "ignite/graphics/objects/mesh.hpp"
-#include <vector>
+#ifndef PARTICLE_SYSTEM_HPP
+#define PARTICLE_SYSTEM_HPP
 
 namespace ignite
 {
-	class AssetStaticMesh : public Asset
+	class ParticleSystem
 	{
 	public:
-		AssetStaticMesh() = default;
-		virtual ~AssetStaticMesh() = default;
-
-		static Ref<AssetStaticMesh> Create();
-		static AssetType GetStaticType() { return AssetType::StaticMesh; }
-		virtual AssetType GetType() const { return GetStaticType(); }
-		
-		const std::vector<Ref<MeshInstance>>& GetMeshInstances() const { return m_MeshInstances; }
-		void SetMeshInstance(const std::vector<Ref<MeshInstance>>& meshInstances) { m_MeshInstances = meshInstances; }
-		void AddMeshInstance(const Ref<MeshInstance>& meshInstance) { m_MeshInstances.push_back(meshInstance); }
 
 	private:
-		std::vector<Ref<MeshInstance>> m_MeshInstances;
-
 	};
 }
+
+#endif

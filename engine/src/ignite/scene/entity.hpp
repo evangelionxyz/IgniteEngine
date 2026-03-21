@@ -103,9 +103,13 @@ namespace ignite
         bool operator!=(const Entity &other) const { return !(*this == other); }
 
         UUID GetUUID() { return GetComponent<IDComponent>().uuid; }
+        UUID GetUUID() const { return const_cast<Entity *>(this)->GetComponent<IDComponent>().uuid; }
         UUID GetParentUUID() { return GetComponent<IDComponent>().parent; }
+        UUID GetParentUUID() const { return const_cast<Entity *>(this)->GetComponent<IDComponent>().parent; }
         TransformComponent &GetTransform() { return GetComponent<TransformComponent>(); }
+        const TransformComponent &GetTransform() const { return const_cast<Entity *>(this)->GetComponent<TransformComponent>(); }
         const std::string &GetName() { return GetComponent<IDComponent>().name; }
+        const std::string &GetName() const { return const_cast<Entity *>(this)->GetComponent<IDComponent>().name; }
 
     private:
         entt::entity m_Handle;

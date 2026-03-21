@@ -43,24 +43,18 @@ namespace ignite {
         Environment(Scene *scene);
     	~Environment();
 
-        void Begin(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline);
-        void End();
+        void Draw(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *fb, const Ref<GraphicsPipeline> &gp);
 
         void UpdateBindingSet();
 
-        void LoadTexture(const std::string &filepath, nvrhi::ICommandList *cmd);
+        void LoadTexture(const std::string &filepath);
         void WriteBuffer(nvrhi::ICommandList *cmd);
 
         static Ref<Environment> Create(Scene *scene);
         static nvrhi::BindingLayoutDesc GetBindingLayoutDesc();
 
         Ref<Texture> GetHDRTexture() { return m_HDRTexture; }
-
-        bool IsInvalidating() const { return m_Invalidating; }
-
     private:
-        bool m_Invalidating = false;
-
         Ref<VertexBuffer> m_VertexBuffer;
         Ref<IndexBuffer> m_IndexBuffer;
         Ref<Texture> m_HDRTexture;

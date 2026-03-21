@@ -195,13 +195,18 @@ PSOutput main(PSInput input)
 
         float3 reflectDirection = reflect(-viewDirection, finalNormal);
         float3 reflectRadiance = SampleSphericalMap(environmentMapTexture, sampler0, reflectDirection);
-        reflectRadiance = reflectRadiance / (reflectRadiance + 1.0f);
-
-        float reflectionStrength = lerp(0.01f, 1.0f, metallic) * (1.0f - roughness);
-        float3 F = SchlickFresnel(viewDirection, finalNormal, specularColor);
-        float NdotR = saturate(dot(finalNormal, reflectDirection));
-        float3 reflectedSpecular = GGXReflect(finalNormal, reflectDirection, viewDirection,
-            reflectRadiance, specularColor, roughness) * reflectionStrength * NdotR * F;
+        float3 reflectedSpecular = float3(0.0f, 0.0f, 0.0f);
+        
+        if (length(reflectRadiance) > 0.01f)
+        {
+            reflectRadiance = reflectRadiance / (reflectRadiance + 1.0f);
+            
+            float reflectionStrength = lerp(0.01f, 1.0f, metallic) * (1.0f - roughness);
+            float3 F = SchlickFresnel(viewDirection, finalNormal, specularColor);
+            float NdotR = saturate(dot(finalNormal, reflectDirection));
+            reflectedSpecular = GGXReflect(finalNormal, reflectDirection, viewDirection,
+                reflectRadiance, specularColor, roughness) * reflectionStrength * NdotR * F;
+        }
 
         float3 irradiance = scene.lightColor.rgb * scene.lightColor.w;
         float3 directLighting = GGX(

@@ -28,16 +28,16 @@
 #include "ignite/scene/icamera.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/scene/scene.hpp"
-#include "ignite/core/application.hpp"
+#include "ignite/core/device/device_manager.hpp"
 
 #include <stb_image.h>
 
-namespace ignite {
+namespace ignite
+{
 
     // clock wise
     std::array<glm::vec3, 24> vertices =
     {
-
         glm::vec3( 1.0f,  1.0f,  1.0f), // top right    front  
         glm::vec3( 1.0f,  1.0f, -1.0f), // top right    back
         glm::vec3( 1.0f, -1.0f, -1.0f), // bottom right back
@@ -72,48 +72,65 @@ namespace ignite {
     Environment::Environment(Scene *scene)
         : m_Scene(scene)
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         // create vertex buffer
-        m_VertexBuffer = VertexBuffer::Create(sizeof(vertices), "[Environment] Vertex Buffer");
-        m_IndexBuffer = IndexBuffer::Create(sizeof(uint32_t) * 36, "[Environment] Index Buffer");
+        m_VertexBuffer = VertexBuffer::Create(sizeof(vertices), "Environment Vertex Buffer");
+        m_IndexBuffer = IndexBuffer::Create(sizeof(uint32_t) * 36, "Environment Index Buffer");
+
+        m_HDRTexture = Renderer::GetBlackTexture();
+
+        auto samplerDesc = nvrhi::SamplerDesc();
+        samplerDesc.addressU = nvrhi::SamplerAddressMode::Repeat;
+        m_Sampler = DeviceManager::GetInstance()->GetDevice()->createSampler(samplerDesc);
+        LOG_ASSERT(m_Sampler, "Failed to create sampler");
     }
 
     Environment::~Environment()
     {
-	    m_Sampler = nullptr;
+        if (auto *device = DeviceManager::GetInstance()->GetDevice())
+        {
+            device->waitForIdle();
+        }
+
+        // Clear binding set first (it references other resources)
+        m_BindingSet.Reset();
+
+        // Clear sampler
+        m_Sampler.Reset();
+
+        // Clear texture and buffers
+        m_HDRTexture.reset();
+        m_VertexBuffer.reset();
+        m_IndexBuffer.reset();
     }
 
-    void Environment::Begin(nvrhi::ICommandList *commandList, ICamera *camera, nvrhi::IFramebuffer *framebuffer, const Ref<GraphicsPipeline> &pipeline)
+    void Environment::Draw(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *fb, const Ref<GraphicsPipeline> &pipeline)
     {
         LOG_ASSERT(m_BindingSet, "[Environment] Invalid binding set");
 
         // render
         auto state = nvrhi::GraphicsState();
         state.pipeline = pipeline->GetHandle();
-        state.framebuffer = framebuffer;
+        state.framebuffer = fb;
         state.bindings = { m_BindingSet };
-        state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+        state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(fb->getFramebufferInfo().getViewport());
         state.addVertexBuffer({ m_VertexBuffer->GetHandle(), 0, 0 });
         state.indexBuffer = { m_IndexBuffer->GetHandle(), nvrhi::Format::R32_UINT };
 
-        commandList->setGraphicsState(state);
+        cmd->setGraphicsState(state);
 
         nvrhi::DrawArguments args;
         args.setVertexCount(36);
         args.instanceCount = 1;
 
-        commandList->drawIndexed(args);
+        cmd->drawIndexed(args);
     }
 
-    void Environment::End()
-    {
-        m_Invalidating = false;
-    }
 
     void Environment::UpdateBindingSet()
     {
-        nvrhi::IDevice* device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         // create binding set after load the texture
         nvrhi::BindingSetDesc bsDesc;
@@ -126,22 +143,15 @@ namespace ignite {
         LOG_ASSERT(m_BindingSet, "Failed to create binding set");
     }
 
-    void Environment::LoadTexture(const std::string& filepath, nvrhi::ICommandList *cmd)
+    void Environment::LoadTexture(const std::string& filepath)
     {
-        m_Invalidating = true;
-        
         TextureCreateInfo textureCI;
         textureCI.dimension = nvrhi::TextureDimension::Texture2D;
         textureCI.format = nvrhi::Format::RGBA32_FLOAT;
         textureCI.flip = true;
     	textureCI.keepInitialState = true;
     	textureCI.initialState = nvrhi::ResourceStates::ShaderResource;
-        m_HDRTexture = Texture::Create(filepath, textureCI, cmd);
-
-    	auto samplerDesc = nvrhi::SamplerDesc();
-    	samplerDesc.addressU = nvrhi::SamplerAddressMode::Repeat;
-    	m_Sampler = Application::GetGraphicsDevice()->createSampler(samplerDesc);
-    	LOG_ASSERT(m_Sampler, "Failed to create sampler");
+        m_HDRTexture = Texture::Create(filepath, textureCI, nullptr, "Environment HDR");
     }
 
 	void Environment::WriteBuffer(nvrhi::ICommandList *cmd)

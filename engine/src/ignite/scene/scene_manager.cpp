@@ -28,7 +28,7 @@
 
 #include "ignite/physics/2d/physics_2d.hpp"
 
-#include "ignite/core/application.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/uuid.hpp"
 
 #include "ignite/graphics/scene_renderer.hpp"
@@ -43,8 +43,6 @@
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
-
-
 
 namespace ignite
 {    
@@ -459,8 +457,7 @@ namespace ignite
 
         // copy scene extra data
         newScene->handle = other->handle;
-        newScene->viewportWidth = other->viewportWidth;
-        newScene->viewportHeight = other->viewportHeight;
+		newScene->Resize(other->m_ViewportWidth, other->m_ViewportHeight);
 
         // Do not copy entities (it is created when creating entity)
         // newScene->entities = other->entities;
@@ -478,7 +475,7 @@ namespace ignite
             mr.mesh->WriteVertexBuffer(static_cast<uint32_t>(e));
         }*/
 
-        Application::GetDeviceManager()->WaitForIdle();
+        DeviceManager::GetInstance()->WaitForIdle();
 
         return newScene;
     }

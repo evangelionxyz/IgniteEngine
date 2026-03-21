@@ -248,6 +248,7 @@ namespace ignite {
     {
     public:
         JoltScene(Scene *scene);
+        ~JoltScene();
 
         void SimulationStart();
         void SimulationStop();
@@ -297,7 +298,7 @@ namespace ignite {
 
     private:
         Scene *m_Scene;
-        JPH::BodyInterface *m_BodyInterface;
+        JPH::BodyInterface *m_BodyInterface = nullptr;
         JPH::PhysicsSystem m_PhysicsSystem;
 
     };

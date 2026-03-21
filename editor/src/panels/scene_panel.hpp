@@ -47,7 +47,7 @@ namespace ignite
     {
     public:
         explicit ScenePanel(const char *windowTitle);
-        ~ScenePanel();
+        virtual ~ScenePanel() override;
         
         void SetActiveScene(const Ref<Scene> &scene);
 

@@ -28,17 +28,18 @@
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/audio/fmod_audio.hpp"
 #include "ignite/physics/jolt/jolt_physics.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 
 #include <nvrhi/utils.h>
 
 namespace ignite
 {
-    static Application *s_JoltInstance = nullptr;
+    static Application *s_AppInstance = nullptr;
 
     Application::Application(const ApplicationCreateInfo &createInfo)
         : m_CreateInfo(createInfo)
     {
-        s_JoltInstance = this;
+        s_AppInstance = this;
 
         if (m_CreateInfo.cmdLineArgs.count > 1)
         {
@@ -78,7 +79,7 @@ namespace ignite
 
         if (createInfo.useGui)
         {
-            m_ImGuiLayer = CreateScope<ImGuiLayer>(GetDeviceManager());
+            m_ImGuiLayer = CreateScope<ImGuiLayer>(m_Window->GetDeviceManager());
             m_ImGuiLayer->OnAttach();
             // PushLayer(m_ImGuiLayer.get());
         }
@@ -96,13 +97,8 @@ namespace ignite
 
     Application *Application::GetInstance()
     {
-        LOG_ASSERT(s_JoltInstance, "Application has not been created!");
-        return s_JoltInstance;
-    }
-
-    DeviceManager * Application::GetDeviceManager()
-    {
-        return GetInstance()->m_Window->GetDeviceManager();
+        LOG_ASSERT(s_AppInstance, "Application has not been created!");
+        return s_AppInstance;
     }
 
     void Application::SetWindowTitle(const std::string &title)
@@ -128,23 +124,149 @@ namespace ignite
         }
     }
 
+	void Application::ProcessRenderThreadSubmissions()
+	{
+		std::queue<std::function<void()>> pending;
+		{
+			std::lock_guard lock(m_RenderThreadFuncsMutex);
+			pending.swap(m_RenderThreadFuncs);
+			m_RenderThreadHasTasks = !pending.empty();
+		}
+
+		while (!pending.empty())
+		{
+			auto func = std::move(pending.front());
+			pending.pop();
+			if (func)
+			{
+				func();
+			}
+		}
+
+		{
+			std::lock_guard lock(m_RenderThreadFuncsMutex);
+			m_RenderThreadHasTasks = !m_RenderThreadFuncs.empty();
+		}
+	}
+
     void Application::ProcessMainThreadSubmissions()
     {
-        while (!m_ThreadFuncs.empty())
+        // Process all pending submissions
+        if (!m_ThreadFuncs.empty())
         {
-            auto func = m_ThreadFuncs.front();
-            if (func())
+            std::function<void()> func;
+
             {
-                m_ThreadFuncs.pop();
+                std::lock_guard lock(m_ThreadFuncsMutex);
+                func = m_ThreadFuncs.front();
             }
-            else
+            
+            // Execute outside lock
+            if (func)
             {
-                break;
+                func();
+
+                std::lock_guard lock(m_ThreadFuncsMutex);
+                m_ThreadFuncs.pop();
             }
         }
     }
 
-    void Application::PushLayer(Layer *layer)
+	void Application::RenderThreadFunc()
+	{
+		DeviceManager *deviceManager = m_Window->GetDeviceManager();
+        nvrhi::IDevice *device = deviceManager->GetDevice();
+
+		// Create per-thread command list
+		auto renderCommandList = device->createCommandList();
+
+        while (m_RenderThreadRunning)
+        {
+            uint64_t currentFrame;
+            nvrhi::IFramebuffer *framebuffer = nullptr;
+            {
+                std::unique_lock<std::mutex> lock(m_FrameMutex);
+                m_FrameCV.wait(lock, [this]
+                {
+                    return m_CurrentFrameReady.load() || !m_RenderThreadRunning.load() || m_RenderThreadHasTasks.load();
+                });
+
+                if (!m_RenderThreadRunning) break;
+
+                if (m_RenderThreadHasTasks.load())
+                {
+                    lock.unlock();
+                    ProcessRenderThreadSubmissions();
+                    lock.lock();
+
+                    if (!m_CurrentFrameReady.load())
+                    {
+                        continue;
+                    }
+                }
+
+                currentFrame = m_FrameCounter;
+                m_CurrentFrameReady = false;
+            }
+
+            // Get frame resources
+            uint32_t frameIndex = currentFrame % FRAMES_IN_FLIGHT;
+            FrameResources &frame = m_FrameResources[frameIndex];
+
+            // Get the current framebuffer (must be done after BeginFrame on main thread)
+            framebuffer = deviceManager->GetCurrentFramebuffer();
+
+            // Clear framebuffer
+            renderCommandList->open();
+            nvrhi::utils::ClearColorAttachment(renderCommandList, framebuffer, 0, nvrhi::Color(0.0f, 0.0f, 0.0f, 1.0f));
+            renderCommandList->close();
+            {
+                std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
+                device->executeCommandList(renderCommandList);
+            }
+
+            // Render layers
+            for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
+            {
+                Layer *layer = *it;
+                layer->OnRender(framebuffer);
+
+                // ImGui rendering
+                if (m_CreateInfo.useGui)
+                {
+                    m_ImGuiLayer->BeginFrame();
+                    layer->OnGuiRender();
+                    m_ImGuiLayer->EndFrame(framebuffer);
+                }
+            }
+
+			// Collect and execute worker command lists if any
+			{
+				std::lock_guard<std::mutex> lock(m_CommandListMutex);
+				if (!m_PendingCommandLists.empty())
+				{
+					std::vector<nvrhi::ICommandList *> workerLists;
+					for (auto &workerCL : m_PendingCommandLists)
+						workerLists.push_back(workerCL);
+
+					{
+						std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+						device->executeCommandLists(workerLists.data(), workerLists.size());
+					}
+					m_PendingCommandLists.clear();
+				}
+			}
+
+            // Signal frame complete
+            {
+                std::lock_guard<std::mutex> lock(m_FrameMutex);
+                m_RenderComplete = true;
+            }
+            m_FrameCV.notify_all();
+        }
+	}
+
+	void Application::PushLayer(Layer *layer)
     {
         layer->OnAttach();
         m_LayerStack.PushLayer(layer);
@@ -158,9 +280,12 @@ namespace ignite
 
     void Application::Run()
     {
-        DeviceManager *deviceManager = GetDeviceManager();
+        DeviceManager *deviceManager = m_Window->GetDeviceManager();
         nvrhi::IDevice *device = deviceManager->GetDevice();
-        auto commandList = device->createCommandList();
+        
+        // Start render thread
+        m_RenderThreadRunning = true;
+        m_RenderThread = CreateScope<std::thread>(&Application::RenderThreadFunc, this);
         
         SDL_Event sdlEvent;
         
@@ -186,6 +311,7 @@ namespace ignite
             }
 
             // update window title
+#if 0
             if (m_AverageFrameTime > 0)
             {
                 std::stringstream ss;
@@ -213,6 +339,7 @@ namespace ignite
 
                 m_Window->SetTitle(ss.str());
             }
+#endif
 
             if (m_Window->IsVisible() && m_Window->IsInFocus())
             {
@@ -220,34 +347,40 @@ namespace ignite
                 for (auto layer = m_LayerStack.rbegin(); layer != m_LayerStack.rend(); ++layer)
                     (*layer)->OnUpdate(m_DeltaTime);
 
-                // render to main framebuffer
-                // begin render frame
+                // Begin frame acquisition on main thread (required for swap chain)
                 if (m_FrameIndex > 0)
                 {
-                    if (deviceManager->BeginFrame())
+                    bool frameBegan = false;
                     {
-                        // Clearing framebuffer
-                        nvrhi::IFramebuffer* framebuffer = deviceManager->GetCurrentFramebuffer();
-                        commandList->open();
-                        nvrhi::utils::ClearColorAttachment(commandList, framebuffer, 0, nvrhi::Color(0.0f, 0.0f, 0.0f, 1.0f));
-                        commandList->close();
-                        device->executeCommandList(commandList);
-                        
-                        for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
-                        {
-                            Layer *layer = *it;
-                            layer->OnRender(framebuffer);
+                        std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                        frameBegan = deviceManager->BeginFrame();
+                    }
 
-                            // ImGui rendering
-                            if (m_CreateInfo.useGui)
-                            {
-                                m_ImGuiLayer->BeginFrame();
-                                layer->OnGuiRender();
-                                m_ImGuiLayer->EndFrame(framebuffer);
-                            }
+                    if (frameBegan)
+                    {
+                        // Signal render thread to start rendering
+                        {
+                            std::lock_guard<std::mutex> lock(m_FrameMutex);
+                            m_FrameCounter++;
+                            m_CurrentFrameReady = true;
+                        }
+                        m_FrameCV.notify_one();
+                        
+                        // Wait for rendering to complete
+                        {
+                            std::unique_lock<std::mutex> lock(m_FrameMutex);
+                            m_FrameCV.wait(lock, [this] { return m_RenderComplete.load(); });
+                            m_RenderComplete = false;
+                        }
+                        
+                        // Present on main thread
+                        bool presented = false;
+                        {
+                            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                            presented = deviceManager->Present();
                         }
 
-                        if (!deviceManager->Present())
+                        if (!presented)
                             continue;
                     }
                 }
@@ -262,8 +395,13 @@ namespace ignite
             ++m_FrameIndex;
         }
 
-        commandList = nullptr;
-        device->waitForIdle();
+        // Shutdown render thread
+        m_RenderThreadRunning = false;
+        m_FrameCV.notify_all();
+        if (m_RenderThread && m_RenderThread->joinable())
+            m_RenderThread->join();
+        
+		GPUUploadSync::DeviceWaitIdle(device);
         
         if (m_ImGuiLayer)
         {
@@ -322,19 +460,49 @@ namespace ignite
         GetInstance()->m_Window->Restore();
     }
 
-    void Application::SubmitToMainThread(const std::function<bool()> func)
+    void Application::SubmitToMainThread(const std::function<void()> func)
     {
+        std::lock_guard lock(GetInstance()->m_ThreadFuncsMutex);
         GetInstance()->m_ThreadFuncs.push(func);
     }
 
-    CommandManager *Application::GetCommandManager()
+    void Application::SubmitToRenderThread(const std::function<void()> func)
+    {
+        if (!GetInstance()->m_RenderThreadRunning.load())
+        {
+            if (func)
+            {
+                func();
+            }
+            return;
+        }
+        {
+            std::lock_guard lock(GetInstance()->m_RenderThreadFuncsMutex);
+            GetInstance()->m_RenderThreadFuncs.push(func);
+            GetInstance()->m_RenderThreadHasTasks = true;
+        }
+        GetInstance()->m_FrameCV.notify_all();
+    }
+
+    void Application::SubmitWorkerCommandList(nvrhi::CommandListHandle commandList)
+    {
+        std::lock_guard<std::mutex> lock(GetInstance()->m_CommandListMutex);
+        GetInstance()->m_PendingCommandLists.push_back(commandList);
+    }
+
+	const std::thread *Application::GetRenderThread() const
+	{
+        return m_RenderThread.get();
+	}
+
+	CommandManager *Application::GetCommandManager()
     {
         return GetInstance()->m_CommandManager.get();
     }
 
-    nvrhi::IDevice* Application::GetGraphicsDevice()
+    bool Application::IsRenderThreadRunning()
     {
-        return GetInstance()->m_Window->GetDeviceManager()->GetDevice();
+        return GetInstance()->m_RenderThreadRunning.load();
     }
 
     float Application::GetDeltaTime()

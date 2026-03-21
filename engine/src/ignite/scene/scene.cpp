@@ -48,8 +48,10 @@
 namespace ignite
 {
     Scene::Scene(Project *project, const std::string &_name)
-        : m_Project(project), name(_name)
+		: m_Project(project), name(_name)
+        , m_ViewportWidth(1280), m_ViewportHeight(720)
     {
+        LOG_TRACE("Scene::Scene() - Creating scene: {0}", name);
         registry = new entt::registry();
         physics2D = CreateScope<Physics2D>(this);
         physics = CreateScope<JoltScene>(this);
@@ -60,13 +62,40 @@ namespace ignite
 
     Scene::~Scene()
     {
+		// Stop physics simulations first
+		if (physics2D)
+		{
+			physics2D->SimulationStop();
+		}
+		if (physics)
+		{
+			physics->SimulationStop();
+		}
+
+		// Clear all entities from registry before deletion
         if (registry)
+        {
+			registry->clear();
             delete registry;
+			registry = nullptr;
+        }
+
+		// Clear entity map
+		entities.clear();
+
+		// Release GPU buffers explicitly
+		m_SceneGPUDataBuffer.reset();
+		m_CSMGPUDataBuffer.reset();
+
+		// Release physics systems
+		physics2D.reset();
+		physics.reset();
     }
 
     void Scene::OnStart()
     {
-        m_Playing = true;
+        m_IsPlaying = true;
+        m_IsPaused = false;
 
         ScriptEngine::GetInstance()->SetSceneContext(this);
 
@@ -78,7 +107,7 @@ namespace ignite
         for (entt::entity entity : camView)
         {
             CameraComponent &cam = camView.get<CameraComponent>(entity);
-			cam.camera.UpdateMatrices(static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
+			cam.camera.UpdateMatrices(static_cast<float>(m_ViewportWidth), static_cast<float>(m_ViewportHeight));
         }
 
         // play on start audio
@@ -111,7 +140,9 @@ namespace ignite
 
     void Scene::OnStop()
     {
-        m_Playing = false;
+        m_IsPlaying = false;
+        m_IsPaused = false;
+        m_StepFrame = 0;
 
         timeInSeconds = 0.0f;
 
@@ -133,7 +164,17 @@ namespace ignite
         physics->SimulationStop();
     }
 
-    void Scene::UpdateTransforms(float deltaTime)
+	void Scene::Pause()
+	{
+        m_IsPaused = true;
+	}
+
+	void Scene::Step(int frame)
+	{
+
+	}
+
+	void Scene::UpdateTransforms(float deltaTime)
     {
 #if 0
         auto skeletalMeshView = registry->view<SkeletalMesh>();
@@ -219,20 +260,20 @@ namespace ignite
     void Scene::OnUpdateEdit(f32 deltaTime)
     {
         timeInSeconds += deltaTime;
-        
+        m_StepFrame++;
         UpdateTransforms(deltaTime);
     }
 
     void Scene::Resize(uint32_t width, uint32_t height)
     {
-        this->viewportWidth = width;
-        this->viewportHeight = height;
+        this->m_ViewportWidth = width;
+        this->m_ViewportHeight = height;
         
-        auto camView = registry->view<CameraComponent>();
+        const auto &camView = registry->view<CameraComponent>();
         for (entt::entity entity : camView)
         {
             CameraComponent &cam = camView.get<CameraComponent>(entity);
-			cam.camera.UpdateMatrices(static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
+			cam.camera.UpdateMatrices(static_cast<float>(width), static_cast<float>(height));
         }
     }
 
@@ -275,7 +316,20 @@ namespace ignite
         return CreateRef<Scene>(project, name);
     }
 
-    template<typename T>
+	Environment *Scene::GetEnvironment()
+	{
+        auto view = registry->view<WorldEnvironment>();
+        for (entt::entity e : view)
+        {
+            WorldEnvironment &we = registry->get<WorldEnvironment>(e);
+            if (we.environment)
+                return we.environment.get();
+        }
+
+        return nullptr;
+	}
+
+	template<typename T>
     void Scene::OnComponentAdded(Entity entity, T &comp)
     {
     }
@@ -358,5 +412,11 @@ namespace ignite
     template<>
     void Scene::OnComponentAdded<CameraComponent>(Entity entity, CameraComponent &comp)
     {
+		auto camView = registry->view<CameraComponent>();
+		for (entt::entity entity : camView)
+		{
+			CameraComponent &cam = camView.get<CameraComponent>(entity);
+			cam.camera.UpdateMatrices(static_cast<float>(m_ViewportWidth), static_cast<float>(m_ViewportHeight));
+		}
     }
 }

@@ -2,7 +2,7 @@
 using System.Linq;
 using System.Reflection;
 
-namespace IgniteEngine;
+namespace Ignite;
 
 public struct FieldMetadata
 {
@@ -24,23 +24,6 @@ public struct TypeMetadata
 
 public static class ReflectionHelper
 {
-    public static string[] GetEntityDerivedTypes(string assemblyPath)
-    {
-        try
-        {
-            var assembly = Assembly.LoadFrom(assemblyPath);
-            return assembly.GetTypes()
-                .Where(t => t.IsSubclassOf(typeof(Entity)) && !t.IsAbstract)
-                .Select(t => t.FullName ?? t.Name)
-                .ToArray();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[ReflectionHelper] Error loading types from {assemblyPath}: {ex.Message}");
-            return Array.Empty<string>();
-        }
-    }
-
     public static TypeMetadata GetTypeMetadata(string typeName, string assemblyPath)
     {
         try

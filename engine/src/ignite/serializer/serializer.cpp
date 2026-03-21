@@ -29,6 +29,7 @@
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/project/project.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 
@@ -223,6 +224,17 @@ namespace ignite {
                     sr.EndMap();
                 }
 
+				// Static Mesh
+				if (entity.HasComponent<StaticMeshComponent>())
+				{
+					const StaticMeshComponent &comp = entity.GetComponent<StaticMeshComponent>();
+					sr.BeginMap("StaticMesh");
+					{
+						sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
+					}
+					sr.EndMap();
+				}
+
                 // skinned mesh
                 // if (entity.HasComponent<SkeletalMesh>())
                 // {
@@ -355,6 +367,17 @@ namespace ignite {
                     }
                     sr.EndMap();
                 }
+
+				// World Environment
+				if (entity.HasComponent<WorldEnvironment>())
+				{
+					const WorldEnvironment &comp = entity.GetComponent<WorldEnvironment>();
+					sr.BeginMap("AudioSource");
+					{
+						sr.AddKeyValue("HDRHandle", static_cast<uint64_t>(comp.hdrHandle));
+					}
+					sr.EndMap();
+				}
 
                 // Script
                 if (entity.HasComponent<ScriptComponent>())
@@ -499,9 +522,8 @@ namespace ignite {
         Ref<Scene> desScene = Scene::Create(project, title);
 
         // Open commandlist for asset deserialization
-        auto device = Application::GetGraphicsDevice();
+        auto device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
-        cmd->open();
 
         for (YAML::Node entityNode : sceneNode["Entities"])
         {
@@ -674,13 +696,15 @@ namespace ignite {
             {
                 WorldEnvironment &world = desEntity.AddComponent<WorldEnvironment>();
                 world.environment = Environment::Create(desScene.get());
-                world.imageHandle = AssetHandle(node["ImageHandle"].as<uint64_t>());
-                const AssetMetaData &metadata = project->GetAssetManager().GetMetaData(world.imageHandle);
-                if (metadata.type == AssetType::Texture)
-                {
-                    world.environment->LoadTexture(metadata.filepath.generic_string(), cmd);
-                }
+                world.hdrHandle = AssetHandle(node["HDRHandle"].as<uint64_t>());
             }
+
+			// Static Mesh
+			if (YAML::Node node = entityNode["StaticMesh"])
+			{
+				StaticMeshComponent &comp = desEntity.AddComponent<StaticMeshComponent>();
+				comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
+			}
 
             // Script
             if (YAML::Node node = entityNode["Script"])
@@ -732,12 +756,8 @@ namespace ignite {
             }
         }
 
-        // Close commandlist after deserialization
-        cmd->close();
-        device->executeCommandList(cmd);
-        
         // attach each node to it's parent
-        for (auto [uuid, e] : desScene->entities)
+        for (auto &[uuid, e] : desScene->entities)
         {
             Entity entity{ e, desScene.get() };
 
@@ -774,6 +794,7 @@ namespace ignite {
         projectSr.AddKeyValue("Name", projectInfo.name);
         projectSr.AddKeyValue("AssetPath", projectInfo.assetDirectory.generic_string());
         projectSr.AddKeyValue("AssetRegistry", projectInfo.assetRegistryFilepath.generic_string());
+        projectSr.AddKeyValue("ScriptModule", projectInfo.scriptModuleFilepath.generic_string());
         projectSr.AddKeyValue("DefaultSceneHandle", projectInfo.defaultSceneHandle);
 
         projectSr.EndMap();
@@ -837,6 +858,7 @@ namespace ignite {
         info.assetDirectory = projectNode["AssetPath"].as<std::string>();
         info.assetRegistryFilepath = projectNode["AssetRegistry"].as<std::string>();
         info.defaultSceneHandle = AssetHandle(projectNode["DefaultSceneHandle"].as<uint64_t>());
+        info.scriptModuleFilepath = projectNode["ScriptModule"].as<std::string>();
 
         Ref<Project> project = Project::Create(info);
 
@@ -857,7 +879,7 @@ namespace ignite {
                 metadata.type = AssetTypeFromString(assetNode["Type"].as<std::string>());
                 metadata.filepath = assetNode["Filepath"].as<std::string>();
 
-                assetManager.InsertMetaData(handle, metadata);
+                assetManager.AssignMetaData(handle, metadata);
             }
         }
 

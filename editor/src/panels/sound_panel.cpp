@@ -30,7 +30,12 @@ namespace ignite
     {
     }
 
-    void SoundPanel::OnGuiRender()
+	SoundPanel::~SoundPanel()
+	{
+
+	}
+
+	void SoundPanel::OnGuiRender()
     {
         ImGui::Begin("Sound");
 

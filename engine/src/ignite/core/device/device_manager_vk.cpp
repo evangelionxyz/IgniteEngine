@@ -22,6 +22,7 @@
 */
 
 #include "ignite/graphics/window.hpp"
+#include "ignite/graphics/texture.hpp"
 
 #include "device_manager_vk.hpp"
 #include "device_manager.hpp"
@@ -35,10 +36,10 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 namespace ignite
 {
-    static constexpr u32 kComputeQueueIndex = 0;
-    static constexpr u32 kGraphicsQueueIndex = 0;
-    static constexpr u32 kPresentQueueIndex = 0;
-    static constexpr u32 kTransferQueueIndex = 0;
+    static constexpr uint32_t kComputeQueueIndex = 0;
+    static constexpr uint32_t kGraphicsQueueIndex = 0;
+    static constexpr uint32_t kPresentQueueIndex = 0;
+    static constexpr uint32_t kTransferQueueIndex = 0;
 
 #define CHECK(a) if (!(a)) { return false; }
 
@@ -156,7 +157,7 @@ namespace ignite
 
             // Go through the memory types to figure out the amount of VRAM on this physical device.
             vk::PhysicalDeviceMemoryProperties memoryProperties = physicalDevice.getMemoryProperties();
-            for (u32 heapIndex = 0; heapIndex < memoryProperties.memoryHeapCount; ++heapIndex)
+            for (uint32_t heapIndex = 0; heapIndex < memoryProperties.memoryHeapCount; ++heapIndex)
             {
                 vk::MemoryHeap const &heap = memoryProperties.memoryHeaps[heapIndex];
                 if (heap.flags & vk::MemoryHeapFlagBits::eDeviceLocal)
@@ -177,6 +178,7 @@ namespace ignite
         {
             enabledExtensions.instance.insert("VK_EXT_debug_report");
             enabledExtensions.layers.insert("VK_LAYER_KHRONOS_validation");
+            enabledExtensions.layers.insert("VK_LAYER_KHRONOS_synchronization2");
         }
 
         m_DynamicLoader = std::make_unique<VulkanDynamicLoader>(m_DeviceParameters.vulkanLibraryName);
@@ -347,24 +349,31 @@ namespace ignite
 
     nvrhi::ITexture *DeviceManager_VK::GetCurrentBackBuffer()
     {
-        return m_SwapChainImages[m_SwapChainIndex].rhiHandle;
+        return m_SwapChainRenderTargets[m_SwapChainIndex]->GetColorAttachment(0)->GetHandle().Get();
     }
 
-    nvrhi::ITexture *DeviceManager_VK::GetBackBuffer(u32 index)
+    nvrhi::ITexture *DeviceManager_VK::GetBackBuffer(uint32_t index)
     {
-        if (index < m_SwapChainImages.size())
-            return m_SwapChainImages[index].rhiHandle;
+        if (index < m_SwapChainRenderTargets.size())
+            return m_SwapChainRenderTargets[index]->GetColorAttachment(0)->GetHandle().Get();
         return nullptr;
     }
 
-    u32 DeviceManager_VK::GetCurrentBackBufferIndex()
+	nvrhi::ITexture *DeviceManager_VK::GetBackDepthBuffer(uint32_t index)
+	{
+		if (index < m_SwapChainRenderTargets.size())
+			return m_SwapChainRenderTargets[index]->GetDepthAttachment()->GetHandle().Get();
+		return nullptr;
+	}
+
+	uint32_t DeviceManager_VK::GetCurrentBackBufferIndex()
     {
         return m_SwapChainIndex;
     }
 
-    u32 DeviceManager_VK::GetBackBufferCount()
+    uint32_t DeviceManager_VK::GetBackBufferCount()
     {
-        return uint32_t(m_SwapChainImages.size());
+        return uint32_t(m_SwapChainRenderTargets.size());
     }
 
     bool DeviceManager_VK::BeginFrame()
@@ -510,11 +519,11 @@ namespace ignite
     {
         if (!m_DeviceParameters.headlessDevice)
         {
-            u32 glfwExtCount;
+            uint32_t glfwExtCount;
             const char* const* glfwExt = SDL_Vulkan_GetInstanceExtensions(&glfwExtCount);
             LOG_ASSERT(glfwExt, " Failed to get required instance extensions");
 
-            for (u32 i = 0; i < glfwExtCount; ++i)
+            for (uint32_t i = 0; i < glfwExtCount; ++i)
             {
                 enabledExtensions.instance.insert(std::string(glfwExt[i]));
             }
@@ -619,7 +628,7 @@ namespace ignite
             return false;
         }
 
-        const u32 minimumVulkanVersion = VK_MAKE_API_VERSION(0, 1, 4, 0);
+        const uint32_t minimumVulkanVersion = VK_MAKE_API_VERSION(0, 1, 4, 0);
         if (applicationInfo.apiVersion < minimumVulkanVersion)
         {
             LOG_ASSERT(false, "The Vulkan API version supported on the system ({}.{}.{}) is too low, at least {}.{}.{} is required",
@@ -648,9 +657,9 @@ namespace ignite
 
         // create the Vulkan Instance
         vk::InstanceCreateInfo info = vk::InstanceCreateInfo()
-            .setEnabledLayerCount(u32(layerVec.size()))
+            .setEnabledLayerCount(uint32_t(layerVec.size()))
             .setPpEnabledLayerNames(layerVec.data())
-            .setEnabledExtensionCount(u32(instanceExtVec.size()))
+            .setEnabledExtensionCount(uint32_t(instanceExtVec.size()))
             .setPpEnabledExtensionNames(instanceExtVec.data())
             .setPApplicationInfo(&applicationInfo);
 
@@ -810,7 +819,7 @@ namespace ignite
                         deviceIsGood = false;
                     }
 
-                    const u32 canPresent = dev.getSurfaceSupportKHR(m_GraphicsQueueFamily, m_WindowSurface);
+                    const uint32_t canPresent = dev.getSurfaceSupportKHR(m_GraphicsQueueFamily, m_WindowSurface);
                     if (canPresent == 0)
                     {
                         errorStream << '\n' << "  - cannot present";
@@ -835,7 +844,7 @@ namespace ignite
         // pick up first discrete GPU if it exists, otherwise the first integrated GPU
         if (!discreteGPUs.empty())
         {
-            u32 selectedIndex = 0;
+            uint32_t selectedIndex = 0;
             m_VulkanPhysicalDevice = discreteGPUs[selectedIndex];
 
             return true;
@@ -843,7 +852,7 @@ namespace ignite
 
         if (!otherGPUs.empty())
         {
-            u32 selectedIndex = 0;
+            uint32_t selectedIndex = 0;
             m_VulkanPhysicalDevice = otherGPUs[selectedIndex];
 
             return true;
@@ -1050,6 +1059,7 @@ namespace ignite
             .setAttachmentFragmentShadingRate(true);
         auto vulkan13features = vk::PhysicalDeviceVulkan13Features()
             .setSynchronization2(synchronization2Supported)
+			.setDynamicRendering(true)
             .setShaderDemoteToHelperInvocation(true)
             .setMaintenance4(maintenance4Features.maintenance4);
         auto aftermathFeatures = vk::DeviceDiagnosticsConfigCreateInfoNV()
@@ -1149,12 +1159,12 @@ namespace ignite
 
         vk::Extent2D extent = vk::Extent2D(m_DeviceParameters.backBufferWidth, m_DeviceParameters.backBufferHeight);
 
-        std::unordered_set<u32> uniqueQueues = {
-            u32(m_GraphicsQueueFamily),
-            u32(m_PresentQueueFamily)
+        std::unordered_set<uint32_t> uniqueQueues = {
+            uint32_t(m_GraphicsQueueFamily),
+            uint32_t(m_PresentQueueFamily)
         };
 
-        std::vector<u32> queues = SetToVector(uniqueQueues);
+        std::vector<uint32_t> queues = SetToVector(uniqueQueues);
 
         const bool enableSwapChainSharing = queues.size() > 1;
 
@@ -1212,20 +1222,27 @@ namespace ignite
         auto images = m_VulkanDevice.getSwapchainImagesKHR(m_SwapChain);
         for (auto image : images)
         {
-            SwapChainImage sci;
-            sci.image = image;
+            RenderTargetCreateInfo createInfo;
+            createInfo.width = m_DeviceParameters.backBufferWidth;
+            createInfo.height = m_DeviceParameters.backBufferHeight;
+            createInfo.attachments =
+            {
+				FramebufferAttachments {
+					.name = "Swapchain RT",
+					.format = nvrhi::Format::D32S8,
+					.state = nvrhi::ResourceStates::DepthWrite
+				},
+                FramebufferAttachments {
+                    .name = "Swapchain RT", 
+                    .format = m_DeviceParameters.swapChainFormat,
+                    .state = nvrhi::ResourceStates::Present,
+                    .nativeObjectPtr = image,
+                    .isNativeObject = true,
+                    .nativeObjectType = nvrhi::ObjectTypes::VK_Image
+                }
+            };
 
-            nvrhi::TextureDesc textureDesc;
-            textureDesc.width = m_DeviceParameters.backBufferWidth;
-            textureDesc.height = m_DeviceParameters.backBufferHeight;
-            textureDesc.format = m_DeviceParameters.swapChainFormat;
-            textureDesc.debugName = "Swap chain image";
-            textureDesc.initialState = nvrhi::ResourceStates::Present;
-            textureDesc.keepInitialState = true;
-            textureDesc.isRenderTarget = true;
-
-            sci.rhiHandle = m_NvrhiDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::VK_Image, nvrhi::Object(sci.image), textureDesc);
-            m_SwapChainImages.push_back(sci);
+            m_SwapChainRenderTargets.emplace_back(RenderTarget::Create(createInfo, "Swapchain RT"));
         }
 
         m_SwapChainIndex = 0;
@@ -1246,7 +1263,7 @@ namespace ignite
             m_SwapChain = nullptr;
         }
 
-        m_SwapChainImages.clear();
+        m_SwapChainRenderTargets.clear();
     }
 
     void DeviceManager_VK::CreateDescriptorPool()

@@ -21,21 +21,26 @@
 * SOFTWARE.
 */
 
-#pragma once
+#ifndef ASSET_MANAGER_HPP
+#define ASSET_MANAGER_HPP
 
 #include "asset.hpp"
 
 #include <map>
+#include <unordered_set>
 #include <vector>
 #include <thread>
 #include <functional>
 #include <condition_variable>
 #include <queue>
 
-namespace ignite {
+namespace ignite
+{
 
     using AssetRegistry = std::map<AssetHandle, AssetMetaData>;
+	using AssetLoadedCallback = std::function<void(AssetHandle, AssetType)>;
     using AssetJob = std::function<void()>;
+
     class Project;
 
     class AssetManager
@@ -46,12 +51,35 @@ namespace ignite {
 
         Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
         AssetHandle ImportAsset(const std::filesystem::path &filepath);
-        void InsertMetaData(AssetHandle handle, const AssetMetaData &metadata);
+        void AssignMetaData(AssetHandle handle, const AssetMetaData &metadata);
+
+        template<typename T>
+        void AssignAsset(AssetHandle handle, const Ref<T> &asset)
+        {
+            if (asset && std::is_base_of_v<Asset, T>)
+            {
+                m_LoadedAssets[handle] = asset;
+                
+                // Notify listeners that asset was loaded
+                for (const auto &callback : m_LoadedCallbacks)
+                {
+                    callback(handle, asset->GetAssetType());
+                }
+            }
+        }
+
         void RemoveAsset(AssetHandle handle);
+        
+        // Register callback to be notified when assets are loaded
+        void RegisterAssetLoadedCallback(AssetLoadedCallback callback)
+        {
+            m_LoadedCallbacks.push_back(callback);
+        }
 
         void SubmitJob(AssetJob job);
 
         Ref<Asset> GetAsset(AssetHandle handle);
+        Ref<Asset> GetAssetImmediate(AssetHandle handle); // Synchronous load - blocks until complete
         AssetType GetAssetType(AssetHandle handle) const;
 
         const AssetMetaData &GetMetaData(const std::filesystem::path &filepath, AssetHandle &outHandle);
@@ -61,6 +89,15 @@ namespace ignite {
         
         const std::filesystem::path &GetFilepath(AssetHandle handle) const;
         bool IsAssetHandleValid(AssetHandle handle) const;
+        
+        // Asset lifecycle management
+        void ClearAllLoadedAssets();
+        void UnloadAsset(AssetHandle handle);
+        void UnloadUnusedAssets();
+        size_t GetLoadedAssetCount() const { return m_LoadedAssets.size(); }
+        bool IsAssetLoaded(AssetHandle handle) const { return m_LoadedAssets.contains(handle); }
+        bool IsAssetLoading(AssetHandle handle) const { return m_LoadingAssets.contains(handle); }
+        const std::unordered_map<AssetHandle, Ref<Asset>>& GetLoadedAssets() const { return m_LoadedAssets; }
     
         AssetRegistry &GetAssetAssetRegistry() { return m_AssetRegistry; }
 
@@ -71,12 +108,15 @@ namespace ignite {
 
         AssetRegistry m_AssetRegistry;
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
+        std::unordered_set<AssetHandle> m_LoadingAssets; // Track assets currently being loaded
+        std::vector<AssetLoadedCallback> m_LoadedCallbacks;
 
         std::condition_variable m_ConditionVariable;
         std::vector<std::thread> m_Workers;
-        std::mutex m_Mutex;
         std::queue<AssetJob> m_Jobs;
         bool m_Running;
     };
 
 }
+
+#endif

@@ -22,12 +22,12 @@
 */
 
 #include "graphics_pipeline.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
 #include "shader.hpp"
 
 #include "renderer.hpp"
 
-#include "ignite/core/application.hpp"
 
 namespace ignite
 {
@@ -53,7 +53,7 @@ namespace ignite
 
     void GraphicsPipeline::Build(nvrhi::IFramebuffer *framebuffer, const GraphicsPipelineParams &params)
     {
-        nvrhi::IDevice* device = Application::GetGraphicsDevice();
+        nvrhi::IDevice* device = DeviceManager::GetInstance()->GetDevice();
 
         LOG_ASSERT(m_Handle == nullptr, "[GraphicsPipeline] Should not re-create pipeline")
         

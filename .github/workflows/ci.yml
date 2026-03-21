@@ -2,69 +2,120 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ "master", "dev" ]
+    branches: [ "master", ]
   pull_request:
     branches: [ "master" ]
 
 jobs:
-  windows:
-    runs-on: windows-latest
-    
+  build:
+    name: Build (Windows container)
+    # ## IMPORTANT ##########################################################
+    # GitHub Actions does NOT support the `container:` key on Windows runners.
+    # We pull the pre-built image from Docker Hub and run all build steps
+    # inside the container using `docker run`, which is the only supported
+    # approach for Windows containers in GitHub Actions.
+    # ######################################################################
+    runs-on: windows-2022   # pinned – avoids surprise breakage from windows-latest updates
+
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
+      # ## 1. Source ########################################################
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.x'
+      # ## 2. Auth ##########################################################
+      # Pulls from Docker Hub to avoid rate limiting (even for public images)
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Install Vulkan SDK
-      id: vulkan
-      uses: humbletim/install-vulkan-sdk@v1.2
-      with:
-        version: 1.4.309.0
-        cache: true
+      # ## 2.1 Start Docker #################################################
+      # On windows-2022 runners, Docker is installed but the service can be
+      # stopped or not fully initialized. We ensure it's started and ready.
+      - name: Start Docker Service
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          Write-Host "Checking Docker service status..."
+          $service = Get-Service -Name docker -ErrorAction SilentlyContinue
+          if ($service) {
+              if ($service.Status -ne 'Running') {
+                  Write-Host "Starting Docker service..."
+                  Start-Service -Name docker
+              }
+              Write-Host "Docker service is $($service.Status)."
+          } else {
+              Write-Warning "Docker service not found via Get-Service."
+          }
 
-    - name: Download Premake5
-      shell: python
-      run: |
-        import urllib.request
-        import zipfile
-        import os
-        
-        # Create downloads directory
-        os.makedirs('scripts/downloads', exist_ok=True)
-        
-        # Download Premake5
-        version = "5.0.0-beta8"
-        url = f"https://github.com/premake/premake-core/releases/download/v{version}/premake-{version}-windows.zip"
-        zip_path = 'scripts/downloads/premake.zip'
-        
-        print(f"Downloading {url}...")
-        urllib.request.urlretrieve(url, zip_path)
-        
-        print("Extracting...")
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall('scripts/downloads')
-            
-        print("Done.")
+          Write-Host "Verifying Docker connection..."
+          $retryCount = 0
+          while ($retryCount -lt 5) {
+              docker info > $null 2>&1
+              if ($LASTEXITCODE -eq 0) {
+                  Write-Host "Docker is ready!"
+                  break
+              }
+              Write-Host "Waiting for Docker daemon... (Attempt $($retryCount + 1))"
+              Start-Sleep -Seconds 5
+              $retryCount++
+          }
+          if ($retryCount -eq 5) {
+              throw "Docker daemon failed to start after 25 seconds."
+          }
 
-    - name: Generate Project Files
-      run: |
-        echo "VULKAN_SDK=$env:VULKAN_SDK"
-        ./scripts/downloads/premake5.exe --file=scripts/premake5.lua vs2022
+      # ## 3. Pull or build the image #######################################
+      # Tries to pull the pre-built image from Docker Hub first.
+      # Falls back to building it inline if it hasn't been published yet
+      # (bootstrap: first push before docker-publish.yml has ever run).
+      - name: Pull or build image
+        shell: pwsh
+        run: |
+          $image = "${{ vars.DOCKERHUB_USERNAME }}/${{ vars.DOCKERHUB_REPOSITORY }}:latest"
+          Write-Host "Attempting to pull $image ..."
+          docker pull $image
 
-    - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v2
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Image not found on Docker Hub -- building it now (bootstrap mode)."
+            Write-Warning "For faster CI, trigger the 'Build & Push Docker Image' workflow once."
+            docker build --tag $image --file dockerfile .
+            if ($LASTEXITCODE -ne 0) { throw "docker build failed (exit $LASTEXITCODE)" }
+            Write-Host "Image built successfully."
+          } else {
+            Write-Host "Pulled $image"
+          }
 
-    - name: Restore NuGet packages
-      shell: pwsh
-      run: msbuild $env:IGN.sln /t:Restore /p:Configuration=Release /p:Platform="x64"
+      # ## 4. Build inside the container ####################################
+      - name: Run build inside container
+        shell: pwsh
+        run: |
+          $image     = "${{ vars.DOCKERHUB_USERNAME }}/${{ vars.DOCKERHUB_REPOSITORY }}:latest"
+          $workspace = "${{ github.workspace }}"
 
-    - name: Build Solution
-      run: |
-        echo "Using VULKAN_SDK=$env:VULKAN_SDK"
-        msbuild IGN.sln /p:Configuration=Release /p:Platform="x64"
+          Write-Host "Running build in $image ..."
+          Write-Host "Host workspace : $workspace"
 
+          # Windows containers accept native Windows paths in volume mounts.
+          # Quote carefully — no path conversion needed for Windows-to-Windows mounts.
+          docker run --rm `
+            --volume "${workspace}:C:\workspace" `
+            $image `
+            powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+              -File "C:\workspace\scripts\docker_build.ps1"
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Container build failed (exit $LASTEXITCODE)"
+          }
+
+      # ## 5. Upload build artifacts #########################################
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ vars.DOCKERHUB_REPOSITORY }}-${{ github.sha }}
+          path: bin/
+          if-no-files-found: warn
+          retention-days: 7

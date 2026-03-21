@@ -41,6 +41,7 @@ namespace ignite {
         Model,
         Project,
         Texture,
+        SpriteSheet,
         Material,
         Font,
         TextureCube,
@@ -66,6 +67,7 @@ namespace ignite {
             case ignite::AssetType::TextureCube: return "TextureCube";
             case ignite::AssetType::Scene: return "Scene";
             case ignite::AssetType::SkeletalAnimation: return "SkeletalAnimation";
+            case ignite::AssetType::SpriteSheet: return "SpriteSheet";
             case ignite::AssetType::Anim2D: return "Anim2D";
 			case ignite::AssetType::SkeletalMesh: return "SkeletalMesh";
             case ignite::AssetType::StaticMesh: return "StaticMesh";
@@ -84,16 +86,19 @@ namespace ignite {
         { ".png", AssetType::Texture },
         { ".jpeg", AssetType::Texture },
         { ".hdr", AssetType::Texture },
+        { ".ixsp", AssetType::SpriteSheet },
         { ".otf", AssetType::Font },
         { ".ttf", AssetType::Font },
         { ".mp3", AssetType::Audio },
         { ".flac", AssetType::Audio },
         { ".wav", AssetType::Audio },
 
+        { ".fbx", AssetType::StaticMesh },
         { ".gltf", AssetType::StaticMesh },
+        { ".bin", AssetType::StaticMesh },
+        { ".ixsm", AssetType::StaticMesh },
 
-        { ".skel", AssetType::Skeleton},
-        { ".mat", AssetType::Material},
+        { ".ixskel", AssetType::Skeleton},
         { ".ixmat", AssetType::Material},
         { ".ixenv", AssetType::Environment},
     };
@@ -107,6 +112,7 @@ namespace ignite {
         if (typeStr == "Project") return AssetType::Project;
         if (typeStr == "Model") return AssetType::Model;
         if (typeStr == "SkeletalAnimation") return AssetType::SkeletalAnimation;
+        if (typeStr == "SpriteSheet") return AssetType::SpriteSheet;
         if (typeStr == "Anim2D")  return AssetType::Anim2D;
         if (typeStr == "StaticMesh")  return AssetType::StaticMesh;
         if (typeStr == "SkeletalMesh")  return AssetType::SkeletalMesh;
@@ -117,10 +123,26 @@ namespace ignite {
         return AssetType::Invalid;
     }
 
+    // Binary Extensions
+    static std::string GetAssetExtensionFromType(const AssetType type)
+    {
+        switch (type)
+        {
+        case AssetType::StaticMesh: return ".ixsm";
+        case AssetType::Scene: return ".ixscene";
+        case AssetType::Project: return ".ixproj";
+        case AssetType::Material: return ".ixmat";
+        case AssetType::Environment: return ".ixenv";
+        default: return ".invalid";
+        }
+    }
+
     static AssetType GetAssetTypeFromExtension(const std::string &ext)
     {
         if (s_AssetExtensionMap.contains(ext))
+        {
             return s_AssetExtensionMap.at(ext);
+        }
 
         return AssetType::Invalid;
     }
@@ -149,7 +171,7 @@ namespace ignite {
             return std::dynamic_pointer_cast<T>(shared_from_this());
         }
 
-        virtual AssetType GetType() { return AssetType::Invalid; }
+        virtual AssetType GetAssetType() { return AssetType::Invalid; }
 
         void SetDirtyFlag(bool dirty)  { m_Dirty = dirty; }
         bool IsDirty() const  { return m_Dirty; }

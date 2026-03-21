@@ -28,7 +28,6 @@
 #include "graphics_pipeline.hpp"
 #include "render_target.hpp"
 #include "ignite/scene/entity.hpp"
-#include "command_list.hpp"
 
 #include <nvrhi/nvrhi.h>
 
@@ -48,7 +47,6 @@ namespace ignite
         SceneRenderer();
         ~SceneRenderer();
         
-        void Create();
         void SetActiveScene(const Ref<Scene> &scene);
         void RenderTo(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT, bool renderEnvironment = true);
         void SetFillMode(nvrhi::RasterFillMode mode);
@@ -64,18 +62,18 @@ namespace ignite
 		Ref<Texture> GetCascadedShadowMapDepthTexture() const;
 
         Ref<CascadedShadowMap> GetCascadedShadowMap();
-        static SceneRenderer *GetActive();
-
         Ref<Environment> &GetEnvironment() { return m_Environment; }
         Ref<UIRenderer> &GetUIRenderer() { return m_UIRenderer; }
-    private:
+        Ref<Renderer2D> &GetRenderer2D() { return m_Renderer2D; }
+
+        void OnEnvironmentTextureChanged();
+
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer);
         void CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture);
         
     private:
         Ref<Environment> m_Environment;
-        Ref<CommandList> m_CommandList;
 		Ref<CascadedShadowMap> m_CascadedShadowMap;
 
         // Composite
@@ -89,6 +87,8 @@ namespace ignite
         std::vector<AABB> m_EntityBounds;
         
         nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
+
+        bool m_EnvironmentDirty = false;
 
         nvrhi::IDevice *m_Device = nullptr;
         Ref<Scene> m_Scene;

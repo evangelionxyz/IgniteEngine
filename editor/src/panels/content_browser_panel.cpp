@@ -24,6 +24,7 @@
 #include "content_browser_panel.hpp"
 #include "ignite/project/project.hpp"
 #include "editor_layer.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 
 #include <format>
 #include <algorithm>
@@ -34,11 +35,10 @@ namespace ignite
     ContentBrowserPanel::ContentBrowserPanel(const char *windowTitle)
         : IPanel(windowTitle)
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         
         nvrhi::CommandListHandle cmd = device->createCommandList();
         cmd->open();
-
         TextureCreateInfo createInfo;
         createInfo.format = nvrhi::Format::RGBA8_UNORM;
     	createInfo.keepInitialState = true;
@@ -47,10 +47,14 @@ namespace ignite
         m_Icons["unknown"] = Texture::Create("resources/ui/ic_file.png", createInfo, cmd);
 
         cmd->close();
-        device->executeCommandList(cmd);
+        Application::SubmitWorkerCommandList(cmd);
     }
 
-    void ContentBrowserPanel::LoadProjectFiles()
+	ContentBrowserPanel::~ContentBrowserPanel()
+	{
+	}
+
+	void ContentBrowserPanel::LoadProjectFiles()
     {
         // clear directories
         m_PathEntryList.clear();
@@ -70,11 +74,23 @@ namespace ignite
         if (node->path.empty())
             return;
 
-        const std::filesystem::path &filepath = Project::GetInstance()->GetAssetFilepath(node->path);
-        const std::string filename = filepath.filename().string();
-        const bool isDirectory = std::filesystem::is_directory(filepath);
+        // Get the node's index in the tree
+        uint32_t nodeIndex = static_cast<uint32_t>(node - m_TreeNodes.data());
+        
+        // Build full path using helper function
+        const std::filesystem::path assetDir = Project::GetInstance()->GetAssetDirectory();
+        const std::filesystem::path relativePath = GetNodeFullpath(nodeIndex);
+        const std::filesystem::path fullPath = assetDir / relativePath;
+        const std::string filename = node->path.filename().string();
+        
+        // Check if path exists and is a directory
+        bool isDirectory = false;
+        if (std::filesystem::exists(fullPath))
+        {
+            isDirectory = std::filesystem::is_directory(fullPath);
+        }
 
-        ImGuiTreeNodeFlags flags = (m_SelectedFileTree == filepath ? ImGuiTreeNodeFlags_Selected : 0)
+        ImGuiTreeNodeFlags flags = (m_SelectedFileTree == fullPath ? ImGuiTreeNodeFlags_Selected : 0)
             | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_SpanFullWidth;
 
         if (!isDirectory)
@@ -84,6 +100,8 @@ namespace ignite
 
         const bool opened = ImGui::TreeNodeEx(filename.c_str(), flags, "%s", filename.c_str());
 
+        DragDropSource(fullPath);
+
         if (ImGui::IsItemHovered())
         {
             if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
@@ -91,16 +109,19 @@ namespace ignite
                 if (isDirectory)
                 {
                     m_BackwardPathStack.push(m_CurrentDirectory);
-                    m_SelectedFileTree = m_CurrentDirectory = filepath;
+                    m_SelectedFileTree = m_CurrentDirectory = fullPath;
                 }
             }
         }
 
         if (opened && isDirectory)
         {
-            for (const auto &nodeIndex : node->children | std::views::values)
+            for (const auto &childNodeIndex : node->children | std::views::values)
             {
-                RenderFileTree(&m_TreeNodes[nodeIndex]);
+                if (childNodeIndex < m_TreeNodes.size())
+                {
+                    RenderFileTree(&m_TreeNodes[childNodeIndex]);
+                }
             }
             
             ImGui::TreePop();
@@ -111,12 +132,15 @@ namespace ignite
     {
         ImGui::Begin("Content Browser");
 
-        ImVec2 regionSize = ImGui::GetContentRegionAvail();
         const float &dpiScale = ImGui::GetWindowDpiScale();
-        const auto navbarBtSize = ImVec2(40.0f * dpiScale, 30.0f * dpiScale);
-        const auto navbarSize = ImVec2(regionSize.x, 45.0f * dpiScale);
+        const auto navbarBtSize = ImVec2(40.0f * dpiScale, 24.0f * dpiScale);
+        
+        // Calculate navbar height based on button size + padding
+        const ImGuiStyle& style = ImGui::GetStyle();
+        const float navbarHeight = navbarBtSize.y + style.FramePadding.y * 2.0f + style.WindowPadding.y * 2.0f;
+
         // Navigation bar
-        ImGui::BeginChild("##NAV_BUTTON_BAR", navbarSize, ImGuiChildFlags_Borders);
+        ImGui::BeginChild("##NAV_BUTTON_BAR", ImVec2(0, navbarHeight), ImGuiChildFlags_Borders);
 
         if (ImGui::Button("<-", navbarBtSize))
         {
@@ -149,7 +173,7 @@ namespace ignite
         }
 
         ImGui::SameLine();
-        if (ImGui::Button("+Import", { 0, navbarBtSize.y }))
+        if (ImGui::Button("+Import", ImVec2(80.0f * dpiScale, navbarBtSize.y)))
         {
             static SDL_DialogFileFilter kFilters[]
             {
@@ -221,16 +245,37 @@ namespace ignite
                 std::filesystem::path path = m_CurrentDirectory / item;
                 bool isDirectory = std::filesystem::is_directory(path);
 
-                // float thumbnailHeight = m_ThumbnailSize * (thumbnail->GetHeight() / thumbnail->GetWidth());
-                const float thumbnailHeight = static_cast<float>(m_ThumbnailSize) * ImGui::GetWindowDpiScale() * (320.0f / 540.0f);
-                const float diff = static_cast<float>(m_ThumbnailSize) - thumbnailHeight;
-                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + diff);
-
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
 
-                Ref<Texture> icon = isDirectory ? m_Icons["folder"] : m_Icons["unknown"];
+                Ref<Texture> icon;
+                if (isDirectory)
+                {
+                    icon = m_Icons["folder"];
+                }
+                else if (IsImageFile(path))
+                {
+                    icon = GetOrCreateThumbnail(path);
+                    if (!icon)
+                        icon = m_Icons["unknown"];
+                }
+                else
+                {
+                    icon = m_Icons["unknown"];
+                }
+
+                // Calculate display size with aspect ratio
+                float maxSize = static_cast<float>(m_ThumbnailSize);
+                ImVec2 displaySize = CalculateThumbnailDisplaySize(icon, maxSize);
+                
+                // Center the thumbnail vertically
+                float diff = maxSize - displaySize.y;
+                if (diff > 0)
+                {
+                    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + diff * 0.5f);
+                }
+                
                 ImTextureID iconId = reinterpret_cast<ImTextureID>( icon->GetHandle().Get());
-                ImGui::ImageButton(item.string().c_str(), iconId, { static_cast<float>(m_ThumbnailSize), static_cast<float>(m_ThumbnailSize) });
+                ImGui::ImageButton(item.string().c_str(), iconId, displaySize);
 
                 if (ImGui::IsItemHovered())
                 {
@@ -287,20 +332,7 @@ namespace ignite
                     ImGui::EndPopup();
                 }
 
-                if (ImGui::BeginDragDropSource())
-                {
-                    if (!std::filesystem::is_directory(item))
-                    {
-                        const std::filesystem::path filepath = Project::GetInstance()->GetAssetRelativeFilepath(m_CurrentDirectory / item);
-                        AssetHandle handle = Project::GetInstance()->GetAssetManager().GetAssetHandle(filepath);
-                        if (handle != AssetHandle(0))
-                        {
-                            ImGui::SetDragDropPayload("content_browser_item", &handle, sizeof(AssetHandle));
-                        }
-                    }
-
-                    ImGui::EndDragDropSource();
-                }
+                DragDropSource(m_CurrentDirectory / item);
                 
                 ImGui::PopStyleColor();
                 ImGui::TextWrapped("%s", filenameStr.c_str());
@@ -347,24 +379,71 @@ namespace ignite
 
 	void ContentBrowserPanel::OnUpdate(float deltaTime)
 	{
+        // Increment frame counter
+        m_CurrentFrame++;
+
         while (!m_PendingAssetLoading.empty())
         {
-            auto &[assetType, assetMetaData, _] = m_PendingAssetLoading.front();
+            auto [assetType, assetMetaData, _] = m_PendingAssetLoading.front();
+			m_PendingAssetLoading.pop();
 
             if (assetType == PendingFileLoading::ImportAssets)
             {
-                Ref<Asset> asset = Project::GetInstance()->GetAssetManager().Import(AssetHandle(), assetMetaData);
-
-                if (asset)
+                Project::GetInstance()->GetAssetManager().SubmitJob([this, assetType, assetMetaData]()
                 {
-				    Project::GetInstance()->ValidateAssetRegistry();
-				    PruneMissingNodes(0, Project::GetInstance()->GetAssetDirectory());
-				    RefreshAssetTree();
-				    CompactTree();
-                }
-            }
+					Ref<Asset> asset = Project::GetInstance()->GetAssetManager().Import(AssetHandle(), assetMetaData);
 
-            m_PendingAssetLoading.pop();
+					if (asset)
+					{
+                        Application::SubmitToMainThread([this]() mutable
+                        {
+							m_NeedsRefresh = true;
+                        });
+					}
+                });
+            }
+        }
+
+        // Perform refresh once per frame if needed, avoiding overlapping command lists
+        if (m_NeedsRefresh)
+        {
+            m_NeedsRefresh = false;
+            Project::GetInstance()->ValidateAssetRegistry();
+            PruneMissingNodes(0, Project::GetInstance()->GetAssetDirectory());
+            RefreshAssetTree();
+            CompactTree();
+
+            ProjectSerializer serializer(Project::GetInstance());
+
+            auto f = Project::GetInstance()->GetFilepath();
+            serializer.Serialize(f);
+        }
+
+        // Check if thumbnail size changed and clear thumbnails if needed
+        if (m_ThumbnailSize != m_LastThumbnailSize)
+        {
+            ClearThumbnails();
+            m_LastThumbnailSize = m_ThumbnailSize;
+        }
+
+        // Load only 1 thumbnail per frame
+        if (!m_PendingThumbnailLoads.empty() && m_CurrentFrame % 3 == 0)
+        {
+            std::filesystem::path filepath = m_PendingThumbnailLoads.front();
+            m_PendingThumbnailLoads.pop();
+            
+            // Check if still needs loading (not already loaded)
+            auto it = m_Thumbnails.find(filepath);
+            if (it != m_Thumbnails.end() && it->second.thumbnail == nullptr)
+            {
+                StartThumbnailLoad(filepath);
+            }
+        }
+
+        // Unload unused thumbnails every 60 frames (once per second at 60fps)
+        if (m_CurrentFrame % 60 == 0)
+        {
+            UnloadUnusedThumbnails();
         }
 	}
 
@@ -425,7 +504,7 @@ namespace ignite
                             AssetMetaData metadata;
                             metadata.type = assetType;
                             metadata.filepath = relPath;
-                            Project::GetInstance()->GetAssetManager().InsertMetaData(assetHandle, metadata);
+                            Project::GetInstance()->GetAssetManager().AssignMetaData(assetHandle, metadata);
                         }
 
                         if (assetType == AssetType::Material)
@@ -468,7 +547,7 @@ namespace ignite
                 continue;
             }
 
-            std::filesystem::path fullPath = basePath / GetFullPath(childIndex);
+            std::filesystem::path fullPath = basePath / GetNodeFullpath(childIndex);
 
             if (!std::filesystem::exists(fullPath))
             {
@@ -511,7 +590,7 @@ namespace ignite
 
         for (auto& childIndex : node.children | std::views::values)
         {
-            std::filesystem::path fullPath = basePath / GetFullPath(childIndex);
+            std::filesystem::path fullPath = basePath / GetNodeFullpath(childIndex);
             if (!std::filesystem::exists(fullPath))
             {
                 CollectNodeAndDescendants(childIndex, nodesToDelete);
@@ -651,6 +730,23 @@ namespace ignite
         m_TreeNodes = std::move(newNodes);
     }
 
+	void ContentBrowserPanel::DragDropSource(const std::filesystem::path &filepath)
+	{
+		if (ImGui::BeginDragDropSource())
+		{
+			if (!std::filesystem::is_directory(filepath))
+			{
+				AssetHandle handle = Project::GetInstance()->GetAssetManager().GetAssetHandle(filepath);
+				if (handle != AssetHandle(0))
+				{
+					ImGui::SetDragDropPayload("content_browser_item", &handle, sizeof(AssetHandle));
+				}
+			}
+
+			ImGui::EndDragDropSource();
+		}
+	}
+
 	void ContentBrowserPanel::OnImportAssetDialog(void *userData, const char *const *filelist, int filter)
 	{
         ContentBrowserPanel *cb = (ContentBrowserPanel *)userData;
@@ -678,20 +774,180 @@ namespace ignite
         }
 	}
 
-	std::filesystem::path ContentBrowserPanel::GetFullPath(uint32_t nodeIndex) const
+	std::filesystem::path ContentBrowserPanel::GetNodeFullpath(uint32_t nodeIndex) const
     {
+        if (nodeIndex == 0 || nodeIndex >= m_TreeNodes.size())
+            return std::filesystem::path();
+
         std::filesystem::path result;
-        while (nodeIndex != 0)
+        uint32_t currentIndex = nodeIndex;
+        
+        // Build path from leaf to root
+        while (currentIndex != 0 && currentIndex < m_TreeNodes.size())
         {
-            const FileTreeNode &node = m_TreeNodes[nodeIndex];
-
-            if (node.path.has_extension())
-                return node.path;
-
-            result = node.path / result;
-            nodeIndex = node.parent;
+            const FileTreeNode &node = m_TreeNodes[currentIndex];
+            
+            // Avoid using operator/ with empty path to prevent trailing separators
+            if (result.empty())
+                result = node.path;
+            else
+                result = node.path / result;
+                
+            currentIndex = node.parent;
         }
 
         return result;
+    }
+
+    bool ContentBrowserPanel::IsImageFile(const std::filesystem::path &filepath) const
+    {
+        if (!std::filesystem::exists(filepath))
+            return false;
+
+        std::string ext = filepath.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        
+        return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || 
+               ext == ".bmp" || ext == ".tga" || ext == ".hdr";
+    }
+
+    ImVec2 ContentBrowserPanel::CalculateThumbnailDisplaySize(Ref<Texture> texture, float maxSize) const
+    {
+        if (!texture)
+            return ImVec2(maxSize, maxSize);
+
+        float textureWidth = static_cast<float>(texture->GetWidth());
+        float textureHeight = static_cast<float>(texture->GetHeight());
+        
+        if (textureWidth <= 0 || textureHeight <= 0)
+            return ImVec2(maxSize, maxSize);
+
+        float aspectRatio = textureWidth / textureHeight;
+        ImVec2 displaySize;
+        
+        if (aspectRatio > 1.0f)
+        {
+            // Wider than tall
+            displaySize.x = maxSize;
+            displaySize.y = maxSize / aspectRatio;
+        }
+        else
+        {
+            // Taller than wide
+            displaySize.x = maxSize * aspectRatio;
+            displaySize.y = maxSize;
+        }
+        
+        return displaySize;
+    }
+
+    Ref<Texture> ContentBrowserPanel::GetOrCreateThumbnail(const std::filesystem::path &filepath)
+    {
+        auto it = m_Thumbnails.find(filepath);
+        if (it != m_Thumbnails.end())
+        {
+            // Mark as used this frame
+            it->second.lastFrameUsed = m_CurrentFrame;
+            return it->second.thumbnail;
+        }
+
+        // Create placeholder entry to prevent duplicate jobs
+        FileThumbnail placeholder;
+        placeholder.thumbnail = nullptr;
+        placeholder.timestamp = 0;
+        placeholder.lastFrameUsed = m_CurrentFrame;
+        m_Thumbnails[filepath] = placeholder;
+
+        // Add to loading queue instead of starting immediately
+        m_PendingThumbnailLoads.push(filepath);
+
+        return nullptr;
+    }
+
+    void ContentBrowserPanel::StartThumbnailLoad(const std::filesystem::path &filepath)
+    {
+        // Capture by value to avoid dangling references
+        std::filesystem::path capturedPath = filepath;
+        int thumbnailSize = m_ThumbnailSize;
+
+        Project::GetInstance()->GetAssetManager().SubmitJob([this, capturedPath, thumbnailSize]()
+        {
+            TextureCreateInfo createInfo;
+            createInfo.format = nvrhi::Format::RGBA8_UNORM;
+            createInfo.keepInitialState = true;
+            createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+            createInfo.width = thumbnailSize;
+            createInfo.height = thumbnailSize;
+
+            // Load texture data on worker thread (no command list yet)
+            Ref<Texture> loadedTexture = Texture::Create(capturedPath.string().c_str(), createInfo, nullptr);
+
+            // Submit to main thread to create command list and finalize GPU upload
+            Application::SubmitToMainThread([this, capturedPath, loadedTexture]() mutable
+            {
+                if (loadedTexture)
+                {
+                    nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+                    nvrhi::CommandListHandle cmd = device->createCommandList();
+                    cmd->open();
+                    
+                    loadedTexture->SetData(cmd, 4);
+                    
+                    cmd->close();
+                    Application::SubmitWorkerCommandList(cmd);
+
+                    FileThumbnail ft;
+                    ft.thumbnail = loadedTexture;
+                    ft.lastFrameUsed = m_CurrentFrame;
+                    
+                    if (std::filesystem::exists(capturedPath))
+                    {
+                        ft.timestamp = std::filesystem::last_write_time(capturedPath).time_since_epoch().count();
+                    }
+                    else
+                    {
+                        ft.timestamp = 0;
+                    }
+                    
+                    m_Thumbnails[capturedPath] = ft;
+                }
+                else
+                {
+                    // Remove placeholder if loading failed
+                    m_Thumbnails.erase(capturedPath);
+                }
+            });
+        });
+    }
+
+    void ContentBrowserPanel::UnloadUnusedThumbnails()
+    {
+        std::vector<std::filesystem::path> toUnload;
+        
+        for (const auto& [path, thumbnail] : m_Thumbnails)
+        {
+            // Only unload if it has a loaded texture and hasn't been used recently
+            if (thumbnail.thumbnail && (m_CurrentFrame - thumbnail.lastFrameUsed) > s_ThumbnailUnloadFrameThreshold)
+            {
+                toUnload.push_back(path);
+            }
+        }
+        
+        // Unload the thumbnails
+        for (const auto& path : toUnload)
+        {
+            m_Thumbnails.erase(path);
+        }
+    }
+
+    void ContentBrowserPanel::ClearThumbnails()
+    {
+        m_Thumbnails.clear();
+        
+        // Clear the pending load queue
+        while (!m_PendingThumbnailLoads.empty())
+        {
+            m_PendingThumbnailLoads.pop();
+        }
     }
 }

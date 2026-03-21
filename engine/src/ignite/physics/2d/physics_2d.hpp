@@ -46,7 +46,6 @@ namespace ignite
 
         void Simulate(f32 deltaTime);
         void CreateBoxCollider(BoxCollider2DComponent *box, b2BodyId bodyId, b2Vec2 size);
-        void ApplyForce(Rigidbody2DComponent *body, const glm::vec2 &force, const glm::vec2 &point, bool wake);
 
     private:
         Scene *m_Scene;

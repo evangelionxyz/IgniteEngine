@@ -72,6 +72,6 @@ namespace ignite {
         std::unordered_map<std::string, AnimationChannel> channels;
 
         static AssetType GetStaticType() { return AssetType::SkeletalAnimation; }
-        virtual AssetType GetType() override { return GetStaticType(); }
+        virtual AssetType GetAssetType() override { return GetStaticType(); }
     };
 }

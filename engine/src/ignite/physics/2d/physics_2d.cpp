@@ -25,7 +25,6 @@
 #include <ignite/scene/scene.hpp>
 
 #include "ignite/scene/component.hpp"
-
 #include "ignite/scene/scene_manager.hpp"
 
 namespace ignite
@@ -37,6 +36,7 @@ namespace ignite
 
     Physics2D::~Physics2D()
     {
+		SimulationStop();
     }
 
     void Physics2D::SimulationStart()
@@ -70,6 +70,8 @@ namespace ignite
             bodyDef.linearDamping    = rb.linearDamping;
             bodyDef.isEnabled        = rb.isEnabled;
             bodyDef.isAwake          = rb.isAwake;
+			bodyDef.motionLocks.angularZ = rb.fixedRotation;
+			bodyDef.allowFastRotation = rb.allowFastRotation;
 
             rb.bodyId = b2CreateBody(m_WorldId, &bodyDef);
             b2Body_SetUserData(rb.bodyId, static_cast<void *>(&e));
@@ -105,7 +107,7 @@ namespace ignite
             // SceneManager::CalculateParentTransform(m_Scene, tr, id.parent);
         }
 
-        Rigidbody2DComponent &rb          = reg->get<Rigidbody2DComponent>(e);
+        Rigidbody2DComponent &rb = reg->get<Rigidbody2DComponent>(e);
 
         b2BodyDef bodyDef        = b2DefaultBodyDef();
         bodyDef.type             = GetB2BodyType(rb.type);
@@ -119,6 +121,8 @@ namespace ignite
         bodyDef.linearDamping    = rb.linearDamping;
         bodyDef.isEnabled        = rb.isEnabled;
         bodyDef.isAwake          = rb.isAwake;
+        bodyDef.motionLocks.angularZ = rb.fixedRotation;
+        bodyDef.allowFastRotation = rb.allowFastRotation;
 
         rb.bodyId = b2CreateBody(m_WorldId, &bodyDef);
         b2Body_SetUserData(rb.bodyId, static_cast<void *>(&e));
@@ -146,7 +150,6 @@ namespace ignite
                 {
                     b2DestroyShape(bc.shapeId, false);
                 }
-                
             }
 
             Rigidbody2DComponent &rb = reg->get<Rigidbody2DComponent>(e);
@@ -167,7 +170,6 @@ namespace ignite
         const auto reg = m_Scene->registry;
         for (const auto e : reg->view<Rigidbody2DComponent>())
         {
-            IDComponent &id = reg->get<IDComponent>(e);
             TransformComponent &tr = reg->get<TransformComponent>(e);
             Rigidbody2DComponent &rb = reg->get<Rigidbody2DComponent>(e);
 
@@ -190,11 +192,19 @@ namespace ignite
             // first, calculate the local transform
             const auto [x, y] = b2Body_GetPosition(rb.bodyId);
             const b2Rot rotation = b2Body_GetRotation(rb.bodyId);
+            const b2Vec2 linearVelocity = b2Body_GetLinearVelocity(rb.bodyId);
+
             tr.localTranslation = { x, y, tr.translation.z };
-            tr.localRotation = glm::quat({ 0.0f, 0.0f, b2Rot_GetAngle(rotation) });
+			tr.localRotation = glm::quat({ 0.0f, 0.0f, b2Rot_GetAngle(rotation) });
+
 
             tr.translation = tr.localTranslation;
             tr.rotation = tr.localRotation;
+
+            rb.linearVelocity = { linearVelocity.x, linearVelocity.y };
+            rb.angularVelocity = b2Body_GetAngularVelocity(rb.bodyId);
+            rb.isAwake = b2Body_IsAwake(rb.bodyId);
+            rb.isEnabled = b2Body_IsEnabled(rb.bodyId);
         }
     }
 
@@ -215,11 +225,6 @@ namespace ignite
         shapeDef.material.restitution = box->restitution;
         shapeDef.isSensor             = box->isSensor;
         box->shapeId                  = b2CreatePolygonShape(bodyId, &shapeDef, &boxShape);
-    }
-
-    void Physics2D::ApplyForce(Rigidbody2DComponent *body, const glm::vec2 &force, const glm::vec2 &point, bool wake)
-    {
-        b2Body_ApplyForce(body->bodyId, {force.x, force.y}, {point.x, point.y}, wake);
     }
 
 } // namespace ignite

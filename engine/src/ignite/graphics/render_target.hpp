@@ -38,11 +38,16 @@ namespace ignite
         nvrhi::Format format;
         nvrhi::ResourceStates state =  nvrhi::ResourceStates::Unknown;
         uint32_t arrayLayers = 1;
+        void *nativeObjectPtr = nullptr;
+        bool isNativeObject = false;
+        nvrhi::ObjectType nativeObjectType = 0;
     };
 
     struct RenderTargetCreateInfo
     {
         std::vector<FramebufferAttachments> attachments;
+		uint32_t sampleCount = 1;
+		uint32_t sampleQuality = 0;
         uint32_t width = 1280;
         uint32_t height = 720;
     };

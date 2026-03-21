@@ -27,7 +27,6 @@
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/layer.hpp"
 #include "ignite/ignite.hpp"
-#include "ignite/graphics/command_list.hpp"
 #include "ignite/graphics/scene_renderer.hpp"
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/project/project.hpp"
@@ -101,14 +100,11 @@ namespace ignite
         Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
         Ref<Project> GetActiveProject() const { return m_ActiveProject; }
 
-        SceneRenderer *GetSceneRenderer() { return &m_SceneRenderer; }
+        SceneRenderer *GetSceneRenderer() { return m_SceneRenderer.get(); }
 
         EditorData &GetState() { return m_Data; }
 
         static EditorLayer *GetInstance();
-
-    public:
-        void OnDialogLoadMesh(Ref<MeshInstance> &outMesh);
 
     private:
         static void OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter);
@@ -117,15 +113,17 @@ namespace ignite
         static void OnProjectSaveFileSelected(void *userData, const char *const *filelist, int filter);
         static void OnProjectOpenFileSelected(void *userData, const char *const *filelist, int filter);
 
-        void ProcessPendingFileLoading();
+        static void OnScreenshotSaveFileSelected(void *userData, const char *const *filelist, int filter);
+        static void OnProjectFolderSelected(void *userData, const char *const *filelist, int filter);
+        static void OnLoadHDRTextureSelected(void *userData, const char *const *filelist, int filter);
 
+        void ProcessPendingFileLoading();
         void UISettings();
-        void UIImportMeshes();
 
         Ref<ScenePanel> m_ScenePanel;
         Ref<ContentBrowserPanel> m_ContentBrowserPanel;
         Ref<MaterialsPanel> m_MaterialsPanel;
-        SceneRenderer m_SceneRenderer;
+        Ref<SceneRenderer> m_SceneRenderer;
 
         Ref<Scene> m_ActiveScene;
         Ref<Scene> m_EditorScene;
@@ -135,13 +133,14 @@ namespace ignite
         std::filesystem::path m_CurrentSceneFilePath;
     	std::filesystem::path m_CurrentProjectFilepath;
 
+        std::vector<uint8_t> m_ScreenshotPixelData;
+        int m_ScreenshotWidth = 0;
+        int m_ScreenshotHeight = 0;
+
         nvrhi::BufferHandle m_DebugRenderBuffer;
         nvrhi::StagingTextureHandle m_MousePickingStagingTexture;
         nvrhi::StagingTextureHandle m_ScreenshotStagingTexture;
-        Ref<CommandList > m_CommandList;
-
-        std::queue<PendingFileLoading> m_PendingFileLoading;
-
+        nvrhi::CommandListHandle m_Cmd;
         glm::vec2 m_CurrentFramebufferSize;
             
         nvrhi::IDevice *m_Device = nullptr;
@@ -149,6 +148,10 @@ namespace ignite
         int m_SelectedMesh = 0;
         void *m_MeshInstanceData = nullptr;
         std::optional<MeshScene> m_LoadedMeshScene;
+
+        AssetHandle m_CurrentSceneHandle = AssetHandle(0);
+
+        std::queue<PendingFileLoading> m_PendingFileLoading;
 
         friend class ScenePanel;
     };

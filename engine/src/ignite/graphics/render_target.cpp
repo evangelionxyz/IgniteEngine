@@ -21,7 +21,7 @@
 * SOFTWARE.
 */
 
-#include "ignite/core/application.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "render_target.hpp"
 #include "texture.hpp"
 
@@ -43,7 +43,9 @@ namespace ignite {
         for (auto &attachment : m_CreateInfo.attachments)
         {
             const bool isDepthAttachment = attachment.format == nvrhi::Format::D32S8 || attachment.format == nvrhi::Format::D16 || attachment.format == nvrhi::Format::D24S8 || attachment.format == nvrhi::Format::D32;
-            const bool isColorAttachment = attachment.format == nvrhi::Format::RGBA8_UNORM || attachment.format == nvrhi::Format::SRGBA8_UNORM || attachment.format == nvrhi::Format::R32_UINT;
+
+            const bool isColorAttachment = attachment.format == nvrhi::Format::RGBA8_UNORM || attachment.format == nvrhi::Format::SRGBA8_UNORM || attachment.format == nvrhi::Format::R32_UINT || attachment.format == nvrhi::Format::BGRA8_UNORM || attachment.format == nvrhi::Format::SBGRA8_UNORM;
+
             constexpr bool isRenderTarget = true;
 
             // find depth attachment if framebuffer is not created yet
@@ -55,8 +57,12 @@ namespace ignite {
                 createInfo.depth = 1;
                 createInfo.isRenderTarget = isRenderTarget;
                 createInfo.format = attachment.format;
-                createInfo.debugName = std::format("{} - {} ", attachment.name, debugName);
-            	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+                createInfo.sampleCount = m_CreateInfo.sampleCount;
+                createInfo.sampleQuality = m_CreateInfo.sampleQuality;
+                // createInfo.debugName = std::format("{} - {} ", attachment.name, debugName);
+				createInfo.initialState = attachment.state != nvrhi::ResourceStates::Unknown
+					? attachment.state
+					: nvrhi::ResourceStates::DepthWrite;
             	createInfo.keepInitialState = true;
 
                 // Set dimension and array size based on attachment configuration
@@ -83,10 +89,18 @@ namespace ignite {
                 createInfo.depth = 1;
                 createInfo.isRenderTarget = isRenderTarget;
                 createInfo.format = attachment.format;
-                createInfo.debugName = std::format("{} - {} ", attachment.name, debugName);
+                // createInfo.debugName = std::format("{} - {} ", attachment.name, debugName);
                 createInfo.isUAV = false;
-            	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+				createInfo.initialState = attachment.state != nvrhi::ResourceStates::Unknown
+					? attachment.state
+					: nvrhi::ResourceStates::RenderTarget;
             	createInfo.keepInitialState = true;
+				createInfo.sampleCount = m_CreateInfo.sampleCount;
+				createInfo.sampleQuality = m_CreateInfo.sampleQuality;
+
+                createInfo.isNativeObject = attachment.isNativeObject;
+                createInfo.nativeObjectPtr = attachment.nativeObjectPtr;
+                createInfo.nativeObjectType = attachment.nativeObjectType;
 
                 // Set dimension and array size based on attachment configuration
                 if (attachment.arrayLayers > 1)
@@ -99,8 +113,7 @@ namespace ignite {
                     createInfo.dimension = nvrhi::TextureDimension::Texture2D;
                 }
 
-                Ref<Texture> colorAttachment = Texture::Create(createInfo);
-                m_ColorAttachments.push_back(colorAttachment);
+                m_ColorAttachments.emplace_back(Texture::Create(createInfo));
             }
         }
 
@@ -127,7 +140,7 @@ namespace ignite {
                 m_FramebufferDesc.addColorAttachment(colorAttachment->GetHandle());
             }
 
-            nvrhi::IDevice *device = Application::GetGraphicsDevice();
+            nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
             m_FramebufferHandle = device->createFramebuffer(m_FramebufferDesc);
             LOG_ASSERT(m_FramebufferHandle, "Failed to create render target framebuffer");
         }
@@ -135,7 +148,7 @@ namespace ignite {
 
     void RenderTarget::Resize(const uint32_t width, const uint32_t height)
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         device->waitForIdle();
 
@@ -244,13 +257,25 @@ namespace ignite {
 
     void RenderTarget::ClearColorAttachmentFloat(nvrhi::ICommandList *commandList, uint32_t attachmentIndex, const glm::vec4 &clearColor) const
     {
-        nvrhi::TextureHandle texture = m_ColorAttachments[attachmentIndex]->GetHandle();
+		if (attachmentIndex >= m_ColorAttachments.size())
+		{
+			LOG_WARN("[Render Target] Color attachment index {} is out of range", attachmentIndex);
+			return;
+		}
+
+		nvrhi::TextureHandle texture = m_ColorAttachments[attachmentIndex]->GetHandle();
         nvrhi::utils::ClearColorAttachment(commandList, m_FramebufferHandle, attachmentIndex, nvrhi::Color(clearColor.x, clearColor.y, clearColor.z, clearColor.w));
     }
 
     void RenderTarget::ClearColorAttachmentUint(nvrhi::ICommandList *commandList, uint32_t attachmentIndex, uint32_t clearColor) const
     {
-        nvrhi::TextureHandle texture = m_ColorAttachments[attachmentIndex]->GetHandle();
+		if (attachmentIndex >= m_ColorAttachments.size())
+		{
+			LOG_WARN("[Render Target] Color attachment index {} is out of range", attachmentIndex);
+			return;
+		}
+
+		nvrhi::TextureHandle texture = m_ColorAttachments[attachmentIndex]->GetHandle();
 
         const nvrhi::Format format = texture->getDesc().format;
         const bool isUint = format == nvrhi::Format::R32_UINT || format == nvrhi::Format::RGBA8_UINT || format == nvrhi::Format::R8_UINT;
@@ -261,6 +286,11 @@ namespace ignite {
 
     void RenderTarget::ClearDepthAttachment(nvrhi::ICommandList *commandList, float depth, uint32_t stencil) const
     {
+		if (!m_DepthAttachment)
+		{
+			return;
+		}
+
         nvrhi::utils::ClearDepthStencilAttachment(commandList, m_FramebufferHandle, depth, stencil);
     }
 

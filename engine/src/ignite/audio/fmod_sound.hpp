@@ -72,7 +72,7 @@ namespace ignite {
         static Ref<FmodSound> CreateStream(const std::string &name, const std::string &filepath, FMOD_MODE mode = FMOD_DEFAULT | FMOD_LOOP_OFF);
     
         static AssetType GetStaticType() { return AssetType::Audio; }
-        AssetType GetType() override { return GetStaticType(); }
+        AssetType GetAssetType() override { return GetStaticType(); }
 
     private:
         void UpdateFading() const;

@@ -21,7 +21,7 @@
 * SOFTWARE.
 */
 
-﻿namespace IgniteEngine;
+﻿namespace Ignite;
 
 public struct Vector4
 {

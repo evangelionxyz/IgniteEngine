@@ -121,15 +121,25 @@ void FmodSound::AddToChannelGroup(FMOD::ChannelGroup* channel_group)
 
 void FmodSound::Release()
 {
-    if (m_Sound)
+    if (m_Channel)
     {
-        m_Sound->release();
-        m_Sound = nullptr;
+        m_Channel->stop();
+        m_Channel = nullptr;
     }
 
     for (auto &dsp : m_DSPs)
     {
-        dsp->release();
+        if (dsp)
+        {
+            dsp->release();
+        }
+    }
+    m_DSPs.clear();
+
+    if (m_Sound)
+    {
+        m_Sound->release();
+        m_Sound = nullptr;
     }
 }
 

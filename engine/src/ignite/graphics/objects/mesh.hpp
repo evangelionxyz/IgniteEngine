@@ -35,7 +35,8 @@
 #include <nvrhi/nvrhi.h>
 #include <filesystem>
 
-namespace ignite {
+namespace ignite
+{
 
     class Shader;
     class Environment;
@@ -46,42 +47,48 @@ namespace ignite {
     struct MeshPrimitive
     {
         MeshPrimitive() = default;
+        ~MeshPrimitive();
+
         MeshPrimitive(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices);
+        
         Ref<VertexBuffer> vertexBuffer;
         Ref<IndexBuffer> indexBuffer;
 
+        std::vector<VertexMesh_Anim> vertices;
+        std::vector<uint32_t> indices;
+
         static Ref<MeshPrimitive> Create(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices);
+
+        void CreateBuffer(nvrhi::ICommandList *cmd);
+        void ClearPrimitivesData();
     };
 
     class MeshInstance
     {
     public:
-        MeshInstance(const std::string &name, const Ref<MeshPrimitive> &mesh, const Ref<Material> &material, int meshIndex = -1, int materialIndex = -1);
+        MeshInstance();
+        ~MeshInstance();
+
+        MeshInstance(const std::string &name, const Ref<MeshPrimitive> &mesh);
 
         glm::mat4 local = glm::mat4(1.0f);
         glm::mat4 global = glm::mat4(1.0f);
 
-        void UpdateBindingSet(Scene *scene);
-        void SetMeshIndex(int index) { m_MeshIndex = index; }
-        void SetMaterialIndex(int index) { m_MaterialIndex = index; }
+        void SetName(const std::string &name) { m_Name = name; }
+        void SetMaterial(AssetHandle assetHandle);
 
-        static Ref<MeshInstance> Create(const std::string &name, const Ref<MeshPrimitive> &mesh, const Ref<Material> &material, int meshIndex = -1, int materialIndex = -1);
+        static Ref<MeshInstance> Create(const std::string &name, const Ref<MeshPrimitive> &mesh);
 
-        nvrhi::BindingSetHandle GetBindingSet() { return m_BindingSet; }
-        const Ref<MeshPrimitive> &GetPrimitive() const { return m_Primitive; }
-        const Ref<Material> &GetMaterial() const { return m_Material; }
-        const Ref<ConstantBuffer> &GetGPUDataBuffer() const { return m_SkinnedMeshGPUDataBuffer; }
-        const std::string &GetName() const { return m_Name; }
+        Ref<MeshPrimitive> &GetPrimitive() { return m_Primitive; }
+        std::string &GetName() { return m_Name; }
     
+        AssetHandle GetMaterialHandle() const { return m_MaterialHandle; }
+
     private:
         std::string m_Name;
         Ref<MeshPrimitive> m_Primitive;
-        Ref<Material> m_Material;
         Ref<ConstantBuffer> m_SkinnedMeshGPUDataBuffer;
-        nvrhi::BindingSetHandle m_BindingSet;
-        
-        int m_MeshIndex;
-        int m_MaterialIndex;
+        AssetHandle m_MaterialHandle = AssetHandle(0);
     };
 
     // scene graph structures
@@ -97,24 +104,69 @@ namespace ignite {
 
     struct MeshScene
     {
+        MeshScene() = default;
+
         std::vector<MeshNode> nodes;
         std::vector<int> roots;
         std::vector<Ref<MeshInstance>> flatMeshes;
+        std::vector<Ref<Material>> materials;
+
+        struct MaterialTextureMap
+        {
+            int textureIndex = -1;
+            Ref<Texture> texture;
+        };
+
+        std::vector<std::array<MaterialTextureMap, 5>> materialTextureMap;
+
+        // Mesh to Material
+        std::unordered_map<int, int> materialMap;
+
+    };
+
+	class StaticMesh : public Asset
+	{
+	public:
+		StaticMesh() = default;
+		virtual ~StaticMesh();
+
+		static Ref<StaticMesh> Create();
+		static AssetType GetStaticType() { return AssetType::StaticMesh; }
+		virtual AssetType GetAssetType() const { return GetStaticType(); }
+
+		const std::vector<Ref<MeshInstance>> &GetMeshInstances() const { return m_MeshInstances; }
+		void SetMeshInstance(const std::vector<Ref<MeshInstance>> &meshInstances) { m_MeshInstances = meshInstances; }
+		void AddMeshInstance(const Ref<MeshInstance> &meshInstance) { m_MeshInstances.push_back(meshInstance); }
+
+	private:
+		std::vector<Ref<MeshInstance>> m_MeshInstances;
+	};
+
+    class GLTFMeshLoader
+    {
+    public:
+        static Ref<Material> LoadMaterial(const tinygltf::Primitive& primitive, const std::vector<tinygltf::Material>& materials,
+            const std::vector<Ref<Texture>> &loadedTextures, std::array<MeshScene::MaterialTextureMap, 5> &textureMap, const std::vector<nvrhi::SamplerDesc> &loadedSamplers, int *materialIndex);
+        static void LoadVertexData(std::vector<VertexMesh_Anim>& vertices, const tinygltf::Primitive& primitive, const tinygltf::Model& model);
+        static void LoadIndicesData(std::vector<uint32_t>& indices, const tinygltf::Primitive& primitive, const tinygltf::Model& model);
+
+        static void LoadSceneGraphFromGLTF(const std::string& filename, MeshScene &outScene);
+
+    private:
+        static std::vector<Ref<Texture>> LoadTexturesFromGLTF(const tinygltf::Model& model);
+        static std::vector<nvrhi::SamplerDesc> GetSamplersFromGLTF(const tinygltf::Model& model);
+        static const unsigned char* GetBufferData(const tinygltf::Model& model, const tinygltf::Accessor& accessor);
+    };
+
+    class FBXMeshLoader
+    {
+    public:
+        static void LoadSceneGraphFromFBX(const std::string &filename, MeshScene &outScene);
     };
 
     class MeshLoader
     {
     public:
-        static Ref<Material> LoadMaterial(const tinygltf::Primitive& primitive, const std::vector<tinygltf::Material>& materials,
-            const std::vector<Ref<Texture>> &loadedTextures, const std::vector<nvrhi::SamplerHandle> &loadedSamplers, int *materialIndex);
-        static void LoadVertexData(std::vector<VertexMesh_Anim>& vertices, const tinygltf::Primitive& primitive, const tinygltf::Model& model);
-        static void LoadIndicesData(std::vector<uint32_t>& indices, const tinygltf::Primitive& primitive, const tinygltf::Model& model);
-
-        static MeshScene LoadSceneGraphFromGLTF(const std::string& filename);
-
-    private:
-        static std::vector<Ref<Texture>> LoadTexturesFromGLTF(const tinygltf::Model& model, nvrhi::ICommandList *cmd);
-        static std::vector<nvrhi::SamplerHandle> GetSamplersFromGLTF(const tinygltf::Model& model);
-        static const unsigned char* GetBufferData(const tinygltf::Model& model, const tinygltf::Accessor& accessor);
+        static void LoadSceneGraph(const std::string &filename, MeshScene &outScene);
     };
 }

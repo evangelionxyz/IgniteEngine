@@ -105,6 +105,15 @@ namespace ignite
         Ref<T> GetAsset(AssetHandle handle)
         {
             Ref<Asset> asset = m_AssetManager->GetAsset(handle);
+            if (!asset) return nullptr;
+            return std::static_pointer_cast<T>(asset);
+        }
+
+        template<typename T>
+        Ref<T> GetAssetImmediate(AssetHandle handle)
+        {
+            Ref<Asset> asset = m_AssetManager->GetAssetImmediate(handle);
+            if (!asset) return nullptr;
             return std::static_pointer_cast<T>(asset);
         }
 
@@ -121,7 +130,7 @@ namespace ignite
         static Ref<Project> Create(const ProjectInfo &info);
 
         static AssetType GetStaticType() { return AssetType::Project; }
-        virtual AssetType GetType() override { return GetStaticType(); }
+        virtual AssetType GetAssetType() override { return GetStaticType(); }
 
     private:
         void GenerateProject();

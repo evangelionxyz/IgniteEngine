@@ -1,6 +1,7 @@
+#pragma once
 /* MIT License
 *
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -21,12 +22,29 @@
 * SOFTWARE.
 */
 
-#include "asset_static_mesh.hpp"
+#pragma once
+
+#include "ignite/scene/icamera.hpp"
 
 namespace ignite
 {
-	Ref<AssetStaticMesh> AssetStaticMesh::Create()
+	class BasicCamera : public ICamera
 	{
-		return CreateRef<AssetStaticMesh>();
-	}
+	public:
+		enum class MovementMode
+		{
+			Orbiting,
+			Flying
+		};
+
+		BasicCamera() = default;
+
+		void UpdateMouseState();
+		void UpdateSphericalPosition();
+		void HandleOrbit(float deltaTime);
+		void HandlePan(float deltaTime);
+		void HandleZoom(float deltaTime);
+		void ApplyInertia(float deltaTime);
+		void UpdateCameraPosition();
+	};
 }

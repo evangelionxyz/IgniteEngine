@@ -42,7 +42,7 @@ namespace ignite
         {
         }
 
-        virtual ~IPanel() = default;
+        virtual ~IPanel() {};
 
         // from Layer class
         virtual void OnGuiRender() { }

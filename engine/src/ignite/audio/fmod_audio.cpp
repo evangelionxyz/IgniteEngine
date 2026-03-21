@@ -73,19 +73,52 @@ namespace ignite {
 
     void FmodAudio::Shutdown()
     {
-        for (auto &s : s_fmod_audio->m_SoundMap | std::views::values)
+        if (!s_fmod_audio)
         {
-            s->Release();
+            return;
         }
 
-        s_fmod_audio->m_SoundMap.clear();
+        if (s_fmod_audio->m_System)
+        {
+            s_fmod_audio->m_System->mixerSuspend();
 
-        result = s_fmod_audio->m_System->close();
-        FMOD_CHECK(result);
-        result = s_fmod_audio->m_System->release();
-        FMOD_CHECK(result);
+            if (s_fmod_audio->m_MasterGroup)
+            {
+                s_fmod_audio->m_MasterGroup->stop();
+                s_fmod_audio->m_MasterGroup->release();
+                s_fmod_audio->m_MasterGroup = nullptr;
+            }
+
+            for (auto &s : s_fmod_audio->m_SoundMap | std::views::values)
+            {
+                s->Release();
+            }
+
+            s_fmod_audio->m_SoundMap.clear();
+
+            for (auto &[name, group] : s_fmod_audio->m_ChannelGroups)
+            {
+                if (group)
+                {
+                    group->stop();
+                    group->release();
+                }
+            }
+
+            s_fmod_audio->m_ChannelGroups.clear();
+
+            s_fmod_audio->m_System->mixerResume();
+            s_fmod_audio->m_System->update();
+
+            result = s_fmod_audio->m_System->close();
+            FMOD_CHECK(result);
+            result = s_fmod_audio->m_System->release();
+            FMOD_CHECK(result);
+            s_fmod_audio->m_System = nullptr;
+        }
 
         delete s_fmod_audio;
+        s_fmod_audio = nullptr;
     }
 
     FMOD::ChannelGroup* FmodAudio::CreateChannelGroup(const std::string &name)

@@ -1,6 +1,6 @@
 /* MIT License
 *
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -21,32 +21,9 @@
 * SOFTWARE.
 */
 
-#ifndef COMMAND_LIST_HPP
-#define COMMAND_LIST_HPP
-
-#include "ignite/core/types.hpp"
-#include <nvrhi/nvrhi.h>
+#include "particle_system.hpp"
 
 namespace ignite
 {
-    class CommandList
-    {
-    public:
-        CommandList(uint32_t count = 0);
-        ~CommandList();
 
-        void Begin();
-        void Submit();
-
-        nvrhi::CommandListHandle GetActiveHandle() const;
-        nvrhi::CommandListHandle GetHandle(uint32_t index) const;
-
-        static Ref<CommandList> Create(uint32_t count = 0);
-
-    private:
-        std::vector<nvrhi::CommandListHandle> m_CommandLists;
-        nvrhi::IDevice* m_Device;
-    };
 }
-
-#endif

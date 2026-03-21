@@ -36,7 +36,9 @@
 #include "command.hpp"
 #include "ignite/graphics/ui/ui_manager.hpp"
 
+
 #include <queue>
+#include <mutex>
 #include <filesystem>
 
 namespace ignite
@@ -91,9 +93,8 @@ namespace ignite
         Window *GetWindow() { return m_Window.get(); }
 
         static Application *GetInstance();
-        static DeviceManager *GetDeviceManager();
         static CommandManager *GetCommandManager();
-        static nvrhi::IDevice *GetGraphicsDevice();
+        static bool IsRenderThreadRunning();
 
         static float GetDeltaTime();
 
@@ -103,11 +104,18 @@ namespace ignite
         static void WindowIconify();
         static void WindowMaximize();
         static void WindowRestore();
-        static void SubmitToMainThread(const std::function<bool()> func);
+        static void SubmitToMainThread(const std::function<void()> func);
+        static void SubmitToRenderThread(const std::function<void()> func);
+        static void SubmitWorkerCommandList(nvrhi::CommandListHandle commandList);
+
+        const std::thread *GetRenderThread() const;
 
     private:
         void UpdateAverageTimeTime(float elapsedTime);
         void ProcessMainThreadSubmissions();
+        void ProcessRenderThreadSubmissions();
+
+        void RenderThreadFunc();
 
     protected:
         ApplicationCreateInfo m_CreateInfo;
@@ -128,7 +136,37 @@ namespace ignite
         int32_t m_NumberOfAccumulatedFrames = 0;
         int32_t m_FrameIndex = 0;
 
-        std::queue<std::function<bool()>> m_ThreadFuncs;
+        std::queue<std::function<void()>> m_ThreadFuncs;
+        std::mutex m_ThreadFuncsMutex;
+
+        std::queue<std::function<void()>> m_RenderThreadFuncs;
+        std::mutex m_RenderThreadFuncsMutex;
+        std::atomic<bool> m_RenderThreadHasTasks{ false };
+
+        // Rendering thread
+        Scope<std::thread> m_RenderThread;
+        std::atomic<bool> m_RenderThreadRunning{ false };
+        std::atomic<bool> m_CurrentFrameReady{ false };
+        std::atomic<bool> m_RenderComplete{ false };
+
+        // Synchronization
+        std::mutex m_CommandListMutex;
+        std::vector<nvrhi::CommandListHandle> m_PendingCommandLists;
+
+        // Frame synchronization
+        std::condition_variable m_FrameCV;
+        std::mutex m_FrameMutex;
+        uint64_t m_FrameCounter{ 0 };
+
+        // Per-frame resources (triple buffered)
+        static constexpr uint32_t FRAMES_IN_FLIGHT = 3;
+        struct FrameResources
+        {
+            nvrhi::CommandListHandle commandList;
+            std::vector<nvrhi::CommandListHandle> workerCommandLists;
+        };
+
+        std::array<FrameResources, FRAMES_IN_FLIGHT> m_FrameResources;
     };
 
     Application *CreateApplication(ApplicationCommandLineArgs args);

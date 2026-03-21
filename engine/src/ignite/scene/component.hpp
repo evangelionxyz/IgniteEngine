@@ -325,10 +325,9 @@ namespace ignite
     {
     public:
         Ref<Environment> environment;
-        AssetHandle imageHandle;
+        AssetHandle hdrHandle;
 
         bool primary = false;
-        
 
         COMPONENT_CLASS_TYPE(CompType_WorldEnvironment)
     };
@@ -346,7 +345,9 @@ namespace ignite
     class StaticMeshComponent : public IComponent
     {
     public:
-        std::vector<Ref<MeshInstance>> meshInstance;
+        AssetHandle handle = AssetHandle(0);
+        Ref<ConstantBuffer> perEntityBuffer;
+        nvrhi::BindingSetHandle meshBindingSet = nullptr; // Cached binding set - reused across frames
 
         StaticMeshComponent() = default;
 
@@ -405,7 +406,6 @@ namespace ignite
         glm::vec3 scale = { 1.0f, 1.0f, 1.0f };
 
         BoxColliderComponent() = default;
-
 
         COMPONENT_CLASS_TYPE(CompType_BoxCollider)
     };
@@ -467,4 +467,5 @@ namespace ignite
 
         COMPONENT_CLASS_TYPE(CompType_Script)
     };
+
 }

@@ -27,7 +27,7 @@
 #include "shader.hpp"
 
 #include "renderer.hpp"
-#include "ignite/core/application.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
 
 namespace ignite
@@ -35,7 +35,7 @@ namespace ignite
 
     EdgeDetection::EdgeDetection()
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         auto bufferDesc = nvrhi::BufferDesc();
         bufferDesc.byteSize = sizeof(EdgeDetectionParameter);
@@ -84,12 +84,12 @@ namespace ignite
 
     EdgeDetection::~EdgeDetection()
     {
-    	m_Sampler = nullptr;
+        m_Sampler = nullptr;
     }
 
     void EdgeDetection::CreatePipeline()
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         // Create compute pipeline
         nvrhi::ComputePipelineDesc computeDesc;
@@ -100,7 +100,7 @@ namespace ignite
 
     void EdgeDetection::UpdateBindingSet(const Ref<Texture> &sceneTexture, const Ref<Texture> &objectIDTexture, const Ref<Texture> &depth)
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         nvrhi::BindingSetDesc desc;
         desc.bindings =
@@ -150,7 +150,7 @@ namespace ignite
 
     void EdgeDetection::CreateOutputTexture(uint32_t width, uint32_t height)
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         // Texture creation -> Common state
         // First use in Compute: Common -> UnorderedAccess (for writing)
@@ -162,7 +162,7 @@ namespace ignite
         createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
         createInfo.isUAV = true;
         
-        createInfo.debugName = "SobelDetection Output Texture";
+        // createInfo.debugName = "SobelDetection Output Texture";
         m_OutputTexture = Texture::Create(createInfo);
 
     	auto samplerDesc = nvrhi::SamplerDesc();

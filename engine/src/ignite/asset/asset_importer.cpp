@@ -22,19 +22,24 @@
 */
 
 #include "asset_importer.hpp"
-#include "asset_static_mesh.hpp"
 
 #include "ignite/audio/fmod_audio.hpp"
 #include "ignite/audio/fmod_sound.hpp"
 
-#include "ignite/core/application.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/serializer/serializer.hpp"
+#include "ignite/serializer/binary_serializer.hpp"
 #include "ignite/graphics/scene_renderer.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/renderer.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/scene/scene.hpp"
+
+#include <mutex>
+#include <condition_variable>
+#include <chrono>
 
 namespace ignite {
 
@@ -43,7 +48,8 @@ namespace ignite {
         { AssetType::Scene, AssetImporter::ImportScene },
         { AssetType::Texture, AssetImporter::ImportTexture },
         { AssetType::Audio, AssetImporter::ImportAudio },
-        { AssetType::StaticMesh, AssetImporter::ImportStaticMesh }
+        { AssetType::StaticMesh, AssetImporter::ImportStaticMesh },
+        { AssetType::Material, AssetImporter::ImportMaterial }
     };
 
     Ref<Asset> AssetImporter::Import(AssetHandle handle, const AssetMetaData &metadata)
@@ -70,7 +76,9 @@ namespace ignite {
 
             Ref<Asset> asset;
             if (s_ImportFunctions.contains(metadataCopy.type))
+            {
                 asset = s_ImportFunctions.at(metadataCopy.type)(handle, metadataCopy);
+            }
             
             if (asset)
             {
@@ -79,17 +87,230 @@ namespace ignite {
         });
     }
 
-	Ref<AssetStaticMesh> AssetImporter::ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata)
+	Ref<StaticMesh> AssetImporter::ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata)
 	{
-        // Generate folders
-        auto meshScene = MeshLoader::LoadSceneGraphFromGLTF(metadata.filepath.generic_string());
+        if (!std::filesystem::exists(metadata.filepath))
+        {
+            LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
+            return nullptr;
+        }
 
-        Ref<MeshInstance> mesh;
+		static auto staticMeshBinExt = GetAssetExtensionFromType(AssetType::StaticMesh);
+		static auto materialBinExt = GetAssetExtensionFromType(AssetType::Material);
 
-        return nullptr;
-	}
+		Ref<StaticMesh> asset;
 
-	Ref<Scene> AssetImporter::ImportScene(AssetHandle handle, const AssetMetaData &metadata)
+		// Load the mesh from .ixsm
+        if (metadata.filepath.extension() == staticMeshBinExt)
+        {
+		    asset = BinarySerializer::DeserializeStaticMesh(metadata.filepath);
+        }
+
+        if (asset)
+        {
+			for (auto &mesh : asset->GetMeshInstances())
+			{
+			    // Load materials
+				AssetHandle materialHandle = mesh->GetMaterialHandle();
+				AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(materialHandle);
+				if (metadata.type == AssetType::Material)
+				{
+					const auto &materialFilepath = Project::GetInstance()->GetAssetFilepath(metadata.filepath);
+					Ref<Material> material = BinarySerializer::DeserializeMaterial(materialFilepath);
+                    Project::GetInstance()->GetAssetManager().AssignAsset(materialHandle, material);
+
+                    // Submit GPU upload command list to render thread (thread-safe)
+                    Application::SubmitToRenderThread([m = mesh]()
+                    {
+                        nvrhi::IDevice* device = DeviceManager::GetInstance()->GetDevice();
+                        nvrhi::CommandListHandle cmd = device->createCommandList();
+                        cmd->open();
+                        m->GetPrimitive()->CreateBuffer(cmd);
+                        cmd->close();
+
+                        Application::SubmitWorkerCommandList(cmd);
+                        });
+                }
+            }
+
+            return asset;
+        }
+
+        const std::filesystem::path parentPath = metadata.filepath.parent_path();
+
+        // Get project asset directory
+        const std::filesystem::path projectAssetPath = Project::GetInstance()->GetAssetDirectory();
+
+        const std::filesystem::path filename = metadata.filepath.stem();
+        const std::filesystem::path outputDirectory = projectAssetPath / filename; // inside project asset directory
+        const std::filesystem::path meshDirectory = outputDirectory / "StaticMesh";
+        const std::filesystem::path materialDirectory = outputDirectory / "Material";
+        const std::filesystem::path textureDirectory = outputDirectory / "Textures";
+
+        // Create Output Directory
+        if (!std::filesystem::exists(outputDirectory))
+        {
+            std::filesystem::create_directory(outputDirectory);
+        }
+
+        // Create Mesh Directory
+        if (!std::filesystem::exists(meshDirectory))
+        {
+            std::filesystem::create_directory(meshDirectory);
+        }
+
+        // Create Material Directory
+        if (!std::filesystem::exists(materialDirectory))
+        {
+            std::filesystem::create_directory(materialDirectory);
+        }
+
+        // Create Texture Directory
+        if (!std::filesystem::exists(textureDirectory))
+        {
+            std::filesystem::create_directory(textureDirectory);
+        }
+
+        std::filesystem::path meshBinaryFilename = filename;
+        meshBinaryFilename = meshBinaryFilename.replace_extension(staticMeshBinExt);
+        std::filesystem::path meshBinaryFullpath = meshDirectory / meshBinaryFilename;
+
+        if (!asset)
+        {
+            // Generate folders
+            MeshScene meshScene;
+            MeshLoader::LoadSceneGraph(metadata.filepath.generic_string(), meshScene);
+
+            // Prepare AssetHandle map for texture material textures
+            // we need 5 textures
+            std::vector<std::array<AssetHandle, 5>> materialTextureHandles;
+            materialTextureHandles.resize(meshScene.materials.size());
+
+            // Import and store textures
+            for (size_t i = 0; i < meshScene.materialTextureMap.size(); ++i)
+            {
+                auto &textureHandles = materialTextureHandles[i];
+
+                // Set the default value to be 0
+                std::fill(textureHandles.begin(), textureHandles.end(), AssetHandle(0));
+
+                for (size_t j = 0; j < meshScene.materialTextureMap[i].size(); ++j)
+                {
+                    auto &[idx, texture] = meshScene.materialTextureMap[i][j];
+
+                    // no texture
+                    if (idx < 0)
+                        continue;
+
+                    const std::string textureFilename = filename.stem().string() + std::format("_{0}_{1}", idx, ".png");
+                    std::filesystem::path texturePNGFullPath = textureDirectory / textureFilename;
+                    BinarySerializer::SerializeTextureToPNG(texture, texturePNGFullPath);
+
+                    AssetHandle textureHandle = AssetHandle();
+                    texture->handle = textureHandle;
+
+                    AssetMetaData textureMD;
+                    textureMD.filepath = Project::GetInstance()->GetAssetRelativeFilepath(texturePNGFullPath);
+                    textureMD.type = AssetType::Texture;
+
+                    Project::GetInstance()->GetAssetManager().AssignAsset(textureHandle, texture);
+                    Project::GetInstance()->GetAssetManager().AssignMetaData(textureHandle, textureMD);
+
+                    // If the texture has been stored, then assign AssetHandle
+                    textureHandles[j] = textureHandle;
+                }
+            }
+
+            // Import and store material
+            for (size_t i = 0; i < meshScene.materials.size(); ++i)
+            {
+                Ref<Material> &mat = meshScene.materials[i];
+
+                // First store the texture handles
+                mat->baseColorTextureHandle = materialTextureHandles[i][0];
+                mat->emissiveTextureHandle = materialTextureHandles[i][1];
+                mat->metallicRoughnessTextureHandle = materialTextureHandles[i][2];
+                mat->normalTextureHandle = materialTextureHandles[i][3];
+                mat->occlusionTextureHandle = materialTextureHandles[i][4];
+
+                const std::string materialFilename = mat->name + materialBinExt;
+                std::filesystem::path materialBinFullPath = materialDirectory / materialFilename;
+                BinarySerializer::SerializeMaterial(mat, materialBinFullPath);
+
+                AssetHandle materialHandle = AssetHandle();
+                mat->handle = materialHandle; // assign material handle
+
+                AssetMetaData materialMD;
+                materialMD.filepath = Project::GetInstance()->GetAssetRelativeFilepath(materialBinFullPath);
+                materialMD.type = AssetType::Material;
+
+                Project::GetInstance()->GetAssetManager().AssignAsset(materialHandle, mat);
+                Project::GetInstance()->GetAssetManager().AssignMetaData(materialHandle, materialMD);
+            }
+
+            asset = CreateRef<StaticMesh>();
+            for (size_t meshIdx = 0; meshIdx < meshScene.flatMeshes.size(); ++meshIdx)
+            {
+                // Resolve material handle
+                const int matIdx = meshScene.materialMap[(int)meshIdx];
+                Ref<Material> mat = meshScene.materials[matIdx];
+
+                Ref<MeshInstance> m = meshScene.flatMeshes[meshIdx];
+                m->SetMaterial(mat->handle);
+
+                asset->AddMeshInstance(m);
+            }
+
+            // Serialize the mesh
+            BinarySerializer::SerializeStaticMesh(asset, meshBinaryFullpath);
+        }
+
+        if (asset)
+        {
+            asset->handle = handle;
+
+            for (auto &mesh : asset->GetMeshInstances())
+            {
+                // Load materials
+                AssetHandle materialHandle = mesh->GetMaterialHandle();
+                AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(materialHandle);
+                if (metadata.type == AssetType::Material)
+                {
+                    const auto &materialFilepath = Project::GetInstance()->GetAssetFilepath(metadata.filepath);
+                    Ref<Material> material = BinarySerializer::DeserializeMaterial(materialFilepath);
+                    Project::GetInstance()->GetAssetManager().AssignAsset(materialHandle, material);
+
+                    // Submit GPU upload command list to render thread (thread-safe)
+                    Application::SubmitToRenderThread([m = mesh]()
+                        {
+                            nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+                            nvrhi::CommandListHandle cmd = device->createCommandList();
+                            cmd->open();
+                            m->GetPrimitive()->CreateBuffer(cmd);
+                            cmd->close();
+
+                            Application::SubmitWorkerCommandList(cmd);
+                        });
+                }
+            }
+
+            auto relativePath = Project::GetInstance()->GetAssetRelativeFilepath(meshBinaryFullpath);
+        }
+
+        return asset;
+    }
+
+    Ref<Material> AssetImporter::ImportMaterial(AssetHandle handle, const AssetMetaData &metadata)
+    {
+        Ref<Material> asset;
+        if (asset)
+        {
+            asset->handle = handle;
+        }
+        return asset;
+    }
+
+    Ref<Scene> AssetImporter::ImportScene(AssetHandle handle, const AssetMetaData &metadata)
     {
         Ref<Scene> scene = SceneSerializer::Deserialize(metadata.filepath, AssetManager::GetProject());
         if (scene)
@@ -101,19 +322,25 @@ namespace ignite {
 
     Ref<Texture> AssetImporter::ImportTexture(AssetHandle handle, const AssetMetaData &metadata)
     {
-        Ref<Texture> result = CreateRef<Texture>();
-        Renderer::Submit([result, metadata, h = handle] (nvrhi::ICommandList *cmd) mutable
-        {
-            TextureCreateInfo createInfo;
-            createInfo.format = nvrhi::Format::RGBA8_UNORM;
-            createInfo.mipLevels = 4;
-            createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
-            createInfo.keepInitialState = true; // should keep initial state
+        TextureCreateInfo createInfo;
+        createInfo.format = nvrhi::Format::RGBA8_UNORM;
+        createInfo.mipLevels = 4;
+        createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+        createInfo.keepInitialState = true; // should keep initial state
+        createInfo.deferGpuCreate = true;
 
-            Ref<Texture> t = Texture::Create(metadata.filepath, createInfo, cmd);
-            t->handle = h;
+        // Load texture pixel data on worker thread (no GPU operations)
+        Ref<Texture> result = Texture::Create(metadata.filepath, createInfo, nullptr);
 
-            *result = *t;
+        // Submit GPU upload to main thread with proper synchronization
+        Application::SubmitToRenderThread([texture = result]()
+            {
+                nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
+            cmd->open();
+            texture->SetData(cmd, 4);
+            cmd->close();
+            
+            Application::SubmitWorkerCommandList(cmd);
         });
 
         return result;
@@ -122,12 +349,10 @@ namespace ignite {
     Ref<FmodSound> AssetImporter::ImportAudio(AssetHandle handle, const AssetMetaData &metadata)
     {
         Ref<FmodSound> sound = FmodSound::Create(metadata.filepath.filename().string(), metadata.filepath.generic_string(), FMOD_DEFAULT);
-        
         if (sound)
         {
             sound->handle = handle;
         }
-
         return sound;
     }
 }

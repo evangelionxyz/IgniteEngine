@@ -33,8 +33,6 @@ namespace ignite
 {
     struct TextureCreateInfo
     {
-        std::string debugName = "[Texture Class]";
-
         uint32_t width = 1;
         uint32_t height = 1;
         uint32_t depth = 1;
@@ -48,8 +46,15 @@ namespace ignite
         bool isTypeless = false;
         bool isUAV = false;
         bool isShadingRateSurface = false;
+        bool keepCpuData = false;
+        bool deferGpuCreate = false;
 
         bool keepInitialState = false;
+		bool isNativeObject = false;
+
+		void *nativeObjectPtr = nullptr;
+        nvrhi::ObjectType nativeObjectType = 0;
+
         nvrhi::Format format = nvrhi::Format::UNKNOWN;
         nvrhi::ResourceStates initialState = nvrhi::ResourceStates::Unknown;
         nvrhi::TextureDimension dimension = nvrhi::TextureDimension::Texture2D;
@@ -59,20 +64,24 @@ namespace ignite
     {
     public:
         Texture() = default;
-        Texture(const TextureCreateInfo &createInfo);
-        Texture(Buffer buffer, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd);
-        Texture(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd);
+        Texture(TextureCreateInfo createInfo, const std::string &debugName = "Texture Class");
+        Texture(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
+        Texture(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
 
         ~Texture() override;
 
-        static Ref<Texture> Create(const TextureCreateInfo& createInfo);
-        static Ref<Texture> Create(Buffer buffer, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd);
-        static Ref<Texture> Create(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo, nvrhi::ICommandList *cmd);
+        static Ref<Texture> Create();
+        static Ref<Texture> Create(TextureCreateInfo createInfo, const std::string &debugName = "Texture Class");
+        static Ref<Texture> Create(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
+        static Ref<Texture> Create(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
 
+        void SetData(nvrhi::ICommandList *cmd, uint32_t channelCount);
         void SetData(nvrhi::ICommandList *cmd, uint32_t rowPitch, uint32_t depthPitch);
 
-        const TextureCreateInfo &GetCreateInfo() const { return m_CreateInfo; }
+        TextureCreateInfo GetCreateInfo() const { return m_CreateInfo; }
         nvrhi::TextureHandle GetHandle() { return m_Handle; }
+
+        static void *GetPixelData(Ref<Texture> texture, size_t *outRowPitch, nvrhi::ICommandList *cmd, nvrhi::IDevice *device);
 
         int GetWidth() const { return m_CreateInfo.width; }
         int GetHeight() const { return m_CreateInfo.height; }
@@ -80,24 +89,25 @@ namespace ignite
         int GetMipLevel() const { return m_CreateInfo.mipLevels; }
         nvrhi::Format GetFormat() const { return m_CreateInfo.format; }
 
+        const std::string &GetDebugName() const { return m_DebugName; }
         const std::filesystem::path &GetFilepath() { return m_Filepath; }
-
-        bool operator ==(const Texture &other) const 
-        { 
-            return m_Handle.Get() == other.m_Handle.Get();
-        }
 
         const Buffer &GetBuffer() { return m_Buffer; }
         static AssetType GetStaticType() { return AssetType::Texture; }
-        virtual AssetType GetType() override { return GetStaticType(); }
+        virtual AssetType GetAssetType() override { return GetStaticType(); }
+
+        bool operator ==(const Texture &other) const  { return m_Handle.Get() == other.m_Handle.Get(); }
 
     private:
         void CreateTextureHandle();
+        void EnsureTextureHandle();
 
         Buffer m_Buffer;
         TextureCreateInfo m_CreateInfo;
         std::filesystem::path m_Filepath;
         nvrhi::TextureHandle m_Handle;
+        std::string m_DebugName;
+        bool m_HasUploaded = false;
     };
 
 }

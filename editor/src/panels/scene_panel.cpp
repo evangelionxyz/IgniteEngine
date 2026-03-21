@@ -77,7 +77,7 @@ namespace ignite
 		m_Camera.UpdateSphericalPosition();
 		m_Camera.UpdateMatrices(width, height);
 
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
         cmd->open();
 
@@ -178,8 +178,6 @@ namespace ignite
             ImGui::EndDragDropTarget();
         }
 
-        ImGui::Text("Entity count: %zu", m_Scene->entities.size());
-
         ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable;
 
         if (ImGui::BeginTable("entity_hierarchy_table", 3, tableFlags))
@@ -197,14 +195,28 @@ namespace ignite
             ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, { 0.000f, 0.243f, 0.408f, 1.000f });
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 2.0f, 0.0f });
 
-            // Render root entity
-			m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const IDComponent &id)
+            std::vector<Entity> rootEntities;
+            m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const IDComponent &id)
             {
                 if (id.parent == UUID(0))
                 {
-                    RenderEntityNode(Entity{ e, m_Scene.get()});
+                    rootEntities.emplace_back(e, m_Scene.get());
                 }
             });
+
+            std::ranges::sort(rootEntities, [](const Entity &a, const Entity &b)
+            {
+                if (a.GetName() == b.GetName())
+                {
+                    return static_cast<u64>(a) < static_cast<u64>(b);
+                }
+                return a.GetName() < b.GetName();
+            });
+
+            for (const Entity &entity : rootEntities)
+            {
+                RenderEntityNode(entity);
+            }
 
             ImGui::PopStyleVar();
             ImGui::PopStyleColor(3);
@@ -283,7 +295,7 @@ namespace ignite
         
         ImGui::PopStyleColor(3);
 
-        if (!m_Scene->IsPlaying() || true)
+        if (!m_Scene->IsRunning() || true)
         {
             ImGui::PushID((int)imguiPushId);
             if (ImGui::BeginPopupContextItem(idComp.name.c_str()))
@@ -393,9 +405,8 @@ namespace ignite
 
             ImGui::SameLine();
 
-            ImVec2 addCompBtSize = ImGui::CalcTextSize("Add Component");
-            //if (ImGui::Button("Add Component", { ImGui::GetContentRegionAvail().x, addCompBtSize.y + addCompBtSize.y / 2.0f }))
-            if (ImGui::Button("Add Component", { ImGui::GetContentRegionAvail().x, 25.0f * ImGui::GetWindowDpiScale() }))
+            ImVec2 addCompBtSize = ImGui::CalcTextSize("Add");
+            if (ImGui::Button("Add", { ImGui::GetContentRegionAvail().x, 25.0f * ImGui::GetWindowDpiScale() }))
             {
                 ImGui::OpenPopup("##add_component_context");
             }
@@ -428,13 +439,13 @@ namespace ignite
 
                 bool isTextureLoaded = c.handle != AssetHandle(0);
 
-                std::string imageButtonLabel = "Load Texture";
+                std::string btLabel = "Load Texture";
                 if (isTextureLoaded)
                 {
-                    imageButtonLabel = "Loaded";
+                    btLabel = "Loaded";
                 }
 
-                if (ImGui::Button(imageButtonLabel.c_str()))
+                if (ImGui::Button(btLabel.c_str()))
                 {
                 }
 
@@ -469,16 +480,188 @@ namespace ignite
                 ImGui::ColorEdit4("Color", &c.color.x);
             });
 
+			RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [&]()
+			{
+				StaticMeshComponent &c = selectedEntity.GetComponent<StaticMeshComponent>();
 
-            RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [&]()
-            {
-                // TODO: Material
-                if (ImGui::BeginDragDropTarget())
+				bool isMeshLoaded = c.handle != AssetHandle(0);
+
+				// Mesh loading section with better styling
+				ImGui::AlignTextToFramePadding();
+				ImGui::Text("Mesh Asset:");
+				ImGui::SameLine();
+
+				std::string buttonLabel = isMeshLoaded ? "Loaded" : "Drag Mesh Here";
+				ImVec4 buttonColor = isMeshLoaded ? ImVec4(0.2f, 0.7f, 0.3f, 1.0f) : ImVec4(0.3f, 0.3f, 0.3f, 1.0f);
+
+				ImGui::PushStyleColor(ImGuiCol_Button, buttonColor);
+				ImGui::Button(buttonLabel.c_str(), ImVec2(ImGui::GetContentRegionAvail().x - 30.0f, 0.0f));
+				ImGui::PopStyleColor();
+
+				if (ImGui::BeginDragDropTarget())
+				{
+					if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+					{
+						LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+						AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+						AssetType type = Project::GetInstance()->GetAssetManager().GetAssetType(handle);
+						if (type == AssetType::StaticMesh)
+						{
+							c.handle = handle;
+						}
+					}
+					ImGui::EndDragDropTarget();
+				}
+
+                if (isMeshLoaded)
                 {
-                    ImGui::EndDragDropTarget();
-                }
+                    ImGui::SameLine();
+                    if (ImGui::Button("X"))
+                    {
+                        c.handle = AssetHandle(0); // reset the mesh
+                    }
 
-                ImGui::Button("Material");
+                    ImGui::Indent(8.0f);
+                    ImGui::TextDisabled("Handle: %llu", static_cast<u64>(c.handle));
+                    ImGui::Unindent(8.0f);
+
+                    Ref<StaticMesh> sm = Project::GetInstance()->GetAsset<StaticMesh>(c.handle);
+                    if (sm)
+                    {
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        ImGui::Spacing();
+
+                        // Display mesh instances with materials
+                        int meshIndex = 0;
+                        for (auto &m : sm->GetMeshInstances())
+                        {
+                            ImGui::PushID(meshIndex++);
+
+                            // Mesh instance header
+                            std::string meshLabel = "Mesh: " + m->GetName();
+                            bool meshTreeOpen = ImGui::TreeNodeEx(meshLabel.c_str(),
+                                ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
+                                ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_FramePadding);
+
+                            if (meshTreeOpen)
+                            {
+                                ImGui::Indent(8.0f);
+
+                                // Material section
+                                Ref<Material> mat = Project::GetInstance()->GetAsset<Material>(m->GetMaterialHandle());
+                                if (mat)
+                                {
+                                    ImGui::Spacing();
+                                    ImGui::Text("Material: %s", mat->name.c_str());
+                                    ImGui::Spacing();
+
+                                    // Material properties in columns
+                                    ImGui::Columns(2, "material_props", false);
+                                    ImGui::SetColumnWidth(0, 120.0f);
+
+                                    // Base Color
+                                    ImGui::Text("Base Color:");
+                                    ImGui::NextColumn();
+                                    ImGui::ColorEdit3("##BaseColor", &mat->gpuData.baseColorFactor.x,
+                                        ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+                                    ImGui::NextColumn();
+
+                                    // Metallic
+                                    ImGui::Text("Metallic:");
+                                    ImGui::NextColumn();
+                                    ImGui::SliderFloat("##Metallic", &mat->gpuData.metallicFactor, 0.0f, 1.0f);
+                                    ImGui::NextColumn();
+
+                                    // Roughness
+                                    ImGui::Text("Roughness:");
+                                    ImGui::NextColumn();
+                                    ImGui::SliderFloat("##Roughness", &mat->gpuData.roughnessFactor, 0.0f, 1.0f);
+                                    ImGui::NextColumn();
+
+                                    // Emissive
+                                    ImGui::Text("Emissive:");
+                                    ImGui::NextColumn();
+                                    ImGui::ColorEdit4("##Emissive", &mat->gpuData.emissiveFactor.x,
+                                        ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+                                    ImGui::NextColumn();
+
+                                    // Occlusion Strength
+                                    ImGui::Text("Occlusion:");
+                                    ImGui::NextColumn();
+                                    ImGui::SliderFloat("##Occlusion", &mat->gpuData.occlusionStrength, 0.0f, 1.0f);
+                                    ImGui::NextColumn();
+
+                                    ImGui::Columns(1);
+
+                                    ImGui::Spacing();
+                                    ImGui::Separator();
+                                    ImGui::Spacing();
+
+                                    // Texture previews
+                                    ImGui::Text("Textures:");
+                                    ImGui::Spacing();
+
+                                    constexpr float thumbnailSize = 64.0f;
+                                    constexpr float spacing = 8.0f;
+
+                                    auto renderTexturePreview = [](const char *label, AssetHandle handle)
+                                        {
+                                            ImGui::PushID(label);
+                                            ImGui::PushID(static_cast<int>(static_cast<uint64_t>(handle)));
+                                            Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(handle);
+
+                                            if (texture && texture->GetHandle())
+                                            {
+                                                ImGui::BeginGroup();
+                                                ImTextureID texID = (ImTextureID)texture->GetHandle().Get();
+                                                ImGui::Image(texID, ImVec2(thumbnailSize, thumbnailSize));
+                                                if (ImGui::IsItemHovered())
+                                                {
+                                                    ImGui::BeginTooltip();
+                                                    ImGui::Image(texID, ImVec2(256.0f, 256.0f));
+                                                    ImGui::EndTooltip();
+                                                }
+                                                ImGui::TextWrapped("%s", label);
+                                                ImGui::EndGroup();
+                                            }
+                                            else
+                                            {
+                                                ImGui::BeginGroup();
+                                                ImGui::Button("None", ImVec2(thumbnailSize, thumbnailSize));
+                                                ImGui::TextWrapped("%s", label);
+                                                ImGui::EndGroup();
+                                            }
+                                            ImGui::PopID();
+                                            ImGui::PopID();
+                                        };
+
+                                    // First row of textures
+                                    renderTexturePreview("Base Color", mat->baseColorTextureHandle);
+                                    ImGui::SameLine(0.0f, spacing);
+                                    renderTexturePreview("Normal", mat->normalTextureHandle);
+                                    ImGui::SameLine(0.0f, spacing);
+                                    renderTexturePreview("Metallic/Rough", mat->metallicRoughnessTextureHandle);
+
+                                    // Second row of textures
+                                    renderTexturePreview("Emissive", mat->emissiveTextureHandle);
+                                    ImGui::SameLine(0.0f, spacing);
+                                    renderTexturePreview("Occlusion", mat->occlusionTextureHandle);
+                                }
+                                else
+                                {
+                                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "No Material Assigned");
+                                }
+
+                                ImGui::Unindent(8.0f);
+                                ImGui::TreePop();
+                            }
+
+                            ImGui::PopID();
+                            ImGui::Spacing();
+                        }
+                    }
+                }
             });
 
 			RenderComponent<Rigidbody2DComponent>("Rigid Body 2D", selectedEntity, [&]()
@@ -506,7 +689,7 @@ namespace ignite
                     ImGui::EndCombo();
                 }
 
-                if (m_Scene->IsPlaying())
+                if (m_Scene->IsRunning())
                 {
                     if (ImGui::DragFloat2("Linear Vel", &c.linearVelocity.x, 0.025f))
                         b2Body_SetLinearVelocity(c.bodyId, { c.linearVelocity.x, c.linearVelocity.y });
@@ -545,6 +728,12 @@ namespace ignite
                     ImGui::Checkbox("Awake", &c.isAwake);
                     ImGui::Checkbox("Enabled", &c.isEnabled);
                     ImGui::Checkbox("Sleep", &c.isEnableSleep);
+                    ImGui::Checkbox("Fixed Rotation", &c.fixedRotation);
+                    
+                    if (!c.fixedRotation)
+                    {
+                        ImGui::Checkbox("Fast Rotation", &c.allowFastRotation);
+                    }
                 }
             });
             RenderComponent<CameraComponent>("Camera", selectedEntity, [&]()
@@ -562,7 +751,7 @@ namespace ignite
                         if (ImGui::Selectable(projectionTypeStr[i], &isSelected))
                         {
                             c.camera.projectionType = static_cast<ProjectionType>(i);
-                            c.camera.UpdateMatrices(static_cast<float>(m_Scene->viewportWidth), static_cast<float>(m_Scene->viewportHeight));
+                            c.camera.UpdateMatrices(static_cast<float>(m_Scene->GetViewportWidth()), static_cast<float>(m_Scene->GetViewportHeight()));
                         }
 
                         if (isSelected)
@@ -590,7 +779,7 @@ namespace ignite
 
                 if (modified)
                 {
-                    c.camera.UpdateMatrices(static_cast<float>(m_Scene->viewportWidth), static_cast<float>(m_Scene->viewportHeight));
+                    c.camera.UpdateMatrices(static_cast<float>(m_Scene->GetViewportWidth()), static_cast<float>(m_Scene->GetViewportHeight()));
                 }
             });
 
@@ -771,7 +960,7 @@ namespace ignite
                 bool detached = c.className == "Detached";
 
                 // classFields
-                bool isRunning = m_Scene->IsPlaying();
+                bool isRunning = m_Scene->IsRunning();
 
                 // Editable classFields (edit mode)
                 if (isRunning && !detached)
@@ -1317,18 +1506,17 @@ namespace ignite
         m_ViewportData.mousePos = { mousePos.x - canvasPos.x, mousePos.y - canvasPos.y };
 
         // Update UI input handling
-        if (SceneRenderer::GetActive())
+        auto sceneRenderer = m_Scene->GetSceneRenderer();
+        if (sceneRenderer)
         {
             glm::vec2 viewportPos = { canvasPos.x, canvasPos.y };
             glm::vec2 viewportSize = { canvasSize.x, canvasSize.y };
             glm::vec2 screenMousePos = { mousePos.x, mousePos.y };
             bool mousePressed = ImGui::IsMouseDown(ImGuiMouseButton_Left);
             
-            SceneRenderer::GetActive()->UpdateUIInput(screenMousePos, viewportPos, viewportSize, mousePressed);
+            sceneRenderer->UpdateUIInput(screenMousePos, viewportPos, viewportSize, mousePressed);
         }
 
-        // ImTextureID sceneImage = (ImTextureID)m_SceneViewportRT->GetColorAttachment(0)->GetHandle().Get(); // Test scene RT
-        // ImTextureID sceneImage = (ImTextureID)m_UIViewportRT->GetColorAttachment(0)->GetHandle().Get(); // Test UI RT
         ImTextureID sceneImage = (ImTextureID)m_CompositeViewportRT->GetColorAttachment(0)->GetHandle().Get(); // Current composite RT
         ImGui::Image(sceneImage, canvasSize);
         if (ImGui::BeginDragDropTarget())
@@ -1406,7 +1594,7 @@ namespace ignite
                 glm::vec3 deltaTranslation, deltaScale, deltaRotation;
                 Math::DecomposeTransformEuler(gizmoDelta, deltaTranslation, deltaRotation, deltaScale);
 
-                for (auto [uuid, entity] : m_SelectedEntities)
+                for (auto &[uuid, entity] : m_SelectedEntities)
                 {
                     // Get the live transform component to apply changes to it
                     TransformComponent &tr = entity.GetTransform();
@@ -1484,18 +1672,29 @@ namespace ignite
             }
         }
 
+        // Preview camera
         if (Entity cameraEntity = GetSelectedEntity())
         {
             if (cameraEntity.HasComponent<CameraComponent>())
             {
-                const ImVec2 vpSize = { static_cast<float>(m_Scene->viewportWidth), static_cast<float>(m_Scene->viewportHeight) };
-                const float padding = 8.0f;
-                const float width = 256.0f;
-                const float height = width / (vpSize.x / vpSize.y);
+                const glm::uvec2 previewRtSize = m_CompositeCameraRT->GetSize();
+                ICamera previewCamera = cameraEntity.GetComponent<CameraComponent>().camera;
+                if (auto sceneRenderer = m_Scene->GetSceneRenderer(); sceneRenderer && previewRtSize.x > 0u && previewRtSize.y > 0u)
+                {
+                    const float aspect = static_cast<float>(previewRtSize.x) / static_cast<float>(previewRtSize.y);
+                    const float padding = 8.0f;
+                    const float width = 256.0f;
+                    const float height = width / aspect;
 
-                ImGui::SetCursorPos({ canvasSize.x - width - padding, canvasSize.y - height });
-                ImTextureID previewImage = (ImTextureID)m_CompositeCameraRT->GetColorAttachment(0)->GetHandle().Get();
-                ImGui::Image(previewImage, {width, height});
+                    sceneRenderer->RenderTo(&previewCamera,
+                        GetSceneCameraRT(),
+                        GetUICameratRT(),
+                        GetCompositeCameraRT());
+
+                    ImGui::SetCursorPos({ canvasSize.x - width - padding, canvasSize.y - height + padding });
+                    ImTextureID previewImage = (ImTextureID)m_CompositeCameraRT->GetColorAttachment(0)->GetHandle().Get();
+                    ImGui::Image(previewImage, {width, height});
+                }
             }
         }
 
@@ -1515,9 +1714,8 @@ namespace ignite
         if (m_Scene)
         {
             m_Scene->Resize(width, height);
+            m_Camera.UpdateMatrices(static_cast<float>(width), static_cast<float>(height));
         }
-
-        m_Camera.UpdateMatrices(static_cast<float>(m_Scene->viewportWidth), static_cast<float>(m_Scene->viewportHeight));
     }
 
     void ScenePanel::UISettings()
@@ -1594,14 +1792,18 @@ namespace ignite
 
             ImGui::PushID(static_cast<int>(compID));
 
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2 { 0.0f, 2.5f });
+            // ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2 { 6.0f, 3.0f });
             ImGui::Separator();
 
             const bool open = ImGui::TreeNodeEx((const char *)(uint32_t *)(uint64_t *)&compID, treeNdeFlags, name.c_str());
-            ImGui::PopStyleVar();
+            // ImGui::PopStyleVar();
 
-            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 20.0f);
-            if (ImGui::Button("...", {24.0f, 0.0f}))
+            const float buttonSize = ImGui::GetFrameHeight();
+            const float cursorX = ImGui::GetCursorPosX();
+            const float available = ImGui::GetContentRegionAvail().x;
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(cursorX + available - buttonSize);
+            if (ImGui::Button("...", { buttonSize, buttonSize }))
                 ImGui::OpenPopup("comp_settings");
 
             bool componentRemoved = false;
@@ -1711,7 +1913,7 @@ namespace ignite
 
     Entity ScenePanel::SetSelectedEntity(Entity entity)
     {
-        auto sceneRenderer = SceneRenderer::GetActive();
+		auto sceneRenderer = m_Scene->GetSceneRenderer();
 
         if (!entity.IsValid())
         {

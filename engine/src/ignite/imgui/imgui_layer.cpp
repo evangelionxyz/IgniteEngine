@@ -137,7 +137,6 @@ namespace ignite
         }
 
         ImGuiStyle &style = ImGui::GetStyle();
-#if 0
         ImVec4 *colors = style.Colors;
         colors[ImGuiCol_Text] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
         colors[ImGuiCol_TextDisabled] = ImVec4(0.60f, 0.60f, 0.60f, 1.00f);
@@ -161,8 +160,8 @@ namespace ignite
         colors[ImGuiCol_SliderGrab] = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);
         colors[ImGuiCol_SliderGrabActive] = ImVec4(0.91f, 0.91f, 0.91f, 1.00f);
         colors[ImGuiCol_Button] = ImVec4(0.17f, 0.17f, 0.17f, 1.00f);
-        colors[ImGuiCol_ButtonHovered] = ImVec4(0.17f, 0.17f, 0.17f, 1.00f);
-        colors[ImGuiCol_ButtonActive] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
+        colors[ImGuiCol_ButtonHovered] = ImVec4(0.000f, 0.2f, 0.494f, 1.0f);
+        colors[ImGuiCol_ButtonActive] = ImVec4(0.0f, 0.405f, 1.0f, 1.0f);
         colors[ImGuiCol_Header] = ImVec4(0.17f, 0.17f, 0.17f, 1.00f);
         colors[ImGuiCol_HeaderHovered] = ImVec4(0.17f, 0.17f, 0.17f, 1.00f);
         colors[ImGuiCol_HeaderActive] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
@@ -215,11 +214,11 @@ namespace ignite
         style.FrameBorderSize = 0.0f;
         style.WindowRounding = 6.0f;
         style.TabRounding = 0.0f;
-        style.ChildRounding = 6.0f;
-        style.FrameRounding = 3.0f;
-        style.PopupRounding = 4.0f;
-        style.GrabRounding = 4.0f;
-        style.ScrollbarRounding = 4.0f;
+        style.ChildRounding = 1.0f;
+        style.FrameRounding = 1.0f;
+        style.PopupRounding = 1.0f;
+        style.GrabRounding = 1.0f;
+        style.ScrollbarRounding = 1.0f;
         style.TabBorderSize = 1.0f;
         style.TabBarBorderSize = 1.0f;
         style.TabBarOverlineSize = 2.0f;
@@ -232,8 +231,6 @@ namespace ignite
         style.AntiAliasedFill = true;
         style.AntiAliasedLines = true;
         style.AntiAliasedLinesUseTex = true;
-
-#endif
 
         // Store the original style for proper scaling
         m_OriginalStyle = style;

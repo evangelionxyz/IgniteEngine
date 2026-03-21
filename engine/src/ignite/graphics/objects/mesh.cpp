@@ -23,26 +23,286 @@
 
 #include "mesh.hpp"
 #include "environment.hpp"
+#include "ignite/project/project.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/scene_renderer.hpp"
+#include "ignite/core/application.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
+
+#include <fbxsdk.h>
+
+#include <algorithm>
+#include <cctype>
+#include <mutex>
 
 namespace ignite
 {
     namespace
     {
+        static glm::mat4 ToGlmMatrix(const FbxAMatrix &matrix)
+        {
+            glm::mat4 result(1.0f);
+            for (int row = 0; row < 4; ++row)
+            {
+                for (int col = 0; col < 4; ++col)
+                {
+                    result[col][row] = static_cast<float>(matrix.Get(row, col));
+                }
+            }
+            return result;
+        }
+
+        static std::string ToLowerCopy(std::string value)
+        {
+            std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c)
+            {
+                return static_cast<char>(std::tolower(c));
+            });
+            return value;
+        }
+
+        static FbxAMatrix BuildNodeGeometricMatrix(FbxNode *node)
+        {
+            FbxAMatrix geometric;
+            geometric.SetIdentity();
+
+            if (!node)
+            {
+                return geometric;
+            }
+
+            geometric.SetT(node->GetGeometricTranslation(FbxNode::eSourcePivot));
+            geometric.SetR(node->GetGeometricRotation(FbxNode::eSourcePivot));
+            geometric.SetS(node->GetGeometricScaling(FbxNode::eSourcePivot));
+
+            return geometric;
+        }
+
+        static Ref<Material> CreateDefaultMaterial(const std::string &name)
+        {
+            Ref<Material> material = CreateRef<Material>();
+            material->name = name.empty() ? "DefaultMaterial" : name;
+            return material;
+        }
+
+        static bool TryGetMaterialPropertyVec3(FbxSurfaceMaterial *material, const std::initializer_list<const char *> &propertyNames, glm::vec3 &outValue)
+        {
+            if (!material)
+            {
+                return false;
+            }
+
+            for (const char *name : propertyNames)
+            {
+                FbxProperty property = material->FindProperty(name);
+                if (!property.IsValid())
+                {
+                    property = material->RootProperty.Find(name);
+                }
+
+                if (!property.IsValid())
+                {
+                    continue;
+                }
+
+                if (property.GetPropertyDataType().GetType() == eFbxDouble3)
+                {
+                    const FbxDouble3 value = property.Get<FbxDouble3>();
+                    outValue = glm::vec3((float)value[0], (float)value[1], (float)value[2]);
+                    return true;
+                }
+
+                if (property.GetPropertyDataType().GetType() == eFbxDouble4)
+                {
+                    const FbxDouble4 value = property.Get<FbxDouble4>();
+                    outValue = glm::vec3((float)value[0], (float)value[1], (float)value[2]);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        static bool TryGetMaterialPropertyFloat(FbxSurfaceMaterial *material, const std::initializer_list<const char *> &propertyNames, float &outValue)
+        {
+            if (!material)
+            {
+                return false;
+            }
+
+            for (const char *name : propertyNames)
+            {
+                FbxProperty property = material->FindProperty(name);
+                if (!property.IsValid())
+                {
+                    property = material->RootProperty.Find(name);
+                }
+
+                if (!property.IsValid())
+                {
+                    continue;
+                }
+
+                const auto type = property.GetPropertyDataType().GetType();
+                if (type == eFbxDouble)
+                {
+                    outValue = (float)property.Get<FbxDouble>();
+                    return true;
+                }
+
+                if (type == eFbxFloat)
+                {
+                    outValue = property.Get<FbxFloat>();
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        static bool TryLoadFBXTextureFromProperty(FbxSurfaceMaterial *material, const std::initializer_list<const char *> &propertyNames,
+            const std::filesystem::path &sourceDirectory, std::vector<Ref<Texture>> &loadedTextures,
+            std::unordered_map<std::string, int> &textureLookup, MeshScene::MaterialTextureMap &textureMap)
+        {
+            if (!material)
+            {
+                return false;
+            }
+
+            for (const char *name : propertyNames)
+            {
+                FbxProperty property = material->FindProperty(name);
+                if (!property.IsValid())
+                {
+                    property = material->RootProperty.Find(name);
+                }
+
+                if (!property.IsValid())
+                {
+                    continue;
+                }
+
+                const int textureCount = property.GetSrcObjectCount<FbxFileTexture>();
+                for (int i = 0; i < textureCount; ++i)
+                {
+                    FbxFileTexture *fbxTexture = property.GetSrcObject<FbxFileTexture>(i);
+                    if (!fbxTexture)
+                    {
+                        continue;
+                    }
+
+                    std::filesystem::path texturePath = fbxTexture->GetFileName();
+                    if (texturePath.empty())
+                    {
+                        texturePath = fbxTexture->GetRelativeFileName();
+                    }
+
+                    if (texturePath.empty())
+                    {
+                        continue;
+                    }
+
+                    if (texturePath.is_relative())
+                    {
+                        texturePath = sourceDirectory / texturePath;
+                    }
+
+                    texturePath = texturePath.lexically_normal();
+                    if (!std::filesystem::exists(texturePath))
+                    {
+                        continue;
+                    }
+
+                    const std::string key = ToLowerCopy(texturePath.generic_string());
+                    if (textureLookup.contains(key))
+                    {
+                        const int index = textureLookup.at(key);
+                        textureMap = { index, loadedTextures[index] };
+                        return true;
+                    }
+
+					TextureCreateInfo createInfo;
+					createInfo.flip = true;
+					createInfo.format = nvrhi::Format::RGBA8_UNORM;
+					createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+					createInfo.keepInitialState = true;
+					createInfo.keepCpuData = true;
+					createInfo.deferGpuCreate = true;
+					createInfo.mipLevels = 4;
+
+                    Ref<Texture> texture = Texture::Create(texturePath, createInfo, nullptr);
+                    if (!texture)
+                    {
+                        continue;
+                    }
+
+                    Application::SubmitToRenderThread([texture]()
+                        {
+                            nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
+                            cmd->open();
+                            texture->SetData(cmd, 4);
+                            cmd->close();
+
+                            Application::SubmitWorkerCommandList(cmd);
+                        });
+
+                    const int index = (int)loadedTextures.size();
+                    loadedTextures.push_back(texture);
+                    textureLookup[key] = index;
+                    textureMap = { index, texture };
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        static Ref<Material> CreateMaterialFromFBX(FbxSurfaceMaterial *fbxMaterial)
+        {
+            if (!fbxMaterial)
+            {
+                return CreateDefaultMaterial("DefaultMaterial");
+            }
+
+            Ref<Material> material = CreateRef<Material>();
+            material->name = fbxMaterial->GetName();
+
+            glm::vec3 diffuse(1.0f);
+            if (TryGetMaterialPropertyVec3(fbxMaterial, { "DiffuseColor", "Diffuse", "BaseColor" }, diffuse))
+            {
+                material->gpuData.baseColorFactor = glm::vec4(diffuse, 1.0f);
+            }
+
+            glm::vec3 emissive(0.0f);
+            if (TryGetMaterialPropertyVec3(fbxMaterial, { "EmissiveColor", "Emissive" }, emissive))
+            {
+                material->gpuData.emissiveFactor = glm::vec4(emissive, 1.0f);
+            }
+
+            float shininess = 0.0f;
+            if (TryGetMaterialPropertyFloat(fbxMaterial, { "Shininess", "SpecularExponent" }, shininess))
+            {
+                material->gpuData.roughnessFactor = glm::clamp(1.0f - shininess / 100.0f, 0.0f, 1.0f);
+            }
+            else
+            {
+                material->gpuData.roughnessFactor = 1.0f;
+            }
+
+            material->gpuData.metallicFactor = 0.0f;
+            return material;
+        }
+
         // Helper to build mat4 from glTF node TRS
         static glm::mat4 BuildNodeLocalMatrix(const tinygltf::Node &node)
         {
             if (!node.matrix.empty())
             {
                 // glTF supplies 16 values column-major. Construct manually.
-                return
-                    glm::mat4(
-                        (float)node.matrix[0], (float)node.matrix[1], (float)node.matrix[2], (float)node.matrix[3],
-                        (float)node.matrix[4], (float)node.matrix[5], (float)node.matrix[6], (float)node.matrix[7],
-                        (float)node.matrix[8], (float)node.matrix[9], (float)node.matrix[10], (float)node.matrix[11],
-                        (float)node.matrix[12], (float)node.matrix[13], (float)node.matrix[14], (float)node.matrix[15]
-                    );
+                return glm::mat4((float)node.matrix[0], (float)node.matrix[1], (float)node.matrix[2], (float)node.matrix[3],
+                    (float)node.matrix[4], (float)node.matrix[5], (float)node.matrix[6], (float)node.matrix[7],
+                    (float)node.matrix[8], (float)node.matrix[9], (float)node.matrix[10], (float)node.matrix[11],
+                    (float)node.matrix[12], (float)node.matrix[13], (float)node.matrix[14], (float)node.matrix[15]);
             }
 
             glm::vec3 translation(0.0f);
@@ -67,15 +327,28 @@ namespace ignite
             return glm::translate(glm::mat4(1.0f), translation) * glm::toMat4(rotation) * glm::scale(glm::mat4(1.0f), scale);
         }
     }
-    
+
 
     MeshPrimitive::MeshPrimitive(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices)
+        : vertices(vertices), indices(indices)
     {
-        vertexBuffer = VertexBuffer::Create(sizeof(VertexMesh_Anim) * vertices.size());
-        indexBuffer = IndexBuffer::Create(sizeof(uint32_t) * indices.size());
+    }
 
-        vertexBuffer->SetData(Buffer((void *)vertices.data(), sizeof(VertexMesh_Anim) * vertices.size()));
-        indexBuffer->SetData(Buffer((void *)indices.data(), sizeof(uint32_t) * indices.size()));
+    MeshPrimitive::~MeshPrimitive()
+    {
+        // Wait for GPU to ensure buffers are not in use
+        if (auto *device = DeviceManager::GetInstance()->GetDevice())
+        {
+            GPUUploadSync::DeviceWaitIdle(device);
+        }
+
+        // Clear GPU buffers
+        vertexBuffer.reset();
+        indexBuffer.reset();
+
+        // Clear CPU data
+        vertices.clear();
+        indices.clear();
     }
 
     Ref<MeshPrimitive> MeshPrimitive::Create(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices)
@@ -83,46 +356,81 @@ namespace ignite
         return CreateRef<MeshPrimitive>(vertices, indices);
     }
 
-    
+    void MeshPrimitive::CreateBuffer(nvrhi::ICommandList *cmd)
+    {
+        vertexBuffer = VertexBuffer::Create(sizeof(VertexMesh_Anim) * vertices.size());
+        indexBuffer = IndexBuffer::Create(sizeof(uint32_t) * indices.size());
+
+        vertexBuffer->SetData(cmd, Buffer((void *)vertices.data(), sizeof(VertexMesh_Anim) * vertices.size()));
+        indexBuffer->SetData(cmd, Buffer((void *)indices.data(), sizeof(uint32_t) * indices.size()));
+    }
+
+    void MeshPrimitive::ClearPrimitivesData()
+    {
+        vertices.clear();
+        indices.clear();
+    }
+
     // Mesh Instance class
-    MeshInstance::MeshInstance(const std::string &name, const Ref<MeshPrimitive> &mesh, const Ref<Material> &material, int meshIndex, int materialIndex)
-        : m_Name(name), m_Primitive(mesh), m_Material(material), m_MeshIndex(meshIndex), m_MaterialIndex(materialIndex)
+    MeshInstance::MeshInstance(const std::string &name, const Ref<MeshPrimitive> &mesh)
+        : m_Name(name), m_Primitive(mesh)
     {
     }
 
-    void MeshInstance::UpdateBindingSet(Scene *scene)
+    MeshInstance::MeshInstance()
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        m_Primitive = CreateRef<MeshPrimitive>();
+    }
 
-        if (!m_SkinnedMeshGPUDataBuffer)
+    MeshInstance::~MeshInstance()
+    {
+        // Wait for GPU to ensure resources are not in use
+        if (auto *device = DeviceManager::GetInstance()->GetDevice())
         {
-            m_SkinnedMeshGPUDataBuffer = ConstantBuffer::Create(sizeof(SkinnedMesh_GPUData), true, 16, "[Mesh] Constant Buffer");
+            device->waitForIdle();
         }
 
-        // Create binding set
-        const Ref<Environment> &env = SceneRenderer::GetActive()->GetEnvironment();
-        auto desc = nvrhi::BindingSetDesc();
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m_SkinnedMeshGPUDataBuffer->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetSceneGPUDataBuffer()->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, scene->GetCSMGPUDataBuffer()->GetHandle()));
+        // Clear GPU data buffer
+        m_SkinnedMeshGPUDataBuffer.reset();
 
-        const auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
-        LOG_ASSERT(newBindingSet, "Failed to create binding set");
-
-        if (newBindingSet)
-        {
-            m_BindingSet = newBindingSet;
-        }
+        // Clear primitive (vertex/index buffers)
+        m_Primitive.reset();
     }
 
-    Ref<MeshInstance> MeshInstance::Create(const std::string &name, const Ref<MeshPrimitive> &mesh, const Ref<Material> &material, int meshIndex /*= -1*/, int materialIndex /*= -1*/)
+    void MeshInstance::SetMaterial(AssetHandle assetHandle)
     {
-        return CreateRef<MeshInstance>(name, mesh, material, meshIndex, materialIndex);
+        m_MaterialHandle = assetHandle;
     }
 
-    Ref<Material> MeshLoader::LoadMaterial(const tinygltf::Primitive &primitive, const std::vector<tinygltf::Material>& gltfMaterials,
-        const std::vector<Ref<Texture>>& loadedTextures, const std::vector<nvrhi::SamplerHandle>& loadedSamplers, int *materialIndex)
+    Ref<MeshInstance> MeshInstance::Create(const std::string &name, const Ref<MeshPrimitive> &mesh)
+    {
+        return CreateRef<MeshInstance>(name, mesh);
+    }
+
+    // 
+    // ==== Static Mesh ====
+    // 
+    Ref<StaticMesh> StaticMesh::Create()
+    {
+        return CreateRef<StaticMesh>();
+    }
+
+    StaticMesh::~StaticMesh()
+    {
+        // Wait for GPU to ensure meshes are not in use
+        if (auto *device = DeviceManager::GetInstance()->GetDevice())
+        {
+            device->waitForIdle();
+        }
+
+        // Clear all mesh instances
+        m_MeshInstances.clear();
+    }
+
+    // 
+    // ==== Mesh Loader ====
+    // 
+    Ref<Material> GLTFMeshLoader::LoadMaterial(const tinygltf::Primitive &primitive, const std::vector<tinygltf::Material> &gltfMaterials, const std::vector<Ref<Texture>> &loadedTextures, std::array<MeshScene::MaterialTextureMap, 5> &textureMap, const std::vector<nvrhi::SamplerDesc> &loadedSamplers, int *materialIndex)
     {
         Ref<Material> material;
         *materialIndex = -1;
@@ -131,96 +439,133 @@ namespace ignite
         {
             *materialIndex = primitive.material;
 
-            const tinygltf::Material& gltfMaterial = gltfMaterials[primitive.material];
+            const tinygltf::Material &gltfMaterial = gltfMaterials[primitive.material];
             LOG_TRACE("Loading material: {}", gltfMaterial.name);
 
             material = CreateRef<Material>();
             material->name = gltfMaterial.name;
-            material->gpuData.baseColorFactor = { gltfMaterial.pbrMetallicRoughness.baseColorFactor[0], gltfMaterial.pbrMetallicRoughness.baseColorFactor[1], gltfMaterial.pbrMetallicRoughness.baseColorFactor[2], 1.0f };
-            material->gpuData.emissiveFactor = { gltfMaterial.emissiveFactor[0], gltfMaterial.emissiveFactor[1], gltfMaterial.emissiveFactor[2], 1.0f };
+
+            material->gpuData.baseColorFactor =
+            {
+                gltfMaterial.pbrMetallicRoughness.baseColorFactor[0],
+                gltfMaterial.pbrMetallicRoughness.baseColorFactor[1],
+                gltfMaterial.pbrMetallicRoughness.baseColorFactor[2],
+                1.0f
+            };
+
+            material->gpuData.emissiveFactor =
+            {
+                gltfMaterial.emissiveFactor[0],
+                gltfMaterial.emissiveFactor[1],
+                gltfMaterial.emissiveFactor[2],
+                1.0f
+            };
+
             material->gpuData.metallicFactor = static_cast<float>(gltfMaterial.pbrMetallicRoughness.metallicFactor);
+
             material->gpuData.roughnessFactor = static_cast<float>(gltfMaterial.pbrMetallicRoughness.roughnessFactor);
+
             material->gpuData.occlusionStrength = static_cast<float>(gltfMaterial.occlusionTexture.strength);
 
             // base color texture
             const int baseColorIndex = gltfMaterial.pbrMetallicRoughness.baseColorTexture.index;
             if (baseColorIndex >= 0 && baseColorIndex < loadedTextures.size())
             {
-                material->baseColorTexture = loadedTextures[baseColorIndex];
+                textureMap[0] = { baseColorIndex, loadedTextures[baseColorIndex] };
+            }
+            else
+            {
+                textureMap[0] = { -1, nullptr };
             }
 
             // emissive texture
             const int emissiveIndex = gltfMaterial.emissiveTexture.index;
             if (emissiveIndex >= 0 && emissiveIndex < loadedTextures.size())
             {
-                material->emissiveTexture = loadedTextures[emissiveIndex];
+                textureMap[1] = { emissiveIndex, loadedTextures[emissiveIndex] };
+            }
+            else
+            {
+                textureMap[1] = { -1, nullptr };
             }
 
             // metallic roughness texture
             const int metallicRoughnessIndex = gltfMaterial.pbrMetallicRoughness.metallicRoughnessTexture.index;
             if (metallicRoughnessIndex >= 0 && metallicRoughnessIndex < loadedTextures.size())
             {
-                material->metallicRoughnessTexture = loadedTextures[metallicRoughnessIndex];
+                textureMap[2] = { metallicRoughnessIndex, loadedTextures[metallicRoughnessIndex] };
+            }
+            else
+            {
+                textureMap[2] = { -1, nullptr };
             }
 
             // normal texture
             const int normalIndex = gltfMaterial.normalTexture.index;
             if (normalIndex >= 0 && normalIndex < loadedTextures.size())
             {
-                material->normalTexture = loadedTextures[normalIndex];
+                textureMap[3] = { normalIndex, loadedTextures[normalIndex] };
+            }
+            else
+            {
+                textureMap[3] = { -1, nullptr };
             }
 
             // occlusion texture
             const int occlusionIndex = gltfMaterial.occlusionTexture.index;
             if (occlusionIndex >= 0 && occlusionIndex < loadedTextures.size())
             {
-                material->occlusionTexture = loadedTextures[occlusionIndex];
+                textureMap[4] = { occlusionIndex, loadedTextures[occlusionIndex] };
+            }
+            else
+            {
+                textureMap[4] = { -1, nullptr };
             }
 
             if (!loadedSamplers.empty())
             {
-                material->sampler = loadedSamplers[0];
+                material->SetSamplerDesc(loadedSamplers[0]);
             }
         }
 
         return material;
     }
 
-    void MeshLoader::LoadVertexData(std::vector<VertexMesh_Anim>& vertices, const tinygltf::Primitive& primitive, const tinygltf::Model& model)
+    void GLTFMeshLoader::LoadVertexData(std::vector<VertexMesh_Anim> &vertices, const tinygltf::Primitive &primitive, const tinygltf::Model &model)
     {
         // Get vertex positions
-        glm::vec3* positions = nullptr;
+        glm::vec3 *positions = nullptr;
         size_t positionCount = 0;
 
         if (primitive.attributes.contains("POSITION"))
         {
-            const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.at("POSITION")];
-            positions = (glm::vec3*)GetBufferData(model, accessor);
+            const tinygltf::Accessor &accessor = model.accessors[primitive.attributes.at("POSITION")];
+            positions = (glm::vec3 *)GetBufferData(model, accessor);
             positionCount = accessor.count;
         }
 
         // Get vertex normals (optional)
-        glm::vec3* normals = nullptr;
+        glm::vec3 *normals = nullptr;
         if (primitive.attributes.contains("NORMAL"))
         {
-            const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.at("NORMAL")];
-            normals = (glm::vec3*)GetBufferData(model, accessor);
+            const tinygltf::Accessor &accessor = model.accessors[primitive.attributes.at("NORMAL")];
+            normals = (glm::vec3 *)GetBufferData(model, accessor);
         }
 
         // Get vertex tangents (optional)
-        glm::vec4* tangents = nullptr;
+        glm::vec4 *tangents = nullptr;
         if (primitive.attributes.contains("TANGENT"))
         {
-            const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.at("TANGENT")];
-            tangents = (glm::vec4*)GetBufferData(model, accessor);
+            const tinygltf::Accessor &accessor = model.accessors[primitive.attributes.at("TANGENT")];
+            tangents = (glm::vec4 *)GetBufferData(model, accessor);
         }
 
         // Get texture coordinates (optional)
-        glm::vec2* texCoords = nullptr;
+        glm::vec2 *texCoords = nullptr;
         if (primitive.attributes.contains("TEXCOORD_0"))
         {
-            const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.at("TEXCOORD_0")];
-            texCoords = (glm::vec2*)GetBufferData(model, accessor);
+            const tinygltf::Accessor &accessor = model.accessors[primitive.attributes.at("TEXCOORD_0")];
+            texCoords = (glm::vec2 *)GetBufferData(model, accessor);
         }
 
         // Build vertices
@@ -250,27 +595,26 @@ namespace ignite
 
             if (texCoords)
             {
-                // vertex.uv = { texCoords[i].x, 1.0f - texCoords[i].y };
-                vertex.uv = texCoords[i]; //{ texCoords[i].x, 1.0f - texCoords[i].y };
+                vertex.uv = texCoords[i];
             }
 
             vertices.push_back(vertex);
         }
     }
 
-    void MeshLoader::LoadIndicesData(std::vector<uint32_t>& indices, const tinygltf::Primitive& primitive, const tinygltf::Model& model)
+    void GLTFMeshLoader::LoadIndicesData(std::vector<uint32_t> &indices, const tinygltf::Primitive &primitive, const tinygltf::Model &model)
     {
         if (primitive.indices >= 0)
         {
-            const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
-            const unsigned char* indexData = GetBufferData(model, indexAccessor);
+            const tinygltf::Accessor &indexAccessor = model.accessors[primitive.indices];
+            const unsigned char *indexData = GetBufferData(model, indexAccessor);
 
             LOG_INFO("Found {} indices", indexAccessor.count);
 
             // Handle different index types
             if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)
             {
-                const auto indexPtr = reinterpret_cast<const uint16_t*>(indexData);
+                const auto indexPtr = (uint16_t *)indexData;
                 for (size_t i = 0; i < indexAccessor.count; ++i)
                 {
                     indices.push_back(indexPtr[i]);
@@ -278,7 +622,7 @@ namespace ignite
             }
             else if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)
             {
-                const auto indexPtr = reinterpret_cast<const uint32_t*>(indexData);
+                const auto indexPtr = (uint32_t *)indexData;
                 for (size_t i = 0; i < indexAccessor.count; ++i)
                 {
                     indices.push_back(indexPtr[i]);
@@ -295,9 +639,8 @@ namespace ignite
         }
     }
 
-    MeshScene MeshLoader::LoadSceneGraphFromGLTF(const std::string& filename)
+    void GLTFMeshLoader::LoadSceneGraphFromGLTF(const std::string &filename, MeshScene &outScene)
     {
-        MeshScene scene;
         tinygltf::Model gltfModel;
         tinygltf::TinyGLTF loader;
         std::string err, warn;
@@ -306,123 +649,141 @@ namespace ignite
         if (filename.ends_with(".glb")) ok = loader.LoadBinaryFromFile(&gltfModel, &err, &warn, filename);
         else ok = loader.LoadASCIIFromFile(&gltfModel, &err, &warn, filename);
 
-        if (!ok) return scene;
+        if (!ok)
+        {
+            return;
+        }
 
         // pre-load textures and samplers
-        auto device = Application::GetGraphicsDevice();
-        nvrhi::CommandListHandle cmd = device->createCommandList();
-        cmd->open();
-        const auto textures = LoadTexturesFromGLTF(gltfModel, cmd);
-        cmd->close();
-        device->executeCommandList(cmd);
-
+        const auto textures = LoadTexturesFromGLTF(gltfModel);
         const auto samplers = GetSamplersFromGLTF(gltfModel);
 
         // preserve nodes
-        scene.nodes.resize(gltfModel.nodes.size());
+        outScene.nodes.resize(gltfModel.nodes.size());
 
         // build raw node relationships and local transforms
         for (size_t i = 0; i < gltfModel.nodes.size(); ++i)
         {
-            const tinygltf::Node& node = gltfModel.nodes[i];
+            const tinygltf::Node &node = gltfModel.nodes[i];
 
-            MeshNode& meshNode = scene.nodes[i];
+            MeshNode &meshNode = outScene.nodes[i];
             meshNode.name = node.name;
             meshNode.local = BuildNodeLocalMatrix(node);
             for (int c : node.children)
             {
                 meshNode.children.push_back(c);
-                scene.nodes[c].parent = static_cast<int>(i);
+                outScene.nodes[c].parent = static_cast<int>(i);
             }
         }
 
-        // identify roots
-        for (size_t i = 0; i < scene.nodes.size(); ++i)
+        // identify roots from default scene when available
+        if (!gltfModel.scenes.empty())
         {
-            if (scene.nodes[i].parent < 0)
+            int sceneIndex = gltfModel.defaultScene;
+            if (sceneIndex < 0 || sceneIndex >= (int)gltfModel.scenes.size())
             {
-                scene.roots.push_back(static_cast<int>(i));
+                sceneIndex = 0;
+            }
+
+            const tinygltf::Scene &scene = gltfModel.scenes[sceneIndex];
+            outScene.roots.reserve(scene.nodes.size());
+            for (int nodeIndex : scene.nodes)
+            {
+                if (nodeIndex >= 0 && nodeIndex < (int)outScene.nodes.size())
+                {
+                    outScene.roots.push_back(nodeIndex);
+                }
+            }
+        }
+
+        // fallback for glTF assets without scene information
+        if (outScene.roots.empty())
+        {
+            for (size_t i = 0; i < outScene.nodes.size(); ++i)
+            {
+                if (outScene.nodes[i].parent < 0)
+                {
+                    outScene.roots.push_back(static_cast<int>(i));
+                }
             }
         }
 
         // load meshes referenced by nodes
         for (size_t i = 0; i < gltfModel.nodes.size(); ++i)
         {
-            const tinygltf::Node& node = gltfModel.nodes[i];
+            const tinygltf::Node &node = gltfModel.nodes[i];
             if (node.mesh < 0 || node.mesh >= (int)gltfModel.meshes.size())
                 continue;
 
-            const tinygltf::Mesh& gltfMesh = gltfModel.meshes[node.mesh];
-            for (const auto& primitive : gltfMesh.primitives)
+            const tinygltf::Mesh &gltfMesh = gltfModel.meshes[node.mesh];
+            for (const auto &gltfPrim : gltfMesh.primitives)
             {
                 std::vector<VertexMesh_Anim> vertices;
                 std::vector<uint32_t> indices;
 
                 // get vertices and indices
-                LoadVertexData(vertices, primitive, gltfModel);
-                LoadIndicesData(indices, primitive, gltfModel);
-                Ref<MeshPrimitive> mesh = CreateRef<MeshPrimitive>(vertices, indices);
+                LoadVertexData(vertices, gltfPrim, gltfModel);
+                LoadIndicesData(indices, gltfPrim, gltfModel);
+                Ref<MeshPrimitive> primitive = CreateRef<MeshPrimitive>(vertices, indices);
 
                 // material
+                std::array<MeshScene::MaterialTextureMap, 5> materialTextureMap{};
+
                 int materialIndex = -1;
-                Ref<Material> material = LoadMaterial(primitive, gltfModel.materials, textures, samplers, &materialIndex);
+                Ref<Material> material = LoadMaterial(gltfPrim, gltfModel.materials, textures, materialTextureMap, samplers, &materialIndex);
                 if (!material)
                 {
-                    // Create fallback
-                    material = CreateRef<Material>();
+                    material = CreateDefaultMaterial("DefaultMaterial");
                 }
 
-                // update binding set
-                material->UpdateBindingSet();
+                Ref<MeshInstance> meshInstance = MeshInstance::Create(gltfMesh.name, primitive);
 
-                auto device = Application::GetGraphicsDevice();
-                auto cmd = device->createCommandList();
-                cmd->open();
-                material->UploadToGpu(cmd);
-                cmd->close();
-                device->executeCommandList(cmd);
+                outScene.nodes[i].meshes.push_back(meshInstance);
+                outScene.flatMeshes.push_back(meshInstance);
+                const int sceneMaterialIndex = static_cast<int>(outScene.materials.size());
+                outScene.materials.push_back(material);
+                outScene.materialTextureMap.push_back(materialTextureMap);
 
-                Ref<MeshInstance> meshInstance = MeshInstance::Create(gltfMesh.name, mesh, material, node.mesh, materialIndex);
-
-                scene.nodes[i].meshes.push_back(meshInstance);
-                scene.flatMeshes.push_back(meshInstance);
+                // Assign Mesh and Material Index
+                outScene.materialMap[static_cast<int>(outScene.flatMeshes.size()) - 1] = sceneMaterialIndex;
             }
-
         }
 
         // compute global transform via DFS
-        std::function<void(int, const glm::mat4&)> recurse = [&](const int nodeIndex, const glm::mat4& parentGlobal)
-        {
-            MeshNode& node = scene.nodes[nodeIndex];
-            node.global = parentGlobal * node.local;
-            for (const auto& m : node.meshes)
+        std::function<void(int, const glm::mat4 &)> recurse = [&](const int nodeIndex, const glm::mat4 &parentGlobal)
             {
-                m->local = node.local;
-                m->global = node.global;
-            }
+                MeshNode &node = outScene.nodes[nodeIndex];
+                node.global = parentGlobal * node.local;
+                for (const auto &m : node.meshes)
+                {
+                    m->local = node.local;
+                    m->global = node.global;
+                }
 
-            for (const int c : node.children)
-                recurse(c, node.global);
-        };
+                for (const int c : node.children)
+                {
+                    recurse(c, node.global);
+                }
+            };
 
-        for (const int root : scene.roots)
+        for (const int root : outScene.roots)
+        {
             recurse(root, glm::mat4(1.0f));
-
-        return scene;
+        }
     }
 
-    std::vector<Ref<Texture>> MeshLoader::LoadTexturesFromGLTF(const tinygltf::Model& model, nvrhi::ICommandList *cmd)
+    std::vector<Ref<Texture>> GLTFMeshLoader::LoadTexturesFromGLTF(const tinygltf::Model &model)
     {
         std::vector<Ref<Texture>> gltfTextures;
         LOG_TRACE("Loading {} textures from glTF", model.textures.size());
 
         for (size_t i = 0; i < model.textures.size(); ++i)
         {
-            const tinygltf::Texture& gltfTexture = model.textures[i];
+            const tinygltf::Texture &gltfTexture = model.textures[i];
 
             if (gltfTexture.source >= 0 && gltfTexture.source < model.images.size())
             {
-                const tinygltf::Image& image = model.images[gltfTexture.source];
+                const tinygltf::Image &image = model.images[gltfTexture.source];
                 LOG_TRACE(" Texture {}: {} ({}x{})", i, image.name, image.width, image.height);
 
                 TextureCreateInfo createInfo;
@@ -430,14 +791,26 @@ namespace ignite
                 createInfo.height = image.height;
                 createInfo.flip = false;
                 createInfo.format = nvrhi::Format::RGBA8_UNORM;
-            	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
-            	createInfo.keepInitialState = true;
+                createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+                createInfo.keepInitialState = true;
+                createInfo.keepCpuData = true;
+                createInfo.deferGpuCreate = true;
 
                 Ref<Texture> texture;
                 if (!image.image.empty())
                 {
-                    texture = Texture::Create(Buffer((void*)image.image.data(), image.image.size() * sizeof(uint8_t)), createInfo, cmd);
+                    texture = Texture::Create(Buffer((void *)image.image.data(), image.image.size() * sizeof(uint8_t)), createInfo, nullptr);
                     LOG_TRACE(" Loaded embedded texture");
+
+                    Application::SubmitToRenderThread([texture]()
+                        {
+                            nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
+                            cmd->open();
+                            texture->SetData(cmd, 4);
+                            cmd->close();
+
+                            Application::SubmitWorkerCommandList(cmd);
+                        });
                 }
                 else if (!image.uri.empty())
                 {
@@ -451,13 +824,12 @@ namespace ignite
         return gltfTextures;
     }
 
-    std::vector<nvrhi::SamplerHandle> MeshLoader::GetSamplersFromGLTF(const tinygltf::Model& model)
+    std::vector<nvrhi::SamplerDesc> GLTFMeshLoader::GetSamplersFromGLTF(const tinygltf::Model &model)
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-        std::vector<nvrhi::SamplerHandle> samplers;
+        std::vector<nvrhi::SamplerDesc> samplers;
         for (size_t i = 0; i < model.textures.size(); ++i)
         {
-            const tinygltf::Texture& gltfTexture = model.textures[i];
+            const tinygltf::Texture &gltfTexture = model.textures[i];
             if (gltfTexture.source >= 0 && gltfTexture.source < model.images.size())
             {
                 tinygltf::Sampler gltfSampler = model.samplers[gltfTexture.sampler];
@@ -485,19 +857,251 @@ namespace ignite
                     break;
                 }
 
-                nvrhi::SamplerHandle sampler = device->createSampler(desc);
-                LOG_ASSERT(sampler, "Failed to create sampler");
-                samplers.push_back(sampler);
+                samplers.push_back(desc);
             }
         }
 
         return samplers;
     }
 
-    const unsigned char* MeshLoader::GetBufferData(const tinygltf::Model& model, const tinygltf::Accessor& accessor)
+    const unsigned char *GLTFMeshLoader::GetBufferData(const tinygltf::Model &model, const tinygltf::Accessor &accessor)
     {
-        const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
-        const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
+        const tinygltf::BufferView &bufferView = model.bufferViews[accessor.bufferView];
+        const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
         return &buffer.data[accessor.byteOffset + bufferView.byteOffset];
+    }
+
+    void FBXMeshLoader::LoadSceneGraphFromFBX(const std::string &filename, MeshScene &outScene)
+    {
+        FbxManager *sdkManager = FbxManager::Create();
+        if (!sdkManager)
+        {
+            return;
+        }
+
+        FbxIOSettings *ioSettings = FbxIOSettings::Create(sdkManager, IOSROOT);
+        sdkManager->SetIOSettings(ioSettings);
+
+        FbxImporter *importer = FbxImporter::Create(sdkManager, "");
+        if (!importer->Initialize(filename.c_str(), -1, sdkManager->GetIOSettings()))
+        {
+            importer->Destroy();
+            sdkManager->Destroy();
+            return;
+        }
+
+        FbxScene *fbxScene = FbxScene::Create(sdkManager, "FBXScene");
+        if (!importer->Import(fbxScene))
+        {
+            importer->Destroy();
+            sdkManager->Destroy();
+            return;
+        }
+        importer->Destroy();
+
+        const FbxAxisSystem targetAxisSystem = FbxAxisSystem::OpenGL;
+        const FbxAxisSystem sceneAxisSystem = fbxScene->GetGlobalSettings().GetAxisSystem();
+        if (sceneAxisSystem != targetAxisSystem)
+        {
+            targetAxisSystem.ConvertScene(fbxScene);
+        }
+
+        const FbxSystemUnit targetUnit = FbxSystemUnit::m;
+        const FbxSystemUnit sceneUnit = fbxScene->GetGlobalSettings().GetSystemUnit();
+        if (sceneUnit.GetScaleFactor() != targetUnit.GetScaleFactor())
+        {
+            targetUnit.ConvertScene(fbxScene);
+        }
+
+        FbxGeometryConverter geometryConverter(sdkManager);
+        geometryConverter.Triangulate(fbxScene, true);
+
+        std::unordered_map<FbxSurfaceMaterial *, int> materialIndices;
+        std::unordered_map<std::string, int> textureLookup;
+        std::vector<Ref<Texture>> loadedTextures;
+        const std::filesystem::path sourceDirectory = std::filesystem::path(filename).parent_path();
+
+        std::function<void(FbxNode *, int)> buildNode = [&](FbxNode *fbxNode, const int parentIndex)
+        {
+            if (!fbxNode)
+            {
+                return;
+            }
+
+            const int nodeIndex = static_cast<int>(outScene.nodes.size());
+            outScene.nodes.emplace_back();
+
+            MeshNode &meshNode = outScene.nodes[nodeIndex];
+            meshNode.parent = parentIndex;
+            meshNode.name = fbxNode->GetName() ? fbxNode->GetName() : "";
+            meshNode.local = ToGlmMatrix(fbxNode->EvaluateLocalTransform());
+
+            if (parentIndex >= 0)
+            {
+                outScene.nodes[parentIndex].children.push_back(nodeIndex);
+            }
+            else
+            {
+                outScene.roots.push_back(nodeIndex);
+            }
+
+            if (FbxMesh *fbxMesh = fbxNode->GetMesh())
+            {
+                std::vector<VertexMesh_Anim> vertices;
+                std::vector<uint32_t> indices;
+
+                const FbxVector4 *controlPoints = fbxMesh->GetControlPoints();
+                const FbxAMatrix geometricMatrix = BuildNodeGeometricMatrix(fbxNode);
+                FbxStringList uvSetNames;
+                fbxMesh->GetUVSetNames(uvSetNames);
+
+                const int polygonCount = fbxMesh->GetPolygonCount();
+                vertices.reserve(static_cast<size_t>(polygonCount) * 3);
+                indices.reserve(static_cast<size_t>(polygonCount) * 3);
+
+                auto emitVertex = [&](const int polygonIndex, const int polygonVertexIndex)
+                {
+                    const int controlPointIndex = fbxMesh->GetPolygonVertex(polygonIndex, polygonVertexIndex);
+                    if (controlPointIndex < 0)
+                    {
+                        return;
+                    }
+
+                    const FbxVector4 cp = controlPoints[controlPointIndex];
+                    const FbxVector4 transformedPosition = geometricMatrix.MultT(cp);
+
+                    VertexMesh_Anim vertex{};
+                    vertex.position = glm::vec3(
+                        static_cast<float>(transformedPosition[0]),
+                        static_cast<float>(transformedPosition[1]),
+                        static_cast<float>(transformedPosition[2]));
+
+                    FbxVector4 normal(0.0, 1.0, 0.0, 0.0);
+                    fbxMesh->GetPolygonVertexNormal(polygonIndex, polygonVertexIndex, normal);
+                    normal = geometricMatrix.MultR(normal);
+                    normal.Normalize();
+                    vertex.normal = glm::vec3(static_cast<float>(normal[0]), static_cast<float>(normal[1]), static_cast<float>(normal[2]));
+
+                    if (uvSetNames.GetCount() > 0)
+                    {
+                        FbxVector2 uv(0.0, 0.0);
+                        bool unmapped = false;
+                        fbxMesh->GetPolygonVertexUV(polygonIndex, polygonVertexIndex, uvSetNames[0], uv, unmapped);
+                        if (!unmapped)
+                        {
+                            vertex.uv = glm::vec2(static_cast<float>(uv[0]), static_cast<float>(uv[1]));
+                        }
+                    }
+
+                    vertex.tangent = glm::vec3(1.0f, 0.0f, 0.0f);
+                    vertex.bitangent = glm::cross(vertex.normal, vertex.tangent);
+
+                    vertices.push_back(vertex);
+                    indices.push_back(static_cast<uint32_t>(vertices.size() - 1));
+                };
+
+                for (int polygonIndex = 0; polygonIndex < polygonCount; ++polygonIndex)
+                {
+                    const int polygonSize = fbxMesh->GetPolygonSize(polygonIndex);
+                    if (polygonSize < 3)
+                    {
+                        continue;
+                    }
+
+                    emitVertex(polygonIndex, 0);
+                    for (int v = 1; v < polygonSize - 1; ++v)
+                    {
+                        emitVertex(polygonIndex, v);
+                        emitVertex(polygonIndex, v + 1);
+                    }
+                }
+
+                if (!vertices.empty() && !indices.empty())
+                {
+                    Ref<MeshPrimitive> primitive = MeshPrimitive::Create(vertices, indices);
+                    Ref<MeshInstance> meshInstance = MeshInstance::Create(meshNode.name, primitive);
+                    outScene.nodes[nodeIndex].meshes.push_back(meshInstance);
+                    outScene.flatMeshes.push_back(meshInstance);
+
+                    FbxSurfaceMaterial *fbxMaterial = fbxNode->GetMaterialCount() > 0 ? fbxNode->GetMaterial(0) : nullptr;
+                    int sceneMaterialIndex = -1;
+
+                    if (materialIndices.contains(fbxMaterial))
+                    {
+                        sceneMaterialIndex = materialIndices[fbxMaterial];
+                    }
+                    else
+                    {
+                        Ref<Material> material = CreateMaterialFromFBX(fbxMaterial);
+                        sceneMaterialIndex = static_cast<int>(outScene.materials.size());
+
+                        std::array<MeshScene::MaterialTextureMap, 5> textureMap{};
+                        if (fbxMaterial)
+                        {
+                            TryLoadFBXTextureFromProperty(fbxMaterial, { "DiffuseColor", "Diffuse", "BaseColor" }, sourceDirectory, loadedTextures, textureLookup, textureMap[0]);
+                            TryLoadFBXTextureFromProperty(fbxMaterial, { "EmissiveColor", "Emissive" }, sourceDirectory, loadedTextures, textureLookup, textureMap[1]);
+                            TryLoadFBXTextureFromProperty(fbxMaterial, { "SpecularColor", "Specular", "Metalness" }, sourceDirectory, loadedTextures, textureLookup, textureMap[2]);
+                            TryLoadFBXTextureFromProperty(fbxMaterial, { "NormalMap", "Bump", "Maya|TEX_normal_map" }, sourceDirectory, loadedTextures, textureLookup, textureMap[3]);
+                            TryLoadFBXTextureFromProperty(fbxMaterial, { "AmbientOcclusion", "AO", "Occlusion" }, sourceDirectory, loadedTextures, textureLookup, textureMap[4]);
+                        }
+
+                        outScene.materials.push_back(material);
+                        outScene.materialTextureMap.push_back(textureMap);
+                        materialIndices[fbxMaterial] = sceneMaterialIndex;
+                    }
+
+                    outScene.materialMap[static_cast<int>(outScene.flatMeshes.size()) - 1] = sceneMaterialIndex;
+                }
+            }
+
+            for (int i = 0; i < fbxNode->GetChildCount(); ++i)
+            {
+                buildNode(fbxNode->GetChild(i), nodeIndex);
+            }
+        };
+
+        FbxNode *rootNode = fbxScene->GetRootNode();
+        if (rootNode)
+        {
+            for (int i = 0; i < rootNode->GetChildCount(); ++i)
+            {
+                buildNode(rootNode->GetChild(i), -1);
+            }
+        }
+
+        std::function<void(int, const glm::mat4 &)> recurse = [&](const int nodeIndex, const glm::mat4 &parentGlobal)
+        {
+            MeshNode &node = outScene.nodes[nodeIndex];
+            node.global = parentGlobal * node.local;
+            for (const auto &m : node.meshes)
+            {
+                m->local = node.local;
+                m->global = node.global;
+            }
+
+            for (const int c : node.children)
+            {
+                recurse(c, node.global);
+            }
+        };
+
+        for (const int root : outScene.roots)
+        {
+            recurse(root, glm::mat4(1.0f));
+        }
+
+        sdkManager->Destroy();
+    }
+
+    void MeshLoader::LoadSceneGraph(const std::string &filename, MeshScene &outScene)
+    {
+        const std::string extension = ToLowerCopy(std::filesystem::path(filename).extension().string());
+        if (extension == ".fbx")
+        {
+            FBXMeshLoader::LoadSceneGraphFromFBX(filename, outScene);
+            return;
+        }
+
+        GLTFMeshLoader::LoadSceneGraphFromGLTF(filename, outScene);
     }
 }
