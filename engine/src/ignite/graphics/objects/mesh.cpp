@@ -238,7 +238,7 @@ namespace ignite
 
                     Application::SubmitToRenderThread([texture]()
                         {
-                            nvrhi::CommandListHandle cmd = Application::GetGraphicsDevice()->createCommandList();
+                            nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
                             cmd->open();
                             texture->SetData(cmd, 4);
                             cmd->close();
@@ -337,7 +337,7 @@ namespace ignite
     MeshPrimitive::~MeshPrimitive()
     {
         // Wait for GPU to ensure buffers are not in use
-        if (auto *device = Application::GetGraphicsDevice())
+        if (auto *device = DeviceManager::GetInstance()->GetDevice())
         {
             GPUUploadSync::DeviceWaitIdle(device);
         }
@@ -385,7 +385,7 @@ namespace ignite
     MeshInstance::~MeshInstance()
     {
         // Wait for GPU to ensure resources are not in use
-        if (auto *device = Application::GetGraphicsDevice())
+        if (auto *device = DeviceManager::GetInstance()->GetDevice())
         {
             device->waitForIdle();
         }
@@ -418,7 +418,7 @@ namespace ignite
     StaticMesh::~StaticMesh()
     {
         // Wait for GPU to ensure meshes are not in use
-        if (auto *device = Application::GetGraphicsDevice())
+        if (auto *device = DeviceManager::GetInstance()->GetDevice())
         {
             device->waitForIdle();
         }
@@ -444,7 +444,7 @@ namespace ignite
 
             material = CreateRef<Material>();
             material->name = gltfMaterial.name;
-            
+
             material->gpuData.baseColorFactor =
             {
                 gltfMaterial.pbrMetallicRoughness.baseColorFactor[0],
@@ -460,11 +460,11 @@ namespace ignite
                 gltfMaterial.emissiveFactor[2],
                 1.0f
             };
-            
+
             material->gpuData.metallicFactor = static_cast<float>(gltfMaterial.pbrMetallicRoughness.metallicFactor);
 
             material->gpuData.roughnessFactor = static_cast<float>(gltfMaterial.pbrMetallicRoughness.roughnessFactor);
-            
+
             material->gpuData.occlusionStrength = static_cast<float>(gltfMaterial.occlusionTexture.strength);
 
             // base color texture
@@ -804,7 +804,7 @@ namespace ignite
 
                     Application::SubmitToRenderThread([texture]()
                         {
-                            nvrhi::CommandListHandle cmd = Application::GetGraphicsDevice()->createCommandList();
+                            nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
                             cmd->open();
                             texture->SetData(cmd, 4);
                             cmd->close();

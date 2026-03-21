@@ -41,6 +41,7 @@ namespace ignite {
         Model,
         Project,
         Texture,
+        SpriteSheet,
         Material,
         Font,
         TextureCube,
@@ -66,6 +67,7 @@ namespace ignite {
             case ignite::AssetType::TextureCube: return "TextureCube";
             case ignite::AssetType::Scene: return "Scene";
             case ignite::AssetType::SkeletalAnimation: return "SkeletalAnimation";
+            case ignite::AssetType::SpriteSheet: return "SkeletalAnimation";
             case ignite::AssetType::Anim2D: return "Anim2D";
 			case ignite::AssetType::SkeletalMesh: return "SkeletalMesh";
             case ignite::AssetType::StaticMesh: return "StaticMesh";
@@ -84,6 +86,7 @@ namespace ignite {
         { ".png", AssetType::Texture },
         { ".jpeg", AssetType::Texture },
         { ".hdr", AssetType::Texture },
+        { ".ixsp", AssetType::SpriteSheet },
         { ".otf", AssetType::Font },
         { ".ttf", AssetType::Font },
         { ".mp3", AssetType::Audio },
@@ -109,6 +112,7 @@ namespace ignite {
         if (typeStr == "Project") return AssetType::Project;
         if (typeStr == "Model") return AssetType::Model;
         if (typeStr == "SkeletalAnimation") return AssetType::SkeletalAnimation;
+        if (typeStr == "SpriteSheet") return AssetType::SpriteSheet;
         if (typeStr == "Anim2D")  return AssetType::Anim2D;
         if (typeStr == "StaticMesh")  return AssetType::StaticMesh;
         if (typeStr == "SkeletalMesh")  return AssetType::SkeletalMesh;

@@ -41,17 +41,17 @@ namespace ignite
 
     Material::~Material()
     {
-        if (auto* device = Application::GetGraphicsDevice())
+        if (auto* device = DeviceManager::GetInstance()->GetDevice())
         {
             GPUUploadSync::DeviceWaitIdle(device);
         }
-        
+
         // Clear binding set first (references other resources)
         m_BindingSet = nullptr;
-        
+
         // Clear GPU data buffer
         m_GPUDataBuffer.reset();
-        
+
         // Clear sampler
         sampler = nullptr;
     }
@@ -59,7 +59,7 @@ namespace ignite
     void Material::UpdateBindingSet(SceneRenderer *sceneRenderer, MaterialTextures *textures)
     {
         EnsureGpuResources();
-        auto device = Application::GetGraphicsDevice();
+        auto device = DeviceManager::GetInstance()->GetDevice();
 
         nvrhi::BindingSetDesc desc = nvrhi::BindingSetDesc();
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_GPUDataBuffer->GetHandle()));
@@ -95,7 +95,7 @@ namespace ignite
         }
 
         desc.addItem(nvrhi::BindingSetItem::Sampler(1, shadowSampler));
-        
+
         auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MATERIAL));
         LOG_ASSERT(newBindingSet, "Failed to create material binding set");
 
@@ -106,7 +106,7 @@ namespace ignite
         }
     }
 
-    void Material::UploadToGpu(nvrhi::ICommandList* cmd)
+    void Material::UploadToGpu(nvrhi::ICommandList *cmd)
     {
         EnsureGpuResources();
         m_GPUDataBuffer->SetData(cmd, Buffer(&gpuData, sizeof(Material_GPUData)));
@@ -118,22 +118,22 @@ namespace ignite
         m_HasSamplerDesc = true;
     }
 
-	void Material::RetrieveTextures(AssetManager *assetManager, MaterialTextures *textures) const
-	{
+    void Material::RetrieveTextures(AssetManager *assetManager, MaterialTextures *textures) const
+    {
         textures->baseColor = RetrieveTexture(assetManager, baseColorTextureHandle, Renderer::GetWhiteTexture());
         textures->emissive = RetrieveTexture(assetManager, emissiveTextureHandle, Renderer::GetBlackTexture());
         textures->metallicRoughness = RetrieveTexture(assetManager, metallicRoughnessTextureHandle, Renderer::GetBlackTexture());
         textures->normal = RetrieveTexture(assetManager, normalTextureHandle, Renderer::GetWhiteTexture());
         textures->occlusion = RetrieveTexture(assetManager, occlusionTextureHandle, Renderer::GetWhiteTexture());
-	}
+    }
 
-	bool Material::IsNeedToInvalidate()
-	{
+    bool Material::IsNeedToInvalidate()
+    {
         // Check if any texture handles have changed and are newly loaded
-        auto* assetManager = &Project::GetInstance()->GetAssetManager();
-        
+        auto *assetManager = &Project::GetInstance()->GetAssetManager();
+
         bool needsInvalidation = false;
-        
+
         // Check each texture to see if it was recently loaded
         if (baseColorTextureHandle != 0 && assetManager->IsAssetLoaded(baseColorTextureHandle))
         {
@@ -157,24 +157,24 @@ namespace ignite
         }
 
         return needsInvalidation && m_BindingSetDirty;
-	}
+    }
 
-	Ref<Texture> Material::RetrieveTexture(AssetManager *assetManager, AssetHandle handle, Ref<Texture> fallback)
-	{
-		if (handle == 0)
-		{
-			return fallback;
-		}
+    Ref<Texture> Material::RetrieveTexture(AssetManager *assetManager, AssetHandle handle, Ref<Texture> fallback)
+    {
+        if (handle == 0)
+        {
+            return fallback;
+        }
 
-		Ref<Texture> result = assetManager->GetProject()->GetAsset<Texture>(handle);
-		if (result && result->IsReady())
-		{
-			return result;
-		}
-		return fallback;
-	}
+        Ref<Texture> result = assetManager->GetProject()->GetAsset<Texture>(handle);
+        if (result && result->IsReady())
+        {
+            return result;
+        }
+        return fallback;
+    }
 
-	nvrhi::BindingLayoutDesc Material::GetBindingLayoutDesc()
+    nvrhi::BindingLayoutDesc Material::GetBindingLayoutDesc()
     {
         auto bindingLayoutDesc = nvrhi::BindingLayoutDesc()
             .setRegisterSpace(1) // set 1
@@ -197,7 +197,7 @@ namespace ignite
     {
         if (!sampler)
         {
-            auto device = Application::GetGraphicsDevice();
+            auto device = DeviceManager::GetInstance()->GetDevice();
             nvrhi::SamplerDesc desc = m_HasSamplerDesc ? m_SamplerDesc : nvrhi::SamplerDesc();
             if (!m_HasSamplerDesc)
             {

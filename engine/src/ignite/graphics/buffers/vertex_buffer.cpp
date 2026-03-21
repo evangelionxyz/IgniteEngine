@@ -23,14 +23,14 @@
 
 #include "vertex_buffer.hpp"
 #include "ignite/graphics/renderer.hpp"
-#include "ignite/core/application.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
 
 namespace ignite
 {
     VertexBuffer::VertexBuffer(const size_t size, const std::string &debugName)
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         nvrhi::BufferDesc desc;
         desc.byteSize = size;

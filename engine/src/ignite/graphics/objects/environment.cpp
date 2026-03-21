@@ -28,7 +28,7 @@
 #include "ignite/scene/icamera.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/scene/scene.hpp"
-#include "ignite/core/application.hpp"
+#include "ignite/core/device/device_manager.hpp"
 
 #include <stb_image.h>
 
@@ -72,7 +72,7 @@ namespace ignite
     Environment::Environment(Scene *scene)
         : m_Scene(scene)
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         // create vertex buffer
         m_VertexBuffer = VertexBuffer::Create(sizeof(vertices), "Environment Vertex Buffer");
@@ -80,25 +80,25 @@ namespace ignite
 
         m_HDRTexture = Renderer::GetBlackTexture();
 
-		auto samplerDesc = nvrhi::SamplerDesc();
-		samplerDesc.addressU = nvrhi::SamplerAddressMode::Repeat;
-		m_Sampler = Application::GetGraphicsDevice()->createSampler(samplerDesc);
-		LOG_ASSERT(m_Sampler, "Failed to create sampler");
+        auto samplerDesc = nvrhi::SamplerDesc();
+        samplerDesc.addressU = nvrhi::SamplerAddressMode::Repeat;
+        m_Sampler = DeviceManager::GetInstance()->GetDevice()->createSampler(samplerDesc);
+        LOG_ASSERT(m_Sampler, "Failed to create sampler");
     }
 
     Environment::~Environment()
     {
-        if (auto* device = Application::GetGraphicsDevice())
+        if (auto *device = DeviceManager::GetInstance()->GetDevice())
         {
             device->waitForIdle();
         }
-        
+
         // Clear binding set first (it references other resources)
         m_BindingSet.Reset();
-        
+
         // Clear sampler
         m_Sampler.Reset();
-        
+
         // Clear texture and buffers
         m_HDRTexture.reset();
         m_VertexBuffer.reset();
@@ -130,7 +130,7 @@ namespace ignite
 
     void Environment::UpdateBindingSet()
     {
-        nvrhi::IDevice* device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         // create binding set after load the texture
         nvrhi::BindingSetDesc bsDesc;

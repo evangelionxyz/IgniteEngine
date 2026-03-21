@@ -77,7 +77,7 @@ namespace ignite
 		m_Camera.UpdateSphericalPosition();
 		m_Camera.UpdateMatrices(width, height);
 
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
         cmd->open();
 

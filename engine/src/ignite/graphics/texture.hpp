@@ -50,6 +50,11 @@ namespace ignite
         bool deferGpuCreate = false;
 
         bool keepInitialState = false;
+		bool isNativeObject = false;
+
+		void *nativeObjectPtr = nullptr;
+        nvrhi::ObjectType nativeObjectType = 0;
+
         nvrhi::Format format = nvrhi::Format::UNKNOWN;
         nvrhi::ResourceStates initialState = nvrhi::ResourceStates::Unknown;
         nvrhi::TextureDimension dimension = nvrhi::TextureDimension::Texture2D;
@@ -59,12 +64,13 @@ namespace ignite
     {
     public:
         Texture() = default;
-		Texture(TextureCreateInfo createInfo, const std::string &debugName = "Texture Class");
+        Texture(TextureCreateInfo createInfo, const std::string &debugName = "Texture Class");
         Texture(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
         Texture(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
 
         ~Texture() override;
 
+        static Ref<Texture> Create();
         static Ref<Texture> Create(TextureCreateInfo createInfo, const std::string &debugName = "Texture Class");
         static Ref<Texture> Create(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
         static Ref<Texture> Create(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
@@ -91,6 +97,7 @@ namespace ignite
         virtual AssetType GetAssetType() override { return GetStaticType(); }
 
         bool operator ==(const Texture &other) const  { return m_Handle.Get() == other.m_Handle.Get(); }
+
     private:
         void CreateTextureHandle();
         void EnsureTextureHandle();

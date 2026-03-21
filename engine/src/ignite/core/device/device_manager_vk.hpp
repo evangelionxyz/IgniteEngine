@@ -28,6 +28,7 @@
 #include <unordered_set>
 
 #include "device_manager.hpp"
+#include "ignite/graphics/render_target.hpp"
 
 #include "ignite/core/logger.hpp"
 
@@ -55,9 +56,10 @@ namespace ignite
         void ResizeSwapChain() override;
 
         nvrhi::ITexture *GetCurrentBackBuffer() override;
-        nvrhi::ITexture *GetBackBuffer(u32 index) override;
-        u32 GetCurrentBackBufferIndex() override;
-        u32 GetBackBufferCount() override;
+        nvrhi::ITexture *GetBackBuffer(uint32_t index) override;
+        nvrhi::ITexture *GetBackDepthBuffer(uint32_t index) override;
+        uint32_t GetCurrentBackBufferIndex() override;
+        uint32_t GetBackBufferCount() override;
 
         bool BeginFrame() override;
         bool Present() override;
@@ -143,10 +145,10 @@ namespace ignite
         vk::DebugReportCallbackEXT m_DebugReportCallback;
 
         vk::PhysicalDevice m_VulkanPhysicalDevice;
-        i32 m_GraphicsQueueFamily = -1;
-        i32 m_ComputeQueueFamily = -1;
-        i32 m_TransferQueueFamily = -1;
-        i32 m_PresentQueueFamily = -1;
+        int m_GraphicsQueueFamily = -1;
+        int m_ComputeQueueFamily = -1;
+        int m_TransferQueueFamily = -1;
+        int m_PresentQueueFamily = -1;
 
         vk::Device m_VulkanDevice;
         vk::Queue m_GraphicsQueue;
@@ -163,14 +165,10 @@ namespace ignite
 
         bool m_SwapChainMutableFormatSupported = false;
 
-        struct SwapChainImage
-        {
-            vk::Image image;
-            nvrhi::TextureHandle rhiHandle;
-        };
-
-        std::vector<SwapChainImage> m_SwapChainImages;
-        u32 m_SwapChainIndex = static_cast<u32>(-1);
+        // Swapchain data
+        std::vector<vk::Image> m_SwapchainImages;
+        std::vector<Ref<RenderTarget>> m_SwapChainRenderTargets;
+        uint32_t m_SwapChainIndex = static_cast<u32>(-1);
 
         nvrhi::vulkan::DeviceHandle m_NvrhiDevice;
         nvrhi::DeviceHandle m_ValidationLayer;
@@ -178,8 +176,8 @@ namespace ignite
         std::vector<vk::Semaphore> m_AcquireSemaphores;
         std::vector<vk::Semaphore> m_PresentSemaphores;
 
-        u32 m_AcquireSemaphoreIndex = 0;
-        u32 m_PresentSemaphoreIndex = 0;
+        uint32_t m_AcquireSemaphoreIndex = 0;
+        uint32_t m_PresentSemaphoreIndex = 0;
 
         std::queue<nvrhi::EventQueryHandle> m_FramesInFlight;
         std::vector<nvrhi::EventQueryHandle> m_QueryPool;

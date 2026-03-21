@@ -23,6 +23,7 @@
 
 #include "script_host.hpp"
 #include "ignite/core/logger.hpp"
+#include "script_glue.hpp"
 
 namespace ignite
 {
@@ -121,7 +122,7 @@ namespace ignite
 
         // UInt64 with UInt64 and Vector3 parameters
         {
-            const char *params[] = { "System.UInt64", "IgniteEngine.Vector3, IgniteScriptEngine" };
+            const char *params[] = { "System.UInt64", "IgniteScriptEngine.Vector3, IgniteScriptEngine" };
             m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::UInt64_UInt64_Vec3), 
                 "System.UInt64", params, 2);
         }
@@ -142,28 +143,28 @@ namespace ignite
 
         // Void with UInt64 and out Vector3
         {
-            const char *params[] = { "System.UInt64", "IgniteEngine.Vector3&, IgniteScriptEngine" };
+			const char *params[] = { "System.UInt64", "IgniteScriptEngine.Vector3&, IgniteScriptEngine" };
             m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_OutVec3), 
                 "System.Void", params, 2);
         }
 
         // Void with UInt64 and Vector3
         {
-            const char *params[] = { "System.UInt64", "IgniteEngine.Vector3, IgniteScriptEngine" };
+            const char *params[] = { "System.UInt64", "IgniteScriptEngine.Vector3, IgniteScriptEngine" };
             m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_Vec3), 
                 "System.Void", params, 2);
         }
 
         // Void with UInt64 and out Quaternion
         {
-            const char *params[] = { "System.UInt64", "IgniteEngine.Quaternion&, IgniteScriptEngine" };
+            const char *params[] = { "System.UInt64", "IgniteScriptEngine.Quaternion&, IgniteScriptEngine" };
             m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_OutQuat), 
                 "System.Void", params, 2);
         }
 
         // Void with UInt64 and Quaternion
         {
-            const char *params[] = { "System.UInt64", "IgniteEngine.Quaternion, IgniteScriptEngine" };
+            const char *params[] = { "System.UInt64", "IgniteScriptEngine.Quaternion, IgniteScriptEngine" };
             m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_Quat), 
                 "System.Void", params, 2);
         }
@@ -176,6 +177,35 @@ namespace ignite
         }
 
         LOG_INFO("[Script Host] Registered method signatures");
+    }
+
+    bool ScriptHost::InitializeInternalCalls()
+    {
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot initialize internal calls - host not initialized");
+            return false;
+        }
+
+        const auto *api = ScriptGlue::GetAPI();
+        const uint64_t apiPtr = reinterpret_cast<uint64_t>(api);
+
+        const int methodId = m_Host->BindStaticMethod("IgniteScriptEngine.InternalCalls", "Initialize", static_cast<int>(ScriptMethodSignature::Void_UInt64));
+        if (methodId == 0)
+        {
+            LOG_ERROR("[Script Host] Failed to bind IgniteScriptEngine.InternalCalls.Initialize");
+            return false;
+        }
+
+        void *args[] = { const_cast<uint64_t *>(&apiPtr) };
+        if (!m_Host->Invoke(methodId, args, 1, nullptr))
+        {
+            LOG_ERROR("[Script Host] Failed to invoke IgniteScriptEngine.InternalCalls.Initialize");
+            return false;
+        }
+
+        LOG_INFO("[Script Host] Internal calls bridge initialized");
+        return true;
     }
 
     bool ScriptHost::CreateInstance(const std::string &guid, const std::string &typeName)
@@ -256,5 +286,17 @@ namespace ignite
         }
 
         return m_Host->Invoke(methodId, argsPtr, argCount, returnPtr);
+    }
+
+    std::string ScriptHost::GetDerivedTypes(const std::filesystem::path &assemblyPath, const std::string &baseType)
+    {
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot get derived types - host not initialized");
+            return {};
+        }
+
+        std::string path = assemblyPath.string();
+        return m_Host->GetDerivedTypes(path.c_str(), baseType.c_str());
     }
 }

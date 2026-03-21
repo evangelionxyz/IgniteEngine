@@ -35,7 +35,7 @@ namespace ignite
     ContentBrowserPanel::ContentBrowserPanel(const char *windowTitle)
         : IPanel(windowTitle)
     {
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         
         nvrhi::CommandListHandle cmd = device->createCommandList();
         cmd->open();
@@ -887,7 +887,7 @@ namespace ignite
             {
                 if (loadedTexture)
                 {
-                    nvrhi::IDevice *device = Application::GetGraphicsDevice();
+                    nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
                     nvrhi::CommandListHandle cmd = device->createCommandList();
                     cmd->open();
                     

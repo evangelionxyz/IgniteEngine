@@ -22,6 +22,7 @@
 */
 
 #include "ignite/graphics/window.hpp"
+#include "ignite/graphics/texture.hpp"
 
 #include "device_manager_vk.hpp"
 #include "device_manager.hpp"
@@ -348,24 +349,31 @@ namespace ignite
 
     nvrhi::ITexture *DeviceManager_VK::GetCurrentBackBuffer()
     {
-        return m_SwapChainImages[m_SwapChainIndex].rhiHandle;
+        return m_SwapChainRenderTargets[m_SwapChainIndex]->GetColorAttachment(0)->GetHandle().Get();
     }
 
     nvrhi::ITexture *DeviceManager_VK::GetBackBuffer(u32 index)
     {
-        if (index < m_SwapChainImages.size())
-            return m_SwapChainImages[index].rhiHandle;
+        if (index < m_SwapChainRenderTargets.size())
+            return m_SwapChainRenderTargets[index]->GetColorAttachment(0)->GetHandle().Get();
         return nullptr;
     }
 
-    u32 DeviceManager_VK::GetCurrentBackBufferIndex()
+	nvrhi::ITexture *DeviceManager_VK::GetBackDepthBuffer(uint32_t index)
+	{
+		if (index < m_SwapChainRenderTargets.size())
+			return m_SwapChainRenderTargets[index]->GetDepthAttachment()->GetHandle().Get();
+		return nullptr;
+	}
+
+	u32 DeviceManager_VK::GetCurrentBackBufferIndex()
     {
         return m_SwapChainIndex;
     }
 
     u32 DeviceManager_VK::GetBackBufferCount()
     {
-        return uint32_t(m_SwapChainImages.size());
+        return uint32_t(m_SwapChainRenderTargets.size());
     }
 
     bool DeviceManager_VK::BeginFrame()
@@ -1214,20 +1222,27 @@ namespace ignite
         auto images = m_VulkanDevice.getSwapchainImagesKHR(m_SwapChain);
         for (auto image : images)
         {
-            SwapChainImage sci;
-            sci.image = image;
+            RenderTargetCreateInfo createInfo;
+            createInfo.width = m_DeviceParameters.backBufferWidth;
+            createInfo.height = m_DeviceParameters.backBufferHeight;
+            createInfo.attachments =
+            {
+				FramebufferAttachments {
+					.name = "Swapchain RT",
+					.format = nvrhi::Format::D32S8,
+					.state = nvrhi::ResourceStates::DepthWrite
+				},
+                FramebufferAttachments {
+                    .name = "Swapchain RT", 
+                    .format = m_DeviceParameters.swapChainFormat,
+                    .state = nvrhi::ResourceStates::Present,
+                    .nativeObjectPtr = image,
+                    .isNativeObject = true,
+                    .nativeObjectType = nvrhi::ObjectTypes::VK_Image
+                }
+            };
 
-            nvrhi::TextureDesc textureDesc;
-            textureDesc.width = m_DeviceParameters.backBufferWidth;
-            textureDesc.height = m_DeviceParameters.backBufferHeight;
-            textureDesc.format = m_DeviceParameters.swapChainFormat;
-            textureDesc.debugName = "Swap chain image";
-            textureDesc.initialState = nvrhi::ResourceStates::Present;
-            textureDesc.keepInitialState = true;
-            textureDesc.isRenderTarget = true;
-
-            sci.rhiHandle = m_NvrhiDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::VK_Image, nvrhi::Object(sci.image), textureDesc);
-            m_SwapChainImages.push_back(sci);
+            m_SwapChainRenderTargets.emplace_back(RenderTarget::Create(createInfo, "Swapchain RT"));
         }
 
         m_SwapChainIndex = 0;
@@ -1248,7 +1263,7 @@ namespace ignite
             m_SwapChain = nullptr;
         }
 
-        m_SwapChainImages.clear();
+        m_SwapChainRenderTargets.clear();
     }
 
     void DeviceManager_VK::CreateDescriptorPool()

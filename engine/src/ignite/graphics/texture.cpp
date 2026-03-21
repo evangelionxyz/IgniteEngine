@@ -26,7 +26,7 @@
 #include "texture.hpp"
 
 #include "ignite/core/logger.hpp"
-#include "ignite/core/application.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include <stb_image.h>
 
@@ -146,7 +146,7 @@ namespace ignite
         }
     }
 
-    Texture::~Texture()
+	Texture::~Texture()
     {
     }
 
@@ -264,19 +264,34 @@ namespace ignite
         textureDesc.setIsRenderTarget(m_CreateInfo.isRenderTarget);
 		textureDesc.setIsTypeless(m_CreateInfo.isTypeless);
         textureDesc.isShadingRateSurface = m_CreateInfo.isShadingRateSurface;
-        
-        nvrhi::IDevice *device = Application::GetGraphicsDevice();
-        m_Handle = device->createTexture(textureDesc);
+
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        if (m_CreateInfo.isNativeObject)
+        {
+            LOG_ASSERT(m_CreateInfo.nativeObjectPtr, "[Texture] Should non null object");
+            LOG_ASSERT(m_CreateInfo.nativeObjectType != 0x0, "[Texture] Should set the native object type");
+            m_Handle = device->createHandleForNativeTexture(m_CreateInfo.nativeObjectType, nvrhi::Object(m_CreateInfo.nativeObjectPtr), textureDesc);
+        }
+        else
+        {
+            m_Handle = device->createTexture(textureDesc);
+        }
+       
         LOG_ASSERT(m_Handle, "Failed to create texture");
     }
 
-    void Texture::EnsureTextureHandle()
+	void Texture::EnsureTextureHandle()
     {
         if (!m_Handle)
         {
             CreateTextureHandle();
         }
     }
+
+	Ref<Texture> Texture::Create()
+	{
+		return CreateRef<Texture>();
+	}
 
     Ref<Texture> Texture::Create(TextureCreateInfo createInfo, const std::string &debugName)
     {

@@ -8,9 +8,9 @@ project "IgniteScriptEngine"
     objdir (INTOUTPUT_DIR)
 
     files {
-        "Core/**.cs",
-        "Math/**.cs",
-        "Properties/**.cs"
+        "%{prj.location}/Core/**.cs",
+        "%{prj.location}/Math/**.cs",
+        "%{prj.location}/Properties/**.cs"
     }
 
     links {
@@ -20,7 +20,7 @@ project "IgniteScriptEngine"
     filter { "action:vs* or system:windows" }
         vsprops {
             AppendTargetFrameworkToOutputPath = "false",
-            Nullable = "disable",
+            Nullable = "enable",
             CopyLocalLockFileAssemblies = "true",
             EnableDynamicLoading = "true",
             ImplicitUsing = "enable"

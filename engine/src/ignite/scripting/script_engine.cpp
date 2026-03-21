@@ -34,9 +34,82 @@
 
 #include <cstdlib>
 #include <format>
+#include <fstream>
+#include <thread>
+#include <chrono>
 
 namespace ignite
 {
+    namespace
+    {
+        static bool WaitForAssemblyFileReady(const std::filesystem::path &filepath)
+        {
+            using namespace std::chrono_literals;
+
+            uintmax_t lastSize = 0;
+            bool hasLastSize = false;
+            std::filesystem::file_time_type lastWriteTime{};
+            bool hasLastWrite = false;
+            int stableCount = 0;
+
+            for (int i = 0; i < 80; i++)
+            {
+                std::error_code ec;
+                if (!std::filesystem::exists(filepath, ec) || ec)
+                {
+                    std::this_thread::sleep_for(25ms);
+                    continue;
+                }
+
+                const auto writeTime = std::filesystem::last_write_time(filepath, ec);
+                if (ec)
+                {
+                    std::this_thread::sleep_for(25ms);
+                    continue;
+                }
+
+                const auto fileSize = std::filesystem::file_size(filepath, ec);
+                if (ec)
+                {
+                    std::this_thread::sleep_for(25ms);
+                    continue;
+                }
+
+                std::ifstream stream(filepath, std::ios::binary);
+                if (!stream.good())
+                {
+                    std::this_thread::sleep_for(25ms);
+                    continue;
+                }
+
+                const bool sameWrite = hasLastWrite && writeTime == lastWriteTime;
+                const bool sameSize = hasLastSize && fileSize == lastSize;
+
+                if (sameWrite && sameSize)
+                {
+                    stableCount++;
+                    if (stableCount >= 3)
+                    {
+                        return true;
+                    }
+                }
+                else
+                {
+                    stableCount = 0;
+                }
+
+                hasLastWrite = true;
+                hasLastSize = true;
+                lastWriteTime = writeTime;
+                lastSize = fileSize;
+
+                std::this_thread::sleep_for(25ms);
+            }
+
+            return false;
+        }
+    }
+
     static std::unordered_map<std::string, ScriptFieldType> s_ScriptFieldTypeMap =
     {
         {"System.Boolean", ScriptFieldType::Bool},
@@ -51,21 +124,10 @@ namespace ignite
         {"System.UInt32",  ScriptFieldType::UInt},
         {"System.UInt64",  ScriptFieldType::ULong},
         {"System.UInt",    ScriptFieldType::UByte},
-        {"IgniteEngine.Vector2", ScriptFieldType::Vector2},
-        {"IgniteEngine.Vector3", ScriptFieldType::Vector3},
-        {"IgniteEngine.Vector4", ScriptFieldType::Vector4},
-        {"IgniteEngine.Entity",  ScriptFieldType::Entity},
-    };
-
-    namespace Utils
-    {
-        // TODO: With HostFXR, type mapping will be done in managed code
-        // For now, this is placeholder
-    }
-
-    struct ScriptData
-    {
-
+        {"IgniteScriptEngine.Vector2", ScriptFieldType::Vector2},
+        {"IgniteScriptEngine.Vector3", ScriptFieldType::Vector3},
+        {"IgniteScriptEngine.Vector4", ScriptFieldType::Vector4},
+        {"IgniteScriptEngine.Entity",  ScriptFieldType::Entity},
     };
 
     struct ScriptEngineData
@@ -252,10 +314,21 @@ namespace ignite
         }
 
         scriptEngineData->appAssemblyFilepath = filepath;
+
+        if (!WaitForAssemblyFileReady(filepath))
+        {
+            LOG_WARN("[Script Engine] App assembly may still be updating: {}", filepath.generic_string());
+        }
         
         if (!scriptEngineData->scriptHost->LoadAssembly(filepath))
         {
             LOG_ERROR("[Script Engine] Failed to load app assembly: {}", filepath.generic_string());
+            return false;
+        }
+
+        if (!scriptEngineData->scriptHost->InitializeInternalCalls())
+        {
+            LOG_ERROR("[Script Engine] Failed to initialize internal calls bridge");
             return false;
         }
 
@@ -397,19 +470,40 @@ namespace ignite
     {
         scriptEngineData->entityClasses.clear();
 
-        // TODO: Implement class discovery via C# reflection bridge
-        // You need to add a C# method in IgniteScriptEngine.dll or MochiSharp.Managed.dll that:
-        // 1. Takes an assembly path as input
-        // 2. Uses System.Reflection to enumerate all types derived from Entity
-        // 3. Returns a list of types with their metadata (namespace, class name, assembly name, fields)
-        // 
-        // Example C# signature:
-        // public static string[] GetEntityDerivedTypes(string assemblyPath)
-        // public static FieldInfo[] GetTypeFields(string typeName, string assemblyName)
-        //
-        // Then call these methods from C++ via ScriptHost to populate scriptEngineData->entityClasses
-        // When creating ScriptClass instances, pass the assembly name to the constructor
+        const std::string appAssemblyName = scriptEngineData->appAssemblyFilepath.stem().string();
+        std::string derivedTypes = scriptEngineData->scriptHost->GetDerivedTypes(scriptEngineData->appAssemblyFilepath, "IgniteScriptEngine.Entity");
+        
+        if (derivedTypes.empty())
+        {
+            LOG_WARN("[Script Engine] No derived script classes found in {}", scriptEngineData->appAssemblyFilepath.generic_string());
+            return;
+        }
 
-        LOG_WARN("[Script Engine] Class discovery needs C# reflection bridge implementation");
+        size_t start = 0;
+        while (start <= derivedTypes.size())
+        {
+            const size_t end = derivedTypes.find('|', start);
+            const std::string fullName = (end == std::string::npos)
+                ? derivedTypes.substr(start)
+                : derivedTypes.substr(start, end - start);
+
+            if (!fullName.empty())
+            {
+                const size_t lastDot = fullName.find_last_of('.');
+                const std::string classNamespace = (lastDot == std::string::npos) ? "" : fullName.substr(0, lastDot);
+                const std::string className = (lastDot == std::string::npos) ? fullName : fullName.substr(lastDot + 1);
+
+                scriptEngineData->entityClasses[fullName] = CreateRef<ScriptClass>(classNamespace, className, appAssemblyName);
+            }
+
+            if (end == std::string::npos)
+            {
+                break;
+            }
+
+            start = end + 1;
+        }
+
+        LOG_INFO("[Script Engine] Loaded {} script classes", scriptEngineData->entityClasses.size());
     }
 }

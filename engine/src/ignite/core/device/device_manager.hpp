@@ -150,8 +150,9 @@ namespace ignite
     public:
         static DeviceManager *Create(Window *window, const DeviceParameters &params, nvrhi::GraphicsAPI api);
 
-        bool CreateInstance(const InstanceParameters &params);
+        static DeviceManager *GetInstance();
 
+        bool CreateInstance(const InstanceParameters &params);
         virtual bool EnumerateAdapters(std::vector<AdapterInfo> &outAdapters) = 0;
         virtual void WaitForIdle() = 0;
         bool IsUpdateDPIScaleFactor();
@@ -190,6 +191,7 @@ namespace ignite
 
         virtual nvrhi::ITexture *GetCurrentBackBuffer() = 0;
         virtual nvrhi::ITexture *GetBackBuffer(uint32_t index) = 0;
+        virtual nvrhi::ITexture *GetBackDepthBuffer(uint32_t index) = 0;
         virtual uint32_t GetCurrentBackBufferIndex() = 0;
         virtual uint32_t GetBackBufferCount() = 0;
         nvrhi::IFramebuffer *GetCurrentFramebuffer();

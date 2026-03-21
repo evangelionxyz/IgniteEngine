@@ -29,6 +29,7 @@
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/project/project.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 
@@ -521,7 +522,7 @@ namespace ignite {
         Ref<Scene> desScene = Scene::Create(project, title);
 
         // Open commandlist for asset deserialization
-        auto device = Application::GetGraphicsDevice();
+        auto device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
 
         for (YAML::Node entityNode : sceneNode["Entities"])
@@ -793,6 +794,7 @@ namespace ignite {
         projectSr.AddKeyValue("Name", projectInfo.name);
         projectSr.AddKeyValue("AssetPath", projectInfo.assetDirectory.generic_string());
         projectSr.AddKeyValue("AssetRegistry", projectInfo.assetRegistryFilepath.generic_string());
+        projectSr.AddKeyValue("ScriptModule", projectInfo.scriptModuleFilepath.generic_string());
         projectSr.AddKeyValue("DefaultSceneHandle", projectInfo.defaultSceneHandle);
 
         projectSr.EndMap();
@@ -856,6 +858,7 @@ namespace ignite {
         info.assetDirectory = projectNode["AssetPath"].as<std::string>();
         info.assetRegistryFilepath = projectNode["AssetRegistry"].as<std::string>();
         info.defaultSceneHandle = AssetHandle(projectNode["DefaultSceneHandle"].as<uint64_t>());
+        info.scriptModuleFilepath = projectNode["ScriptModele"].as<std::string>();
 
         Ref<Project> project = Project::Create(info);
 

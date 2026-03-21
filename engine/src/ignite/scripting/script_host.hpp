@@ -68,6 +68,9 @@ namespace ignite
         // Register method signatures for script methods
         void RegisterSignatures();
 
+        // Initialize C# InternalCalls bridge with native callbacks
+        bool InitializeInternalCalls();
+
         // Create a script instance with a GUID
         bool CreateInstance(const std::string &guid, const std::string &typeName);
 
@@ -82,6 +85,9 @@ namespace ignite
 
         // Invoke a method with arguments
         bool Invoke(int methodId, const void *argsPtr, int argCount, void *returnPtr);
+
+        // Get all non-abstract classes derived from baseType in an assembly
+        std::string GetDerivedTypes(const std::filesystem::path &assemblyPath, const std::string &baseType);
 
         // Check if initialized
         bool IsInitialized() const { return m_Initialized; }

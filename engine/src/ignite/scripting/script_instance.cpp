@@ -58,6 +58,14 @@ namespace ignite
         }
     }
 
+    ScriptInstance::~ScriptInstance()
+    {
+        if (m_ScriptHost && !m_InstanceGuid.empty())
+        {
+            m_ScriptHost->DestroyInstance(m_InstanceGuid);
+        }
+    }
+
     void ScriptInstance::InvokeOnCreate()
     {
         if (m_OnCreateMethodId)
