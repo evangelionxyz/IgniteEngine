@@ -23,6 +23,7 @@
 
 #include "script_host.hpp"
 #include "ignite/core/logger.hpp"
+#include "script_glue.hpp"
 
 namespace ignite
 {
@@ -176,6 +177,35 @@ namespace ignite
         }
 
         LOG_INFO("[Script Host] Registered method signatures");
+    }
+
+    bool ScriptHost::InitializeInternalCalls()
+    {
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot initialize internal calls - host not initialized");
+            return false;
+        }
+
+        const auto *api = ScriptGlue::GetAPI();
+        const uint64_t apiPtr = reinterpret_cast<uint64_t>(api);
+
+        const int methodId = m_Host->BindStaticMethod("IgniteScriptEngine.InternalCalls", "Initialize", static_cast<int>(ScriptMethodSignature::Void_UInt64));
+        if (methodId == 0)
+        {
+            LOG_ERROR("[Script Host] Failed to bind IgniteScriptEngine.InternalCalls.Initialize");
+            return false;
+        }
+
+        void *args[] = { const_cast<uint64_t *>(&apiPtr) };
+        if (!m_Host->Invoke(methodId, args, 1, nullptr))
+        {
+            LOG_ERROR("[Script Host] Failed to invoke IgniteScriptEngine.InternalCalls.Initialize");
+            return false;
+        }
+
+        LOG_INFO("[Script Host] Internal calls bridge initialized");
+        return true;
     }
 
     bool ScriptHost::CreateInstance(const std::string &guid, const std::string &typeName)

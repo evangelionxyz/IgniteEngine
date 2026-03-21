@@ -259,9 +259,11 @@ namespace ignite
             return false;
         }
 
-        // Signatures are stored in managed ScriptContext and must be re-registered
-        // every time the app assembly is (re)loaded.
-        scriptEngineData->scriptHost->RegisterSignatures();
+        if (!scriptEngineData->scriptHost->InitializeInternalCalls())
+        {
+            LOG_ERROR("[Script Engine] Failed to initialize internal calls bridge");
+            return false;
+        }
 
         scriptEngineData->appAssemblyFileWatcher = CreateScope<filewatch::FileWatch<std::string>>(filepath.string(), ScriptEngine::OnAppAssemblyFileSystemEvent);
         scriptEngineData->assemblyReloadingPending = false;

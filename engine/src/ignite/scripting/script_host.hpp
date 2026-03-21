@@ -68,6 +68,9 @@ namespace ignite
         // Register method signatures for script methods
         void RegisterSignatures();
 
+        // Initialize C# InternalCalls bridge with native callbacks
+        bool InitializeInternalCalls();
+
         // Create a script instance with a GUID
         bool CreateInstance(const std::string &guid, const std::string &typeName);
 
