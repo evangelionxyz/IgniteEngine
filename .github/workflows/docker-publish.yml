@@ -27,6 +27,41 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # ## 2.1 Start Docker #################################################
+      # On windows-2022 runners, Docker is installed but the service can be
+      # stopped or not fully initialized. We ensure it's started and ready.
+      - name: Start Docker Service
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          Write-Host "Checking Docker service status..."
+          $service = Get-Service -Name docker -ErrorAction SilentlyContinue
+          if ($service) {
+              if ($service.Status -ne 'Running') {
+                  Write-Host "Starting Docker service..."
+                  Start-Service -Name docker
+              }
+              Write-Host "Docker service is $($service.Status)."
+          } else {
+              Write-Warning "Docker service not found via Get-Service."
+          }
+
+          Write-Host "Verifying Docker connection..."
+          $retryCount = 0
+          while ($retryCount -lt 5) {
+              docker info > $null 2>&1
+              if ($LASTEXITCODE -eq 0) {
+                  Write-Host "Docker is ready!"
+                  break
+              }
+              Write-Host "Waiting for Docker daemon... (Attempt $($retryCount + 1))"
+              Start-Sleep -Seconds 5
+              $retryCount++
+          }
+          if ($retryCount -eq 5) {
+              throw "Docker daemon failed to start after 25 seconds."
+          }
+
       # ## 3. Build #########################################################
       # NOTE: BuildKit is NOT used here — it has known limitations with
       # Windows containers on GitHub-hosted runners.
