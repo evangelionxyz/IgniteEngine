@@ -1,11 +1,14 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #include "script_glue.hpp"
+#include "ignite/core/input/input.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/scene/component.hpp"
 #include "ignite/scene/component_group.hpp"
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/scripting/script_engine.hpp"
+
+#include "box2d/box2d.h"
 
 #include <glm/gtx/quaternion.hpp>
 #include <algorithm>
@@ -296,6 +299,42 @@ namespace ignite
             *result = entity.GetComponent<TransformComponent>().visible;
         }
 
+        static bool Input_IsKeyPressed(uint32_t keyCode)
+        {
+            return Input::IsKeyPressed(static_cast<KeyCode>(keyCode));
+        }
+
+        static bool Input_IsModifierPressed(uint16_t modCode)
+        {
+            return Input::IsModifierPressed(static_cast<KeyModCode>(modCode));
+        }
+
+        static bool Input_IsMouseButtonPressed(uint8_t button)
+        {
+            return Input::IsMouseButtonPressed(static_cast<MouseCode>(button));
+        }
+
+        static void Input_GetMousePosition(glm::vec2 *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            const glm::ivec2 mousePos = Input::GetMousePosition();
+            *result = glm::vec2(mousePos.x, mousePos.y);
+        }
+
+        static void Input_SetMouseToCenter()
+        {
+            Input::SetMouseToCenter();
+        }
+
+        static void Input_SetCursorMode(int32_t mode)
+        {
+            Input::SetCursorMode(static_cast<CursorMode>(mode));
+        }
+
         static void TransformComponent_GetForward(uint64_t entityID, glm::vec3 *result)
         {
             if (!result)
@@ -537,10 +576,699 @@ namespace ignite
             }
 
             auto &transform = entity.GetComponent<TransformComponent>();
-            const glm::vec3 scale = value;
-            transform.localScale = scale;
-            transform.scale = scale;
+            transform.localScale = value;
+            transform.scale = value;
             transform.dirty = true;
+        }
+
+		static void Sprite2DComponent_SetColor(uint64_t entityID, glm::vec4 value)
+		{
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<Sprite2DComponent>())
+			{
+				return;
+			}
+
+			auto &comp = entity.GetComponent<Sprite2DComponent>();
+			comp.color = value;
+		}
+
+		static void Sprite2DComponent_GetColor(uint64_t entityID, glm::vec4 *result)
+		{
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<Sprite2DComponent>())
+			{
+				return;
+			}
+
+			auto &comp = entity.GetComponent<Sprite2DComponent>();
+			*result = comp.color;
+		}
+
+		static void Sprite2DComponent_SetTilingFactor(uint64_t entityID, glm::vec2 value)
+		{
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<Sprite2DComponent>())
+			{
+				return;
+			}
+
+			auto &comp = entity.GetComponent<Sprite2DComponent>();
+			comp.tilingFactor = value;
+		}
+
+		static void Sprite2DComponent_GetTilingFactor(uint64_t entityID, glm::vec2 *result)
+		{
+            if (!result)
+            {
+                return;
+            }
+
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<Sprite2DComponent>())
+			{
+				return;
+			}
+
+			auto &comp = entity.GetComponent<Sprite2DComponent>();
+			*result = comp.tilingFactor;
+		}
+
+        static void Rigidbody2DComponent_GetType(uint64_t entityID, int32_t *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = static_cast<int32_t>(Body2DType_Static);
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            *result = static_cast<int32_t>(entity.GetComponent<Rigidbody2DComponent>().type);
+        }
+
+        static void Rigidbody2DComponent_SetType(uint64_t entityID, int32_t value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            rb.type = static_cast<Body2DType>(value);
+            if (b2Body_IsValid(rb.bodyId))
+            {
+                b2Body_SetType(rb.bodyId, GetB2BodyType(rb.type));
+            }
+        }
+
+        static void Rigidbody2DComponent_GetLinearVelocity(uint64_t entityID, glm::vec2 *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = {};
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<Rigidbody2DComponent>().linearVelocity;
+        }
+
+        static void Rigidbody2DComponent_SetLinearVelocity(uint64_t entityID, glm::vec2 value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            rb.linearVelocity = value;
+            if (b2Body_IsValid(rb.bodyId))
+            {
+                b2Body_SetLinearVelocity(rb.bodyId, { value.x, value.y });
+            }
+        }
+
+        static void Rigidbody2DComponent_GetAngularVelocity(uint64_t entityID, float *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<Rigidbody2DComponent>().angularVelocity;
+        }
+
+        static void Rigidbody2DComponent_SetAngularVelocity(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            rb.angularVelocity = value;
+            if (b2Body_IsValid(rb.bodyId))
+            {
+                b2Body_SetAngularVelocity(rb.bodyId, value);
+            }
+        }
+
+        static void Rigidbody2DComponent_GetGravityScale(uint64_t entityID, float *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<Rigidbody2DComponent>().gravityScale;
+        }
+
+        static void Rigidbody2DComponent_SetGravityScale(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            rb.gravityScale = value;
+            if (b2Body_IsValid(rb.bodyId))
+            {
+                b2Body_SetGravityScale(rb.bodyId, value);
+            }
+        }
+
+        static void Rigidbody2DComponent_GetLinearDamping(uint64_t entityID, float *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<Rigidbody2DComponent>().linearDamping;
+        }
+
+        static void Rigidbody2DComponent_SetLinearDamping(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            rb.linearDamping = value;
+            if (b2Body_IsValid(rb.bodyId))
+            {
+                b2Body_SetLinearDamping(rb.bodyId, value);
+            }
+        }
+
+        static void Rigidbody2DComponent_GetAngularDamping(uint64_t entityID, float *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<Rigidbody2DComponent>().angularDamping;
+        }
+
+        static void Rigidbody2DComponent_SetAngularDamping(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            rb.angularDamping = value;
+            if (b2Body_IsValid(rb.bodyId))
+            {
+                b2Body_SetAngularDamping(rb.bodyId, value);
+            }
+        }
+
+        static void Rigidbody2DComponent_GetIsAwake(uint64_t entityID, bool *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = false;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<Rigidbody2DComponent>().isAwake;
+        }
+
+        static void Rigidbody2DComponent_SetIsAwake(uint64_t entityID, bool value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            rb.isAwake = value;
+            if (b2Body_IsValid(rb.bodyId))
+            {
+                b2Body_SetAwake(rb.bodyId, value);
+            }
+        }
+
+        static void Rigidbody2DComponent_GetIsEnabled(uint64_t entityID, bool *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = false;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<Rigidbody2DComponent>().isEnabled;
+        }
+
+        static void Rigidbody2DComponent_SetIsEnabled(uint64_t entityID, bool value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            rb.isEnabled = value;
+            if (b2Body_IsValid(rb.bodyId))
+            {
+                if (value)
+                {
+                    b2Body_Enable(rb.bodyId);
+                }
+                else
+                {
+                    b2Body_Disable(rb.bodyId);
+                }
+            }
+        }
+
+        static void Rigidbody2DComponent_GetIsEnableSleep(uint64_t entityID, bool *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = false;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<Rigidbody2DComponent>().isEnableSleep;
+        }
+
+        static void Rigidbody2DComponent_SetIsEnableSleep(uint64_t entityID, bool value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            rb.isEnableSleep = value;
+            if (b2Body_IsValid(rb.bodyId))
+            {
+                b2Body_EnableSleep(rb.bodyId, value);
+            }
+        }
+
+        static void Rigidbody2DComponent_ApplyForce(uint64_t entityID, glm::vec2 force, glm::vec2 point, bool wake)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            if (!b2Body_IsValid(rb.bodyId))
+            {
+                return;
+            }
+
+            b2Body_ApplyForce(rb.bodyId, { force.x, force.y }, { point.x, point.y }, wake);
+        }
+
+        static void Rigidbody2DComponent_ApplyForceToCenter(uint64_t entityID, glm::vec2 force, bool wake)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            if (!b2Body_IsValid(rb.bodyId))
+            {
+                return;
+            }
+
+            b2Body_ApplyForceToCenter(rb.bodyId, { force.x, force.y }, wake);
+        }
+
+        static void Rigidbody2DComponent_ApplyLinearImpulse(uint64_t entityID, glm::vec2 impulse, glm::vec2 point, bool wake)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            if (!b2Body_IsValid(rb.bodyId))
+            {
+                return;
+            }
+
+            b2Body_ApplyLinearImpulse(rb.bodyId, { impulse.x, impulse.y }, { point.x, point.y }, wake);
+        }
+
+        static void Rigidbody2DComponent_ApplyLinearImpulseToCenter(uint64_t entityID, glm::vec2 impulse, bool wake)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            if (!b2Body_IsValid(rb.bodyId))
+            {
+                return;
+            }
+
+            b2Body_ApplyLinearImpulseToCenter(rb.bodyId, { impulse.x, impulse.y }, wake);
+        }
+
+        static void Rigidbody2DComponent_ApplyAngularImpulse(uint64_t entityID, float impulse, bool wake)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            if (!b2Body_IsValid(rb.bodyId))
+            {
+                return;
+            }
+
+            b2Body_ApplyAngularImpulse(rb.bodyId, impulse, wake);
+        }
+
+        static void Rigidbody2DComponent_ApplyTorque(uint64_t entityID, float torque, bool wake)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            if (!b2Body_IsValid(rb.bodyId))
+            {
+                return;
+            }
+
+            b2Body_ApplyTorque(rb.bodyId, torque, wake);
+        }
+
+        static void Rigidbody2DComponent_GetMass(uint64_t entityID, float *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            if (!b2Body_IsValid(rb.bodyId))
+            {
+                return;
+            }
+
+            *result = b2Body_GetMass(rb.bodyId);
+        }
+
+        static void Rigidbody2DComponent_GetIsBullet(uint64_t entityID, bool *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = false;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            if (!b2Body_IsValid(rb.bodyId))
+            {
+                return;
+            }
+
+            *result = b2Body_IsBullet(rb.bodyId);
+        }
+
+        static void Rigidbody2DComponent_SetIsBullet(uint64_t entityID, bool value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
+            {
+                return;
+            }
+
+            auto &rb = entity.GetComponent<Rigidbody2DComponent>();
+            if (!b2Body_IsValid(rb.bodyId))
+            {
+                return;
+            }
+
+            b2Body_SetBullet(rb.bodyId, value);
+        }
+
+        static void BoxCollider2DComponent_GetSize(uint64_t entityID, glm::vec2 *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = {};
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<BoxCollider2DComponent>().size;
+        }
+
+        static void BoxCollider2DComponent_SetSize(uint64_t entityID, glm::vec2 value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
+            {
+                return;
+            }
+
+            entity.GetComponent<BoxCollider2DComponent>().size = value;
+        }
+
+        static void BoxCollider2DComponent_GetOffset(uint64_t entityID, glm::vec2 *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = {};
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<BoxCollider2DComponent>().offset;
+        }
+
+        static void BoxCollider2DComponent_SetOffset(uint64_t entityID, glm::vec2 value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
+            {
+                return;
+            }
+
+            entity.GetComponent<BoxCollider2DComponent>().offset = value;
+        }
+
+        static void BoxCollider2DComponent_GetRestitution(uint64_t entityID, float *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<BoxCollider2DComponent>().restitution;
+        }
+
+        static void BoxCollider2DComponent_SetRestitution(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
+            {
+                return;
+            }
+
+            entity.GetComponent<BoxCollider2DComponent>().restitution = value;
+        }
+
+        static void BoxCollider2DComponent_GetFriction(uint64_t entityID, float *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<BoxCollider2DComponent>().friction;
+        }
+
+        static void BoxCollider2DComponent_SetFriction(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
+            {
+                return;
+            }
+
+            entity.GetComponent<BoxCollider2DComponent>().friction = value;
+        }
+
+        static void BoxCollider2DComponent_GetDensity(uint64_t entityID, float *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<BoxCollider2DComponent>().density;
+        }
+
+        static void BoxCollider2DComponent_SetDensity(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
+            {
+                return;
+            }
+
+            entity.GetComponent<BoxCollider2DComponent>().density = value;
+        }
+
+        static void BoxCollider2DComponent_GetIsSensor(uint64_t entityID, bool *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = false;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<BoxCollider2DComponent>().isSensor;
+        }
+
+        static void BoxCollider2DComponent_SetIsSensor(uint64_t entityID, bool value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
+            {
+                return;
+            }
+
+            entity.GetComponent<BoxCollider2DComponent>().isSensor = value;
         }
 
         static const ScriptGlueAPI s_API =
@@ -553,6 +1281,14 @@ namespace ignite
             &Entity_Destroy,
             &Entity_SetVisibility,
             &Entity_GetVisibility,
+
+            &Input_IsKeyPressed,
+            &Input_IsModifierPressed,
+            &Input_IsMouseButtonPressed,
+            &Input_GetMousePosition,
+            &Input_SetMouseToCenter,
+            &Input_SetCursorMode,
+            
             &TransformComponent_GetForward,
             &TransformComponent_SetForward,
             &TransformComponent_GetRight,
@@ -567,6 +1303,52 @@ namespace ignite
             &TransformComponent_SetEulerAngles,
             &TransformComponent_GetScale,
             &TransformComponent_SetScale,
+
+            &Sprite2DComponent_SetColor,
+            &Sprite2DComponent_GetColor,
+            &Sprite2DComponent_SetTilingFactor,
+            &Sprite2DComponent_GetTilingFactor,
+
+            &Rigidbody2DComponent_GetType,
+            &Rigidbody2DComponent_SetType,
+            &Rigidbody2DComponent_GetLinearVelocity,
+            &Rigidbody2DComponent_SetLinearVelocity,
+            &Rigidbody2DComponent_GetAngularVelocity,
+            &Rigidbody2DComponent_SetAngularVelocity,
+            &Rigidbody2DComponent_GetGravityScale,
+            &Rigidbody2DComponent_SetGravityScale,
+            &Rigidbody2DComponent_GetLinearDamping,
+            &Rigidbody2DComponent_SetLinearDamping,
+            &Rigidbody2DComponent_GetAngularDamping,
+            &Rigidbody2DComponent_SetAngularDamping,
+            &Rigidbody2DComponent_GetIsAwake,
+            &Rigidbody2DComponent_SetIsAwake,
+            &Rigidbody2DComponent_GetIsEnabled,
+            &Rigidbody2DComponent_SetIsEnabled,
+            &Rigidbody2DComponent_GetIsEnableSleep,
+            &Rigidbody2DComponent_SetIsEnableSleep,
+            &Rigidbody2DComponent_ApplyForce,
+            &Rigidbody2DComponent_ApplyForceToCenter,
+            &Rigidbody2DComponent_ApplyLinearImpulse,
+            &Rigidbody2DComponent_ApplyLinearImpulseToCenter,
+            &Rigidbody2DComponent_ApplyAngularImpulse,
+            &Rigidbody2DComponent_ApplyTorque,
+            &Rigidbody2DComponent_GetMass,
+            &Rigidbody2DComponent_GetIsBullet,
+            &Rigidbody2DComponent_SetIsBullet,
+
+            &BoxCollider2DComponent_GetSize,
+            &BoxCollider2DComponent_SetSize,
+            &BoxCollider2DComponent_GetOffset,
+            &BoxCollider2DComponent_SetOffset,
+            &BoxCollider2DComponent_GetRestitution,
+            &BoxCollider2DComponent_SetRestitution,
+            &BoxCollider2DComponent_GetFriction,
+            &BoxCollider2DComponent_SetFriction,
+            &BoxCollider2DComponent_GetDensity,
+            &BoxCollider2DComponent_SetDensity,
+            &BoxCollider2DComponent_GetIsSensor,
+            &BoxCollider2DComponent_SetIsSensor,
         };
     }
 
