@@ -83,6 +83,9 @@ namespace ignite
         // Invoke a method with arguments
         bool Invoke(int methodId, const void *argsPtr, int argCount, void *returnPtr);
 
+        // Get all non-abstract classes derived from baseType in an assembly
+        std::string GetDerivedTypes(const std::filesystem::path &assemblyPath, const std::string &baseType);
+
         // Check if initialized
         bool IsInitialized() const { return m_Initialized; }
 

@@ -121,7 +121,7 @@ namespace ignite
 
         // UInt64 with UInt64 and Vector3 parameters
         {
-            const char *params[] = { "System.UInt64", "IgniteEngine.Vector3, IgniteScriptEngine" };
+            const char *params[] = { "System.UInt64", "IgniteScriptEngine.Vector3, IgniteScriptEngine" };
             m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::UInt64_UInt64_Vec3), 
                 "System.UInt64", params, 2);
         }
@@ -142,28 +142,28 @@ namespace ignite
 
         // Void with UInt64 and out Vector3
         {
-            const char *params[] = { "System.UInt64", "IgniteEngine.Vector3&, IgniteScriptEngine" };
+			const char *params[] = { "System.UInt64", "IgniteScriptEngine.Vector3&, IgniteScriptEngine" };
             m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_OutVec3), 
                 "System.Void", params, 2);
         }
 
         // Void with UInt64 and Vector3
         {
-            const char *params[] = { "System.UInt64", "IgniteEngine.Vector3, IgniteScriptEngine" };
+            const char *params[] = { "System.UInt64", "IgniteScriptEngine.Vector3, IgniteScriptEngine" };
             m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_Vec3), 
                 "System.Void", params, 2);
         }
 
         // Void with UInt64 and out Quaternion
         {
-            const char *params[] = { "System.UInt64", "IgniteEngine.Quaternion&, IgniteScriptEngine" };
+            const char *params[] = { "System.UInt64", "IgniteScriptEngine.Quaternion&, IgniteScriptEngine" };
             m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_OutQuat), 
                 "System.Void", params, 2);
         }
 
         // Void with UInt64 and Quaternion
         {
-            const char *params[] = { "System.UInt64", "IgniteEngine.Quaternion, IgniteScriptEngine" };
+            const char *params[] = { "System.UInt64", "IgniteScriptEngine.Quaternion, IgniteScriptEngine" };
             m_Host->RegisterSignature(static_cast<int>(ScriptMethodSignature::Void_UInt64_Quat), 
                 "System.Void", params, 2);
         }
@@ -256,5 +256,17 @@ namespace ignite
         }
 
         return m_Host->Invoke(methodId, argsPtr, argCount, returnPtr);
+    }
+
+    std::string ScriptHost::GetDerivedTypes(const std::filesystem::path &assemblyPath, const std::string &baseType)
+    {
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot get derived types - host not initialized");
+            return {};
+        }
+
+        std::string path = assemblyPath.string();
+        return m_Host->GetDerivedTypes(path.c_str(), baseType.c_str());
     }
 }

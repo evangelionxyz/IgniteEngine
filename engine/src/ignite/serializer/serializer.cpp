@@ -794,6 +794,7 @@ namespace ignite {
         projectSr.AddKeyValue("Name", projectInfo.name);
         projectSr.AddKeyValue("AssetPath", projectInfo.assetDirectory.generic_string());
         projectSr.AddKeyValue("AssetRegistry", projectInfo.assetRegistryFilepath.generic_string());
+        projectSr.AddKeyValue("ScriptModule", projectInfo.scriptModuleFilepath.generic_string());
         projectSr.AddKeyValue("DefaultSceneHandle", projectInfo.defaultSceneHandle);
 
         projectSr.EndMap();
@@ -857,6 +858,7 @@ namespace ignite {
         info.assetDirectory = projectNode["AssetPath"].as<std::string>();
         info.assetRegistryFilepath = projectNode["AssetRegistry"].as<std::string>();
         info.defaultSceneHandle = AssetHandle(projectNode["DefaultSceneHandle"].as<uint64_t>());
+        info.scriptModuleFilepath = projectNode["ScriptModele"].as<std::string>();
 
         Ref<Project> project = Project::Create(info);
 

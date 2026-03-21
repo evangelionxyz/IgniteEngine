@@ -23,7 +23,7 @@
 
 ﻿using System;
 
-namespace IgniteEngine;
+namespace IgniteScriptEngine;
 
 public static class Mathf
 {

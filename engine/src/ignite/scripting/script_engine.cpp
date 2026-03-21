@@ -51,10 +51,10 @@ namespace ignite
         {"System.UInt32",  ScriptFieldType::UInt},
         {"System.UInt64",  ScriptFieldType::ULong},
         {"System.UInt",    ScriptFieldType::UByte},
-        {"IgniteEngine.Vector2", ScriptFieldType::Vector2},
-        {"IgniteEngine.Vector3", ScriptFieldType::Vector3},
-        {"IgniteEngine.Vector4", ScriptFieldType::Vector4},
-        {"IgniteEngine.Entity",  ScriptFieldType::Entity},
+        {"IgniteScriptEngine.Vector2", ScriptFieldType::Vector2},
+        {"IgniteScriptEngine.Vector3", ScriptFieldType::Vector3},
+        {"IgniteScriptEngine.Vector4", ScriptFieldType::Vector4},
+        {"IgniteScriptEngine.Entity",  ScriptFieldType::Entity},
     };
 
     namespace Utils
@@ -259,6 +259,10 @@ namespace ignite
             return false;
         }
 
+        // Signatures are stored in managed ScriptContext and must be re-registered
+        // every time the app assembly is (re)loaded.
+        scriptEngineData->scriptHost->RegisterSignatures();
+
         scriptEngineData->appAssemblyFileWatcher = CreateScope<filewatch::FileWatch<std::string>>(filepath.string(), ScriptEngine::OnAppAssemblyFileSystemEvent);
         scriptEngineData->assemblyReloadingPending = false;
 
@@ -397,19 +401,40 @@ namespace ignite
     {
         scriptEngineData->entityClasses.clear();
 
-        // TODO: Implement class discovery via C# reflection bridge
-        // You need to add a C# method in IgniteScriptEngine.dll or MochiSharp.Managed.dll that:
-        // 1. Takes an assembly path as input
-        // 2. Uses System.Reflection to enumerate all types derived from Entity
-        // 3. Returns a list of types with their metadata (namespace, class name, assembly name, fields)
-        // 
-        // Example C# signature:
-        // public static string[] GetEntityDerivedTypes(string assemblyPath)
-        // public static FieldInfo[] GetTypeFields(string typeName, string assemblyName)
-        //
-        // Then call these methods from C++ via ScriptHost to populate scriptEngineData->entityClasses
-        // When creating ScriptClass instances, pass the assembly name to the constructor
+        const std::string appAssemblyName = scriptEngineData->appAssemblyFilepath.stem().string();
+        std::string derivedTypes = scriptEngineData->scriptHost->GetDerivedTypes(scriptEngineData->appAssemblyFilepath, "IgniteScriptEngine.Entity");
+        
+        if (derivedTypes.empty())
+        {
+            LOG_WARN("[Script Engine] No derived script classes found in {}", scriptEngineData->appAssemblyFilepath.generic_string());
+            return;
+        }
 
-        LOG_WARN("[Script Engine] Class discovery needs C# reflection bridge implementation");
+        size_t start = 0;
+        while (start <= derivedTypes.size())
+        {
+            const size_t end = derivedTypes.find('|', start);
+            const std::string fullName = (end == std::string::npos)
+                ? derivedTypes.substr(start)
+                : derivedTypes.substr(start, end - start);
+
+            if (!fullName.empty())
+            {
+                const size_t lastDot = fullName.find_last_of('.');
+                const std::string classNamespace = (lastDot == std::string::npos) ? "" : fullName.substr(0, lastDot);
+                const std::string className = (lastDot == std::string::npos) ? fullName : fullName.substr(lastDot + 1);
+
+                scriptEngineData->entityClasses[fullName] = CreateRef<ScriptClass>(classNamespace, className, appAssemblyName);
+            }
+
+            if (end == std::string::npos)
+            {
+                break;
+            }
+
+            start = end + 1;
+        }
+
+        LOG_INFO("[Script Engine] Loaded {} script classes", scriptEngineData->entityClasses.size());
     }
 }

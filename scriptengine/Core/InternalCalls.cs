@@ -24,11 +24,15 @@
 using System;
 using System.Runtime.CompilerServices;
 
-namespace IgniteEngine;
+namespace IgniteScriptEngine;
 
 public static class InternalCalls
 {
-    // Entity Method
+    // Core Methods
+    [MethodImplAttribute(MethodImplOptions.InternalCall)]
+    internal extern static void Debug_Log(string message);
+
+    // Entity Methods
     [MethodImplAttribute(MethodImplOptions.InternalCall)]
     internal extern static bool Entity_HasComponent(ulong entityID, Type componentType);
     [MethodImplAttribute(MethodImplOptions.InternalCall)]

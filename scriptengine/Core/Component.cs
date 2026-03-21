@@ -22,7 +22,7 @@
 */
 
 using System;
-namespace IgniteEngine;
+namespace IgniteScriptEngine;
 
 public abstract class Component
 {
