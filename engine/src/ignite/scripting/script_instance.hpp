@@ -68,7 +68,6 @@ namespace ignite
     {
     public:
         ScriptInstance(Ref<ScriptClass> scriptClass, Entity entity);
-        ~ScriptInstance();
 
         void InvokeOnCreate();
         void InvokeOnUpdate(float time);

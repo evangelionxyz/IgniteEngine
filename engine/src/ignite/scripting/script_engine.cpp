@@ -369,6 +369,12 @@ namespace ignite
     void ScriptEngine::ClearSceneContext()
     {
         m_Scene = nullptr;
+
+        for (auto &instance : scriptEngineData->entityInstances)
+        {
+			scriptEngine->GetScriptHost()->DestroyInstance(instance.second->GetInstanceGuid());
+        }
+
         scriptEngineData->entityInstances.clear();
     }
 
