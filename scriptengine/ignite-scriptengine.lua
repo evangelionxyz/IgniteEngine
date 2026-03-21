@@ -28,21 +28,12 @@ project "IgniteScriptEngine"
         
     filter "configurations:Debug"
         symbols "on"
-        vsprops {
-            OutputPath = "..\\bin\\Debug\\",
-            IntermediateOutputPath = "..\\bin\\objs\\Debug\\IgniteScriptEngine\\"
-        }
+        optimize "off"
 
     filter "configurations:Release"
         optimize "on"
         symbols "off"
-        vsprops {
-            OutputPath = "..\\bin\\Release\\",
-            IntermediateOutputPath = "..\\bin\\objs\\Release\\IgniteScriptEngine\\"
-        }
     
     filter "configurations:Shipping"
-        vsprops {
-            OutputPath = "..\\bin\\Shipping\\",
-            IntermediateOutputPath = "..\\bin\\objs\\Shipping\\IgniteScriptEngine\\"
-        }
+        optimize "on"
+        symbols "off"
