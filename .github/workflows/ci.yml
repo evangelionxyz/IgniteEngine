@@ -54,22 +54,27 @@ jobs:
           }
 
       # ── 4. Build inside the container ────────────────────────────────────
-      # The workspace is volume-mounted into C:\workspace (the WORKDIR set
-      # in the Dockerfile). The script has full access to all baked-in SDKs.
       - name: Run build inside container
         shell: pwsh
         run: |
           $image     = "${{ secrets.DOCKERHUB_USERNAME }}/ignite-engine:latest"
           $workspace = "${{ github.workspace }}"
 
+          # Convert Windows path  D:\a\Ignite\Ignite  →  //d/a/Ignite/Ignite
+          # Required so Docker does not misread the drive-letter colon as the
+          # host:container path separator (e.g. "D" would become the host path).
+          $dockerPath = $workspace -replace '\\', '/'
+          $dockerPath = $dockerPath -replace '^([A-Za-z]):', { "//$($_.Groups[1].Value.ToLower())" }
+
           Write-Host "Running build in $image ..."
-          Write-Host "Workspace: $workspace"
+          Write-Host "Host workspace : $workspace"
+          Write-Host "Docker volume  : ${dockerPath}:C:/workspace"
 
           docker run --rm `
-            --volume "${workspace}:C:\workspace" `
+            --volume "${dockerPath}:C:/workspace" `
             $image `
             powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass `
-              -File "C:\workspace\scripts\docker_build.ps1"
+              -File "C:/workspace/scripts/docker_build.ps1"
 
           if ($LASTEXITCODE -ne 0) {
             throw "Container build failed (exit $LASTEXITCODE)"
