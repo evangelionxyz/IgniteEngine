@@ -1,37 +1,20 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "script_glue.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/scene/component.hpp"
+#include "ignite/scene/component_group.hpp"
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/scripting/script_engine.hpp"
 
 #include <glm/gtx/quaternion.hpp>
 #include <algorithm>
 #include <cctype>
+#include <functional>
 #include <string>
 #include <string_view>
+#include <typeinfo>
+#include <unordered_map>
 
 namespace ignite
 {
@@ -74,38 +57,21 @@ namespace ignite
             return {};
         }
 
-        static ScriptVec3 ToScriptVec3(const glm::vec3 &value)
+        static std::unordered_map<std::string, std::function<bool(Entity)>> s_EntityHasComponentFuncs;
+        static std::unordered_map<std::string, std::function<void(Entity)>> s_EntityAddComponentFuncs;
+
+        static std::string TrimString(std::string value)
         {
-            return { value.x, value.y, value.z };
+            value.erase(value.begin(), std::find_if(value.begin(), value.end(), [](unsigned char ch) { return !std::isspace(ch); }));
+            value.erase(std::find_if(value.rbegin(), value.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), value.end());
+            return value;
         }
 
-        static glm::vec3 ToGlmVec3(ScriptVec3 value)
-        {
-            return { value.x, value.y, value.z };
-        }
-
-        static ScriptQuat ToScriptQuat(const glm::quat &value)
-        {
-            return { value.x, value.y, value.z, value.w };
-        }
-
-        static glm::quat ToGlmQuat(ScriptQuat value)
-        {
-            return { value.w, value.x, value.y, value.z };
-        }
-
-        enum class ManagedComponentType
-        {
-            Unknown,
-            Transform,
-            Script,
-        };
-
-        static ManagedComponentType ResolveManagedComponentType(const char *componentTypeName)
+        static std::string NormalizeManagedTypeName(const char *componentTypeName)
         {
             if (!componentTypeName)
             {
-                return ManagedComponentType::Unknown;
+                return {};
             }
 
             std::string typeName(componentTypeName);
@@ -115,8 +81,7 @@ namespace ignite
                 typeName = typeName.substr(0, comma);
             }
 
-            typeName.erase(typeName.begin(), std::find_if(typeName.begin(), typeName.end(), [](unsigned char ch) { return !std::isspace(ch); }));
-            typeName.erase(std::find_if(typeName.rbegin(), typeName.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), typeName.end());
+            typeName = TrimString(typeName);
 
             const size_t plus = typeName.find_last_of('+');
             if (plus != std::string::npos)
@@ -135,17 +100,68 @@ namespace ignite
                 typeName = typeName.substr(0, genericMarker);
             }
 
-            if (typeName == "Transform" || typeName == "TransformComponent")
+            return typeName;
+        }
+
+        static std::string GetNativeComponentName(std::string typeName)
+        {
+            const size_t separator = typeName.find_last_of(':');
+            if (separator != std::string::npos)
             {
-                return ManagedComponentType::Transform;
+                typeName = typeName.substr(separator + 1);
             }
 
-            if (typeName == "ScriptComponent" || typeName == "Script")
+            typeName = TrimString(typeName);
+
+            constexpr std::string_view classPrefix = "class ";
+            if (typeName.rfind(classPrefix, 0) == 0)
             {
-                return ManagedComponentType::Script;
+                typeName = typeName.substr(classPrefix.size());
             }
 
-            return ManagedComponentType::Unknown;
+            constexpr std::string_view structPrefix = "struct ";
+            if (typeName.rfind(structPrefix, 0) == 0)
+            {
+                typeName = typeName.substr(structPrefix.size());
+            }
+
+            return TrimString(typeName);
+        }
+
+        static std::string GetManagedComponentName(std::string nativeComponentName)
+        {
+            constexpr std::string_view suffix = "Component";
+            if (nativeComponentName.size() > suffix.size() && nativeComponentName.ends_with(suffix))
+            {
+                nativeComponentName = nativeComponentName.substr(0, nativeComponentName.size() - suffix.size());
+            }
+
+            return nativeComponentName;
+        }
+
+        template<typename... Component>
+        static void RegisterComponent()
+        {
+            (([]()
+            {
+                std::string nativeTypeName = GetNativeComponentName(typeid(Component).name());
+                std::string managedTypeName = GetManagedComponentName(nativeTypeName);
+
+                const auto hasComponentFunc = [](Entity entity) { return entity.HasComponent<Component>(); };
+                const auto addComponentFunc = [](Entity entity) { entity.AddOrReplaceComponent<Component>(); };
+
+                s_EntityHasComponentFuncs[managedTypeName] = hasComponentFunc;
+                s_EntityAddComponentFuncs[managedTypeName] = addComponentFunc;
+
+                s_EntityHasComponentFuncs[nativeTypeName] = hasComponentFunc;
+                s_EntityAddComponentFuncs[nativeTypeName] = addComponentFunc;
+            }()), ...);
+        }
+
+        template<typename... Component>
+        static void RegisterComponent(ComponentGroup<Component...>)
+        {
+            RegisterComponent<Component...>();
         }
 
         static void Debug_Log(const char *message)
@@ -161,15 +177,19 @@ namespace ignite
                 return false;
             }
 
-            switch (ResolveManagedComponentType(componentTypeName))
+            const std::string typeName = NormalizeManagedTypeName(componentTypeName);
+            if (typeName.empty())
             {
-            case ManagedComponentType::Transform:
-                return entity.HasComponent<TransformComponent>();
-            case ManagedComponentType::Script:
-                return entity.HasComponent<ScriptComponent>();
-            default:
                 return false;
             }
+
+            const auto hasComponentIt = s_EntityHasComponentFuncs.find(typeName);
+            if (hasComponentIt == s_EntityHasComponentFuncs.end())
+            {
+                return false;
+            }
+
+            return hasComponentIt->second(entity);
         }
 
         static void Entity_AddComponent(uint64_t entityID, const char *componentTypeName)
@@ -180,17 +200,19 @@ namespace ignite
                 return;
             }
 
-            switch (ResolveManagedComponentType(componentTypeName))
+            const std::string typeName = NormalizeManagedTypeName(componentTypeName);
+            if (typeName.empty())
             {
-            case ManagedComponentType::Transform:
-                entity.AddOrReplaceComponent<TransformComponent>();
-                break;
-            case ManagedComponentType::Script:
-                entity.AddOrReplaceComponent<ScriptComponent>();
-                break;
-            default:
-                break;
+                return;
             }
+
+            const auto addComponentIt = s_EntityAddComponentFuncs.find(typeName);
+            if (addComponentIt == s_EntityAddComponentFuncs.end())
+            {
+                return;
+            }
+
+            addComponentIt->second(entity);
         }
 
         static uint64_t Entity_FindEntityByName(const char *name)
@@ -205,7 +227,7 @@ namespace ignite
             return entity.IsValid() ? static_cast<uint64_t>(entity.GetUUID()) : 0;
         }
 
-        static uint64_t Entity_Instantiate(uint64_t entityID, ScriptVec3 value)
+		static uint64_t Entity_Instantiate(uint64_t entityID, glm::vec3 value)
         {
             Scene *scene = GetSceneContext();
             if (!scene)
@@ -225,7 +247,7 @@ namespace ignite
                 return 0;
             }
 
-            copyEntity.GetComponent<TransformComponent>().translation = ToGlmVec3(value);
+            copyEntity.GetComponent<TransformComponent>().translation = value;
             return static_cast<uint64_t>(copyEntity.GetUUID());
         }
 
@@ -274,7 +296,7 @@ namespace ignite
             *result = entity.GetComponent<TransformComponent>().visible;
         }
 
-        static void TransformComponent_GetForward(uint64_t entityID, ScriptVec3 *result)
+        static void TransformComponent_GetForward(uint64_t entityID, glm::vec3 *result)
         {
             if (!result)
             {
@@ -289,10 +311,10 @@ namespace ignite
             }
 
             const auto &transform = entity.GetComponent<TransformComponent>();
-            *result = ToScriptVec3(transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f));
+            *result = glm::vec3(transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f));
         }
 
-        static void TransformComponent_SetForward(uint64_t entityID, ScriptVec3 value)
+        static void TransformComponent_SetForward(uint64_t entityID, glm::vec3 value)
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
@@ -300,7 +322,7 @@ namespace ignite
                 return;
             }
 
-            glm::vec3 forward = glm::normalize(ToGlmVec3(value));
+            glm::vec3 forward = glm::normalize(value);
             if (glm::length2(forward) <= 0.0f)
             {
                 return;
@@ -313,7 +335,7 @@ namespace ignite
             transform.dirty = true;
         }
 
-        static void TransformComponent_GetRight(uint64_t entityID, ScriptVec3 *result)
+        static void TransformComponent_GetRight(uint64_t entityID, glm::vec3 *result)
         {
             if (!result)
             {
@@ -328,12 +350,12 @@ namespace ignite
             }
 
             const auto &transform = entity.GetComponent<TransformComponent>();
-            *result = ToScriptVec3(transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f));
+            *result = glm::vec3(transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f));
         }
 
-        static void TransformComponent_SetRight(uint64_t entityID, ScriptVec3 value)
+        static void TransformComponent_SetRight(uint64_t entityID, glm::vec3 value)
         {
-            glm::vec3 right = glm::normalize(ToGlmVec3(value));
+            glm::vec3 right = glm::normalize(value);
             if (glm::length2(right) <= 0.0f)
             {
                 return;
@@ -346,10 +368,10 @@ namespace ignite
                 return;
             }
 
-            TransformComponent_SetForward(entityID, ToScriptVec3(forward));
+            TransformComponent_SetForward(entityID, glm::vec3(forward));
         }
 
-        static void TransformComponent_GetUp(uint64_t entityID, ScriptVec3 *result)
+        static void TransformComponent_GetUp(uint64_t entityID, glm::vec3 *result)
         {
             if (!result)
             {
@@ -364,12 +386,12 @@ namespace ignite
             }
 
             const auto &transform = entity.GetComponent<TransformComponent>();
-            *result = ToScriptVec3(transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f));
+            *result = glm::vec3(transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f));
         }
 
-        static void TransformComponent_SetUp(uint64_t entityID, ScriptVec3 value)
+        static void TransformComponent_SetUp(uint64_t entityID, glm::vec3 value)
         {
-            glm::vec3 up = glm::normalize(ToGlmVec3(value));
+            glm::vec3 up = glm::normalize(value);
             if (glm::length2(up) <= 0.0f)
             {
                 return;
@@ -395,7 +417,7 @@ namespace ignite
             transform.dirty = true;
         }
 
-        static void TransformComponent_GetTranslation(uint64_t entityID, ScriptVec3 *result)
+        static void TransformComponent_GetTranslation(uint64_t entityID, glm::vec3 *result)
         {
             if (!result)
             {
@@ -409,10 +431,10 @@ namespace ignite
                 return;
             }
 
-            *result = ToScriptVec3(entity.GetComponent<TransformComponent>().translation);
+            *result = glm::vec3(entity.GetComponent<TransformComponent>().translation);
         }
 
-        static void TransformComponent_SetTranslation(uint64_t entityID, ScriptVec3 value)
+        static void TransformComponent_SetTranslation(uint64_t entityID, glm::vec3 value)
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
@@ -421,13 +443,12 @@ namespace ignite
             }
 
             auto &transform = entity.GetComponent<TransformComponent>();
-            const glm::vec3 translation = ToGlmVec3(value);
-            transform.localTranslation = translation;
-            transform.translation = translation;
+            transform.localTranslation = value;
+            transform.translation = value;
             transform.dirty = true;
         }
 
-        static void TransformComponent_GetRotation(uint64_t entityID, ScriptQuat *result)
+        static void TransformComponent_GetRotation(uint64_t entityID, glm::quat *result)
         {
             if (!result)
             {
@@ -441,10 +462,10 @@ namespace ignite
                 return;
             }
 
-            *result = ToScriptQuat(entity.GetComponent<TransformComponent>().rotation);
+            *result = glm::quat(entity.GetComponent<TransformComponent>().rotation);
         }
 
-        static void TransformComponent_SetRotation(uint64_t entityID, ScriptQuat value)
+        static void TransformComponent_SetRotation(uint64_t entityID, glm::quat value)
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
@@ -453,13 +474,44 @@ namespace ignite
             }
 
             auto &transform = entity.GetComponent<TransformComponent>();
-            const glm::quat rotation = ToGlmQuat(value);
+            transform.localRotation = value;
+            transform.rotation = value;
+            transform.dirty = true;
+        }
+
+        static void TransformComponent_GetEulerAngles(uint64_t entityID, glm::vec3 *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = {};
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
+            {
+                return;
+            }
+
+            *result = glm::vec3(glm::eulerAngles(entity.GetComponent<TransformComponent>().rotation));
+        }
+
+        static void TransformComponent_SetEulerAngles(uint64_t entityID, glm::vec3 value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
+            {
+                return;
+            }
+
+            auto &transform = entity.GetComponent<TransformComponent>();
+            const glm::quat rotation = glm::quat(value);
             transform.localRotation = rotation;
             transform.rotation = rotation;
             transform.dirty = true;
         }
 
-        static void TransformComponent_GetEulerAngles(uint64_t entityID, ScriptVec3 *result)
+        static void TransformComponent_GetScale(uint64_t entityID, glm::vec3 *result)
         {
             if (!result)
             {
@@ -473,10 +525,10 @@ namespace ignite
                 return;
             }
 
-            *result = ToScriptVec3(glm::eulerAngles(entity.GetComponent<TransformComponent>().rotation));
+            *result = glm::vec3(entity.GetComponent<TransformComponent>().scale);
         }
 
-        static void TransformComponent_SetEulerAngles(uint64_t entityID, ScriptVec3 value)
+        static void TransformComponent_SetScale(uint64_t entityID, glm::vec3 value)
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
@@ -485,39 +537,7 @@ namespace ignite
             }
 
             auto &transform = entity.GetComponent<TransformComponent>();
-            const glm::quat rotation = glm::quat(ToGlmVec3(value));
-            transform.localRotation = rotation;
-            transform.rotation = rotation;
-            transform.dirty = true;
-        }
-
-        static void TransformComponent_GetScale(uint64_t entityID, ScriptVec3 *result)
-        {
-            if (!result)
-            {
-                return;
-            }
-
-            *result = {};
-            Entity entity = GetEntityByID(entityID);
-            if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
-                return;
-            }
-
-            *result = ToScriptVec3(entity.GetComponent<TransformComponent>().scale);
-        }
-
-        static void TransformComponent_SetScale(uint64_t entityID, ScriptVec3 value)
-        {
-            Entity entity = GetEntityByID(entityID);
-            if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
-                return;
-            }
-
-            auto &transform = entity.GetComponent<TransformComponent>();
-            const glm::vec3 scale = ToGlmVec3(value);
+            const glm::vec3 scale = value;
             transform.localScale = scale;
             transform.scale = scale;
             transform.dirty = true;
@@ -557,6 +577,10 @@ namespace ignite
 
     void ScriptGlue::RegisterComponents()
     {
+        s_EntityHasComponentFuncs.clear();
+        s_EntityAddComponentFuncs.clear();
+        RegisterComponent(AllComponents {});
+
         LOG_INFO("[ScriptGlue] Component bridge initialized (HostFXR)");
     }
 
