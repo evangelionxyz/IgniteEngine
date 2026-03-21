@@ -34,9 +34,82 @@
 
 #include <cstdlib>
 #include <format>
+#include <fstream>
+#include <thread>
+#include <chrono>
 
 namespace ignite
 {
+    namespace
+    {
+        static bool WaitForAssemblyFileReady(const std::filesystem::path &filepath)
+        {
+            using namespace std::chrono_literals;
+
+            uintmax_t lastSize = 0;
+            bool hasLastSize = false;
+            std::filesystem::file_time_type lastWriteTime{};
+            bool hasLastWrite = false;
+            int stableCount = 0;
+
+            for (int i = 0; i < 80; i++)
+            {
+                std::error_code ec;
+                if (!std::filesystem::exists(filepath, ec) || ec)
+                {
+                    std::this_thread::sleep_for(25ms);
+                    continue;
+                }
+
+                const auto writeTime = std::filesystem::last_write_time(filepath, ec);
+                if (ec)
+                {
+                    std::this_thread::sleep_for(25ms);
+                    continue;
+                }
+
+                const auto fileSize = std::filesystem::file_size(filepath, ec);
+                if (ec)
+                {
+                    std::this_thread::sleep_for(25ms);
+                    continue;
+                }
+
+                std::ifstream stream(filepath, std::ios::binary);
+                if (!stream.good())
+                {
+                    std::this_thread::sleep_for(25ms);
+                    continue;
+                }
+
+                const bool sameWrite = hasLastWrite && writeTime == lastWriteTime;
+                const bool sameSize = hasLastSize && fileSize == lastSize;
+
+                if (sameWrite && sameSize)
+                {
+                    stableCount++;
+                    if (stableCount >= 3)
+                    {
+                        return true;
+                    }
+                }
+                else
+                {
+                    stableCount = 0;
+                }
+
+                hasLastWrite = true;
+                hasLastSize = true;
+                lastWriteTime = writeTime;
+                lastSize = fileSize;
+
+                std::this_thread::sleep_for(25ms);
+            }
+
+            return false;
+        }
+    }
+
     static std::unordered_map<std::string, ScriptFieldType> s_ScriptFieldTypeMap =
     {
         {"System.Boolean", ScriptFieldType::Bool},
@@ -55,17 +128,6 @@ namespace ignite
         {"IgniteScriptEngine.Vector3", ScriptFieldType::Vector3},
         {"IgniteScriptEngine.Vector4", ScriptFieldType::Vector4},
         {"IgniteScriptEngine.Entity",  ScriptFieldType::Entity},
-    };
-
-    namespace Utils
-    {
-        // TODO: With HostFXR, type mapping will be done in managed code
-        // For now, this is placeholder
-    }
-
-    struct ScriptData
-    {
-
     };
 
     struct ScriptEngineData
@@ -252,6 +314,11 @@ namespace ignite
         }
 
         scriptEngineData->appAssemblyFilepath = filepath;
+
+        if (!WaitForAssemblyFileReady(filepath))
+        {
+            LOG_WARN("[Script Engine] App assembly may still be updating: {}", filepath.generic_string());
+        }
         
         if (!scriptEngineData->scriptHost->LoadAssembly(filepath))
         {
