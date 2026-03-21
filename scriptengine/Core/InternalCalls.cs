@@ -24,7 +24,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace IgniteScriptEngine;
+namespace Ignite;
 
 public static class InternalCalls
 {

@@ -103,10 +103,10 @@ namespace ignite
         {"System.UInt32",  ScriptFieldType::UInt},
         {"System.UInt64",  ScriptFieldType::ULong},
         {"System.UInt",    ScriptFieldType::UByte},
-        {"IgniteScriptEngine.Vector2", ScriptFieldType::Vector2},
-        {"IgniteScriptEngine.Vector3", ScriptFieldType::Vector3},
-        {"IgniteScriptEngine.Vector4", ScriptFieldType::Vector4},
-        {"IgniteScriptEngine.Entity",  ScriptFieldType::Entity},
+        {"Ignite.Vector2", ScriptFieldType::Vector2},
+        {"Ignite.Vector3", ScriptFieldType::Vector3},
+        {"Ignite.Vector4", ScriptFieldType::Vector4},
+		{"Ignite.Entity",  ScriptFieldType::Entity},
     };
 
     struct ScriptEngineData
@@ -456,7 +456,7 @@ namespace ignite
         scriptEngineData->entityClasses.clear();
 
         const std::string appAssemblyName = scriptEngineData->appAssemblyFilepath.stem().string();
-        std::string derivedTypes = scriptEngineData->scriptHost->GetDerivedTypes(scriptEngineData->appAssemblyFilepath, "IgniteScriptEngine.Entity");
+        std::string derivedTypes = scriptEngineData->scriptHost->GetDerivedTypes(scriptEngineData->appAssemblyFilepath, "Ignite.Entity");
         
         if (derivedTypes.empty())
         {

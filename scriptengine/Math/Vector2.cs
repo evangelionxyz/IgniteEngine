@@ -21,7 +21,7 @@
 * SOFTWARE.
 */
 
-﻿namespace IgniteScriptEngine;
+﻿namespace Ignite;
 
 public struct Vector2
 {

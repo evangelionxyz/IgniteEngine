@@ -23,7 +23,7 @@
 
 ﻿using System;
 
-namespace IgniteScriptEngine;
+namespace Ignite;
 
 public struct Vector3
 {
