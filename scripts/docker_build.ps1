@@ -19,7 +19,7 @@ $ErrorActionPreference = "Stop"
 # NOTE: Set-StrictMode removed — it throws VariableIsUndefined for $workspace
 #       in certain PowerShell startup code paths inside Docker containers.
 
-# ── Banner ─────────────────────────────────────────────────────────────────
+# ## Banner #################################################################
 Write-Host ""
 Write-Host "======================================================" -ForegroundColor Cyan
 Write-Host "  Ignite Engine - Docker Container Build"              -ForegroundColor Cyan
@@ -28,13 +28,13 @@ Write-Host "  Platform      : $Platform"                           -ForegroundCo
 Write-Host "======================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# ── Working directory ──────────────────────────────────────────────────────
+# ## Working directory ######################################################
 if (-not (Test-Path $workspace)) {
     throw "Workspace not found at $workspace. Is the repo volume mounted with -v?"
 }
 Set-Location $workspace
 
-# ── Verify environment ─────────────────────────────────────────────────────
+# ## Verify environment #####################################################
 Write-Host "[ENV] VULKAN_SDK   = $env:VULKAN_SDK"
 Write-Host "[ENV] FBX_SDK_PATH = $env:FBX_SDK_PATH"
 
@@ -55,7 +55,7 @@ if ($env:FBX_SDK_PATH -and -not (Test-Path $env:FBX_SDK_PATH)) {
 
 Write-Host ""
 
-# ── Step 1: Premake ────────────────────────────────────────────────────────
+# ## Step 1: Premake ########################################################
 Write-Host "[1/2] Generating project files with Premake..." -ForegroundColor Yellow
 & premake5.exe --file=scripts/premake5.lua vs2022
 if ($LASTEXITCODE -ne 0) {
@@ -64,7 +64,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "[1/2] Premake OK." -ForegroundColor Green
 Write-Host ""
 
-# ── Step 2: MSBuild ────────────────────────────────────────────────────────
+# ## Step 2: MSBuild ########################################################
 Write-Host "[2/2] Building with MSBuild..." -ForegroundColor Yellow
 
 $sln = Get-ChildItem $workspace -Filter "*.slnx" | Select-Object -First 1

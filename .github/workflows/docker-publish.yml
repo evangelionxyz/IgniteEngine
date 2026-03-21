@@ -16,18 +16,18 @@ jobs:
     runs-on: windows-2022   # pinned – we need a Windows host for Windows containers
 
     steps:
-      # ── 1. Source ────────────────────────────────────────────────────────
+      # ## 1. Source ########################################################
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── 2. Auth ──────────────────────────────────────────────────────────
+      # ## 2. Auth ##########################################################
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # ── 3. Build ─────────────────────────────────────────────────────────
+      # ## 3. Build #########################################################
       # NOTE: BuildKit is NOT used here — it has known limitations with
       # Windows containers on GitHub-hosted runners.
       - name: Build Docker image
@@ -49,7 +49,7 @@ jobs:
             throw "docker build failed (exit $LASTEXITCODE)"
           }
 
-      # ── 4. Push ──────────────────────────────────────────────────────────
+      # ## 4. Push ##########################################################
       - name: Push to Docker Hub
         shell: pwsh
         run: |
@@ -58,7 +58,7 @@ jobs:
           docker push "${image}:latest"
           Write-Host "Pushed ${image}:${{ github.sha }} and ${image}:latest"
 
-      # ── 5. Summary ───────────────────────────────────────────────────────
+      # ## 5. Summary #######################################################
       - name: Write job summary
         shell: pwsh
         run: |

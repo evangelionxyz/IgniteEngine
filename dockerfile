@@ -8,13 +8,13 @@ FROM mcr.microsoft.com/windows/servercore:ltsc2022
 
 SHELL ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command"]
 
-# ─── Versions (change here to upgrade) ──────────────────────
+#### Versions (change here to upgrade) #######
 ARG VULKAN_VERSION=1.4.309.0
 ARG FBX_SDK_VERSION=fbx202037
 ARG PREMAKE_VERSION=5.0.0-beta8
 ARG PYTHON_VERSION=3.12.9
 
-# ─── Python ─────────────────────────────────────────────────
+#### Python #################################
 # Needed by setup scripts and CI steps
 RUN $url = \"https://www.python.org/ftp/python/${env:PYTHON_VERSION}/python-${env:PYTHON_VERSION}-amd64.exe\"; \
     Write-Host \"[Python] Downloading $url\"; \
@@ -27,7 +27,7 @@ RUN $url = \"https://www.python.org/ftp/python/${env:PYTHON_VERSION}/python-${en
     Remove-Item C:\python-installer.exe -Force; \
     Write-Host \"[Python] Done.\"
 
-# ─── MSVC Build Tools (C++ workload + MSBuild) ──────────────
+#### MSVC Build Tools (C++ workload + MSBuild) ##
 # This layer is the heaviest (~5 GB); pin it first so it caches well.
 RUN Write-Host \"[MSVC] Downloading Visual Studio Build Tools...\"; \
     Invoke-WebRequest \
@@ -49,7 +49,7 @@ RUN Write-Host \"[MSVC] Downloading Visual Studio Build Tools...\"; \
     Remove-Item C:\vs_buildtools.exe -Force; \
     Write-Host \"[MSVC] Done.\"
 
-# ─── Vulkan SDK ──────────────────────────────────────────────
+#### Vulkan SDK #################################
 RUN $url = \"https://sdk.lunarg.com/sdk/download/${env:VULKAN_VERSION}/windows/VulkanSDK-${env:VULKAN_VERSION}-Installer.exe\"; \
     Write-Host \"[Vulkan] Downloading $url\"; \
     Invoke-WebRequest -Uri $url -OutFile C:\vulkan-installer.exe -UseBasicParsing; \
@@ -61,7 +61,7 @@ RUN $url = \"https://sdk.lunarg.com/sdk/download/${env:VULKAN_VERSION}/windows/V
     Remove-Item C:\vulkan-installer.exe -Force; \
     Write-Host \"[Vulkan] Done.\"
 
-# ─── FBX SDK 2020.3.7 ────────────────────────────────────────
+#### FBX SDK 2020.3.7 ###############################
 RUN $url = \"https://damassets.autodesk.net/content/dam/autodesk/www/files/${env:FBX_SDK_VERSION}_fbxsdk_vs2022_win.exe\"; \
     Write-Host \"[FBX] Downloading $url\"; \
     Invoke-WebRequest -Uri $url -OutFile C:\fbx-installer.exe -UseBasicParsing; \
@@ -80,7 +80,7 @@ RUN $url = \"https://damassets.autodesk.net/content/dam/autodesk/www/files/${env
     Remove-Item C:\fbx-installer.exe -Force; \
     Write-Host \"[FBX] Installed at $($header.DirectoryName -replace '\\\\include.*','')\"
 
-# ─── Premake 5 ───────────────────────────────────────────────
+#### Premake 5 #################################
 RUN $url = \"https://github.com/premake/premake-core/releases/download/v${env:PREMAKE_VERSION}/premake-${env:PREMAKE_VERSION}-windows.zip\"; \
     Write-Host \"[Premake] Downloading $url\"; \
     Invoke-WebRequest -Uri $url -OutFile C:\premake.zip -UseBasicParsing; \
@@ -90,11 +90,11 @@ RUN $url = \"https://github.com/premake/premake-core/releases/download/v${env:PR
     if (-not (Test-Path 'C:\tools\premake5\premake5.exe')) { throw '[Premake] premake5.exe not found after extraction' }; \
     Write-Host \"[Premake] Done.\"
 
-# ─── Environment Variables ────────────────────────────────────
+#### Environment Variables ###############################
 ENV VULKAN_SDK="C:\VulkanSDK\1.4.309.0"
 ENV FBX_SDK_PATH="C:\FBX_SDK\2020.3.7"
 
-# Add MSBuild, Premake, and Vulkan glslc to PATH
+#### Add MSBuild, Premake, and Vulkan glslc to PATH
 RUN $current = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine'); \
     $additions = @( \
         'C:\BuildTools\MSBuild\Current\Bin', \
@@ -106,7 +106,7 @@ RUN $current = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine'); 
     [System.Environment]::SetEnvironmentVariable('PATH', $newPath, 'Machine'); \
     Write-Host \"[PATH] Updated.\"
 
-# ─── Final verification ───────────────────────────────────────
+#### Final verification #################################
 RUN Write-Host \"--- Build container verification ---\"; \
     $msbuild = Get-Command msbuild.exe -ErrorAction SilentlyContinue; \
     if ($msbuild) { Write-Host \"MSBuild: $($msbuild.Source)\" } else { Write-Warning \"MSBuild not found in PATH\" }; \
