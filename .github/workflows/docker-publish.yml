@@ -1,0 +1,75 @@
+name: Build & Push Docker Image
+
+# Triggers only when the Dockerfile itself changes.
+# This is the slow workflow (~30-60 min); it runs rarely.
+on:
+  push:
+    branches: [ "master", "dev" ]
+    paths:
+      - "dockerfile"
+      - ".dockerignore"
+  workflow_dispatch:    # allow manual trigger from GitHub UI
+
+jobs:
+  build-and-push:
+    name: Build Windows container & push to Docker Hub
+    runs-on: windows-2022   # pinned – we need a Windows host for Windows containers
+
+    steps:
+      # ── 1. Source ────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Auth ──────────────────────────────────────────────────────────
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # ── 3. Build ─────────────────────────────────────────────────────────
+      # NOTE: BuildKit is NOT used here — it has known limitations with
+      # Windows containers on GitHub-hosted runners.
+      - name: Build Docker image
+        shell: pwsh
+        run: |
+          $image   = "${{ secrets.DOCKERHUB_USERNAME }}/ignite-engine"
+          $tagSha  = "${image}:${{ github.sha }}"
+          $tagLatest = "${image}:latest"
+
+          Write-Host "Building $tagSha ..."
+          docker build `
+            --no-cache `
+            --tag $tagSha `
+            --tag $tagLatest `
+            --file dockerfile `
+            .
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "docker build failed (exit $LASTEXITCODE)"
+          }
+
+      # ── 4. Push ──────────────────────────────────────────────────────────
+      - name: Push to Docker Hub
+        shell: pwsh
+        run: |
+          $image = "${{ secrets.DOCKERHUB_USERNAME }}/ignite-engine"
+          docker push "${image}:${{ github.sha }}"
+          docker push "${image}:latest"
+          Write-Host "Pushed ${image}:${{ github.sha }} and ${image}:latest"
+
+      # ── 5. Summary ───────────────────────────────────────────────────────
+      - name: Write job summary
+        shell: pwsh
+        run: |
+          $image = "${{ secrets.DOCKERHUB_USERNAME }}/ignite-engine"
+          @"
+          ## Docker image published
+
+          | Tag | Value |
+          |-----|-------|
+          | ``:latest`` | ``${image}:latest`` |
+          | SHA pin     | ``${image}:${{ github.sha }}`` |
+
+          > Use the SHA tag in ``ci.yml`` when you need a pinned, immutable reference.
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append

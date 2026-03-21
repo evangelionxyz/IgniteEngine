@@ -7,111 +7,69 @@ on:
     branches: [ "master" ]
 
 jobs:
-  windows:
-    runs-on: windows-latest
-    
+  build:
+    name: Build (Windows container)
+    # ── IMPORTANT ──────────────────────────────────────────────────────────
+    # GitHub Actions does NOT support the `container:` key on Windows runners.
+    # We pull the pre-built image from Docker Hub and run all build steps
+    # inside the container using `docker run`, which is the only supported
+    # approach for Windows containers in GitHub Actions.
+    # ──────────────────────────────────────────────────────────────────────
+    runs-on: windows-2022   # pinned – avoids surprise breakage from windows-latest updates
+
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
+      # ── 1. Source ────────────────────────────────────────────────────────
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.x'
+      # ── 2. Auth ──────────────────────────────────────────────────────────
+      # Pulls from Docker Hub to avoid rate limiting (even for public images)
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Install Vulkan SDK
-      id: vulkan
-      uses: humbletim/install-vulkan-sdk@v1.2
-      with:
-        version: 1.4.309.0
-        cache: true
+      # ── 3. Pull build container ──────────────────────────────────────────
+      - name: Pull build image
+        shell: pwsh
+        run: |
+          $image = "${{ secrets.DOCKERHUB_USERNAME }}/ignite-engine:latest"
+          Write-Host "Pulling $image ..."
+          docker pull $image
+          if ($LASTEXITCODE -ne 0) { throw "docker pull failed" }
+          Write-Host "Pulled $image"
 
-    - name: Install FBX SDK
-      shell: pwsh
-      run: |
-        $ErrorActionPreference = "Stop"
-        $downloadsDir = "scripts/downloads"
-        New-Item -ItemType Directory -Path $downloadsDir -Force | Out-Null
+      # ── 4. Build inside the container ────────────────────────────────────
+      # The workspace is volume-mounted into C:\workspace (the WORKDIR set
+      # in the Dockerfile). The script has full access to all baked-in SDKs.
+      - name: Run build inside container
+        shell: pwsh
+        run: |
+          $image     = "${{ secrets.DOCKERHUB_USERNAME }}/ignite-engine:latest"
+          $workspace = ${{ github.workspace }}
 
-        $fbxInstaller = Join-Path $downloadsDir "fbx202037_fbxsdk_vs2022_win.exe"
-        $fbxUrl = "https://damassets.autodesk.net/content/dam/autodesk/www/files/fbx202037_fbxsdk_vs2022_win.exe"
-        if (-not (Test-Path $fbxInstaller)) {
-          Write-Host "Downloading FBX SDK installer..."
-          Invoke-WebRequest -Uri $fbxUrl -OutFile $fbxInstaller
-        }
+          Write-Host "Running build in $image ..."
+          Write-Host "Workspace: $workspace"
 
-        $installRoot = "C:\Program Files\Autodesk\FBX\FBX SDK"
-        $silentArgs = @(
-          @('/S', "/D=$installRoot"),
-          @('/VERYSILENT', '/NORESTART', "/DIR=$installRoot")
-        )
+          docker run --rm `
+            --volume "${workspace}:C:\workspace" `
+            $image `
+            powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+              -File "C:\workspace\scripts\docker_build.ps1"
 
-        $detected = $null
-        foreach ($args in $silentArgs) {
-          Write-Host "Trying FBX installer args: $($args -join ' ')"
-          try {
-            Start-Process -FilePath $fbxInstaller -ArgumentList $args -Wait -NoNewWindow
-          } catch {
-            Write-Host "Installer attempt failed: $_"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Container build failed (exit $LASTEXITCODE)"
           }
 
-          $detected = Get-ChildItem "C:\Program Files\Autodesk\FBX\FBX SDK" -Directory -ErrorAction SilentlyContinue |
-            Where-Object {
-              Test-Path (Join-Path $_.FullName "include\fbxsdk.h") -and
-              Test-Path (Join-Path $_.FullName "lib\x64")
-            } |
-            Select-Object -First 1
-
-          if ($detected) { break }
-        }
-
-        if (-not $detected) {
-          throw "FBX SDK installation failed or SDK path not detected"
-        }
-
-        "FBX_SDK_PATH=$($detected.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        Write-Host "FBX_SDK_PATH set to $($detected.FullName)"
-
-    - name: Download Premake5
-      shell: python
-      run: |
-        import urllib.request
-        import zipfile
-        import os
-        
-        # Create downloads directory
-        os.makedirs('scripts/downloads', exist_ok=True)
-        
-        # Download Premake5
-        version = "5.0.0-beta8"
-        url = f"https://github.com/premake/premake-core/releases/download/v{version}/premake-{version}-windows.zip"
-        zip_path = 'scripts/downloads/premake.zip'
-        
-        print(f"Downloading {url}...")
-        urllib.request.urlretrieve(url, zip_path)
-        
-        print("Extracting...")
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall('scripts/downloads')
-            
-        print("Done.")
-
-    - name: Generate Project Files
-      run: |
-        echo "VULKAN_SDK=$env:VULKAN_SDK"
-        echo "FBX_SDK_PATH=$env:FBX_SDK_PATH"
-        ./scripts/downloads/premake5.exe --file=scripts/premake5.lua vs2022
-
-    - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v2
-
-    - name: Restore NuGet packages
-      shell: pwsh
-      run: msbuild $env:IGN.sln /t:Restore /p:Configuration=Release /p:Platform="x64"
-
-    - name: Build Solution
-      run: |
-        echo "Using VULKAN_SDK=$env:VULKAN_SDK"
-        msbuild IGN.sln /p:Configuration=Release /p:Platform="x64"
-
+      # ── 5. Upload build artifacts ─────────────────────────────────────────
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ignite-engine-${{ github.sha }}
+          path: bin/
+          if-no-files-found: warn
+          retention-days: 7

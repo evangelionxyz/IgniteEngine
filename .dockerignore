@@ -1,0 +1,19 @@
+# ─── Files that are downloaded during docker build ───────────
+# (never part of the image context)
+scripts/downloads/
+
+# ─── Build artifacts & IDE state ─────────────────────────────
+.git
+.vs
+.vscode
+bin/
+obj/
+*.user
+
+# ─── Solution and project files (mounted at runtime) ─────────
+*.sln
+*.slnx
+
+# ─── OS / misc ────────────────────────────────────────────────
+Thumbs.db
+imgui.ini
