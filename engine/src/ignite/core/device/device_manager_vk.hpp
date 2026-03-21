@@ -168,7 +168,7 @@ namespace ignite
         // Swapchain data
         std::vector<vk::Image> m_SwapchainImages;
         std::vector<Ref<RenderTarget>> m_SwapChainRenderTargets;
-        uint32_t m_SwapChainIndex = static_cast<u32>(-1);
+        uint32_t m_SwapChainIndex = static_cast<uint32_t>(-1);
 
         nvrhi::vulkan::DeviceHandle m_NvrhiDevice;
         nvrhi::DeviceHandle m_ValidationLayer;

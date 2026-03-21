@@ -229,6 +229,7 @@ namespace ignite
             for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
             {
                 Layer *layer = *it;
+                layer->OnRender(framebuffer);
 
                 // ImGui rendering
                 if (m_CreateInfo.useGui)
@@ -237,8 +238,6 @@ namespace ignite
                     layer->OnGuiRender();
                     m_ImGuiLayer->EndFrame(framebuffer);
                 }
-
-                layer->OnRender(framebuffer);
             }
 
 			// Collect and execute worker command lists if any
