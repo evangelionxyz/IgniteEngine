@@ -67,7 +67,7 @@ namespace ignite {
             case ignite::AssetType::TextureCube: return "TextureCube";
             case ignite::AssetType::Scene: return "Scene";
             case ignite::AssetType::SkeletalAnimation: return "SkeletalAnimation";
-            case ignite::AssetType::SpriteSheet: return "SkeletalAnimation";
+            case ignite::AssetType::SpriteSheet: return "SpriteSheet";
             case ignite::AssetType::Anim2D: return "Anim2D";
 			case ignite::AssetType::SkeletalMesh: return "SkeletalMesh";
             case ignite::AssetType::StaticMesh: return "StaticMesh";
