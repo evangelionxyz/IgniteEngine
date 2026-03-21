@@ -27,7 +27,7 @@ RUN $url = \"https://www.python.org/ftp/python/${env:PYTHON_VERSION}/python-${en
     Remove-Item C:\python-installer.exe -Force; \
     Write-Host \"[Python] Done.\"
 
-#### MSVC Build Tools (C++ workload + MSBuild) ##
+#### MSVC Build Tools (C++ workload + C# Managed) ##
 # This layer is the heaviest (~5 GB); pin it first so it caches well.
 RUN Write-Host \"[MSVC] Downloading Visual Studio Build Tools...\"; \
     Invoke-WebRequest \
@@ -52,8 +52,7 @@ RUN Write-Host \"[MSVC] Downloading Visual Studio Build Tools...\"; \
 
 #### .NET SDK 8 #################################
 # Required for SDK-style C# projects (.csproj with Microsoft.NET.Sdk).
-# ManagedDesktopBuildTools above adds targeting packs, but the full SDK
-# (dotnet.exe + MSBuild resolvers) must be installed separately.
+# Installs dotnet CLI, SDK resolvers, and sets MSBuildSDKsPath dynamically.
 RUN Write-Host \"[.NET] Installing .NET SDK 8.0...\"; \
     Invoke-WebRequest \
       -Uri \"https://dot.net/v1/dotnet-install.ps1\" \
@@ -62,10 +61,15 @@ RUN Write-Host \"[.NET] Installing .NET SDK 8.0...\"; \
     & C:\dotnet-install.ps1 -Channel 8.0 -InstallDir C:\dotnet -NoPath; \
     Remove-Item C:\dotnet-install.ps1 -Force; \
     if (-not (Test-Path 'C:\dotnet\dotnet.exe')) { throw '[.NET] dotnet.exe not found after install' }; \
+    $sdkVer = (Get-ChildItem 'C:\dotnet\sdk' -Directory | Sort-Object Name -Descending | Select-Object -First 1).Name; \
+    Write-Host \"[.NET] Detected SDK version: $sdkVer\"; \
+    $sdksPath = \"C:\dotnet\sdk\$sdkVer\Sdks\"; \
+    if (-not (Test-Path $sdksPath)) { throw \"[.NET] Sdks directory not found at $sdksPath\" }; \
+    [System.Environment]::SetEnvironmentVariable('MSBuildSDKsPath', $sdksPath, 'Machine'); \
+    Write-Host \"[.NET] MSBuildSDKsPath = $sdksPath\"; \
     Write-Host \"[.NET] Done.\"
 
 ENV DOTNET_ROOT="C:\dotnet"
-
 
 #### Vulkan SDK #################################
 RUN $url = \"https://sdk.lunarg.com/sdk/download/${env:VULKAN_VERSION}/windows/VulkanSDK-${env:VULKAN_VERSION}-Installer.exe\"; \
@@ -80,6 +84,9 @@ RUN $url = \"https://sdk.lunarg.com/sdk/download/${env:VULKAN_VERSION}/windows/V
     Write-Host \"[Vulkan] Done.\"
 
 #### FBX SDK 2020.3.7 ###############################
+# The NSIS installer with /D= puts files directly into $installDir.
+# After install, we verify the expected structure and dynamically
+# detect the actual SDK root (where include/fbxsdk.h lives).
 RUN $url = \"https://damassets.autodesk.net/content/dam/autodesk/www/files/${env:FBX_SDK_VERSION}_fbxsdk_vs2022_win.exe\"; \
     Write-Host \"[FBX] Downloading $url\"; \
     Invoke-WebRequest -Uri $url -OutFile C:\fbx-installer.exe -UseBasicParsing; \
@@ -95,8 +102,12 @@ RUN $url = \"https://damassets.autodesk.net/content/dam/autodesk/www/files/${env
     }; \
     $header = Get-ChildItem $installDir -Recurse -Filter fbxsdk.h -ErrorAction SilentlyContinue | Select-Object -First 1; \
     if (-not $header) { throw \"FBX SDK install failed: fbxsdk.h not found under $installDir\" }; \
+    $fbxRoot = $header.DirectoryName -replace '[\\/]include.*',''; \
+    Write-Host \"[FBX] SDK root detected at: $fbxRoot\"; \
+    Write-Host \"[FBX] Contents:\" ; Get-ChildItem $fbxRoot | ForEach-Object { Write-Host \"  $_\" }; \
+    [System.Environment]::SetEnvironmentVariable('FBX_SDK_PATH', $fbxRoot, 'Machine'); \
     Remove-Item C:\fbx-installer.exe -Force; \
-    Write-Host \"[FBX] Installed at $($header.DirectoryName -replace '\\\\include.*','')\"
+    Write-Host \"[FBX] Done.\"
 
 #### Premake 5 #################################
 RUN $url = \"https://github.com/premake/premake-core/releases/download/v${env:PREMAKE_VERSION}/premake-${env:PREMAKE_VERSION}-windows.zip\"; \
@@ -108,10 +119,11 @@ RUN $url = \"https://github.com/premake/premake-core/releases/download/v${env:PR
     if (-not (Test-Path 'C:\tools\premake5\premake5.exe')) { throw '[Premake] premake5.exe not found after extraction' }; \
     Write-Host \"[Premake] Done.\"
 
+#### Environment Variables ######################
 ENV VULKAN_SDK="C:\VulkanSDK\1.4.309.0"
-# FBX SDK installer places files directly at the /D= target (no version subdir added by installer)
+# FBX_SDK_PATH is set dynamically by the FBX installer RUN step above.
+# This ENV is a fallback; the Machine-level env from the RUN takes precedence.
 ENV FBX_SDK_PATH="C:\FBX_SDK"
-
 
 #### Add MSBuild, Premake, Vulkan glslc, and .NET SDK to PATH
 RUN $current = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine'); \
@@ -138,8 +150,15 @@ RUN Write-Host \"--- Build container verification ---\"; \
     if ($msbuild) { Write-Host \"MSBuild: $($msbuild.Source)\" } else { Write-Warning \"MSBuild not found in PATH\" }; \
     $premake = Get-Command premake5.exe -ErrorAction SilentlyContinue; \
     if ($premake) { Write-Host \"Premake: $($premake.Source)\" } else { Write-Warning \"premake5.exe not found in PATH\" }; \
-    Write-Host \"VULKAN_SDK = $env:VULKAN_SDK\"; \
-    Write-Host \"FBX_SDK_PATH = $env:FBX_SDK_PATH\"; \
+    $dotnet = Get-Command dotnet.exe -ErrorAction SilentlyContinue; \
+    if ($dotnet) { Write-Host \"dotnet: $($dotnet.Source)\" } else { Write-Warning \"dotnet not found in PATH\" }; \
+    Write-Host \"VULKAN_SDK      = $env:VULKAN_SDK\"; \
+    Write-Host \"FBX_SDK_PATH    = $env:FBX_SDK_PATH\"; \
+    Write-Host \"DOTNET_ROOT     = $env:DOTNET_ROOT\"; \
+    Write-Host \"MSBuildSDKsPath = $([System.Environment]::GetEnvironmentVariable('MSBuildSDKsPath', 'Machine'))\"; \
+    if (Test-Path $env:FBX_SDK_PATH) { \
+      Write-Host \"FBX_SDK contents:\"; Get-ChildItem $env:FBX_SDK_PATH | ForEach-Object { Write-Host \"  $_\" } \
+    } else { Write-Warning \"FBX_SDK_PATH directory missing!\" }; \
     Write-Host \"--- Done ---\"
 
 WORKDIR C:\\workspace

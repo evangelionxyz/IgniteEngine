@@ -34,9 +34,22 @@ if (-not (Test-Path $workspace)) {
 }
 Set-Location $workspace
 
+# ## Resolve Machine-level env vars that Docker ENV can't propagate ########
+# These were set dynamically during docker build RUN steps.
+$machineEnv = @('MSBuildSDKsPath', 'FBX_SDK_PATH')
+foreach ($varName in $machineEnv) {
+    $machineVal = [System.Environment]::GetEnvironmentVariable($varName, 'Machine')
+    if ($machineVal -and (-not (Get-Item "Env:\$varName" -ErrorAction SilentlyContinue) -or $machineVal -ne (Get-Item "Env:\$varName").Value)) {
+        [System.Environment]::SetEnvironmentVariable($varName, $machineVal, 'Process')
+        Write-Host "[ENV] Resolved $varName from Machine env: $machineVal"
+    }
+}
+
 # ## Verify environment #####################################################
-Write-Host "[ENV] VULKAN_SDK   = $env:VULKAN_SDK"
-Write-Host "[ENV] FBX_SDK_PATH = $env:FBX_SDK_PATH"
+Write-Host "[ENV] VULKAN_SDK      = $env:VULKAN_SDK"
+Write-Host "[ENV] FBX_SDK_PATH    = $env:FBX_SDK_PATH"
+Write-Host "[ENV] MSBuildSDKsPath = $env:MSBuildSDKsPath"
+Write-Host "[ENV] DOTNET_ROOT     = $env:DOTNET_ROOT"
 
 foreach ($bin in @("premake5.exe", "msbuild.exe")) {
     $found = Get-Command $bin -ErrorAction SilentlyContinue
@@ -51,6 +64,9 @@ if ($env:VULKAN_SDK -and -not (Test-Path $env:VULKAN_SDK)) {
 }
 if ($env:FBX_SDK_PATH -and -not (Test-Path $env:FBX_SDK_PATH)) {
     Write-Warning "FBX_SDK_PATH not found: $env:FBX_SDK_PATH"
+}
+if (-not $env:MSBuildSDKsPath -or -not (Test-Path $env:MSBuildSDKsPath)) {
+    Write-Warning "MSBuildSDKsPath not set or not found: $env:MSBuildSDKsPath"
 }
 
 Write-Host ""
