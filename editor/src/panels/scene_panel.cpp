@@ -60,6 +60,9 @@ namespace ignite
 
 		m_Camera.UpdateSphericalPosition();
 		m_Camera.UpdateMatrices(width, height);
+        
+        m_Camera2D = m_Camera;
+        m_Camera3D = m_Camera;
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
@@ -1824,6 +1827,29 @@ namespace ignite
                     {
                         // Set projection type
                         m_Camera.projectionType = static_cast<ProjectionType>(i);
+
+                        if (m_Camera.projectionType == ProjectionType::Orthographic)
+                        {
+                            if (m_Camera2D)
+                            {
+                                // Save
+                                m_Camera3D = m_Camera;
+
+                                m_Camera = *m_Camera2D;
+                                m_Camera.projectionType = ProjectionType::Orthographic;
+                            }
+                        }
+                        else if (m_Camera.projectionType == ProjectionType::Perspective)
+                        {
+                            if (m_Camera3D)
+                            {
+                                // Save camera
+                                m_Camera2D = m_Camera;
+
+                                m_Camera = *m_Camera3D;
+                                m_Camera.projectionType = ProjectionType::Perspective;
+                            }
+                        }
 
                         // Recalculate matrices
                         const glm::vec2 &size = m_ViewportData.rect.GetSize();

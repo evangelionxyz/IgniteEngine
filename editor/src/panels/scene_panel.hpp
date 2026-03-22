@@ -81,6 +81,9 @@ namespace ignite
 
     private:
         EditorCamera m_Camera;
+        std::optional<EditorCamera> m_Camera2D;
+        std::optional<EditorCamera> m_Camera3D;
+
         Ref<Scene> m_Scene;
         Gizmo m_Gizmo;
         std::unordered_map<UUID, Entity> m_SelectedEntities;
