@@ -61,6 +61,7 @@ namespace ignite
         { "Rigid Body 2D", CompType_Rigidbody2D },
         { "Box Collider 2D", CompType_BoxCollider2D },
         { "Sprite 2D", CompType_Sprite2D },
+        { "Circle 2D", CompType_Circle2D },
         { "Static Mesh", CompType_StaticMesh },
         { "Skeletal Mesh", CompType_SkeletalMesh },
         { "Rigid Body", CompType_Rigidbody },
@@ -165,6 +166,7 @@ namespace ignite
             case CompType_Rigidbody2D: return "CompType_Rigidbody2D";
             case CompType_BoxCollider2D: return "CompType_BoxCollider2D";
             case CompType_Sprite2D: return "CompType_Sprite2D";
+            case CompType_Circle2D: return "CompType_Circle2D";
             case CompType_SkeletalMesh: return "CompType_SkeletalMesh";
             case CompType_StaticMesh: return "CompType_StaticMesh";
             case CompType_Rigidbody: return "CompType_Rigidbody";
@@ -341,6 +343,16 @@ namespace ignite
 
         COMPONENT_CLASS_TYPE(CompType_Sprite2D)
     };
+
+	class Circle2DComponent : public IComponent
+	{
+	public:
+		glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        float thickness = 1.0f;
+        float fade = 0.005f;
+
+		COMPONENT_CLASS_TYPE(CompType_Circle2D)
+	};
 
     class StaticMeshComponent : public IComponent
     {

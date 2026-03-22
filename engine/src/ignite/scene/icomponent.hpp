@@ -35,6 +35,7 @@ namespace ignite
         CompType_Camera,
         CompType_Transform,
         CompType_Sprite2D,
+        CompType_Circle2D,
 
         CompType_SkeletalMesh,
         CompType_StaticMesh,

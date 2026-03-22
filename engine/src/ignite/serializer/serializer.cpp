@@ -176,7 +176,7 @@ namespace ignite {
                     sr.EndMap();
                 }
 
-                // Sprite component
+                // Sprite 2D component
                 if (entity.HasComponent<Sprite2DComponent>())
                 {
                     const Sprite2DComponent &comp = entity.GetComponent<Sprite2DComponent>();
@@ -188,6 +188,19 @@ namespace ignite {
                     }
                     sr.EndMap();
                 }
+
+				// Circle 2D component
+				if (entity.HasComponent<Circle2DComponent>())
+				{
+					const Circle2DComponent &comp = entity.GetComponent<Circle2DComponent>();
+					sr.BeginMap("Circle2D");
+					{
+						sr.AddKeyValue("Color", comp.color);
+						sr.AddKeyValue("Thickness", comp.thickness);
+						sr.AddKeyValue("Fade", comp.fade);
+					}
+					sr.EndMap();
+				}
 
                 // Rigidbody 2D
                 if (entity.HasComponent<Rigidbody2DComponent>())
@@ -559,7 +572,7 @@ namespace ignite {
                 comp.primary = node["Primary"].as<bool>();
             }
 
-            // Sprite2D component
+            // Sprite 2D component
             if (YAML::Node node = entityNode["Sprite2D"])
             {
                 Sprite2DComponent &comp = desEntity.AddComponent<Sprite2DComponent>();
@@ -567,6 +580,15 @@ namespace ignite {
                 comp.color = node["Color"].as<glm::vec4>();
                 comp.tilingFactor = node["TilingFactor"].as<glm::vec2>();
             }
+
+			// Circle 2D component
+			if (YAML::Node node = entityNode["Circle2D"])
+			{
+				Circle2DComponent &comp = desEntity.AddComponent<Circle2DComponent>();
+				comp.color = node["Color"].as<glm::vec4>();
+				comp.thickness = node["Thickness"].as<float>();
+				comp.fade = node["Fade"].as<float>();
+			}
 
             // Rigidbody 2D
             if (YAML::Node node = entityNode["Rigidbody2D"])

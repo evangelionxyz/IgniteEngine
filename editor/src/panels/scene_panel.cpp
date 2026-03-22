@@ -240,6 +240,10 @@ namespace ignite
             {
                 entity = SetSelectedEntity(SceneManager::CreateSprite(m_Scene.get(), "Sprite"));
             }
+			if (ImGui::MenuItem("Circle"))
+			{
+				entity = SetSelectedEntity(SceneManager::CreateCircle(m_Scene.get(), "Circle"));
+			}
             ImGui::EndMenu();
         }
        
@@ -501,6 +505,20 @@ namespace ignite
                 if (ImGui::IsItemActivated())            s_Sprite2DBefore = c;
                 if (ImGui::IsItemDeactivatedAfterEdit()) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
             });
+
+			RenderComponent<Circle2DComponent>("Circle 2D", selectedEntity, [&]()
+				{
+					Circle2DComponent &c = selectedEntity.GetComponent<Circle2DComponent>();
+
+					static Circle2DComponent compBefore;
+
+					ImGui::ColorEdit4("Color", &c.color.x);
+					if (ImGui::IsItemActivated())
+						compBefore = c;
+
+					if (ImGui::IsItemDeactivatedAfterEdit())
+						CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Circle2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), compBefore, c));
+				});
 
 			RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [&]()
 			{
@@ -1349,6 +1367,9 @@ namespace ignite
                     case CompType_Sprite2D:
                         entity.AddComponent<Sprite2DComponent>();
                         break;
+					case CompType_Circle2D:
+						entity.AddComponent<Circle2DComponent>();
+						break;
                     case CompType_Rigidbody2D:
                         entity.AddComponent<Rigidbody2DComponent>();
                         break;

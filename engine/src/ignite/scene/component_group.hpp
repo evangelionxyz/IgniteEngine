@@ -37,6 +37,7 @@ namespace ignite
         TransformComponent, 
         CameraComponent, 
         Sprite2DComponent,
+        Circle2DComponent,
         Rigidbody2DComponent,
         BoxCollider2DComponent,
         StaticMeshComponent,

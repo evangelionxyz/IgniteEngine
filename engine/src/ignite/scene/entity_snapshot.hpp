@@ -49,6 +49,7 @@ namespace ignite
         // Components (optional so we only store the ones the entity actually has)
         std::optional<TransformComponent>      transform;
         std::optional<Sprite2DComponent>       sprite2D;
+        std::optional<Circle2DComponent>       circle2D;
         std::optional<CameraComponent>         camera;
         std::optional<WorldEnvironment>        worldEnv;
         std::optional<StaticMeshComponent>     staticMesh;
@@ -127,6 +128,9 @@ namespace ignite
 
         if (entity.HasComponent<Sprite2DComponent>())
             snap.sprite2D = entity.GetComponent<Sprite2DComponent>();
+
+        if (entity.HasComponent<Circle2DComponent>())
+            snap.circle2D = entity.GetComponent<Circle2DComponent>();
 
         if (entity.HasComponent<CameraComponent>())
             snap.camera = entity.GetComponent<CameraComponent>();
