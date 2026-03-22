@@ -84,6 +84,17 @@ namespace ignite
         };
         std::optional<BoxCollider2DSnapshot> boxCollider2D;
 
+		struct CircleCollider2DSnapshot
+		{
+			glm::vec2 center = { 0.0f, 0.0f };
+			float     radius = 0.5f;
+			float     restitution = 0.1f;
+			float     friction = 0.5f;
+			float     density = 1.0f;
+			bool      isSensor = false;
+		};
+		std::optional<CircleCollider2DSnapshot> circleCollider2D;
+
         // 3D Physics — JPH::Body* is runtime-only
         struct RigidbodySnapshot
         {
@@ -183,6 +194,19 @@ namespace ignite
             snap.boxCollider2D = s;
         }
 
+		if (entity.HasComponent<CircleCollider2DComponent>())
+		{
+			const CircleCollider2DComponent &cc = entity.GetComponent<CircleCollider2DComponent>();
+			EntitySnapshot::CircleCollider2DSnapshot s;
+			s.center = cc.center;
+			s.radius = cc.radius;
+			s.restitution = cc.restitution;
+			s.friction = cc.friction;
+			s.density = cc.density;
+			s.isSensor = cc.isSensor;
+			snap.circleCollider2D = s;
+		}
+
         if (entity.HasComponent<RigibodyComponent>())
         {
             const RigibodyComponent &rb = entity.GetComponent<RigibodyComponent>();
@@ -238,6 +262,9 @@ namespace ignite
         if (snap.sprite2D)
             e.AddOrReplaceComponent<Sprite2DComponent>(*snap.sprite2D);
 
+		if (snap.circle2D)
+			e.AddOrReplaceComponent<Circle2DComponent>(*snap.circle2D);
+
         if (snap.camera)
             e.AddOrReplaceComponent<CameraComponent>(*snap.camera);
 
@@ -284,6 +311,19 @@ namespace ignite
             bc.isSensor    = s.isSensor;
             e.AddOrReplaceComponent<BoxCollider2DComponent>(bc);
         }
+
+		if (snap.circleCollider2D)
+		{
+			const auto &s = *snap.circleCollider2D;
+			CircleCollider2DComponent cc;
+			cc.center = s.center;
+			cc.radius = s.radius;
+			cc.restitution = s.restitution;
+			cc.friction = s.friction;
+			cc.density = s.density;
+			cc.isSensor = s.isSensor;
+			e.AddOrReplaceComponent<CircleCollider2DComponent>(cc);
+		}
 
         if (snap.rigidbody)
         {

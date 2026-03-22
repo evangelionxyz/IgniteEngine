@@ -237,6 +237,22 @@ namespace ignite {
                     sr.EndMap();
                 }
 
+				// Circle collider 2D
+				if (entity.HasComponent<CircleCollider2DComponent>())
+				{
+					const CircleCollider2DComponent &comp = entity.GetComponent<CircleCollider2DComponent>();
+					sr.BeginMap("CircleCollider2D");
+					{
+						sr.AddKeyValue("Radius", comp.radius);
+						sr.AddKeyValue("Center", comp.center);
+						sr.AddKeyValue("Restitution", comp.restitution);
+						sr.AddKeyValue("Friction", comp.friction);
+						sr.AddKeyValue("Density", comp.density);
+						sr.AddKeyValue("IsSensor", comp.isSensor);
+					}
+					sr.EndMap();
+				}
+
 				// Static Mesh
 				if (entity.HasComponent<StaticMeshComponent>())
 				{
@@ -616,6 +632,18 @@ namespace ignite {
                 comp.density = node["Density"].as<float>();
                 comp.isSensor = node["IsSensor"].as<bool>();
             }
+
+			// CircleCollider 2D
+			if (YAML::Node node = entityNode["CircleCollider2D"])
+			{
+				CircleCollider2DComponent &comp = desEntity.AddComponent<CircleCollider2DComponent>();
+				comp.center = node["Center"].as<glm::vec2>();
+				comp.radius = node["Radius"].as<float>();
+				comp.restitution = node["Restitution"].as<float>();
+				comp.friction = node["Friction"].as<float>();
+				comp.density = node["Density"].as<float>();
+				comp.isSensor = node["IsSensor"].as<bool>();
+			}
 
             // Rigidbody
             if (YAML::Node node = entityNode["Rigidbody"])

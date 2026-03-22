@@ -58,6 +58,8 @@ namespace ignite
 
         m_SceneGPUDataBuffer = ConstantBuffer::Create(sizeof(Scene_GPUData), false, 1, "[Scene GPU Data]");
 		m_CSMGPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMap_GPUData), false, 1, "[CSM GPU Data]");
+
+		ScriptEngine::GetInstance()->SetSceneContext(this);
     }
 
     Scene::~Scene()
@@ -97,7 +99,7 @@ namespace ignite
         m_IsPlaying = true;
         m_IsPaused = false;
 
-        ScriptEngine::GetInstance()->SetSceneContext(this);
+		ScriptEngine::GetInstance()->SetSceneContext(this);
 
         // reset time
         timeInSeconds = 0.0f;
@@ -363,6 +365,11 @@ namespace ignite
     void Scene::OnComponentAdded<BoxCollider2DComponent>(Entity entity, BoxCollider2DComponent &comp)
     {
     }
+
+	template<>
+	void Scene::OnComponentAdded<CircleCollider2DComponent>(Entity entity, CircleCollider2DComponent &comp)
+	{
+	}
 
     template<>
     void Scene::OnComponentAdded<RigibodyComponent>(Entity entity, RigibodyComponent &comp)

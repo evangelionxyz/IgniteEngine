@@ -605,6 +605,30 @@ namespace ignite
 			*result = comp.color;
 		}
 
+		static void Circle2DComponent_SetColor(uint64_t entityID, glm::vec4 value)
+		{
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<Circle2DComponent>())
+			{
+				return;
+			}
+
+			auto &comp = entity.GetComponent<Circle2DComponent>();
+			comp.color = value;
+		}
+
+		static void Circle2DComponent_GetColor(uint64_t entityID, glm::vec4 *result)
+		{
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<Circle2DComponent>())
+			{
+				return;
+			}
+
+			auto &comp = entity.GetComponent<Circle2DComponent>();
+			*result = comp.color;
+		}
+
 		static void Sprite2DComponent_SetTilingFactor(uint64_t entityID, glm::vec2 value)
 		{
 			Entity entity = GetEntityByID(entityID);
@@ -1271,6 +1295,174 @@ namespace ignite
             entity.GetComponent<BoxCollider2DComponent>().isSensor = value;
         }
 
+		static void CircleCollider2DComponent_GetCenter(uint64_t entityID, glm::vec2 *result)
+		{
+			if (!result)
+			{
+				return;
+			}
+
+			*result = {};
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+			{
+				return;
+			}
+
+			*result = entity.GetComponent<CircleCollider2DComponent>().center;
+		}
+
+		static void CircleCollider2DComponent_SetCenter(uint64_t entityID, glm::vec2 value)
+		{
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+			{
+				return;
+			}
+
+			entity.GetComponent<CircleCollider2DComponent>().center = value;
+		}
+
+		static void CircleCollider2DComponent_GetRadius(uint64_t entityID, float *result)
+		{
+			if (!result)
+			{
+				return;
+			}
+
+			*result = {};
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+			{
+				return;
+			}
+
+			*result = entity.GetComponent<CircleCollider2DComponent>().radius;
+		}
+
+		static void CircleCollider2DComponent_SetRadius(uint64_t entityID, float value)
+		{
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+			{
+				return;
+			}
+
+			entity.GetComponent<CircleCollider2DComponent>().radius = value;
+		}
+
+		static void CircleCollider2DComponent_GetRestitution(uint64_t entityID, float *result)
+		{
+			if (!result)
+			{
+				return;
+			}
+
+			*result = 0.0f;
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+			{
+				return;
+			}
+
+			*result = entity.GetComponent<CircleCollider2DComponent>().restitution;
+		}
+
+		static void CircleCollider2DComponent_SetRestitution(uint64_t entityID, float value)
+		{
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+			{
+				return;
+			}
+
+			entity.GetComponent<CircleCollider2DComponent>().restitution = value;
+		}
+
+		static void CircleCollider2DComponent_GetFriction(uint64_t entityID, float *result)
+		{
+			if (!result)
+			{
+				return;
+			}
+
+			*result = 0.0f;
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+			{
+				return;
+			}
+
+			*result = entity.GetComponent<CircleCollider2DComponent>().friction;
+		}
+
+		static void CircleCollider2DComponent_SetFriction(uint64_t entityID, float value)
+		{
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+			{
+				return;
+			}
+
+			entity.GetComponent<CircleCollider2DComponent>().friction = value;
+		}
+
+		static void CircleCollider2DComponent_GetDensity(uint64_t entityID, float *result)
+		{
+			if (!result)
+			{
+				return;
+			}
+
+			*result = 0.0f;
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+			{
+				return;
+			}
+
+			*result = entity.GetComponent<CircleCollider2DComponent>().density;
+		}
+
+		static void CircleCollider2DComponent_SetDensity(uint64_t entityID, float value)
+		{
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+			{
+				return;
+			}
+
+			entity.GetComponent<CircleCollider2DComponent>().density = value;
+		}
+
+		static void CircleCollider2DComponent_GetIsSensor(uint64_t entityID, bool *result)
+		{
+			if (!result)
+			{
+				return;
+			}
+
+			*result = false;
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+			{
+				return;
+			}
+
+			*result = entity.GetComponent<CircleCollider2DComponent>().isSensor;
+		}
+
+		static void CircleCollider2DComponent_SetIsSensor(uint64_t entityID, bool value)
+		{
+			Entity entity = GetEntityByID(entityID);
+			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+			{
+				return;
+			}
+
+			entity.GetComponent<CircleCollider2DComponent>().isSensor = value;
+		}
+
         static const ScriptGlueAPI s_API =
         {
             &Debug_Log,
@@ -1308,6 +1500,9 @@ namespace ignite
             &Sprite2DComponent_GetColor,
             &Sprite2DComponent_SetTilingFactor,
             &Sprite2DComponent_GetTilingFactor,
+
+			&Circle2DComponent_SetColor,
+			&Circle2DComponent_GetColor,
 
             &Rigidbody2DComponent_GetType,
             &Rigidbody2DComponent_SetType,
@@ -1349,6 +1544,19 @@ namespace ignite
             &BoxCollider2DComponent_SetDensity,
             &BoxCollider2DComponent_GetIsSensor,
             &BoxCollider2DComponent_SetIsSensor,
+
+			&CircleCollider2DComponent_GetCenter,
+			&CircleCollider2DComponent_SetCenter,
+			&CircleCollider2DComponent_GetRadius,
+			&CircleCollider2DComponent_SetRadius,
+			&CircleCollider2DComponent_GetRestitution,
+			&CircleCollider2DComponent_SetRestitution,
+			&CircleCollider2DComponent_GetFriction,
+			&CircleCollider2DComponent_SetFriction,
+			&CircleCollider2DComponent_GetDensity,
+			&CircleCollider2DComponent_SetDensity,
+			&CircleCollider2DComponent_GetIsSensor,
+			&CircleCollider2DComponent_SetIsSensor,
         };
     }
 

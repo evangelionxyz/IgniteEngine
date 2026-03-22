@@ -729,52 +729,20 @@ namespace ignite
                     ImGui::EndCombo();
                 }
 
-                if (m_Scene->IsRunning())
-                {
-                    if (ImGui::DragFloat2("Linear Vel", &c.linearVelocity.x, 0.025f))
-                        b2Body_SetLinearVelocity(c.bodyId, { c.linearVelocity.x, c.linearVelocity.y });
+				ImGui::DragFloat2("Linear Vel", &c.linearVelocity.x, 0.025f, FLT_MIN, FLT_MAX);
+				ImGui::DragFloat("Angular Vel", &c.angularVelocity, 0.025f, FLT_MIN, FLT_MAX);
+				ImGui::DragFloat("Gravity", &c.gravityScale, 0.025f, FLT_MIN, FLT_MAX);
+				ImGui::DragFloat("Linear Damping", &c.linearDamping, 0.0f, FLT_MAX);
+				ImGui::DragFloat("Angular Damping", &c.angularDamping, 0.025f, 0.0f, FLT_MAX);
+				ImGui::Checkbox("Awake", &c.isAwake);
+				ImGui::Checkbox("Enabled", &c.isEnabled);
+				ImGui::Checkbox("Sleep", &c.isEnableSleep);
+				ImGui::Checkbox("Fixed Rotation", &c.fixedRotation);
 
-                    if (ImGui::DragFloat("Angular Vel", &c.angularVelocity, 0.025f))
-                        b2Body_SetAngularVelocity(c.bodyId, c.angularVelocity);
-
-                    if (ImGui::DragFloat("Gravity", &c.gravityScale, 0.025f))
-                        b2Body_SetGravityScale(c.bodyId, c.gravityScale);
-
-
-                    if (ImGui::DragFloat("Linear Damping", &c.linearDamping, 0.025f))
-                        b2Body_SetLinearDamping(c.bodyId, c.linearDamping);
-
-                    if (ImGui::DragFloat("Angular Damping", &c.angularDamping, 0.025f))
-                        b2Body_SetAngularDamping(c.bodyId, c.angularDamping);
-
-                    if (ImGui::Checkbox("Awake", &c.isAwake))
-                        b2Body_SetAwake(c.bodyId, c.isAwake);
-
-                    if (ImGui::Checkbox("Enabled", &c.isEnabled))
-                    {
-                        c.isEnabled ? b2Body_Enable(c.bodyId) : b2Body_Disable(c.bodyId);
-                    }
-
-                    if (ImGui::Checkbox("Sleep", &c.isEnableSleep))
-                        b2Body_EnableSleep(c.bodyId, c.isEnableSleep);
-                }
-                else
-                {
-                    ImGui::DragFloat2("Linear Vel", &c.linearVelocity.x, 0.025f, FLT_MIN, FLT_MAX);
-                    ImGui::DragFloat("Angular Vel", &c.angularVelocity, 0.025f, FLT_MIN, FLT_MAX);
-                    ImGui::DragFloat("Gravity", &c.gravityScale, 0.025f, FLT_MIN, FLT_MAX);
-                    ImGui::DragFloat("Linear Damping", &c.linearDamping, 0.0f, FLT_MAX);
-                    ImGui::DragFloat("Angular Damping", &c.angularDamping, 0.025f, 0.0f, FLT_MAX);
-                    ImGui::Checkbox("Awake", &c.isAwake);
-                    ImGui::Checkbox("Enabled", &c.isEnabled);
-                    ImGui::Checkbox("Sleep", &c.isEnableSleep);
-                    ImGui::Checkbox("Fixed Rotation", &c.fixedRotation);
-                    
-                    if (!c.fixedRotation)
-                    {
-                        ImGui::Checkbox("Fast Rotation", &c.allowFastRotation);
-                    }
-                }
+				if (!c.fixedRotation)
+				{
+					ImGui::Checkbox("Fast Rotation", &c.allowFastRotation);
+				}
             });
             RenderComponent<CameraComponent>("Camera", selectedEntity, [&]()
             {
@@ -805,58 +773,80 @@ namespace ignite
                     ImGui::EndCombo();
                 }
 
-                bool modified = false;
-
                 if (c.camera.projectionType == ProjectionType::Perspective)
                 {
                     ImGui::DragFloat("Fov", &c.camera.fov, 0.025f, 0.0f, FLT_MAX);
-                    if (ImGui::IsItemActivated())            s_CameraBefore = c;
-                    if (ImGui::IsItemEdited())               modified = true;
-                    if (ImGui::IsItemDeactivatedAfterEdit()) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
+                    if (ImGui::IsItemActivated())
+                        s_CameraBefore = c;
+                    if (ImGui::IsItemEdited())
+                        c.dirty = true;
+                    if (ImGui::IsItemDeactivatedAfterEdit()) 
+                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
                 }
                 else
                 {
                     ImGui::DragFloat("Zoom", &c.camera.distance, 0.025f, 0.0f, FLT_MAX);
-                    if (ImGui::IsItemActivated())            s_CameraBefore = c;
-                    if (ImGui::IsItemEdited())               modified = true;
-                    if (ImGui::IsItemDeactivatedAfterEdit()) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
+                    if (ImGui::IsItemActivated())
+                        s_CameraBefore = c;
+                    if (ImGui::IsItemEdited())
+                        c.dirty = true;
+                    if (ImGui::IsItemDeactivatedAfterEdit()) 
+                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
                 }
 
                 ImGui::DragFloat("Near", &c.camera.nearPlane, 0.025f, 0.0f, FLT_MAX);
-                if (ImGui::IsItemActivated())            s_CameraBefore = c;
-                if (ImGui::IsItemEdited())               modified = true;
-                if (ImGui::IsItemDeactivatedAfterEdit()) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
+                if (ImGui::IsItemActivated())
+                    s_CameraBefore = c;
+                if (ImGui::IsItemEdited())
+                    c.dirty = true;
+                if (ImGui::IsItemDeactivatedAfterEdit())
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
 
                 ImGui::DragFloat("Far", &c.camera.farPlane, 0.025f, 0.0f, FLT_MAX);
-                if (ImGui::IsItemActivated())            s_CameraBefore = c;
-                if (ImGui::IsItemEdited())               modified = true;
-                if (ImGui::IsItemDeactivatedAfterEdit()) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
+                if (ImGui::IsItemActivated())
+                    s_CameraBefore = c;
+                if (ImGui::IsItemEdited())
+                    c.dirty = true;
+                if (ImGui::IsItemDeactivatedAfterEdit())
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
 
                 {
                     CameraComponent before = c;
                     if (ImGui::Checkbox("Primary", &c.primary))
                     {
-                        modified = true;
+                        c.dirty = true;
                         CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
                     }
                 }
 
-                if (modified)
+                if (c.dirty)
                 {
                     c.camera.UpdateMatrices(static_cast<float>(m_Scene->GetViewportWidth()), static_cast<float>(m_Scene->GetViewportHeight()));
+                    c.dirty = false;
                 }
             });
 
             RenderComponent<BoxCollider2DComponent>("Box Collider 2D", selectedEntity, [&]()
             {
                 BoxCollider2DComponent &c = selectedEntity.GetComponent<BoxCollider2DComponent>();
-                ImGui::DragFloat2("Size", &c.size.x, 0.025f, 0.0f, FLT_MAX);
-                ImGui::DragFloat2("Offset", &c.offset.x, 0.025f, 0.0f, FLT_MAX);
-                ImGui::DragFloat("Restitution", &c.restitution, 0.025f, 0.0f, FLT_MAX);
-                ImGui::DragFloat("Friction", &c.friction, 0.025f, 0.0f, FLT_MAX);
-                ImGui::DragFloat("Density", &c.density, 0.025f);
-                ImGui::Checkbox("Is Sensor", &c.isSensor);
+                c.dirty = ImGui::DragFloat2("Size", &c.size.x, 0.025f, 0.0f, FLT_MAX);
+                c.dirty |= ImGui::DragFloat2("Offset", &c.offset.x, 0.025f, 0.0f, FLT_MAX);
+                c.dirty |= ImGui::DragFloat("Restitution", &c.restitution, 0.025f, 0.0f, FLT_MAX);
+                c.dirty |= ImGui::DragFloat("Friction", &c.friction, 0.025f, 0.0f, FLT_MAX);
+                c.dirty |= ImGui::DragFloat("Density", &c.density, 0.025f);
+                c.dirty |= ImGui::Checkbox("Is Sensor", &c.isSensor);
             });
+
+			RenderComponent<CircleCollider2DComponent>("Circle Collider 2D", selectedEntity, [&]()
+				{
+					CircleCollider2DComponent &cc = selectedEntity.GetComponent<CircleCollider2DComponent>();
+					cc.dirty = ImGui::DragFloat("Radius", &cc.radius, 0.025f, 0.0f, FLT_MAX);
+					cc.dirty |= ImGui::DragFloat2("Center", &cc.center.x, 0.025f, 0.0f, FLT_MAX);
+					cc.dirty |= ImGui::DragFloat("Restitution", &cc.restitution, 0.025f, 0.0f, FLT_MAX);
+					cc.dirty |= ImGui::DragFloat("Friction", &cc.friction, 0.025f, 0.0f, FLT_MAX);
+					cc.dirty |= ImGui::DragFloat("Density", &cc.density, 0.025f);
+					cc.dirty |= ImGui::Checkbox("Is Sensor", &cc.isSensor);
+				});
 
             RenderComponent<RigibodyComponent>("Rigid Body", selectedEntity, [&]()
             {
@@ -867,46 +857,47 @@ namespace ignite
             RenderComponent<BoxColliderComponent>("Box Collider", selectedEntity, [&]()
             {
                 BoxColliderComponent &c = selectedEntity.GetComponent<BoxColliderComponent>();
-                ImGui::DragFloat3("Scale", &c.scale.x, 0.025f, 0.0f, 10000.0f);
-                ImGui::DragFloat("Friction", &c.friction, 0.025f);
-                ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
-                ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
-                ImGui::DragFloat("Density", &c.density, 0.025f);
+                c.dirty = ImGui::DragFloat3("Scale", &c.scale.x, 0.025f, 0.0f, 10000.0f);
+                c.dirty |= ImGui::DragFloat("Friction", &c.friction, 0.025f);
+                c.dirty |= ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
+                c.dirty |= ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
+                c.dirty |= ImGui::DragFloat("Density", &c.density, 0.025f);
             });
 
             RenderComponent<SphereColliderComponent>("Sphere Collider", selectedEntity, [&]()
             {
                 SphereColliderComponent &c = selectedEntity.GetComponent<SphereColliderComponent>();
-                ImGui::DragFloat("Radius", &c.radius, 0.025f, 0.01f, 10000.0f);
-                ImGui::DragFloat("Friction", &c.friction, 0.025f);
-                ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
-                ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
-                ImGui::DragFloat("Density", &c.density, 0.025f);
+                c.dirty = ImGui::DragFloat("Radius", &c.radius, 0.025f, 0.01f, 10000.0f);
+                c.dirty |= ImGui::DragFloat("Friction", &c.friction, 0.025f);
+                c.dirty |= ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
+                c.dirty |= ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
+                c.dirty |= ImGui::DragFloat("Density", &c.density, 0.025f);
             });
 
             RenderComponent<CapsuleColliderComponent>("Capsule Collider", selectedEntity, [&]()
             {
                 CapsuleColliderComponent &c = selectedEntity.GetComponent<CapsuleColliderComponent>();
-                ImGui::DragFloat("Radius", &c.radius, 0.025f, 0.01f, 10000.0f);
-                ImGui::DragFloat("Height", &c.height, 0.025f, 0.01f, 10000.0f);
-                ImGui::DragFloat("Friction", &c.friction, 0.025f);
-                ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
-                ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
-                ImGui::DragFloat("Density", &c.density, 0.025f);
+                c.dirty = ImGui::DragFloat("Radius", &c.radius, 0.025f, 0.01f, 10000.0f);
+                c.dirty |= ImGui::DragFloat("Height", &c.height, 0.025f, 0.01f, 10000.0f);
+                c.dirty |= ImGui::DragFloat("Friction", &c.friction, 0.025f);
+                c.dirty |= ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
+                c.dirty |= ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
+                c.dirty |= ImGui::DragFloat("Density", &c.density, 0.025f);
             });
 
             RenderComponent<MeshColliderComponent>("Mesh Collider", selectedEntity, [&]()
             {
                 MeshColliderComponent &c = selectedEntity.GetComponent<MeshColliderComponent>();
-                ImGui::Checkbox("Convex", &c.convex);
+                c.dirty = ImGui::Checkbox("Convex", &c.convex);
                 ImGui::Text("Vertices: %zu", c.vertices.size());
                 ImGui::Text("Indices: %zu", c.indices.size());
-                ImGui::DragFloat("Friction", &c.friction, 0.025f);
-                ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
-                ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
-                ImGui::DragFloat("Density", &c.density, 0.025f);
+                c.dirty |= ImGui::DragFloat("Friction", &c.friction, 0.025f);
+                c.dirty |= ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
+                c.dirty |= ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
+                c.dirty |= ImGui::DragFloat("Density", &c.density, 0.025f);
                 if (ImGui::Button("Clear Mesh Data"))
                 {
+                    c.dirty = false;
                     c.vertices.clear();
                     c.indices.clear();
                 }
@@ -1376,6 +1367,9 @@ namespace ignite
                     case CompType_BoxCollider2D:
                         entity.AddComponent<BoxCollider2DComponent>();
                         break;
+					case CompType_CircleCollider2D:
+						entity.AddComponent<CircleCollider2DComponent>();
+						break;
                     case CompType_StaticMesh:
                         entity.AddComponent<StaticMeshComponent>();
                         break;
@@ -1844,7 +1838,7 @@ namespace ignite
                 ImGui::EndCombo();
             }
 
-            ImGui::DragFloat3("Position", &m_Camera.position[0], 0.025f);
+            ImGui::DragFloat3("Position", &m_Camera.position.x, 0.025f);
 
             glm::vec2 yawPitch = { m_Camera.yaw, m_Camera.pitch };
             if (ImGui::DragFloat2("Yaw/Pitch", &yawPitch.x, 0.025f, -89.0f, 89.0f))

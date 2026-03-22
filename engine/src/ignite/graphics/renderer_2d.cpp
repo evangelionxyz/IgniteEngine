@@ -192,7 +192,7 @@ namespace ignite
         return bindingSet;
     }
 
-    static Ref<GraphicsPipeline> GetCirclePipelineForFB(nvrhi::IFramebuffer *framebuffer)
+    static Ref<GraphicsPipeline> GetCirclePipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
     {
         auto key = MakeFramebufferKey(framebuffer);
         auto it = s_CirclePSOCache.find(key);
@@ -209,7 +209,7 @@ namespace ignite
         params.enableDepthWrite = hasDepthAttachment;
         params.enableDepthTest = hasDepthAttachment;
         params.enableDepthStencil = false;
-        params.fillMode = nvrhi::RasterFillMode::Solid;
+        params.fillMode = fillMode;
         params.cullMode = nvrhi::RasterCullMode::None;
         params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
 
@@ -413,7 +413,7 @@ namespace ignite
             const size_t bufferSize = reinterpret_cast<uint8_t *>(m_CircleBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_CircleBatch.vertexBufferBase);
             m_CircleBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_CircleBatch.vertexBufferBase, bufferSize));
 
-            Ref<GraphicsPipeline> gp = GetCirclePipelineForFB(framebuffer);
+            Ref<GraphicsPipeline> gp = GetCirclePipelineForFB(framebuffer, m_FillMode);
             nvrhi::BindingSetHandle bindingSet = GetCircleBindingSet(gp->GetBindingLayout(0));
 
             const auto graphicsState = nvrhi::GraphicsState()
@@ -570,7 +570,7 @@ namespace ignite
         m_LineBatch.count++;
     }
 
-    void Renderer2D::DrawAABB(const AABB &aabb, const glm::vec4 &color /*= glm::vec4(1.0f)*/)
+    void Renderer2D::DrawAABB(const AABB &aabb, const glm::vec4 &color)
     {
         // Bottom face
         DrawLine({ {aabb.min.x, aabb.min.y, aabb.min.z}, {aabb.max.x, aabb.min.y, aabb.min.z} }, color);

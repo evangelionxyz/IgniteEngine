@@ -47,6 +47,9 @@ namespace ignite
 		void (*Sprite2DComponent_SetTilingFactor)(uint64_t entityID, glm::vec2 tiling);
 		void (*Sprite2DComponent_GetTilingFactor)(uint64_t entityID, glm::vec2 *result);
 
+		void (*Circle2DComponent_SetColor)(uint64_t entityID, glm::vec4 color);
+		void (*Circle2DComponent_GetColor)(uint64_t entityID, glm::vec4 *result);
+
         void (*Rigidbody2DComponent_GetType)(uint64_t entityID, int32_t *result);
         void (*Rigidbody2DComponent_SetType)(uint64_t entityID, int32_t value);
         void (*Rigidbody2DComponent_GetLinearVelocity)(uint64_t entityID, glm::vec2 *result);
@@ -87,6 +90,19 @@ namespace ignite
         void (*BoxCollider2DComponent_SetDensity)(uint64_t entityID, float value);
         void (*BoxCollider2DComponent_GetIsSensor)(uint64_t entityID, bool *result);
         void (*BoxCollider2DComponent_SetIsSensor)(uint64_t entityID, bool value);
+
+		void (*CircleCollider2DComponent_GetCenter)(uint64_t entityID, glm::vec2 *result);
+		void (*CircleCollider2DComponent_SetCenter)(uint64_t entityID, glm::vec2 value);
+		void (*CircleCollider2DComponent_GetRadius)(uint64_t entityID, float *result);
+		void (*CircleCollider2DComponent_SetSetRadius)(uint64_t entityID, float value);
+		void (*CircleCollider2DComponent_GetRestitution)(uint64_t entityID, float *result);
+		void (*CircleCollider2DComponent_SetRestitution)(uint64_t entityID, float value);
+		void (*CircleCollider2DComponent_GetFriction)(uint64_t entityID, float *result);
+		void (*CircleCollider2DComponent_SetFriction)(uint64_t entityID, float value);
+		void (*CircleCollider2DComponent_GetDensity)(uint64_t entityID, float *result);
+		void (*CircleCollider2DComponent_SetDensity)(uint64_t entityID, float value);
+		void (*CircleCollider2DComponent_GetIsSensor)(uint64_t entityID, bool *result);
+		void (*CircleCollider2DComponent_SetIsSensor)(uint64_t entityID, bool value);
     };
 
     class ScriptGlue

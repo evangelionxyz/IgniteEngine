@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "physics_2d.hpp"
 #include <ignite/scene/scene.hpp>
@@ -83,6 +62,14 @@ namespace ignite
                 CreateBoxCollider(&bc, rb.bodyId, b2Vec2(bc.size.x * tr.scale.x, bc.size.y * tr.scale.y));
                 b2Shape_SetUserData(bc.shapeId, static_cast<void *>(&e));
             }
+
+            // create circle collider
+            if (reg->any_of<CircleCollider2DComponent>(e))
+            {
+                auto &cc = reg->get<CircleCollider2DComponent>(e);
+				CreateCircleCollider(&cc, rb.bodyId, glm::max(tr.scale.x, tr.scale.y));
+				b2Shape_SetUserData(cc.shapeId, static_cast<void *>(&e));
+            }
         }
     }
 
@@ -134,6 +121,14 @@ namespace ignite
             CreateBoxCollider(&bc, rb.bodyId, b2Vec2(bc.size.x * tr.scale.x, bc.size.y * tr.scale.y));
             b2Shape_SetUserData(bc.shapeId, static_cast<void *>(&e));
         }
+
+		// create circle collider
+		if (reg->any_of<CircleCollider2DComponent>(e))
+		{
+			auto &cc = reg->get<CircleCollider2DComponent>(e);
+			CreateCircleCollider(&cc, rb.bodyId, glm::max(tr.scale.x, tr.scale.y));
+			b2Shape_SetUserData(cc.shapeId, static_cast<void *>(&e));
+		}
     }
 
     void Physics2D::DestroyBody(entt::entity e)
@@ -173,20 +168,60 @@ namespace ignite
             TransformComponent &tr = reg->get<TransformComponent>(e);
             Rigidbody2DComponent &rb = reg->get<Rigidbody2DComponent>(e);
 
+            if (rb.dirty)
+            {
+                b2Body_SetLinearVelocity(rb.bodyId, { rb.linearVelocity.x, rb.linearVelocity.y });
+                b2Body_SetAngularVelocity(rb.bodyId, rb.angularVelocity);
+                b2Body_SetGravityScale(rb.bodyId, rb.gravityScale);
+                b2Body_SetLinearDamping(rb.bodyId, rb.linearDamping);
+                b2Body_SetAngularDamping(rb.bodyId, rb.angularDamping);
+                b2Body_SetAwake(rb.bodyId, rb.isAwake);
+                rb.isEnabled ? b2Body_Enable(rb.bodyId) : b2Body_Disable(rb.bodyId);
+                b2Body_EnableSleep(rb.bodyId, rb.isEnableSleep);
+
+                b2MotionLocks ml;
+                ml.angularZ = rb.fixedRotation;
+                b2Body_SetMotionLocks(rb.bodyId, ml);
+
+                rb.dirty = false;
+            }
+
             if (reg->any_of<BoxCollider2DComponent>(e))
             {
                 BoxCollider2DComponent &bc = reg->get<BoxCollider2DComponent>(e);
-                b2Shape_SetFriction(bc.shapeId, bc.friction);
-                b2Shape_SetDensity(bc.shapeId, bc.density, true);
-                b2Shape_SetRestitution(bc.shapeId, bc.restitution);
+                if (bc.dirty)
+                {
+					b2Shape_SetFriction(bc.shapeId, bc.friction);
+					b2Shape_SetDensity(bc.shapeId, bc.density, true);
+					b2Shape_SetRestitution(bc.shapeId, bc.restitution);
 
-                f32 width = glm::abs(bc.size.x * tr.scale.x);
-                f32 height = glm::abs(bc.size.y * tr.scale.y);
+					f32 width = glm::abs(bc.size.x * tr.scale.x);
+					f32 height = glm::abs(bc.size.y * tr.scale.y);
 
-                width = glm::max(width, glm::epsilon<f32>());
-                height = glm::max(height, glm::epsilon<f32>());
-                const b2Polygon boxShape = b2MakeBox(width, height);
-                b2Shape_SetPolygon(bc.shapeId, &boxShape);
+					width = glm::max(width, glm::epsilon<f32>());
+					height = glm::max(height, glm::epsilon<f32>());
+					const b2Polygon boxShape = b2MakeBox(width, height);
+					b2Shape_SetPolygon(bc.shapeId, &boxShape);
+                    bc.dirty = false;
+                }
+            }
+
+            if (reg->any_of<CircleCollider2DComponent>(e))
+            {
+                CircleCollider2DComponent &cc = reg->get<CircleCollider2DComponent>(e);
+                if (cc.dirty)
+                {
+					b2Shape_SetFriction(cc.shapeId, cc.friction);
+					b2Shape_SetDensity(cc.shapeId, cc.density, true);
+					b2Shape_SetRestitution(cc.shapeId, cc.restitution);
+
+					const b2Circle circleShape = {
+						.center = {cc.center.x, cc.center.y},
+						.radius = cc.radius
+					};
+					b2Shape_SetCircle(cc.shapeId, &circleShape);
+                    cc.dirty = false;
+                }
             }
 
             // first, calculate the local transform
@@ -196,7 +231,6 @@ namespace ignite
 
             tr.localTranslation = { x, y, tr.translation.z };
 			tr.localRotation = glm::quat({ 0.0f, 0.0f, b2Rot_GetAngle(rotation) });
-
 
             tr.translation = tr.localTranslation;
             tr.rotation = tr.localRotation;
@@ -226,5 +260,21 @@ namespace ignite
         shapeDef.isSensor             = box->isSensor;
         box->shapeId                  = b2CreatePolygonShape(bodyId, &shapeDef, &boxShape);
     }
+
+	void Physics2D::CreateCircleCollider(CircleCollider2DComponent *circle, b2BodyId bodyId, float size)
+	{
+        b2Circle circleShape =
+        {
+            .center = {circle->center.x, circle->center.y},
+            .radius = circle->radius * size
+        };
+
+		b2ShapeDef shapeDef = b2DefaultShapeDef();
+		shapeDef.density = circle->density;
+		shapeDef.material.friction = circle->friction;
+		shapeDef.material.restitution = circle->restitution;
+		shapeDef.isSensor = circle->isSensor;
+		circle->shapeId = b2CreateCircleShape(bodyId, &shapeDef, &circleShape);
+	}
 
 } // namespace ignite

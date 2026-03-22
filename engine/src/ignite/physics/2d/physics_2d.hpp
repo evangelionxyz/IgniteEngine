@@ -46,6 +46,7 @@ namespace ignite
 
         void Simulate(f32 deltaTime);
         void CreateBoxCollider(BoxCollider2DComponent *box, b2BodyId bodyId, b2Vec2 size);
+        void CreateCircleCollider(CircleCollider2DComponent *circle, b2BodyId bodyId, float size);
 
     private:
         Scene *m_Scene;
