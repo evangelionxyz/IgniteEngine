@@ -25,6 +25,7 @@
 
 #include <functional>
 #include <stack>
+#include <deque>
 
 #include "types.hpp"
 
@@ -54,53 +55,63 @@ namespace ignite
         
         static CommandManager *GetInstance();
 
+        // AddCommand — push a pre-executed command (already applied, just record for undo)
         static void AddCommand(Scope<ICommand> command)
         {
-            GetInstance()->m_UndoStack.push(std::move(command));
-            GetInstance()->m_RedoStack = std::stack<Scope<ICommand>>();
+            auto *inst = GetInstance();
+            inst->m_UndoStack.push_back(std::move(command));
+            inst->m_RedoStack.clear();
+            // Trim oldest entries when stack exceeds the limit
+            while (static_cast<int>(inst->m_UndoStack.size()) > inst->m_MaxStackSize)
+                inst->m_UndoStack.pop_front();
         }
 
+        // ExecuteCommand — call Execute() immediately, then record for undo
         static void ExecuteCommand(Scope<ICommand> command)
         {
             command->Execute();
-            GetInstance()->m_UndoStack.push(std::move(command));
-            GetInstance()->m_RedoStack = std::stack<Scope<ICommand>>();
+            AddCommand(std::move(command));
         }
 
         void Undo()
         {
             if (m_UndoStack.empty())
-            {
                 return;
-            }
 
-            // store undo stack and pop it
-            auto command = std::move(m_UndoStack.top());
-            m_UndoStack.pop();
-            command->Undo(); // execute undo command
-
-            // push to redo
-            m_RedoStack.push(std::move(command));
+            auto command = std::move(m_UndoStack.back());
+            m_UndoStack.pop_back();
+            command->Undo();
+            m_RedoStack.push_back(std::move(command));
         }
 
         void Redo()
         {
             if (m_RedoStack.empty())
-            {
                 return;
-            }
 
-            // store redo stack and pop it
-            auto command = std::move(m_RedoStack.top());
-            m_RedoStack.pop();
-            command->Execute(); // execute redo command
-
-            // push to undo
-            m_UndoStack.push(std::move(command));
+            auto command = std::move(m_RedoStack.back());
+            m_RedoStack.pop_back();
+            command->Execute();
+            m_UndoStack.push_back(std::move(command));
         }
 
+        // Clear — must be called when a new scene is loaded/created to
+        // prevent stale Entity/Scene pointers in captured lambdas from crashing.
+        void Clear()
+        {
+            m_UndoStack.clear();
+            m_RedoStack.clear();
+        }
+
+        bool CanUndo() const { return !m_UndoStack.empty(); }
+        bool CanRedo() const { return !m_RedoStack.empty(); }
+
+        void SetMaxStackSize(int size) { m_MaxStackSize = size; }
+
     private:
-        std::stack<Scope<ICommand>> m_UndoStack;
-        std::stack<Scope<ICommand>> m_RedoStack;
+        // Using deque instead of stack so we can pop from the front (trim oldest)
+        std::deque<Scope<ICommand>> m_UndoStack;
+        std::deque<Scope<ICommand>> m_RedoStack;
+        int m_MaxStackSize = 100;
     };
 }
