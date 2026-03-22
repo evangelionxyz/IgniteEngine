@@ -1570,17 +1570,21 @@ namespace ignite
         m_ViewportData.mousePos = { mousePos.x - canvasPos.x, mousePos.y - canvasPos.y };
 
         // Update UI input handling
-        auto sceneRenderer = m_Scene->GetSceneRenderer();
-        if (sceneRenderer)
+        if (m_Scene)
         {
-            glm::vec2 viewportPos = { canvasPos.x, canvasPos.y };
-            glm::vec2 viewportSize = { canvasSize.x, canvasSize.y };
-            glm::vec2 screenMousePos = { mousePos.x, mousePos.y };
-            bool mousePressed = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+            auto sceneRenderer = m_Scene->GetSceneRenderer();
+            if (sceneRenderer)
+            {
+                glm::vec2 viewportPos = { canvasPos.x, canvasPos.y };
+                glm::vec2 viewportSize = { canvasSize.x, canvasSize.y };
+                glm::vec2 screenMousePos = { mousePos.x, mousePos.y };
+                bool mousePressed = ImGui::IsMouseDown(ImGuiMouseButton_Left);
             
-            sceneRenderer->UpdateUIInput(screenMousePos, viewportPos, viewportSize, mousePressed);
+                sceneRenderer->UpdateUIInput(screenMousePos, viewportPos, viewportSize, mousePressed);
+            }
         }
 
+        // Render scene texture to imgui
         ImTextureID sceneImage = (ImTextureID)m_CompositeViewportRT->GetColorAttachment(0)->GetHandle().Get(); // Current composite RT
         ImGui::Image(sceneImage, canvasSize);
         if (ImGui::BeginDragDropTarget())
