@@ -22,8 +22,8 @@ namespace ignite
         ScriptClass(const std::string &classNamespace, const std::string &className, const std::string &assemblyName);
 
         // Bind methods (instance/static) using HostFXR
-        int BindInstanceMethod(const std::string &instanceGuid, const std::string &methodName, ScriptMethodSignature signature);
-        int BindStaticMethod(const std::string &methodName, ScriptMethodSignature signature);
+        int BindInstanceMethod(uint64_t instanceId, const std::string &methodName, ScriptMethodSig signature);
+        int BindStaticMethod(const std::string &methodName, ScriptMethodSig signature);
 
         const std::string &GetNamespace() const { return m_ClassNamespace; }
         const std::string &GetClassName() const { return m_ClassName; }

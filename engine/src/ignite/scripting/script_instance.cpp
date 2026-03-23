@@ -8,27 +8,28 @@
 namespace ignite
 {
     ScriptInstance::ScriptInstance(Ref<ScriptClass> scriptClass, Entity entity)
-        : m_ScriptClass(scriptClass)
+        : m_ScriptClass(scriptClass), m_InstanceId(0)
     {
         m_ScriptHost = ScriptEngine::GetInstance()->GetScriptHost();
         LOG_ASSERT(m_ScriptHost, "[Script Instance] ScriptHost is null");
 
         // Use entity UUID as GUID key for the managed instance
-        m_InstanceGuid = std::to_string(static_cast<uint64_t>(entity.GetUUID()));
+		m_InstanceId = entity.GetUUID();
 
         // Create managed instance
-        if (!m_ScriptHost->CreateInstance(m_InstanceGuid, scriptClass->GetFullName()))
+        if (!m_ScriptHost->CreateInstance(m_InstanceId, scriptClass->GetFullName()))
         {
-            LOG_ERROR("[Script Instance] Failed to create managed instance {}", m_InstanceGuid);
+            LOG_ERROR("[Script Instance] Failed to create managed instance {}", m_InstanceId);
             return;
         }
 
         // Bind lifecycle methods
-        m_OnCreateMethodId = scriptClass->BindInstanceMethod(m_InstanceGuid, "OnCreate", ScriptMethodSignature::Void);
-        m_OnUpdateMethodId = scriptClass->BindInstanceMethod(m_InstanceGuid, "OnUpdate", ScriptMethodSignature::Void_Float);
+        m_OnCreateMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnCreate", ScriptMethodSig::Void);
+        m_OnDestroyMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnDestroy", ScriptMethodSig::Void);
+        m_OnUpdateMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnUpdate", ScriptMethodSig::Void_Float);
 
         // Set Entity ID on managed instance if available
-        const int setIdMethod = scriptClass->BindInstanceMethod(m_InstanceGuid, "SetID", ScriptMethodSignature::Void_UInt64);
+        const int setIdMethod = scriptClass->BindInstanceMethod(m_InstanceId, "SetID", ScriptMethodSig::Void_UInt64);
         if (setIdMethod)
         {
             const uint64_t entityId = static_cast<uint64_t>(entity.GetUUID());
@@ -45,7 +46,15 @@ namespace ignite
         }
     }
 
-    void ScriptInstance::InvokeOnUpdate(float time)
+	void ScriptInstance::InvokeOnDestroy()
+	{
+        if (m_OnDestroyMethodId)
+        {
+            m_ScriptHost->Invoke(m_OnDestroyMethodId, nullptr, 0, nullptr);
+        }
+	}
+
+	void ScriptInstance::InvokeOnUpdate(float time)
     {
         if (m_OnUpdateMethodId)
         {

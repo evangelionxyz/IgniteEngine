@@ -405,7 +405,7 @@ namespace ignite
 
         for (auto &instance : scriptEngineData->entityInstances)
         {
-			scriptEngine->GetScriptHost()->DestroyInstance(instance.second->GetInstanceGuid());
+			scriptEngine->GetScriptHost()->DestroyInstance(instance.second->GetInstanceID());
         }
 
         scriptEngineData->entityInstances.clear();

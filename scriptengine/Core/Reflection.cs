@@ -22,7 +22,7 @@ public struct TypeMetadata
     public FieldMetadata[] Fields;
 }
 
-public static class ReflectionHelper
+public static class Reflection
 {
     public static TypeMetadata GetTypeMetadata(string typeName, string assemblyPath)
     {

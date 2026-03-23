@@ -14,7 +14,7 @@
 namespace ignite
 {
     // Method signature IDs for Ignite scripting
-    enum class ScriptMethodSignature : int
+    enum class ScriptMethodSig : int
     {
         Void = 0,
         Void_Float = 1,
@@ -51,17 +51,15 @@ namespace ignite
         // Initialize C# InternalCalls bridge with native callbacks
         bool InitializeInternalCalls();
 
-        // Create a script instance with a GUID
-        bool CreateInstance(const std::string &guid, const std::string &typeName);
-
-        // Destroy a script instance
-        void DestroyInstance(const std::string &guid);
+        // Create a script instance
+        bool CreateInstance(uint64_t instanceId, const std::string &typeName);
+        void DestroyInstance(uint64_t instanceId);
 
         // Bind an instance method and return a method handle
-        int BindInstanceMethod(const std::string &guid, const std::string &methodName, ScriptMethodSignature signature);
+        int BindInstanceMethod(uint64_t instanceId, const std::string &methodName, ScriptMethodSig signature);
 
         // Bind a static method and return a method handle
-        int BindStaticMethod(const std::string &typeName, const std::string &methodName, ScriptMethodSignature signature);
+        int BindStaticMethod(const std::string &typeName, const std::string &methodName, ScriptMethodSig signature);
 
         // Invoke a method with arguments
         bool Invoke(int methodId, const void *argsPtr, int argCount, void *returnPtr);

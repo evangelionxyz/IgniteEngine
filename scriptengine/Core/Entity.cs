@@ -19,6 +19,10 @@ public class Entity
         ID = id;
     }
 
+    public virtual void OnCreate() { }
+    public virtual void OnUpdate(float deltaTime) { }
+    public virtual void OnDestroy() { }
+
     public Vector3 Translation
     {
         get
