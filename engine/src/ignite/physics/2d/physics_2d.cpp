@@ -81,12 +81,10 @@ namespace ignite
         m_WorldId = b2_nullWorldId;
     }
 
-    void Physics2D::Instantiate(entt::entity e)
+    void Physics2D::InstantiateEntity(Entity entity)
     {
-        entt::registry *reg = m_Scene->registry;
-
-        IDComponent &id = reg->get<IDComponent>(e);
-        TransformComponent &tr      = reg->get<TransformComponent>(e);
+        auto &id = entity.GetComponent<IDComponent>();
+        auto &tr = entity.GetComponent<TransformComponent>();
 
         // first, calculate the transformed matrix from parent
         if (id.parent != 0)
@@ -94,7 +92,7 @@ namespace ignite
             // SceneManager::CalculateParentTransform(m_Scene, tr, id.parent);
         }
 
-        Rigidbody2DComponent &rb = reg->get<Rigidbody2DComponent>(e);
+        auto &rb = entity.GetComponent<Rigidbody2DComponent>();
 
         b2BodyDef bodyDef        = b2DefaultBodyDef();
         bodyDef.type             = GetB2BodyType(rb.type);
@@ -112,52 +110,62 @@ namespace ignite
         bodyDef.allowFastRotation = rb.allowFastRotation;
 
         rb.bodyId = b2CreateBody(m_WorldId, &bodyDef);
-        b2Body_SetUserData(rb.bodyId, static_cast<void *>(&e));
+        b2Body_SetUserData(rb.bodyId, static_cast<void *>(&entity));
 
         // create box collider
-        if (reg->any_of<BoxCollider2DComponent>(e))
+        if (entity.HasComponent<BoxCollider2DComponent>())
         {
-            auto &bc = reg->get<BoxCollider2DComponent>(e);
+            auto &bc = entity.GetComponent<BoxCollider2DComponent>();
             CreateBoxCollider(&bc, rb.bodyId, b2Vec2(bc.size.x * tr.scale.x, bc.size.y * tr.scale.y));
-            b2Shape_SetUserData(bc.shapeId, static_cast<void *>(&e));
+            b2Shape_SetUserData(bc.shapeId, static_cast<void *>(&entity));
         }
 
 		// create circle collider
-		if (reg->any_of<CircleCollider2DComponent>(e))
+		if (entity.HasComponent<CircleCollider2DComponent>())
 		{
-			auto &cc = reg->get<CircleCollider2DComponent>(e);
+			auto &cc = entity.GetComponent<CircleCollider2DComponent>();
 			CreateCircleCollider(&cc, rb.bodyId, glm::max(tr.scale.x, tr.scale.y));
-			b2Shape_SetUserData(cc.shapeId, static_cast<void *>(&e));
+			b2Shape_SetUserData(cc.shapeId, static_cast<void *>(&entity));
 		}
     }
 
-    void Physics2D::DestroyBody(entt::entity e)
+	void Physics2D::DestroyEntity(Entity entity)
     {
-        entt::registry *reg = m_Scene->registry;
-        if (reg->any_of<Rigidbody2DComponent>(e))
+		if (entity.HasComponent<BoxCollider2DComponent>())
+		{
+			auto &c = entity.GetComponent<BoxCollider2DComponent>();
+
+			// check b2world is already created
+			if (b2World_IsValid(m_WorldId))
+			{
+				b2DestroyShape(c.shapeId, false);
+			}
+		}
+
+		if (entity.HasComponent<CircleCollider2DComponent>())
+		{
+			auto &c = entity.GetComponent<CircleCollider2DComponent>();
+
+			// check b2world is already created
+			if (b2World_IsValid(m_WorldId))
+			{
+				b2DestroyShape(c.shapeId, false);
+			}
+		}
+
+        if (entity.HasComponent<Rigidbody2DComponent>())
         {
-            if (reg->any_of<BoxCollider2DComponent>(e))
-            {
-                auto &bc = reg->get<BoxCollider2DComponent>(e);
+			auto &rb = entity.GetComponent<Rigidbody2DComponent>();
 
-                // check b2world is already created
-                if (bc.shapeId.world0 != 0)
-                {
-                    b2DestroyShape(bc.shapeId, false);
-                }
-            }
-
-            Rigidbody2DComponent &rb = reg->get<Rigidbody2DComponent>(e);
-
-            // check b2world is already created
-            if (rb.bodyId.world0 != 0)
-            {
-                b2DestroyBody(rb.bodyId);
-            }
+			// check b2world is already created
+			if (b2World_IsValid(m_WorldId))
+			{
+				b2DestroyBody(rb.bodyId);
+			}
         }
     }
 
-    void Physics2D::Simulate(f32 deltaTime)
+    void Physics2D::Simulate(float deltaTime)
     {
         constexpr i32 subStepCount = 12;
         b2World_Step(m_WorldId, deltaTime, subStepCount);
@@ -195,11 +203,11 @@ namespace ignite
 					b2Shape_SetDensity(bc.shapeId, bc.density, true);
 					b2Shape_SetRestitution(bc.shapeId, bc.restitution);
 
-					f32 width = glm::abs(bc.size.x * tr.scale.x);
-					f32 height = glm::abs(bc.size.y * tr.scale.y);
+					float width = glm::abs(bc.size.x * tr.scale.x);
+					float height = glm::abs(bc.size.y * tr.scale.y);
 
-					width = glm::max(width, glm::epsilon<f32>());
-					height = glm::max(height, glm::epsilon<f32>());
+					width = glm::max(width, glm::epsilon<float>());
+					height = glm::max(height, glm::epsilon<float>());
 					const b2Polygon boxShape = b2MakeBox(width, height);
 					b2Shape_SetPolygon(bc.shapeId, &boxShape);
                     bc.dirty = false;
@@ -244,10 +252,10 @@ namespace ignite
 
     void Physics2D::CreateBoxCollider(BoxCollider2DComponent *box, b2BodyId bodyId, b2Vec2 size)
     {
-        f32 width = glm::abs(size.x);
-        f32 height = glm::abs(size.y);
-        width = glm::max(width, glm::epsilon<f32>());
-        height = glm::max(height, glm::epsilon<f32>());
+        float width = glm::abs(size.x);
+        float height = glm::abs(size.y);
+        width = glm::max(width, glm::epsilon<float>());
+        height = glm::max(height, glm::epsilon<float>());
         
         box->currentSize = { width, height };
 

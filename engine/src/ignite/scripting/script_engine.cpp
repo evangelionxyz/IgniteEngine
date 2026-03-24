@@ -438,6 +438,9 @@ namespace ignite
 
     void ScriptEngine::OnCreateEntity(Entity entity)
     {
+        if (!entity.HasComponent<ScriptComponent>())
+            return;
+
         if (const auto &sc = entity.GetComponent<ScriptComponent>(); 
             EntityClassExists(sc.className))
         {
@@ -451,7 +454,22 @@ namespace ignite
         }
     }
 
-    void ScriptEngine::OnUpdateEntity(Entity entity, float time)
+	void ScriptEngine::OnDestroyEntity(Entity entity)
+	{
+		if (!entity.HasComponent<ScriptComponent>())
+			return;
+
+        if (const auto &sc = entity.GetComponent<ScriptComponent>();
+            EntityClassExists(sc.className))
+        {
+            auto &instance = scriptEngineData->entityInstances[entity.GetUUID()];
+            instance->InvokeOnDestroy();
+
+            scriptEngineData->entityInstances.erase(entity.GetUUID());
+        }
+	}
+
+	void ScriptEngine::OnUpdateEntity(Entity entity, float time)
     {
         const UUID uuid = entity.GetUUID();
         if (const auto &it = scriptEngineData->entityInstances.find(uuid);

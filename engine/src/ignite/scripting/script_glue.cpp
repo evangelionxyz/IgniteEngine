@@ -8,7 +8,8 @@
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/scripting/script_engine.hpp"
 
-#include "box2d/box2d.h"
+#include "ignite/physics/jolt/jolt_physics.hpp"
+#include "ignite/physics/2d/physics_2d.hpp"
 
 #include <glm/gtx/quaternion.hpp>
 #include <algorithm>
@@ -251,6 +252,15 @@ namespace ignite
             }
 
             copyEntity.GetComponent<TransformComponent>().translation = value;
+            
+            if (scene->IsRunning())
+            {
+                if (auto *scriptEngine = ScriptEngine::GetInstance())
+                {
+                    scriptEngine->OnCreateEntity(copyEntity);
+                }
+            }
+
             return static_cast<uint64_t>(copyEntity.GetUUID());
         }
 
@@ -266,6 +276,14 @@ namespace ignite
             if (!entity.IsValid())
             {
                 return;
+            }
+
+            if (scene->IsRunning())
+            {
+				if (auto *scriptEngine = ScriptEngine::GetInstance())
+				{
+					scriptEngine->OnDestroyEntity(entity);
+				}
             }
 
             SceneManager::DestroyEntity(scene, entity);

@@ -28,6 +28,7 @@
 #include "entity_destroy_command.hpp"
 
 #include "ignite/physics/2d/physics_2d.hpp"
+#include "ignite/physics/jolt/jolt_physics.hpp"
 
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/uuid.hpp"
@@ -337,6 +338,9 @@ namespace ignite
         if (!scene || !scene->registry->valid(entity))
             return;
 
+		scene->physics->DestroyEntity(entity);
+		scene->physics2D->DestroyEntity(entity);
+
         IDComponent idComp = entity.GetComponent<IDComponent>();
 
         // recursively destroy children
@@ -347,7 +351,6 @@ namespace ignite
         }
 
         scene->registry->destroy(entity);
-        scene->physics2D->DestroyBody(entity);
         scene->entities.erase(idComp.uuid);
         
         // remove from parent
@@ -406,19 +409,28 @@ namespace ignite
             parentIDComp.AddChild(newEntityIDComp.uuid);
         }
 
-        // Capture the new entity UUID so undo can destroy it
-        UUID newUUID = newEntityIDComp.uuid;
-        CommandManager::AddCommand(
-            CreateScope<EntityManagerCommand>(
-                [scene, newUUID]() { /* no-op: already duplicated */ },
-                [scene, newUUID]()
-                {
-                    if (Entity e = GetEntity(scene, newUUID))
-                        DestroyEntity(scene, e);
-                },
-                CommandState_Create
-            )
-        );
+        if (scene->IsRunning())
+        {
+		    scene->physics->InstantiateEntity(newEntity);
+		    scene->physics2D->InstantiateEntity(newEntity);
+        }
+
+        if (!scene->IsRunning())
+        {
+			// Capture the new entity UUID so undo can destroy it
+			UUID newUUID = newEntityIDComp.uuid;
+			CommandManager::AddCommand(
+				CreateScope<EntityManagerCommand>(
+					[scene, newUUID]() { /* no-op: already duplicated */ },
+					[scene, newUUID]()
+					{
+						if (Entity e = GetEntity(scene, newUUID))
+							DestroyEntity(scene, e);
+					},
+					CommandState_Create
+				)
+			);
+        }
 
         return newEntity;
     }

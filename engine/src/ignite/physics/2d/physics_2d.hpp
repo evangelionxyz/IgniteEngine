@@ -28,6 +28,8 @@
 #include <entt/entt.hpp>
 #include <ignite/core/types.hpp>
 
+#include "ignite/scene/entity.hpp"
+
 namespace ignite
 {
     class Scene;
@@ -41,10 +43,10 @@ namespace ignite
         void SimulationStart();
         void SimulationStop();
 
-        void Instantiate(entt::entity e);
-        void DestroyBody(entt::entity e);
+        void InstantiateEntity(Entity entity);
+        void DestroyEntity(Entity entity);
 
-        void Simulate(f32 deltaTime);
+        void Simulate(float deltaTime);
         void CreateBoxCollider(BoxCollider2DComponent *box, b2BodyId bodyId, b2Vec2 size);
         void CreateCircleCollider(CircleCollider2DComponent *circle, b2BodyId bodyId, float size);
 

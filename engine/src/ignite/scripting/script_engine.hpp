@@ -36,6 +36,7 @@ namespace ignite
         bool EntityClassExists(const std::string &fullClassName);
         
         void OnCreateEntity(Entity entity);
+        void OnDestroyEntity(Entity entity);
         void OnUpdateEntity(Entity entity, float time);
         
         std::shared_ptr<ScriptClass> GetEntityClassesByName(const std::string &name);
