@@ -55,6 +55,12 @@ namespace ignite
         bool CreateInstance(uint64_t instanceId, const std::string &typeName);
         void DestroyInstance(uint64_t instanceId);
 
+        std::string GetInstanceFields(uint64_t instanceId);
+        std::string GetTypeFields(const std::string &typeName);
+        bool ConfigureSerialization(const std::string &serializeFieldAttributeTypeName, const std::string &entityTypeName);
+        bool GetInstanceFieldValue(uint64_t instanceId, const std::string &fieldName, void *buffer, int bufferSize);
+        bool SetInstanceFieldValue(uint64_t instanceId, const std::string &fieldName, const void *buffer, int bufferSize);
+
         // Bind an instance method and return a method handle
         int BindInstanceMethod(uint64_t instanceId, const std::string &methodName, ScriptMethodSig signature);
 

@@ -411,58 +411,46 @@ namespace ignite {
                 // Script
                 if (entity.HasComponent<ScriptComponent>())
                 {
-                    const ScriptComponent &comp = entity.GetComponent<ScriptComponent>();
+                    ScriptComponent &comp = entity.GetComponent<ScriptComponent>();
                     sr.BeginMap("Script");
                     {
                         sr.AddKeyValue("ClassName", comp.className);
 
-                        // Fields
-                        const Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(comp.className);
-
+                        Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(comp.className);
                         if (scriptClass)
                         {
-                            const auto &classFields = scriptClass->GetFields();
-
-                            if (!classFields.empty())
+                            if (auto instanceFields = scriptClass->GetInstanceFieldsById(entity.GetUUID()); instanceFields && !instanceFields->empty())
                             {
-                                auto &fields = ScriptEngine::GetInstance()->GetScriptFieldMap(entity);
-
                                 sr.BeginSequence("Fields");
-                                for (const auto &[fieldName, field] : classFields)
+                                for (auto &[name, fieldInstance] : *instanceFields)
                                 {
-                                    if (!fields.contains(fieldName) || field.Type == ScriptFieldType::Invalid)
-                                    {
-                                        continue;
-                                    }
-
                                     sr.BeginMap();
-                                    sr.AddKeyValue("Name", fieldName);
-                                    sr.AddKeyValue("Type", Utils::ScriptFieldTypeToString(field.Type));
-                                    
-                                    ScriptFieldInstance fieldInstance = fields.at(fieldName);
-                                    switch (field.Type)
+                                    sr.AddKeyValue("Name", name);
+                                    sr.AddKeyValue("Type", Utils::ScriptFieldTypeToString(fieldInstance.field.Type));
+
+                                    switch (fieldInstance.field.Type)
                                     {
-                                    case ScriptFieldType::Float: sr.AddKeyValue("Value", fieldInstance.GetValue<float>()); break;
-                                    case ScriptFieldType::Double: sr.AddKeyValue("Value", fieldInstance.GetValue<double>()); break;
-                                    case ScriptFieldType::Bool: sr.AddKeyValue("Value", fieldInstance.GetValue<bool>()); break;
-                                    case ScriptFieldType::Char: sr.AddKeyValue("Value", fieldInstance.GetValue<char>()); break;
-                                    case ScriptFieldType::Byte: sr.AddKeyValue("Value", fieldInstance.GetValue<int8_t>()); break;
-                                    case ScriptFieldType::Short: sr.AddKeyValue("Value", fieldInstance.GetValue<int16_t>()); break;
-                                    case ScriptFieldType::Long: sr.AddKeyValue("Value", fieldInstance.GetValue<int64_t>()); break;
-                                    case ScriptFieldType::UByte: sr.AddKeyValue("Value", fieldInstance.GetValue<uint8_t>()); break;
-                                    case ScriptFieldType::UShort: sr.AddKeyValue("Value", fieldInstance.GetValue<uint16_t>()); break;
-                                    case ScriptFieldType::UInt: sr.AddKeyValue("Value", fieldInstance.GetValue<uint32_t>()); break;
-                                    case ScriptFieldType::ULong: sr.AddKeyValue("Value", fieldInstance.GetValue<uint64_t>()); break;
-                                    case ScriptFieldType::Int: sr.AddKeyValue("Value", fieldInstance.GetValue<int>()); break;
-                                    case ScriptFieldType::Vector2: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec2>()); break;
-                                    case ScriptFieldType::Vector3: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec3>()); break;
-                                    case ScriptFieldType::Vector4: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec4>()); break;
-                                    case ScriptFieldType::Entity: sr.AddKeyValue("Value", fieldInstance.GetValue<uint64_t>()); break;
+                                        case ScriptFieldType::Float: sr.AddKeyValue("Value", fieldInstance.GetValue<float>()); break;
+                                        case ScriptFieldType::Double: sr.AddKeyValue("Value", fieldInstance.GetValue<double>()); break;
+                                        case ScriptFieldType::Bool: sr.AddKeyValue("Value", fieldInstance.GetValue<bool>()); break;
+                                        case ScriptFieldType::Char: sr.AddKeyValue("Value", fieldInstance.GetValue<char>()); break;
+                                        case ScriptFieldType::Byte: sr.AddKeyValue("Value", fieldInstance.GetValue<int8_t>()); break;
+                                        case ScriptFieldType::Short: sr.AddKeyValue("Value", fieldInstance.GetValue<int16_t>()); break;
+                                        case ScriptFieldType::Long: sr.AddKeyValue("Value", fieldInstance.GetValue<int64_t>()); break;
+                                        case ScriptFieldType::UByte: sr.AddKeyValue("Value", fieldInstance.GetValue<uint8_t>()); break;
+                                        case ScriptFieldType::UShort: sr.AddKeyValue("Value", fieldInstance.GetValue<uint16_t>()); break;
+                                        case ScriptFieldType::UInt: sr.AddKeyValue("Value", fieldInstance.GetValue<uint32_t>()); break;
+                                        case ScriptFieldType::ULong: sr.AddKeyValue("Value", fieldInstance.GetValue<uint64_t>()); break;
+                                        case ScriptFieldType::Int: sr.AddKeyValue("Value", fieldInstance.GetValue<int>()); break;
+                                        case ScriptFieldType::Vector2: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec2>()); break;
+                                        case ScriptFieldType::Vector3: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec3>()); break;
+                                        case ScriptFieldType::Vector4: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec4>()); break;
+                                        case ScriptFieldType::Entity: sr.AddKeyValue("Value", fieldInstance.GetValue<uint64_t>()); break;
+                                        default: break;
                                     }
 
                                     sr.EndMap();
                                 }
-
                                 sr.EndSequence();
                             }
                         }
@@ -538,8 +526,8 @@ namespace ignite {
     Ref<Scene> SceneSerializer::Deserialize(const std::filesystem::path &filepath, Project *project)
     {
         LOG_ASSERT(std::filesystem::exists(filepath), "[Scene SR] File does not exists!\n{}", filepath.generic_string());
-        LOG_ASSERT(project,"[Scene SR] Invalid project");
-        
+        LOG_ASSERT(project, "[Scene SR] Invalid project");
+
         YAML::Node sceneFileNode = Serializer::Deserialize(filepath);
         YAML::Node sceneNode = sceneFileNode["Scene"];
 
@@ -597,14 +585,14 @@ namespace ignite {
                 comp.tilingFactor = node["TilingFactor"].as<glm::vec2>();
             }
 
-			// Circle 2D component
-			if (YAML::Node node = entityNode["Circle2D"])
-			{
-				Circle2DComponent &comp = desEntity.AddComponent<Circle2DComponent>();
-				comp.color = node["Color"].as<glm::vec4>();
-				comp.thickness = node["Thickness"].as<float>();
-				comp.fade = node["Fade"].as<float>();
-			}
+            // Circle 2D component
+            if (YAML::Node node = entityNode["Circle2D"])
+            {
+                Circle2DComponent &comp = desEntity.AddComponent<Circle2DComponent>();
+                comp.color = node["Color"].as<glm::vec4>();
+                comp.thickness = node["Thickness"].as<float>();
+                comp.fade = node["Fade"].as<float>();
+            }
 
             // Rigidbody 2D
             if (YAML::Node node = entityNode["Rigidbody2D"])
@@ -633,17 +621,17 @@ namespace ignite {
                 comp.isSensor = node["IsSensor"].as<bool>();
             }
 
-			// CircleCollider 2D
-			if (YAML::Node node = entityNode["CircleCollider2D"])
-			{
-				CircleCollider2DComponent &comp = desEntity.AddComponent<CircleCollider2DComponent>();
-				comp.center = node["Center"].as<glm::vec2>();
-				comp.radius = node["Radius"].as<float>();
-				comp.restitution = node["Restitution"].as<float>();
-				comp.friction = node["Friction"].as<float>();
-				comp.density = node["Density"].as<float>();
-				comp.isSensor = node["IsSensor"].as<bool>();
-			}
+            // CircleCollider 2D
+            if (YAML::Node node = entityNode["CircleCollider2D"])
+            {
+                CircleCollider2DComponent &comp = desEntity.AddComponent<CircleCollider2DComponent>();
+                comp.center = node["Center"].as<glm::vec2>();
+                comp.radius = node["Radius"].as<float>();
+                comp.restitution = node["Restitution"].as<float>();
+                comp.friction = node["Friction"].as<float>();
+                comp.density = node["Density"].as<float>();
+                comp.isSensor = node["IsSensor"].as<bool>();
+            }
 
             // Rigidbody
             if (YAML::Node node = entityNode["Rigidbody"])
@@ -708,7 +696,7 @@ namespace ignite {
                 comp.staticFriction = node["StaticFriction"].as<float>();
                 comp.restitution = node["Restitution"].as<float>();
                 comp.density = node["Density"].as<float>();
-                
+
                 // Deserialize vertices
                 if (YAML::Node verticesNode = node["Vertices"])
                 {
@@ -718,7 +706,7 @@ namespace ignite {
                         comp.vertices.push_back(vertexNode.as<glm::vec3>());
                     }
                 }
-                
+
                 // Deserialize indices
                 if (YAML::Node indicesNode = node["Indices"])
                 {
@@ -733,7 +721,7 @@ namespace ignite {
             // Audio Source
             if (YAML::Node node = entityNode["AudioSource"])
             {
-                AudioSourceComponent& comp = desEntity.AddComponent<AudioSourceComponent>();
+                AudioSourceComponent &comp = desEntity.AddComponent<AudioSourceComponent>();
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
                 comp.volume = node["Volume"].as<float>();
                 comp.pitch = node["Pitch"].as<float>();
@@ -749,58 +737,73 @@ namespace ignite {
                 world.hdrHandle = AssetHandle(node["HDRHandle"].as<uint64_t>());
             }
 
-			// Static Mesh
-			if (YAML::Node node = entityNode["StaticMesh"])
-			{
-				StaticMeshComponent &comp = desEntity.AddComponent<StaticMeshComponent>();
-				comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
-			}
+            // Static Mesh
+            if (YAML::Node node = entityNode["StaticMesh"])
+            {
+                StaticMeshComponent &comp = desEntity.AddComponent<StaticMeshComponent>();
+                comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
+            }
 
             // Script
             if (YAML::Node node = entityNode["Script"])
             {
-                ScriptComponent &sc = desEntity.AddComponent<ScriptComponent>();
+                auto &sc = desEntity.AddComponent<ScriptComponent>();
                 sc.className = node["ClassName"].as<std::string>();
 
-                if (YAML::Node classFieldsNode = node["Fields"])
-                {
-                    if (Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(sc.className))
-                    {
-                        const auto &classFields = scriptClass->GetFields();
-                        ScriptFieldMap &fieldMap = ScriptEngine::GetInstance()->GetScriptFieldMap(desEntity);
+                Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(sc.className);
 
+                if (scriptClass)
+                {
+                    if (YAML::Node classFieldsNode = node["Fields"])
+                    {
+                        std::unordered_map<std::string, ScriptInstanceField> instanceFields;
                         for (YAML::Node fieldNode : classFieldsNode)
                         {
-                            std::string fieldName = fieldNode["Name"].as<std::string>();
-                            ScriptFieldType fieldType = Utils::ScriptFieldTypeFromString(fieldNode["Type"].as<std::string>());
+                            // Get name and type
+                            std::string name = fieldNode["Name"].as<std::string>();
+                            ScriptFieldType type = Utils::ScriptFieldTypeFromString(fieldNode["Type"].as<std::string>());
 
-                            ScriptFieldInstance &fieldInstance = fieldMap[fieldName];
-
-                            if (!fieldMap.contains(fieldName))
-                                continue;
-
-                            fieldInstance.Field = classFields.at(fieldName);
-
-                            switch (fieldType)
+                            auto &classFields = scriptClass->GetFields();
+                            auto classFieldIt = classFields.find(name);
+                            if (classFieldIt == classFields.end())
                             {
-                            case ScriptFieldType::Float: fieldInstance.SetValue(fieldNode["Value"].as<float>()); break;
-                            case ScriptFieldType::Double: fieldInstance.SetValue(fieldNode["Value"].as<double>()); break;
-                            case ScriptFieldType::Bool: fieldInstance.SetValue(fieldNode["Value"].as<bool>()); break;
-                            case ScriptFieldType::Char: fieldInstance.SetValue(fieldNode["Value"].as<char>()); break;
-                            case ScriptFieldType::Byte: fieldInstance.SetValue(fieldNode["Value"].as<int8_t>()); break;
-                            case ScriptFieldType::Short: fieldInstance.SetValue(fieldNode["Value"].as<int16_t>()); break;
-                            case ScriptFieldType::Long: fieldInstance.SetValue(fieldNode["Value"].as<int64_t>()); break;
-                            case ScriptFieldType::UByte: fieldInstance.SetValue(fieldNode["Value"].as<uint8_t>()); break;
-                            case ScriptFieldType::UShort: fieldInstance.SetValue(fieldNode["Value"].as<uint16_t>()); break;
-                            case ScriptFieldType::UInt: fieldInstance.SetValue(fieldNode["Value"].as<uint32_t>()); break;
-                            case ScriptFieldType::ULong: fieldInstance.SetValue(fieldNode["Value"].as<uint64_t>()); break;
-                            case ScriptFieldType::Int: fieldInstance.SetValue(fieldNode["Value"].as<int>()); break;
-                            case ScriptFieldType::Entity: fieldInstance.SetValue(fieldNode["Value"].as<uint64_t>()); break;
-                            case ScriptFieldType::Vector2: fieldInstance.SetValue(fieldNode["Value"].as<glm::vec2>()); break;
-                            case ScriptFieldType::Vector3: fieldInstance.SetValue(fieldNode["Value"].as<glm::vec3>()); break;
-                            case ScriptFieldType::Vector4: fieldInstance.SetValue(fieldNode["Value"].as<glm::vec4>()); break;
+                                continue;
                             }
+
+                            ScriptInstanceField instanceField;
+                            instanceField.field = classFieldIt->second;
+
+                            if (instanceField.field.Type != type)
+                            {
+                                continue;
+                            }
+
+                            // Set the value
+                            switch (type)
+                            {
+                            case ScriptFieldType::Float: instanceField.SetValue(fieldNode["Value"].as<float>()); break;
+                            case ScriptFieldType::Double: instanceField.SetValue(fieldNode["Value"].as<double>()); break;
+                            case ScriptFieldType::Bool: instanceField.SetValue(fieldNode["Value"].as<bool>()); break;
+                            case ScriptFieldType::Char: instanceField.SetValue(fieldNode["Value"].as<char>()); break;
+                            case ScriptFieldType::Byte: instanceField.SetValue(fieldNode["Value"].as<int8_t>()); break;
+                            case ScriptFieldType::Short: instanceField.SetValue(fieldNode["Value"].as<int16_t>()); break;
+                            case ScriptFieldType::Long: instanceField.SetValue(fieldNode["Value"].as<int64_t>()); break;
+                            case ScriptFieldType::UByte: instanceField.SetValue(fieldNode["Value"].as<uint8_t>()); break;
+                            case ScriptFieldType::UShort: instanceField.SetValue(fieldNode["Value"].as<uint16_t>()); break;
+                            case ScriptFieldType::UInt: instanceField.SetValue(fieldNode["Value"].as<uint32_t>()); break;
+                            case ScriptFieldType::ULong: instanceField.SetValue(fieldNode["Value"].as<uint64_t>()); break;
+                            case ScriptFieldType::Int: instanceField.SetValue(fieldNode["Value"].as<int>()); break;
+                            case ScriptFieldType::Entity: instanceField.SetValue(fieldNode["Value"].as<uint64_t>()); break;
+                            case ScriptFieldType::Vector2: instanceField.SetValue(fieldNode["Value"].as<glm::vec2>()); break;
+                            case ScriptFieldType::Vector3: instanceField.SetValue(fieldNode["Value"].as<glm::vec3>()); break;
+                            case ScriptFieldType::Vector4: instanceField.SetValue(fieldNode["Value"].as<glm::vec4>()); break;
+                            }
+
+                            instanceFields[name] = instanceField;
                         }
+
+                        // Insert for instances
+                        scriptClass->InsertInstanceFields(desEntity.GetUUID(), instanceFields);
                     }
                 }
             }

@@ -54,4 +54,17 @@ namespace ignite
         m_Fields[fieldName] = field;
     }
 
+	void ScriptClass::InsertInstanceFields(uint64_t instanceId, const std::unordered_map<std::string, ScriptInstanceField> &instanceFields)
+	{
+        m_InstancesFields[instanceId] = instanceFields;
+    }
+
+    std::unordered_map<std::string, ScriptInstanceField> *ScriptClass::GetInstanceFieldsById(uint64_t instanceId)
+    {
+        auto it = m_InstancesFields.find(instanceId);
+        if (it != m_InstancesFields.end())
+            return &it->second;
+        return nullptr;
+	}
+
 }

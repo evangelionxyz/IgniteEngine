@@ -14,36 +14,6 @@ namespace ignite
     class Entity;
     class ScriptClass;
 
-    // script field + data storage
-    struct ScriptFieldInstance
-    {
-        ScriptField Field;
-        ScriptFieldInstance()
-        {
-            memset(m_Buffer, 0, sizeof(m_Buffer));
-        }
-
-        template<typename T>
-        T GetValue()
-        {
-            static_assert(sizeof(T) <= 16, "Type too large!");
-            return *(T *)m_Buffer;
-        }
-
-        template<typename T>
-        void SetValue(T value)
-        {
-            static_assert(sizeof(T) <= 16, "Type too large!");
-            memcpy(m_Buffer, &value, sizeof(T));
-        }
-
-    private:
-        char m_Buffer[16];
-
-        friend class ScriptEngine;
-        friend class ScriptInstance;
-    };
-
     class ScriptInstance
     {
     public:
@@ -53,34 +23,50 @@ namespace ignite
         void InvokeOnDestroy();
         void InvokeOnUpdate(float time);
 
-        Ref<ScriptClass> GetScriptClass() { return m_ScriptClass; }
+        const Ref<ScriptClass> &GetScriptClass() const { return m_ScriptClass; }
         uint64_t GetInstanceID() const { return m_InstanceId; }
 
         template<typename T>
-        T GetFieldValue(const std::string &name)
+		T GetFieldValue(const std::string &fieldName)
         {
             static_assert(sizeof(T) <= 24, "Type too large!");
 
-            bool success = GetFieldValueInternal(name, s_FieldValueBuffer);
-            if (!success)
+			if (!m_ScriptHost || fieldName.empty() || s_FieldValueBuffer == nullptr)
+			{
                 return T();
+			}
 
+            const bool success = m_ScriptHost->GetInstanceFieldValue(m_InstanceId, fieldName, s_FieldValueBuffer, sizeof(s_FieldValueBuffer));
+            if (!success)
+            {
+                return T();
+            }
+
+            m_ScriptClass->GetInstanceFieldsById(m_InstanceId)->at(fieldName).SetValue(s_FieldValueBuffer);
             return *(T *)s_FieldValueBuffer;
         }
 
         template<typename T>
-        void SetFieldValue(const std::string &name, const T &value)
+        bool SetFieldValue(const std::string &fieldName, const T &value)
         {
             static_assert(sizeof(T) <= 24, "Type too large!");
-            SetFieldValueInternal(name, &value);
+
+			if (!m_ScriptHost || fieldName.empty() || &value == nullptr)
+			{
+				return false;
+			}
+
+			const bool success = m_ScriptHost->SetInstanceFieldValue(m_InstanceId, fieldName, &value, sizeof(s_FieldValueBuffer));
+            if (success)
+            {
+			    m_ScriptClass->GetInstanceFieldsById(m_InstanceId)->at(fieldName).SetValue(value);
+            }
+            return success;
         }
 
     private:
-        bool GetFieldValueInternal(const std::string &name, void *buffer);
-        bool SetFieldValueInternal(const std::string &name, const void *value);
-
-    private:
         Ref<ScriptClass> m_ScriptClass;
+
         ScriptHost *m_ScriptHost = nullptr;
 
         uint64_t m_InstanceId = 0;

@@ -16,7 +16,6 @@
 
 namespace ignite
 {
-    using ScriptFieldMap = std::unordered_map<std::string, ScriptFieldInstance>;
     class Project;
     class Scene;
 
@@ -41,7 +40,6 @@ namespace ignite
         
         std::shared_ptr<ScriptClass> GetEntityClassesByName(const std::string &name);
         std::unordered_map<std::string, std::shared_ptr<ScriptClass>> GetEntityClasses();
-        ScriptFieldMap &GetScriptFieldMap(Entity entity);
         
         std::shared_ptr<ScriptInstance> GetEntityScriptInstance(UUID uuid);
         std::vector<std::string> GetScriptClassStorage();

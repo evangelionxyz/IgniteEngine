@@ -14,7 +14,7 @@ namespace ignite
         LOG_ASSERT(m_ScriptHost, "[Script Instance] ScriptHost is null");
 
         // Use entity UUID as GUID key for the managed instance
-		m_InstanceId = entity.GetUUID();
+        m_InstanceId = entity.GetUUID();
 
         // Create managed instance
         if (!m_ScriptHost->CreateInstance(m_InstanceId, scriptClass->GetFullName()))
@@ -35,6 +35,128 @@ namespace ignite
             const uint64_t entityId = static_cast<uint64_t>(entity.GetUUID());
             void *args[] = { const_cast<uint64_t *>(&entityId) };
             m_ScriptHost->Invoke(setIdMethod, args, 1, nullptr);
+        }
+
+        // Load script fields, based on class field name
+        auto &classRegisteredInstanceField = scriptClass->GetInstancesFields();
+        auto existingFieldsIt = classRegisteredInstanceField.find(m_InstanceId);
+        const bool hasDeserializedValues = existingFieldsIt != classRegisteredInstanceField.end();
+        auto &instanceFields = classRegisteredInstanceField[m_InstanceId];
+
+        for (auto &[name, field] : scriptClass->GetFields())
+        {
+            if (!instanceFields.contains(name))
+            {
+                ScriptInstanceField defaultField;
+                defaultField.field = field;
+                instanceFields[name] = defaultField;
+            }
+            else
+            {
+                instanceFields[name].field = field;
+            }
+
+            ScriptInstanceField &instanceField = instanceFields[name];
+            switch (field.Type)
+            {
+            case ScriptFieldType::Float:
+            {
+                if (hasDeserializedValues) SetFieldValue<float>(name, instanceField.GetValue<float>());
+                else instanceField.SetValue(GetFieldValue<float>(name));
+                break;
+            }
+            case ScriptFieldType::Double:
+            {
+                if (hasDeserializedValues) SetFieldValue<double>(name, instanceField.GetValue<double>());
+                else instanceField.SetValue(GetFieldValue<double>(name));
+                break;
+            }
+            case ScriptFieldType::Bool:
+            {
+                if (hasDeserializedValues) SetFieldValue<bool>(name, instanceField.GetValue<bool>());
+                else instanceField.SetValue(GetFieldValue<bool>(name));
+                break;
+            }
+            case ScriptFieldType::Char:
+            {
+                if (hasDeserializedValues) SetFieldValue<char>(name, instanceField.GetValue<char>());
+                else instanceField.SetValue(GetFieldValue<char>(name));
+                break;
+            }
+            case ScriptFieldType::Byte:
+            {
+                if (hasDeserializedValues) SetFieldValue<int8_t>(name, instanceField.GetValue<int8_t>());
+                else instanceField.SetValue(GetFieldValue<int8_t>(name));
+                break;
+            }
+            case ScriptFieldType::Short:
+            {
+                if (hasDeserializedValues) SetFieldValue<int16_t>(name, instanceField.GetValue<int16_t>());
+                else instanceField.SetValue(GetFieldValue<int16_t>(name));
+                break;
+            }
+            case ScriptFieldType::Int:
+            {
+                if (hasDeserializedValues) SetFieldValue<int>(name, instanceField.GetValue<int>());
+                else instanceField.SetValue(GetFieldValue<int>(name));
+                break;
+            }
+            case ScriptFieldType::Long:
+            {
+                if (hasDeserializedValues) SetFieldValue<int64_t>(name, instanceField.GetValue<int64_t>());
+                else instanceField.SetValue(GetFieldValue<int64_t>(name));
+                break;
+            }
+            case ScriptFieldType::UByte:
+            {
+                if (hasDeserializedValues) SetFieldValue<uint8_t>(name, instanceField.GetValue<uint8_t>());
+                else instanceField.SetValue(GetFieldValue<uint8_t>(name));
+                break;
+            }
+            case ScriptFieldType::UShort:
+            {
+                if (hasDeserializedValues) SetFieldValue<uint16_t>(name, instanceField.GetValue<uint16_t>());
+                else instanceField.SetValue(GetFieldValue<uint16_t>(name));
+                break;
+            }
+            case ScriptFieldType::UInt:
+            {
+                if (hasDeserializedValues) SetFieldValue<uint32_t>(name, instanceField.GetValue<uint32_t>());
+                else instanceField.SetValue(GetFieldValue<uint32_t>(name));
+                break;
+            }
+            case ScriptFieldType::ULong:
+            {
+                if (hasDeserializedValues) SetFieldValue<uint64_t>(name, instanceField.GetValue<uint64_t>());
+                else instanceField.SetValue(GetFieldValue<uint64_t>(name));
+                break;
+            }
+            case ScriptFieldType::Vector2:
+            {
+                if (hasDeserializedValues) SetFieldValue<glm::vec2>(name, instanceField.GetValue<glm::vec2>());
+                else instanceField.SetValue(GetFieldValue<glm::vec2>(name));
+                break;
+            }
+            case ScriptFieldType::Vector3:
+            {
+                if (hasDeserializedValues) SetFieldValue<glm::vec3>(name, instanceField.GetValue<glm::vec3>());
+                else instanceField.SetValue(GetFieldValue<glm::vec3>(name));
+                break;
+            }
+            case ScriptFieldType::Vector4:
+            {
+                if (hasDeserializedValues) SetFieldValue<glm::vec4>(name, instanceField.GetValue<glm::vec4>());
+                else instanceField.SetValue(GetFieldValue<glm::vec4>(name));
+                break;
+            }
+            case ScriptFieldType::Entity:
+            {
+                if (hasDeserializedValues) SetFieldValue<uint64_t>(name, instanceField.GetValue<uint64_t>());
+                else instanceField.SetValue(GetFieldValue<uint64_t>(name));
+                break;
+            }
+            default: break;
+            }
         }
     }
 
@@ -61,21 +183,5 @@ namespace ignite
             void *args[] = { &time };
             m_ScriptHost->Invoke(m_OnUpdateMethodId, args, 1, nullptr);
         }
-    }
-
-    bool ScriptInstance::GetFieldValueInternal(const std::string &name, void *buffer)
-    {
-        (void)name;
-        (void)buffer;
-        LOG_WARN("[Script Instance] GetFieldValueInternal not implemented for HostFXR yet");
-        return false;
-    }
-
-    bool ScriptInstance::SetFieldValueInternal(const std::string &name, const void *value)
-    {
-        (void)name;
-        (void)value;
-        LOG_WARN("[Script Instance] SetFieldValueInternal not implemented for HostFXR yet");
-        return false;
     }
 }

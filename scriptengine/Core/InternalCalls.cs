@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
+// Copyright (c) 2026 Evangelion Manuhutu
 
 using System;
 using System.Runtime.InteropServices;

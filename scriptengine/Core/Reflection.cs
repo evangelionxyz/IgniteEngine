@@ -1,4 +1,6 @@
-﻿using System;
+﻿// Copyright (c) 2026 Evangelion Manuhutu
+
+using System;
 using System.Linq;
 using System.Reflection;
 

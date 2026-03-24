@@ -203,7 +203,62 @@ namespace ignite
         LOG_TRACE("[Script Host] Destroyed instance {}", instanceId);
     }
 
-    int ScriptHost::BindInstanceMethod(uint64_t instanceId, const std::string &methodName, ScriptMethodSig signature)
+	std::string ScriptHost::GetInstanceFields(uint64_t instanceId)
+	{
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot get instance fields - host not initialized");
+            return {};
+        }
+
+        return m_Host->GetInstanceFields(instanceId);
+	}
+
+    std::string ScriptHost::GetTypeFields(const std::string &typeName)
+    {
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot get type fields - host not initialized");
+            return {};
+        }
+
+        return m_Host->GetTypeFields(typeName.c_str());
+    }
+
+    bool ScriptHost::ConfigureSerialization(const std::string &serializeFieldAttributeTypeName, const std::string &entityTypeName)
+    {
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot configure serialization - host not initialized");
+            return false;
+        }
+
+        return m_Host->ConfigureSerialization(serializeFieldAttributeTypeName.c_str(), entityTypeName.c_str());
+    }
+
+    bool ScriptHost::GetInstanceFieldValue(uint64_t instanceId, const std::string &fieldName, void *buffer, int bufferSize)
+    {
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot get field value - host not initialized");
+            return false;
+        }
+
+        return m_Host->GetInstanceFieldValue(instanceId, fieldName.c_str(), buffer, bufferSize);
+    }
+
+    bool ScriptHost::SetInstanceFieldValue(uint64_t instanceId, const std::string &fieldName, const void *buffer, int bufferSize)
+    {
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot set field value - host not initialized");
+            return false;
+        }
+
+        return m_Host->SetInstanceFieldValue(instanceId, fieldName.c_str(), buffer, bufferSize);
+    }
+
+	int ScriptHost::BindInstanceMethod(uint64_t instanceId, const std::string &methodName, ScriptMethodSig signature)
     {
         if (!m_Initialized)
         {

@@ -1015,296 +1015,191 @@ namespace ignite
                     isSelected = false;
                 }
 
-                bool detached = c.className == "Detached";
+                const bool detached = c.className == "Detached";
 
-                // classFields
-                bool isRunning = m_Scene->IsRunning();
-
-                // Editable classFields (edit mode)
-                if (isRunning && !detached)
+                if (scriptClassExist && !detached)
                 {
-                    if (Ref<ScriptInstance> scriptInstance = ScriptEngine::GetInstance()->GetEntityScriptInstance(selectedEntity.GetUUID()))
+                    const bool isRunning = m_Scene && m_Scene->IsRunning();
+                    Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(c.className);
+                    if (scriptClass)
                     {
-                        auto classFields = scriptInstance->GetScriptClass()->GetFields();
+                        const uint64_t instanceId = selectedEntity.GetUUID();
 
-                        for (const auto &[fieldName, field] : classFields)
+                        auto classRegisteredInstanceField = scriptClass->GetInstanceFieldsById(instanceId);
+                        if (!classRegisteredInstanceField)
                         {
-                            switch (field.Type)
+                            std::unordered_map<std::string, ScriptInstanceField> defaultInstanceFields;
+                            for (auto &[name, field] : scriptClass->GetFields())
                             {
-                            case ScriptFieldType::Float:
-                            {
-                                float data = scriptInstance->GetFieldValue<float>(fieldName);
-                                if (ImGui::DragFloat(fieldName.c_str(), &data, 0.1f))
-                                {
-                                    scriptInstance->SetFieldValue<float>(fieldName, data);
-                                }
-                                break;
+                                ScriptInstanceField instanceField;
+                                instanceField.field = field;
+                                defaultInstanceFields[name] = instanceField;
                             }
-                            case ScriptFieldType::Int:
-                            {
-                                int data = scriptInstance->GetFieldValue<int>(fieldName);
-                                if (ImGui::DragInt(fieldName.c_str(), &data, 1))
-                                {
-                                    scriptInstance->SetFieldValue<int>(fieldName, data);
-                                }
-                                break;
-                            }
-                            case ScriptFieldType::Vector2:
-                            {
-                                auto data = scriptInstance->GetFieldValue<glm::vec2>(fieldName);
-                                if (ImGui::DragFloat2(fieldName.c_str(), &data.x, 0.1f))
-                                {
-                                    scriptInstance->SetFieldValue<glm::vec2>(fieldName, data);
-                                }
-                                break;
-                            }
-                            case ScriptFieldType::Vector3:
-                            {
-                                auto data = scriptInstance->GetFieldValue<glm::vec3>(fieldName);
-                                if (ImGui::DragFloat3(fieldName.c_str(), &data.x, 0.1f))
-                                {
-                                    scriptInstance->SetFieldValue<glm::vec3>(fieldName, data);
-                                }
-                                break;
-                            }
-                            case ScriptFieldType::Vector4:
-                            {
-                                auto data = scriptInstance->GetFieldValue<glm::vec4>(fieldName);
-                                if (ImGui::DragFloat4(fieldName.c_str(), &data.x, 0.1f))
-                                {
-                                    scriptInstance->SetFieldValue<glm::vec4>(fieldName, data);
-                                }
-                                break;
-                            }
-                            case ScriptFieldType::Entity:
-                            {
-                                auto uuid = scriptInstance->GetFieldValue<uint64_t>(fieldName);
-                                if (Entity entity = SceneManager::GetEntity(m_Scene.get(), UUID(uuid)))
-                                {
-                                    ImGui::Button(fieldName.c_str());
-                                    if (ImGui::IsItemHovered())
-                                    {
-                                        ImGui::BeginTooltip();
-                                        ImGui::Text("%llu", uuid);
-                                        ImGui::EndTooltip();
-                                    }
-                                }
-                                break;
-                            }
-                            }
+
+                            scriptClass->InsertInstanceFields(instanceId, defaultInstanceFields);
+                            classRegisteredInstanceField = scriptClass->GetInstanceFieldsById(instanceId);
                         }
-                    }
-                }
 
-                // Scene is running, we don't have to set anything
-                else if (!isRunning && scriptClassExist && !detached)
-                {
-                    // !IsRunning
-                    Ref<ScriptClass> entityClass = ScriptEngine::GetInstance()->GetEntityClassesByName(c.className);
-                    if (entityClass)
-                    {
-                        const auto &classFields = entityClass->GetFields();
-                        auto &entityFields = ScriptEngine::GetInstance()->GetScriptFieldMap(selectedEntity);
-
-                        for (const auto &[name, field] : classFields)
+                        Ref<ScriptInstance> scriptInstance = nullptr;
+                        if (isRunning)
                         {
-                            if (entityFields.find(name) != entityFields.end())
-                            {
-                                ScriptFieldInstance &scriptField = entityFields.at(name);
-
-                                switch (field.Type)
-                                {
-                                case ScriptFieldType::Float:
-                                {
-                                    auto data = scriptField.GetValue<float>();
-                                    if (ImGui::DragFloat(name.c_str(), &data, 0.1f))
-                                    {
-                                        scriptField.SetValue<float>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Int:
-                                {
-                                    auto data = scriptField.GetValue<int>();
-                                    if (ImGui::DragInt(name.c_str(), &data))
-                                    {
-                                        scriptField.SetValue<int>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Vector2:
-                                {
-                                    auto data = scriptField.GetValue<glm::vec2>();
-                                    if (ImGui::DragFloat2(name.c_str(), &data.x, 0.1f))
-                                    {
-                                        scriptField.SetValue<glm::vec2>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Vector3:
-                                {
-                                    auto data = scriptField.GetValue<glm::vec3>();
-                                    if (ImGui::DragFloat3(name.c_str(), &data.x, 0.1f))
-                                    {
-                                        scriptField.SetValue<glm::vec3>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Vector4:
-                                {
-                                    auto data = scriptField.GetValue<glm::vec4>();
-                                    if (ImGui::DragFloat4(name.c_str(), &data.x, 0.1f))
-                                    {
-                                        scriptField.SetValue<glm::vec4>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Entity:
-                                {
-                                    auto uuid = scriptField.GetValue<uint64_t>();
-                                    std::string label = "Drag Here";
-                                    if (uuid)
-                                    {
-                                        Entity e = SceneManager::GetEntity(m_Scene.get(), UUID(uuid));
-                                        if (e)
-                                        {
-                                            label = e.GetName();
-                                        }
-                                    }
-
-                                    ImGui::Button(label.c_str());
-
-                                    if (ImGui::BeginDragDropTarget())
-                                    {
-                                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY_SOURCE_ITEM"))
-                                        {
-                                            LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ENTITY ITEM");
-                                            if (payload->DataSize == sizeof(Entity))
-                                            {
-                                                Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get()};
-                                                uint64_t id = (uint64_t)src.GetUUID();
-                                                scriptField.Field.Type = ScriptFieldType::Entity;
-                                                scriptField.SetValue<uint64_t>(id);
-                                            }
-                                        }
-                                        ImGui::EndDragDropTarget();
-                                    }
-
-                                    if (ImGui::IsItemHovered())
-                                    {
-                                        ImGui::BeginTooltip();
-
-                                        if (uuid)
-                                            ImGui::Text("%llu", uuid);
-                                        else
-                                            ImGui::Text("Null Entity!");
-
-                                        ImGui::EndTooltip();
-                                    }
-
-                                    ImGui::SameLine();
-                                    if (ImGui::Button("X"))
-                                    {
-                                        scriptField.SetValue<uint64_t>(0);
-                                    }
-                                    break;
-                                }
-                                }
-                            }
-                            else
-                            {
-                                ScriptFieldInstance &fieldInstance = entityFields[name];
-                                switch (field.Type)
-                                {
-                                case ScriptFieldType::Float:
-                                {
-                                    float data = 0.0f;
-                                    if (ImGui::DragFloat(name.c_str(), &data, 0.1f))
-                                    {
-                                        fieldInstance.Field = field;
-                                        fieldInstance.SetValue<float>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Int:
-                                {
-                                    int data = 0;
-                                    if (ImGui::DragInt(name.c_str(), &data))
-                                    {
-                                        fieldInstance.Field = field;
-                                        fieldInstance.SetValue<int>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Vector2:
-                                {
-                                    glm::vec2 data(0.0f);
-                                    if (ImGui::DragFloat2(name.c_str(), &data.x, 0.1f))
-                                    {
-                                        fieldInstance.Field = field;
-                                        fieldInstance.SetValue<glm::vec2>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Vector3:
-                                {
-                                    glm::vec3 data(0.0f);
-                                    if (ImGui::DragFloat3(name.c_str(), &data.x, 0.1f))
-                                    {
-                                        fieldInstance.Field = field;
-                                        fieldInstance.SetValue<glm::vec3>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Vector4:
-                                {
-                                    glm::vec4 data(0.0f);
-                                    if (ImGui::DragFloat4(name.c_str(), &data.x, 0.1f))
-                                    {
-                                        fieldInstance.Field = field;
-                                        fieldInstance.SetValue<glm::vec4>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Entity:
-                                {
-                                    ImGui::Button("Drag Here");
-
-                                    if (ImGui::BeginDragDropTarget())
-                                    {
-                                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY_SOURCE_ITEM"))
-                                        {
-                                            LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ENTITY ITEM");
-                                            if (payload->DataSize == sizeof(Entity))
-                                            {
-                                                Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get()};
-                                                fieldInstance.Field = field;
-                                                fieldInstance.SetValue<uint64_t>(src.GetUUID());
-                                            }
-                                        }
-                                        ImGui::EndDragDropTarget();
-                                    }
-
-                                    if (ImGui::IsItemHovered())
-                                    {
-                                        ImGui::BeginTooltip();
-                                        ImGui::Text("Null Entity!");
-                                        ImGui::EndTooltip();
-                                    }
-
-                                    ImGui::SameLine();
-                                    if (ImGui::Button("X"))
-                                    {
-                                        fieldInstance.Field = field;
-                                        fieldInstance.SetValue<uint64_t>(0);
-                                    }
-
-                                    break;
-                                }
-                                default: break;
-                                }
-                            }
+                            scriptInstance = ScriptEngine::GetInstance()->GetEntityScriptInstance(selectedEntity.GetUUID());
                         }
+
+                        if (classRegisteredInstanceField)
+                        {
+							for (const auto &[name, field] : scriptClass->GetFields())
+							{
+								ImGui::PushID(name.c_str());
+
+								ImGui::Text(name.c_str());
+
+                                ImGui::SameLine();
+
+                                auto it = classRegisteredInstanceField->find(name);
+								if (it != classRegisteredInstanceField->end())
+								{
+									ScriptInstanceField &instanceField = it->second;
+
+									switch (instanceField.field.Type)
+									{
+									case ScriptFieldType::Float:
+									{
+										auto data = instanceField.GetValue<float>();
+										if (ImGui::DragFloat("##_field_value", &data, 0.1f))
+										{
+                                           if (scriptInstance)
+                                                scriptInstance->SetFieldValue<float>(name, data);
+                                            else
+                                                instanceField.SetValue<float>(data);
+										}
+										break;
+									}
+									case ScriptFieldType::Int:
+									{
+										auto data = instanceField.GetValue<int>();
+										if (ImGui::DragInt("##_field_value", &data))
+										{
+                                         if (scriptInstance)
+                                                scriptInstance->SetFieldValue<int>(name, data);
+                                            else
+                                                instanceField.SetValue<int>(data);
+										}
+										break;
+									}
+									case ScriptFieldType::Double:
+									{
+                                      auto dData = instanceField.GetValue<double>();
+                                        float data = static_cast<float>(dData);
+										if (ImGui::DragFloat("##_field_value", &data, 0.1f))
+										{
+                                           dData = static_cast<double>(data);
+                                            if (scriptInstance)
+                                                scriptInstance->SetFieldValue<double>(name, dData);
+                                            else
+                                                instanceField.SetValue<double>(dData);
+										}
+										break;
+									}
+									case ScriptFieldType::Vector2:
+									{
+										auto data = instanceField.GetValue<glm::vec2>();
+										if (ImGui::DragFloat2("##_field_value", &data.x, 0.1f))
+										{
+                                           if (scriptInstance)
+                                                scriptInstance->SetFieldValue<glm::vec2>(name, data);
+                                            else
+                                                instanceField.SetValue<glm::vec2>(data);
+										}
+										break;
+									}
+									case ScriptFieldType::Vector3:
+									{
+										auto data = instanceField.GetValue<glm::vec3>();
+										if (ImGui::DragFloat3("##_field_value", &data.x, 0.1f))
+										{
+                                           if (scriptInstance)
+                                                scriptInstance->SetFieldValue<glm::vec3>(name, data);
+                                            else
+                                                instanceField.SetValue<glm::vec3>(data);
+										}
+										break;
+									}
+									case ScriptFieldType::Vector4:
+									{
+										auto data = instanceField.GetValue<glm::vec4>();
+										if (ImGui::DragFloat4("##_field_value", &data.x, 0.1f))
+										{
+                                           if (scriptInstance)
+                                                scriptInstance->SetFieldValue<glm::vec4>(name, data);
+                                            else
+                                                instanceField.SetValue<glm::vec4>(data);
+										}
+										break;
+									}
+									case ScriptFieldType::Entity:
+									{
+										auto uuid = instanceField.GetValue<uint64_t>();
+										std::string label = "Drag Here";
+										if (uuid)
+										{
+											Entity e = SceneManager::GetEntity(m_Scene.get(), UUID(uuid));
+											if (e)
+											{
+												label = e.GetName();
+											}
+										}
+
+										ImGui::Button(label.c_str());
+
+										if (ImGui::BeginDragDropTarget())
+										{
+											if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY_SOURCE_ITEM"))
+											{
+												LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ENTITY ITEM");
+												if (payload->DataSize == sizeof(Entity))
+												{
+													Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
+													uint64_t id = (uint64_t)src.GetUUID();
+													instanceField.field.Type = ScriptFieldType::Entity;
+                                                  if (scriptInstance)
+                                                        scriptInstance->SetFieldValue<uint64_t>(name, id);
+                                                    else
+                                                        instanceField.SetValue<uint64_t>(id);
+												}
+											}
+											ImGui::EndDragDropTarget();
+										}
+
+										if (ImGui::IsItemHovered())
+										{
+											ImGui::BeginTooltip();
+
+											if (uuid)
+												ImGui::Text("%llu", uuid);
+											else
+												ImGui::Text("Null Entity!");
+
+											ImGui::EndTooltip();
+										}
+
+										ImGui::SameLine();
+										if (ImGui::Button("X"))
+										{
+                                           if (scriptInstance)
+                                                scriptInstance->SetFieldValue<uint64_t>(name, 0);
+                                            else
+                                                instanceField.SetValue<uint64_t>(0);
+										}
+										break;
+									}
+									}
+								}
+
+								ImGui::PopID();
+							}
+                        }
+
                     }
                 }
 
