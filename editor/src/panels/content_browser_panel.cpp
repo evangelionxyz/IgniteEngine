@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+//Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 
 #include "content_browser_panel.hpp"
 #include "ignite/project/project.hpp"
@@ -194,10 +173,13 @@ namespace ignite
         {
             // Left side directory tree
             ImGui::BeginChild("left_item_browser", { 300.0f, 0.0f }, ImGuiChildFlags_ResizeX);
-            for (auto it = m_TreeNodes.begin() + 1; it != m_TreeNodes.end(); ++it)
+            if (!m_TreeNodes.empty())
             {
-                if (it->parent == 0)
-                    RenderFileTree(&(*it));
+                for (auto it = m_TreeNodes.begin() + 1; it != m_TreeNodes.end(); ++it)
+                {
+                    if (it->parent == 0)
+                        RenderFileTree(&(*it));
+                }
             }
             ImGui::EndChild();
             ImGui::SameLine();
@@ -207,138 +189,141 @@ namespace ignite
 
             // Insert path nodes
             FileTreeNode *node = m_TreeNodes.data();
-            auto f = Project::GetInstance()->GetAssetDirectory();
-            const auto &relativePath = std::filesystem::relative(m_CurrentDirectory, f);
-
-            for (const auto &path : relativePath)
+            if (node)
             {
-                if (node->path == relativePath)
-                {
-                    break;
-                }
+				auto f = Project::GetInstance()->GetAssetDirectory();
+				const auto &relativePath = std::filesystem::relative(m_CurrentDirectory, f);
 
-                if (node->children.contains(path))
-                {
-                    node = &m_TreeNodes[node->children[path]];
-                }
-            }
+				for (const auto &path : relativePath)
+				{
+					if (node->path == relativePath)
+					{
+						break;
+					}
 
-            if (node->children.empty())
-            {
-                ImGui::Text("This folder is empty");
-            }
+					if (node->children.contains(path))
+					{
+						node = &m_TreeNodes[node->children[path]];
+					}
+				}
 
-            static float padding = 12.0f;
-            const float cellSize = static_cast<float>(m_ThumbnailSize) + padding;
-            const float &childWindowWidth = ImGui::GetContentRegionAvail().x;
+				if (node->children.empty())
+				{
+					ImGui::Text("This folder is empty");
+				}
 
-            int columnCount = static_cast<int>(childWindowWidth / cellSize);
-            columnCount = std::max(columnCount, 1);
+				static float padding = 12.0f;
+				const float cellSize = static_cast<float>(m_ThumbnailSize) + padding;
+				const float &childWindowWidth = ImGui::GetContentRegionAvail().x;
 
-            ImGui::Columns(columnCount, nullptr, false);
+				int columnCount = static_cast<int>(childWindowWidth / cellSize);
+				columnCount = std::max(columnCount, 1);
 
-            for (const auto& item : node->children | std::views::keys)
-            {
-                std::string filenameStr = item.generic_string();
-                ImGui::PushID(filenameStr.c_str());
+				ImGui::Columns(columnCount, nullptr, false);
 
-                std::filesystem::path path = m_CurrentDirectory / item;
-                bool isDirectory = std::filesystem::is_directory(path);
+				for (const auto &item : node->children | std::views::keys)
+				{
+					std::string filenameStr = item.generic_string();
+					ImGui::PushID(filenameStr.c_str());
 
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+					std::filesystem::path path = m_CurrentDirectory / item;
+					bool isDirectory = std::filesystem::is_directory(path);
 
-                Ref<Texture> icon;
-                if (isDirectory)
-                {
-                    icon = m_Icons["folder"];
-                }
-                else if (IsImageFile(path))
-                {
-                    icon = GetOrCreateThumbnail(path);
-                    if (!icon)
-                        icon = m_Icons["unknown"];
-                }
-                else
-                {
-                    icon = m_Icons["unknown"];
-                }
+					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
 
-                // Calculate display size with aspect ratio
-                float maxSize = static_cast<float>(m_ThumbnailSize);
-                ImVec2 displaySize = CalculateThumbnailDisplaySize(icon, maxSize);
-                
-                // Center the thumbnail vertically
-                float diff = maxSize - displaySize.y;
-                if (diff > 0)
-                {
-                    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + diff * 0.5f);
-                }
-                
-                ImTextureID iconId = reinterpret_cast<ImTextureID>( icon->GetHandle().Get());
-                ImGui::ImageButton(item.string().c_str(), iconId, displaySize);
+					Ref<Texture> icon;
+					if (isDirectory)
+					{
+						icon = m_Icons["folder"];
+					}
+					else if (IsImageFile(path))
+					{
+						icon = GetOrCreateThumbnail(path);
+						if (!icon)
+							icon = m_Icons["unknown"];
+					}
+					else
+					{
+						icon = m_Icons["unknown"];
+					}
 
-                if (ImGui::IsItemHovered())
-                {
-                    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-                    {
-                        if (isDirectory)
-                        {
-                            m_BackwardPathStack.push(m_CurrentDirectory);
-                            m_CurrentDirectory = path;
-                        }
-                    }
-                }
+					// Calculate display size with aspect ratio
+					float maxSize = static_cast<float>(m_ThumbnailSize);
+					ImVec2 displaySize = CalculateThumbnailDisplaySize(icon, maxSize);
 
-                if (ImGui::BeginPopupContextItem())
-                {
-                    if (ImGui::MenuItem("Open"))
-                    {
-                        if (isDirectory)
-                        {
-                            m_BackwardPathStack.push(m_CurrentDirectory);
-                            m_CurrentDirectory = path;
-                        }
-                        else
-                        {
-                            // Windows
-                            std::string command = std::format("\"{}\"", path.generic_string());
-                            std::system(command.c_str());
-                        }
-                    }
+					// Center the thumbnail vertically
+					float diff = maxSize - displaySize.y;
+					if (diff > 0)
+					{
+						ImGui::SetCursorPosY(ImGui::GetCursorPosY() + diff * 0.5f);
+					}
+
+					ImTextureID iconId = reinterpret_cast<ImTextureID>(icon->GetHandle().Get());
+					ImGui::ImageButton(item.string().c_str(), iconId, displaySize);
+
+					if (ImGui::IsItemHovered())
+					{
+						if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+						{
+							if (isDirectory)
+							{
+								m_BackwardPathStack.push(m_CurrentDirectory);
+								m_CurrentDirectory = path;
+							}
+						}
+					}
+
+					if (ImGui::BeginPopupContextItem())
+					{
+						if (ImGui::MenuItem("Open"))
+						{
+							if (isDirectory)
+							{
+								m_BackwardPathStack.push(m_CurrentDirectory);
+								m_CurrentDirectory = path;
+							}
+							else
+							{
+								// Windows
+								std::string command = std::format("\"{}\"", path.generic_string());
+								std::system(command.c_str());
+							}
+						}
 
 
-                    if (ImGui::MenuItem("Import"))
-                    {
-                        Project::GetInstance()->GetAssetManager().ImportAsset(path);
-                    }
+						if (ImGui::MenuItem("Import"))
+						{
+							Project::GetInstance()->GetAssetManager().ImportAsset(path);
+						}
 
-                    if (item.extension() == ".ixscene")
-                    {
-                        if (ImGui::MenuItem("Set As Default Scene"))
-                        {
-                            Project::GetInstance()->GetAssetManager().ImportAsset(path);
+						if (item.extension() == ".ixscene")
+						{
+							if (ImGui::MenuItem("Set As Default Scene"))
+							{
+								Project::GetInstance()->GetAssetManager().ImportAsset(path);
 
-                            AssetHandle handle = Project::GetInstance()->GetAssetManager().GetAssetHandle(path);
-                            Project::GetInstance()->SetDefaultScene(handle);
+								AssetHandle handle = Project::GetInstance()->GetAssetManager().GetAssetHandle(path);
+								Project::GetInstance()->SetDefaultScene(handle);
 
-                            ProjectSerializer serializer(Project::GetInstance());
-                            serializer.Serialize(Project::GetInstance()->GetFilepath());
-                        }
-                    }
+								ProjectSerializer serializer(Project::GetInstance());
+								serializer.Serialize(Project::GetInstance()->GetFilepath());
+							}
+						}
 
-                    ImGui::Separator();
-                    ImGui::Text("%s", filenameStr.c_str());
+						ImGui::Separator();
+						ImGui::Text("%s", filenameStr.c_str());
 
-                    ImGui::EndPopup();
-                }
+						ImGui::EndPopup();
+					}
 
-                DragDropSource(m_CurrentDirectory / item);
-                
-                ImGui::PopStyleColor();
-                ImGui::TextWrapped("%s", filenameStr.c_str());
+					DragDropSource(m_CurrentDirectory / item);
 
-                ImGui::NextColumn();
-                ImGui::PopID();
+					ImGui::PopStyleColor();
+					ImGui::TextWrapped("%s", filenameStr.c_str());
+
+					ImGui::NextColumn();
+					ImGui::PopID();
+				}
             }
 
             ImGui::Columns(1);
@@ -449,7 +434,10 @@ namespace ignite
 
 	void ContentBrowserPanel::RefreshEntryPathList()
     {
-        m_PathEntryList.erase(m_PathEntryList.begin() + 1, m_PathEntryList.end());
+        if (!m_PathEntryList.empty())
+        {
+            m_PathEntryList.erase(m_PathEntryList.begin() + 1, m_PathEntryList.end());
+        }
 
         const auto &relativePath = std::filesystem::relative(m_CurrentDirectory, Project::GetInstance()->GetAssetDirectory());
         auto currentDir = Project::GetInstance()->GetAssetDirectory();

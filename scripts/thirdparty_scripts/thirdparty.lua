@@ -79,7 +79,7 @@ Library["FBX_ALEMBIC_DEBUG"]           = "%{LibraryDir.FBX_SDK}/x64/debug/alembi
 Library["FBX_SDK_DEBUG"]               = "%{LibraryDir.FBX_SDK}/x64/debug/libfbxsdk-md.lib"
 Library["FBX_XML_DEBUG"]               = "%{LibraryDir.FBX_SDK}/x64/debug/libxml2.lib"
 
-Library["FBX_ALEMBIC"]                = "%{LibraryDir.FBX_SDK}/x64/release/alemibc.lib"
+Library["FBX_ALEMBIC"]                = "%{LibraryDir.FBX_SDK}/x64/release/alembic.lib"
 Library["FBX_SDK"]                    = "%{LibraryDir.FBX_SDK}/x64/release/libfbxsdk-md.lib"
 Library["FBX_XML"]                    = "%{LibraryDir.FBX_SDK}/x64/release/libxml2.lib"
 

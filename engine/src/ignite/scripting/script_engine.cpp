@@ -21,6 +21,12 @@ namespace ignite
 {
     namespace
     {
+        constexpr const char *kSerializeFieldAttributeTypeName = "Ignite.SerializeFieldAttribute";
+        constexpr const char *kEntityTypeName = "Ignite.Entity";
+    }
+
+    namespace
+    {
         static bool TryGetAssemblyWriteTime(const std::filesystem::path &filepath, std::filesystem::file_time_type &outTime)
         {
             std::error_code ec;
@@ -157,7 +163,6 @@ namespace ignite
 
         std::unordered_map<std::string, Ref<ScriptClass>> entityClasses;
         std::unordered_map<UUID, Ref<ScriptInstance>> entityInstances;
-        std::unordered_map<UUID, ScriptFieldMap> entityScriptFields;
     };
 
     ScriptEngineData *scriptEngineData = nullptr;
@@ -352,6 +357,12 @@ namespace ignite
             return false;
         }
 
+        if (!scriptEngineData->scriptHost->ConfigureSerialization(kSerializeFieldAttributeTypeName, kEntityTypeName))
+        {
+            LOG_ERROR("[Script Engine] Failed to configure script serialization type names");
+            return false;
+        }
+
         if (!scriptEngineData->scriptHost->InitializeInternalCalls())
         {
             LOG_ERROR("[Script Engine] Failed to initialize internal calls bridge");
@@ -405,7 +416,7 @@ namespace ignite
 
         for (auto &instance : scriptEngineData->entityInstances)
         {
-			scriptEngine->GetScriptHost()->DestroyInstance(instance.second->GetInstanceGuid());
+			scriptEngine->GetScriptHost()->DestroyInstance(instance.second->GetInstanceID());
         }
 
         scriptEngineData->entityInstances.clear();
@@ -427,32 +438,48 @@ namespace ignite
 
     void ScriptEngine::OnCreateEntity(Entity entity)
     {
-        if (const auto &sc = entity.GetComponent<ScriptComponent>(); EntityClassExists(sc.className))
+        if (!entity.HasComponent<ScriptComponent>())
+            return;
+
+        if (const auto &sc = entity.GetComponent<ScriptComponent>(); 
+            EntityClassExists(sc.className))
         {
             const UUID uuid = entity.GetUUID();
 
             const auto instance = std::make_shared<ScriptInstance>(scriptEngineData->entityClasses[sc.className], entity);
             scriptEngineData->entityInstances[uuid] = instance;
 
-            // TODO: Field value copying for HostFXR
-            // For now, we'll handle basic fields in ScriptInstance
-            // Complex types (Entity references) need C# bridge methods
-
             // C# On Create Function
             instance->InvokeOnCreate();
         }
     }
 
-    void ScriptEngine::OnUpdateEntity(Entity entity, float time)
+	void ScriptEngine::OnDestroyEntity(Entity entity)
+	{
+		if (!entity.HasComponent<ScriptComponent>())
+			return;
+
+        if (const auto &sc = entity.GetComponent<ScriptComponent>();
+            EntityClassExists(sc.className))
+        {
+            auto &instance = scriptEngineData->entityInstances[entity.GetUUID()];
+            instance->InvokeOnDestroy();
+
+            scriptEngineData->entityInstances.erase(entity.GetUUID());
+        }
+	}
+
+	void ScriptEngine::OnUpdateEntity(Entity entity, float time)
     {
         const UUID uuid = entity.GetUUID();
-        if (const auto &it = scriptEngineData->entityInstances.find(uuid); it == scriptEngineData->entityInstances.end())
+        if (const auto &it = scriptEngineData->entityInstances.find(uuid);
+            it == scriptEngineData->entityInstances.end())
         {
             LOG_ERROR("[Script Engine] Entity script instance is not attached! {} {}", entity.GetName(), static_cast<uint64_t>(uuid));
             return;
         }
 
-        const auto instance = scriptEngineData->entityInstances.at(uuid);
+        const auto &instance = scriptEngineData->entityInstances.at(uuid);
         instance->InvokeOnUpdate(time);
     }
 
@@ -470,14 +497,6 @@ namespace ignite
     std::unordered_map<std::string, Ref<ScriptClass>> ScriptEngine::GetEntityClasses()
     {
         return scriptEngineData->entityClasses;
-    }
-
-    ScriptFieldMap &ScriptEngine::GetScriptFieldMap(Entity entity)
-    {
-        LOG_ASSERT(entity.IsValid(), "[Script Engine] Failed to get entity");
-
-        const UUID uuid = entity.GetUUID();
-        return scriptEngineData->entityScriptFields[uuid];
     }
 
     std::vector<std::string> ScriptEngine::GetScriptClassStorage()
@@ -514,6 +533,7 @@ namespace ignite
 
     void ScriptEngine::LoadAppAssemblyClasses()
     {
+        auto previousEntityClasses = std::move(scriptEngineData->entityClasses);
         scriptEngineData->entityClasses.clear();
 
         const std::string appAssemblyName = scriptEngineData->appAssemblyFilepath.stem().string();
@@ -525,6 +545,7 @@ namespace ignite
             return;
         }
 
+        // Get classes names
         size_t start = 0;
         while (start <= derivedTypes.size())
         {
@@ -539,7 +560,84 @@ namespace ignite
                 const std::string classNamespace = (lastDot == std::string::npos) ? "" : fullName.substr(0, lastDot);
                 const std::string className = (lastDot == std::string::npos) ? fullName : fullName.substr(lastDot + 1);
 
-                scriptEngineData->entityClasses[fullName] = CreateRef<ScriptClass>(classNamespace, className, appAssemblyName);
+                const auto scriptClass = CreateRef<ScriptClass>(classNamespace, className, appAssemblyName);
+
+                const std::string fieldMetadata = scriptEngineData->scriptHost->GetTypeFields(fullName);
+                size_t fieldStart = 0;
+                while (fieldStart <= fieldMetadata.size())
+                {
+                    const size_t fieldEnd = fieldMetadata.find('|', fieldStart);
+                    const std::string fieldEntry = (fieldEnd == std::string::npos)
+                        ? fieldMetadata.substr(fieldStart)
+                        : fieldMetadata.substr(fieldStart, fieldEnd - fieldStart);
+
+                    if (!fieldEntry.empty())
+                    {
+                        const size_t sep0 = fieldEntry.find('~');
+                        const size_t sep1 = (sep0 == std::string::npos) ? std::string::npos : fieldEntry.find('~', sep0 + 1);
+                        const size_t sep2 = (sep1 == std::string::npos) ? std::string::npos : fieldEntry.find('~', sep1 + 1);
+
+                        if (sep0 != std::string::npos && sep1 != std::string::npos && sep2 != std::string::npos)
+                        {
+                            const std::string fieldName = fieldEntry.substr(0, sep0);
+                            const std::string managedTypeName = fieldEntry.substr(sep0 + 1, sep1 - sep0 - 1);
+                            const bool isPublic = fieldEntry.substr(sep1 + 1, sep2 - sep1 - 1) == "1";
+                            const bool hasSerializeField = fieldEntry.substr(sep2 + 1) == "1";
+
+                            ScriptField field;
+                            field.Name = fieldName;
+                            field.ManagedTypeName = managedTypeName;
+                            field.IsPublic = isPublic;
+                            field.HasSerializeFieldAttribute = hasSerializeField;
+
+                            const auto fieldTypeIt = s_ScriptFieldTypeMap.find(managedTypeName);
+                            if (fieldTypeIt != s_ScriptFieldTypeMap.end())
+                            {
+                                field.Type = fieldTypeIt->second;
+                                scriptClass->InsertField(fieldName, field);
+                            }
+                            else
+                            {
+                                LOG_WARN("[Script Engine] Unsupported script field type '{}.{}' ({})", fullName, fieldName, managedTypeName);
+                            }
+                        }
+                    }
+
+                    if (fieldEnd == std::string::npos)
+                    {
+                        break;
+                    }
+
+                    fieldStart = fieldEnd + 1;
+                }
+
+                auto previousClassIt = previousEntityClasses.find(fullName);
+                if (previousClassIt != previousEntityClasses.end() && previousClassIt->second)
+                {
+                    auto &previousInstances = previousClassIt->second->GetInstancesFields();
+                    auto &currentInstances = scriptClass->GetInstancesFields();
+
+                    for (auto &[instanceId, previousFields] : previousInstances)
+                    {
+                        auto &currentFields = currentInstances[instanceId];
+                        for (auto &[fieldName, fieldDef] : scriptClass->GetFields())
+                        {
+                            ScriptInstanceField instanceField;
+                            instanceField.field = fieldDef;
+
+                            auto previousFieldIt = previousFields.find(fieldName);
+                            if (previousFieldIt != previousFields.end() && previousFieldIt->second.field.Type == fieldDef.Type)
+                            {
+                                instanceField = previousFieldIt->second;
+                                instanceField.field = fieldDef;
+                            }
+
+                            currentFields[fieldName] = instanceField;
+                        }
+                    }
+                }
+
+                scriptEngineData->entityClasses[fullName] = scriptClass;
             }
 
             if (end == std::string::npos)

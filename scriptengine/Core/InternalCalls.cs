@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 using System;
 using System.Runtime.InteropServices;
@@ -100,6 +79,9 @@ public static class InternalCalls
         public IntPtr Sprite2DComponent_SetTilingFactor;
         public IntPtr Sprite2DComponent_GetTilingFactor;
 
+        public IntPtr Circle2DComponent_SetColor;
+        public IntPtr Circle2DComponent_GetColor;
+
         public IntPtr Rigidbody2DComponent_GetType;
         public IntPtr Rigidbody2DComponent_SetType;
         public IntPtr Rigidbody2DComponent_GetLinearVelocity;
@@ -140,6 +122,19 @@ public static class InternalCalls
         public IntPtr BoxCollider2DComponent_SetDensity;
         public IntPtr BoxCollider2DComponent_GetIsSensor;
         public IntPtr BoxCollider2DComponent_SetIsSensor;
+
+        public IntPtr CircleCollider2DComponent_GetCenter;
+        public IntPtr CircleCollider2DComponent_SetCenter;
+        public IntPtr CircleCollider2DComponent_GetRadius;
+        public IntPtr CircleCollider2DComponent_SetRadius;
+        public IntPtr CircleCollider2DComponent_GetRestitution;
+        public IntPtr CircleCollider2DComponent_SetRestitution;
+        public IntPtr CircleCollider2DComponent_GetFriction;
+        public IntPtr CircleCollider2DComponent_SetFriction;
+        public IntPtr CircleCollider2DComponent_GetDensity;
+        public IntPtr CircleCollider2DComponent_SetDensity;
+        public IntPtr CircleCollider2DComponent_GetIsSensor;
+        public IntPtr CircleCollider2DComponent_SetIsSensor;
     }
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -195,6 +190,11 @@ public static class InternalCalls
     private delegate void Sprite2DGetTilingFactorFn(ulong entityID, out NativeVector2 value);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void Circle2DSetColorFn(ulong entityID, NativeVector4 value);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void Circle2DGetColorFn(ulong entityID, out NativeVector4 value);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void Rigidbody2DGetTypeFn(ulong entityID, out int result);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void Rigidbody2DSetTypeFn(ulong entityID, int value);
@@ -243,6 +243,19 @@ public static class InternalCalls
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void BoxCollider2DSetBoolFn(ulong entityID, [MarshalAs(UnmanagedType.I1)] bool value);
 
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void CircleCollider2DGetVec2Fn(ulong entityID, out NativeVector2 result);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void CircleCollider2DSetVec2Fn(ulong entityID, NativeVector2 value);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void CircleCollider2DGetFloatFn(ulong entityID, out float result);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void CircleCollider2DSetFloatFn(ulong entityID, float value);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void CircleCollider2DGetBoolFn(ulong entityID, [MarshalAs(UnmanagedType.I1)] out bool result);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void CircleCollider2DSetBoolFn(ulong entityID, [MarshalAs(UnmanagedType.I1)] bool value);
+
     private static bool s_Initialized;
     private static DebugLogFn s_DebugLog;
     private static EntityHasComponentFn s_EntityHasComponent;
@@ -277,6 +290,10 @@ public static class InternalCalls
     private static Sprite2DGetColorFn s_Sprite2DGetColor;
     private static Sprite2DSetTilingFactorFn s_Sprite2DSetTilingFactor;
     private static Sprite2DGetTilingFactorFn s_Sprite2DGetTilingFactor;
+
+    private static Circle2DSetColorFn s_Circle2DSetColor;
+    private static Circle2DGetColorFn s_Circle2DGetColor;
+
     private static Rigidbody2DGetTypeFn s_Rigidbody2DGetType;
     private static Rigidbody2DSetTypeFn s_Rigidbody2DSetType;
     private static Rigidbody2DGetVec2Fn s_Rigidbody2DGetLinearVelocity;
@@ -317,6 +334,19 @@ public static class InternalCalls
     private static BoxCollider2DGetBoolFn s_BoxCollider2DGetIsSensor;
     private static BoxCollider2DSetBoolFn s_BoxCollider2DSetIsSensor;
 
+    private static CircleCollider2DGetVec2Fn s_CircleCollider2DGetCenter;
+    private static CircleCollider2DSetVec2Fn s_CircleCollider2DSetCenter;
+    private static CircleCollider2DGetFloatFn s_CircleCollider2DGetRadius;
+    private static CircleCollider2DSetFloatFn s_CircleCollider2DSetRadius;
+    private static CircleCollider2DGetFloatFn s_CircleCollider2DGetRestitution;
+    private static CircleCollider2DSetFloatFn s_CircleCollider2DSetRestitution;
+    private static CircleCollider2DGetFloatFn s_CircleCollider2DGetFriction;
+    private static CircleCollider2DSetFloatFn s_CircleCollider2DSetFriction;
+    private static CircleCollider2DGetFloatFn s_CircleCollider2DGetDensity;
+    private static CircleCollider2DSetFloatFn s_CircleCollider2DSetDensity;
+    private static CircleCollider2DGetBoolFn s_CircleCollider2DGetIsSensor;
+    private static CircleCollider2DSetBoolFn s_CircleCollider2DSetIsSensor;
+
     public static void Initialize(ulong apiPtr)
     {
         if (apiPtr == 0)
@@ -338,6 +368,7 @@ public static class InternalCalls
         s_InputGetMousePosition = Marshal.GetDelegateForFunctionPointer<InputGetMousePositionFn>(api.Input_GetMousePosition);
         s_InputSetMouseToCenter = Marshal.GetDelegateForFunctionPointer<InputSetMouseToCenterFn>(api.Input_SetMouseToCenter);
         s_InputSetCursorMode = Marshal.GetDelegateForFunctionPointer<InputSetCursorModeFn>(api.Input_SetCursorMode);
+        
         s_TransformGetForward = Marshal.GetDelegateForFunctionPointer<TransformGetVec3Fn>(api.TransformComponent_GetForward);
         s_TransformSetForward = Marshal.GetDelegateForFunctionPointer<TransformSetVec3Fn>(api.TransformComponent_SetForward);
         s_TransformGetRight = Marshal.GetDelegateForFunctionPointer<TransformGetVec3Fn>(api.TransformComponent_GetRight);
@@ -352,10 +383,15 @@ public static class InternalCalls
         s_TransformSetEulerAngles = Marshal.GetDelegateForFunctionPointer<TransformSetVec3Fn>(api.TransformComponent_SetEulerAngles);
         s_TransformGetScale = Marshal.GetDelegateForFunctionPointer<TransformGetVec3Fn>(api.TransformComponent_GetScale);
         s_TransformSetScale = Marshal.GetDelegateForFunctionPointer<TransformSetVec3Fn>(api.TransformComponent_SetScale);
+
         s_Sprite2DSetColor = Marshal.GetDelegateForFunctionPointer<Sprite2DSetColorFn>(api.Sprite2DComponent_SetColor);
         s_Sprite2DGetColor = Marshal.GetDelegateForFunctionPointer<Sprite2DGetColorFn>(api.Sprite2DComponent_GetColor);
         s_Sprite2DSetTilingFactor = Marshal.GetDelegateForFunctionPointer<Sprite2DSetTilingFactorFn>(api.Sprite2DComponent_SetTilingFactor);
         s_Sprite2DGetTilingFactor = Marshal.GetDelegateForFunctionPointer<Sprite2DGetTilingFactorFn>(api.Sprite2DComponent_GetTilingFactor);
+
+        s_Circle2DSetColor = Marshal.GetDelegateForFunctionPointer<Circle2DSetColorFn>(api.Circle2DComponent_SetColor);
+        s_Circle2DGetColor = Marshal.GetDelegateForFunctionPointer<Circle2DGetColorFn>(api.Circle2DComponent_GetColor);
+
         s_Rigidbody2DGetType = Marshal.GetDelegateForFunctionPointer<Rigidbody2DGetTypeFn>(api.Rigidbody2DComponent_GetType);
         s_Rigidbody2DSetType = Marshal.GetDelegateForFunctionPointer<Rigidbody2DSetTypeFn>(api.Rigidbody2DComponent_SetType);
         s_Rigidbody2DGetLinearVelocity = Marshal.GetDelegateForFunctionPointer<Rigidbody2DGetVec2Fn>(api.Rigidbody2DComponent_GetLinearVelocity);
@@ -383,6 +419,7 @@ public static class InternalCalls
         s_Rigidbody2DGetMass = Marshal.GetDelegateForFunctionPointer<Rigidbody2DGetMassFn>(api.Rigidbody2DComponent_GetMass);
         s_Rigidbody2DGetIsBullet = Marshal.GetDelegateForFunctionPointer<Rigidbody2DGetIsBulletFn>(api.Rigidbody2DComponent_GetIsBullet);
         s_Rigidbody2DSetIsBullet = Marshal.GetDelegateForFunctionPointer<Rigidbody2DSetIsBulletFn>(api.Rigidbody2DComponent_SetIsBullet);
+        
         s_BoxCollider2DGetSize = Marshal.GetDelegateForFunctionPointer<BoxCollider2DGetVec2Fn>(api.BoxCollider2DComponent_GetSize);
         s_BoxCollider2DSetSize = Marshal.GetDelegateForFunctionPointer<BoxCollider2DSetVec2Fn>(api.BoxCollider2DComponent_SetSize);
         s_BoxCollider2DGetOffset = Marshal.GetDelegateForFunctionPointer<BoxCollider2DGetVec2Fn>(api.BoxCollider2DComponent_GetOffset);
@@ -395,6 +432,19 @@ public static class InternalCalls
         s_BoxCollider2DSetDensity = Marshal.GetDelegateForFunctionPointer<BoxCollider2DSetFloatFn>(api.BoxCollider2DComponent_SetDensity);
         s_BoxCollider2DGetIsSensor = Marshal.GetDelegateForFunctionPointer<BoxCollider2DGetBoolFn>(api.BoxCollider2DComponent_GetIsSensor);
         s_BoxCollider2DSetIsSensor = Marshal.GetDelegateForFunctionPointer<BoxCollider2DSetBoolFn>(api.BoxCollider2DComponent_SetIsSensor);
+
+        s_CircleCollider2DGetCenter = Marshal.GetDelegateForFunctionPointer<CircleCollider2DGetVec2Fn>(api.CircleCollider2DComponent_GetCenter);
+        s_CircleCollider2DSetCenter = Marshal.GetDelegateForFunctionPointer<CircleCollider2DSetVec2Fn>(api.CircleCollider2DComponent_SetCenter);
+        s_CircleCollider2DGetRadius = Marshal.GetDelegateForFunctionPointer<CircleCollider2DGetFloatFn>(api.CircleCollider2DComponent_GetRadius);
+        s_CircleCollider2DSetRadius = Marshal.GetDelegateForFunctionPointer<CircleCollider2DSetFloatFn>(api.CircleCollider2DComponent_SetRadius);
+        s_CircleCollider2DGetRestitution = Marshal.GetDelegateForFunctionPointer<CircleCollider2DGetFloatFn>(api.CircleCollider2DComponent_GetRestitution);
+        s_CircleCollider2DSetRestitution = Marshal.GetDelegateForFunctionPointer<CircleCollider2DSetFloatFn>(api.CircleCollider2DComponent_SetRestitution);
+        s_CircleCollider2DGetFriction = Marshal.GetDelegateForFunctionPointer<CircleCollider2DGetFloatFn>(api.CircleCollider2DComponent_GetFriction);
+        s_CircleCollider2DSetFriction = Marshal.GetDelegateForFunctionPointer<CircleCollider2DSetFloatFn>(api.CircleCollider2DComponent_SetFriction);
+        s_CircleCollider2DGetDensity = Marshal.GetDelegateForFunctionPointer<CircleCollider2DGetFloatFn>(api.CircleCollider2DComponent_GetDensity);
+        s_CircleCollider2DSetDensity = Marshal.GetDelegateForFunctionPointer<CircleCollider2DSetFloatFn>(api.CircleCollider2DComponent_SetDensity);
+        s_CircleCollider2DGetIsSensor = Marshal.GetDelegateForFunctionPointer<CircleCollider2DGetBoolFn>(api.CircleCollider2DComponent_GetIsSensor);
+        s_CircleCollider2DSetIsSensor = Marshal.GetDelegateForFunctionPointer<CircleCollider2DSetBoolFn>(api.CircleCollider2DComponent_SetIsSensor);
 
         s_Initialized = true;
     }
@@ -665,6 +715,19 @@ public static class InternalCalls
         result = ToManaged(native);
     }
 
+    internal static void Circle2DComponent_SetColor(ulong entityID, Vector4 value)
+    {
+        EnsureInitialized();
+        s_Circle2DSetColor(entityID, ToNative(value));
+    }
+
+    internal static void Circle2DComponent_GetColor(ulong entityID, out Vector4 result)
+    {
+        EnsureInitialized();
+        s_Circle2DGetColor(entityID, out NativeVector4 native);
+        result = ToManaged(native);
+    }
+
     internal static void Rigidbody2DComponent_GetType(ulong entityID, out int result)
     {
         EnsureInitialized();
@@ -900,5 +963,79 @@ public static class InternalCalls
     {
         EnsureInitialized();
         s_BoxCollider2DSetIsSensor(entityID, value);
+    }
+
+    internal static void CircleCollider2DComponent_GetCenter(ulong entityID, out Vector2 result)
+    {
+        EnsureInitialized();
+        s_CircleCollider2DGetCenter(entityID, out NativeVector2 native);
+        result = ToManaged(native);
+    }
+
+    internal static void CircleCollider2DComponent_SetCenter(ulong entityID, Vector2 value)
+    {
+        EnsureInitialized();
+        s_CircleCollider2DSetCenter(entityID, ToNative(value));
+    }
+
+    internal static void CircleCollider2DComponent_GetRadius(ulong entityID, out float result)
+    {
+        EnsureInitialized();
+        s_CircleCollider2DGetRadius(entityID, out float native);
+        result = native;
+    }
+
+    internal static void CircleCollider2DComponent_SetRadius(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_CircleCollider2DSetRadius(entityID, value);
+    }
+
+    internal static void CircleCollider2DComponent_GetRestitution(ulong entityID, out float result)
+    {
+        EnsureInitialized();
+        s_CircleCollider2DGetRestitution(entityID, out result);
+    }
+
+    internal static void CircleCollider2DComponent_SetRestitution(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_CircleCollider2DSetRestitution(entityID, value);
+    }
+
+    internal static void CircleCollider2DComponent_GetFriction(ulong entityID, out float result)
+    {
+        EnsureInitialized();
+        s_CircleCollider2DGetFriction(entityID, out result);
+    }
+
+    internal static void CircleCollider2DComponent_SetFriction(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_CircleCollider2DSetFriction(entityID, value);
+    }
+
+    internal static void CircleCollider2DComponent_GetDensity(ulong entityID, out float result)
+    {
+        EnsureInitialized();
+        s_CircleCollider2DGetDensity(entityID, out result);
+    }
+
+    internal static void CircleCollider2DComponent_SetDensity(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_CircleCollider2DSetDensity(entityID, value);
+    }
+
+    internal static void CircleCollider2DComponent_GetIsSensor(ulong entityID, out bool result)
+    {
+        EnsureInitialized();
+        s_CircleCollider2DGetIsSensor(entityID, out result);
+    }
+
+    internal static void CircleCollider2DComponent_SetIsSensor(ulong entityID, bool value)
+    {
+        EnsureInitialized();
+        s_CircleCollider2DSetIsSensor(entityID, value);
     }
 }

@@ -84,6 +84,9 @@ namespace ignite
         void DrawLine(const glm::vec3 &pos0, const glm::vec3 &pos1, const glm::vec4& color = glm::vec4(1.0f));
         void DrawAABB(const AABB& aabb, const glm::vec4& color = glm::vec4(1.0f));
 
+        void DrawCircle(const glm::vec3& position, const glm::vec3 &scale, const glm::vec4& color = glm::vec4(1.0f), float thickness = -1.0f, float fade = 0.005f);
+        void DrawCircle(const glm::mat4 &transform, const glm::vec4 &color = glm::vec4(1.0f), float thickness = -1.0f, float fade = 0.005f);
+
         void DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
         void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
         void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
@@ -91,6 +94,7 @@ namespace ignite
 
         void InitQuadData();
         void InitLineData();
+        void InitCircleData();
 
         void ClearPipelineCache();
         
@@ -102,6 +106,7 @@ namespace ignite
         nvrhi::ICommandList *m_Cmd;
         BatchRender<Vertex2DQuad> m_QuadBatch;
         BatchRender<Vertex2DLine> m_LineBatch;
+        BatchRender<Vertex2DCircle> m_CircleBatch;
         nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
     };
 }

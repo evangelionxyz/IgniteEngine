@@ -41,9 +41,11 @@ namespace ignite
     const uint8_t MAX_TEXTURE_BATCH_COUNT = 32;
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_LinePSOCache;
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_QuadPSOCache;
+    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_CirclePSOCache;
 
     static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_QuadBindingSetCache;
     static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_LineBindingSetCache;
+    static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_CircleBindingSetCache;
 
     // Helper to build a quad pipeline for a framebuffer (once) and cache it.
     static Ref<GraphicsPipeline> GetQuadPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
@@ -78,7 +80,6 @@ namespace ignite
 
         nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
 
-        params.fillMode = nvrhi::RasterFillMode::Solid;
         params.cullMode = nvrhi::RasterCullMode::None;
         params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
 
@@ -116,6 +117,7 @@ namespace ignite
         params.fillMode = nvrhi::RasterFillMode::Wireframe;
         params.cullMode = nvrhi::RasterCullMode::None;
         params.primitiveType = nvrhi::PrimitiveType::LineList;
+        params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
 
         Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
         nvrhi::BindingLayoutDesc bindingLayoutDesc;
@@ -164,6 +166,8 @@ namespace ignite
         nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
         LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
 
+        s_QuadBindingSetCache.emplace(bindingLayout, bindingSet);
+
         return bindingSet;
     }
 
@@ -183,6 +187,67 @@ namespace ignite
         nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
         LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
 
+        s_LineBindingSetCache.emplace(bindingLayout, bindingSet);
+
+        return bindingSet;
+    }
+
+    static Ref<GraphicsPipeline> GetCirclePipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+    {
+        auto key = MakeFramebufferKey(framebuffer);
+        auto it = s_CirclePSOCache.find(key);
+        if (it != s_CirclePSOCache.end())
+            return it->second;
+
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+        const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+        bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+
+        GraphicsPipelineParams params;
+        params.enableBlend = true;
+        params.enableDepthWrite = hasDepthAttachment;
+        params.enableDepthTest = hasDepthAttachment;
+        params.enableDepthStencil = false;
+        params.fillMode = fillMode;
+        params.cullMode = nvrhi::RasterCullMode::None;
+        params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
+
+        nvrhi::BindingLayoutDesc bindingLayoutDesc;
+        bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
+        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
+
+        nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
+
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_circle.vertex.hlsl", ShaderType::Vertex, true);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_circle.pixel.hlsl", ShaderType::Pixel, true);
+
+        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
+        gp->SetShaders({ vertexShader, pixelShader })
+            .AddBindingLayout(bindingLayout)
+            .Build(framebuffer, params);
+
+        s_CirclePSOCache.emplace(key, gp);
+
+        return gp;
+    }
+
+    static nvrhi::BindingSetHandle GetCircleBindingSet(nvrhi::IBindingLayout *bindingLayout)
+    {
+        auto it = s_CircleBindingSetCache.find(bindingLayout);
+        if (it != s_CircleBindingSetCache.end())
+            return it->second;
+
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+        nvrhi::BindingSetDesc bindingSetDesc;
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
+
+        nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
+        LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
+
+        s_CircleBindingSetCache.emplace(bindingLayout, bindingSet);
+
         return bindingSet;
     }
 
@@ -195,21 +260,24 @@ namespace ignite
     {
         InitQuadData();
         InitLineData();
+        InitCircleData();
     }
 
     Renderer2D::~Renderer2D()
     {
         s_QuadPSOCache.clear();
         s_LinePSOCache.clear();
+        s_CirclePSOCache.clear();
 
         s_QuadBindingSetCache.clear();
         s_LineBindingSetCache.clear();
+        s_CircleBindingSetCache.clear();
     }
 
     void Renderer2D::InitQuadData()
     {
         size_t vertAllocSize = m_QuadBatch.maxVertices * sizeof(Vertex2DQuad);
-        m_QuadBatch.vertexBufferBase = new Vertex2DQuad[vertAllocSize];
+        m_QuadBatch.vertexBufferBase = new Vertex2DQuad[m_QuadBatch.maxVertices];
 
         m_QuadBatch.vertexBuffer = VertexBuffer::Create(vertAllocSize);
         m_QuadBatch.indexBuffer = IndexBuffer::Create(m_QuadBatch.maxIndices * sizeof(uint32_t));
@@ -251,14 +319,46 @@ namespace ignite
     void Renderer2D::InitLineData()
     {
         size_t vertAllocSize = m_LineBatch.maxVertices * sizeof(Vertex2DLine);
-        m_LineBatch.vertexBufferBase = new Vertex2DLine[vertAllocSize];
+        m_LineBatch.vertexBufferBase = new Vertex2DLine[m_LineBatch.maxVertices];
         m_LineBatch.vertexBuffer = VertexBuffer::Create(vertAllocSize);
+    }
+
+    void Renderer2D::InitCircleData()
+    {
+        size_t vertAllocSize = m_CircleBatch.maxVertices * sizeof(Vertex2DCircle);
+        m_CircleBatch.vertexBufferBase = new Vertex2DCircle[m_CircleBatch.maxVertices];
+        m_CircleBatch.vertexBuffer = VertexBuffer::Create(vertAllocSize);
+        m_CircleBatch.indexBuffer = IndexBuffer::Create(m_CircleBatch.maxIndices * sizeof(uint32_t));
+
+        std::vector<uint32_t> indices(m_CircleBatch.maxIndices);
+
+        uint32_t offset = 0;
+        for (uint32_t i = 0; i < m_CircleBatch.maxIndices; i += 6)
+        {
+            indices[0 + i] = offset + 0;
+            indices[1 + i] = offset + 1;
+            indices[2 + i] = offset + 2;
+
+            indices[3 + i] = offset + 0;
+            indices[4 + i] = offset + 3;
+            indices[5 + i] = offset + 1;
+
+            offset += 4;
+        }
+
+        auto device = DeviceManager::GetInstance()->GetDevice();
+        nvrhi::CommandListHandle cmd = device->createCommandList();
+        cmd->open();
+        m_CircleBatch.indexBuffer->SetData(cmd, Buffer(indices.data(), indices.size() * sizeof(uint32_t)));
+        cmd->close();
+        device->executeCommandList(cmd);
     }
 
     void Renderer2D::ClearPipelineCache()
     {
         s_LinePSOCache.clear();
         s_QuadPSOCache.clear();
+        s_CirclePSOCache.clear();
     }
 
     void Renderer2D::Begin(nvrhi::ICommandList *cmd)
@@ -272,6 +372,11 @@ namespace ignite
         m_LineBatch.indexCount = 0;
         m_LineBatch.count = 0;
         m_LineBatch.vertexBufferPtr = m_LineBatch.vertexBufferBase;
+
+        // Circle data
+        m_CircleBatch.indexCount = 0;
+        m_CircleBatch.count = 0;
+        m_CircleBatch.vertexBufferPtr = m_CircleBatch.vertexBufferBase;
 
         m_Cmd = cmd;
     }
@@ -301,6 +406,30 @@ namespace ignite
             args.instanceCount = 1;
 
             m_Cmd->draw(args);
+        }
+
+        if (m_CircleBatch.indexCount > 0)
+        {
+            const size_t bufferSize = reinterpret_cast<uint8_t *>(m_CircleBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_CircleBatch.vertexBufferBase);
+            m_CircleBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_CircleBatch.vertexBufferBase, bufferSize));
+
+            Ref<GraphicsPipeline> gp = GetCirclePipelineForFB(framebuffer, m_FillMode);
+            nvrhi::BindingSetHandle bindingSet = GetCircleBindingSet(gp->GetBindingLayout(0));
+
+            const auto graphicsState = nvrhi::GraphicsState()
+                .setPipeline(gp->GetHandle())
+                .setFramebuffer(framebuffer)
+                .addBindingSet(bindingSet)
+                .setViewport(nvrhi::ViewportState().addViewportAndScissorRect(viewport))
+                .addVertexBuffer(nvrhi::VertexBufferBinding{ m_CircleBatch.vertexBuffer->GetHandle(), 0, 0 })
+                .setIndexBuffer({ m_CircleBatch.indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+            m_Cmd->setGraphicsState(graphicsState);
+
+            nvrhi::DrawArguments args;
+            args.vertexCount = m_CircleBatch.indexCount;
+            args.instanceCount = 1;
+
+            m_Cmd->drawIndexed(args);
         }
 
         if (m_QuadBatch.indexCount > 0)
@@ -335,6 +464,9 @@ namespace ignite
 
         m_LineBatch.indexCount = 0;
         m_LineBatch.count = 0;
+
+        m_CircleBatch.indexCount = 0;
+        m_CircleBatch.count = 0;
     }
 
     void Renderer2D::DrawBox(const glm::mat4 &transform, const glm::vec4 &color)
@@ -438,7 +570,7 @@ namespace ignite
         m_LineBatch.count++;
     }
 
-    void Renderer2D::DrawAABB(const AABB &aabb, const glm::vec4 &color /*= glm::vec4(1.0f)*/)
+    void Renderer2D::DrawAABB(const AABB &aabb, const glm::vec4 &color)
     {
         // Bottom face
         DrawLine({ {aabb.min.x, aabb.min.y, aabb.min.z}, {aabb.max.x, aabb.min.y, aabb.min.z} }, color);
@@ -459,7 +591,29 @@ namespace ignite
         DrawLine({ {aabb.min.x, aabb.min.y, aabb.max.z}, {aabb.min.x, aabb.max.y, aabb.max.z} }, color);
     }
 
-    void Renderer2D::DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &tilingFactor)
+    void Renderer2D::DrawCircle(const glm::vec3 &position, const glm::vec3 &scale, const glm::vec4 &color, float thickness, float fade)
+    {
+        DrawCircle(glm::translate(position) * glm::scale(scale), color, thickness, fade);
+    }
+
+	void Renderer2D::DrawCircle(const glm::mat4 &transform, const glm::vec4 &color, float thickness, float fade)
+	{
+		if (m_CircleBatch.count >= m_CircleBatch.maxCount)
+			Renderer2D::End();
+
+		for (uint32_t i = 0; i < 4; ++i)
+		{
+			m_CircleBatch.vertexBufferPtr->position = transform * QUAD_POSITIONS[i];
+			m_CircleBatch.vertexBufferPtr->localPosition = QUAD_POSITIONS[i];
+			m_CircleBatch.vertexBufferPtr->color = color;
+			m_CircleBatch.vertexBufferPtr++;
+		}
+
+		m_CircleBatch.indexCount += 6;
+		m_CircleBatch.count++;
+	}
+
+	void Renderer2D::DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &tilingFactor)
     {
         if (m_QuadBatch.count >= m_QuadBatch.maxCount)
             Renderer2D::End();
@@ -517,7 +671,8 @@ namespace ignite
             Renderer2D::End();
 
         static constexpr uint32_t quadVertexCount = 4;
-        static constexpr glm::vec2 textureCoords[] = {
+        static constexpr glm::vec2 textureCoords[] =
+        {
             { 0.0f, 1.0f },
             { 1.0f, 0.0f },
             { 0.0f, 0.0f },

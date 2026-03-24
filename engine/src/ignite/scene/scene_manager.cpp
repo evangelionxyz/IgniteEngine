@@ -25,8 +25,10 @@
 #include "scene.hpp"
 #include "entity.hpp"
 #include "entity_command_manager.hpp"
+#include "entity_destroy_command.hpp"
 
 #include "ignite/physics/2d/physics_2d.hpp"
+#include "ignite/physics/jolt/jolt_physics.hpp"
 
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/uuid.hpp"
@@ -156,7 +158,45 @@ namespace ignite
         return createdEntity;
     }
 
-    Entity SceneManager::CreateMesh(Scene *scene, const std::string &name, UUID uuid)
+	Entity SceneManager::CreateCircle(Scene *scene, const std::string &name, UUID uuid)
+	{
+		// create local storage for entity data
+		Entity createdEntity;
+
+		// prepare entity creation logic
+		std::function createFunc = [=, &createdEntity]() mutable
+			{
+				createdEntity = CreateEntity(scene, name, EntityType_Node, uuid);
+				createdEntity.AddComponent<Circle2DComponent>();
+			};
+
+		// immediately call createFunc to initialize createdEntity
+		createFunc();
+
+		// capture scene and entity by value to preserve the for undo
+		Scene *capturedScene = scene;
+		UUID capturedUUID = createdEntity.GetComponent<IDComponent>().uuid;
+
+		std::function destroyFunc = [capturedScene, capturedUUID]()
+			{
+				if (Entity entityToDestroy = GetEntity(capturedScene, capturedUUID))
+				{
+					DestroyEntity(capturedScene, entityToDestroy);
+				}
+			};
+
+		CommandManager::AddCommand(
+			CreateScope<EntityManagerCommand>(
+				createFunc,
+				destroyFunc,
+				CommandState_Create
+			)
+		);
+
+		return createdEntity;
+	}
+
+	Entity SceneManager::CreateMesh(Scene *scene, const std::string &name, UUID uuid)
     {
         scene->SetDirtyFlag(true);
 
@@ -245,6 +285,41 @@ namespace ignite
         return createdEntity;
     }
 
+    Entity SceneManager::CreateEmptyEntity(Scene *scene, const std::string &name, UUID uuid)
+    {
+        // create local storage for entity data
+        Entity createdEntity;
+
+        // prepare entity creation logic
+        std::function createFunc = [=, &createdEntity]() mutable
+        {
+            createdEntity = CreateEntity(scene, name, EntityType_Node, uuid);
+        };
+
+        // immediately call createFunc to initialize createdEntity
+        createFunc();
+
+        // capture by value for undo safety
+        Scene *capturedScene = scene;
+        UUID capturedUUID = createdEntity.GetComponent<IDComponent>().uuid;
+
+        std::function destroyFunc = [capturedScene, capturedUUID]()
+        {
+            if (Entity entityToDestroy = GetEntity(capturedScene, capturedUUID))
+                DestroyEntity(capturedScene, entityToDestroy);
+        };
+
+        CommandManager::AddCommand(
+            CreateScope<EntityManagerCommand>(
+                createFunc,
+                destroyFunc,
+                CommandState_Create
+            )
+        );
+
+        return createdEntity;
+    }
+
     void SceneManager::RenameEntity(Scene *scene, Entity entity, const std::string &newName)
     {
         scene->SetDirtyFlag(true);
@@ -263,6 +338,9 @@ namespace ignite
         if (!scene || !scene->registry->valid(entity))
             return;
 
+		scene->physics->DestroyEntity(entity);
+		scene->physics2D->DestroyEntity(entity);
+
         IDComponent idComp = entity.GetComponent<IDComponent>();
 
         // recursively destroy children
@@ -273,7 +351,6 @@ namespace ignite
         }
 
         scene->registry->destroy(entity);
-        scene->physics2D->DestroyBody(entity);
         scene->entities.erase(idComp.uuid);
         
         // remove from parent
@@ -330,6 +407,29 @@ namespace ignite
 
             // add child to parent
             parentIDComp.AddChild(newEntityIDComp.uuid);
+        }
+
+        if (scene->IsRunning())
+        {
+		    scene->physics->InstantiateEntity(newEntity);
+		    scene->physics2D->InstantiateEntity(newEntity);
+        }
+
+        if (!scene->IsRunning())
+        {
+			// Capture the new entity UUID so undo can destroy it
+			UUID newUUID = newEntityIDComp.uuid;
+			CommandManager::AddCommand(
+				CreateScope<EntityManagerCommand>(
+					[scene, newUUID]() { /* no-op: already duplicated */ },
+					[scene, newUUID]()
+					{
+						if (Entity e = GetEntity(scene, newUUID))
+							DestroyEntity(scene, e);
+					},
+					CommandState_Create
+				)
+			);
         }
 
         return newEntity;

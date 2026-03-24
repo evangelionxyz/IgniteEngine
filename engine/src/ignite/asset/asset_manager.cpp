@@ -57,8 +57,6 @@ namespace ignite {
             unsigned long long id = std::stoull(ss.str());
             LOG_WARN("[Asset Manager] Worker [{0}]: {1}", i, id);
         }
-
-        LOG_WARN("\n");
     }
 
     AssetManager::~AssetManager()

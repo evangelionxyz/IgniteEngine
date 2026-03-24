@@ -127,7 +127,6 @@ project "IgniteEngine"
             '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll" "%{cfg.targetdir}"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/SDL3/lib/windows/x64/SDL3.dll" "%{cfg.targetdir}"',
             '{COPYFILE} "%{LibraryDir.VULKAN_SDK_BIN}/dxcompiler.dll" "%{cfg.targetdir}"',
-            '{COPYFILE} "%{LibraryDir.FBX_SDK}/x64/debug/libfbxsdk.dll" "%{cfg.targetdir}"',
             
             -- Copying dotnet libraries
             '{COPYFILE} "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.dll\" "%{cfg.targetdir}\"',
@@ -153,6 +152,9 @@ project "IgniteEngine"
                 "%{Library.FBX_XML_DEBUG}",
                 "%{Library.FBX_ALEMBIC_DEBUG}"
             }
+            postbuildcommands {
+                '{COPYFILE} "%{LibraryDir.FBX_SDK}/x64/debug/libfbxsdk.dll" "%{cfg.targetdir}"'
+            }
         filter "configurations:Release"
             runtime "release"
             optimize "on"
@@ -171,6 +173,9 @@ project "IgniteEngine"
                 "%{Library.FBX_SDK}",
                 "%{Library.FBX_XML}",
                 "%{Library.FBX_ALEMBIC}"
+            }
+            postbuildcommands {
+                '{COPYFILE} "%{LibraryDir.FBX_SDK}/x64/release/libfbxsdk.dll" "%{cfg.targetdir}"'
             }
 
         filter "configurations:Shipping"
@@ -191,4 +196,7 @@ project "IgniteEngine"
                 "%{Library.FBX_SDK}",
                 "%{Library.FBX_XML}",
                 "%{Library.FBX_ALEMBIC}"
+            }
+            postbuildcommands {
+                '{COPYFILE} "%{LibraryDir.FBX_SDK}/x64/release/libfbxsdk.dll" "%{cfg.targetdir}"'
             }

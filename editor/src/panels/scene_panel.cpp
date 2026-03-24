@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+//Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 
 #include "scene_panel.hpp"
 
@@ -44,6 +23,11 @@
 
 #include "ignite/scene/entity.hpp"
 #include "../states.hpp"
+
+#include "ignite/scene/entity_destroy_command.hpp"
+#include "ignite/scene/entity_rename_command.hpp"
+#include "ignite/scene/entity_reparent_command.hpp"
+#include "ignite/scene/component_property_command.hpp"
 
 #include <set>
 #include <unordered_map>
@@ -76,6 +60,9 @@ namespace ignite
 
 		m_Camera.UpdateSphericalPosition();
 		m_Camera.UpdateMatrices(width, height);
+        
+        m_Camera2D = m_Camera;
+        m_Camera3D = m_Camera;
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
@@ -164,14 +151,17 @@ namespace ignite
                 Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
 
                 // check if src entity has parent
-                if (IDComponent &idComp = src.GetComponent<IDComponent>(); idComp.parent != 0)
+                IDComponent &idComp = src.GetComponent<IDComponent>();
+                if (idComp.parent != 0)
                 {
-                    // current parent should be removed it
+                    UUID oldParent = idComp.parent;
+                    // current parent should be removed
                     Entity parent = SceneManager::GetEntity(m_Scene.get(), idComp.parent);
                     parent.GetComponent<IDComponent>().RemoveChild(idComp.uuid);
-
-                    // reset the parent to 0
                     idComp.parent = UUID(0);
+
+                    // Record for undo — reparenting to root (UUID 0)
+                    CommandManager::AddCommand(CreateScope<EntityReparentCommand>(m_Scene.get(), src.GetUUID(), oldParent, UUID(0)));
                 }
             }
 
@@ -239,7 +229,7 @@ namespace ignite
         Entity entity = {};
         if (ImGui::MenuItem("Empty"))
         {
-            entity = SetSelectedEntity(SceneManager::CreateEntity(m_Scene.get(), "Empty", EntityType_Node));
+            entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Empty"));
         }
 
         if (ImGui::MenuItem("Camera"))
@@ -253,6 +243,10 @@ namespace ignite
             {
                 entity = SetSelectedEntity(SceneManager::CreateSprite(m_Scene.get(), "Sprite"));
             }
+			if (ImGui::MenuItem("Circle"))
+			{
+				entity = SetSelectedEntity(SceneManager::CreateCircle(m_Scene.get(), "Circle"));
+			}
             ImGui::EndMenu();
         }
        
@@ -346,8 +340,15 @@ namespace ignite
                     LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ITEM, that should be an entity");
                     Entity src { *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
                     
+                    // Capture old parent BEFORE reparenting
+                    UUID oldParent = src.GetComponent<IDComponent>().parent;
+                    UUID newParent = entity.GetComponent<IDComponent>().uuid;
+
                     // the current 'entity' is the target (new parent for src)
                     SceneManager::AddChild(m_Scene.get(), entity, src);
+
+                    // Record the reparent for undo
+                    CommandManager::AddCommand(CreateScope<EntityReparentCommand>(m_Scene.get(), src.GetUUID(), oldParent, newParent));
                 }
 
                 ImGui::EndDragDropTarget();
@@ -400,7 +401,9 @@ namespace ignite
             strncpy(buffer, idComp.name.c_str(), sizeof(buffer) - 1);
             if (ImGui::InputText("##label", buffer, sizeof(buffer), ImGuiInputTextFlags_EnterReturnsTrue))
             {
-                SceneManager::RenameEntity(m_Scene.get(), selectedEntity, std::string(buffer));
+                std::string oldName = idComp.name;
+                std::string newName(buffer);
+                CommandManager::ExecuteCommand(CreateScope<EntityRenameCommand>(m_Scene.get(), idComp.uuid, oldName, newName));
             }
 
             ImGui::SameLine();
@@ -415,20 +418,35 @@ namespace ignite
             RenderComponent<TransformComponent>("Transform", selectedEntity, [&]()
             {
                 TransformComponent &comp = selectedEntity.GetComponent<TransformComponent>();
-                if (ImGui::DragFloat3("Translation", &comp.localTranslation.x, 0.025f))
-                {
-                    comp.dirty = true;
-                }
+
+                // Snapshot before the user starts dragging.
+                // IsItemActivated() fires on the FIRST click frame before any value changes,
+                // so it must be checked AFTER the widget call, unconditionally.
+                static TransformComponent s_TransformBefore;
+
+                bool changed = false;
+
+                ImGui::DragFloat3("Translation", &comp.localTranslation.x, 0.025f);
+                if (ImGui::IsItemActivated())            s_TransformBefore = comp;
+                if (ImGui::IsItemEdited())               { comp.dirty = true; changed = true; }
+                if (ImGui::IsItemDeactivatedAfterEdit()) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp));
 
                 glm::vec3 euler = eulerAngles(comp.localRotation);
-                if (ImGui::DragFloat3("Rotation", &euler.x, 0.025f))
+                ImGui::DragFloat3("Rotation", &euler.x, 0.025f);
+                if (ImGui::IsItemActivated())            s_TransformBefore = comp;
+                if (ImGui::IsItemEdited())               { comp.localRotation = glm::quat(euler); comp.dirty = true; changed = true; }
+                if (ImGui::IsItemDeactivatedAfterEdit()) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp));
+
+                ImGui::DragFloat3("Scale", &comp.localScale.x, 0.025f);
+                if (ImGui::IsItemActivated())            s_TransformBefore = comp;
+                if (ImGui::IsItemEdited())               { comp.dirty = true; changed = true; }
+                if (ImGui::IsItemDeactivatedAfterEdit()) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp));
+
+                // Visibility checkbox — instant commit
                 {
-                    comp.localRotation = glm::quat(euler);
-                    comp.dirty = true;
-                }
-                if (ImGui::DragFloat3("Scale", &comp.localScale.x, 0.025f))
-                {
-                    comp.dirty = true;
+                    TransformComponent before = comp;
+                    if (ImGui::Checkbox("Visible", &comp.visible))
+                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, comp));
                 }
 
             }, false); // false: not allowed to remove the component
@@ -458,7 +476,9 @@ namespace ignite
                         AssetType type = Project::GetInstance()->GetAssetManager().GetAssetType(handle);
                         if (type == AssetType::Texture)
                         {
+                            Sprite2DComponent before = c;
                             c.handle = handle;
+                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
                         }
                     }
                     ImGui::EndDragDropTarget();
@@ -469,16 +489,39 @@ namespace ignite
                     ImGui::SameLine();
                     if (ImGui::Button("X"))
                     {
-                        c.handle = AssetHandle(0); // reset the texture handle
+                        Sprite2DComponent before = c;
+                        c.handle = AssetHandle(0);
+                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
                     }
 
                     ImGui::SameLine();
                     ImGui::Text("Handle: %llu", static_cast<u64>(c.handle));
                 }
 
+                static Sprite2DComponent s_Sprite2DBefore;
+
                 ImGui::DragFloat2("Tiling", &c.tilingFactor.x, 0.025f);
+                if (ImGui::IsItemActivated())            s_Sprite2DBefore = c;
+                if (ImGui::IsItemDeactivatedAfterEdit()) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
+
                 ImGui::ColorEdit4("Color", &c.color.x);
+                if (ImGui::IsItemActivated())            s_Sprite2DBefore = c;
+                if (ImGui::IsItemDeactivatedAfterEdit()) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
             });
+
+			RenderComponent<Circle2DComponent>("Circle 2D", selectedEntity, [&]()
+				{
+					Circle2DComponent &c = selectedEntity.GetComponent<Circle2DComponent>();
+
+					static Circle2DComponent compBefore;
+
+					ImGui::ColorEdit4("Color", &c.color.x);
+					if (ImGui::IsItemActivated())
+						compBefore = c;
+
+					if (ImGui::IsItemDeactivatedAfterEdit())
+						CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Circle2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), compBefore, c));
+				});
 
 			RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [&]()
 			{
@@ -689,56 +732,25 @@ namespace ignite
                     ImGui::EndCombo();
                 }
 
-                if (m_Scene->IsRunning())
-                {
-                    if (ImGui::DragFloat2("Linear Vel", &c.linearVelocity.x, 0.025f))
-                        b2Body_SetLinearVelocity(c.bodyId, { c.linearVelocity.x, c.linearVelocity.y });
+				ImGui::DragFloat2("Linear Vel", &c.linearVelocity.x, 0.025f, FLT_MIN, FLT_MAX);
+				ImGui::DragFloat("Angular Vel", &c.angularVelocity, 0.025f, FLT_MIN, FLT_MAX);
+				ImGui::DragFloat("Gravity", &c.gravityScale, 0.025f, FLT_MIN, FLT_MAX);
+				ImGui::DragFloat("Linear Damping", &c.linearDamping, 0.0f, FLT_MAX);
+				ImGui::DragFloat("Angular Damping", &c.angularDamping, 0.025f, 0.0f, FLT_MAX);
+				ImGui::Checkbox("Awake", &c.isAwake);
+				ImGui::Checkbox("Enabled", &c.isEnabled);
+				ImGui::Checkbox("Sleep", &c.isEnableSleep);
+				ImGui::Checkbox("Fixed Rotation", &c.fixedRotation);
 
-                    if (ImGui::DragFloat("Angular Vel", &c.angularVelocity, 0.025f))
-                        b2Body_SetAngularVelocity(c.bodyId, c.angularVelocity);
-
-                    if (ImGui::DragFloat("Gravity", &c.gravityScale, 0.025f))
-                        b2Body_SetGravityScale(c.bodyId, c.gravityScale);
-
-
-                    if (ImGui::DragFloat("Linear Damping", &c.linearDamping, 0.025f))
-                        b2Body_SetLinearDamping(c.bodyId, c.linearDamping);
-
-                    if (ImGui::DragFloat("Angular Damping", &c.angularDamping, 0.025f))
-                        b2Body_SetAngularDamping(c.bodyId, c.angularDamping);
-
-                    if (ImGui::Checkbox("Awake", &c.isAwake))
-                        b2Body_SetAwake(c.bodyId, c.isAwake);
-
-                    if (ImGui::Checkbox("Enabled", &c.isEnabled))
-                    {
-                        c.isEnabled ? b2Body_Enable(c.bodyId) : b2Body_Disable(c.bodyId);
-                    }
-
-                    if (ImGui::Checkbox("Sleep", &c.isEnableSleep))
-                        b2Body_EnableSleep(c.bodyId, c.isEnableSleep);
-                }
-                else
-                {
-                    ImGui::DragFloat2("Linear Vel", &c.linearVelocity.x, 0.025f, FLT_MIN, FLT_MAX);
-                    ImGui::DragFloat("Angular Vel", &c.angularVelocity, 0.025f, FLT_MIN, FLT_MAX);
-                    ImGui::DragFloat("Gravity", &c.gravityScale, 0.025f, FLT_MIN, FLT_MAX);
-                    ImGui::DragFloat("Linear Damping", &c.linearDamping, 0.0f, FLT_MAX);
-                    ImGui::DragFloat("Angular Damping", &c.angularDamping, 0.025f, 0.0f, FLT_MAX);
-                    ImGui::Checkbox("Awake", &c.isAwake);
-                    ImGui::Checkbox("Enabled", &c.isEnabled);
-                    ImGui::Checkbox("Sleep", &c.isEnableSleep);
-                    ImGui::Checkbox("Fixed Rotation", &c.fixedRotation);
-                    
-                    if (!c.fixedRotation)
-                    {
-                        ImGui::Checkbox("Fast Rotation", &c.allowFastRotation);
-                    }
-                }
+				if (!c.fixedRotation)
+				{
+					ImGui::Checkbox("Fast Rotation", &c.allowFastRotation);
+				}
             });
             RenderComponent<CameraComponent>("Camera", selectedEntity, [&]()
             {
                 CameraComponent &c = selectedEntity.GetComponent<CameraComponent>();
+                static CameraComponent s_CameraBefore;
 
                 static const char *projectionTypeStr[] = { "Orthographic", "Perspective" };
                 const char *currentProjectionTypeStr = projectionTypeStr[static_cast<int>(c.camera.projectionType)];
@@ -748,10 +760,12 @@ namespace ignite
                     for (size_t i = 0; i < std::size(projectionTypeStr); ++i)
                     {
                         bool isSelected = false;
+                        CameraComponent before = c;
                         if (ImGui::Selectable(projectionTypeStr[i], &isSelected))
                         {
                             c.camera.projectionType = static_cast<ProjectionType>(i);
                             c.camera.UpdateMatrices(static_cast<float>(m_Scene->GetViewportWidth()), static_cast<float>(m_Scene->GetViewportHeight()));
+                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
                         }
 
                         if (isSelected)
@@ -762,37 +776,80 @@ namespace ignite
                     ImGui::EndCombo();
                 }
 
-                bool modified = false;
-
                 if (c.camera.projectionType == ProjectionType::Perspective)
                 {
-                    modified |= ImGui::DragFloat("Fov", &c.camera.fov, 0.025f, 0.0f, FLT_MAX);
+                    ImGui::DragFloat("Fov", &c.camera.fov, 0.025f, 0.0f, FLT_MAX);
+                    if (ImGui::IsItemActivated())
+                        s_CameraBefore = c;
+                    if (ImGui::IsItemEdited())
+                        c.dirty = true;
+                    if (ImGui::IsItemDeactivatedAfterEdit()) 
+                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
                 }
                 else
                 {
-                    modified |= ImGui::DragFloat("Zoom", &c.camera.distance, 0.025f, 0.0f, FLT_MAX);
+                    ImGui::DragFloat("Zoom", &c.camera.distance, 0.025f, 0.0f, FLT_MAX);
+                    if (ImGui::IsItemActivated())
+                        s_CameraBefore = c;
+                    if (ImGui::IsItemEdited())
+                        c.dirty = true;
+                    if (ImGui::IsItemDeactivatedAfterEdit()) 
+                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
                 }
 
-                modified |= ImGui::DragFloat("Near", &c.camera.nearPlane, 0.025f, 0.0f, FLT_MAX);
-                modified |= ImGui::DragFloat("Far", &c.camera.farPlane, 0.025f, 0.0f, FLT_MAX);
-                modified |= ImGui::Checkbox("Primary", &c.primary);
+                ImGui::DragFloat("Near", &c.camera.nearPlane, 0.025f, 0.0f, FLT_MAX);
+                if (ImGui::IsItemActivated())
+                    s_CameraBefore = c;
+                if (ImGui::IsItemEdited())
+                    c.dirty = true;
+                if (ImGui::IsItemDeactivatedAfterEdit())
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
 
-                if (modified)
+                ImGui::DragFloat("Far", &c.camera.farPlane, 0.025f, 0.0f, FLT_MAX);
+                if (ImGui::IsItemActivated())
+                    s_CameraBefore = c;
+                if (ImGui::IsItemEdited())
+                    c.dirty = true;
+                if (ImGui::IsItemDeactivatedAfterEdit())
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
+
+                {
+                    CameraComponent before = c;
+                    if (ImGui::Checkbox("Primary", &c.primary))
+                    {
+                        c.dirty = true;
+                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                    }
+                }
+
+                if (c.dirty)
                 {
                     c.camera.UpdateMatrices(static_cast<float>(m_Scene->GetViewportWidth()), static_cast<float>(m_Scene->GetViewportHeight()));
+                    c.dirty = false;
                 }
             });
 
             RenderComponent<BoxCollider2DComponent>("Box Collider 2D", selectedEntity, [&]()
             {
                 BoxCollider2DComponent &c = selectedEntity.GetComponent<BoxCollider2DComponent>();
-                ImGui::DragFloat2("Size", &c.size.x, 0.025f, 0.0f, FLT_MAX);
-                ImGui::DragFloat2("Offset", &c.offset.x, 0.025f, 0.0f, FLT_MAX);
-                ImGui::DragFloat("Restitution", &c.restitution, 0.025f, 0.0f, FLT_MAX);
-                ImGui::DragFloat("Friction", &c.friction, 0.025f, 0.0f, FLT_MAX);
-                ImGui::DragFloat("Density", &c.density, 0.025f);
-                ImGui::Checkbox("Is Sensor", &c.isSensor);
+                c.dirty = ImGui::DragFloat2("Size", &c.size.x, 0.025f, 0.0f, FLT_MAX);
+                c.dirty |= ImGui::DragFloat2("Offset", &c.offset.x, 0.025f, 0.0f, FLT_MAX);
+                c.dirty |= ImGui::DragFloat("Restitution", &c.restitution, 0.025f, 0.0f, FLT_MAX);
+                c.dirty |= ImGui::DragFloat("Friction", &c.friction, 0.025f, 0.0f, FLT_MAX);
+                c.dirty |= ImGui::DragFloat("Density", &c.density, 0.025f);
+                c.dirty |= ImGui::Checkbox("Is Sensor", &c.isSensor);
             });
+
+			RenderComponent<CircleCollider2DComponent>("Circle Collider 2D", selectedEntity, [&]()
+				{
+					CircleCollider2DComponent &cc = selectedEntity.GetComponent<CircleCollider2DComponent>();
+					cc.dirty = ImGui::DragFloat("Radius", &cc.radius, 0.025f, 0.0f, FLT_MAX);
+					cc.dirty |= ImGui::DragFloat2("Center", &cc.center.x, 0.025f, 0.0f, FLT_MAX);
+					cc.dirty |= ImGui::DragFloat("Restitution", &cc.restitution, 0.025f, 0.0f, FLT_MAX);
+					cc.dirty |= ImGui::DragFloat("Friction", &cc.friction, 0.025f, 0.0f, FLT_MAX);
+					cc.dirty |= ImGui::DragFloat("Density", &cc.density, 0.025f);
+					cc.dirty |= ImGui::Checkbox("Is Sensor", &cc.isSensor);
+				});
 
             RenderComponent<RigibodyComponent>("Rigid Body", selectedEntity, [&]()
             {
@@ -803,46 +860,47 @@ namespace ignite
             RenderComponent<BoxColliderComponent>("Box Collider", selectedEntity, [&]()
             {
                 BoxColliderComponent &c = selectedEntity.GetComponent<BoxColliderComponent>();
-                ImGui::DragFloat3("Scale", &c.scale.x, 0.025f, 0.0f, 10000.0f);
-                ImGui::DragFloat("Friction", &c.friction, 0.025f);
-                ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
-                ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
-                ImGui::DragFloat("Density", &c.density, 0.025f);
+                c.dirty = ImGui::DragFloat3("Scale", &c.scale.x, 0.025f, 0.0f, 10000.0f);
+                c.dirty |= ImGui::DragFloat("Friction", &c.friction, 0.025f);
+                c.dirty |= ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
+                c.dirty |= ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
+                c.dirty |= ImGui::DragFloat("Density", &c.density, 0.025f);
             });
 
             RenderComponent<SphereColliderComponent>("Sphere Collider", selectedEntity, [&]()
             {
                 SphereColliderComponent &c = selectedEntity.GetComponent<SphereColliderComponent>();
-                ImGui::DragFloat("Radius", &c.radius, 0.025f, 0.01f, 10000.0f);
-                ImGui::DragFloat("Friction", &c.friction, 0.025f);
-                ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
-                ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
-                ImGui::DragFloat("Density", &c.density, 0.025f);
+                c.dirty = ImGui::DragFloat("Radius", &c.radius, 0.025f, 0.01f, 10000.0f);
+                c.dirty |= ImGui::DragFloat("Friction", &c.friction, 0.025f);
+                c.dirty |= ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
+                c.dirty |= ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
+                c.dirty |= ImGui::DragFloat("Density", &c.density, 0.025f);
             });
 
             RenderComponent<CapsuleColliderComponent>("Capsule Collider", selectedEntity, [&]()
             {
                 CapsuleColliderComponent &c = selectedEntity.GetComponent<CapsuleColliderComponent>();
-                ImGui::DragFloat("Radius", &c.radius, 0.025f, 0.01f, 10000.0f);
-                ImGui::DragFloat("Height", &c.height, 0.025f, 0.01f, 10000.0f);
-                ImGui::DragFloat("Friction", &c.friction, 0.025f);
-                ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
-                ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
-                ImGui::DragFloat("Density", &c.density, 0.025f);
+                c.dirty = ImGui::DragFloat("Radius", &c.radius, 0.025f, 0.01f, 10000.0f);
+                c.dirty |= ImGui::DragFloat("Height", &c.height, 0.025f, 0.01f, 10000.0f);
+                c.dirty |= ImGui::DragFloat("Friction", &c.friction, 0.025f);
+                c.dirty |= ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
+                c.dirty |= ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
+                c.dirty |= ImGui::DragFloat("Density", &c.density, 0.025f);
             });
 
             RenderComponent<MeshColliderComponent>("Mesh Collider", selectedEntity, [&]()
             {
                 MeshColliderComponent &c = selectedEntity.GetComponent<MeshColliderComponent>();
-                ImGui::Checkbox("Convex", &c.convex);
+                c.dirty = ImGui::Checkbox("Convex", &c.convex);
                 ImGui::Text("Vertices: %zu", c.vertices.size());
                 ImGui::Text("Indices: %zu", c.indices.size());
-                ImGui::DragFloat("Friction", &c.friction, 0.025f);
-                ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
-                ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
-                ImGui::DragFloat("Density", &c.density, 0.025f);
+                c.dirty |= ImGui::DragFloat("Friction", &c.friction, 0.025f);
+                c.dirty |= ImGui::DragFloat("Static Friction", &c.staticFriction, 0.025f);
+                c.dirty |= ImGui::DragFloat("Restitution", &c.restitution, 0.025f);
+                c.dirty |= ImGui::DragFloat("Density", &c.density, 0.025f);
                 if (ImGui::Button("Clear Mesh Data"))
                 {
+                    c.dirty = false;
                     c.vertices.clear();
                     c.indices.clear();
                 }
@@ -957,296 +1015,191 @@ namespace ignite
                     isSelected = false;
                 }
 
-                bool detached = c.className == "Detached";
+                const bool detached = c.className == "Detached";
 
-                // classFields
-                bool isRunning = m_Scene->IsRunning();
-
-                // Editable classFields (edit mode)
-                if (isRunning && !detached)
+                if (scriptClassExist && !detached)
                 {
-                    if (Ref<ScriptInstance> scriptInstance = ScriptEngine::GetInstance()->GetEntityScriptInstance(selectedEntity.GetUUID()))
+                    const bool isRunning = m_Scene && m_Scene->IsRunning();
+                    Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(c.className);
+                    if (scriptClass)
                     {
-                        auto classFields = scriptInstance->GetScriptClass()->GetFields();
+                        const uint64_t instanceId = selectedEntity.GetUUID();
 
-                        for (const auto &[fieldName, field] : classFields)
+                        auto classRegisteredInstanceField = scriptClass->GetInstanceFieldsById(instanceId);
+                        if (!classRegisteredInstanceField)
                         {
-                            switch (field.Type)
+                            std::unordered_map<std::string, ScriptInstanceField> defaultInstanceFields;
+                            for (auto &[name, field] : scriptClass->GetFields())
                             {
-                            case ScriptFieldType::Float:
-                            {
-                                float data = scriptInstance->GetFieldValue<float>(fieldName);
-                                if (ImGui::DragFloat(fieldName.c_str(), &data, 0.1f))
-                                {
-                                    scriptInstance->SetFieldValue<float>(fieldName, data);
-                                }
-                                break;
+                                ScriptInstanceField instanceField;
+                                instanceField.field = field;
+                                defaultInstanceFields[name] = instanceField;
                             }
-                            case ScriptFieldType::Int:
-                            {
-                                int data = scriptInstance->GetFieldValue<int>(fieldName);
-                                if (ImGui::DragInt(fieldName.c_str(), &data, 1))
-                                {
-                                    scriptInstance->SetFieldValue<int>(fieldName, data);
-                                }
-                                break;
-                            }
-                            case ScriptFieldType::Vector2:
-                            {
-                                auto data = scriptInstance->GetFieldValue<glm::vec2>(fieldName);
-                                if (ImGui::DragFloat2(fieldName.c_str(), &data.x, 0.1f))
-                                {
-                                    scriptInstance->SetFieldValue<glm::vec2>(fieldName, data);
-                                }
-                                break;
-                            }
-                            case ScriptFieldType::Vector3:
-                            {
-                                auto data = scriptInstance->GetFieldValue<glm::vec3>(fieldName);
-                                if (ImGui::DragFloat3(fieldName.c_str(), &data.x, 0.1f))
-                                {
-                                    scriptInstance->SetFieldValue<glm::vec3>(fieldName, data);
-                                }
-                                break;
-                            }
-                            case ScriptFieldType::Vector4:
-                            {
-                                auto data = scriptInstance->GetFieldValue<glm::vec4>(fieldName);
-                                if (ImGui::DragFloat4(fieldName.c_str(), &data.x, 0.1f))
-                                {
-                                    scriptInstance->SetFieldValue<glm::vec4>(fieldName, data);
-                                }
-                                break;
-                            }
-                            case ScriptFieldType::Entity:
-                            {
-                                auto uuid = scriptInstance->GetFieldValue<uint64_t>(fieldName);
-                                if (Entity entity = SceneManager::GetEntity(m_Scene.get(), UUID(uuid)))
-                                {
-                                    ImGui::Button(fieldName.c_str());
-                                    if (ImGui::IsItemHovered())
-                                    {
-                                        ImGui::BeginTooltip();
-                                        ImGui::Text("%llu", uuid);
-                                        ImGui::EndTooltip();
-                                    }
-                                }
-                                break;
-                            }
-                            }
+
+                            scriptClass->InsertInstanceFields(instanceId, defaultInstanceFields);
+                            classRegisteredInstanceField = scriptClass->GetInstanceFieldsById(instanceId);
                         }
-                    }
-                }
 
-                // Scene is running, we don't have to set anything
-                else if (!isRunning && scriptClassExist && !detached)
-                {
-                    // !IsRunning
-                    Ref<ScriptClass> entityClass = ScriptEngine::GetInstance()->GetEntityClassesByName(c.className);
-                    if (entityClass)
-                    {
-                        const auto &classFields = entityClass->GetFields();
-                        auto &entityFields = ScriptEngine::GetInstance()->GetScriptFieldMap(selectedEntity);
-
-                        for (const auto &[name, field] : classFields)
+                        Ref<ScriptInstance> scriptInstance = nullptr;
+                        if (isRunning)
                         {
-                            if (entityFields.find(name) != entityFields.end())
-                            {
-                                ScriptFieldInstance &scriptField = entityFields.at(name);
-
-                                switch (field.Type)
-                                {
-                                case ScriptFieldType::Float:
-                                {
-                                    auto data = scriptField.GetValue<float>();
-                                    if (ImGui::DragFloat(name.c_str(), &data, 0.1f))
-                                    {
-                                        scriptField.SetValue<float>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Int:
-                                {
-                                    auto data = scriptField.GetValue<int>();
-                                    if (ImGui::DragInt(name.c_str(), &data))
-                                    {
-                                        scriptField.SetValue<int>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Vector2:
-                                {
-                                    auto data = scriptField.GetValue<glm::vec2>();
-                                    if (ImGui::DragFloat2(name.c_str(), &data.x, 0.1f))
-                                    {
-                                        scriptField.SetValue<glm::vec2>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Vector3:
-                                {
-                                    auto data = scriptField.GetValue<glm::vec3>();
-                                    if (ImGui::DragFloat3(name.c_str(), &data.x, 0.1f))
-                                    {
-                                        scriptField.SetValue<glm::vec3>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Vector4:
-                                {
-                                    auto data = scriptField.GetValue<glm::vec4>();
-                                    if (ImGui::DragFloat4(name.c_str(), &data.x, 0.1f))
-                                    {
-                                        scriptField.SetValue<glm::vec4>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Entity:
-                                {
-                                    auto uuid = scriptField.GetValue<uint64_t>();
-                                    std::string label = "Drag Here";
-                                    if (uuid)
-                                    {
-                                        Entity e = SceneManager::GetEntity(m_Scene.get(), UUID(uuid));
-                                        if (e)
-                                        {
-                                            label = e.GetName();
-                                        }
-                                    }
-
-                                    ImGui::Button(label.c_str());
-
-                                    if (ImGui::BeginDragDropTarget())
-                                    {
-                                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY_SOURCE_ITEM"))
-                                        {
-                                            LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ENTITY ITEM");
-                                            if (payload->DataSize == sizeof(Entity))
-                                            {
-                                                Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get()};
-                                                uint64_t id = (uint64_t)src.GetUUID();
-                                                scriptField.Field.Type = ScriptFieldType::Entity;
-                                                scriptField.SetValue<uint64_t>(id);
-                                            }
-                                        }
-                                        ImGui::EndDragDropTarget();
-                                    }
-
-                                    if (ImGui::IsItemHovered())
-                                    {
-                                        ImGui::BeginTooltip();
-
-                                        if (uuid)
-                                            ImGui::Text("%llu", uuid);
-                                        else
-                                            ImGui::Text("Null Entity!");
-
-                                        ImGui::EndTooltip();
-                                    }
-
-                                    ImGui::SameLine();
-                                    if (ImGui::Button("X"))
-                                    {
-                                        scriptField.SetValue<uint64_t>(0);
-                                    }
-                                    break;
-                                }
-                                }
-                            }
-                            else
-                            {
-                                ScriptFieldInstance &fieldInstance = entityFields[name];
-                                switch (field.Type)
-                                {
-                                case ScriptFieldType::Float:
-                                {
-                                    float data = 0.0f;
-                                    if (ImGui::DragFloat(name.c_str(), &data, 0.1f))
-                                    {
-                                        fieldInstance.Field = field;
-                                        fieldInstance.SetValue<float>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Int:
-                                {
-                                    int data = 0;
-                                    if (ImGui::DragInt(name.c_str(), &data))
-                                    {
-                                        fieldInstance.Field = field;
-                                        fieldInstance.SetValue<int>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Vector2:
-                                {
-                                    glm::vec2 data(0.0f);
-                                    if (ImGui::DragFloat2(name.c_str(), &data.x, 0.1f))
-                                    {
-                                        fieldInstance.Field = field;
-                                        fieldInstance.SetValue<glm::vec2>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Vector3:
-                                {
-                                    glm::vec3 data(0.0f);
-                                    if (ImGui::DragFloat3(name.c_str(), &data.x, 0.1f))
-                                    {
-                                        fieldInstance.Field = field;
-                                        fieldInstance.SetValue<glm::vec3>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Vector4:
-                                {
-                                    glm::vec4 data(0.0f);
-                                    if (ImGui::DragFloat4(name.c_str(), &data.x, 0.1f))
-                                    {
-                                        fieldInstance.Field = field;
-                                        fieldInstance.SetValue<glm::vec4>(data);
-                                    }
-                                    break;
-                                }
-                                case ScriptFieldType::Entity:
-                                {
-                                    ImGui::Button("Drag Here");
-
-                                    if (ImGui::BeginDragDropTarget())
-                                    {
-                                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY_SOURCE_ITEM"))
-                                        {
-                                            LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ENTITY ITEM");
-                                            if (payload->DataSize == sizeof(Entity))
-                                            {
-                                                Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get()};
-                                                fieldInstance.Field = field;
-                                                fieldInstance.SetValue<uint64_t>(src.GetUUID());
-                                            }
-                                        }
-                                        ImGui::EndDragDropTarget();
-                                    }
-
-                                    if (ImGui::IsItemHovered())
-                                    {
-                                        ImGui::BeginTooltip();
-                                        ImGui::Text("Null Entity!");
-                                        ImGui::EndTooltip();
-                                    }
-
-                                    ImGui::SameLine();
-                                    if (ImGui::Button("X"))
-                                    {
-                                        fieldInstance.Field = field;
-                                        fieldInstance.SetValue<uint64_t>(0);
-                                    }
-
-                                    break;
-                                }
-                                default: break;
-                                }
-                            }
+                            scriptInstance = ScriptEngine::GetInstance()->GetEntityScriptInstance(selectedEntity.GetUUID());
                         }
+
+                        if (classRegisteredInstanceField)
+                        {
+							for (const auto &[name, field] : scriptClass->GetFields())
+							{
+								ImGui::PushID(name.c_str());
+
+								ImGui::Text(name.c_str());
+
+                                ImGui::SameLine();
+
+                                auto it = classRegisteredInstanceField->find(name);
+								if (it != classRegisteredInstanceField->end())
+								{
+									ScriptInstanceField &instanceField = it->second;
+
+									switch (instanceField.field.Type)
+									{
+									case ScriptFieldType::Float:
+									{
+										auto data = instanceField.GetValue<float>();
+										if (ImGui::DragFloat("##_field_value", &data, 0.1f))
+										{
+                                           if (scriptInstance)
+                                                scriptInstance->SetFieldValue<float>(name, data);
+                                            else
+                                                instanceField.SetValue<float>(data);
+										}
+										break;
+									}
+									case ScriptFieldType::Int:
+									{
+										auto data = instanceField.GetValue<int>();
+										if (ImGui::DragInt("##_field_value", &data))
+										{
+                                         if (scriptInstance)
+                                                scriptInstance->SetFieldValue<int>(name, data);
+                                            else
+                                                instanceField.SetValue<int>(data);
+										}
+										break;
+									}
+									case ScriptFieldType::Double:
+									{
+                                      auto dData = instanceField.GetValue<double>();
+                                        float data = static_cast<float>(dData);
+										if (ImGui::DragFloat("##_field_value", &data, 0.1f))
+										{
+                                           dData = static_cast<double>(data);
+                                            if (scriptInstance)
+                                                scriptInstance->SetFieldValue<double>(name, dData);
+                                            else
+                                                instanceField.SetValue<double>(dData);
+										}
+										break;
+									}
+									case ScriptFieldType::Vector2:
+									{
+										auto data = instanceField.GetValue<glm::vec2>();
+										if (ImGui::DragFloat2("##_field_value", &data.x, 0.1f))
+										{
+                                           if (scriptInstance)
+                                                scriptInstance->SetFieldValue<glm::vec2>(name, data);
+                                            else
+                                                instanceField.SetValue<glm::vec2>(data);
+										}
+										break;
+									}
+									case ScriptFieldType::Vector3:
+									{
+										auto data = instanceField.GetValue<glm::vec3>();
+										if (ImGui::DragFloat3("##_field_value", &data.x, 0.1f))
+										{
+                                           if (scriptInstance)
+                                                scriptInstance->SetFieldValue<glm::vec3>(name, data);
+                                            else
+                                                instanceField.SetValue<glm::vec3>(data);
+										}
+										break;
+									}
+									case ScriptFieldType::Vector4:
+									{
+										auto data = instanceField.GetValue<glm::vec4>();
+										if (ImGui::DragFloat4("##_field_value", &data.x, 0.1f))
+										{
+                                           if (scriptInstance)
+                                                scriptInstance->SetFieldValue<glm::vec4>(name, data);
+                                            else
+                                                instanceField.SetValue<glm::vec4>(data);
+										}
+										break;
+									}
+									case ScriptFieldType::Entity:
+									{
+										auto uuid = instanceField.GetValue<uint64_t>();
+										std::string label = "Drag Here";
+										if (uuid)
+										{
+											Entity e = SceneManager::GetEntity(m_Scene.get(), UUID(uuid));
+											if (e)
+											{
+												label = e.GetName();
+											}
+										}
+
+										ImGui::Button(label.c_str());
+
+										if (ImGui::BeginDragDropTarget())
+										{
+											if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY_SOURCE_ITEM"))
+											{
+												LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ENTITY ITEM");
+												if (payload->DataSize == sizeof(Entity))
+												{
+													Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
+													uint64_t id = (uint64_t)src.GetUUID();
+													instanceField.field.Type = ScriptFieldType::Entity;
+                                                  if (scriptInstance)
+                                                        scriptInstance->SetFieldValue<uint64_t>(name, id);
+                                                    else
+                                                        instanceField.SetValue<uint64_t>(id);
+												}
+											}
+											ImGui::EndDragDropTarget();
+										}
+
+										if (ImGui::IsItemHovered())
+										{
+											ImGui::BeginTooltip();
+
+											if (uuid)
+												ImGui::Text("%llu", uuid);
+											else
+												ImGui::Text("Null Entity!");
+
+											ImGui::EndTooltip();
+										}
+
+										ImGui::SameLine();
+										if (ImGui::Button("X"))
+										{
+                                           if (scriptInstance)
+                                                scriptInstance->SetFieldValue<uint64_t>(name, 0);
+                                            else
+                                                instanceField.SetValue<uint64_t>(0);
+										}
+										break;
+									}
+									}
+								}
+
+								ImGui::PopID();
+							}
+                        }
+
                     }
                 }
 
@@ -1303,12 +1256,18 @@ namespace ignite
                     case CompType_Sprite2D:
                         entity.AddComponent<Sprite2DComponent>();
                         break;
+					case CompType_Circle2D:
+						entity.AddComponent<Circle2DComponent>();
+						break;
                     case CompType_Rigidbody2D:
                         entity.AddComponent<Rigidbody2DComponent>();
                         break;
                     case CompType_BoxCollider2D:
                         entity.AddComponent<BoxCollider2DComponent>();
                         break;
+					case CompType_CircleCollider2D:
+						entity.AddComponent<CircleCollider2DComponent>();
+						break;
                     case CompType_StaticMesh:
                         entity.AddComponent<StaticMeshComponent>();
                         break;
@@ -1506,17 +1465,21 @@ namespace ignite
         m_ViewportData.mousePos = { mousePos.x - canvasPos.x, mousePos.y - canvasPos.y };
 
         // Update UI input handling
-        auto sceneRenderer = m_Scene->GetSceneRenderer();
-        if (sceneRenderer)
+        if (m_Scene)
         {
-            glm::vec2 viewportPos = { canvasPos.x, canvasPos.y };
-            glm::vec2 viewportSize = { canvasSize.x, canvasSize.y };
-            glm::vec2 screenMousePos = { mousePos.x, mousePos.y };
-            bool mousePressed = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+            auto sceneRenderer = m_Scene->GetSceneRenderer();
+            if (sceneRenderer)
+            {
+                glm::vec2 viewportPos = { canvasPos.x, canvasPos.y };
+                glm::vec2 viewportSize = { canvasSize.x, canvasSize.y };
+                glm::vec2 screenMousePos = { mousePos.x, mousePos.y };
+                bool mousePressed = ImGui::IsMouseDown(ImGuiMouseButton_Left);
             
-            sceneRenderer->UpdateUIInput(screenMousePos, viewportPos, viewportSize, mousePressed);
+                sceneRenderer->UpdateUIInput(screenMousePos, viewportPos, viewportSize, mousePressed);
+            }
         }
 
+        // Render scene texture to imgui
         ImTextureID sceneImage = (ImTextureID)m_CompositeViewportRT->GetColorAttachment(0)->GetHandle().Get(); // Current composite RT
         ImGui::Image(sceneImage, canvasSize);
         if (ImGui::BeginDragDropTarget())
@@ -1564,7 +1527,8 @@ namespace ignite
                 initialTransforms[uuid] = entity.GetTransform();
             }
         }
-        // Set the master flag for the current frame
+        // Capture PREVIOUS frame value before overwriting — needed for the release-commit below
+        bool wasManipulating = m_Data.isGizmoManipulating;
         m_Data.isGizmoManipulating = isManipulatingNow;
         m_Data.isGizmoBeingUse = isManipulatingNow || m_Gizmo.IsHovered();
 
@@ -1640,6 +1604,24 @@ namespace ignite
                     tr.dirty = true;
                 }
             }
+
+            // Commit commands when the multi-entity gizmo is released
+            if (!isManipulatingNow && wasManipulating)
+            {
+                std::vector<ComponentPropertyBatchCommand<TransformComponent>::Entry> entries;
+                for (auto &[uuid, entity] : m_SelectedEntities)
+                {
+                    if (auto it = initialTransforms.find(uuid); it != initialTransforms.end())
+                    {
+                        entries.push_back({ uuid, it->second, entity.GetTransform() });
+                    }
+                }
+
+                if (!entries.empty())
+                {
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyBatchCommand<TransformComponent>>(m_Scene.get(), std::move(entries)));
+                }
+            }
         }
         else if (Entity entity = GetSelectedEntity())
         {
@@ -1669,6 +1651,15 @@ namespace ignite
                     tr.localScale = scale;
                 }
                 tr.dirty = true;
+            }
+
+            // Commit a single command when the gizmo is released (single entity)
+            if (!isManipulatingNow && wasManipulating)
+            {
+                if (auto it = initialTransforms.find(entity.GetUUID()); it != initialTransforms.end())
+                {
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), entity.GetUUID(), it->second, entity.GetTransform()));
+                }
             }
         }
 
@@ -1736,6 +1727,29 @@ namespace ignite
                         // Set projection type
                         m_Camera.projectionType = static_cast<ProjectionType>(i);
 
+                        if (m_Camera.projectionType == ProjectionType::Orthographic)
+                        {
+                            if (m_Camera2D)
+                            {
+                                // Save
+                                m_Camera3D = m_Camera;
+
+                                m_Camera = *m_Camera2D;
+                                m_Camera.projectionType = ProjectionType::Orthographic;
+                            }
+                        }
+                        else if (m_Camera.projectionType == ProjectionType::Perspective)
+                        {
+                            if (m_Camera3D)
+                            {
+                                // Save camera
+                                m_Camera2D = m_Camera;
+
+                                m_Camera = *m_Camera3D;
+                                m_Camera.projectionType = ProjectionType::Perspective;
+                            }
+                        }
+
                         // Recalculate matrices
                         const glm::vec2 &size = m_ViewportData.rect.GetSize();
                         m_Camera.UpdateMatrices(size.x, size.y);
@@ -1749,7 +1763,7 @@ namespace ignite
                 ImGui::EndCombo();
             }
 
-            ImGui::DragFloat3("Position", &m_Camera.position[0], 0.025f);
+            ImGui::DragFloat3("Position", &m_Camera.position.x, 0.025f);
 
             glm::vec2 yawPitch = { m_Camera.yaw, m_Camera.pitch };
             if (ImGui::DragFloat2("Yaw/Pitch", &yawPitch.x, 0.025f, -89.0f, 89.0f))
@@ -1903,7 +1917,8 @@ namespace ignite
 
     void ScenePanel::DestroyEntity(Entity entity)
     {
-        SceneManager::DestroyEntity(m_Scene.get(), entity);
+        // Snapshot the entire subtree BEFORE destroying, so undo can recreate it
+        CommandManager::ExecuteCommand(CreateScope<EntityDestroyCommand>(m_Scene.get(), entity));
     }
 
     void ScenePanel::ClearSelection()

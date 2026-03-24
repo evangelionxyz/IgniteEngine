@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Evangelion Manuhutu
+
 namespace Ignite;
 
 public static class Input
