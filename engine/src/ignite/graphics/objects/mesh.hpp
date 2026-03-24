@@ -30,10 +30,18 @@
 #include "ignite/math/aabb.hpp"
 #include "material.hpp"
 
-#include "../../thirdparty/TINYGLTF/include/tinygltf.h"
+#include <tinygltf.h>
+
 
 #include <nvrhi/nvrhi.h>
 #include <filesystem>
+
+namespace fbxsdk
+{
+    class FbxNode;
+    class FbxScene;
+    class FbxSurfaceMaterial;
+}
 
 namespace ignite
 {
@@ -42,6 +50,8 @@ namespace ignite
     class Environment;
     class GraphicsPipeline;
     class Scene;
+    class Skeleton;
+    class SkeletalAnimation;
 
     // Primitive Mesh
     struct MeshPrimitive
@@ -87,7 +97,6 @@ namespace ignite
     private:
         std::string m_Name;
         Ref<MeshPrimitive> m_Primitive;
-        Ref<ConstantBuffer> m_SkinnedMeshGPUDataBuffer;
         AssetHandle m_MaterialHandle = AssetHandle(0);
     };
 
@@ -122,6 +131,9 @@ namespace ignite
         // Mesh to Material
         std::unordered_map<int, int> materialMap;
 
+        Ref<Skeleton> skeleton;
+        std::vector<Ref<SkeletalAnimation>> animations;
+
     };
 
 	class StaticMesh : public Asset
@@ -132,7 +144,7 @@ namespace ignite
 
 		static Ref<StaticMesh> Create();
 		static AssetType GetStaticType() { return AssetType::StaticMesh; }
-		virtual AssetType GetAssetType() const { return GetStaticType(); }
+		virtual AssetType GetAssetType() override { return GetStaticType(); }
 
 		const std::vector<Ref<MeshInstance>> &GetMeshInstances() const { return m_MeshInstances; }
 		void SetMeshInstance(const std::vector<Ref<MeshInstance>> &meshInstances) { m_MeshInstances = meshInstances; }
@@ -141,6 +153,30 @@ namespace ignite
 	private:
 		std::vector<Ref<MeshInstance>> m_MeshInstances;
 	};
+
+    class SkeletalMesh : public Asset
+    {
+    public:
+        SkeletalMesh() = default;
+        virtual ~SkeletalMesh();
+
+        static Ref<SkeletalMesh> Create();
+        static AssetType GetStaticType() { return AssetType::SkeletalMesh; }
+        virtual AssetType GetAssetType() override { return GetStaticType(); }
+
+        const std::vector<Ref<MeshInstance>> &GetMeshInstances() const { return m_MeshInstances; }
+        void SetMeshInstance(const std::vector<Ref<MeshInstance>> &meshInstances) { m_MeshInstances = meshInstances; }
+        void AddMeshInstance(const Ref<MeshInstance> &meshInstance) { m_MeshInstances.push_back(meshInstance); }
+
+        AssetHandle skeletonHandle = AssetHandle(0);
+        std::vector<AssetHandle> animationHandles;
+        uint32_t activeAnimationIndex = 0;
+        bool isPlaying = true;
+        std::vector<glm::mat4> boneTransforms;
+
+    private:
+        std::vector<Ref<MeshInstance>> m_MeshInstances;
+    };
 
     class GLTFMeshLoader
     {
@@ -161,7 +197,23 @@ namespace ignite
     class FBXMeshLoader
     {
     public:
+        struct Loader
+        {
+            std::vector<Ref<Texture>> loadedTextures;
+            std::unordered_map<fbxsdk::FbxSurfaceMaterial *, int> materialIndices;
+            std::unordered_map<std::string, int> textureLookup;
+            std::unordered_map<std::string, int32_t> jointNameToIndex;
+            std::unordered_map<std::string, fbxsdk::FbxNode *> jointNodes;
+        };
+
+		struct FBXBoneInfluence
+		{
+			std::array<uint32_t, VERTEX_MAX_BONES> ids = { 0, 0, 0, 0 };
+			std::array<float, VERTEX_MAX_BONES> weights = { 0.0f, 0.0f, 0.0f, 0.0f };
+		};
+
         static void LoadSceneGraphFromFBX(const std::string &filename, MeshScene &outScene);
+        static void BuildNode(fbxsdk::FbxNode *node, fbxsdk::FbxScene *fbxScene, MeshScene &outscene, Loader &ld, const std::filesystem::path &sourceDir, int parentIdx);
     };
 
     class MeshLoader

@@ -64,7 +64,7 @@ PSInput main(VSInput input)
         float weight = input.weights[i];
         if (weight > 0.0f)
         {
-            uint boneId = input.boneIDs[i];
+            uint boneId = min(input.boneIDs[i], (uint)(MAX_BONES - 1));
             float4x4 transform = object.boneTransforms[boneId];
 
             posL += weight * mul(transform, float4(input.position, 1.0));

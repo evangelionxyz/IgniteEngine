@@ -547,8 +547,17 @@ namespace ignite
 					{
 						LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
 						AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-						AssetType type = Project::GetInstance()->GetAssetManager().GetAssetType(handle);
-						if (type == AssetType::StaticMesh)
+                        auto &assetManager = Project::GetInstance()->GetAssetManager();
+                        AssetMetaData metadata = assetManager.GetMetaData(handle);
+
+                        if (metadata.type == AssetType::GLTF)
+                        {
+                            metadata.type = AssetType::StaticMesh;
+                            assetManager.AssignMetaData(handle, metadata);
+                            assetManager.UnloadAsset(handle);
+                        }
+
+                        if (assetManager.GetAssetType(handle) == AssetType::StaticMesh)
 						{
 							c.handle = handle;
 						}
@@ -706,6 +715,199 @@ namespace ignite
                     }
                 }
             });
+
+         RenderComponent<SkeletalMeshComponent>("Skeletal Mesh", selectedEntity, [&]()
+			{
+				SkeletalMeshComponent &c = selectedEntity.GetComponent<SkeletalMeshComponent>();
+
+				bool isMeshLoaded = c.handle != AssetHandle(0);
+
+				// Mesh loading section with better styling
+				ImGui::AlignTextToFramePadding();
+				ImGui::Text("Mesh Asset:");
+				ImGui::SameLine();
+
+				std::string buttonLabel = isMeshLoaded ? "Loaded" : "Drag Mesh Here";
+				ImVec4 buttonColor = isMeshLoaded ? ImVec4(0.2f, 0.7f, 0.3f, 1.0f) : ImVec4(0.3f, 0.3f, 0.3f, 1.0f);
+
+				ImGui::PushStyleColor(ImGuiCol_Button, buttonColor);
+				ImGui::Button(buttonLabel.c_str(), ImVec2(ImGui::GetContentRegionAvail().x - 30.0f, 0.0f));
+				ImGui::PopStyleColor();
+
+				if (ImGui::BeginDragDropTarget())
+				{
+					if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+					{
+						LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+						AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                        auto &assetManager = Project::GetInstance()->GetAssetManager();
+                        AssetMetaData metadata = assetManager.GetMetaData(handle);
+
+                        if (metadata.type == AssetType::FBX)
+                        {
+                            metadata.type = AssetType::SkeletalMesh;
+                            assetManager.AssignMetaData(handle, metadata);
+                            assetManager.UnloadAsset(handle);
+                        }
+
+                        if (assetManager.GetAssetType(handle) == AssetType::SkeletalMesh)
+						{
+							c.handle = handle;
+						}
+					}
+					ImGui::EndDragDropTarget();
+				}
+
+				if (isMeshLoaded)
+				{
+					ImGui::SameLine();
+					if (ImGui::Button("X"))
+					{
+						c.handle = AssetHandle(0); // reset the mesh
+					}
+
+					ImGui::Indent(8.0f);
+					ImGui::TextDisabled("Handle: %llu", static_cast<u64>(c.handle));
+					ImGui::Unindent(8.0f);
+
+                    Ref<SkeletalMesh> sm = Project::GetInstance()->GetAsset<SkeletalMesh>(c.handle);
+					if (sm)
+					{
+						ImGui::Spacing();
+						ImGui::Separator();
+						ImGui::Spacing();
+
+						// Display mesh instances with materials
+						int meshIndex = 0;
+						for (auto &m : sm->GetMeshInstances())
+						{
+							ImGui::PushID(meshIndex++);
+
+							// Mesh instance header
+							std::string meshLabel = "Mesh: " + m->GetName();
+							bool meshTreeOpen = ImGui::TreeNodeEx(meshLabel.c_str(),
+								ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
+								ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_FramePadding);
+
+							if (meshTreeOpen)
+							{
+								ImGui::Indent(8.0f);
+
+								// Material section
+								Ref<Material> mat = Project::GetInstance()->GetAsset<Material>(m->GetMaterialHandle());
+								if (mat)
+								{
+									ImGui::Spacing();
+									ImGui::Text("Material: %s", mat->name.c_str());
+									ImGui::Spacing();
+
+									// Material properties in columns
+									ImGui::Columns(2, "material_props", false);
+									ImGui::SetColumnWidth(0, 120.0f);
+
+									// Base Color
+									ImGui::Text("Base Color:");
+									ImGui::NextColumn();
+									ImGui::ColorEdit3("##BaseColor", &mat->gpuData.baseColorFactor.x,
+										ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+									ImGui::NextColumn();
+
+									// Metallic
+									ImGui::Text("Metallic:");
+									ImGui::NextColumn();
+									ImGui::SliderFloat("##Metallic", &mat->gpuData.metallicFactor, 0.0f, 1.0f);
+									ImGui::NextColumn();
+
+									// Roughness
+									ImGui::Text("Roughness:");
+									ImGui::NextColumn();
+									ImGui::SliderFloat("##Roughness", &mat->gpuData.roughnessFactor, 0.0f, 1.0f);
+									ImGui::NextColumn();
+
+									// Emissive
+									ImGui::Text("Emissive:");
+									ImGui::NextColumn();
+									ImGui::ColorEdit4("##Emissive", &mat->gpuData.emissiveFactor.x,
+										ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+									ImGui::NextColumn();
+
+									// Occlusion Strength
+									ImGui::Text("Occlusion:");
+									ImGui::NextColumn();
+									ImGui::SliderFloat("##Occlusion", &mat->gpuData.occlusionStrength, 0.0f, 1.0f);
+									ImGui::NextColumn();
+
+									ImGui::Columns(1);
+
+									ImGui::Spacing();
+									ImGui::Separator();
+									ImGui::Spacing();
+
+									// Texture previews
+									ImGui::Text("Textures:");
+									ImGui::Spacing();
+
+									constexpr float thumbnailSize = 64.0f;
+									constexpr float spacing = 8.0f;
+
+									auto renderTexturePreview = [](const char *label, AssetHandle handle)
+										{
+											ImGui::PushID(label);
+											ImGui::PushID(static_cast<int>(static_cast<uint64_t>(handle)));
+											Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(handle);
+
+											if (texture && texture->GetHandle())
+											{
+												ImGui::BeginGroup();
+												ImTextureID texID = (ImTextureID)texture->GetHandle().Get();
+												ImGui::Image(texID, ImVec2(thumbnailSize, thumbnailSize));
+												if (ImGui::IsItemHovered())
+												{
+													ImGui::BeginTooltip();
+													ImGui::Image(texID, ImVec2(256.0f, 256.0f));
+													ImGui::EndTooltip();
+												}
+												ImGui::TextWrapped("%s", label);
+												ImGui::EndGroup();
+											}
+											else
+											{
+												ImGui::BeginGroup();
+												ImGui::Button("None", ImVec2(thumbnailSize, thumbnailSize));
+												ImGui::TextWrapped("%s", label);
+												ImGui::EndGroup();
+											}
+											ImGui::PopID();
+											ImGui::PopID();
+										};
+
+									// First row of textures
+									renderTexturePreview("Base Color", mat->baseColorTextureHandle);
+									ImGui::SameLine(0.0f, spacing);
+									renderTexturePreview("Normal", mat->normalTextureHandle);
+									ImGui::SameLine(0.0f, spacing);
+									renderTexturePreview("Metallic/Rough", mat->metallicRoughnessTextureHandle);
+
+									// Second row of textures
+									renderTexturePreview("Emissive", mat->emissiveTextureHandle);
+									ImGui::SameLine(0.0f, spacing);
+									renderTexturePreview("Occlusion", mat->occlusionTextureHandle);
+								}
+								else
+								{
+									ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "No Material Assigned");
+								}
+
+								ImGui::Unindent(8.0f);
+								ImGui::TreePop();
+							}
+
+							ImGui::PopID();
+							ImGui::Spacing();
+						}
+					}
+				}
+			});
 
 			RenderComponent<Rigidbody2DComponent>("Rigid Body 2D", selectedEntity, [&]()
             {
@@ -1271,9 +1473,9 @@ namespace ignite
                     case CompType_StaticMesh:
                         entity.AddComponent<StaticMeshComponent>();
                         break;
-                        // case CompType_SkeletalMesh:
-                        //     entity.AddComponent<SkeletalMeshComponent>();
-                        //     break;
+                    case CompType_SkeletalMesh:
+                        entity.AddComponent<SkeletalMeshComponent>();
+                        break;
                     case CompType_Rigidbody:
                         entity.AddComponent<RigibodyComponent>();
                         break;

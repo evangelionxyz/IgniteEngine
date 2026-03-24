@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "asset_importer.hpp"
 
@@ -35,6 +14,8 @@
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/animation/skeleton.hpp"
+#include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/scene/scene.hpp"
 
 #include <mutex>
@@ -49,7 +30,10 @@ namespace ignite {
         { AssetType::Texture, AssetImporter::ImportTexture },
         { AssetType::Audio, AssetImporter::ImportAudio },
         { AssetType::StaticMesh, AssetImporter::ImportStaticMesh },
-        { AssetType::Material, AssetImporter::ImportMaterial }
+        { AssetType::SkeletalMesh, AssetImporter::ImportSkeletalMesh },
+        { AssetType::Material, AssetImporter::ImportMaterial },
+        { AssetType::Skeleton, AssetImporter::ImportSkeleton },
+        { AssetType::SkeletalAnimation, AssetImporter::ImportSkeletalAnimation },
     };
 
     Ref<Asset> AssetImporter::Import(AssetHandle handle, const AssetMetaData &metadata)
@@ -101,12 +85,12 @@ namespace ignite {
 		Ref<StaticMesh> asset;
 
 		// Load the mesh from .ixsm
-        if (metadata.filepath.extension() == staticMeshBinExt)
+        if (metadata.filepath.extension() == staticMeshBinExt && false)
         {
 		    asset = BinarySerializer::DeserializeStaticMesh(metadata.filepath);
         }
 
-        if (asset)
+        if (asset && false)
         {
 			for (auto &mesh : asset->GetMeshInstances())
 			{
@@ -129,7 +113,7 @@ namespace ignite {
                         cmd->close();
 
                         Application::SubmitWorkerCommandList(cmd);
-                        });
+                    });
                 }
             }
 
@@ -297,6 +281,122 @@ namespace ignite {
             auto relativePath = Project::GetInstance()->GetAssetRelativeFilepath(meshBinaryFullpath);
         }
 
+        return asset;
+    }
+
+    Ref<SkeletalMesh> AssetImporter::ImportSkeletalMesh(AssetHandle handle, const AssetMetaData &metadata)
+    {
+        if (!std::filesystem::exists(metadata.filepath))
+        {
+            LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
+            return nullptr;
+        }
+
+        const auto skeletalMeshBinExt = GetAssetExtensionFromType(AssetType::SkeletalMesh);
+        const auto skeletonBinExt = GetAssetExtensionFromType(AssetType::Skeleton);
+        const auto animationBinExt = GetAssetExtensionFromType(AssetType::SkeletalAnimation);
+
+        Ref<SkeletalMesh> asset;
+
+        if (metadata.filepath.extension() == skeletalMeshBinExt)
+        {
+            asset = BinarySerializer::DeserializeSkeletalMesh(metadata.filepath);
+            if (asset)
+            {
+                asset->handle = handle;
+            }
+            return asset;
+        }
+
+        MeshScene meshScene;
+        MeshLoader::LoadSceneGraph(metadata.filepath.generic_string(), meshScene);
+
+        AssetMetaData staticMeshMetadata = metadata;
+        staticMeshMetadata.type = AssetType::StaticMesh;
+        Ref<StaticMesh> staticMesh = ImportStaticMesh(AssetHandle(), staticMeshMetadata);
+        if (!staticMesh)
+        {
+            return nullptr;
+        }
+
+        asset = SkeletalMesh::Create();
+        asset->SetMeshInstance(staticMesh->GetMeshInstances());
+
+        const std::filesystem::path projectAssetPath = Project::GetInstance()->GetAssetDirectory();
+        const std::filesystem::path filename = metadata.filepath.stem();
+        const std::filesystem::path outputDirectory = projectAssetPath / filename;
+        const std::filesystem::path skeletalMeshDirectory = outputDirectory / "SkeletalMesh";
+        const std::filesystem::path animationDirectory = outputDirectory / "Animation";
+
+        if (!std::filesystem::exists(outputDirectory)) std::filesystem::create_directory(outputDirectory);
+        if (!std::filesystem::exists(skeletalMeshDirectory)) std::filesystem::create_directory(skeletalMeshDirectory);
+        if (!std::filesystem::exists(animationDirectory)) std::filesystem::create_directory(animationDirectory);
+
+        if (meshScene.skeleton)
+        {
+            std::filesystem::path skeletonPath = skeletalMeshDirectory / (filename.string() + skeletonBinExt);
+            BinarySerializer::SerializeSkeleton(meshScene.skeleton, skeletonPath);
+
+            AssetHandle skeletonHandle = AssetHandle();
+            meshScene.skeleton->handle = skeletonHandle;
+
+            AssetMetaData skeletonMD;
+            skeletonMD.filepath = Project::GetInstance()->GetAssetRelativeFilepath(skeletonPath);
+            skeletonMD.type = AssetType::Skeleton;
+
+            Project::GetInstance()->GetAssetManager().AssignAsset(skeletonHandle, meshScene.skeleton);
+            Project::GetInstance()->GetAssetManager().AssignMetaData(skeletonHandle, skeletonMD);
+            asset->skeletonHandle = skeletonHandle;
+            asset->boneTransforms.resize(meshScene.skeleton->joints.size(), glm::mat4(1.0f));
+        }
+
+        for (size_t i = 0; i < meshScene.animations.size(); ++i)
+        {
+            Ref<SkeletalAnimation> animation = meshScene.animations[i];
+            if (!animation)
+            {
+                continue;
+            }
+
+            std::filesystem::path animationPath = animationDirectory / (std::format("{}_{}", filename.string(), i) + animationBinExt);
+            BinarySerializer::SerializeAnimation(animation, animationPath);
+
+            AssetHandle animationHandle = AssetHandle();
+            animation->handle = animationHandle;
+
+            AssetMetaData animationMD;
+            animationMD.filepath = Project::GetInstance()->GetAssetRelativeFilepath(animationPath);
+            animationMD.type = AssetType::SkeletalAnimation;
+
+            Project::GetInstance()->GetAssetManager().AssignAsset(animationHandle, animation);
+            Project::GetInstance()->GetAssetManager().AssignMetaData(animationHandle, animationMD);
+            asset->animationHandles.push_back(animationHandle);
+        }
+
+        std::filesystem::path skmBinaryPath = skeletalMeshDirectory / (filename.string() + skeletalMeshBinExt);
+        BinarySerializer::SerializeSkeletalMesh(asset, skmBinaryPath);
+
+        asset->handle = handle;
+        return asset;
+    }
+
+    Ref<Skeleton> AssetImporter::ImportSkeleton(AssetHandle handle, const AssetMetaData &metadata)
+    {
+        Ref<Skeleton> asset = BinarySerializer::DeserializeSkeleton(metadata.filepath);
+        if (asset)
+        {
+            asset->handle = handle;
+        }
+        return asset;
+    }
+
+    Ref<SkeletalAnimation> AssetImporter::ImportSkeletalAnimation(AssetHandle handle, const AssetMetaData &metadata)
+    {
+        Ref<SkeletalAnimation> asset = BinarySerializer::DeserializeAnimation(metadata.filepath);
+        if (asset)
+        {
+            asset->handle = handle;
+        }
         return asset;
     }
 

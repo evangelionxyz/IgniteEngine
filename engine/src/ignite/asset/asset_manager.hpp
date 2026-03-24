@@ -49,7 +49,7 @@ namespace ignite
         AssetManager(Project *project);
         ~AssetManager();
 
-        Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
+        Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata, AssetType requestedAssetType = AssetType::Auto);
         AssetHandle ImportAsset(const std::filesystem::path &filepath);
         void AssignMetaData(AssetHandle handle, const AssetMetaData &metadata);
 
@@ -78,8 +78,8 @@ namespace ignite
 
         void SubmitJob(AssetJob job);
 
-        Ref<Asset> GetAsset(AssetHandle handle);
-        Ref<Asset> GetAssetImmediate(AssetHandle handle); // Synchronous load - blocks until complete
+        Ref<Asset> GetAsset(AssetHandle handle, AssetType requestedAssetType = AssetType::Auto);
+        Ref<Asset> GetAssetImmediate(AssetHandle handle, AssetType requestedAssetType = AssetType::Auto); // Synchronous load - blocks until complete
         AssetType GetAssetType(AssetHandle handle) const;
 
         const AssetMetaData &GetMetaData(const std::filesystem::path &filepath, AssetHandle &outHandle);

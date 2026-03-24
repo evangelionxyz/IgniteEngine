@@ -355,7 +355,7 @@ namespace ignite
     class StaticMeshComponent : public IComponent
     {
     public:
-        AssetHandle handle = AssetHandle(0);
+        AssetHandle handle = AssetHandle(0); // class StaticMesh in mesh.h
         Ref<ConstantBuffer> perEntityBuffer;
         nvrhi::BindingSetHandle meshBindingSet = nullptr; // Cached binding set - reused across frames
 
@@ -367,6 +367,11 @@ namespace ignite
 	class SkeletalMeshComponent : public IComponent
 	{
 	public:
+        AssetHandle handle = AssetHandle(0); // class SkeletalMesh in mesh.h
+
+        Ref<ConstantBuffer> perEntityBuffer;
+        nvrhi::BindingSetHandle meshBindingSet = nullptr; // Cached binding set - reused across frames
+
         SkeletalMeshComponent() = default;
 		COMPONENT_CLASS_TYPE(CompType_SkeletalMesh)
 	};

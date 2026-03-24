@@ -222,7 +222,7 @@ namespace ignite {
         m_ConditionVariable.notify_one();
     }
 
-    Ref<Asset> AssetManager::GetAsset(AssetHandle handle)
+    Ref<Asset> AssetManager::GetAsset(AssetHandle handle, AssetType requestedAssetType)
     {
         if (!IsAssetHandleValid(handle))
         {
@@ -254,11 +254,12 @@ namespace ignite {
         // Submit import work to worker thread
         const AssetMetaData metadata = GetMetaData(handle);
         
-        SubmitJob([this, handle, metadata]() {
+        SubmitJob([this, handle, metadata, requestedAssetType]()
+        {
             try
             {
                 // Do the heavy I/O work on worker thread
-                Ref<Asset> asset = Import(handle, metadata);
+                Ref<Asset> asset = Import(handle, metadata, requestedAssetType);
                 
                 if (asset)
                 {
@@ -289,7 +290,7 @@ namespace ignite {
         return nullptr;
     }
 
-    Ref<Asset> AssetManager::GetAssetImmediate(AssetHandle handle)
+    Ref<Asset> AssetManager::GetAssetImmediate(AssetHandle handle, AssetType requestedAssetType)
     {
         if (!IsAssetHandleValid(handle))
         {
@@ -310,7 +311,7 @@ namespace ignite {
         LOG_TRACE("[Asset Manager] Synchronous asset load requested: {}", 
             metadata.filepath.generic_string());
         
-        return Import(handle, metadata);
+        return Import(handle, metadata, requestedAssetType);
     }
 
     AssetType AssetManager::GetAssetType(AssetHandle handle) const
@@ -406,7 +407,7 @@ namespace ignite {
         }
     }
 
-    Ref<Asset> AssetManager::Import(AssetHandle handle, const AssetMetaData &metadata)
+    Ref<Asset> AssetManager::Import(AssetHandle handle, const AssetMetaData &metadata, AssetType requestedAssetType)
     {
         // Check if already loaded (thread-safe read)
         {
@@ -418,7 +419,14 @@ namespace ignite {
         }
 
         Ref<Asset> asset;
-        switch (metadata.type)
+
+        AssetMetaData getterMetadata = metadata;
+        if (requestedAssetType != AssetType::Auto && requestedAssetType != AssetType::Invalid)
+        {
+            getterMetadata.type = requestedAssetType;
+        }
+
+        switch (getterMetadata.type)
         {
         case AssetType::Invalid:
         {
@@ -428,8 +436,10 @@ namespace ignite {
 
         case AssetType::Material:
         case AssetType::StaticMesh:
+        case AssetType::SkeletalAnimation:
+        case AssetType::SkeletalMesh:
         {
-            asset = AssetImporter::Import(handle, metadata);
+            asset = AssetImporter::Import(handle, getterMetadata);
             
             // Thread-safe assignment
             {
@@ -447,7 +457,7 @@ namespace ignite {
         case AssetType::Scene:
         case AssetType::Texture:
         {
-            asset = AssetImporter::Import(handle, metadata);
+            asset = AssetImporter::Import(handle, getterMetadata);
             
             // Thread-safe assignment
             {
