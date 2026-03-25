@@ -191,105 +191,105 @@ namespace ignite
             return false;
         }
 
-        static bool TryLoadFBXTextureFromProperty(FbxSurfaceMaterial *material, const std::initializer_list<const char *> &propertyNames, 
-            const std::filesystem::path &sourceDir, FBXMeshLoader::Loader &ld, MeshScene::MaterialTextureMap &textureMap)
-        {
-            if (!material)
-            {
-                return false;
-            }
+		static bool TryLoadFBXTextureFromProperty(FbxSurfaceMaterial *material, const std::initializer_list<const char *> &propertyNames,
+			const std::filesystem::path &sourceDir, FBXMeshLoader::MaterialLoader &materialLoader, MeshScene::MaterialTextureMap &textureMap)
+		{
+			if (!material)
+			{
+				return false;
+			}
 
-            for (const char *name : propertyNames)
-            {
-                FbxProperty property = material->FindProperty(name);
-                if (!property.IsValid())
-                {
-                    property = material->RootProperty.Find(name);
-                }
+			for (const char *name : propertyNames)
+			{
+				FbxProperty property = material->FindProperty(name);
+				if (!property.IsValid())
+				{
+					property = material->RootProperty.Find(name);
+				}
 
-                if (!property.IsValid())
-                {
-                    continue;
-                }
+				if (!property.IsValid())
+				{
+					continue;
+				}
 
-                const int textureCount = property.GetSrcObjectCount<FbxFileTexture>();
-                for (int i = 0; i < textureCount; ++i)
-                {
-                    FbxFileTexture *fbxTexture = property.GetSrcObject<FbxFileTexture>(i);
-                    if (!fbxTexture)
-                    {
-                        continue;
-                    }
+				const int textureCount = property.GetSrcObjectCount<FbxFileTexture>();
+				for (int i = 0; i < textureCount; ++i)
+				{
+					FbxFileTexture *fbxTexture = property.GetSrcObject<FbxFileTexture>(i);
+					if (!fbxTexture)
+					{
+						continue;
+					}
 
-                    std::filesystem::path texturePath = fbxTexture->GetFileName();
-                    if (texturePath.empty())
-                    {
-                        texturePath = fbxTexture->GetRelativeFileName();
-                    }
+					std::filesystem::path texturePath = fbxTexture->GetFileName();
+					if (texturePath.empty())
+					{
+						texturePath = fbxTexture->GetRelativeFileName();
+					}
 
-                    if (texturePath.empty())
-                    {
-                        continue;
-                    }
+					if (texturePath.empty())
+					{
+						continue;
+					}
 
-                    if (texturePath.is_relative())
-                    {
-                        texturePath = sourceDir / texturePath;
-                    }
+					if (texturePath.is_relative())
+					{
+						texturePath = sourceDir / texturePath;
+					}
 
-                    texturePath = texturePath.lexically_normal();
-                    if (!std::filesystem::exists(texturePath))
-                    {
-                        continue;
-                    }
+					texturePath = texturePath.lexically_normal();
+					if (!std::filesystem::exists(texturePath))
+					{
+						continue;
+					}
 
-                    const std::string key = ToLowerCopy(texturePath.generic_string());
-                    if (ld.textureLookup.contains(key))
-                    {
-                        const int index = ld.textureLookup.at(key);
-                        textureMap = { index, ld.loadedTextures[index] };
-                        return true;
-                    }
+					const std::string key = ToLowerCopy(texturePath.generic_string());
+					if (materialLoader.textureLookup.contains(key))
+					{
+						const int index = materialLoader.textureLookup.at(key);
+						textureMap = { index, materialLoader.loadedTextures[index] };
+						return true;
+					}
 
-                    TextureCreateInfo createInfo;
-                    createInfo.flip = true;
-                    createInfo.format = nvrhi::Format::RGBA8_UNORM;
-                    createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
-                    createInfo.keepInitialState = true;
-                    createInfo.keepCpuData = true;
-                    createInfo.deferGpuCreate = true;
-                    createInfo.mipLevels = 4;
+					TextureCreateInfo createInfo;
+					createInfo.flip = true;
+					createInfo.format = nvrhi::Format::RGBA8_UNORM;
+					createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+					createInfo.keepInitialState = true;
+					createInfo.keepCpuData = true;
+					createInfo.deferGpuCreate = true;
+					createInfo.mipLevels = 4;
 
-                    Ref<Texture> texture = Texture::Create(texturePath, createInfo, nullptr);
-                    if (!texture)
-                    {
-                        continue;
-                    }
+					Ref<Texture> texture = Texture::Create(texturePath, createInfo, nullptr);
+					if (!texture)
+					{
+						continue;
+					}
 
-                    Application::SubmitToRenderThread([texture]()
-                    {
-                        nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
-                        cmd->open();
-                        texture->SetData(cmd, 4);
-                        texture->SetReadyFlag(false);
-                        cmd->close();
+					Application::SubmitToRenderThread([texture]()
+					{
+						nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
+						cmd->open();
+						texture->SetData(cmd, 4);
+						texture->SetReadyFlag(false);
+						cmd->close();
 
-                        Application::SubmitWorkerCommandList(cmd, [texture]()
-                        {
-                            texture->SetReadyFlag(true);
-                        });
-                    });
+						Application::SubmitWorkerCommandList(cmd, [texture]()
+						{
+							texture->SetReadyFlag(true);
+						});
+					});
 
-                    const int index = (int)ld.loadedTextures.size();
-                    ld.loadedTextures.push_back(texture);
-                    ld.textureLookup[key] = index;
-                    textureMap = { index, texture };
-                    return true;
-                }
-            }
+					const int index = (int)materialLoader.loadedTextures.size();
+					materialLoader.loadedTextures.push_back(texture);
+					materialLoader.textureLookup[key] = index;
+					textureMap = { index, texture };
+					return true;
+				}
+			}
 
-            return false;
-        }
+			return false;
+		}
 
         static Ref<Material> CreateMaterialFromFBX(FbxSurfaceMaterial *fbxMaterial)
         {
@@ -404,211 +404,6 @@ namespace ignite
             {
                 w *= inv;
             }
-        }
-
-        static int32_t FindOrAddJoint(FBXMeshLoader::Loader &ld, const Ref<Skeleton> &skeleton, FbxNode *jointNode)
-        {
-            if (!jointNode || !skeleton)
-            {
-                return -1;
-            }
-
-            const std::string jointName = jointNode->GetName() ? jointNode->GetName() : "";
-            if (jointName.empty())
-            {
-                return -1;
-            }
-
-            if (ld.jointNameToIndex.contains(jointName))
-            {
-                return ld.jointNameToIndex[jointName];
-            }
-
-            int32_t parentJointId = -1;
-            FbxNode *parentNode = jointNode->GetParent();
-            if (parentNode && jointNode->GetScene() && parentNode != jointNode->GetScene()->GetRootNode())
-            {
-                parentJointId = FindOrAddJoint(ld, skeleton, parentNode);
-            }
-
-            Joint joint{};
-            joint.id = static_cast<int32_t>(skeleton->joints.size());
-            joint.parentJointId = parentJointId;
-            joint.name = jointName;
-            joint.localTransform = ToGlmMatrix(jointNode->EvaluateLocalTransform());
-            
-            glm::vec3 skew;
-            glm::vec4 perspective;
-            glm::decompose(joint.localTransform, joint.defaultScale, joint.defaultRotation, joint.defaultTranslation, skew, perspective);
-            
-            joint.globalTransform = glm::mat4(1.0f);
-            joint.inverseBindPose = glm::mat4(1.0f);
-
-            skeleton->nameToJointMap[joint.name] = joint.id;
-            skeleton->joints.push_back(joint);
-            ld.jointNameToIndex[joint.name] = joint.id;
-            ld.jointNodes[joint.name] = jointNode;
-            return joint.id;
-        }
-
-        static void BuildSkeletonHierarchy(FbxNode *node, const Ref<Skeleton> &skeleton, FBXMeshLoader::Loader &ld)
-        {
-            if (!node)
-            {
-                return;
-            }
-
-            FbxNodeAttribute *attribute = node->GetNodeAttribute();
-            if (attribute && attribute->GetAttributeType() == FbxNodeAttribute::eSkeleton)
-            {
-                FindOrAddJoint(ld, skeleton, node);
-            }
-
-            for (int i = 0; i < node->GetChildCount(); ++i)
-            {
-                BuildSkeletonHierarchy(node->GetChild(i), skeleton, ld);
-            }
-        }
-
-        static void BuildAnimationsFromFBX(FbxScene *fbxScene, const Ref<Skeleton> &skeleton, FBXMeshLoader::Loader &ld, std::vector<Ref<SkeletalAnimation>> &outAnimations)
-        {
-            if (!fbxScene || !skeleton)
-            {
-                return;
-            }
-
-            const double frameRate = FbxTime::GetFrameRate(fbxScene->GetGlobalSettings().GetTimeMode());
-            const float ticksPerSecond = frameRate > 0.0 ? static_cast<float>(frameRate) : 30.0f;
-
-            for (int stackIndex = 0; stackIndex < fbxScene->GetSrcObjectCount<FbxAnimStack>(); ++stackIndex)
-            {
-                FbxAnimStack *animStack = fbxScene->GetSrcObject<FbxAnimStack>(stackIndex);
-                if (!animStack || animStack->GetMemberCount<FbxAnimLayer>() == 0)
-                {
-                    continue;
-                }
-
-                FbxAnimLayer *layer = animStack->GetMember<FbxAnimLayer>(0);
-                if (!layer)
-                {
-                    continue;
-                }
-
-                FbxTimeSpan timeSpan = animStack->GetLocalTimeSpan();
-                const double startSeconds = timeSpan.GetStart().GetSecondDouble();
-                const double endSeconds = timeSpan.GetStop().GetSecondDouble();
-
-                Ref<SkeletalAnimation> animation = CreateRef<SkeletalAnimation>();
-                animation->name = animStack->GetName() ? animStack->GetName() : "FBXAnimation";
-                animation->ticksPerSeconds = ticksPerSecond;
-                animation->duration = std::max(0.0f, static_cast<float>((endSeconds - startSeconds) * ticksPerSecond));
-
-                for (const Joint &joint : skeleton->joints)
-                {
-                    if (!ld.jointNodes.contains(joint.name))
-                    {
-                        continue;
-                    }
-
-                    FbxNode *node = ld.jointNodes[joint.name];
-                    std::set<FbxLongLong> keyTicks;
-
-                    auto collectTicks = [&keyTicks](FbxAnimCurve *curve)
-                        {
-                            if (!curve)
-                            {
-                                return;
-                            }
-
-                            for (int keyIndex = 0; keyIndex < curve->KeyGetCount(); ++keyIndex)
-                            {
-                                keyTicks.insert(curve->KeyGetTime(keyIndex).Get());
-                            }
-                        };
-
-                    collectTicks(node->LclTranslation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_X));
-                    collectTicks(node->LclTranslation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Y));
-                    collectTicks(node->LclTranslation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Z));
-
-                    collectTicks(node->LclRotation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_X));
-                    collectTicks(node->LclRotation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Y));
-                    collectTicks(node->LclRotation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Z));
-
-                    collectTicks(node->LclScaling.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_X));
-                    collectTicks(node->LclScaling.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Y));
-                    collectTicks(node->LclScaling.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Z));
-
-                    if (keyTicks.empty())
-                    {
-                        continue;
-                    }
-
-                    AnimationChannel channel{};
-                    channel.translationKeys.frames.reserve(keyTicks.size());
-                    channel.rotationKeys.frames.reserve(keyTicks.size());
-                    channel.scaleKeys.frames.reserve(keyTicks.size());
-
-                    for (const FbxLongLong tick : keyTicks)
-                    {
-                        FbxTime sampleTime;
-                        sampleTime.Set(tick);
-
-                        const float timestamp = static_cast<float>((sampleTime.GetSecondDouble() - startSeconds) * ticksPerSecond);
-
-                        const glm::mat4 localMatrix = ToGlmMatrix(node->EvaluateLocalTransform(sampleTime));
-
-                        glm::vec3 decomposedScale(1.0f);
-                        glm::quat decomposedRotation(1.0f, 0.0f, 0.0f, 0.0f);
-                        glm::vec3 decomposedTranslation(0.0f);
-                        glm::vec3 skew(0.0f);
-                        glm::vec4 perspective(0.0f);
-                        glm::decompose(localMatrix,
-                            decomposedScale,
-                            decomposedRotation,
-                            decomposedTranslation,
-                            skew,
-                            perspective);
-
-                        channel.translationKeys.AddFrame({ decomposedTranslation, timestamp });
-                        channel.rotationKeys.AddFrame({ decomposedRotation, timestamp });
-                        channel.scaleKeys.AddFrame({ decomposedScale, timestamp });
-                    }
-
-                    animation->channels.emplace(joint.name, std::move(channel));
-                }
-
-                if (!animation->channels.empty())
-                {
-                    outAnimations.push_back(animation);
-                }
-            }
-        }
-
-        static void ExtractSkeletonAndAnimations(FbxScene *fbxScene, MeshScene &outScene, FBXMeshLoader::Loader &ld)
-        {
-            if (!fbxScene)
-            {
-                return;
-            }
-
-            outScene.skeleton = CreateRef<Skeleton>();
-
-            FbxNode *rootNode = fbxScene->GetRootNode();
-            if (rootNode)
-            {
-                for (int i = 0; i < rootNode->GetChildCount(); ++i)
-                {
-                    BuildSkeletonHierarchy(rootNode->GetChild(i), outScene.skeleton, ld);
-                }
-            }
-
-            if (outScene.skeleton->joints.empty())
-            {
-                outScene.skeleton.reset();
-                return;
-            }
-
-            BuildAnimationsFromFBX(fbxScene, outScene.skeleton, ld, outScene.animations);
         }
     }
 
@@ -1233,24 +1028,146 @@ namespace ignite
             LOG_WARN("[FBX Loader] Triangulate geometry completed for {}s", timer.Elapsed());
         }
 
-        Loader ld;
-        ExtractSkeletonAndAnimations(fbxScene, outScene, ld);
+        JointLoader jointLoader;
+        outScene.skeleton = LoadSkeletonFBX(fbxScene, jointLoader);
+        LoadAnimationsFBX(fbxScene, outScene.skeleton, jointLoader.jointNodes, outScene.animations);
 
         const std::filesystem::path sourceDir = std::filesystem::path(filename).parent_path();
 
+        MaterialLoader materialLoader;
         FbxNode *rootNode = fbxScene->GetRootNode();
         if (rootNode)
         {
             for (int i = 0; i < rootNode->GetChildCount(); ++i)
             {
-                BuildNode(rootNode->GetChild(i), fbxScene, outScene, ld, sourceDir, -1, glm::mat4(1.0f));
+                BuildNode(rootNode->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, -1, glm::mat4(1.0f));
             }
         }
 
         fbxScene->Destroy();
     }
 
-    void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene &outScene, Loader &ld, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal)
+	void FBXMeshLoader::LoadSkeletonOnlyFromFBX(const std::string &filename, Ref<Skeleton> &skeleton)
+	{
+		if (!skeleton)
+		{
+			LOG_ERROR("[FBX Loader] Failed to load animation only: Skeleton is required");
+			return;
+		}
+
+		AssetManager &assetManager = Project::GetInstance()->GetAssetManager();
+		std::lock_guard<std::mutex> lock(assetManager.GetFbxSdkMutex());
+
+		FbxManager *sdkManager = assetManager.GetOrCreateFbxSdkManager();
+		if (!sdkManager)
+		{
+			LOG_ASSERT(false, "[FBX Loader] Failed to create FBX SDK Manager");
+			return;
+		}
+
+		// Create FBX Importer
+		FbxImporter *importer = FbxImporter::Create(sdkManager, "");
+		if (!importer->Initialize(filename.c_str(), -1, sdkManager->GetIOSettings()))
+		{
+			LOG_ERROR("[FBX Loader] Failed to create FBX Importer");
+
+			importer->Destroy();
+			return;
+		}
+
+		// Create FBX Scene
+		FbxScene *fbxScene = FbxScene::Create(sdkManager, "FBXScene");
+		if (!importer->Import(fbxScene))
+		{
+			LOG_ERROR("[FBX Loader] Failed to import {}", filename);
+
+			importer->Destroy();
+			fbxScene->Destroy();
+			return;
+		}
+		importer->Destroy();
+
+		JointLoader jointLoader;
+
+		FbxNode *rootNode = fbxScene->GetRootNode();
+		if (rootNode)
+		{
+			for (int i = 0; i < rootNode->GetChildCount(); ++i)
+			{
+				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, jointLoader);
+			}
+		}
+
+		if (skeleton->joints.empty())
+		{
+			skeleton.reset();
+		}
+
+		fbxScene->Destroy();
+	}
+
+	void FBXMeshLoader::LoadAnimationsOnlyFromFBX(const std::string &filename, Ref<Skeleton> skeleton, std::vector<Ref<SkeletalAnimation>> &outAnimations)
+	{
+        if (!skeleton)
+        {
+            LOG_ERROR("[FBX Loader] Failed to load animation only: Skeleton is required");
+            return;
+        }
+
+		AssetManager &assetManager = Project::GetInstance()->GetAssetManager();
+		std::lock_guard<std::mutex> lock(assetManager.GetFbxSdkMutex());
+
+		FbxManager *sdkManager = assetManager.GetOrCreateFbxSdkManager();
+		if (!sdkManager)
+		{
+			LOG_ASSERT(false, "[FBX Loader] Failed to create FBX SDK Manager");
+			return;
+		}
+
+		// Create FBX Importer
+		FbxImporter *importer = FbxImporter::Create(sdkManager, "");
+		if (!importer->Initialize(filename.c_str(), -1, sdkManager->GetIOSettings()))
+		{
+			LOG_ERROR("[FBX Loader] Failed to create FBX Importer");
+
+			importer->Destroy();
+			return;
+		}
+
+		// Create FBX Scene
+		FbxScene *fbxScene = FbxScene::Create(sdkManager, "FBXScene");
+		if (!importer->Import(fbxScene))
+		{
+			LOG_ERROR("[FBX Loader] Failed to import {}", filename);
+
+			importer->Destroy();
+			fbxScene->Destroy();
+			return;
+		}
+		importer->Destroy();
+
+		JointLoader jointLoader;
+
+		FbxNode *rootNode = fbxScene->GetRootNode();
+		if (rootNode)
+		{
+			for (int i = 0; i < rootNode->GetChildCount(); ++i)
+			{
+				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, jointLoader);
+			}
+		}
+
+		if (skeleton->joints.empty())
+		{
+			skeleton.reset();
+		}
+
+		LoadAnimationsFBX(fbxScene, skeleton, jointLoader.jointNodes, outAnimations);
+
+        fbxScene->Destroy();
+	}
+
+	void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene &outScene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal)
     {
         if (!node)
         {
@@ -1334,7 +1251,7 @@ namespace ignite
                         continue;
                     }
 
-                    const int32_t jointId = FindOrAddJoint(ld, outScene.skeleton, jointNode);
+                    const int32_t jointId = SkeletonFindOrAddJoint(jointNode, outScene.skeleton, jointLoader);
                     if (jointId < 0)
                     {
                         continue;
@@ -1519,9 +1436,9 @@ namespace ignite
                 FbxSurfaceMaterial *fbxMaterial = node->GetMaterialCount() > 0 ? node->GetMaterial(0) : nullptr;
                 int sceneMaterialIndex = -1;
 
-                if (ld.materialIndices.contains(fbxMaterial))
+                if (materialLoader.materialIndices.contains(fbxMaterial))
                 {
-                    sceneMaterialIndex = ld.materialIndices[fbxMaterial];
+                    sceneMaterialIndex = materialLoader.materialIndices[fbxMaterial];
                 }
                 else
                 {
@@ -1531,16 +1448,16 @@ namespace ignite
                     std::array<MeshScene::MaterialTextureMap, 5> textureMap{};
                     if (fbxMaterial)
                     {
-                        TryLoadFBXTextureFromProperty(fbxMaterial, { "DiffuseColor", "Diffuse", "BaseColor" }, sourceDir, ld, textureMap[0]);
-                        TryLoadFBXTextureFromProperty(fbxMaterial, { "EmissiveColor", "Emissive" }, sourceDir, ld, textureMap[1]);
-                        TryLoadFBXTextureFromProperty(fbxMaterial, { "SpecularColor", "Specular", "Metalness" }, sourceDir, ld, textureMap[2]);
-                        TryLoadFBXTextureFromProperty(fbxMaterial, { "NormalMap", "Bump", "Maya|TEX_normal_map" }, sourceDir, ld, textureMap[3]);
-                        TryLoadFBXTextureFromProperty(fbxMaterial, { "AmbientOcclusion", "AO", "Occlusion" }, sourceDir, ld, textureMap[4]);
+						TryLoadFBXTextureFromProperty(fbxMaterial, { "DiffuseColor", "Diffuse", "BaseColor" }, sourceDir, materialLoader, textureMap[0]);
+                        TryLoadFBXTextureFromProperty(fbxMaterial, { "EmissiveColor", "Emissive" }, sourceDir, materialLoader, textureMap[1]);
+                        TryLoadFBXTextureFromProperty(fbxMaterial, { "SpecularColor", "Specular", "Metalness" }, sourceDir, materialLoader, textureMap[2]);
+                        TryLoadFBXTextureFromProperty(fbxMaterial, { "NormalMap", "Bump", "Maya|TEX_normal_map" }, sourceDir, materialLoader, textureMap[3]);
+                        TryLoadFBXTextureFromProperty(fbxMaterial, { "AmbientOcclusion", "AO", "Occlusion" }, sourceDir, materialLoader, textureMap[4]);
                     }
 
                     outScene.materials.push_back(material);
                     outScene.materialTextureMap.push_back(textureMap);
-                    ld.materialIndices[fbxMaterial] = sceneMaterialIndex;
+                    materialLoader.materialIndices[fbxMaterial] = sceneMaterialIndex;
                 }
 
                 outScene.materialMap[static_cast<int>(outScene.flatMeshes.size()) - 1] = sceneMaterialIndex;
@@ -1549,11 +1466,217 @@ namespace ignite
 
         for (int i = 0; i < node->GetChildCount(); ++i)
         {
-            BuildNode(node->GetChild(i), fbxScene, outScene, ld, sourceDir, nodeIndex, meshNode.global);
+            BuildNode(node->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, nodeIndex, meshNode.global);
         }
     }
 
-    void MeshLoader::LoadSceneGraph(const std::string &filename, MeshScene &outScene)
+	Ref<Skeleton> FBXMeshLoader::LoadSkeletonFBX(fbxsdk::FbxScene *fbxScene, JointLoader &outJointResult)
+	{
+		if (!fbxScene)
+		{
+			return nullptr;
+		}
+
+		Ref<Skeleton> skeleton = CreateRef<Skeleton>();
+
+		FbxNode *rootNode = fbxScene->GetRootNode();
+		if (rootNode)
+		{
+			for (int i = 0; i < rootNode->GetChildCount(); ++i)
+			{
+				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, outJointResult);
+			}
+		}
+
+		if (skeleton->joints.empty())
+		{
+			skeleton.reset();
+		}
+
+        return skeleton;
+	}
+
+	void FBXMeshLoader::LoadAnimationsFBX(fbxsdk::FbxScene *fbxScene, const Ref<Skeleton> &skeleton, JointMap &jointNodes, std::vector<Ref<SkeletalAnimation>> &outAnimations)
+	{
+		if (!fbxScene || !skeleton)
+		{
+			return;
+		}
+
+		const double frameRate = FbxTime::GetFrameRate(fbxScene->GetGlobalSettings().GetTimeMode());
+		const float ticksPerSecond = frameRate > 0.0 ? static_cast<float>(frameRate) : 30.0f;
+
+		for (int stackIndex = 0; stackIndex < fbxScene->GetSrcObjectCount<FbxAnimStack>(); ++stackIndex)
+		{
+			FbxAnimStack *animStack = fbxScene->GetSrcObject<FbxAnimStack>(stackIndex);
+			if (!animStack || animStack->GetMemberCount<FbxAnimLayer>() == 0)
+			{
+				continue;
+			}
+
+			FbxAnimLayer *layer = animStack->GetMember<FbxAnimLayer>(0);
+			if (!layer)
+			{
+				continue;
+			}
+
+			FbxTimeSpan timeSpan = animStack->GetLocalTimeSpan();
+			const double startSeconds = timeSpan.GetStart().GetSecondDouble();
+			const double endSeconds = timeSpan.GetStop().GetSecondDouble();
+
+			Ref<SkeletalAnimation> animation = CreateRef<SkeletalAnimation>();
+			animation->name = animStack->GetName() ? animStack->GetName() : "FBXAnimation";
+			animation->ticksPerSeconds = ticksPerSecond;
+			animation->duration = std::max(0.0f, static_cast<float>((endSeconds - startSeconds) * ticksPerSecond));
+
+			for (const Joint &joint : skeleton->joints)
+			{
+				if (!jointNodes.contains(joint.name))
+				{
+					continue;
+				}
+
+				FbxNode *node = jointNodes[joint.name];
+				std::set<FbxLongLong> keyTicks;
+
+				auto collectTicks = [&keyTicks](FbxAnimCurve *curve)
+				{
+					if (!curve)
+					{
+						return;
+					}
+
+					for (int keyIndex = 0; keyIndex < curve->KeyGetCount(); ++keyIndex)
+					{
+						keyTicks.insert(curve->KeyGetTime(keyIndex).Get());
+					}
+				};
+
+				collectTicks(node->LclTranslation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_X));
+				collectTicks(node->LclTranslation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Y));
+				collectTicks(node->LclTranslation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Z));
+
+				collectTicks(node->LclRotation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_X));
+				collectTicks(node->LclRotation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Y));
+				collectTicks(node->LclRotation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Z));
+
+				collectTicks(node->LclScaling.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_X));
+				collectTicks(node->LclScaling.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Y));
+				collectTicks(node->LclScaling.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Z));
+
+				if (keyTicks.empty())
+				{
+					continue;
+				}
+
+				AnimationChannel channel{};
+				channel.translationKeys.frames.reserve(keyTicks.size());
+				channel.rotationKeys.frames.reserve(keyTicks.size());
+				channel.scaleKeys.frames.reserve(keyTicks.size());
+
+				for (const FbxLongLong tick : keyTicks)
+				{
+					FbxTime sampleTime;
+					sampleTime.Set(tick);
+
+					const float timestamp = static_cast<float>((sampleTime.GetSecondDouble() - startSeconds) * ticksPerSecond);
+
+					const glm::mat4 localMatrix = ToGlmMatrix(node->EvaluateLocalTransform(sampleTime));
+
+					glm::vec3 decomposedScale(1.0f);
+					glm::quat decomposedRotation(1.0f, 0.0f, 0.0f, 0.0f);
+					glm::vec3 decomposedTranslation(0.0f);
+					glm::vec3 skew(0.0f);
+					glm::vec4 perspective(0.0f);
+					glm::decompose(localMatrix,
+						decomposedScale,
+						decomposedRotation,
+						decomposedTranslation,
+						skew,
+						perspective);
+
+					channel.translationKeys.AddFrame({ decomposedTranslation, timestamp });
+					channel.rotationKeys.AddFrame({ decomposedRotation, timestamp });
+					channel.scaleKeys.AddFrame({ decomposedScale, timestamp });
+				}
+
+				animation->channels.emplace(joint.name, std::move(channel));
+			}
+
+			if (!animation->channels.empty())
+			{
+				outAnimations.push_back(animation);
+			}
+		}
+	}
+
+	int32_t FBXMeshLoader::SkeletonFindOrAddJoint(fbxsdk::FbxNode *jointNode, const Ref<Skeleton> &skeleton, JointLoader &outJointResult)
+	{
+		if (!jointNode || !skeleton)
+		{
+			return -1;
+		}
+
+		const std::string jointName = jointNode->GetName() ? jointNode->GetName() : "";
+		if (jointName.empty())
+		{
+			return -1;
+		}
+
+		if (outJointResult.jointNameToIndex.contains(jointName))
+		{
+			return outJointResult.jointNameToIndex[jointName];
+		}
+
+		int32_t parentJointId = -1;
+		FbxNode *parentNode = jointNode->GetParent();
+		if (parentNode && jointNode->GetScene() && parentNode != jointNode->GetScene()->GetRootNode())
+		{
+			parentJointId = SkeletonFindOrAddJoint(parentNode, skeleton, outJointResult);
+		}
+
+		Joint joint{};
+		joint.id = static_cast<int32_t>(skeleton->joints.size());
+		joint.parentJointId = parentJointId;
+		joint.name = jointName;
+		joint.localTransform = ToGlmMatrix(jointNode->EvaluateLocalTransform());
+
+		glm::vec3 skew;
+		glm::vec4 perspective;
+		glm::decompose(joint.localTransform, joint.defaultScale, joint.defaultRotation, joint.defaultTranslation, skew, perspective);
+
+		joint.globalTransform = glm::mat4(1.0f);
+		joint.inverseBindPose = glm::mat4(1.0f);
+
+		skeleton->nameToJointMap[joint.name] = joint.id;
+		skeleton->joints.push_back(joint);
+		outJointResult.jointNameToIndex[joint.name] = joint.id;
+
+		outJointResult.jointNodes[joint.name] = jointNode;
+
+		return joint.id;
+	}
+
+	void FBXMeshLoader::SkeletonBuildHierarchy(fbxsdk::FbxNode *node, const Ref<Skeleton> &skeleton, JointLoader &outJointResult)
+	{
+		if (!node)
+		{
+			return;
+		}
+
+		FbxNodeAttribute *attribute = node->GetNodeAttribute();
+		if (attribute && attribute->GetAttributeType() == FbxNodeAttribute::eSkeleton)
+		{
+            SkeletonFindOrAddJoint(node, skeleton, outJointResult);
+		}
+
+		for (int i = 0; i < node->GetChildCount(); ++i)
+		{
+            SkeletonBuildHierarchy(node->GetChild(i), skeleton, outJointResult);
+		}
+	}
+
+	void MeshLoader::LoadSceneGraph(const std::string &filename, MeshScene &outScene)
     {
         const std::string extension = ToLowerCopy(std::filesystem::path(filename).extension().string());
         if (extension == ".fbx")

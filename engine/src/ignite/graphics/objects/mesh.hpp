@@ -201,13 +201,21 @@ namespace ignite
     class FBXMeshLoader
     {
     public:
-        struct Loader
+
+        using JointMap = std::unordered_map<std::string, fbxsdk::FbxNode *>;
+        using JointIdxMap = std::unordered_map<std::string, int32_t>;
+
+        struct JointLoader
+        {
+            JointMap jointNodes;
+            JointIdxMap jointNameToIndex;
+        };
+
+        struct MaterialLoader
         {
             std::vector<Ref<Texture>> loadedTextures;
             std::unordered_map<fbxsdk::FbxSurfaceMaterial *, int> materialIndices;
             std::unordered_map<std::string, int> textureLookup;
-            std::unordered_map<std::string, int32_t> jointNameToIndex;
-            std::unordered_map<std::string, fbxsdk::FbxNode *> jointNodes;
         };
 
 		struct FBXBoneInfluence
@@ -217,7 +225,17 @@ namespace ignite
 		};
 
         static void LoadSceneGraphFromFBX(const std::string &filename, MeshScene &outScene);
-        static void BuildNode(fbxsdk::FbxNode *node, fbxsdk::FbxScene *fbxScene, MeshScene &outscene, Loader &ld, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal);
+        static void LoadSkeletonOnlyFromFBX(const std::string &filename, Ref<Skeleton> &skeleton);
+        static void LoadAnimationsOnlyFromFBX(const std::string &filename, Ref<Skeleton> skeleton, std::vector<Ref<SkeletalAnimation>> &outAnimations);
+
+        static void BuildNode(fbxsdk::FbxNode *node, fbxsdk::FbxScene *fbxScene, MeshScene &outscene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal);
+
+        static Ref<Skeleton> LoadSkeletonFBX(fbxsdk::FbxScene *fbxScene, JointLoader &outJointResult);
+        static void LoadAnimationsFBX(fbxsdk::FbxScene *fbxScene, const Ref<Skeleton> &skeleton, JointMap &jointNodes, std::vector<Ref<SkeletalAnimation>> &outAnimations);
+
+    private:
+        static void SkeletonBuildHierarchy(fbxsdk::FbxNode *node, const Ref<Skeleton> &skeleton, JointLoader &outJointResult);
+        static int32_t SkeletonFindOrAddJoint(fbxsdk::FbxNode *jointNode, const Ref<Skeleton> &skeleton, JointLoader &outJointResult);
     };
 
     class MeshLoader

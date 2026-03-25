@@ -18,35 +18,6 @@ namespace ignite
         }
     }
 
-    void AnimationSystem::ApplySkeletonToEntities(Scene* scene, Ref<Skeleton> &skeleton)
-    {
-        for (size_t i = 0; i < skeleton->joints.size(); i++)
-        {
-            auto it = skeleton->jointEntityMap.find(static_cast<i32>(i));
-            if (it == skeleton->jointEntityMap.end())
-                continue;
-
-            Entity entity = SceneManager::GetEntity(scene, it->second);
-
-            if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-                continue;
-            
-            glm::vec3 skew;
-            glm::vec4 perspective;
-
-            TransformComponent& transform = entity.GetTransform();
-            glm::decompose(skeleton->joints[i].localTransform,
-                transform.localScale,
-                transform.localRotation,
-                transform.localTranslation,
-                skew,
-                perspective);
-
-            transform.isAnimated = true;
-            transform.dirty = true;
-        }
-    }
-
     bool AnimationSystem::UpdateSkeleton(Ref<Skeleton> &skeleton, const Ref<SkeletalAnimation> &animation, float timeInSeconds)
     {
         if (!skeleton || !animation || animation->duration <= 0.0f)

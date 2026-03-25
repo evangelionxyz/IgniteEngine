@@ -19,15 +19,6 @@ namespace ignite
         glm::mat4 offsetMatrix = glm::mat4(1.0f);
     };
 
-    struct BoneMapping
-    {
-        std::vector<BoneInfo> boneInfo; // Bone weights and indices
-        std::unordered_map<std::string, uint32_t> boneMapping; // Maps bone name to indices
-    };
-
-    // mesh index to bone info
-    using MeshBoneMapping = std::unordered_map<int, BoneMapping>;
-
     struct Joint
     {
         std::string name;
@@ -45,10 +36,10 @@ namespace ignite
     {
     public:
         std::vector<Joint> joints;
-        std::unordered_map<std::string, int32_t> nameToJointMap; // for fast lookup by name
-        std::unordered_map<int32_t, UUID> jointEntityMap;
+        std::unordered_map<std::string, int32_t> nameToJointMap;
 
-        MeshBoneMapping boneMapping;
+        //                  Joint name, socket id
+        std::unordered_map<std::string, int32_t> jointSockets;
 
         static AssetType GetStaticType() { return AssetType::Skeleton; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }
