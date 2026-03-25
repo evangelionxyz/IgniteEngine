@@ -296,7 +296,46 @@ namespace ignite {
         const auto skeletonBinExt = GetAssetExtensionFromType(AssetType::Skeleton);
         const auto animationBinExt = GetAssetExtensionFromType(AssetType::SkeletalAnimation);
 
+        const std::filesystem::path projectAssetPath = Project::GetInstance()->GetAssetDirectory();
+        const std::filesystem::path filename = metadata.filepath.stem();
+        const std::filesystem::path outputDirectory = projectAssetPath / filename;
+        const std::filesystem::path skeletalMeshDirectory = outputDirectory / "SkeletalMesh";
+        const std::filesystem::path animationDirectory = outputDirectory / "Animation";
+        const std::filesystem::path skmBinaryPath = skeletalMeshDirectory / (filename.string() + skeletalMeshBinExt);
+        const std::filesystem::path skeletonPath = skeletalMeshDirectory / (filename.string() + skeletonBinExt);
+
         Ref<SkeletalMesh> asset;
+
+        auto prepareMeshGpuAndMaterials = [](const Ref<SkeletalMesh> &skeletalMesh)
+        {
+            if (!skeletalMesh)
+            {
+                return;
+            }
+
+            for (auto &mesh : skeletalMesh->GetMeshInstances())
+            {
+                AssetHandle materialHandle = mesh->GetMaterialHandle();
+                AssetMetaData materialMetadata = Project::GetInstance()->GetAssetManager().GetMetaData(materialHandle);
+                if (materialMetadata.type == AssetType::Material)
+                {
+                    const auto &materialFilepath = Project::GetInstance()->GetAssetFilepath(materialMetadata.filepath);
+                    Ref<Material> material = BinarySerializer::DeserializeMaterial(materialFilepath);
+                    Project::GetInstance()->GetAssetManager().AssignAsset(materialHandle, material);
+                }
+
+                Application::SubmitToRenderThread([m = mesh]()
+                {
+                    nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+                    nvrhi::CommandListHandle cmd = device->createCommandList();
+                    cmd->open();
+                    m->GetPrimitive()->CreateBuffer(cmd);
+                    cmd->close();
+
+                    Application::SubmitWorkerCommandList(cmd);
+                });
+            }
+        };
 
         if (metadata.filepath.extension() == skeletalMeshBinExt)
         {
@@ -304,7 +343,85 @@ namespace ignite {
             if (asset)
             {
                 asset->handle = handle;
+                prepareMeshGpuAndMaterials(asset);
             }
+            return asset;
+        }
+
+        // Fast path: use cached binaries generated in dedicated folders.
+        if (std::filesystem::exists(skmBinaryPath) && std::filesystem::exists(skeletonPath))
+        {
+            asset = BinarySerializer::DeserializeSkeletalMesh(skmBinaryPath);
+            if (!asset)
+            {
+                return nullptr;
+            }
+
+            auto &assetManager = Project::GetInstance()->GetAssetManager();
+
+            // skeleton
+            AssetMetaData skeletonMD;
+            skeletonMD.filepath = Project::GetInstance()->GetAssetRelativeFilepath(skeletonPath);
+            skeletonMD.type = AssetType::Skeleton;
+
+            AssetHandle skeletonHandle = assetManager.GetAssetHandle(skeletonMD.filepath);
+            if (skeletonHandle == AssetHandle(0))
+            {
+                skeletonHandle = AssetHandle();
+            }
+
+            Ref<Skeleton> skeletonAsset = BinarySerializer::DeserializeSkeleton(skeletonPath);
+            if (skeletonAsset)
+            {
+                skeletonAsset->handle = skeletonHandle;
+                assetManager.AssignMetaData(skeletonHandle, skeletonMD);
+                assetManager.AssignAsset(skeletonHandle, skeletonAsset);
+                asset->skeletonHandle = skeletonHandle;
+                asset->boneTransforms.resize(skeletonAsset->joints.size(), glm::mat4(1.0f));
+            }
+
+            // animations
+            asset->animationHandles.clear();
+            std::vector<std::filesystem::path> animationFiles;
+            if (std::filesystem::exists(animationDirectory))
+            {
+                for (const auto &entry : std::filesystem::directory_iterator(animationDirectory))
+                {
+                    if (entry.is_regular_file() && entry.path().extension() == animationBinExt)
+                    {
+                        animationFiles.push_back(entry.path());
+                    }
+                }
+            }
+
+            std::sort(animationFiles.begin(), animationFiles.end());
+
+            for (const auto &animationPath : animationFiles)
+            {
+                AssetMetaData animationMD;
+                animationMD.filepath = Project::GetInstance()->GetAssetRelativeFilepath(animationPath);
+                animationMD.type = AssetType::SkeletalAnimation;
+
+                AssetHandle animationHandle = assetManager.GetAssetHandle(animationMD.filepath);
+                if (animationHandle == AssetHandle(0))
+                {
+                    animationHandle = AssetHandle();
+                }
+
+                Ref<SkeletalAnimation> animationAsset = BinarySerializer::DeserializeAnimation(animationPath);
+                if (!animationAsset)
+                {
+                    continue;
+                }
+
+                animationAsset->handle = animationHandle;
+                assetManager.AssignMetaData(animationHandle, animationMD);
+                assetManager.AssignAsset(animationHandle, animationAsset);
+                asset->animationHandles.push_back(animationHandle);
+            }
+
+            asset->handle = handle;
+            prepareMeshGpuAndMaterials(asset);
             return asset;
         }
 
@@ -322,19 +439,12 @@ namespace ignite {
         asset = SkeletalMesh::Create();
         asset->SetMeshInstance(staticMesh->GetMeshInstances());
 
-        const std::filesystem::path projectAssetPath = Project::GetInstance()->GetAssetDirectory();
-        const std::filesystem::path filename = metadata.filepath.stem();
-        const std::filesystem::path outputDirectory = projectAssetPath / filename;
-        const std::filesystem::path skeletalMeshDirectory = outputDirectory / "SkeletalMesh";
-        const std::filesystem::path animationDirectory = outputDirectory / "Animation";
-
         if (!std::filesystem::exists(outputDirectory)) std::filesystem::create_directory(outputDirectory);
         if (!std::filesystem::exists(skeletalMeshDirectory)) std::filesystem::create_directory(skeletalMeshDirectory);
         if (!std::filesystem::exists(animationDirectory)) std::filesystem::create_directory(animationDirectory);
 
         if (meshScene.skeleton)
         {
-            std::filesystem::path skeletonPath = skeletalMeshDirectory / (filename.string() + skeletonBinExt);
             BinarySerializer::SerializeSkeleton(meshScene.skeleton, skeletonPath);
 
             AssetHandle skeletonHandle = AssetHandle();
@@ -373,10 +483,10 @@ namespace ignite {
             asset->animationHandles.push_back(animationHandle);
         }
 
-        std::filesystem::path skmBinaryPath = skeletalMeshDirectory / (filename.string() + skeletalMeshBinExt);
         BinarySerializer::SerializeSkeletalMesh(asset, skmBinaryPath);
 
         asset->handle = handle;
+        prepareMeshGpuAndMaterials(asset);
         return asset;
     }
 
