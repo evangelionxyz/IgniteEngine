@@ -88,6 +88,8 @@ namespace ignite
 
         bool m_SupportExplicitDisplayScaling;
         bool m_BeginFrameCalled = false;
+        bool m_BlockEvents = true;
+
         DeviceManager *m_DeviceManager = nullptr;
         
         // Store original style for proper scaling

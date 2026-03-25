@@ -183,6 +183,7 @@ namespace ignite
     void ImGui_NVRHI::BackBufferResizing()
     {
         graphicsPipeline = nullptr;
+        bindingsCache.clear();
     }
 
     bool ImGui_NVRHI::ReallocateBuffer(nvrhi::BufferHandle &buffer, size_t requiredSize, size_t reallocateSize, bool isIndexBuffer)
@@ -223,7 +224,7 @@ namespace ignite
         layoutDesc.visibility = nvrhi::ShaderType::All;
         layoutDesc.bindings =
         {
-            nvrhi::BindingLayoutItem::PushConstants(0, sizeof(f32) * 2),
+            nvrhi::BindingLayoutItem::PushConstants(0, sizeof(float) * 2),
             nvrhi::BindingLayoutItem::Texture_SRV(0),
             nvrhi::BindingLayoutItem::Sampler(0)
         };
@@ -248,7 +249,10 @@ namespace ignite
         params.enableDepthStencil = false;
 
         graphicsPipeline = GraphicsPipeline::Create();
-        graphicsPipeline->SetShaders({ vertexShader, pixelShader }).AddBindingLayout(bindingLayout).Build(framebuffer, params);
+        graphicsPipeline->SetShaders({ vertexShader, pixelShader })
+            .AddBindingLayout(bindingLayout)
+            .Build(framebuffer, params);
+
         return graphicsPipeline;
     }
 
@@ -336,6 +340,8 @@ namespace ignite
 
     void ImGui_NVRHI::Shutdown()
     {
+        bindingsCache.clear();
+
         fontTexture = nullptr;
         fontSampler = nullptr;
 

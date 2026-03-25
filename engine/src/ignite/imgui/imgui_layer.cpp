@@ -286,7 +286,12 @@ namespace ignite
 
     void ImGuiLayer::OnEvent(Event &event)
     {
-        Layer::OnEvent(event);
+		if (m_BlockEvents)
+		{
+			// ImGuiIO &io = ImGui::GetIO();
+			// event.Handled |= event.IsInCategory(EventCategoryMouse) & io.WantCaptureMouse;
+			// event.Handled |= event.IsInCategory(EventCategoryKeyboard) & io.WantCaptureKeyboard;
+		}
 
         EventDispatcher dispatcher(event);
         dispatcher.Dispatch<FramebufferResizeEvent>(BIND_CLASS_EVENT_FN(ImGuiLayer::OnFramebufferResize));
@@ -309,7 +314,7 @@ namespace ignite
 
         m_Font->ReleaseScaledFont();
 
-        return true;
+        return false;
     }
 
     bool ImGuiLayer::OnDPIScaleChanged(WindowDPIScaleChangedEvent &event)
@@ -331,7 +336,8 @@ namespace ignite
         m_CurrentDPIScale = event.GetScaleX();
 
         LOG_INFO("ImGui DPI scaling updated to: {}", event.GetScaleX());
-        return true;
+
+        return false;
     }
 
     void ImGuiLayer::BeginFrame()
