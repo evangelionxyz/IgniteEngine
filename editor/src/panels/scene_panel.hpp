@@ -30,7 +30,7 @@ namespace ignite
         
         void SetActiveScene(const Ref<Scene> &scene);
 
-        void OnUpdate(f32 deltaTime) override;
+        void OnUpdate(float deltaTime) override;
         void OnGuiRender() override;
         void RenderViewport();
 
@@ -56,7 +56,7 @@ namespace ignite
         
         void RenderInspector();
         void UISettings();
-        void UpdateCameraInput(f32 deltaTime);
+        void UpdateCameraInput(float deltaTime);
         void DestroyEntity(Entity entity);
         void DuplicateSelectedEntity();
         void ClearSelection();

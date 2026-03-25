@@ -23,7 +23,12 @@ namespace ignite
     {
     }
 
-    void MaterialsPanel::OnImGuiRender()
+	void MaterialsPanel::OnEvent(Event &event)
+	{
+        EventDispatcher dispatcher(event);
+	}
+
+	void MaterialsPanel::OnImGuiRender()
     {
         if (!m_IsOpen)
             return;

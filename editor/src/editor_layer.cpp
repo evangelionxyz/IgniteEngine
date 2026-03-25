@@ -65,9 +65,16 @@ namespace ignite
 
         m_Device = DeviceManager::GetInstance()->GetDevice();
 
-        m_ScenePanel = CreateRef<ScenePanel>("Scene Panel");
-        m_ContentBrowserPanel = CreateRef<ContentBrowserPanel>("Content Browser");
-        m_MaterialsPanel = CreateRef<MaterialsPanel>();
+        auto *app = Application::GetInstance();
+
+        m_ScenePanel = new ScenePanel("Scene Panel");
+        m_ContentBrowserPanel = new ContentBrowserPanel("Content Browser");
+        m_MaterialsPanel = new MaterialsPanel();
+
+        app->PushLayer(m_ScenePanel);
+        app->PushLayer(m_ContentBrowserPanel);
+        app->PushLayer(m_MaterialsPanel);
+
 
         // Set up material panel callbacks
         m_MaterialsPanel->SetMaterialSelectionCallback([this](Ref<Material> material) {
@@ -102,10 +109,6 @@ namespace ignite
     void EditorLayer::OnDetach()
     {
         Layer::OnDetach();
-
-        m_ScenePanel.reset();
-        m_ContentBrowserPanel.reset();
-        m_MaterialsPanel.reset();
 
 		s_EditorLayerInstance = nullptr;
     }
@@ -149,7 +152,6 @@ namespace ignite
     void EditorLayer::OnEvent(Event &e)
     {
         Layer::OnEvent(e);
-        m_ScenePanel->OnEvent(e);
 
         EventDispatcher dispatcher(e);
         dispatcher.Dispatch<KeyPressedEvent>(BIND_CLASS_EVENT_FN(EditorLayer::OnKeyPressedEvent));
@@ -619,10 +621,10 @@ namespace ignite
         // dock space
         ImGui::DockSpace(ImGui::GetID("main_dockspace"), ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
         {
-            // scene dock space
-            m_ScenePanel->OnGuiRender();
-            m_ContentBrowserPanel->OnGuiRender();
-            m_MaterialsPanel->OnImGuiRender();
+            // // scene dock space
+            // m_ScenePanel->OnGuiRender();
+            // m_ContentBrowserPanel->OnGuiRender();
+            // m_MaterialsPanel->OnImGuiRender();
 
             ImGui::Begin("Project");
 

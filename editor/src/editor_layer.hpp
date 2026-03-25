@@ -99,9 +99,10 @@ namespace ignite
         void ProcessPendingFileLoading();
         void UISettings();
 
-        Ref<ScenePanel> m_ScenePanel;
-        Ref<ContentBrowserPanel> m_ContentBrowserPanel;
-        Ref<MaterialsPanel> m_MaterialsPanel;
+        ScenePanel *m_ScenePanel;
+        ContentBrowserPanel *m_ContentBrowserPanel;
+        MaterialsPanel *m_MaterialsPanel;
+
         Ref<SceneRenderer> m_SceneRenderer;
 
         Ref<Scene> m_ActiveScene;

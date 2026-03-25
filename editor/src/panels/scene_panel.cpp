@@ -132,7 +132,7 @@ namespace ignite
         RenderViewport();
     }
 
-    void ScenePanel::OnUpdate(f32 deltaTime)
+    void ScenePanel::OnUpdate(float deltaTime)
     {
         UpdateCameraInput(deltaTime);
     }
@@ -2049,10 +2049,10 @@ namespace ignite
     void ScenePanel::OnEvent(Event &event)
     {
         EventDispatcher dispatcher(event);
+
         dispatcher.Dispatch<MouseScrolledEvent>(BIND_CLASS_EVENT_FN(ScenePanel::OnMouseScrolledEvent));
         dispatcher.Dispatch<MouseMovedEvent>(BIND_CLASS_EVENT_FN(ScenePanel::OnMouseMovedEvent));
         dispatcher.Dispatch<JoystickConnectionEvent>(BIND_CLASS_EVENT_FN(ScenePanel::OnJoystickConnectionEvent));
-		dispatcher.Dispatch<MouseMovedEvent>(BIND_CLASS_EVENT_FN(ScenePanel::OnMouseMovedEvent));
     }
 
     bool ScenePanel::OnMouseScrolledEvent(MouseScrolledEvent &event)
@@ -2089,7 +2089,7 @@ namespace ignite
         m_Gizmo.SetMode(mode);
     }
 
-    void ScenePanel::UpdateCameraInput(f32 deltaTime)
+    void ScenePanel::UpdateCameraInput(float deltaTime)
     {
         for (const Ref<Joystick> &j : JoystickManager::GetConnectedJoystick())
         {

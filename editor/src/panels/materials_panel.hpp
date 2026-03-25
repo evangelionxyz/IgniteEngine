@@ -3,16 +3,21 @@
 #pragma once
 
 #include "ignite/graphics/objects/material.hpp"
+
+#include "ipanel.hpp"
+
 #include <string>
 #include <functional>
 
 namespace ignite
 {
-    class MaterialsPanel
+    class MaterialsPanel : public IPanel
     {
     public:
         MaterialsPanel();
         ~MaterialsPanel();
+
+        virtual void OnEvent(Event &event) override;
 
         void OnImGuiRender();
 

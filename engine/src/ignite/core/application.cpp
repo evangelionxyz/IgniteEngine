@@ -80,9 +80,8 @@ namespace ignite
 
         if (createInfo.useGui)
         {
-            m_ImGuiLayer = CreateScope<ImGuiLayer>(m_Window->GetDeviceManager());
-            m_ImGuiLayer->OnAttach();
-            // PushLayer(m_ImGuiLayer.get());
+            m_ImGuiLayer = new ImGuiLayer(m_Window->GetDeviceManager());
+            PushLayer(m_ImGuiLayer);
         }
 
         if (m_CreateInfo.useAudio)
@@ -231,14 +230,23 @@ namespace ignite
             {
                 Layer *layer = *it;
                 layer->OnRender(framebuffer);
+            }
 
-                // ImGui rendering
-                if (m_CreateInfo.useGui)
+            // ImGui rendering
+            if (m_CreateInfo.useGui && m_ImGuiLayer)
+            {
+                m_ImGuiLayer->BeginFrame();
+
+                for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
                 {
-                    m_ImGuiLayer->BeginFrame();
+                    Layer *layer = *it;
+                    if (layer == m_ImGuiLayer)
+                        continue;
+
                     layer->OnGuiRender();
-                    m_ImGuiLayer->EndFrame(framebuffer);
                 }
+
+                m_ImGuiLayer->EndFrame(framebuffer);
             }
 
 			// Collect and execute worker command lists if any
@@ -425,12 +433,6 @@ namespace ignite
         
 		GPUUploadSync::DeviceWaitIdle(device);
         
-        if (m_ImGuiLayer)
-        {
-            m_ImGuiLayer->OnDetach();
-            m_ImGuiLayer.reset();
-        }
-        
         for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
         {
             (*it)->OnDetach();
@@ -459,10 +461,20 @@ namespace ignite
     void Application::OnEvent(Event &e)
     {
         EventDispatcher dispatcher(e);
+
+        if (m_CreateInfo.useGui && m_ImGuiLayer)
+        {
+            m_ImGuiLayer->OnEvent(e);
+        }
+
         for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
         {
             if (e.Handled)
                 break;
+
+            if (*it == m_ImGuiLayer)
+                continue;
+
             (*it)->OnEvent(e);
         }
     }

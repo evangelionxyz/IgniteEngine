@@ -1,36 +1,34 @@
-//Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
+// Copyright (c) 2026 Evangelion Manuhutu
 
-#pragma once
+#ifndef IPANEL_HPP
+#define IPANEL_HPP
+
+#include "ignite/core/logger.hpp"
+#include "ignite/core/types.hpp"
+#include "ignite/core/layer.hpp"
+#include "states.hpp"
 
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <string>
-#include "ignite/core/logger.hpp"
-#include "ignite/core/types.hpp"
-
-#include "states.hpp"
 
 namespace ignite
 {
-    class IPanel
+    class IPanel : public Layer
     {
     public:
         IPanel() = default;
         explicit IPanel(const char *windowTitle)
-            : m_WindowTitle(windowTitle)
+            : m_WindowTitle(windowTitle), Layer(windowTitle)
         {
         }
 
         virtual ~IPanel() {};
 
-        // from Layer class
-        virtual void OnGuiRender() { }
-
         // to child class
         virtual bool IsOpen() { return m_IsOpen; }
         virtual bool IsFocused() { return m_IsFocused; }
         virtual bool IsHovered() { return m_IsHovered; }
-        virtual void OnUpdate(float deltaTime) { }
 
         std::string &GetTitle() { return m_WindowTitle; }
 
@@ -42,4 +40,4 @@ namespace ignite
     };
 }
 
-
+#endif

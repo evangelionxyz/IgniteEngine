@@ -124,7 +124,7 @@ namespace ignite
         Scope<CommandManager> m_CommandManager;
         Scope<UIManager> m_UIManager;
         LayerStack m_LayerStack;
-        Ref<ImGuiLayer> m_ImGuiLayer;
+        ImGuiLayer *m_ImGuiLayer;
         Scope<Input> m_Input;
 
         Ref<Renderer> m_Renderer;

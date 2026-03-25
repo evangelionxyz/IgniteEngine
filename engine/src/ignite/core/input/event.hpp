@@ -26,7 +26,8 @@
 #include "ignite/core/base.hpp"
 #include <sstream>
 
-namespace ignite {
+namespace ignite
+{
     enum class EventType
     {
         None = 0,
@@ -51,7 +52,9 @@ namespace ignite {
         MouseButtonPressed,
         MouseButtonReleased,
         MouseMoved,
-        MouseScrolled
+        MouseScrolled,
+
+        AssetImport,
     };
 
     enum EventCategory
