@@ -288,9 +288,9 @@ namespace ignite
     {
 		if (m_BlockEvents)
 		{
-            ImGuiIO &io = ImGui::GetIO();
-            event.Handled |= event.IsInCategory(EventCategoryMouse) && io.WantCaptureMouse;
-            event.Handled |= event.IsInCategory(EventCategoryKeyboard) && io.WantCaptureKeyboard;
+            // ImGuiIO &io = ImGui::GetIO();
+            // event.Handled |= event.IsInCategory(EventCategoryMouse) && io.WantCaptureMouse;
+            // event.Handled |= event.IsInCategory(EventCategoryKeyboard) && io.WantCaptureKeyboard;
 		}
 
         EventDispatcher dispatcher(event);

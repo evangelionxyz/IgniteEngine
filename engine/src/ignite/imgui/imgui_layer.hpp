@@ -78,6 +78,8 @@ namespace ignite
 
         void PollEvent(const SDL_Event &event);
 
+        void SetBlock(bool block) { m_BlockEvents = block; }
+
         void OnEvent(Event &event) override;
         bool OnFramebufferResize(FramebufferResizeEvent &event) const;
         bool OnDPIScaleChanged(WindowDPIScaleChangedEvent &event);
