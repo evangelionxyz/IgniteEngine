@@ -14,12 +14,14 @@
 
 namespace ignite
 {
+    class EditorLayer;
+
     class IPanel : public Layer
     {
     public:
         IPanel() = default;
-        explicit IPanel(const char *windowTitle)
-            : m_WindowTitle(windowTitle), Layer(windowTitle)
+		explicit IPanel(const char *name, EditorLayer *editor)
+            : m_WindowTitle(name), Layer(name), m_EditorLayer(editor)
         {
         }
 
@@ -34,6 +36,8 @@ namespace ignite
 
     protected:
         std::string m_WindowTitle;
+        EditorLayer *m_EditorLayer;
+
         bool m_IsOpen = true;
         bool m_IsFocused = false;
         bool m_IsHovered = false;

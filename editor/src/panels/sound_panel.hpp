@@ -9,10 +9,10 @@ namespace ignite
     class SoundPanel : public IPanel
     {
     public:
-        SoundPanel(const char *windowTitle);
+        SoundPanel(const char *name, EditorLayer *editor);
         virtual ~SoundPanel() override;
         
         virtual void OnGuiRender() override;
-        virtual void OnUpdate(f32 deltaTime) override;
+        virtual void OnUpdate(float deltaTime) override;
     };
 }

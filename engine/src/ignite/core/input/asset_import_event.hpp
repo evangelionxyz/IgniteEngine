@@ -5,6 +5,8 @@
 
 #include "event.hpp"
 
+#include "ignite/asset/asset.hpp"
+
 #include <vector>
 #include <filesystem>
 
@@ -13,11 +15,19 @@ namespace ignite
 	class AssetImportEvent : public Event
 	{
 	public:
-		AssetImportEvent();
+		AssetImportEvent(const std::vector<std::filesystem::path> &filepaths, AssetType assetType)
+			: m_Filepaths(filepaths), m_AssetType(assetType)
+		{
+		}
 
-		EVENT_CLASS_TYPE(AssetImporter)
+		AssetType GetAssetType() { return m_AssetType; }
+		std::vector<std::filesystem::path> &GetFilepaths() { return m_Filepaths; }
+
+		EVENT_CLASS_TYPE(AssetImport)
 		EVENT_CLASS_CATEGORY(EventCategoryApplication)
 	private:
+
+		AssetType m_AssetType;
 		std::vector<std::filesystem::path> m_Filepaths;
 	};
 }

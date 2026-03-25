@@ -4,8 +4,8 @@
 
 namespace ignite
 {
-    SoundPanel::SoundPanel(const char *windowTitle)
-        : IPanel(windowTitle)
+    SoundPanel::SoundPanel(const char *name, EditorLayer *editor)
+        : IPanel(name, editor)
     {
     }
 
@@ -21,7 +21,8 @@ namespace ignite
         ImGui::End();
     }
 
-    void SoundPanel::OnUpdate(f32 deltaTime)
+    void SoundPanel::OnUpdate(float deltaTime)
     {
+
     }
 }

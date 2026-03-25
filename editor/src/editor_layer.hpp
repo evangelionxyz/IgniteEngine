@@ -18,8 +18,9 @@ namespace ignite
 {
     class ShaderFactory;
     class ScenePanel;
+    class AssetImporterPanel;
     class ContentBrowserPanel;
-    class MaterialsPanel;
+    class MaterialPanel;
 
     class EditorLayer final : public Layer
     {
@@ -100,8 +101,9 @@ namespace ignite
         void UISettings();
 
         ScenePanel *m_ScenePanel;
+        MaterialPanel *m_MaterialsPanel;
+        AssetImporterPanel *m_AssetImporterPanel;
         ContentBrowserPanel *m_ContentBrowserPanel;
-        MaterialsPanel *m_MaterialsPanel;
 
         Ref<SceneRenderer> m_SceneRenderer;
 
@@ -134,5 +136,6 @@ namespace ignite
         std::queue<PendingFileLoading> m_PendingFileLoading;
 
         friend class ScenePanel;
+        friend class AssetImporterPanel;
     };
 }

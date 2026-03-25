@@ -43,8 +43,8 @@ namespace ignite
 {
     UUID ScenePanel::m_TrackingSelectedEntity = UUID(0);
 
-    ScenePanel::ScenePanel(const char *windowTitle)
-        : IPanel(windowTitle), m_Gizmo()
+    ScenePanel::ScenePanel(const char *windowTitle, EditorLayer *editor)
+        : IPanel(windowTitle, editor), m_Gizmo()
     {
         Application* app = Application::GetInstance();
 
@@ -1410,6 +1410,7 @@ namespace ignite
                     ImGui::PopStyleColor();
                 }
             });           
+
             if (ImGui::BeginPopup("##add_component_context", ImGuiWindowFlags_NoDecoration))
             {
                 static char buffer[256] = { 0 };

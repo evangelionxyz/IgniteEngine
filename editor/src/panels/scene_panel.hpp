@@ -25,7 +25,7 @@ namespace ignite
     class ScenePanel final : public IPanel
     {
     public:
-        explicit ScenePanel(const char *windowTitle);
+        explicit ScenePanel(const char *windowTitle, EditorLayer *editor);
         virtual ~ScenePanel() override;
         
         void SetActiveScene(const Ref<Scene> &scene);

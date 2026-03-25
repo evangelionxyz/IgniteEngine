@@ -5,14 +5,58 @@
 #include "editor_layer.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 
+#include "ignite/core/input/asset_import_event.hpp"
+
 #include <format>
 #include <algorithm>
 #include <ranges>
+#include <SDL3/SDL_dialog.h>
 
 namespace ignite
 {
-    ContentBrowserPanel::ContentBrowserPanel(const char *windowTitle)
-        : IPanel(windowTitle)
+    namespace
+    {
+        static const SDL_DialogFileFilter kSkeletalMeshFilters[]
+        {
+            {"FBX File (.fbx)", "fbx"},
+            {"Ignite Skeletal Mesh (.ixskm)", "ixskm"}
+        };
+
+        static const SDL_DialogFileFilter kStaticMeshFilters[]
+        {
+            {"GLTF File (.gltf)", "gltf"},
+            {"FBX File (.fbx)", "fbx"},
+            {"Ignite Static Mesh (.ixsm)", "ixsm"}
+        };
+
+        static const SDL_DialogFileFilter kTextureFilters[]
+        {
+            {"Texture (.png)", "png"},
+            {"Texture (.jpg)", "jpg"},
+            {"Texture (.jpeg)", "jpeg"},
+            {"Texture (.hdr)", "hdr"}
+        };
+
+        static const SDL_DialogFileFilter kAudioFilters[]
+        {
+            {"Audio (.wav)", "wav"},
+            {"Audio (.mp3)", "mp3"},
+            {"Audio (.flac)", "flac"}
+        };
+
+        static const SDL_DialogFileFilter kSceneFilters[]
+        {
+            {"Ignite Scene (.ixscene)", "ixscene"}
+        };
+
+        static const SDL_DialogFileFilter kMaterialFilters[]
+        {
+            {"Ignite Material (.ixmat)", "ixmat"}
+        };
+    }
+
+    ContentBrowserPanel::ContentBrowserPanel(const char *windowTitle, EditorLayer *editor)
+        : IPanel(windowTitle, editor)
     {
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         
@@ -109,257 +153,254 @@ namespace ignite
 
     void ContentBrowserPanel::OnGuiRender()
     {
-        ImGui::Begin("Content Browser");
-
-        const float &dpiScale = ImGui::GetWindowDpiScale();
-        const auto navbarBtSize = ImVec2(40.0f * dpiScale, 24.0f * dpiScale);
-        
-        // Calculate navbar height based on button size + padding
-        const ImGuiStyle& style = ImGui::GetStyle();
-        const float navbarHeight = navbarBtSize.y + style.FramePadding.y * 2.0f + style.WindowPadding.y * 2.0f;
-
-        // Navigation bar
-        ImGui::BeginChild("##NAV_BUTTON_BAR", ImVec2(0, navbarHeight), ImGuiChildFlags_Borders);
-
-        if (ImGui::Button("<-", navbarBtSize))
+        if (ImGui::Begin("Content Browser"))
         {
-            if (!m_BackwardPathStack.empty())
+            const float &dpiScale = ImGui::GetWindowDpiScale();
+            const auto navbarBtSize = ImVec2(40.0f * dpiScale, 24.0f * dpiScale);
+
+            // Calculate navbar height based on button size + padding
+            const ImGuiStyle &style = ImGui::GetStyle();
+            const float navbarHeight = navbarBtSize.y + style.FramePadding.y * 2.0f + style.WindowPadding.y * 2.0f;
+
+            // Navigation bar
+            ImGui::BeginChild("##NAV_BUTTON_BAR", ImVec2(0, navbarHeight), ImGuiChildFlags_Borders);
+
+            if (ImGui::Button("<-", navbarBtSize))
             {
-                m_ForwardPathStack.push(m_CurrentDirectory);
-                m_CurrentDirectory = m_BackwardPathStack.top();
-                m_BackwardPathStack.pop();
-            }
-        }
-        
-        ImGui::SameLine();
-        if (ImGui::Button("->", navbarBtSize))
-        {
-            if (!m_ForwardPathStack.empty())
-            {
-                m_BackwardPathStack.push(m_CurrentDirectory);
-                m_CurrentDirectory = m_ForwardPathStack.top();
-                m_ForwardPathStack.pop();
-            }
-        }
-        
-        ImGui::SameLine();
-        if (ImGui::Button("R", navbarBtSize))
-        {
-            Project::GetInstance()->ValidateAssetRegistry();
-            PruneMissingNodes(0, Project::GetInstance()->GetAssetDirectory());
-            RefreshAssetTree();
-            CompactTree();
-        }
-
-        ImGui::SameLine();
-        if (ImGui::Button("+Import", ImVec2(80.0f * dpiScale, navbarBtSize.y)))
-        {
-            static SDL_DialogFileFilter kFilters[]
-            {
-                {"All Files (*)", "*"}
-            };
-
-            bool allowMany = true;
-
-			SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
-				Application::GetInstance()->GetWindow()->GetWindowHandle(),
-				kFilters, IM_ARRAYSIZE(kFilters),
-				nullptr, allowMany);
-        }
-
-        ImGui::EndChild();
-
-        if (Project::GetInstance())
-        {
-            // Left side directory tree
-            ImGui::BeginChild("left_item_browser", { 300.0f, 0.0f }, ImGuiChildFlags_ResizeX);
-            if (!m_TreeNodes.empty())
-            {
-                for (auto it = m_TreeNodes.begin() + 1; it != m_TreeNodes.end(); ++it)
+                if (!m_BackwardPathStack.empty())
                 {
-                    if (it->parent == 0)
-                        RenderFileTree(&(*it));
+                    m_ForwardPathStack.push(m_CurrentDirectory);
+                    m_CurrentDirectory = m_BackwardPathStack.top();
+                    m_BackwardPathStack.pop();
                 }
             }
-            ImGui::EndChild();
+
             ImGui::SameLine();
-
-            // Files
-            ImGui::BeginChild("##FILE_LISTS", { 0.0f, 0.0f });
-
-            // Insert path nodes
-            FileTreeNode *node = m_TreeNodes.data();
-            if (node)
+            if (ImGui::Button("->", navbarBtSize))
             {
-				auto f = Project::GetInstance()->GetAssetDirectory();
-				const auto &relativePath = std::filesystem::relative(m_CurrentDirectory, f);
-
-				for (const auto &path : relativePath)
-				{
-					if (node->path == relativePath)
-					{
-						break;
-					}
-
-					if (node->children.contains(path))
-					{
-						node = &m_TreeNodes[node->children[path]];
-					}
-				}
-
-				if (node->children.empty())
-				{
-					ImGui::Text("This folder is empty");
-				}
-
-				static float padding = 12.0f;
-				const float cellSize = static_cast<float>(m_ThumbnailSize) + padding;
-				const float &childWindowWidth = ImGui::GetContentRegionAvail().x;
-
-				int columnCount = static_cast<int>(childWindowWidth / cellSize);
-				columnCount = std::max(columnCount, 1);
-
-				ImGui::Columns(columnCount, nullptr, false);
-
-				for (const auto &item : node->children | std::views::keys)
-				{
-					std::string filenameStr = item.generic_string();
-					ImGui::PushID(filenameStr.c_str());
-
-					std::filesystem::path path = m_CurrentDirectory / item;
-					bool isDirectory = std::filesystem::is_directory(path);
-
-					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-
-					Ref<Texture> icon;
-					if (isDirectory)
-					{
-						icon = m_Icons["folder"];
-					}
-					else if (IsImageFile(path))
-					{
-						icon = GetOrCreateThumbnail(path);
-						if (!icon)
-							icon = m_Icons["unknown"];
-					}
-					else
-					{
-						icon = m_Icons["unknown"];
-					}
-
-					// Calculate display size with aspect ratio
-					float maxSize = static_cast<float>(m_ThumbnailSize);
-					ImVec2 displaySize = CalculateThumbnailDisplaySize(icon, maxSize);
-
-					// Center the thumbnail vertically
-					float diff = maxSize - displaySize.y;
-					if (diff > 0)
-					{
-						ImGui::SetCursorPosY(ImGui::GetCursorPosY() + diff * 0.5f);
-					}
-
-					ImTextureID iconId = reinterpret_cast<ImTextureID>(icon->GetHandle().Get());
-					ImGui::ImageButton(item.string().c_str(), iconId, displaySize);
-
-					if (ImGui::IsItemHovered())
-					{
-						if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-						{
-							if (isDirectory)
-							{
-								m_BackwardPathStack.push(m_CurrentDirectory);
-								m_CurrentDirectory = path;
-							}
-						}
-					}
-
-					if (ImGui::BeginPopupContextItem())
-					{
-						if (ImGui::MenuItem("Open"))
-						{
-							if (isDirectory)
-							{
-								m_BackwardPathStack.push(m_CurrentDirectory);
-								m_CurrentDirectory = path;
-							}
-							else
-							{
-								// Windows
-								std::string command = std::format("\"{}\"", path.generic_string());
-								std::system(command.c_str());
-							}
-						}
-
-
-						if (ImGui::MenuItem("Import"))
-						{
-							Project::GetInstance()->GetAssetManager().ImportAsset(path);
-						}
-
-						if (item.extension() == ".ixscene")
-						{
-							if (ImGui::MenuItem("Set As Default Scene"))
-							{
-								Project::GetInstance()->GetAssetManager().ImportAsset(path);
-
-								AssetHandle handle = Project::GetInstance()->GetAssetManager().GetAssetHandle(path);
-								Project::GetInstance()->SetDefaultScene(handle);
-
-								ProjectSerializer serializer(Project::GetInstance());
-								serializer.Serialize(Project::GetInstance()->GetFilepath());
-							}
-						}
-
-						ImGui::Separator();
-						ImGui::Text("%s", filenameStr.c_str());
-
-						ImGui::EndPopup();
-					}
-
-					DragDropSource(m_CurrentDirectory / item);
-
-					ImGui::PopStyleColor();
-					ImGui::TextWrapped("%s", filenameStr.c_str());
-
-					ImGui::NextColumn();
-					ImGui::PopID();
-				}
+                if (!m_ForwardPathStack.empty())
+                {
+                    m_BackwardPathStack.push(m_CurrentDirectory);
+                    m_CurrentDirectory = m_ForwardPathStack.top();
+                    m_ForwardPathStack.pop();
+                }
             }
 
-            ImGui::Columns(1);
-
-            if (ImGui::BeginPopupContextWindow("##content_browser_context_menu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoReopen | ImGuiPopupFlags_NoOpenOverItems))
+            ImGui::SameLine();
+            if (ImGui::Button("R", navbarBtSize))
             {
-                if (ImGui::BeginMenu("Create"))
-                {
-                    if (ImGui::MenuItem("New Folder"))
-                    {
-                    }
+                Project::GetInstance()->ValidateAssetRegistry();
+                PruneMissingNodes(0, Project::GetInstance()->GetAssetDirectory());
+                RefreshAssetTree();
+                CompactTree();
+            }
 
-                    ImGui::EndMenu();
-                }
+            ImGui::SameLine();
+            if (ImGui::Button("+Import", ImVec2(80.0f * dpiScale, navbarBtSize.y)))
+            {
+                ImGui::OpenPopup("##asset_importer_context");
+            }
 
-                if (ImGui::BeginMenu("Thumbnail Size"))
-                {
-                    if (ImGui::MenuItem("Small")) m_ThumbnailSize = 38;
-                    if (ImGui::MenuItem("Medium")) m_ThumbnailSize = 64;
-                    if (ImGui::MenuItem("Large")) m_ThumbnailSize = 96;
-                    ImGui::EndMenu();
-                }
-
-                if (ImGui::MenuItem("Open Folder in File Explorer"))
-                {
-                    std::string command = std::format("explorer {}", m_CurrentDirectory.string());
-                    std::system(command.c_str());
-                }
-
+            if (ImGui::BeginPopupContextWindow("##asset_importer_context"))
+            {
+                UIShowAssetImportContext();
                 ImGui::EndPopup();
             }
-
+                
             ImGui::EndChild();
-        }
 
-        ImGui::End();
+            if (Project::GetInstance())
+            {
+                // Left side directory tree
+                ImGui::BeginChild("left_item_browser", { 300.0f, 0.0f }, ImGuiChildFlags_ResizeX);
+                if (!m_TreeNodes.empty())
+                {
+                    for (auto it = m_TreeNodes.begin() + 1; it != m_TreeNodes.end(); ++it)
+                    {
+                        if (it->parent == 0)
+                            RenderFileTree(&(*it));
+                    }
+                }
+                ImGui::EndChild();
+                ImGui::SameLine();
+
+                // Files
+                ImGui::BeginChild("##FILE_LISTS", { 0.0f, 0.0f });
+
+                // Insert path nodes
+                FileTreeNode *node = m_TreeNodes.data();
+                if (node)
+                {
+                    auto f = Project::GetInstance()->GetAssetDirectory();
+                    const auto &relativePath = std::filesystem::relative(m_CurrentDirectory, f);
+
+                    for (const auto &path : relativePath)
+                    {
+                        if (node->path == relativePath)
+                        {
+                            break;
+                        }
+
+                        if (node->children.contains(path))
+                        {
+                            node = &m_TreeNodes[node->children[path]];
+                        }
+                    }
+
+                    if (node->children.empty())
+                    {
+                        ImGui::Text("This folder is empty");
+                    }
+
+                    static float padding = 12.0f;
+                    const float cellSize = static_cast<float>(m_ThumbnailSize) + padding;
+                    const float &childWindowWidth = ImGui::GetContentRegionAvail().x;
+
+                    int columnCount = static_cast<int>(childWindowWidth / cellSize);
+                    columnCount = std::max(columnCount, 1);
+
+                    ImGui::Columns(columnCount, nullptr, false);
+
+                    for (const auto &item : node->children | std::views::keys)
+                    {
+                        std::string filenameStr = item.generic_string();
+                        ImGui::PushID(filenameStr.c_str());
+
+                        std::filesystem::path path = m_CurrentDirectory / item;
+                        bool isDirectory = std::filesystem::is_directory(path);
+
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+
+                        Ref<Texture> icon;
+                        if (isDirectory)
+                        {
+                            icon = m_Icons["folder"];
+                        }
+                        else if (IsImageFile(path))
+                        {
+                            icon = GetOrCreateThumbnail(path);
+                            if (!icon)
+                                icon = m_Icons["unknown"];
+                        }
+                        else
+                        {
+                            icon = m_Icons["unknown"];
+                        }
+
+                        // Calculate display size with aspect ratio
+                        float maxSize = static_cast<float>(m_ThumbnailSize);
+                        ImVec2 displaySize = CalculateThumbnailDisplaySize(icon, maxSize);
+
+                        // Center the thumbnail vertically
+                        float diff = maxSize - displaySize.y;
+                        if (diff > 0)
+                        {
+                            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + diff * 0.5f);
+                        }
+
+                        ImTextureID iconId = reinterpret_cast<ImTextureID>(icon->GetHandle().Get());
+                        ImGui::ImageButton(item.string().c_str(), iconId, displaySize);
+
+                        if (ImGui::IsItemHovered())
+                        {
+                            if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+                            {
+                                if (isDirectory)
+                                {
+                                    m_BackwardPathStack.push(m_CurrentDirectory);
+                                    m_CurrentDirectory = path;
+                                }
+                            }
+                        }
+
+                        if (ImGui::BeginPopupContextItem())
+                        {
+                            if (ImGui::MenuItem("Open"))
+                            {
+                                if (isDirectory)
+                                {
+                                    m_BackwardPathStack.push(m_CurrentDirectory);
+                                    m_CurrentDirectory = path;
+                                }
+                                else
+                                {
+                                    // Windows
+                                    std::string command = std::format("\"{}\"", path.generic_string());
+                                    std::system(command.c_str());
+                                }
+                            }
+
+
+                            if (ImGui::MenuItem("Import"))
+                            {
+                                Project::GetInstance()->GetAssetManager().ImportAsset(path);
+                            }
+
+                            if (item.extension() == ".ixscene")
+                            {
+                                if (ImGui::MenuItem("Set As Default Scene"))
+                                {
+                                    Project::GetInstance()->GetAssetManager().ImportAsset(path);
+
+                                    AssetHandle handle = Project::GetInstance()->GetAssetManager().GetAssetHandle(path);
+                                    Project::GetInstance()->SetDefaultScene(handle);
+
+                                    ProjectSerializer serializer(Project::GetInstance());
+                                    serializer.Serialize(Project::GetInstance()->GetFilepath());
+                                }
+                            }
+
+                            ImGui::Separator();
+                            ImGui::Text("%s", filenameStr.c_str());
+
+                            ImGui::EndPopup();
+                        }
+
+                        DragDropSource(m_CurrentDirectory / item);
+
+                        ImGui::PopStyleColor();
+                        ImGui::TextWrapped("%s", filenameStr.c_str());
+
+                        ImGui::NextColumn();
+                        ImGui::PopID();
+                    }
+                }
+
+                ImGui::Columns(1);
+
+                if (ImGui::BeginPopupContextWindow("##content_browser_context_menu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoReopen | ImGuiPopupFlags_NoOpenOverItems))
+                {
+                    if (ImGui::BeginMenu("Create"))
+                    {
+                        if (ImGui::MenuItem("New Folder"))
+                        {
+                        }
+
+                        ImGui::EndMenu();
+                    }
+
+                    if (ImGui::BeginMenu("Thumbnail Size"))
+                    {
+                        if (ImGui::MenuItem("Small")) m_ThumbnailSize = 38;
+                        if (ImGui::MenuItem("Medium")) m_ThumbnailSize = 64;
+                        if (ImGui::MenuItem("Large")) m_ThumbnailSize = 96;
+                        ImGui::EndMenu();
+                    }
+
+                    if (ImGui::MenuItem("Open Folder in File Explorer"))
+                    {
+                        std::string command = std::format("explorer {}", m_CurrentDirectory.string());
+                        std::system(command.c_str());
+                    }
+
+                    ImGui::EndPopup();
+                }
+
+                ImGui::EndChild();
+            }
+
+            ImGui::End();
+        }
     }
 
 	void ContentBrowserPanel::OnUpdate(float deltaTime)
@@ -430,6 +471,7 @@ namespace ignite
         {
             UnloadUnusedThumbnails();
         }
+
 	}
 
 	void ContentBrowserPanel::RefreshEntryPathList()
@@ -517,7 +559,79 @@ namespace ignite
         }
     }
 
-    void ContentBrowserPanel::PruneMissingNodes(uint32_t nodeIndex, const std::filesystem::path& basePath)
+	void ContentBrowserPanel::UIShowAssetImportContext()
+	{
+       if (ImGui::BeginMenu("Mesh"))
+        {
+            if (ImGui::MenuItem("Skeletal Mesh"))
+            {
+                SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
+                    kSkeletalMeshFilters, IM_ARRAYSIZE(kSkeletalMeshFilters),
+                    nullptr, true);
+            }
+
+            if (ImGui::MenuItem("Static Mesh"))
+            {
+                SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
+                    kStaticMeshFilters, IM_ARRAYSIZE(kStaticMeshFilters),
+                    nullptr, true);
+            }
+
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Texture"))
+        {
+            if (ImGui::MenuItem("2D Texture"))
+            {
+                SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
+                    kTextureFilters, IM_ARRAYSIZE(kTextureFilters),
+                    nullptr, true);
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Audio"))
+        {
+            if (ImGui::MenuItem("Sound"))
+            {
+                SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
+                    kAudioFilters, IM_ARRAYSIZE(kAudioFilters),
+                    nullptr, true);
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Scene"))
+        {
+            if (ImGui::MenuItem("Ignite Scene"))
+            {
+                SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
+                    kSceneFilters, IM_ARRAYSIZE(kSceneFilters),
+                    nullptr, true);
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Material"))
+        {
+            if (ImGui::MenuItem("Ignite Material"))
+            {
+                SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
+                    kMaterialFilters, IM_ARRAYSIZE(kMaterialFilters),
+                    nullptr, true);
+            }
+            ImGui::EndMenu();
+        }
+	}
+
+	void ContentBrowserPanel::PruneMissingNodes(uint32_t nodeIndex, const std::filesystem::path &basePath)
     {
         if (nodeIndex >= m_TreeNodes.size() || m_TreeNodes[nodeIndex].isDeleted)
             return;
@@ -755,10 +869,18 @@ namespace ignite
         {
             std::filesystem::path filepath = std::string(*file);
 
-            AssetType assetType = GetAssetTypeFromExtension(filepath.extension().string());
+            Application::SubmitToMainThread([filepath]()
+            {
+				AssetType assetType = GetAssetTypeFromExtension(filepath.extension().string());
+                if (assetType == AssetType::Invalid)
+                {
+                    LOG_WARN("Import Asset Dialog: Unsupported asset extension '{}'", filepath.extension().string());
+                    return;
+                }
 
-            PendingFileLoading pf = { PendingFileLoading::ImportAssets, AssetMetaData(filepath, assetType), userData };
-            cb->m_PendingAssetLoading.push(pf);
+                AssetImportEvent importEvent({filepath}, assetType);
+                Application::GetInstance()->OnEvent(importEvent);
+            });
         }
 	}
 

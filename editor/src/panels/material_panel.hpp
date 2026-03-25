@@ -11,11 +11,11 @@
 
 namespace ignite
 {
-    class MaterialsPanel : public IPanel
+    class MaterialPanel : public IPanel
     {
     public:
-        MaterialsPanel();
-        ~MaterialsPanel();
+        MaterialPanel(const char *name, EditorLayer *editor);
+        ~MaterialPanel();
 
         virtual void OnEvent(Event &event) override;
 

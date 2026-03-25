@@ -42,7 +42,7 @@ namespace ignite
     class ContentBrowserPanel : public IPanel
     {
     public:
-        explicit ContentBrowserPanel(const char *windowTitle);
+        explicit ContentBrowserPanel(const char *windowTitle, EditorLayer *editor);
         virtual ~ContentBrowserPanel() override;
 
         virtual void OnGuiRender() override;
@@ -55,6 +55,8 @@ namespace ignite
         void RefreshEntryPathList();
         void RefreshAssetTree();
         void LoadAssetTree(const std::filesystem::path &directory);
+
+        void UIShowAssetImportContext();
 
         void PruneMissingNodes(uint32_t nodeIndex, const std::filesystem::path &basePath);
         void PruneMissingNodesAlt(uint32_t nodeIndex, const std::filesystem::path &basePath);

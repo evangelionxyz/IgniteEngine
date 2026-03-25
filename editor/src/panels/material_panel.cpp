@@ -1,6 +1,6 @@
 //Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 
-#include "materials_panel.hpp"
+#include "material_panel.hpp"
 #include "ignite/serializer/binary_serializer.hpp"
 
 #include "ignite/project/project.hpp"
@@ -15,20 +15,21 @@
 
 namespace ignite
 {
-    MaterialsPanel::MaterialsPanel()
+    MaterialPanel::MaterialPanel(const char *name, EditorLayer *editor)
+        : IPanel(name, editor)
     {
     }
 
-    MaterialsPanel::~MaterialsPanel()
+    MaterialPanel::~MaterialPanel()
     {
     }
 
-	void MaterialsPanel::OnEvent(Event &event)
+	void MaterialPanel::OnEvent(Event &event)
 	{
         EventDispatcher dispatcher(event);
 	}
 
-	void MaterialsPanel::OnImGuiRender()
+	void MaterialPanel::OnImGuiRender()
     {
         if (!m_IsOpen)
             return;
@@ -131,13 +132,13 @@ namespace ignite
         }
     }
 
-    void MaterialsPanel::RefreshMaterialsList()
+    void MaterialPanel::RefreshMaterialsList()
     {
         // The material manager already maintains the list, so we just need to trigger a refresh
         // This could be useful for reloading from disk or updating after external changes
     }
 
-    void MaterialsPanel::RenderMaterialItem(const std::string& materialName, Ref<Material> material)
+    void MaterialPanel::RenderMaterialItem(const std::string& materialName, Ref<Material> material)
     {
         bool isSelected = (m_SelectedMaterialName == materialName);
         
@@ -175,7 +176,7 @@ namespace ignite
         }
     }
 
-    void MaterialsPanel::RenderContextMenu(const std::string& materialName, Ref<Material> material)
+    void MaterialPanel::RenderContextMenu(const std::string& materialName, Ref<Material> material)
     {
         if (ImGui::MenuItem("Edit"))
         {
@@ -221,7 +222,7 @@ namespace ignite
         }
     }
 
-    void MaterialsPanel::CreateNewMaterial()
+    void MaterialPanel::CreateNewMaterial()
     {
         if (Project::GetInstance())
         {
@@ -252,7 +253,7 @@ namespace ignite
         }
     }
 
-    void MaterialsPanel::DuplicateMaterial(const std::string& materialName)
+    void MaterialPanel::DuplicateMaterial(const std::string& materialName)
     {
         if (Project::GetInstance())
         {
@@ -262,7 +263,7 @@ namespace ignite
         }
     }
 
-    void MaterialsPanel::DeleteMaterial(const std::string& materialName)
+    void MaterialPanel::DeleteMaterial(const std::string& materialName)
     {
         if (Project::GetInstance())
         {
@@ -277,7 +278,7 @@ namespace ignite
         }
     }
 
-    void MaterialsPanel::ShowDeleteConfirmationModal()
+    void MaterialPanel::ShowDeleteConfirmationModal()
     {
         if (ImGui::BeginPopupModal("Delete Material", &m_ShowDeleteModal, ImGuiWindowFlags_AlwaysAutoResize))
         {

@@ -3,7 +3,8 @@
 #include "editor_layer.hpp"
 #include "panels/scene_panel.hpp"
 #include "panels/content_browser_panel.hpp"
-#include "panels/materials_panel.hpp"
+#include "panels/material_panel.hpp"
+#include "panels/asset_importer_panel.hpp"
 
 #include "ignite/core/command.hpp"
 #include "ignite/graphics/renderer_2d.hpp"
@@ -67,23 +68,15 @@ namespace ignite
 
         auto *app = Application::GetInstance();
 
-        m_ScenePanel = new ScenePanel("Scene Panel");
-        m_ContentBrowserPanel = new ContentBrowserPanel("Content Browser");
-        m_MaterialsPanel = new MaterialsPanel();
+        m_ScenePanel = new ScenePanel("Scene Panel", this);
+        m_ContentBrowserPanel = new ContentBrowserPanel("Content Browser", this);
+        m_MaterialsPanel = new MaterialPanel("Material Panel", this);
+        m_AssetImporterPanel = new AssetImporterPanel("AssetImporter Panel", this);
 
         app->PushLayer(m_ScenePanel);
         app->PushLayer(m_ContentBrowserPanel);
         app->PushLayer(m_MaterialsPanel);
-
-
-        // Set up material panel callbacks
-        m_MaterialsPanel->SetMaterialSelectionCallback([this](Ref<Material> material) {
-            // Optional: Handle material selection in main editor
-        });
-        
-        m_MaterialsPanel->SetMaterialEditCallback([this](Ref<Material> material) {
-
-        });
+        app->PushLayer(m_AssetImporterPanel);
 
         // create render target framebuffer
         m_SceneRenderer = CreateRef<SceneRenderer>();
