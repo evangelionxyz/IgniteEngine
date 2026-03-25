@@ -271,9 +271,13 @@ namespace ignite
                         nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
                         cmd->open();
                         texture->SetData(cmd, 4);
+                        texture->SetReadyFlag(false);
                         cmd->close();
 
-                        Application::SubmitWorkerCommandList(cmd);
+                        Application::SubmitWorkerCommandList(cmd, [texture]()
+                        {
+                            texture->SetReadyFlag(true);
+                        });
                     });
 
                     const int index = (int)ld.loadedTextures.size();
@@ -674,7 +678,7 @@ namespace ignite
         // Wait for GPU to ensure resources are not in use
         if (auto *device = DeviceManager::GetInstance()->GetDevice())
         {
-            device->waitForIdle();
+            GPUUploadSync::DeviceWaitIdle(device);
         }
 
         // Clear primitive (vertex/index buffers)
@@ -1104,9 +1108,13 @@ namespace ignite
                             nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
                             cmd->open();
                             texture->SetData(cmd, 4);
+                            texture->SetReadyFlag(false);
                             cmd->close();
 
-                            Application::SubmitWorkerCommandList(cmd);
+                            Application::SubmitWorkerCommandList(cmd, [texture]()
+                            {
+                                texture->SetReadyFlag(true);
+                            });
                         });
                 }
                 else if (!image.uri.empty())

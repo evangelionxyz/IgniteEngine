@@ -61,6 +61,37 @@ namespace ignite {
         }
     }
 
+    bool AssetManager::IsAssetLoaded(AssetHandle handle) const
+    {
+        std::unique_lock lock(s_AssetThreadMutex);
+
+        const auto it = m_LoadedAssets.find(handle);
+        if (it == m_LoadedAssets.end() || !it->second)
+        {
+            return false;
+        }
+
+        return it->second->IsReady();
+    }
+
+    bool AssetManager::IsAssetLoading(AssetHandle handle) const
+    {
+        std::unique_lock lock(s_AssetThreadMutex);
+
+        if (m_LoadingAssets.contains(handle))
+        {
+            return true;
+        }
+
+        const auto it = m_LoadedAssets.find(handle);
+        if (it == m_LoadedAssets.end() || !it->second)
+        {
+            return false;
+        }
+
+        return !it->second->IsReady();
+    }
+
     AssetManager::~AssetManager()
     {
         {

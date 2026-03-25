@@ -871,33 +871,35 @@ namespace ignite
             Ref<Texture> loadedTexture = Texture::Create(capturedPath.string().c_str(), createInfo, nullptr);
 
             // Submit to main thread to create command list and finalize GPU upload
-            Application::SubmitToMainThread([this, capturedPath, loadedTexture]() mutable
+            Application::SubmitToRenderThread([this, capturedPath, loadedTexture]() mutable
             {
                 if (loadedTexture)
                 {
                     nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
                     nvrhi::CommandListHandle cmd = device->createCommandList();
                     cmd->open();
-                    
                     loadedTexture->SetData(cmd, 4);
-                    
                     cmd->close();
-                    Application::SubmitWorkerCommandList(cmd);
+                    
+                    Application::SubmitWorkerCommandList(cmd, [this, loadedTexture, capturedPath]()
+                    {
+                        loadedTexture->SetReadyFlag(true);
 
-                    FileThumbnail ft;
-                    ft.thumbnail = loadedTexture;
-                    ft.lastFrameUsed = m_CurrentFrame;
-                    
-                    if (std::filesystem::exists(capturedPath))
-                    {
-                        ft.timestamp = std::filesystem::last_write_time(capturedPath).time_since_epoch().count();
-                    }
-                    else
-                    {
-                        ft.timestamp = 0;
-                    }
-                    
-                    m_Thumbnails[capturedPath] = ft;
+						FileThumbnail ft;
+						ft.thumbnail = loadedTexture;
+						ft.lastFrameUsed = m_CurrentFrame;
+
+						if (std::filesystem::exists(capturedPath))
+						{
+							ft.timestamp = std::filesystem::last_write_time(capturedPath).time_since_epoch().count();
+						}
+						else
+						{
+							ft.timestamp = 0;
+						}
+
+						m_Thumbnails[capturedPath] = ft;
+                    });
                 }
                 else
                 {

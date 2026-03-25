@@ -107,7 +107,6 @@ namespace ignite
         std::filesystem::path m_Filepath;
         nvrhi::TextureHandle m_Handle;
         std::string m_DebugName;
-        bool m_HasUploaded = false;
     };
 
 }

@@ -91,6 +91,31 @@ namespace ignite
                 return;
             }
 
+            const std::thread::id mainThreadId = Application::GetMainThreadId();
+            if (!Application::IsRenderThreadRunning() && std::this_thread::get_id() != mainThreadId)
+            {
+                std::mutex waitMutex;
+                std::condition_variable waitCv;
+                bool done = false;
+
+                Application::SubmitToMainThread([&]()
+                {
+                    {
+                        std::scoped_lock lock(GetWaitIdleMutex(), GetQueueMutex());
+                        device->waitForIdle();
+                    }
+                    {
+                        std::lock_guard<std::mutex> guard(waitMutex);
+                        done = true;
+                    }
+                    waitCv.notify_one();
+                });
+
+                std::unique_lock<std::mutex> waitLock(waitMutex);
+                waitCv.wait(waitLock, [&]() { return done; });
+                return;
+            }
+
             std::scoped_lock lock(GetWaitIdleMutex(), GetQueueMutex());
             device->waitForIdle();
         }

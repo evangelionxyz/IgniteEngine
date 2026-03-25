@@ -152,7 +152,7 @@ namespace ignite
 
     void Texture::SetData(nvrhi::ICommandList *cmd, uint32_t rowPitch, uint32_t depthPitch)
     {
-        if (m_HasUploaded || !m_Buffer.data)
+        if (!m_Buffer.data)
         {
             return;
         }
@@ -202,9 +202,6 @@ namespace ignite
                 cmd->writeTexture(m_Handle, 0, mip, mipData.data.data(), rowPitch * sizeof(float), depthPitch * sizeof(float));
             }
         }
-
-        m_HasUploaded = true;
-        SetReadyFlag(m_HasUploaded);
 
         if (!m_CreateInfo.keepCpuData)
         {

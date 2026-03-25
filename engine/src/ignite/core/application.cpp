@@ -40,6 +40,7 @@ namespace ignite
         : m_CreateInfo(createInfo)
     {
         s_AppInstance = this;
+        m_MainThreadId = std::this_thread::get_id();
 
         if (m_CreateInfo.cmdLineArgs.count > 1)
         {
@@ -242,19 +243,35 @@ namespace ignite
 
 			// Collect and execute worker command lists if any
 			{
-				std::lock_guard<std::mutex> lock(m_CommandListMutex);
-				if (!m_PendingCommandLists.empty())
-				{
-					std::vector<nvrhi::ICommandList *> workerLists;
-					for (auto &workerCL : m_PendingCommandLists)
-						workerLists.push_back(workerCL);
+                std::vector<std::function<void()>> callbacks;
+                {
+                    std::lock_guard<std::mutex> lock(m_CommandListMutex);
+                    if (!m_PendingCommandLists.empty())
+                    {
+                        std::vector<nvrhi::ICommandList *> workerLists;
+                        for (auto &workerCL : m_PendingCommandLists)
+                        {
+                            workerLists.push_back(workerCL);
+                        }
 
-					{
-						std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
-						device->executeCommandLists(workerLists.data(), workerLists.size());
-					}
-					m_PendingCommandLists.clear();
-				}
+                        {
+                            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                            device->executeCommandLists(workerLists.data(), workerLists.size());
+                        }
+
+                        callbacks = std::move(m_PendingCommandListCallbacks);
+                        m_PendingCommandLists.clear();
+                        m_PendingCommandListCallbacks.clear();
+                    }
+                }
+
+                for (auto &callback : callbacks)
+                {
+                    if (callback)
+                    {
+                        callback();
+                    }
+                }
 			}
 
             // Signal frame complete
@@ -286,6 +303,11 @@ namespace ignite
         // Start render thread
         m_RenderThreadRunning = true;
         m_RenderThread = CreateScope<std::thread>(&Application::RenderThreadFunc, this);
+
+		std::stringstream ss;
+		ss << m_RenderThread->get_id();
+		unsigned long long id = std::stoull(ss.str());
+		LOG_WARN("[Application] Render thread: {}", id);
         
         SDL_Event sdlEvent;
         
@@ -484,10 +506,11 @@ namespace ignite
         GetInstance()->m_FrameCV.notify_all();
     }
 
-    void Application::SubmitWorkerCommandList(nvrhi::CommandListHandle commandList)
+    void Application::SubmitWorkerCommandList(nvrhi::CommandListHandle commandList, std::function<void()> onExecuted)
     {
         std::lock_guard<std::mutex> lock(GetInstance()->m_CommandListMutex);
         GetInstance()->m_PendingCommandLists.push_back(commandList);
+        GetInstance()->m_PendingCommandListCallbacks.push_back(std::move(onExecuted));
     }
 
 	const std::thread *Application::GetRenderThread() const
@@ -503,6 +526,11 @@ namespace ignite
     bool Application::IsRenderThreadRunning()
     {
         return GetInstance()->m_RenderThreadRunning.load();
+    }
+
+    std::thread::id Application::GetMainThreadId()
+    {
+        return GetInstance()->m_MainThreadId;
     }
 
     float Application::GetDeltaTime()

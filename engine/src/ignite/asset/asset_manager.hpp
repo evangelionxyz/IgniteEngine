@@ -100,8 +100,8 @@ namespace ignite
         void UnloadAsset(AssetHandle handle);
         void UnloadUnusedAssets();
         size_t GetLoadedAssetCount() const { return m_LoadedAssets.size(); }
-        bool IsAssetLoaded(AssetHandle handle) const { return m_LoadedAssets.contains(handle); }
-        bool IsAssetLoading(AssetHandle handle) const { return m_LoadingAssets.contains(handle); }
+        bool IsAssetLoaded(AssetHandle handle) const;
+        bool IsAssetLoading(AssetHandle handle) const;
         const std::unordered_map<AssetHandle, Ref<Asset>>& GetLoadedAssets() const { return m_LoadedAssets; }
     
         AssetRegistry &GetAssetAssetRegistry() { return m_AssetRegistry; }

@@ -31,7 +31,9 @@
 #include "ignite/project/project.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/graphics/objects/material.hpp"
 #include "ignite/graphics/objects/environment.hpp"
+#include "ignite/animation/skeleton.hpp"
 
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/component.hpp"
@@ -41,6 +43,36 @@
 #include <ranges>
 
 namespace ignite {
+
+    namespace
+    {
+        static void SerializeMat4(Serializer &sr, const char *key, const glm::mat4 &mat)
+        {
+            sr.BeginSequence(key);
+            for (int col = 0; col < 4; ++col)
+            {
+                sr.AddValue(glm::vec4(mat[col]));
+            }
+            sr.EndSequence();
+        }
+
+        static bool DeserializeMat4(const YAML::Node &node, const char *key, glm::mat4 &outMat)
+        {
+            const YAML::Node matNode = node[key];
+            if (!matNode || !matNode.IsSequence() || matNode.size() != 4)
+            {
+                return false;
+            }
+
+            for (size_t col = 0; col < 4; ++col)
+            {
+                const glm::vec4 v = matNode[col].as<glm::vec4>();
+                outMat[col] = v;
+            }
+
+            return true;
+        }
+    }
 
     Serializer::Serializer(const std::filesystem::path &filepath)
         : m_Filepath(filepath)
@@ -939,32 +971,36 @@ namespace ignite {
     }
 
 
-    AnimationSerializer::AnimationSerializer(const SkeletalAnimation &animation)
+    AnimationSerializer::AnimationSerializer(const Ref<SkeletalAnimation> &animation)
         : m_Animation(animation)
     {
     }
 
     bool AnimationSerializer::Serialize(const std::filesystem::path &filepath)
     {
+        if (!m_Animation)
+        {
+            return false;
+        }
+
         Serializer sr(filepath);
 
         sr.BeginMap(); // START
 
         sr.BeginMap("Animation");
         sr.AddKeyValue("Version", ENGINE_VERSION);
-        sr.AddKeyValue("Name", m_Animation.name);
-        sr.AddKeyValue("Duration", m_Animation.duration);
-        sr.AddKeyValue("TicksPerSeconds", m_Animation.ticksPerSeconds);
+        sr.AddKeyValue("Name", m_Animation->name);
+        sr.AddKeyValue("Duration", m_Animation->duration);
+        sr.AddKeyValue("TicksPerSeconds", m_Animation->ticksPerSeconds);
 
         sr.BeginSequence("Channels");
 
-        for (auto &[name, channel] : m_Animation.channels)
+        for (auto &[name, channel] : m_Animation->channels)
         {
             sr.BeginMap();
 
             sr.AddKeyValue("Name", name);
 
-            // Translation
             sr.BeginSequence("TranslationKeys");
             for (auto &f : channel.translationKeys.frames)
             {
@@ -975,7 +1011,6 @@ namespace ignite {
             }
             sr.EndSequence();
 
-            // Rotation
             sr.BeginSequence("RotationKeys");
             for (auto &f : channel.rotationKeys.frames)
             {
@@ -986,7 +1021,6 @@ namespace ignite {
             }
             sr.EndSequence();
 
-            // Scale
             sr.BeginSequence("ScaleKeys");
             for (auto &f : channel.scaleKeys.frames)
             {
@@ -1011,10 +1045,235 @@ namespace ignite {
         return true;
     }
 
-    SkeletalAnimation AnimationSerializer::Deserialize(const std::filesystem::path &filepath)
+    Ref<SkeletalAnimation> AnimationSerializer::Deserialize(const std::filesystem::path &filepath)
     {
-        SkeletalAnimation animation;
+        if (!std::filesystem::exists(filepath))
+        {
+            return nullptr;
+        }
+
+        YAML::Node fileNode = Serializer::Deserialize(filepath);
+        YAML::Node animationNode = fileNode["Animation"];
+        if (!animationNode)
+        {
+            return nullptr;
+        }
+
+        Ref<SkeletalAnimation> animation = CreateRef<SkeletalAnimation>();
+        if (animationNode["Name"]) animation->name = animationNode["Name"].as<std::string>();
+        if (animationNode["Duration"]) animation->duration = animationNode["Duration"].as<float>();
+        if (animationNode["TicksPerSeconds"]) animation->ticksPerSeconds = animationNode["TicksPerSeconds"].as<float>();
+
+        if (YAML::Node channelsNode = animationNode["Channels"])
+        {
+            for (const YAML::Node &channelNode : channelsNode)
+            {
+                if (!channelNode["Name"])
+                {
+                    continue;
+                }
+
+                const std::string channelName = channelNode["Name"].as<std::string>();
+                AnimationChannel channel{};
+
+                if (YAML::Node translationKeys = channelNode["TranslationKeys"])
+                {
+                    for (const YAML::Node &keyNode : translationKeys)
+                    {
+                        KeyFrame<glm::vec3> frame{};
+                        frame.Timestamp = keyNode["Timestamp"].as<float>();
+                        frame.Value = keyNode["Value"].as<glm::vec3>();
+                        channel.translationKeys.frames.push_back(frame);
+                    }
+                }
+
+                if (YAML::Node rotationKeys = channelNode["RotationKeys"])
+                {
+                    for (const YAML::Node &keyNode : rotationKeys)
+                    {
+                        KeyFrame<glm::quat> frame{};
+                        frame.Timestamp = keyNode["Timestamp"].as<float>();
+                        frame.Value = keyNode["Value"].as<glm::quat>();
+                        channel.rotationKeys.frames.push_back(frame);
+                    }
+                }
+
+                if (YAML::Node scaleKeys = channelNode["ScaleKeys"])
+                {
+                    for (const YAML::Node &keyNode : scaleKeys)
+                    {
+                        KeyFrame<glm::vec3> frame{};
+                        frame.Timestamp = keyNode["Timestamp"].as<float>();
+                        frame.Value = keyNode["Value"].as<glm::vec3>();
+                        channel.scaleKeys.frames.push_back(frame);
+                    }
+                }
+
+                animation->channels[channelName] = std::move(channel);
+            }
+        }
 
         return animation;
+    }
+
+    SkeletonSerializer::SkeletonSerializer(const Ref<Skeleton> &skeleton)
+        : m_Skeleton(skeleton)
+    {
+    }
+
+    bool SkeletonSerializer::Serialize(const std::filesystem::path &filepath)
+    {
+        if (!m_Skeleton)
+        {
+            return false;
+        }
+
+        Serializer sr(filepath);
+
+        sr.BeginMap();
+        sr.BeginMap("Skeleton");
+        sr.AddKeyValue("Version", ENGINE_VERSION);
+
+        sr.BeginSequence("Joints");
+        for (const Joint &joint : m_Skeleton->joints)
+        {
+            sr.BeginMap();
+            sr.AddKeyValue("Name", joint.name);
+            sr.AddKeyValue("ID", joint.id);
+            sr.AddKeyValue("ParentID", joint.parentJointId);
+            sr.AddKeyValue("DefaultTranslation", joint.defaultTranslation);
+            sr.AddKeyValue("DefaultRotation", joint.defaultRotation);
+            sr.AddKeyValue("DefaultScale", joint.defaultScale);
+            SerializeMat4(sr, "InverseBindPose", joint.inverseBindPose);
+            SerializeMat4(sr, "LocalTransform", joint.localTransform);
+            SerializeMat4(sr, "GlobalTransform", joint.globalTransform);
+            sr.EndMap();
+        }
+        sr.EndSequence();
+
+        sr.EndMap();
+        sr.EndMap();
+        sr.Serialize(filepath);
+
+        return true;
+    }
+
+    Ref<Skeleton> SkeletonSerializer::Deserialize(const std::filesystem::path &filepath)
+    {
+        if (!std::filesystem::exists(filepath))
+        {
+            return nullptr;
+        }
+
+        YAML::Node fileNode = Serializer::Deserialize(filepath);
+        YAML::Node skeletonNode = fileNode["Skeleton"];
+        if (!skeletonNode)
+        {
+            return nullptr;
+        }
+
+        Ref<Skeleton> skeleton = CreateRef<Skeleton>();
+
+        if (YAML::Node jointsNode = skeletonNode["Joints"])
+        {
+            skeleton->joints.reserve(jointsNode.size());
+            for (const YAML::Node &jointNode : jointsNode)
+            {
+                Joint joint{};
+                if (jointNode["Name"]) joint.name = jointNode["Name"].as<std::string>();
+                if (jointNode["ID"]) joint.id = jointNode["ID"].as<int32_t>();
+                if (jointNode["ParentID"]) joint.parentJointId = jointNode["ParentID"].as<int32_t>();
+                if (jointNode["DefaultTranslation"]) joint.defaultTranslation = jointNode["DefaultTranslation"].as<glm::vec3>();
+                if (jointNode["DefaultRotation"]) joint.defaultRotation = jointNode["DefaultRotation"].as<glm::quat>();
+                if (jointNode["DefaultScale"]) joint.defaultScale = jointNode["DefaultScale"].as<glm::vec3>();
+
+                DeserializeMat4(jointNode, "InverseBindPose", joint.inverseBindPose);
+                DeserializeMat4(jointNode, "LocalTransform", joint.localTransform);
+                if (!DeserializeMat4(jointNode, "GlobalTransform", joint.globalTransform))
+                {
+                    joint.globalTransform = glm::mat4(1.0f);
+                }
+
+                skeleton->nameToJointMap[joint.name] = joint.id;
+                skeleton->joints.push_back(std::move(joint));
+            }
+        }
+
+        return skeleton;
+    }
+
+    MaterialSerializer::MaterialSerializer(const Ref<Material> &material)
+        : m_Material(material)
+    {
+    }
+
+    bool MaterialSerializer::Serialize(const std::filesystem::path &filepath)
+    {
+        if (!m_Material)
+        {
+            return false;
+        }
+
+        Serializer sr(filepath);
+
+        sr.BeginMap();
+        sr.BeginMap("Material");
+        sr.AddKeyValue("Version", ENGINE_VERSION);
+        sr.AddKeyValue("Name", m_Material->name);
+        sr.AddKeyValue("Type", static_cast<int>(m_Material->GetType()));
+        sr.AddKeyValue("BaseColorTextureHandle", static_cast<uint64_t>(m_Material->baseColorTextureHandle));
+        sr.AddKeyValue("EmissiveTextureHandle", static_cast<uint64_t>(m_Material->emissiveTextureHandle));
+        sr.AddKeyValue("MetallicRoughnessTextureHandle", static_cast<uint64_t>(m_Material->metallicRoughnessTextureHandle));
+        sr.AddKeyValue("NormalTextureHandle", static_cast<uint64_t>(m_Material->normalTextureHandle));
+        sr.AddKeyValue("OcclusionTextureHandle", static_cast<uint64_t>(m_Material->occlusionTextureHandle));
+
+        sr.BeginMap("GPUData");
+        sr.AddKeyValue("BaseColorFactor", m_Material->gpuData.baseColorFactor);
+        sr.AddKeyValue("EmissiveFactor", m_Material->gpuData.emissiveFactor);
+        sr.AddKeyValue("MetallicFactor", m_Material->gpuData.metallicFactor);
+        sr.AddKeyValue("RoughnessFactor", m_Material->gpuData.roughnessFactor);
+        sr.AddKeyValue("OcclusionStrength", m_Material->gpuData.occlusionStrength);
+        sr.EndMap();
+
+        sr.EndMap();
+        sr.EndMap();
+
+        sr.Serialize(filepath);
+        return true;
+    }
+
+    Ref<Material> MaterialSerializer::Deserialize(const std::filesystem::path &filepath)
+    {
+        if (!std::filesystem::exists(filepath))
+        {
+            return nullptr;
+        }
+
+        YAML::Node fileNode = Serializer::Deserialize(filepath);
+        YAML::Node materialNode = fileNode["Material"];
+        if (!materialNode)
+        {
+            return nullptr;
+        }
+
+        Ref<Material> material = CreateRef<Material>();
+        if (materialNode["Name"]) material->name = materialNode["Name"].as<std::string>();
+        if (materialNode["Type"]) material->SetType(static_cast<MaterialType>(materialNode["Type"].as<int>()));
+        if (materialNode["BaseColorTextureHandle"]) material->baseColorTextureHandle = AssetHandle(materialNode["BaseColorTextureHandle"].as<uint64_t>());
+        if (materialNode["EmissiveTextureHandle"]) material->emissiveTextureHandle = AssetHandle(materialNode["EmissiveTextureHandle"].as<uint64_t>());
+        if (materialNode["MetallicRoughnessTextureHandle"]) material->metallicRoughnessTextureHandle = AssetHandle(materialNode["MetallicRoughnessTextureHandle"].as<uint64_t>());
+        if (materialNode["NormalTextureHandle"]) material->normalTextureHandle = AssetHandle(materialNode["NormalTextureHandle"].as<uint64_t>());
+        if (materialNode["OcclusionTextureHandle"]) material->occlusionTextureHandle = AssetHandle(materialNode["OcclusionTextureHandle"].as<uint64_t>());
+
+        if (YAML::Node gpuDataNode = materialNode["GPUData"])
+        {
+            if (gpuDataNode["BaseColorFactor"]) material->gpuData.baseColorFactor = gpuDataNode["BaseColorFactor"].as<glm::vec4>();
+            if (gpuDataNode["EmissiveFactor"]) material->gpuData.emissiveFactor = gpuDataNode["EmissiveFactor"].as<glm::vec4>();
+            if (gpuDataNode["MetallicFactor"]) material->gpuData.metallicFactor = gpuDataNode["MetallicFactor"].as<float>();
+            if (gpuDataNode["RoughnessFactor"]) material->gpuData.roughnessFactor = gpuDataNode["RoughnessFactor"].as<float>();
+            if (gpuDataNode["OcclusionStrength"]) material->gpuData.occlusionStrength = gpuDataNode["OcclusionStrength"].as<float>();
+        }
+
+        return material;
     }
 }

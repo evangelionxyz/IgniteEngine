@@ -95,6 +95,7 @@ namespace ignite
         static Application *GetInstance();
         static CommandManager *GetCommandManager();
         static bool IsRenderThreadRunning();
+        static std::thread::id GetMainThreadId();
 
         static float GetDeltaTime();
 
@@ -106,7 +107,7 @@ namespace ignite
         static void WindowRestore();
         static void SubmitToMainThread(const std::function<void()> func);
         static void SubmitToRenderThread(const std::function<void()> func);
-        static void SubmitWorkerCommandList(nvrhi::CommandListHandle commandList);
+        static void SubmitWorkerCommandList(nvrhi::CommandListHandle commandList, std::function<void()> onExecuted = {});
 
         const std::thread *GetRenderThread() const;
 
@@ -145,6 +146,7 @@ namespace ignite
 
         // Rendering thread
         Scope<std::thread> m_RenderThread;
+        std::thread::id m_MainThreadId;
         std::atomic<bool> m_RenderThreadRunning{ false };
         std::atomic<bool> m_CurrentFrameReady{ false };
         std::atomic<bool> m_RenderComplete{ false };
@@ -152,6 +154,7 @@ namespace ignite
         // Synchronization
         std::mutex m_CommandListMutex;
         std::vector<nvrhi::CommandListHandle> m_PendingCommandLists;
+        std::vector<std::function<void()>> m_PendingCommandListCallbacks;
 
         // Frame synchronization
         std::condition_variable m_FrameCV;
