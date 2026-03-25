@@ -7,7 +7,8 @@
 #include "ignite/scene/scene_manager.hpp"
 #include "skeleton.hpp"
 
-namespace ignite {
+namespace ignite
+{
 
     void AnimationSystem::PlayAnimation(std::vector<Ref<SkeletalAnimation>> &animations, int animIndex)
     {

@@ -47,6 +47,7 @@ namespace ignite
         std::vector<Joint> joints;
         std::unordered_map<std::string, int32_t> nameToJointMap; // for fast lookup by name
         std::unordered_map<int32_t, UUID> jointEntityMap;
+
         MeshBoneMapping boneMapping;
 
         static AssetType GetStaticType() { return AssetType::Skeleton; }

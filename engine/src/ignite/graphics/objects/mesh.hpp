@@ -53,6 +53,8 @@ namespace ignite
     class Skeleton;
     class SkeletalAnimation;
 
+    struct MeshNode;
+
     // Primitive Mesh
     struct MeshPrimitive
     {
@@ -79,6 +81,7 @@ namespace ignite
         MeshInstance();
         ~MeshInstance();
 
+        MeshInstance(const MeshNode &node, const Ref<MeshPrimitive> &mesh);
         MeshInstance(const std::string &name, const Ref<MeshPrimitive> &mesh);
 
         glm::mat4 local = glm::mat4(1.0f);
@@ -87,6 +90,7 @@ namespace ignite
         void SetName(const std::string &name) { m_Name = name; }
         void SetMaterial(AssetHandle assetHandle);
 
+        static Ref<MeshInstance> Create(const MeshNode &node, const Ref<MeshPrimitive> &mesh);
         static Ref<MeshInstance> Create(const std::string &name, const Ref<MeshPrimitive> &mesh);
 
         Ref<MeshPrimitive> &GetPrimitive() { return m_Primitive; }
@@ -213,7 +217,7 @@ namespace ignite
 		};
 
         static void LoadSceneGraphFromFBX(const std::string &filename, MeshScene &outScene);
-        static void BuildNode(fbxsdk::FbxNode *node, fbxsdk::FbxScene *fbxScene, MeshScene &outscene, Loader &ld, const std::filesystem::path &sourceDir, int parentIdx);
+        static void BuildNode(fbxsdk::FbxNode *node, fbxsdk::FbxScene *fbxScene, MeshScene &outscene, Loader &ld, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal);
     };
 
     class MeshLoader

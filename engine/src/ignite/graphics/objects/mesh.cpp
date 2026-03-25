@@ -50,6 +50,26 @@ namespace ignite
 
     namespace
     {
+        static bool Mat4NearEqual(const glm::mat4 &a, const glm::mat4 &b, const float epsilon = 0.0001f)
+        {
+            for (int c = 0; c < 4; ++c)
+            {
+                for (int r = 0; r < 4; ++r)
+                {
+                    if (fabs(a[c][r] - b[c][r]) > epsilon)
+                    {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        static glm::vec3 ExtractTranslation(const glm::mat4 &m)
+        {
+            return { m[3][0], m[3][1], m[3][2] };
+        }
+
         static glm::mat4 ToGlmMatrix(const FbxAMatrix &matrix)
         {
             glm::mat4 result(1.0f);
@@ -531,25 +551,23 @@ namespace ignite
 
                         const float timestamp = static_cast<float>((sampleTime.GetSecondDouble() - startSeconds) * ticksPerSecond);
 
-                        const FbxDouble3 t = node->LclTranslation.EvaluateValue(sampleTime);
-                        const FbxDouble3 r = node->LclRotation.EvaluateValue(sampleTime);
-                        const FbxDouble3 s = node->LclScaling.EvaluateValue(sampleTime);
+                        const glm::mat4 localMatrix = ToGlmMatrix(node->EvaluateLocalTransform(sampleTime));
 
-                        channel.translationKeys.AddFrame({
-                            glm::vec3(static_cast<float>(t[0]), static_cast<float>(t[1]), static_cast<float>(t[2])),
-                            timestamp
-                        });
+                        glm::vec3 decomposedScale(1.0f);
+                        glm::quat decomposedRotation(1.0f, 0.0f, 0.0f, 0.0f);
+                        glm::vec3 decomposedTranslation(0.0f);
+                        glm::vec3 skew(0.0f);
+                        glm::vec4 perspective(0.0f);
+                        glm::decompose(localMatrix,
+                            decomposedScale,
+                            decomposedRotation,
+                            decomposedTranslation,
+                            skew,
+                            perspective);
 
-                        const glm::vec3 rotRadians = glm::radians(glm::vec3(
-                            static_cast<float>(r[0]),
-                            static_cast<float>(r[1]),
-                            static_cast<float>(r[2])));
-                        channel.rotationKeys.AddFrame({ glm::quat(rotRadians), timestamp });
-
-                        channel.scaleKeys.AddFrame({
-                            glm::vec3(static_cast<float>(s[0]), static_cast<float>(s[1]), static_cast<float>(s[2])),
-                            timestamp
-                        });
+                        channel.translationKeys.AddFrame({ decomposedTranslation, timestamp });
+                        channel.rotationKeys.AddFrame({ decomposedRotation, timestamp });
+                        channel.scaleKeys.AddFrame({ decomposedScale, timestamp });
                     }
 
                     animation->channels.emplace(joint.name, std::move(channel));
@@ -644,7 +662,14 @@ namespace ignite
         m_Primitive = CreateRef<MeshPrimitive>();
     }
 
-    MeshInstance::~MeshInstance()
+	MeshInstance::MeshInstance(const MeshNode &node, const Ref<MeshPrimitive> &mesh)
+        : m_Name(node.name), m_Primitive(mesh)
+	{
+        local = node.local;
+        global = node.global;
+	}
+
+	MeshInstance::~MeshInstance()
     {
         // Wait for GPU to ensure resources are not in use
         if (auto *device = DeviceManager::GetInstance()->GetDevice())
@@ -666,7 +691,12 @@ namespace ignite
         return CreateRef<MeshInstance>(name, mesh);
     }
 
-    // ===================================
+	Ref<MeshInstance> MeshInstance::Create(const MeshNode &node, const Ref<MeshPrimitive> &mesh)
+	{
+        return CreateRef<MeshInstance>(node, mesh);
+	}
+
+	// ===================================
     // Static Mesh
     // ===================================
     Ref<StaticMesh> StaticMesh::Create()
@@ -980,6 +1010,8 @@ namespace ignite
             if (node.mesh < 0 || node.mesh >= (int)gltfModel.meshes.size())
                 continue;
 
+            const MeshNode &meshNode = outScene.nodes[i];
+
             const tinygltf::Mesh &gltfMesh = gltfModel.meshes[node.mesh];
             for (const auto &gltfPrim : gltfMesh.primitives)
             {
@@ -1001,7 +1033,7 @@ namespace ignite
                     material = CreateDefaultMaterial("DefaultMaterial");
                 }
 
-                Ref<MeshInstance> meshInstance = MeshInstance::Create(gltfMesh.name, primitive);
+                Ref<MeshInstance> meshInstance = MeshInstance::Create(meshNode, primitive);
 
                 outScene.nodes[i].meshes.push_back(meshInstance);
                 outScene.flatMeshes.push_back(meshInstance);
@@ -1205,35 +1237,14 @@ namespace ignite
         {
             for (int i = 0; i < rootNode->GetChildCount(); ++i)
             {
-                BuildNode(rootNode->GetChild(i), fbxScene, outScene, ld, sourceDir, -1);
+                BuildNode(rootNode->GetChild(i), fbxScene, outScene, ld, sourceDir, -1, glm::mat4(1.0f));
             }
-        }
-
-        std::function<void(int, const glm::mat4 &)> recurse = [&](const int nodeIndex, const glm::mat4 &parentGlobal)
-        {
-            MeshNode &node = outScene.nodes[nodeIndex];
-            node.global = parentGlobal * node.local;
-            for (const auto &m : node.meshes)
-            {
-                m->local = node.local;
-                m->global = node.global;
-            }
-
-            for (const int c : node.children)
-            {
-                recurse(c, node.global);
-            }
-        };
-
-        for (const int root : outScene.roots)
-        {
-            recurse(root, glm::mat4(1.0f));
         }
 
         sdkManager->Destroy();
     }
 
-    void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene &outScene, Loader &ld, const std::filesystem::path &sourceDir, int parentIdx)
+    void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene &outScene, Loader &ld, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal)
     {
         if (!node)
         {
@@ -1247,6 +1258,7 @@ namespace ignite
         meshNode.parent = parentIdx;
         meshNode.name = node->GetName() ? node->GetName() : "";
         meshNode.local = ToGlmMatrix(node->EvaluateLocalTransform());
+        meshNode.global = parentGlobal * meshNode.local;
 
         if (parentIdx >= 0)
         {
@@ -1263,12 +1275,31 @@ namespace ignite
             std::vector<uint32_t> indices;
 
             const FbxVector4 *controlPoints = fbxMesh->GetControlPoints();
-            const FbxAMatrix geometricMatrix = BuildNodeGeometricMatrix(node);
+            FbxAMatrix meshGeom = BuildNodeGeometricMatrix(node);
             FbxStringList uvSetNames;
             fbxMesh->GetUVSetNames(uvSetNames);
 
             std::vector<FBXBoneInfluence> controlPointInfluence;
             controlPointInfluence.resize(static_cast<size_t>(fbxMesh->GetControlPointsCount()));
+
+            bool isSkinned = fbxMesh->GetDeformerCount(FbxDeformer::eSkin) > 0;
+            LOG_INFO("[FBX SKIN DEBUG] Node='{}' parent='{}' mesh='{}' skinned={} deformers={} cpCount={}",
+                meshNode.name,
+                (parentIdx >= 0 ? outScene.nodes[parentIdx].name : std::string("<root>")),
+                (fbxMesh->GetName() ? std::string(fbxMesh->GetName()) : std::string("<unnamed>")),
+                isSkinned,
+                fbxMesh->GetDeformerCount(FbxDeformer::eSkin),
+                fbxMesh->GetControlPointsCount());
+
+            if (isSkinned)
+            {
+                FbxSkin *skin = static_cast<FbxSkin *>(fbxMesh->GetDeformer(0, FbxDeformer::eSkin));
+                if (skin && skin->GetClusterCount() > 0)
+                {
+                    // Keep vertices in mesh-local space. Skinning matrices already include mesh bind transform.
+                    LOG_INFO("[FBX SKIN DEBUG] Node='{}' firstSkinClusters={}", meshNode.name, skin->GetClusterCount());
+                }
+            }
 
             for (int deformerIndex = 0; deformerIndex < fbxMesh->GetDeformerCount(FbxDeformer::eSkin); ++deformerIndex)
             {
@@ -1314,11 +1345,47 @@ namespace ignite
                         continue;
                     }
 
-                    FbxAMatrix meshBindMatrix;
-                    FbxAMatrix linkBindMatrix;
-                    cluster->GetTransformMatrix(meshBindMatrix);
-                    cluster->GetTransformLinkMatrix(linkBindMatrix);
-                    outScene.skeleton->joints[jointId].inverseBindPose = ToGlmMatrix(linkBindMatrix.Inverse()) * ToGlmMatrix(meshBindMatrix);
+                    
+                    FbxAMatrix meshBind;
+                    FbxAMatrix jointBind;
+
+                    // Cluster matrices (FBX bind pose)
+                    cluster->GetTransformMatrix(meshBind);
+                    cluster->GetTransformLinkMatrix(jointBind);
+
+                    // Keep a joint-space inverse bind (shared safely across multiple skinned meshes).
+                    // Mesh node placement is applied in object transform during rendering.
+                    const FbxAMatrix invBind = jointBind.Inverse();
+                    const glm::mat4 invBindGlm = ToGlmMatrix(invBind);
+                    glm::mat4 &existingInvBind = outScene.skeleton->joints[jointId].inverseBindPose;
+                    const bool hasExistingInvBind = !Mat4NearEqual(existingInvBind, glm::mat4(1.0f));
+                    if (hasExistingInvBind && !Mat4NearEqual(existingInvBind, invBindGlm, 0.001f))
+                    {
+                        const glm::vec3 oldT = ExtractTranslation(existingInvBind);
+                        const glm::vec3 newT = ExtractTranslation(invBindGlm);
+                        LOG_WARN("[FBX SKIN DEBUG] InverseBind mismatch joint='{}' id={} meshNode='{}' oldT=({:.4f},{:.4f},{:.4f}) newT=({:.4f},{:.4f},{:.4f})",
+                            outScene.skeleton->joints[jointId].name,
+                            jointId,
+                            meshNode.name,
+                            oldT.x, oldT.y, oldT.z,
+                            newT.x, newT.y, newT.z);
+                    }
+
+                    existingInvBind = invBindGlm;
+
+                    if (clusterIndex < 6)
+                    {
+                        const glm::vec3 meshBindT = ExtractTranslation(ToGlmMatrix(meshBind));
+                        const glm::vec3 jointBindT = ExtractTranslation(ToGlmMatrix(jointBind));
+                        const glm::vec3 invBindT = ExtractTranslation(invBindGlm);
+                        LOG_INFO("[FBX SKIN DEBUG] joint='{}' id={} cpInfluences={} meshBindT=({:.3f},{:.3f},{:.3f}) jointBindT=({:.3f},{:.3f},{:.3f}) invBindT=({:.3f},{:.3f},{:.3f})",
+                            outScene.skeleton->joints[jointId].name,
+                            jointId,
+                            cluster->GetControlPointIndicesCount(),
+                            meshBindT.x, meshBindT.y, meshBindT.z,
+                            jointBindT.x, jointBindT.y, jointBindT.z,
+                            invBindT.x, invBindT.y, invBindT.z);
+                    }
 
                     const int *controlPointIndices = cluster->GetControlPointIndices();
                     const double *controlPointWeights = cluster->GetControlPointWeights();
@@ -1342,6 +1409,26 @@ namespace ignite
                 NormalizeBoneInfluence(influence);
             }
 
+            size_t influencedControlPoints = 0;
+            for (const FBXMeshLoader::FBXBoneInfluence &influence : controlPointInfluence)
+            {
+                float wsum = 0.0f;
+                for (float w : influence.weights)
+                {
+                    wsum += w;
+                }
+
+                if (wsum > 0.00001f)
+                {
+                    influencedControlPoints++;
+                }
+            }
+
+            if (isSkinned)
+            {
+                LOG_INFO("[FBX SKIN DEBUG] Node='{}' influencedCP={}/{}", meshNode.name, influencedControlPoints, controlPointInfluence.size());
+            }
+
             const int polygonCount = fbxMesh->GetPolygonCount();
             vertices.reserve(static_cast<size_t>(polygonCount) * 3);
             indices.reserve(static_cast<size_t>(polygonCount) * 3);
@@ -1355,7 +1442,7 @@ namespace ignite
                 }
 
                 const FbxVector4 cp = controlPoints[controlPointIndex];
-                const FbxVector4 transformedPosition = geometricMatrix.MultT(cp);
+                const FbxVector4 transformedPosition = meshGeom.MultT(cp);
 
                 VertexMesh_Anim vertex{};
                 vertex.position =
@@ -1367,7 +1454,7 @@ namespace ignite
 
                 FbxVector4 normal(0.0, 1.0, 0.0, 0.0);
                 fbxMesh->GetPolygonVertexNormal(polygonIndex, polygonVertexIndex, normal);
-                normal = geometricMatrix.MultR(normal);
+                normal = meshGeom.MultR(normal);
                 normal.Normalize();
                 vertex.normal = glm::vec3(static_cast<float>(normal[0]), static_cast<float>(normal[1]), static_cast<float>(normal[2]));
 
@@ -1418,7 +1505,8 @@ namespace ignite
             if (!vertices.empty() && !indices.empty())
             {
                 Ref<MeshPrimitive> primitive = MeshPrimitive::Create(vertices, indices);
-                Ref<MeshInstance> meshInstance = MeshInstance::Create(meshNode.name, primitive);
+                Ref<MeshInstance> meshInstance = MeshInstance::Create(meshNode, primitive);
+
                 outScene.nodes[nodeIndex].meshes.push_back(meshInstance);
                 outScene.flatMeshes.push_back(meshInstance);
 
@@ -1455,7 +1543,7 @@ namespace ignite
 
         for (int i = 0; i < node->GetChildCount(); ++i)
         {
-            BuildNode(node->GetChild(i), fbxScene, outScene, ld, sourceDir, nodeIndex);
+            BuildNode(node->GetChild(i), fbxScene, outScene, ld, sourceDir, nodeIndex, meshNode.global);
         }
     }
 

@@ -24,8 +24,13 @@ namespace ignite {
         {
             float midWayLength = time - last_time_stamp;
             float framesDiff = next_time_stamp - last_time_stamp;
+            if (fabs(framesDiff) <= 0.000001f)
+            {
+                return 0.0f;
+            }
+
             float scale_factor = midWayLength / framesDiff;
-            return scale_factor;
+            return glm::clamp(scale_factor, 0.0f, 1.0f);
         }
     };
 
@@ -48,7 +53,7 @@ namespace ignite {
                 }
             }
 
-            return 0;
+            return static_cast<int32_t>(frames.size()) - 2;
         }
 
         glm::vec3 InterpolateTranslation(float time)
@@ -103,7 +108,7 @@ namespace ignite {
                     return i;
                 }
             }
-            return 0;
+            return static_cast<int32_t>(frames.size()) - 2;
         }
 
         glm::quat InterpolateRotation(float time)
