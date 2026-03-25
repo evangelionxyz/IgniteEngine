@@ -34,6 +34,11 @@
 #include <condition_variable>
 #include <queue>
 
+namespace fbxsdk
+{
+    class FbxManager;
+}
+
 namespace ignite
 {
 
@@ -101,6 +106,9 @@ namespace ignite
     
         AssetRegistry &GetAssetAssetRegistry() { return m_AssetRegistry; }
 
+        fbxsdk::FbxManager *GetOrCreateFbxSdkManager();
+        std::mutex &GetFbxSdkMutex() { return m_FbxSdkMutex; }
+
         static Project *GetProject();
 
     private:
@@ -115,6 +123,9 @@ namespace ignite
         std::vector<std::thread> m_Workers;
         std::queue<AssetJob> m_Jobs;
         bool m_Running;
+
+        std::mutex m_FbxSdkMutex;
+        fbxsdk::FbxManager *m_FbxSdkManager = nullptr;
     };
 
 }

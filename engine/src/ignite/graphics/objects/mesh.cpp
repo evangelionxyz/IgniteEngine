@@ -1170,16 +1170,15 @@ namespace ignite
 
     void FBXMeshLoader::LoadSceneGraphFromFBX(const std::string &filename, MeshScene &outScene)
     {
-        FbxManager *sdkManager = FbxManager::Create();
+        AssetManager &assetManager = Project::GetInstance()->GetAssetManager();
+        std::lock_guard<std::mutex> lock(assetManager.GetFbxSdkMutex());
+
+        FbxManager *sdkManager = assetManager.GetOrCreateFbxSdkManager();
         if (!sdkManager)
         {
             LOG_ASSERT(false, "[FBX Loader] Failed to create FBX SDK Manager");
             return;
         }
-
-        // Setup IO Settings
-        FbxIOSettings *ioSettings = FbxIOSettings::Create(sdkManager, IOSROOT);
-        sdkManager->SetIOSettings(ioSettings);
 
         // Create FBX Importer
         FbxImporter *importer = FbxImporter::Create(sdkManager, "");
@@ -1188,7 +1187,6 @@ namespace ignite
             LOG_ERROR("[FBX Loader] Failed to create FBX Importer");
 
             importer->Destroy();
-            sdkManager->Destroy();
             return;
         }
 
@@ -1199,7 +1197,7 @@ namespace ignite
             LOG_ERROR("[FBX Loader] Failed to import {}", filename);
 
             importer->Destroy();
-            sdkManager->Destroy();
+            fbxScene->Destroy();
             return;
         }
         importer->Destroy();
@@ -1241,7 +1239,7 @@ namespace ignite
             }
         }
 
-        sdkManager->Destroy();
+        fbxScene->Destroy();
     }
 
     void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene &outScene, Loader &ld, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal)

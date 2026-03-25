@@ -30,6 +30,8 @@
 #include "ignite/core/logger.hpp"
 #include <cstdint>
 
+#include <fbxsdk.h>
+
 namespace ignite {
 
 	static std::mutex s_AssetThreadMutex;
@@ -72,6 +74,29 @@ namespace ignite {
         {
             worker.join();
         }
+
+        if (m_FbxSdkManager)
+        {
+            m_FbxSdkManager->Destroy();
+            m_FbxSdkManager = nullptr;
+        }
+    }
+
+    fbxsdk::FbxManager *AssetManager::GetOrCreateFbxSdkManager()
+    {
+        if (!m_FbxSdkManager)
+        {
+            m_FbxSdkManager = fbxsdk::FbxManager::Create();
+            if (!m_FbxSdkManager)
+            {
+                return nullptr;
+            }
+
+            fbxsdk::FbxIOSettings *ioSettings = fbxsdk::FbxIOSettings::Create(m_FbxSdkManager, IOSROOT);
+            m_FbxSdkManager->SetIOSettings(ioSettings);
+        }
+
+        return m_FbxSdkManager;
     }
 
     AssetHandle AssetManager::ImportAsset(const std::filesystem::path &filepath)
