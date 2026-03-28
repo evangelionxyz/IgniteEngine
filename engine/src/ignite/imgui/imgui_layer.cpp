@@ -197,21 +197,21 @@ namespace ignite
         colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.20f, 0.20f, 0.20f, 0.45f);
 
         style.WindowPadding = ImVec2{ 5.0f, 5.0f };
-        style.FramePadding = ImVec2{ 3.0f, 5.0f };
-        style.ItemSpacing = ImVec2{ 5.0f, 5.0f };
-        style.ItemInnerSpacing = ImVec2{ 6.0f, 3.0f };
+        style.FramePadding = ImVec2{ 4.0f, 4.0f };
+        style.ItemSpacing = ImVec2{ 4.0f, 3.0f };
+        style.ItemInnerSpacing = ImVec2{ 5.0f, 5.0f };
         style.CellPadding = ImVec2{ 2.0f, 4.0f };
         style.TouchExtraPadding = ImVec2{ 0.0f, 0.0f };
         style.WindowTitleAlign = ImVec2 { 0.5f, 0.5f };
         style.WindowBorderHoverPadding = 10.0f;
-        style.WindowBorderSize = 0;
+        style.WindowBorderSize = 1;
         style.ChildBorderSize = 1;
         style.PopupBorderSize = 1;
 
         style.IndentSpacing = 8;
-        style.ScrollbarSize = 16.0f;
-        style.GrabMinSize = 15.0f;
-        style.FrameBorderSize = 0.0f;
+        style.ScrollbarSize = 14.0f;
+        style.GrabMinSize = 14.0f;
+        style.FrameBorderSize = 1.0f;
         style.WindowRounding = 6.0f;
         style.TabRounding = 0.0f;
         style.ChildRounding = 1.0f;

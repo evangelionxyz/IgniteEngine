@@ -1296,7 +1296,7 @@ namespace ignite
     {
         ImGui::Begin("Settings", &m_Data.settingsWindow);
 
-        constexpr ImGuiTreeNodeFlags treeFlags = ImGuiTreeNodeFlags_DefaultOpen;
+        constexpr ImGuiTreeNodeFlags treeFlags = 0;
 
         m_ScenePanel->UISettings();
 
@@ -1330,7 +1330,7 @@ namespace ignite
         if (m_ActiveScene)
         {
             // Scene
-            if (ImGui::TreeNodeEx("Scene Data", treeFlags))
+            if (ImGui::TreeNodeEx("Scene", treeFlags))
             {
                 if (ImGui::Button("Load HDR Texture"))
                 {
