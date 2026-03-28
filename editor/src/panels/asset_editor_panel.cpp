@@ -136,6 +136,11 @@ namespace ignite
 			{
 				ImGui::InvisibleButton("##sprite_sheet_view_btn", viewportSize);
 				hovered = ImGui::IsItemHovered();
+               if (hovered)
+				{
+					ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
+					ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelX);
+				}
 			}
 
 			if (hovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
@@ -725,11 +730,96 @@ namespace ignite
 			m_CreateRequest.asset = CreateRef<SpriteSheet>();
 		}
 
-		ImGui::SetNextWindowSizeConstraints(ImVec2(560.0f, 0.0f), ImVec2(FLT_MAX, FLT_MAX));
-		if (ImGui::Begin("Create Asset", &m_CreateRequest.open))
+		ImGui::SetNextWindowSize(ImVec2(1200.0f, 760.0f), ImGuiCond_FirstUseEver);
+		ImGui::SetNextWindowSizeConstraints(ImVec2(900.0f, 640.0f), ImVec2(FLT_MAX, FLT_MAX));
+		if (ImGui::Begin("Create Asset", &m_CreateRequest.open, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
 		{
 			ImGui::Text("Asset Type: %s", AssetTypeToString(m_CreateRequest.type).c_str());
 			ImGui::InputText("Name", m_CreateRequest.nameBuffer, sizeof(m_CreateRequest.nameBuffer));
+
+			auto tryCreateAsset = [&]()
+				{
+					std::string assetName = m_CreateRequest.nameBuffer;
+					if (assetName.empty())
+					{
+						assetName = "NewAsset";
+					}
+
+					std::filesystem::path targetDirectory = m_CreateRequest.targetDirectory.empty() ? project->GetAssetDirectory() : m_CreateRequest.targetDirectory;
+					if (!std::filesystem::exists(targetDirectory))
+					{
+						std::filesystem::create_directories(targetDirectory);
+					}
+
+					const std::string extension = GetAssetExtensionFromType(m_CreateRequest.type);
+					const std::filesystem::path fullAssetPath = BuildUniqueAssetPath(targetDirectory, assetName, extension);
+
+					bool created = false;
+					Ref<Asset> createdAsset = nullptr;
+					if (m_CreateRequest.type == AssetType::Material2D)
+					{
+						Ref<Material2D> material2D = std::dynamic_pointer_cast<Material2D>(m_CreateRequest.asset);
+						if (material2D)
+						{
+							material2D->name = assetName;
+							Material2DSerializer serializer(material2D);
+							created = serializer.Serialize(fullAssetPath);
+							if (created)
+							{
+								material2D->SetDirtyFlag(false);
+								material2D->SetReadyFlag(true);
+								createdAsset = material2D;
+							}
+						}
+					}
+					else if (m_CreateRequest.type == AssetType::SpriteSheet)
+					{
+						Ref<SpriteSheet> spriteSheet = std::dynamic_pointer_cast<SpriteSheet>(m_CreateRequest.asset);
+						if (spriteSheet)
+						{
+							created = spriteSheet->Serialize(fullAssetPath);
+							if (created)
+							{
+								spriteSheet->SetDirtyFlag(false);
+								spriteSheet->SetReadyFlag(true);
+								createdAsset = spriteSheet;
+							}
+						}
+					}
+
+					if (created && createdAsset)
+					{
+						AssetHandle handle = AssetHandle();
+						AssetMetaData metadata;
+						metadata.type = m_CreateRequest.type;
+						metadata.filepath = project->GetAssetRelativeFilepath(fullAssetPath);
+
+						createdAsset->handle = handle;
+						assetManager.AssignMetaData(handle, metadata);
+						assetManager.AssignAsset(handle, createdAsset);
+
+						// TODO: Fix save project assets
+						m_EditorLayer->SaveProject();
+
+						AssetEditorData data;
+						data.asset = createdAsset;
+						data.metadata = metadata;
+						data.handle = handle;
+						data.isOpen = true;
+						data.requestFocus = true;
+						data.windowTitle = std::format("{} - {}###asset_editor_{}", AssetTypeToString(metadata.type), fullAssetPath.filename().string(), static_cast<uint64_t>(handle));
+						m_Assets.push_back(std::move(data));
+
+						m_CreateRequest = {};
+					}
+				};
+
+			if (ImGui::Button("Create"))
+				tryCreateAsset();
+			ImGui::SameLine();
+			if (ImGui::Button("Cancel"))
+				m_CreateRequest = {};
+			ImGui::Separator();
 
 			if (m_CreateRequest.type == AssetType::Material2D)
 			{
@@ -757,90 +847,6 @@ namespace ignite
 
 				ImGui::Separator();
 				RenderSpriteSheetEditor(spriteSheet);
-			}
-
-			ImGui::Separator();
-			if (ImGui::Button("Create"))
-			{
-				std::string assetName = m_CreateRequest.nameBuffer;
-				if (assetName.empty())
-				{
-					assetName = "NewAsset";
-				}
-
-				std::filesystem::path targetDirectory = m_CreateRequest.targetDirectory.empty() ? project->GetAssetDirectory() : m_CreateRequest.targetDirectory;
-				if (!std::filesystem::exists(targetDirectory))
-				{
-					std::filesystem::create_directories(targetDirectory);
-				}
-
-				const std::string extension = GetAssetExtensionFromType(m_CreateRequest.type);
-				const std::filesystem::path fullAssetPath = BuildUniqueAssetPath(targetDirectory, assetName, extension);
-
-				bool created = false;
-				Ref<Asset> createdAsset = nullptr;
-				if (m_CreateRequest.type == AssetType::Material2D)
-				{
-					Ref<Material2D> material2D = std::dynamic_pointer_cast<Material2D>(m_CreateRequest.asset);
-					if (material2D)
-					{
-						material2D->name = assetName;
-						Material2DSerializer serializer(material2D);
-						created = serializer.Serialize(fullAssetPath);
-						if (created)
-						{
-							material2D->SetDirtyFlag(false);
-							material2D->SetReadyFlag(true);
-							createdAsset = material2D;
-						}
-					}
-				}
-				else if (m_CreateRequest.type == AssetType::SpriteSheet)
-				{
-					Ref<SpriteSheet> spriteSheet = std::dynamic_pointer_cast<SpriteSheet>(m_CreateRequest.asset);
-					if (spriteSheet)
-					{
-						created = spriteSheet->Serialize(fullAssetPath);
-						if (created)
-						{
-							spriteSheet->SetDirtyFlag(false);
-							spriteSheet->SetReadyFlag(true);
-							createdAsset = spriteSheet;
-						}
-					}
-				}
-
-				if (created && createdAsset)
-				{
-					AssetHandle handle = AssetHandle();
-					AssetMetaData metadata;
-					metadata.type = m_CreateRequest.type;
-					metadata.filepath = project->GetAssetRelativeFilepath(fullAssetPath);
-
-					createdAsset->handle = handle;
-					assetManager.AssignMetaData(handle, metadata);
-					assetManager.AssignAsset(handle, createdAsset);
-
-					// TODO: Fix save project assets
-					m_EditorLayer->SaveProject();
-
-					AssetEditorData data;
-					data.asset = createdAsset;
-					data.metadata = metadata;
-					data.handle = handle;
-					data.isOpen = true;
-					data.requestFocus = true;
-					data.windowTitle = std::format("{} - {}###asset_editor_{}", AssetTypeToString(metadata.type), fullAssetPath.filename().string(), static_cast<uint64_t>(handle));
-					m_Assets.push_back(std::move(data));
-
-					m_CreateRequest = {};
-				}
-			}
-
-			ImGui::SameLine();
-			if (ImGui::Button("Cancel"))
-			{
-				m_CreateRequest = {};
 			}
 
 			ImGui::End();
@@ -1137,8 +1143,9 @@ namespace ignite
 			}
 
 			bool isOpen = assetData.isOpen;
-			ImGui::SetNextWindowSizeConstraints(ImVec2(560.0f, 0.0f), ImVec2(FLT_MAX, FLT_MAX));
-			if (!ImGui::Begin(assetData.windowTitle.c_str(), &isOpen))
+			ImGui::SetNextWindowSize(ImVec2(1200.0f, 760.0f), ImGuiCond_FirstUseEver);
+			ImGui::SetNextWindowSizeConstraints(ImVec2(900.0f, 640.0f), ImVec2(FLT_MAX, FLT_MAX));
+			if (!ImGui::Begin(assetData.windowTitle.c_str(), &isOpen, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
 			{
               if (!isOpen && assetData.asset && assetData.asset->IsDirty())
 				{
