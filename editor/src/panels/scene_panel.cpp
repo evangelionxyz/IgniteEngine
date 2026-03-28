@@ -15,6 +15,7 @@
 #include "ignite/graphics/ui_renderer.hpp"
 #include "editor_layer.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
+#include "ignite/graphics/objects/material_2d.hpp"
 
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/script_field.hpp"
@@ -455,17 +456,10 @@ namespace ignite
             {
                 Sprite2DComponent &c = selectedEntity.GetComponent<Sprite2DComponent>();
 
-                bool isTextureLoaded = c.handle != AssetHandle(0);
+                bool isMaterialLoaded = c.materialHandle != AssetHandle(0);
 
-                std::string btLabel = "Load Texture";
-                if (isTextureLoaded)
-                {
-                    btLabel = "Loaded";
-                }
-
-                if (ImGui::Button(btLabel.c_str()))
-                {
-                }
+                std::string btLabel = isMaterialLoaded ? "Material Loaded" : "Drag Material2D Here";
+                ImGui::Button(btLabel.c_str(), ImVec2(ImGui::GetContentRegionAvail().x - 30.0f, 0.0f));
 
                 if (ImGui::BeginDragDropTarget())
                 {
@@ -474,39 +468,110 @@ namespace ignite
                         LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
                         AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
                         AssetType type = Project::GetInstance()->GetAssetManager().GetAssetType(handle);
-                        if (type == AssetType::Texture)
+                        if (type == AssetType::Material2D)
                         {
                             Sprite2DComponent before = c;
-                            c.handle = handle;
+                            c.materialHandle = handle;
                             CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
                         }
                     }
                     ImGui::EndDragDropTarget();
                 }
 
-                if (isTextureLoaded)
+                if (isMaterialLoaded)
                 {
                     ImGui::SameLine();
                     if (ImGui::Button("X"))
                     {
                         Sprite2DComponent before = c;
-                        c.handle = AssetHandle(0);
+                        c.materialHandle = AssetHandle(0);
                         CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
                     }
 
                     ImGui::SameLine();
-                    ImGui::Text("Handle: %llu", static_cast<u64>(c.handle));
+                    ImGui::Text("Material: %llu", static_cast<u64>(c.materialHandle));
                 }
 
-                static Sprite2DComponent s_Sprite2DBefore;
+                Ref<Material2D> material2D = nullptr;
+                if (c.materialHandle != AssetHandle(0))
+                {
+                    material2D = Project::GetInstance()->GetAsset<Material2D>(c.materialHandle, AssetType::Material2D);
+                }
 
-                ImGui::DragFloat2("Tiling", &c.tilingFactor.x, 0.025f);
-                if (ImGui::IsItemActivated())            s_Sprite2DBefore = c;
-                if (ImGui::IsItemDeactivatedAfterEdit()) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
+                if (material2D)
+                {
+                    if (ImGui::BeginCombo("Material Type", material2D->data.type == MATERIAL_2D_TYPE_LIT ? "Lit" : "Unlit"))
+                    {
+                        if (ImGui::Selectable("Unlit", material2D->data.type == MATERIAL_2D_TYPE_UNLIT))
+                        {
+                            material2D->data.type = MATERIAL_2D_TYPE_UNLIT;
+                            material2D->SetDirtyFlag(true);
+                        }
 
+                        if (ImGui::Selectable("Lit", material2D->data.type == MATERIAL_2D_TYPE_LIT))
+                        {
+                            material2D->data.type = MATERIAL_2D_TYPE_LIT;
+                            material2D->SetDirtyFlag(true);
+                        }
+                        ImGui::EndCombo();
+                    }
+
+                    if (ImGui::ColorEdit4("Base Color", &material2D->data.baseColor.x))
+                    {
+                        material2D->SetDirtyFlag(true);
+                    }
+
+                    if (ImGui::ColorEdit4("Additive Color", &material2D->data.additiveColor.x))
+                    {
+                        material2D->SetDirtyFlag(true);
+                    }
+
+                    if (ImGui::DragFloat2("Tiling", &material2D->data.tilingFactor.x, 0.025f))
+                    {
+                        material2D->SetDirtyFlag(true);
+                    }
+
+                    ImGui::Button("Drag Texture Here", { 130.0f, 25.0f * ImGui::GetWindowDpiScale() });
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+                        {
+                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                            AssetType type = Project::GetInstance()->GetAssetManager().GetAssetType(handle);
+                            if (type == AssetType::Texture)
+                            {
+                                material2D->textureHandle = handle;
+                                material2D->SetDirtyFlag(true);
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+
+                    ImGui::SameLine();
+                    ImGui::Text("Texture: %llu", static_cast<u64>(material2D->textureHandle));
+                }
+                else
+                {
+                    static Sprite2DComponent s_Sprite2DBefore;
+
+                    ImGui::DragFloat2("Tiling", &c.tilingFactor.x, 0.025f);
+                    if (ImGui::IsItemActivated())            s_Sprite2DBefore = c;
+                    if (ImGui::IsItemDeactivatedAfterEdit()) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
+
+                    ImGui::ColorEdit4("Color", &c.color.x);
+                    if (ImGui::IsItemActivated())            s_Sprite2DBefore = c;
+                    if (ImGui::IsItemDeactivatedAfterEdit()) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
+                }
+            });
+
+            RenderComponent<PointLight2DComponent>("Point Light 2D", selectedEntity, [&]()
+            {
+                PointLight2DComponent &c = selectedEntity.GetComponent<PointLight2DComponent>();
+                ImGui::Checkbox("Enabled", &c.enabled);
                 ImGui::ColorEdit4("Color", &c.color.x);
-                if (ImGui::IsItemActivated())            s_Sprite2DBefore = c;
-                if (ImGui::IsItemDeactivatedAfterEdit()) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
+                ImGui::DragFloat("Radius", &c.radius, 0.025f, 0.0f, 10000.0f);
+                ImGui::DragFloat("Intensity", &c.intensity, 0.025f, 0.0f, 10000.0f);
             });
 
 			RenderComponent<Circle2DComponent>("Circle 2D", selectedEntity, [&]()
@@ -1468,6 +1533,9 @@ namespace ignite
 					case CompType_Circle2D:
 						entity.AddComponent<Circle2DComponent>();
 						break;
+                    case CompType_PointLight2D:
+                        entity.AddComponent<PointLight2DComponent>();
+                        break;
                     case CompType_Rigidbody2D:
                         entity.AddComponent<Rigidbody2DComponent>();
                         break;

@@ -33,6 +33,7 @@
 #include "texture.hpp"
 
 #include <stb_image.h>
+#include <algorithm>
 #include <unordered_map>
 
 namespace ignite
@@ -71,6 +72,7 @@ namespace ignite
         nvrhi::BindingLayoutDesc bindingLayoutDesc;
         bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
         bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
+        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(1));
         bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
 
         for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; i++)
@@ -137,7 +139,7 @@ namespace ignite
         return gp;
     }
 
-    static nvrhi::BindingSetHandle GetQuadBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures)
+    static nvrhi::BindingSetHandle GetQuadBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &lightingBuffer)
     {
         auto it = s_QuadBindingSetCache.find(bindingLayout);
         if (it != s_QuadBindingSetCache.end())
@@ -154,6 +156,7 @@ namespace ignite
 
         nvrhi::BindingSetDesc bindingSetDesc;
         bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, lightingBuffer->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
         for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
         {
@@ -261,6 +264,9 @@ namespace ignite
         InitQuadData();
         InitLineData();
         InitCircleData();
+
+        m_Material2DLightingBuffer = ConstantBuffer::Create(sizeof(Material2DLighting_GPUData), false, 1, "Material2D Lighting Buffer");
+        m_Material2DLightingData.pointLightCount = 0;
     }
 
     Renderer2D::~Renderer2D()
@@ -378,6 +384,12 @@ namespace ignite
         m_CircleBatch.count = 0;
         m_CircleBatch.vertexBufferPtr = m_CircleBatch.vertexBufferBase;
 
+        if (m_Material2DLightingBuffer && m_Material2DLightingDirty)
+        {
+            m_Material2DLightingBuffer->SetData(cmd, Buffer(&m_Material2DLightingData, sizeof(m_Material2DLightingData)));
+            m_Material2DLightingDirty = false;
+        }
+
         m_Cmd = cmd;
     }
 
@@ -438,7 +450,7 @@ namespace ignite
             m_QuadBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_QuadBatch.vertexBufferBase, bufferSize));
 
             Ref<GraphicsPipeline> gp = GetQuadPipelineForFB(framebuffer, m_FillMode);
-            nvrhi::BindingSetHandle bindingSet = GetQuadBindingSet(gp->GetBindingLayout(0), m_QuadBatch.textureSlots);
+            nvrhi::BindingSetHandle bindingSet = GetQuadBindingSet(gp->GetBindingLayout(0), m_QuadBatch.textureSlots, m_Material2DLightingBuffer);
 
             const auto graphicsState = nvrhi::GraphicsState()
                 .setPipeline(gp->GetHandle())
@@ -643,7 +655,9 @@ namespace ignite
             m_QuadBatch.vertexBufferPtr->texCoord = textureCoords[i];
             m_QuadBatch.vertexBufferPtr->tilingFactor = tilingFactor;
             m_QuadBatch.vertexBufferPtr->color = color;
+            m_QuadBatch.vertexBufferPtr->additiveColor = glm::vec4(0.0f);
             m_QuadBatch.vertexBufferPtr->texIndex = texIndex;
+            m_QuadBatch.vertexBufferPtr->materialType = MATERIAL_2D_TYPE_UNLIT;
             m_QuadBatch.vertexBufferPtr++;
         }
 
@@ -667,6 +681,11 @@ namespace ignite
 
     void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &tilingFactor)
     {
+        DrawQuad(transform, color, glm::vec4(0.0f), MATERIAL_2D_TYPE_UNLIT, texture, tilingFactor);
+    }
+
+    void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const glm::vec4 &additiveColor, Material2DType materialType, const Ref<Texture> &texture, const glm::vec2 &tilingFactor)
+    {
         if (m_QuadBatch.count >= m_QuadBatch.maxCount)
             Renderer2D::End();
 
@@ -687,12 +706,30 @@ namespace ignite
             m_QuadBatch.vertexBufferPtr->texCoord = textureCoords[i];
             m_QuadBatch.vertexBufferPtr->tilingFactor = tilingFactor;
             m_QuadBatch.vertexBufferPtr->color = color;
+            m_QuadBatch.vertexBufferPtr->additiveColor = additiveColor;
             m_QuadBatch.vertexBufferPtr->texIndex = texIndex;
+            m_QuadBatch.vertexBufferPtr->materialType = static_cast<uint32_t>(materialType);
             m_QuadBatch.vertexBufferPtr++;
         }
 
         m_QuadBatch.indexCount += 6;
         m_QuadBatch.count++;
+    }
+
+    void Renderer2D::SetPointLights2D(const std::vector<PointLight2D_GPUData> &pointLights)
+    {
+        m_Material2DLightingData.pointLightCount = std::min<uint32_t>(static_cast<uint32_t>(pointLights.size()), MAX_POINT_LIGHTS_2D);
+        for (uint32_t i = 0; i < m_Material2DLightingData.pointLightCount; ++i)
+        {
+            m_Material2DLightingData.pointLights[i] = pointLights[i];
+        }
+
+        for (uint32_t i = m_Material2DLightingData.pointLightCount; i < MAX_POINT_LIGHTS_2D; ++i)
+        {
+            m_Material2DLightingData.pointLights[i] = PointLight2D_GPUData{};
+        }
+
+        m_Material2DLightingDirty = true;
     }
 
     uint32_t Renderer2D::GetOrInsertTexture(const Ref<Texture> &texture)

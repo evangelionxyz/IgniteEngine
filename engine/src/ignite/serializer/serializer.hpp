@@ -297,6 +297,7 @@ namespace ignite
     class Project;
     class Skeleton;
     class Material;
+    class Material2D;
 
     class Serializer
     {
@@ -394,5 +395,17 @@ namespace ignite
 
     private:
         Ref<Material> m_Material;
+    };
+
+    class Material2DSerializer
+    {
+    public:
+        Material2DSerializer(const Ref<Material2D> &material);
+
+        bool Serialize(const std::filesystem::path &filepath);
+        static Ref<Material2D> Deserialize(const std::filesystem::path &filepath);
+
+    private:
+        Ref<Material2D> m_Material;
     };
 }

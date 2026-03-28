@@ -491,6 +491,7 @@ namespace ignite {
         }
 
         case AssetType::Material:
+        case AssetType::Material2D:
         case AssetType::StaticMesh:
         case AssetType::SkeletalAnimation:
         case AssetType::SkeletalMesh:

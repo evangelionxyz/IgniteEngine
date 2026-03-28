@@ -35,9 +35,31 @@
 
 #include "ignite/graphics/buffers/vertex_buffer.hpp"
 #include "ignite/graphics/buffers/index_buffer.hpp"
+#include "ignite/graphics/buffers/constant_buffer.hpp"
+#include "ignite/graphics/objects/material_2d.hpp"
+
+#include <array>
 
 namespace ignite
 {
+    constexpr uint32_t MAX_POINT_LIGHTS_2D = 32;
+
+    struct PointLight2D_GPUData
+    {
+        glm::vec4 position = glm::vec4(0.0f);
+        glm::vec4 color = glm::vec4(1.0f);
+        float radius = 0.0f;
+        float intensity = 1.0f;
+        glm::vec2 _padding = glm::vec2(0.0f);
+    };
+
+    struct Material2DLighting_GPUData
+    {
+        uint32_t pointLightCount = 0;
+        glm::vec3 _padding = glm::vec3(0.0f);
+        std::array<PointLight2D_GPUData, MAX_POINT_LIGHTS_2D> pointLights;
+    };
+
     class GraphicsPipeline;
     class DeviceManager;
     class Texture;
@@ -91,6 +113,9 @@ namespace ignite
         void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
         void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
         void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture>& texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
+        void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const glm::vec4 &additiveColor, Material2DType materialType, const Ref<Texture> &texture = nullptr, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
+
+        void SetPointLights2D(const std::vector<PointLight2D_GPUData> &pointLights);
 
         void InitQuadData();
         void InitLineData();
@@ -108,6 +133,10 @@ namespace ignite
         BatchRender<Vertex2DLine> m_LineBatch;
         BatchRender<Vertex2DCircle> m_CircleBatch;
         nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
+
+        Ref<ConstantBuffer> m_Material2DLightingBuffer;
+        Material2DLighting_GPUData m_Material2DLightingData;
+        bool m_Material2DLightingDirty = true;
     };
 }
 

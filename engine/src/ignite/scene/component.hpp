@@ -29,6 +29,7 @@
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/core/uuid.hpp"
 #include "ignite/graphics/objects/material.hpp"
+#include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/math/aabb.hpp"
@@ -59,6 +60,7 @@ namespace ignite
         { "Circle Collider 2D", CompType_CircleCollider2D },
         { "Sprite 2D", CompType_Sprite2D },
         { "Circle 2D", CompType_Circle2D },
+        { "Point Light 2D", CompType_PointLight2D },
         { "Static Mesh", CompType_StaticMesh },
         { "Skeletal Mesh", CompType_SkeletalMesh },
         { "Rigid Body", CompType_Rigidbody },
@@ -165,6 +167,7 @@ namespace ignite
             case CompType_CircleCollider2D: return "CompType_CircleCollider2D";
             case CompType_Sprite2D: return "CompType_Sprite2D";
             case CompType_Circle2D: return "CompType_Circle2D";
+            case CompType_PointLight2D: return "CompType_PointLight2D";
             case CompType_SkeletalMesh: return "CompType_SkeletalMesh";
             case CompType_StaticMesh: return "CompType_StaticMesh";
             case CompType_Rigidbody: return "CompType_Rigidbody";
@@ -336,10 +339,22 @@ namespace ignite
     {
     public:
         AssetHandle handle = AssetHandle(0); // Texture handle
+        AssetHandle materialHandle = AssetHandle(0); // Material2D handle
         glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
         glm::vec2 tilingFactor = { 1.0f, 1.0f };
 
         COMPONENT_CLASS_TYPE(CompType_Sprite2D)
+    };
+
+    class PointLight2DComponent : public IComponent
+    {
+    public:
+        glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        float radius = 5.0f;
+        float intensity = 1.0f;
+        bool enabled = true;
+
+        COMPONENT_CLASS_TYPE(CompType_PointLight2D)
     };
 
 	class Circle2DComponent : public IComponent

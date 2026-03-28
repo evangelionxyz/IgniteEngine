@@ -181,4 +181,23 @@ namespace ignite
         AssetMetaData m_AssetMetaData;
         AssetHandle m_Handle;
     };
+
+    class AssetEditorCreateEvent final : public Event
+    {
+    public:
+        AssetEditorCreateEvent(AssetType type, std::filesystem::path targetDirectory)
+            : m_Type(type), m_TargetDirectory(std::move(targetDirectory))
+        {
+        }
+
+        AssetType GetAssetType() const { return m_Type; }
+        const std::filesystem::path &GetTargetDirectory() const { return m_TargetDirectory; }
+
+        EVENT_CLASS_TYPE(AssetEditorCreate);
+		EVENT_CLASS_CATEGORY(EventCategoryApplication);
+
+    private:
+        AssetType m_Type = AssetType::Invalid;
+        std::filesystem::path m_TargetDirectory;
+    };
 }

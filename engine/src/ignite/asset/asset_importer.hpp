@@ -10,6 +10,8 @@
 
 namespace ignite {
 
+    struct TextureCreateInfo;
+
     struct FmodSound;
     class Environment;
     class GraphicsPipeline;
@@ -17,6 +19,7 @@ namespace ignite {
     class SkeletalMesh;
     class Skeleton;
     class SkeletalAnimation;
+    class Material2D;
     class Scene;
 
 	struct PendingFileLoading
@@ -43,12 +46,14 @@ namespace ignite {
         static Ref<StaticMesh> ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<SkeletalMesh> ImportSkeletalMesh(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<Material> ImportMaterial(AssetHandle handle, const AssetMetaData &metadata);
+        static Ref<Material2D> ImportMaterial2D(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<Skeleton> ImportSkeleton(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<SkeletalAnimation> ImportSkeletalAnimation(AssetHandle handle, const AssetMetaData &metadata);
 
 
         static Ref<Scene> ImportScene(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata);
+        static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata, const TextureCreateInfo &createInfo);
         static Ref<FmodSound> ImportAudio(AssetHandle handle, const AssetMetaData &metadata);
     };
 }

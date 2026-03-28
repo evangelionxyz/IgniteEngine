@@ -56,6 +56,7 @@ namespace ignite
 
         AssetImport,
         AssetEditorOpen,
+        AssetEditorCreate,
     };
 
     enum EventCategory

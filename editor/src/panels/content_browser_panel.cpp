@@ -31,6 +31,20 @@ namespace ignite
             });
         }
 
+        static void DispatchCreateAssetEditorEvent(AssetType assetType, const std::filesystem::path &targetDirectory)
+        {
+            if (assetType == AssetType::Invalid)
+            {
+                return;
+            }
+
+            Application::SubmitToMainThread([assetType, targetDirectory]()
+            {
+                AssetEditorCreateEvent createEvent(assetType, targetDirectory);
+                Application::GetInstance()->OnEvent(createEvent);
+            });
+        }
+
         static const SDL_DialogFileFilter kSkeletalMeshFilters[]
         {
             {"FBX File (.fbx)", "fbx"},
@@ -67,6 +81,11 @@ namespace ignite
         static const SDL_DialogFileFilter kMaterialFilters[]
         {
             {"Ignite Material (.ixmat)", "ixmat"}
+        };
+
+        static const SDL_DialogFileFilter kMaterial2DFilters[]
+        {
+            {"Ignite Material2D (.ixmat2d)", "ixmat2d"}
         };
     }
 
@@ -168,12 +187,36 @@ namespace ignite
 
         if (opened && isDirectory)
         {
+            std::vector<uint32_t> sortedChildNodeIndices;
+            sortedChildNodeIndices.reserve(node->children.size());
+
             for (const auto &childNodeIndex : node->children | std::views::values)
             {
                 if (childNodeIndex < m_TreeNodes.size())
                 {
-                    RenderFileTree(&m_TreeNodes[childNodeIndex]);
+                    sortedChildNodeIndices.push_back(childNodeIndex);
                 }
+            }
+
+            std::ranges::sort(sortedChildNodeIndices, [this, &assetDir](uint32_t leftIndex, uint32_t rightIndex)
+            {
+                const std::filesystem::path leftPath = assetDir / GetNodeFullpath(leftIndex);
+                const std::filesystem::path rightPath = assetDir / GetNodeFullpath(rightIndex);
+
+                const bool leftIsDirectory = std::filesystem::exists(leftPath) && std::filesystem::is_directory(leftPath);
+                const bool rightIsDirectory = std::filesystem::exists(rightPath) && std::filesystem::is_directory(rightPath);
+
+                if (leftIsDirectory != rightIsDirectory)
+                {
+                    return leftIsDirectory;
+                }
+
+                return m_TreeNodes[leftIndex].path.generic_string() < m_TreeNodes[rightIndex].path.generic_string();
+            });
+
+            for (const auto &childNodeIndex : sortedChildNodeIndices)
+            {
+                RenderFileTree(&m_TreeNodes[childNodeIndex]);
             }
             
             ImGui::TreePop();
@@ -244,10 +287,37 @@ namespace ignite
                 ImGui::BeginChild("left_item_browser", { 300.0f, 0.0f }, ImGuiChildFlags_ResizeX);
                 if (!m_TreeNodes.empty())
                 {
-                    for (auto it = m_TreeNodes.begin() + 1; it != m_TreeNodes.end(); ++it)
+                    const std::filesystem::path assetDir = Project::GetInstance()->GetAssetDirectory();
+                    std::vector<uint32_t> sortedRootNodeIndices;
+                    sortedRootNodeIndices.reserve(m_TreeNodes.size() - 1);
+
+                    for (uint32_t i = 1; i < m_TreeNodes.size(); ++i)
                     {
-                        if (it->parent == 0)
-                            RenderFileTree(&(*it));
+                        if (m_TreeNodes[i].parent == 0)
+                        {
+                            sortedRootNodeIndices.push_back(i);
+                        }
+                    }
+
+                    std::ranges::sort(sortedRootNodeIndices, [this, &assetDir](uint32_t leftIndex, uint32_t rightIndex)
+                    {
+                        const std::filesystem::path leftPath = assetDir / GetNodeFullpath(leftIndex);
+                        const std::filesystem::path rightPath = assetDir / GetNodeFullpath(rightIndex);
+
+                        const bool leftIsDirectory = std::filesystem::exists(leftPath) && std::filesystem::is_directory(leftPath);
+                        const bool rightIsDirectory = std::filesystem::exists(rightPath) && std::filesystem::is_directory(rightPath);
+
+                        if (leftIsDirectory != rightIsDirectory)
+                        {
+                            return leftIsDirectory;
+                        }
+
+                        return m_TreeNodes[leftIndex].path.generic_string() < m_TreeNodes[rightIndex].path.generic_string();
+                    });
+
+                    for (const uint32_t rootNodeIndex : sortedRootNodeIndices)
+                    {
+                        RenderFileTree(&m_TreeNodes[rootNodeIndex]);
                     }
                 }
                 ImGui::EndChild();
@@ -290,15 +360,33 @@ namespace ignite
 
                     ImGui::Columns(columnCount, nullptr, false);
 
+                    std::vector<std::filesystem::path> sortedItems;
+                    sortedItems.reserve(node->children.size());
                     for (const auto &item : node->children | std::views::keys)
+                    {
+                        sortedItems.push_back(item);
+                    }
+
+                    std::ranges::sort(sortedItems, [this](const std::filesystem::path &left, const std::filesystem::path &right)
+                    {
+                        const bool leftIsDirectory = std::filesystem::is_directory(m_CurrentDirectory / left);
+                        const bool rightIsDirectory = std::filesystem::is_directory(m_CurrentDirectory / right);
+
+                        if (leftIsDirectory != rightIsDirectory)
+                        {
+                            return leftIsDirectory;
+                        }
+
+                        return left.generic_string() < right.generic_string();
+                    });
+
+                    for (const auto &item : sortedItems)
                     {
                         std::string filenameStr = item.generic_string();
                         ImGui::PushID(filenameStr.c_str());
 
                         std::filesystem::path path = m_CurrentDirectory / item;
                         bool isDirectory = std::filesystem::is_directory(path);
-
-                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
 
                         Ref<Texture> icon;
                         if (isDirectory)
@@ -316,19 +404,33 @@ namespace ignite
                             icon = m_Icons["unknown"];
                         }
 
-                        // Calculate display size with aspect ratio
-                        float maxSize = static_cast<float>(m_ThumbnailSize);
-                        ImVec2 displaySize = CalculateThumbnailDisplaySize(icon, maxSize);
+                        // Keep a fixed clickable area and draw the image separately with preserved aspect ratio
+                        const float maxSize = static_cast<float>(m_ThumbnailSize);
+                        const ImVec2 buttonSize(maxSize, maxSize);
+                        const ImVec2 buttonMin = ImGui::GetCursorScreenPos();
+                        const ImVec2 buttonMax(buttonMin.x + buttonSize.x, buttonMin.y + buttonSize.y);
 
-                        // Center the thumbnail vertically
-                        float diff = maxSize - displaySize.y;
-                        if (diff > 0)
-                        {
-                            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + diff * 0.5f);
-                        }
+                        ImGui::InvisibleButton(item.string().c_str(), buttonSize);
+
+                        const bool isActive = ImGui::IsItemActive();
+                        const bool isHovered = ImGui::IsItemHovered();
+                        const ImU32 buttonColor = isActive
+                            ? ImGui::GetColorU32(ImGuiCol_ButtonActive)
+                            : (isHovered ? ImGui::GetColorU32(ImGuiCol_ButtonHovered) : ImGui::GetColorU32(ImGuiCol_Button));
+                        ImGui::GetWindowDrawList()->AddRectFilled(
+                            buttonMin,
+                            buttonMax,
+                            buttonColor,
+                            ImGui::GetStyle().FrameRounding);
+
+                        const ImVec2 displaySize = CalculateThumbnailDisplaySize(icon, maxSize);
+                        const ImVec2 imageMin(
+                            buttonMin.x + (maxSize - displaySize.x) * 0.5f,
+                            buttonMin.y + (maxSize - displaySize.y) * 0.5f);
+                        const ImVec2 imageMax(imageMin.x + displaySize.x, imageMin.y + displaySize.y);
 
                         ImTextureID iconId = reinterpret_cast<ImTextureID>(icon->GetHandle().Get());
-                        ImGui::ImageButton(item.string().c_str(), iconId, displaySize);
+                        ImGui::GetWindowDrawList()->AddImage(iconId, imageMin, imageMax);
 
                         if (ImGui::IsItemHovered())
                         {
@@ -409,8 +511,6 @@ namespace ignite
                         }
 
                         DragDropSource(m_CurrentDirectory / item);
-
-                        ImGui::PopStyleColor();
                         ImGui::TextWrapped("%s", filenameStr.c_str());
 
                         ImGui::NextColumn();
@@ -426,6 +526,16 @@ namespace ignite
                     {
                         if (ImGui::MenuItem("New Folder"))
                         {
+                        }
+
+                        if (ImGui::BeginMenu("Material"))
+                        {
+                            if (ImGui::MenuItem("Material2D"))
+                            {
+                                DispatchCreateAssetEditorEvent(AssetType::Material2D, m_CurrentDirectory);
+                            }
+
+                            ImGui::EndMenu();
                         }
 
                         ImGui::EndMenu();
@@ -677,6 +787,14 @@ namespace ignite
                 SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
                     Application::GetInstance()->GetWindow()->GetWindowHandle(),
                     kMaterialFilters, IM_ARRAYSIZE(kMaterialFilters),
+                    nullptr, true);
+            }
+
+            if (ImGui::MenuItem("Ignite Material2D"))
+            {
+                SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
+                    kMaterial2DFilters, IM_ARRAYSIZE(kMaterial2DFilters),
                     nullptr, true);
             }
             ImGui::EndMenu();

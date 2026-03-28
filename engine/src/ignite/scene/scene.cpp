@@ -337,6 +337,11 @@ namespace ignite
 	}
 
     template<>
+    void Scene::OnComponentAdded<PointLight2DComponent>(Entity entity, PointLight2DComponent &comp)
+    {
+    }
+
+    template<>
     void Scene::OnComponentAdded<Rigidbody2DComponent>(Entity entity, Rigidbody2DComponent &comp)
     {
     }

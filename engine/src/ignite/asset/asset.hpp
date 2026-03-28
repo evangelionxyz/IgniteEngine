@@ -54,6 +54,8 @@ namespace ignite {
         StaticMesh,
         Scene,
 
+        Material2D,
+
         FBX,
         GLTF,
     };
@@ -79,6 +81,7 @@ namespace ignite {
             case ignite::AssetType::Environment: return "Environment";
             case ignite::AssetType::FBX: return "FBX";
             case ignite::AssetType::GLTF: return "GLTF";
+            case ignite::AssetType::Material2D: return "Material2D";
             case ignite::AssetType::Invalid:
             default: return "Invalid";
         }
@@ -111,6 +114,9 @@ namespace ignite {
         
         { ".ixmat", AssetType::Material},
         { ".ixenv", AssetType::Environment},
+
+
+        { ".ixmat2d", AssetType::Material2D},
     };
 
     static AssetType AssetTypeFromString(const std::string &typeStr)
@@ -132,6 +138,7 @@ namespace ignite {
         if (typeStr == "FBX")  return AssetType::FBX;
         if (typeStr == "GLTF")  return AssetType::GLTF;
         if (typeStr == "Font")  return AssetType::Font;
+        if (typeStr == "Material2D")  return AssetType::Material2D;
         return AssetType::Invalid;
     }
 
@@ -147,6 +154,7 @@ namespace ignite {
         case AssetType::Scene: return ".ixscene";
         case AssetType::Project: return ".ixproj";
         case AssetType::Material: return ".ixmat";
+        case AssetType::Material2D: return ".ixmat2d";
         case AssetType::Environment: return ".ixenv";
         default: return ".invalid";
         }

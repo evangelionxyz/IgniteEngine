@@ -11,6 +11,8 @@
 namespace ignite
 {
   class SkeletalAnimation;
+  class Material2D;
+  class Texture;
 
 	class AssetEditorPanel : public IPanel
     {
@@ -21,9 +23,9 @@ namespace ignite
         virtual void OnEvent(Event &event) override;
 
         bool OnAssetEditorOpenEvent(AssetEditorOpenEvent &event);
+        bool OnAssetEditorCreateEvent(AssetEditorCreateEvent &event);
 
     private:
-		// Current selected asset
 		struct AssetEditorData
 		{
 			Ref<Asset> asset;
@@ -34,11 +36,25 @@ namespace ignite
 			std::string windowTitle;
 		};
 
+        struct CreateAssetRequest
+        {
+            AssetType type = AssetType::Invalid;
+            std::filesystem::path targetDirectory;
+            bool open = false;
+            char nameBuffer[256] = "NewAsset";
+            Ref<Asset> asset;
+        };
+
         bool DrawAssetEditorHeader(AssetEditorData &assetData);
         void RenderSkeletalAnimationEditor(const Ref<SkeletalAnimation> &animation);
+        void RenderMaterial2DEditor(const Ref<Material2D> &material2D);
+        void RenderTextureEditor(AssetEditorData &assetData, const Ref<Texture> &texture);
         bool SaveAsset(AssetEditorData &assetData);
+        void RenderCreateAssetPopup();
+        std::filesystem::path BuildUniqueAssetPath(const std::filesystem::path &baseDirectory, const std::string &baseName, const std::string &extension) const;
 
         std::vector<AssetEditorData> m_Assets;
+        CreateAssetRequest m_CreateRequest;
     };
 }
 

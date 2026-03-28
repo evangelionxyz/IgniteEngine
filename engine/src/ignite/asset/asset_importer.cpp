@@ -27,11 +27,12 @@ namespace ignite {
     static std::unordered_map<AssetType, std::function<Ref<Asset>(AssetHandle, const AssetMetaData &)>> s_ImportFunctions =
     {
         { AssetType::Scene, AssetImporter::ImportScene },
-        { AssetType::Texture, AssetImporter::ImportTexture },
+        { AssetType::Texture, [](AssetHandle handle, const AssetMetaData &metadata) { return AssetImporter::ImportTexture(handle, metadata); } },
         { AssetType::Audio, AssetImporter::ImportAudio },
         { AssetType::StaticMesh, AssetImporter::ImportStaticMesh },
         { AssetType::SkeletalMesh, AssetImporter::ImportSkeletalMesh },
         { AssetType::Material, AssetImporter::ImportMaterial },
+        { AssetType::Material2D, AssetImporter::ImportMaterial2D },
         { AssetType::Skeleton, AssetImporter::ImportSkeleton },
         { AssetType::SkeletalAnimation, AssetImporter::ImportSkeletalAnimation },
     };
@@ -612,6 +613,17 @@ namespace ignite {
         return asset;
     }
 
+    Ref<Material2D> AssetImporter::ImportMaterial2D(AssetHandle handle, const AssetMetaData &metadata)
+    {
+        Ref<Material2D> asset = Material2DSerializer::Deserialize(metadata.filepath);
+        if (asset)
+        {
+            asset->handle = handle;
+            asset->SetReadyFlag(true);
+        }
+        return asset;
+    }
+
     Ref<Scene> AssetImporter::ImportScene(AssetHandle handle, const AssetMetaData &metadata)
     {
         Ref<Scene> scene = SceneSerializer::Deserialize(metadata.filepath, AssetManager::GetProject());
@@ -633,8 +645,36 @@ namespace ignite {
         createInfo.keepInitialState = true; // should keep initial state
         createInfo.deferGpuCreate = true;
 
+        return ImportTexture(handle, metadata, createInfo);
+    }
+
+    Ref<Texture> AssetImporter::ImportTexture(AssetHandle handle, const AssetMetaData &metadata, const TextureCreateInfo &createInfo)
+    {
+        TextureCreateInfo importCreateInfo = createInfo;
+
+        if (importCreateInfo.format == nvrhi::Format::UNKNOWN)
+        {
+            importCreateInfo.format = nvrhi::Format::RGBA8_UNORM;
+        }
+
+        if (importCreateInfo.mipLevels == 0)
+        {
+            importCreateInfo.mipLevels = 1;
+        }
+
+        if (importCreateInfo.initialState == nvrhi::ResourceStates::Unknown)
+        {
+            importCreateInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+        }
+
         // Load texture pixel data on worker thread (no GPU operations)
-        Ref<Texture> result = Texture::Create(metadata.filepath, createInfo, nullptr);
+        Ref<Texture> result = Texture::Create(metadata.filepath, importCreateInfo, nullptr);
+        if (!result)
+        {
+            return nullptr;
+        }
+
+        result->handle = handle;
 
         // Submit GPU upload to main thread with proper synchronization
         Application::SubmitToRenderThread([texture = result]()

@@ -32,6 +32,7 @@
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/graphics/objects/material.hpp"
+#include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/animation/skeleton.hpp"
 
@@ -214,6 +215,7 @@ namespace ignite {
                     const Sprite2DComponent &comp = entity.GetComponent<Sprite2DComponent>();
                     sr.BeginMap("Sprite2D");
                     {
+                        sr.AddKeyValue("MaterialHandle", comp.materialHandle);
                         sr.AddKeyValue("Handle", comp.handle);
                         sr.AddKeyValue("Color", comp.color);
                         sr.AddKeyValue("TilingFactor", comp.tilingFactor);
@@ -233,6 +235,19 @@ namespace ignite {
 					}
 					sr.EndMap();
 				}
+
+                if (entity.HasComponent<PointLight2DComponent>())
+                {
+                    const PointLight2DComponent &comp = entity.GetComponent<PointLight2DComponent>();
+                    sr.BeginMap("PointLight2D");
+                    {
+                        sr.AddKeyValue("Color", comp.color);
+                        sr.AddKeyValue("Radius", comp.radius);
+                        sr.AddKeyValue("Intensity", comp.intensity);
+                        sr.AddKeyValue("Enabled", comp.enabled);
+                    }
+                    sr.EndMap();
+                }
 
                 // Rigidbody 2D
                 if (entity.HasComponent<Rigidbody2DComponent>())
@@ -605,6 +620,10 @@ namespace ignite {
             if (YAML::Node node = entityNode["Sprite2D"])
             {
                 Sprite2DComponent &comp = desEntity.AddComponent<Sprite2DComponent>();
+                if (node["MaterialHandle"])
+                {
+                    comp.materialHandle = AssetHandle(node["MaterialHandle"].as<uint64_t>());
+                }
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
                 comp.color = node["Color"].as<glm::vec4>();
                 comp.tilingFactor = node["TilingFactor"].as<glm::vec2>();
@@ -617,6 +636,15 @@ namespace ignite {
                 comp.color = node["Color"].as<glm::vec4>();
                 comp.thickness = node["Thickness"].as<float>();
                 comp.fade = node["Fade"].as<float>();
+            }
+
+            if (YAML::Node node = entityNode["PointLight2D"])
+            {
+                PointLight2DComponent &comp = desEntity.AddComponent<PointLight2DComponent>();
+                comp.color = node["Color"].as<glm::vec4>();
+                comp.radius = node["Radius"].as<float>();
+                comp.intensity = node["Intensity"].as<float>();
+                comp.enabled = node["Enabled"].as<bool>();
             }
 
             // Rigidbody 2D
@@ -1273,6 +1301,61 @@ namespace ignite {
             if (gpuDataNode["RoughnessFactor"]) material->gpuData.roughnessFactor = gpuDataNode["RoughnessFactor"].as<float>();
             if (gpuDataNode["OcclusionStrength"]) material->gpuData.occlusionStrength = gpuDataNode["OcclusionStrength"].as<float>();
         }
+
+        return material;
+    }
+
+    Material2DSerializer::Material2DSerializer(const Ref<Material2D> &material)
+        : m_Material(material)
+    {
+    }
+
+    bool Material2DSerializer::Serialize(const std::filesystem::path &filepath)
+    {
+        if (!m_Material)
+        {
+            return false;
+        }
+
+        Serializer sr(filepath);
+
+        sr.BeginMap();
+        sr.BeginMap("Material2D");
+        sr.AddKeyValue("Version", ENGINE_VERSION);
+        sr.AddKeyValue("Name", m_Material->name);
+        sr.AddKeyValue("TextureHandle", static_cast<uint64_t>(m_Material->textureHandle));
+        sr.AddKeyValue("BaseColor", m_Material->data.baseColor);
+        sr.AddKeyValue("AdditiveColor", m_Material->data.additiveColor);
+        sr.AddKeyValue("TilingFactor", m_Material->data.tilingFactor);
+        sr.AddKeyValue("Type", static_cast<int>(m_Material->data.type));
+        sr.EndMap();
+        sr.EndMap();
+
+        sr.Serialize(filepath);
+        return true;
+    }
+
+    Ref<Material2D> Material2DSerializer::Deserialize(const std::filesystem::path &filepath)
+    {
+        if (!std::filesystem::exists(filepath))
+        {
+            return nullptr;
+        }
+
+        YAML::Node fileNode = Serializer::Deserialize(filepath);
+        YAML::Node materialNode = fileNode["Material2D"];
+        if (!materialNode)
+        {
+            return nullptr;
+        }
+
+        Ref<Material2D> material = CreateRef<Material2D>();
+        if (materialNode["Name"]) material->name = materialNode["Name"].as<std::string>();
+        if (materialNode["TextureHandle"]) material->textureHandle = AssetHandle(materialNode["TextureHandle"].as<uint64_t>());
+        if (materialNode["BaseColor"]) material->data.baseColor = materialNode["BaseColor"].as<glm::vec4>();
+        if (materialNode["AdditiveColor"]) material->data.additiveColor = materialNode["AdditiveColor"].as<glm::vec4>();
+        if (materialNode["TilingFactor"]) material->data.tilingFactor = materialNode["TilingFactor"].as<glm::vec2>();
+        if (materialNode["Type"]) material->data.type = static_cast<Material2DType>(materialNode["Type"].as<int>());
 
         return material;
     }
