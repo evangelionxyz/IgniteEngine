@@ -87,8 +87,8 @@ namespace ignite
         auto camView = registry->view<CameraComponent>();
         for (entt::entity entity : camView)
         {
-            CameraComponent &cam = camView.get<CameraComponent>(entity);
-			cam.camera.UpdateMatrices(static_cast<float>(m_ViewportWidth), static_cast<float>(m_ViewportHeight));
+            CameraComponent &cc = camView.get<CameraComponent>(entity);
+            cc.camera.UpdateProjection(static_cast<float>(m_ViewportWidth), static_cast<float>(m_ViewportHeight));
         }
 
         // play on start audio
@@ -200,6 +200,14 @@ namespace ignite
                 UpdateTransformRecursive(Entity { ent, this }, glm::mat4(1.0f));
             }
         }
+
+        auto cameraView = registry->view<TransformComponent, CameraComponent>();
+        for (auto entity : cameraView)
+        {
+            auto &tr = cameraView.get<TransformComponent>(entity);
+            auto &cc = cameraView.get<CameraComponent>(entity);
+            cc.camera.SetTransform(tr.GetWorldMatrix());
+        }
     }
 
     void Scene::UpdateTransformRecursive(Entity entity, const glm::mat4 &parentWorldTransform)
@@ -219,17 +227,6 @@ namespace ignite
             skew,
             perspective);
 
-        if (entity.HasComponent<CameraComponent>())
-        {
-            CameraComponent &cam = entity.GetComponent<CameraComponent>();
-            if (cam.primary)
-            {
-                cam.camera.position = transform.translation;
-                cam.camera.view = glm::translate(glm::mat4(1.0f), transform.translation) * glm::toMat4(transform.rotation);
-                cam.camera.view = glm::inverse(cam.camera.view);
-            }
-        }
-        
         transform.dirty = false;
 
         for (const UUID &childUUID : id.children)
@@ -243,6 +240,7 @@ namespace ignite
     {
         timeInSeconds += deltaTime;
         m_StepFrame++;
+    
         UpdateTransforms(deltaTime);
     }
 
@@ -250,13 +248,6 @@ namespace ignite
     {
         this->m_ViewportWidth = width;
         this->m_ViewportHeight = height;
-        
-        const auto &camView = registry->view<CameraComponent>();
-        for (entt::entity entity : camView)
-        {
-            CameraComponent &cam = camView.get<CameraComponent>(entity);
-			cam.camera.UpdateMatrices(static_cast<float>(width), static_cast<float>(height));
-        }
     }
 
     void Scene::WriteBuffer(nvrhi::ICommandList* cmd)
@@ -412,8 +403,8 @@ namespace ignite
 		auto camView = registry->view<CameraComponent>();
 		for (entt::entity entity : camView)
 		{
-			CameraComponent &cam = camView.get<CameraComponent>(entity);
-			cam.camera.UpdateMatrices(static_cast<float>(m_ViewportWidth), static_cast<float>(m_ViewportHeight));
+			CameraComponent &cc = camView.get<CameraComponent>(entity);
+            cc.camera.UpdateProjection(static_cast<float>(m_ViewportWidth), static_cast<float>(m_ViewportHeight));
 		}
     }
 }

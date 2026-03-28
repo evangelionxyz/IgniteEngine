@@ -52,18 +52,19 @@ namespace ignite
         auto width = static_cast<float>(app->GetCreateInfo().width);
         auto height = static_cast<float>(app->GetCreateInfo().height);
 
-        m_Camera = EditorCamera("ScenePanel-Editor Camera");
+        m_EditorCamera = EditorCamera("ScenePanel-Editor Camera");
 
-		m_Camera.target = glm::vec3(0.0f);
-		m_Camera.distance = 5.5f;
-		m_Camera.yaw = glm::radians(90.0f);
-		m_Camera.pitch = 0.0f;
+		m_EditorCamera.SetTarget(glm::vec3(0.0f));
+		m_EditorCamera.SetDistance(5.5f);
+		m_EditorCamera.yaw = glm::radians(90.0f);
+		m_EditorCamera.pitch = 0.0f;
 
-		m_Camera.UpdateSphericalPosition();
-		m_Camera.UpdateMatrices(width, height);
+		m_EditorCamera.UpdateSphericalPosition();
+        m_EditorCamera.UpdateView();
+		m_EditorCamera.UpdateProjection(width, height);
         
-        m_Camera2D = m_Camera;
-        m_Camera3D = m_Camera;
+        m_EditorCamera2D = m_EditorCamera;
+        m_EditorCamera3D = m_EditorCamera;
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
@@ -91,10 +92,14 @@ namespace ignite
             FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
             FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget} // Main Color
         };
-        m_SceneViewportRT = RenderTarget::Create(rtCreateInfo, "[SceneViewportRT]");
-        m_SceneCameraRT = RenderTarget::Create(rtCreateInfo, "[SceneCameraRT]");
-        m_UIViewportRT = RenderTarget::Create(rtCreateInfo, "[UIViewportRT]");
-        m_UICameraRT = RenderTarget::Create(rtCreateInfo, "[UICameraRT]");
+
+        // Edit RT
+        m_ViewportEditRT.scene = RenderTarget::Create(rtCreateInfo, "[Edit Viewport Scene RT]");
+        m_ViewportEditRT.ui = RenderTarget::Create(rtCreateInfo, "[Edit Viewport UI RT]");
+        
+        // Game RT
+        m_ViewportGameRT.scene = RenderTarget::Create(rtCreateInfo, "[Game Viewport Scene RT]");
+        m_ViewportGameRT.ui = RenderTarget::Create(rtCreateInfo, "[Game Viewport UI RT]");
 
         // Composite render target
         {
@@ -105,8 +110,11 @@ namespace ignite
                 FramebufferAttachments{ "[Composite Color Attachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget} // Main Color
             };
 
-            m_CompositeViewportRT = RenderTarget::Create(rtCreateInfo, "[CompositeViewportRT]");
-            m_CompositeCameraRT = RenderTarget::Create(rtCreateInfo, "[CompositeCameraRT]");
+            // Edit RT
+            m_ViewportEditRT.composite = RenderTarget::Create(rtCreateInfo, "[Edit Viewport Composite RT]");
+            
+            // Game RT
+            m_ViewportGameRT.composite = RenderTarget::Create(rtCreateInfo, "[Game Viewport Composite RT]");
         }
     }
 
@@ -130,7 +138,8 @@ namespace ignite
             RenderInspector();
         }
         
-        RenderViewport();
+        RenderSceneEditViewport();
+        RenderSceneGameViewport();
     }
 
     void ScenePanel::OnUpdate(float deltaTime)
@@ -1036,8 +1045,11 @@ namespace ignite
                         CameraComponent before = c;
                         if (ImGui::Selectable(projectionTypeStr[i], &isSelected))
                         {
+                            const auto w = static_cast<float>(m_Scene->GetViewportWidth());
+                            const auto h = static_cast<float>(m_Scene->GetViewportHeight());
                             c.camera.projectionType = static_cast<ProjectionType>(i);
-                            c.camera.UpdateMatrices(static_cast<float>(m_Scene->GetViewportWidth()), static_cast<float>(m_Scene->GetViewportHeight()));
+                            c.camera.UpdateView();
+                            c.camera.UpdateProjection(w, h);
                             CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
                         }
 
@@ -1061,7 +1073,7 @@ namespace ignite
                 }
                 else
                 {
-                    ImGui::DragFloat("Zoom", &c.camera.distance, 0.025f, 0.0f, FLT_MAX);
+                    ImGui::DragFloat("Ortho Size", &c.camera.orthoSize, 0.025f, 0.0f, FLT_MAX);
                     if (ImGui::IsItemActivated())
                         s_CameraBefore = c;
                     if (ImGui::IsItemEdited())
@@ -1097,7 +1109,8 @@ namespace ignite
 
                 if (c.dirty)
                 {
-                    c.camera.UpdateMatrices(static_cast<float>(m_Scene->GetViewportWidth()), static_cast<float>(m_Scene->GetViewportHeight()));
+                    c.camera.UpdateView();
+                    c.camera.UpdateProjection(static_cast<float>(m_Scene->GetViewportWidth()), static_cast<float>(m_Scene->GetViewportHeight()));
                     c.dirty = false;
                 }
             });
@@ -1617,7 +1630,7 @@ namespace ignite
         ImGui::End();
     }
 
-    void ScenePanel::RenderViewport()
+    void ScenePanel::RenderSceneEditViewport()
     {
         ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 
@@ -1633,8 +1646,6 @@ namespace ignite
         m_IsFocused = ImGui::IsWindowFocused();
         m_IsHovered = ImGui::IsWindowHovered();
 
-		ImGui::TextUnformatted("Operation");
-		ImGui::SameLine();
 		static std::array<const char *, 3> kGizmoOperationLabels = { "Translate", "Rotate", "Scale" };
 		int operationIndex = 0;
 		switch (m_Gizmo.GetOperation())
@@ -1651,8 +1662,6 @@ namespace ignite
 		}
 		ImGui::SameLine();
 
-		ImGui::TextUnformatted("Mode");
-		ImGui::SameLine();
 		static std::array<const char *, 2> kGizmoModeLabels = { "Local", "World" };
 		int modeIndex = m_Gizmo.GetMode() == ImGuizmo::LOCAL ? 0 : 1;
 		ImGui::SetNextItemWidth(90.0f);
@@ -1663,7 +1672,7 @@ namespace ignite
 		}
 
         ImGui::SameLine();
-        ImGui::TextUnformatted("Snapping");
+        ImGui::TextUnformatted("Snap");
 		ImGui::SameLine();
         ImGui::SetNextItemWidth(90.0f);
         ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValue, 0.05f, 0.0f, 100.0f);
@@ -1734,8 +1743,8 @@ namespace ignite
         const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
         const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
 
-        m_ViewportData.rect.min = { canvasPos.x, canvasPos.y };
-        m_ViewportData.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
+        m_ViewportEditRT.rect.min = { canvasPos.x, canvasPos.y };
+        m_ViewportEditRT.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
 
         // Mouse position in screen space
         const ImVec2 &mousePos = ImGui::GetMousePos();
@@ -1757,7 +1766,7 @@ namespace ignite
         }
 
         // Render scene texture to imgui
-        ImTextureID sceneImage = (ImTextureID)m_CompositeViewportRT->GetColorAttachment(0)->GetHandle().Get(); // Current composite RT
+        ImTextureID sceneImage = (ImTextureID)m_ViewportEditRT.composite->GetColorAttachment(0)->GetHandle().Get(); // Current composite RT
         ImGui::Image(sceneImage, canvasSize);
         if (ImGui::BeginDragDropTarget())
         {
@@ -1782,11 +1791,11 @@ namespace ignite
         }
 
         GizmoInfo gizmoInfo;
-        gizmoInfo.cameraView = m_Camera.view;
-        gizmoInfo.cameraProjection = m_Camera.projection;
-        gizmoInfo.cameraType = m_Camera.projectionType;
+        gizmoInfo.cameraView = m_EditorCamera.GetView();
+        gizmoInfo.cameraProjection = m_EditorCamera.GetProjection();
+        gizmoInfo.cameraType = m_EditorCamera.projectionType;
         gizmoInfo.snapValue = m_ViewportData.snapValue;
-        gizmoInfo.viewRect = m_ViewportData.rect;
+        gizmoInfo.viewRect = m_ViewportEditRT.rect;
 
         m_Gizmo.SetInfo(gizmoInfo);
 
@@ -1940,135 +1949,64 @@ namespace ignite
             }
         }
 
-        // Preview camera
-        if (Entity cameraEntity = GetSelectedEntity())
-        {
-            if (cameraEntity.HasComponent<CameraComponent>())
-            {
-                const glm::uvec2 previewRtSize = m_CompositeCameraRT->GetSize();
-                ICamera previewCamera = cameraEntity.GetComponent<CameraComponent>().camera;
-                if (auto sceneRenderer = m_Scene->GetSceneRenderer(); sceneRenderer && previewRtSize.x > 0u && previewRtSize.y > 0u)
-                {
-                    const float aspect = static_cast<float>(previewRtSize.x) / static_cast<float>(previewRtSize.y);
-                    const float padding = 8.0f;
-                    const float width = 256.0f;
-                    const float height = width / aspect;
-
-                    sceneRenderer->RenderTo(&previewCamera,
-                        GetSceneCameraRT(),
-                        GetUICameratRT(),
-                        GetCompositeCameraRT());
-
-                    ImGui::SetCursorPos({ canvasSize.x - width - padding, canvasSize.y - height + padding });
-                    ImTextureID previewImage = (ImTextureID)m_CompositeCameraRT->GetColorAttachment(0)->GetHandle().Get();
-                    ImGui::Image(previewImage, {width, height});
-                }
-            }
-        }
-
         ImGui::End();
     }
 
-    void ScenePanel::ResizeFramebuffer(uint32_t width, uint32_t height)
+	void ScenePanel::RenderSceneGameViewport()
+	{
+        if (ImGui::Begin("Game"))
+        {
+			// Calculating Scene Viewport location
+			const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
+			const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
+
+			m_ViewportGameRT.rect.min = { canvasPos.x, canvasPos.y };
+            m_ViewportGameRT.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
+
+			// Preview camera
+            if (Entity cameraEntity = m_Scene->GetPrimaryCamera())
+            {
+				ICamera primaryCam = cameraEntity.GetComponent<CameraComponent>().camera;
+				ImTextureID previewImage = (ImTextureID)m_ViewportGameRT.composite->GetColorAttachment(0)->GetHandle().Get();
+				ImGui::Image(previewImage, canvasSize);
+            }
+            else
+            {
+                ImGui::Text("No Camera");
+            }
+
+        }
+        ImGui::End();
+	}
+
+	void ScenePanel::ViewportEditResize(uint32_t width, uint32_t height)
     {
-        m_SceneViewportRT->Resize(width, height);
-        m_CompositeViewportRT->Resize(width, height);
-        m_UIViewportRT->Resize(width, height);
+        // Resize framebuffers
+        m_ViewportEditRT.scene->Resize(width, height);
+        m_ViewportEditRT.ui->Resize(width, height);
+        m_ViewportEditRT.composite->Resize(width, height);
 
-        m_UICameraRT->Resize(width, height);
-        m_SceneCameraRT->Resize(width, height);
-        m_CompositeCameraRT->Resize(width, height);
+        // Update camera view
+        m_EditorCamera.UpdateProjection(static_cast<float>(width), static_cast<float>(height));
+    }
 
+	void ScenePanel::ViewportGameResize(uint32_t width, uint32_t height)
+	{
+        // Resize framebuffers
+		m_ViewportGameRT.scene->Resize(width, height);
+		m_ViewportGameRT.ui->Resize(width, height);
+		m_ViewportGameRT.composite->Resize(width, height);
+        
+        // Update camera view
         if (m_Scene)
         {
-            m_Scene->Resize(width, height);
-            m_Camera.UpdateMatrices(static_cast<float>(width), static_cast<float>(height));
+            if (Entity cameraEntity = m_Scene->GetPrimaryCamera())
+            {
+                CameraComponent &cameraComp = cameraEntity.GetComponent<CameraComponent>();
+                cameraComp.camera.UpdateProjection(static_cast<float>(width), static_cast<float>(height));
+            }
         }
-    }
-
-    void ScenePanel::UISettings()
-    {
-        // ImGui::Text("Mouse Pos: %.2f, %.2f Entity: (%d)", m_ViewportData.mousePos.x, m_ViewportData.mousePos.y, static_cast<entt::entity>(GetSelectedEntity()));
-
-        if (ImGui::TreeNodeEx("Camera", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            static std::array<const char *, 2> cameraModeStr = { "Orthographic", "Perspective" };
-            const char *currentCameraModeStr = cameraModeStr[static_cast<i32>(m_Camera.projectionType)];
-            if (ImGui::BeginCombo("Mode", currentCameraModeStr))
-            {
-                for (size_t i = 0; i < std::size(cameraModeStr); ++i)
-                {
-                    bool isSelected = strcmp(currentCameraModeStr, cameraModeStr[i]) == 0;
-                    if (ImGui::Selectable(cameraModeStr[i], isSelected))
-                    {
-                        // Set projection type
-                        m_Camera.projectionType = static_cast<ProjectionType>(i);
-
-                        if (m_Camera.projectionType == ProjectionType::Orthographic)
-                        {
-                            if (m_Camera2D)
-                            {
-                                // Save
-                                m_Camera3D = m_Camera;
-
-                                m_Camera = *m_Camera2D;
-                                m_Camera.projectionType = ProjectionType::Orthographic;
-                            }
-                        }
-                        else if (m_Camera.projectionType == ProjectionType::Perspective)
-                        {
-                            if (m_Camera3D)
-                            {
-                                // Save camera
-                                m_Camera2D = m_Camera;
-
-                                m_Camera = *m_Camera3D;
-                                m_Camera.projectionType = ProjectionType::Perspective;
-                            }
-                        }
-
-                        // Recalculate matrices
-                        const glm::vec2 &size = m_ViewportData.rect.GetSize();
-                        m_Camera.UpdateMatrices(size.x, size.y);
-                    }
-
-                    if (isSelected)
-                    {
-                        ImGui::SetItemDefaultFocus();
-                    }
-                }
-                ImGui::EndCombo();
-            }
-
-            ImGui::DragFloat3("Position", &m_Camera.position.x, 0.025f);
-
-            glm::vec2 yawPitch = { m_Camera.yaw, m_Camera.pitch };
-            if (ImGui::DragFloat2("Yaw/Pitch", &yawPitch.x, 0.025f, -89.0f, 89.0f))
-            {
-                m_Camera.yaw = yawPitch.x;
-                m_Camera.pitch = yawPitch.y;
-            }
-
-            if (m_Camera.projectionType == ProjectionType::Perspective)
-            {
-                ImGui::DragFloat("FOV", &m_Camera.fov, 0.25f, 20.0f, 120.0f);
-                ImGui::DragFloat("Distance", &m_Camera.distance, 0.025f);
-
-                const glm::vec2 &size = m_ViewportData.rect.GetSize();
-                m_Camera.UpdateMatrices(size.x, size.y);
-            }
-            else if (m_Camera.projectionType == ProjectionType::Orthographic)
-            {
-                if (ImGui::DragFloat("Ortho size", &m_Camera.orthoSize, 0.025f))
-                {
-                    const glm::vec2 &size = m_ViewportData.rect.GetSize();
-                    m_Camera.UpdateMatrices(size.x, size.y);
-                }
-            }
-
-            ImGui::TreePop();
-        }
-    }
+	}
 
     template<typename T, typename UIFunction>
     void ScenePanel::RenderComponent(const std::string &name, Entity entity, UIFunction uiFunction, bool allowedToRemove)
@@ -2121,7 +2059,7 @@ namespace ignite
         }
     }
 
-    void ScenePanel::OnEvent(Event &event)
+	void ScenePanel::OnEvent(Event &event)
     {
         EventDispatcher dispatcher(event);
 
@@ -2134,7 +2072,7 @@ namespace ignite
     {
         if (m_IsHovered)
         {
-			m_Camera.mouse.scroll = { event.GetXOffset(), event.GetYOffset() };
+			m_EditorCamera.mouse.scroll = { event.GetXOffset(), event.GetYOffset() };
         }
 
         return false;
@@ -2172,8 +2110,8 @@ namespace ignite
             const glm::vec2 &camMoveAxis = j->GetLeftAxis();
             const glm::vec2 &l2r2 = j->GetTriggerAxis();
 
-            m_Camera.yaw += deltaTime * camViewAxis.x;
-            m_Camera.pitch += deltaTime * camViewAxis.y;
+            m_EditorCamera.yaw += deltaTime * camViewAxis.x;
+            m_EditorCamera.pitch += deltaTime * camViewAxis.y;
 
             // m_Camera.position += m_Camera.GetForwardDirection() * deltaTime * m_CameraData.moveSpeed * -camMoveAxis.y;
             // m_Camera.position += m_Camera.GetRightDirection() * deltaTime * m_CameraData.moveSpeed * camMoveAxis.x;
@@ -2181,15 +2119,16 @@ namespace ignite
             LOG_INFO(j->ToString());
         }
 
-		m_Camera.UpdateMouseState();
+		m_EditorCamera.UpdateMouseState();
 		if (m_IsHovered && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered())
 		{
-			m_Camera.HandleOrbit(deltaTime);
-			m_Camera.HandlePan(deltaTime);
-			m_Camera.HandleZoom(deltaTime);
+			m_EditorCamera.HandleOrbit(deltaTime);
+			m_EditorCamera.HandlePan(deltaTime);
+			m_EditorCamera.HandleZoom(deltaTime);
 		}
-		m_Camera.ApplyInertia(deltaTime);
-		m_Camera.UpdateCameraPosition();
+		m_EditorCamera.ApplyInertia(deltaTime);
+		m_EditorCamera.UpdateCameraPosition();
+        m_EditorCamera.UpdateView();
     }
 
     void ScenePanel::DestroyEntity(Entity entity)

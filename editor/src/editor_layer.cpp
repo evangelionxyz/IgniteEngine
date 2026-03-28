@@ -3,7 +3,6 @@
 #include "editor_layer.hpp"
 #include "panels/scene_panel.hpp"
 #include "panels/content_browser_panel.hpp"
-#include "panels/material_panel.hpp"
 #include "panels/asset_importer_panel.hpp"
 
 #include "ignite/core/command.hpp"
@@ -70,12 +69,10 @@ namespace ignite
 
         m_ScenePanel = new ScenePanel("Scene Panel", this);
         m_ContentBrowserPanel = new ContentBrowserPanel("Content Browser", this);
-        m_MaterialsPanel = new MaterialPanel("Material Panel", this);
         m_AssetImporterPanel = new AssetImporterPanel("AssetImporter Panel", this);
 
         app->PushLayer(m_ScenePanel);
         app->PushLayer(m_ContentBrowserPanel);
-        app->PushLayer(m_MaterialsPanel);
         app->PushLayer(m_AssetImporterPanel);
 
         // create render target framebuffer
@@ -166,7 +163,7 @@ namespace ignite
                 Entity entity = m_ScenePanel->GetSelectedEntity();
                 if (entity.IsValid())
                 {
-                    m_ScenePanel->GetViewportCamera().target = entity.GetComponent<TransformComponent>().translation;
+                    m_ScenePanel->GetViewportCamera().SetTarget(entity.GetComponent<TransformComponent>().translation);
                 }
                 break;
             }
@@ -261,80 +258,113 @@ namespace ignite
         if (!m_ActiveScene)
             return;
 
-        // Perform Resize (use integer sizes to avoid continuous resizing from fractional values)
-        const glm::uvec2 framebufferSize = m_ScenePanel->GetSceneViewportRT()->GetSize();
-        const glm::vec2 currentViewportSize = m_ScenePanel->GetViewportSize();
-        const glm::uvec2 desiredSize
+        // Resize Edit Viewport Framebuffer
         {
-            static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.x))),
-            static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.y)))
-        };
-
-        const glm::uvec2 sceneSize
-        {
-            m_ActiveScene->GetViewportWidth(),
-            m_ActiveScene->GetViewportHeight()
-        };
-
-        const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
-        const bool sceneNeedsResize = sceneSize.x != desiredSize.x || sceneSize.y != desiredSize.y;
-
-        if (desiredSize.x > 0u && desiredSize.y > 0u)
-        {
-            if (framebufferNeedsResize)
+            const glm::uvec2 framebufferSize = m_ScenePanel->GetViewportEditCompRT()->GetSize();
+            const glm::vec2 currentViewportSize = m_ScenePanel->GetViewportEditSize();
+            const glm::uvec2 desiredSize
             {
-                m_ScenePanel->ResizeFramebuffer(desiredSize.x, desiredSize.y);
-            }
+                static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.x))),
+                static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.y)))
+            };
 
-            if (sceneNeedsResize)
+            const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
+            if (framebufferNeedsResize && desiredSize.x > 0u && desiredSize.y > 0u)
             {
-                m_ActiveScene->Resize(desiredSize.x, desiredSize.y);
+                m_ScenePanel->ViewportEditResize(desiredSize.x, desiredSize.y);
             }
         }
 
-        // Scene Render
+        // Resize Game Viewport Framebuffer
+        {
+            const glm::uvec2 framebufferSize = m_ScenePanel->GetViewportGameCompRT()->GetSize();
+            const glm::vec2 currentViewportSize = m_ScenePanel->GetViewportGameSize();
+            const glm::uvec2 desiredSize
+            {
+                static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.x))),
+                static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.y)))
+            };
+
+            const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
+            if (framebufferNeedsResize && desiredSize.x > 0u && desiredSize.y > 0u)
+            {
+                m_ScenePanel->ViewportGameResize(desiredSize.x, desiredSize.y);
+            }
+        }
+
+        // Render to Edit Viewport
         switch (m_Data.sceneState)
         {
         case State::SceneSimulate:
         case State::SceneEdit:
         {
-            m_SceneRenderer->RenderTo(&m_ScenePanel->GetViewportCamera(),
-                m_ScenePanel->GetSceneViewportRT(),
-                m_ScenePanel->GetUIViewportRT(),
-                m_ScenePanel->GetCompositeViewportRT());
+            ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
+            if (const glm::uvec2 editSize = m_ScenePanel->GetViewportEditCompRT()->GetSize(); editSize.x > 0u && editSize.y > 0u)
+            {
+                editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
+            }
+
+            m_SceneRenderer->RenderTo(editCamera,
+                m_ScenePanel->GetViewportEditSceneRT(),
+                m_ScenePanel->GetViewportEditUIRT(),
+                m_ScenePanel->GetViewportEditCompRT());
             break;
         }
         case State::ScenePlay:
         {
-            ICamera *camera = &m_ScenePanel->GetViewportCamera();
+            ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
             if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
             {
-				camera = &primaryCam.GetComponent<CameraComponent>().camera;
+                editCamera = &primaryCam.GetComponent<CameraComponent>().camera;
             }
-			m_SceneRenderer->RenderTo(camera,
-                m_ScenePanel->GetSceneViewportRT(),
-                m_ScenePanel->GetUIViewportRT(),
-                m_ScenePanel->GetCompositeViewportRT());
+
+            if (const glm::uvec2 editSize = m_ScenePanel->GetViewportEditCompRT()->GetSize(); editSize.x > 0u && editSize.y > 0u)
+            {
+                editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
+            }
+
+            m_SceneRenderer->RenderTo(editCamera,
+                m_ScenePanel->GetViewportEditSceneRT(),
+                m_ScenePanel->GetViewportEditUIRT(),
+                m_ScenePanel->GetViewportEditCompRT());
             break;
         }
         }
-		
+
+        // Prevent shared camera constant-buffer hazards between back-to-back viewport renders.
+        m_Device->waitForIdle();
+
+        // Render to Game Viewport
+        if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
+        {
+            ICamera *gameCamera = &primaryCam.GetComponent<CameraComponent>().camera;
+            if (const glm::uvec2 gameSize = m_ScenePanel->GetViewportGameCompRT()->GetSize(); gameSize.x > 0u && gameSize.y > 0u)
+            {
+                gameCamera->UpdateProjection(static_cast<float>(gameSize.x), static_cast<float>(gameSize.y));
+            }
+
+            m_SceneRenderer->RenderTo(gameCamera,
+                m_ScenePanel->GetViewportGameSceneRT(),
+                m_ScenePanel->GetViewportGameUIRT(),
+                m_ScenePanel->GetViewportGameCompRT());
+        }
+
         m_Cmd->open();
         // Create staging texture for read-back
         if (m_Data.isPickingEntity && false) // FIXME: No mouse picking
         {
-            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(1)->GetHandle()->getDesc();
+            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetViewportEditCompRT()->GetColorAttachment(1)->GetHandle()->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_MousePickingStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            m_Cmd->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(1)->GetHandle(), nvrhi::TextureSlice());
+            m_Cmd->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetViewportEditCompRT()->GetColorAttachment(1)->GetHandle(), nvrhi::TextureSlice());
         }
 
         if (m_Data.takeScreenshot)
         {
-            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(0)->GetHandle()->getDesc();
+            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetViewportEditCompRT()->GetColorAttachment(0)->GetHandle()->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_ScreenshotStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            m_Cmd->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(0)->GetHandle(), nvrhi::TextureSlice());
+            m_Cmd->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetViewportEditCompRT()->GetColorAttachment(0)->GetHandle(), nvrhi::TextureSlice());
         }
 
         m_Cmd->close();
@@ -352,8 +382,8 @@ namespace ignite
                 size_t packedStride = m_ScreenshotWidth * 4;
                 m_ScreenshotPixelData.resize(m_ScreenshotHeight * packedStride);
 
-                const uint8_t* src = static_cast<const uint8_t*>(mappedData);
-                uint8_t* dst = m_ScreenshotPixelData.data();
+                const uint8_t *src = static_cast<const uint8_t *>(mappedData);
+                uint8_t *dst = m_ScreenshotPixelData.data();
 
                 for (int y = 0; y < m_ScreenshotHeight; ++y)
                 {
@@ -390,7 +420,7 @@ namespace ignite
                 {
                     if (uint32_t eId = static_cast<uint32_t>(e); eId == m_Data.hoveredEntity)
                     {
-                        Entity entity { e, m_ActiveScene.get() };
+                        Entity entity{ e, m_ActiveScene.get() };
                         m_ScenePanel->SetSelectedEntity(entity);
                         found = true;
                         break;
@@ -481,16 +511,6 @@ namespace ignite
                 if (ImGui::MenuItem("Screenshot", nullptr, false, m_ActiveProject != nullptr))
                 {
                     m_Data.takeScreenshot = true;
-                }
-
-                ImGui::EndMenu();
-            }
-
-            if (ImGui::BeginMenu("Window"))
-            {
-                if (ImGui::MenuItem("Materials", nullptr, m_MaterialsPanel->IsOpen(), m_ActiveProject != nullptr))
-                {
-                    m_MaterialsPanel->SetOpen(!m_MaterialsPanel->IsOpen());
                 }
 
                 ImGui::EndMenu();
@@ -1297,8 +1317,6 @@ namespace ignite
         ImGui::Begin("Settings", &m_Data.settingsWindow);
 
         constexpr ImGuiTreeNodeFlags treeFlags = 0;
-
-        m_ScenePanel->UISettings();
 
         if (ImGui::TreeNodeEx("Pipeline", treeFlags))
         {

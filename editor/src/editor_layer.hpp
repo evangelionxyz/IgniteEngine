@@ -20,7 +20,6 @@ namespace ignite
     class ScenePanel;
     class AssetImporterPanel;
     class ContentBrowserPanel;
-    class MaterialPanel;
 
     class EditorLayer final : public Layer
     {
@@ -101,7 +100,6 @@ namespace ignite
         void UISettings();
 
         ScenePanel *m_ScenePanel;
-        MaterialPanel *m_MaterialsPanel;
         AssetImporterPanel *m_AssetImporterPanel;
         ContentBrowserPanel *m_ContentBrowserPanel;
 

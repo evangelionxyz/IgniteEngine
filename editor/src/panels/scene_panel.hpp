@@ -32,9 +32,13 @@ namespace ignite
 
         void OnUpdate(float deltaTime) override;
         void OnGuiRender() override;
-        void RenderViewport();
 
-        void ResizeFramebuffer(uint32_t width, uint32_t height);
+        // Viewports
+        void RenderSceneEditViewport();
+        void RenderSceneGameViewport();
+
+        void ViewportEditResize(uint32_t width, uint32_t height);
+        void ViewportGameResize(uint32_t width, uint32_t height);
 
         void OnEvent(Event &event);
         bool OnMouseScrolledEvent(MouseScrolledEvent &event);
@@ -46,7 +50,7 @@ namespace ignite
 
         bool IsGizmoBeingUse() const { return m_Data.isGizmoBeingUse; }
         
-        EditorCamera &GetViewportCamera() { return m_Camera; }
+        EditorCamera &GetViewportCamera() { return m_EditorCamera; }
 
         const glm::vec2 &GetViewportMousePos() const { return m_ViewportData.mousePos; }
 
@@ -55,7 +59,6 @@ namespace ignite
         void RenderEntityNode(Entity entity);
         
         void RenderInspector();
-        void UISettings();
         void UpdateCameraInput(float deltaTime);
         void DestroyEntity(Entity entity);
         void DuplicateSelectedEntity();
@@ -64,25 +67,26 @@ namespace ignite
         Entity SetSelectedEntity(Entity entity);
         Entity GetSelectedEntity();
 
-        glm::vec2 GetViewportSize() const { return m_ViewportData.rect.GetSize(); }
+        glm::vec2 GetViewportEditSize() const { return m_ViewportEditRT.rect.GetSize(); }
+        glm::vec2 GetViewportGameSize() const { return m_ViewportGameRT.rect.GetSize(); }
 
         const std::unordered_map<UUID, Entity> &GetSelectedEntities() { return m_SelectedEntities; }
 
-        const Ref<RenderTarget> &GetSceneViewportRT() { return m_SceneViewportRT; }
-        const Ref<RenderTarget> &GetCompositeViewportRT() { return m_CompositeViewportRT; }
-        const Ref<RenderTarget> &GetUIViewportRT() { return m_UIViewportRT; }
-        const Ref<RenderTarget> &GetUICameratRT() { return m_UICameraRT; }
-        
-        const Ref<RenderTarget> &GetSceneCameraRT() { return m_SceneCameraRT; }
-        const Ref<RenderTarget> &GetCompositeCameraRT() { return m_CompositeCameraRT; }
+        const Ref<RenderTarget> &GetViewportEditSceneRT() { return m_ViewportEditRT.scene; }
+        const Ref<RenderTarget> &GetViewportEditUIRT() { return m_ViewportEditRT.ui; }
+        const Ref<RenderTarget> &GetViewportEditCompRT() { return m_ViewportEditRT.composite; }
 
+		const Ref<RenderTarget> &GetViewportGameSceneRT() { return m_ViewportGameRT.scene; }
+		const Ref<RenderTarget> &GetViewportGameUIRT() { return m_ViewportGameRT.ui; }
+		const Ref<RenderTarget> &GetViewportGameCompRT() { return m_ViewportGameRT.composite; }
+        
         template<typename T, typename UIFunction>
         void RenderComponent(const std::string &name, Entity entity, UIFunction uiFunction, bool allowedToRemove = true);
 
     private:
-        EditorCamera m_Camera;
-        std::optional<EditorCamera> m_Camera2D;
-        std::optional<EditorCamera> m_Camera3D;
+        EditorCamera m_EditorCamera;
+        std::optional<EditorCamera> m_EditorCamera2D;
+        std::optional<EditorCamera> m_EditorCamera3D;
 
         Ref<Scene> m_Scene;
         Gizmo m_Gizmo;
@@ -91,19 +95,20 @@ namespace ignite
 
         static UUID m_TrackingSelectedEntity;
 
-        // For viewport
-        Ref<RenderTarget> m_SceneViewportRT;
-        Ref<RenderTarget> m_UIViewportRT;
-        Ref<RenderTarget> m_CompositeViewportRT;
-        
-        // For camera preview
-        Ref<RenderTarget> m_SceneCameraRT;
-        Ref<RenderTarget> m_CompositeCameraRT;
-        Ref<RenderTarget> m_UICameraRT;
+        struct ViewportRenderTarget
+        {
+            Ref<RenderTarget> scene;
+            Ref<RenderTarget> ui;
+            Ref<RenderTarget> composite;
+
+            Rect rect;
+        };
+
+        ViewportRenderTarget m_ViewportEditRT;
+        ViewportRenderTarget m_ViewportGameRT;
 
 		struct ViewportData
 		{
-			Rect rect = { 0, 0, 1, 1 };
 			glm::vec2 mousePos = glm::vec2(0.0f);
             float snapValue = 0.05f;
 			bool wantMouseDragging = false;

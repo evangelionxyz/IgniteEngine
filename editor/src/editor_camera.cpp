@@ -27,9 +27,9 @@ namespace ignite
 
 	void EditorCamera::UpdateSphericalPosition()
 	{
-		position.x = target.x + distance * cos(pitch) * cos(yaw);
-		position.y = target.y + distance * sin(pitch);
-		position.z = target.z + distance * cos(pitch) * sin(yaw);
+		position.x = m_Target.x + m_Distance * cos(pitch) * cos(yaw);
+		position.y = m_Target.y + m_Distance * sin(pitch);
+		position.z = m_Target.z + m_Distance * cos(pitch) * sin(yaw);
 	}
 
 	void EditorCamera::HandleOrbit(float deltaTime)
@@ -50,29 +50,29 @@ namespace ignite
 					// apply zoom velocity for smooth zooming
 					if (controls.enableInertia)
 					{
-						zoomVelocity += delta.y;
+						m_ZoomVelocity += delta.y;
 					}
 					else
 					{
 						// direct zoom for imediate response
-						distance -= delta.y;
-						distance = glm::clamp(distance, controls.minDistance, controls.maxDistance);
+						m_Distance -= delta.y;
+						m_Distance = glm::clamp(m_Distance, controls.minDistance, controls.maxDistance);
 					}
 				}
 
 				// apply zoom velocity
-				if (controls.enableInertia && abs(zoomVelocity) > 0.001f)
+				if (controls.enableInertia && abs(m_ZoomVelocity) > 0.001f)
 				{
-					distance -= zoomVelocity * deltaTime;
-					distance = glm::clamp(distance, controls.minDistance, controls.maxDistance);
+					m_Distance -= m_ZoomVelocity * deltaTime;
+					m_Distance = glm::clamp(m_Distance, controls.minDistance, controls.maxDistance);
 					
 					// dampen zoom velocity
-					zoomVelocity *= controls.zoomDamping;
+					m_ZoomVelocity *= controls.zoomDamping;
 
 					// stop very small velocities
-					if (abs(zoomVelocity) < 0.001f)
+					if (abs(m_ZoomVelocity) < 0.001f)
 					{
-						zoomVelocity = 0.0f;
+						m_ZoomVelocity = 0.0f;
 					}
 				}
 			}
@@ -81,8 +81,8 @@ namespace ignite
 				// apply mouse movement to angular velocity for inertia
 				if (controls.enableInertia)
 				{
-					angularVelocity.x += delta.x * controls.mouseSensitivity;
-					angularVelocity.y += delta.y * controls.mouseSensitivity;
+					m_AngularVelocity.x += delta.x * controls.mouseSensitivity;
+					m_AngularVelocity.y += delta.y * controls.mouseSensitivity;
 				}
 
 				// directly update angles for immediate response
@@ -106,14 +106,14 @@ namespace ignite
 			const glm::vec3 upVector = GetUpDirection();
 
 			// pan in the camera's right vector and up vector
-			const float panSpeed = controls.panSensitivity * distance;
+			const float panSpeed = controls.panSensitivity * m_Distance;
 			const glm::vec3 panVector = rightVector * (-delta.x * panSpeed) + upVector * (delta.y * panSpeed);
 
 			// apply pan to target
-			target += panVector;
+			m_Target += panVector;
 			if (controls.enableInertia)
 			{
-				panVelocity = delta * controls.panSensitivity;
+				m_PanVelocity = delta * controls.panSensitivity;
 			}
 		}
 	}
@@ -146,15 +146,15 @@ namespace ignite
 			// Apply zoom velocity for smooth zooming
 			if (controls.enableInertia)
 			{
-				zoomVelocity += wheelDelta * controls.zoomSensitivity;
+				m_ZoomVelocity += wheelDelta * controls.zoomSensitivity;
 			}
 			else
 			{
 				if (projectionType == ProjectionType::Perspective)
 				{
 					// Direct zoom for immediate response
-					distance -= wheelDelta * controls.zoomSensitivity;
-					distance = glm::clamp(distance, controls.minDistance, controls.maxDistance);
+					m_Distance -= wheelDelta * controls.zoomSensitivity;
+					m_Distance = glm::clamp(m_Distance, controls.minDistance, controls.maxDistance);
 				}
 				else if (projectionType == ProjectionType::Orthographic)
 				{
@@ -163,19 +163,20 @@ namespace ignite
 
 					if (this->width > 0.0f && this->height > 0.0f)
 					{
-						UpdateMatrices(this->width, this->height);
+						UpdateView();
+						UpdateProjection(this->width, this->height);
 					}
 				}
 			}
 		}
 
 		// Apply zoom velocity
-		if (controls.enableInertia && abs(zoomVelocity) > 0.001f)
+		if (controls.enableInertia && abs(m_ZoomVelocity) > 0.001f)
 		{
 			if (projectionType == ProjectionType::Perspective)
 			{
-				distance -= zoomVelocity * deltaTime * 10.0f;
-				distance = glm::clamp(distance, controls.minDistance, controls.maxDistance);
+				m_Distance -= m_ZoomVelocity * deltaTime * 10.0f;
+				m_Distance = glm::clamp(m_Distance, controls.minDistance, controls.maxDistance);
 			}
 			else if (projectionType == ProjectionType::Orthographic)
 			{
@@ -184,17 +185,18 @@ namespace ignite
 				
 				if (this->width > 0.0f && this->height > 0.0f)
 				{
-					UpdateMatrices(this->width, this->height);
+					UpdateView();
+					UpdateProjection(this->width, this->height);
 				}
 			}
 
 			// Dampen zoom velocity
-			zoomVelocity *= controls.zoomDamping;
+			m_ZoomVelocity *= controls.zoomDamping;
 
 			// Stop very small velocities
-			if (abs(zoomVelocity) < 0.001f)
+			if (abs(m_ZoomVelocity) < 0.001f)
 			{
-				zoomVelocity = 0.0f;
+				m_ZoomVelocity = 0.0f;
 			}
 		}
 	}
@@ -202,49 +204,92 @@ namespace ignite
 	void EditorCamera::ApplyInertia(float deltaTime)
 	{
 		// apply angular intertia
-		if (glm::length(angularVelocity) > 0.001f)
+		if (glm::length(m_AngularVelocity) > 0.001f)
 		{
-			yaw += angularVelocity.x * deltaTime;
-			pitch += angularVelocity.y * deltaTime;
+			yaw += m_AngularVelocity.x * deltaTime;
+			pitch += m_AngularVelocity.y * deltaTime;
 			pitch = glm::clamp(pitch, controls.minPitch, controls.maxPitch);
 
 			// dampen angular velocity
-			angularVelocity *= controls.inertiaDamping;
+			m_AngularVelocity *= controls.inertiaDamping;
 
 			// stop very small velocities
-			if (glm::length(angularVelocity) < 0.001f)
+			if (glm::length(m_AngularVelocity) < 0.001f)
 			{
-				angularVelocity = glm::vec2(0.0f);
+				m_AngularVelocity = glm::vec2(0.0f);
 			}
 		}
 
 		// apply pan inertia
-		if (glm::length(panVelocity) > 0.001f)
+		if (glm::length(m_PanVelocity) > 0.001f)
 		{
 			const glm::vec3 right = GetRightDirection();
 			const glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
-			const float panSpeed = distance;
-			const glm::vec3 panVector = right * (-panVelocity.x * panSpeed) + worldUp * (panVelocity.y * panSpeed);
+			const float panSpeed = m_Distance;
+			const glm::vec3 panVector = right * (-m_PanVelocity.x * panSpeed) + worldUp * (m_PanVelocity.y * panSpeed);
 
-			target += panVector * deltaTime;
+			m_Target += panVector * deltaTime;
 
 			// dampen pan velocity
-			panVelocity *= controls.inertiaDamping;
+			m_PanVelocity *= controls.inertiaDamping;
 
 			// stop very small velocities
-			if (glm::length(panVelocity) < 0.001f)
+			if (glm::length(m_PanVelocity) < 0.001f)
 			{
-				panVelocity = glm::vec2(0.0f);
+				m_PanVelocity = glm::vec2(0.0f);
 			}
 		}
 	}
 
 	void EditorCamera::UpdateCameraPosition()
 	{
-		// update camera position based on spherical coordinates
 		UpdateSphericalPosition();
-
-		view = glm::lookAt(position, target, { 0.0f, 1.0f, 0.0f });
 	}
+
+	void EditorCamera::UpdateView()
+	{
+		m_View = glm::lookAt(position, m_Target, { 0.0f, 1.0f, 0.0f });
+	}
+
+	void EditorCamera::UpdateProjection(float width, float height)
+	{
+		this->width = width;
+		this->height = height;
+
+		const float aspectRatio = width / height;
+
+		switch (projectionType)
+		{
+		case ProjectionType::Orthographic:
+		{
+			const float halfH = orthoSize * 0.5f;
+			const float halfW = halfH * aspectRatio;
+			m_Projection = glm::orthoZO(-halfW, halfW, -halfH, halfH, nearPlane, farPlane);
+			break;
+		}
+		case ProjectionType::Perspective:
+		default:
+		{
+			m_Projection = glm::perspectiveZO(glm::radians(fov), aspectRatio, nearPlane, farPlane);
+			break;
+		}
+		}
+	}
+
+	glm::vec3 EditorCamera::GetUpDirection() const
+	{
+		return glm::normalize(glm::cross(GetRightDirection(), GetForwardDirection()));
+	}
+
+	glm::vec3 EditorCamera::GetRightDirection() const
+	{
+		return glm::normalize(glm::cross(GetForwardDirection(), { 0.0f, 1.0f, 0.0f }));
+	}
+
+	glm::vec3 EditorCamera::GetForwardDirection() const
+	{
+		return glm::normalize(m_Target - position);
+	}
+
 }
