@@ -495,6 +495,7 @@ namespace ignite {
         case AssetType::StaticMesh:
         case AssetType::SkeletalAnimation:
         case AssetType::SkeletalMesh:
+        case AssetType::SpriteSheet:
         {
             asset = AssetImporter::Import(handle, getterMetadata);
             

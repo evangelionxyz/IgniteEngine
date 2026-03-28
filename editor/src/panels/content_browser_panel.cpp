@@ -528,6 +528,11 @@ namespace ignite
                         {
                         }
 
+                        if (ImGui::MenuItem("Sprite Sheet"))
+                        {
+							DispatchCreateAssetEditorEvent(AssetType::SpriteSheet, m_CurrentDirectory);
+                        }
+
                         if (ImGui::BeginMenu("Material"))
                         {
                             if (ImGui::MenuItem("Material2D"))

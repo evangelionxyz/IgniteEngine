@@ -819,7 +819,7 @@ namespace ignite
     {
         if (m_ActiveProject)
         {
-            SaveScene();
+            // SaveScene();
 
             const auto &info = m_ActiveProject->GetInfo();
             ProjectSerializer sr(m_ActiveProject.get());

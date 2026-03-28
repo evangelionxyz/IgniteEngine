@@ -14,4 +14,19 @@ namespace ignite
 	{
       return glm::inverse(m_Transform);
 	}
+
+	float SceneCamera::GetAspectRatioValue() const
+	{
+		switch (m_AspectRatioPreset)
+		{
+		case AspectRatioPreset::Ratio16x9: return 16.0f / 9.0f;
+		case AspectRatioPreset::Ratio16x10: return 16.0f / 10.0f;
+		case AspectRatioPreset::Ratio4x3: return 4.0f / 3.0f;
+		case AspectRatioPreset::Ratio21x9: return 21.0f / 9.0f;
+		case AspectRatioPreset::Ratio1x1: return 1.0f;
+		case AspectRatioPreset::Free:
+		default:
+			return 0.0f;
+		}
+	}
 }

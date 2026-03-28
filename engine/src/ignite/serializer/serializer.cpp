@@ -200,7 +200,9 @@ namespace ignite {
                     sr.BeginMap("Camera");
                     {
                         int projectionType = static_cast<int>(comp.camera.projectionType);
+                        int aspectRatioPreset = static_cast<int>(comp.camera.GetAspectRatioPreset());
                         sr.AddKeyValue("ProjectionType", projectionType);
+                        sr.AddKeyValue("AspectRatioPreset", aspectRatioPreset);
                         sr.AddKeyValue("NearClip", comp.camera.nearPlane);
                         sr.AddKeyValue("FarClip", comp.camera.farPlane);
                         sr.AddKeyValue("Fov", comp.camera.fov);
@@ -610,6 +612,10 @@ namespace ignite {
             {
                 CameraComponent &comp = desEntity.AddComponent<CameraComponent>();
                 comp.camera.projectionType = static_cast<ProjectionType>(node["ProjectionType"].as<int>());
+                if (node["AspectRatioPreset"])
+                {
+                    comp.camera.SetAspectRatioPreset(static_cast<SceneCamera::AspectRatioPreset>(node["AspectRatioPreset"].as<int>()));
+                }
                 comp.camera.nearPlane = node["NearClip"].as<float>();
                 comp.camera.farPlane = node["FarClip"].as<float>();
                 comp.camera.fov = node["Fov"].as<float>();
@@ -1359,4 +1365,5 @@ namespace ignite {
 
         return material;
     }
+
 }

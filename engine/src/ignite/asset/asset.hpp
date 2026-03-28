@@ -153,6 +153,7 @@ namespace ignite {
         case AssetType::SkeletalAnimation: return ".ixanim";
         case AssetType::Scene: return ".ixscene";
         case AssetType::Project: return ".ixproj";
+        case AssetType::SpriteSheet: return ".ixsp";
         case AssetType::Material: return ".ixmat";
         case AssetType::Material2D: return ".ixmat2d";
         case AssetType::Environment: return ".ixenv";

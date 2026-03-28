@@ -13,6 +13,7 @@ namespace ignite
   class SkeletalAnimation;
   class Material2D;
   class Texture;
+  class SpriteSheet;
 
 	class AssetEditorPanel : public IPanel
     {
@@ -33,6 +34,7 @@ namespace ignite
 			AssetHandle handle;
 			bool isOpen = true;
             bool requestFocus = false;
+            bool showUnsavedClosePopup = false;
 			std::string windowTitle;
 		};
 
@@ -49,6 +51,7 @@ namespace ignite
         void RenderSkeletalAnimationEditor(const Ref<SkeletalAnimation> &animation);
         void RenderMaterial2DEditor(const Ref<Material2D> &material2D);
         void RenderTextureEditor(AssetEditorData &assetData, const Ref<Texture> &texture);
+        void RenderSpriteSheetEditor(const Ref<SpriteSheet> &spriteSheet);
         bool SaveAsset(AssetEditorData &assetData);
         void RenderCreateAssetPopup();
         std::filesystem::path BuildUniqueAssetPath(const std::filesystem::path &baseDirectory, const std::string &baseName, const std::string &extension) const;

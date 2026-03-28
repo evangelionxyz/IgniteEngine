@@ -408,4 +408,5 @@ namespace ignite
     private:
         Ref<Material2D> m_Material;
     };
+
 }

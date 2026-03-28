@@ -524,7 +524,6 @@ namespace ignite
                         }
                         ImGui::EndCombo();
                     }
-
                     if (ImGui::ColorEdit4("Base Color", &material2D->data.baseColor.x))
                     {
                         material2D->SetDirtyFlag(true);
@@ -1050,6 +1049,29 @@ namespace ignite
                             c.camera.projectionType = static_cast<ProjectionType>(i);
                             c.camera.UpdateView();
                             c.camera.UpdateProjection(w, h);
+                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                        }
+
+                        if (isSelected)
+                        {
+                            ImGui::SetItemDefaultFocus();
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+
+                static const char *aspectRatioLabels[] = { "Free", "16:9", "16:10", "4:3", "21:9", "1:1" };
+                int aspectRatioIndex = static_cast<int>(c.camera.GetAspectRatioPreset());
+                if (ImGui::BeginCombo("Aspect Ratio", aspectRatioLabels[aspectRatioIndex]))
+                {
+                    for (int i = 0; i < IM_ARRAYSIZE(aspectRatioLabels); ++i)
+                    {
+                        const bool isSelected = (aspectRatioIndex == i);
+                        CameraComponent before = c;
+                        if (ImGui::Selectable(aspectRatioLabels[i], isSelected))
+                        {
+                            c.camera.SetAspectRatioPreset(static_cast<SceneCamera::AspectRatioPreset>(i));
+                            c.dirty = true;
                             CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
                         }
 
@@ -1960,18 +1982,46 @@ namespace ignite
 			const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
 			const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
 
-			m_ViewportGameRT.rect.min = { canvasPos.x, canvasPos.y };
-            m_ViewportGameRT.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
-
 			// Preview camera
             if (Entity cameraEntity = m_Scene->GetPrimaryCamera())
             {
-				ICamera primaryCam = cameraEntity.GetComponent<CameraComponent>().camera;
-				ImTextureID previewImage = (ImTextureID)m_ViewportGameRT.composite->GetColorAttachment(0)->GetHandle().Get();
-				ImGui::Image(previewImage, canvasSize);
+                CameraComponent &cameraComp = cameraEntity.GetComponent<CameraComponent>();
+
+                ImVec2 imagePos = canvasPos;
+                ImVec2 imageSize = canvasSize;
+
+                const float safeCanvasW = glm::max(canvasSize.x, 1.0f);
+                const float safeCanvasH = glm::max(canvasSize.y, 1.0f);
+                const float canvasAspect = safeCanvasW / safeCanvasH;
+
+                float targetAspect = canvasAspect;
+                if (!cameraComp.camera.IsFreeAspect())
+                {
+                    targetAspect = glm::max(cameraComp.camera.GetAspectRatioValue(), 0.0001f);
+                }
+
+                if (canvasAspect > targetAspect)
+                {
+                    imageSize.x = safeCanvasH * targetAspect;
+                    imagePos.x += (safeCanvasW - imageSize.x) * 0.5f;
+                }
+                else
+                {
+                    imageSize.y = safeCanvasW / targetAspect;
+                    imagePos.y += (safeCanvasH - imageSize.y) * 0.5f;
+                }
+
+                m_ViewportGameRT.rect.min = { imagePos.x, imagePos.y };
+                m_ViewportGameRT.rect.max = { imagePos.x + imageSize.x, imagePos.y + imageSize.y };
+
+                ImTextureID previewImage = (ImTextureID)m_ViewportGameRT.composite->GetColorAttachment(0)->GetHandle().Get();
+                ImGui::SetCursorScreenPos(imagePos);
+                ImGui::Image(previewImage, imageSize);
             }
             else
             {
+                m_ViewportGameRT.rect.min = { canvasPos.x, canvasPos.y };
+                m_ViewportGameRT.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
                 ImGui::Text("No Camera");
             }
 

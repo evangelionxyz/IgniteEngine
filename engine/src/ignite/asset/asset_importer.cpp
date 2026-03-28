@@ -17,6 +17,7 @@
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/scene/scene.hpp"
+#include "ignite/scene/sprite_sheet.h"
 
 #include <mutex>
 #include <condition_variable>
@@ -33,6 +34,7 @@ namespace ignite {
         { AssetType::SkeletalMesh, AssetImporter::ImportSkeletalMesh },
         { AssetType::Material, AssetImporter::ImportMaterial },
         { AssetType::Material2D, AssetImporter::ImportMaterial2D },
+        { AssetType::SpriteSheet, AssetImporter::ImportSpriteSheet },
         { AssetType::Skeleton, AssetImporter::ImportSkeleton },
         { AssetType::SkeletalAnimation, AssetImporter::ImportSkeletalAnimation },
     };
@@ -47,8 +49,27 @@ namespace ignite {
         {
             return s_ImportFunctions.at(metadataCopy.type)(handle, metadataCopy);
         }
-
         return nullptr;
+	}
+
+
+    Ref<SpriteSheet> AssetImporter::ImportSpriteSheet(AssetHandle handle, const AssetMetaData &metadata)
+    {
+        if (!std::filesystem::exists(metadata.filepath))
+        {
+            LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
+            return nullptr;
+        }
+
+        Ref<SpriteSheet> spriteSheet = SpriteSheet::Deserialize(metadata.filepath);
+        if (spriteSheet)
+        {
+            spriteSheet->handle = handle;
+            spriteSheet->SetReadyFlag(true);
+            spriteSheet->SetDirtyFlag(false);
+        }
+
+        return spriteSheet;
     }
 
     void AssetImporter::ImportAsync(AssetHandle handle, const AssetMetaData &metadata, std::function<void(Ref<Asset>, AssetHandle)> callback)
