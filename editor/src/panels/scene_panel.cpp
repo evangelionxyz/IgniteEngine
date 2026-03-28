@@ -787,6 +787,8 @@ namespace ignite
 							ImGui::PushID(meshIndex++);
 
 							// Mesh instance header
+
+#if 0
 							std::string meshLabel = "Mesh: " + m->GetName();
 							bool meshTreeOpen = ImGui::TreeNodeEx(meshLabel.c_str(),
 								ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
@@ -904,6 +906,7 @@ namespace ignite
 								ImGui::Unindent(8.0f);
 								ImGui::TreePop();
 							}
+#endif
 
 							ImGui::PopID();
 							ImGui::Spacing();

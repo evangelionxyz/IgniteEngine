@@ -6,6 +6,7 @@
 #include "ignite/graphics/gpu_upload_sync.hpp"
 
 #include "ignite/core/input/asset_import_event.hpp"
+#include "ignite/core/input/app_event.hpp"
 
 #include <format>
 #include <algorithm>
@@ -16,6 +17,20 @@ namespace ignite
 {
     namespace
     {
+        static void DispatchOpenAssetEditorEvent(AssetHandle handle, const AssetMetaData &metadata)
+        {
+            if (handle == AssetHandle(0) || metadata.type == AssetType::Invalid)
+            {
+                return;
+            }
+
+            Application::SubmitToMainThread([handle, metadata]()
+            {
+                AssetEditorOpenEvent openEvent(handle, metadata);
+                Application::GetInstance()->OnEvent(openEvent);
+            });
+        }
+
         static const SDL_DialogFileFilter kSkeletalMeshFilters[]
         {
             {"FBX File (.fbx)", "fbx"},
@@ -60,6 +75,8 @@ namespace ignite
     {
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         
+        auto app = Application::GetInstance();
+
         nvrhi::CommandListHandle cmd = device->createCommandList();
         cmd->open();
         TextureCreateInfo createInfo;
@@ -70,7 +87,10 @@ namespace ignite
         m_Icons["unknown"] = Texture::Create("resources/ui/ic_file.png", createInfo, cmd);
 
         cmd->close();
-        Application::SubmitWorkerCommandList(cmd);
+        app->SubmitWorkerCommandList(cmd);
+
+        m_AssetEditorPanel = new AssetEditorPanel("Animation Panel", editor);
+        app->PushLayer(m_AssetEditorPanel);
     }
 
 	ContentBrowserPanel::~ContentBrowserPanel()
@@ -125,15 +145,24 @@ namespace ignite
 
         DragDropSource(fullPath);
 
-        if (ImGui::IsItemHovered())
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
         {
-            if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+            if (isDirectory)
             {
-                if (isDirectory)
-                {
-                    m_BackwardPathStack.push(m_CurrentDirectory);
-                    m_SelectedFileTree = m_CurrentDirectory = fullPath;
-                }
+                m_BackwardPathStack.push(m_CurrentDirectory);
+                m_SelectedFileTree = m_CurrentDirectory = fullPath;
+            }
+            else
+            {
+                auto *project = m_EditorLayer->GetActiveProject().get();
+                if (!project)
+                    return;
+
+                const std::filesystem::path relativeAssetPath = project->GetAssetRelativeFilepath(fullPath);
+                auto &assetManager = project->GetAssetManager();
+                AssetHandle handle = assetManager.GetAssetHandle(relativeAssetPath);
+                AssetMetaData metadata = assetManager.GetMetaData(handle);
+                DispatchOpenAssetEditorEvent(handle, metadata);
             }
         }
 
@@ -310,11 +339,35 @@ namespace ignite
                                     m_BackwardPathStack.push(m_CurrentDirectory);
                                     m_CurrentDirectory = path;
                                 }
+                                else if (m_EditorLayer && m_EditorLayer->GetActiveProject())
+                                {
+                                    auto *project = m_EditorLayer->GetActiveProject().get();
+                                    const std::filesystem::path relativeAssetPath = project->GetAssetRelativeFilepath(path);
+                                    auto &assetManager = project->GetAssetManager();
+
+                                    AssetHandle handle = assetManager.GetAssetHandle(relativeAssetPath);
+                                    AssetMetaData metadata = assetManager.GetMetaData(handle);
+                                    DispatchOpenAssetEditorEvent(handle, metadata);
+                                }
                             }
                         }
 
                         if (ImGui::BeginPopupContextItem())
                         {
+                            if (!isDirectory && ImGui::MenuItem("Open in Asset Editor"))
+                            {
+                                if (m_EditorLayer && m_EditorLayer->GetActiveProject())
+                                {
+                                    auto *project = m_EditorLayer->GetActiveProject().get();
+                                    const std::filesystem::path relativeAssetPath = project->GetAssetRelativeFilepath(path);
+                                    auto &assetManager = project->GetAssetManager();
+
+                                    AssetHandle handle = assetManager.GetAssetHandle(relativeAssetPath);
+                                    AssetMetaData metadata = assetManager.GetMetaData(handle);
+                                    DispatchOpenAssetEditorEvent(handle, metadata);
+                                }
+                            }
+
                             if (ImGui::MenuItem("Open"))
                             {
                                 if (isDirectory)
@@ -329,7 +382,6 @@ namespace ignite
                                     std::system(command.c_str());
                                 }
                             }
-
 
                             if (ImGui::MenuItem("Import"))
                             {
@@ -838,7 +890,9 @@ namespace ignite
 		{
 			if (!std::filesystem::is_directory(filepath))
 			{
-				AssetHandle handle = Project::GetInstance()->GetAssetManager().GetAssetHandle(filepath);
+                Project *project = Project::GetInstance();
+                const std::filesystem::path relativeAssetPath = project ? project->GetAssetRelativeFilepath(filepath) : filepath;
+                AssetHandle handle = project ? project->GetAssetManager().GetAssetHandle(relativeAssetPath) : AssetHandle(0);
 				if (handle != AssetHandle(0))
 				{
 					ImGui::SetDragDropPayload("content_browser_item", &handle, sizeof(AssetHandle));

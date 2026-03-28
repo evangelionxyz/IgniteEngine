@@ -7,13 +7,15 @@
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/graphics/texture.hpp"
 
+// Asset panel
+#include "asset_editor_panel.hpp"
+
 #include <filesystem>
 #include <stack>
 #include <map>
 
 namespace ignite
 {
-
     class Project;
     class EditorLayer;
 
@@ -82,6 +84,8 @@ namespace ignite
 
         std::vector<FileTreeNode> m_TreeNodes;
         std::queue<PendingFileLoading> m_PendingAssetLoading;
+
+        AssetEditorPanel *m_AssetEditorPanel;
 
         int m_ThumbnailSize = 64;
         int m_LastThumbnailSize = 64;

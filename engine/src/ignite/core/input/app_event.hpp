@@ -24,6 +24,7 @@
 #pragma once
 
 #include "event.hpp"
+#include "ignite/asset/asset.hpp"
 
 #include <vector>
 #include <sstream>
@@ -160,5 +161,24 @@ namespace ignite
 
     private:
         float m_ScaleX, m_ScaleY;
+    };
+
+    class AssetEditorOpenEvent final : public Event
+    {
+    public:
+        AssetEditorOpenEvent(AssetHandle handle, AssetMetaData metadata)
+            : m_Handle(handle), m_AssetMetaData(metadata)
+        {
+        }
+
+        AssetHandle GetAssetHandle() { return m_Handle; }
+        AssetMetaData &GetAssetMetaData() { return m_AssetMetaData; }
+
+		EVENT_CLASS_TYPE(AssetEditorOpen);
+		EVENT_CLASS_CATEGORY(EventCategoryApplication);
+
+    private:
+        AssetMetaData m_AssetMetaData;
+        AssetHandle m_Handle;
     };
 }

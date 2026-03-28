@@ -663,10 +663,12 @@ namespace ignite
                 anim->channels[channelName] = channel;
             }
 
-            uint64_t skeletonHandle = 0;
-            ReadRaw(inFile, &skeletonHandle);
-
-            anim->SetSkeletonHandle(UUID(skeletonHandle));
+            if (inFile.peek() != EOF)
+            {
+                uint64_t skeletonHandle = 0;
+                ReadRaw(inFile, &skeletonHandle);
+                anim->SetSkeletonHandle(UUID(skeletonHandle));
+            }
 
             inFile.close();
 

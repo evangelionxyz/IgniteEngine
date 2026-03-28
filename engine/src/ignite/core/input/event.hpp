@@ -55,6 +55,7 @@ namespace ignite
         MouseScrolled,
 
         AssetImport,
+        AssetEditorOpen,
     };
 
     enum EventCategory
