@@ -399,8 +399,27 @@ namespace ignite
                         // Wait for rendering to complete
                         {
                             std::unique_lock<std::mutex> lock(m_FrameMutex);
-                            m_FrameCV.wait(lock, [this] { return m_RenderComplete.load(); });
+
+                            while (!m_RenderComplete.load())
+                            {
+                                const bool signaled = m_FrameCV.wait_for(lock, std::chrono::milliseconds(5), [this] { return m_RenderComplete.load(); });
+                                if (signaled)
+                                    break;
+
+                                lock.unlock();
+                                if (m_CreateInfo.useAudio)
+                                {
+                                    FmodAudio::Update(0.0f);
+                                }
+                                lock.lock();
+                            }
+
                             m_RenderComplete = false;
+                        }
+
+                        if (m_CreateInfo.useGui && m_ImGuiLayer)
+                        {
+                            m_ImGuiLayer->RenderPlatformWindows();
                         }
                         
                         // Present on main thread

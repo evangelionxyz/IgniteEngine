@@ -1053,9 +1053,15 @@ namespace ignite
                 {
                     nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
                     nvrhi::CommandListHandle cmd = device->createCommandList();
-                    cmd->open();
-                    loadedTexture->SetData(cmd, 4);
-                    cmd->close();
+
+                    {
+                        std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                        cmd->open();
+                        cmd->beginMarker("Content browser thumbnails creation");
+                        loadedTexture->SetData(cmd, 4);
+                        cmd->endMarker();
+                        cmd->close();
+                    }
                     
                     Application::SubmitWorkerCommandList(cmd, [this, loadedTexture, capturedPath]()
                     {

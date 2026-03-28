@@ -75,6 +75,7 @@ namespace ignite
 
         void BeginFrame();
         void EndFrame(nvrhi::IFramebuffer* framebuffer);
+        void RenderPlatformWindows();
 
         void PollEvent(const SDL_Event &event);
 

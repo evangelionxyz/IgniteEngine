@@ -180,6 +180,7 @@ namespace ignite
     void Window::PollEvents(const SDL_Event &event)
     {
 		DeviceParameters &deviceParams = m_DeviceManager->GetDeviceParameters();
+        const SDL_WindowID mainWindowId = SDL_GetWindowID(m_Window);
         switch (event.type)
         {
         case SDL_EVENT_QUIT:
@@ -190,6 +191,9 @@ namespace ignite
 
         case SDL_EVENT_WINDOW_RESIZED:
         {
+            if (event.window.windowID != mainWindowId)
+                break;
+
             WindowResizeEvent e(event.window.data1, event.window.data2);
             m_Callback(e);
 
@@ -209,6 +213,9 @@ namespace ignite
         }
         case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
         {
+            if (event.window.windowID != mainWindowId)
+                break;
+
             FramebufferResizeEvent e(event.window.data1, event.window.data2);
             m_Callback(e);
 
@@ -225,24 +232,36 @@ namespace ignite
         }
         case SDL_EVENT_WINDOW_MAXIMIZED:
         {
+            if (event.window.windowID != mainWindowId)
+                break;
+
             WindowMaximizedEvent e(true);
             m_Callback(e);
 			break;
         }
         case SDL_EVENT_WINDOW_MINIMIZED:
         {
+            if (event.window.windowID != mainWindowId)
+                break;
+
             WindowMinimizedEvent e(true);
             m_Callback(e);
             break;
         }
         case SDL_EVENT_WINDOW_RESTORED:
         {
+            if (event.window.windowID != mainWindowId)
+                break;
+
             WindowMinimizedEvent event(false);
             m_Callback(event);
             break;
 		}
         case SDL_EVENT_WINDOW_DESTROYED:
         {
+            if (event.window.windowID != mainWindowId)
+                break;
+
             WindowCloseEvent e;
             m_Callback(e);
             break;
@@ -262,12 +281,18 @@ namespace ignite
         }
         case SDL_EVENT_TEXT_INPUT:
         {
+            if (event.text.windowID != mainWindowId)
+                break;
+
 			/*KeyTypedEvent e(std::string(event.text.text));
 			m_Callback(e);*/
             break;
         }
         case SDL_EVENT_KEY_DOWN:
         {
+            if (event.key.windowID != mainWindowId)
+                break;
+
             Input::SetModifier(KeyMod::Shift, event.key.mod & SDL_KMOD_SHIFT);
             Input::SetModifier(KeyMod::Control, event.key.mod & SDL_KMOD_CTRL);
             Input::SetModifier(KeyMod::LeftAlt, event.key.mod & SDL_KMOD_LALT);
@@ -293,6 +318,9 @@ namespace ignite
         }
         case SDL_EVENT_KEY_UP:
         {
+            if (event.key.windowID != mainWindowId)
+                break;
+
             Input::SetModifier(KeyMod::Shift, event.key.mod& SDL_KMOD_SHIFT);
             Input::SetModifier(KeyMod::Control, event.key.mod& SDL_KMOD_CTRL);
             Input::SetModifier(KeyMod::LeftAlt, event.key.mod& SDL_KMOD_LALT);
@@ -310,6 +338,9 @@ namespace ignite
         }
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         {
+           if (event.button.windowID != mainWindowId)
+                break;
+
 			Input::SetMouseButton(event.button.button, true);
             MouseButtonPressedEvent e(event.button.button);
             m_Callback(e);
@@ -317,6 +348,9 @@ namespace ignite
         }
         case SDL_EVENT_MOUSE_BUTTON_UP:
         {
+            if (event.button.windowID != mainWindowId)
+                break;
+
             Input::SetMouseButton(event.button.button, false);
             MouseButtonReleasedEvent e(event.button.button);
             m_Callback(e);
@@ -324,12 +358,18 @@ namespace ignite
         }
         case SDL_EVENT_MOUSE_WHEEL:
         {
+            if (event.wheel.windowID != mainWindowId)
+                break;
+
             MouseScrolledEvent e(event.wheel.x, event.wheel.y);
             m_Callback(e);
             break;
 		}
         case SDL_EVENT_MOUSE_MOTION:
         {
+          if (event.motion.windowID != mainWindowId)
+                break;
+
 			Input::SetMousePosition((int)event.motion.x, (int)event.motion.y);
             MouseMovedEvent e((int)event.motion.x, (int)event.motion.y);
             m_Callback(e);
