@@ -330,8 +330,8 @@ namespace ignite {
             }
             catch (const std::exception& e)
             {
-                LOG_ERROR("[Asset Manager] Failed to import asset {}: {}", 
-                    static_cast<uint64_t>(handle), e.what());
+                LOG_ERROR("[Asset Manager] Failed to import asset {} \"{}\": {}", 
+                    static_cast<uint64_t>(handle), metadata.filepath.generic_string(), e.what());
             }
             
             // Remove from loading set

@@ -899,18 +899,18 @@ namespace ignite
                     LOG_TRACE(" Loaded embedded texture");
 
                     Application::SubmitToRenderThread([texture]()
-                        {
-                            nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
-                            cmd->open();
-                            texture->SetData(cmd, 4);
-                            texture->SetReadyFlag(false);
-                            cmd->close();
+                    {
+                        nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
+                        cmd->open();
+                        texture->SetData(cmd, 4);
+                        texture->SetReadyFlag(false);
+                        cmd->close();
 
-                            Application::SubmitWorkerCommandList(cmd, [texture]()
-                            {
-                                texture->SetReadyFlag(true);
-                            });
+                        Application::SubmitWorkerCommandList(cmd, [texture]()
+                        {
+                            texture->SetReadyFlag(true);
                         });
+                    });
                 }
                 else if (!image.uri.empty())
                 {

@@ -584,6 +584,7 @@ namespace ignite
                         ImGui::Separator();
                         ImGui::Spacing();
 
+
                         // Display mesh instances with materials
                         int meshIndex = 0;
                         for (auto &m : sm->GetMeshInstances())
@@ -592,6 +593,8 @@ namespace ignite
 
                             // Mesh instance header
                             std::string meshLabel = "Mesh: " + m->GetName();
+
+#if 0
                             bool meshTreeOpen = ImGui::TreeNodeEx(meshLabel.c_str(),
                                 ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
                                 ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_FramePadding);
@@ -708,7 +711,7 @@ namespace ignite
                                 ImGui::Unindent(8.0f);
                                 ImGui::TreePop();
                             }
-
+#endif
                             ImGui::PopID();
                             ImGui::Spacing();
                         }

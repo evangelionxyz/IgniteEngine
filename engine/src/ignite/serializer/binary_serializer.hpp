@@ -400,8 +400,6 @@ namespace ignite
                 AppendRaw(buffer, materialHandle);
             }
 
-            AppendRaw(buffer, sm->skeletonHandle);
-
             uint32_t animationCount = static_cast<uint32_t>(sm->animationHandles.size());
             AppendRaw(buffer, animationCount);
             for (const AssetHandle animationHandle : sm->animationHandles)
@@ -481,8 +479,6 @@ namespace ignite
                 skeletalMesh->AddMeshInstance(meshInstance);
             }
 
-            ReadRaw(inFile, &skeletalMesh->skeletonHandle);
-
             uint32_t animationCount = 0;
             ReadRaw(inFile, &animationCount);
             skeletalMesh->animationHandles.resize(animationCount);
@@ -558,6 +554,8 @@ namespace ignite
                     AppendRaw(buffer, frame.Timestamp);
                 }
             }
+
+            AppendRaw(buffer, (uint64_t)anim->GetSkeletonHandle());
 
             // Write to file
             std::ofstream of(filepath, std::ios::binary);
@@ -664,6 +662,11 @@ namespace ignite
 
                 anim->channels[channelName] = channel;
             }
+
+            uint64_t skeletonHandle = 0;
+            ReadRaw(inFile, &skeletonHandle);
+
+            anim->SetSkeletonHandle(UUID(skeletonHandle));
 
             inFile.close();
 

@@ -167,17 +167,20 @@ namespace ignite
             }
 
             Ref<SkeletalMesh> skeletalMesh = m_Project->GetAsset<SkeletalMesh>(sm.handle, AssetType::SkeletalMesh);
-            if (!skeletalMesh || !skeletalMesh->isPlaying || skeletalMesh->skeletonHandle == AssetHandle(0) || skeletalMesh->animationHandles.empty())
+            if (!skeletalMesh || !skeletalMesh->isPlaying || skeletalMesh->animationHandles.empty())
             {
                 continue;
             }
 
             const size_t animIndex = std::min(static_cast<size_t>(skeletalMesh->activeAnimationIndex), skeletalMesh->animationHandles.size() - 1);
-
-            Ref<Skeleton> skeleton = m_Project->GetAsset<Skeleton>(skeletalMesh->skeletonHandle);
             Ref<SkeletalAnimation> anim = m_Project->GetAsset<SkeletalAnimation>(skeletalMesh->animationHandles[animIndex]);
+            if (!anim)
+            {
+                continue;
+            }
 
-            if (!skeleton || !anim)
+            Ref<Skeleton> skeleton = m_Project->GetAsset<Skeleton>(anim->GetSkeletonHandle());
+            if (!skeleton)
             {
                 continue;
             }

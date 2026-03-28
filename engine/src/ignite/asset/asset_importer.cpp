@@ -374,13 +374,12 @@ namespace ignite {
                 skeletonHandle = AssetHandle();
             }
 
-            Ref<Skeleton> skeletonAsset = SkeletonSerializer::Deserialize(skeletonPath);
+            Ref<Skeleton> skeletonAsset = BinarySerializer::DeserializeSkeleton(skeletonPath);
             if (skeletonAsset)
             {
                 skeletonAsset->handle = skeletonHandle;
                 assetManager.AssignMetaData(skeletonHandle, skeletonMD);
                 assetManager.AssignAsset(skeletonHandle, skeletonAsset);
-                asset->skeletonHandle = skeletonHandle;
                 asset->boneTransforms.resize(skeletonAsset->joints.size(), glm::mat4(1.0f));
             }
 
@@ -417,6 +416,8 @@ namespace ignite {
                 {
                     continue;
                 }
+
+                animationAsset->SetSkeletonHandle(skeletonHandle ? skeletonHandle : AssetHandle(0));
 
                 animationAsset->handle = animationHandle;
                 assetManager.AssignMetaData(animationHandle, animationMD);
@@ -531,8 +532,7 @@ namespace ignite {
         // Skeleton
         if (meshScene.skeleton)
         {
-            SkeletonSerializer skeletonSerializer(meshScene.skeleton);
-            skeletonSerializer.Serialize(skeletonPath);
+            BinarySerializer::SerializeSkeleton(meshScene.skeleton, skeletonPath);
 
             AssetHandle skeletonHandle = AssetHandle();
             meshScene.skeleton->handle = skeletonHandle;
@@ -543,7 +543,6 @@ namespace ignite {
 
             Project::GetInstance()->GetAssetManager().AssignAsset(skeletonHandle, meshScene.skeleton);
             Project::GetInstance()->GetAssetManager().AssignMetaData(skeletonHandle, skeletonMD);
-            asset->skeletonHandle = skeletonHandle;
             asset->boneTransforms.resize(meshScene.skeleton->joints.size(), glm::mat4(1.0f));
         }
 
@@ -555,6 +554,8 @@ namespace ignite {
             {
                 continue;
             }
+
+            animation->SetSkeletonHandle(meshScene.skeleton ? meshScene.skeleton->handle : AssetHandle(0));
 
             std::filesystem::path animationPath = animationDirectory / (std::format("{}_{}", filename.string(), i) + animationBinExt);
             BinarySerializer::SerializeAnimation(animation, animationPath);

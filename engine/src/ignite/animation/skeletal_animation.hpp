@@ -38,10 +38,15 @@ namespace ignite
         float ticksPerSeconds = 1.0f;
         float timeInSeconds = 0.0f;
         bool isPlaying = false;
-
         std::unordered_map<std::string, AnimationChannel> channels;
+
+        void SetSkeletonHandle(UUID skeletonHandle) { m_SkeletonHandle = skeletonHandle; }
+        UUID GetSkeletonHandle() { return m_SkeletonHandle; }
 
         static AssetType GetStaticType() { return AssetType::SkeletalAnimation; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }
+    
+    private:
+        UUID m_SkeletonHandle = UUID(0);
     };
 }
