@@ -1,9 +1,8 @@
 //Copyright (c) 2026 Evangelion Manuhutu
 
 #include "scene_panel.hpp"
-
+#include "editor_layer.hpp"
 #include "ignite/audio/fmod_sound.hpp"
-
 #include "ignite/core/application.hpp"
 #include "ignite/core/input/event.hpp"
 #include "ignite/core/input/key_event.hpp"
@@ -13,24 +12,23 @@
 #include "ignite/scene/icomponent.hpp"
 #include "ignite/core/platform_utils.hpp"
 #include "ignite/graphics/ui_renderer.hpp"
-#include "editor_layer.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/font.hpp"
-
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/script_field.hpp"
 #include "ignite/scripting/script_instance.hpp"
 #include "ignite/asset/asset_importer.hpp"
-
 #include "ignite/scene/entity.hpp"
-#include "../states.hpp"
-
 #include "ignite/scene/entity_destroy_command.hpp"
 #include "ignite/scene/entity_rename_command.hpp"
 #include "ignite/scene/entity_reparent_command.hpp"
 #include "ignite/scene/component_property_command.hpp"
 
+#include "ext/imgui_orientation.hpp"
+#include "states.hpp"
+
+#include <glm/gtc/type_ptr.hpp>
 #include <set>
 #include <unordered_map>
 #include <string>
@@ -139,8 +137,8 @@ namespace ignite
             RenderInspector();
         }
         
-        RenderSceneEditViewport();
         RenderSceneGameViewport();
+        RenderSceneEditViewport();
     }
 
     void ScenePanel::OnUpdate(float deltaTime)
@@ -1952,6 +1950,29 @@ namespace ignite
             ImGui::EndDragDropTarget();
         }
 
+		auto view = m_EditorCamera.GetView();
+		auto &projection = m_EditorCamera.GetProjection();
+
+        {
+            const float orientationSize = ImGuiOrientation::internal::config.mSize = 80.0f;
+            const float orientationPadding = 25.0f;
+            ImGuiOrientation::config.axisLengthScale = 0.25f;
+            ImGuiOrientation::SetRect
+            (
+                m_ViewportEditRT.rect.max.x - orientationSize - orientationPadding,
+                m_ViewportEditRT.rect.min.y + orientationPadding
+            );
+
+			if (ImGuiOrientation::DrawGizmo(ImGui::GetWindowDrawList(), (float *const)glm::value_ptr(view), glm::value_ptr(projection), 100.0f))
+			{
+				glm::vec3 f = glm::vec3(view[0][2], view[1][2], view[2][2]);
+				m_EditorCamera.pitch = glm::clamp(std::asin(glm::clamp(-f.y, -1.0f, 1.0f)), m_EditorCamera.controls.minPitch, m_EditorCamera.controls.maxPitch);
+				m_EditorCamera.yaw = std::atan2(-f.z, -f.x);
+				m_EditorCamera.UpdateCameraPosition();
+				m_EditorCamera.UpdateView();
+			}
+		}
+
         GizmoInfo gizmoInfo;
         gizmoInfo.cameraView = m_EditorCamera.GetView();
         gizmoInfo.cameraProjection = m_EditorCamera.GetProjection();
@@ -2112,6 +2133,7 @@ namespace ignite
         }
 
         ImGui::End();
+
     }
 
 	void ScenePanel::RenderSceneGameViewport()

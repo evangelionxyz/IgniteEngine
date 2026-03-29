@@ -19,6 +19,8 @@ namespace ignite
         EditorCamera() = default;
         EditorCamera(const std::string &name);
 
+		void SetView(const glm::mat4 &view);
+
 		void UpdateMouseState();
 		void UpdateSphericalPosition();
 		void HandleOrbit(float deltaTime);

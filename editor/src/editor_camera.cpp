@@ -11,6 +11,11 @@ namespace ignite
     {
     }
 
+	void EditorCamera::SetView(const glm::mat4 &view)
+	{
+		m_View = view;
+	}
+
 	void EditorCamera::UpdateMouseState()
 	{
 		// store last position before updating
