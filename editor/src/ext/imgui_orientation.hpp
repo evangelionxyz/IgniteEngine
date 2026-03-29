@@ -177,8 +177,8 @@ namespace ImGuiOrientation
 		// in relation to half the rect size
 		float lineThicknessScale = 0.035f;
 		float axisLengthScale = 0.33f;
-		float positiveRadiusScale = 0.04f;
-		float negativeRadiusScale = 0.03f;
+		float positiveRadiusScale = 0.090f;
+		float negativeRadiusScale = 0.07f;
 		float hoverCircleRadiusScale = 0.95f;
 		ImU32 xCircleFrontColor = IM_COL32(255, 54, 83, 255);
 		ImU32 xCircleBackColor = IM_COL32(154, 57, 71, 255);

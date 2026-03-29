@@ -635,11 +635,6 @@ namespace ignite
         // dock space
         ImGui::DockSpace(ImGui::GetID("main_dockspace"), ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
         {
-            // // scene dock space
-            // m_ScenePanel->OnGuiRender();
-            // m_ContentBrowserPanel->OnGuiRender();
-            // m_MaterialsPanel->OnImGuiRender();
-
             ImGui::Begin("Project");
 
             if (m_ActiveProject)

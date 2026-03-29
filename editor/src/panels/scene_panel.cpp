@@ -26,6 +26,8 @@
 #include "ignite/scene/component_property_command.hpp"
 
 #include "ext/imgui_orientation.hpp"
+#include "ext/imgui_knobs.hpp"
+
 #include "states.hpp"
 
 #include <glm/gtc/type_ptr.hpp>
@@ -133,8 +135,8 @@ namespace ignite
 
         if (m_Scene)
         {
-            RenderHierarchy();
             RenderInspector();
+            RenderHierarchy();
         }
         
         RenderSceneGameViewport();
