@@ -22,6 +22,7 @@ namespace ignite {
     class Material2D;
     class SpriteSheet;
     class Scene;
+    class Font;
 
 	struct PendingFileLoading
 	{
@@ -49,6 +50,7 @@ namespace ignite {
         static Ref<Material> ImportMaterial(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<Material2D> ImportMaterial2D(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<SpriteSheet> ImportSpriteSheet(AssetHandle handle, const AssetMetaData &metadata);
+        static Ref<Font> ImportFont(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<Skeleton> ImportSkeleton(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<SkeletalAnimation> ImportSkeletalAnimation(AssetHandle handle, const AssetMetaData &metadata);
 

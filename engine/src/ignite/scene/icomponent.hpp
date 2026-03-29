@@ -37,6 +37,7 @@ namespace ignite
         CompType_Sprite2D,
         CompType_Circle2D,
         CompType_PointLight2D,
+        CompType_Font,
 
         CompType_SkeletalMesh,
         CompType_StaticMesh,

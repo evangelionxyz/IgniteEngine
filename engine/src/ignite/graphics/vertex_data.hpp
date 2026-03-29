@@ -75,8 +75,8 @@ namespace ignite
         glm::vec2 tilingFactor;
         glm::vec4 color;
         glm::vec4 additiveColor;
-        u32 texIndex;
-        u32 materialType;
+        uint32_t texIndex;
+        uint32_t materialType;
     };
 
     struct Vertex2DLine
@@ -91,5 +91,13 @@ namespace ignite
         glm::vec2 localPosition;
         glm::vec4 color;
     };
+
+	struct VertexText
+	{
+		glm::vec3 position;
+		glm::vec4 color;
+		glm::vec2 texCoord;
+		uint32_t texIndex;
+	};
 
 }

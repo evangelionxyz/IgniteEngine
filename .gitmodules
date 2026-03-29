@@ -16,12 +16,12 @@
 [submodule "thirdparty/JOLT"]
 	path = thirdparty/JOLT
 	url = https://github.com/jrouwe/JoltPhysics.git
-[submodule "thirdparty/MSDFAtlasGen"]
-	path = thirdparty/MSDFAtlasGen
-	url = https://github.com/Chlumsky/msdf-atlas-gen.git
 [submodule "thirdparty/IGNSERVER"]
 	path = thirdparty/IGNSERVER
 	url = https://github.com/evangelionxyz/Ignite-Server.git
 [submodule "thirdparty/MochiSharp"]
 	path = thirdparty/MochiSharp
 	url = https://github.com/evangelionxyz/MochiSharp.git
+[submodule "thirdparty/MSDF-ATLAS-GEN"]
+	path = thirdparty/MSDF-ATLAS-GEN
+	url = https://github.com/evangelionxyz/msdf-atlas-gen.git

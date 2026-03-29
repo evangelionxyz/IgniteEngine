@@ -18,6 +18,7 @@
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/sprite_sheet.h"
+#include "ignite/graphics/font.hpp"
 
 #include <mutex>
 #include <condition_variable>
@@ -35,6 +36,7 @@ namespace ignite {
         { AssetType::Material, AssetImporter::ImportMaterial },
         { AssetType::Material2D, AssetImporter::ImportMaterial2D },
         { AssetType::SpriteSheet, AssetImporter::ImportSpriteSheet },
+        { AssetType::Font, AssetImporter::ImportFont },
         { AssetType::Skeleton, AssetImporter::ImportSkeleton },
         { AssetType::SkeletalAnimation, AssetImporter::ImportSkeletalAnimation },
     };
@@ -70,6 +72,25 @@ namespace ignite {
         }
 
         return spriteSheet;
+    }
+
+    Ref<Font> AssetImporter::ImportFont(AssetHandle handle, const AssetMetaData &metadata)
+    {
+        if (!std::filesystem::exists(metadata.filepath))
+        {
+            LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
+            return nullptr;
+        }
+
+        Ref<Font> font = Font::Create(metadata.filepath);
+        if (font)
+        {
+            font->handle = handle;
+            font->SetDirtyFlag(false);
+            font->SetReadyFlag(true);
+        }
+
+        return font;
     }
 
     void AssetImporter::ImportAsync(AssetHandle handle, const AssetMetaData &metadata, std::function<void(Ref<Asset>, AssetHandle)> callback)
@@ -660,8 +681,12 @@ namespace ignite {
     Ref<Texture> AssetImporter::ImportTexture(AssetHandle handle, const AssetMetaData &metadata)
     {
         TextureCreateInfo createInfo;
-        createInfo.format = nvrhi::Format::RGBA8_UNORM;
-        createInfo.mipLevels = 4;
+        const std::string extension = metadata.filepath.extension().string();
+        const bool isHDR = extension == ".hdr";
+
+        createInfo.format = isHDR ? nvrhi::Format::RGBA32_FLOAT : nvrhi::Format::RGBA8_UNORM;
+        createInfo.mipLevels = isHDR ? 1 : 4;
+        createInfo.flip = isHDR;
         createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
         createInfo.keepInitialState = true; // should keep initial state
         createInfo.deferGpuCreate = true;

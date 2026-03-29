@@ -44,6 +44,9 @@ project "IgniteEditor"
         "%{IncludeDir.ZLIB}",
         "%{IncludeDir.YAMLCPP}",
         "%{IncludeDir.TINYGLTF}",
+        "%{IncludeDir.MSDFATLASGEN}",
+        "%{IncludeDir.MSDFGEN}",
+        "%{IncludeDir.FREETYPE}",
         "%{IncludeDir.JSON}",
         "%{IncludeDir.MochiSharpNative}",
         "%{IncludeDir.Hostfxr}"

@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
 
 #ifndef RENDERER_2D_HPP
 #define RENDERER_2D_HPP
@@ -64,6 +43,7 @@ namespace ignite
     class DeviceManager;
     class Texture;
     class RenderTarget;
+    class Font;
 
     template<typename VertexType>
     struct BatchRender
@@ -117,13 +97,17 @@ namespace ignite
 
         void SetPointLights2D(const std::vector<PointLight2D_GPUData> &pointLights);
 
+        void DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing);
+
         void InitQuadData();
         void InitLineData();
         void InitCircleData();
+        void InitTextData();
 
         void ClearPipelineCache();
         
-        u32 GetOrInsertTexture(const Ref<Texture>& texture);
+        uint32_t GetOrInsertQuadTexture(const Ref<Texture>& texture);
+        uint32_t GetOrInsertFontTexture(const Ref<Texture>& texture);
         
         static Ref<Renderer2D> Create();
         
@@ -132,6 +116,8 @@ namespace ignite
         BatchRender<Vertex2DQuad> m_QuadBatch;
         BatchRender<Vertex2DLine> m_LineBatch;
         BatchRender<Vertex2DCircle> m_CircleBatch;
+        BatchRender<VertexText> m_TextBatch;
+
         nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
 
         Ref<ConstantBuffer> m_Material2DLightingBuffer;

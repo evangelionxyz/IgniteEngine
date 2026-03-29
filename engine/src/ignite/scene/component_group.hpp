@@ -51,6 +51,7 @@ namespace ignite
         MeshColliderComponent,
         AudioSourceComponent,
         ScriptComponent,
+        TextComponent,
         WorldEnvironment
     >; 
 }

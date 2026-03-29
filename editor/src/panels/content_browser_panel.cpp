@@ -73,6 +73,12 @@ namespace ignite
             {"Audio (.flac)", "flac"}
         };
 
+        static const SDL_DialogFileFilter kFontFilters[]
+        {
+            {"Font (.ttf)", "ttf"},
+            {"Font (.otf)", "otf"}
+        };
+
         static const SDL_DialogFileFilter kSceneFilters[]
         {
             {"Ignite Scene (.ixscene)", "ixscene"}
@@ -761,6 +767,18 @@ namespace ignite
             ImGui::EndMenu();
         }
 
+        if (ImGui::BeginMenu("Font"))
+        {
+            if (ImGui::MenuItem("MSDF Font"))
+            {
+                SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
+                    kFontFilters, IM_ARRAYSIZE(kFontFilters),
+                    nullptr, true);
+            }
+            ImGui::EndMenu();
+        }
+
         if (ImGui::BeginMenu("Audio"))
         {
             if (ImGui::MenuItem("Sound"))
@@ -1045,8 +1063,9 @@ namespace ignite
         for (const char *const *file = filelist; *file != nullptr; file++)
         {
             std::filesystem::path filepath = std::string(*file);
+            std::filesystem::path targetDirectory = cb->m_CurrentDirectory;
 
-            Application::SubmitToMainThread([filepath]()
+            Application::SubmitToMainThread([filepath, targetDirectory]()
             {
 				AssetType assetType = GetAssetTypeFromExtension(filepath.extension().string());
                 if (assetType == AssetType::Invalid)
@@ -1055,7 +1074,7 @@ namespace ignite
                     return;
                 }
 
-                AssetImportEvent importEvent({filepath}, assetType);
+                AssetImportEvent importEvent({filepath}, assetType, targetDirectory);
                 Application::GetInstance()->OnEvent(importEvent);
             });
         }

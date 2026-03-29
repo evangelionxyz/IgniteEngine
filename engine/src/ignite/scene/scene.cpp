@@ -250,9 +250,38 @@ namespace ignite
         this->m_ViewportHeight = height;
     }
 
-    void Scene::WriteBuffer(nvrhi::ICommandList* cmd)
+    void Scene::WriteBuffer(nvrhi::ICommandList *cmd)
     {
-        m_SceneGPUDataBuffer->SetData(cmd, Buffer((void*)&this->gpuData, sizeof(Scene_GPUData)));
+        const Scene_GPUData *sceneGPUData = &gpuData;
+
+        auto view = registry->view<WorldEnvironment>();
+        WorldEnvironment *fallback = nullptr;
+        for (entt::entity e : view)
+        {
+            WorldEnvironment &world = view.get<WorldEnvironment>(e);
+            if (!world.enabled)
+                continue;
+
+            if (world.primary)
+            {
+                sceneGPUData = &world.sceneGPUData;
+                fallback = nullptr;
+                break;
+            }
+
+            if (!fallback)
+            {
+                fallback = &world;
+            }
+        }
+
+        if (fallback)
+        {
+            sceneGPUData = &fallback->sceneGPUData;
+        }
+
+        gpuData = *sceneGPUData;
+        m_SceneGPUDataBuffer->SetData(cmd, Buffer((void *)&gpuData, sizeof(Scene_GPUData)));
     }
 
     Entity Scene::GetPrimaryCamera()
@@ -289,18 +318,29 @@ namespace ignite
         return CreateRef<Scene>(project, name);
     }
 
-	Environment *Scene::GetEnvironment()
-	{
+    Environment *Scene::GetEnvironment()
+    {
         auto view = registry->view<WorldEnvironment>();
+        WorldEnvironment *fallback = nullptr;
         for (entt::entity e : view)
         {
             WorldEnvironment &we = registry->get<WorldEnvironment>(e);
-            if (we.environment)
+            if (!we.enabled || !we.environment)
+                continue;
+
+            if (we.primary)
+            {
                 return we.environment.get();
+            }
+
+            if (!fallback)
+            {
+                fallback = &we;
+            }
         }
 
-        return nullptr;
-	}
+        return fallback ? fallback->environment.get() : nullptr;
+    }
 
 	template<typename T>
     void Scene::OnComponentAdded(Entity entity, T &comp)
@@ -377,6 +417,11 @@ namespace ignite
     {
     }
 
+	template<>
+	void Scene::OnComponentAdded<TextComponent>(Entity entity, TextComponent &comp)
+	{
+	}
+
     template<>
     void Scene::OnComponentAdded<ScriptComponent>(Entity entity, ScriptComponent &comp)
     {
@@ -385,6 +430,15 @@ namespace ignite
     template<>
     void Scene::OnComponentAdded<WorldEnvironment>(Entity entity, WorldEnvironment &comp)
     {
+        if (!comp.environment)
+        {
+            comp.environment = Environment::Create(this);
+        }
+
+        comp.sceneGPUData = gpuData;
+        comp.dirtyEnvironment = true;
+        comp.gpuInitialized = false;
+        comp.loadedHDRHandle = AssetHandle(0);
     }
 
     template<>

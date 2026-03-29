@@ -8,6 +8,9 @@ if errorlevel 1 (
 	echo Python module 'requests' already installed.
 )
 
+rem ensure submodules are ready
+git submodule update --init --recursive
+
 rem keep pip up to date
 python -m pip install --upgrade pip
 

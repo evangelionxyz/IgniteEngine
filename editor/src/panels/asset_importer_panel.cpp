@@ -5,7 +5,9 @@
 #include "ignite/project/project.hpp"
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
+#include "ignite/graphics/font.hpp"
 #include "ignite/serializer/binary_serializer.hpp"
+#include "ignite/serializer/serializer.hpp"
 
 #include <algorithm>
 #include <format>
@@ -35,12 +37,24 @@ namespace ignite
 
 	bool AssetImporterPanel::OnAssetImportEvent(AssetImportEvent &event)
 	{
-        m_SelectedFilepaths = event.GetFilepaths();
+		m_SelectedFilepaths = event.GetFilepaths();
+		m_TargetDirectory = event.GetTargetDirectory();
+		if (m_TargetDirectory.empty())
+		{
+			m_TargetDirectory = Project::GetInstance() ? Project::GetInstance()->GetAssetDirectory() : std::filesystem::path();
+		}
 		m_SelectedAssetType = event.GetAssetType();
 		m_SkeletalMeshOptions = {};
+		m_FontPreview = {};
+
+		if (m_SelectedAssetType == AssetType::Font && !m_SelectedFilepaths.empty())
+		{
+			m_FontPreview.sourceFilepath = m_SelectedFilepaths.front();
+			m_FontPreview.font = Font::Create(m_FontPreview.sourceFilepath);
+		}
 		m_ShowImporterWindow = !m_SelectedFilepaths.empty();
 
-       return m_ShowImporterWindow;
+		return m_ShowImporterWindow;
 	}
 
 	void AssetImporterPanel::OnUpdate(float deltaTime)
@@ -55,7 +69,7 @@ namespace ignite
 
 	void AssetImporterPanel::OnGuiRender()
 	{
-       if (!m_ShowImporterWindow)
+		if (!m_ShowImporterWindow)
 		{
 			return;
 		}
@@ -79,25 +93,50 @@ namespace ignite
 		}
 
 		const bool hasFbx = std::ranges::any_of(m_SelectedFilepaths, [](const std::filesystem::path &filepath)
-		{
-			return IsFbxFile(filepath);
-		});
+			{
+				return IsFbxFile(filepath);
+			});
 
 		if (hasFbx)
 		{
 			DrawSkeletalMeshImportOptions();
 		}
 
+		if (m_SelectedAssetType == AssetType::Font)
+		{
+			DrawFontImportPreview();
+		}
+
 		ImGui::Separator();
 
-		if (ImGui::Button("Import"))
+		bool canImport = true;
+		if (m_SelectedAssetType == AssetType::Font)
+		{
+			Ref<Texture> atlasTexture = m_FontPreview.font ? m_FontPreview.font->GetAtlasTexture() : nullptr;
+			canImport = atlasTexture && atlasTexture->IsReady();
+		}
+
+        if (!canImport)
+		{
+			ImGui::BeginDisabled();
+		}
+
+		if (ImGui::Button("Import") && canImport)
 		{
 			QueueImportRequest();
+		}
+
+		if (!canImport)
+		{
+			ImGui::EndDisabled();
+			ImGui::SameLine();
+			ImGui::TextDisabled("Waiting for atlas upload...");
 		}
 
 		ImGui::SameLine();
 		if (ImGui::Button("Cancel"))
 		{
+			m_FontPreview = {};
 			m_ShowImporterWindow = false;
 		}
 
@@ -132,7 +171,33 @@ namespace ignite
 		request.assetType = m_SelectedAssetType;
 		request.skeletalMeshOptions = m_SkeletalMeshOptions;
 		m_ImportRequests.push(std::move(request));
+		m_FontPreview = {};
 		m_ShowImporterWindow = false;
+	}
+
+	void AssetImporterPanel::DrawFontImportPreview()
+	{
+		ImGui::SeparatorText("Font MSDF Preview");
+		if (!m_FontPreview.font)
+		{
+			ImGui::TextDisabled("Failed to generate font preview.");
+			return;
+		}
+
+		Ref<Texture> atlasTexture = m_FontPreview.font->GetAtlasTexture();
+        if (!atlasTexture || !atlasTexture->IsReady())
+		{
+			ImGui::TextDisabled("Generating atlas...");
+			return;
+		}
+
+		ImGui::Text("Source: %s", m_FontPreview.sourceFilepath.filename().generic_string().c_str());
+		ImGui::Text("Atlas: %d x %d", atlasTexture->GetWidth(), atlasTexture->GetHeight());
+
+		const float maxWidth = std::min(420.0f, ImGui::GetContentRegionAvail().x);
+		const float aspect = atlasTexture->GetHeight() > 0 ? static_cast<float>(atlasTexture->GetWidth()) / static_cast<float>(atlasTexture->GetHeight()) : 1.0f;
+		ImVec2 previewSize(maxWidth, maxWidth / std::max(aspect, 0.001f));
+		ImGui::Image(reinterpret_cast<ImTextureID>(atlasTexture->GetHandle().Get()), previewSize);
 	}
 
 	void AssetImporterPanel::DrawSkeletalMeshImportOptions()
@@ -170,9 +235,17 @@ namespace ignite
 		}
 
 		auto &assetManager = project->GetAssetManager();
+		bool importedAny = false;
 
 		for (const auto &filepath : request.filepaths)
 		{
+			if (request.assetType == AssetType::Font)
+			{
+				ImportFontAsset(filepath);
+				importedAny = true;
+				continue;
+			}
+
 			if (IsFbxFile(filepath))
 			{
 				if (request.skeletalMeshOptions.importSkeletalMesh)
@@ -183,10 +256,121 @@ namespace ignite
 				{
 					ImportFbxSkeletonAndAnimations(filepath, request.skeletalMeshOptions);
 				}
+				importedAny = true;
 				continue;
 			}
 
 			assetManager.ImportAsset(filepath);
+			importedAny = true;
+		}
+
+		if (importedAny)
+		{
+			ProjectSerializer serializer(project);
+			serializer.Serialize(project->GetFilepath());
+		}
+	}
+
+	void AssetImporterPanel::ImportFontAsset(const std::filesystem::path &filepath)
+	{
+		Project *project = Project::GetInstance();
+		if (!project || !std::filesystem::exists(filepath))
+		{
+			return;
+		}
+
+		auto &assetManager = project->GetAssetManager();
+		const std::filesystem::path assetDirectory = m_TargetDirectory.empty() ? project->GetAssetDirectory() : m_TargetDirectory;
+		if (!std::filesystem::exists(assetDirectory))
+		{
+			std::filesystem::create_directories(assetDirectory);
+		}
+		const std::filesystem::path sourceExtension = filepath.extension();
+		const std::filesystem::path targetFontPath = BuildUniquePath(assetDirectory, filepath.stem().string(), sourceExtension.string());
+
+		std::error_code ec;
+		if (std::filesystem::absolute(filepath) != std::filesystem::absolute(targetFontPath))
+		{
+			std::filesystem::copy_file(filepath, targetFontPath, std::filesystem::copy_options::overwrite_existing, ec);
+			if (ec)
+			{
+				LOG_ERROR("[Asset Importer] Failed to copy font '{}' -> '{}': {}", filepath.generic_string(), targetFontPath.generic_string(), ec.message());
+				return;
+			}
+		}
+
+		AssetMetaData importMetadata;
+		importMetadata.filepath = targetFontPath;
+		importMetadata.type = AssetType::Font;
+
+		const std::filesystem::path relativeFontPath = project->GetAssetRelativeFilepath(targetFontPath);
+		AssetHandle fontHandle = assetManager.GetAssetHandle(relativeFontPath);
+		if (fontHandle == AssetHandle(0))
+		{
+			fontHandle = AssetHandle();
+		}
+
+		Ref<Font> importedFont = AssetImporter::ImportFont(fontHandle, importMetadata);
+		if (!importedFont)
+		{
+			LOG_ERROR("[Asset Importer] Failed to import font {}", filepath.generic_string());
+			return;
+		}
+
+		AssetMetaData fontRegistryMetadata;
+		fontRegistryMetadata.filepath = relativeFontPath;
+		fontRegistryMetadata.type = AssetType::Font;
+		assetManager.AssignMetaData(fontHandle, fontRegistryMetadata);
+		assetManager.AssignAsset(fontHandle, importedFont);
+
+        if (Ref<Texture> atlasTexture = importedFont->GetAtlasTexture())
+		{
+            if (!atlasTexture->IsReady())
+			{
+				LOG_WARN("[Asset Importer] Font atlas is not ready yet for {}", filepath.generic_string());
+				return;
+			}
+
+			const std::filesystem::path atlasPath = BuildUniquePath(assetDirectory, filepath.stem().string() + "_msdf", ".png");
+			if (BinarySerializer::SerializeTextureToPNG(atlasTexture, atlasPath))
+			{
+				const std::filesystem::path relativeAtlasPath = project->GetAssetRelativeFilepath(atlasPath);
+				AssetHandle atlasHandle = assetManager.GetAssetHandle(relativeAtlasPath);
+				if (atlasHandle == AssetHandle(0))
+				{
+					atlasHandle = AssetHandle();
+				}
+
+				atlasTexture->handle = atlasHandle;
+				atlasTexture->SetDirtyFlag(false);
+				atlasTexture->SetReadyFlag(true);
+
+				AssetMetaData atlasMetadata;
+				atlasMetadata.filepath = relativeAtlasPath;
+				atlasMetadata.type = AssetType::Texture;
+				assetManager.AssignMetaData(atlasHandle, atlasMetadata);
+				assetManager.AssignAsset(atlasHandle, atlasTexture);
+			}
+		}
+	}
+
+	std::filesystem::path AssetImporterPanel::BuildUniquePath(const std::filesystem::path &directory, const std::string &baseName, const std::string &extension) const
+	{
+		std::filesystem::path candidate = directory / (baseName + extension);
+		if (!std::filesystem::exists(candidate))
+		{
+			return candidate;
+		}
+
+		uint32_t suffix = 1;
+		while (true)
+		{
+			candidate = directory / std::format("{}_{}{}", baseName, suffix, extension);
+			if (!std::filesystem::exists(candidate))
+			{
+				return candidate;
+			}
+			++suffix;
 		}
 	}
 

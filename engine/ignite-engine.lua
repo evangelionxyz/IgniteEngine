@@ -38,6 +38,9 @@ project "IgniteEngine"
         "%{IncludeDir.JSON}",
         "%{IncludeDir.MochiSharpNative}",
         "%{IncludeDir.Hostfxr}",
+        "%{IncludeDir.MSDFATLASGEN}",
+        "%{IncludeDir.MSDFGEN}",
+        "%{IncludeDir.FREETYPE}",
         "%{IncludeDir.FBX_SDK}"
     }
 
@@ -51,6 +54,9 @@ project "IgniteEngine"
         "NVRHI",
         "ZLIB",
         "YAMLCPP",
+        "msdf-atlas-gen",
+        "msdfgen",
+        "freetype",
         "MochiSharp.Native"
     }
 

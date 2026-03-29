@@ -38,6 +38,9 @@ IncludeDir["MochiSharpNative"] = "%{THIRDPARTY_DIR}/MochiSharp/MochiSharp.Native
 IncludeDir["VULKAN_SDK"]       = "%{VULKAN_SDK_PATH}/Include"
 IncludeDir["FBX_SDK"]          = "%{FBX_SDK_PATH}/include"
 IncludeDir["Hostfxr"]          = "%{THIRDPARTY_DIR}/MochiSharp/NetCore/include"
+IncludeDir["MSDFATLASGEN"]     = "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdf-atlas-gen"
+IncludeDir["MSDFGEN"]          = "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdfgen"
+IncludeDir["FREETYPE"]     = "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdfgen/freetype/include"
 
 --library dirs
 LibraryDir = {}
@@ -94,6 +97,9 @@ group "Third Party"
     include "yaml-cpp.lua"
     include "tinygltf.lua"
     include "zlib.lua"
+    include "msdf-atlas-gen.lua"
+    include "msdfgen.lua"
+    include "freetype.lua"
 group ""
 
 group "NVIDIA"

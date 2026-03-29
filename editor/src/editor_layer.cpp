@@ -1133,17 +1133,51 @@ namespace ignite
         if (!filepath.empty())
         {
             EditorLayer* editor = static_cast<EditorLayer*>(userData);
-            Project::GetInstance()->GetAssetManager().SubmitJob([editor, f = filepath, sr = editor->m_SceneRenderer]() mutable
+            if (!editor || !editor->m_ActiveScene)
             {
-                auto &env = sr->GetEnvironment();
-                env->LoadTexture(f);
-                
-                // Signal the renderer on the main thread that the environment has changed
-                Application::SubmitToMainThread([sr]()
+                return;
+            }
+
+            WorldEnvironment *world = nullptr;
+            auto view = editor->m_ActiveScene->registry->view<WorldEnvironment>();
+            for (entt::entity e : view)
+            {
+                auto &candidate = view.get<WorldEnvironment>(e);
+                if (candidate.primary)
                 {
-                    sr->OnEnvironmentTextureChanged();
-                });
-            });
+                    world = &candidate;
+                    break;
+                }
+
+                if (!world)
+                {
+                    world = &candidate;
+                }
+            }
+
+            if (!world)
+            {
+                Entity envEntity = SceneManager::CreateWorldEnvironment(editor->m_ActiveScene.get(), "World Environment");
+                if (envEntity && envEntity.HasComponent<WorldEnvironment>())
+                {
+                    world = &envEntity.GetComponent<WorldEnvironment>();
+                }
+            }
+
+            if (!world)
+            {
+                return;
+            }
+
+            if (!world->environment)
+            {
+                world->environment = Environment::Create(editor->m_ActiveScene.get());
+            }
+
+            world->environment->LoadTexture(filepath);
+            world->hdrHandle = AssetHandle(0);
+            world->loadedHDRHandle = AssetHandle(0);
+            world->dirtyEnvironment = true;
         }
     }
 

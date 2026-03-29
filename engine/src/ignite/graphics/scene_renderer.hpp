@@ -23,7 +23,6 @@
 
 #pragma once
 
-#include "ignite/graphics/objects/environment.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "edge_detection.hpp"
 #include "graphics_pipeline.hpp"
@@ -94,7 +93,6 @@ namespace ignite
 		Ref<Texture> GetCascadedShadowMapDepthTexture() const;
 
         Ref<CascadedShadowMap> GetCascadedShadowMap();
-        Ref<Environment> &GetEnvironment() { return m_Environment; }
         Ref<UIRenderer> &GetUIRenderer() { return m_UIRenderer; }
         Ref<Renderer2D> &GetRenderer2D() { return m_Renderer2D; }
 
@@ -102,15 +100,12 @@ namespace ignite
         const DebugGridSettings &GetDebugGridSettings() const { return m_DebugGridSettings; }
         void SetDebugGridSettings(const DebugGridSettings &settings) { m_DebugGridSettings = settings; }
 
-        void OnEnvironmentTextureChanged();
-
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer);
         void CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture);
         void DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const DebugGridStyle &style, bool is2D);
         
     private:
-        Ref<Environment> m_Environment;
 		Ref<CascadedShadowMap> m_CascadedShadowMap;
 
         // Composite
@@ -124,8 +119,6 @@ namespace ignite
         std::vector<AABB> m_EntityBounds;
         
         nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
-
-        bool m_EnvironmentDirty = false;
 
         Ref<ConstantBuffer> m_DebugGridBuffer;
         DebugGridSettings m_DebugGridSettings;

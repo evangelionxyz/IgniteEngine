@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2025 Evangelion Manuhutu
 
 #include "renderer_2d.hpp"
 #include "render_target.hpp"
@@ -30,6 +9,7 @@
 #include "ignite/core/device/device_manager.hpp"
 #include "graphics_pipeline.hpp"
 
+#include "font.hpp"
 #include "texture.hpp"
 
 #include <stb_image.h>
@@ -40,13 +20,16 @@ namespace ignite
 {
     static glm::vec4 QUAD_POSITIONS[4];
     const uint8_t MAX_TEXTURE_BATCH_COUNT = 32;
+
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_LinePSOCache;
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_QuadPSOCache;
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_CirclePSOCache;
+    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_TextPSOCache;
 
     static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_QuadBindingSetCache;
     static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_LineBindingSetCache;
     static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_CircleBindingSetCache;
+    static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_TextBindingSetCache;
 
     // Helper to build a quad pipeline for a framebuffer (once) and cache it.
     static Ref<GraphicsPipeline> GetQuadPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
@@ -97,6 +80,55 @@ namespace ignite
 
         return gp;
     }
+
+	static Ref<GraphicsPipeline> GetTextPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+	{
+		auto key = MakeFramebufferKey(framebuffer);
+		auto it = s_TextPSOCache.find(key);
+		if (it != s_TextPSOCache.end())
+			return it->second;
+
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+
+		GraphicsPipelineParams params;
+		params.enableBlend = true;
+		params.enableDepthWrite = hasDepthAttachment;
+		params.enableDepthTest = hasDepthAttachment;
+		params.enableDepthStencil = false;
+		params.fillMode = fillMode;
+
+		// create binding layout
+		nvrhi::BindingLayoutDesc bindingLayoutDesc;
+		bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
+		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
+		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(1));
+		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
+
+		for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; i++)
+		{
+			bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(i));
+		}
+
+		nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
+
+		params.cullMode = nvrhi::RasterCullMode::None;
+		params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
+
+		Ref<Shader> vertexShader = Shader::Create("resources/shaders/msdf_font.vertex.hlsl", ShaderType::Vertex, true);
+		Ref<Shader> pixelShader = Shader::Create("resources/shaders/msdf_font.pixel.hlsl", ShaderType::Pixel, true);
+
+		Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
+		gp->SetShaders({ vertexShader, pixelShader })
+			.AddBindingLayout(bindingLayout)
+			.Build(framebuffer, params);
+
+		s_TextPSOCache.emplace(key, gp);
+
+		return gp;
+	}
 
     // Helper to build a line pipeline for a framebuffer (once) and cache it.
     static Ref<GraphicsPipeline> GetLinePipelineForFB(nvrhi::IFramebuffer *framebuffer)
@@ -149,7 +181,7 @@ namespace ignite
 
         // then add textures
         const auto samplerDesc = nvrhi::SamplerDesc()
-            .setAllAddressModes(nvrhi::SamplerAddressMode::Repeat)
+          .setAllAddressModes(nvrhi::SamplerAddressMode::ClampToEdge)
             .setAllFilters(true);
 
         nvrhi::SamplerHandle sampler = device->createSampler(samplerDesc);
@@ -173,6 +205,41 @@ namespace ignite
 
         return bindingSet;
     }
+
+	static nvrhi::BindingSetHandle GetTextBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &lightingBuffer)
+	{
+        auto it = s_TextBindingSetCache.find(bindingLayout);
+        if (it != s_TextBindingSetCache.end())
+			return it->second;
+
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+		// then add textures
+		const auto samplerDesc = nvrhi::SamplerDesc()
+			.setAllAddressModes(nvrhi::SamplerAddressMode::Repeat)
+			.setAllFilters(true);
+
+		nvrhi::SamplerHandle sampler = device->createSampler(samplerDesc);
+
+		nvrhi::BindingSetDesc bindingSetDesc;
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, lightingBuffer->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
+		for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
+		{
+			Ref<Texture> tex = textures[i];
+			if (!tex)
+				tex = Renderer::GetWhiteTexture();
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(i, tex->GetHandle()));
+		}
+
+		nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
+		LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
+
+       s_TextBindingSetCache.emplace(bindingLayout, bindingSet);
+
+		return bindingSet;
+	}
 
     static nvrhi::BindingSetHandle GetLineBindingSet(nvrhi::IBindingLayout *bindingLayout)
     {
@@ -264,6 +331,7 @@ namespace ignite
         InitQuadData();
         InitLineData();
         InitCircleData();
+        InitTextData();
 
         m_Material2DLightingBuffer = ConstantBuffer::Create(sizeof(Material2DLighting_GPUData), false, 1, "Material2D Lighting Buffer");
         m_Material2DLightingData.pointLightCount = 0;
@@ -274,10 +342,12 @@ namespace ignite
         s_QuadPSOCache.clear();
         s_LinePSOCache.clear();
         s_CirclePSOCache.clear();
+        s_TextPSOCache.clear();
 
         s_QuadBindingSetCache.clear();
         s_LineBindingSetCache.clear();
         s_CircleBindingSetCache.clear();
+        s_TextBindingSetCache.clear();
     }
 
     void Renderer2D::InitQuadData()
@@ -360,11 +430,45 @@ namespace ignite
         device->executeCommandList(cmd);
     }
 
-    void Renderer2D::ClearPipelineCache()
+	void Renderer2D::InitTextData()
+	{
+        size_t vertAllocSize = m_TextBatch.maxVertices * sizeof(VertexText);
+        m_TextBatch.vertexBufferBase = new VertexText[m_TextBatch.maxVertices];
+        m_TextBatch.vertexBuffer = VertexBuffer::Create(vertAllocSize);
+        m_TextBatch.indexBuffer = IndexBuffer::Create(m_TextBatch.maxIndices * sizeof(uint32_t));
+        m_TextBatch.textureSlots.resize(MAX_TEXTURE_BATCH_COUNT);
+        m_TextBatch.textureSlots[0] = Renderer::GetWhiteTexture();
+
+		std::vector<uint32_t> indices(m_TextBatch.maxIndices);
+
+        uint32_t offset = 0;
+        for (uint32_t i = 0; i < m_TextBatch.maxIndices; i += 6)
+        {
+            indices[0 + i] = offset + 0;
+            indices[1 + i] = offset + 1;
+            indices[2 + i] = offset + 2;
+
+            indices[3 + i] = offset + 0;
+            indices[4 + i] = offset + 3;
+            indices[5 + i] = offset + 1;
+
+            offset += 4;
+        }
+
+        auto device = DeviceManager::GetInstance()->GetDevice();
+        nvrhi::CommandListHandle cmd = device->createCommandList();
+        cmd->open();
+        m_TextBatch.indexBuffer->SetData(cmd, Buffer(indices.data(), indices.size() * sizeof(uint32_t)));
+		cmd->close();
+		device->executeCommandList(cmd);
+	}
+
+	void Renderer2D::ClearPipelineCache()
     {
         s_LinePSOCache.clear();
         s_QuadPSOCache.clear();
         s_CirclePSOCache.clear();
+        s_TextPSOCache.clear();
     }
 
     void Renderer2D::Begin(nvrhi::ICommandList *cmd)
@@ -372,6 +476,7 @@ namespace ignite
         // Quad data
         m_QuadBatch.indexCount = 0;
         m_QuadBatch.count = 0;
+        m_QuadBatch.textureSlotIndex = 1;
         m_QuadBatch.vertexBufferPtr = m_QuadBatch.vertexBufferBase;
 
         // Line data
@@ -383,6 +488,12 @@ namespace ignite
         m_CircleBatch.indexCount = 0;
         m_CircleBatch.count = 0;
         m_CircleBatch.vertexBufferPtr = m_CircleBatch.vertexBufferBase;
+
+        // Text data
+        m_TextBatch.indexCount = 0;
+        m_TextBatch.count = 0;
+       m_TextBatch.textureSlotIndex = 1;
+        m_TextBatch.vertexBufferPtr = m_TextBatch.vertexBufferBase;
 
         if (m_Material2DLightingBuffer && m_Material2DLightingDirty)
         {
@@ -467,18 +578,47 @@ namespace ignite
 
             m_Cmd->drawIndexed(args);
         }
+
+        if (m_TextBatch.indexCount > 0)
+        {
+            const size_t bufferSize = reinterpret_cast<uint8_t *>(m_TextBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_TextBatch.vertexBufferBase);
+            m_TextBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_TextBatch.vertexBufferBase, bufferSize));
+
+            Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode);
+          nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_TextBatch.textureSlots, m_Material2DLightingBuffer);
+
+            const auto graphicsState = nvrhi::GraphicsState()
+                .setPipeline(gp->GetHandle())
+                .setFramebuffer(framebuffer)
+                .addBindingSet(bindingSet)
+                .setViewport(nvrhi::ViewportState().addViewportAndScissorRect(viewport))
+                .addVertexBuffer(nvrhi::VertexBufferBinding{ m_TextBatch.vertexBuffer->GetHandle(), 0, 0 })
+                .setIndexBuffer({ m_TextBatch.indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+            m_Cmd->setGraphicsState(graphicsState);
+
+            nvrhi::DrawArguments args;
+          args.vertexCount = m_TextBatch.indexCount;
+            args.instanceCount = 1;
+
+            m_Cmd->drawIndexed(args);
+        }
     }
 
     void Renderer2D::End()
     {
         m_QuadBatch.indexCount = 0;
         m_QuadBatch.count = 0;
+        m_QuadBatch.textureSlotIndex = 1;
 
         m_LineBatch.indexCount = 0;
         m_LineBatch.count = 0;
 
         m_CircleBatch.indexCount = 0;
         m_CircleBatch.count = 0;
+
+        m_TextBatch.indexCount = 0;
+        m_TextBatch.count = 0;
+        m_TextBatch.textureSlotIndex = 1;
     }
 
     void Renderer2D::DrawBox(const glm::mat4 &transform, const glm::vec4 &color)
@@ -647,7 +787,7 @@ namespace ignite
             { rect.max.x, rect.min.y, 0.0f, 1.0f }, // bottom-right
         };
 
-        uint32_t texIndex = GetOrInsertTexture(texture);
+        uint32_t texIndex = GetOrInsertQuadTexture(texture);
 
         for (uint32_t i = 0; i < quadVertexCount; ++i)
         {
@@ -698,7 +838,7 @@ namespace ignite
             { 1.0f, 1.0f }
         };
 
-        uint32_t texIndex = GetOrInsertTexture(texture);
+		uint32_t texIndex = GetOrInsertQuadTexture(texture);
 
         for (uint32_t i = 0; i < quadVertexCount; ++i)
         {
@@ -732,7 +872,141 @@ namespace ignite
         m_Material2DLightingDirty = true;
     }
 
-    uint32_t Renderer2D::GetOrInsertTexture(const Ref<Texture> &texture)
+	void Renderer2D::DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing)
+	{
+        if (!font)
+            return;
+
+        if (!font->GetAtlasTexture() || !font->GetAtlasTexture()->IsReady())
+            return;
+
+        const auto &fontGeometry = font->GetGeometry();
+        const auto &metrics = fontGeometry.getMetrics();
+
+        Ref<Texture> fontAtlasTexture = font->GetAtlasTexture();
+		uint32_t texIndex = GetOrInsertFontTexture(fontAtlasTexture);
+
+        double x = 0.0;
+        double y = 0.0;
+        double maxX = 0.0;
+        double minY = 0.0;
+
+        double fsScale = 1.0 / (metrics.ascenderY - metrics.descenderY);
+        const double spaceGlypAdvance = fontGeometry.getGlyph(' ')->getAdvance();
+
+        for (size_t i = 0; i < str.size(); ++i)
+        {
+            char character = str[i];
+            if (character == '\r')
+            {
+                continue;
+            }
+
+			if (character == '\n')
+			{
+				maxX= std::max(maxX, x);
+
+				x = 0.0;
+				y -= fsScale * metrics.lineHeight + linespacing;
+				continue;
+			}
+
+            if (character == ' ')
+            {
+                float advance = static_cast<float>(spaceGlypAdvance);
+                if (i < str.size() - 1)
+                {
+                    char nextCharacter = str[i + 1];
+                    double dAdvence;
+                    fontGeometry.getAdvance(dAdvence, character, nextCharacter);
+                    advance = static_cast<float>(dAdvence);
+                }
+
+                x += fsScale * advance + kerning;
+                continue;
+            }
+
+            if (character == '\t')
+            {
+                x += 4.0 * (fsScale * spaceGlypAdvance + kerning);
+                continue;
+            }
+
+            auto glyph = fontGeometry.getGlyph(character);
+            if (!glyph)
+            {
+                glyph = fontGeometry.getGlyph('?');
+            }
+
+            double atlasLeft, atlasBottom, atlasRight, atlasTop;
+            glyph->getQuadAtlasBounds(atlasLeft, atlasBottom, atlasRight, atlasTop);
+            glm::vec2 texCoordMin(static_cast<float>(atlasLeft), static_cast<float>(atlasBottom));
+            glm::vec2 texCoordMax(static_cast<float>(atlasRight), static_cast<float>(atlasTop));
+
+            double planeLeft, planeBottom, planeRight, planeTop;
+            glyph->getQuadPlaneBounds(planeLeft, planeBottom, planeRight, planeTop);
+			glm::vec2 quadMin(static_cast<float>(planeLeft), static_cast<float>(planeBottom));
+			glm::vec2 quadMax(static_cast<float>(planeRight), static_cast<float>(planeTop));
+
+            quadMin *= fsScale;
+            quadMax *= fsScale;
+
+            quadMin += glm::vec2{ x, y };
+            quadMax += glm::vec2{ x, y };
+
+            float texelWidth = 1.0f / fontAtlasTexture->GetWidth();
+            float texelHeight = 1.0f / fontAtlasTexture->GetHeight();
+
+            texCoordMin *= glm::vec2{ texelWidth, texelHeight };
+            texCoordMax *= glm::vec2{ texelWidth, texelHeight };
+
+            {
+                m_TextBatch.vertexBufferPtr->position = transform * glm::vec4(quadMin, 0.0f, 1.0f);
+                m_TextBatch.vertexBufferPtr->color = color;
+                m_TextBatch.vertexBufferPtr->texCoord = texCoordMin;
+                m_TextBatch.vertexBufferPtr->texIndex = texIndex;
+                m_TextBatch.vertexBufferPtr++;
+
+                m_TextBatch.vertexBufferPtr->position = transform * glm::vec4(quadMax, 0.0f, 1.0f);
+				m_TextBatch.vertexBufferPtr->color = color;
+                m_TextBatch.vertexBufferPtr->texCoord = texCoordMax;
+				m_TextBatch.vertexBufferPtr->texIndex = texIndex;
+				m_TextBatch.vertexBufferPtr++;
+
+                m_TextBatch.vertexBufferPtr->position = transform * glm::vec4(quadMin.x, quadMax.y, 0.0f, 1.0f);
+				m_TextBatch.vertexBufferPtr->color = color;
+                m_TextBatch.vertexBufferPtr->texCoord = { texCoordMin.x, texCoordMax.y };
+				m_TextBatch.vertexBufferPtr->texIndex = texIndex;
+				m_TextBatch.vertexBufferPtr++;
+
+				m_TextBatch.vertexBufferPtr->position = transform * glm::vec4(quadMax.x, quadMin.y, 0.0f, 1.0f);
+				m_TextBatch.vertexBufferPtr->color = color;
+                m_TextBatch.vertexBufferPtr->texCoord = { texCoordMax.x, texCoordMin.y };
+				m_TextBatch.vertexBufferPtr->texIndex = texIndex;
+				m_TextBatch.vertexBufferPtr++;
+
+                m_TextBatch.indexCount += 6;
+            }
+
+            if (i < str.size() - 1)
+            {
+                double advance = glyph->getAdvance();
+                char nextCharacter = str[i + 1];
+                fontGeometry.getAdvance(advance, character, nextCharacter);
+                x += fsScale * advance + kerning;
+            }
+            else
+            {
+                x += fsScale * glyph->getAdvance() + kerning;
+            }
+
+            maxX = glm::max(maxX, x);
+            minY = glm::min(minY, y);
+        
+        }
+	}
+
+	uint32_t Renderer2D::GetOrInsertQuadTexture(const Ref<Texture> &texture)
     {
         if (texture == nullptr || (texture && !texture->GetHandle()))
             return 0;
@@ -767,4 +1041,41 @@ namespace ignite
 
         return textureIndex;
     }
+
+	uint32_t Renderer2D::GetOrInsertFontTexture(const Ref<Texture> &texture)
+	{
+		if (texture == nullptr || (texture && !texture->GetHandle()))
+			return 0;
+
+		uint32_t textureIndex = 0;
+
+		// find texture
+		for (uint32_t i = 0; i < m_TextBatch.textureSlotIndex; ++i)
+		{
+			if (*m_TextBatch.textureSlots[i] == *texture)
+			{
+				textureIndex = i;
+				break;
+			}
+		}
+
+		// insert if not found
+		if (textureIndex == 0)
+		{
+			if (m_TextBatch.textureSlotIndex >= MAX_TEXTURE_BATCH_COUNT)
+			{
+				End();
+				return MAX_TEXTURE_BATCH_COUNT;
+			}
+
+			textureIndex = m_TextBatch.textureSlotIndex;
+            m_TextBatch.textureSlots[m_TextBatch.textureSlotIndex] = texture;
+            m_TextBatch.textureSlotIndex++;
+
+			s_TextBindingSetCache.clear(); // reset (so we can recreate it)
+		}
+
+		return textureIndex;
+	}
+
 }

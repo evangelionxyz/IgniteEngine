@@ -15,13 +15,14 @@ namespace ignite
 	class AssetImportEvent : public Event
 	{
 	public:
-		AssetImportEvent(const std::vector<std::filesystem::path> &filepaths, AssetType assetType)
-			: m_Filepaths(filepaths), m_AssetType(assetType)
+      AssetImportEvent(const std::vector<std::filesystem::path> &filepaths, AssetType assetType, const std::filesystem::path &targetDirectory = {})
+			: m_Filepaths(filepaths), m_AssetType(assetType), m_TargetDirectory(targetDirectory)
 		{
 		}
 
 		AssetType GetAssetType() { return m_AssetType; }
 		std::vector<std::filesystem::path> &GetFilepaths() { return m_Filepaths; }
+		const std::filesystem::path &GetTargetDirectory() const { return m_TargetDirectory; }
 
 		EVENT_CLASS_TYPE(AssetImport)
 		EVENT_CLASS_CATEGORY(EventCategoryApplication)
@@ -29,6 +30,7 @@ namespace ignite
 
 		AssetType m_AssetType;
 		std::vector<std::filesystem::path> m_Filepaths;
+      std::filesystem::path m_TargetDirectory;
 	};
 }
 

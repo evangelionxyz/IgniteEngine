@@ -440,15 +440,25 @@ namespace ignite {
                 }
 
 				// World Environment
-				if (entity.HasComponent<WorldEnvironment>())
-				{
-					const WorldEnvironment &comp = entity.GetComponent<WorldEnvironment>();
-					sr.BeginMap("AudioSource");
-					{
-						sr.AddKeyValue("HDRHandle", static_cast<uint64_t>(comp.hdrHandle));
-					}
-					sr.EndMap();
-				}
+                if (entity.HasComponent<WorldEnvironment>())
+                {
+                    const WorldEnvironment &comp = entity.GetComponent<WorldEnvironment>();
+                    sr.BeginMap("WorldEnvironment");
+                    {
+                        sr.AddKeyValue("Primary", comp.primary);
+                        sr.AddKeyValue("Enabled", comp.enabled);
+                        sr.AddKeyValue("HDRHandle", static_cast<uint64_t>(comp.hdrHandle));
+                        sr.AddKeyValue("SunColor", comp.sceneGPUData.sunColor);
+                        sr.AddKeyValue("SunAngles", comp.sceneGPUData.sungAngles);
+                        sr.AddKeyValue("SunAngularRadius", comp.sceneGPUData.sunAngularRadius);
+                        sr.AddKeyValue("RenderMode", comp.sceneGPUData.renderMode);
+                        sr.AddKeyValue("DebugShadow", comp.sceneGPUData.debugShadow);
+                        sr.AddKeyValue("Exposure", comp.sceneGPUData.exposure);
+                        sr.AddKeyValue("Gamma", comp.sceneGPUData.gamma);
+                        sr.AddKeyValue("Ambient", comp.sceneGPUData.ambient);
+                    }
+                    sr.EndMap();
+                }
 
                 // Script
                 if (entity.HasComponent<ScriptComponent>())
@@ -792,8 +802,51 @@ namespace ignite {
             if (YAML::Node node = entityNode["WorldEnvironment"])
             {
                 WorldEnvironment &world = desEntity.AddComponent<WorldEnvironment>();
-                world.environment = Environment::Create(desScene.get());
-                world.hdrHandle = AssetHandle(node["HDRHandle"].as<uint64_t>());
+                if (node["HDRHandle"])
+                {
+                    world.hdrHandle = AssetHandle(node["HDRHandle"].as<uint64_t>());
+                }
+                if (node["Primary"])
+                {
+                    world.primary = node["Primary"].as<bool>();
+                }
+                if (node["Enabled"])
+                {
+                    world.enabled = node["Enabled"].as<bool>();
+                }
+
+                if (node["SunColor"])
+                {
+                    world.sceneGPUData.sunColor = node["SunColor"].as<glm::vec4>();
+                }
+                if (node["SunAngles"])
+                {
+                    world.sceneGPUData.sungAngles = node["SunAngles"].as<glm::vec2>();
+                }
+                if (node["SunAngularRadius"])
+                {
+                    world.sceneGPUData.sunAngularRadius = node["SunAngularRadius"].as<float>();
+                }
+                if (node["RenderMode"])
+                {
+                    world.sceneGPUData.renderMode = node["RenderMode"].as<int>();
+                }
+                if (node["DebugShadow"])
+                {
+                    world.sceneGPUData.debugShadow = node["DebugShadow"].as<int>();
+                }
+                if (node["Exposure"])
+                {
+                    world.sceneGPUData.exposure = node["Exposure"].as<float>();
+                }
+                if (node["Gamma"])
+                {
+                    world.sceneGPUData.gamma = node["Gamma"].as<float>();
+                }
+                if (node["Ambient"])
+                {
+                    world.sceneGPUData.ambient = node["Ambient"].as<float>();
+                }
             }
 
             // Static Mesh

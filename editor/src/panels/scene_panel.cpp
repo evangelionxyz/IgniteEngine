@@ -16,6 +16,7 @@
 #include "editor_layer.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/objects/material_2d.hpp"
+#include "ignite/graphics/font.hpp"
 
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/script_field.hpp"
@@ -460,6 +461,62 @@ namespace ignite
                 }
 
             }, false); // false: not allowed to remove the component
+
+            RenderComponent<WorldEnvironment>("World Environment", selectedEntity, [&]()
+            {
+                WorldEnvironment &c = selectedEntity.GetComponent<WorldEnvironment>();
+
+                ImGui::Checkbox("Primary", &c.primary);
+                ImGui::Checkbox("Enabled", &c.enabled);
+
+                const bool hasHDR = c.hdrHandle != AssetHandle(0);
+                std::string buttonLabel = hasHDR ? "HDR Loaded" : "Drag .hdr Here";
+                ImGui::Button(buttonLabel.c_str(), ImVec2(ImGui::GetContentRegionAvail().x - 30.0f, 0.0f));
+
+                if (ImGui::BeginDragDropTarget())
+                {
+                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+                    {
+                        LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                        AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                        AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(handle);
+                        if (metadata.type == AssetType::Texture && metadata.filepath.extension() == ".hdr")
+                        {
+                            c.hdrHandle = handle;
+                            c.loadedHDRHandle = AssetHandle(0);
+                            c.dirtyEnvironment = true;
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+
+                if (hasHDR)
+                {
+                    ImGui::SameLine();
+                    if (ImGui::Button("X"))
+                    {
+                        c.hdrHandle = AssetHandle(0);
+                        c.loadedHDRHandle = AssetHandle(0);
+                        c.dirtyEnvironment = true;
+                    }
+
+                    ImGui::TextDisabled("HDR Handle: %llu", static_cast<u64>(c.hdrHandle));
+                }
+
+                ImGui::Separator();
+                ImGui::ColorEdit4("Sun Color", &c.sceneGPUData.sunColor.x);
+                ImGui::DragFloat2("Sun Angles", &c.sceneGPUData.sungAngles.x, 0.01f);
+                ImGui::DragFloat("Sun Angular Radius", &c.sceneGPUData.sunAngularRadius, 0.01f, 0.0f, 10.0f);
+                ImGui::DragInt("Render Mode", &c.sceneGPUData.renderMode, 1.0f, 0, 16);
+                bool debugShadow = c.sceneGPUData.debugShadow != 0;
+                if (ImGui::Checkbox("Debug Shadow", &debugShadow))
+                {
+                    c.sceneGPUData.debugShadow = debugShadow ? 1 : 0;
+                }
+                ImGui::DragFloat("Exposure", &c.sceneGPUData.exposure, 0.01f, 0.0f, 32.0f);
+                ImGui::DragFloat("Gamma", &c.sceneGPUData.gamma, 0.01f, 0.1f, 8.0f);
+                ImGui::DragFloat("Ambient", &c.sceneGPUData.ambient, 0.01f, 0.0f, 4.0f);
+            });
 
             RenderComponent<Sprite2DComponent>("Sprite 2D", selectedEntity, [&]()
             {
@@ -1214,6 +1271,82 @@ namespace ignite
                 }
             });
 
+			RenderComponent<TextComponent>("Text", selectedEntity, [&]()
+				{
+					TextComponent &c = selectedEntity.GetComponent<TextComponent>();
+
+					const bool isMaterialLoaded = c.material2dHandle != AssetHandle(0);
+					std::string materialLabel = isMaterialLoaded ? "Material Loaded" : "Drag Material2D Here";
+					ImGui::Button(materialLabel.c_str(), ImVec2(ImGui::GetContentRegionAvail().x - 30.0f, 0.0f));
+
+					if (ImGui::BeginDragDropTarget())
+					{
+						if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+						{
+							LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+							AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+							if (Project::GetInstance()->GetAssetManager().GetAssetType(handle) == AssetType::Material2D)
+							{
+								c.material2dHandle = handle;
+							}
+						}
+						ImGui::EndDragDropTarget();
+					}
+
+					if (isMaterialLoaded)
+					{
+						ImGui::SameLine();
+						if (ImGui::Button("X##ClearTextMaterial"))
+						{
+							c.material2dHandle = AssetHandle(0);
+						}
+
+						ImGui::SameLine();
+						ImGui::Text("Material: %llu", static_cast<u64>(c.material2dHandle));
+					}
+
+					const bool isFontLoaded = c.fontHandle != AssetHandle(0);
+					std::string fontLabel = isFontLoaded ? "Font Loaded" : "Drag Font Here";
+					ImGui::Button(fontLabel.c_str(), ImVec2(ImGui::GetContentRegionAvail().x - 30.0f, 0.0f));
+
+					if (ImGui::BeginDragDropTarget())
+					{
+						if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+						{
+							LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+							AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+							if (Project::GetInstance()->GetAssetManager().GetAssetType(handle) == AssetType::Font)
+							{
+								c.fontHandle = handle;
+							}
+						}
+						ImGui::EndDragDropTarget();
+					}
+
+					if (isFontLoaded)
+					{
+						ImGui::SameLine();
+						if (ImGui::Button("X##ClearTextFont"))
+						{
+							c.fontHandle = AssetHandle(0);
+						}
+
+						ImGui::SameLine();
+						ImGui::Text("Font: %llu", static_cast<u64>(c.fontHandle));
+					}
+
+					char textBuffer[2048] = {};
+					strncpy(textBuffer, c.text.c_str(), sizeof(textBuffer) - 1);
+					if (ImGui::InputTextMultiline("Text", textBuffer, sizeof(textBuffer), ImVec2(-FLT_MIN, ImGui::GetTextLineHeight() * 4.0f)))
+					{
+						c.text = textBuffer;
+					}
+
+					ImGui::DragFloat("Kerning", &c.kering, 0.001f, -10.0f, 10.0f);
+					ImGui::DragFloat("Line Spacing", &c.lineSpacing, 0.001f, -10.0f, 10.0f);
+					ImGui::Checkbox("Screen Space", &c.screenSpace);
+				});
+
             RenderComponent<AudioSourceComponent>("Audio Source", selectedEntity, [&]()
             {
                 AudioSourceComponent &c = selectedEntity.GetComponent<AudioSourceComponent>();
@@ -1571,6 +1704,9 @@ namespace ignite
                     case CompType_PointLight2D:
                         entity.AddComponent<PointLight2DComponent>();
                         break;
+                    case CompType_Font:
+                        entity.AddComponent<TextComponent>();
+                        break;
                     case CompType_Rigidbody2D:
                         entity.AddComponent<Rigidbody2DComponent>();
                         break;
@@ -1603,6 +1739,9 @@ namespace ignite
                         break;
                     case CompType_AudioSource:
                         entity.AddComponent<AudioSourceComponent>();
+                        break;
+                    case CompType_WorldEnvironment:
+                        entity.AddComponent<WorldEnvironment>();
                         break;
                     case CompType_Script:
                         entity.AddComponent<ScriptComponent>();

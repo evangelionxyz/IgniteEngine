@@ -32,6 +32,7 @@
 #include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/objects/environment.hpp"
+#include "ignite/graphics/gpu_data.hpp"
 #include "ignite/math/aabb.hpp"
 #include "scene_camera.hpp"
 #include "ignite/core/string_utils.hpp"
@@ -61,6 +62,7 @@ namespace ignite
         { "Sprite 2D", CompType_Sprite2D },
         { "Circle 2D", CompType_Circle2D },
         { "Point Light 2D", CompType_PointLight2D },
+        { "Font", CompType_Font },
         { "Static Mesh", CompType_StaticMesh },
         { "Skeletal Mesh", CompType_SkeletalMesh },
         { "Rigid Body", CompType_Rigidbody },
@@ -69,6 +71,7 @@ namespace ignite
         { "Capsule Collider", CompType_CapsuleCollider },
         { "Mesh Collider", CompType_MeshCollider },
         { "Audio Source", CompType_AudioSource },
+        { "World Environment", CompType_WorldEnvironment },
         { "C# Script", CompType_Script },
     };
 
@@ -328,9 +331,16 @@ namespace ignite
     {
     public:
         Ref<Environment> environment;
-        AssetHandle hdrHandle;
+        AssetHandle hdrHandle = AssetHandle(0);
+
+        Scene_GPUData sceneGPUData;
 
         bool primary = false;
+        bool enabled = true;
+
+        AssetHandle loadedHDRHandle = AssetHandle(0);
+        bool gpuInitialized = false;
+        bool dirtyEnvironment = true;
 
         COMPONENT_CLASS_TYPE(CompType_WorldEnvironment)
     };
@@ -366,6 +376,23 @@ namespace ignite
 
 		COMPONENT_CLASS_TYPE(CompType_Circle2D)
 	};
+
+    class TextComponent : public IComponent
+    {
+    public:
+        AssetHandle fontHandle = AssetHandle(0);
+        AssetHandle material2dHandle = AssetHandle(0);
+        
+        std::string text = "Empty";
+
+        float kering = 0.0f;
+        float lineSpacing = 0.0f;
+        bool screenSpace = false;
+
+        TextComponent() = default;
+
+		COMPONENT_CLASS_TYPE(CompType_Font)
+    };
 
     class StaticMeshComponent : public IComponent
     {
