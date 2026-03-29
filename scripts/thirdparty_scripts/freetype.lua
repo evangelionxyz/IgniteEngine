@@ -7,7 +7,8 @@ project "freetype"
     staticruntime "off"
 
     defines {
-        "BUILD_SHARED_LIBS"
+        "DLL_EXPORT",
+        "FT2_BUILD_LIBRARY"
     }
 
     targetdir (OUTPUT_DIR)
@@ -63,8 +64,6 @@ project "freetype"
     }
 
     includedirs { "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdfgen/freetype/include"}
-
-    defines { "FT2_BUILD_LIBRARY" }
     
     filter "configurations:Debug"
         runtime "Debug"

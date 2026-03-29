@@ -2123,48 +2123,56 @@ namespace ignite
 			const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
 
 			// Preview camera
-            if (Entity cameraEntity = m_Scene->GetPrimaryCamera())
+			if (m_Scene)
             {
-                CameraComponent &cameraComp = cameraEntity.GetComponent<CameraComponent>();
-
-                ImVec2 imagePos = canvasPos;
-                ImVec2 imageSize = canvasSize;
-
-                const float safeCanvasW = glm::max(canvasSize.x, 1.0f);
-                const float safeCanvasH = glm::max(canvasSize.y, 1.0f);
-                const float canvasAspect = safeCanvasW / safeCanvasH;
-
-                float targetAspect = canvasAspect;
-                if (!cameraComp.camera.IsFreeAspect())
+                if (Entity cameraEntity = m_Scene->GetPrimaryCamera())
                 {
-                    targetAspect = glm::max(cameraComp.camera.GetAspectRatioValue(), 0.0001f);
-                }
+					CameraComponent &cameraComp = cameraEntity.GetComponent<CameraComponent>();
 
-                if (canvasAspect > targetAspect)
-                {
-                    imageSize.x = safeCanvasH * targetAspect;
-                    imagePos.x += (safeCanvasW - imageSize.x) * 0.5f;
-                }
-                else
-                {
-                    imageSize.y = safeCanvasW / targetAspect;
-                    imagePos.y += (safeCanvasH - imageSize.y) * 0.5f;
-                }
+					ImVec2 imagePos = canvasPos;
+					ImVec2 imageSize = canvasSize;
 
-                m_ViewportGameRT.rect.min = { imagePos.x, imagePos.y };
-                m_ViewportGameRT.rect.max = { imagePos.x + imageSize.x, imagePos.y + imageSize.y };
+					const float safeCanvasW = glm::max(canvasSize.x, 1.0f);
+					const float safeCanvasH = glm::max(canvasSize.y, 1.0f);
+					const float canvasAspect = safeCanvasW / safeCanvasH;
 
-                ImTextureID previewImage = (ImTextureID)m_ViewportGameRT.composite->GetColorAttachment(0)->GetHandle().Get();
-                ImGui::SetCursorScreenPos(imagePos);
-                ImGui::Image(previewImage, imageSize);
+					float targetAspect = canvasAspect;
+					if (!cameraComp.camera.IsFreeAspect())
+					{
+						targetAspect = glm::max(cameraComp.camera.GetAspectRatioValue(), 0.0001f);
+					}
+
+					if (canvasAspect > targetAspect)
+					{
+						imageSize.x = safeCanvasH * targetAspect;
+						imagePos.x += (safeCanvasW - imageSize.x) * 0.5f;
+					}
+					else
+					{
+						imageSize.y = safeCanvasW / targetAspect;
+						imagePos.y += (safeCanvasH - imageSize.y) * 0.5f;
+					}
+
+					m_ViewportGameRT.rect.min = { imagePos.x, imagePos.y };
+					m_ViewportGameRT.rect.max = { imagePos.x + imageSize.x, imagePos.y + imageSize.y };
+
+					ImTextureID previewImage = (ImTextureID)m_ViewportGameRT.composite->GetColorAttachment(0)->GetHandle().Get();
+					ImGui::SetCursorScreenPos(imagePos);
+					ImGui::Image(previewImage, imageSize);
+                }
+				else
+				{
+					m_ViewportGameRT.rect.min = { canvasPos.x, canvasPos.y };
+					m_ViewportGameRT.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
+					ImGui::Text("No Camera");
+				}
             }
             else
             {
                 m_ViewportGameRT.rect.min = { canvasPos.x, canvasPos.y };
                 m_ViewportGameRT.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
-                ImGui::Text("No Camera");
+                ImGui::Text("No Scene");
             }
-
         }
         ImGui::End();
 	}

@@ -8,6 +8,7 @@
 #include "ignite/core/logger.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "graphics_pipeline.hpp"
+#include "gpu_upload_sync.hpp"
 
 #include "font.hpp"
 #include "texture.hpp"
@@ -30,6 +31,162 @@ namespace ignite
     static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_LineBindingSetCache;
     static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_CircleBindingSetCache;
     static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_TextBindingSetCache;
+
+    static constexpr uint32_t s_BatchGrowThresholdPercent = 90;
+    static constexpr uint32_t s_BatchShrinkThresholdPercent = 30;
+    static constexpr uint32_t s_BatchShrinkFrameThreshold = 300;
+
+    template<typename VertexType>
+    static void ResizeBatch(BatchRender<VertexType> &batch, uint32_t newMaxCount, bool recreateIndexBuffer, nvrhi::ICommandList *uploadCmd)
+    {
+        if (newMaxCount == 0 || newMaxCount == batch.maxCount)
+            return;
+
+        const uint32_t usedVertices = batch.vertexBufferPtr
+            ? static_cast<uint32_t>(batch.vertexBufferPtr - batch.vertexBufferBase)
+            : 0;
+
+        VertexType *newBase = new VertexType[newMaxCount * batch.verticesPerObject];
+        if (batch.vertexBufferBase && usedVertices > 0)
+        {
+            std::copy_n(batch.vertexBufferBase, usedVertices, newBase);
+        }
+
+        delete[] batch.vertexBufferBase;
+        batch.vertexBufferBase = newBase;
+        batch.vertexBufferPtr = batch.vertexBufferBase + usedVertices;
+
+        batch.maxCount = newMaxCount;
+        batch.maxVertices = batch.maxCount * batch.verticesPerObject;
+        batch.maxIndices = batch.maxCount * batch.indicesPerObject;
+
+        const size_t verticesAllocSize = static_cast<size_t>(batch.maxVertices) * sizeof(VertexType);
+        const size_t indicesAllocSize = static_cast<size_t>(batch.maxIndices) * sizeof(uint32_t);
+
+        batch.vertexBuffer = VertexBuffer::Create(verticesAllocSize);
+
+        if (recreateIndexBuffer && batch.indicesPerObject > 0)
+        {
+            batch.indexBuffer = IndexBuffer::Create(indicesAllocSize);
+
+            std::vector<uint32_t> indices(batch.maxIndices);
+            uint32_t offset = 0;
+            for (uint32_t i = 0; i < batch.maxIndices; i += 6)
+            {
+                indices[0 + i] = offset + 0;
+                indices[1 + i] = offset + 1;
+                indices[2 + i] = offset + 2;
+                indices[3 + i] = offset + 0;
+                indices[4 + i] = offset + 3;
+                indices[5 + i] = offset + 1;
+                offset += 4;
+            }
+
+            if (uploadCmd)
+            {
+                batch.indexBuffer->SetData(uploadCmd, Buffer(indices.data(), indices.size() * sizeof(uint32_t)));
+            }
+            else
+            {
+                nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+                nvrhi::CommandListHandle cmd = device->createCommandList();
+                cmd->open();
+                batch.indexBuffer->SetData(cmd, Buffer(indices.data(), indices.size() * sizeof(uint32_t)));
+                cmd->close();
+                device->executeCommandList(cmd);
+            }
+        }
+
+        if (batch.count > batch.maxCount)
+            batch.count = batch.maxCount;
+
+        if (batch.indicesPerObject > 0 && batch.indexCount > batch.maxIndices)
+            batch.indexCount = batch.maxIndices;
+
+        LOG_TRACE("[Renderer 2D] Resizing buffer Vertex: {} bytes, Index: {} bytes", verticesAllocSize, indicesAllocSize);
+    }
+
+    template<typename VertexType>
+    static void EnsureBatchCapacity(BatchRender<VertexType> &batch, uint32_t additionalVertices, uint32_t additionalIndices, bool recreateIndexBuffer, nvrhi::ICommandList *uploadCmd)
+    {
+        const uint32_t usedVertices = batch.vertexBufferPtr
+            ? static_cast<uint32_t>(batch.vertexBufferPtr - batch.vertexBufferBase)
+            : 0;
+
+        const uint32_t requiredVertices = usedVertices + additionalVertices;
+        const uint32_t requiredIndices = batch.indexCount + additionalIndices;
+
+        const uint32_t vertexGrowThreshold = (batch.maxVertices * s_BatchGrowThresholdPercent) / 100;
+        const uint32_t indexGrowThreshold = batch.maxIndices > 0
+            ? (batch.maxIndices * s_BatchGrowThresholdPercent) / 100
+            : 0;
+
+        const bool needGrowByVertex = requiredVertices >= vertexGrowThreshold;
+        const bool needGrowByIndex = batch.indicesPerObject > 0 && requiredIndices >= indexGrowThreshold;
+
+        if (!needGrowByVertex && !needGrowByIndex)
+            return;
+
+        uint32_t newMaxCount = batch.maxCount;
+        while (true)
+        {
+            const uint32_t newMaxVertices = newMaxCount * batch.verticesPerObject;
+            const uint32_t newMaxIndices = newMaxCount * batch.indicesPerObject;
+
+            const bool fitVertices = requiredVertices < (newMaxVertices * s_BatchGrowThresholdPercent) / 100;
+            const bool fitIndices = batch.indicesPerObject == 0
+                || requiredIndices < (newMaxIndices * s_BatchGrowThresholdPercent) / 100;
+
+            if (fitVertices && fitIndices)
+                break;
+
+            newMaxCount *= 2;
+        }
+
+        ResizeBatch(batch, newMaxCount, recreateIndexBuffer, uploadCmd);
+        batch.lowUsageFrames = 0;
+    }
+
+    template<typename VertexType>
+    static void TryShrinkBatch(BatchRender<VertexType> &batch, uint32_t usedVertices, uint32_t usedIndices, bool recreateIndexBuffer, nvrhi::ICommandList *uploadCmd)
+    {
+        if (batch.maxCount <= batch.minCount)
+            return;
+
+        const bool lowVertexUsage = usedVertices < (batch.maxVertices * s_BatchShrinkThresholdPercent) / 100;
+        const bool lowIndexUsage = batch.indicesPerObject == 0
+            || usedIndices < (batch.maxIndices * s_BatchShrinkThresholdPercent) / 100;
+
+        if (lowVertexUsage && lowIndexUsage)
+        {
+            batch.lowUsageFrames++;
+        }
+        else
+        {
+            batch.lowUsageFrames = 0;
+            return;
+        }
+
+        if (batch.lowUsageFrames < s_BatchShrinkFrameThreshold)
+            return;
+
+        const uint32_t targetByVertices = std::max(batch.minCount,
+            static_cast<uint32_t>(std::max<uint32_t>(1, usedVertices) * 2 / std::max<uint32_t>(1, batch.verticesPerObject)));
+        const uint32_t targetByIndices = batch.indicesPerObject > 0
+            ? std::max(batch.minCount,
+                static_cast<uint32_t>(std::max<uint32_t>(1, usedIndices) * 2 / std::max<uint32_t>(1, batch.indicesPerObject)))
+            : batch.minCount;
+
+        const uint32_t target = std::max(targetByVertices, targetByIndices);
+        const uint32_t newMaxCount = std::max(batch.minCount, std::max(target, batch.maxCount / 2));
+
+        if (newMaxCount < batch.maxCount)
+        {
+            ResizeBatch(batch, newMaxCount, recreateIndexBuffer, uploadCmd);
+        }
+
+        batch.lowUsageFrames = 0;
+    }
 
     // Helper to build a quad pipeline for a framebuffer (once) and cache it.
     static Ref<GraphicsPipeline> GetQuadPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
@@ -352,6 +509,13 @@ namespace ignite
 
     void Renderer2D::InitQuadData()
     {
+        m_QuadBatch.minCount = 256;
+        m_QuadBatch.maxCount = m_QuadBatch.minCount;
+        m_QuadBatch.verticesPerObject = 4;
+        m_QuadBatch.indicesPerObject = 6;
+        m_QuadBatch.maxVertices = m_QuadBatch.maxCount * m_QuadBatch.verticesPerObject;
+        m_QuadBatch.maxIndices = m_QuadBatch.maxCount * m_QuadBatch.indicesPerObject;
+
         size_t vertAllocSize = m_QuadBatch.maxVertices * sizeof(Vertex2DQuad);
         m_QuadBatch.vertexBufferBase = new Vertex2DQuad[m_QuadBatch.maxVertices];
 
@@ -394,6 +558,13 @@ namespace ignite
 
     void Renderer2D::InitLineData()
     {
+        m_LineBatch.minCount = 256;
+        m_LineBatch.maxCount = m_LineBatch.minCount;
+        m_LineBatch.verticesPerObject = 24;
+        m_LineBatch.indicesPerObject = 0;
+        m_LineBatch.maxVertices = m_LineBatch.maxCount * m_LineBatch.verticesPerObject;
+        m_LineBatch.maxIndices = 0;
+
         size_t vertAllocSize = m_LineBatch.maxVertices * sizeof(Vertex2DLine);
         m_LineBatch.vertexBufferBase = new Vertex2DLine[m_LineBatch.maxVertices];
         m_LineBatch.vertexBuffer = VertexBuffer::Create(vertAllocSize);
@@ -401,6 +572,13 @@ namespace ignite
 
     void Renderer2D::InitCircleData()
     {
+        m_CircleBatch.minCount = 256;
+        m_CircleBatch.maxCount = m_CircleBatch.minCount;
+        m_CircleBatch.verticesPerObject = 4;
+        m_CircleBatch.indicesPerObject = 6;
+        m_CircleBatch.maxVertices = m_CircleBatch.maxCount * m_CircleBatch.verticesPerObject;
+        m_CircleBatch.maxIndices = m_CircleBatch.maxCount * m_CircleBatch.indicesPerObject;
+
         size_t vertAllocSize = m_CircleBatch.maxVertices * sizeof(Vertex2DCircle);
         m_CircleBatch.vertexBufferBase = new Vertex2DCircle[m_CircleBatch.maxVertices];
         m_CircleBatch.vertexBuffer = VertexBuffer::Create(vertAllocSize);
@@ -432,6 +610,13 @@ namespace ignite
 
 	void Renderer2D::InitTextData()
 	{
+        m_TextBatch.minCount = 256;
+        m_TextBatch.maxCount = m_TextBatch.minCount;
+        m_TextBatch.verticesPerObject = 4;
+        m_TextBatch.indicesPerObject = 6;
+        m_TextBatch.maxVertices = m_TextBatch.maxCount * m_TextBatch.verticesPerObject;
+        m_TextBatch.maxIndices = m_TextBatch.maxCount * m_TextBatch.indicesPerObject;
+
         size_t vertAllocSize = m_TextBatch.maxVertices * sizeof(VertexText);
         m_TextBatch.vertexBufferBase = new VertexText[m_TextBatch.maxVertices];
         m_TextBatch.vertexBuffer = VertexBuffer::Create(vertAllocSize);
@@ -606,6 +791,24 @@ namespace ignite
 
     void Renderer2D::End()
     {
+        const uint32_t quadUsedVertices = m_QuadBatch.vertexBufferPtr
+            ? static_cast<uint32_t>(m_QuadBatch.vertexBufferPtr - m_QuadBatch.vertexBufferBase)
+            : 0;
+        const uint32_t lineUsedVertices = m_LineBatch.vertexBufferPtr
+            ? static_cast<uint32_t>(m_LineBatch.vertexBufferPtr - m_LineBatch.vertexBufferBase)
+            : 0;
+        const uint32_t circleUsedVertices = m_CircleBatch.vertexBufferPtr
+            ? static_cast<uint32_t>(m_CircleBatch.vertexBufferPtr - m_CircleBatch.vertexBufferBase)
+            : 0;
+        const uint32_t textUsedVertices = m_TextBatch.vertexBufferPtr
+            ? static_cast<uint32_t>(m_TextBatch.vertexBufferPtr - m_TextBatch.vertexBufferBase)
+            : 0;
+
+        TryShrinkBatch(m_QuadBatch, quadUsedVertices, m_QuadBatch.indexCount, true, m_Cmd);
+        TryShrinkBatch(m_LineBatch, lineUsedVertices, 0, false, m_Cmd);
+        TryShrinkBatch(m_CircleBatch, circleUsedVertices, m_CircleBatch.indexCount, true, m_Cmd);
+        TryShrinkBatch(m_TextBatch, textUsedVertices, m_TextBatch.indexCount, true, m_Cmd);
+
         m_QuadBatch.indexCount = 0;
         m_QuadBatch.count = 0;
         m_QuadBatch.textureSlotIndex = 1;
@@ -623,8 +826,7 @@ namespace ignite
 
     void Renderer2D::DrawBox(const glm::mat4 &transform, const glm::vec4 &color)
     {
-        if (m_LineBatch.count >= m_LineBatch.maxCount)
-            Renderer2D::End();
+        EnsureBatchCapacity(m_LineBatch, 24, 0, false, m_Cmd);
 
         static glm::vec4 cubeVertices[8] =
         {
@@ -662,8 +864,7 @@ namespace ignite
 
     void Renderer2D::DrawRect(const glm::mat4 &transform, const glm::vec4 &color)
     {
-        if (m_LineBatch.count >= m_LineBatch.maxCount)
-            Renderer2D::End();
+        EnsureBatchCapacity(m_LineBatch, 8, 0, false, m_Cmd);
 
         static constexpr int indices[8][2] =
         {
@@ -690,8 +891,7 @@ namespace ignite
 
     void Renderer2D::DrawLine(const std::vector<glm::vec3> &positions, const glm::vec4 &color)
     {
-        if (m_LineBatch.count >= m_LineBatch.maxCount)
-            Renderer2D::End();
+        EnsureBatchCapacity(m_LineBatch, static_cast<uint32_t>(positions.size()), 0, false, m_Cmd);
 
         for (auto &pos : positions)
         {
@@ -707,8 +907,7 @@ namespace ignite
 
     void Renderer2D::DrawLine(const glm::vec3 &pos0, const glm::vec3 &pos1, const glm::vec4 &color)
     {
-        if (m_LineBatch.count >= m_LineBatch.maxCount)
-            Renderer2D::End();
+        EnsureBatchCapacity(m_LineBatch, 2, 0, false, m_Cmd);
 
         m_LineBatch.vertexBufferPtr->position = pos0;
         m_LineBatch.vertexBufferPtr->color = color;
@@ -750,8 +949,7 @@ namespace ignite
 
 	void Renderer2D::DrawCircle(const glm::mat4 &transform, const glm::vec4 &color, float thickness, float fade)
 	{
-		if (m_CircleBatch.count >= m_CircleBatch.maxCount)
-			Renderer2D::End();
+      EnsureBatchCapacity(m_CircleBatch, 4, 6, true, m_Cmd);
 
 		for (uint32_t i = 0; i < 4; ++i)
 		{
@@ -767,8 +965,7 @@ namespace ignite
 
 	void Renderer2D::DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &tilingFactor)
     {
-        if (m_QuadBatch.count >= m_QuadBatch.maxCount)
-            Renderer2D::End();
+        EnsureBatchCapacity(m_QuadBatch, 4, 6, true, m_Cmd);
 
         static constexpr uint32_t quadVertexCount = 4;
         static constexpr glm::vec2 textureCoords[] =
@@ -826,8 +1023,7 @@ namespace ignite
 
     void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const glm::vec4 &additiveColor, Material2DType materialType, const Ref<Texture> &texture, const glm::vec2 &tilingFactor)
     {
-        if (m_QuadBatch.count >= m_QuadBatch.maxCount)
-            Renderer2D::End();
+        EnsureBatchCapacity(m_QuadBatch, 4, 6, true, m_Cmd);
 
         static constexpr uint32_t quadVertexCount = 4;
         static constexpr glm::vec2 textureCoords[] =
@@ -961,6 +1157,8 @@ namespace ignite
             texCoordMax *= glm::vec2{ texelWidth, texelHeight };
 
             {
+                EnsureBatchCapacity(m_TextBatch, 4, 6, true, m_Cmd);
+
                 m_TextBatch.vertexBufferPtr->position = transform * glm::vec4(quadMin, 0.0f, 1.0f);
                 m_TextBatch.vertexBufferPtr->color = color;
                 m_TextBatch.vertexBufferPtr->texCoord = texCoordMin;
@@ -986,6 +1184,7 @@ namespace ignite
 				m_TextBatch.vertexBufferPtr++;
 
                 m_TextBatch.indexCount += 6;
+                m_TextBatch.count++;
             }
 
             if (i < str.size() - 1)

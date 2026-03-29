@@ -48,9 +48,13 @@ namespace ignite
     template<typename VertexType>
     struct BatchRender
     {
-        const uint32_t maxCount = 1024 * 3;
-        const uint32_t maxVertices = maxCount * 4;
-        const uint32_t maxIndices = maxCount * 6;
+        uint32_t minCount = 256;
+        uint32_t maxCount = minCount;
+        uint32_t verticesPerObject = 4;
+        uint32_t indicesPerObject = 6;
+        uint32_t maxVertices = maxCount * verticesPerObject;
+        uint32_t maxIndices = maxCount * indicesPerObject;
+        uint32_t lowUsageFrames = 0;
         uint8_t textureSlotIndex = 1; // 0 for white texture
         uint32_t indexCount = 0;
         uint32_t count = 0;

@@ -163,6 +163,7 @@ namespace ignite
                 Entity entity = m_ScenePanel->GetSelectedEntity();
                 if (entity.IsValid())
                 {
+                    m_ScenePanel->GetViewportCamera().SetDistance(20.0f);
                     m_ScenePanel->GetViewportCamera().SetTarget(entity.GetComponent<TransformComponent>().translation);
                 }
                 break;
