@@ -382,11 +382,12 @@ namespace ignite
     public:
         AssetHandle fontHandle = AssetHandle(0);
         AssetHandle material2dHandle = AssetHandle(0);
-        
+
         std::string text = "Empty";
 
-        float kering = 0.0f;
-        float lineSpacing = 0.0f;
+        glm::vec4 color = glm::vec4(1.0f);
+        float kerning = 0.0f;
+        float lineSpacing = -0.025f;
         bool screenSpace = false;
 
         TextComponent() = default;

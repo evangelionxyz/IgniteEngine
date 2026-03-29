@@ -74,12 +74,13 @@ namespace
         std::vector<std::shared_ptr<ignite::RenderTarget>> renderTargets;
         vk::SurfaceFormatKHR surfaceFormat{};
         vk::Extent2D extent{};
-        vk::Semaphore acquireSemaphore;
+        vk::Fence acquireFence;
         vk::Semaphore presentSemaphore;
         u32 currentImageIndex = 0;
         u32 pendingWidth = 0;
         u32 pendingHeight = 0;
         bool hasPendingResize = false;
+        bool hasAcquiredImage = false;
     };
 #endif
 }
@@ -668,6 +669,7 @@ namespace ignite
         }
 
         viewportData->currentImageIndex = 0;
+        viewportData->hasAcquiredImage = false;
         if (viewportData->renderTargets.empty())
         {
             deviceManager.m_VulkanDevice.destroySwapchainKHR(viewportData->swapChain);
@@ -708,13 +710,13 @@ namespace ignite
 
         viewportData->surface = vk::SurfaceKHR(reinterpret_cast<VkSurfaceKHR>(static_cast<uintptr_t>(surface)));
 
-        viewportData->acquireSemaphore = deviceManager->m_VulkanDevice.createSemaphore(vk::SemaphoreCreateInfo());
+        viewportData->acquireFence = deviceManager->m_VulkanDevice.createFence(vk::FenceCreateInfo());
         viewportData->presentSemaphore = deviceManager->m_VulkanDevice.createSemaphore(vk::SemaphoreCreateInfo());
 
-        if (!viewportData->acquireSemaphore || !viewportData->presentSemaphore)
+        if (!viewportData->acquireFence || !viewportData->presentSemaphore)
         {
-            if (viewportData->acquireSemaphore)
-                deviceManager->m_VulkanDevice.destroySemaphore(viewportData->acquireSemaphore);
+            if (viewportData->acquireFence)
+                deviceManager->m_VulkanDevice.destroyFence(viewportData->acquireFence);
             if (viewportData->presentSemaphore)
                 deviceManager->m_VulkanDevice.destroySemaphore(viewportData->presentSemaphore);
             deviceManager->m_VulkanInstance.destroySurfaceKHR(viewportData->surface);
@@ -728,7 +730,7 @@ namespace ignite
             static_cast<u32>(std::max(viewport->Size.x, 1.0f)),
             static_cast<u32>(std::max(viewport->Size.y, 1.0f))))
         {
-            deviceManager->m_VulkanDevice.destroySemaphore(viewportData->acquireSemaphore);
+            deviceManager->m_VulkanDevice.destroyFence(viewportData->acquireFence);
             deviceManager->m_VulkanDevice.destroySemaphore(viewportData->presentSemaphore);
             deviceManager->m_VulkanInstance.destroySurfaceKHR(viewportData->surface);
             delete viewportData;
@@ -763,10 +765,10 @@ namespace ignite
                 viewportData->swapChain = nullptr;
             }
 
-            if (viewportData->acquireSemaphore)
+            if (viewportData->acquireFence)
             {
-                deviceManager->m_VulkanDevice.destroySemaphore(viewportData->acquireSemaphore);
-                viewportData->acquireSemaphore = nullptr;
+                deviceManager->m_VulkanDevice.destroyFence(viewportData->acquireFence);
+                viewportData->acquireFence = nullptr;
             }
 
             if (viewportData->presentSemaphore)
@@ -859,12 +861,16 @@ namespace ignite
             }
         }
 
+        deviceManager->m_VulkanDevice.resetFences(1, &viewportData->acquireFence);
+
         const vk::Result acquireResult = deviceManager->m_VulkanDevice.acquireNextImageKHR(
             viewportData->swapChain,
-            std::numeric_limits<uint64_t>::max(),
-            viewportData->acquireSemaphore,
-            vk::Fence(),
+            0,
+            vk::Semaphore(),
+            viewportData->acquireFence,
             &viewportData->currentImageIndex);
+
+        viewportData->hasAcquiredImage = false;
 
         if (acquireResult == vk::Result::eErrorOutOfDateKHR)
         {
@@ -872,10 +878,15 @@ namespace ignite
             return;
         }
 
+        if (acquireResult == vk::Result::eTimeout || acquireResult == vk::Result::eNotReady)
+            return;
+
         if (!(acquireResult == vk::Result::eSuccess || acquireResult == vk::Result::eSuboptimalKHR))
             return;
 
-        deviceManager->m_NvrhiDevice->queueWaitForSemaphore(nvrhi::CommandQueue::Graphics, viewportData->acquireSemaphore, 0);
+        deviceManager->m_VulkanDevice.waitForFences(1, &viewportData->acquireFence, VK_TRUE, std::numeric_limits<uint64_t>::max());
+
+        viewportData->hasAcquiredImage = true;
 
         if (viewportData->currentImageIndex >= viewportData->renderTargets.size())
             return;
@@ -894,6 +905,9 @@ namespace ignite
         if (renderer->m_IsShuttingDown)
             return;
 
+        if (!viewportData->hasAcquiredImage)
+            return;
+
         deviceManager->m_NvrhiDevice->queueSignalSemaphore(nvrhi::CommandQueue::Graphics, viewportData->presentSemaphore, 0);
         deviceManager->m_NvrhiDevice->executeCommandLists(nullptr, 0);
 
@@ -908,6 +922,7 @@ namespace ignite
         if (presentResult == vk::Result::eErrorOutOfDateKHR || presentResult == vk::Result::eSuboptimalKHR)
         {
             viewportData->hasPendingResize = true;
+            viewportData->hasAcquiredImage = false;
             return;
         }
 
@@ -915,6 +930,8 @@ namespace ignite
         {
             LOG_WARN("Failed to present ImGui Vulkan viewport swap chain, result={}", static_cast<int>(presentResult));
         }
+
+        viewportData->hasAcquiredImage = false;
     }
 #endif
 

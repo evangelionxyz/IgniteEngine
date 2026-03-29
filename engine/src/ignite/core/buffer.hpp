@@ -46,8 +46,13 @@ namespace ignite
         {
         }
 
-        static Buffer Copy(Buffer other)
+        static Buffer Copy(const Buffer &other)
         {
+            if (!other.data || other.size == 0)
+            {
+                return {};
+            }
+
             Buffer result(other.size);
             memcpy(result.data, other.data, other.size);
             return result;

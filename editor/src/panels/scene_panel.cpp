@@ -1275,6 +1275,24 @@ namespace ignite
 				{
 					TextComponent &c = selectedEntity.GetComponent<TextComponent>();
 
+					const bool isFontLoaded = c.fontHandle != AssetHandle(0);
+					std::string fontLabel = isFontLoaded ? "Font Loaded" : "Drag Font Here";
+					ImGui::Button(fontLabel.c_str(), ImVec2(ImGui::GetContentRegionAvail().x - 30.0f, 0.0f));
+
+					if (ImGui::BeginDragDropTarget())
+					{
+						if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+						{
+							LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+							AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+							if (Project::GetInstance()->GetAssetManager().GetAssetType(handle) == AssetType::Font)
+							{
+								c.fontHandle = handle;
+							}
+						}
+						ImGui::EndDragDropTarget();
+					}
+
 					const bool isMaterialLoaded = c.material2dHandle != AssetHandle(0);
 					std::string materialLabel = isMaterialLoaded ? "Material Loaded" : "Drag Material2D Here";
 					ImGui::Button(materialLabel.c_str(), ImVec2(ImGui::GetContentRegionAvail().x - 30.0f, 0.0f));
@@ -1305,24 +1323,6 @@ namespace ignite
 						ImGui::Text("Material: %llu", static_cast<u64>(c.material2dHandle));
 					}
 
-					const bool isFontLoaded = c.fontHandle != AssetHandle(0);
-					std::string fontLabel = isFontLoaded ? "Font Loaded" : "Drag Font Here";
-					ImGui::Button(fontLabel.c_str(), ImVec2(ImGui::GetContentRegionAvail().x - 30.0f, 0.0f));
-
-					if (ImGui::BeginDragDropTarget())
-					{
-						if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
-						{
-							LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-							AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-							if (Project::GetInstance()->GetAssetManager().GetAssetType(handle) == AssetType::Font)
-							{
-								c.fontHandle = handle;
-							}
-						}
-						ImGui::EndDragDropTarget();
-					}
-
 					if (isFontLoaded)
 					{
 						ImGui::SameLine();
@@ -1342,7 +1342,8 @@ namespace ignite
 						c.text = textBuffer;
 					}
 
-					ImGui::DragFloat("Kerning", &c.kering, 0.001f, -10.0f, 10.0f);
+					ImGui::ColorEdit4("Color", &c.color.x);
+					ImGui::DragFloat("Kerning", &c.kerning, 0.001f, -10.0f, 10.0f);
 					ImGui::DragFloat("Line Spacing", &c.lineSpacing, 0.001f, -10.0f, 10.0f);
 					ImGui::Checkbox("Screen Space", &c.screenSpace);
 				});

@@ -460,6 +460,23 @@ namespace ignite {
                     sr.EndMap();
                 }
 
+				// Text Component
+				if (entity.HasComponent<TextComponent>())
+				{
+					const TextComponent &comp = entity.GetComponent<TextComponent>();
+					sr.BeginMap("TextComponent");
+					{
+						sr.AddKeyValue("FontHandle", comp.fontHandle);
+						sr.AddKeyValue("Material2DHandle", comp.material2dHandle);
+						sr.AddKeyValue("Text", comp.text);
+						sr.AddKeyValue("Color", comp.color);
+						sr.AddKeyValue("Kerning", comp.kerning);
+						sr.AddKeyValue("LineSpacing", comp.lineSpacing);
+						sr.AddKeyValue("ScreenSpace", comp.screenSpace);
+					}
+					sr.EndMap();
+				}
+
                 // Script
                 if (entity.HasComponent<ScriptComponent>())
                 {
@@ -848,6 +865,41 @@ namespace ignite {
                     world.sceneGPUData.ambient = node["Ambient"].as<float>();
                 }
             }
+
+			// Text Component
+			if (YAML::Node node = entityNode["TextComponent"])
+			{
+                TextComponent &comp = desEntity.AddComponent<TextComponent>();
+                if (node["FontHandle"])
+                {
+                    comp.fontHandle = AssetHandle(node["FontHandle"].as<uint64_t>());
+                }
+				if (node["Material2DHandle"])
+				{
+					comp.material2dHandle= AssetHandle(node["Material2DHandle"].as<uint64_t>());
+				}
+                if (node["Text"])
+                {
+                    comp.text = node["Text"].as<std::string>();
+                }
+
+                if (node["Color"])
+                {
+                    comp.color = node["Color"].as<glm::vec4>();
+                }
+                if (node["Kerning"])
+                {
+                    comp.kerning = node["Kerning"].as<float>();
+                }
+                if (node["LineSpacing"])
+                {
+                    comp.lineSpacing = node["LineSpacing"].as<float>();
+                }
+                if (node["ScreenSpace"])
+                {
+                    comp.screenSpace = node["ScreenSpace"].as<bool>();
+                }
+			}
 
             // Static Mesh
             if (YAML::Node node = entityNode["StaticMesh"])

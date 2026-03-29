@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <stack>
 #include <map>
+#include <unordered_set>
 
 namespace ignite
 {
@@ -101,6 +102,8 @@ namespace ignite
         std::unordered_map<std::string, Ref<Texture>> m_Icons;
         std::unordered_map<std::filesystem::path, FileThumbnail> m_Thumbnails;
         std::queue<std::filesystem::path> m_PendingThumbnailLoads;
+        std::unordered_set<std::filesystem::path> m_ThumbnailLoadsInFlight;
+        uint64_t m_ThumbnailLoadGeneration = 0;
         
         uint64_t m_CurrentFrame = 0;
         static constexpr uint64_t s_ThumbnailUnloadFrameThreshold = 300; // Unload after 5 seconds at 60fps

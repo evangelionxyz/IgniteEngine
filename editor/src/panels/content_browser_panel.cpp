@@ -1154,6 +1154,13 @@ namespace ignite
         {
             // Mark as used this frame
             it->second.lastFrameUsed = m_CurrentFrame;
+
+            if (!it->second.thumbnail && !m_ThumbnailLoadsInFlight.contains(filepath))
+            {
+                m_PendingThumbnailLoads.push(filepath);
+                m_ThumbnailLoadsInFlight.insert(filepath);
+            }
+
             return it->second.thumbnail;
         }
 
@@ -1165,7 +1172,11 @@ namespace ignite
         m_Thumbnails[filepath] = placeholder;
 
         // Add to loading queue instead of starting immediately
-        m_PendingThumbnailLoads.push(filepath);
+        if (!m_ThumbnailLoadsInFlight.contains(filepath))
+        {
+            m_PendingThumbnailLoads.push(filepath);
+            m_ThumbnailLoadsInFlight.insert(filepath);
+        }
 
         return nullptr;
     }
@@ -1175,8 +1186,9 @@ namespace ignite
         // Capture by value to avoid dangling references
         std::filesystem::path capturedPath = filepath;
         int thumbnailSize = m_ThumbnailSize;
+        const uint64_t requestGeneration = m_ThumbnailLoadGeneration;
 
-        Project::GetInstance()->GetAssetManager().SubmitJob([this, capturedPath, thumbnailSize]()
+        Project::GetInstance()->GetAssetManager().SubmitJob([this, capturedPath, thumbnailSize, requestGeneration]()
         {
             TextureCreateInfo createInfo;
             createInfo.format = nvrhi::Format::RGBA8_UNORM;
@@ -1189,8 +1201,14 @@ namespace ignite
             Ref<Texture> loadedTexture = Texture::Create(capturedPath.string().c_str(), createInfo, nullptr);
 
             // Submit to main thread to create command list and finalize GPU upload
-            Application::SubmitToRenderThread([this, capturedPath, loadedTexture]() mutable
+            Application::SubmitToRenderThread([this, capturedPath, loadedTexture, requestGeneration]() mutable
             {
+                if (requestGeneration != m_ThumbnailLoadGeneration)
+                {
+                    m_ThumbnailLoadsInFlight.erase(capturedPath);
+                    return;
+                }
+
                 if (loadedTexture)
                 {
                     nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
@@ -1205,8 +1223,14 @@ namespace ignite
                         cmd->close();
                     }
                     
-                    Application::SubmitWorkerCommandList(cmd, [this, loadedTexture, capturedPath]()
+                    Application::SubmitWorkerCommandList(cmd, [this, loadedTexture, capturedPath, requestGeneration]()
                     {
+                        if (requestGeneration != m_ThumbnailLoadGeneration)
+                        {
+                            m_ThumbnailLoadsInFlight.erase(capturedPath);
+                            return;
+                        }
+
                         loadedTexture->SetReadyFlag(true);
 
 						FileThumbnail ft;
@@ -1223,12 +1247,14 @@ namespace ignite
 						}
 
 						m_Thumbnails[capturedPath] = ft;
+                        m_ThumbnailLoadsInFlight.erase(capturedPath);
                     });
                 }
                 else
                 {
                     // Remove placeholder if loading failed
                     m_Thumbnails.erase(capturedPath);
+                    m_ThumbnailLoadsInFlight.erase(capturedPath);
                 }
             });
         });
@@ -1240,8 +1266,11 @@ namespace ignite
         
         for (const auto& [path, thumbnail] : m_Thumbnails)
         {
-            // Only unload if it has a loaded texture and hasn't been used recently
-            if (thumbnail.thumbnail && (m_CurrentFrame - thumbnail.lastFrameUsed) > s_ThumbnailUnloadFrameThreshold)
+            const bool isStale = (m_CurrentFrame - thumbnail.lastFrameUsed) > s_ThumbnailUnloadFrameThreshold;
+
+            // Unload stale GPU thumbnails and also stale placeholders to prevent map growth.
+            // Keep placeholders that are currently loading to avoid duplicate in-flight reloads.
+            if (isStale && (thumbnail.thumbnail || !m_ThumbnailLoadsInFlight.contains(path)))
             {
                 toUnload.push_back(path);
             }
@@ -1256,7 +1285,9 @@ namespace ignite
 
     void ContentBrowserPanel::ClearThumbnails()
     {
+        m_ThumbnailLoadGeneration++;
         m_Thumbnails.clear();
+        m_ThumbnailLoadsInFlight.clear();
         
         // Clear the pending load queue
         while (!m_PendingThumbnailLoads.empty())
