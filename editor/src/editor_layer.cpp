@@ -525,30 +525,13 @@ namespace ignite
             ImGui::OpenPopup("New Project");
             m_Data.popupNewProjectModal = false;
         }
+		UIProjectCreation();
 
         // dock space
         ImGui::DockSpace(ImGui::GetID("main_dockspace"), ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
-        {
-            ImGui::Begin("Project");
+        ImGui::End();
 
-            if (m_ActiveProject)
-            {
-                const auto &info = m_ActiveProject->GetInfo();
-                std::string projectName = info.name;
-                if (m_ActiveProject->IsDirty())
-                    projectName += "*";
-                ImGui::Text("Name: %s", projectName.c_str());
-                ImGui::Text("Filepath: %s", info.filepath.generic_string().c_str());
-            }
-
-            ImGui::End();
-            
-            // Render GUI
-            UIProjectCreation();
-            UISettings();
-        }
-
-        ImGui::End(); // end dock space
+		UISettings();
     }
 
     void EditorLayer::SetActiveScene(const Ref<Scene> &scene)
@@ -1239,7 +1222,7 @@ namespace ignite
 
     void EditorLayer::UIProjectCreation()
     {
-        ImGui::SetNextWindowSizeConstraints({ 512.0f, 320.0f }, { 512.0f, 320.0f });
+        ImGui::SetNextWindowSizeConstraints({ 640.0f, 320.0f }, { 640.0f, 320.0f });
         if (!ImGui::BeginPopupModal("New Project", nullptr, ImGuiWindowFlags_NoResize))
         {
             return;

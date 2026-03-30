@@ -11,6 +11,7 @@
 #include <format>
 #include <algorithm>
 #include <ranges>
+#include <cstring>
 #include <SDL3/SDL_dialog.h>
 
 namespace ignite
@@ -475,6 +476,22 @@ namespace ignite
                                     DispatchOpenAssetEditorEvent(handle, metadata);
                                 }
                             }
+                            // Rename
+                            if (ImGui::MenuItem("Rename"))
+                            {
+                                m_PopupTargetPath = path;
+                                // prefill buffer with filename
+                                std::string fname = path.filename().generic_string();
+                                std::strncpy(m_PopupInputBuffer, fname.c_str(), sizeof(m_PopupInputBuffer) - 1);
+                                m_ShowRenameModal = true;
+                            }
+
+                            // Delete
+                            if (ImGui::MenuItem("Delete"))
+                            {
+                                m_PopupTargetPath = path;
+                                m_ShowDeleteModal = true;
+                            }
 
                             if (ImGui::MenuItem("Open"))
                             {
@@ -532,6 +549,8 @@ namespace ignite
                     {
                         if (ImGui::MenuItem("New Folder"))
                         {
+                            // show create folder modal
+                            m_ShowCreateFolderModal = true;
                         }
 
                         if (ImGui::MenuItem("Sprite Sheet"))
@@ -570,6 +589,122 @@ namespace ignite
                 }
 
                 ImGui::EndChild();
+            }
+
+            // Create Folder Modal
+            if (m_ShowCreateFolderModal)
+            {
+                ImGui::OpenPopup("Create Folder");
+                m_ShowCreateFolderModal = false;
+            }
+
+            if (ImGui::BeginPopupModal("Create Folder", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+            {
+                ImGui::Text("Create folder in: %s", m_CurrentDirectory.generic_string().c_str());
+                ImGui::Spacing();
+                ImGui::InputText("Folder Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer));
+
+                ImGui::Separator();
+                if (ImGui::Button("Create"))
+                {
+                    std::string name = m_PopupInputBuffer;
+                    if (!name.empty())
+                    {
+                        std::filesystem::path newPath = m_CurrentDirectory / name;
+                        if (!std::filesystem::exists(newPath))
+                        {
+                            std::error_code ec;
+                            std::filesystem::create_directory(newPath, ec);
+                            if (!ec)
+                            {
+                                m_NeedsRefresh = true;
+                            }
+                        }
+                    }
+                    // clear
+                    m_PopupInputBuffer[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel"))
+                {
+                    m_PopupInputBuffer[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
+
+            // Rename Modal
+            if (m_ShowRenameModal)
+            {
+                ImGui::OpenPopup("Rename Item");
+                m_ShowRenameModal = false;
+            }
+
+            if (ImGui::BeginPopupModal("Rename Item", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+            {
+                ImGui::Text("Rename: %s", m_PopupTargetPath.filename().generic_string().c_str());
+                ImGui::Spacing();
+                ImGui::InputText("New Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer));
+
+                ImGui::Separator();
+                if (ImGui::Button("Rename"))
+                {
+                    std::string newName = m_PopupInputBuffer;
+                    if (!newName.empty())
+                    {
+                        std::filesystem::path target = m_PopupTargetPath;
+                        std::filesystem::path dest = target.parent_path() / newName;
+                        std::error_code ec;
+                        std::filesystem::rename(target, dest, ec);
+                        if (!ec)
+                        {
+                            m_NeedsRefresh = true;
+                        }
+                    }
+                    m_PopupInputBuffer[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel"))
+                {
+                    m_PopupInputBuffer[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
+
+            // Delete Confirmation Modal
+            if (m_ShowDeleteModal)
+            {
+                ImGui::OpenPopup("Delete Item");
+                m_ShowDeleteModal = false;
+            }
+
+            if (ImGui::BeginPopupModal("Delete Item", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+            {
+                ImGui::Text("Are you sure you want to delete: %s ?", m_PopupTargetPath.filename().generic_string().c_str());
+                ImGui::Spacing();
+                ImGui::Separator();
+                if (ImGui::Button("Delete"))
+                {
+                    std::error_code ec;
+                    if (std::filesystem::is_directory(m_PopupTargetPath))
+                        std::filesystem::remove_all(m_PopupTargetPath, ec);
+                    else
+                        std::filesystem::remove(m_PopupTargetPath, ec);
+
+                    if (!ec)
+                        m_NeedsRefresh = true;
+
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel"))
+                {
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
             }
 
             ImGui::End();

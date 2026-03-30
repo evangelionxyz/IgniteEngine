@@ -465,8 +465,8 @@ namespace ignite
                 UI::DrawCheckbox("Enabled", &c.enabled);
 
                 const bool hasHDR = c.hdrHandle != AssetHandle(0);
-                std::string buttonLabel = hasHDR ? "HDR Loaded" : "Drag .hdr Here";
-                UI::DrawButtonWithColumn("HDR", buttonLabel.c_str(), nullptr, [&c]()
+                std::string buttonLabel = hasHDR ? "HDR Loaded" : "Drag Here";
+                UI::DrawButtonWithColumn("HDR", buttonLabel.c_str(), nullptr, [&c, &hasHDR]()
                     {
 						if (ImGui::BeginDragDropTarget())
 						{
@@ -484,22 +484,19 @@ namespace ignite
 							}
 							ImGui::EndDragDropTarget();
 						}
+
+						if (hasHDR)
+						{
+							ImGui::SameLine();
+							if (ImGui::Button("X"))
+							{
+								c.hdrHandle = AssetHandle(0);
+								c.loadedHDRHandle = AssetHandle(0);
+								c.dirtyEnvironment = true;
+							}
+						}
                     });
-
                 
-
-                if (hasHDR)
-                {
-                    ImGui::SameLine();
-                    if (ImGui::Button("X"))
-                    {
-                        c.hdrHandle = AssetHandle(0);
-                        c.loadedHDRHandle = AssetHandle(0);
-                        c.dirtyEnvironment = true;
-                    }
-
-                    ImGui::TextDisabled("HDR Handle: %llu", static_cast<u64>(c.hdrHandle));
-                }
 
                 ImGui::Separator();
                 ImGui::ColorEdit4("Sun Color", &c.sceneGPUData.sunColor.x);
@@ -594,7 +591,7 @@ namespace ignite
 
                     const bool isTextureLoaded = material2D->textureHandle != AssetHandle(0);
                     const std::string textureLabel = isTextureLoaded ? std::to_string(material2D->textureHandle) : "Drag Here";
-                    UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&material2D]()
+                    UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&material2D, &isTextureLoaded]()
                         {
 							if (ImGui::BeginDragDropTarget())
 							{
@@ -611,6 +608,15 @@ namespace ignite
 								}
 								ImGui::EndDragDropTarget();
 							}
+
+                            if (isTextureLoaded)
+                            {
+                                ImGui::SameLine();
+                                if (ImGui::Button("X##ClearTexture"))
+                                {
+                                    material2D->textureHandle = AssetHandle(0);
+                                }
+                            }
                         });
                 }
                 else
@@ -657,7 +663,7 @@ namespace ignite
 				bool isMeshLoaded = c.handle != AssetHandle(0);
 
 				std::string buttonLabel = isMeshLoaded ? "Loaded" : "Drag Mesh Here";
-                UI::DrawButtonWithColumn("Mesh Asset", buttonLabel.c_str(), nullptr, [&c]()
+                UI::DrawButtonWithColumn("Mesh Asset", buttonLabel.c_str(), nullptr, [&c, &isMeshLoaded]()
                     {
                         if (ImGui::BeginDragDropTarget())
                         {
@@ -682,17 +688,20 @@ namespace ignite
                             }
                             ImGui::EndDragDropTarget();
                         }
+
+                        if (isMeshLoaded)
+                        {
+                            ImGui::SameLine();
+                            if (ImGui::Button("X"))
+                            {
+                                c.handle = AssetHandle(0); // reset the mesh
+                            }
+                        }
                     });
 
 
                 if (isMeshLoaded)
                 {
-                    ImGui::SameLine();
-                    if (ImGui::Button("X"))
-                    {
-                        c.handle = AssetHandle(0); // reset the mesh
-                    }
-
                     ImGui::Indent(8.0f);
                     ImGui::TextDisabled("Handle: %llu", static_cast<u64>(c.handle));
                     ImGui::Unindent(8.0f);
@@ -846,7 +855,7 @@ namespace ignite
 				bool isMeshLoaded = c.handle != AssetHandle(0);
 
 				std::string buttonLabel = isMeshLoaded ? "Loaded" : "Drag Mesh Here";
-                UI::DrawButtonWithColumn("Mesh Asset", buttonLabel.c_str(), nullptr, [&c]()
+                UI::DrawButtonWithColumn("Mesh Asset", buttonLabel.c_str(), nullptr, [&c, &isMeshLoaded]()
                     {
 						if (ImGui::BeginDragDropTarget())
 						{
@@ -871,16 +880,19 @@ namespace ignite
 							}
 							ImGui::EndDragDropTarget();
 						}
+
+                        if (isMeshLoaded)
+                        {
+                            ImGui::SameLine();
+                            if (ImGui::Button("X"))
+                            {
+                                c.handle = AssetHandle(0); // reset the mesh
+                            }
+                        }
                     });
 
 				if (isMeshLoaded)
 				{
-					ImGui::SameLine();
-					if (ImGui::Button("X"))
-					{
-						c.handle = AssetHandle(0); // reset the mesh
-					}
-
 					ImGui::Indent(8.0f);
 					ImGui::TextDisabled("Handle: %llu", static_cast<u64>(c.handle));
 					ImGui::Unindent(8.0f);
@@ -1258,7 +1270,7 @@ namespace ignite
                     TextComponent &c = selectedEntity.GetComponent<TextComponent>();
 
                     const bool isFontLoaded = c.fontHandle != AssetHandle(0);
-                    std::string fontLabel = isFontLoaded ? "Font Loaded" : "Drag Font Here";
+                    std::string fontLabel = isFontLoaded ? "Font Loaded" : "Drag Here";
                     UI::DrawButtonWithColumn("Font", fontLabel.c_str(), nullptr, [&]()
                         {
                             if (ImGui::BeginDragDropTarget())
@@ -1274,13 +1286,20 @@ namespace ignite
                                 }
                                 ImGui::EndDragDropTarget();
                             }
+
+							if (isFontLoaded)
+							{
+								ImGui::SameLine();
+								if (ImGui::Button("X##ClearTextFont"))
+								{
+									c.fontHandle = AssetHandle(0);
+								}
+							}
                         });
 
-
-
                     const bool isMaterialLoaded = c.material2dHandle != AssetHandle(0);
-                    std::string materialLabel = isMaterialLoaded ? "Material Loaded" : "Drag Material2D Here";
-                    UI::DrawButtonWithColumn("Material", materialLabel.c_str(), nullptr, [&c]()
+                    std::string materialLabel = isMaterialLoaded ? "Material Loaded" : "Drag Here";
+                    UI::DrawButtonWithColumn("Material", materialLabel.c_str(), nullptr, [&c, &isMaterialLoaded]()
                         {
                             if (ImGui::BeginDragDropTarget())
                             {
@@ -1295,32 +1314,16 @@ namespace ignite
                                 }
                                 ImGui::EndDragDropTarget();
                             }
+
+							if (isMaterialLoaded)
+							{
+								ImGui::SameLine();
+								if (ImGui::Button("X##ClearTextMaterial"))
+								{
+									c.material2dHandle = AssetHandle(0);
+								}
+							}
                         });
-
-
-                    if (isMaterialLoaded)
-                    {
-                        ImGui::SameLine();
-                        if (ImGui::Button("X##ClearTextMaterial"))
-                        {
-                            c.material2dHandle = AssetHandle(0);
-                        }
-
-                        ImGui::SameLine();
-                        ImGui::Text("Material: %llu", static_cast<u64>(c.material2dHandle));
-                    }
-
-                    if (isFontLoaded)
-                    {
-                        ImGui::SameLine();
-                        if (ImGui::Button("X##ClearTextFont"))
-                        {
-                            c.fontHandle = AssetHandle(0);
-                        }
-
-                        ImGui::SameLine();
-                        ImGui::Text("Font: %llu", static_cast<u64>(c.fontHandle));
-                    }
 
                     char textBuffer[2048] = {};
                     strncpy(textBuffer, c.text.c_str(), sizeof(textBuffer) - 1);
@@ -1342,7 +1345,7 @@ namespace ignite
                 bool isLoaded = c.handle != AssetHandle(0);
                 std::string label = isLoaded ? std::to_string((uint64_t)c.handle) : "Drag Here";
 
-                UI::DrawButtonWithColumn("Audio", label.c_str(), nullptr, [&c]()
+                UI::DrawButtonWithColumn("Audio", label.c_str(), nullptr, [&c, &isLoaded]()
                     {
 						if (ImGui::BeginDragDropTarget())
 						{
@@ -1365,10 +1368,13 @@ namespace ignite
 							ImGui::EndDragDropTarget();
 						}
 
-                        ImGui::SameLine();
-                        if (ImGui::Button("X"))
+                        if (isLoaded)
                         {
-                            c.handle = AssetHandle(0);
+                            ImGui::SameLine();
+                            if (ImGui::Button("X"))
+                            {
+                                c.handle = AssetHandle(0);
+                            }
                         }
                     });;
                 
@@ -1619,16 +1625,20 @@ namespace ignite
 													ImGui::EndTooltip();
 												}
 
-                                                if (ImGui::Button("X"))
+                                                if (uuid != UUID(0))
                                                 {
-                                                    if (scriptInstance)
-                                                    {
-														scriptInstance->SetFieldValue<uint64_t>(name, 0);
-                                                    }
-                                                    else
-                                                    {
-														instanceField.SetValue<uint64_t>(0);
-                                                    }
+													ImGui::SameLine();
+													if (ImGui::Button("X"))
+													{
+														if (scriptInstance)
+														{
+															scriptInstance->SetFieldValue<uint64_t>(name, 0);
+														}
+														else
+														{
+															instanceField.SetValue<uint64_t>(0);
+														}
+													}
                                                 }
                                             });
                                         break;

@@ -109,5 +109,12 @@ namespace ignite
         static constexpr uint64_t s_ThumbnailUnloadFrameThreshold = 300; // Unload after 5 seconds at 60fps
         
         bool m_NeedsRefresh = false;
+
+        // Modal state for create/rename/delete operations
+        bool m_ShowCreateFolderModal = false;
+        bool m_ShowRenameModal = false;
+        bool m_ShowDeleteModal = false;
+        std::filesystem::path m_PopupTargetPath; // target file/folder for rename/delete
+        char m_PopupInputBuffer[1024] = { 0 }; // used for create/rename names
     };
 }

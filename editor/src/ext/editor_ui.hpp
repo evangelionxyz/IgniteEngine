@@ -175,10 +175,6 @@ namespace ignite::UI
 		ModalWindowDimBg,      // Darken/colorize entire screen behind a modal window, when one is active
 	};
 
-	struct StyleVarBase
-	{
-	};
-
 	class ScopedColorStyle
 	{
 	public:
@@ -186,7 +182,10 @@ namespace ignite::UI
 			: m_Styles(styles)
 		{
 			for (auto s : m_Styles)
-				ImGui::PushStyleColor(static_cast<ImGuiCol>(s.first), ImVec4(s.second.x, s.second.y, s.second.z, s.second.w));
+			{
+				ImGui::PushStyleColor(static_cast<ImGuiCol>(s.first),
+					ImVec4(s.second.x, s.second.y, s.second.z, s.second.w));
+			}
 		}
 		~ScopedColorStyle()
 		{
@@ -543,11 +542,12 @@ namespace ignite::UI
 		// ================================
 		// Z
 		{
-			ScopedColorStyle buttonStyle({
+			ScopedColorStyle buttonStyle(
+			{
 				{ EColorStyle::Button,          { 0.1f, 0.1f, 0.8f, 1.0f } },
 				{ EColorStyle::ButtonHovered,   { 0.3f, 0.3f, 0.9f, 1.0f } },
 				{ EColorStyle::ButtonActive,    { 0.1f, 0.1f, 0.8f, 1.0f } }
-				});
+			});
 
 			if (ImGui::Button("Z", buttonSize))
 			{
