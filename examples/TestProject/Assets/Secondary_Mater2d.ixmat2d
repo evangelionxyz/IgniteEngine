@@ -1,8 +1,8 @@
 Material2D:
   Version: Alpha-0.1
   Name: Secondary_Mater2d
-  TextureHandle: 0
+  TextureHandle: 14048962819861439313
   BaseColor: [0.22222221, 0.22222221, 0.22222221, 1]
   AdditiveColor: [0.02745098, 1, 0.6117647, 1]
   TilingFactor: [1, 1]
-  Type: 1
+  Type: 0

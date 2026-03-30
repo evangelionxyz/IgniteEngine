@@ -515,11 +515,11 @@ namespace ignite
 
             RenderComponent<Sprite2DComponent>("Sprite 2D", selectedEntity, [&]()
             {
-                Sprite2DComponent &c = selectedEntity.GetComponent<Sprite2DComponent>();
+                auto &c = selectedEntity.GetComponent<Sprite2DComponent>();
 
+                // Material 2D
                 bool isMaterialLoaded = c.materialHandle != AssetHandle(0);
-
-                std::string btLabel = isMaterialLoaded ? std::to_string(c.materialHandle) : "Drag Material2D Here";
+                std::string btLabel = isMaterialLoaded ? std::to_string(c.materialHandle) : "Drag Here";
                 UI::DrawButtonWithColumn("Material", btLabel.c_str(), nullptr, [&c, &selectedEntity, &isMaterialLoaded, this]()
                     {
 						if (ImGui::BeginDragDropTarget())
@@ -559,6 +559,36 @@ namespace ignite
 
                 if (material2D)
                 {
+					const bool isTextureLoaded = material2D->textureHandle != AssetHandle(0);
+					const std::string textureLabel = isTextureLoaded ? std::to_string(material2D->textureHandle) : "Drag Here";
+					UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&material2D, &isTextureLoaded]()
+						{
+							if (ImGui::BeginDragDropTarget())
+							{
+								if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+								{
+									LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+									AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+									AssetType type = Project::GetInstance()->GetAssetManager().GetAssetType(handle);
+									if (type == AssetType::Texture)
+									{
+										material2D->textureHandle = handle;
+										material2D->SetDirtyFlag(true);
+									}
+								}
+								ImGui::EndDragDropTarget();
+							}
+
+							if (isTextureLoaded)
+							{
+								ImGui::SameLine();
+								if (ImGui::Button("X##ClearTexture"))
+								{
+									material2D->textureHandle = AssetHandle(0);
+								}
+							}
+						});
+
                     if (ImGui::BeginCombo("Material Type", material2D->data.type == MATERIAL_2D_TYPE_LIT ? "Lit" : "Unlit"))
                     {
                         if (ImGui::Selectable("Unlit", material2D->data.type == MATERIAL_2D_TYPE_UNLIT))
@@ -588,36 +618,6 @@ namespace ignite
                     {
                         material2D->SetDirtyFlag(true);
                     }
-
-                    const bool isTextureLoaded = material2D->textureHandle != AssetHandle(0);
-                    const std::string textureLabel = isTextureLoaded ? std::to_string(material2D->textureHandle) : "Drag Here";
-                    UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&material2D, &isTextureLoaded]()
-                        {
-							if (ImGui::BeginDragDropTarget())
-							{
-								if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
-								{
-									LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-									AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-									AssetType type = Project::GetInstance()->GetAssetManager().GetAssetType(handle);
-									if (type == AssetType::Texture)
-									{
-										material2D->textureHandle = handle;
-										material2D->SetDirtyFlag(true);
-									}
-								}
-								ImGui::EndDragDropTarget();
-							}
-
-                            if (isTextureLoaded)
-                            {
-                                ImGui::SameLine();
-                                if (ImGui::Button("X##ClearTexture"))
-                                {
-                                    material2D->textureHandle = AssetHandle(0);
-                                }
-                            }
-                        });
                 }
                 else
                 {

@@ -121,7 +121,7 @@ namespace ignite
         const glm::vec4 &buttonColor = button->GetCurrentColor();
         const Ref<Texture> image = button->GetImage();
         
-        m_Renderer->DrawQuad(rect, 0.0f, buttonColor, image);
+        m_Renderer->DrawQuad(rect, 0.0f, buttonColor, image, {0.0f, 1.0f}, {1.0f, 0.0f});
     }
 
     Ref<UIRenderer> UIRenderer::Create(uint32_t width, uint32_t height)

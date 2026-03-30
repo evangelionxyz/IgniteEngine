@@ -15,6 +15,9 @@ AssetRegistry:
     - Handle: 5850886667373479827
       Type: Skeleton
       Filepath: Great Sword Jump Attack/SkeletalMesh/Great Sword Jump Attack.ixskel
+    - Handle: 5867990243395963258
+      Type: Texture
+      Filepath: LUNARIS-LOGO-2.png
     - Handle: 5883949835432046130
       Type: SkeletalAnimation
       Filepath: Great Sword Jump Attack/Animation/Great Sword Jump Attack_0.ixanim

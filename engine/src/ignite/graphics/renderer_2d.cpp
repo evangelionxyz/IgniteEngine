@@ -963,18 +963,18 @@ namespace ignite
 		m_CircleBatch.count++;
 	}
 
-	void Renderer2D::DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &tilingFactor)
+	void Renderer2D::DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor)
     {
         EnsureBatchCapacity(m_QuadBatch, 4, 6, true, m_Cmd);
 
         static constexpr uint32_t quadVertexCount = 4;
-        static constexpr glm::vec2 textureCoords[] =
-        {
-            { 0.0f, 1.0f },
-            { 1.0f, 0.0f },
-            { 0.0f, 0.0f },
-            { 1.0f, 1.0f }
-        };
+		const glm::vec2 textureCoords[] =
+		{
+			{ uv0.x, uv0.y },
+			{ uv1.x, uv1.y },
+			{ uv0.x, uv1.y },
+			{ uv1.x, uv0.y }
+		};
 
         const glm::vec4 positions[4] =
         {
@@ -1002,37 +1002,37 @@ namespace ignite
         m_QuadBatch.count++;
     }
 
-    void Renderer2D::DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &tilingFactor)
+    void Renderer2D::DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor)
     {
         glm::mat4 transform = glm::translate(glm::mat4(1.0f), position)
             * glm::rotate(glm::mat4(1.0f), rotation, { 0.0f, 0.0f, 1.0f })
             * glm::scale(glm::mat4(1.0f), { size.x, size.y, 1.0f });
-        DrawQuad(transform, color, texture, tilingFactor);
+        DrawQuad(transform, color, texture, uv0, uv1, tilingFactor);
     }
 
-    void Renderer2D::DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &tilingFactor)
+    void Renderer2D::DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor)
     {
         glm::mat4 transform = glm::translate(glm::mat4(1.0f), position) * glm::scale(glm::mat4(1.0f), { size.x, size.y, 1.0f });
-        DrawQuad(transform, color, texture, tilingFactor);
+        DrawQuad(transform, color, texture, uv0, uv1, tilingFactor);
     }
 
-    void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &tilingFactor)
+    void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor)
     {
-        DrawQuad(transform, color, glm::vec4(0.0f), MATERIAL_2D_TYPE_UNLIT, texture, tilingFactor);
+        DrawQuad(transform, color, glm::vec4(0.0f), MATERIAL_2D_TYPE_UNLIT, texture, uv0, uv1, tilingFactor);
     }
 
-    void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const glm::vec4 &additiveColor, Material2DType materialType, const Ref<Texture> &texture, const glm::vec2 &tilingFactor)
+    void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const glm::vec4 &additiveColor, Material2DType materialType, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor)
     {
         EnsureBatchCapacity(m_QuadBatch, 4, 6, true, m_Cmd);
 
         static constexpr uint32_t quadVertexCount = 4;
-        static constexpr glm::vec2 textureCoords[] =
-        {
-            { 0.0f, 1.0f },
-            { 1.0f, 0.0f },
-            { 0.0f, 0.0f },
-            { 1.0f, 1.0f }
-        };
+		const glm::vec2 textureCoords[] =
+		{
+			{ uv0.x, uv0.y },
+			{ uv1.x, uv1.y },
+			{ uv0.x, uv1.y },
+			{ uv1.x, uv0.y }
+		};
 
 		uint32_t texIndex = GetOrInsertQuadTexture(texture);
 

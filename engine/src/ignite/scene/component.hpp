@@ -350,8 +350,12 @@ namespace ignite
     public:
         AssetHandle handle = AssetHandle(0); // Texture handle
         AssetHandle materialHandle = AssetHandle(0); // Material2D handle
+
         glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
         glm::vec2 tilingFactor = { 1.0f, 1.0f };
+
+        glm::vec2 uv0 = { 0.0f, 1.0f };
+        glm::vec2 uv1 = { 1.0f, 0.0f };
 
         COMPONENT_CLASS_TYPE(CompType_Sprite2D)
     };
