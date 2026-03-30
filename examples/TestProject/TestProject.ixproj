@@ -1,0 +1,7 @@
+Project:
+  Version: Alpha-0.1
+  Name: TestProject
+  AssetPath: Assets
+  AssetRegistry: AssetRegistry.ixreg
+  ScriptModule: C:/Dev/Ignite/examples/TestProject/Bin/TestProject.dll
+  DefaultSceneHandle: 0

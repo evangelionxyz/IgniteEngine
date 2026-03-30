@@ -1,0 +1,124 @@
+Scene:
+  Version: Alpha-0.1
+  Title: New Scene
+  Entities:
+    - ID: 1526093693854368421
+      Name: Empty
+      Type: Node
+      Parent: 4035038001599782878
+      Transform:
+        WorldTranslation: [1.0500001, 0.3499999, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [1.0500001, 0.3499999, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      PointLight2D:
+        Color: [1, 1, 1, 1]
+        Radius: 5
+        Intensity: 1
+        Enabled: true
+    - ID: 4035038001599782878
+      Name: Lighting2D
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [0, 0, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+    - ID: 4079620013279894760
+      Name: WorldEnv
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [0, 0, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      WorldEnvironment:
+        Primary: true
+        Enabled: true
+        HDRHandle: 8487866291550668718
+        SunColor: [1, 1, 1, 1.1]
+        SunAngles: [1.05, 1.51]
+        SunAngularRadius: 0.67
+        RenderMode: 0
+        DebugShadow: 0
+        Exposure: 1.85
+        Gamma: 1.19
+        Ambient: 0.65
+    - ID: 17833650945756935595
+      Name: Sprite
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [-1.05, 0.5, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [-1.05, 0.5, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 13076240160514272371
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+    - ID: 10241510213556530219
+      Name: Sprite
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [-0.05, 1.5, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [-0.05, 1.5, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 13076240160514272371
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+    - ID: 13453779684525687773
+      Name: Camera
+      Type: Camera
+      Parent: 0
+      Transform:
+        WorldTranslation: [0.5916604, 1.9697556, 6.5284166]
+        WorldRotation: [-0.048853334, 0.2262326, 0.011361525, 0.9727811]
+        WorldScale: [0.999998, 0.99999964, 0.99999803]
+        LocalTranslation: [0.5916604, 1.9697556, 6.5284166]
+        LocalRotation: [-0.048853338, 0.22623262, 0.011361526, 0.9727811]
+        LocalScale: [0.999998, 0.99999964, 0.9999981]
+        Visible: true
+      Camera:
+        ProjectionType: 1
+        AspectRatioPreset: 1
+        NearClip: 0.1
+        FarClip: 1000
+        Fov: 60
+        Primary: true
+    - ID: 2105128037324554352
+      Name: SkeletalMesh
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [-1.1, 0, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.011625, 0.011625, 0.011625]
+        LocalTranslation: [-1.1, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.011625, 0.011625, 0.011625]
+        Visible: true
+      SkeletalMesh:
+        Handle: 1146833996653238217

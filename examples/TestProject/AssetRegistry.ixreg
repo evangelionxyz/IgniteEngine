@@ -1,0 +1,68 @@
+AssetRegistry:
+  Assets:
+    - Handle: 23797601587078018
+      Type: SkeletalAnimation
+      Filepath: Great Sword Jump Attack/Animation/Great Sword Jump Attack_0.ixanim
+    - Handle: 1146833996653238217
+      Type: SkeletalMesh
+      Filepath: Great Sword Jump Attack/SkeletalMesh/Great Sword Jump Attack.ixskm
+    - Handle: 2730403899731088208
+      Type: SkeletalAnimation
+      Filepath: Great Sword Jump Attack/Animation/Great Sword Jump Attack_0.ixanim
+    - Handle: 5784425294381670522
+      Type: Texture
+      Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_2_.png
+    - Handle: 5850886667373479827
+      Type: Skeleton
+      Filepath: Great Sword Jump Attack/SkeletalMesh/Great Sword Jump Attack.ixskel
+    - Handle: 5883949835432046130
+      Type: SkeletalAnimation
+      Filepath: Great Sword Jump Attack/Animation/Great Sword Jump Attack_0.ixanim
+    - Handle: 6496642200112123619
+      Type: Scene
+      Filepath: Scene/Animations.ixscene
+    - Handle: 6895963861277518904
+      Type: Texture
+      Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_0_.png
+    - Handle: 7950879191016284909
+      Type: SpriteSheet
+      Filepath: NewSpriteSheet.ixsp
+    - Handle: 8487866291550668718
+      Type: Texture
+      Filepath: klippad_sunrise_2_2k.hdr
+    - Handle: 9420462621085832834
+      Type: Font
+      Filepath: segoeui.ttf
+    - Handle: 9637491453112083221
+      Type: Scene
+      Filepath: Scene/TestScene.ixscene
+    - Handle: 10607535596036951705
+      Type: Material
+      Filepath: Great Sword Jump Attack/Material/MariaMat.ixmat
+    - Handle: 12873815896187692576
+      Type: Scene
+      Filepath: Scene/DefaultScene.ixscene
+    - Handle: 13076240160514272371
+      Type: Material2D
+      Filepath: Default_Mat2d.ixmat2d
+    - Handle: 14048962819861439313
+      Type: Texture
+      Filepath: segoeui_msdf.png
+    - Handle: 14651447316888264835
+      Type: Material2D
+      Filepath: Secondary_Mater2d.ixmat2d
+    - Handle: 15618750618960578444
+      Type: Skeleton
+      Filepath: Great Sword Jump Attack/SkeletalMesh/Great Sword Jump Attack.ixskel
+    - Handle: 15807500425735898075
+      Type: Texture
+      Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_1_.png
+    - Handle: 16099940366770328639
+      Type: Invalid
+      Filepath: Scene/imgui.ini
+    - Handle: 16477014767729516534
+      Type: Skeleton
+      Filepath: Great Sword Jump Attack/SkeletalMesh/Great Sword Jump Attack.ixskel
+    - Handle: 16733559418084721288
+      Type: Material2D
+      Filepath: Background_Mat2d.ixmat2d
