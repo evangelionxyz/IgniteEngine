@@ -143,6 +143,7 @@ project "IgniteEngine"
             runtime "Debug"
             symbols "on"
             defines {
+                "IGN_DEBUG_BUILD",
                 "DEBUG",
                 "_DEBUG"
             }
@@ -166,6 +167,7 @@ project "IgniteEngine"
             optimize "on"
             symbols "on" -- with debug info
             defines {
+                "IGN_RELEASE_BUILD",
                 "NDEBUG"
             }
             links {
@@ -189,6 +191,7 @@ project "IgniteEngine"
             optimize "speed"
             symbols "off" -- without debug info
             defines {
+                "IGN_SHIPPING_BUILD",
                 "NDEBUG"
             }
             links {

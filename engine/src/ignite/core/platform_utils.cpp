@@ -29,14 +29,53 @@
     #include <Windows.h>
     #include <ShObjIdl.h>
     #include <commdlg.h>
+    #include <objbase.h> // for CoCreateGuid
 #elif PLATFORM_LINUX
     #include <iostream>
     #include <memory>
     #include <stdexcept>
     #include <array>
+    #include <unistd.h>
 #endif
 
+#include <filesystem>
+
 namespace ignite {
+
+    // --- Executable helpers ---
+#ifdef PLATFORM_WINDOWS
+    std::filesystem::path GetExecutablePath()
+    {
+        char buffer[MAX_PATH] = { 0 };
+        DWORD size = GetModuleFileNameA(nullptr, buffer, MAX_PATH);
+        if (size == 0 || size == MAX_PATH)
+            return std::filesystem::current_path();
+        return std::filesystem::path(std::string(buffer, buffer + size));
+    }
+#elif defined(PLATFORM_LINUX)
+    std::filesystem::path GetExecutablePath()
+    {
+        std::array<char, 1024> buffer;
+        ssize_t len = readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
+        if (len == -1)
+            return std::filesystem::current_path();
+        buffer[len] = '\0';
+        return std::filesystem::path(buffer.data());
+    }
+#else
+    std::filesystem::path GetExecutablePath()
+    {
+        return std::filesystem::current_path();
+    }
+#endif
+
+    std::filesystem::path GetExecutableDirectory()
+    {
+        auto exe = GetExecutablePath();
+        if (exe.empty())
+            return std::filesystem::current_path();
+        return exe.parent_path();
+    }
 
 #ifdef PLATFORM_WINDOWS
 

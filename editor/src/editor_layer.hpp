@@ -97,6 +97,8 @@ namespace ignite
         static void OnLoadHDRTextureSelected(void *userData, const char *const *filelist, int filter);
 
         void ProcessPendingFileLoading();
+
+        void UIProjectCreation();
         void UISettings();
 
         ScenePanel *m_ScenePanel;

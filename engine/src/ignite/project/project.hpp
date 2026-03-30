@@ -78,7 +78,7 @@ namespace ignite
 
         std::filesystem::path GetSolutionFilepath() const
         {
-            return GetDirectory() / std::string(m_Info.name + ".sln");
+            return GetDirectory() / std::string(m_Info.name + ".slnx");
         }
 
         std::filesystem::path GetAssetDirectory() const
@@ -139,8 +139,9 @@ namespace ignite
         virtual AssetType GetAssetType() override { return GetStaticType(); }
 
     private:
+        void CreateDirectories();
+        void CopyDependencies();
         void GenerateProject();
-        void CopyManagedAssemblies();
 
         Ref<Scene> m_ActiveScene; // current active scene in editor
         ProjectInfo m_Info;

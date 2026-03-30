@@ -412,7 +412,6 @@ namespace ignite
 
     void ScriptEngine::ClearSceneContext()
     {
-        m_Scene = nullptr;
 
         for (auto &instance : scriptEngineData->entityInstances)
         {
@@ -427,6 +426,8 @@ namespace ignite
             scriptEngineData->appAssemblyFileWatcher.reset();
             ReloadAssembly();
         }
+
+		m_Scene = nullptr;
     }
 
     bool ScriptEngine::EntityClassExists(const std::string &fullClassName)

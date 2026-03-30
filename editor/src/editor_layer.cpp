@@ -11,7 +11,7 @@
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/graphics/objects/shadow_map.hpp"
-
+#include "ignite/core/platform_utils.hpp"
 #include "stb_image_write.h"
 
 #include <cmath>
@@ -526,112 +526,6 @@ namespace ignite
             m_Data.popupNewProjectModal = false;
         }
 
-        if (ImGui::BeginPopupModal("New Project", nullptr, 0))
-        {
-            ImGui::Text("Create a brand new project here...");
-
-            static char nameBuffer[128] = {};
-            if (ImGui::InputText("Project Name", nameBuffer, 128))
-            {
-                m_Data.projectCreateInfo.name = std::string(nameBuffer);
-            }
-
-            static char filepathBuffer[256] = {};
-            if (!m_Data.projectCreateInfo.filepath.empty())
-            {
-                std::string filepathCopy = m_Data.projectCreateInfo.filepath.generic_string();
-                if (filepathCopy.length() < sizeof(filepathBuffer))
-                    memcpy(filepathBuffer, filepathCopy.c_str(), filepathCopy.length() + 1);
-            }
-
-            if (ImGui::InputText("Location", filepathBuffer, sizeof(filepathBuffer), ImGuiInputTextFlags_ReadOnly))
-            {
-                m_Data.projectCreateInfo.filepath = std::string(filepathBuffer);
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button("..."))
-            {
-                SDL_ShowOpenFolderDialog(OnProjectFolderSelected, this,
-                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
-                    nullptr, false);
-            }
-
-            if (ImGui::Button("Create"))
-            {
-                if (!m_Data.projectCreateInfo.name.empty() && !m_Data.projectCreateInfo.filepath.empty())
-                {
-                    while (m_Data.projectCreateInfo.name.find(' ') != std::string::npos)
-                    {
-                        const size_t spacePos = m_Data.projectCreateInfo.name.find(' ');
-                        m_Data.projectCreateInfo.name.replace(spacePos, 1, "");
-                    }
-
-                    m_Data.projectCreateInfo.filepath /= (m_Data.projectCreateInfo.name + ".ixproj");
-
-                    if (Ref<Project> newProject = Project::Create(m_Data.projectCreateInfo))
-                    {
-                        m_ActiveProject = newProject;
-
-                        ProjectSerializer serializer(m_ActiveProject.get());
-                        serializer.Serialize(m_Data.projectCreateInfo.filepath);
-
-                        // Reload content browser
-                        m_ContentBrowserPanel->LoadProjectFiles();
-
-                        if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
-                        {
-                            // Use GetAssetImmediate since we're in modal and need synchronous load
-                            if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
-                            {
-                                m_EditorScene = SceneManager::Copy(activeScene);
-                                m_EditorScene->SetDirtyFlag(false);
-
-                                SetActiveScene(m_EditorScene);
-
-                                AssetMetaData metadata = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
-                                auto scenePath = m_ActiveProject->GetAssetFilepath(metadata.filepath);
-                                m_CurrentSceneFilePath = scenePath;
-                            }
-                        }
-                        else
-                        {
-                            // Create default scene
-                            NewScene();
-                        }
-                    }
-
-                    m_Data.projectCreateInfo.filepath.clear();
-                    m_Data.projectCreateInfo.name.clear();
-
-                    memset(nameBuffer, 0, sizeof(nameBuffer));
-                    memset(filepathBuffer, 0, sizeof(filepathBuffer));
-
-                    ImGui::CloseCurrentPopup();
-                }
-                else
-                {
-                    // TODO: Show error message text
-                }
-            }
-
-            ImGui::SameLine();
-
-            if (ImGui::Button("Cancel"))
-            {
-                m_Data.projectCreateInfo.filepath.clear();
-                m_Data.projectCreateInfo.name.clear();
-
-                memset(nameBuffer, 0, sizeof(nameBuffer));
-                memset(filepathBuffer, 0, sizeof(filepathBuffer));
-
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::EndPopup();
-        }
-
-
         // dock space
         ImGui::DockSpace(ImGui::GetID("main_dockspace"), ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
         {
@@ -650,6 +544,7 @@ namespace ignite
             ImGui::End();
             
             // Render GUI
+            UIProjectCreation();
             UISettings();
         }
 
@@ -1117,7 +1012,7 @@ namespace ignite
         if (!filepath.empty())
         {
             EditorLayer* editor = static_cast<EditorLayer*>(userData);
-            editor->m_Data.projectCreateInfo.filepath = std::filesystem::path(filepath);
+            editor->m_Data.projectCreateInfo.filepath = std::filesystem::path(filepath) / editor->m_Data.projectCreateInfo.name; // Append project name
         }
     }
 
@@ -1342,7 +1237,138 @@ namespace ignite
         }
     }
 
-    void EditorLayer::UISettings()
+    void EditorLayer::UIProjectCreation()
+    {
+        ImGui::SetNextWindowSizeConstraints({ 512.0f, 320.0f }, { 512.0f, 320.0f });
+        if (!ImGui::BeginPopupModal("New Project", nullptr, ImGuiWindowFlags_NoResize))
+        {
+            return;
+        }
+
+        ImGui::Text("Create a brand new project");
+        ImGui::Separator();
+
+        static char nameBuffer[128] = {};
+
+        // Use a simple two-column table for labels and controls
+        if (ImGui::BeginTable("proj_create_table", 2, ImGuiTableFlags_SizingStretchProp))
+        {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Project Name");
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::InputText("##ProjectName", nameBuffer, sizeof(nameBuffer)))
+            {
+                m_Data.projectCreateInfo.name = std::string(nameBuffer);
+            }
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Location");
+            ImGui::TableNextColumn();
+            // Path input with Browse button
+            ImGui::PushItemWidth(-120);
+            std::string pathStr = m_Data.projectCreateInfo.filepath.generic_string();
+            char pathBuf[1024] = {};
+            if (!pathStr.empty()) strncpy(pathBuf, pathStr.c_str(), sizeof(pathBuf) - 1);
+            if (ImGui::InputText("##ProjectLocation", pathBuf, sizeof(pathBuf)))
+            {
+                m_Data.projectCreateInfo.filepath = std::filesystem::path(pathBuf);
+            }
+            ImGui::PopItemWidth();
+            ImGui::SameLine();
+            if (ImGui::Button("Browse"))
+            {
+                std::string filepath = FileDialogs::SelectFolder();
+                if (!filepath.empty())
+                {
+                    m_Data.projectCreateInfo.filepath = std::filesystem::path(filepath) / m_Data.projectCreateInfo.name;
+                }
+            }
+
+            ImGui::EndTable();
+        }
+
+        ImGui::Spacing();
+        ImGui::TextWrapped("Note: A sample `Game.cs` will only be created when no scripts exist for the project. Existing user scripts will not be overwritten.");
+
+        ImGui::Spacing();
+
+        // Actions
+        const bool isProjectPathValid = !m_Data.projectCreateInfo.filepath.empty() && !m_Data.projectCreateInfo.name.empty();
+
+        ImGui::Separator();
+
+        ImGui::Spacing();
+
+        ImGui::BeginDisabled(!isProjectPathValid);
+        ImGui::SameLine(ImGui::GetWindowWidth() - 220);
+        if (ImGui::Button("Create", ImVec2(100, 0)))
+        {
+            // sanitize name
+            while (m_Data.projectCreateInfo.name.find(' ') != std::string::npos)
+            {
+                const size_t spacePos = m_Data.projectCreateInfo.name.find(' ');
+                m_Data.projectCreateInfo.name.replace(spacePos, 1, "");
+            }
+
+            m_Data.projectCreateInfo.filepath /= (m_Data.projectCreateInfo.name + ".ixproj");
+
+            if (Ref<Project> newProject = Project::Create(m_Data.projectCreateInfo))
+            {
+                m_ActiveProject = newProject;
+
+                ProjectSerializer serializer(m_ActiveProject.get());
+                serializer.Serialize(m_Data.projectCreateInfo.filepath);
+
+                // Reload content browser
+                m_ContentBrowserPanel->LoadProjectFiles();
+
+                if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
+                {
+                    if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
+                    {
+                        m_EditorScene = SceneManager::Copy(activeScene);
+                        m_EditorScene->SetDirtyFlag(false);
+
+                        SetActiveScene(m_EditorScene);
+
+                        AssetMetaData metadata = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
+                        auto scenePath = m_ActiveProject->GetAssetFilepath(metadata.filepath);
+                        m_CurrentSceneFilePath = scenePath;
+                    }
+                }
+                else
+                {
+                    NewScene();
+                }
+
+                // clear modal inputs
+                m_Data.projectCreateInfo.filepath.clear();
+                m_Data.projectCreateInfo.name.clear();
+                memset(nameBuffer, 0, sizeof(nameBuffer));
+
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::EndDisabled();
+
+        ImGui::SameLine(ImGui::GetWindowWidth() - 110);
+        if (ImGui::Button("Cancel", ImVec2(100, 0)))
+        {
+            m_Data.projectCreateInfo.filepath.clear();
+            m_Data.projectCreateInfo.name.clear();
+            memset(nameBuffer, 0, sizeof(nameBuffer));
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+
+	void EditorLayer::UISettings()
     {
         ImGui::Begin("Settings", &m_Data.settingsWindow);
 

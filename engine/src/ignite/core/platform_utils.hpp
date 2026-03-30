@@ -25,6 +25,7 @@
 
 #include <string>
 #include <vector>
+#include <filesystem>
 
 namespace ignite {
 
@@ -35,4 +36,10 @@ namespace ignite {
         static std::string SelectFolder();
         static std::string SaveFile(const char *filter);
     };
+
+    // Returns the full path to the running executable, e.g. C:\Dev\Ignite\Build\MyExe.exe
+    std::filesystem::path GetExecutablePath();
+
+    // Returns the directory that contains the running executable, e.g. C:\Dev\Ignite\Build
+    std::filesystem::path GetExecutableDirectory();
 }
