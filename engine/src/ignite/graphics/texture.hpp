@@ -58,6 +58,11 @@ namespace ignite
         nvrhi::Format format = nvrhi::Format::UNKNOWN;
         nvrhi::ResourceStates initialState = nvrhi::ResourceStates::Unknown;
         nvrhi::TextureDimension dimension = nvrhi::TextureDimension::Texture2D;
+
+        nvrhi::SamplerAddressMode samplerAddressU = nvrhi::SamplerAddressMode::Repeat;
+        nvrhi::SamplerAddressMode samplerAddressV = nvrhi::SamplerAddressMode::Repeat;
+        nvrhi::SamplerAddressMode samplerAddressW = nvrhi::SamplerAddressMode::Repeat;
+        bool samplerLinearFiltering = true;
     };
 
     class Texture : public Asset
@@ -107,7 +112,6 @@ namespace ignite
         std::filesystem::path m_Filepath;
         nvrhi::TextureHandle m_Handle;
         std::string m_DebugName;
-        bool m_HasUploaded = false;
     };
 
 }

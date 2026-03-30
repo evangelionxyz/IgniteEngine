@@ -34,8 +34,8 @@ namespace ignite
     {
         glm::vec3 position;
         glm::vec3 normal;
-		glm::vec3 tangent;
-		glm::vec3 bitangent;
+        glm::vec3 tangent;
+        glm::vec3 bitangent;
         glm::vec2 uv;
     };
 
@@ -43,8 +43,8 @@ namespace ignite
     {
         glm::vec3 position;
         glm::vec3 normal;
-		glm::vec3 tangent;
-		glm::vec3 bitangent;
+        glm::vec3 tangent;
+        glm::vec3 bitangent;
         glm::vec2 uv;
         uint32_t boneIDs[4] = { 0 };
         float weights[4] = { 0.0f };
@@ -74,7 +74,9 @@ namespace ignite
         glm::vec2 texCoord;
         glm::vec2 tilingFactor;
         glm::vec4 color;
-        u32 texIndex;
+        glm::vec4 additiveColor;
+        uint32_t texIndex;
+        uint32_t materialType;
     };
 
     struct Vertex2DLine
@@ -82,5 +84,20 @@ namespace ignite
         glm::vec3 position;
         glm::vec4 color;
     };
+
+    struct Vertex2DCircle
+    {
+        glm::vec4 position;
+        glm::vec2 localPosition;
+        glm::vec4 color;
+    };
+
+	struct VertexText
+	{
+		glm::vec3 position;
+		glm::vec4 color;
+		glm::vec2 texCoord;
+		uint32_t texIndex;
+	};
 
 }

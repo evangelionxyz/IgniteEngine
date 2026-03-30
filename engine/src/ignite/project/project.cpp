@@ -1,105 +1,89 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "project.hpp"
 #include "ignite/core/string_utils.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/scripting/script_engine.hpp"
+#include "ignite/core/platform_utils.hpp"
+
+#include <array>
+#include <sstream>
+#include <iomanip>
+#include <algorithm>
 
 #include <fstream>
 #include <format>
 
 namespace ignite
 {
-    static std::string s_PremakeTemplate =
-R"(workspace "{PROJECT_NAME}"
-    configurations { "Release" }
-    flags { "MultiProcessorCompile" }
-
-    startproject "{PROJECT_NAME}"
-
-    project "{PROJECT_NAME}"
-        kind "SharedLib"
-        language "C#"
-        dotnetframework "net9.0"
-        location "%{wks.location}"
-
-        targetdir ( "%{prj.location}/Bin" )
-        objdir    ( "%{prj.location}/Bin/Objs" )
-        files     { "%{prj.location}/Scripts/**.cs" }
-
-        links { 
-            "Bin/IgniteScriptEngine.dll",
-            "Bin/MochiSharp.Managed.dll"
-        }
-
-        filter { "action:vs* or system:windows" }
-            vsprops {
-                AppendTargetFrameworkToOutputPath = "false",
-                Nullable = "enable",
-                CopyLocalLockFileAssemblies = "true",
-                EnableDynamicLoading = "true",
-                ImplicitUsing = "enable"
-            }
-
-        filter {}
-
-        filter "system:linux"
-            pic "On"
-            
-        filter "system:windows"
-            systemversion "latest"
-
-        filter "configurations:Debug"
-            optimize "Off"
-            symbols "Default"
-
-        filter "configurations:Release"
-            optimize "On"
-            symbols "Default"
-
-        filter "configurations:Shipping"
-            optimize "Full"
-            symbols "Off"
-)";
-
     static std::string s_CSSharpScriptTemplate =
-R"(using IgniteEngine;
+R"(using Ignite;
 using System;
 
 namespace {PROJECT_NAME};
 public class Game : Entity
 {
-    public void OnCreate()
+    public override void OnCreate()
     {
         // Initialize you object here
         Console.WriteLine("Hello From C#!");
     }
 
-    public void OnUpdate(float deltaTime)
+    public override void OnUpdate(float deltaTime)
     {
         // Update loop
     }
+}
+)";
+
+    static std::string s_SlnxTemplate = 
+R"(<Solution Description="Visual Studio slnx" Version="1.4">
+  <Configurations>
+    <BuildType Name="Release" />
+  </Configurations>
+  <Project Path="{PROJECT_NAME}.csproj" Id="{GENERATED_GUID}" />
+</Solution>
+)";
+
+    static std::string s_CSProjTemplate =
+R"(<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <TargetFramework>net9.0</TargetFramework>
+    <Configurations>Release</Configurations>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <Optimize>true</Optimize>
+    <OutputPath>Bin\</OutputPath>
+    <IntermediateOutputPath>Bin\Objs\</IntermediateOutputPath>
+    <DefineConstants></DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <ImplicitUsing>enable</ImplicitUsing>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <Reference Include="MochiSharp.Managed">
+      <HintPath>Bin\MochiSharp.Managed.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Scripts\Game.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="IgniteScriptEngine">
+      <HintPath>Bin\IgniteScriptEngine.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>
 )";
 
     Project *project = nullptr;
@@ -180,12 +164,19 @@ public class Game : Entity
 
     bool Project::BuildSolution()
     {
-        // execute build.batch
-        std::string buildCommand = "msbuild " + GetSolutionFilepath().generic_string();
-        std::system(buildCommand.c_str());
+		// restore NuGet
+        {
+			std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /t:Restore /p:Configuration=Release /p:Platform=\"Any CPU\"";
+			std::system(buildCommand.c_str());
+		}
 
+        // Build
+        {
+			std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /p:Configuration=Release /p:Platform=\"Any CPU\"";
+			std::system(buildCommand.c_str());
+        }
+        
         m_Info.scriptModuleFilepath = std::format("{}/{}.dll", GetScriptBinDirectory().string(), m_Info.name);
-
         bool success = std::filesystem::exists(GetDirectory() / m_Info.scriptModuleFilepath);
 
         // Validate .dll file
@@ -193,60 +184,201 @@ public class Game : Entity
         return success;
     }
 
-    void Project::GenerateProject()
+	void Project::CreateDirectories()
+	{
+		std::filesystem::path projectDir = GetDirectory();
+
+		// Create asset directory
+		std::filesystem::path assetDirectory = GetAssetDirectory();
+		if (!std::filesystem::exists(assetDirectory))
+			std::filesystem::create_directories(assetDirectory);
+
+		// Create script directory
+		std::filesystem::path scriptDirectory = GetScriptsDirectory();
+		if (!std::filesystem::exists(scriptDirectory))
+			std::filesystem::create_directories(scriptDirectory);
+	}
+
+	void Project::CopyDependencies()
+	{
+		// copy IgniteScriptEngine.dll to project dir
+		std::filesystem::path projectBinDir = GetScriptBinDirectory();
+		if (!std::filesystem::exists(projectBinDir))
+		{
+			std::filesystem::create_directory(projectBinDir);
+		}
+
+        static std::array<std::string, 5> dependencies =
+        {
+            "IgniteScriptEngine.dll",
+            "IgniteScriptEngine.deps.json",
+            "MochiSharp.Managed.dll",
+            "MochiSharp.Managed.deps.json",
+            "MochiSharp.Managed.runtimeconfig.json"
+        };
+
+        // Candidate source directories to search for dependencies. Prefer the executable directory.
+        std::filesystem::path exeDir = GetExecutableDirectory();
+        std::vector<std::filesystem::path> candidates = {
+            exeDir,
+            exeDir / "bin",
+            exeDir / "bin" / "Debug",
+            exeDir / "bin" / "Release",
+            exeDir / "Bin",
+            exeDir / "Bin" / "Debug",
+            exeDir / "Bin" / "Release"
+        };
+
+        bool dependenciesAvailable = false;
+        for (auto &dep : dependencies)
+        {
+            std::filesystem::path targetDepFilename = projectBinDir / dep;
+            // if already copied, skip
+            if (std::filesystem::exists(targetDepFilename))
+            {
+                dependenciesAvailable = true;
+                LOG_INFO("[Project] Script dependency \"{}\" available.", dep);
+                continue;
+            }
+
+            // find dependency in candidate dirs
+            bool copied = false;
+            for (auto &cand : candidates)
+            {
+                std::filesystem::path depFilename = cand / dep;
+                if (std::filesystem::exists(depFilename))
+                {
+                    try
+                    {
+						LOG_INFO("[Project] Copying script dependency \"{}\".", dep);
+
+                        std::filesystem::copy_file(depFilename, targetDepFilename, std::filesystem::copy_options::overwrite_existing);
+                        copied = true;
+                        dependenciesAvailable = true;
+                        break;
+                    }
+                    catch (...) {}
+                }
+            }
+
+            // if not found, continue to try other deps; final assertion below will fail if none copied
+            (void)copied;
+        }
+
+        LOG_ASSERT(dependenciesAvailable, "[Project] Failed to copy script dependencies");
+	}
+
+	void Project::GenerateProject()
     {
-        std::filesystem::path projectDir = GetDirectory();
+        CreateDirectories();
 
-        std::filesystem::path assetDirectory = GetAssetDirectory();
-        if (!std::filesystem::exists(assetDirectory))
-            std::filesystem::create_directories(assetDirectory);
-
-        std::filesystem::path scriptDirectory = GetScriptsDirectory();
-        if (!std::filesystem::exists(scriptDirectory))
-            std::filesystem::create_directories(scriptDirectory);
-
-        // generate the Visual Studio project if there is no solution file
+        // Generate the Visual Studio project if there is no solution file
         std::filesystem::path solutionFilepath = GetSolutionFilepath();
         if (!std::filesystem::exists(solutionFilepath))
         {
-            // Create dummy c# script when there is no scripts (new project)
-            std::filesystem::path defaultCSharpScriptFilepath = scriptDirectory / "Game.cs";
-            if (!std::filesystem::exists(defaultCSharpScriptFilepath) || std::filesystem::is_empty(scriptDirectory))
+            // Create visual studio .slnx
             {
-                // copy template
+                std::string slnx = s_SlnxTemplate;
+#ifdef PLATFORM_WINDOWS
+                GUID gidReference;
+                HRESULT hCreateGuid = CoCreateGuid(&gidReference);
+                std::stringstream guidStream;
+                if (SUCCEEDED(hCreateGuid))
+                {
+                    guidStream << std::uppercase << std::hex << std::setfill('0')
+                        << std::setw(8) << gidReference.Data1 << "-"
+                        << std::setw(4) << gidReference.Data2 << "-"
+                        << std::setw(4) << gidReference.Data3 << "-"
+                        << std::setw(2) << static_cast<unsigned short>(gidReference.Data4[0])
+                        << std::setw(2) << static_cast<unsigned short>(gidReference.Data4[1]) << "-";
+                    for (int i = 2; i < 8; ++i)
+                        guidStream << std::setw(2) << static_cast<unsigned short>(gidReference.Data4[i]);
+                }
+                std::string guidStr = guidStream.str();
+                if (guidStr.empty())
+                    guidStr = "{00000000-0000-0000-0000-000000000000}";
+                stringutils::ReplaceWith(slnx, "{GENERATED_GUID}", guidStr);
+#else
+                stringutils::ReplaceWith(slnx, "{GENERATED_GUID}", "{00000000-0000-0000-0000-000000000000}");
+#endif
+                stringutils::ReplaceWith(slnx, "{PROJECT_NAME}", m_Info.name);
+                std::ofstream slnOut(solutionFilepath, std::ios::out);
+                slnOut << slnx;
+                slnOut.close();
+
+				LOG_TRACE("[Project] Generate C# Project GUID {}", guidStr);
+            }
+
+            // Create .csproj
+            {
+                // Build ItemGroup for all .cs files under Scripts directory
+                std::filesystem::path scriptsDir = GetScriptsDirectory();
+                std::string compileItems;
+
+                for (auto &p : std::filesystem::recursive_directory_iterator(scriptsDir))
+                {
+                    if (!p.is_regular_file())
+                        continue;
+
+                    if (p.path().extension() == ".cs")
+                    {
+                        // compute path relative to project directory
+                        std::filesystem::path rel = std::filesystem::relative(p.path(), GetDirectory());
+                        std::string includepath = rel.generic_string();
+                        // convert forward slashes to backslashes for csproj
+                        std::replace(includepath.begin(), includepath.end(), '/', '\\');
+                        compileItems += "  <Compile Include=\"" + includepath + "\" />\n";
+
+                        LOG_TRACE("[Project] Add file {} to C# Project", includepath);
+                    }
+                }
+
+                // If no .cs files found, create Game.cs using template but do not overwrite if exists
+                if (compileItems.empty())
+                {
+                    std::filesystem::path defaultCSharpScriptFilepath = scriptsDir / "Game.cs";
+                    if (!std::filesystem::exists(defaultCSharpScriptFilepath) || std::filesystem::is_empty(scriptsDir))
+                    {
+                        std::string csharpScriptTemplate = s_CSSharpScriptTemplate;
+                        stringutils::ReplaceWith(csharpScriptTemplate, "{PROJECT_NAME}", m_Info.name);
+                        std::ofstream out(defaultCSharpScriptFilepath, std::ios::out);
+                        out << csharpScriptTemplate;
+                        out.close();
+                        std::string includepath = (m_Info.scriptsDirectory / "Game.cs").generic_string();
+                        std::replace(includepath.begin(), includepath.end(), '/', '\\');
+                        compileItems += "  <Compile Include=\"" + includepath + "\" />\n";
+                    }
+                }
+
+                std::string csproj = s_CSProjTemplate;
+                // Insert compile items into the first ItemGroup (the one without condition)
+                size_t pos = csproj.find("  <ItemGroup>\n    <Compile Include=\"Scripts\\Game.cs\" />\n  </ItemGroup>");
+                if (pos != std::string::npos)
+                {
+                    std::string newItemGroup = "  <ItemGroup>\n" + compileItems + "  </ItemGroup>";
+                    csproj.replace(pos, std::string("  <ItemGroup>\n    <Compile Include=\"Scripts\\Game.cs\" />\n  </ItemGroup>").length(), newItemGroup);
+                }
+
+                std::ofstream out(GetDirectory() / (m_Info.name + ".csproj"), std::ios::out);
+                out << csproj;
+                out.close();
+            }
+
+            // Create dummy c# script when there is no scripts (new project)
+            std::filesystem::path defaultCSharpScriptFilepath = GetScriptsDirectory() / "Game.cs";
+            if (!std::filesystem::exists(defaultCSharpScriptFilepath) || std::filesystem::is_empty(GetScriptsDirectory()))
+            {
+                LOG_WARN("[Project] Creating default C# script {}", defaultCSharpScriptFilepath.filename().generic_string());
+
                 std::string csharpScriptTemplate = s_CSSharpScriptTemplate;
                 stringutils::ReplaceWith(csharpScriptTemplate, "{PROJECT_NAME}", m_Info.name);
                 std::fstream outfile = std::fstream(defaultCSharpScriptFilepath, std::ios::out);
                 outfile << csharpScriptTemplate;
                 outfile.close();
             }
-
-            // copy template
-            std::string premakeTemplate = s_PremakeTemplate;
-            stringutils::ReplaceWith(premakeTemplate, "{PROJECT_NAME}", m_Info.name);
-            std::fstream outfile = std::fstream(GetDirectory() / m_Info.premakeFilepath, std::ios::out);
-            outfile << premakeTemplate;
-            outfile.close();
         }
 
-        // copy IgniteScript.dll to project dir
-        std::filesystem::path projectBinDir = GetScriptBinDirectory();
-        if (!std::filesystem::exists(projectBinDir))
-            std::filesystem::create_directory(projectBinDir);
-
-        std::filesystem::path scriptCoreDLLSource = std::filesystem::current_path() / "Bin/IgniteScriptEngine.dll";
-        std::filesystem::path scriptCoreDLLDestination = projectBinDir / "IgniteScriptEngine.dll";
-        if (std::filesystem::exists(scriptCoreDLLSource) && !std::filesystem::exists(scriptCoreDLLDestination))
-        {
-            std::filesystem::copy_file(scriptCoreDLLSource, scriptCoreDLLDestination);
-        }
-
+        CopyDependencies();
         BuildSolution();
     }
-
-    void Project::CopyManagedAssemblies()
-    {
-
-    }
-
 }

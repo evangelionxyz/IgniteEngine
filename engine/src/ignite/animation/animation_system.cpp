@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "animation_system.hpp"
 
@@ -28,9 +7,10 @@
 #include "ignite/scene/scene_manager.hpp"
 #include "skeleton.hpp"
 
-namespace ignite {
+namespace ignite
+{
 
-    void AnimationSystem::PlayAnimation(std::vector<Ref<SkeletalAnimation>> &animations, int animIndex /*= 0*/)
+    void AnimationSystem::PlayAnimation(std::vector<Ref<SkeletalAnimation>> &animations, int animIndex)
     {
         if (animIndex < animations.size())
         {
@@ -38,37 +18,13 @@ namespace ignite {
         }
     }
 
-    void AnimationSystem::ApplySkeletonToEntities(Scene* scene, Ref<Skeleton> &skeleton)
-    {
-        for (size_t i = 0; i < skeleton->joints.size(); i++)
-        {
-            auto it = skeleton->jointEntityMap.find(static_cast<i32>(i));
-            if (it == skeleton->jointEntityMap.end())
-                continue;
-
-            Entity entity = SceneManager::GetEntity(scene, it->second);
-
-            if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-                continue;
-            
-            glm::vec3 skew;
-            glm::vec4 perspective;
-
-            TransformComponent& transform = entity.GetTransform();
-            glm::decompose(skeleton->joints[i].localTransform,
-                transform.localScale,
-                transform.localRotation,
-                transform.localTranslation,
-                skew,
-                perspective);
-
-            transform.isAnimated = true;
-            transform.dirty = true;
-        }
-    }
-
     bool AnimationSystem::UpdateSkeleton(Ref<Skeleton> &skeleton, const Ref<SkeletalAnimation> &animation, float timeInSeconds)
     {
+        if (!skeleton || !animation || animation->duration <= 0.0f)
+        {
+            return false;
+        }
+
         // Find animation key frames
         const float animTime = fmod(timeInSeconds * animation->ticksPerSeconds, animation->duration);
 
@@ -77,7 +33,10 @@ namespace ignite {
             if (const auto it = skeleton->nameToJointMap.find(nodeName); it != skeleton->nameToJointMap.end())
             {
                 const i32 jointIndex = it->second;
-                skeleton->joints[jointIndex].localTransform = channel.CalculateTransform(animTime);
+                skeleton->joints[jointIndex].localTransform = channel.CalculateTransform(animTime, 
+                    skeleton->joints[jointIndex].defaultTranslation,
+                    skeleton->joints[jointIndex].defaultRotation,
+                    skeleton->joints[jointIndex].defaultScale);
             }
         }
 
@@ -108,15 +67,26 @@ namespace ignite {
     std::vector<glm::mat4> AnimationSystem::GetFinalJointTransforms(const Ref<Skeleton> &skeleton)
     {
         std::vector<glm::mat4> finalTransforms;
-        finalTransforms.reserve(skeleton->joints.size());
-
-        for (const Joint &joint : skeleton->joints)
-        {
-            // Final transform = globalTransform * inverseBindPose
-            finalTransforms.push_back(joint.globalTransform * joint.inverseBindPose);
-        }
+        GetFinalJointTransforms(skeleton, finalTransforms);
 
         return finalTransforms;
+    }
+
+    void AnimationSystem::GetFinalJointTransforms(const Ref<Skeleton> &skeleton, std::vector<glm::mat4> &outTransforms)
+    {
+        if (!skeleton)
+        {
+            outTransforms.clear();
+            return;
+        }
+
+        outTransforms.resize(skeleton->joints.size());
+
+        for (size_t i = 0; i < skeleton->joints.size(); ++i)
+        {
+            const Joint &joint = skeleton->joints[i];
+            outTransforms[i] = joint.globalTransform * joint.inverseBindPose;
+        }
     }
 
 }

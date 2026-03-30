@@ -35,11 +35,15 @@ namespace ignite
         CompType_Camera,
         CompType_Transform,
         CompType_Sprite2D,
+        CompType_Circle2D,
+        CompType_PointLight2D,
+        CompType_Font,
 
         CompType_SkeletalMesh,
         CompType_StaticMesh,
         
         CompType_BoxCollider2D,
+        CompType_CircleCollider2D,
         CompType_Rigidbody2D,
         CompType_Rigidbody,
         CompType_BoxCollider,
@@ -57,7 +61,7 @@ namespace ignite
     public:
         virtual ~IComponent() = default;
 
-        bool dirty = true;
+        bool dirty = false;
 
         template<typename T>
         T *As()
@@ -70,4 +74,9 @@ namespace ignite
     private:
         UUID m_UUID;
     };
+
+#define COMPONENT_CLASS_TYPE(Type) \
+    static const char *GetName() { return #Type; } \
+    static CompType StaticType() { return Type; } \
+    virtual CompType GetType() override { return StaticType(); }
 }

@@ -1,25 +1,4 @@
-/* MIT License
-*
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-*
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #ifndef FONT_HPP
 #define FONT_HPP
@@ -28,30 +7,41 @@
 #include "ignite/core/types.hpp"
 #include "ignite/core/buffer.hpp"
 
+#include "texture.hpp"
+
+#include <vector>
 #include <filesystem>
+
+#include <msdf-atlas-gen.h>
 
 namespace ignite
 {
-    struct FontCreateInfo
-    {
-        Buffer buffer;
-        int width = 1, height = 1;
-    };
-
     class Font : public Asset
     {
     public:
 
-        Font(const FontCreateInfo &createInfo, const std::filesystem::path &filepath);
+        Font(const std::filesystem::path &filepath);
         ~Font();
 
-        static Ref<Font> Create(const FontCreateInfo &createInfo, const std::filesystem::path &filepath);
+        static Ref<Font> Create(const std::filesystem::path &filepath);
+
+        const Ref<Texture> GetAtlasTexture() const { return m_AtlasTexture; }
+        
+        const std::vector<msdf_atlas::GlyphGeometry> &GetGlyphs() { return m_Glyphs; }
+        const msdf_atlas::FontGeometry &GetGeometry() { return m_FontGeometry; }
 
         static AssetType GetStaticType() { return AssetType::Font; }
         AssetType GetAssetType() override { return GetStaticType(); }
-    private:
-    };
-} // namespace ignite
 
+    private:
+        void LoadGlyphs(const std::filesystem::path &filepath);
+
+		std::vector<msdf_atlas::GlyphGeometry> m_Glyphs;
+		msdf_atlas::FontGeometry m_FontGeometry;
+
+        Ref<Texture> m_AtlasTexture;
+    };
+
+}
 
 #endif

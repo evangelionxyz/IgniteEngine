@@ -102,33 +102,28 @@ namespace ignite
         ICamera();
         ~ICamera() { }
 
-        void UpdateMatrices(float width, float height);
+		virtual void UpdateView();
+		virtual void UpdateProjection(float width, float height);
        
-        glm::vec3 GetUpDirection() const;
-        glm::vec3 GetRightDirection() const;
-        glm::vec3 GetForwardDirection() const;
+        virtual glm::vec3 GetUpDirection() const;
+        virtual glm::vec3 GetRightDirection() const;
+        virtual glm::vec3 GetForwardDirection() const;
+
+		virtual glm::mat4 &GetProjection();
+		virtual glm::mat4 GetView();
 
         glm::vec3 position;
-		glm::vec3 target = { 0.0f, 0.0f, -1.0f };
-
-		glm::mat4 view;
-		glm::mat4 projection;
+		
 
 		float pitch = 0.0f; // rotation around X axis
 		float yaw = 0.0f; // rotation around Y axis
 
-		float distance = 1.0f;
 		float fov = 45.0f; // for perspective
 		float nearPlane = 0.1f;
 		float farPlane = 1000.0f;
 		float width = 1920;
 		float height = 1080;
-
 		float orthoSize = 10.0f;
-
-		glm::vec2 angularVelocity = glm::vec2(0.0f);
-		glm::vec2 panVelocity = glm::vec2(0.0f);
-		float zoomVelocity = 0.0f;
 
 		// Control settings
 		struct Controls
@@ -151,5 +146,9 @@ namespace ignite
 		CameraMouseState mouse;
 		PostProcessing postProcessing;
         ProjectionType projectionType = ProjectionType::Perspective;
+
+	protected:
+		glm::mat4 m_View = glm::mat4(1.0f);
+		glm::mat4 m_Projection = glm::mat4(1.0f);
     };
 }

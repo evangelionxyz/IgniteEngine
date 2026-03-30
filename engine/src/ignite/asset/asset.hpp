@@ -37,6 +37,7 @@ namespace ignite {
     enum class AssetType
     {
         Invalid,
+        Auto,
         Audio,
         Model,
         Project,
@@ -51,7 +52,12 @@ namespace ignite {
         Skeleton,
         SkeletalMesh,
         StaticMesh,
-        Scene
+        Scene,
+
+        Material2D,
+
+        FBX,
+        GLTF,
     };
 
     static std::string AssetTypeToString(AssetType type)
@@ -73,6 +79,9 @@ namespace ignite {
             case ignite::AssetType::StaticMesh: return "StaticMesh";
             case ignite::AssetType::Skeleton: return "Skeleton";
             case ignite::AssetType::Environment: return "Environment";
+            case ignite::AssetType::FBX: return "FBX";
+            case ignite::AssetType::GLTF: return "GLTF";
+            case ignite::AssetType::Material2D: return "Material2D";
             case ignite::AssetType::Invalid:
             default: return "Invalid";
         }
@@ -93,14 +102,21 @@ namespace ignite {
         { ".flac", AssetType::Audio },
         { ".wav", AssetType::Audio },
 
-        { ".fbx", AssetType::StaticMesh },
-        { ".gltf", AssetType::StaticMesh },
-        { ".bin", AssetType::StaticMesh },
+        { ".fbx", AssetType::FBX },
+        { ".gltf", AssetType::GLTF },
+        { ".bin", AssetType::GLTF },
+
         { ".ixsm", AssetType::StaticMesh },
+        { ".ixskm", AssetType::SkeletalMesh },
 
         { ".ixskel", AssetType::Skeleton},
+        { ".ixanim", AssetType::SkeletalAnimation},
+        
         { ".ixmat", AssetType::Material},
         { ".ixenv", AssetType::Environment},
+
+
+        { ".ixmat2d", AssetType::Material2D},
     };
 
     static AssetType AssetTypeFromString(const std::string &typeStr)
@@ -119,7 +135,10 @@ namespace ignite {
         if (typeStr == "Skeleton")  return AssetType::Skeleton;
         if (typeStr == "Material")  return AssetType::Material;
         if (typeStr == "Environment")  return AssetType::Environment;
+        if (typeStr == "FBX")  return AssetType::FBX;
+        if (typeStr == "GLTF")  return AssetType::GLTF;
         if (typeStr == "Font")  return AssetType::Font;
+        if (typeStr == "Material2D")  return AssetType::Material2D;
         return AssetType::Invalid;
     }
 
@@ -129,9 +148,14 @@ namespace ignite {
         switch (type)
         {
         case AssetType::StaticMesh: return ".ixsm";
+        case AssetType::SkeletalMesh: return ".ixskm";
+        case AssetType::Skeleton: return ".ixskel";
+        case AssetType::SkeletalAnimation: return ".ixanim";
         case AssetType::Scene: return ".ixscene";
         case AssetType::Project: return ".ixproj";
+        case AssetType::SpriteSheet: return ".ixsp";
         case AssetType::Material: return ".ixmat";
+        case AssetType::Material2D: return ".ixmat2d";
         case AssetType::Environment: return ".ixenv";
         default: return ".invalid";
         }

@@ -197,21 +197,21 @@ namespace ignite
         colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.20f, 0.20f, 0.20f, 0.45f);
 
         style.WindowPadding = ImVec2{ 5.0f, 5.0f };
-        style.FramePadding = ImVec2{ 3.0f, 5.0f };
-        style.ItemSpacing = ImVec2{ 5.0f, 5.0f };
-        style.ItemInnerSpacing = ImVec2{ 6.0f, 3.0f };
+        style.FramePadding = ImVec2{ 4.0f, 4.0f };
+        style.ItemSpacing = ImVec2{ 4.0f, 3.0f };
+        style.ItemInnerSpacing = ImVec2{ 5.0f, 5.0f };
         style.CellPadding = ImVec2{ 2.0f, 4.0f };
         style.TouchExtraPadding = ImVec2{ 0.0f, 0.0f };
         style.WindowTitleAlign = ImVec2 { 0.5f, 0.5f };
         style.WindowBorderHoverPadding = 10.0f;
-        style.WindowBorderSize = 0;
+        style.WindowBorderSize = 1;
         style.ChildBorderSize = 1;
         style.PopupBorderSize = 1;
 
         style.IndentSpacing = 8;
-        style.ScrollbarSize = 16.0f;
-        style.GrabMinSize = 15.0f;
-        style.FrameBorderSize = 0.0f;
+        style.ScrollbarSize = 14.0f;
+        style.GrabMinSize = 14.0f;
+        style.FrameBorderSize = 1.0f;
         style.WindowRounding = 6.0f;
         style.TabRounding = 0.0f;
         style.ChildRounding = 1.0f;
@@ -238,22 +238,32 @@ namespace ignite
         ImGuiIO &io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-        // io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-        // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
-
+        io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+        io.ConfigViewportsNoAutoMerge = false;
         io.ConfigWindowsMoveFromTitleBarOnly = true;
         io.ConfigViewportsNoDecoration = false;
+        // io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+
+        if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+        {
+            style.WindowRounding = 0.0f;
+            style.Colors[ImGuiCol_WindowBg].w = 1.0f;
+        }
 
         switch (Renderer::GetGraphicsAPI())
         {
             case nvrhi::GraphicsAPI::VULKAN:
             {
+				io.BackendRendererName = "NVRHI Vulkan";
                 ImGui_ImplSDL3_InitForVulkan(Application::GetInstance()->GetWindow()->GetWindowHandle());
+
                 break;
             }
             case nvrhi::GraphicsAPI::D3D12:
             {
 #ifdef PLATFORM_WINDOWS
+				io.BackendRendererName = "NVRHI DirectX12";
+
                 DeviceManager_DX12 &d3d12 = DeviceManager_DX12::GetInstance();
                 ImGui_ImplDX12_InitInfo initInfo = {};
                 initInfo.Device = d3d12.m_Device12;
@@ -286,7 +296,12 @@ namespace ignite
 
     void ImGuiLayer::OnEvent(Event &event)
     {
-        Layer::OnEvent(event);
+		if (m_BlockEvents)
+		{
+            // ImGuiIO &io = ImGui::GetIO();
+            // event.Handled |= event.IsInCategory(EventCategoryMouse) && io.WantCaptureMouse;
+            // event.Handled |= event.IsInCategory(EventCategoryKeyboard) && io.WantCaptureKeyboard;
+		}
 
         EventDispatcher dispatcher(event);
         dispatcher.Dispatch<FramebufferResizeEvent>(BIND_CLASS_EVENT_FN(ImGuiLayer::OnFramebufferResize));
@@ -309,7 +324,7 @@ namespace ignite
 
         m_Font->ReleaseScaledFont();
 
-        return true;
+        return false;
     }
 
     bool ImGuiLayer::OnDPIScaleChanged(WindowDPIScaleChangedEvent &event)
@@ -331,7 +346,8 @@ namespace ignite
         m_CurrentDPIScale = event.GetScaleX();
 
         LOG_INFO("ImGui DPI scaling updated to: {}", event.GetScaleX());
-        return true;
+
+        return false;
     }
 
     void ImGuiLayer::BeginFrame()
@@ -389,19 +405,62 @@ namespace ignite
     {
         ImGui::Render();
         imguiNVRHI->Render(framebuffer);
+
         m_BeginFrameCalled = false;
+    }
+
+    void ImGuiLayer::RenderPlatformWindows()
+    {
+        ImGuiIO &io = ImGui::GetIO();
+        if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+        {
+            ImGui::UpdatePlatformWindows();
+            ImGui::RenderPlatformWindowsDefault();
+        }
     }
 
     void ImGuiLayer::PollEvent(const SDL_Event& event)
     {
-        ImGui_ImplSDL3_ProcessEvent(&event);
+        SDL_Event patchedEvent = event;
+
+        if ((patchedEvent.type == SDL_EVENT_MOUSE_MOTION && patchedEvent.motion.windowID == 0)
+            || (patchedEvent.type == SDL_EVENT_MOUSE_BUTTON_DOWN && patchedEvent.button.windowID == 0)
+            || (patchedEvent.type == SDL_EVENT_MOUSE_BUTTON_UP && patchedEvent.button.windowID == 0)
+            || (patchedEvent.type == SDL_EVENT_MOUSE_WHEEL && patchedEvent.wheel.windowID == 0))
+        {
+            if (SDL_Window *mouseFocus = SDL_GetMouseFocus())
+            {
+                const SDL_WindowID focusedWindowId = SDL_GetWindowID(mouseFocus);
+                if (patchedEvent.type == SDL_EVENT_MOUSE_MOTION)
+                    patchedEvent.motion.windowID = focusedWindowId;
+                else if (patchedEvent.type == SDL_EVENT_MOUSE_WHEEL)
+                    patchedEvent.wheel.windowID = focusedWindowId;
+                else
+                    patchedEvent.button.windowID = focusedWindowId;
+            }
+        }
+
+        if (patchedEvent.type == SDL_EVENT_WINDOW_FOCUS_LOST)
+        {
+            const SDL_MouseButtonFlags pressedButtons = SDL_GetMouseState(nullptr, nullptr);
+            if (pressedButtons == 0)
+            {
+                ImGuiIO &io = ImGui::GetIO();
+                for (int button = 0; button < 5; ++button)
+                {
+                    io.AddMouseButtonEvent(button, false);
+                }
+            }
+        }
+
+        ImGui_ImplSDL3_ProcessEvent(&patchedEvent);
     }
 
     void ImGuiLayer::OnDetach()
     {
+        imguiNVRHI->Shutdown();
+
         ImGui_ImplSDL3_Shutdown();
         ImGui::DestroyContext();
-
-        imguiNVRHI->Shutdown();
     }
 }

@@ -22,23 +22,54 @@
 */
 
 #include "mesh.hpp"
+#include "ignite/core/time.hpp"
 #include "environment.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/scene_renderer.hpp"
 #include "ignite/core/application.hpp"
+#include "ignite/core/device/device_manager.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
-
-#include <fbxsdk.h>
+#include "ignite/animation/skeleton.hpp"
+#include "ignite/animation/skeletal_animation.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <mutex>
+#include <set>
+
+#include <fbxsdk.h>
+
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 namespace ignite
 {
+    using namespace fbxsdk;
+
     namespace
     {
+        static bool Mat4NearEqual(const glm::mat4 &a, const glm::mat4 &b, const float epsilon = 0.0001f)
+        {
+            for (int c = 0; c < 4; ++c)
+            {
+                for (int r = 0; r < 4; ++r)
+                {
+                    if (fabs(a[c][r] - b[c][r]) > epsilon)
+                    {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        static glm::vec3 ExtractTranslation(const glm::mat4 &m)
+        {
+            return { m[3][0], m[3][1], m[3][2] };
+        }
+
         static glm::mat4 ToGlmMatrix(const FbxAMatrix &matrix)
         {
             glm::mat4 result(1.0f);
@@ -46,7 +77,7 @@ namespace ignite
             {
                 for (int col = 0; col < 4; ++col)
                 {
-                    result[col][row] = static_cast<float>(matrix.Get(row, col));
+                    result[row][col] = static_cast<float>(matrix.Get(row, col));
                 }
             }
             return result;
@@ -160,66 +191,65 @@ namespace ignite
             return false;
         }
 
-        static bool TryLoadFBXTextureFromProperty(FbxSurfaceMaterial *material, const std::initializer_list<const char *> &propertyNames,
-            const std::filesystem::path &sourceDirectory, std::vector<Ref<Texture>> &loadedTextures,
-            std::unordered_map<std::string, int> &textureLookup, MeshScene::MaterialTextureMap &textureMap)
-        {
-            if (!material)
-            {
-                return false;
-            }
+		static bool TryLoadFBXTextureFromProperty(FbxSurfaceMaterial *material, const std::initializer_list<const char *> &propertyNames,
+			const std::filesystem::path &sourceDir, FBXMeshLoader::MaterialLoader &materialLoader, MeshScene::MaterialTextureMap &textureMap)
+		{
+			if (!material)
+			{
+				return false;
+			}
 
-            for (const char *name : propertyNames)
-            {
-                FbxProperty property = material->FindProperty(name);
-                if (!property.IsValid())
-                {
-                    property = material->RootProperty.Find(name);
-                }
+			for (const char *name : propertyNames)
+			{
+				FbxProperty property = material->FindProperty(name);
+				if (!property.IsValid())
+				{
+					property = material->RootProperty.Find(name);
+				}
 
-                if (!property.IsValid())
-                {
-                    continue;
-                }
+				if (!property.IsValid())
+				{
+					continue;
+				}
 
-                const int textureCount = property.GetSrcObjectCount<FbxFileTexture>();
-                for (int i = 0; i < textureCount; ++i)
-                {
-                    FbxFileTexture *fbxTexture = property.GetSrcObject<FbxFileTexture>(i);
-                    if (!fbxTexture)
-                    {
-                        continue;
-                    }
+				const int textureCount = property.GetSrcObjectCount<FbxFileTexture>();
+				for (int i = 0; i < textureCount; ++i)
+				{
+					FbxFileTexture *fbxTexture = property.GetSrcObject<FbxFileTexture>(i);
+					if (!fbxTexture)
+					{
+						continue;
+					}
 
-                    std::filesystem::path texturePath = fbxTexture->GetFileName();
-                    if (texturePath.empty())
-                    {
-                        texturePath = fbxTexture->GetRelativeFileName();
-                    }
+					std::filesystem::path texturePath = fbxTexture->GetFileName();
+					if (texturePath.empty())
+					{
+						texturePath = fbxTexture->GetRelativeFileName();
+					}
 
-                    if (texturePath.empty())
-                    {
-                        continue;
-                    }
+					if (texturePath.empty())
+					{
+						continue;
+					}
 
-                    if (texturePath.is_relative())
-                    {
-                        texturePath = sourceDirectory / texturePath;
-                    }
+					if (texturePath.is_relative())
+					{
+						texturePath = sourceDir / texturePath;
+					}
 
-                    texturePath = texturePath.lexically_normal();
-                    if (!std::filesystem::exists(texturePath))
-                    {
-                        continue;
-                    }
+					texturePath = texturePath.lexically_normal();
+					if (!std::filesystem::exists(texturePath))
+					{
+						continue;
+					}
 
-                    const std::string key = ToLowerCopy(texturePath.generic_string());
-                    if (textureLookup.contains(key))
-                    {
-                        const int index = textureLookup.at(key);
-                        textureMap = { index, loadedTextures[index] };
-                        return true;
-                    }
+					const std::string key = ToLowerCopy(texturePath.generic_string());
+					if (materialLoader.textureLookup.contains(key))
+					{
+						const int index = materialLoader.textureLookup.at(key);
+						textureMap = { index, materialLoader.loadedTextures[index] };
+						return true;
+					}
 
 					TextureCreateInfo createInfo;
 					createInfo.flip = true;
@@ -230,32 +260,36 @@ namespace ignite
 					createInfo.deferGpuCreate = true;
 					createInfo.mipLevels = 4;
 
-                    Ref<Texture> texture = Texture::Create(texturePath, createInfo, nullptr);
-                    if (!texture)
-                    {
-                        continue;
-                    }
+					Ref<Texture> texture = Texture::Create(texturePath, createInfo, nullptr);
+					if (!texture)
+					{
+						continue;
+					}
 
-                    Application::SubmitToRenderThread([texture]()
-                        {
-                            nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
-                            cmd->open();
-                            texture->SetData(cmd, 4);
-                            cmd->close();
+					Application::SubmitToRenderThread([texture]()
+					{
+						nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
+						cmd->open();
+						texture->SetData(cmd, 4);
+						texture->SetReadyFlag(false);
+						cmd->close();
 
-                            Application::SubmitWorkerCommandList(cmd);
-                        });
+						Application::SubmitWorkerCommandList(cmd, [texture]()
+						{
+							texture->SetReadyFlag(true);
+						});
+					});
 
-                    const int index = (int)loadedTextures.size();
-                    loadedTextures.push_back(texture);
-                    textureLookup[key] = index;
-                    textureMap = { index, texture };
-                    return true;
-                }
-            }
+					const int index = (int)materialLoader.loadedTextures.size();
+					materialLoader.loadedTextures.push_back(texture);
+					materialLoader.textureLookup[key] = index;
+					textureMap = { index, texture };
+					return true;
+				}
+			}
 
-            return false;
-        }
+			return false;
+		}
 
         static Ref<Material> CreateMaterialFromFBX(FbxSurfaceMaterial *fbxMaterial)
         {
@@ -326,6 +360,51 @@ namespace ignite
 
             return glm::translate(glm::mat4(1.0f), translation) * glm::toMat4(rotation) * glm::scale(glm::mat4(1.0f), scale);
         }
+
+        
+
+        static void AddBoneInfluence(FBXMeshLoader::FBXBoneInfluence &influence, uint32_t boneId, float weight)
+        {
+            if (weight <= 0.0f)
+            {
+                return;
+            }
+
+            size_t minIndex = 0;
+            for (size_t i = 1; i < VERTEX_MAX_BONES; ++i)
+            {
+                if (influence.weights[i] < influence.weights[minIndex])
+                {
+                    minIndex = i;
+                }
+            }
+
+            if (weight > influence.weights[minIndex])
+            {
+                influence.weights[minIndex] = weight;
+                influence.ids[minIndex] = boneId;
+            }
+        }
+
+        static void NormalizeBoneInfluence(FBXMeshLoader::FBXBoneInfluence &influence)
+        {
+            float total = 0.0f;
+            for (float w : influence.weights)
+            {
+                total += w;
+            }
+
+            if (total <= 0.000001f)
+            {
+                return;
+            }
+
+            const float inv = 1.0f / total;
+            for (float &w : influence.weights)
+            {
+                w *= inv;
+            }
+        }
     }
 
 
@@ -382,16 +461,20 @@ namespace ignite
         m_Primitive = CreateRef<MeshPrimitive>();
     }
 
-    MeshInstance::~MeshInstance()
+	MeshInstance::MeshInstance(const MeshNode &node, const Ref<MeshPrimitive> &mesh)
+        : m_Name(node.name), m_Primitive(mesh)
+	{
+        local = node.local;
+        global = node.global;
+	}
+
+	MeshInstance::~MeshInstance()
     {
         // Wait for GPU to ensure resources are not in use
         if (auto *device = DeviceManager::GetInstance()->GetDevice())
         {
-            device->waitForIdle();
+            GPUUploadSync::DeviceWaitIdle(device);
         }
-
-        // Clear GPU data buffer
-        m_SkinnedMeshGPUDataBuffer.reset();
 
         // Clear primitive (vertex/index buffers)
         m_Primitive.reset();
@@ -407,9 +490,14 @@ namespace ignite
         return CreateRef<MeshInstance>(name, mesh);
     }
 
-    // 
-    // ==== Static Mesh ====
-    // 
+	Ref<MeshInstance> MeshInstance::Create(const MeshNode &node, const Ref<MeshPrimitive> &mesh)
+	{
+        return CreateRef<MeshInstance>(node, mesh);
+	}
+
+	// ===================================
+    // Static Mesh
+    // ===================================
     Ref<StaticMesh> StaticMesh::Create()
     {
         return CreateRef<StaticMesh>();
@@ -417,19 +505,25 @@ namespace ignite
 
     StaticMesh::~StaticMesh()
     {
-        // Wait for GPU to ensure meshes are not in use
-        if (auto *device = DeviceManager::GetInstance()->GetDevice())
-        {
-            device->waitForIdle();
-        }
-
-        // Clear all mesh instances
         m_MeshInstances.clear();
     }
 
-    // 
-    // ==== Mesh Loader ====
-    // 
+    // ===================================
+    // Skeletal Mesh
+    // ===================================
+    Ref<SkeletalMesh> SkeletalMesh::Create()
+    {
+        return CreateRef<SkeletalMesh>();
+    }
+
+    SkeletalMesh::~SkeletalMesh()
+    {
+        m_MeshInstances.clear();
+    }
+
+    // ===================================
+    // Mesh Loader
+    // ===================================
     Ref<Material> GLTFMeshLoader::LoadMaterial(const tinygltf::Primitive &primitive, const std::vector<tinygltf::Material> &gltfMaterials, const std::vector<Ref<Texture>> &loadedTextures, std::array<MeshScene::MaterialTextureMap, 5> &textureMap, const std::vector<nvrhi::SamplerDesc> &loadedSamplers, int *materialIndex)
     {
         Ref<Material> material;
@@ -715,6 +809,8 @@ namespace ignite
             if (node.mesh < 0 || node.mesh >= (int)gltfModel.meshes.size())
                 continue;
 
+            const MeshNode &meshNode = outScene.nodes[i];
+
             const tinygltf::Mesh &gltfMesh = gltfModel.meshes[node.mesh];
             for (const auto &gltfPrim : gltfMesh.primitives)
             {
@@ -736,7 +832,7 @@ namespace ignite
                     material = CreateDefaultMaterial("DefaultMaterial");
                 }
 
-                Ref<MeshInstance> meshInstance = MeshInstance::Create(gltfMesh.name, primitive);
+                Ref<MeshInstance> meshInstance = MeshInstance::Create(meshNode, primitive);
 
                 outScene.nodes[i].meshes.push_back(meshInstance);
                 outScene.flatMeshes.push_back(meshInstance);
@@ -803,14 +899,18 @@ namespace ignite
                     LOG_TRACE(" Loaded embedded texture");
 
                     Application::SubmitToRenderThread([texture]()
-                        {
-                            nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
-                            cmd->open();
-                            texture->SetData(cmd, 4);
-                            cmd->close();
+                    {
+                        nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
+                        cmd->open();
+                        texture->SetData(cmd, 4);
+                        texture->SetReadyFlag(false);
+                        cmd->close();
 
-                            Application::SubmitWorkerCommandList(cmd);
+                        Application::SubmitWorkerCommandList(cmd, [texture]()
+                        {
+                            texture->SetReadyFlag(true);
                         });
+                    });
                 }
                 else if (!image.uri.empty())
                 {
@@ -873,227 +973,710 @@ namespace ignite
 
     void FBXMeshLoader::LoadSceneGraphFromFBX(const std::string &filename, MeshScene &outScene)
     {
-        FbxManager *sdkManager = FbxManager::Create();
+        AssetManager &assetManager = Project::GetInstance()->GetAssetManager();
+        std::lock_guard<std::mutex> lock(assetManager.GetFbxSdkMutex());
+
+        FbxManager *sdkManager = assetManager.GetOrCreateFbxSdkManager();
         if (!sdkManager)
         {
+            LOG_ASSERT(false, "[FBX Loader] Failed to create FBX SDK Manager");
             return;
         }
 
-        FbxIOSettings *ioSettings = FbxIOSettings::Create(sdkManager, IOSROOT);
-        sdkManager->SetIOSettings(ioSettings);
-
+        // Create FBX Importer
         FbxImporter *importer = FbxImporter::Create(sdkManager, "");
         if (!importer->Initialize(filename.c_str(), -1, sdkManager->GetIOSettings()))
         {
+            LOG_ERROR("[FBX Loader] Failed to create FBX Importer");
+
             importer->Destroy();
-            sdkManager->Destroy();
             return;
         }
 
+        // Create FBX Scene
         FbxScene *fbxScene = FbxScene::Create(sdkManager, "FBXScene");
         if (!importer->Import(fbxScene))
         {
+            LOG_ERROR("[FBX Loader] Failed to import {}", filename);
+
             importer->Destroy();
-            sdkManager->Destroy();
+            fbxScene->Destroy();
             return;
         }
         importer->Destroy();
 
-        const FbxAxisSystem targetAxisSystem = FbxAxisSystem::OpenGL;
+        const FbxAxisSystem targetAxisSystem = FbxAxisSystem::MayaYUp;
         const FbxAxisSystem sceneAxisSystem = fbxScene->GetGlobalSettings().GetAxisSystem();
         if (sceneAxisSystem != targetAxisSystem)
         {
             targetAxisSystem.ConvertScene(fbxScene);
         }
 
-        const FbxSystemUnit targetUnit = FbxSystemUnit::m;
+        const FbxSystemUnit targetUnit = FbxSystemUnit::cm;
         const FbxSystemUnit sceneUnit = fbxScene->GetGlobalSettings().GetSystemUnit();
         if (sceneUnit.GetScaleFactor() != targetUnit.GetScaleFactor())
         {
             targetUnit.ConvertScene(fbxScene);
         }
 
-        FbxGeometryConverter geometryConverter(sdkManager);
-        geometryConverter.Triangulate(fbxScene, true);
-
-        std::unordered_map<FbxSurfaceMaterial *, int> materialIndices;
-        std::unordered_map<std::string, int> textureLookup;
-        std::vector<Ref<Texture>> loadedTextures;
-        const std::filesystem::path sourceDirectory = std::filesystem::path(filename).parent_path();
-
-        std::function<void(FbxNode *, int)> buildNode = [&](FbxNode *fbxNode, const int parentIndex)
         {
-            if (!fbxNode)
-            {
-                return;
-            }
+            Timer timer;
+            LOG_WARN("[FBX Loader] Triangulate geometry...");
+            FbxGeometryConverter geometryConverter(sdkManager);
+            geometryConverter.Triangulate(fbxScene, true);
+            
+            LOG_WARN("[FBX Loader] Triangulate geometry completed for {}s", timer.Elapsed());
+        }
 
-            const int nodeIndex = static_cast<int>(outScene.nodes.size());
-            outScene.nodes.emplace_back();
+        JointLoader jointLoader;
+        outScene.skeleton = LoadSkeletonFBX(fbxScene, jointLoader);
+        LoadAnimationsFBX(fbxScene, outScene.skeleton, jointLoader.jointNodes, outScene.animations);
 
-            MeshNode &meshNode = outScene.nodes[nodeIndex];
-            meshNode.parent = parentIndex;
-            meshNode.name = fbxNode->GetName() ? fbxNode->GetName() : "";
-            meshNode.local = ToGlmMatrix(fbxNode->EvaluateLocalTransform());
+        const std::filesystem::path sourceDir = std::filesystem::path(filename).parent_path();
 
-            if (parentIndex >= 0)
-            {
-                outScene.nodes[parentIndex].children.push_back(nodeIndex);
-            }
-            else
-            {
-                outScene.roots.push_back(nodeIndex);
-            }
-
-            if (FbxMesh *fbxMesh = fbxNode->GetMesh())
-            {
-                std::vector<VertexMesh_Anim> vertices;
-                std::vector<uint32_t> indices;
-
-                const FbxVector4 *controlPoints = fbxMesh->GetControlPoints();
-                const FbxAMatrix geometricMatrix = BuildNodeGeometricMatrix(fbxNode);
-                FbxStringList uvSetNames;
-                fbxMesh->GetUVSetNames(uvSetNames);
-
-                const int polygonCount = fbxMesh->GetPolygonCount();
-                vertices.reserve(static_cast<size_t>(polygonCount) * 3);
-                indices.reserve(static_cast<size_t>(polygonCount) * 3);
-
-                auto emitVertex = [&](const int polygonIndex, const int polygonVertexIndex)
-                {
-                    const int controlPointIndex = fbxMesh->GetPolygonVertex(polygonIndex, polygonVertexIndex);
-                    if (controlPointIndex < 0)
-                    {
-                        return;
-                    }
-
-                    const FbxVector4 cp = controlPoints[controlPointIndex];
-                    const FbxVector4 transformedPosition = geometricMatrix.MultT(cp);
-
-                    VertexMesh_Anim vertex{};
-                    vertex.position = glm::vec3(
-                        static_cast<float>(transformedPosition[0]),
-                        static_cast<float>(transformedPosition[1]),
-                        static_cast<float>(transformedPosition[2]));
-
-                    FbxVector4 normal(0.0, 1.0, 0.0, 0.0);
-                    fbxMesh->GetPolygonVertexNormal(polygonIndex, polygonVertexIndex, normal);
-                    normal = geometricMatrix.MultR(normal);
-                    normal.Normalize();
-                    vertex.normal = glm::vec3(static_cast<float>(normal[0]), static_cast<float>(normal[1]), static_cast<float>(normal[2]));
-
-                    if (uvSetNames.GetCount() > 0)
-                    {
-                        FbxVector2 uv(0.0, 0.0);
-                        bool unmapped = false;
-                        fbxMesh->GetPolygonVertexUV(polygonIndex, polygonVertexIndex, uvSetNames[0], uv, unmapped);
-                        if (!unmapped)
-                        {
-                            vertex.uv = glm::vec2(static_cast<float>(uv[0]), static_cast<float>(uv[1]));
-                        }
-                    }
-
-                    vertex.tangent = glm::vec3(1.0f, 0.0f, 0.0f);
-                    vertex.bitangent = glm::cross(vertex.normal, vertex.tangent);
-
-                    vertices.push_back(vertex);
-                    indices.push_back(static_cast<uint32_t>(vertices.size() - 1));
-                };
-
-                for (int polygonIndex = 0; polygonIndex < polygonCount; ++polygonIndex)
-                {
-                    const int polygonSize = fbxMesh->GetPolygonSize(polygonIndex);
-                    if (polygonSize < 3)
-                    {
-                        continue;
-                    }
-
-                    emitVertex(polygonIndex, 0);
-                    for (int v = 1; v < polygonSize - 1; ++v)
-                    {
-                        emitVertex(polygonIndex, v);
-                        emitVertex(polygonIndex, v + 1);
-                    }
-                }
-
-                if (!vertices.empty() && !indices.empty())
-                {
-                    Ref<MeshPrimitive> primitive = MeshPrimitive::Create(vertices, indices);
-                    Ref<MeshInstance> meshInstance = MeshInstance::Create(meshNode.name, primitive);
-                    outScene.nodes[nodeIndex].meshes.push_back(meshInstance);
-                    outScene.flatMeshes.push_back(meshInstance);
-
-                    FbxSurfaceMaterial *fbxMaterial = fbxNode->GetMaterialCount() > 0 ? fbxNode->GetMaterial(0) : nullptr;
-                    int sceneMaterialIndex = -1;
-
-                    if (materialIndices.contains(fbxMaterial))
-                    {
-                        sceneMaterialIndex = materialIndices[fbxMaterial];
-                    }
-                    else
-                    {
-                        Ref<Material> material = CreateMaterialFromFBX(fbxMaterial);
-                        sceneMaterialIndex = static_cast<int>(outScene.materials.size());
-
-                        std::array<MeshScene::MaterialTextureMap, 5> textureMap{};
-                        if (fbxMaterial)
-                        {
-                            TryLoadFBXTextureFromProperty(fbxMaterial, { "DiffuseColor", "Diffuse", "BaseColor" }, sourceDirectory, loadedTextures, textureLookup, textureMap[0]);
-                            TryLoadFBXTextureFromProperty(fbxMaterial, { "EmissiveColor", "Emissive" }, sourceDirectory, loadedTextures, textureLookup, textureMap[1]);
-                            TryLoadFBXTextureFromProperty(fbxMaterial, { "SpecularColor", "Specular", "Metalness" }, sourceDirectory, loadedTextures, textureLookup, textureMap[2]);
-                            TryLoadFBXTextureFromProperty(fbxMaterial, { "NormalMap", "Bump", "Maya|TEX_normal_map" }, sourceDirectory, loadedTextures, textureLookup, textureMap[3]);
-                            TryLoadFBXTextureFromProperty(fbxMaterial, { "AmbientOcclusion", "AO", "Occlusion" }, sourceDirectory, loadedTextures, textureLookup, textureMap[4]);
-                        }
-
-                        outScene.materials.push_back(material);
-                        outScene.materialTextureMap.push_back(textureMap);
-                        materialIndices[fbxMaterial] = sceneMaterialIndex;
-                    }
-
-                    outScene.materialMap[static_cast<int>(outScene.flatMeshes.size()) - 1] = sceneMaterialIndex;
-                }
-            }
-
-            for (int i = 0; i < fbxNode->GetChildCount(); ++i)
-            {
-                buildNode(fbxNode->GetChild(i), nodeIndex);
-            }
-        };
-
+        MaterialLoader materialLoader;
         FbxNode *rootNode = fbxScene->GetRootNode();
         if (rootNode)
         {
             for (int i = 0; i < rootNode->GetChildCount(); ++i)
             {
-                buildNode(rootNode->GetChild(i), -1);
+                BuildNode(rootNode->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, -1, glm::mat4(1.0f));
             }
         }
 
-        std::function<void(int, const glm::mat4 &)> recurse = [&](const int nodeIndex, const glm::mat4 &parentGlobal)
-        {
-            MeshNode &node = outScene.nodes[nodeIndex];
-            node.global = parentGlobal * node.local;
-            for (const auto &m : node.meshes)
-            {
-                m->local = node.local;
-                m->global = node.global;
-            }
-
-            for (const int c : node.children)
-            {
-                recurse(c, node.global);
-            }
-        };
-
-        for (const int root : outScene.roots)
-        {
-            recurse(root, glm::mat4(1.0f));
-        }
-
-        sdkManager->Destroy();
+        fbxScene->Destroy();
     }
 
-    void MeshLoader::LoadSceneGraph(const std::string &filename, MeshScene &outScene)
+	void FBXMeshLoader::LoadSkeletonOnlyFromFBX(const std::string &filename, Ref<Skeleton> &skeleton)
+	{
+		if (!skeleton)
+		{
+			LOG_ERROR("[FBX Loader] Failed to load animation only: Skeleton is required");
+			return;
+		}
+
+		AssetManager &assetManager = Project::GetInstance()->GetAssetManager();
+		std::lock_guard<std::mutex> lock(assetManager.GetFbxSdkMutex());
+
+		FbxManager *sdkManager = assetManager.GetOrCreateFbxSdkManager();
+		if (!sdkManager)
+		{
+			LOG_ASSERT(false, "[FBX Loader] Failed to create FBX SDK Manager");
+			return;
+		}
+
+		// Create FBX Importer
+		FbxImporter *importer = FbxImporter::Create(sdkManager, "");
+		if (!importer->Initialize(filename.c_str(), -1, sdkManager->GetIOSettings()))
+		{
+			LOG_ERROR("[FBX Loader] Failed to create FBX Importer");
+
+			importer->Destroy();
+			return;
+		}
+
+		// Create FBX Scene
+		FbxScene *fbxScene = FbxScene::Create(sdkManager, "FBXScene");
+		if (!importer->Import(fbxScene))
+		{
+			LOG_ERROR("[FBX Loader] Failed to import {}", filename);
+
+			importer->Destroy();
+			fbxScene->Destroy();
+			return;
+		}
+		importer->Destroy();
+
+		JointLoader jointLoader;
+
+		FbxNode *rootNode = fbxScene->GetRootNode();
+		if (rootNode)
+		{
+			for (int i = 0; i < rootNode->GetChildCount(); ++i)
+			{
+				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, jointLoader);
+			}
+		}
+
+		if (skeleton->joints.empty())
+		{
+			skeleton.reset();
+		}
+
+		fbxScene->Destroy();
+	}
+
+	void FBXMeshLoader::LoadAnimationsOnlyFromFBX(const std::string &filename, Ref<Skeleton> skeleton, std::vector<Ref<SkeletalAnimation>> &outAnimations)
+	{
+        if (!skeleton)
+        {
+            LOG_ERROR("[FBX Loader] Failed to load animation only: Skeleton is required");
+            return;
+        }
+
+		AssetManager &assetManager = Project::GetInstance()->GetAssetManager();
+		std::lock_guard<std::mutex> lock(assetManager.GetFbxSdkMutex());
+
+		FbxManager *sdkManager = assetManager.GetOrCreateFbxSdkManager();
+		if (!sdkManager)
+		{
+			LOG_ASSERT(false, "[FBX Loader] Failed to create FBX SDK Manager");
+			return;
+		}
+
+		// Create FBX Importer
+		FbxImporter *importer = FbxImporter::Create(sdkManager, "");
+		if (!importer->Initialize(filename.c_str(), -1, sdkManager->GetIOSettings()))
+		{
+			LOG_ERROR("[FBX Loader] Failed to create FBX Importer");
+
+			importer->Destroy();
+			return;
+		}
+
+		// Create FBX Scene
+		FbxScene *fbxScene = FbxScene::Create(sdkManager, "FBXScene");
+		if (!importer->Import(fbxScene))
+		{
+			LOG_ERROR("[FBX Loader] Failed to import {}", filename);
+
+			importer->Destroy();
+			fbxScene->Destroy();
+			return;
+		}
+		importer->Destroy();
+
+		JointLoader jointLoader;
+
+		FbxNode *rootNode = fbxScene->GetRootNode();
+		if (rootNode)
+		{
+			for (int i = 0; i < rootNode->GetChildCount(); ++i)
+			{
+				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, jointLoader);
+			}
+		}
+
+		if (skeleton->joints.empty())
+		{
+			skeleton.reset();
+		}
+
+		LoadAnimationsFBX(fbxScene, skeleton, jointLoader.jointNodes, outAnimations);
+
+        fbxScene->Destroy();
+	}
+
+	void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene &outScene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal)
+    {
+        if (!node)
+        {
+            return;
+        }
+
+        const int nodeIndex = static_cast<int>(outScene.nodes.size());
+        outScene.nodes.emplace_back();
+
+        MeshNode &meshNode = outScene.nodes[nodeIndex];
+        meshNode.parent = parentIdx;
+        meshNode.name = node->GetName() ? node->GetName() : "";
+        meshNode.local = ToGlmMatrix(node->EvaluateLocalTransform());
+        meshNode.global = parentGlobal * meshNode.local;
+
+        if (parentIdx >= 0)
+        {
+            outScene.nodes[parentIdx].children.push_back(nodeIndex);
+        }
+        else
+        {
+            outScene.roots.push_back(nodeIndex);
+        }
+
+        if (FbxMesh *fbxMesh = node->GetMesh())
+        {
+            std::vector<VertexMesh_Anim> vertices;
+            std::vector<uint32_t> indices;
+
+            const FbxVector4 *controlPoints = fbxMesh->GetControlPoints();
+            FbxAMatrix meshGeom = BuildNodeGeometricMatrix(node);
+            FbxStringList uvSetNames;
+            fbxMesh->GetUVSetNames(uvSetNames);
+
+            std::vector<FBXBoneInfluence> controlPointInfluence;
+            controlPointInfluence.resize(static_cast<size_t>(fbxMesh->GetControlPointsCount()));
+
+            bool isSkinned = fbxMesh->GetDeformerCount(FbxDeformer::eSkin) > 0;
+            LOG_INFO("[FBX SKIN DEBUG] Node='{}' parent='{}' mesh='{}' skinned={} deformers={} cpCount={}",
+                meshNode.name,
+                (parentIdx >= 0 ? outScene.nodes[parentIdx].name : std::string("<root>")),
+                (fbxMesh->GetName() ? std::string(fbxMesh->GetName()) : std::string("<unnamed>")),
+                isSkinned,
+                fbxMesh->GetDeformerCount(FbxDeformer::eSkin),
+                fbxMesh->GetControlPointsCount());
+
+            if (isSkinned)
+            {
+                FbxSkin *skin = static_cast<FbxSkin *>(fbxMesh->GetDeformer(0, FbxDeformer::eSkin));
+                if (skin && skin->GetClusterCount() > 0)
+                {
+                    // Keep vertices in mesh-local space. Skinning matrices already include mesh bind transform.
+                    LOG_INFO("[FBX SKIN DEBUG] Node='{}' firstSkinClusters={}", meshNode.name, skin->GetClusterCount());
+                }
+            }
+
+            for (int deformerIndex = 0; deformerIndex < fbxMesh->GetDeformerCount(FbxDeformer::eSkin); ++deformerIndex)
+            {
+                FbxSkin *skin = static_cast<FbxSkin *>(fbxMesh->GetDeformer(deformerIndex, FbxDeformer::eSkin));
+                if (!skin)
+                {
+                    continue;
+                }
+
+                if (!outScene.skeleton)
+                {
+                    outScene.skeleton = CreateRef<Skeleton>();
+                }
+
+                for (int clusterIndex = 0; clusterIndex < skin->GetClusterCount(); ++clusterIndex)
+                {
+                    FbxCluster *cluster = skin->GetCluster(clusterIndex);
+                    if (!cluster)
+                    {
+                        continue;
+                    }
+
+                    FbxNode *jointNode = cluster->GetLink();
+                    if (!jointNode)
+                    {
+                        continue;
+                    }
+
+                    const int32_t jointId = SkeletonFindOrAddJoint(jointNode, outScene.skeleton, jointLoader);
+                    if (jointId < 0)
+                    {
+                        continue;
+                    }
+
+                    if (jointId >= MAX_BONES)
+                    {
+                        static bool s_MaxBonesWarningPrinted = false;
+                        if (!s_MaxBonesWarningPrinted)
+                        {
+                            LOG_WARN("[FBX Loader] Joint count exceeds MAX_BONES ({}) - extra joints will be ignored for skinning", MAX_BONES);
+                            s_MaxBonesWarningPrinted = true;
+                        }
+                        continue;
+                    }
+
+                    
+                    FbxAMatrix meshBind;
+                    FbxAMatrix jointBind;
+
+                    // Cluster matrices (FBX bind pose)
+                    cluster->GetTransformMatrix(meshBind);
+                    cluster->GetTransformLinkMatrix(jointBind);
+
+                    // Keep a joint-space inverse bind (shared safely across multiple skinned meshes).
+                    // Mesh node placement is applied in object transform during rendering.
+                    const FbxAMatrix invBind = jointBind.Inverse();
+                    const glm::mat4 invBindGlm = ToGlmMatrix(invBind);
+                    glm::mat4 &existingInvBind = outScene.skeleton->joints[jointId].inverseBindPose;
+                    const bool hasExistingInvBind = !Mat4NearEqual(existingInvBind, glm::mat4(1.0f));
+                    if (hasExistingInvBind && !Mat4NearEqual(existingInvBind, invBindGlm, 0.001f))
+                    {
+                        const glm::vec3 oldT = ExtractTranslation(existingInvBind);
+                        const glm::vec3 newT = ExtractTranslation(invBindGlm);
+                        LOG_WARN("[FBX SKIN DEBUG] InverseBind mismatch joint='{}' id={} meshNode='{}' oldT=({:.4f},{:.4f},{:.4f}) newT=({:.4f},{:.4f},{:.4f})",
+                            outScene.skeleton->joints[jointId].name,
+                            jointId,
+                            meshNode.name,
+                            oldT.x, oldT.y, oldT.z,
+                            newT.x, newT.y, newT.z);
+                    }
+
+                    existingInvBind = invBindGlm;
+
+                    if (clusterIndex < 6)
+                    {
+                        const glm::vec3 meshBindT = ExtractTranslation(ToGlmMatrix(meshBind));
+                        const glm::vec3 jointBindT = ExtractTranslation(ToGlmMatrix(jointBind));
+                        const glm::vec3 invBindT = ExtractTranslation(invBindGlm);
+                        LOG_INFO("[FBX SKIN DEBUG] joint='{}' id={} cpInfluences={} meshBindT=({:.3f},{:.3f},{:.3f}) jointBindT=({:.3f},{:.3f},{:.3f}) invBindT=({:.3f},{:.3f},{:.3f})",
+                            outScene.skeleton->joints[jointId].name,
+                            jointId,
+                            cluster->GetControlPointIndicesCount(),
+                            meshBindT.x, meshBindT.y, meshBindT.z,
+                            jointBindT.x, jointBindT.y, jointBindT.z,
+                            invBindT.x, invBindT.y, invBindT.z);
+                    }
+
+                    const int *controlPointIndices = cluster->GetControlPointIndices();
+                    const double *controlPointWeights = cluster->GetControlPointWeights();
+                    const int controlPointIndexCount = cluster->GetControlPointIndicesCount();
+
+                    for (int i = 0; i < controlPointIndexCount; ++i)
+                    {
+                        const int controlPointIndex = controlPointIndices[i];
+                        if (controlPointIndex < 0 || controlPointIndex >= static_cast<int>(controlPointInfluence.size()))
+                        {
+                            continue;
+                        }
+
+                        AddBoneInfluence(controlPointInfluence[controlPointIndex], static_cast<uint32_t>(jointId), static_cast<float>(controlPointWeights[i]));
+                    }
+                }
+            }
+
+            for (FBXMeshLoader::FBXBoneInfluence &influence : controlPointInfluence)
+            {
+                NormalizeBoneInfluence(influence);
+            }
+
+            size_t influencedControlPoints = 0;
+            for (const FBXMeshLoader::FBXBoneInfluence &influence : controlPointInfluence)
+            {
+                float wsum = 0.0f;
+                for (float w : influence.weights)
+                {
+                    wsum += w;
+                }
+
+                if (wsum > 0.00001f)
+                {
+                    influencedControlPoints++;
+                }
+            }
+
+            if (isSkinned)
+            {
+                LOG_INFO("[FBX SKIN DEBUG] Node='{}' influencedCP={}/{}", meshNode.name, influencedControlPoints, controlPointInfluence.size());
+            }
+
+            const int polygonCount = fbxMesh->GetPolygonCount();
+            vertices.reserve(static_cast<size_t>(polygonCount) * 3);
+            indices.reserve(static_cast<size_t>(polygonCount) * 3);
+
+            auto emitVertex = [&](const int polygonIndex, const int polygonVertexIndex)
+            {
+                const int controlPointIndex = fbxMesh->GetPolygonVertex(polygonIndex, polygonVertexIndex);
+                if (controlPointIndex < 0)
+                {
+                    return;
+                }
+
+                const FbxVector4 cp = controlPoints[controlPointIndex];
+                const FbxVector4 transformedPosition = meshGeom.MultT(cp);
+
+                VertexMesh_Anim vertex{};
+                vertex.position =
+                {
+                    static_cast<float>(transformedPosition[0]),
+                    static_cast<float>(transformedPosition[1]),
+                    static_cast<float>(transformedPosition[2])
+                };
+
+                FbxVector4 normal(0.0, 1.0, 0.0, 0.0);
+                fbxMesh->GetPolygonVertexNormal(polygonIndex, polygonVertexIndex, normal);
+                normal = meshGeom.MultR(normal);
+                normal.Normalize();
+                vertex.normal = glm::vec3(static_cast<float>(normal[0]), static_cast<float>(normal[1]), static_cast<float>(normal[2]));
+
+                if (uvSetNames.GetCount() > 0)
+                {
+                    FbxVector2 uv(0.0, 0.0);
+                    bool unmapped = false;
+                    fbxMesh->GetPolygonVertexUV(polygonIndex, polygonVertexIndex, uvSetNames[0], uv, unmapped);
+                    if (!unmapped)
+                    {
+                        vertex.uv = glm::vec2(static_cast<float>(uv[0]), static_cast<float>(uv[1]));
+                    }
+                }
+
+                vertex.tangent = glm::vec3(1.0f, 0.0f, 0.0f);
+                vertex.bitangent = glm::cross(vertex.normal, vertex.tangent);
+
+                if (controlPointIndex >= 0 && controlPointIndex < static_cast<int>(controlPointInfluence.size()))
+                {
+                    const FBXBoneInfluence &influence = controlPointInfluence[controlPointIndex];
+                    for (size_t i = 0; i < VERTEX_MAX_BONES; ++i)
+                    {
+                        vertex.boneIDs[i] = influence.ids[i];
+                        vertex.weights[i] = influence.weights[i];
+                    }
+                }
+
+                vertices.push_back(vertex);
+                indices.push_back(static_cast<uint32_t>(vertices.size() - 1));
+            };
+
+            for (int polygonIndex = 0; polygonIndex < polygonCount; ++polygonIndex)
+            {
+                const int polygonSize = fbxMesh->GetPolygonSize(polygonIndex);
+                if (polygonSize < 3)
+                {
+                    continue;
+                }
+
+                emitVertex(polygonIndex, 0);
+                for (int v = 1; v < polygonSize - 1; ++v)
+                {
+                    emitVertex(polygonIndex, v);
+                    emitVertex(polygonIndex, v + 1);
+                }
+            }
+
+            if (!vertices.empty() && !indices.empty())
+            {
+                Ref<MeshPrimitive> primitive = MeshPrimitive::Create(vertices, indices);
+                Ref<MeshInstance> meshInstance = MeshInstance::Create(meshNode, primitive);
+
+                outScene.nodes[nodeIndex].meshes.push_back(meshInstance);
+                outScene.flatMeshes.push_back(meshInstance);
+
+                FbxSurfaceMaterial *fbxMaterial = node->GetMaterialCount() > 0 ? node->GetMaterial(0) : nullptr;
+                int sceneMaterialIndex = -1;
+
+                if (materialLoader.materialIndices.contains(fbxMaterial))
+                {
+                    sceneMaterialIndex = materialLoader.materialIndices[fbxMaterial];
+                }
+                else
+                {
+                    Ref<Material> material = CreateMaterialFromFBX(fbxMaterial);
+                    sceneMaterialIndex = static_cast<int>(outScene.materials.size());
+
+                    std::array<MeshScene::MaterialTextureMap, 5> textureMap{};
+                    if (fbxMaterial)
+                    {
+						TryLoadFBXTextureFromProperty(fbxMaterial, { "DiffuseColor", "Diffuse", "BaseColor" }, sourceDir, materialLoader, textureMap[0]);
+                        TryLoadFBXTextureFromProperty(fbxMaterial, { "EmissiveColor", "Emissive" }, sourceDir, materialLoader, textureMap[1]);
+                        TryLoadFBXTextureFromProperty(fbxMaterial, { "SpecularColor", "Specular", "Metalness" }, sourceDir, materialLoader, textureMap[2]);
+                        TryLoadFBXTextureFromProperty(fbxMaterial, { "NormalMap", "Bump", "Maya|TEX_normal_map" }, sourceDir, materialLoader, textureMap[3]);
+                        TryLoadFBXTextureFromProperty(fbxMaterial, { "AmbientOcclusion", "AO", "Occlusion" }, sourceDir, materialLoader, textureMap[4]);
+                    }
+
+                    outScene.materials.push_back(material);
+                    outScene.materialTextureMap.push_back(textureMap);
+                    materialLoader.materialIndices[fbxMaterial] = sceneMaterialIndex;
+                }
+
+                outScene.materialMap[static_cast<int>(outScene.flatMeshes.size()) - 1] = sceneMaterialIndex;
+            }
+        }
+
+        for (int i = 0; i < node->GetChildCount(); ++i)
+        {
+            BuildNode(node->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, nodeIndex, meshNode.global);
+        }
+    }
+
+	Ref<Skeleton> FBXMeshLoader::LoadSkeletonFBX(fbxsdk::FbxScene *fbxScene, JointLoader &outJointResult)
+	{
+		if (!fbxScene)
+		{
+			return nullptr;
+		}
+
+		Ref<Skeleton> skeleton = CreateRef<Skeleton>();
+
+		FbxNode *rootNode = fbxScene->GetRootNode();
+		if (rootNode)
+		{
+			for (int i = 0; i < rootNode->GetChildCount(); ++i)
+			{
+				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, outJointResult);
+			}
+		}
+
+		if (skeleton->joints.empty())
+		{
+			skeleton.reset();
+		}
+
+        return skeleton;
+	}
+
+	void FBXMeshLoader::LoadAnimationsFBX(fbxsdk::FbxScene *fbxScene, const Ref<Skeleton> &skeleton, JointMap &jointNodes, std::vector<Ref<SkeletalAnimation>> &outAnimations)
+	{
+		if (!fbxScene || !skeleton)
+		{
+			return;
+		}
+
+		const double frameRate = FbxTime::GetFrameRate(fbxScene->GetGlobalSettings().GetTimeMode());
+		const float ticksPerSecond = frameRate > 0.0 ? static_cast<float>(frameRate) : 30.0f;
+
+		for (int stackIndex = 0; stackIndex < fbxScene->GetSrcObjectCount<FbxAnimStack>(); ++stackIndex)
+		{
+			FbxAnimStack *animStack = fbxScene->GetSrcObject<FbxAnimStack>(stackIndex);
+			if (!animStack || animStack->GetMemberCount<FbxAnimLayer>() == 0)
+			{
+				continue;
+			}
+
+			FbxAnimLayer *layer = animStack->GetMember<FbxAnimLayer>(0);
+			if (!layer)
+			{
+				continue;
+			}
+
+			FbxTimeSpan timeSpan = animStack->GetLocalTimeSpan();
+			const double startSeconds = timeSpan.GetStart().GetSecondDouble();
+			const double endSeconds = timeSpan.GetStop().GetSecondDouble();
+
+			Ref<SkeletalAnimation> animation = CreateRef<SkeletalAnimation>();
+			animation->name = animStack->GetName() ? animStack->GetName() : "FBXAnimation";
+			animation->ticksPerSeconds = ticksPerSecond;
+			animation->duration = std::max(0.0f, static_cast<float>((endSeconds - startSeconds) * ticksPerSecond));
+
+			for (const Joint &joint : skeleton->joints)
+			{
+				if (!jointNodes.contains(joint.name))
+				{
+					continue;
+				}
+
+				FbxNode *node = jointNodes[joint.name];
+				std::set<FbxLongLong> keyTicks;
+
+				auto collectTicks = [&keyTicks](FbxAnimCurve *curve)
+				{
+					if (!curve)
+					{
+						return;
+					}
+
+					for (int keyIndex = 0; keyIndex < curve->KeyGetCount(); ++keyIndex)
+					{
+						keyTicks.insert(curve->KeyGetTime(keyIndex).Get());
+					}
+				};
+
+				collectTicks(node->LclTranslation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_X));
+				collectTicks(node->LclTranslation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Y));
+				collectTicks(node->LclTranslation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Z));
+
+				collectTicks(node->LclRotation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_X));
+				collectTicks(node->LclRotation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Y));
+				collectTicks(node->LclRotation.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Z));
+
+				collectTicks(node->LclScaling.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_X));
+				collectTicks(node->LclScaling.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Y));
+				collectTicks(node->LclScaling.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Z));
+
+				if (keyTicks.empty())
+				{
+					continue;
+				}
+
+				AnimationChannel channel{};
+				channel.translationKeys.frames.reserve(keyTicks.size());
+				channel.rotationKeys.frames.reserve(keyTicks.size());
+				channel.scaleKeys.frames.reserve(keyTicks.size());
+
+				for (const FbxLongLong tick : keyTicks)
+				{
+					FbxTime sampleTime;
+					sampleTime.Set(tick);
+
+					const float timestamp = static_cast<float>((sampleTime.GetSecondDouble() - startSeconds) * ticksPerSecond);
+
+					const glm::mat4 localMatrix = ToGlmMatrix(node->EvaluateLocalTransform(sampleTime));
+
+					glm::vec3 decomposedScale(1.0f);
+					glm::quat decomposedRotation(1.0f, 0.0f, 0.0f, 0.0f);
+					glm::vec3 decomposedTranslation(0.0f);
+					glm::vec3 skew(0.0f);
+					glm::vec4 perspective(0.0f);
+					glm::decompose(localMatrix,
+						decomposedScale,
+						decomposedRotation,
+						decomposedTranslation,
+						skew,
+						perspective);
+
+					channel.translationKeys.AddFrame({ decomposedTranslation, timestamp });
+					channel.rotationKeys.AddFrame({ decomposedRotation, timestamp });
+					channel.scaleKeys.AddFrame({ decomposedScale, timestamp });
+				}
+
+				animation->channels.emplace(joint.name, std::move(channel));
+			}
+
+			if (!animation->channels.empty())
+			{
+				outAnimations.push_back(animation);
+			}
+		}
+	}
+
+	int32_t FBXMeshLoader::SkeletonFindOrAddJoint(fbxsdk::FbxNode *jointNode, const Ref<Skeleton> &skeleton, JointLoader &outJointResult)
+	{
+		if (!jointNode || !skeleton)
+		{
+			return -1;
+		}
+
+		const std::string jointName = jointNode->GetName() ? jointNode->GetName() : "";
+		if (jointName.empty())
+		{
+			return -1;
+		}
+
+		if (outJointResult.jointNameToIndex.contains(jointName))
+		{
+			return outJointResult.jointNameToIndex[jointName];
+		}
+
+		int32_t parentJointId = -1;
+		FbxNode *parentNode = jointNode->GetParent();
+		if (parentNode && jointNode->GetScene() && parentNode != jointNode->GetScene()->GetRootNode())
+		{
+			parentJointId = SkeletonFindOrAddJoint(parentNode, skeleton, outJointResult);
+		}
+
+		Joint joint{};
+		joint.id = static_cast<int32_t>(skeleton->joints.size());
+		joint.parentJointId = parentJointId;
+		joint.name = jointName;
+		joint.localTransform = ToGlmMatrix(jointNode->EvaluateLocalTransform());
+
+		glm::vec3 skew;
+		glm::vec4 perspective;
+		glm::decompose(joint.localTransform, joint.defaultScale, joint.defaultRotation, joint.defaultTranslation, skew, perspective);
+
+		joint.globalTransform = glm::mat4(1.0f);
+		joint.inverseBindPose = glm::mat4(1.0f);
+
+		skeleton->nameToJointMap[joint.name] = joint.id;
+		skeleton->joints.push_back(joint);
+		outJointResult.jointNameToIndex[joint.name] = joint.id;
+
+		outJointResult.jointNodes[joint.name] = jointNode;
+
+		return joint.id;
+	}
+
+	void FBXMeshLoader::SkeletonBuildHierarchy(fbxsdk::FbxNode *node, const Ref<Skeleton> &skeleton, JointLoader &outJointResult)
+	{
+		if (!node)
+		{
+			return;
+		}
+
+		FbxNodeAttribute *attribute = node->GetNodeAttribute();
+		if (attribute && attribute->GetAttributeType() == FbxNodeAttribute::eSkeleton)
+		{
+            SkeletonFindOrAddJoint(node, skeleton, outJointResult);
+		}
+
+		for (int i = 0; i < node->GetChildCount(); ++i)
+		{
+            SkeletonBuildHierarchy(node->GetChild(i), skeleton, outJointResult);
+		}
+	}
+
+	void MeshLoader::LoadSceneGraph(const std::string &filename, MeshScene &outScene)
     {
         const std::string extension = ToLowerCopy(std::filesystem::path(filename).extension().string());
         if (extension == ".fbx")

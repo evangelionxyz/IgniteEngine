@@ -3,6 +3,7 @@
 struct Constants
 {
     float2 invDisplaySize;
+    float2 displayPos;
 };
 
 DECLARE_PUSH_CONSTANTS(Constants, g_Const, 0, 0);
@@ -24,7 +25,8 @@ struct PS_INPUT
 PS_INPUT main(VS_INPUT input)
 {
     PS_INPUT output;
-    output.out_pos.xy = input.pos.xy * g_Const.invDisplaySize * float2(2.0, -2.0) + float2(-1.0, 1.0);
+    float2 pos = input.pos.xy - g_Const.displayPos;
+    output.out_pos.xy = pos * g_Const.invDisplaySize * float2(2.0, -2.0) + float2(-1.0, 1.0);
     output.out_pos.zw = float2(0, 1);
     output.out_col = input.col;
     output.out_uv = input.uv;

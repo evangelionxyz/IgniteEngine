@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+//Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 
 #pragma once
 
@@ -40,6 +19,8 @@ namespace ignite
         EditorCamera() = default;
         EditorCamera(const std::string &name);
 
+		void SetView(const glm::mat4 &view);
+
 		void UpdateMouseState();
 		void UpdateSphericalPosition();
 		void HandleOrbit(float deltaTime);
@@ -48,10 +29,29 @@ namespace ignite
 		void ApplyInertia(float deltaTime);
 		void UpdateCameraPosition();
 
+		virtual void UpdateView() override;
+		virtual void UpdateProjection(float width, float height) override;
+
+		void SetDistance(float distance) { m_Distance = distance; }
+		float GetDistance() { return m_Distance; }
+
+		void SetTarget(const glm::vec3 &target) { m_Target = target; }
+		const glm::vec3 &GetTarget() { return m_Target; }
+
+		virtual glm::vec3 GetUpDirection() const override;
+		virtual glm::vec3 GetRightDirection() const override;
+		virtual glm::vec3 GetForwardDirection() const override;
+
 		const std::string& GetName() { return m_Name; }
 
 	private:
+		glm::vec2 m_AngularVelocity = glm::vec2(0.0f);
+		glm::vec2 m_PanVelocity = glm::vec2(0.0f);
+		float m_ZoomVelocity = 0.0f;
+        float m_Distance = 1.0f;
 
+		glm::vec3 m_Target = { 0.0f, 0.0f, -1.0f };
+		
 		std::string m_Name;
     };
 }

@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
 
@@ -30,6 +9,28 @@ namespace ignite
     class SceneCamera : public ICamera
     {
     public:
+        enum class AspectRatioPreset
+        {
+            Free = 0,
+            Ratio16x9,
+            Ratio16x10,
+            Ratio4x3,
+            Ratio21x9,
+            Ratio1x1
+        };
+
         SceneCamera() = default;
+
+        void SetTransform(const glm::mat4 &transform);
+        virtual glm::mat4 GetView() override;
+
+        void SetAspectRatioPreset(AspectRatioPreset preset) { m_AspectRatioPreset = preset; }
+        AspectRatioPreset GetAspectRatioPreset() const { return m_AspectRatioPreset; }
+        bool IsFreeAspect() const { return m_AspectRatioPreset == AspectRatioPreset::Free; }
+        float GetAspectRatioValue() const;
+
+    private:
+        glm::mat4 m_Transform = glm::mat4(1.0f);
+        AspectRatioPreset m_AspectRatioPreset = AspectRatioPreset::Free;
     };
 }

@@ -75,8 +75,11 @@ namespace ignite
 
         void BeginFrame();
         void EndFrame(nvrhi::IFramebuffer* framebuffer);
+        void RenderPlatformWindows();
 
         void PollEvent(const SDL_Event &event);
+
+        void SetBlock(bool block) { m_BlockEvents = block; }
 
         void OnEvent(Event &event) override;
         bool OnFramebufferResize(FramebufferResizeEvent &event) const;
@@ -88,6 +91,8 @@ namespace ignite
 
         bool m_SupportExplicitDisplayScaling;
         bool m_BeginFrameCalled = false;
+        bool m_BlockEvents = true;
+
         DeviceManager *m_DeviceManager = nullptr;
         
         // Store original style for proper scaling

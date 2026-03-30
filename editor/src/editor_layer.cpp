@@ -1,30 +1,9 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+//Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 
 #include "editor_layer.hpp"
 #include "panels/scene_panel.hpp"
 #include "panels/content_browser_panel.hpp"
-#include "panels/materials_panel.hpp"
+#include "panels/asset_importer_panel.hpp"
 
 #include "ignite/core/command.hpp"
 #include "ignite/graphics/renderer_2d.hpp"
@@ -32,7 +11,7 @@
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/graphics/objects/shadow_map.hpp"
-
+#include "ignite/core/platform_utils.hpp"
 #include "stb_image_write.h"
 
 #include <cmath>
@@ -86,18 +65,15 @@ namespace ignite
 
         m_Device = DeviceManager::GetInstance()->GetDevice();
 
-        m_ScenePanel = CreateRef<ScenePanel>("Scene Panel");
-        m_ContentBrowserPanel = CreateRef<ContentBrowserPanel>("Content Browser");
-        m_MaterialsPanel = CreateRef<MaterialsPanel>();
+        auto *app = Application::GetInstance();
 
-        // Set up material panel callbacks
-        m_MaterialsPanel->SetMaterialSelectionCallback([this](Ref<Material> material) {
-            // Optional: Handle material selection in main editor
-        });
-        
-        m_MaterialsPanel->SetMaterialEditCallback([this](Ref<Material> material) {
+        m_ScenePanel = new ScenePanel("Scene Panel", this);
+        m_ContentBrowserPanel = new ContentBrowserPanel("Content Browser", this);
+        m_AssetImporterPanel = new AssetImporterPanel("AssetImporter Panel", this);
 
-        });
+        app->PushLayer(m_ScenePanel);
+        app->PushLayer(m_ContentBrowserPanel);
+        app->PushLayer(m_AssetImporterPanel);
 
         // create render target framebuffer
         m_SceneRenderer = CreateRef<SceneRenderer>();
@@ -123,10 +99,6 @@ namespace ignite
     void EditorLayer::OnDetach()
     {
         Layer::OnDetach();
-
-        m_ScenePanel.reset();
-        m_ContentBrowserPanel.reset();
-        m_MaterialsPanel.reset();
 
 		s_EditorLayerInstance = nullptr;
     }
@@ -170,7 +142,6 @@ namespace ignite
     void EditorLayer::OnEvent(Event &e)
     {
         Layer::OnEvent(e);
-        m_ScenePanel->OnEvent(e);
 
         EventDispatcher dispatcher(e);
         dispatcher.Dispatch<KeyPressedEvent>(BIND_CLASS_EVENT_FN(EditorLayer::OnKeyPressedEvent));
@@ -192,7 +163,8 @@ namespace ignite
                 Entity entity = m_ScenePanel->GetSelectedEntity();
                 if (entity.IsValid())
                 {
-                    m_ScenePanel->GetViewportCamera().target = entity.GetComponent<TransformComponent>().translation;
+                    m_ScenePanel->GetViewportCamera().SetDistance(20.0f);
+                    m_ScenePanel->GetViewportCamera().SetTarget(entity.GetComponent<TransformComponent>().translation);
                 }
                 break;
             }
@@ -287,80 +259,113 @@ namespace ignite
         if (!m_ActiveScene)
             return;
 
-        // Perform Resize (use integer sizes to avoid continuous resizing from fractional values)
-        const glm::uvec2 framebufferSize = m_ScenePanel->GetSceneViewportRT()->GetSize();
-        const glm::vec2 currentViewportSize = m_ScenePanel->GetViewportSize();
-        const glm::uvec2 desiredSize
+        // Resize Edit Viewport Framebuffer
         {
-            static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.x))),
-            static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.y)))
-        };
-
-        const glm::uvec2 sceneSize
-        {
-            m_ActiveScene->GetViewportWidth(),
-            m_ActiveScene->GetViewportHeight()
-        };
-
-        const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
-        const bool sceneNeedsResize = sceneSize.x != desiredSize.x || sceneSize.y != desiredSize.y;
-
-        if (desiredSize.x > 0u && desiredSize.y > 0u)
-        {
-            if (framebufferNeedsResize)
+            const glm::uvec2 framebufferSize = m_ScenePanel->GetViewportEditCompRT()->GetSize();
+            const glm::vec2 currentViewportSize = m_ScenePanel->GetViewportEditSize();
+            const glm::uvec2 desiredSize
             {
-                m_ScenePanel->ResizeFramebuffer(desiredSize.x, desiredSize.y);
-            }
+                static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.x))),
+                static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.y)))
+            };
 
-            if (sceneNeedsResize)
+            const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
+            if (framebufferNeedsResize && desiredSize.x > 0u && desiredSize.y > 0u)
             {
-                m_ActiveScene->Resize(desiredSize.x, desiredSize.y);
+                m_ScenePanel->ViewportEditResize(desiredSize.x, desiredSize.y);
             }
         }
 
-        // Scene Render
+        // Resize Game Viewport Framebuffer
+        {
+            const glm::uvec2 framebufferSize = m_ScenePanel->GetViewportGameCompRT()->GetSize();
+            const glm::vec2 currentViewportSize = m_ScenePanel->GetViewportGameSize();
+            const glm::uvec2 desiredSize
+            {
+                static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.x))),
+                static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.y)))
+            };
+
+            const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
+            if (framebufferNeedsResize && desiredSize.x > 0u && desiredSize.y > 0u)
+            {
+                m_ScenePanel->ViewportGameResize(desiredSize.x, desiredSize.y);
+            }
+        }
+
+        // Render to Edit Viewport
         switch (m_Data.sceneState)
         {
         case State::SceneSimulate:
         case State::SceneEdit:
         {
-            m_SceneRenderer->RenderTo(&m_ScenePanel->GetViewportCamera(),
-                m_ScenePanel->GetSceneViewportRT(),
-                m_ScenePanel->GetUIViewportRT(),
-                m_ScenePanel->GetCompositeViewportRT());
+            ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
+            if (const glm::uvec2 editSize = m_ScenePanel->GetViewportEditCompRT()->GetSize(); editSize.x > 0u && editSize.y > 0u)
+            {
+                editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
+            }
+
+            m_SceneRenderer->RenderTo(editCamera,
+                m_ScenePanel->GetViewportEditSceneRT(),
+                m_ScenePanel->GetViewportEditUIRT(),
+                m_ScenePanel->GetViewportEditCompRT());
             break;
         }
         case State::ScenePlay:
         {
-            ICamera *camera = &m_ScenePanel->GetViewportCamera();
+            ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
             if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
             {
-				camera = &primaryCam.GetComponent<CameraComponent>().camera;
+                editCamera = &primaryCam.GetComponent<CameraComponent>().camera;
             }
-			m_SceneRenderer->RenderTo(camera,
-                m_ScenePanel->GetSceneViewportRT(),
-                m_ScenePanel->GetUIViewportRT(),
-                m_ScenePanel->GetCompositeViewportRT());
+
+            if (const glm::uvec2 editSize = m_ScenePanel->GetViewportEditCompRT()->GetSize(); editSize.x > 0u && editSize.y > 0u)
+            {
+                editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
+            }
+
+            m_SceneRenderer->RenderTo(editCamera,
+                m_ScenePanel->GetViewportEditSceneRT(),
+                m_ScenePanel->GetViewportEditUIRT(),
+                m_ScenePanel->GetViewportEditCompRT());
             break;
         }
         }
-		
+
+        // Prevent shared camera constant-buffer hazards between back-to-back viewport renders.
+        m_Device->waitForIdle();
+
+        // Render to Game Viewport
+        if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
+        {
+            ICamera *gameCamera = &primaryCam.GetComponent<CameraComponent>().camera;
+            if (const glm::uvec2 gameSize = m_ScenePanel->GetViewportGameCompRT()->GetSize(); gameSize.x > 0u && gameSize.y > 0u)
+            {
+                gameCamera->UpdateProjection(static_cast<float>(gameSize.x), static_cast<float>(gameSize.y));
+            }
+
+            m_SceneRenderer->RenderTo(gameCamera,
+                m_ScenePanel->GetViewportGameSceneRT(),
+                m_ScenePanel->GetViewportGameUIRT(),
+                m_ScenePanel->GetViewportGameCompRT());
+        }
+
         m_Cmd->open();
         // Create staging texture for read-back
         if (m_Data.isPickingEntity && false) // FIXME: No mouse picking
         {
-            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(1)->GetHandle()->getDesc();
+            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetViewportEditCompRT()->GetColorAttachment(1)->GetHandle()->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_MousePickingStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            m_Cmd->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(1)->GetHandle(), nvrhi::TextureSlice());
+            m_Cmd->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetViewportEditCompRT()->GetColorAttachment(1)->GetHandle(), nvrhi::TextureSlice());
         }
 
         if (m_Data.takeScreenshot)
         {
-            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(0)->GetHandle()->getDesc();
+            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetViewportEditCompRT()->GetColorAttachment(0)->GetHandle()->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_ScreenshotStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            m_Cmd->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetCompositeViewportRT()->GetColorAttachment(0)->GetHandle(), nvrhi::TextureSlice());
+            m_Cmd->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetViewportEditCompRT()->GetColorAttachment(0)->GetHandle(), nvrhi::TextureSlice());
         }
 
         m_Cmd->close();
@@ -378,8 +383,8 @@ namespace ignite
                 size_t packedStride = m_ScreenshotWidth * 4;
                 m_ScreenshotPixelData.resize(m_ScreenshotHeight * packedStride);
 
-                const uint8_t* src = static_cast<const uint8_t*>(mappedData);
-                uint8_t* dst = m_ScreenshotPixelData.data();
+                const uint8_t *src = static_cast<const uint8_t *>(mappedData);
+                uint8_t *dst = m_ScreenshotPixelData.data();
 
                 for (int y = 0; y < m_ScreenshotHeight; ++y)
                 {
@@ -416,7 +421,7 @@ namespace ignite
                 {
                     if (uint32_t eId = static_cast<uint32_t>(e); eId == m_Data.hoveredEntity)
                     {
-                        Entity entity { e, m_ActiveScene.get() };
+                        Entity entity{ e, m_ActiveScene.get() };
                         m_ScenePanel->SetSelectedEntity(entity);
                         found = true;
                         break;
@@ -512,16 +517,6 @@ namespace ignite
                 ImGui::EndMenu();
             }
 
-            if (ImGui::BeginMenu("Window"))
-            {
-                if (ImGui::MenuItem("Materials", nullptr, m_MaterialsPanel->IsOpen(), m_ActiveProject != nullptr))
-                {
-                    m_MaterialsPanel->SetOpen(!m_MaterialsPanel->IsOpen());
-                }
-
-                ImGui::EndMenu();
-            }
-
             ImGui::EndMenuBar();
         }
 
@@ -530,140 +525,13 @@ namespace ignite
             ImGui::OpenPopup("New Project");
             m_Data.popupNewProjectModal = false;
         }
-
-        if (ImGui::BeginPopupModal("New Project", nullptr, 0))
-        {
-            ImGui::Text("Create a brand new project here...");
-
-            static char nameBuffer[128] = {};
-            if (ImGui::InputText("Project Name", nameBuffer, 128))
-            {
-                m_Data.projectCreateInfo.name = std::string(nameBuffer);
-            }
-
-            static char filepathBuffer[256] = {};
-            if (!m_Data.projectCreateInfo.filepath.empty())
-            {
-                std::string filepathCopy = m_Data.projectCreateInfo.filepath.generic_string();
-                if (filepathCopy.length() < sizeof(filepathBuffer))
-                    memcpy(filepathBuffer, filepathCopy.c_str(), filepathCopy.length() + 1);
-            }
-
-            if (ImGui::InputText("Location", filepathBuffer, sizeof(filepathBuffer), ImGuiInputTextFlags_ReadOnly))
-            {
-                m_Data.projectCreateInfo.filepath = std::string(filepathBuffer);
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button("..."))
-            {
-                SDL_ShowOpenFolderDialog(OnProjectFolderSelected, this,
-                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
-                    nullptr, false);
-            }
-
-            if (ImGui::Button("Create"))
-            {
-                if (!m_Data.projectCreateInfo.name.empty() && !m_Data.projectCreateInfo.filepath.empty())
-                {
-                    while (m_Data.projectCreateInfo.name.find(' ') != std::string::npos)
-                    {
-                        const size_t spacePos = m_Data.projectCreateInfo.name.find(' ');
-                        m_Data.projectCreateInfo.name.replace(spacePos, 1, "");
-                    }
-
-                    m_Data.projectCreateInfo.filepath /= (m_Data.projectCreateInfo.name + ".ixproj");
-
-                    if (Ref<Project> newProject = Project::Create(m_Data.projectCreateInfo))
-                    {
-                        m_ActiveProject = newProject;
-
-                        ProjectSerializer serializer(m_ActiveProject.get());
-                        serializer.Serialize(m_Data.projectCreateInfo.filepath);
-
-                        // Reload content browser
-                        m_ContentBrowserPanel->LoadProjectFiles();
-
-                        if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
-                        {
-                            // Use GetAssetImmediate since we're in modal and need synchronous load
-                            if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
-                            {
-                                m_EditorScene = SceneManager::Copy(activeScene);
-                                m_EditorScene->SetDirtyFlag(false);
-
-                                SetActiveScene(m_EditorScene);
-
-                                AssetMetaData metadata = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
-                                auto scenePath = m_ActiveProject->GetAssetFilepath(metadata.filepath);
-                                m_CurrentSceneFilePath = scenePath;
-                            }
-                        }
-                        else
-                        {
-                            // Create default scene
-                            NewScene();
-                        }
-                    }
-
-                    m_Data.projectCreateInfo.filepath.clear();
-                    m_Data.projectCreateInfo.name.clear();
-
-                    memset(nameBuffer, 0, sizeof(nameBuffer));
-                    memset(filepathBuffer, 0, sizeof(filepathBuffer));
-
-                    ImGui::CloseCurrentPopup();
-                }
-                else
-                {
-                    // TODO: Show error message text
-                }
-            }
-
-            ImGui::SameLine();
-
-            if (ImGui::Button("Cancel"))
-            {
-                m_Data.projectCreateInfo.filepath.clear();
-                m_Data.projectCreateInfo.name.clear();
-
-                memset(nameBuffer, 0, sizeof(nameBuffer));
-                memset(filepathBuffer, 0, sizeof(filepathBuffer));
-
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::EndPopup();
-        }
-
+		UIProjectCreation();
 
         // dock space
         ImGui::DockSpace(ImGui::GetID("main_dockspace"), ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
-        {
-            // scene dock space
-            m_ScenePanel->OnGuiRender();
-            m_ContentBrowserPanel->OnGuiRender();
-            m_MaterialsPanel->OnImGuiRender();
+        ImGui::End();
 
-            ImGui::Begin("Project");
-
-            if (m_ActiveProject)
-            {
-                const auto &info = m_ActiveProject->GetInfo();
-                std::string projectName = info.name;
-                if (m_ActiveProject->IsDirty())
-                    projectName += "*";
-                ImGui::Text("Name: %s", projectName.c_str());
-                ImGui::Text("Filepath: %s", info.filepath.generic_string().c_str());
-            }
-
-            ImGui::End();
-            
-            // Render GUI
-            UISettings();
-        }
-
-        ImGui::End(); // end dock space
+		UISettings();
     }
 
     void EditorLayer::SetActiveScene(const Ref<Scene> &scene)
@@ -825,7 +693,7 @@ namespace ignite
     {
         if (m_ActiveProject)
         {
-            SaveScene();
+            // SaveScene();
 
             const auto &info = m_ActiveProject->GetInfo();
             ProjectSerializer sr(m_ActiveProject.get());
@@ -1127,7 +995,7 @@ namespace ignite
         if (!filepath.empty())
         {
             EditorLayer* editor = static_cast<EditorLayer*>(userData);
-            editor->m_Data.projectCreateInfo.filepath = std::filesystem::path(filepath);
+            editor->m_Data.projectCreateInfo.filepath = std::filesystem::path(filepath) / editor->m_Data.projectCreateInfo.name; // Append project name
         }
     }
 
@@ -1139,17 +1007,51 @@ namespace ignite
         if (!filepath.empty())
         {
             EditorLayer* editor = static_cast<EditorLayer*>(userData);
-            Project::GetInstance()->GetAssetManager().SubmitJob([editor, f = filepath, sr = editor->m_SceneRenderer]() mutable
+            if (!editor || !editor->m_ActiveScene)
             {
-                auto &env = sr->GetEnvironment();
-                env->LoadTexture(f);
-                
-                // Signal the renderer on the main thread that the environment has changed
-                Application::SubmitToMainThread([sr]()
+                return;
+            }
+
+            WorldEnvironment *world = nullptr;
+            auto view = editor->m_ActiveScene->registry->view<WorldEnvironment>();
+            for (entt::entity e : view)
+            {
+                auto &candidate = view.get<WorldEnvironment>(e);
+                if (candidate.primary)
                 {
-                    sr->OnEnvironmentTextureChanged();
-                });
-            });
+                    world = &candidate;
+                    break;
+                }
+
+                if (!world)
+                {
+                    world = &candidate;
+                }
+            }
+
+            if (!world)
+            {
+                Entity envEntity = SceneManager::CreateWorldEnvironment(editor->m_ActiveScene.get(), "World Environment");
+                if (envEntity && envEntity.HasComponent<WorldEnvironment>())
+                {
+                    world = &envEntity.GetComponent<WorldEnvironment>();
+                }
+            }
+
+            if (!world)
+            {
+                return;
+            }
+
+            if (!world->environment)
+            {
+                world->environment = Environment::Create(editor->m_ActiveScene.get());
+            }
+
+            world->environment->LoadTexture(filepath);
+            world->hdrHandle = AssetHandle(0);
+            world->loadedHDRHandle = AssetHandle(0);
+            world->dirtyEnvironment = true;
         }
     }
 
@@ -1229,73 +1131,68 @@ namespace ignite
                     }
                     else if (pf.metadata.type == AssetType::Project)
                     {
-                        // Submit project loading to asset worker
                         std::filesystem::path filepath = pf.metadata.filepath;
-                        
+
                         if (filepath == m_CurrentProjectFilepath)
                         {
                             LOG_TRACE("Dismiss opening current project {0}", filepath.generic_string());
                             break;
                         }
-                        
-                        // Submit heavy I/O work to asset worker
-                        m_ActiveProject->GetAssetManager().SubmitJob([this, filepath]() {
-                            // Load project on worker thread
-                            Ref<Project> loadedProject = ProjectSerializer::Deserialize(filepath);
-                            if (loadedProject)
-                            {
-                                // Submit UI update back to main thread
-                                Application::SubmitToMainThread([this, loadedProject, filepath]() mutable {
-                                    // Clear old project's assets
-                                    if (m_ActiveProject)
+
+                        Ref<Project> loadedProject = ProjectSerializer::Deserialize(filepath);
+                        if (loadedProject)
+                        {
+                            // Submit UI update back to main thread
+                            Application::SubmitToMainThread([this, loadedProject, filepath]() mutable {
+                                // Clear old project's assets
+                                if (m_ActiveProject)
+                                {
+                                    SetActiveScene(nullptr);
+
+                                    if (m_Device)
                                     {
-                                        SetActiveScene(nullptr);
-                                        
-                                        if (m_Device)
-                                        {
-                                            m_Device->waitForIdle();
-                                        }
-                                        
-                                        m_EditorScene.reset();
-                                        m_ActiveScene.reset();
-                                        m_ActiveProject->GetAssetManager().ClearAllLoadedAssets();
+                                        m_Device->waitForIdle();
                                     }
-                                    
-                                    m_ActiveProject = loadedProject;
-                                    m_CurrentProjectFilepath = filepath;
-                                    
-                                    // Reload content browser
-                                    m_ContentBrowserPanel->LoadProjectFiles();
-                                    
-                                    // Load default scene
-                                    if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
+
+                                    m_EditorScene.reset();
+                                    m_ActiveScene.reset();
+                                    m_ActiveProject->GetAssetManager().ClearAllLoadedAssets();
+                                }
+
+                                m_ActiveProject = loadedProject;
+                                m_CurrentProjectFilepath = filepath;
+
+                                // Reload content browser
+                                m_ContentBrowserPanel->LoadProjectFiles();
+
+                                // Load default scene
+                                if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
+                                {
+                                    if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
                                     {
-                                        if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
-                                        {
-                                            m_EditorScene = SceneManager::Copy(activeScene);
-                                            m_EditorScene->SetDirtyFlag(false);
-                                            SetActiveScene(m_EditorScene);
-                                            
-                                            const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
-                                            m_CurrentSceneFilePath = m_ActiveProject->GetAssetFilepath(assetFilepath);
-                                            m_CurrentSceneHandle = activeScene->handle;
-                                        }
-                                        else
-                                        {
-                                            NewScene();
-                                        }
+                                        m_EditorScene = SceneManager::Copy(activeScene);
+                                        m_EditorScene->SetDirtyFlag(false);
+                                        SetActiveScene(m_EditorScene);
+
+                                        const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
+                                        m_CurrentSceneFilePath = m_ActiveProject->GetAssetFilepath(assetFilepath);
+                                        m_CurrentSceneHandle = activeScene->handle;
                                     }
                                     else
                                     {
                                         NewScene();
                                     }
+                                }
+                                else
+                                {
+                                    NewScene();
+                                }
                                 });
-                            }
-                            else
-                            {
-                                LOG_ERROR("[Editor] Failed to load project: {}", filepath.generic_string());
-                            }
-                        });
+                        }
+                        else
+                        {
+                            LOG_ERROR("[Editor] Failed to load project: {}", filepath.generic_string());
+                        }
                     }
                     break;
                 }
@@ -1323,13 +1220,142 @@ namespace ignite
         }
     }
 
-    void EditorLayer::UISettings()
+    void EditorLayer::UIProjectCreation()
+    {
+        ImGui::SetNextWindowSizeConstraints({ 640.0f, 320.0f }, { 640.0f, 320.0f });
+        if (!ImGui::BeginPopupModal("New Project", nullptr, ImGuiWindowFlags_NoResize))
+        {
+            return;
+        }
+
+        ImGui::Text("Create a brand new project");
+        ImGui::Separator();
+
+        static char nameBuffer[128] = {};
+
+        // Use a simple two-column table for labels and controls
+        if (ImGui::BeginTable("proj_create_table", 2, ImGuiTableFlags_SizingStretchProp))
+        {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Project Name");
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::InputText("##ProjectName", nameBuffer, sizeof(nameBuffer)))
+            {
+                m_Data.projectCreateInfo.name = std::string(nameBuffer);
+            }
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Location");
+            ImGui::TableNextColumn();
+            // Path input with Browse button
+            ImGui::PushItemWidth(-120);
+            std::string pathStr = m_Data.projectCreateInfo.filepath.generic_string();
+            char pathBuf[1024] = {};
+            if (!pathStr.empty()) strncpy(pathBuf, pathStr.c_str(), sizeof(pathBuf) - 1);
+            if (ImGui::InputText("##ProjectLocation", pathBuf, sizeof(pathBuf)))
+            {
+                m_Data.projectCreateInfo.filepath = std::filesystem::path(pathBuf);
+            }
+            ImGui::PopItemWidth();
+            ImGui::SameLine();
+            if (ImGui::Button("Browse"))
+            {
+                std::string filepath = FileDialogs::SelectFolder();
+                if (!filepath.empty())
+                {
+                    m_Data.projectCreateInfo.filepath = std::filesystem::path(filepath) / m_Data.projectCreateInfo.name;
+                }
+            }
+
+            ImGui::EndTable();
+        }
+
+        ImGui::Spacing();
+        ImGui::TextWrapped("Note: A sample `Game.cs` will only be created when no scripts exist for the project. Existing user scripts will not be overwritten.");
+
+        ImGui::Spacing();
+
+        // Actions
+        const bool isProjectPathValid = !m_Data.projectCreateInfo.filepath.empty() && !m_Data.projectCreateInfo.name.empty();
+
+        ImGui::Separator();
+
+        ImGui::Spacing();
+
+        ImGui::BeginDisabled(!isProjectPathValid);
+        ImGui::SameLine(ImGui::GetWindowWidth() - 220);
+        if (ImGui::Button("Create", ImVec2(100, 0)))
+        {
+            // sanitize name
+            while (m_Data.projectCreateInfo.name.find(' ') != std::string::npos)
+            {
+                const size_t spacePos = m_Data.projectCreateInfo.name.find(' ');
+                m_Data.projectCreateInfo.name.replace(spacePos, 1, "");
+            }
+
+            m_Data.projectCreateInfo.filepath /= (m_Data.projectCreateInfo.name + ".ixproj");
+
+            if (Ref<Project> newProject = Project::Create(m_Data.projectCreateInfo))
+            {
+                m_ActiveProject = newProject;
+
+                ProjectSerializer serializer(m_ActiveProject.get());
+                serializer.Serialize(m_Data.projectCreateInfo.filepath);
+
+                // Reload content browser
+                m_ContentBrowserPanel->LoadProjectFiles();
+
+                if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
+                {
+                    if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
+                    {
+                        m_EditorScene = SceneManager::Copy(activeScene);
+                        m_EditorScene->SetDirtyFlag(false);
+
+                        SetActiveScene(m_EditorScene);
+
+                        AssetMetaData metadata = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
+                        auto scenePath = m_ActiveProject->GetAssetFilepath(metadata.filepath);
+                        m_CurrentSceneFilePath = scenePath;
+                    }
+                }
+                else
+                {
+                    NewScene();
+                }
+
+                // clear modal inputs
+                m_Data.projectCreateInfo.filepath.clear();
+                m_Data.projectCreateInfo.name.clear();
+                memset(nameBuffer, 0, sizeof(nameBuffer));
+
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::EndDisabled();
+
+        ImGui::SameLine(ImGui::GetWindowWidth() - 110);
+        if (ImGui::Button("Cancel", ImVec2(100, 0)))
+        {
+            m_Data.projectCreateInfo.filepath.clear();
+            m_Data.projectCreateInfo.name.clear();
+            memset(nameBuffer, 0, sizeof(nameBuffer));
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+
+	void EditorLayer::UISettings()
     {
         ImGui::Begin("Settings", &m_Data.settingsWindow);
 
-        constexpr ImGuiTreeNodeFlags treeFlags = ImGuiTreeNodeFlags_DefaultOpen;
-
-        m_ScenePanel->UISettings();
+        constexpr ImGuiTreeNodeFlags treeFlags = 0;
 
         if (ImGui::TreeNodeEx("Pipeline", treeFlags))
         {
@@ -1361,7 +1387,7 @@ namespace ignite
         if (m_ActiveScene)
         {
             // Scene
-            if (ImGui::TreeNodeEx("Scene Data", treeFlags))
+            if (ImGui::TreeNodeEx("Scene", treeFlags))
             {
                 if (ImGui::Button("Load HDR Texture"))
                 {

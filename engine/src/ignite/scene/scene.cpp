@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2025 Evangelion Manuhutu
 
 #include "scene.hpp"
 #include <entt/entt.hpp>
@@ -58,6 +37,8 @@ namespace ignite
 
         m_SceneGPUDataBuffer = ConstantBuffer::Create(sizeof(Scene_GPUData), false, 1, "[Scene GPU Data]");
 		m_CSMGPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMap_GPUData), false, 1, "[CSM GPU Data]");
+
+		ScriptEngine::GetInstance()->SetSceneContext(this);
     }
 
     Scene::~Scene()
@@ -97,7 +78,7 @@ namespace ignite
         m_IsPlaying = true;
         m_IsPaused = false;
 
-        ScriptEngine::GetInstance()->SetSceneContext(this);
+		ScriptEngine::GetInstance()->SetSceneContext(this);
 
         // reset time
         timeInSeconds = 0.0f;
@@ -106,8 +87,8 @@ namespace ignite
         auto camView = registry->view<CameraComponent>();
         for (entt::entity entity : camView)
         {
-            CameraComponent &cam = camView.get<CameraComponent>(entity);
-			cam.camera.UpdateMatrices(static_cast<float>(m_ViewportWidth), static_cast<float>(m_ViewportHeight));
+            CameraComponent &cc = camView.get<CameraComponent>(entity);
+            cc.camera.UpdateProjection(static_cast<float>(m_ViewportWidth), static_cast<float>(m_ViewportHeight));
         }
 
         // play on start audio
@@ -176,38 +157,39 @@ namespace ignite
 
 	void Scene::UpdateTransforms(float deltaTime)
     {
-#if 0
-        auto skeletalMeshView = registry->view<SkeletalMesh>();
-        for (auto entity : skeletalMeshView)
+        auto skeletalMeshView = registry->view<SkeletalMeshComponent>();
+        for (auto ent : skeletalMeshView)
         {
-            SkeletalMesh &sm = skeletalMeshView.get<SkeletalMesh>(entity);
-            Ref<Skeleton> skeleton = m_Project->GetAsset<Skeleton>(sm.skeletonHandle);
-            Ref<SkeletalAnimation> anim = m_Project->GetAsset<SkeletalAnimation>(sm.activeAnimationHandle);
-
-            if (skeleton && anim && anim->isPlaying)
+            SkeletalMeshComponent &sm = skeletalMeshView.get<SkeletalMeshComponent>(ent);
+            if (sm.handle == AssetHandle(0))
             {
-                if (AnimationSystem::UpdateSkeleton(skeleton, anim, timeInSeconds))
-                {
-                    AnimationSystem::ApplySkeletonToEntities(this, skeleton);
-                    sm.boneTransforms = AnimationSystem::GetFinalJointTransforms(skeleton);
-                }
+                continue;
             }
-            
-            const size_t numBones = std::min(sm.boneTransforms.size(), static_cast<size_t>(MAX_BONES));
-            for (auto &mesh : sm.meshes)
-            {
-                for (size_t i = 0; i < numBones; ++i)
-                {
-                    mesh->skinBuffer.boneTransforms[i] = sm.boneTransforms[i];
-                }
 
-                for (size_t i = numBones; i < MAX_BONES; ++i)
-                {
-                    mesh->skinBuffer.boneTransforms[i] = glm::mat4(1.0f);
-                }
+            Ref<SkeletalMesh> skeletalMesh = m_Project->GetAsset<SkeletalMesh>(sm.handle, AssetType::SkeletalMesh);
+            if (!skeletalMesh || !skeletalMesh->isPlaying || skeletalMesh->animationHandles.empty())
+            {
+                continue;
+            }
+
+            const size_t animIndex = std::min(static_cast<size_t>(skeletalMesh->activeAnimationIndex), skeletalMesh->animationHandles.size() - 1);
+            Ref<SkeletalAnimation> anim = m_Project->GetAsset<SkeletalAnimation>(skeletalMesh->animationHandles[animIndex]);
+            if (!anim)
+            {
+                continue;
+            }
+
+            Ref<Skeleton> skeleton = m_Project->GetAsset<Skeleton>(anim->GetSkeletonHandle());
+            if (!skeleton)
+            {
+                continue;
+            }
+
+            if (AnimationSystem::UpdateSkeleton(skeleton, anim, timeInSeconds))
+            {
+                AnimationSystem::GetFinalJointTransforms(skeleton, skeletalMesh->boneTransforms);
             }
         }
-#endif
 
         auto view = registry->view<IDComponent, TransformComponent>();
         for (auto ent : view)
@@ -217,6 +199,14 @@ namespace ignite
             {
                 UpdateTransformRecursive(Entity { ent, this }, glm::mat4(1.0f));
             }
+        }
+
+        auto cameraView = registry->view<TransformComponent, CameraComponent>();
+        for (auto entity : cameraView)
+        {
+            auto &tr = cameraView.get<TransformComponent>(entity);
+            auto &cc = cameraView.get<CameraComponent>(entity);
+            cc.camera.SetTransform(tr.GetWorldMatrix());
         }
     }
 
@@ -237,17 +227,6 @@ namespace ignite
             skew,
             perspective);
 
-        if (entity.HasComponent<CameraComponent>())
-        {
-            CameraComponent &cam = entity.GetComponent<CameraComponent>();
-            if (cam.primary)
-            {
-                cam.camera.position = transform.translation;
-                cam.camera.view = glm::translate(glm::mat4(1.0f), transform.translation) * glm::toMat4(transform.rotation);
-                cam.camera.view = glm::inverse(cam.camera.view);
-            }
-        }
-        
         transform.dirty = false;
 
         for (const UUID &childUUID : id.children)
@@ -261,6 +240,7 @@ namespace ignite
     {
         timeInSeconds += deltaTime;
         m_StepFrame++;
+    
         UpdateTransforms(deltaTime);
     }
 
@@ -268,18 +248,40 @@ namespace ignite
     {
         this->m_ViewportWidth = width;
         this->m_ViewportHeight = height;
-        
-        const auto &camView = registry->view<CameraComponent>();
-        for (entt::entity entity : camView)
-        {
-            CameraComponent &cam = camView.get<CameraComponent>(entity);
-			cam.camera.UpdateMatrices(static_cast<float>(width), static_cast<float>(height));
-        }
     }
 
-    void Scene::WriteBuffer(nvrhi::ICommandList* cmd)
+    void Scene::WriteBuffer(nvrhi::ICommandList *cmd)
     {
-        m_SceneGPUDataBuffer->SetData(cmd, Buffer((void*)&this->gpuData, sizeof(Scene_GPUData)));
+        const Scene_GPUData *sceneGPUData = &gpuData;
+
+        auto view = registry->view<WorldEnvironment>();
+        WorldEnvironment *fallback = nullptr;
+        for (entt::entity e : view)
+        {
+            WorldEnvironment &world = view.get<WorldEnvironment>(e);
+            if (!world.enabled)
+                continue;
+
+            if (world.primary)
+            {
+                sceneGPUData = &world.sceneGPUData;
+                fallback = nullptr;
+                break;
+            }
+
+            if (!fallback)
+            {
+                fallback = &world;
+            }
+        }
+
+        if (fallback)
+        {
+            sceneGPUData = &fallback->sceneGPUData;
+        }
+
+        gpuData = *sceneGPUData;
+        m_SceneGPUDataBuffer->SetData(cmd, Buffer((void *)&gpuData, sizeof(Scene_GPUData)));
     }
 
     Entity Scene::GetPrimaryCamera()
@@ -316,18 +318,29 @@ namespace ignite
         return CreateRef<Scene>(project, name);
     }
 
-	Environment *Scene::GetEnvironment()
-	{
+    Environment *Scene::GetEnvironment()
+    {
         auto view = registry->view<WorldEnvironment>();
+        WorldEnvironment *fallback = nullptr;
         for (entt::entity e : view)
         {
             WorldEnvironment &we = registry->get<WorldEnvironment>(e);
-            if (we.environment)
+            if (!we.enabled || !we.environment)
+                continue;
+
+            if (we.primary)
+            {
                 return we.environment.get();
+            }
+
+            if (!fallback)
+            {
+                fallback = &we;
+            }
         }
 
-        return nullptr;
-	}
+        return fallback ? fallback->environment.get() : nullptr;
+    }
 
 	template<typename T>
     void Scene::OnComponentAdded(Entity entity, T &comp)
@@ -349,6 +362,16 @@ namespace ignite
     {
     }
 
+	template<>
+	void Scene::OnComponentAdded<Circle2DComponent>(Entity entity, Circle2DComponent &comp)
+	{
+	}
+
+    template<>
+    void Scene::OnComponentAdded<PointLight2DComponent>(Entity entity, PointLight2DComponent &comp)
+    {
+    }
+
     template<>
     void Scene::OnComponentAdded<Rigidbody2DComponent>(Entity entity, Rigidbody2DComponent &comp)
     {
@@ -358,6 +381,11 @@ namespace ignite
     void Scene::OnComponentAdded<BoxCollider2DComponent>(Entity entity, BoxCollider2DComponent &comp)
     {
     }
+
+	template<>
+	void Scene::OnComponentAdded<CircleCollider2DComponent>(Entity entity, CircleCollider2DComponent &comp)
+	{
+	}
 
     template<>
     void Scene::OnComponentAdded<RigibodyComponent>(Entity entity, RigibodyComponent &comp)
@@ -389,6 +417,11 @@ namespace ignite
     {
     }
 
+	template<>
+	void Scene::OnComponentAdded<TextComponent>(Entity entity, TextComponent &comp)
+	{
+	}
+
     template<>
     void Scene::OnComponentAdded<ScriptComponent>(Entity entity, ScriptComponent &comp)
     {
@@ -397,6 +430,15 @@ namespace ignite
     template<>
     void Scene::OnComponentAdded<WorldEnvironment>(Entity entity, WorldEnvironment &comp)
     {
+        if (!comp.environment)
+        {
+            comp.environment = Environment::Create(this);
+        }
+
+        comp.sceneGPUData = gpuData;
+        comp.dirtyEnvironment = true;
+        comp.gpuInitialized = false;
+        comp.loadedHDRHandle = AssetHandle(0);
     }
 
     template<>
@@ -415,8 +457,8 @@ namespace ignite
 		auto camView = registry->view<CameraComponent>();
 		for (entt::entity entity : camView)
 		{
-			CameraComponent &cam = camView.get<CameraComponent>(entity);
-			cam.camera.UpdateMatrices(static_cast<float>(m_ViewportWidth), static_cast<float>(m_ViewportHeight));
+			CameraComponent &cc = camView.get<CameraComponent>(entity);
+            cc.camera.UpdateProjection(static_cast<float>(m_ViewportWidth), static_cast<float>(m_ViewportHeight));
 		}
     }
 }

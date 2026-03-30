@@ -1,5 +1,6 @@
 .idea
 .vs
+.docs
 *.vcxproj
 *.vcxproj.filters
 *.vcxproj.user
@@ -51,3 +52,5 @@ editor/ignite_editor_icon.rc
 runtime/IgniteRuntime.dir
 thirdparty/TINYGLTF.dir
 
+examples/*/obj
+examples/*/Bin

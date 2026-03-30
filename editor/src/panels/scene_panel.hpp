@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+//Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 
 #pragma once
 
@@ -46,16 +25,20 @@ namespace ignite
     class ScenePanel final : public IPanel
     {
     public:
-        explicit ScenePanel(const char *windowTitle);
+        explicit ScenePanel(const char *windowTitle, EditorLayer *editor);
         virtual ~ScenePanel() override;
         
         void SetActiveScene(const Ref<Scene> &scene);
 
-        void OnUpdate(f32 deltaTime) override;
+        void OnUpdate(float deltaTime) override;
         void OnGuiRender() override;
-        void RenderViewport();
 
-        void ResizeFramebuffer(uint32_t width, uint32_t height);
+        // Viewports
+        void RenderSceneEditViewport();
+        void RenderSceneGameViewport();
+
+        void ViewportEditResize(uint32_t width, uint32_t height);
+        void ViewportGameResize(uint32_t width, uint32_t height);
 
         void OnEvent(Event &event);
         bool OnMouseScrolledEvent(MouseScrolledEvent &event);
@@ -67,7 +50,7 @@ namespace ignite
 
         bool IsGizmoBeingUse() const { return m_Data.isGizmoBeingUse; }
         
-        EditorCamera &GetViewportCamera() { return m_Camera; }
+        EditorCamera &GetViewportCamera() { return m_EditorCamera; }
 
         const glm::vec2 &GetViewportMousePos() const { return m_ViewportData.mousePos; }
 
@@ -76,8 +59,7 @@ namespace ignite
         void RenderEntityNode(Entity entity);
         
         void RenderInspector();
-        void UISettings();
-        void UpdateCameraInput(f32 deltaTime);
+        void UpdateCameraInput(float deltaTime);
         void DestroyEntity(Entity entity);
         void DuplicateSelectedEntity();
         void ClearSelection();
@@ -85,23 +67,27 @@ namespace ignite
         Entity SetSelectedEntity(Entity entity);
         Entity GetSelectedEntity();
 
-        glm::vec2 GetViewportSize() const { return m_ViewportData.rect.GetSize(); }
+        glm::vec2 GetViewportEditSize() const { return m_ViewportEditRT.rect.GetSize(); }
+        glm::vec2 GetViewportGameSize() const { return m_ViewportGameRT.rect.GetSize(); }
 
         const std::unordered_map<UUID, Entity> &GetSelectedEntities() { return m_SelectedEntities; }
 
-        const Ref<RenderTarget> &GetSceneViewportRT() { return m_SceneViewportRT; }
-        const Ref<RenderTarget> &GetCompositeViewportRT() { return m_CompositeViewportRT; }
-        const Ref<RenderTarget> &GetUIViewportRT() { return m_UIViewportRT; }
-        const Ref<RenderTarget> &GetUICameratRT() { return m_UICameraRT; }
-        
-        const Ref<RenderTarget> &GetSceneCameraRT() { return m_SceneCameraRT; }
-        const Ref<RenderTarget> &GetCompositeCameraRT() { return m_CompositeCameraRT; }
+        const Ref<RenderTarget> &GetViewportEditSceneRT() { return m_ViewportEditRT.scene; }
+        const Ref<RenderTarget> &GetViewportEditUIRT() { return m_ViewportEditRT.ui; }
+        const Ref<RenderTarget> &GetViewportEditCompRT() { return m_ViewportEditRT.composite; }
 
+		const Ref<RenderTarget> &GetViewportGameSceneRT() { return m_ViewportGameRT.scene; }
+		const Ref<RenderTarget> &GetViewportGameUIRT() { return m_ViewportGameRT.ui; }
+		const Ref<RenderTarget> &GetViewportGameCompRT() { return m_ViewportGameRT.composite; }
+        
         template<typename T, typename UIFunction>
         void RenderComponent(const std::string &name, Entity entity, UIFunction uiFunction, bool allowedToRemove = true);
 
     private:
-        EditorCamera m_Camera;
+        EditorCamera m_EditorCamera;
+        std::optional<EditorCamera> m_EditorCamera2D;
+        std::optional<EditorCamera> m_EditorCamera3D;
+
         Ref<Scene> m_Scene;
         Gizmo m_Gizmo;
         std::unordered_map<UUID, Entity> m_SelectedEntities;
@@ -109,19 +95,20 @@ namespace ignite
 
         static UUID m_TrackingSelectedEntity;
 
-        // For viewport
-        Ref<RenderTarget> m_SceneViewportRT;
-        Ref<RenderTarget> m_UIViewportRT;
-        Ref<RenderTarget> m_CompositeViewportRT;
-        
-        // For camera preview
-        Ref<RenderTarget> m_SceneCameraRT;
-        Ref<RenderTarget> m_CompositeCameraRT;
-        Ref<RenderTarget> m_UICameraRT;
+        struct ViewportRenderTarget
+        {
+            Ref<RenderTarget> scene;
+            Ref<RenderTarget> ui;
+            Ref<RenderTarget> composite;
+
+            Rect rect;
+        };
+
+        ViewportRenderTarget m_ViewportEditRT;
+        ViewportRenderTarget m_ViewportGameRT;
 
 		struct ViewportData
 		{
-			Rect rect = { 0, 0, 1, 1 };
 			glm::vec2 mousePos = glm::vec2(0.0f);
             float snapValue = 0.05f;
 			bool wantMouseDragging = false;

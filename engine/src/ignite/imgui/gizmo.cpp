@@ -62,10 +62,12 @@ namespace ignite {
         ImGuizmo::Manipulate(glm::value_ptr(m_GizmoInfo.cameraView),
             glm::value_ptr(m_GizmoInfo.cameraProjection),
             m_Operation, m_Mode,
-            glm::value_ptr(inOutMatrix), 
-            nullptr, 
-            m_GizmoInfo.isSnapping ? snapValues : nullptr,
-            nullptr, nullptr);
+            glm::value_ptr(inOutMatrix), // matrix 
+            nullptr, // delta matrix
+            m_GizmoInfo.isSnapping ? snapValues : nullptr, // snap
+            nullptr, // local bound
+            nullptr // bound snap
+        );
     }
 
     void Gizmo::DrawGrid(float gridSize, const glm::mat4 &gridMatrix)

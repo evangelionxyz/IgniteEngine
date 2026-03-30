@@ -31,7 +31,10 @@
 #include "ignite/project/project.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/graphics/objects/material.hpp"
+#include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/objects/environment.hpp"
+#include "ignite/animation/skeleton.hpp"
 
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/component.hpp"
@@ -41,6 +44,36 @@
 #include <ranges>
 
 namespace ignite {
+
+    namespace
+    {
+        static void SerializeMat4(Serializer &sr, const char *key, const glm::mat4 &mat)
+        {
+            sr.BeginSequence(key);
+            for (int col = 0; col < 4; ++col)
+            {
+                sr.AddValue(glm::vec4(mat[col]));
+            }
+            sr.EndSequence();
+        }
+
+        static bool DeserializeMat4(const YAML::Node &node, const char *key, glm::mat4 &outMat)
+        {
+            const YAML::Node matNode = node[key];
+            if (!matNode || !matNode.IsSequence() || matNode.size() != 4)
+            {
+                return false;
+            }
+
+            for (size_t col = 0; col < 4; ++col)
+            {
+                const glm::vec4 v = matNode[col].as<glm::vec4>();
+                outMat[col] = v;
+            }
+
+            return true;
+        }
+    }
 
     Serializer::Serializer(const std::filesystem::path &filepath)
         : m_Filepath(filepath)
@@ -167,7 +200,9 @@ namespace ignite {
                     sr.BeginMap("Camera");
                     {
                         int projectionType = static_cast<int>(comp.camera.projectionType);
+                        int aspectRatioPreset = static_cast<int>(comp.camera.GetAspectRatioPreset());
                         sr.AddKeyValue("ProjectionType", projectionType);
+                        sr.AddKeyValue("AspectRatioPreset", aspectRatioPreset);
                         sr.AddKeyValue("NearClip", comp.camera.nearPlane);
                         sr.AddKeyValue("FarClip", comp.camera.farPlane);
                         sr.AddKeyValue("Fov", comp.camera.fov);
@@ -176,15 +211,42 @@ namespace ignite {
                     sr.EndMap();
                 }
 
-                // Sprite component
+                // Sprite 2D component
                 if (entity.HasComponent<Sprite2DComponent>())
                 {
                     const Sprite2DComponent &comp = entity.GetComponent<Sprite2DComponent>();
                     sr.BeginMap("Sprite2D");
                     {
+                        sr.AddKeyValue("MaterialHandle", comp.materialHandle);
                         sr.AddKeyValue("Handle", comp.handle);
                         sr.AddKeyValue("Color", comp.color);
                         sr.AddKeyValue("TilingFactor", comp.tilingFactor);
+                    }
+                    sr.EndMap();
+                }
+
+				// Circle 2D component
+				if (entity.HasComponent<Circle2DComponent>())
+				{
+					const Circle2DComponent &comp = entity.GetComponent<Circle2DComponent>();
+					sr.BeginMap("Circle2D");
+					{
+						sr.AddKeyValue("Color", comp.color);
+						sr.AddKeyValue("Thickness", comp.thickness);
+						sr.AddKeyValue("Fade", comp.fade);
+					}
+					sr.EndMap();
+				}
+
+                if (entity.HasComponent<PointLight2DComponent>())
+                {
+                    const PointLight2DComponent &comp = entity.GetComponent<PointLight2DComponent>();
+                    sr.BeginMap("PointLight2D");
+                    {
+                        sr.AddKeyValue("Color", comp.color);
+                        sr.AddKeyValue("Radius", comp.radius);
+                        sr.AddKeyValue("Intensity", comp.intensity);
+                        sr.AddKeyValue("Enabled", comp.enabled);
                     }
                     sr.EndMap();
                 }
@@ -224,6 +286,22 @@ namespace ignite {
                     sr.EndMap();
                 }
 
+				// Circle collider 2D
+				if (entity.HasComponent<CircleCollider2DComponent>())
+				{
+					const CircleCollider2DComponent &comp = entity.GetComponent<CircleCollider2DComponent>();
+					sr.BeginMap("CircleCollider2D");
+					{
+						sr.AddKeyValue("Radius", comp.radius);
+						sr.AddKeyValue("Center", comp.center);
+						sr.AddKeyValue("Restitution", comp.restitution);
+						sr.AddKeyValue("Friction", comp.friction);
+						sr.AddKeyValue("Density", comp.density);
+						sr.AddKeyValue("IsSensor", comp.isSensor);
+					}
+					sr.EndMap();
+				}
+
 				// Static Mesh
 				if (entity.HasComponent<StaticMeshComponent>())
 				{
@@ -236,22 +314,15 @@ namespace ignite {
 				}
 
                 // skinned mesh
-                // if (entity.HasComponent<SkeletalMesh>())
-                // {
-                //     const SkeletalMesh &comp = entity.GetComponent<SkeletalMesh>();
-                //     sr.BeginMap("SkeletalMesh");
-                //     sr.AddKeyValue("MeshHandle", static_cast<uint64_t>(comp.meshHandle));
-                //     sr.AddKeyValue("SkeletonHandle", static_cast<uint64_t>(comp.skeletonHandle));
-                //     sr.BeginSequence("Animations");
-                //     for (const auto &anim : comp.animationHandle)
-                //     {
-                //         sr.BeginMap("Anim");
-                //         sr.AddKeyValue("Handle", static_cast<uint64_t>(anim));
-                //         sr.EndMap();
-                //     }
-                //     sr.EndSequence();
-                //     sr.EndMap();
-                // }
+                if (entity.HasComponent<SkeletalMeshComponent>())
+                {
+                    const SkeletalMeshComponent &comp = entity.GetComponent<SkeletalMeshComponent>();
+                    sr.BeginMap("SkeletalMesh");
+                    {
+                        sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
+                    }
+                    sr.EndMap();
+                }
 
                 // Rigidbody
                 if (entity.HasComponent<RigibodyComponent>())
@@ -369,12 +440,39 @@ namespace ignite {
                 }
 
 				// World Environment
-				if (entity.HasComponent<WorldEnvironment>())
+                if (entity.HasComponent<WorldEnvironment>())
+                {
+                    const WorldEnvironment &comp = entity.GetComponent<WorldEnvironment>();
+                    sr.BeginMap("WorldEnvironment");
+                    {
+                        sr.AddKeyValue("Primary", comp.primary);
+                        sr.AddKeyValue("Enabled", comp.enabled);
+                        sr.AddKeyValue("HDRHandle", static_cast<uint64_t>(comp.hdrHandle));
+                        sr.AddKeyValue("SunColor", comp.sceneGPUData.sunColor);
+                        sr.AddKeyValue("SunAngles", comp.sceneGPUData.sungAngles);
+                        sr.AddKeyValue("SunAngularRadius", comp.sceneGPUData.sunAngularRadius);
+                        sr.AddKeyValue("RenderMode", comp.sceneGPUData.renderMode);
+                        sr.AddKeyValue("DebugShadow", comp.sceneGPUData.debugShadow);
+                        sr.AddKeyValue("Exposure", comp.sceneGPUData.exposure);
+                        sr.AddKeyValue("Gamma", comp.sceneGPUData.gamma);
+                        sr.AddKeyValue("Ambient", comp.sceneGPUData.ambient);
+                    }
+                    sr.EndMap();
+                }
+
+				// Text Component
+				if (entity.HasComponent<TextComponent>())
 				{
-					const WorldEnvironment &comp = entity.GetComponent<WorldEnvironment>();
-					sr.BeginMap("AudioSource");
+					const TextComponent &comp = entity.GetComponent<TextComponent>();
+					sr.BeginMap("TextComponent");
 					{
-						sr.AddKeyValue("HDRHandle", static_cast<uint64_t>(comp.hdrHandle));
+						sr.AddKeyValue("FontHandle", comp.fontHandle);
+						sr.AddKeyValue("Material2DHandle", comp.material2dHandle);
+						sr.AddKeyValue("Text", comp.text);
+						sr.AddKeyValue("Color", comp.color);
+						sr.AddKeyValue("Kerning", comp.kerning);
+						sr.AddKeyValue("LineSpacing", comp.lineSpacing);
+						sr.AddKeyValue("ScreenSpace", comp.screenSpace);
 					}
 					sr.EndMap();
 				}
@@ -382,58 +480,46 @@ namespace ignite {
                 // Script
                 if (entity.HasComponent<ScriptComponent>())
                 {
-                    const ScriptComponent &comp = entity.GetComponent<ScriptComponent>();
+                    ScriptComponent &comp = entity.GetComponent<ScriptComponent>();
                     sr.BeginMap("Script");
                     {
                         sr.AddKeyValue("ClassName", comp.className);
 
-                        // Fields
-                        const Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(comp.className);
-
+                        Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(comp.className);
                         if (scriptClass)
                         {
-                            const auto &classFields = scriptClass->GetFields();
-
-                            if (!classFields.empty())
+                            if (auto instanceFields = scriptClass->GetInstanceFieldsById(entity.GetUUID()); instanceFields && !instanceFields->empty())
                             {
-                                auto &fields = ScriptEngine::GetInstance()->GetScriptFieldMap(entity);
-
                                 sr.BeginSequence("Fields");
-                                for (const auto &[fieldName, field] : classFields)
+                                for (auto &[name, fieldInstance] : *instanceFields)
                                 {
-                                    if (!fields.contains(fieldName) || field.Type == ScriptFieldType::Invalid)
-                                    {
-                                        continue;
-                                    }
-
                                     sr.BeginMap();
-                                    sr.AddKeyValue("Name", fieldName);
-                                    sr.AddKeyValue("Type", Utils::ScriptFieldTypeToString(field.Type));
-                                    
-                                    ScriptFieldInstance fieldInstance = fields.at(fieldName);
-                                    switch (field.Type)
+                                    sr.AddKeyValue("Name", name);
+                                    sr.AddKeyValue("Type", Utils::ScriptFieldTypeToString(fieldInstance.field.Type));
+
+                                    switch (fieldInstance.field.Type)
                                     {
-                                    case ScriptFieldType::Float: sr.AddKeyValue("Value", fieldInstance.GetValue<float>()); break;
-                                    case ScriptFieldType::Double: sr.AddKeyValue("Value", fieldInstance.GetValue<double>()); break;
-                                    case ScriptFieldType::Bool: sr.AddKeyValue("Value", fieldInstance.GetValue<bool>()); break;
-                                    case ScriptFieldType::Char: sr.AddKeyValue("Value", fieldInstance.GetValue<char>()); break;
-                                    case ScriptFieldType::Byte: sr.AddKeyValue("Value", fieldInstance.GetValue<int8_t>()); break;
-                                    case ScriptFieldType::Short: sr.AddKeyValue("Value", fieldInstance.GetValue<int16_t>()); break;
-                                    case ScriptFieldType::Long: sr.AddKeyValue("Value", fieldInstance.GetValue<int64_t>()); break;
-                                    case ScriptFieldType::UByte: sr.AddKeyValue("Value", fieldInstance.GetValue<uint8_t>()); break;
-                                    case ScriptFieldType::UShort: sr.AddKeyValue("Value", fieldInstance.GetValue<uint16_t>()); break;
-                                    case ScriptFieldType::UInt: sr.AddKeyValue("Value", fieldInstance.GetValue<uint32_t>()); break;
-                                    case ScriptFieldType::ULong: sr.AddKeyValue("Value", fieldInstance.GetValue<uint64_t>()); break;
-                                    case ScriptFieldType::Int: sr.AddKeyValue("Value", fieldInstance.GetValue<int>()); break;
-                                    case ScriptFieldType::Vector2: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec2>()); break;
-                                    case ScriptFieldType::Vector3: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec3>()); break;
-                                    case ScriptFieldType::Vector4: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec4>()); break;
-                                    case ScriptFieldType::Entity: sr.AddKeyValue("Value", fieldInstance.GetValue<uint64_t>()); break;
+                                        case ScriptFieldType::Float: sr.AddKeyValue("Value", fieldInstance.GetValue<float>()); break;
+                                        case ScriptFieldType::Double: sr.AddKeyValue("Value", fieldInstance.GetValue<double>()); break;
+                                        case ScriptFieldType::Bool: sr.AddKeyValue("Value", fieldInstance.GetValue<bool>()); break;
+                                        case ScriptFieldType::Char: sr.AddKeyValue("Value", fieldInstance.GetValue<char>()); break;
+                                        case ScriptFieldType::Byte: sr.AddKeyValue("Value", fieldInstance.GetValue<int8_t>()); break;
+                                        case ScriptFieldType::Short: sr.AddKeyValue("Value", fieldInstance.GetValue<int16_t>()); break;
+                                        case ScriptFieldType::Long: sr.AddKeyValue("Value", fieldInstance.GetValue<int64_t>()); break;
+                                        case ScriptFieldType::UByte: sr.AddKeyValue("Value", fieldInstance.GetValue<uint8_t>()); break;
+                                        case ScriptFieldType::UShort: sr.AddKeyValue("Value", fieldInstance.GetValue<uint16_t>()); break;
+                                        case ScriptFieldType::UInt: sr.AddKeyValue("Value", fieldInstance.GetValue<uint32_t>()); break;
+                                        case ScriptFieldType::ULong: sr.AddKeyValue("Value", fieldInstance.GetValue<uint64_t>()); break;
+                                        case ScriptFieldType::Int: sr.AddKeyValue("Value", fieldInstance.GetValue<int>()); break;
+                                        case ScriptFieldType::Vector2: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec2>()); break;
+                                        case ScriptFieldType::Vector3: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec3>()); break;
+                                        case ScriptFieldType::Vector4: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec4>()); break;
+                                        case ScriptFieldType::Entity: sr.AddKeyValue("Value", fieldInstance.GetValue<uint64_t>()); break;
+                                        default: break;
                                     }
 
                                     sr.EndMap();
                                 }
-
                                 sr.EndSequence();
                             }
                         }
@@ -509,8 +595,8 @@ namespace ignite {
     Ref<Scene> SceneSerializer::Deserialize(const std::filesystem::path &filepath, Project *project)
     {
         LOG_ASSERT(std::filesystem::exists(filepath), "[Scene SR] File does not exists!\n{}", filepath.generic_string());
-        LOG_ASSERT(project,"[Scene SR] Invalid project");
-        
+        LOG_ASSERT(project, "[Scene SR] Invalid project");
+
         YAML::Node sceneFileNode = Serializer::Deserialize(filepath);
         YAML::Node sceneNode = sceneFileNode["Scene"];
 
@@ -553,19 +639,45 @@ namespace ignite {
             {
                 CameraComponent &comp = desEntity.AddComponent<CameraComponent>();
                 comp.camera.projectionType = static_cast<ProjectionType>(node["ProjectionType"].as<int>());
+                if (node["AspectRatioPreset"])
+                {
+                    comp.camera.SetAspectRatioPreset(static_cast<SceneCamera::AspectRatioPreset>(node["AspectRatioPreset"].as<int>()));
+                }
                 comp.camera.nearPlane = node["NearClip"].as<float>();
                 comp.camera.farPlane = node["FarClip"].as<float>();
                 comp.camera.fov = node["Fov"].as<float>();
                 comp.primary = node["Primary"].as<bool>();
             }
 
-            // Sprite2D component
+            // Sprite 2D component
             if (YAML::Node node = entityNode["Sprite2D"])
             {
                 Sprite2DComponent &comp = desEntity.AddComponent<Sprite2DComponent>();
+                if (node["MaterialHandle"])
+                {
+                    comp.materialHandle = AssetHandle(node["MaterialHandle"].as<uint64_t>());
+                }
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
                 comp.color = node["Color"].as<glm::vec4>();
                 comp.tilingFactor = node["TilingFactor"].as<glm::vec2>();
+            }
+
+            // Circle 2D component
+            if (YAML::Node node = entityNode["Circle2D"])
+            {
+                Circle2DComponent &comp = desEntity.AddComponent<Circle2DComponent>();
+                comp.color = node["Color"].as<glm::vec4>();
+                comp.thickness = node["Thickness"].as<float>();
+                comp.fade = node["Fade"].as<float>();
+            }
+
+            if (YAML::Node node = entityNode["PointLight2D"])
+            {
+                PointLight2DComponent &comp = desEntity.AddComponent<PointLight2DComponent>();
+                comp.color = node["Color"].as<glm::vec4>();
+                comp.radius = node["Radius"].as<float>();
+                comp.intensity = node["Intensity"].as<float>();
+                comp.enabled = node["Enabled"].as<bool>();
             }
 
             // Rigidbody 2D
@@ -589,6 +701,18 @@ namespace ignite {
                 BoxCollider2DComponent &comp = desEntity.AddComponent<BoxCollider2DComponent>();
                 comp.size = node["Size"].as<glm::vec2>();
                 comp.offset = node["Offset"].as<glm::vec2>();
+                comp.restitution = node["Restitution"].as<float>();
+                comp.friction = node["Friction"].as<float>();
+                comp.density = node["Density"].as<float>();
+                comp.isSensor = node["IsSensor"].as<bool>();
+            }
+
+            // CircleCollider 2D
+            if (YAML::Node node = entityNode["CircleCollider2D"])
+            {
+                CircleCollider2DComponent &comp = desEntity.AddComponent<CircleCollider2DComponent>();
+                comp.center = node["Center"].as<glm::vec2>();
+                comp.radius = node["Radius"].as<float>();
                 comp.restitution = node["Restitution"].as<float>();
                 comp.friction = node["Friction"].as<float>();
                 comp.density = node["Density"].as<float>();
@@ -658,7 +782,7 @@ namespace ignite {
                 comp.staticFriction = node["StaticFriction"].as<float>();
                 comp.restitution = node["Restitution"].as<float>();
                 comp.density = node["Density"].as<float>();
-                
+
                 // Deserialize vertices
                 if (YAML::Node verticesNode = node["Vertices"])
                 {
@@ -668,7 +792,7 @@ namespace ignite {
                         comp.vertices.push_back(vertexNode.as<glm::vec3>());
                     }
                 }
-                
+
                 // Deserialize indices
                 if (YAML::Node indicesNode = node["Indices"])
                 {
@@ -683,7 +807,7 @@ namespace ignite {
             // Audio Source
             if (YAML::Node node = entityNode["AudioSource"])
             {
-                AudioSourceComponent& comp = desEntity.AddComponent<AudioSourceComponent>();
+                AudioSourceComponent &comp = desEntity.AddComponent<AudioSourceComponent>();
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
                 comp.volume = node["Volume"].as<float>();
                 comp.pitch = node["Pitch"].as<float>();
@@ -695,62 +819,161 @@ namespace ignite {
             if (YAML::Node node = entityNode["WorldEnvironment"])
             {
                 WorldEnvironment &world = desEntity.AddComponent<WorldEnvironment>();
-                world.environment = Environment::Create(desScene.get());
-                world.hdrHandle = AssetHandle(node["HDRHandle"].as<uint64_t>());
+                if (node["HDRHandle"])
+                {
+                    world.hdrHandle = AssetHandle(node["HDRHandle"].as<uint64_t>());
+                }
+                if (node["Primary"])
+                {
+                    world.primary = node["Primary"].as<bool>();
+                }
+                if (node["Enabled"])
+                {
+                    world.enabled = node["Enabled"].as<bool>();
+                }
+
+                if (node["SunColor"])
+                {
+                    world.sceneGPUData.sunColor = node["SunColor"].as<glm::vec4>();
+                }
+                if (node["SunAngles"])
+                {
+                    world.sceneGPUData.sungAngles = node["SunAngles"].as<glm::vec2>();
+                }
+                if (node["SunAngularRadius"])
+                {
+                    world.sceneGPUData.sunAngularRadius = node["SunAngularRadius"].as<float>();
+                }
+                if (node["RenderMode"])
+                {
+                    world.sceneGPUData.renderMode = node["RenderMode"].as<int>();
+                }
+                if (node["DebugShadow"])
+                {
+                    world.sceneGPUData.debugShadow = node["DebugShadow"].as<int>();
+                }
+                if (node["Exposure"])
+                {
+                    world.sceneGPUData.exposure = node["Exposure"].as<float>();
+                }
+                if (node["Gamma"])
+                {
+                    world.sceneGPUData.gamma = node["Gamma"].as<float>();
+                }
+                if (node["Ambient"])
+                {
+                    world.sceneGPUData.ambient = node["Ambient"].as<float>();
+                }
             }
 
-			// Static Mesh
-			if (YAML::Node node = entityNode["StaticMesh"])
+			// Text Component
+			if (YAML::Node node = entityNode["TextComponent"])
 			{
-				StaticMeshComponent &comp = desEntity.AddComponent<StaticMeshComponent>();
-				comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
+                TextComponent &comp = desEntity.AddComponent<TextComponent>();
+                if (node["FontHandle"])
+                {
+                    comp.fontHandle = AssetHandle(node["FontHandle"].as<uint64_t>());
+                }
+				if (node["Material2DHandle"])
+				{
+					comp.material2dHandle= AssetHandle(node["Material2DHandle"].as<uint64_t>());
+				}
+                if (node["Text"])
+                {
+                    comp.text = node["Text"].as<std::string>();
+                }
+
+                if (node["Color"])
+                {
+                    comp.color = node["Color"].as<glm::vec4>();
+                }
+                if (node["Kerning"])
+                {
+                    comp.kerning = node["Kerning"].as<float>();
+                }
+                if (node["LineSpacing"])
+                {
+                    comp.lineSpacing = node["LineSpacing"].as<float>();
+                }
+                if (node["ScreenSpace"])
+                {
+                    comp.screenSpace = node["ScreenSpace"].as<bool>();
+                }
 			}
+
+            // Static Mesh
+            if (YAML::Node node = entityNode["StaticMesh"])
+            {
+                StaticMeshComponent &comp = desEntity.AddComponent<StaticMeshComponent>();
+                comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
+            }
+
+            if (YAML::Node node = entityNode["SkeletalMesh"])
+            {
+                SkeletalMeshComponent &comp = desEntity.AddComponent<SkeletalMeshComponent>();
+                comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
+            }
 
             // Script
             if (YAML::Node node = entityNode["Script"])
             {
-                ScriptComponent &sc = desEntity.AddComponent<ScriptComponent>();
+                auto &sc = desEntity.AddComponent<ScriptComponent>();
                 sc.className = node["ClassName"].as<std::string>();
 
-                if (YAML::Node classFieldsNode = node["Fields"])
-                {
-                    if (Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(sc.className))
-                    {
-                        const auto &classFields = scriptClass->GetFields();
-                        ScriptFieldMap &fieldMap = ScriptEngine::GetInstance()->GetScriptFieldMap(desEntity);
+                Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(sc.className);
 
+                if (scriptClass)
+                {
+                    if (YAML::Node classFieldsNode = node["Fields"])
+                    {
+                        std::unordered_map<std::string, ScriptInstanceField> instanceFields;
                         for (YAML::Node fieldNode : classFieldsNode)
                         {
-                            std::string fieldName = fieldNode["Name"].as<std::string>();
-                            ScriptFieldType fieldType = Utils::ScriptFieldTypeFromString(fieldNode["Type"].as<std::string>());
+                            // Get name and type
+                            std::string name = fieldNode["Name"].as<std::string>();
+                            ScriptFieldType type = Utils::ScriptFieldTypeFromString(fieldNode["Type"].as<std::string>());
 
-                            ScriptFieldInstance &fieldInstance = fieldMap[fieldName];
-
-                            if (!fieldMap.contains(fieldName))
-                                continue;
-
-                            fieldInstance.Field = classFields.at(fieldName);
-
-                            switch (fieldType)
+                            auto &classFields = scriptClass->GetFields();
+                            auto classFieldIt = classFields.find(name);
+                            if (classFieldIt == classFields.end())
                             {
-                            case ScriptFieldType::Float: fieldInstance.SetValue(fieldNode["Value"].as<float>()); break;
-                            case ScriptFieldType::Double: fieldInstance.SetValue(fieldNode["Value"].as<double>()); break;
-                            case ScriptFieldType::Bool: fieldInstance.SetValue(fieldNode["Value"].as<bool>()); break;
-                            case ScriptFieldType::Char: fieldInstance.SetValue(fieldNode["Value"].as<char>()); break;
-                            case ScriptFieldType::Byte: fieldInstance.SetValue(fieldNode["Value"].as<int8_t>()); break;
-                            case ScriptFieldType::Short: fieldInstance.SetValue(fieldNode["Value"].as<int16_t>()); break;
-                            case ScriptFieldType::Long: fieldInstance.SetValue(fieldNode["Value"].as<int64_t>()); break;
-                            case ScriptFieldType::UByte: fieldInstance.SetValue(fieldNode["Value"].as<uint8_t>()); break;
-                            case ScriptFieldType::UShort: fieldInstance.SetValue(fieldNode["Value"].as<uint16_t>()); break;
-                            case ScriptFieldType::UInt: fieldInstance.SetValue(fieldNode["Value"].as<uint32_t>()); break;
-                            case ScriptFieldType::ULong: fieldInstance.SetValue(fieldNode["Value"].as<uint64_t>()); break;
-                            case ScriptFieldType::Int: fieldInstance.SetValue(fieldNode["Value"].as<int>()); break;
-                            case ScriptFieldType::Entity: fieldInstance.SetValue(fieldNode["Value"].as<uint64_t>()); break;
-                            case ScriptFieldType::Vector2: fieldInstance.SetValue(fieldNode["Value"].as<glm::vec2>()); break;
-                            case ScriptFieldType::Vector3: fieldInstance.SetValue(fieldNode["Value"].as<glm::vec3>()); break;
-                            case ScriptFieldType::Vector4: fieldInstance.SetValue(fieldNode["Value"].as<glm::vec4>()); break;
+                                continue;
                             }
+
+                            ScriptInstanceField instanceField;
+                            instanceField.field = classFieldIt->second;
+
+                            if (instanceField.field.Type != type)
+                            {
+                                continue;
+                            }
+
+                            // Set the value
+                            switch (type)
+                            {
+                            case ScriptFieldType::Float: instanceField.SetValue(fieldNode["Value"].as<float>()); break;
+                            case ScriptFieldType::Double: instanceField.SetValue(fieldNode["Value"].as<double>()); break;
+                            case ScriptFieldType::Bool: instanceField.SetValue(fieldNode["Value"].as<bool>()); break;
+                            case ScriptFieldType::Char: instanceField.SetValue(fieldNode["Value"].as<char>()); break;
+                            case ScriptFieldType::Byte: instanceField.SetValue(fieldNode["Value"].as<int8_t>()); break;
+                            case ScriptFieldType::Short: instanceField.SetValue(fieldNode["Value"].as<int16_t>()); break;
+                            case ScriptFieldType::Long: instanceField.SetValue(fieldNode["Value"].as<int64_t>()); break;
+                            case ScriptFieldType::UByte: instanceField.SetValue(fieldNode["Value"].as<uint8_t>()); break;
+                            case ScriptFieldType::UShort: instanceField.SetValue(fieldNode["Value"].as<uint16_t>()); break;
+                            case ScriptFieldType::UInt: instanceField.SetValue(fieldNode["Value"].as<uint32_t>()); break;
+                            case ScriptFieldType::ULong: instanceField.SetValue(fieldNode["Value"].as<uint64_t>()); break;
+                            case ScriptFieldType::Int: instanceField.SetValue(fieldNode["Value"].as<int>()); break;
+                            case ScriptFieldType::Entity: instanceField.SetValue(fieldNode["Value"].as<uint64_t>()); break;
+                            case ScriptFieldType::Vector2: instanceField.SetValue(fieldNode["Value"].as<glm::vec2>()); break;
+                            case ScriptFieldType::Vector3: instanceField.SetValue(fieldNode["Value"].as<glm::vec3>()); break;
+                            case ScriptFieldType::Vector4: instanceField.SetValue(fieldNode["Value"].as<glm::vec4>()); break;
+                            }
+
+                            instanceFields[name] = instanceField;
                         }
+
+                        // Insert for instances
+                        scriptClass->InsertInstanceFields(desEntity.GetUUID(), instanceFields);
                     }
                 }
             }
@@ -887,32 +1110,36 @@ namespace ignite {
     }
 
 
-    AnimationSerializer::AnimationSerializer(const SkeletalAnimation &animation)
+    AnimationSerializer::AnimationSerializer(const Ref<SkeletalAnimation> &animation)
         : m_Animation(animation)
     {
     }
 
     bool AnimationSerializer::Serialize(const std::filesystem::path &filepath)
     {
+        if (!m_Animation)
+        {
+            return false;
+        }
+
         Serializer sr(filepath);
 
         sr.BeginMap(); // START
 
         sr.BeginMap("Animation");
         sr.AddKeyValue("Version", ENGINE_VERSION);
-        sr.AddKeyValue("Name", m_Animation.name);
-        sr.AddKeyValue("Duration", m_Animation.duration);
-        sr.AddKeyValue("TicksPerSeconds", m_Animation.ticksPerSeconds);
+        sr.AddKeyValue("Name", m_Animation->name);
+        sr.AddKeyValue("Duration", m_Animation->duration);
+        sr.AddKeyValue("TicksPerSeconds", m_Animation->ticksPerSeconds);
 
         sr.BeginSequence("Channels");
 
-        for (auto &[name, channel] : m_Animation.channels)
+        for (auto &[name, channel] : m_Animation->channels)
         {
             sr.BeginMap();
 
             sr.AddKeyValue("Name", name);
 
-            // Translation
             sr.BeginSequence("TranslationKeys");
             for (auto &f : channel.translationKeys.frames)
             {
@@ -923,7 +1150,6 @@ namespace ignite {
             }
             sr.EndSequence();
 
-            // Rotation
             sr.BeginSequence("RotationKeys");
             for (auto &f : channel.rotationKeys.frames)
             {
@@ -934,7 +1160,6 @@ namespace ignite {
             }
             sr.EndSequence();
 
-            // Scale
             sr.BeginSequence("ScaleKeys");
             for (auto &f : channel.scaleKeys.frames)
             {
@@ -959,10 +1184,291 @@ namespace ignite {
         return true;
     }
 
-    SkeletalAnimation AnimationSerializer::Deserialize(const std::filesystem::path &filepath)
+    Ref<SkeletalAnimation> AnimationSerializer::Deserialize(const std::filesystem::path &filepath)
     {
-        SkeletalAnimation animation;
+        if (!std::filesystem::exists(filepath))
+        {
+            return nullptr;
+        }
+
+        YAML::Node fileNode = Serializer::Deserialize(filepath);
+        YAML::Node animationNode = fileNode["Animation"];
+        if (!animationNode)
+        {
+            return nullptr;
+        }
+
+        Ref<SkeletalAnimation> animation = CreateRef<SkeletalAnimation>();
+        if (animationNode["Name"]) animation->name = animationNode["Name"].as<std::string>();
+        if (animationNode["Duration"]) animation->duration = animationNode["Duration"].as<float>();
+        if (animationNode["TicksPerSeconds"]) animation->ticksPerSeconds = animationNode["TicksPerSeconds"].as<float>();
+
+        if (YAML::Node channelsNode = animationNode["Channels"])
+        {
+            for (const YAML::Node &channelNode : channelsNode)
+            {
+                if (!channelNode["Name"])
+                {
+                    continue;
+                }
+
+                const std::string channelName = channelNode["Name"].as<std::string>();
+                AnimationChannel channel{};
+
+                if (YAML::Node translationKeys = channelNode["TranslationKeys"])
+                {
+                    for (const YAML::Node &keyNode : translationKeys)
+                    {
+                        KeyFrame<glm::vec3> frame{};
+                        frame.Timestamp = keyNode["Timestamp"].as<float>();
+                        frame.Value = keyNode["Value"].as<glm::vec3>();
+                        channel.translationKeys.frames.push_back(frame);
+                    }
+                }
+
+                if (YAML::Node rotationKeys = channelNode["RotationKeys"])
+                {
+                    for (const YAML::Node &keyNode : rotationKeys)
+                    {
+                        KeyFrame<glm::quat> frame{};
+                        frame.Timestamp = keyNode["Timestamp"].as<float>();
+                        frame.Value = keyNode["Value"].as<glm::quat>();
+                        channel.rotationKeys.frames.push_back(frame);
+                    }
+                }
+
+                if (YAML::Node scaleKeys = channelNode["ScaleKeys"])
+                {
+                    for (const YAML::Node &keyNode : scaleKeys)
+                    {
+                        KeyFrame<glm::vec3> frame{};
+                        frame.Timestamp = keyNode["Timestamp"].as<float>();
+                        frame.Value = keyNode["Value"].as<glm::vec3>();
+                        channel.scaleKeys.frames.push_back(frame);
+                    }
+                }
+
+                animation->channels[channelName] = std::move(channel);
+            }
+        }
 
         return animation;
     }
+
+    SkeletonSerializer::SkeletonSerializer(const Ref<Skeleton> &skeleton)
+        : m_Skeleton(skeleton)
+    {
+    }
+
+    bool SkeletonSerializer::Serialize(const std::filesystem::path &filepath)
+    {
+        if (!m_Skeleton)
+        {
+            return false;
+        }
+
+        Serializer sr(filepath);
+
+        sr.BeginMap();
+        sr.BeginMap("Skeleton");
+        sr.AddKeyValue("Version", ENGINE_VERSION);
+
+        sr.BeginSequence("Joints");
+        for (const Joint &joint : m_Skeleton->joints)
+        {
+            sr.BeginMap();
+            sr.AddKeyValue("Name", joint.name);
+            sr.AddKeyValue("ID", joint.id);
+            sr.AddKeyValue("ParentID", joint.parentJointId);
+            sr.AddKeyValue("DefaultTranslation", joint.defaultTranslation);
+            sr.AddKeyValue("DefaultRotation", joint.defaultRotation);
+            sr.AddKeyValue("DefaultScale", joint.defaultScale);
+            SerializeMat4(sr, "InverseBindPose", joint.inverseBindPose);
+            SerializeMat4(sr, "LocalTransform", joint.localTransform);
+            SerializeMat4(sr, "GlobalTransform", joint.globalTransform);
+            sr.EndMap();
+        }
+        sr.EndSequence();
+
+        sr.EndMap();
+        sr.EndMap();
+        sr.Serialize(filepath);
+
+        return true;
+    }
+
+    Ref<Skeleton> SkeletonSerializer::Deserialize(const std::filesystem::path &filepath)
+    {
+        if (!std::filesystem::exists(filepath))
+        {
+            return nullptr;
+        }
+
+        YAML::Node fileNode = Serializer::Deserialize(filepath);
+        YAML::Node skeletonNode = fileNode["Skeleton"];
+        if (!skeletonNode)
+        {
+            return nullptr;
+        }
+
+        Ref<Skeleton> skeleton = CreateRef<Skeleton>();
+
+        if (YAML::Node jointsNode = skeletonNode["Joints"])
+        {
+            skeleton->joints.reserve(jointsNode.size());
+            for (const YAML::Node &jointNode : jointsNode)
+            {
+                Joint joint{};
+                if (jointNode["Name"]) joint.name = jointNode["Name"].as<std::string>();
+                if (jointNode["ID"]) joint.id = jointNode["ID"].as<int32_t>();
+                if (jointNode["ParentID"]) joint.parentJointId = jointNode["ParentID"].as<int32_t>();
+                if (jointNode["DefaultTranslation"]) joint.defaultTranslation = jointNode["DefaultTranslation"].as<glm::vec3>();
+                if (jointNode["DefaultRotation"]) joint.defaultRotation = jointNode["DefaultRotation"].as<glm::quat>();
+                if (jointNode["DefaultScale"]) joint.defaultScale = jointNode["DefaultScale"].as<glm::vec3>();
+
+                DeserializeMat4(jointNode, "InverseBindPose", joint.inverseBindPose);
+                DeserializeMat4(jointNode, "LocalTransform", joint.localTransform);
+                if (!DeserializeMat4(jointNode, "GlobalTransform", joint.globalTransform))
+                {
+                    joint.globalTransform = glm::mat4(1.0f);
+                }
+
+                skeleton->nameToJointMap[joint.name] = joint.id;
+                skeleton->joints.push_back(std::move(joint));
+            }
+        }
+
+        return skeleton;
+    }
+
+    MaterialSerializer::MaterialSerializer(const Ref<Material> &material)
+        : m_Material(material)
+    {
+    }
+
+    bool MaterialSerializer::Serialize(const std::filesystem::path &filepath)
+    {
+        if (!m_Material)
+        {
+            return false;
+        }
+
+        Serializer sr(filepath);
+
+        sr.BeginMap();
+        sr.BeginMap("Material");
+        sr.AddKeyValue("Version", ENGINE_VERSION);
+        sr.AddKeyValue("Name", m_Material->name);
+        sr.AddKeyValue("Type", static_cast<int>(m_Material->GetType()));
+        sr.AddKeyValue("BaseColorTextureHandle", static_cast<uint64_t>(m_Material->baseColorTextureHandle));
+        sr.AddKeyValue("EmissiveTextureHandle", static_cast<uint64_t>(m_Material->emissiveTextureHandle));
+        sr.AddKeyValue("MetallicRoughnessTextureHandle", static_cast<uint64_t>(m_Material->metallicRoughnessTextureHandle));
+        sr.AddKeyValue("NormalTextureHandle", static_cast<uint64_t>(m_Material->normalTextureHandle));
+        sr.AddKeyValue("OcclusionTextureHandle", static_cast<uint64_t>(m_Material->occlusionTextureHandle));
+
+        sr.BeginMap("GPUData");
+        sr.AddKeyValue("BaseColorFactor", m_Material->gpuData.baseColorFactor);
+        sr.AddKeyValue("EmissiveFactor", m_Material->gpuData.emissiveFactor);
+        sr.AddKeyValue("MetallicFactor", m_Material->gpuData.metallicFactor);
+        sr.AddKeyValue("RoughnessFactor", m_Material->gpuData.roughnessFactor);
+        sr.AddKeyValue("OcclusionStrength", m_Material->gpuData.occlusionStrength);
+        sr.EndMap();
+
+        sr.EndMap();
+        sr.EndMap();
+
+        sr.Serialize(filepath);
+        return true;
+    }
+
+    Ref<Material> MaterialSerializer::Deserialize(const std::filesystem::path &filepath)
+    {
+        if (!std::filesystem::exists(filepath))
+        {
+            return nullptr;
+        }
+
+        YAML::Node fileNode = Serializer::Deserialize(filepath);
+        YAML::Node materialNode = fileNode["Material"];
+        if (!materialNode)
+        {
+            return nullptr;
+        }
+
+        Ref<Material> material = CreateRef<Material>();
+        if (materialNode["Name"]) material->name = materialNode["Name"].as<std::string>();
+        if (materialNode["Type"]) material->SetType(static_cast<MaterialType>(materialNode["Type"].as<int>()));
+        if (materialNode["BaseColorTextureHandle"]) material->baseColorTextureHandle = AssetHandle(materialNode["BaseColorTextureHandle"].as<uint64_t>());
+        if (materialNode["EmissiveTextureHandle"]) material->emissiveTextureHandle = AssetHandle(materialNode["EmissiveTextureHandle"].as<uint64_t>());
+        if (materialNode["MetallicRoughnessTextureHandle"]) material->metallicRoughnessTextureHandle = AssetHandle(materialNode["MetallicRoughnessTextureHandle"].as<uint64_t>());
+        if (materialNode["NormalTextureHandle"]) material->normalTextureHandle = AssetHandle(materialNode["NormalTextureHandle"].as<uint64_t>());
+        if (materialNode["OcclusionTextureHandle"]) material->occlusionTextureHandle = AssetHandle(materialNode["OcclusionTextureHandle"].as<uint64_t>());
+
+        if (YAML::Node gpuDataNode = materialNode["GPUData"])
+        {
+            if (gpuDataNode["BaseColorFactor"]) material->gpuData.baseColorFactor = gpuDataNode["BaseColorFactor"].as<glm::vec4>();
+            if (gpuDataNode["EmissiveFactor"]) material->gpuData.emissiveFactor = gpuDataNode["EmissiveFactor"].as<glm::vec4>();
+            if (gpuDataNode["MetallicFactor"]) material->gpuData.metallicFactor = gpuDataNode["MetallicFactor"].as<float>();
+            if (gpuDataNode["RoughnessFactor"]) material->gpuData.roughnessFactor = gpuDataNode["RoughnessFactor"].as<float>();
+            if (gpuDataNode["OcclusionStrength"]) material->gpuData.occlusionStrength = gpuDataNode["OcclusionStrength"].as<float>();
+        }
+
+        return material;
+    }
+
+    Material2DSerializer::Material2DSerializer(const Ref<Material2D> &material)
+        : m_Material(material)
+    {
+    }
+
+    bool Material2DSerializer::Serialize(const std::filesystem::path &filepath)
+    {
+        if (!m_Material)
+        {
+            return false;
+        }
+
+        Serializer sr(filepath);
+
+        sr.BeginMap();
+        sr.BeginMap("Material2D");
+        sr.AddKeyValue("Version", ENGINE_VERSION);
+        sr.AddKeyValue("Name", m_Material->name);
+        sr.AddKeyValue("TextureHandle", static_cast<uint64_t>(m_Material->textureHandle));
+        sr.AddKeyValue("BaseColor", m_Material->data.baseColor);
+        sr.AddKeyValue("AdditiveColor", m_Material->data.additiveColor);
+        sr.AddKeyValue("TilingFactor", m_Material->data.tilingFactor);
+        sr.AddKeyValue("Type", static_cast<int>(m_Material->data.type));
+        sr.EndMap();
+        sr.EndMap();
+
+        sr.Serialize(filepath);
+        return true;
+    }
+
+    Ref<Material2D> Material2DSerializer::Deserialize(const std::filesystem::path &filepath)
+    {
+        if (!std::filesystem::exists(filepath))
+        {
+            return nullptr;
+        }
+
+        YAML::Node fileNode = Serializer::Deserialize(filepath);
+        YAML::Node materialNode = fileNode["Material2D"];
+        if (!materialNode)
+        {
+            return nullptr;
+        }
+
+        Ref<Material2D> material = CreateRef<Material2D>();
+        if (materialNode["Name"]) material->name = materialNode["Name"].as<std::string>();
+        if (materialNode["TextureHandle"]) material->textureHandle = AssetHandle(materialNode["TextureHandle"].as<uint64_t>());
+        if (materialNode["BaseColor"]) material->data.baseColor = materialNode["BaseColor"].as<glm::vec4>();
+        if (materialNode["AdditiveColor"]) material->data.additiveColor = materialNode["AdditiveColor"].as<glm::vec4>();
+        if (materialNode["TilingFactor"]) material->data.tilingFactor = materialNode["TilingFactor"].as<glm::vec2>();
+        if (materialNode["Type"]) material->data.type = static_cast<Material2DType>(materialNode["Type"].as<int>());
+
+        return material;
+    }
+
 }

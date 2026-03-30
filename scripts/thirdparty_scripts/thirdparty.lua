@@ -38,6 +38,9 @@ IncludeDir["MochiSharpNative"] = "%{THIRDPARTY_DIR}/MochiSharp/MochiSharp.Native
 IncludeDir["VULKAN_SDK"]       = "%{VULKAN_SDK_PATH}/Include"
 IncludeDir["FBX_SDK"]          = "%{FBX_SDK_PATH}/include"
 IncludeDir["Hostfxr"]          = "%{THIRDPARTY_DIR}/MochiSharp/NetCore/include"
+IncludeDir["MSDFATLASGEN"]     = "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdf-atlas-gen"
+IncludeDir["MSDFGEN"]          = "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdfgen"
+IncludeDir["FREETYPE"]     = "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdfgen/freetype/include"
 
 --library dirs
 LibraryDir = {}
@@ -79,7 +82,7 @@ Library["FBX_ALEMBIC_DEBUG"]           = "%{LibraryDir.FBX_SDK}/x64/debug/alembi
 Library["FBX_SDK_DEBUG"]               = "%{LibraryDir.FBX_SDK}/x64/debug/libfbxsdk-md.lib"
 Library["FBX_XML_DEBUG"]               = "%{LibraryDir.FBX_SDK}/x64/debug/libxml2.lib"
 
-Library["FBX_ALEMBIC"]                = "%{LibraryDir.FBX_SDK}/x64/release/alemibc.lib"
+Library["FBX_ALEMBIC"]                = "%{LibraryDir.FBX_SDK}/x64/release/alembic.lib"
 Library["FBX_SDK"]                    = "%{LibraryDir.FBX_SDK}/x64/release/libfbxsdk-md.lib"
 Library["FBX_XML"]                    = "%{LibraryDir.FBX_SDK}/x64/release/libxml2.lib"
 
@@ -94,6 +97,9 @@ group "Third Party"
     include "yaml-cpp.lua"
     include "tinygltf.lua"
     include "zlib.lua"
+    include "msdf-atlas-gen.lua"
+    include "msdfgen.lua"
+    include "freetype.lua"
 group ""
 
 group "NVIDIA"

@@ -32,14 +32,27 @@ namespace ignite
     {
     }
 
-    void ICamera::UpdateMatrices(float width, float height)
+	void ICamera::UpdateView()
+	{
+		switch (projectionType)
+		{
+		case ProjectionType::Perspective:
+			m_View = glm::translate(glm::mat4(1.0f), position) * glm::toMat4(glm::quat({ -pitch, -yaw, 0.0f }));
+			m_View = glm::inverse(m_View);
+			break;
+		case ProjectionType::Orthographic:
+			m_View = glm::translate(glm::mat4(1.0f), position);
+			m_View = glm::inverse(m_View);
+			break;
+		}
+	}
+
+	void ICamera::UpdateProjection(float width, float height)
     {
         this->width = width;
         this->height = height;
 
-        const float aspectRatio = width / height;
-		
-        view = glm::lookAt(position, target, { 0.0f, 1.0f, 0.0f });
+		const float aspectRatio = width / height;
         
         switch (projectionType)
         {
@@ -47,13 +60,13 @@ namespace ignite
             {
 				const float halfH = orthoSize * 0.5f;
 				const float halfW = halfH * aspectRatio;
-				projection = glm::orthoZO(-halfW, halfW, -halfH, halfH, nearPlane, farPlane);
+                m_Projection = glm::orthoZO(-halfW, halfW, -halfH, halfH, nearPlane, farPlane);
                 break;
             }
             case ProjectionType::Perspective:
             default:
             {
-				projection = glm::perspectiveZO(glm::radians(fov), aspectRatio, nearPlane, farPlane);
+				m_Projection = glm::perspectiveZO(glm::radians(fov), aspectRatio, nearPlane, farPlane);
                 break;
             }
         }
@@ -61,16 +74,27 @@ namespace ignite
 
     glm::vec3 ICamera::GetUpDirection() const
     {
-		return glm::normalize(glm::cross(GetRightDirection(), GetForwardDirection()));
+        return rotate(glm::quat({ -pitch, -yaw, 0.0f }), { 0.0f, 1.0f, 0.0f });
     }
 
     glm::vec3 ICamera::GetRightDirection() const
     {
-		return glm::normalize(glm::cross(GetForwardDirection(), {0.0f, 1.0f, 0.0f}));
+        return rotate(glm::quat({ -pitch, -yaw, 0.0f }), { 1.0f, 0.0f, 0.0f });
     }
 
     glm::vec3 ICamera::GetForwardDirection() const
     {
-		return glm::normalize(target - position);
+        return rotate(glm::quat({ -pitch, -yaw, 0.0f }), { 0.0f, 0.0f, -1.0f });
     }
+
+	glm::mat4 &ICamera::GetProjection()
+	{
+        return m_Projection;
+	}
+
+	glm::mat4 ICamera::GetView()
+	{
+		return m_View;
+	}
+
 }

@@ -128,19 +128,51 @@ namespace ignite
     }
 
 
-    void Environment::UpdateBindingSet()
+    bool Environment::UpdateBindingSet()
     {
+        if (!m_Scene)
+        {
+            return false;
+        }
+
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        if (!device)
+        {
+            return false;
+        }
+
+        Ref<ConstantBuffer> cameraCB = Renderer::GetCameraConstantBuffer();
+        Ref<ConstantBuffer> sceneCB = m_Scene->GetSceneGPUDataBuffer();
+        if (!cameraCB || !sceneCB)
+        {
+            return false;
+        }
+
+        if (!cameraCB->GetHandle() || !sceneCB->GetHandle())
+        {
+            return false;
+        }
+
+        if (!m_HDRTexture)
+        {
+            m_HDRTexture = Renderer::GetBlackTexture();
+        }
+
+        if (!m_HDRTexture || !m_HDRTexture->GetHandle())
+        {
+            return false;
+        }
 
         // create binding set after load the texture
         nvrhi::BindingSetDesc bsDesc;
-        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
-        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m_Scene->GetSceneGPUDataBuffer()->GetHandle()));
+        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraCB->GetHandle()));
+        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, sceneCB->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_HDRTexture->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_Sampler));
 
         m_BindingSet = device->createBindingSet(bsDesc, Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT));
         LOG_ASSERT(m_BindingSet, "Failed to create binding set");
+        return m_BindingSet != nullptr;
     }
 
     void Environment::LoadTexture(const std::string& filepath)
@@ -152,6 +184,11 @@ namespace ignite
     	textureCI.keepInitialState = true;
     	textureCI.initialState = nvrhi::ResourceStates::ShaderResource;
         m_HDRTexture = Texture::Create(filepath, textureCI, nullptr, "Environment HDR");
+    }
+
+    void Environment::SetTexture(const Ref<Texture> &texture)
+    {
+        m_HDRTexture = texture ? texture : Renderer::GetBlackTexture();
     }
 
 	void Environment::WriteBuffer(nvrhi::ICommandList *cmd)

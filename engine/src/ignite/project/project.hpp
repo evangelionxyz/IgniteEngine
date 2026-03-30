@@ -78,7 +78,7 @@ namespace ignite
 
         std::filesystem::path GetSolutionFilepath() const
         {
-            return GetDirectory() / std::string(m_Info.name + ".sln");
+            return GetDirectory() / std::string(m_Info.name + ".slnx");
         }
 
         std::filesystem::path GetAssetDirectory() const
@@ -102,18 +102,24 @@ namespace ignite
         }
 
         template<typename T>
-        Ref<T> GetAsset(AssetHandle handle)
+        Ref<T> GetAsset(AssetHandle handle, AssetType requestAssetType = AssetType::Auto)
         {
-            Ref<Asset> asset = m_AssetManager->GetAsset(handle);
-            if (!asset) return nullptr;
+            Ref<Asset> asset = m_AssetManager->GetAsset(handle, requestAssetType);
+            if (!asset)
+            {
+                return nullptr;
+            }
             return std::static_pointer_cast<T>(asset);
         }
 
         template<typename T>
-        Ref<T> GetAssetImmediate(AssetHandle handle)
+        Ref<T> GetAssetImmediate(AssetHandle handle, AssetType requestAssetType = AssetType::Auto)
         {
-            Ref<Asset> asset = m_AssetManager->GetAssetImmediate(handle);
-            if (!asset) return nullptr;
+            Ref<Asset> asset = m_AssetManager->GetAssetImmediate(handle, requestAssetType);
+            if (!asset)
+            {
+                return nullptr;
+            }
             return std::static_pointer_cast<T>(asset);
         }
 
@@ -133,8 +139,9 @@ namespace ignite
         virtual AssetType GetAssetType() override { return GetStaticType(); }
 
     private:
+        void CreateDirectories();
+        void CopyDependencies();
         void GenerateProject();
-        void CopyManagedAssemblies();
 
         Ref<Scene> m_ActiveScene; // current active scene in editor
         ProjectInfo m_Info;

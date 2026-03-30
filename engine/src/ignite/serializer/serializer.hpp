@@ -295,6 +295,9 @@ namespace ignite
 
     class Scene;
     class Project;
+    class Skeleton;
+    class Material;
+    class Material2D;
 
     class Serializer
     {
@@ -361,12 +364,49 @@ namespace ignite
     class AnimationSerializer
     {
     public:
-        AnimationSerializer(const SkeletalAnimation &animation);
+        AnimationSerializer(const Ref<SkeletalAnimation> &animation);
 
         bool Serialize(const std::filesystem::path &filepath);
-        static SkeletalAnimation Deserialize(const std::filesystem::path &filepath);
+        static Ref<SkeletalAnimation> Deserialize(const std::filesystem::path &filepath);
 
     private:
-        SkeletalAnimation m_Animation;
+        Ref<SkeletalAnimation> m_Animation;
     };
+
+    class SkeletonSerializer
+    {
+    public:
+        SkeletonSerializer(const Ref<Skeleton> &skeleton);
+
+        bool Serialize(const std::filesystem::path &filepath);
+        static Ref<Skeleton> Deserialize(const std::filesystem::path &filepath);
+
+    private:
+        Ref<Skeleton> m_Skeleton;
+    };
+
+    class MaterialSerializer
+    {
+    public:
+        MaterialSerializer(const Ref<Material> &material);
+
+        bool Serialize(const std::filesystem::path &filepath);
+        static Ref<Material> Deserialize(const std::filesystem::path &filepath);
+
+    private:
+        Ref<Material> m_Material;
+    };
+
+    class Material2DSerializer
+    {
+    public:
+        Material2DSerializer(const Ref<Material2D> &material);
+
+        bool Serialize(const std::filesystem::path &filepath);
+        static Ref<Material2D> Deserialize(const std::filesystem::path &filepath);
+
+    private:
+        Ref<Material2D> m_Material;
+    };
+
 }

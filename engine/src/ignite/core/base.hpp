@@ -1,27 +1,7 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
-#pragma once
+#ifndef IGN_BASE_HPP
+#define IGN_BASE_HPP
 
 #ifdef _WIN32
     #ifndef PLATFORM_WINDOWS
@@ -33,7 +13,7 @@
     #endif
 #endif
 
-#ifdef _DEBUG
+#if defined(_DEBUG) || defined(IGN_DEBUG_BUILD)
     #define ENABLE_ASSERTS
     #ifdef _WIN32
         #define DEBUGBREAK() __debugbreak()
@@ -44,7 +24,7 @@
 #define DEBUGBREAK()
 #endif
 
-#ifndef RELEASE_BUILD
+#if !defined(IGN_RELEASE_BUILD) || !defined(IGN_SHIPPING_BUILD)
     #define ENABLE_VERIFY
 #endif
 
@@ -56,3 +36,5 @@
 #define BIT(x)(1 << x)
 #define BIND_EVENT_FN(fn) [](auto&&... args) -> decltype(auto) { return fn(std::forward<decltype(args)>(args)...); }
 #define BIND_CLASS_EVENT_FN(fn) [this](auto&&... args) -> decltype(auto) { return this->fn(std::forward<decltype(args)>(args)...); }
+
+#endif

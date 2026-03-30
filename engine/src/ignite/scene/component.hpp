@@ -29,8 +29,10 @@
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/core/uuid.hpp"
 #include "ignite/graphics/objects/material.hpp"
+#include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/objects/environment.hpp"
+#include "ignite/graphics/gpu_data.hpp"
 #include "ignite/math/aabb.hpp"
 #include "scene_camera.hpp"
 #include "ignite/core/string_utils.hpp"
@@ -50,17 +52,17 @@ namespace ignite
     class Texture;
     class Skeleton;
 
-#define COMPONENT_CLASS_TYPE(Type) \
-    static const char *GetName() { return #Type; } \
-    static CompType StaticType() { return Type; } \
-    virtual CompType GetType() override { return StaticType(); }
 
     static std::unordered_map<std::string, CompType> s_ComponentsName =
     {
         { "Camera", CompType_Camera },
         { "Rigid Body 2D", CompType_Rigidbody2D },
         { "Box Collider 2D", CompType_BoxCollider2D },
+        { "Circle Collider 2D", CompType_CircleCollider2D },
         { "Sprite 2D", CompType_Sprite2D },
+        { "Circle 2D", CompType_Circle2D },
+        { "Point Light 2D", CompType_PointLight2D },
+        { "Font", CompType_Font },
         { "Static Mesh", CompType_StaticMesh },
         { "Skeletal Mesh", CompType_SkeletalMesh },
         { "Rigid Body", CompType_Rigidbody },
@@ -69,6 +71,7 @@ namespace ignite
         { "Capsule Collider", CompType_CapsuleCollider },
         { "Mesh Collider", CompType_MeshCollider },
         { "Audio Source", CompType_AudioSource },
+        { "World Environment", CompType_WorldEnvironment },
         { "C# Script", CompType_Script },
     };
 
@@ -164,7 +167,10 @@ namespace ignite
             case CompType_Camera: return "CompType_Camera";
             case CompType_Rigidbody2D: return "CompType_Rigidbody2D";
             case CompType_BoxCollider2D: return "CompType_BoxCollider2D";
+            case CompType_CircleCollider2D: return "CompType_CircleCollider2D";
             case CompType_Sprite2D: return "CompType_Sprite2D";
+            case CompType_Circle2D: return "CompType_Circle2D";
+            case CompType_PointLight2D: return "CompType_PointLight2D";
             case CompType_SkeletalMesh: return "CompType_SkeletalMesh";
             case CompType_StaticMesh: return "CompType_StaticMesh";
             case CompType_Rigidbody: return "CompType_Rigidbody";
@@ -325,9 +331,16 @@ namespace ignite
     {
     public:
         Ref<Environment> environment;
-        AssetHandle hdrHandle;
+        AssetHandle hdrHandle = AssetHandle(0);
+
+        Scene_GPUData sceneGPUData;
 
         bool primary = false;
+        bool enabled = true;
+
+        AssetHandle loadedHDRHandle = AssetHandle(0);
+        bool gpuInitialized = false;
+        bool dirtyEnvironment = true;
 
         COMPONENT_CLASS_TYPE(CompType_WorldEnvironment)
     };
@@ -336,16 +349,60 @@ namespace ignite
     {
     public:
         AssetHandle handle = AssetHandle(0); // Texture handle
+        AssetHandle materialHandle = AssetHandle(0); // Material2D handle
+
         glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
         glm::vec2 tilingFactor = { 1.0f, 1.0f };
 
+        glm::vec2 uv0 = { 0.0f, 1.0f };
+        glm::vec2 uv1 = { 1.0f, 0.0f };
+
         COMPONENT_CLASS_TYPE(CompType_Sprite2D)
+    };
+
+    class PointLight2DComponent : public IComponent
+    {
+    public:
+        glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        float radius = 5.0f;
+        float intensity = 1.0f;
+        bool enabled = true;
+
+        COMPONENT_CLASS_TYPE(CompType_PointLight2D)
+    };
+
+	class Circle2DComponent : public IComponent
+	{
+	public:
+		glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        float thickness = 1.0f;
+        float fade = 0.005f;
+
+		COMPONENT_CLASS_TYPE(CompType_Circle2D)
+	};
+
+    class TextComponent : public IComponent
+    {
+    public:
+        AssetHandle fontHandle = AssetHandle(0);
+        AssetHandle material2dHandle = AssetHandle(0);
+
+        std::string text = "Empty";
+
+        glm::vec4 color = glm::vec4(1.0f);
+        float kerning = 0.0f;
+        float lineSpacing = -0.025f;
+        bool screenSpace = false;
+
+        TextComponent() = default;
+
+		COMPONENT_CLASS_TYPE(CompType_Font)
     };
 
     class StaticMeshComponent : public IComponent
     {
     public:
-        AssetHandle handle = AssetHandle(0);
+        AssetHandle handle = AssetHandle(0); // class StaticMesh in mesh.h
         Ref<ConstantBuffer> perEntityBuffer;
         nvrhi::BindingSetHandle meshBindingSet = nullptr; // Cached binding set - reused across frames
 
@@ -357,6 +414,11 @@ namespace ignite
 	class SkeletalMeshComponent : public IComponent
 	{
 	public:
+        AssetHandle handle = AssetHandle(0); // class SkeletalMesh in mesh.h
+
+        Ref<ConstantBuffer> perEntityBuffer;
+        nvrhi::BindingSetHandle meshBindingSet = nullptr; // Cached binding set - reused across frames
+
         SkeletalMeshComponent() = default;
 		COMPONENT_CLASS_TYPE(CompType_SkeletalMesh)
 	};

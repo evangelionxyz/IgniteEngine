@@ -44,10 +44,12 @@ namespace ignite {
     	~Environment();
 
         void Draw(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *fb, const Ref<GraphicsPipeline> &gp);
+        void SetScene(Scene *scene) { m_Scene = scene; }
 
-        void UpdateBindingSet();
+        bool UpdateBindingSet();
 
         void LoadTexture(const std::string &filepath);
+        void SetTexture(const Ref<Texture> &texture);
         void WriteBuffer(nvrhi::ICommandList *cmd);
 
         static Ref<Environment> Create(Scene *scene);

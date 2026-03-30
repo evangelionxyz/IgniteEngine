@@ -83,8 +83,22 @@ namespace ignite
         bool fixedRotation = false;
         b2BodyId bodyId = {};
 
-        static CompType StaticType() { return CompType_Rigidbody2D; }
-        virtual CompType GetType() override { return StaticType(); }
+		COMPONENT_CLASS_TYPE(CompType_Rigidbody2D)
+    };
+
+    class CircleCollider2DComponent : public IComponent
+    {
+    public:
+        glm::vec2 center{ 0.0f, 0.0f };
+        float radius = 0.5f;
+		f32 restitution = 0.1f;
+		f32 friction = 0.5f;
+		f32 density = 1.0f;
+        bool isSensor = false;
+
+        b2ShapeId shapeId{};
+
+        COMPONENT_CLASS_TYPE(CompType_CircleCollider2D)
     };
 
     class BoxCollider2DComponent : public IComponent
@@ -100,7 +114,6 @@ namespace ignite
 
         b2ShapeId shapeId{};
 
-        static CompType StaticType() { return CompType_BoxCollider2D; }
-        virtual CompType GetType() override { return StaticType(); }
+		COMPONENT_CLASS_TYPE(CompType_BoxCollider2D)
     };
 }

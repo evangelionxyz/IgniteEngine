@@ -155,7 +155,7 @@ namespace ignite
 			m_GPUData.cascadeSplits[i] = dist;
 		}
 
-		glm::mat4 invView = glm::inverse(camera->view);
+		glm::mat4 invView = glm::inverse(camera->GetView());
 
 		const float aspect = camera->width / camera->height;
 		const float fovRadians = glm::radians(camera->fov);

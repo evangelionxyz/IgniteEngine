@@ -34,6 +34,11 @@
 #include <condition_variable>
 #include <queue>
 
+namespace fbxsdk
+{
+    class FbxManager;
+}
+
 namespace ignite
 {
 
@@ -49,7 +54,7 @@ namespace ignite
         AssetManager(Project *project);
         ~AssetManager();
 
-        Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
+        Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata, AssetType requestedAssetType = AssetType::Auto);
         AssetHandle ImportAsset(const std::filesystem::path &filepath);
         void AssignMetaData(AssetHandle handle, const AssetMetaData &metadata);
 
@@ -78,8 +83,8 @@ namespace ignite
 
         void SubmitJob(AssetJob job);
 
-        Ref<Asset> GetAsset(AssetHandle handle);
-        Ref<Asset> GetAssetImmediate(AssetHandle handle); // Synchronous load - blocks until complete
+        Ref<Asset> GetAsset(AssetHandle handle, AssetType requestedAssetType = AssetType::Auto);
+        Ref<Asset> GetAssetImmediate(AssetHandle handle, AssetType requestedAssetType = AssetType::Auto); // Synchronous load - blocks until complete
         AssetType GetAssetType(AssetHandle handle) const;
 
         const AssetMetaData &GetMetaData(const std::filesystem::path &filepath, AssetHandle &outHandle);
@@ -95,11 +100,14 @@ namespace ignite
         void UnloadAsset(AssetHandle handle);
         void UnloadUnusedAssets();
         size_t GetLoadedAssetCount() const { return m_LoadedAssets.size(); }
-        bool IsAssetLoaded(AssetHandle handle) const { return m_LoadedAssets.contains(handle); }
-        bool IsAssetLoading(AssetHandle handle) const { return m_LoadingAssets.contains(handle); }
+        bool IsAssetLoaded(AssetHandle handle) const;
+        bool IsAssetLoading(AssetHandle handle) const;
         const std::unordered_map<AssetHandle, Ref<Asset>>& GetLoadedAssets() const { return m_LoadedAssets; }
     
         AssetRegistry &GetAssetAssetRegistry() { return m_AssetRegistry; }
+
+        fbxsdk::FbxManager *GetOrCreateFbxSdkManager();
+        std::mutex &GetFbxSdkMutex() { return m_FbxSdkMutex; }
 
         static Project *GetProject();
 
@@ -115,6 +123,9 @@ namespace ignite
         std::vector<std::thread> m_Workers;
         std::queue<AssetJob> m_Jobs;
         bool m_Running;
+
+        std::mutex m_FbxSdkMutex;
+        fbxsdk::FbxManager *m_FbxSdkManager = nullptr;
     };
 
 }

@@ -30,6 +30,8 @@
 #include "ignite/core/logger.hpp"
 #include <cstdint>
 
+#include <fbxsdk.h>
+
 namespace ignite {
 
 	static std::mutex s_AssetThreadMutex;
@@ -57,8 +59,37 @@ namespace ignite {
             unsigned long long id = std::stoull(ss.str());
             LOG_WARN("[Asset Manager] Worker [{0}]: {1}", i, id);
         }
+    }
 
-        LOG_WARN("\n");
+    bool AssetManager::IsAssetLoaded(AssetHandle handle) const
+    {
+        std::unique_lock lock(s_AssetThreadMutex);
+
+        const auto it = m_LoadedAssets.find(handle);
+        if (it == m_LoadedAssets.end() || !it->second)
+        {
+            return false;
+        }
+
+        return it->second->IsReady();
+    }
+
+    bool AssetManager::IsAssetLoading(AssetHandle handle) const
+    {
+        std::unique_lock lock(s_AssetThreadMutex);
+
+        if (m_LoadingAssets.contains(handle))
+        {
+            return true;
+        }
+
+        const auto it = m_LoadedAssets.find(handle);
+        if (it == m_LoadedAssets.end() || !it->second)
+        {
+            return false;
+        }
+
+        return !it->second->IsReady();
     }
 
     AssetManager::~AssetManager()
@@ -74,6 +105,29 @@ namespace ignite {
         {
             worker.join();
         }
+
+        if (m_FbxSdkManager)
+        {
+            m_FbxSdkManager->Destroy();
+            m_FbxSdkManager = nullptr;
+        }
+    }
+
+    fbxsdk::FbxManager *AssetManager::GetOrCreateFbxSdkManager()
+    {
+        if (!m_FbxSdkManager)
+        {
+            m_FbxSdkManager = fbxsdk::FbxManager::Create();
+            if (!m_FbxSdkManager)
+            {
+                return nullptr;
+            }
+
+            fbxsdk::FbxIOSettings *ioSettings = fbxsdk::FbxIOSettings::Create(m_FbxSdkManager, IOSROOT);
+            m_FbxSdkManager->SetIOSettings(ioSettings);
+        }
+
+        return m_FbxSdkManager;
     }
 
     AssetHandle AssetManager::ImportAsset(const std::filesystem::path &filepath)
@@ -224,7 +278,7 @@ namespace ignite {
         m_ConditionVariable.notify_one();
     }
 
-    Ref<Asset> AssetManager::GetAsset(AssetHandle handle)
+    Ref<Asset> AssetManager::GetAsset(AssetHandle handle, AssetType requestedAssetType)
     {
         if (!IsAssetHandleValid(handle))
         {
@@ -256,11 +310,12 @@ namespace ignite {
         // Submit import work to worker thread
         const AssetMetaData metadata = GetMetaData(handle);
         
-        SubmitJob([this, handle, metadata]() {
+        SubmitJob([this, handle, metadata, requestedAssetType]()
+        {
             try
             {
                 // Do the heavy I/O work on worker thread
-                Ref<Asset> asset = Import(handle, metadata);
+                Ref<Asset> asset = Import(handle, metadata, requestedAssetType);
                 
                 if (asset)
                 {
@@ -275,8 +330,8 @@ namespace ignite {
             }
             catch (const std::exception& e)
             {
-                LOG_ERROR("[Asset Manager] Failed to import asset {}: {}", 
-                    static_cast<uint64_t>(handle), e.what());
+                LOG_ERROR("[Asset Manager] Failed to import asset {} \"{}\": {}", 
+                    static_cast<uint64_t>(handle), metadata.filepath.generic_string(), e.what());
             }
             
             // Remove from loading set
@@ -291,7 +346,7 @@ namespace ignite {
         return nullptr;
     }
 
-    Ref<Asset> AssetManager::GetAssetImmediate(AssetHandle handle)
+    Ref<Asset> AssetManager::GetAssetImmediate(AssetHandle handle, AssetType requestedAssetType)
     {
         if (!IsAssetHandleValid(handle))
         {
@@ -312,7 +367,7 @@ namespace ignite {
         LOG_TRACE("[Asset Manager] Synchronous asset load requested: {}", 
             metadata.filepath.generic_string());
         
-        return Import(handle, metadata);
+        return Import(handle, metadata, requestedAssetType);
     }
 
     AssetType AssetManager::GetAssetType(AssetHandle handle) const
@@ -408,7 +463,7 @@ namespace ignite {
         }
     }
 
-    Ref<Asset> AssetManager::Import(AssetHandle handle, const AssetMetaData &metadata)
+    Ref<Asset> AssetManager::Import(AssetHandle handle, const AssetMetaData &metadata, AssetType requestedAssetType)
     {
         // Check if already loaded (thread-safe read)
         {
@@ -420,7 +475,14 @@ namespace ignite {
         }
 
         Ref<Asset> asset;
-        switch (metadata.type)
+
+        AssetMetaData getterMetadata = metadata;
+        if (requestedAssetType != AssetType::Auto && requestedAssetType != AssetType::Invalid)
+        {
+            getterMetadata.type = requestedAssetType;
+        }
+
+        switch (getterMetadata.type)
         {
         case AssetType::Invalid:
         {
@@ -429,9 +491,14 @@ namespace ignite {
         }
 
         case AssetType::Material:
+        case AssetType::Material2D:
         case AssetType::StaticMesh:
+        case AssetType::SkeletalAnimation:
+        case AssetType::SkeletalMesh:
+        case AssetType::SpriteSheet:
+        case AssetType::Font:
         {
-            asset = AssetImporter::Import(handle, metadata);
+            asset = AssetImporter::Import(handle, getterMetadata);
             
             // Thread-safe assignment
             {
@@ -449,7 +516,7 @@ namespace ignite {
         case AssetType::Scene:
         case AssetType::Texture:
         {
-            asset = AssetImporter::Import(handle, metadata);
+            asset = AssetImporter::Import(handle, getterMetadata);
             
             // Thread-safe assignment
             {

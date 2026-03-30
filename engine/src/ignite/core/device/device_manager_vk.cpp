@@ -387,7 +387,7 @@ namespace ignite
         {
             res = m_VulkanDevice.acquireNextImageKHR(
                 m_SwapChain,
-                std::numeric_limits<uint64_t>::max(), // timeout
+                0, // non-blocking acquire to avoid indefinite wait issues on surfaces without guaranteed forward progress
                 semaphore,
                 vk::Fence(),
                 &m_SwapChainIndex);
@@ -401,6 +401,11 @@ namespace ignite
             {
                 break;
             }
+        }
+
+        if (res == vk::Result::eTimeout || res == vk::Result::eNotReady)
+        {
+            return false;
         }
 
         m_AcquireSemaphoreIndex = (m_AcquireSemaphoreIndex + 1) % m_AcquireSemaphores.size();

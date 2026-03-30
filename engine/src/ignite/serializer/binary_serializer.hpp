@@ -355,6 +355,145 @@ namespace ignite
             return staticMesh;
         }
 
+        static std::vector<std::byte> SerializeSkeletalMesh(const Ref<SkeletalMesh> &sm, const std::filesystem::path &filepath)
+        {
+            std::vector<std::byte> buffer;
+
+            const std::vector<Ref<MeshInstance>> &meshInstances = sm->GetMeshInstances();
+            uint32_t meshCount = static_cast<uint32_t>(meshInstances.size());
+            AppendRaw(buffer, meshCount);
+
+            for (auto &m : meshInstances)
+            {
+                auto &primitive = m->GetPrimitive();
+
+                uint32_t verticesCount = static_cast<uint32_t>(primitive->vertices.size());
+                uint32_t indicesCount = static_cast<uint32_t>(primitive->indices.size());
+                AppendRaw(buffer, verticesCount);
+                AppendRaw(buffer, indicesCount);
+
+                for (VertexMesh_Anim &vertex : primitive->vertices)
+                {
+                    AppendRaw(buffer, vertex.position);
+                    AppendRaw(buffer, vertex.normal);
+                    AppendRaw(buffer, vertex.tangent);
+                    AppendRaw(buffer, vertex.bitangent);
+                    AppendRaw(buffer, vertex.uv);
+                    AppendRaw(buffer, vertex.boneIDs);
+                    AppendRaw(buffer, vertex.weights);
+                }
+
+                AppendBytes(buffer, primitive->indices.data(), indicesCount * sizeof(uint32_t));
+
+                uint32_t nameSize = 0;
+                AppendString(buffer, m->GetName(), nameSize);
+
+                for (int i = 0; i < 4; ++i)
+                {
+                    AppendRaw(buffer, m->local[i].x);
+                    AppendRaw(buffer, m->local[i].y);
+                    AppendRaw(buffer, m->local[i].z);
+                    AppendRaw(buffer, m->local[i].w);
+                }
+
+                uint64_t materialHandle = m->GetMaterialHandle();
+                AppendRaw(buffer, materialHandle);
+            }
+
+            uint32_t animationCount = static_cast<uint32_t>(sm->animationHandles.size());
+            AppendRaw(buffer, animationCount);
+            for (const AssetHandle animationHandle : sm->animationHandles)
+            {
+                AppendRaw(buffer, animationHandle);
+            }
+
+            AppendRaw(buffer, sm->activeAnimationIndex);
+            AppendRaw(buffer, sm->isPlaying);
+
+            std::ofstream of(filepath, std::ios::binary);
+            of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
+            of.close();
+
+            return buffer;
+        }
+
+        static Ref<SkeletalMesh> DeserializeSkeletalMesh(const std::filesystem::path &filepath)
+        {
+            Ref<SkeletalMesh> skeletalMesh = SkeletalMesh::Create();
+
+            std::ifstream inFile(filepath, std::ios::binary);
+            if (!inFile)
+            {
+                return nullptr;
+            }
+
+            uint32_t meshCount = 0;
+            ReadRaw(inFile, &meshCount);
+
+            for (uint32_t i = 0; i < meshCount; ++i)
+            {
+                uint32_t verticesCount = 0, indicesCount = 0;
+                ReadRaw(inFile, &verticesCount);
+                ReadRaw(inFile, &indicesCount);
+
+                Ref<MeshInstance> meshInstance = CreateRef<MeshInstance>();
+                auto &name = meshInstance->GetName();
+                auto &primitive = meshInstance->GetPrimitive();
+
+                primitive->vertices.reserve(verticesCount);
+                for (uint32_t vertexIndex = 0; vertexIndex < verticesCount; ++vertexIndex)
+                {
+                    VertexMesh_Anim vertex;
+                    ReadRaw(inFile, &vertex.position);
+                    ReadRaw(inFile, &vertex.normal);
+                    ReadRaw(inFile, &vertex.tangent);
+                    ReadRaw(inFile, &vertex.bitangent);
+                    ReadRaw(inFile, &vertex.uv);
+                    ReadRaw(inFile, &vertex.boneIDs);
+                    ReadRaw(inFile, &vertex.weights);
+                    primitive->vertices.push_back(vertex);
+                }
+
+                primitive->indices.resize(indicesCount);
+                ReadRaw(inFile, primitive->indices.data(), indicesCount * sizeof(uint32_t));
+
+                uint32_t nameSize = 0;
+                ReadRaw(inFile, &nameSize);
+                name = ReadString(inFile, nameSize);
+
+                for (int j = 0; j < 4; ++j)
+                {
+                    ReadRaw(inFile, &meshInstance->local[j].x);
+                    ReadRaw(inFile, &meshInstance->local[j].y);
+                    ReadRaw(inFile, &meshInstance->local[j].z);
+                    ReadRaw(inFile, &meshInstance->local[j].w);
+                }
+
+                uint64_t materialHandle = 0;
+                ReadRaw(inFile, &materialHandle);
+                if (materialHandle != 0)
+                {
+                    meshInstance->SetMaterial(AssetHandle(materialHandle));
+                }
+
+                skeletalMesh->AddMeshInstance(meshInstance);
+            }
+
+            uint32_t animationCount = 0;
+            ReadRaw(inFile, &animationCount);
+            skeletalMesh->animationHandles.resize(animationCount);
+            for (uint32_t i = 0; i < animationCount; ++i)
+            {
+                ReadRaw(inFile, &skeletalMesh->animationHandles[i]);
+            }
+
+            ReadRaw(inFile, &skeletalMesh->activeAnimationIndex);
+            ReadRaw(inFile, &skeletalMesh->isPlaying);
+
+            inFile.close();
+            return skeletalMesh;
+        }
+
         static std::vector<std::byte> SerializeAnimation(const Ref<SkeletalAnimation> &anim, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
@@ -415,6 +554,8 @@ namespace ignite
                     AppendRaw(buffer, frame.Timestamp);
                 }
             }
+
+            AppendRaw(buffer, (uint64_t)anim->GetSkeletonHandle());
 
             // Write to file
             std::ofstream of(filepath, std::ios::binary);
@@ -520,6 +661,13 @@ namespace ignite
                     expectedTotalSize, totalChannelByteSize);
 
                 anim->channels[channelName] = channel;
+            }
+
+            if (inFile.peek() != EOF)
+            {
+                uint64_t skeletonHandle = 0;
+                ReadRaw(inFile, &skeletonHandle);
+                anim->SetSkeletonHandle(UUID(skeletonHandle));
             }
 
             inFile.close();

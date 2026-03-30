@@ -61,23 +61,43 @@ namespace ignite
         nvrhi::BufferHandle vertexBuffer;
         nvrhi::BufferHandle indexBuffer;
 
-        Ref<GraphicsPipeline> graphicsPipeline;
+        nvrhi::BindingLayoutHandle bindingLayout;
+        std::unordered_map<nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> graphicsPipelines;
         std::unordered_map<nvrhi::ITexture *, nvrhi::BindingSetHandle> bindingsCache;
 
         std::vector<ImGuiVertexData> imguiVertexBuffer;
         std::vector<ImDrawIdx> imguiIndexBuffer;
 
+        bool m_IsShuttingDown = false;
+
         bool Init(nvrhi::IDevice *device);
         void Shutdown();
         bool UpdateFontTexture();
         bool Render(nvrhi::IFramebuffer *framebuffer);
+        bool Render(ImDrawData *drawData, nvrhi::IFramebuffer *framebuffer);
         void BackBufferResizing();
 
     private:
         bool ReallocateBuffer(nvrhi::BufferHandle &buffer, size_t requiredSize, size_t reallocateSize, bool isIndexBuffer);
         Ref<GraphicsPipeline> GetPSO(nvrhi::IFramebuffer *framebuffer);
         nvrhi::IBindingSet *GetBindingSet(nvrhi::ITexture *texture, nvrhi::BindingLayoutHandle bindingLayout);
-        bool UpdateGeometry(nvrhi::ICommandList *commandList);
+        bool UpdateGeometry(nvrhi::ICommandList *commandList, ImDrawData *drawData);
+
+#ifdef PLATFORM_WINDOWS
+        static void RendererCreateWindow(ImGuiViewport *viewport);
+        static void RendererDestroyWindow(ImGuiViewport *viewport);
+        static void RendererSetWindowSize(ImGuiViewport *viewport, ImVec2 size);
+        static void RendererRenderWindow(ImGuiViewport *viewport, void *);
+        static void RendererSwapBuffers(ImGuiViewport *viewport, void *);
+#endif
+
+#ifdef IGNITE_WITH_VULKAN
+        static void RendererCreateWindowVK(ImGuiViewport *viewport);
+        static void RendererDestroyWindowVK(ImGuiViewport *viewport);
+        static void RendererSetWindowSizeVK(ImGuiViewport *viewport, ImVec2 size);
+        static void RendererRenderWindowVK(ImGuiViewport *viewport, void *);
+        static void RendererSwapBuffersVK(ImGuiViewport *viewport, void *);
+#endif
 
     };
 }

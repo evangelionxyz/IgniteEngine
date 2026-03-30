@@ -87,7 +87,7 @@ namespace ignite
     }
 
     Texture::Texture(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName)
-        : m_CreateInfo(createInfo), m_Filepath(filepath)
+        : m_CreateInfo(createInfo), m_Filepath(filepath), m_DebugName(debugName)
     {
         LOG_ASSERT(std::filesystem::exists(filepath), "File does not found!");
 
@@ -101,10 +101,9 @@ namespace ignite
                 int width, height, channelsOut;
                 uint8_t *pixelData = stbi_load(filepath.generic_string().c_str(), &width, &height, &channelsOut, channels);
                 const uint64_t dataSize = static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * channels;
-                Buffer buffer(dataSize);
-                memcpy(buffer.data, pixelData, dataSize);
+                m_Buffer.Allocate(dataSize);
+                memcpy(m_Buffer.data, pixelData, dataSize);
                 stbi_image_free(pixelData);
-                m_Buffer = buffer;
 
                 m_CreateInfo.width = static_cast<uint32_t>(width);
                 m_CreateInfo.height = static_cast<uint32_t>(height);
@@ -116,10 +115,9 @@ namespace ignite
                 int width, height, channelsOut;
                 float *pixelData = stbi_loadf(filepath.generic_string().c_str(), &width, &height, &channelsOut, channels);
                 const uint64_t dataSize = static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * channels * sizeof(float);
-                Buffer buffer(dataSize);
-                memcpy(buffer.data, pixelData, dataSize);
+                m_Buffer.Allocate(dataSize);
+                memcpy(m_Buffer.data, pixelData, dataSize);
                 stbi_image_free(pixelData);
-                m_Buffer = buffer;
 
                 m_CreateInfo.width = static_cast<uint32_t>(width);
                 m_CreateInfo.height = static_cast<uint32_t>(height);
@@ -148,11 +146,14 @@ namespace ignite
 
 	Texture::~Texture()
     {
+        m_Buffer.Release();
+
+        m_Handle = nullptr;
     }
 
     void Texture::SetData(nvrhi::ICommandList *cmd, uint32_t rowPitch, uint32_t depthPitch)
     {
-        if (m_HasUploaded || !m_Buffer.data)
+        if (!m_Buffer.data)
         {
             return;
         }
@@ -203,9 +204,6 @@ namespace ignite
             }
         }
 
-        m_HasUploaded = true;
-        SetReadyFlag(m_HasUploaded);
-
         if (!m_CreateInfo.keepCpuData)
         {
             m_Buffer.Release();
@@ -219,23 +217,23 @@ namespace ignite
 		SetData(cmd, rowPitch, depthPitch);
 	}
 
-	void *Texture::GetPixelData(Ref<Texture> texture, size_t *outRowPitch, nvrhi::ICommandList *cmd, nvrhi::IDevice *device)
-	{
-		cmd->open();
-		nvrhi::TextureDesc stagingDesc = texture->GetHandle()->getDesc();
-		stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
-		nvrhi::StagingTextureHandle stagingTexture = device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-		cmd->copyTexture(stagingTexture, nvrhi::TextureSlice(), texture->GetHandle(), nvrhi::TextureSlice());
-		cmd->close();
-	{
-		std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
-		device->executeCommandList(cmd);
-	}
+    void *Texture::GetPixelData(Ref<Texture> texture, size_t *outRowPitch, nvrhi::ICommandList *cmd, nvrhi::IDevice *device)
+    {
+        cmd->open();
+        nvrhi::TextureDesc stagingDesc = texture->GetHandle()->getDesc();
+        stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
+        nvrhi::StagingTextureHandle stagingTexture = device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
+        cmd->copyTexture(stagingTexture, nvrhi::TextureSlice(), texture->GetHandle(), nvrhi::TextureSlice());
+        cmd->close();
+        {
+            std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
+            device->executeCommandList(cmd);
+        }
 
-		// Map and read the pixel data
-		void *pixelData = device->mapStagingTexture(stagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, outRowPitch);
+        // Map and read the pixel data
+        void *pixelData = device->mapStagingTexture(stagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, outRowPitch);
         return pixelData;
-	}
+    }
 
 	void Texture::CreateTextureHandle()
     {

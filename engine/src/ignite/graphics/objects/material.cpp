@@ -58,6 +58,9 @@ namespace ignite
 
     void Material::UpdateBindingSet(SceneRenderer *sceneRenderer, MaterialTextures *textures)
     {
+        if (m_BindingSet && !m_BindingSetDirty)
+            return;
+
         EnsureGpuResources();
         auto device = DeviceManager::GetInstance()->GetDevice();
 
@@ -102,7 +105,27 @@ namespace ignite
         if (newBindingSet)
         {
             m_BindingSet = newBindingSet;
-            m_BindingSetDirty = false;
+
+            auto* assetManager = &Project::GetInstance()->GetAssetManager();
+            auto isTextureReady = [assetManager](AssetHandle textureHandle)
+            {
+                if (textureHandle == 0)
+                {
+                    return true;
+                }
+
+                Ref<Asset> asset = assetManager->GetAsset(textureHandle);
+                return asset && asset->IsReady();
+            };
+
+            const bool allTexturesReady =
+                isTextureReady(baseColorTextureHandle)
+                && isTextureReady(emissiveTextureHandle)
+                && isTextureReady(metallicRoughnessTextureHandle)
+                && isTextureReady(normalTextureHandle)
+                && isTextureReady(occlusionTextureHandle);
+
+            m_BindingSetDirty = !allTexturesReady;
         }
     }
 
@@ -129,34 +152,7 @@ namespace ignite
 
     bool Material::IsNeedToInvalidate()
     {
-        // Check if any texture handles have changed and are newly loaded
-        auto *assetManager = &Project::GetInstance()->GetAssetManager();
-
-        bool needsInvalidation = false;
-
-        // Check each texture to see if it was recently loaded
-        if (baseColorTextureHandle != 0 && assetManager->IsAssetLoaded(baseColorTextureHandle))
-        {
-            needsInvalidation = true;
-        }
-        if (emissiveTextureHandle != 0 && assetManager->IsAssetLoaded(emissiveTextureHandle))
-        {
-            needsInvalidation = true;
-        }
-        if (metallicRoughnessTextureHandle != 0 && assetManager->IsAssetLoaded(metallicRoughnessTextureHandle))
-        {
-            needsInvalidation = true;
-        }
-        if (normalTextureHandle != 0 && assetManager->IsAssetLoaded(normalTextureHandle))
-        {
-            needsInvalidation = true;
-        }
-        if (occlusionTextureHandle != 0 && assetManager->IsAssetLoaded(occlusionTextureHandle))
-        {
-            needsInvalidation = true;
-        }
-
-        return needsInvalidation && m_BindingSetDirty;
+        return m_BindingSetDirty;
     }
 
     Ref<Texture> Material::RetrieveTexture(AssetManager *assetManager, AssetHandle handle, Ref<Texture> fallback)
@@ -171,6 +167,7 @@ namespace ignite
         {
             return result;
         }
+
         return fallback;
     }
 

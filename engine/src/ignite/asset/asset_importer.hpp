@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
 
@@ -31,11 +10,19 @@
 
 namespace ignite {
 
+    struct TextureCreateInfo;
+
     struct FmodSound;
     class Environment;
     class GraphicsPipeline;
     class StaticMesh;
+    class SkeletalMesh;
+    class Skeleton;
+    class SkeletalAnimation;
+    class Material2D;
+    class SpriteSheet;
     class Scene;
+    class Font;
 
 	struct PendingFileLoading
 	{
@@ -59,10 +46,18 @@ namespace ignite {
         static void ImportAsync(AssetHandle handle, const AssetMetaData &metadata, std::function<void(Ref<Asset>, AssetHandle)> callback);
 
         static Ref<StaticMesh> ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata);
+        static Ref<SkeletalMesh> ImportSkeletalMesh(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<Material> ImportMaterial(AssetHandle handle, const AssetMetaData &metadata);
+        static Ref<Material2D> ImportMaterial2D(AssetHandle handle, const AssetMetaData &metadata);
+        static Ref<SpriteSheet> ImportSpriteSheet(AssetHandle handle, const AssetMetaData &metadata);
+        static Ref<Font> ImportFont(AssetHandle handle, const AssetMetaData &metadata);
+        static Ref<Skeleton> ImportSkeleton(AssetHandle handle, const AssetMetaData &metadata);
+        static Ref<SkeletalAnimation> ImportSkeletalAnimation(AssetHandle handle, const AssetMetaData &metadata);
+
 
         static Ref<Scene> ImportScene(AssetHandle handle, const AssetMetaData &metadata);
         static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata);
+        static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata, const TextureCreateInfo &createInfo);
         static Ref<FmodSound> ImportAudio(AssetHandle handle, const AssetMetaData &metadata);
     };
 }
