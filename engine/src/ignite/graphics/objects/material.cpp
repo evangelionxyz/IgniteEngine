@@ -23,6 +23,7 @@
 
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/project/project.hpp"
+#include "ignite/serializer/serializer.hpp"
 
 #include "material.hpp"
 #include "ignite/graphics/renderer.hpp"
@@ -171,7 +172,69 @@ namespace ignite
         return fallback;
     }
 
-    nvrhi::BindingLayoutDesc Material::GetBindingLayoutDesc()
+	bool Material::Serialize(const std::filesystem::path &filepath)
+	{
+		Serializer sr(filepath);
+
+		sr.BeginMap();
+        {
+		    sr.BeginMap("Material"); // MATERIAL START
+		    sr.AddKeyValue("Version", ENGINE_VERSION);
+		    sr.AddKeyValue("Name", name);
+		    sr.AddKeyValue("Type", static_cast<int>(GetType()));
+		    sr.AddKeyValue("BaseColorTextureHandle", static_cast<uint64_t>(baseColorTextureHandle));
+		    sr.AddKeyValue("EmissiveTextureHandle", static_cast<uint64_t>(emissiveTextureHandle));
+		    sr.AddKeyValue("MetallicRoughnessTextureHandle", static_cast<uint64_t>(metallicRoughnessTextureHandle));
+		    sr.AddKeyValue("NormalTextureHandle", static_cast<uint64_t>(normalTextureHandle));
+		    sr.AddKeyValue("OcclusionTextureHandle", static_cast<uint64_t>(occlusionTextureHandle));
+
+		    sr.BeginMap("GPUData");
+		    sr.AddKeyValue("BaseColorFactor", gpuData.baseColorFactor);
+		    sr.AddKeyValue("EmissiveFactor", gpuData.emissiveFactor);
+		    sr.AddKeyValue("MetallicFactor", gpuData.metallicFactor);
+		    sr.AddKeyValue("RoughnessFactor", gpuData.roughnessFactor);
+		    sr.AddKeyValue("OcclusionStrength", gpuData.occlusionStrength);
+		    sr.EndMap();
+
+		    sr.EndMap(); // MATERIAL END
+        }
+		sr.EndMap();
+
+		sr.Serialize(filepath);
+		return true;
+	}
+
+	Ref<Material> Material::Deserialize(const std::filesystem::path &filepath)
+	{
+		YAML::Node fileNode = Serializer::Deserialize(filepath);
+		YAML::Node materialNode = fileNode["Material"];
+		if (!materialNode)
+		{
+			return nullptr;
+		}
+
+		Ref<Material> material = CreateRef<Material>();
+		if (materialNode["Name"]) material->name = materialNode["Name"].as<std::string>();
+		if (materialNode["Type"]) material->SetType(static_cast<MaterialType>(materialNode["Type"].as<int>()));
+		if (materialNode["BaseColorTextureHandle"]) material->baseColorTextureHandle = AssetHandle(materialNode["BaseColorTextureHandle"].as<uint64_t>());
+		if (materialNode["EmissiveTextureHandle"]) material->emissiveTextureHandle = AssetHandle(materialNode["EmissiveTextureHandle"].as<uint64_t>());
+		if (materialNode["MetallicRoughnessTextureHandle"]) material->metallicRoughnessTextureHandle = AssetHandle(materialNode["MetallicRoughnessTextureHandle"].as<uint64_t>());
+		if (materialNode["NormalTextureHandle"]) material->normalTextureHandle = AssetHandle(materialNode["NormalTextureHandle"].as<uint64_t>());
+		if (materialNode["OcclusionTextureHandle"]) material->occlusionTextureHandle = AssetHandle(materialNode["OcclusionTextureHandle"].as<uint64_t>());
+
+		if (YAML::Node gpuDataNode = materialNode["GPUData"])
+		{
+			if (gpuDataNode["BaseColorFactor"]) material->gpuData.baseColorFactor = gpuDataNode["BaseColorFactor"].as<glm::vec4>();
+			if (gpuDataNode["EmissiveFactor"]) material->gpuData.emissiveFactor = gpuDataNode["EmissiveFactor"].as<glm::vec4>();
+			if (gpuDataNode["MetallicFactor"]) material->gpuData.metallicFactor = gpuDataNode["MetallicFactor"].as<float>();
+			if (gpuDataNode["RoughnessFactor"]) material->gpuData.roughnessFactor = gpuDataNode["RoughnessFactor"].as<float>();
+			if (gpuDataNode["OcclusionStrength"]) material->gpuData.occlusionStrength = gpuDataNode["OcclusionStrength"].as<float>();
+		}
+
+		return material;
+	}
+
+	nvrhi::BindingLayoutDesc Material::GetBindingLayoutDesc()
     {
         auto bindingLayoutDesc = nvrhi::BindingLayoutDesc()
             .setRegisterSpace(1) // set 1

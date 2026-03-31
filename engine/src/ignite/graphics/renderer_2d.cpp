@@ -3,6 +3,7 @@
 #include "renderer_2d.hpp"
 #include "render_target.hpp"
 #include "framebuffer_key.hpp"
+#include "ignite/scene/component.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 
 #include "ignite/core/logger.hpp"
@@ -16,6 +17,7 @@
 #include <stb_image.h>
 #include <algorithm>
 #include <unordered_map>
+
 
 namespace ignite
 {
@@ -1052,7 +1054,7 @@ namespace ignite
         m_QuadBatch.count++;
     }
 
-    void Renderer2D::SetPointLights2D(const std::vector<PointLight2D_GPUData> &pointLights)
+	void Renderer2D::SetPointLights2D(const std::vector<PointLight2D_GPUData> &pointLights)
     {
         m_Material2DLightingData.pointLightCount = std::min<uint32_t>(static_cast<uint32_t>(pointLights.size()), MAX_POINT_LIGHTS_2D);
         for (uint32_t i = 0; i < m_Material2DLightingData.pointLightCount; ++i)

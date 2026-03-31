@@ -10,10 +10,11 @@ namespace ignite
     {
     public:
 
-        enum class MovementMode
+        enum class NavigationMode
         {
-            Orbiting,
-            Flying
+            Orbit,
+			Fly,
+			Mode2D
         };
 
         EditorCamera() = default;
@@ -24,10 +25,17 @@ namespace ignite
 		void UpdateMouseState();
 		void UpdateSphericalPosition();
 		void HandleOrbit(float deltaTime);
+        void HandleFly(float deltaTime);
 		void HandlePan(float deltaTime);
 		void HandleZoom(float deltaTime);
 		void ApplyInertia(float deltaTime);
 		void UpdateCameraPosition();
+
+		void SetNavigationMode(NavigationMode mode);
+		NavigationMode GetNavigationMode() const { return m_NavigationMode; }
+
+		void SetPanSnapValue(float snap) { m_PanSnapValue = snap; }
+		float GetPanSnapValue() const { return m_PanSnapValue; }
 
 		virtual void UpdateView() override;
 		virtual void UpdateProjection(float width, float height) override;
@@ -49,8 +57,11 @@ namespace ignite
 		glm::vec2 m_PanVelocity = glm::vec2(0.0f);
 		float m_ZoomVelocity = 0.0f;
         float m_Distance = 1.0f;
+		float m_PanSnapValue = 0.0f;
+		float m_FlySpeed = 6.0f;
 
 		glm::vec3 m_Target = { 0.0f, 0.0f, -1.0f };
+		NavigationMode m_NavigationMode = NavigationMode::Orbit;
 		
 		std::string m_Name;
     };

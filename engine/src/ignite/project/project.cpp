@@ -6,6 +6,8 @@
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/core/platform_utils.hpp"
 
+#include "ignite/serializer/serializer.hpp"
+
 #include <array>
 #include <sstream>
 #include <iomanip>
@@ -152,7 +154,126 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         return invalidRegistry;
     }
 
-    Project *Project::GetInstance()
+	bool Project::Serialize(const std::filesystem::path &filepath)
+	{
+		Serializer projectSr(filepath);
+
+		projectSr.BeginMap(); // START
+
+		{
+			projectSr.BeginMap("Project");
+
+			projectSr.AddKeyValue("Version", ENGINE_VERSION);
+			projectSr.AddKeyValue("Name", m_Info.name);
+			projectSr.AddKeyValue("AssetPath", m_Info.assetDirectory.generic_string());
+			projectSr.AddKeyValue("AssetRegistry", m_Info.assetRegistryFilepath.generic_string());
+			projectSr.AddKeyValue("ScriptModule", m_Info.scriptModuleFilepath.generic_string());
+			projectSr.AddKeyValue("DefaultSceneHandle", m_Info.defaultSceneHandle);
+
+			projectSr.EndMap();
+		}
+
+		projectSr.EndMap(); // END
+		projectSr.Serialize();
+		// set dirty flags
+		this->SetDirtyFlag(false);
+
+
+		// Serialize asset manager
+		auto &assetRegistry = m_AssetManager->GetAssetAssetRegistry();
+
+		{
+			const std::filesystem::path assetRegFilepath = filepath.parent_path() / m_Info.assetRegistryFilepath;
+			Serializer assetSr(assetRegFilepath);
+
+			assetSr.BeginMap(); // Start
+
+			assetSr.BeginMap("AssetRegistry");
+
+			assetSr.BeginSequence("Assets"); // Asset sequence
+			for (auto &[handle, metadata] : assetRegistry)
+			{
+				assetSr.BeginMap(); // Begin Metadata
+
+				assetSr.AddKeyValue("Handle", static_cast<uint64_t>(handle));
+				assetSr.AddKeyValue("Type", AssetTypeToString(metadata.type));
+				assetSr.AddKeyValue("Filepath", metadata.filepath.generic_string());
+
+				assetSr.EndMap();
+			}
+
+			assetSr.EndSequence(); // Asset sequence
+
+			assetSr.EndMap(); // End
+
+			assetSr.Serialize();
+		}
+
+		// Save dirty assets
+		auto &loadedAssets = m_AssetManager->GetLoadedAssets();
+		for (auto &[handle, metadata] : assetRegistry)
+		{
+			auto it = loadedAssets.find(handle);
+            if (it != loadedAssets.end())
+            {
+			    if (it->second && it->second->IsDirty())
+			    {
+                    it->second->Serialize(metadata.filepath);
+                    it->second->SetDirtyFlag(false);
+			    }
+            }
+		}
+
+        return true;
+	}
+
+	Ref<Project> Project::Deserialize(const std::filesystem::path &filepath)
+	{
+		bool exists = std::filesystem::exists(filepath);
+		LOG_ASSERT(exists, "[Project Serializer] File does not exists");
+		if (!exists)
+		{
+			return nullptr;
+		}
+
+		YAML::Node projectFileNode = Serializer::Deserialize(filepath);
+		YAML::Node projectNode = projectFileNode["Project"];
+
+		ProjectInfo info;
+		info.name = projectNode["Name"].as<std::string>();
+		info.filepath = filepath;
+		info.assetDirectory = projectNode["AssetPath"].as<std::string>();
+		info.assetRegistryFilepath = projectNode["AssetRegistry"].as<std::string>();
+		info.defaultSceneHandle = AssetHandle(projectNode["DefaultSceneHandle"].as<uint64_t>());
+		info.scriptModuleFilepath = projectNode["ScriptModule"].as<std::string>();
+
+		Ref<Project> project = Project::Create(info);
+
+		auto &assetManager = project->GetAssetManager();
+
+		// import registry
+		if (!info.assetRegistryFilepath.empty())
+		{
+			// project filepath / asset filename (.ixreg)
+			std::filesystem::path assetRegFilepath = filepath.parent_path() / info.assetRegistryFilepath;
+			YAML::Node assetRegFileNode = Serializer::Deserialize(assetRegFilepath);
+			YAML::Node assetRegNode = assetRegFileNode["AssetRegistry"];
+
+			for (YAML::Node assetNode : assetRegNode["Assets"])
+			{
+				AssetHandle handle = AssetHandle(assetNode["Handle"].as<uint64_t>());
+				AssetMetaData metadata;
+				metadata.type = AssetTypeFromString(assetNode["Type"].as<std::string>());
+				metadata.filepath = assetNode["Filepath"].as<std::string>();
+
+				assetManager.AssignMetaData(handle, metadata);
+			}
+		}
+
+		return project;
+	}
+
+	Project *Project::GetInstance()
     {
         return project;
     }

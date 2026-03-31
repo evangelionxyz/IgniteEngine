@@ -111,7 +111,7 @@ namespace ignite
 		return s_instance->m_EditorCameraConstantBuffer;
 	}
 
-    Ref<Texture> Renderer::GetWhiteTexture()
+	Ref<Texture> Renderer::GetWhiteTexture()
     {
         return s_instance->m_WhiteTexture;
     }

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "ignite/core/uuid.hpp"
+#include "ignite/asset/asset.hpp"
 
 #include <unordered_map>
 #include <string>
@@ -10,6 +11,7 @@
 #include <glm/glm.hpp>
 
 #include "ignite/graphics/vertex_data.hpp"
+#include "ignite/graphics/gpu_data.hpp"
 
 namespace ignite
 {
@@ -40,6 +42,9 @@ namespace ignite
 
         //                  Joint name, socket id
         std::unordered_map<std::string, int32_t> jointSockets;
+
+        virtual bool Serialize(const std::filesystem::path &filepath) override;
+        static Ref<Skeleton> Deserialize(const std::filesystem::path &filepath);
 
         static AssetType GetStaticType() { return AssetType::Skeleton; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }

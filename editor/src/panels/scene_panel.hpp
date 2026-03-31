@@ -83,6 +83,10 @@ namespace ignite
         template<typename T, typename UIFunction>
         void RenderComponent(const std::string &name, Entity entity, UIFunction uiFunction, bool allowedToRemove = true);
 
+        void Render2DBoundsSizing();
+        bool Is2DResizableEntity(Entity entity) const;
+        glm::vec3 ScreenToWorldOnPlane(const glm::vec2 &screenPos, float planeZ, bool *isValid = nullptr);
+
     private:
         EditorCamera m_EditorCamera;
         std::optional<EditorCamera> m_EditorCamera2D;
@@ -111,6 +115,7 @@ namespace ignite
 		{
 			glm::vec2 mousePos = glm::vec2(0.0f);
             float snapValue = 0.05f;
+            float panSnapValue = 0.0025f;
 			bool wantMouseDragging = false;
 		};
 
@@ -121,6 +126,16 @@ namespace ignite
 			bool settingsWindow = true;
 			bool isGizmoManipulating = false;
 			bool isGizmoBeingUse = false;
+
+            bool is2DBoundsSizing = false;
+            bool is2DBoundsHovered = false;
+            int active2DCorner = -1;
+            UUID active2DEntity = UUID(0);
+            float active2DPlaneZ = 0.0f;
+            glm::vec3 active2DAxisX = glm::vec3(1.0f, 0.0f, 0.0f);
+            glm::vec3 active2DAxisY = glm::vec3(0.0f, 1.0f, 0.0f);
+            glm::vec3 active2DOppositeWorld = glm::vec3(0.0f);
+            TransformComponent before2DResize;
 		} m_Data;
     };
 }

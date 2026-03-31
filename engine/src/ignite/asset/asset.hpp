@@ -195,6 +195,8 @@ namespace ignite {
             return std::dynamic_pointer_cast<T>(shared_from_this());
         }
 
+        virtual bool Serialize(const std::filesystem::path &filepath) { return true; }
+
         virtual AssetType GetAssetType() { return AssetType::Invalid; }
 
         void SetDirtyFlag(bool dirty)  { m_Dirty = dirty; }
@@ -208,3 +210,5 @@ namespace ignite {
         bool m_Dirty = true;
     };
 }
+
+#include "ignite/core/base.hpp"

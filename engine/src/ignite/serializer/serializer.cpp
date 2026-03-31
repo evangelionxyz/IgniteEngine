@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
 
 #include "serializer.hpp"
 
@@ -43,38 +22,8 @@
 #include <fstream>
 #include <ranges>
 
-namespace ignite {
-
-    namespace
-    {
-        static void SerializeMat4(Serializer &sr, const char *key, const glm::mat4 &mat)
-        {
-            sr.BeginSequence(key);
-            for (int col = 0; col < 4; ++col)
-            {
-                sr.AddValue(glm::vec4(mat[col]));
-            }
-            sr.EndSequence();
-        }
-
-        static bool DeserializeMat4(const YAML::Node &node, const char *key, glm::mat4 &outMat)
-        {
-            const YAML::Node matNode = node[key];
-            if (!matNode || !matNode.IsSequence() || matNode.size() != 4)
-            {
-                return false;
-            }
-
-            for (size_t col = 0; col < 4; ++col)
-            {
-                const glm::vec4 v = matNode[col].as<glm::vec4>();
-                outMat[col] = v;
-            }
-
-            return true;
-        }
-    }
-
+namespace ignite
+{    
     Serializer::Serializer(const std::filesystem::path &filepath)
         : m_Filepath(filepath)
     {
@@ -83,6 +32,9 @@ namespace ignite {
     void Serializer::Serialize() const
     {
         std::ofstream outFile(m_Filepath);
+
+		LOG_INFO("[Serializer] Serialized to {}", m_Filepath);
+
         outFile << m_Emitter.c_str();
         outFile.close();
     }
@@ -90,6 +42,8 @@ namespace ignite {
     void Serializer::Serialize(const std::filesystem::path &filepath)
     {
         m_Filepath = filepath;
+
+        LOG_INFO("[Serializer] Serialized to {}", filepath);
 
         std::ofstream outFile(m_Filepath);
         outFile << m_Emitter.c_str();
@@ -203,6 +157,7 @@ namespace ignite {
                         int aspectRatioPreset = static_cast<int>(comp.camera.GetAspectRatioPreset());
                         sr.AddKeyValue("ProjectionType", projectionType);
                         sr.AddKeyValue("AspectRatioPreset", aspectRatioPreset);
+                        sr.AddKeyValue("OrthoSize", comp.camera.orthoSize);
                         sr.AddKeyValue("NearClip", comp.camera.nearPlane);
                         sr.AddKeyValue("FarClip", comp.camera.farPlane);
                         sr.AddKeyValue("Fov", comp.camera.fov);
@@ -221,6 +176,35 @@ namespace ignite {
                         sr.AddKeyValue("Handle", comp.handle);
                         sr.AddKeyValue("Color", comp.color);
                         sr.AddKeyValue("TilingFactor", comp.tilingFactor);
+                        sr.AddKeyValue("UV0", comp.uv0);
+                        sr.AddKeyValue("UV1", comp.uv1);
+                        sr.AddKeyValue("FlipX", comp.flipX);
+                        sr.AddKeyValue("FlipY", comp.flipY);
+                    }
+                    sr.EndMap();
+                }
+
+                if (entity.HasComponent<Sprite2DAnimationComponent>())
+                {
+                    const Sprite2DAnimationComponent &comp = entity.GetComponent<Sprite2DAnimationComponent>();
+                    sr.BeginMap("Sprite2DAnimation");
+                    {
+                        sr.AddKeyValue("TextureHandle", comp.textureHandle);
+                        sr.AddKeyValue("FPS", comp.fps);
+                        sr.AddKeyValue("Speed", comp.speed);
+                        sr.AddKeyValue("CurrentFrame", comp.currentFrame);
+                        sr.AddKeyValue("Playing", comp.playing);
+                        sr.AddKeyValue("Loop", comp.loop);
+
+                        sr.BeginSequence("Frames");
+                        for (const auto &frame : comp.frames)
+                        {
+                            sr.BeginMap();
+                            sr.AddKeyValue("UV0", frame.uv0);
+                            sr.AddKeyValue("UV1", frame.uv1);
+                            sr.EndMap();
+                        }
+                        sr.EndSequence();
                     }
                     sr.EndMap();
                 }
@@ -264,6 +248,8 @@ namespace ignite {
                         sr.AddKeyValue("LinearDamping", comp.linearDamping);
                         sr.AddKeyValue("AngularDamping", comp.angularDamping);
                         sr.AddKeyValue("IsAwake", comp.isAwake);
+                        sr.AddKeyValue("FixedRotation", comp.fixedRotation);
+                        sr.AddKeyValue("AllowFastRotation", comp.allowFastRotation);
                         sr.AddKeyValue("IsEnabled", comp.isEnabled);
                         sr.AddKeyValue("IsEnableSleep", comp.isEnableSleep);
                     }
@@ -624,48 +610,90 @@ namespace ignite {
             // Transform component
             if (YAML::Node node = entityNode["Transform"])
             {
-                TransformComponent &comp = desEntity.AddComponent<TransformComponent>();
+                auto &comp = desEntity.AddComponent<TransformComponent>();
                 comp.translation = node["WorldTranslation"].as<glm::vec3>();
                 comp.rotation = node["WorldRotation"].as<glm::quat>();
                 comp.scale = node["WorldScale"].as<glm::vec3>();
-                comp.localTranslation = node["WorldTranslation"].as<glm::vec3>();
-                comp.localRotation = node["WorldRotation"].as<glm::quat>();
-                comp.localScale = node["WorldScale"].as<glm::vec3>();
+                
+                comp.localTranslation = node["LocalTranslation"].as<glm::vec3>();
+                comp.localRotation = node["LocalRotation"].as<glm::quat>();
+                comp.localScale = node["LocalScale"].as<glm::vec3>();
+                
                 comp.visible = node["Visible"].as<bool>();
             }
 
             // Camera component
             if (YAML::Node node = entityNode["Camera"])
             {
-                CameraComponent &comp = desEntity.AddComponent<CameraComponent>();
+                auto &comp = desEntity.AddComponent<CameraComponent>();
                 comp.camera.projectionType = static_cast<ProjectionType>(node["ProjectionType"].as<int>());
                 if (node["AspectRatioPreset"])
                 {
                     comp.camera.SetAspectRatioPreset(static_cast<SceneCamera::AspectRatioPreset>(node["AspectRatioPreset"].as<int>()));
                 }
-                comp.camera.nearPlane = node["NearClip"].as<float>();
-                comp.camera.farPlane = node["FarClip"].as<float>();
-                comp.camera.fov = node["Fov"].as<float>();
-                comp.primary = node["Primary"].as<bool>();
+                if (auto n = node["OrthoSize"])
+                {
+                    comp.camera.orthoSize = n.as<float>();
+                }
+                if (auto n = node["NearClip"])
+                {
+                    comp.camera.nearPlane = n.as<float>();
+                }
+                if (auto n = node["FarClip"])
+                {
+                    comp.camera.farPlane = n.as<float>();
+                }
+                if (auto n = node["Fov"])
+                {
+                    comp.camera.fov = n.as<float>();
+                }
+                if (auto n = node["Primary"])
+                {
+                    comp.primary = n.as<bool>();
+                }
             }
 
             // Sprite 2D component
             if (YAML::Node node = entityNode["Sprite2D"])
             {
                 Sprite2DComponent &comp = desEntity.AddComponent<Sprite2DComponent>();
-                if (node["MaterialHandle"])
+                if (auto n = node["MaterialHandle"])comp.materialHandle = AssetHandle(n.as<uint64_t>());
+                if (auto n = node["Handle"]) comp.handle = AssetHandle(n.as<uint64_t>());
+                if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
+				if (auto n = node["TilingFactor"]) comp.tilingFactor = n.as<glm::vec2>();
+                if (auto n = node["UV0"]) comp.uv0 = n.as<glm::vec2>();
+                if (auto n = node["UV1"]) comp.uv1 = n.as<glm::vec2>();
+                if (auto n = node["FlipX"])comp.flipX = n.as<bool>();
+				if (auto n = node["FlipY"]) comp.flipY = n.as<bool>();
+            }
+
+            if (YAML::Node node = entityNode["Sprite2DAnimation"])
+            {
+                auto &comp = desEntity.AddComponent<Sprite2DAnimationComponent>();
+                if (auto n = node["TextureHandle"]) comp.textureHandle = AssetHandle(n.as<uint64_t>());
+                if (auto n = node["FPS"]) comp.fps = n.as<float>();
+                if (auto n = node["Speed"]) comp.speed = n.as<float>();
+                if (auto n = node["CurrentFrame"]) comp.currentFrame = n.as<int>();
+                if (auto n = node["Playing"]) comp.playing = n.as<bool>();
+                if (auto n = node["Loop"]) comp.loop = n.as<bool>();
+
+                if (auto framesNode = node["Frames"]; framesNode && framesNode.IsSequence())
                 {
-                    comp.materialHandle = AssetHandle(node["MaterialHandle"].as<uint64_t>());
+                    comp.frames.clear();
+                    for (const auto &frameNode : framesNode)
+                    {
+                        Sprite2DAnimationComponent::Frame frame;
+                        if (auto uv0Node = frameNode["UV0"]) frame.uv0 = uv0Node.as<glm::vec2>();
+                        if (auto uv1Node = frameNode["UV1"]) frame.uv1 = uv1Node.as<glm::vec2>();
+                        comp.frames.push_back(frame);
+                    }
                 }
-                comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
-                comp.color = node["Color"].as<glm::vec4>();
-                comp.tilingFactor = node["TilingFactor"].as<glm::vec2>();
             }
 
             // Circle 2D component
             if (YAML::Node node = entityNode["Circle2D"])
             {
-                Circle2DComponent &comp = desEntity.AddComponent<Circle2DComponent>();
+                auto &comp = desEntity.AddComponent<Circle2DComponent>();
                 comp.color = node["Color"].as<glm::vec4>();
                 comp.thickness = node["Thickness"].as<float>();
                 comp.fade = node["Fade"].as<float>();
@@ -673,7 +701,7 @@ namespace ignite {
 
             if (YAML::Node node = entityNode["PointLight2D"])
             {
-                PointLight2DComponent &comp = desEntity.AddComponent<PointLight2DComponent>();
+                auto &comp = desEntity.AddComponent<PointLight2DComponent>();
                 comp.color = node["Color"].as<glm::vec4>();
                 comp.radius = node["Radius"].as<float>();
                 comp.intensity = node["Intensity"].as<float>();
@@ -683,66 +711,68 @@ namespace ignite {
             // Rigidbody 2D
             if (YAML::Node node = entityNode["Rigidbody2D"])
             {
-                Rigidbody2DComponent &comp = desEntity.AddComponent<Rigidbody2DComponent>();
-                comp.type = BodyTypeFromString(node["Type"].as<std::string>());
-                comp.linearVelocity = node["LinearVelocity"].as<glm::vec2>();
-                comp.angularVelocity = node["AngularVelocity"].as<float>();
-                comp.gravityScale = node["GravityScale"].as<float>();
-                comp.linearDamping = node["LinearDamping"].as<float>();
-                comp.angularDamping = node["AngularDamping"].as<float>();
-                comp.isAwake = node["IsAwake"].as<bool>();
-                comp.isEnabled = node["IsEnabled"].as<bool>();
-                comp.isEnableSleep = node["IsEnableSleep"].as<bool>();
+                auto &comp = desEntity.AddComponent<Rigidbody2DComponent>();
+                if (auto n = node["Type"]) comp.type = BodyTypeFromString(n.as<std::string>());
+                if (auto n = node["LinearVelocity"]) comp.linearVelocity = n.as<glm::vec2>();
+                if (auto n = node["AngularVelocity"]) comp.angularVelocity = n.as<float>();
+                if (auto n = node["GravityScale"]) comp.gravityScale = n.as<float>();
+                if (auto n = node["LinearDamping"]) comp.linearDamping = n.as<float>();
+                if (auto n = node["AngularDamping"]) comp.angularDamping = n.as<float>();
+                if (auto n = node["FixedRotation"]) comp.fixedRotation = n.as<bool>();
+                if (auto n = node["AllowFastRotation"]) comp.allowFastRotation = n.as<bool>();
+                if (auto n = node["IsAwake"]) comp.isAwake = n.as<bool>();
+                if (auto n = node["IsEnabled"]) comp.isEnabled = n.as<bool>();
+                if (auto n = node["IsEnableSleep"]) comp.isEnableSleep = n.as<bool>();
             }
 
             // BoxCollider 2D
             if (YAML::Node node = entityNode["BoxCollider2D"])
             {
-                BoxCollider2DComponent &comp = desEntity.AddComponent<BoxCollider2DComponent>();
-                comp.size = node["Size"].as<glm::vec2>();
-                comp.offset = node["Offset"].as<glm::vec2>();
-                comp.restitution = node["Restitution"].as<float>();
-                comp.friction = node["Friction"].as<float>();
-                comp.density = node["Density"].as<float>();
-                comp.isSensor = node["IsSensor"].as<bool>();
+                auto &comp = desEntity.AddComponent<BoxCollider2DComponent>();
+                if (auto n = node["Size"]) comp.size = n.as<glm::vec2>();
+                if (auto n = node["Offset"]) comp.offset = n.as<glm::vec2>();
+                if (auto n = node["Restitution"]) comp.restitution = n.as<float>();
+                if (auto n = node["Friction"]) comp.friction = n.as<float>();
+                if (auto n = node["Density"]) comp.density = n.as<float>();
+                if (auto n = node["IsSensor"]) comp.isSensor = n.as<bool>();
             }
 
             // CircleCollider 2D
             if (YAML::Node node = entityNode["CircleCollider2D"])
             {
-                CircleCollider2DComponent &comp = desEntity.AddComponent<CircleCollider2DComponent>();
-                comp.center = node["Center"].as<glm::vec2>();
-                comp.radius = node["Radius"].as<float>();
-                comp.restitution = node["Restitution"].as<float>();
-                comp.friction = node["Friction"].as<float>();
-                comp.density = node["Density"].as<float>();
-                comp.isSensor = node["IsSensor"].as<bool>();
+                auto &comp = desEntity.AddComponent<CircleCollider2DComponent>();
+                if (auto n = node["Center"]) comp.center = n.as<glm::vec2>();
+                if (auto n = node["Radius"]) comp.radius = n.as<float>();
+                if (auto n = node["Restitution"]) comp.restitution = n.as<float>();
+                if (auto n = node["Friction"]) comp.friction = n.as<float>();
+                if (auto n = node["Density"]) comp.density = n.as<float>();
+				if (auto n = node["IsSensor"]) comp.isSensor = n.as<bool>();
             }
 
             // Rigidbody
             if (YAML::Node node = entityNode["Rigidbody"])
             {
-                RigibodyComponent &comp = desEntity.AddComponent<RigibodyComponent>();
+                auto &comp = desEntity.AddComponent<RigibodyComponent>();
                 comp.MotionQuality = static_cast<RigibodyComponent::EMotionQuality>(node["MotionQuality"].as<int>());
-                comp.useGravity = node["UseGravity"].as<bool>();
-                comp.rotateX = node["RotateX"].as<bool>();
-                comp.rotateY = node["RotateY"].as<bool>();
-                comp.rotateZ = node["RotateZ"].as<bool>();
-                comp.moveX = node["MoveX"].as<bool>();
-                comp.moveY = node["MoveY"].as<bool>();
-                comp.moveZ = node["MoveZ"].as<bool>();
-                comp.isStatic = node["IsStatic"].as<bool>();
-                comp.mass = node["Mass"].as<float>();
-                comp.allowSleeping = node["AllowSleeping"].as<bool>();
-                comp.retainAcceleration = node["RetainAcceleration"].as<bool>();
-                comp.gravityFactor = node["GravityFactor"].as<float>();
-                comp.centerMass = node["CenterMass"].as<glm::vec3>();
+                if (auto n = node["UseGravity"]) comp.useGravity = n.as<bool>();
+                if (auto n = node["RotateX"]) comp.rotateX = n.as<bool>();
+                if (auto n = node["RotateY"]) comp.rotateY = n.as<bool>();
+                if (auto n = node["RotateZ"]) comp.rotateZ = n.as<bool>();
+                if (auto n = node["MoveX"]) comp.moveX = n.as<bool>();
+                if (auto n = node["MoveY"]) comp.moveY = n.as<bool>();
+                if (auto n = node["MoveZ"]) comp.moveZ = n.as<bool>();
+                if (auto n = node["IsStatic"]) comp.isStatic = n.as<bool>();
+                if (auto n = node["Mass"]) comp.mass = n.as<float>();
+                if (auto n = node["AllowSleeping"]) comp.allowSleeping = n.as<bool>();
+                if (auto n = node["RetainAcceleration"]) comp.retainAcceleration = n.as<bool>();
+                if (auto n = node["GravityFactor"]) comp.gravityFactor = n.as<float>();
+                if (auto n = node["CenterMass"]) comp.centerMass = n.as<glm::vec3>();
             }
 
             // BoxCollider
             if (YAML::Node node = entityNode["BoxCollider"])
             {
-                BoxColliderComponent &comp = desEntity.AddComponent<BoxColliderComponent>();
+                auto &comp = desEntity.AddComponent<BoxColliderComponent>();
                 comp.scale = node["Scale"].as<glm::vec3>();
                 comp.friction = node["Friction"].as<float>();
                 comp.staticFriction = node["StaticFriction"].as<float>();
@@ -764,7 +794,7 @@ namespace ignite {
             // CapsuleCollider
             if (YAML::Node node = entityNode["CapsuleCollider"])
             {
-                CapsuleColliderComponent &comp = desEntity.AddComponent<CapsuleColliderComponent>();
+                auto &comp = desEntity.AddComponent<CapsuleColliderComponent>();
                 comp.radius = node["Radius"].as<float>();
                 comp.height = node["Height"].as<float>();
                 comp.friction = node["Friction"].as<float>();
@@ -776,7 +806,7 @@ namespace ignite {
             // MeshCollider
             if (YAML::Node node = entityNode["MeshCollider"])
             {
-                MeshColliderComponent &comp = desEntity.AddComponent<MeshColliderComponent>();
+                auto &comp = desEntity.AddComponent<MeshColliderComponent>();
                 comp.convex = node["Convex"].as<bool>();
                 comp.friction = node["Friction"].as<float>();
                 comp.staticFriction = node["StaticFriction"].as<float>();
@@ -807,7 +837,7 @@ namespace ignite {
             // Audio Source
             if (YAML::Node node = entityNode["AudioSource"])
             {
-                AudioSourceComponent &comp = desEntity.AddComponent<AudioSourceComponent>();
+                auto &comp = desEntity.AddComponent<AudioSourceComponent>();
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
                 comp.volume = node["Volume"].as<float>();
                 comp.pitch = node["Pitch"].as<float>();
@@ -818,7 +848,7 @@ namespace ignite {
             // World Environment
             if (YAML::Node node = entityNode["WorldEnvironment"])
             {
-                WorldEnvironment &world = desEntity.AddComponent<WorldEnvironment>();
+                auto &world = desEntity.AddComponent<WorldEnvironment>();
                 if (node["HDRHandle"])
                 {
                     world.hdrHandle = AssetHandle(node["HDRHandle"].as<uint64_t>());
@@ -867,22 +897,21 @@ namespace ignite {
             }
 
 			// Text Component
-			if (YAML::Node node = entityNode["TextComponent"])
-			{
-                TextComponent &comp = desEntity.AddComponent<TextComponent>();
+            if (YAML::Node node = entityNode["TextComponent"])
+            {
+                auto &comp = desEntity.AddComponent<TextComponent>();
                 if (node["FontHandle"])
                 {
                     comp.fontHandle = AssetHandle(node["FontHandle"].as<uint64_t>());
                 }
-				if (node["Material2DHandle"])
-				{
-					comp.material2dHandle= AssetHandle(node["Material2DHandle"].as<uint64_t>());
-				}
+                if (node["Material2DHandle"])
+                {
+                    comp.material2dHandle = AssetHandle(node["Material2DHandle"].as<uint64_t>());
+                }
                 if (node["Text"])
                 {
                     comp.text = node["Text"].as<std::string>();
                 }
-
                 if (node["Color"])
                 {
                     comp.color = node["Color"].as<glm::vec4>();
@@ -899,18 +928,18 @@ namespace ignite {
                 {
                     comp.screenSpace = node["ScreenSpace"].as<bool>();
                 }
-			}
+            }
 
             // Static Mesh
             if (YAML::Node node = entityNode["StaticMesh"])
             {
-                StaticMeshComponent &comp = desEntity.AddComponent<StaticMeshComponent>();
+                auto &comp = desEntity.AddComponent<StaticMeshComponent>();
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
             }
 
             if (YAML::Node node = entityNode["SkeletalMesh"])
             {
-                SkeletalMeshComponent &comp = desEntity.AddComponent<SkeletalMeshComponent>();
+                auto &comp = desEntity.AddComponent<SkeletalMeshComponent>();
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
             }
 
@@ -993,482 +1022,4 @@ namespace ignite {
 
         return desScene;
     }
-
-
-    ProjectSerializer::ProjectSerializer(Project *project)
-        : m_Project(project)
-    {
-    }
-
-    bool ProjectSerializer::Serialize(const std::filesystem::path &filepath)
-    {
-        if (!m_Project)
-            return false;
-
-        const auto &projectInfo = m_Project->GetInfo();
-
-        Serializer projectSr(filepath);
-
-        projectSr.BeginMap(); // START
-
-        projectSr.BeginMap("Project");
-
-        projectSr.AddKeyValue("Version", ENGINE_VERSION);
-        projectSr.AddKeyValue("Name", projectInfo.name);
-        projectSr.AddKeyValue("AssetPath", projectInfo.assetDirectory.generic_string());
-        projectSr.AddKeyValue("AssetRegistry", projectInfo.assetRegistryFilepath.generic_string());
-        projectSr.AddKeyValue("ScriptModule", projectInfo.scriptModuleFilepath.generic_string());
-        projectSr.AddKeyValue("DefaultSceneHandle", projectInfo.defaultSceneHandle);
-
-        projectSr.EndMap();
-
-        projectSr.EndMap(); // END
-
-        projectSr.Serialize();
-
-        // set dirty flags
-        m_Project->SetDirtyFlag(false);
-
-        // Serialize asset manager
-        auto &assetManager = m_Project->GetAssetManager();
-        auto &assetRegistry = assetManager.GetAssetAssetRegistry();
-
-        {
-            const std::filesystem::path assetRegFilepath = filepath.parent_path() / projectInfo.assetRegistryFilepath;
-            Serializer assetSr(assetRegFilepath);
-
-            assetSr.BeginMap(); // Start
-
-            assetSr.BeginMap("AssetRegistry");
-
-            assetSr.BeginSequence("Assets"); // Asset sequence
-            for (auto &[handle, metadata] : assetRegistry)
-            {
-                assetSr.BeginMap(); // Begin Metadata
-
-                assetSr.AddKeyValue("Handle", static_cast<uint64_t>(handle));
-                assetSr.AddKeyValue("Type", AssetTypeToString(metadata.type));
-                assetSr.AddKeyValue("Filepath", metadata.filepath.generic_string());
-
-                assetSr.EndMap();
-            }
-
-            assetSr.EndSequence(); // Asset sequence
-
-            assetSr.EndMap(); // End
-
-            assetSr.Serialize();
-        }
-
-        return true;
-    }
-
-    Ref<Project> ProjectSerializer::Deserialize(const std::filesystem::path &filepath)
-    {
-        bool exists = std::filesystem::exists(filepath);
-        LOG_ASSERT(exists, "[Project Serializer] File does not exists");
-        if (!exists)
-        {
-            return nullptr;
-        }
-
-        YAML::Node projectFileNode = Serializer::Deserialize(filepath);
-        YAML::Node projectNode = projectFileNode["Project"];
-
-        ProjectInfo info;
-        info.name = projectNode["Name"].as<std::string>();
-        info.filepath = filepath;
-        info.assetDirectory = projectNode["AssetPath"].as<std::string>();
-        info.assetRegistryFilepath = projectNode["AssetRegistry"].as<std::string>();
-        info.defaultSceneHandle = AssetHandle(projectNode["DefaultSceneHandle"].as<uint64_t>());
-        info.scriptModuleFilepath = projectNode["ScriptModule"].as<std::string>();
-
-        Ref<Project> project = Project::Create(info);
-
-        auto &assetManager = project->GetAssetManager();
-
-        // import registry
-        if (!info.assetRegistryFilepath.empty())
-        {
-            // project filepath / asset filename (.ixreg)
-            std::filesystem::path assetRegFilepath = filepath.parent_path() / info.assetRegistryFilepath;
-            YAML::Node assetRegFileNode = Serializer::Deserialize(assetRegFilepath);
-            YAML::Node assetRegNode = assetRegFileNode["AssetRegistry"];
-
-            for (YAML::Node assetNode : assetRegNode["Assets"])
-            {
-                AssetHandle handle = AssetHandle(assetNode["Handle"].as<uint64_t>());
-                AssetMetaData metadata;
-                metadata.type = AssetTypeFromString(assetNode["Type"].as<std::string>());
-                metadata.filepath = assetNode["Filepath"].as<std::string>();
-
-                assetManager.AssignMetaData(handle, metadata);
-            }
-        }
-
-        return project;
-    }
-
-
-    AnimationSerializer::AnimationSerializer(const Ref<SkeletalAnimation> &animation)
-        : m_Animation(animation)
-    {
-    }
-
-    bool AnimationSerializer::Serialize(const std::filesystem::path &filepath)
-    {
-        if (!m_Animation)
-        {
-            return false;
-        }
-
-        Serializer sr(filepath);
-
-        sr.BeginMap(); // START
-
-        sr.BeginMap("Animation");
-        sr.AddKeyValue("Version", ENGINE_VERSION);
-        sr.AddKeyValue("Name", m_Animation->name);
-        sr.AddKeyValue("Duration", m_Animation->duration);
-        sr.AddKeyValue("TicksPerSeconds", m_Animation->ticksPerSeconds);
-
-        sr.BeginSequence("Channels");
-
-        for (auto &[name, channel] : m_Animation->channels)
-        {
-            sr.BeginMap();
-
-            sr.AddKeyValue("Name", name);
-
-            sr.BeginSequence("TranslationKeys");
-            for (auto &f : channel.translationKeys.frames)
-            {
-                sr.BeginMap();
-                sr.AddKeyValue("Timestamp", f.Timestamp);
-                sr.AddKeyValue("Value", f.Value);
-                sr.EndMap();
-            }
-            sr.EndSequence();
-
-            sr.BeginSequence("RotationKeys");
-            for (auto &f : channel.rotationKeys.frames)
-            {
-                sr.BeginMap();
-                sr.AddKeyValue("Timestamp", f.Timestamp);
-                sr.AddKeyValue("Value", f.Value);
-                sr.EndMap();
-            }
-            sr.EndSequence();
-
-            sr.BeginSequence("ScaleKeys");
-            for (auto &f : channel.scaleKeys.frames)
-            {
-                sr.BeginMap();
-                sr.AddKeyValue("Timestamp", f.Timestamp);
-                sr.AddKeyValue("Value", f.Value);
-                sr.EndMap();
-            }
-            sr.EndSequence();
-
-            sr.EndMap();
-        }
-
-        sr.EndSequence();
-
-        sr.EndMap();
-
-        sr.EndMap(); // END
-
-        sr.Serialize(filepath);
-
-        return true;
-    }
-
-    Ref<SkeletalAnimation> AnimationSerializer::Deserialize(const std::filesystem::path &filepath)
-    {
-        if (!std::filesystem::exists(filepath))
-        {
-            return nullptr;
-        }
-
-        YAML::Node fileNode = Serializer::Deserialize(filepath);
-        YAML::Node animationNode = fileNode["Animation"];
-        if (!animationNode)
-        {
-            return nullptr;
-        }
-
-        Ref<SkeletalAnimation> animation = CreateRef<SkeletalAnimation>();
-        if (animationNode["Name"]) animation->name = animationNode["Name"].as<std::string>();
-        if (animationNode["Duration"]) animation->duration = animationNode["Duration"].as<float>();
-        if (animationNode["TicksPerSeconds"]) animation->ticksPerSeconds = animationNode["TicksPerSeconds"].as<float>();
-
-        if (YAML::Node channelsNode = animationNode["Channels"])
-        {
-            for (const YAML::Node &channelNode : channelsNode)
-            {
-                if (!channelNode["Name"])
-                {
-                    continue;
-                }
-
-                const std::string channelName = channelNode["Name"].as<std::string>();
-                AnimationChannel channel{};
-
-                if (YAML::Node translationKeys = channelNode["TranslationKeys"])
-                {
-                    for (const YAML::Node &keyNode : translationKeys)
-                    {
-                        KeyFrame<glm::vec3> frame{};
-                        frame.Timestamp = keyNode["Timestamp"].as<float>();
-                        frame.Value = keyNode["Value"].as<glm::vec3>();
-                        channel.translationKeys.frames.push_back(frame);
-                    }
-                }
-
-                if (YAML::Node rotationKeys = channelNode["RotationKeys"])
-                {
-                    for (const YAML::Node &keyNode : rotationKeys)
-                    {
-                        KeyFrame<glm::quat> frame{};
-                        frame.Timestamp = keyNode["Timestamp"].as<float>();
-                        frame.Value = keyNode["Value"].as<glm::quat>();
-                        channel.rotationKeys.frames.push_back(frame);
-                    }
-                }
-
-                if (YAML::Node scaleKeys = channelNode["ScaleKeys"])
-                {
-                    for (const YAML::Node &keyNode : scaleKeys)
-                    {
-                        KeyFrame<glm::vec3> frame{};
-                        frame.Timestamp = keyNode["Timestamp"].as<float>();
-                        frame.Value = keyNode["Value"].as<glm::vec3>();
-                        channel.scaleKeys.frames.push_back(frame);
-                    }
-                }
-
-                animation->channels[channelName] = std::move(channel);
-            }
-        }
-
-        return animation;
-    }
-
-    SkeletonSerializer::SkeletonSerializer(const Ref<Skeleton> &skeleton)
-        : m_Skeleton(skeleton)
-    {
-    }
-
-    bool SkeletonSerializer::Serialize(const std::filesystem::path &filepath)
-    {
-        if (!m_Skeleton)
-        {
-            return false;
-        }
-
-        Serializer sr(filepath);
-
-        sr.BeginMap();
-        sr.BeginMap("Skeleton");
-        sr.AddKeyValue("Version", ENGINE_VERSION);
-
-        sr.BeginSequence("Joints");
-        for (const Joint &joint : m_Skeleton->joints)
-        {
-            sr.BeginMap();
-            sr.AddKeyValue("Name", joint.name);
-            sr.AddKeyValue("ID", joint.id);
-            sr.AddKeyValue("ParentID", joint.parentJointId);
-            sr.AddKeyValue("DefaultTranslation", joint.defaultTranslation);
-            sr.AddKeyValue("DefaultRotation", joint.defaultRotation);
-            sr.AddKeyValue("DefaultScale", joint.defaultScale);
-            SerializeMat4(sr, "InverseBindPose", joint.inverseBindPose);
-            SerializeMat4(sr, "LocalTransform", joint.localTransform);
-            SerializeMat4(sr, "GlobalTransform", joint.globalTransform);
-            sr.EndMap();
-        }
-        sr.EndSequence();
-
-        sr.EndMap();
-        sr.EndMap();
-        sr.Serialize(filepath);
-
-        return true;
-    }
-
-    Ref<Skeleton> SkeletonSerializer::Deserialize(const std::filesystem::path &filepath)
-    {
-        if (!std::filesystem::exists(filepath))
-        {
-            return nullptr;
-        }
-
-        YAML::Node fileNode = Serializer::Deserialize(filepath);
-        YAML::Node skeletonNode = fileNode["Skeleton"];
-        if (!skeletonNode)
-        {
-            return nullptr;
-        }
-
-        Ref<Skeleton> skeleton = CreateRef<Skeleton>();
-
-        if (YAML::Node jointsNode = skeletonNode["Joints"])
-        {
-            skeleton->joints.reserve(jointsNode.size());
-            for (const YAML::Node &jointNode : jointsNode)
-            {
-                Joint joint{};
-                if (jointNode["Name"]) joint.name = jointNode["Name"].as<std::string>();
-                if (jointNode["ID"]) joint.id = jointNode["ID"].as<int32_t>();
-                if (jointNode["ParentID"]) joint.parentJointId = jointNode["ParentID"].as<int32_t>();
-                if (jointNode["DefaultTranslation"]) joint.defaultTranslation = jointNode["DefaultTranslation"].as<glm::vec3>();
-                if (jointNode["DefaultRotation"]) joint.defaultRotation = jointNode["DefaultRotation"].as<glm::quat>();
-                if (jointNode["DefaultScale"]) joint.defaultScale = jointNode["DefaultScale"].as<glm::vec3>();
-
-                DeserializeMat4(jointNode, "InverseBindPose", joint.inverseBindPose);
-                DeserializeMat4(jointNode, "LocalTransform", joint.localTransform);
-                if (!DeserializeMat4(jointNode, "GlobalTransform", joint.globalTransform))
-                {
-                    joint.globalTransform = glm::mat4(1.0f);
-                }
-
-                skeleton->nameToJointMap[joint.name] = joint.id;
-                skeleton->joints.push_back(std::move(joint));
-            }
-        }
-
-        return skeleton;
-    }
-
-    MaterialSerializer::MaterialSerializer(const Ref<Material> &material)
-        : m_Material(material)
-    {
-    }
-
-    bool MaterialSerializer::Serialize(const std::filesystem::path &filepath)
-    {
-        if (!m_Material)
-        {
-            return false;
-        }
-
-        Serializer sr(filepath);
-
-        sr.BeginMap();
-        sr.BeginMap("Material");
-        sr.AddKeyValue("Version", ENGINE_VERSION);
-        sr.AddKeyValue("Name", m_Material->name);
-        sr.AddKeyValue("Type", static_cast<int>(m_Material->GetType()));
-        sr.AddKeyValue("BaseColorTextureHandle", static_cast<uint64_t>(m_Material->baseColorTextureHandle));
-        sr.AddKeyValue("EmissiveTextureHandle", static_cast<uint64_t>(m_Material->emissiveTextureHandle));
-        sr.AddKeyValue("MetallicRoughnessTextureHandle", static_cast<uint64_t>(m_Material->metallicRoughnessTextureHandle));
-        sr.AddKeyValue("NormalTextureHandle", static_cast<uint64_t>(m_Material->normalTextureHandle));
-        sr.AddKeyValue("OcclusionTextureHandle", static_cast<uint64_t>(m_Material->occlusionTextureHandle));
-
-        sr.BeginMap("GPUData");
-        sr.AddKeyValue("BaseColorFactor", m_Material->gpuData.baseColorFactor);
-        sr.AddKeyValue("EmissiveFactor", m_Material->gpuData.emissiveFactor);
-        sr.AddKeyValue("MetallicFactor", m_Material->gpuData.metallicFactor);
-        sr.AddKeyValue("RoughnessFactor", m_Material->gpuData.roughnessFactor);
-        sr.AddKeyValue("OcclusionStrength", m_Material->gpuData.occlusionStrength);
-        sr.EndMap();
-
-        sr.EndMap();
-        sr.EndMap();
-
-        sr.Serialize(filepath);
-        return true;
-    }
-
-    Ref<Material> MaterialSerializer::Deserialize(const std::filesystem::path &filepath)
-    {
-        if (!std::filesystem::exists(filepath))
-        {
-            return nullptr;
-        }
-
-        YAML::Node fileNode = Serializer::Deserialize(filepath);
-        YAML::Node materialNode = fileNode["Material"];
-        if (!materialNode)
-        {
-            return nullptr;
-        }
-
-        Ref<Material> material = CreateRef<Material>();
-        if (materialNode["Name"]) material->name = materialNode["Name"].as<std::string>();
-        if (materialNode["Type"]) material->SetType(static_cast<MaterialType>(materialNode["Type"].as<int>()));
-        if (materialNode["BaseColorTextureHandle"]) material->baseColorTextureHandle = AssetHandle(materialNode["BaseColorTextureHandle"].as<uint64_t>());
-        if (materialNode["EmissiveTextureHandle"]) material->emissiveTextureHandle = AssetHandle(materialNode["EmissiveTextureHandle"].as<uint64_t>());
-        if (materialNode["MetallicRoughnessTextureHandle"]) material->metallicRoughnessTextureHandle = AssetHandle(materialNode["MetallicRoughnessTextureHandle"].as<uint64_t>());
-        if (materialNode["NormalTextureHandle"]) material->normalTextureHandle = AssetHandle(materialNode["NormalTextureHandle"].as<uint64_t>());
-        if (materialNode["OcclusionTextureHandle"]) material->occlusionTextureHandle = AssetHandle(materialNode["OcclusionTextureHandle"].as<uint64_t>());
-
-        if (YAML::Node gpuDataNode = materialNode["GPUData"])
-        {
-            if (gpuDataNode["BaseColorFactor"]) material->gpuData.baseColorFactor = gpuDataNode["BaseColorFactor"].as<glm::vec4>();
-            if (gpuDataNode["EmissiveFactor"]) material->gpuData.emissiveFactor = gpuDataNode["EmissiveFactor"].as<glm::vec4>();
-            if (gpuDataNode["MetallicFactor"]) material->gpuData.metallicFactor = gpuDataNode["MetallicFactor"].as<float>();
-            if (gpuDataNode["RoughnessFactor"]) material->gpuData.roughnessFactor = gpuDataNode["RoughnessFactor"].as<float>();
-            if (gpuDataNode["OcclusionStrength"]) material->gpuData.occlusionStrength = gpuDataNode["OcclusionStrength"].as<float>();
-        }
-
-        return material;
-    }
-
-    Material2DSerializer::Material2DSerializer(const Ref<Material2D> &material)
-        : m_Material(material)
-    {
-    }
-
-    bool Material2DSerializer::Serialize(const std::filesystem::path &filepath)
-    {
-        if (!m_Material)
-        {
-            return false;
-        }
-
-        Serializer sr(filepath);
-
-        sr.BeginMap();
-        sr.BeginMap("Material2D");
-        sr.AddKeyValue("Version", ENGINE_VERSION);
-        sr.AddKeyValue("Name", m_Material->name);
-        sr.AddKeyValue("TextureHandle", static_cast<uint64_t>(m_Material->textureHandle));
-        sr.AddKeyValue("BaseColor", m_Material->data.baseColor);
-        sr.AddKeyValue("AdditiveColor", m_Material->data.additiveColor);
-        sr.AddKeyValue("TilingFactor", m_Material->data.tilingFactor);
-        sr.AddKeyValue("Type", static_cast<int>(m_Material->data.type));
-        sr.EndMap();
-        sr.EndMap();
-
-        sr.Serialize(filepath);
-        return true;
-    }
-
-    Ref<Material2D> Material2DSerializer::Deserialize(const std::filesystem::path &filepath)
-    {
-        if (!std::filesystem::exists(filepath))
-        {
-            return nullptr;
-        }
-
-        YAML::Node fileNode = Serializer::Deserialize(filepath);
-        YAML::Node materialNode = fileNode["Material2D"];
-        if (!materialNode)
-        {
-            return nullptr;
-        }
-
-        Ref<Material2D> material = CreateRef<Material2D>();
-        if (materialNode["Name"]) material->name = materialNode["Name"].as<std::string>();
-        if (materialNode["TextureHandle"]) material->textureHandle = AssetHandle(materialNode["TextureHandle"].as<uint64_t>());
-        if (materialNode["BaseColor"]) material->data.baseColor = materialNode["BaseColor"].as<glm::vec4>();
-        if (materialNode["AdditiveColor"]) material->data.additiveColor = materialNode["AdditiveColor"].as<glm::vec4>();
-        if (materialNode["TilingFactor"]) material->data.tilingFactor = materialNode["TilingFactor"].as<glm::vec2>();
-        if (materialNode["Type"]) material->data.type = static_cast<Material2DType>(materialNode["Type"].as<int>());
-
-        return material;
-    }
-
 }

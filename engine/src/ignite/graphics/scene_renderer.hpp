@@ -68,7 +68,7 @@ namespace ignite
         DebugGridSettings()
         {
             world2D.enableZAxis = false;
-            world2D.gridSize = 150.0f;
+            world2D.gridSize = 100.0f;
         }
     };
 
@@ -79,7 +79,10 @@ namespace ignite
         ~SceneRenderer();
         
         void SetActiveScene(const Ref<Scene> &scene);
-        void RenderTo(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT, bool renderEnvironment = true);
+        
+        void RenderEditorTo(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT, bool renderEnvironment = true);
+        void RenderGameplayTo(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT, bool renderEnvironment = true);
+        
         void SetFillMode(nvrhi::RasterFillMode mode);
 
         void SetSelectedEntity(const Entity& entity);
@@ -116,10 +119,7 @@ namespace ignite
         Ref<UIRenderer> m_UIRenderer;
 
         std::vector<uint32_t> m_SelectedEntities;
-        std::vector<AABB> m_EntityBounds;
-        
         nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
-
         Ref<ConstantBuffer> m_DebugGridBuffer;
         DebugGridSettings m_DebugGridSettings;
 

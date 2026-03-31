@@ -494,7 +494,7 @@ namespace ignite
             return skeletalMesh;
         }
 
-        static std::vector<std::byte> SerializeAnimation(const Ref<SkeletalAnimation> &anim, const std::filesystem::path &filepath)
+        static std::vector<std::byte> SerializeSkeletalAnimation(SkeletalAnimation *anim, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
 
@@ -565,7 +565,7 @@ namespace ignite
             return buffer;
         }
 
-        static Ref<SkeletalAnimation> DeserializeAnimation(const std::filesystem::path &filepath)
+        static Ref<SkeletalAnimation> DeserializeSkeletalAnimation(const std::filesystem::path &filepath)
         {
             Ref<SkeletalAnimation> anim = CreateRef<SkeletalAnimation>();
 
@@ -675,7 +675,7 @@ namespace ignite
             return anim;
         }
 
-        static std::vector<std::byte> SerializeSkeleton(const Ref<Skeleton> &skeleton, const std::filesystem::path &filepath)
+        static std::vector<std::byte> SerializeSkeleton(Skeleton *skeleton, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
 

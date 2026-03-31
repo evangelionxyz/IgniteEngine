@@ -4,6 +4,7 @@
 #include "ignite/project/project.hpp"
 #include "editor_layer.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/scene/sprite_sheet.hpp"
 
 #include "ignite/core/input/asset_import_event.hpp"
 #include "ignite/core/input/app_event.hpp"
@@ -517,13 +518,15 @@ namespace ignite
                             {
                                 if (ImGui::MenuItem("Set As Default Scene"))
                                 {
-                                    Project::GetInstance()->GetAssetManager().ImportAsset(path);
+                                    auto project = m_EditorLayer->GetActiveProject();
+                                    if (project)
+                                    {
+                                        project->GetAssetManager().ImportAsset(path);
+									    AssetHandle handle = project->GetAssetManager().GetAssetHandle(path);
+                                        project->SetDefaultScene(handle);
 
-                                    AssetHandle handle = Project::GetInstance()->GetAssetManager().GetAssetHandle(path);
-                                    Project::GetInstance()->SetDefaultScene(handle);
-
-                                    ProjectSerializer serializer(Project::GetInstance());
-                                    serializer.Serialize(Project::GetInstance()->GetFilepath());
+                                        project->Serialize(project->GetFilepath());
+                                    }
                                 }
                             }
 
@@ -535,6 +538,90 @@ namespace ignite
 
                         DragDropSource(m_CurrentDirectory / item);
                         ImGui::TextWrapped("%s", filenameStr.c_str());
+
+                        if (!isDirectory && m_EditorLayer && m_EditorLayer->GetActiveProject())
+                        {
+                            Project *project = m_EditorLayer->GetActiveProject().get();
+                            auto &assetManager = project->GetAssetManager();
+                            const std::filesystem::path relativeAssetPath = project->GetAssetRelativeFilepath(path);
+                            AssetHandle handle = assetManager.GetAssetHandle(relativeAssetPath);
+                            AssetMetaData metadata = assetManager.GetMetaData(handle);
+
+                            if (metadata.type == AssetType::SpriteSheet && handle != AssetHandle(0))
+                            {
+                                const std::string popupId = std::format("##sprites_popup_{}", filenameStr);
+                                if (ImGui::SmallButton(std::format("Sprites##{}", filenameStr).c_str()))
+                                {
+                                    ImGui::OpenPopup(popupId.c_str());
+                                }
+
+                                if (ImGui::BeginPopup(popupId.c_str()))
+                                {
+                                    Ref<SpriteSheet> spriteSheet = project->GetAsset<SpriteSheet>(handle);
+                                    if (!spriteSheet)
+                                    {
+                                        spriteSheet = project->GetAssetImmediate<SpriteSheet>(handle);
+                                    }
+
+                                    if (spriteSheet)
+                                    {
+                                        Ref<Texture> texture = nullptr;
+                                        if (spriteSheet->GetTextureHandle() != AssetHandle(0))
+                                        {
+                                            texture = project->GetAsset<Texture>(spriteSheet->GetTextureHandle());
+                                        }
+
+                                        const auto &sprites = spriteSheet->GetSprites();
+                                        if (sprites.empty())
+                                        {
+                                            ImGui::TextDisabled("No extracted sprites.");
+                                        }
+                                        else
+                                        {
+                                            constexpr float spritePreviewSize = 56.0f;
+                                            for (size_t spriteIndex = 0; spriteIndex < sprites.size(); ++spriteIndex)
+                                            {
+                                                const auto &sprite = sprites[spriteIndex];
+                                                ImGui::PushID(static_cast<int>(spriteIndex));
+
+                                                if (texture && texture->GetHandle())
+                                                {
+                                                    ImTextureID texId = reinterpret_cast<ImTextureID>(texture->GetHandle().Get());
+                                                    ImGui::ImageButton("##sprite_item", texId, ImVec2(spritePreviewSize, spritePreviewSize), ImVec2(sprite.uv0.x, sprite.uv0.y), ImVec2(sprite.uv1.x, sprite.uv1.y));
+                                                }
+                                                else
+                                                {
+                                                    ImGui::Button("N/A", ImVec2(spritePreviewSize, spritePreviewSize));
+                                                }
+
+                                                if (ImGui::BeginDragDropSource())
+                                                {
+                                                    SpriteSheetSpritePayload payload;
+                                                    payload.spriteSheetHandle = handle;
+                                                    payload.textureHandle = spriteSheet->GetTextureHandle();
+                                                    payload.spriteIndex = static_cast<uint32_t>(spriteIndex);
+                                                    payload.uv0 = sprite.uv0;
+                                                    payload.uv1 = sprite.uv1;
+
+                                                    ImGui::SetDragDropPayload("sprite_sheet_item", &payload, sizeof(payload));
+                                                    ImGui::Text("Sprite %zu", spriteIndex);
+                                                    ImGui::EndDragDropSource();
+                                                }
+
+                                                if ((spriteIndex + 1) % 4 != 0)
+                                                {
+                                                    ImGui::SameLine();
+                                                }
+
+                                                ImGui::PopID();
+                                            }
+                                        }
+                                    }
+
+                                    ImGui::EndPopup();
+                                }
+                            }
+                        }
 
                         ImGui::NextColumn();
                         ImGui::PopID();
@@ -742,15 +829,13 @@ namespace ignite
         if (m_NeedsRefresh)
         {
             m_NeedsRefresh = false;
-            Project::GetInstance()->ValidateAssetRegistry();
-            PruneMissingNodes(0, Project::GetInstance()->GetAssetDirectory());
+            m_EditorLayer->GetActiveProject()->ValidateAssetRegistry();
+            PruneMissingNodes(0, m_EditorLayer->GetActiveProject()->GetAssetDirectory());
             RefreshAssetTree();
             CompactTree();
 
-            ProjectSerializer serializer(Project::GetInstance());
-
             auto f = Project::GetInstance()->GetFilepath();
-            serializer.Serialize(f);
+            m_EditorLayer->GetActiveProject()->Serialize(f);
         }
 
         // Check if thumbnail size changed and clear thumbnails if needed

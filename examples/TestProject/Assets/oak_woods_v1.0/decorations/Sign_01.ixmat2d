@@ -1,0 +1,8 @@
+Material2D:
+  Version: Alpha-0.1
+  Name: Sign_01
+  TextureHandle: 18141019710842340681
+  BaseColor: [1, 1, 1, 1]
+  AdditiveColor: [0, 0.08436997, 0.4031008, 0]
+  TilingFactor: [1, 1]
+  Type: 1

@@ -60,6 +60,7 @@ namespace ignite
         { "Box Collider 2D", CompType_BoxCollider2D },
         { "Circle Collider 2D", CompType_CircleCollider2D },
         { "Sprite 2D", CompType_Sprite2D },
+        { "Sprite 2D Animation", CompType_Sprite2DAnimation },
         { "Circle 2D", CompType_Circle2D },
         { "Point Light 2D", CompType_PointLight2D },
         { "Font", CompType_Font },
@@ -348,7 +349,7 @@ namespace ignite
     class Sprite2DComponent : public IComponent
     {
     public:
-        AssetHandle handle = AssetHandle(0); // Texture handle
+        AssetHandle handle         = AssetHandle(0); // Texture handle
         AssetHandle materialHandle = AssetHandle(0); // Material2D handle
 
         glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -357,7 +358,33 @@ namespace ignite
         glm::vec2 uv0 = { 0.0f, 1.0f };
         glm::vec2 uv1 = { 1.0f, 0.0f };
 
+        bool flipY = false;
+        bool flipX = false;
+        
         COMPONENT_CLASS_TYPE(CompType_Sprite2D)
+    };
+
+    class Sprite2DAnimationComponent : public IComponent
+    {
+    public:
+        struct Frame
+        {
+            glm::vec2 uv0 = { 0.0f, 1.0f };
+            glm::vec2 uv1 = { 1.0f, 0.0f };
+        };
+
+        AssetHandle textureHandle = AssetHandle(0);
+        std::vector<Frame> frames;
+
+        float fps = 12.0f;
+        float speed = 1.0f;
+        float elapsed = 0.0f;
+
+        int currentFrame = 0;
+        bool playing = true;
+        bool loop = true;
+
+        COMPONENT_CLASS_TYPE(CompType_Sprite2DAnimation)
     };
 
     class PointLight2DComponent : public IComponent

@@ -17,7 +17,7 @@
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/scene/scene.hpp"
-#include "ignite/scene/sprite_sheet.h"
+#include "ignite/scene/sprite_sheet.hpp"
 #include "ignite/graphics/font.hpp"
 
 #include <mutex>
@@ -123,7 +123,7 @@ namespace ignite {
         }
 
 		static auto staticMeshBinExt = GetAssetExtensionFromType(AssetType::StaticMesh);
-		static auto materialBinExt = GetAssetExtensionFromType(AssetType::Material);
+		static auto materialExt = GetAssetExtensionFromType(AssetType::Material);
 
 		Ref<StaticMesh> asset;
 
@@ -255,13 +255,13 @@ namespace ignite {
                 mat->normalTextureHandle = materialTextureHandles[i][3];
                 mat->occlusionTextureHandle = materialTextureHandles[i][4];
 
-                const std::string materialFilename = mat->name + materialBinExt;
-                std::filesystem::path materialBinFullPath = materialDirectory / materialFilename;
-                MaterialSerializer materialSerializer(mat);
-                materialSerializer.Serialize(materialBinFullPath);
+                std::filesystem::path materialFullPath = materialDirectory / (mat->name + materialExt);
+
+                // 
+                mat->Serialize(materialFullPath);
 
                 auto &assetManager = Project::GetInstance()->GetAssetManager();
-                const auto relativeMaterialPath = Project::GetInstance()->GetAssetRelativeFilepath(materialBinFullPath);
+                const auto relativeMaterialPath = Project::GetInstance()->GetAssetRelativeFilepath(materialFullPath);
 
                 AssetHandle materialHandle = assetManager.GetAssetHandle(relativeMaterialPath);
                 if (materialHandle == AssetHandle(0))
@@ -307,7 +307,7 @@ namespace ignite {
                 if (metadata.type == AssetType::Material)
                 {
                     const auto &materialFilepath = Project::GetInstance()->GetAssetFilepath(metadata.filepath);
-                    Ref<Material> material = MaterialSerializer::Deserialize(materialFilepath);
+                    Ref<Material> material = Material::Deserialize(materialFilepath);
                     Project::GetInstance()->GetAssetManager().AssignAsset(materialHandle, material);
 
                     // Submit GPU upload command list to render thread (thread-safe)
@@ -367,7 +367,7 @@ namespace ignite {
                 if (materialMetadata.type == AssetType::Material)
                 {
                     const auto &materialFilepath = Project::GetInstance()->GetAssetFilepath(materialMetadata.filepath);
-                    Ref<Material> material = MaterialSerializer::Deserialize(materialFilepath);
+                    Ref<Material> material = Material::Deserialize(materialFilepath);
                     Project::GetInstance()->GetAssetManager().AssignAsset(materialHandle, material);
                 }
 
@@ -417,7 +417,7 @@ namespace ignite {
                 skeletonHandle = AssetHandle();
             }
 
-            Ref<Skeleton> skeletonAsset = BinarySerializer::DeserializeSkeleton(skeletonPath);
+            Ref<Skeleton> skeletonAsset = Skeleton::Deserialize(skeletonPath);
             if (skeletonAsset)
             {
                 skeletonAsset->handle = skeletonHandle;
@@ -454,7 +454,7 @@ namespace ignite {
                     animationHandle = AssetHandle();
                 }
 
-                Ref<SkeletalAnimation> animationAsset = BinarySerializer::DeserializeAnimation(animationPath);
+                Ref<SkeletalAnimation> animationAsset = SkeletalAnimation::Deserialize(animationPath);
                 if (!animationAsset)
                 {
                     continue;
@@ -539,8 +539,9 @@ namespace ignite {
 
             const std::string materialFilename = mat->name + materialBinExt;
             const std::filesystem::path materialBinFullPath = materialDirectory / materialFilename;
-            MaterialSerializer materialSerializer(mat);
-            materialSerializer.Serialize(materialBinFullPath);
+            
+            // Serialize Material
+            mat->Serialize(materialBinFullPath);
 
             auto &assetManager = Project::GetInstance()->GetAssetManager();
             const auto relativeMaterialPath = Project::GetInstance()->GetAssetRelativeFilepath(materialBinFullPath);
@@ -575,7 +576,8 @@ namespace ignite {
         // Skeleton
         if (meshScene.skeleton)
         {
-            BinarySerializer::SerializeSkeleton(meshScene.skeleton, skeletonPath);
+            // Serialize skeleton
+            meshScene.skeleton->Serialize(skeletonPath);
 
             AssetHandle skeletonHandle = AssetHandle();
             meshScene.skeleton->handle = skeletonHandle;
@@ -601,7 +603,7 @@ namespace ignite {
             animation->SetSkeletonHandle(meshScene.skeleton ? meshScene.skeleton->handle : AssetHandle(0));
 
             std::filesystem::path animationPath = animationDirectory / (std::format("{}_{}", filename.string(), i) + animationBinExt);
-            BinarySerializer::SerializeAnimation(animation, animationPath);
+            animation->Serialize(animationPath);
 
             AssetHandle animationHandle = AssetHandle();
             animation->handle = animationHandle;
@@ -624,7 +626,7 @@ namespace ignite {
 
     Ref<Skeleton> AssetImporter::ImportSkeleton(AssetHandle handle, const AssetMetaData &metadata)
     {
-        Ref<Skeleton> asset = BinarySerializer::DeserializeSkeleton(metadata.filepath);
+        Ref<Skeleton> asset = Skeleton::Deserialize(metadata.filepath);
         if (asset)
         {
             asset->handle = handle;
@@ -635,7 +637,7 @@ namespace ignite {
 
     Ref<SkeletalAnimation> AssetImporter::ImportSkeletalAnimation(AssetHandle handle, const AssetMetaData &metadata)
     {
-        Ref<SkeletalAnimation> asset = BinarySerializer::DeserializeAnimation(metadata.filepath);
+        Ref<SkeletalAnimation> asset = SkeletalAnimation::Deserialize(metadata.filepath);
         if (asset)
         {
             asset->handle = handle;
@@ -646,7 +648,7 @@ namespace ignite {
 
     Ref<Material> AssetImporter::ImportMaterial(AssetHandle handle, const AssetMetaData &metadata)
     {
-        Ref<Material> asset = MaterialSerializer::Deserialize(metadata.filepath);
+        Ref<Material> asset = Material::Deserialize(metadata.filepath);
         if (asset)
         {
             asset->handle = handle;
@@ -657,7 +659,7 @@ namespace ignite {
 
     Ref<Material2D> AssetImporter::ImportMaterial2D(AssetHandle handle, const AssetMetaData &metadata)
     {
-        Ref<Material2D> asset = Material2DSerializer::Deserialize(metadata.filepath);
+        Ref<Material2D> asset = Material2D::Deserialize(metadata.filepath);
         if (asset)
         {
             asset->handle = handle;

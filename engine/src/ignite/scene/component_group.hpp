@@ -37,6 +37,7 @@ namespace ignite
         TransformComponent, 
         CameraComponent, 
         Sprite2DComponent,
+        Sprite2DAnimationComponent,
         Circle2DComponent,
         PointLight2DComponent,
         Rigidbody2DComponent,

@@ -191,6 +191,55 @@ namespace ignite
             }
         }
 
+        auto spriteAnimView = registry->view<Sprite2DComponent, Sprite2DAnimationComponent>();
+        for (entt::entity e : spriteAnimView)
+        {
+            auto &sprite = spriteAnimView.get<Sprite2DComponent>(e);
+            auto &anim = spriteAnimView.get<Sprite2DAnimationComponent>(e);
+            
+            if (anim.frames.empty())
+            {
+                continue;
+            }
+
+            anim.currentFrame = std::clamp(anim.currentFrame, 0, static_cast<int>(anim.frames.size()) - 1);
+
+            if (anim.playing)
+            {
+                const float fps = glm::max(anim.fps, 0.001f);
+                const float stepDuration = 1.0f / fps;
+                anim.elapsed += deltaTime * glm::max(anim.speed, 0.0f);
+
+                while (anim.elapsed >= stepDuration)
+                {
+                    anim.elapsed -= stepDuration;
+                    anim.currentFrame++;
+
+                    if (anim.currentFrame >= static_cast<int>(anim.frames.size()))
+                    {
+                        if (anim.loop)
+                        {
+                            anim.currentFrame = 0;
+                        }
+                        else
+                        {
+                            anim.currentFrame = static_cast<int>(anim.frames.size()) - 1;
+                            anim.playing = false;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            const auto &frame = anim.frames[static_cast<size_t>(anim.currentFrame)];
+            sprite.uv0 = frame.uv0;
+            sprite.uv1 = frame.uv1;
+            if (anim.textureHandle != AssetHandle(0))
+            {
+                sprite.handle = anim.textureHandle;
+            }
+        }
+
         auto view = registry->view<IDComponent, TransformComponent>();
         for (auto ent : view)
         {
@@ -419,6 +468,11 @@ namespace ignite
 
 	template<>
 	void Scene::OnComponentAdded<TextComponent>(Entity entity, TextComponent &comp)
+	{
+	}
+
+	template<>
+	void Scene::OnComponentAdded<Sprite2DAnimationComponent>(Entity entity, Sprite2DAnimationComponent &comp)
 	{
 	}
 
