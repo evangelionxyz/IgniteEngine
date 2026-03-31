@@ -157,6 +157,7 @@ namespace ignite
                         int aspectRatioPreset = static_cast<int>(comp.camera.GetAspectRatioPreset());
                         sr.AddKeyValue("ProjectionType", projectionType);
                         sr.AddKeyValue("AspectRatioPreset", aspectRatioPreset);
+                        sr.AddKeyValue("OrthoSize", comp.camera.orthoSize);
                         sr.AddKeyValue("NearClip", comp.camera.nearPlane);
                         sr.AddKeyValue("FarClip", comp.camera.farPlane);
                         sr.AddKeyValue("Fov", comp.camera.fov);
@@ -584,9 +585,11 @@ namespace ignite
                 comp.translation = node["WorldTranslation"].as<glm::vec3>();
                 comp.rotation = node["WorldRotation"].as<glm::quat>();
                 comp.scale = node["WorldScale"].as<glm::vec3>();
-                comp.localTranslation = node["WorldTranslation"].as<glm::vec3>();
-                comp.localRotation = node["WorldRotation"].as<glm::quat>();
-                comp.localScale = node["WorldScale"].as<glm::vec3>();
+                
+                comp.localTranslation = node["LocalTranslation"].as<glm::vec3>();
+                comp.localRotation = node["LocalRotation"].as<glm::quat>();
+                comp.localScale = node["LocalScale"].as<glm::vec3>();
+                
                 comp.visible = node["Visible"].as<bool>();
             }
 
@@ -599,10 +602,26 @@ namespace ignite
                 {
                     comp.camera.SetAspectRatioPreset(static_cast<SceneCamera::AspectRatioPreset>(node["AspectRatioPreset"].as<int>()));
                 }
-                comp.camera.nearPlane = node["NearClip"].as<float>();
-                comp.camera.farPlane = node["FarClip"].as<float>();
-                comp.camera.fov = node["Fov"].as<float>();
-                comp.primary = node["Primary"].as<bool>();
+                if (auto n = node["OrthoSize"])
+                {
+                    comp.camera.orthoSize = n.as<float>();
+                }
+                if (auto n = node["NearClip"])
+                {
+                    comp.camera.nearPlane = n.as<float>();
+                }
+                if (auto n = node["FarClip"])
+                {
+                    comp.camera.farPlane = n.as<float>();
+                }
+                if (auto n = node["Fov"])
+                {
+                    comp.camera.fov = n.as<float>();
+                }
+                if (auto n = node["Primary"])
+                {
+                    comp.primary = n.as<bool>();
+                }
             }
 
             // Sprite 2D component

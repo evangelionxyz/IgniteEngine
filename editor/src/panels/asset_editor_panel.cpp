@@ -762,7 +762,8 @@ namespace ignite
 						if (material2D)
 						{
 							material2D->name = assetName;
-							if (material2D->Serialize(fullAssetPath))
+							created = material2D->Serialize(fullAssetPath);
+							if (created)
 							{
 								material2D->SetDirtyFlag(false);
 								material2D->SetReadyFlag(true);

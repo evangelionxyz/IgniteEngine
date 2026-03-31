@@ -174,9 +174,6 @@ namespace ignite
 
 	bool Material::Serialize(const std::filesystem::path &filepath)
 	{
-		if (!std::filesystem::exists(filepath))
-			return false;
-
 		Serializer sr(filepath);
 
 		sr.BeginMap();

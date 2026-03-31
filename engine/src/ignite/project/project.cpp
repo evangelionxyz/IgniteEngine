@@ -213,12 +213,15 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 		auto &loadedAssets = m_AssetManager->GetLoadedAssets();
 		for (auto &[handle, metadata] : assetRegistry)
 		{
-			Ref<Asset> asset = loadedAssets.at(handle);
-			if (asset && asset->IsDirty())
-			{
-				asset->Serialize(metadata.filepath);
-				asset->SetDirtyFlag(false);
-			}
+			auto it = loadedAssets.find(handle);
+            if (it != loadedAssets.end())
+            {
+			    if (it->second && it->second->IsDirty())
+			    {
+                    it->second->Serialize(metadata.filepath);
+                    it->second->SetDirtyFlag(false);
+			    }
+            }
 		}
 
         return true;

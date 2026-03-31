@@ -8,9 +8,6 @@ namespace ignite
 
 	bool Material2D::Serialize(const std::filesystem::path &filepath)
 	{
-		if (!std::filesystem::exists(filepath))
-			return false;
-
 		Serializer sr(filepath);
 
 		sr.BeginMap();
