@@ -27,6 +27,9 @@ AssetRegistry:
     - Handle: 3090420985205604540
       Type: Invalid
       Filepath: oak_woods_v1.0
+    - Handle: 4136522683356979229
+      Type: SpriteSheet
+      Filepath: oak_woods_v1.0/character/Character_Animation.ixsp
     - Handle: 5784425294381670522
       Type: Texture
       Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_2_.png

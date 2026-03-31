@@ -1054,7 +1054,7 @@ namespace ignite
 
 			RenderComponent<Rigidbody2DComponent>("Rigid Body 2D", selectedEntity, [&]()
             {
-                Rigidbody2DComponent &c = selectedEntity.GetComponent<Rigidbody2DComponent>();
+                auto &c = selectedEntity.GetComponent<Rigidbody2DComponent>();
 
                 std::array<const char *, 3> bodyTypeStr = { "Static", "Dynamic", "Kinematic" };
                 const char *currentBodyType = bodyTypeStr[static_cast<i32>(c.type)];
@@ -1087,10 +1087,10 @@ namespace ignite
                 UI::DrawCheckbox("Sleep", &c.isEnableSleep);
                 UI::DrawCheckbox("Fixed Rotation", &c.fixedRotation);
 
-				if (!c.fixedRotation)
-				{
-                 UI::DrawCheckbox("Fast Rotation", &c.allowFastRotation);
-				}
+                if (!c.fixedRotation)
+                {
+                    UI::DrawCheckbox("Fast Rotation", &c.allowFastRotation);
+                }
             });
             RenderComponent<CameraComponent>("Camera", selectedEntity, [&]()
             {
@@ -1829,6 +1829,39 @@ namespace ignite
         m_IsFocused = ImGui::IsWindowFocused();
         m_IsHovered = ImGui::IsWindowHovered();
 
+        static std::array<const char *, 3> kCameraModeLabels = { "Orbit", "Fly", "2D" };
+        int cameraModeIndex = 0;
+        switch (m_EditorCamera.GetNavigationMode())
+        {
+        case EditorCamera::NavigationMode::Fly: cameraModeIndex = 1; break;
+        case EditorCamera::NavigationMode::Mode2D: cameraModeIndex = 2; break;
+        default: cameraModeIndex = 0; break;
+        }
+        ImGui::SetNextItemWidth(80.0f);
+        if (ImGui::Combo("##CameraMode", &cameraModeIndex, kCameraModeLabels.data(), static_cast<int>(kCameraModeLabels.size())))
+        {
+            const auto mode = cameraModeIndex == 0
+                ? EditorCamera::NavigationMode::Orbit
+                : (cameraModeIndex == 1 ? EditorCamera::NavigationMode::Fly : EditorCamera::NavigationMode::Mode2D);
+            m_EditorCamera.SetNavigationMode(mode);
+        }
+
+        ImGui::SameLine();
+        if (m_EditorCamera.GetNavigationMode() == EditorCamera::NavigationMode::Mode2D)
+        {
+            ImGui::TextUnformatted("Pan Snap");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(80.0f);
+            ImGui::DragFloat("##CameraPanSnap", &m_ViewportData.panSnapValue, 0.05f, 0.0f, 100.0f);
+            m_EditorCamera.SetPanSnapValue(m_ViewportData.panSnapValue);
+        }
+        else
+        {
+            m_EditorCamera.SetPanSnapValue(0.0f);
+        }
+
+        ImGui::SameLine();
+
 		static std::array<const char *, 3> kGizmoOperationLabels = { "Translate", "Rotate", "Scale" };
 		int operationIndex = 0;
 		switch (m_Gizmo.GetOperation())
@@ -1976,6 +2009,7 @@ namespace ignite
 		auto view = m_EditorCamera.GetView();
 		auto &projection = m_EditorCamera.GetProjection();
 
+        if (m_EditorCamera.projectionType != ProjectionType::Orthographic)
         {
             const float orientationSize = ImGuiOrientation::internal::config.mSize = 80.0f;
             const float orientationPadding = 25.0f;
@@ -1997,8 +2031,8 @@ namespace ignite
 		}
 
         GizmoInfo gizmoInfo;
-        gizmoInfo.cameraView = m_EditorCamera.GetView();
-        gizmoInfo.cameraProjection = m_EditorCamera.GetProjection();
+        gizmoInfo.cameraView = view;
+        gizmoInfo.cameraProjection = projection;
         gizmoInfo.cameraType = m_EditorCamera.projectionType;
         gizmoInfo.snapValue = m_ViewportData.snapValue;
         gizmoInfo.viewRect = m_ViewportEditRT.rect;
@@ -2362,15 +2396,30 @@ namespace ignite
             LOG_INFO(j->ToString());
         }
 
-		m_EditorCamera.UpdateMouseState();
-		if (m_IsHovered && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered())
-		{
-			m_EditorCamera.HandleOrbit(deltaTime);
-			m_EditorCamera.HandlePan(deltaTime);
-			m_EditorCamera.HandleZoom(deltaTime);
-		}
-		m_EditorCamera.ApplyInertia(deltaTime);
-		m_EditorCamera.UpdateCameraPosition();
+        m_EditorCamera.UpdateMouseState();
+        if (m_IsHovered && !m_Gizmo.IsManipulating())
+        {
+            switch (m_EditorCamera.GetNavigationMode())
+            {
+            case EditorCamera::NavigationMode::Fly:
+                m_EditorCamera.HandleFly(deltaTime);
+                m_EditorCamera.HandlePan(deltaTime);
+                m_EditorCamera.HandleZoom(deltaTime);
+                break;
+            case EditorCamera::NavigationMode::Mode2D:
+                m_EditorCamera.HandlePan(deltaTime);
+                m_EditorCamera.HandleZoom(deltaTime);
+                break;
+            case EditorCamera::NavigationMode::Orbit:
+            default:
+                m_EditorCamera.HandleOrbit(deltaTime);
+                m_EditorCamera.HandlePan(deltaTime);
+                m_EditorCamera.HandleZoom(deltaTime);
+                break;
+            }
+        }
+        m_EditorCamera.ApplyInertia(deltaTime);
+        m_EditorCamera.UpdateCameraPosition();
         m_EditorCamera.UpdateView();
     }
 

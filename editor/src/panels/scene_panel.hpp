@@ -111,6 +111,7 @@ namespace ignite
 		{
 			glm::vec2 mousePos = glm::vec2(0.0f);
             float snapValue = 0.05f;
+            float panSnapValue = 0.0025f;
 			bool wantMouseDragging = false;
 		};
 
