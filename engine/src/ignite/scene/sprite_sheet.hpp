@@ -13,6 +13,15 @@
 
 namespace ignite
 {
+    struct SpriteSheetSpritePayload
+	{
+		AssetHandle spriteSheetHandle = AssetHandle(0);
+		AssetHandle textureHandle = AssetHandle(0);
+		uint32_t spriteIndex = 0;
+		glm::vec2 uv0 = glm::vec2(0.0f);
+		glm::vec2 uv1 = glm::vec2(1.0f);
+	};
+
 	class SpriteSheet : public Asset
 	{
 	public:

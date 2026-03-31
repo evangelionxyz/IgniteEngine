@@ -54,6 +54,8 @@ namespace ignite
 			float snapStepV = 0.001f;
 			float zoom = 1.0f;
 			glm::vec2 pan = { 0.0f, 0.0f };
+			float extractedPanelHeight = 170.0f;
+			float previewColumnWidth = 0.0f;
 		};
 
 		static std::unordered_map<uint64_t, SpriteSheetEditorState> s_SpriteSheetEditorState;
@@ -122,11 +124,27 @@ namespace ignite
 		}
 
 		const ImVec2 contentSize = ImGui::GetContentRegionAvail();
-		const float toolsWidth = std::clamp(contentSize.x * 0.36f, 320.0f, 460.0f);
-		const float previewWidth = std::max(140.0f, contentSize.x - toolsWidth - ImGui::GetStyle().ItemSpacing.x);
+		const float horizontalSplitterWidth = 6.0f;
+		const float minPreviewColumnWidth = 260.0f;
+		const float minToolsColumnWidth = 320.0f;
+		const float maxPreviewColumnWidth = std::max(minPreviewColumnWidth, contentSize.x - minToolsColumnWidth - horizontalSplitterWidth);
 
-		ImGui::BeginChild("##sprite_sheet_preview_column", ImVec2(previewWidth, 0.0f), ImGuiChildFlags_None);
-        ImGui::BeginChild("##sprite_sheet_viewport", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
+		if (state.previewColumnWidth <= 0.0f)
+		{
+			const float defaultToolsWidth = std::clamp(contentSize.x * 0.36f, 320.0f, 460.0f);
+			state.previewColumnWidth = std::max(minPreviewColumnWidth, contentSize.x - defaultToolsWidth - horizontalSplitterWidth);
+		}
+		state.previewColumnWidth = std::clamp(state.previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
+
+		ImGui::BeginChild("##sprite_sheet_preview_column", ImVec2(state.previewColumnWidth, 0.0f), ImGuiChildFlags_None);
+		const float splitterThickness = 6.0f;
+		const float minViewportHeight = 120.0f;
+		const float minExtractedHeight = 90.0f;
+		const float totalLeftHeight = ImGui::GetContentRegionAvail().y;
+		state.extractedPanelHeight = std::clamp(state.extractedPanelHeight, minExtractedHeight, std::max(minExtractedHeight, totalLeftHeight - minViewportHeight - splitterThickness));
+		const float viewportHeight = std::max(minViewportHeight, totalLeftHeight - state.extractedPanelHeight - splitterThickness);
+
+		ImGui::BeginChild("##sprite_sheet_viewport", ImVec2(0.0f, viewportHeight), ImGuiChildFlags_Borders);
 		{
 			const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
 			const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
@@ -154,7 +172,8 @@ namespace ignite
 				const float texH = static_cast<float>(texture->GetHeight());
 				const float fitScale = glm::min(viewportSize.x / std::max(texW, 1.0f), viewportSize.y / std::max(texH, 1.0f));
                 ImVec2 imageSize = { texW * fitScale * state.zoom, texH * fitScale * state.zoom };
-				ImVec2 imagePos = {
+				ImVec2 imagePos =
+				{
 					viewportPos.x + (viewportSize.x - imageSize.x) * 0.5f + state.pan.x,
 					viewportPos.y + (viewportSize.y - imageSize.y) * 0.5f + state.pan.y
 				};
@@ -168,7 +187,8 @@ namespace ignite
 						if (newZoom != state.zoom)
 						{
 							const ImVec2 mousePos = ImGui::GetMousePos();
-							const ImVec2 uvAtMouse = {
+							const ImVec2 uvAtMouse =
+							{
 								(mousePos.x - imagePos.x) / std::max(imageSize.x, 1.0f),
 								(mousePos.y - imagePos.y) / std::max(imageSize.y, 1.0f)
 							};
@@ -176,7 +196,8 @@ namespace ignite
 							state.zoom = newZoom;
 							imageSize = { texW * fitScale * state.zoom, texH * fitScale * state.zoom };
 
-							const ImVec2 centeredPos = {
+							const ImVec2 centeredPos =
+							{
 								viewportPos.x + (viewportSize.x - imageSize.x) * 0.5f,
 								viewportPos.y + (viewportSize.y - imageSize.y) * 0.5f
 							};
@@ -184,7 +205,8 @@ namespace ignite
 							state.pan.x = mousePos.x - uvAtMouse.x * imageSize.x - centeredPos.x;
 							state.pan.y = mousePos.y - uvAtMouse.y * imageSize.y - centeredPos.y;
 
-							imagePos = {
+							imagePos =
+							{
 								viewportPos.x + (viewportSize.x - imageSize.x) * 0.5f + state.pan.x,
 								viewportPos.y + (viewportSize.y - imageSize.y) * 0.5f + state.pan.y
 							};
@@ -474,9 +496,92 @@ namespace ignite
 			}
 		}
 		ImGui::EndChild();
+
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.28f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.32f, 0.32f, 0.32f, 1.0f));
+		ImGui::Button("##sprite_sheet_vertical_splitter", ImVec2(-1.0f, splitterThickness));
+		if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+		{
+			ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+		}
+		if (ImGui::IsItemActive())
+		{
+			state.extractedPanelHeight -= ImGui::GetIO().MouseDelta.y;
+			state.extractedPanelHeight = std::clamp(state.extractedPanelHeight, minExtractedHeight, std::max(minExtractedHeight, totalLeftHeight - minViewportHeight - splitterThickness));
+		}
+		ImGui::PopStyleColor(3);
+
+		ImGui::Text("Extracted Sprites");
+		ImGui::BeginChild("##sprite_sheet_extracted_preview", ImVec2(0.0f, state.extractedPanelHeight), ImGuiChildFlags_Borders);
+		if (texture && texture->GetHandle())
+		{
+			const float previewSize = 56.0f;
+			const float spacing = ImGui::GetStyle().ItemSpacing.x;
+			const float contentWidth = ImGui::GetContentRegionAvail().x;
+			const int spritesPerRow = std::max(1, static_cast<int>((contentWidth + spacing) / (previewSize + spacing + horizontalSplitterWidth)));
+			for (size_t i = 0; i < sprites.size(); ++i)
+			{
+				const auto &sprite = sprites[i];
+				ImGui::PushID(static_cast<int>(i));
+
+				ImTextureID texId = reinterpret_cast<ImTextureID>(texture->GetHandle().Get());
+				ImGui::ImageButton("##sprite_preview", texId, ImVec2(previewSize, previewSize), ImVec2(sprite.uv0.x, sprite.uv0.y), ImVec2(sprite.uv1.x, sprite.uv1.y));
+
+				if (ImGui::BeginDragDropSource())
+				{
+					SpriteSheetSpritePayload payload;
+					payload.spriteSheetHandle = spriteSheet->handle;
+					payload.textureHandle = spriteSheet->GetTextureHandle();
+					payload.spriteIndex = static_cast<uint32_t>(i);
+					payload.uv0 = sprite.uv0;
+					payload.uv1 = sprite.uv1;
+
+					ImGui::SetDragDropPayload("sprite_sheet_item", &payload, sizeof(payload));
+					ImGui::Text("Sprite %zu", i);
+					ImGui::EndDragDropSource();
+				}
+
+				if (state.selectedSpriteIndex == static_cast<int>(i))
+				{
+					ImDrawList *selectionDrawList = ImGui::GetWindowDrawList();
+					selectionDrawList->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), IM_COL32(255, 180, 0, 255), 2.0f, 0, 2.0f);
+				}
+
+				if ((i + 1) % spritesPerRow != 0)
+				{
+					ImGui::SameLine();
+				}
+
+				ImGui::PopID();
+			}
+		}
+		else
+		{
+			ImGui::TextDisabled("Assign a texture to preview extracted sprites.");
+		}
+		ImGui::EndChild();
 		ImGui::EndChild();
 
-		ImGui::SameLine();
+		ImGui::SameLine(0.0f, 0.0f);
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.28f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.32f, 0.32f, 0.32f, 1.0f));
+		ImGui::BeginChild("##sprite_sheet_horizontal_splitter", ImVec2(horizontalSplitterWidth, 0.0f), ImGuiChildFlags_None);
+		ImGui::Button("##sprite_sheet_horizontal_splitter_btn", ImVec2(-1.0f, -1.0f));
+		if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+		{
+			ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+		}
+		if (ImGui::IsItemActive())
+		{
+			state.previewColumnWidth += ImGui::GetIO().MouseDelta.x;
+			state.previewColumnWidth = std::clamp(state.previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
+		}
+		ImGui::EndChild();
+		ImGui::PopStyleColor(3);
+
+		ImGui::SameLine(0.0f, 0.0f);
 		ImGui::BeginChild("##sprite_sheet_tools_column", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
 
 		ImGui::Spacing();
@@ -594,6 +699,21 @@ namespace ignite
 				std::strncpy(state.renameBuffer, state.spriteNames[i].c_str(), sizeof(state.renameBuffer) - 1);
 				state.renameBuffer[sizeof(state.renameBuffer) - 1] = '\0';
 			}
+
+			if (ImGui::BeginDragDropSource())
+			{
+				SpriteSheetSpritePayload payload;
+				payload.spriteSheetHandle = spriteSheet->handle;
+				payload.textureHandle = spriteSheet->GetTextureHandle();
+				payload.spriteIndex = static_cast<uint32_t>(i);
+				payload.uv0 = sprite.uv0;
+				payload.uv1 = sprite.uv1;
+
+				ImGui::SetDragDropPayload("sprite_sheet_item", &payload, sizeof(payload));
+				ImGui::Text("Sprite %zu", i);
+				ImGui::EndDragDropSource();
+			}
+
 			ImGui::SameLine();
 			ImGui::TextDisabled("(%.3f, %.3f) -> (%.3f, %.3f)", sprite.uv0.x, sprite.uv0.y, sprite.uv1.x, sprite.uv1.y);
 		}

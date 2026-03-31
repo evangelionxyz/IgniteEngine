@@ -20,6 +20,7 @@
 #include "ignite/scripting/script_instance.hpp"
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/scene/entity.hpp"
+#include "ignite/scene/sprite_sheet.hpp"
 #include "ignite/scene/entity_destroy_command.hpp"
 #include "ignite/scene/entity_rename_command.hpp"
 #include "ignite/scene/entity_reparent_command.hpp"
@@ -35,6 +36,7 @@
 #include <set>
 #include <unordered_map>
 #include <string>
+#include <format>
 #include <algorithm>
 #include <ranges>
 
@@ -44,6 +46,33 @@
 
 namespace ignite
 {
+    namespace
+    {
+        constexpr std::array<glm::vec2, 4> kBoundsCorners =
+        {
+            glm::vec2(-0.5f, -0.5f),
+            glm::vec2( 0.5f, -0.5f),
+            glm::vec2( 0.5f,  0.5f),
+            glm::vec2(-0.5f,  0.5f)
+        };
+
+        bool ProjectWorldToScreen(const glm::vec3 &worldPos, const glm::mat4 &viewProjection, const Rect &viewportRect, ImVec2 &outScreen)
+        {
+            const glm::vec4 clip = viewProjection * glm::vec4(worldPos, 1.0f);
+            if (clip.w == 0.0f)
+                return false;
+
+            const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+            if (ndc.z < 0.0f || ndc.z > 1.0f)
+                return false;
+
+            const glm::vec2 viewportSize = viewportRect.GetSize();
+            outScreen.x = viewportRect.min.x + ((ndc.x + 1.0f) * 0.5f) * viewportSize.x;
+            outScreen.y = viewportRect.min.y + ((1.0f - ndc.y) * 0.5f) * viewportSize.y;
+            return true;
+        }
+    }
+
     UUID ScenePanel::m_TrackingSelectedEntity = UUID(0);
 
     ScenePanel::ScenePanel(const char *windowTitle, EditorLayer *editor)
@@ -424,7 +453,7 @@ namespace ignite
             // transform component
             RenderComponent<TransformComponent>("Transform", selectedEntity, [&]()
             {
-                TransformComponent &comp = selectedEntity.GetComponent<TransformComponent>();
+                auto &comp = selectedEntity.GetComponent<TransformComponent>();
 
                 // Snapshot before the user starts dragging.
                 // IsItemActivated() fires on the FIRST click frame before any value changes,
@@ -560,48 +589,12 @@ namespace ignite
                     Project::GetInstance()->GetAsset<Material2D>(c.materialHandle, AssetType::Material2D);
                 }
 
-                if (isMat2dLoaded)
-                {
-                    if (mat2d)
-                    {
-						if (ImGui::BeginCombo("Material Type", mat2d->data.type == MATERIAL_2D_TYPE_LIT ? "Lit" : "Unlit"))
-						{
-							if (ImGui::Selectable("Unlit", mat2d->data.type == MATERIAL_2D_TYPE_UNLIT))
-							{
-								mat2d->data.type = MATERIAL_2D_TYPE_UNLIT;
-								mat2d->SetDirtyFlag(true);
-							}
-
-							if (ImGui::Selectable("Lit", mat2d->data.type == MATERIAL_2D_TYPE_LIT))
-							{
-								mat2d->data.type = MATERIAL_2D_TYPE_LIT;
-								mat2d->SetDirtyFlag(true);
-							}
-							ImGui::EndCombo();
-						}
-
-						if (ImGui::ColorEdit4("Base Color", &mat2d->data.baseColor.x))
-						{
-							mat2d->SetDirtyFlag(true);
-						}
-
-						if (ImGui::ColorEdit4("Additive Color", &mat2d->data.additiveColor.x))
-						{
-							mat2d->SetDirtyFlag(true);
-						}
-
-						if (ImGui::DragFloat2("Tiling", &mat2d->data.tilingFactor.x, 0.025f))
-						{
-							mat2d->SetDirtyFlag(true);
-						}
-                    }
-                }
-                else
+                if (!isMat2dLoaded)
                 {
 					// Texture on sprite 2d
 					const bool isTextureLoaded = c.handle != AssetHandle(0);
 					const std::string textureLabel = isTextureLoaded ? std::to_string(c.handle) : "Drag Here";
-					UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&c, &isTextureLoaded]()
+					UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&c, &isTextureLoaded, this, &selectedEntity]()
 						{
 							if (ImGui::BeginDragDropTarget())
 							{
@@ -615,6 +608,23 @@ namespace ignite
 										c.handle = handle;
 									}
 								}
+								else if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("sprite_sheet_item"))
+								{
+									if (payload->Data && payload->DataSize == sizeof(SpriteSheetSpritePayload))
+									{
+										auto dropped = *static_cast<const SpriteSheetSpritePayload *>(payload->Data);
+										std::swap(dropped.uv0.y, dropped.uv1.y);
+
+										Sprite2DComponent before = c;
+										c.handle = dropped.textureHandle;
+                                        c.uv0 = dropped.uv0;
+                                        c.uv1 = dropped.uv1;
+										c.materialHandle = AssetHandle(0);
+										CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(),
+                                            selectedEntity.GetUUID(), before, c));
+									}
+								}
+
 								ImGui::EndDragDropTarget();
 							}
 
@@ -632,8 +642,8 @@ namespace ignite
                     if (tilingState.isItemActivated)            s_Sprite2DBefore = c;
                     if (tilingState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
 
-                    UI::State colorState = UI::DrawVec4Control("Color", c.color, 0.025f, 1.0f);
-                    if (colorState.isItemActivated)            s_Sprite2DBefore = c;
+                    auto colorState = UI::DrawColorVec4("Color", c.color);
+                    if (colorState.isItemActivated) s_Sprite2DBefore = c;
                     if (colorState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
                 }
 
@@ -644,6 +654,75 @@ namespace ignite
                 UI::State flipYState = UI::DrawCheckbox("Flip Y", &c.flipY);
 				if (flipYState.isItemActivated)            s_Sprite2DBefore = c;
 				if (flipYState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
+
+                UI::State uv0State = UI::DrawVec2Control("UV0", c.uv0, 0.001f);
+                if (uv0State.isItemActivated)            s_Sprite2DBefore = c;
+                if (uv0State.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
+
+                UI::State uv1State = UI::DrawVec2Control("UV1", c.uv1, 0.001f);
+                if (uv1State.isItemActivated)            s_Sprite2DBefore = c;
+                if (uv1State.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
+            });
+
+            RenderComponent<Sprite2DAnimationComponent>("Sprite 2D Animation", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<Sprite2DAnimationComponent>();
+
+                UI::DrawCheckbox("Playing", &c.playing);
+                UI::DrawCheckbox("Loop", &c.loop);
+                UI::DrawFloatControl("FPS", &c.fps, 0.25f, 1.0f, 240.0f);
+                UI::DrawFloatControl("Speed", &c.speed, 0.01f, 0.0f, 16.0f);
+
+                std::string animDropLabel = c.frames.empty() ? "Drop Sprite Frame" : std::format("{} Frame(s)", c.frames.size());
+                UI::DrawButtonWithColumn("Add Frame", animDropLabel.c_str(), nullptr, [&c]()
+                    {
+                        if (ImGui::BeginDragDropTarget())
+                        {
+                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("sprite_sheet_item"))
+                            {
+                                if (payload->Data && payload->DataSize == sizeof(SpriteSheetSpritePayload))
+                                {
+									auto dropped = *static_cast<const SpriteSheetSpritePayload *>(payload->Data);
+									std::swap(dropped.uv0.y, dropped.uv1.y);
+                                    if (c.textureHandle != AssetHandle(0) && c.textureHandle != dropped.textureHandle)
+                                    {
+                                        c.frames.clear();
+                                        c.currentFrame = 0;
+                                        c.elapsed = 0.0f;
+                                    }
+
+                                    c.textureHandle = dropped.textureHandle;
+                                    c.frames.push_back({ dropped.uv0, dropped.uv1 });
+                                    c.playing = true;
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+                    });
+
+                ImGui::SameLine();
+                if (ImGui::Button("Clear Frames"))
+                {
+                    c.frames.clear();
+                    c.currentFrame = 0;
+                    c.elapsed = 0.0f;
+                }
+
+                if (!c.frames.empty())
+                {
+                    c.currentFrame = std::clamp(c.currentFrame, 0, static_cast<int>(c.frames.size()) - 1);
+                    UI::DrawIntControl("Frame", &c.currentFrame, 1.0f, 0, static_cast<int>(c.frames.size()) - 1);
+
+                    if (c.textureHandle != AssetHandle(0))
+                    {
+                        if (Ref<Texture> previewTexture = Project::GetInstance()->GetAsset<Texture>(c.textureHandle))
+                        {
+                            const auto &frame = c.frames[static_cast<size_t>(c.currentFrame)];
+                            ImTextureID texId = reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get());
+                            ImGui::Image(texId, ImVec2(96.0f, 96.0f), ImVec2(frame.uv0.x, frame.uv1.y), ImVec2(frame.uv1.x, frame.uv0.y));
+                        }
+                    }
+                }
             });
 
             RenderComponent<PointLight2DComponent>("Point Light 2D", selectedEntity, [&]()
@@ -1720,6 +1799,9 @@ namespace ignite
                     case CompType_Sprite2D:
                         entity.AddComponent<Sprite2DComponent>();
                         break;
+                 case CompType_Sprite2DAnimation:
+                        entity.AddComponent<Sprite2DAnimationComponent>();
+                        break;
 					case CompType_Circle2D:
 						entity.AddComponent<Circle2DComponent>();
 						break;
@@ -1866,9 +1948,9 @@ namespace ignite
 		int operationIndex = 0;
 		switch (m_Gizmo.GetOperation())
 		{
-		case ImGuizmo::ROTATE: operationIndex = 1; break;
-		case ImGuizmo::SCALE: operationIndex = 2; break;
-		default: operationIndex = 0; break;
+		    case ImGuizmo::ROTATE: operationIndex = 1; break;
+		    case ImGuizmo::SCALE: operationIndex = 2; break;
+		    default: operationIndex = 0; break;
 		}
 		ImGui::SetNextItemWidth(90.0f);
 		if (ImGui::Combo("##GizmoOperation", &operationIndex, kGizmoOperationLabels.data(), static_cast<int>(kGizmoOperationLabels.size())))
@@ -2039,8 +2121,11 @@ namespace ignite
 
         m_Gizmo.SetInfo(gizmoInfo);
 
+        Render2DBoundsSizing();
+
         // Start manipulation: Fired only on the first frame of interaction
-        bool isManipulatingNow = m_Gizmo.IsManipulating();
+        const bool allowGizmoManipulation = !m_Data.is2DBoundsSizing;
+        bool isManipulatingNow = allowGizmoManipulation && m_Gizmo.IsManipulating();
 
         static std::unordered_map<UUID, TransformComponent> initialTransforms;
 
@@ -2056,9 +2141,9 @@ namespace ignite
         // Capture PREVIOUS frame value before overwriting — needed for the release-commit below
         bool wasManipulating = m_Data.isGizmoManipulating;
         m_Data.isGizmoManipulating = isManipulatingNow;
-        m_Data.isGizmoBeingUse = isManipulatingNow || m_Gizmo.IsHovered();
+        m_Data.isGizmoBeingUse = isManipulatingNow || m_Gizmo.IsHovered() || m_Data.is2DBoundsHovered || m_Data.is2DBoundsSizing;
 
-        if (m_SelectedEntities.size() > 1)
+        if (allowGizmoManipulation && m_SelectedEntities.size() > 1)
         {
             // Step 1: Compute shared pivot (center of all selected entities)
             glm::vec3 pivot(0.0f);
@@ -2151,46 +2236,260 @@ namespace ignite
         }
         else if (Entity entity = GetSelectedEntity())
         {
-            TransformComponent &tr = entity.GetTransform();
-            glm::mat4 transformMatrix = tr.GetWorldMatrix();
-
-            m_Gizmo.Manipulate(transformMatrix);
-
-            if (m_Gizmo.IsManipulating())
+            if (allowGizmoManipulation)
             {
-                glm::vec3 translation, rotation, scale;
-                Math::DecomposeTransformEuler(transformMatrix, translation, rotation, scale);
+				TransformComponent &tr = entity.GetTransform();
+				glm::mat4 transformMatrix = tr.GetWorldMatrix();
 
-                if (entity.GetParentUUID() != UUID(0))
-                {
-                    Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
-                    const TransformComponent &parentTr = parent.GetTransform();
-                    glm::vec4 localTranslation = glm::inverse(parentTr.GetWorldMatrix()) * glm::vec4(translation, 1.0f);
-                    tr.localTranslation = localTranslation;
-                    tr.localRotation = glm::inverse(parentTr.rotation) * glm::quat(rotation);
-                    tr.localScale = scale / parentTr.scale;
-                }
-                else
-                {
-                    tr.localTranslation = translation;
-                    tr.localRotation = glm::quat(rotation);
-                    tr.localScale = scale;
-                }
-                tr.dirty = true;
-            }
+				m_Gizmo.Manipulate(transformMatrix);
 
-            // Commit a single command when the gizmo is released (single entity)
-            if (!isManipulatingNow && wasManipulating)
-            {
-                if (auto it = initialTransforms.find(entity.GetUUID()); it != initialTransforms.end())
-                {
-                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), entity.GetUUID(), it->second, entity.GetTransform()));
-                }
+				if (m_Gizmo.IsManipulating())
+				{
+					glm::vec3 translation, rotation, scale;
+					Math::DecomposeTransformEuler(transformMatrix, translation, rotation, scale);
+
+					if (entity.GetParentUUID() != UUID(0))
+					{
+						Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
+						const TransformComponent &parentTr = parent.GetTransform();
+						glm::vec4 localTranslation = glm::inverse(parentTr.GetWorldMatrix()) * glm::vec4(translation, 1.0f);
+						tr.localTranslation = localTranslation;
+						tr.localRotation = glm::inverse(parentTr.rotation) * glm::quat(rotation);
+						tr.localScale = scale / parentTr.scale;
+					}
+					else
+					{
+						tr.localTranslation = translation;
+						tr.localRotation = glm::quat(rotation);
+						tr.localScale = scale;
+					}
+					tr.dirty = true;
+				}
+
+				// Commit a single command when the gizmo is released (single entity)
+				if (!isManipulatingNow && wasManipulating)
+				{
+					if (auto it = initialTransforms.find(entity.GetUUID()); it != initialTransforms.end())
+					{
+						CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), entity.GetUUID(), it->second, entity.GetTransform()));
+					}
+				}
             }
         }
 
         ImGui::End();
 
+    }
+
+    bool ScenePanel::Is2DResizableEntity(Entity entity) const
+    {
+        return entity.IsValid() &&
+            (entity.HasComponent<Sprite2DComponent>() || entity.HasComponent<Circle2DComponent>() || entity.HasComponent<TextComponent>());
+    }
+
+    glm::vec3 ScenePanel::ScreenToWorldOnPlane(const glm::vec2 &screenPos, float planeZ, bool *isValid)
+    {
+        if (isValid)
+            *isValid = false;
+
+        const glm::vec2 viewportSize = m_ViewportEditRT.rect.GetSize();
+        if (viewportSize.x <= 0.0f || viewportSize.y <= 0.0f)
+            return glm::vec3(0.0f);
+
+        const float ndcX = ((screenPos.x - m_ViewportEditRT.rect.min.x) / viewportSize.x) * 2.0f - 1.0f;
+        const float ndcY = 1.0f - ((screenPos.y - m_ViewportEditRT.rect.min.y) / viewportSize.y) * 2.0f;
+
+        const glm::mat4 invViewProjection = glm::inverse(m_EditorCamera.GetProjection() * m_EditorCamera.GetView());
+
+        glm::vec4 nearPoint = invViewProjection * glm::vec4(ndcX, ndcY, 0.0f, 1.0f);
+        glm::vec4 farPoint = invViewProjection * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
+        if (nearPoint.w == 0.0f || farPoint.w == 0.0f)
+            return glm::vec3(0.0f);
+
+        nearPoint /= nearPoint.w;
+        farPoint /= farPoint.w;
+
+        const glm::vec3 origin = glm::vec3(nearPoint);
+        const glm::vec3 rayDir = glm::normalize(glm::vec3(farPoint - nearPoint));
+        if (glm::abs(rayDir.z) < 0.00001f)
+            return glm::vec3(0.0f);
+
+        const float t = (planeZ - origin.z) / rayDir.z;
+        if (isValid)
+            *isValid = true;
+
+        return origin + rayDir * t;
+    }
+
+    void ScenePanel::Render2DBoundsSizing()
+    {
+        m_Data.is2DBoundsHovered = false;
+
+        auto clearResizeState = [this]()
+        {
+            m_Data.is2DBoundsSizing = false;
+            m_Data.active2DCorner = -1;
+            m_Data.active2DEntity = UUID(0);
+        };
+
+        auto releaseResizeCommand = [this, &clearResizeState]()
+        {
+            if (!m_Data.is2DBoundsSizing)
+                return;
+
+            if (!m_Scene)
+            {
+                clearResizeState();
+                return;
+            }
+
+            Entity resizedEntity = SceneManager::GetEntity(m_Scene.get(), m_Data.active2DEntity);
+            if (resizedEntity.IsValid())
+            {
+                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(
+                    m_Scene.get(), resizedEntity.GetUUID(), m_Data.before2DResize, resizedEntity.GetTransform()));
+            }
+
+            clearResizeState();
+        };
+
+        if (!m_Scene || m_EditorCamera.GetNavigationMode() != EditorCamera::NavigationMode::Mode2D || m_SelectedEntities.size() != 1)
+        {
+            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                releaseResizeCommand();
+            return;
+        }
+
+        Entity entity = GetSelectedEntity();
+        if (!Is2DResizableEntity(entity))
+        {
+            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                releaseResizeCommand();
+            return;
+        }
+
+        TransformComponent &tr = entity.GetTransform();
+        const glm::mat4 worldMatrix = tr.GetWorldMatrix();
+        const glm::mat4 viewProjection = m_EditorCamera.GetProjection() * m_EditorCamera.GetView();
+
+        std::array<glm::vec3, 4> worldCorners{};
+        std::array<ImVec2, 4> screenCorners{};
+        for (size_t i = 0; i < kBoundsCorners.size(); ++i)
+        {
+            const glm::vec4 world = worldMatrix * glm::vec4(kBoundsCorners[i].x, kBoundsCorners[i].y, 0.0f, 1.0f);
+            worldCorners[i] = glm::vec3(world);
+            if (!ProjectWorldToScreen(worldCorners[i], viewProjection, m_ViewportEditRT.rect, screenCorners[i]))
+            {
+                if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                    releaseResizeCommand();
+                return;
+            }
+        }
+
+        ImDrawList *drawList = ImGui::GetWindowDrawList();
+        constexpr ImU32 boundsColor = IM_COL32(247, 210, 60, 255);
+        drawList->AddPolyline(screenCorners.data(), static_cast<int>(screenCorners.size()), boundsColor, ImDrawFlags_Closed, 2.0f);
+
+        const ImVec2 mousePos = ImGui::GetMousePos();
+        const bool mouseInViewport =
+            mousePos.x >= m_ViewportEditRT.rect.min.x && mousePos.x <= m_ViewportEditRT.rect.max.x &&
+            mousePos.y >= m_ViewportEditRT.rect.min.y && mousePos.y <= m_ViewportEditRT.rect.max.y;
+
+        constexpr float handleRadius = 6.0f;
+        const float handleRadiusSq = handleRadius * handleRadius;
+
+        int hoveredCorner = -1;
+        float bestDistanceSq = FLT_MAX;
+        for (int i = 0; i < static_cast<int>(screenCorners.size()); ++i)
+        {
+            const float dx = mousePos.x - screenCorners[i].x;
+            const float dy = mousePos.y - screenCorners[i].y;
+            const float distanceSq = dx * dx + dy * dy;
+            if (distanceSq <= handleRadiusSq && distanceSq < bestDistanceSq)
+            {
+                bestDistanceSq = distanceSq;
+                hoveredCorner = i;
+            }
+        }
+
+        m_Data.is2DBoundsHovered = mouseInViewport && hoveredCorner != -1;
+
+        for (int i = 0; i < static_cast<int>(screenCorners.size()); ++i)
+        {
+            const bool isActive = m_Data.is2DBoundsSizing && m_Data.active2DCorner == i;
+            const bool isHovered = hoveredCorner == i;
+            const ImU32 fillColor = isActive ? IM_COL32(255, 185, 0, 255) : (isHovered ? IM_COL32(255, 220, 110, 255) : IM_COL32(240, 240, 240, 230));
+
+            const ImVec2 min = { screenCorners[i].x - handleRadius, screenCorners[i].y - handleRadius };
+            const ImVec2 max = { screenCorners[i].x + handleRadius, screenCorners[i].y + handleRadius };
+            drawList->AddRectFilled(min, max, fillColor, 2.0f);
+            drawList->AddRect(min, max, IM_COL32(30, 30, 30, 255), 2.0f, 0, 1.0f);
+        }
+
+        if (!m_Data.is2DBoundsSizing && mouseInViewport && hoveredCorner != -1 && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !m_Gizmo.IsManipulating())
+        {
+            m_Data.is2DBoundsSizing = true;
+            m_Data.active2DCorner = hoveredCorner;
+            m_Data.active2DEntity = entity.GetUUID();
+            m_Data.active2DPlaneZ = worldMatrix[3].z;
+            m_Data.active2DAxisX = glm::normalize(glm::vec3(worldMatrix[0]));
+            m_Data.active2DAxisY = glm::normalize(glm::vec3(worldMatrix[1]));
+            m_Data.before2DResize = tr;
+
+            const int oppositeCorner = (hoveredCorner + 2) % 4;
+            m_Data.active2DOppositeWorld = worldCorners[oppositeCorner];
+        }
+
+        if (m_Data.is2DBoundsSizing)
+        {
+            if (m_Data.active2DEntity != entity.GetUUID())
+            {
+                releaseResizeCommand();
+                return;
+            }
+
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
+            {
+                bool validDragPoint = false;
+                glm::vec3 dragWorld = ScreenToWorldOnPlane(glm::vec2(mousePos.x, mousePos.y), m_Data.active2DPlaneZ, &validDragPoint);
+                if (validDragPoint)
+                {
+                    const glm::vec2 cornerSign = glm::sign(kBoundsCorners[m_Data.active2DCorner]);
+                    const glm::vec3 delta = dragWorld - m_Data.active2DOppositeWorld;
+
+                    float halfX = cornerSign.x * glm::dot(delta, m_Data.active2DAxisX) * 0.5f;
+                    float halfY = cornerSign.y * glm::dot(delta, m_Data.active2DAxisY) * 0.5f;
+
+                    halfX = glm::max(halfX, 0.01f);
+                    halfY = glm::max(halfY, 0.01f);
+
+                    const glm::vec3 centerWorld = m_Data.active2DOppositeWorld
+                        + (m_Data.active2DAxisX * (cornerSign.x * halfX))
+                        + (m_Data.active2DAxisY * (cornerSign.y * halfY));
+
+                    tr.localScale.x = halfX * 2.0f;
+                    tr.localScale.y = halfY * 2.0f;
+
+                    if (entity.GetParentUUID() != UUID(0))
+                    {
+                        Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
+                        const glm::mat4 parentWorld = parent.GetTransform().GetWorldMatrix();
+                        const glm::vec4 localCenter = glm::inverse(parentWorld) * glm::vec4(centerWorld, 1.0f);
+                        tr.localTranslation = glm::vec3(localCenter);
+                    }
+                    else
+                    {
+                        tr.localTranslation = centerWorld;
+                    }
+
+                    tr.dirty = true;
+                }
+            }
+            else
+            {
+                releaseResizeCommand();
+            }
+        }
     }
 
 	void ScenePanel::RenderSceneGameViewport()
@@ -2397,7 +2696,7 @@ namespace ignite
         }
 
         m_EditorCamera.UpdateMouseState();
-        if (m_IsHovered && !m_Gizmo.IsManipulating())
+        if (m_IsHovered && !m_Gizmo.IsManipulating() && !m_Data.is2DBoundsSizing)
         {
             switch (m_EditorCamera.GetNavigationMode())
             {

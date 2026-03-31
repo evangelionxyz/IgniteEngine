@@ -2,115 +2,12 @@ Scene:
   Version: Alpha-0.1
   Title: New Scene
   Entities:
-    - ID: 10289201209083341378
-      Name: Grass_01
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [4.5975003, -0.050000004, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [4.5975003, -0.050000004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-    - ID: 689071888742133515
-      Name: Lamp_02
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [1.3999993, 0.29999998, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1.2791593, 1.495, 1.495]
-        LocalTranslation: [1.3999993, 0.29999998, -0.1]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1.2791593, 1.495, 1.495]
-        Visible: true
-    - ID: 12494423258485385263
-      Name: Background
-      Type: Node
-      Parent: 0
-      Transform:
-        WorldTranslation: [0, 0, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [0, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-    - ID: 9000340527206763556
-      Name: WALL
-      Type: Node
-      Parent: 0
-      Transform:
-        WorldTranslation: [0, 0, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [0, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-    - ID: 7850481711310523792
+    - ID: 16977892508522383338
       Name: Sprite
       Type: Node
-      Parent: 10289201209083341378
+      Parent: 6009695102693143678
       Transform:
-        WorldTranslation: [4.7225904, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.12509036, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 11024050709781866657
-      Name: BG_03
-      Type: Node
-      Parent: 3672810857965809310
-      Transform:
-        WorldTranslation: [5.247083, 2.078905, -0.5]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [10, 5, 1.9487174]
-        LocalTranslation: [5.247083, 2.078905, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [10, 5, 1.7715611]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 11616100263721429172
-        Handle: 12217278547325118582
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 18212878320261388052
-      Name: Warm_TOP
-      Type: Node
-      Parent: 16175313832269160950
-      Transform:
-        WorldTranslation: [7.747187, 1.4543753, 8.955619e-09]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.016366562, 0.016366562, 0.016366562]
-        LocalTranslation: [0.24022293, 1.7616434, 2.9802322e-08]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.054464303, 0.054464303, 0.054464303]
-        Visible: true
-      PointLight2D:
-        Color: [1.55, 0.775, 1, 1]
-        Radius: 1.325
-        Intensity: 0.275
-        Enabled: true
-    - ID: 10633215452004596080
-      Name: Sprite
-      Type: Node
-      Parent: 10289201209083341378
-      Transform:
-        WorldTranslation: [4.830721, -0.0075000003, 0.1]
+        WorldTranslation: [3.1707206, -0.0075000003, 0.1]
         WorldRotation: [0, 0, 0, 1]
         WorldScale: [0.10793672, 0.05939376, 0.91375005]
         LocalTranslation: [0.23322058, 0.042500004, 0]
@@ -122,568 +19,16 @@ Scene:
         Handle: 0
         Color: [1, 1, 1, 1]
         TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
         FlipX: false
         FlipY: false
-    - ID: 4911438726738945143
-      Name: GFX
-      Type: Node
-      Parent: 10531643862615567560
-      Transform:
-        WorldTranslation: [2.7675, 0.46249998, 0.05]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [0, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 0
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 3464442040291797054
-      Name: Grass_01
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [2.08, -0.050000004, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [2.08, -0.050000004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-    - ID: 4132265972533343931
-      Name: Grass_01
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [6.435, -0.050000004, 0.11]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [6.435, -0.050000004, 0.009999998]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-    - ID: 4855345797252682878
+    - ID: 6240584338716392291
       Name: Sprite
       Type: Node
-      Parent: 10289201209083341378
+      Parent: 5639215584019385578
       Transform:
-        WorldTranslation: [4.6150002, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.017499924, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 3632627401754184110
-      Name: Sprite
-      Type: Node
-      Parent: 12886258125234070352
-      Transform:
-        WorldTranslation: [1.9885086, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.34100866, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 8804648056365130491
-      Name: Sprite
-      Type: Node
-      Parent: 12219584896521682718
-      Transform:
-        WorldTranslation: [4.1335087, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.34100866, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 150044051659369564
-      Name: Lighting
-      Type: Node
-      Parent: 689071888742133515
-      Transform:
-        WorldTranslation: [1.3999993, 0.29999998, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1.2791593, 1.495, 1.495]
-        LocalTranslation: [0, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-    - ID: 7300925393737959374
-      Name: Sprite
-      Type: Node
-      Parent: 12886258125234070352
-      Transform:
-        WorldTranslation: [1.7725903, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.12509036, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 16259925079312575951
-      Name: Sprite
-      Type: Node
-      Parent: 12886258125234070352
-      Transform:
-        WorldTranslation: [1.8807205, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.23322058, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 15389723682455880672
-      Name: Sprite
-      Type: Node
-      Parent: 12886258125234070352
-      Transform:
-        WorldTranslation: [1.6649998, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.017499924, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 724834589115548689
-      Name: LEFT_WALL
-      Type: Node
-      Parent: 9000340527206763556
-      Transform:
-        WorldTranslation: [10.374999, 1.7475, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 6.9175, 1]
-        LocalTranslation: [10.374999, 1.7475, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 6.9175, 1]
-        Visible: true
-      Rigidbody2D:
-        Type: Static
-        LinearVelocity: [0, 0]
-        AngularVelocity: 0
-        GravityScale: 1
-        LinearDamping: 0.6
-        AngularDamping: 0.2
-        IsAwake: true
-        FixedRotation: false
-        AllowFastRotation: true
-        IsEnabled: true
-        IsEnableSleep: false
-      BoxCollider2D:
-        Size: [0.5, 0.5]
-        Offset: [0, 0]
-        Restitution: 0.1
-        Friction: 0.5
-        Density: 1
-        IsSensor: false
-    - ID: 5361845902125243993
-      Name: Grass_01
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [4.9975004, -0.050000004, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1.452, 1, 1]
-        LocalTranslation: [4.9975004, -0.050000004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1.452, 1, 1]
-        Visible: true
-    - ID: 12886258125234070352
-      Name: Grass_01
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [1.6474999, -0.050000004, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [1.6474999, -0.050000004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-    - ID: 1358001006070736475
-      Name: Sprite
-      Type: Node
-      Parent: 724834589115548689
-      Transform:
-        WorldTranslation: [10.374999, 1.7475, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 6.9175, 1]
-        LocalTranslation: [0, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 0
-        Handle: 0
-        Color: [-0.1, 0.525, 0.625, 0.001]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 15789125991443266737
-      Name: LEFT_WALL
-      Type: Node
-      Parent: 9000340527206763556
-      Transform:
-        WorldTranslation: [0.45499998, 1.7475, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 6.9175, 1]
-        LocalTranslation: [0.45499998, 1.7475, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 6.9175, 1]
-        Visible: true
-      Rigidbody2D:
-        Type: Static
-        LinearVelocity: [0, 0]
-        AngularVelocity: 0
-        GravityScale: 1
-        LinearDamping: 0.6
-        AngularDamping: 0.2
-        IsAwake: true
-        FixedRotation: false
-        AllowFastRotation: true
-        IsEnabled: true
-        IsEnableSleep: false
-      BoxCollider2D:
-        Size: [0.5, 0.5]
-        Offset: [0, 0]
-        Restitution: 0.1
-        Friction: 0.5
-        Density: 1
-        IsSensor: false
-    - ID: 13350592402983530400
-      Name: Sprite
-      Type: Node
-      Parent: 3464442040291797054
-      Transform:
-        WorldTranslation: [2.2050903, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.12509036, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 5715143088136870867
-      Name: Sprite
-      Type: Node
-      Parent: 3464442040291797054
-      Transform:
-        WorldTranslation: [2.4210086, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.34100866, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 6270072682942669873
-      Name: L2D_Orange
-      Type: Node
-      Parent: 10822149648046992745
-      Transform:
-        WorldTranslation: [3.6664917, -1.8927449, 7.491789]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.21606149, 0.21606149, 0.1890884]
-        LocalTranslation: [5.107648, -1.883965, 10.421467]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.36832163, 0.36832163, 0.36832163]
-        Visible: true
-      PointLight2D:
-        Color: [0.7, 0.175, -0.225, 1]
-        Radius: 12.5
-        Intensity: 0.425
-        Enabled: true
-    - ID: 18315372472246946002
-      Name: Sprite
-      Type: Node
-      Parent: 3464442040291797054
-      Transform:
-        WorldTranslation: [2.3132205, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.23322058, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 10871911861215491986
-      Name: L1
-      Type: Node
-      Parent: 15945316497396741502
-      Transform:
-        WorldTranslation: [9.524999, 0.25, -0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1.2235439, 1.43, 1.43]
-        LocalTranslation: [0, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-      PointLight2D:
-        Color: [1, 0.825, -0.45, 1]
-        Radius: 0.525
-        Intensity: 1.1
-        Enabled: true
-    - ID: 6289511135659883602
-      Name: Shop
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [7.675, 0.9250001, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.96250004, 0.96250004, 0.96250004]
-        LocalTranslation: [7.675, 0.9250001, -0.1]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.96250004, 0.96250004, 0.96250004]
-        Visible: true
-    - ID: 12248462520784883615
-      Name: Sprite
-      Type: Node
-      Parent: 5361845902125243993
-      Transform:
-        WorldTranslation: [5.02291, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.15672411, 0.05939376, 0.91375005]
-        LocalTranslation: [0.017499924, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 16670170706828495020
-      Name: Sprite
-      Type: Node
-      Parent: 3464442040291797054
-      Transform:
-        WorldTranslation: [2.0974998, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.017499924, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 15945316497396741502
-      Name: Lighting
-      Type: Node
-      Parent: 8456151092950617896
-      Transform:
-        WorldTranslation: [9.524999, 0.25, -0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1.2235439, 1.43, 1.43]
-        LocalTranslation: [0, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-    - ID: 3734505998077980915
-      Name: Rock_01
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [8.879999, 0.19500001, -0.10499998]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.78431994, 0.40980718, 0.78431994]
-        LocalTranslation: [8.879999, 0.19500001, -0.20499998]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.78431994, 0.40980718, 0.78431994]
-        Visible: true
-    - ID: 2657379013831983765
-      Name: Sprite
-      Type: Node
-      Parent: 8456151092950617896
-      Transform:
-        WorldTranslation: [9.524912, 0.25, -0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.26382664, 0.6166874, 1.2333748]
-        LocalTranslation: [-7.104874e-05, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.21562499, 0.43124998, 0.86249995]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 15111561572354869003
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 8456151092950617896
-      Name: Lamp_02
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [9.524999, 0.25, -0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1.2235439, 1.43, 1.43]
-        LocalTranslation: [9.524999, 0.25, -0.2]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1.2235439, 1.43, 1.43]
-        Visible: true
-    - ID: 6009695102693143678
-      Name: Grass_01
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [2.9375, -0.050000004, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [2.9375, -0.050000004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-    - ID: 9717920491242987561
-      Name: Warm_Middle
-      Type: Node
-      Parent: 16175313832269160950
-      Transform:
-        WorldTranslation: [7.626875, 0.4196875, 8.955619e-09]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.016366562, 0.016366562, 0.016366562]
-        LocalTranslation: [-0.16015053, -1.6815686, 2.9802322e-08]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.054464303, 0.054464303, 0.054464303]
-        Visible: true
-      PointLight2D:
-        Color: [0.55, 0.45, 1, 1]
-        Radius: 0.65
-        Intensity: 2.65
-        Enabled: true
-    - ID: 13101015759007617888
-      Name: Warm_Left
-      Type: Node
-      Parent: 16175313832269160950
-      Transform:
-        WorldTranslation: [6.9049997, 0.5400001, 8.955619e-09]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.016366562, 0.016366562, 0.016366562]
-        LocalTranslation: [-2.5623913, -1.2811949, 2.9802322e-08]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.054464303, 0.054464303, 0.054464303]
-        Visible: true
-      PointLight2D:
-        Color: [1.55, 0.775, 0, 1]
-        Radius: 0.525
-        Intensity: 0.575
-        Enabled: true
-    - ID: 18289412731338123603
-      Name: Sprite
-      Type: Node
-      Parent: 3734505998077980915
-      Transform:
-        WorldTranslation: [8.879999, 0.19500001, -0.10499998]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.78431994, 0.40980718, 0.78431994]
-        LocalTranslation: [0, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 13528834060294667901
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: true
-        FlipY: false
-    - ID: 3532345801532706971
-      Name: Sprite
-      Type: Node
-      Parent: 16071144372635779303
-      Transform:
-        WorldTranslation: [6.124921, 0.25, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.23984239, 0.56062496, 1.1212499]
-        LocalTranslation: [-7.104874e-05, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.21562499, 0.43124998, 0.86249995]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 15111561572354869003
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 14695432879728450964
-      Name: Sprite
-      Type: Node
-      Parent: 8672233695292464468
-      Transform:
-        WorldTranslation: [5.347499, 5.0750003, 0.012500003]
+        WorldTranslation: [5.347499, -0.525, 0.012500003]
         WorldRotation: [0, 0, 0, 1]
         WorldScale: [9.958983, 1, 1]
         LocalTranslation: [0, 0, 0]
@@ -695,704 +40,90 @@ Scene:
         Handle: 0
         Color: [0.075, -0.025, 0, 1]
         TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
         FlipX: false
         FlipY: false
-    - ID: 7212968488817564794
-      Name: Sprite
+    - ID: 5639215584019385578
+      Name: Ground
       Type: Node
-      Parent: 8370496193239212945
+      Parent: 9000340527206763556
       Transform:
-        WorldTranslation: [4.563509, 0, 0.13]
+        WorldTranslation: [5.347499, -0.525, 0.012500003]
         WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.34100866, 0.042500004, 0]
+        WorldScale: [9.958983, 1, 1]
+        LocalTranslation: [5.347499, -0.525, 0.012500003]
         LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalScale: [9.958983, 1, 1]
         Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 14067582249556729985
-      Name: Sprite
+      Rigidbody2D:
+        Type: Static
+        LinearVelocity: [0, 0]
+        AngularVelocity: 0
+        GravityScale: 1
+        LinearDamping: 0.6
+        AngularDamping: 0.2
+        IsAwake: true
+        FixedRotation: false
+        AllowFastRotation: true
+        IsEnabled: true
+        IsEnableSleep: false
+      BoxCollider2D:
+        Size: [0.5, 0.5]
+        Offset: [0, 0]
+        Restitution: 0.1
+        Friction: 0.5
+        Density: 1
+        IsSensor: false
+    - ID: 8672233695292464468
+      Name: Ground
       Type: Node
-      Parent: 15096049290709147356
+      Parent: 9000340527206763556
       Transform:
-        WorldTranslation: [5.59, -0.0075000003, 0.1]
+        WorldTranslation: [5.347499, 5.0750003, 0.012500003]
         WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.017499924, 0.042500004, 0]
+        WorldScale: [9.958983, 1, 1]
+        LocalTranslation: [5.347499, 5.0750003, 0.012500003]
         LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalScale: [9.958983, 1, 1]
         Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 11629919832467861121
-      Name: L2D_Purple
-      Type: Node
-      Parent: 10822149648046992745
-      Transform:
-        WorldTranslation: [2.9192202, -1.9351434, 7.491789]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.21606149, 0.21606149, 0.1890884]
-        LocalTranslation: [3.8337686, -1.9562418, 10.421467]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.36832163, 0.36832163, 0.36832163]
-        Visible: true
-      PointLight2D:
-        Color: [0.15, -0.2, -0.25, 1]
-        Radius: 12.5
-        Intensity: 0.475
-        Enabled: true
-    - ID: 16071144372635779303
-      Name: Lamp_02
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [6.125, 0.25, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1.1123126, 1.3, 1.3]
-        LocalTranslation: [6.125, 0.25, -0.1]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1.1123126, 1.3, 1.3]
-        Visible: true
-    - ID: 10822149648046992745
-      Name: Lighting 2D
-      Type: Node
-      Parent: 245333557063795345
-      Transform:
-        WorldTranslation: [0.6702898, -0.7875905, 2.1416323]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.5866109, 0.5866109, 0.5133785]
-        LocalTranslation: [0.6702898, -0.7875905, 3.5897799]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.5866109, 0.5866109, 0.5866109]
-        Visible: true
-    - ID: 15900599815805412380
-      Name: Sprite
-      Type: Node
-      Parent: 6289511135659883602
-      Transform:
-        WorldTranslation: [7.674999, 0.9250001, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1.9250001, 1.9250001, 0.96250004]
-        LocalTranslation: [-9.536743e-07, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [2, 2, 1]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 13420973135166490331
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 12219584896521682718
+      Rigidbody2D:
+        Type: Static
+        LinearVelocity: [0, 0]
+        AngularVelocity: 0
+        GravityScale: 1
+        LinearDamping: 0.6
+        AngularDamping: 0.2
+        IsAwake: true
+        FixedRotation: false
+        AllowFastRotation: true
+        IsEnabled: true
+        IsEnableSleep: false
+      BoxCollider2D:
+        Size: [0.5, 0.5]
+        Offset: [0, 0]
+        Restitution: 0.1
+        Friction: 0.5
+        Density: 1
+        IsSensor: false
+    - ID: 14616520511747920107
       Name: Grass_01
       Type: Node
       Parent: 1832974820749730873
       Transform:
-        WorldTranslation: [3.7925, -0.050000004, 0.1]
+        WorldTranslation: [6, -0.050000004, 0.11]
         WorldRotation: [0, 0, 0, 1]
         WorldScale: [1, 1, 1]
-        LocalTranslation: [3.7925, -0.050000004, 0]
+        LocalTranslation: [6, -0.050000004, 0.009999998]
         LocalRotation: [0, 0, 0, 1]
         LocalScale: [1, 1, 1]
         Visible: true
-    - ID: 3672810857965809310
-      Name: Layer_1
-      Type: Node
-      Parent: 12494423258485385263
-      Transform:
-        WorldTranslation: [0, 0, -0.5]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 1.1]
-        LocalTranslation: [0, 0, -0.5]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1.1]
-        Visible: true
-    - ID: 14434803299958768132
-      Name: Camera
-      Type: Camera
-      Parent: 0
-      Transform:
-        WorldTranslation: [5.400001, 1.725, 4.525]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [5.400001, 1.725, 4.525]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-      Camera:
-        ProjectionType: 0
-        AspectRatioPreset: 1
-        OrthoSize: 5
-        NearClip: 0.1
-        FarClip: 1000
-        Fov: 45
-        Primary: true
-    - ID: 18011332921105254933
-      Name: Sprite
-      Type: Node
-      Parent: 6009695102693143678
-      Transform:
-        WorldTranslation: [3.0625904, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.12509036, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 6489676327413834269
-      Name: Sprite
-      Type: Node
-      Parent: 2347075659979086207
-      Transform:
-        WorldTranslation: [6.3625, 0.19999999, -0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.85999995, 0.44934997, 0.85999995]
-        LocalTranslation: [0, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 13528834060294667901
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 245333557063795345
-      Name: Layer_0
-      Type: Node
-      Parent: 12494423258485385263
-      Transform:
-        WorldTranslation: [0, 0, -1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 0.87516016]
-        LocalTranslation: [0, 0, -1]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 0.87516016]
-        Visible: true
-    - ID: 16175313832269160950
-      Name: Lighting
-      Type: Node
-      Parent: 6289511135659883602
-      Transform:
-        WorldTranslation: [7.675, 0.9250001, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.30050072, 0.30050072, 0.30050072]
-        LocalTranslation: [0, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.31220853, 0.31220853, 0.31220853]
-        Visible: true
-    - ID: 17177649139509206500
-      Name: Warm_Right
-      Type: Node
-      Parent: 16175313832269160950
-      Transform:
-        WorldTranslation: [8.469063, 0.5400001, 8.955619e-09]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.016366562, 0.016366562, 0.016366562]
-        LocalTranslation: [2.6424637, -1.2811949, 2.9802322e-08]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.054464303, 0.054464303, 0.054464303]
-        Visible: true
-      PointLight2D:
-        Color: [1.55, 0.775, 0, 1]
-        Radius: 0.6
-        Intensity: 1.075
-        Enabled: true
-    - ID: 577621019473639114
-      Name: Sprite
-      Type: Node
-      Parent: 5361845902125243993
-      Transform:
-        WorldTranslation: [5.336137, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.15672411, 0.05939376, 0.91375005]
-        LocalTranslation: [0.23322058, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 16220243187784939478
-      Name: Lighting
-      Type: Node
-      Parent: 16071144372635779303
-      Transform:
-        WorldTranslation: [6.125, 0.25, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1.1123126, 1.3, 1.3]
-        LocalTranslation: [0, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-    - ID: 14983396277923246524
-      Name: Sprite
-      Type: Node
-      Parent: 15096049290709147356
-      Transform:
-        WorldTranslation: [5.805721, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.23322058, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 7246828727354877922
-      Name: Sprite
-      Type: Node
-      Parent: 14616520511747920107
-      Transform:
-        WorldTranslation: [6.1250906, -0.0075000003, 0.11]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.12509036, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 9474622147877582630
-      Name: L1
-      Type: Node
-      Parent: 16220243187784939478
-      Transform:
-        WorldTranslation: [6.125, 0.25, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1.1123126, 1.3, 1.3]
-        LocalTranslation: [0, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-      PointLight2D:
-        Color: [1, 0.825, -0.45, 1]
-        Radius: 0.525
-        Intensity: 1.1
-        Enabled: true
-    - ID: 11116479910241431571
-      Name: Sprite
-      Type: Node
-      Parent: 689071888742133515
-      Transform:
-        WorldTranslation: [1.3999084, 0.29999998, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.2758187, 0.6447187, 1.2894374]
-        LocalTranslation: [-7.104874e-05, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.21562499, 0.43124998, 0.86249995]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 15111561572354869003
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 13885054940935933940
-      Name: L1
-      Type: Node
-      Parent: 150044051659369564
-      Transform:
-        WorldTranslation: [1.3999993, 0.29999998, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1.2791593, 1.495, 1.495]
-        LocalTranslation: [0, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-      PointLight2D:
-        Color: [1, 0.825, -0.45, 1]
-        Radius: 0.525
-        Intensity: 1.1
-        Enabled: true
-    - ID: 13397390256769140525
-      Name: Sprite
-      Type: Node
-      Parent: 8370496193239212945
-      Transform:
-        WorldTranslation: [4.2400002, 0, 0.13]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.017499924, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 12814995985397129848
-      Name: Sprite
-      Type: Node
-      Parent: 14616520511747920107
-      Transform:
-        WorldTranslation: [6.3410087, -0.0075000003, 0.11]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.34100866, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 2347075659979086207
-      Name: Rock_01
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [6.3625, 0.19999999, -0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.85999995, 0.44934997, 0.85999995]
-        LocalTranslation: [6.3625, 0.19999999, -0.2]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.85999995, 0.44934997, 0.85999995]
-        Visible: true
-    - ID: 6123247837940156830
-      Name: Sprite
-      Type: Node
-      Parent: 12219584896521682718
-      Transform:
-        WorldTranslation: [3.9175904, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.12509036, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 5770355226931564697
-      Name: Sprite
-      Type: Node
-      Parent: 12219584896521682718
-      Transform:
-        WorldTranslation: [4.0257206, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.23322058, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 16126710347673438143
-      Name: Sprite
-      Type: Node
-      Parent: 12219584896521682718
-      Transform:
-        WorldTranslation: [3.81, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.017499924, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 12870971283697811781
-      Name: Sprite
-      Type: Node
-      Parent: 15096049290709147356
-      Transform:
-        WorldTranslation: [5.913509, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.34100866, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 8884543332853008437
-      Name: Sprite
-      Type: Node
-      Parent: 14616520511747920107
-      Transform:
-        WorldTranslation: [6.0175, -0.0075000003, 0.11]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.017499924, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 17980154896187088012
-      Name: Sprite
-      Type: Node
-      Parent: 4132265972533343931
-      Transform:
-        WorldTranslation: [6.56009, -0.0075000003, 0.11]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.12509036, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 10702896033127599464
-      Name: Sprite
-      Type: Node
-      Parent: 4132265972533343931
-      Transform:
-        WorldTranslation: [6.7760086, -0.0075000003, 0.11]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.34100866, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 3872441706159040829
-      Name: Sprite
-      Type: Node
-      Parent: 15789125991443266737
-      Transform:
-        WorldTranslation: [0.45499998, 1.7475, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 6.9175, 1]
-        LocalTranslation: [0, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 0
-        Handle: 0
-        Color: [-0.1, 0.525, 0.625, 0.001]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 17206558796487733068
-      Name: Sprite
-      Type: Node
-      Parent: 4132265972533343931
-      Transform:
-        WorldTranslation: [6.6682205, -0.0075000003, 0.11]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.23322058, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 479189306478398767
-      Name: Sprite
-      Type: Node
-      Parent: 4132265972533343931
-      Transform:
-        WorldTranslation: [6.4525, -0.0075000003, 0.11]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.017499924, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 985828949722476835
-      Name: Sprite
-      Type: Node
-      Parent: 14616520511747920107
-      Transform:
-        WorldTranslation: [6.2332206, -0.0075000003, 0.11]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.23322058, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 11550512070002991946
+    - ID: 5657560834557677866
       Name: Sprite
       Type: Node
       Parent: 3569882442528750846
       Transform:
-        WorldTranslation: [1.5635086, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.34100866, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 10731643770733618529
-      Name: Grass_01
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [3.365, -0.050000004, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [3.365, -0.050000004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-    - ID: 12680580760771792815
-      Name: Sprite
-      Type: Node
-      Parent: 10289201209083341378
-      Transform:
-        WorldTranslation: [4.938509, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.34100866, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 2451966926868210548
-      Name: Sprite
-      Type: Node
-      Parent: 8370496193239212945
-      Transform:
-        WorldTranslation: [4.455721, 0, 0.13]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.23322058, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 9569005256701093331
-      Name: Sprite
-      Type: Node
-      Parent: 10731643770733618529
-      Transform:
-        WorldTranslation: [3.4900904, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.12509036, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 10801458477224346045
-      Name: Sprite
-      Type: Node
-      Parent: 10731643770733618529
-      Transform:
-        WorldTranslation: [3.3825, -0.0075000003, 0.1]
+        WorldTranslation: [1.2399999, -0.0075000003, 0.1]
         WorldRotation: [0, 0, 0, 1]
         WorldScale: [0.10793672, 0.05939376, 0.91375005]
         LocalTranslation: [0.017499924, 0.042500004, 0]
@@ -1404,325 +135,48 @@ Scene:
         Handle: 0
         Color: [1, 1, 1, 1]
         TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
         FlipX: false
         FlipY: false
-    - ID: 15087405355134483946
-      Name: Sprite
-      Type: Node
-      Parent: 6009695102693143678
-      Transform:
-        WorldTranslation: [3.2785087, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.34100866, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 2321160754883908697
-      Name: Sprite
-      Type: Node
-      Parent: 6009695102693143678
-      Transform:
-        WorldTranslation: [2.955, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.017499924, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 15096049290709147356
-      Name: Grass_01
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [5.5725, -0.050000004, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [5.5725, -0.050000004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-    - ID: 12608473994490422980
-      Name: Grass_01
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [2.5075, -0.050000004, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [2.5075, -0.050000004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-    - ID: 15996824995821417177
-      Name: Sprite
-      Type: Node
-      Parent: 12608473994490422980
-      Transform:
-        WorldTranslation: [2.6325903, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.12509036, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 18077768360742837091
-      Name: Sprite
-      Type: Node
-      Parent: 12608473994490422980
-      Transform:
-        WorldTranslation: [2.7407205, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.23322058, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 2560776053861994935
-      Name: Sprite
-      Type: Node
-      Parent: 10731643770733618529
-      Transform:
-        WorldTranslation: [3.5982206, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.23322058, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 15416488488786728431
-      Name: Sprite
-      Type: Node
-      Parent: 12608473994490422980
-      Transform:
-        WorldTranslation: [2.5249999, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.017499924, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 3569882442528750846
-      Name: Grass_01
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [1.2225, -0.050000004, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [1.2225, -0.050000004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-    - ID: 6632079902639294532
-      Name: Sprite
-      Type: Node
-      Parent: 12608473994490422980
-      Transform:
-        WorldTranslation: [2.8485086, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.34100866, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 10775091570220935434
-      Name: Sign_01
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [3.885, 0.24999999, -0.0050000027]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1.35, 1.35, 1.35]
-        LocalTranslation: [3.885, 0.24999999, -0.105000004]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1.35, 1.35, 1.35]
-        Visible: true
-    - ID: 8370496193239212945
-      Name: Grass_01
-      Type: Node
-      Parent: 1832974820749730873
-      Transform:
-        WorldTranslation: [4.2225003, -0.042500004, 0.13]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [4.2225003, -0.042500004, 0.029999994]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-    - ID: 14182212505745337279
-      Name: Sprite
-      Type: Node
-      Parent: 3569882442528750846
-      Transform:
-        WorldTranslation: [1.3475903, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.12509036, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 630411059173970159
-      Name: BG_02
-      Type: Node
-      Parent: 245333557063795345
-      Transform:
-        WorldTranslation: [5, 2, -1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [10, 5, 1.9858546]
-        LocalTranslation: [5, 2, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [10, 5, 2.2691329]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 13858284188598339881
-        Handle: 15960546007109320329
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 1832974820749730873
-      Name: Foreground
-      Type: Node
-      Parent: 0
-      Transform:
-        WorldTranslation: [0, 0, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [0, 0, 0.1]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-    - ID: 887708253194982019
-      Name: Sprite
-      Type: Node
-      Parent: 5361845902125243993
-      Transform:
-        WorldTranslation: [5.1791315, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.15672411, 0.05939376, 0.91375005]
-        LocalTranslation: [0.12509036, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 11306274647946960363
-      Name: Sprite
-      Type: Node
-      Parent: 15096049290709147356
-      Transform:
-        WorldTranslation: [5.697591, -0.0075000003, 0.1]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.12509036, 0.042500004, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.10793672, 0.05939376, 0.91375005]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 6536254144797540605
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 5216333737539405937
-      Name: Sprite
-      Type: Node
-      Parent: 10775091570220935434
-      Transform:
-        WorldTranslation: [3.8850002, 0.24999999, -0.0050000027]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.30686036, 0.53136, 0.53136]
-        LocalTranslation: [2.3841858e-07, 0, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.22730397, 0.39359996, 0.39359996]
-        Visible: true
-      Sprite2D:
-        MaterialHandle: 13956626230384988686
-        Handle: 0
-        Color: [1, 1, 1, 1]
-        TilingFactor: [1, 1]
-        FlipX: false
-        FlipY: false
-    - ID: 3714746140443717664
+    - ID: 940130752793554757
       Name: Lighting
       Type: Node
       Parent: 10775091570220935434
       Transform:
-        WorldTranslation: [3.8985002, 0.058874995, -0.0050000027]
+        WorldTranslation: [3.8647501, 0.44237494, -0.0050000027]
         WorldRotation: [0, 0, 0, 1]
         WorldScale: [1.35, 1.35, 1.35]
-        LocalTranslation: [0.010000229, -0.14157407, 0]
+        LocalTranslation: [-0.0149998665, 0.14249997, 0]
         LocalRotation: [0, 0, 0, 1]
         LocalScale: [1, 1, 1]
         Visible: true
       PointLight2D:
-        Color: [1, 1, 1, 1]
-        Radius: 0.325
-        Intensity: 0.875
+        Color: [1, 0.2, 1, 1]
+        Radius: 0.275
+        Intensity: 1.6
         Enabled: true
+    - ID: 13778488193811012204
+      Name: Sprite
+      Type: Node
+      Parent: 3569882442528750846
+      Transform:
+        WorldTranslation: [1.4557205, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.23322058, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
     - ID: 10531643862615567560
       Name: Player
       Type: Node
@@ -1777,6 +231,8 @@ Scene:
         Handle: 0
         Color: [1, 1, 1, 1]
         TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
         FlipX: false
         FlipY: false
     - ID: 12270683327993114012
@@ -1796,6 +252,8 @@ Scene:
         Handle: 0
         Color: [1, 1, 1, 1]
         TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
         FlipX: false
         FlipY: false
     - ID: 7002828475324251415
@@ -1815,65 +273,57 @@ Scene:
         Handle: 0
         Color: [1, 1, 1, 1]
         TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
         FlipX: false
         FlipY: false
-    - ID: 8672233695292464468
-      Name: Ground
-      Type: Node
-      Parent: 9000340527206763556
-      Transform:
-        WorldTranslation: [5.347499, 5.0750003, 0.012500003]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [9.958983, 1, 1]
-        LocalTranslation: [5.347499, 5.0750003, 0.012500003]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [9.958983, 1, 1]
-        Visible: true
-      Rigidbody2D:
-        Type: Static
-        LinearVelocity: [0, 0]
-        AngularVelocity: 0
-        GravityScale: 1
-        LinearDamping: 0.6
-        AngularDamping: 0.2
-        IsAwake: true
-        FixedRotation: false
-        AllowFastRotation: true
-        IsEnabled: true
-        IsEnableSleep: false
-      BoxCollider2D:
-        Size: [0.5, 0.5]
-        Offset: [0, 0]
-        Restitution: 0.1
-        Friction: 0.5
-        Density: 1
-        IsSensor: false
-    - ID: 940130752793554757
+    - ID: 3714746140443717664
       Name: Lighting
       Type: Node
       Parent: 10775091570220935434
       Transform:
-        WorldTranslation: [3.8647501, 0.44237494, -0.0050000027]
+        WorldTranslation: [3.8985002, 0.058874995, -0.0050000027]
         WorldRotation: [0, 0, 0, 1]
         WorldScale: [1.35, 1.35, 1.35]
-        LocalTranslation: [-0.0149998665, 0.14249997, 0]
+        LocalTranslation: [0.010000229, -0.14157407, 0]
         LocalRotation: [0, 0, 0, 1]
         LocalScale: [1, 1, 1]
         Visible: true
       PointLight2D:
-        Color: [1, 0.2, 1, 1]
-        Radius: 0.275
-        Intensity: 1.6
+        Color: [1, 1, 1, 1]
+        Radius: 0.325
+        Intensity: 0.875
         Enabled: true
-    - ID: 13778488193811012204
+    - ID: 5216333737539405937
+      Name: Sprite
+      Type: Node
+      Parent: 10775091570220935434
+      Transform:
+        WorldTranslation: [3.8850002, 0.24999999, -0.0050000027]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.30686036, 0.53136, 0.53136]
+        LocalTranslation: [2.3841858e-07, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.22730397, 0.39359996, 0.39359996]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 13956626230384988686
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 14182212505745337279
       Name: Sprite
       Type: Node
       Parent: 3569882442528750846
       Transform:
-        WorldTranslation: [1.4557205, -0.0075000003, 0.1]
+        WorldTranslation: [1.3475903, -0.0075000003, 0.1]
         WorldRotation: [0, 0, 0, 1]
         WorldScale: [0.10793672, 0.05939376, 0.91375005]
-        LocalTranslation: [0.23322058, 0.042500004, 0]
+        LocalTranslation: [0.12509036, 0.042500004, 0]
         LocalRotation: [0, 0, 0, 1]
         LocalScale: [0.10793672, 0.05939376, 0.91375005]
         Visible: true
@@ -1882,26 +332,160 @@ Scene:
         Handle: 0
         Color: [1, 1, 1, 1]
         TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
         FlipX: false
         FlipY: false
-    - ID: 14616520511747920107
+    - ID: 630411059173970159
+      Name: BG_02
+      Type: Node
+      Parent: 245333557063795345
+      Transform:
+        WorldTranslation: [5, 2, -1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [10, 5, 1.9858546]
+        LocalTranslation: [5, 2, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [10, 5, 2.2691329]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 13858284188598339881
+        Handle: 15960546007109320329
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 1832974820749730873
+      Name: Foreground
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [0, 0, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [0, 0, 0.1]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+    - ID: 887708253194982019
+      Name: Sprite
+      Type: Node
+      Parent: 5361845902125243993
+      Transform:
+        WorldTranslation: [5.1791315, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.15672411, 0.05939376, 0.91375005]
+        LocalTranslation: [0.12509036, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 11306274647946960363
+      Name: Sprite
+      Type: Node
+      Parent: 15096049290709147356
+      Transform:
+        WorldTranslation: [5.697591, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.12509036, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 10775091570220935434
+      Name: Sign_01
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [3.885, 0.24999999, -0.0050000027]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1.35, 1.35, 1.35]
+        LocalTranslation: [3.885, 0.24999999, -0.105000004]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1.35, 1.35, 1.35]
+        Visible: true
+    - ID: 8370496193239212945
       Name: Grass_01
       Type: Node
       Parent: 1832974820749730873
       Transform:
-        WorldTranslation: [6, -0.050000004, 0.11]
+        WorldTranslation: [4.2225003, -0.042500004, 0.13]
         WorldRotation: [0, 0, 0, 1]
         WorldScale: [1, 1, 1]
-        LocalTranslation: [6, -0.050000004, 0.009999998]
+        LocalTranslation: [4.2225003, -0.042500004, 0.029999994]
         LocalRotation: [0, 0, 0, 1]
         LocalScale: [1, 1, 1]
         Visible: true
-    - ID: 5657560834557677866
+    - ID: 3569882442528750846
+      Name: Grass_01
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [1.2225, -0.050000004, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [1.2225, -0.050000004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+    - ID: 6632079902639294532
       Name: Sprite
       Type: Node
-      Parent: 3569882442528750846
+      Parent: 12608473994490422980
       Transform:
-        WorldTranslation: [1.2399999, -0.0075000003, 0.1]
+        WorldTranslation: [2.8485086, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.34100866, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 16175313832269160950
+      Name: Lighting
+      Type: Node
+      Parent: 6289511135659883602
+      Transform:
+        WorldTranslation: [7.675, 0.9250001, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.30050072, 0.30050072, 0.30050072]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.31220853, 0.31220853, 0.31220853]
+        Visible: true
+    - ID: 15416488488786728431
+      Name: Sprite
+      Type: Node
+      Parent: 12608473994490422980
+      Transform:
+        WorldTranslation: [2.5249999, -0.0075000003, 0.1]
         WorldRotation: [0, 0, 0, 1]
         WorldScale: [0.10793672, 0.05939376, 0.91375005]
         LocalTranslation: [0.017499924, 0.042500004, 0]
@@ -1913,19 +497,1218 @@ Scene:
         Handle: 0
         Color: [1, 1, 1, 1]
         TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
         FlipX: false
         FlipY: false
-    - ID: 5639215584019385578
-      Name: Ground
+    - ID: 18077768360742837091
+      Name: Sprite
+      Type: Node
+      Parent: 12608473994490422980
+      Transform:
+        WorldTranslation: [2.7407205, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.23322058, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 2560776053861994935
+      Name: Sprite
+      Type: Node
+      Parent: 10731643770733618529
+      Transform:
+        WorldTranslation: [3.5982206, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.23322058, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 15996824995821417177
+      Name: Sprite
+      Type: Node
+      Parent: 12608473994490422980
+      Transform:
+        WorldTranslation: [2.6325903, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.12509036, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 12608473994490422980
+      Name: Grass_01
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [2.5075, -0.050000004, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [2.5075, -0.050000004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+    - ID: 2321160754883908697
+      Name: Sprite
+      Type: Node
+      Parent: 6009695102693143678
+      Transform:
+        WorldTranslation: [2.955, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.017499924, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 15096049290709147356
+      Name: Grass_01
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [5.5725, -0.050000004, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [5.5725, -0.050000004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+    - ID: 15087405355134483946
+      Name: Sprite
+      Type: Node
+      Parent: 6009695102693143678
+      Transform:
+        WorldTranslation: [3.2785087, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.34100866, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 10801458477224346045
+      Name: Sprite
+      Type: Node
+      Parent: 10731643770733618529
+      Transform:
+        WorldTranslation: [3.3825, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.017499924, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 9569005256701093331
+      Name: Sprite
+      Type: Node
+      Parent: 10731643770733618529
+      Transform:
+        WorldTranslation: [3.4900904, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.12509036, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 10731643770733618529
+      Name: Grass_01
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [3.365, -0.050000004, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [3.365, -0.050000004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+    - ID: 2451966926868210548
+      Name: Sprite
+      Type: Node
+      Parent: 8370496193239212945
+      Transform:
+        WorldTranslation: [4.455721, 0, 0.13]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.23322058, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 12680580760771792815
+      Name: Sprite
+      Type: Node
+      Parent: 10289201209083341378
+      Transform:
+        WorldTranslation: [4.938509, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.34100866, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 479189306478398767
+      Name: Sprite
+      Type: Node
+      Parent: 4132265972533343931
+      Transform:
+        WorldTranslation: [6.4525, -0.0075000003, 0.11]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.017499924, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 11550512070002991946
+      Name: Sprite
+      Type: Node
+      Parent: 3569882442528750846
+      Transform:
+        WorldTranslation: [1.5635086, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.34100866, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 985828949722476835
+      Name: Sprite
+      Type: Node
+      Parent: 14616520511747920107
+      Transform:
+        WorldTranslation: [6.2332206, -0.0075000003, 0.11]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.23322058, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 17206558796487733068
+      Name: Sprite
+      Type: Node
+      Parent: 4132265972533343931
+      Transform:
+        WorldTranslation: [6.6682205, -0.0075000003, 0.11]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.23322058, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 10702896033127599464
+      Name: Sprite
+      Type: Node
+      Parent: 4132265972533343931
+      Transform:
+        WorldTranslation: [6.7760086, -0.0075000003, 0.11]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.34100866, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 3872441706159040829
+      Name: Sprite
+      Type: Node
+      Parent: 15789125991443266737
+      Transform:
+        WorldTranslation: [0.45499998, 1.7475, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 6.9175, 1]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 0
+        Handle: 0
+        Color: [-0.1, 0.525, 0.625, 0.001]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 245333557063795345
+      Name: Layer_0
+      Type: Node
+      Parent: 12494423258485385263
+      Transform:
+        WorldTranslation: [0, 0, -1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 0.87516016]
+        LocalTranslation: [0, 0, -1]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 0.87516016]
+        Visible: true
+    - ID: 17980154896187088012
+      Name: Sprite
+      Type: Node
+      Parent: 4132265972533343931
+      Transform:
+        WorldTranslation: [6.56009, -0.0075000003, 0.11]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.12509036, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 8884543332853008437
+      Name: Sprite
+      Type: Node
+      Parent: 14616520511747920107
+      Transform:
+        WorldTranslation: [6.0175, -0.0075000003, 0.11]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.017499924, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 12870971283697811781
+      Name: Sprite
+      Type: Node
+      Parent: 15096049290709147356
+      Transform:
+        WorldTranslation: [5.913509, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.34100866, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 16126710347673438143
+      Name: Sprite
+      Type: Node
+      Parent: 12219584896521682718
+      Transform:
+        WorldTranslation: [3.81, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.017499924, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 5770355226931564697
+      Name: Sprite
+      Type: Node
+      Parent: 12219584896521682718
+      Transform:
+        WorldTranslation: [4.0257206, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.23322058, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 6123247837940156830
+      Name: Sprite
+      Type: Node
+      Parent: 12219584896521682718
+      Transform:
+        WorldTranslation: [3.9175904, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.12509036, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 2347075659979086207
+      Name: Rock_01
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [6.3625, 0.19999999, -0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.85999995, 0.44934997, 0.85999995]
+        LocalTranslation: [6.3625, 0.19999999, -0.2]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.85999995, 0.44934997, 0.85999995]
+        Visible: true
+    - ID: 12814995985397129848
+      Name: Sprite
+      Type: Node
+      Parent: 14616520511747920107
+      Transform:
+        WorldTranslation: [6.3410087, -0.0075000003, 0.11]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.34100866, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 13397390256769140525
+      Name: Sprite
+      Type: Node
+      Parent: 8370496193239212945
+      Transform:
+        WorldTranslation: [4.2400002, 0, 0.13]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.017499924, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 13885054940935933940
+      Name: L1
+      Type: Node
+      Parent: 150044051659369564
+      Transform:
+        WorldTranslation: [1.3999993, 0.29999998, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1.2791593, 1.495, 1.495]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      PointLight2D:
+        Color: [1, 0.825, -0.45, 1]
+        Radius: 0.525
+        Intensity: 1.1
+        Enabled: true
+    - ID: 11116479910241431571
+      Name: Sprite
+      Type: Node
+      Parent: 689071888742133515
+      Transform:
+        WorldTranslation: [1.3999084, 0.29999998, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.2758187, 0.6447187, 1.2894374]
+        LocalTranslation: [-7.104874e-05, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.21562499, 0.43124998, 0.86249995]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 15111561572354869003
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 7246828727354877922
+      Name: Sprite
+      Type: Node
+      Parent: 14616520511747920107
+      Transform:
+        WorldTranslation: [6.1250906, -0.0075000003, 0.11]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.12509036, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 9474622147877582630
+      Name: L1
+      Type: Node
+      Parent: 16220243187784939478
+      Transform:
+        WorldTranslation: [6.125, 0.25, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1.1123126, 1.3, 1.3]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      PointLight2D:
+        Color: [1, 0.825, -0.45, 1]
+        Radius: 0.525
+        Intensity: 1.1
+        Enabled: true
+    - ID: 14983396277923246524
+      Name: Sprite
+      Type: Node
+      Parent: 15096049290709147356
+      Transform:
+        WorldTranslation: [5.805721, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.23322058, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 16220243187784939478
+      Name: Lighting
+      Type: Node
+      Parent: 16071144372635779303
+      Transform:
+        WorldTranslation: [6.125, 0.25, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1.1123126, 1.3, 1.3]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+    - ID: 577621019473639114
+      Name: Sprite
+      Type: Node
+      Parent: 5361845902125243993
+      Transform:
+        WorldTranslation: [5.336137, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.15672411, 0.05939376, 0.91375005]
+        LocalTranslation: [0.23322058, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 17177649139509206500
+      Name: Warm_Right
+      Type: Node
+      Parent: 16175313832269160950
+      Transform:
+        WorldTranslation: [8.469063, 0.5400001, 8.955619e-09]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.016366562, 0.016366562, 0.016366562]
+        LocalTranslation: [2.6424637, -1.2811949, 2.9802322e-08]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.054464303, 0.054464303, 0.054464303]
+        Visible: true
+      PointLight2D:
+        Color: [1.55, 0.775, 0, 1]
+        Radius: 0.6
+        Intensity: 1.075
+        Enabled: true
+    - ID: 18011332921105254933
+      Name: Sprite
+      Type: Node
+      Parent: 6009695102693143678
+      Transform:
+        WorldTranslation: [3.0625904, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.12509036, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 14434803299958768132
+      Name: Camera
+      Type: Camera
+      Parent: 0
+      Transform:
+        WorldTranslation: [5.400001, 1.725, 4.525]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [5.400001, 1.725, 4.525]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      Camera:
+        ProjectionType: 0
+        AspectRatioPreset: 1
+        OrthoSize: 5
+        NearClip: 0.1
+        FarClip: 1000
+        Fov: 45
+        Primary: true
+    - ID: 6489676327413834269
+      Name: Sprite
+      Type: Node
+      Parent: 2347075659979086207
+      Transform:
+        WorldTranslation: [6.3625, 0.19999999, -0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.85999995, 0.44934997, 0.85999995]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 13528834060294667901
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 12219584896521682718
+      Name: Grass_01
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [3.7925, -0.050000004, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [3.7925, -0.050000004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+    - ID: 3672810857965809310
+      Name: Layer_1
+      Type: Node
+      Parent: 12494423258485385263
+      Transform:
+        WorldTranslation: [0, 0, -0.5]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1.1]
+        LocalTranslation: [0, 0, -0.5]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1.1]
+        Visible: true
+    - ID: 15900599815805412380
+      Name: Sprite
+      Type: Node
+      Parent: 6289511135659883602
+      Transform:
+        WorldTranslation: [7.674999, 0.9250001, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1.9250001, 1.9250001, 0.96250004]
+        LocalTranslation: [-9.536743e-07, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [2, 2, 1]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 13420973135166490331
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 10822149648046992745
+      Name: Lighting 2D
+      Type: Node
+      Parent: 245333557063795345
+      Transform:
+        WorldTranslation: [0.6702898, -0.7875905, 2.1416323]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.5866109, 0.5866109, 0.5133785]
+        LocalTranslation: [0.6702898, -0.7875905, 3.5897799]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.5866109, 0.5866109, 0.5866109]
+        Visible: true
+    - ID: 16071144372635779303
+      Name: Lamp_02
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [6.125, 0.25, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1.1123126, 1.3, 1.3]
+        LocalTranslation: [6.125, 0.25, -0.1]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1.1123126, 1.3, 1.3]
+        Visible: true
+    - ID: 11629919832467861121
+      Name: L2D_Purple
+      Type: Node
+      Parent: 10822149648046992745
+      Transform:
+        WorldTranslation: [2.9192202, -1.9351434, 7.491789]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.21606149, 0.21606149, 0.1890884]
+        LocalTranslation: [3.8337686, -1.9562418, 10.421467]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.36832163, 0.36832163, 0.36832163]
+        Visible: true
+      PointLight2D:
+        Color: [0.15, -0.2, -0.25, 1]
+        Radius: 12.5
+        Intensity: 0.475
+        Enabled: true
+    - ID: 14067582249556729985
+      Name: Sprite
+      Type: Node
+      Parent: 15096049290709147356
+      Transform:
+        WorldTranslation: [5.59, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.017499924, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 7212968488817564794
+      Name: Sprite
+      Type: Node
+      Parent: 8370496193239212945
+      Transform:
+        WorldTranslation: [4.563509, 0, 0.13]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.34100866, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 3532345801532706971
+      Name: Sprite
+      Type: Node
+      Parent: 16071144372635779303
+      Transform:
+        WorldTranslation: [6.124921, 0.25, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.23984239, 0.56062496, 1.1212499]
+        LocalTranslation: [-7.104874e-05, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.21562499, 0.43124998, 0.86249995]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 15111561572354869003
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 14695432879728450964
+      Name: Sprite
+      Type: Node
+      Parent: 8672233695292464468
+      Transform:
+        WorldTranslation: [5.347499, 5.0750003, 0.012500003]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [9.958983, 1, 1]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 0
+        Handle: 0
+        Color: [0.075, -0.025, 0, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 18289412731338123603
+      Name: Sprite
+      Type: Node
+      Parent: 3734505998077980915
+      Transform:
+        WorldTranslation: [8.879999, 0.19500001, -0.10499998]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.78431994, 0.40980718, 0.78431994]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 13528834060294667901
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: true
+        FlipY: false
+    - ID: 13101015759007617888
+      Name: Warm_Left
+      Type: Node
+      Parent: 16175313832269160950
+      Transform:
+        WorldTranslation: [6.9049997, 0.5400001, 8.955619e-09]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.016366562, 0.016366562, 0.016366562]
+        LocalTranslation: [-2.5623913, -1.2811949, 2.9802322e-08]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.054464303, 0.054464303, 0.054464303]
+        Visible: true
+      PointLight2D:
+        Color: [1.55, 0.775, 0, 1]
+        Radius: 0.525
+        Intensity: 0.575
+        Enabled: true
+    - ID: 9717920491242987561
+      Name: Warm_Middle
+      Type: Node
+      Parent: 16175313832269160950
+      Transform:
+        WorldTranslation: [7.626875, 0.4196875, 8.955619e-09]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.016366562, 0.016366562, 0.016366562]
+        LocalTranslation: [-0.16015053, -1.6815686, 2.9802322e-08]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.054464303, 0.054464303, 0.054464303]
+        Visible: true
+      PointLight2D:
+        Color: [0.55, 0.45, 1, 1]
+        Radius: 0.65
+        Intensity: 2.65
+        Enabled: true
+    - ID: 8456151092950617896
+      Name: Lamp_02
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [9.524999, 0.25, -0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1.2235439, 1.43, 1.43]
+        LocalTranslation: [9.524999, 0.25, -0.2]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1.2235439, 1.43, 1.43]
+        Visible: true
+    - ID: 6009695102693143678
+      Name: Grass_01
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [2.9375, -0.050000004, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [2.9375, -0.050000004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+    - ID: 2657379013831983765
+      Name: Sprite
+      Type: Node
+      Parent: 8456151092950617896
+      Transform:
+        WorldTranslation: [9.524912, 0.25, -0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.26382664, 0.6166874, 1.2333748]
+        LocalTranslation: [-7.104874e-05, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.21562499, 0.43124998, 0.86249995]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 15111561572354869003
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 3734505998077980915
+      Name: Rock_01
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [8.879999, 0.19500001, -0.10499998]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.78431994, 0.40980718, 0.78431994]
+        LocalTranslation: [8.879999, 0.19500001, -0.20499998]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.78431994, 0.40980718, 0.78431994]
+        Visible: true
+    - ID: 15945316497396741502
+      Name: Lighting
+      Type: Node
+      Parent: 8456151092950617896
+      Transform:
+        WorldTranslation: [9.524999, 0.25, -0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1.2235439, 1.43, 1.43]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+    - ID: 16670170706828495020
+      Name: Sprite
+      Type: Node
+      Parent: 3464442040291797054
+      Transform:
+        WorldTranslation: [2.0974998, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.017499924, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 12248462520784883615
+      Name: Sprite
+      Type: Node
+      Parent: 5361845902125243993
+      Transform:
+        WorldTranslation: [5.02291, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.15672411, 0.05939376, 0.91375005]
+        LocalTranslation: [0.017499924, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 6289511135659883602
+      Name: Shop
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [7.675, 0.9250001, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.96250004, 0.96250004, 0.96250004]
+        LocalTranslation: [7.675, 0.9250001, -0.1]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.96250004, 0.96250004, 0.96250004]
+        Visible: true
+    - ID: 10871911861215491986
+      Name: L1
+      Type: Node
+      Parent: 15945316497396741502
+      Transform:
+        WorldTranslation: [9.524999, 0.25, -0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1.2235439, 1.43, 1.43]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      PointLight2D:
+        Color: [1, 0.825, -0.45, 1]
+        Radius: 0.525
+        Intensity: 1.1
+        Enabled: true
+    - ID: 18315372472246946002
+      Name: Sprite
+      Type: Node
+      Parent: 3464442040291797054
+      Transform:
+        WorldTranslation: [2.3132205, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.23322058, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 6270072682942669873
+      Name: L2D_Orange
+      Type: Node
+      Parent: 10822149648046992745
+      Transform:
+        WorldTranslation: [3.6664917, -1.8927449, 7.491789]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.21606149, 0.21606149, 0.1890884]
+        LocalTranslation: [5.107648, -1.883965, 10.421467]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.36832163, 0.36832163, 0.36832163]
+        Visible: true
+      PointLight2D:
+        Color: [0.7, 0.175, -0.225, 1]
+        Radius: 12.5
+        Intensity: 0.425
+        Enabled: true
+    - ID: 5715143088136870867
+      Name: Sprite
+      Type: Node
+      Parent: 3464442040291797054
+      Transform:
+        WorldTranslation: [2.4210086, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.34100866, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 13350592402983530400
+      Name: Sprite
+      Type: Node
+      Parent: 3464442040291797054
+      Transform:
+        WorldTranslation: [2.2050903, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.12509036, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 15789125991443266737
+      Name: LEFT_WALL
       Type: Node
       Parent: 9000340527206763556
       Transform:
-        WorldTranslation: [5.347499, -0.525, 0.012500003]
+        WorldTranslation: [0.45499998, 1.7475, 0]
         WorldRotation: [0, 0, 0, 1]
-        WorldScale: [9.958983, 1, 1]
-        LocalTranslation: [5.347499, -0.525, 0.012500003]
+        WorldScale: [1, 6.9175, 1]
+        LocalTranslation: [0.45499998, 1.7475, 0]
         LocalRotation: [0, 0, 0, 1]
-        LocalScale: [9.958983, 1, 1]
+        LocalScale: [1, 6.9175, 1]
         Visible: true
       Rigidbody2D:
         Type: Static
@@ -1946,14 +1729,14 @@ Scene:
         Friction: 0.5
         Density: 1
         IsSensor: false
-    - ID: 6240584338716392291
+    - ID: 1358001006070736475
       Name: Sprite
       Type: Node
-      Parent: 5639215584019385578
+      Parent: 724834589115548689
       Transform:
-        WorldTranslation: [5.347499, -0.525, 0.012500003]
+        WorldTranslation: [10.374999, 1.7475, 0]
         WorldRotation: [0, 0, 0, 1]
-        WorldScale: [9.958983, 1, 1]
+        WorldScale: [1, 6.9175, 1]
         LocalTranslation: [0, 0, 0]
         LocalRotation: [0, 0, 0, 1]
         LocalScale: [1, 1, 1]
@@ -1961,16 +1744,94 @@ Scene:
       Sprite2D:
         MaterialHandle: 0
         Handle: 0
-        Color: [0.075, -0.025, 0, 1]
+        Color: [-0.1, 0.525, 0.625, 0.001]
         TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
         FlipX: false
         FlipY: false
-    - ID: 16977892508522383338
+    - ID: 12886258125234070352
+      Name: Grass_01
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [1.6474999, -0.050000004, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [1.6474999, -0.050000004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+    - ID: 5361845902125243993
+      Name: Grass_01
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [4.9975004, -0.050000004, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1.452, 1, 1]
+        LocalTranslation: [4.9975004, -0.050000004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1.452, 1, 1]
+        Visible: true
+    - ID: 724834589115548689
+      Name: LEFT_WALL
+      Type: Node
+      Parent: 9000340527206763556
+      Transform:
+        WorldTranslation: [10.374999, 1.7475, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 6.9175, 1]
+        LocalTranslation: [10.374999, 1.7475, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 6.9175, 1]
+        Visible: true
+      Rigidbody2D:
+        Type: Static
+        LinearVelocity: [0, 0]
+        AngularVelocity: 0
+        GravityScale: 1
+        LinearDamping: 0.6
+        AngularDamping: 0.2
+        IsAwake: true
+        FixedRotation: false
+        AllowFastRotation: true
+        IsEnabled: true
+        IsEnableSleep: false
+      BoxCollider2D:
+        Size: [0.5, 0.5]
+        Offset: [0, 0]
+        Restitution: 0.1
+        Friction: 0.5
+        Density: 1
+        IsSensor: false
+    - ID: 15389723682455880672
       Name: Sprite
       Type: Node
-      Parent: 6009695102693143678
+      Parent: 12886258125234070352
       Transform:
-        WorldTranslation: [3.1707206, -0.0075000003, 0.1]
+        WorldTranslation: [1.6649998, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.017499924, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 16259925079312575951
+      Name: Sprite
+      Type: Node
+      Parent: 12886258125234070352
+      Transform:
+        WorldTranslation: [1.8807205, -0.0075000003, 0.1]
         WorldRotation: [0, 0, 0, 1]
         WorldScale: [0.10793672, 0.05939376, 0.91375005]
         LocalTranslation: [0.23322058, 0.042500004, 0]
@@ -1982,5 +1843,296 @@ Scene:
         Handle: 0
         Color: [1, 1, 1, 1]
         TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
         FlipX: false
         FlipY: false
+    - ID: 7300925393737959374
+      Name: Sprite
+      Type: Node
+      Parent: 12886258125234070352
+      Transform:
+        WorldTranslation: [1.7725903, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.12509036, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 150044051659369564
+      Name: Lighting
+      Type: Node
+      Parent: 689071888742133515
+      Transform:
+        WorldTranslation: [1.3999993, 0.29999998, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1.2791593, 1.495, 1.495]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+    - ID: 8804648056365130491
+      Name: Sprite
+      Type: Node
+      Parent: 12219584896521682718
+      Transform:
+        WorldTranslation: [4.1335087, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.34100866, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 3632627401754184110
+      Name: Sprite
+      Type: Node
+      Parent: 12886258125234070352
+      Transform:
+        WorldTranslation: [1.9885086, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.34100866, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 4855345797252682878
+      Name: Sprite
+      Type: Node
+      Parent: 10289201209083341378
+      Transform:
+        WorldTranslation: [4.6150002, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.017499924, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 4132265972533343931
+      Name: Grass_01
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [6.435, -0.050000004, 0.11]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [6.435, -0.050000004, 0.009999998]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+    - ID: 3464442040291797054
+      Name: Grass_01
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [2.08, -0.050000004, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [2.08, -0.050000004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+    - ID: 4911438726738945143
+      Name: GFX
+      Type: Node
+      Parent: 10531643862615567560
+      Transform:
+        WorldTranslation: [2.7675, 0.46249998, 0.05]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 0
+        Handle: 1595657205177314199
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0.625, 0.14285715]
+        UV1: [0.75, 0]
+        FlipX: false
+        FlipY: false
+      Sprite2DAnimation:
+        TextureHandle: 1595657205177314199
+        FPS: 12
+        Speed: 1
+        CurrentFrame: 5
+        Playing: true
+        Loop: true
+        Frames:
+          - UV0: [0, 0.14285715]
+            UV1: [0.125, 0]
+          - UV0: [0.125, 0.14285715]
+            UV1: [0.25, 0]
+          - UV0: [0.25, 0.14285715]
+            UV1: [0.375, 0]
+          - UV0: [0.375, 0.14285715]
+            UV1: [0.5, 0]
+          - UV0: [0.5, 0.14285715]
+            UV1: [0.625, 0]
+          - UV0: [0.625, 0.14285715]
+            UV1: [0.75, 0]
+    - ID: 10633215452004596080
+      Name: Sprite
+      Type: Node
+      Parent: 10289201209083341378
+      Transform:
+        WorldTranslation: [4.830721, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.23322058, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 18212878320261388052
+      Name: Warm_TOP
+      Type: Node
+      Parent: 16175313832269160950
+      Transform:
+        WorldTranslation: [7.747187, 1.4543753, 8.955619e-09]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.016366562, 0.016366562, 0.016366562]
+        LocalTranslation: [0.24022293, 1.7616434, 2.9802322e-08]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.054464303, 0.054464303, 0.054464303]
+        Visible: true
+      PointLight2D:
+        Color: [1.55, 0.775, 1, 1]
+        Radius: 1.325
+        Intensity: 0.275
+        Enabled: true
+    - ID: 11024050709781866657
+      Name: BG_03
+      Type: Node
+      Parent: 3672810857965809310
+      Transform:
+        WorldTranslation: [5.247083, 2.078905, -0.5]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [10, 5, 1.9487174]
+        LocalTranslation: [5.247083, 2.078905, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [10, 5, 1.7715611]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 11616100263721429172
+        Handle: 12217278547325118582
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 7850481711310523792
+      Name: Sprite
+      Type: Node
+      Parent: 10289201209083341378
+      Transform:
+        WorldTranslation: [4.7225904, -0.0075000003, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.10793672, 0.05939376, 0.91375005]
+        LocalTranslation: [0.12509036, 0.042500004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.10793672, 0.05939376, 0.91375005]
+        Visible: true
+      Sprite2D:
+        MaterialHandle: 6536254144797540605
+        Handle: 0
+        Color: [1, 1, 1, 1]
+        TilingFactor: [1, 1]
+        UV0: [0, 1]
+        UV1: [1, 0]
+        FlipX: false
+        FlipY: false
+    - ID: 9000340527206763556
+      Name: WALL
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [0, 0, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+    - ID: 689071888742133515
+      Name: Lamp_02
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [1.3999993, 0.29999998, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1.2791593, 1.495, 1.495]
+        LocalTranslation: [1.3999993, 0.29999998, -0.1]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1.2791593, 1.495, 1.495]
+        Visible: true
+    - ID: 12494423258485385263
+      Name: Background
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [0, 0, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+    - ID: 10289201209083341378
+      Name: Grass_01
+      Type: Node
+      Parent: 1832974820749730873
+      Transform:
+        WorldTranslation: [4.5975003, -0.050000004, 0.1]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [4.5975003, -0.050000004, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true

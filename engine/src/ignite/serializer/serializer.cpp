@@ -176,8 +176,35 @@ namespace ignite
                         sr.AddKeyValue("Handle", comp.handle);
                         sr.AddKeyValue("Color", comp.color);
                         sr.AddKeyValue("TilingFactor", comp.tilingFactor);
+                        sr.AddKeyValue("UV0", comp.uv0);
+                        sr.AddKeyValue("UV1", comp.uv1);
                         sr.AddKeyValue("FlipX", comp.flipX);
                         sr.AddKeyValue("FlipY", comp.flipY);
+                    }
+                    sr.EndMap();
+                }
+
+                if (entity.HasComponent<Sprite2DAnimationComponent>())
+                {
+                    const Sprite2DAnimationComponent &comp = entity.GetComponent<Sprite2DAnimationComponent>();
+                    sr.BeginMap("Sprite2DAnimation");
+                    {
+                        sr.AddKeyValue("TextureHandle", comp.textureHandle);
+                        sr.AddKeyValue("FPS", comp.fps);
+                        sr.AddKeyValue("Speed", comp.speed);
+                        sr.AddKeyValue("CurrentFrame", comp.currentFrame);
+                        sr.AddKeyValue("Playing", comp.playing);
+                        sr.AddKeyValue("Loop", comp.loop);
+
+                        sr.BeginSequence("Frames");
+                        for (const auto &frame : comp.frames)
+                        {
+                            sr.BeginMap();
+                            sr.AddKeyValue("UV0", frame.uv0);
+                            sr.AddKeyValue("UV1", frame.uv1);
+                            sr.EndMap();
+                        }
+                        sr.EndSequence();
                     }
                     sr.EndMap();
                 }
@@ -634,8 +661,33 @@ namespace ignite
                 if (auto n = node["Handle"]) comp.handle = AssetHandle(n.as<uint64_t>());
                 if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
 				if (auto n = node["TilingFactor"]) comp.tilingFactor = n.as<glm::vec2>();
+                if (auto n = node["UV0"]) comp.uv0 = n.as<glm::vec2>();
+                if (auto n = node["UV1"]) comp.uv1 = n.as<glm::vec2>();
                 if (auto n = node["FlipX"])comp.flipX = n.as<bool>();
 				if (auto n = node["FlipY"]) comp.flipY = n.as<bool>();
+            }
+
+            if (YAML::Node node = entityNode["Sprite2DAnimation"])
+            {
+                auto &comp = desEntity.AddComponent<Sprite2DAnimationComponent>();
+                if (auto n = node["TextureHandle"]) comp.textureHandle = AssetHandle(n.as<uint64_t>());
+                if (auto n = node["FPS"]) comp.fps = n.as<float>();
+                if (auto n = node["Speed"]) comp.speed = n.as<float>();
+                if (auto n = node["CurrentFrame"]) comp.currentFrame = n.as<int>();
+                if (auto n = node["Playing"]) comp.playing = n.as<bool>();
+                if (auto n = node["Loop"]) comp.loop = n.as<bool>();
+
+                if (auto framesNode = node["Frames"]; framesNode && framesNode.IsSequence())
+                {
+                    comp.frames.clear();
+                    for (const auto &frameNode : framesNode)
+                    {
+                        Sprite2DAnimationComponent::Frame frame;
+                        if (auto uv0Node = frameNode["UV0"]) frame.uv0 = uv0Node.as<glm::vec2>();
+                        if (auto uv1Node = frameNode["UV1"]) frame.uv1 = uv1Node.as<glm::vec2>();
+                        comp.frames.push_back(frame);
+                    }
+                }
             }
 
             // Circle 2D component
