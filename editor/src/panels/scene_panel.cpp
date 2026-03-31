@@ -520,9 +520,9 @@ namespace ignite
 				static Sprite2DComponent s_Sprite2DBefore;
 
                 // Material 2D
-                bool isMaterialLoaded = c.materialHandle != AssetHandle(0);
-                std::string btLabel = isMaterialLoaded ? std::to_string(c.materialHandle) : "Drag Here";
-                UI::DrawButtonWithColumn("Material", btLabel.c_str(), nullptr, [&c, &selectedEntity, &isMaterialLoaded, this]()
+                bool isMat2dLoaded = c.materialHandle != AssetHandle(0);
+                std::string mat2dLabel = isMat2dLoaded ? std::to_string(c.materialHandle) : "Drag Here";
+                UI::DrawButtonWithColumn("Material", mat2dLabel.c_str(), nullptr, [&c, &selectedEntity, &isMat2dLoaded, this]()
                     {
 						if (ImGui::BeginDragDropTarget())
 						{
@@ -541,7 +541,7 @@ namespace ignite
 							ImGui::EndDragDropTarget();
 						}
 
-                        if (isMaterialLoaded)
+                        if (isMat2dLoaded)
                         {
                             ImGui::SameLine();
                             if (ImGui::Button("X"))
@@ -553,17 +553,55 @@ namespace ignite
                         }
                     });
 
-                Ref<Material2D> material2D = nullptr;
-                if (isMaterialLoaded)
+                // Get material 2d
+                Ref<Material2D> mat2d = nullptr;
+                if (isMat2dLoaded)
                 {
-                    material2D = Project::GetInstance()->GetAsset<Material2D>(c.materialHandle, AssetType::Material2D);
+                    Project::GetInstance()->GetAsset<Material2D>(c.materialHandle, AssetType::Material2D);
                 }
 
-                if (material2D)
+                if (isMat2dLoaded)
                 {
-					const bool isTextureLoaded = material2D->textureHandle != AssetHandle(0);
-					const std::string textureLabel = isTextureLoaded ? std::to_string(material2D->textureHandle) : "Drag Here";
-					UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&material2D, &isTextureLoaded]()
+                    if (mat2d)
+                    {
+						if (ImGui::BeginCombo("Material Type", mat2d->data.type == MATERIAL_2D_TYPE_LIT ? "Lit" : "Unlit"))
+						{
+							if (ImGui::Selectable("Unlit", mat2d->data.type == MATERIAL_2D_TYPE_UNLIT))
+							{
+								mat2d->data.type = MATERIAL_2D_TYPE_UNLIT;
+								mat2d->SetDirtyFlag(true);
+							}
+
+							if (ImGui::Selectable("Lit", mat2d->data.type == MATERIAL_2D_TYPE_LIT))
+							{
+								mat2d->data.type = MATERIAL_2D_TYPE_LIT;
+								mat2d->SetDirtyFlag(true);
+							}
+							ImGui::EndCombo();
+						}
+
+						if (ImGui::ColorEdit4("Base Color", &mat2d->data.baseColor.x))
+						{
+							mat2d->SetDirtyFlag(true);
+						}
+
+						if (ImGui::ColorEdit4("Additive Color", &mat2d->data.additiveColor.x))
+						{
+							mat2d->SetDirtyFlag(true);
+						}
+
+						if (ImGui::DragFloat2("Tiling", &mat2d->data.tilingFactor.x, 0.025f))
+						{
+							mat2d->SetDirtyFlag(true);
+						}
+                    }
+                }
+                else
+                {
+					// Texture on sprite 2d
+					const bool isTextureLoaded = c.handle != AssetHandle(0);
+					const std::string textureLabel = isTextureLoaded ? std::to_string(c.handle) : "Drag Here";
+					UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&c, &isTextureLoaded]()
 						{
 							if (ImGui::BeginDragDropTarget())
 							{
@@ -574,8 +612,7 @@ namespace ignite
 									AssetType type = Project::GetInstance()->GetAssetManager().GetAssetType(handle);
 									if (type == AssetType::Texture)
 									{
-										material2D->textureHandle = handle;
-										material2D->SetDirtyFlag(true);
+										c.handle = handle;
 									}
 								}
 								ImGui::EndDragDropTarget();
@@ -586,43 +623,10 @@ namespace ignite
 								ImGui::SameLine();
 								if (ImGui::Button("X##ClearTexture"))
 								{
-									material2D->textureHandle = AssetHandle(0);
+									c.handle = AssetHandle(0);
 								}
 							}
 						});
-
-                    if (ImGui::BeginCombo("Material Type", material2D->data.type == MATERIAL_2D_TYPE_LIT ? "Lit" : "Unlit"))
-                    {
-                        if (ImGui::Selectable("Unlit", material2D->data.type == MATERIAL_2D_TYPE_UNLIT))
-                        {
-                            material2D->data.type = MATERIAL_2D_TYPE_UNLIT;
-                            material2D->SetDirtyFlag(true);
-                        }
-
-                        if (ImGui::Selectable("Lit", material2D->data.type == MATERIAL_2D_TYPE_LIT))
-                        {
-                            material2D->data.type = MATERIAL_2D_TYPE_LIT;
-                            material2D->SetDirtyFlag(true);
-                        }
-                        ImGui::EndCombo();
-                    }
-                    if (ImGui::ColorEdit4("Base Color", &material2D->data.baseColor.x))
-                    {
-                        material2D->SetDirtyFlag(true);
-                    }
-
-                    if (ImGui::ColorEdit4("Additive Color", &material2D->data.additiveColor.x))
-                    {
-                        material2D->SetDirtyFlag(true);
-                    }
-
-                    if (ImGui::DragFloat2("Tiling", &material2D->data.tilingFactor.x, 0.025f))
-                    {
-                        material2D->SetDirtyFlag(true);
-                    }
-                }
-                else
-                {
 
                     UI::State tilingState = UI::DrawVec2Control("Tiling", c.tilingFactor, 0.025f, 1.0f);
                     if (tilingState.isItemActivated)            s_Sprite2DBefore = c;
@@ -640,7 +644,6 @@ namespace ignite
                 UI::State flipYState = UI::DrawCheckbox("Flip Y", &c.flipY);
 				if (flipYState.isItemActivated)            s_Sprite2DBefore = c;
 				if (flipYState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
-
             });
 
             RenderComponent<PointLight2DComponent>("Point Light 2D", selectedEntity, [&]()

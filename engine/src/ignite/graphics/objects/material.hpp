@@ -24,6 +24,8 @@
 #ifndef MATERIAL_HPP
 #define MATERIAL_HPP
 
+#include "ignite/asset/asset.hpp"
+
 #include "ignite/core/application.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/texture.hpp"
@@ -92,6 +94,9 @@ namespace ignite
 		virtual AssetType GetAssetType() override { return GetStaticType(); }
 
         static Ref<Texture> RetrieveTexture(AssetManager *assetManager, AssetHandle handle, Ref<Texture> fallback);
+
+        virtual bool Serialize(const std::filesystem::path &filepath) override;
+        static Ref<Material> Deserialize(const std::filesystem::path &filepath);
 
     private:
         void EnsureGpuResources();

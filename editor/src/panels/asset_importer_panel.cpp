@@ -266,8 +266,7 @@ namespace ignite
 
 		if (importedAny)
 		{
-			ProjectSerializer serializer(project);
-			serializer.Serialize(project->GetFilepath());
+			project->Serialize(project->GetFilepath());
 		}
 	}
 
@@ -461,7 +460,7 @@ namespace ignite
 		if (options.importSkeleton)
 		{
 			const std::filesystem::path skeletonPath = skeletalMeshDirectory / (filename.string() + skeletonExt);
-			BinarySerializer::SerializeSkeleton(skeleton, skeletonPath);
+			skeleton->Serialize(skeletonPath);
 
 			AssetMetaData skeletonMD;
 			skeletonMD.filepath = project->GetAssetRelativeFilepath(skeletonPath);
@@ -499,7 +498,7 @@ namespace ignite
 				}
 
 				const std::filesystem::path animationPath = animationDirectory / (std::format("{}_{}", filename.string(), i) + animationExt);
-				BinarySerializer::SerializeAnimation(animation, animationPath);
+				animation->Serialize(animationPath);
 
 				AssetMetaData animationMD;
 				animationMD.filepath = project->GetAssetRelativeFilepath(animationPath);

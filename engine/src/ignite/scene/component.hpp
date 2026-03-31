@@ -348,7 +348,7 @@ namespace ignite
     class Sprite2DComponent : public IComponent
     {
     public:
-        AssetHandle handle = AssetHandle(0); // Texture handle
+        AssetHandle handle         = AssetHandle(0); // Texture handle
         AssetHandle materialHandle = AssetHandle(0); // Material2D handle
 
         glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};

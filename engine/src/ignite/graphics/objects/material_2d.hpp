@@ -19,6 +19,9 @@ namespace ignite
         glm::vec4 baseColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 		glm::vec4 additiveColor = { 0.0f, 0.0f, 0.0f, 0.0f };
 		glm::vec2 tilingFactor = { 1.0f, 1.0f };
+		
+		bool flipX = false;
+		bool flipY = false;
 
 		Material2DType type = MATERIAL_2D_TYPE_UNLIT;
 	};
@@ -29,6 +32,9 @@ namespace ignite
 		std::string name = "NewMaterial2D";
 		AssetHandle textureHandle = AssetHandle(0);
 		Material2DData data;
+
+		virtual bool Serialize(const std::filesystem::path &filepath) override;
+		static Ref<Material2D> Deserialize(const std::filesystem::path &filepath);
 
 		static AssetType GetStaticAssetType() { return AssetType::Material2D; }
 		virtual AssetType GetAssetType() { return GetStaticAssetType(); }

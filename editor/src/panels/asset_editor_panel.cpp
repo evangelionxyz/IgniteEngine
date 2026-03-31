@@ -10,7 +10,7 @@
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/texture.hpp"
-#include "ignite/scene/sprite_sheet.h"
+#include "ignite/scene/sprite_sheet.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -762,9 +762,7 @@ namespace ignite
 						if (material2D)
 						{
 							material2D->name = assetName;
-							Material2DSerializer serializer(material2D);
-							created = serializer.Serialize(fullAssetPath);
-							if (created)
+							if (material2D->Serialize(fullAssetPath))
 							{
 								material2D->SetDirtyFlag(false);
 								material2D->SetReadyFlag(true);
@@ -1352,8 +1350,7 @@ namespace ignite
 				return false;
 			}
 
-			Material2DSerializer serializer(material2D);
-			if (!serializer.Serialize(savePath))
+			if (!material2D->Serialize(savePath))
 			{
 				return false;
 			}
@@ -1369,8 +1366,7 @@ namespace ignite
 			{
 				return false;
 			}
-
-			BinarySerializer::SerializeAnimation(animation, savePath);
+			animation->Serialize(savePath);
 			animation->SetDirtyFlag(false);
 			return true;
 		}

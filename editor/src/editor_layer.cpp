@@ -693,14 +693,7 @@ namespace ignite
     {
         if (m_ActiveProject)
         {
-            // SaveScene();
-
-            const auto &info = m_ActiveProject->GetInfo();
-            ProjectSerializer sr(m_ActiveProject.get());
-            if (!info.filepath.empty())
-            {
-                sr.Serialize(info.filepath);
-            }
+            m_ActiveProject->Serialize(m_CurrentProjectFilepath);
         }
     }
 
@@ -736,7 +729,7 @@ namespace ignite
             m_ActiveProject->GetAssetManager().ClearAllLoadedAssets();
         }
 
-        if (const Ref<Project> openedProject = ProjectSerializer::Deserialize(filepath))
+        if (const Ref<Project> openedProject = Project::Deserialize(filepath))
         {
             m_ActiveProject = openedProject;
             m_CurrentProjectFilepath = filepath;
@@ -1139,7 +1132,7 @@ namespace ignite
                             break;
                         }
 
-                        Ref<Project> loadedProject = ProjectSerializer::Deserialize(filepath);
+                        Ref<Project> loadedProject = Project::Deserialize(filepath);
                         if (loadedProject)
                         {
                             // Submit UI update back to main thread
@@ -1304,8 +1297,8 @@ namespace ignite
             {
                 m_ActiveProject = newProject;
 
-                ProjectSerializer serializer(m_ActiveProject.get());
-                serializer.Serialize(m_Data.projectCreateInfo.filepath);
+                // Serialize
+                m_ActiveProject->Serialize(m_Data.projectCreateInfo.filepath);
 
                 // Reload content browser
                 m_ContentBrowserPanel->LoadProjectFiles();

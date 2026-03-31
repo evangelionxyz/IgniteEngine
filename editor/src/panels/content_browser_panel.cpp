@@ -517,13 +517,15 @@ namespace ignite
                             {
                                 if (ImGui::MenuItem("Set As Default Scene"))
                                 {
-                                    Project::GetInstance()->GetAssetManager().ImportAsset(path);
+                                    auto project = m_EditorLayer->GetActiveProject();
+                                    if (project)
+                                    {
+                                        project->GetAssetManager().ImportAsset(path);
+									    AssetHandle handle = project->GetAssetManager().GetAssetHandle(path);
+                                        project->SetDefaultScene(handle);
 
-                                    AssetHandle handle = Project::GetInstance()->GetAssetManager().GetAssetHandle(path);
-                                    Project::GetInstance()->SetDefaultScene(handle);
-
-                                    ProjectSerializer serializer(Project::GetInstance());
-                                    serializer.Serialize(Project::GetInstance()->GetFilepath());
+                                        project->Serialize(project->GetFilepath());
+                                    }
                                 }
                             }
 
@@ -742,15 +744,13 @@ namespace ignite
         if (m_NeedsRefresh)
         {
             m_NeedsRefresh = false;
-            Project::GetInstance()->ValidateAssetRegistry();
-            PruneMissingNodes(0, Project::GetInstance()->GetAssetDirectory());
+            m_EditorLayer->GetActiveProject()->ValidateAssetRegistry();
+            PruneMissingNodes(0, m_EditorLayer->GetActiveProject()->GetAssetDirectory());
             RefreshAssetTree();
             CompactTree();
 
-            ProjectSerializer serializer(Project::GetInstance());
-
             auto f = Project::GetInstance()->GetFilepath();
-            serializer.Serialize(f);
+            m_EditorLayer->GetActiveProject()->Serialize(f);
         }
 
         // Check if thumbnail size changed and clear thumbnails if needed

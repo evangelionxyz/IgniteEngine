@@ -1,27 +1,7 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
 
-#pragma once
+#ifndef SERIALIZER_HPP
+#define SERIALIZER_HPP
 
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/core/uuid.hpp"
@@ -331,6 +311,33 @@ namespace ignite
 
         const std::filesystem::path &GetFilepath() const { return m_Filepath; }
 
+		static void SerializeMat4(Serializer &sr, const char *key, const glm::mat4 &mat)
+		{
+			sr.BeginSequence(key);
+			for (int col = 0; col < 4; ++col)
+			{
+				sr.AddValue(glm::vec4(mat[col]));
+			}
+			sr.EndSequence();
+		}
+
+		static bool DeserializeMat4(const YAML::Node &node, const char *key, glm::mat4 &outMat)
+		{
+			const YAML::Node matNode = node[key];
+			if (!matNode || !matNode.IsSequence() || matNode.size() != 4)
+			{
+				return false;
+			}
+
+			for (size_t col = 0; col < 4; ++col)
+			{
+				const glm::vec4 v = matNode[col].as<glm::vec4>();
+				outMat[static_cast<int>(col)] = v;
+			}
+
+			return true;
+		}
+
     private:
         YAML::Emitter m_Emitter;
         std::filesystem::path m_Filepath;
@@ -348,65 +355,6 @@ namespace ignite
         Ref<Scene> m_Scene;
         Project *m_Project;
     };
-
-    class ProjectSerializer
-    {
-    public:
-        ProjectSerializer(Project *project);
-
-        bool Serialize(const std::filesystem::path &filepath);
-        static Ref<Project> Deserialize(const std::filesystem::path &filepath);
-
-    private:
-        Project * m_Project;
-    };
-
-    class AnimationSerializer
-    {
-    public:
-        AnimationSerializer(const Ref<SkeletalAnimation> &animation);
-
-        bool Serialize(const std::filesystem::path &filepath);
-        static Ref<SkeletalAnimation> Deserialize(const std::filesystem::path &filepath);
-
-    private:
-        Ref<SkeletalAnimation> m_Animation;
-    };
-
-    class SkeletonSerializer
-    {
-    public:
-        SkeletonSerializer(const Ref<Skeleton> &skeleton);
-
-        bool Serialize(const std::filesystem::path &filepath);
-        static Ref<Skeleton> Deserialize(const std::filesystem::path &filepath);
-
-    private:
-        Ref<Skeleton> m_Skeleton;
-    };
-
-    class MaterialSerializer
-    {
-    public:
-        MaterialSerializer(const Ref<Material> &material);
-
-        bool Serialize(const std::filesystem::path &filepath);
-        static Ref<Material> Deserialize(const std::filesystem::path &filepath);
-
-    private:
-        Ref<Material> m_Material;
-    };
-
-    class Material2DSerializer
-    {
-    public:
-        Material2DSerializer(const Ref<Material2D> &material);
-
-        bool Serialize(const std::filesystem::path &filepath);
-        static Ref<Material2D> Deserialize(const std::filesystem::path &filepath);
-
-    private:
-        Ref<Material2D> m_Material;
-    };
-
 }
+
+#endif
