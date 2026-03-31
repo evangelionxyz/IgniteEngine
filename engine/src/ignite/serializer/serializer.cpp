@@ -221,6 +221,8 @@ namespace ignite
                         sr.AddKeyValue("LinearDamping", comp.linearDamping);
                         sr.AddKeyValue("AngularDamping", comp.angularDamping);
                         sr.AddKeyValue("IsAwake", comp.isAwake);
+                        sr.AddKeyValue("FixedRotation", comp.fixedRotation);
+                        sr.AddKeyValue("AllowFastRotation", comp.allowFastRotation);
                         sr.AddKeyValue("IsEnabled", comp.isEnabled);
                         sr.AddKeyValue("IsEnableSleep", comp.isEnableSleep);
                     }
@@ -581,7 +583,7 @@ namespace ignite
             // Transform component
             if (YAML::Node node = entityNode["Transform"])
             {
-                TransformComponent &comp = desEntity.AddComponent<TransformComponent>();
+                auto &comp = desEntity.AddComponent<TransformComponent>();
                 comp.translation = node["WorldTranslation"].as<glm::vec3>();
                 comp.rotation = node["WorldRotation"].as<glm::quat>();
                 comp.scale = node["WorldScale"].as<glm::vec3>();
@@ -596,7 +598,7 @@ namespace ignite
             // Camera component
             if (YAML::Node node = entityNode["Camera"])
             {
-                CameraComponent &comp = desEntity.AddComponent<CameraComponent>();
+                auto &comp = desEntity.AddComponent<CameraComponent>();
                 comp.camera.projectionType = static_cast<ProjectionType>(node["ProjectionType"].as<int>());
                 if (node["AspectRatioPreset"])
                 {
@@ -628,29 +630,18 @@ namespace ignite
             if (YAML::Node node = entityNode["Sprite2D"])
             {
                 Sprite2DComponent &comp = desEntity.AddComponent<Sprite2DComponent>();
-                if (node["MaterialHandle"])
-                {
-                    comp.materialHandle = AssetHandle(node["MaterialHandle"].as<uint64_t>());
-                }
-                comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
-                comp.color = node["Color"].as<glm::vec4>();
-                comp.tilingFactor = node["TilingFactor"].as<glm::vec2>();
-
-                if (node["FlipX"])
-                {
-                    comp.flipX = node["FlipX"].as<bool>();
-                }
-
-				if (node["FlipY"])
-				{
-					comp.flipY = node["FlipY"].as<bool>();
-				}
+                if (auto n = node["MaterialHandle"])comp.materialHandle = AssetHandle(n.as<uint64_t>());
+                if (auto n = node["Handle"]) comp.handle = AssetHandle(n.as<uint64_t>());
+                if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
+				if (auto n = node["TilingFactor"]) comp.tilingFactor = n.as<glm::vec2>();
+                if (auto n = node["FlipX"])comp.flipX = n.as<bool>();
+				if (auto n = node["FlipY"]) comp.flipY = n.as<bool>();
             }
 
             // Circle 2D component
             if (YAML::Node node = entityNode["Circle2D"])
             {
-                Circle2DComponent &comp = desEntity.AddComponent<Circle2DComponent>();
+                auto &comp = desEntity.AddComponent<Circle2DComponent>();
                 comp.color = node["Color"].as<glm::vec4>();
                 comp.thickness = node["Thickness"].as<float>();
                 comp.fade = node["Fade"].as<float>();
@@ -658,7 +649,7 @@ namespace ignite
 
             if (YAML::Node node = entityNode["PointLight2D"])
             {
-                PointLight2DComponent &comp = desEntity.AddComponent<PointLight2DComponent>();
+                auto &comp = desEntity.AddComponent<PointLight2DComponent>();
                 comp.color = node["Color"].as<glm::vec4>();
                 comp.radius = node["Radius"].as<float>();
                 comp.intensity = node["Intensity"].as<float>();
@@ -668,66 +659,68 @@ namespace ignite
             // Rigidbody 2D
             if (YAML::Node node = entityNode["Rigidbody2D"])
             {
-                Rigidbody2DComponent &comp = desEntity.AddComponent<Rigidbody2DComponent>();
-                comp.type = BodyTypeFromString(node["Type"].as<std::string>());
-                comp.linearVelocity = node["LinearVelocity"].as<glm::vec2>();
-                comp.angularVelocity = node["AngularVelocity"].as<float>();
-                comp.gravityScale = node["GravityScale"].as<float>();
-                comp.linearDamping = node["LinearDamping"].as<float>();
-                comp.angularDamping = node["AngularDamping"].as<float>();
-                comp.isAwake = node["IsAwake"].as<bool>();
-                comp.isEnabled = node["IsEnabled"].as<bool>();
-                comp.isEnableSleep = node["IsEnableSleep"].as<bool>();
+                auto &comp = desEntity.AddComponent<Rigidbody2DComponent>();
+                if (auto n = node["Type"]) comp.type = BodyTypeFromString(n.as<std::string>());
+                if (auto n = node["LinearVelocity"]) comp.linearVelocity = n.as<glm::vec2>();
+                if (auto n = node["AngularVelocity"]) comp.angularVelocity = n.as<float>();
+                if (auto n = node["GravityScale"]) comp.gravityScale = n.as<float>();
+                if (auto n = node["LinearDamping"]) comp.linearDamping = n.as<float>();
+                if (auto n = node["AngularDamping"]) comp.angularDamping = n.as<float>();
+                if (auto n = node["FixedRotation"]) comp.fixedRotation = n.as<bool>();
+                if (auto n = node["AllowFastRotation"]) comp.allowFastRotation = n.as<bool>();
+                if (auto n = node["IsAwake"]) comp.isAwake = n.as<bool>();
+                if (auto n = node["IsEnabled"]) comp.isEnabled = n.as<bool>();
+                if (auto n = node["IsEnableSleep"]) comp.isEnableSleep = n.as<bool>();
             }
 
             // BoxCollider 2D
             if (YAML::Node node = entityNode["BoxCollider2D"])
             {
-                BoxCollider2DComponent &comp = desEntity.AddComponent<BoxCollider2DComponent>();
-                comp.size = node["Size"].as<glm::vec2>();
-                comp.offset = node["Offset"].as<glm::vec2>();
-                comp.restitution = node["Restitution"].as<float>();
-                comp.friction = node["Friction"].as<float>();
-                comp.density = node["Density"].as<float>();
-                comp.isSensor = node["IsSensor"].as<bool>();
+                auto &comp = desEntity.AddComponent<BoxCollider2DComponent>();
+                if (auto n = node["Size"]) comp.size = n.as<glm::vec2>();
+                if (auto n = node["Offset"]) comp.offset = n.as<glm::vec2>();
+                if (auto n = node["Restitution"]) comp.restitution = n.as<float>();
+                if (auto n = node["Friction"]) comp.friction = n.as<float>();
+                if (auto n = node["Density"]) comp.density = n.as<float>();
+                if (auto n = node["IsSensor"]) comp.isSensor = n.as<bool>();
             }
 
             // CircleCollider 2D
             if (YAML::Node node = entityNode["CircleCollider2D"])
             {
-                CircleCollider2DComponent &comp = desEntity.AddComponent<CircleCollider2DComponent>();
-                comp.center = node["Center"].as<glm::vec2>();
-                comp.radius = node["Radius"].as<float>();
-                comp.restitution = node["Restitution"].as<float>();
-                comp.friction = node["Friction"].as<float>();
-                comp.density = node["Density"].as<float>();
-                comp.isSensor = node["IsSensor"].as<bool>();
+                auto &comp = desEntity.AddComponent<CircleCollider2DComponent>();
+                if (auto n = node["Center"]) comp.center = n.as<glm::vec2>();
+                if (auto n = node["Radius"]) comp.radius = n.as<float>();
+                if (auto n = node["Restitution"]) comp.restitution = n.as<float>();
+                if (auto n = node["Friction"]) comp.friction = n.as<float>();
+                if (auto n = node["Density"]) comp.density = n.as<float>();
+				if (auto n = node["IsSensor"]) comp.isSensor = n.as<bool>();
             }
 
             // Rigidbody
             if (YAML::Node node = entityNode["Rigidbody"])
             {
-                RigibodyComponent &comp = desEntity.AddComponent<RigibodyComponent>();
+                auto &comp = desEntity.AddComponent<RigibodyComponent>();
                 comp.MotionQuality = static_cast<RigibodyComponent::EMotionQuality>(node["MotionQuality"].as<int>());
-                comp.useGravity = node["UseGravity"].as<bool>();
-                comp.rotateX = node["RotateX"].as<bool>();
-                comp.rotateY = node["RotateY"].as<bool>();
-                comp.rotateZ = node["RotateZ"].as<bool>();
-                comp.moveX = node["MoveX"].as<bool>();
-                comp.moveY = node["MoveY"].as<bool>();
-                comp.moveZ = node["MoveZ"].as<bool>();
-                comp.isStatic = node["IsStatic"].as<bool>();
-                comp.mass = node["Mass"].as<float>();
-                comp.allowSleeping = node["AllowSleeping"].as<bool>();
-                comp.retainAcceleration = node["RetainAcceleration"].as<bool>();
-                comp.gravityFactor = node["GravityFactor"].as<float>();
-                comp.centerMass = node["CenterMass"].as<glm::vec3>();
+                if (auto n = node["UseGravity"]) comp.useGravity = n.as<bool>();
+                if (auto n = node["RotateX"]) comp.rotateX = n.as<bool>();
+                if (auto n = node["RotateY"]) comp.rotateY = n.as<bool>();
+                if (auto n = node["RotateZ"]) comp.rotateZ = n.as<bool>();
+                if (auto n = node["MoveX"]) comp.moveX = n.as<bool>();
+                if (auto n = node["MoveY"]) comp.moveY = n.as<bool>();
+                if (auto n = node["MoveZ"]) comp.moveZ = n.as<bool>();
+                if (auto n = node["IsStatic"]) comp.isStatic = n.as<bool>();
+                if (auto n = node["Mass"]) comp.mass = n.as<float>();
+                if (auto n = node["AllowSleeping"]) comp.allowSleeping = n.as<bool>();
+                if (auto n = node["RetainAcceleration"]) comp.retainAcceleration = n.as<bool>();
+                if (auto n = node["GravityFactor"]) comp.gravityFactor = n.as<float>();
+                if (auto n = node["CenterMass"]) comp.centerMass = n.as<glm::vec3>();
             }
 
             // BoxCollider
             if (YAML::Node node = entityNode["BoxCollider"])
             {
-                BoxColliderComponent &comp = desEntity.AddComponent<BoxColliderComponent>();
+                auto &comp = desEntity.AddComponent<BoxColliderComponent>();
                 comp.scale = node["Scale"].as<glm::vec3>();
                 comp.friction = node["Friction"].as<float>();
                 comp.staticFriction = node["StaticFriction"].as<float>();
@@ -749,7 +742,7 @@ namespace ignite
             // CapsuleCollider
             if (YAML::Node node = entityNode["CapsuleCollider"])
             {
-                CapsuleColliderComponent &comp = desEntity.AddComponent<CapsuleColliderComponent>();
+                auto &comp = desEntity.AddComponent<CapsuleColliderComponent>();
                 comp.radius = node["Radius"].as<float>();
                 comp.height = node["Height"].as<float>();
                 comp.friction = node["Friction"].as<float>();
@@ -761,7 +754,7 @@ namespace ignite
             // MeshCollider
             if (YAML::Node node = entityNode["MeshCollider"])
             {
-                MeshColliderComponent &comp = desEntity.AddComponent<MeshColliderComponent>();
+                auto &comp = desEntity.AddComponent<MeshColliderComponent>();
                 comp.convex = node["Convex"].as<bool>();
                 comp.friction = node["Friction"].as<float>();
                 comp.staticFriction = node["StaticFriction"].as<float>();
@@ -792,7 +785,7 @@ namespace ignite
             // Audio Source
             if (YAML::Node node = entityNode["AudioSource"])
             {
-                AudioSourceComponent &comp = desEntity.AddComponent<AudioSourceComponent>();
+                auto &comp = desEntity.AddComponent<AudioSourceComponent>();
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
                 comp.volume = node["Volume"].as<float>();
                 comp.pitch = node["Pitch"].as<float>();
@@ -803,7 +796,7 @@ namespace ignite
             // World Environment
             if (YAML::Node node = entityNode["WorldEnvironment"])
             {
-                WorldEnvironment &world = desEntity.AddComponent<WorldEnvironment>();
+                auto &world = desEntity.AddComponent<WorldEnvironment>();
                 if (node["HDRHandle"])
                 {
                     world.hdrHandle = AssetHandle(node["HDRHandle"].as<uint64_t>());
@@ -852,22 +845,21 @@ namespace ignite
             }
 
 			// Text Component
-			if (YAML::Node node = entityNode["TextComponent"])
-			{
-                TextComponent &comp = desEntity.AddComponent<TextComponent>();
+            if (YAML::Node node = entityNode["TextComponent"])
+            {
+                auto &comp = desEntity.AddComponent<TextComponent>();
                 if (node["FontHandle"])
                 {
                     comp.fontHandle = AssetHandle(node["FontHandle"].as<uint64_t>());
                 }
-				if (node["Material2DHandle"])
-				{
-					comp.material2dHandle= AssetHandle(node["Material2DHandle"].as<uint64_t>());
-				}
+                if (node["Material2DHandle"])
+                {
+                    comp.material2dHandle = AssetHandle(node["Material2DHandle"].as<uint64_t>());
+                }
                 if (node["Text"])
                 {
                     comp.text = node["Text"].as<std::string>();
                 }
-
                 if (node["Color"])
                 {
                     comp.color = node["Color"].as<glm::vec4>();
@@ -884,18 +876,18 @@ namespace ignite
                 {
                     comp.screenSpace = node["ScreenSpace"].as<bool>();
                 }
-			}
+            }
 
             // Static Mesh
             if (YAML::Node node = entityNode["StaticMesh"])
             {
-                StaticMeshComponent &comp = desEntity.AddComponent<StaticMeshComponent>();
+                auto &comp = desEntity.AddComponent<StaticMeshComponent>();
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
             }
 
             if (YAML::Node node = entityNode["SkeletalMesh"])
             {
-                SkeletalMeshComponent &comp = desEntity.AddComponent<SkeletalMeshComponent>();
+                auto &comp = desEntity.AddComponent<SkeletalMeshComponent>();
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
             }
 

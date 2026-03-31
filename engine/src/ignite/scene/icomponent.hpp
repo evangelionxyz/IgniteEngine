@@ -32,11 +32,15 @@ namespace ignite
     {
         CompType_Invalid = 0,
         CompType_ID,
-        CompType_Camera,
         CompType_Transform,
+        
+        CompType_Camera,
+        
         CompType_Sprite2D,
         CompType_Circle2D,
+        CompType_Sprite2DAnimation,
         CompType_PointLight2D,
+
         CompType_Font,
 
         CompType_SkeletalMesh,

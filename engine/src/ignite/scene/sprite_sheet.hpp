@@ -13,14 +13,15 @@
 
 namespace ignite
 {
-	struct SpriteSheetData
-	{
-		glm::vec2 uv0 = glm::vec2(0.0f);
-		glm::vec2 uv1 = glm::vec2(1.0f);
-	};
-
 	class SpriteSheet : public Asset
 	{
+	public:
+		struct Data
+		{
+			glm::vec2 uv0 = glm::vec2(0.0f);
+			glm::vec2 uv1 = glm::vec2(1.0f);
+		};
+
 	public:
 		SpriteSheet()
 			: m_TextureHandle(AssetHandle(0))
@@ -39,8 +40,8 @@ namespace ignite
 		void SetTextureHandle(AssetHandle handle) { m_TextureHandle = handle; }
 		AssetHandle GetTextureHandle() const { return m_TextureHandle; }
 
-		std::vector<SpriteSheetData> &GetSprites() { return m_Sprites; }
-		const std::vector<SpriteSheetData> &GetSprites() const { return m_Sprites; }
+		std::vector<Data> &GetSprites() { return m_Sprites; }
+		const std::vector<Data> &GetSprites() const { return m_Sprites; }
 
 		virtual bool Serialize(const std::filesystem::path &filepath) override;
 		static Ref<SpriteSheet> Deserialize(const std::filesystem::path &filepath);
@@ -50,7 +51,7 @@ namespace ignite
 
 	private:
 		glm::vec2 m_AtlasSize = { 32.0f, 32.0f };
-		std::vector<SpriteSheetData> m_Sprites;
+		std::vector<Data> m_Sprites;
 		AssetHandle m_TextureHandle;
 
 	};

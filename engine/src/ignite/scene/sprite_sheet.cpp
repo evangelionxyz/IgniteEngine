@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #include "sprite_sheet.hpp"
+#include "ignite/serializer/serializer.hpp"
 
 namespace ignite
 {
@@ -50,7 +51,6 @@ namespace ignite
 		}
 
 		Ref<SpriteSheet> spriteSheet = CreateRef<SpriteSheet>();
-
 		if (YAML::Node textureNode = node["TextureHandle"])
 		{
 			spriteSheet->SetTextureHandle(AssetHandle(textureNode.as<uint64_t>()));
@@ -67,8 +67,7 @@ namespace ignite
 		{
 			for (const YAML::Node &spriteNode : spritesNode)
 			{
-				SpriteSheetData data;
-
+				SpriteSheet::Data data;
 				if (YAML::Node uv0Node = spriteNode["UV0"]; uv0Node && uv0Node.IsSequence() && uv0Node.size() == 2)
 				{
 					data.uv0 = { uv0Node[0].as<float>(), uv0Node[1].as<float>() };

@@ -363,6 +363,13 @@ namespace ignite
         COMPONENT_CLASS_TYPE(CompType_Sprite2D)
     };
 
+    class Sprite2DAnimationComponent : public IComponent
+    {
+    public:
+        AssetHandle handle;
+        COMPONENT_CLASS_TYPE(CompType_Sprite2DAnimation)
+    };
+
     class PointLight2DComponent : public IComponent
     {
     public:

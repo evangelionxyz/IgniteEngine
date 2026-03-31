@@ -305,7 +305,7 @@ namespace ignite
                 editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
             }
 
-            m_SceneRenderer->RenderTo(editCamera,
+            m_SceneRenderer->RenderEditorTo(editCamera,
                 m_ScenePanel->GetViewportEditSceneRT(),
                 m_ScenePanel->GetViewportEditUIRT(),
                 m_ScenePanel->GetViewportEditCompRT());
@@ -324,7 +324,7 @@ namespace ignite
                 editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
             }
 
-            m_SceneRenderer->RenderTo(editCamera,
+            m_SceneRenderer->RenderEditorTo(editCamera,
                 m_ScenePanel->GetViewportEditSceneRT(),
                 m_ScenePanel->GetViewportEditUIRT(),
                 m_ScenePanel->GetViewportEditCompRT());
@@ -344,7 +344,7 @@ namespace ignite
                 gameCamera->UpdateProjection(static_cast<float>(gameSize.x), static_cast<float>(gameSize.y));
             }
 
-            m_SceneRenderer->RenderTo(gameCamera,
+            m_SceneRenderer->RenderGameplayTo(gameCamera,
                 m_ScenePanel->GetViewportGameSceneRT(),
                 m_ScenePanel->GetViewportGameUIRT(),
                 m_ScenePanel->GetViewportGameCompRT());

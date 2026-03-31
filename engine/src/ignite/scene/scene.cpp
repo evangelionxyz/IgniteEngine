@@ -422,6 +422,11 @@ namespace ignite
 	{
 	}
 
+	template<>
+	void Scene::OnComponentAdded<Sprite2DAnimationComponent>(Entity entity, Sprite2DAnimationComponent &comp)
+	{
+	}
+
     template<>
     void Scene::OnComponentAdded<ScriptComponent>(Entity entity, ScriptComponent &comp)
     {
