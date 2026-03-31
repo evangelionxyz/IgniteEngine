@@ -221,6 +221,8 @@ namespace ignite {
                         sr.AddKeyValue("Handle", comp.handle);
                         sr.AddKeyValue("Color", comp.color);
                         sr.AddKeyValue("TilingFactor", comp.tilingFactor);
+                        sr.AddKeyValue("FlipX", comp.flipX);
+                        sr.AddKeyValue("FlipY", comp.flipY);
                     }
                     sr.EndMap();
                 }
@@ -660,6 +662,16 @@ namespace ignite {
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
                 comp.color = node["Color"].as<glm::vec4>();
                 comp.tilingFactor = node["TilingFactor"].as<glm::vec2>();
+
+                if (node["FlipX"])
+                {
+                    comp.flipX = node["FlipX"].as<bool>();
+                }
+
+				if (node["FlipY"])
+				{
+					comp.flipY = node["FlipY"].as<bool>();
+				}
             }
 
             // Circle 2D component

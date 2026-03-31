@@ -517,6 +517,8 @@ namespace ignite
             {
                 auto &c = selectedEntity.GetComponent<Sprite2DComponent>();
 
+				static Sprite2DComponent s_Sprite2DBefore;
+
                 // Material 2D
                 bool isMaterialLoaded = c.materialHandle != AssetHandle(0);
                 std::string btLabel = isMaterialLoaded ? std::to_string(c.materialHandle) : "Drag Here";
@@ -621,7 +623,6 @@ namespace ignite
                 }
                 else
                 {
-                    static Sprite2DComponent s_Sprite2DBefore;
 
                     UI::State tilingState = UI::DrawVec2Control("Tiling", c.tilingFactor, 0.025f, 1.0f);
                     if (tilingState.isItemActivated)            s_Sprite2DBefore = c;
@@ -631,6 +632,15 @@ namespace ignite
                     if (colorState.isItemActivated)            s_Sprite2DBefore = c;
                     if (colorState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
                 }
+
+                UI::State flipXState = UI::DrawCheckbox("Flip X", &c.flipX);
+				if (flipXState.isItemActivated)            s_Sprite2DBefore = c;
+				if (flipXState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
+
+                UI::State flipYState = UI::DrawCheckbox("Flip Y", &c.flipY);
+				if (flipYState.isItemActivated)            s_Sprite2DBefore = c;
+				if (flipYState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
+
             });
 
             RenderComponent<PointLight2DComponent>("Point Light 2D", selectedEntity, [&]()

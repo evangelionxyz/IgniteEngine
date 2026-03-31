@@ -357,6 +357,9 @@ namespace ignite
         glm::vec2 uv0 = { 0.0f, 1.0f };
         glm::vec2 uv1 = { 1.0f, 0.0f };
 
+        bool flipY = false;
+        bool flipX = false;
+        
         COMPONENT_CLASS_TYPE(CompType_Sprite2D)
     };
 

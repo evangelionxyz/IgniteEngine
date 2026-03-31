@@ -45,6 +45,8 @@ namespace ignite
     class RenderTarget;
     class Font;
 
+    class Sprite2DComponent;
+
     template<typename VertexType>
     struct BatchRender
     {
