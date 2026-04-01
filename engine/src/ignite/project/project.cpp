@@ -102,6 +102,8 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 
     Project::~Project()
     {
+        project = nullptr;
+
         delete m_ScriptEngine;
         delete m_AssetManager;
     }

@@ -130,6 +130,9 @@ namespace ignite
             bool sceneViewportGameplayVisible = false;
             bool sceneViewportEditorVisible = false;
 
+            float gamePreviewZoom = 1.0f;
+            glm::vec2 gamePreviewPan = glm::vec2(0.0f);
+
             bool is2DBoundsSizing = false;
             bool is2DBoundsHovered = false;
             int active2DCorner = -1;

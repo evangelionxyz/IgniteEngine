@@ -2361,60 +2361,164 @@ namespace ignite
 
         if (m_Data.sceneViewportGameplayVisible)
         {
-
-			// Calculating Scene Viewport location
-			const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
-			const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
-
-			// Preview camera
-			if (m_Scene)
+            // Preview camera
+            if (m_Scene)
             {
+                // TOOLBAR: 
+                constexpr ImVec2 buttonSize = { 24.0f, 24.0f };
+
+                State sceneState = EditorLayer::GetInstance()->GetState().sceneState;
+                const bool isScenePlaying = sceneState == ignite::State::ScenePlay;
+                Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
+                ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
+
+                ImGui::SameLine();
+                ImGui::Image(scenePlayStopID, buttonSize);
+                if (ImGui::IsItemClicked())
+                {
+                    if (isScenePlaying)
+                    {
+                        EditorLayer::GetInstance()->OnSceneStop();
+#if _WIN32
+                        HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
+                        COLORREF rgbRed = 0x00E86071;
+                        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
+#endif
+                    }
+                    else
+                    {
+                        EditorLayer::GetInstance()->OnScenePlay();
+#if _WIN32
+                        HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
+                        COLORREF rgbRed = 0x000000AB;
+                        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
+#endif
+                    }
+                }
+
+                const bool isSceneSimulate = sceneState == ignite::State::SceneSimulate;
+                Ref<Texture> sceneSimulateTex = isSceneSimulate ? m_Icons["stop"] : m_Icons["simulate"];
+                ImTextureID sceneSimulateID = (ImTextureID)sceneSimulateTex->GetHandle().Get();
+
+                ImGui::SameLine();
+                ImGui::Image(sceneSimulateID, buttonSize);
+                if (ImGui::IsItemClicked())
+                {
+                    if (isSceneSimulate)
+                    {
+                        EditorLayer::GetInstance()->OnSceneStop();
+#if _WIN32
+                        HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
+                        COLORREF rgbRed = 0x00E86071;
+                        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
+#endif
+                    }
+                    else
+                    {
+                        EditorLayer::GetInstance()->OnSceneSimulate();
+#if _WIN32
+                        HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
+                        COLORREF rgbRed = 0x000000AB;
+                        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
+#endif
+                    }
+                }
+
+                ImGui::SameLine();
+                ImGui::TextUnformatted("Zoom");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(120.0f);
+                ImGui::SliderFloat("##GamePreviewZoom", &m_Data.gamePreviewZoom, 0.25f, 4.0f, "%.2fx");
+
+                ImGui::SameLine();
+                if (ImGui::Button("Reset##GamePreviewZoomPan"))
+                {
+                    m_Data.gamePreviewZoom = 1.0f;
+                    m_Data.gamePreviewPan = glm::vec2(0.0f);
+                }
+
+                // Calculating Scene Viewport location
+                const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
+                const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
+
                 if (Entity cameraEntity = m_Scene->GetPrimaryCamera())
                 {
-					CameraComponent &cameraComp = cameraEntity.GetComponent<CameraComponent>();
+                    CameraComponent &cameraComp = cameraEntity.GetComponent<CameraComponent>();
 
-					ImVec2 imagePos = canvasPos;
-					ImVec2 imageSize = canvasSize;
+                    ImVec2 baseImagePos = canvasPos;
+                    ImVec2 baseImageSize = canvasSize;
 
-					const float safeCanvasW = glm::max(canvasSize.x, 1.0f);
-					const float safeCanvasH = glm::max(canvasSize.y, 1.0f);
-					const float canvasAspect = safeCanvasW / safeCanvasH;
+                    const float safeCanvasW = glm::max(canvasSize.x, 1.0f);
+                    const float safeCanvasH = glm::max(canvasSize.y, 1.0f);
+                    const float canvasAspect = safeCanvasW / safeCanvasH;
 
-					float targetAspect = canvasAspect;
-					if (!cameraComp.camera.IsFreeAspect())
-					{
-						targetAspect = glm::max(cameraComp.camera.GetAspectRatioValue(), 0.0001f);
-					}
+                    float targetAspect = canvasAspect;
+                    if (!cameraComp.camera.IsFreeAspect())
+                    {
+                        targetAspect = glm::max(cameraComp.camera.GetAspectRatioValue(), 0.0001f);
+                    }
 
-					if (canvasAspect > targetAspect)
-					{
-						imageSize.x = safeCanvasH * targetAspect;
-						imagePos.x += (safeCanvasW - imageSize.x) * 0.5f;
-					}
-					else
-					{
-						imageSize.y = safeCanvasW / targetAspect;
-						imagePos.y += (safeCanvasH - imageSize.y) * 0.5f;
-					}
+                    if (canvasAspect > targetAspect)
+                    {
+                        baseImageSize.x = safeCanvasH * targetAspect;
+                        baseImagePos.x += (safeCanvasW - baseImageSize.x) * 0.5f;
+                    }
+                    else
+                    {
+                        baseImageSize.y = safeCanvasW / targetAspect;
+                        baseImagePos.y += (safeCanvasH - baseImageSize.y) * 0.5f;
+                    }
 
-					m_ViewportGameRT.rect.min = { imagePos.x, imagePos.y };
-					m_ViewportGameRT.rect.max = { imagePos.x + imageSize.x, imagePos.y + imageSize.y };
+                    m_Data.gamePreviewZoom = glm::clamp(m_Data.gamePreviewZoom, 0.25f, 4.0f);
 
-					ImTextureID previewImage = (ImTextureID)m_ViewportGameRT.composite->GetColorAttachment(0)->GetHandle().Get();
-					ImGui::SetCursorScreenPos(imagePos);
-					ImGui::Image(previewImage, imageSize);
+                    ImVec2 imageSize =
+                    {
+                        baseImageSize.x * m_Data.gamePreviewZoom,
+                        baseImageSize.y * m_Data.gamePreviewZoom
+                    };
+
+                    const float maxPanX = glm::max((imageSize.x - baseImageSize.x) * 0.5f, 0.0f);
+                    const float maxPanY = glm::max((imageSize.y - baseImageSize.y) * 0.5f, 0.0f);
+                    m_Data.gamePreviewPan.x = glm::clamp(m_Data.gamePreviewPan.x, -maxPanX, maxPanX);
+                    m_Data.gamePreviewPan.y = glm::clamp(m_Data.gamePreviewPan.y, -maxPanY, maxPanY);
+
+                    ImVec2 imagePos =
+                    {
+                        baseImagePos.x + (baseImageSize.x - imageSize.x) * 0.5f + m_Data.gamePreviewPan.x,
+                        baseImagePos.y + (baseImageSize.y - imageSize.y) * 0.5f + m_Data.gamePreviewPan.y
+                    };
+
+                    const bool imageHovered =
+                        ImGui::GetMousePos().x >= imagePos.x && ImGui::GetMousePos().x <= imagePos.x + imageSize.x &&
+                        ImGui::GetMousePos().y >= imagePos.y && ImGui::GetMousePos().y <= imagePos.y + imageSize.y;
+
+                    if (imageHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
+                    {
+                        const ImVec2 delta = ImGui::GetIO().MouseDelta;
+                        m_Data.gamePreviewPan += glm::vec2(delta.x, delta.y);
+                    }
+
+                    m_ViewportGameRT.rect.min = { baseImagePos.x, baseImagePos.y };
+                    m_ViewportGameRT.rect.max = { baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y };
+
+                    ImTextureID previewImage = (ImTextureID)m_ViewportGameRT.composite->GetColorAttachment(0)->GetHandle().Get();
+                    ImDrawList *drawList = ImGui::GetWindowDrawList();
+                    drawList->PushClipRect(baseImagePos, ImVec2(baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y), true);
+                    drawList->AddImage(previewImage, imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
+                    drawList->PopClipRect();
+
+                    ImGui::SetCursorScreenPos(baseImagePos);
+                    ImGui::InvisibleButton("##GamePreviewCanvas", baseImageSize);
                 }
-				else
-				{
-					m_ViewportGameRT.rect.min = { canvasPos.x, canvasPos.y };
-					m_ViewportGameRT.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
-					ImGui::Text("No Camera");
-				}
+                else
+                {
+                    m_ViewportGameRT.rect.min = { canvasPos.x, canvasPos.y };
+                    m_ViewportGameRT.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
+                    ImGui::Text("No Camera");
+                }
             }
             else
             {
-                m_ViewportGameRT.rect.min = { canvasPos.x, canvasPos.y };
-                m_ViewportGameRT.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
                 ImGui::Text("No Scene");
             }
         }

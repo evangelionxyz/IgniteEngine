@@ -59,9 +59,9 @@ namespace ignite
         nvrhi::ResourceStates initialState = nvrhi::ResourceStates::Unknown;
         nvrhi::TextureDimension dimension = nvrhi::TextureDimension::Texture2D;
 
-        nvrhi::SamplerAddressMode samplerAddressU = nvrhi::SamplerAddressMode::Repeat;
-        nvrhi::SamplerAddressMode samplerAddressV = nvrhi::SamplerAddressMode::Repeat;
-        nvrhi::SamplerAddressMode samplerAddressW = nvrhi::SamplerAddressMode::Repeat;
+        nvrhi::SamplerAddressMode samplerAddressU = nvrhi::SamplerAddressMode::ClampToEdge;
+        nvrhi::SamplerAddressMode samplerAddressV = nvrhi::SamplerAddressMode::ClampToEdge;
+        nvrhi::SamplerAddressMode samplerAddressW = nvrhi::SamplerAddressMode::ClampToEdge;
         bool samplerLinearFiltering = true;
     };
 

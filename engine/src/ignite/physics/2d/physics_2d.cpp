@@ -31,12 +31,6 @@ namespace ignite
             Rigidbody2DComponent &rb = reg->get<Rigidbody2DComponent>(e);
             TransformComponent &tr   = reg->get<TransformComponent>(e);
 
-            // first, calculate the transformed matrix from parent
-            if (id.parent != 0)
-            {
-                // SceneManager::CalculateParentTransform(m_Scene, tr, id.parent);
-            }
-
             b2BodyDef bodyDef        = b2DefaultBodyDef();
             bodyDef.type             = GetB2BodyType(rb.type);
             bodyDef.position         = { tr.translation.x, tr.translation.y };
@@ -85,12 +79,6 @@ namespace ignite
     {
         auto &id = entity.GetComponent<IDComponent>();
         auto &tr = entity.GetComponent<TransformComponent>();
-
-        // first, calculate the transformed matrix from parent
-        if (id.parent != 0)
-        {
-            // SceneManager::CalculateParentTransform(m_Scene, tr, id.parent);
-        }
 
         auto &rb = entity.GetComponent<Rigidbody2DComponent>();
 
@@ -208,7 +196,8 @@ namespace ignite
 
 					width = glm::max(width, glm::epsilon<float>());
 					height = glm::max(height, glm::epsilon<float>());
-					const b2Polygon boxShape = b2MakeBox(width, height);
+                    const b2Vec2 offset = { bc.offset.x * tr.scale.x, bc.offset.y * tr.scale.y };
+                    const b2Polygon boxShape = b2MakeOffsetBox(width, height, offset, b2MakeRot(0.0f));
 					b2Shape_SetPolygon(bc.shapeId, &boxShape);
                     bc.dirty = false;
                 }
@@ -259,7 +248,15 @@ namespace ignite
         
         box->currentSize = { width, height };
 
-        const b2Polygon boxShape = b2MakeBox(width, height);
+        float scaleX = 1.0f;
+        float scaleY = 1.0f;
+        if (glm::abs(box->size.x) > glm::epsilon<float>())
+            scaleX = size.x / box->size.x;
+        if (glm::abs(box->size.y) > glm::epsilon<float>())
+            scaleY = size.y / box->size.y;
+
+        const b2Vec2 offset = { box->offset.x * scaleX, box->offset.y * scaleY };
+        const b2Polygon boxShape = b2MakeOffsetBox(width, height, offset, b2MakeRot(0.0f));
 
         b2ShapeDef shapeDef           = b2DefaultShapeDef();
         shapeDef.density              = box->density;

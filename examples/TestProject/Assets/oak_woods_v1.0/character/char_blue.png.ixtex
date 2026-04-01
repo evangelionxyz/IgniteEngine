@@ -18,6 +18,6 @@ TextureImportSettings:
   Format: 19
   InitialState: 32
   Dimension: 3
-  SamplerAddressU: 1
-  SamplerAddressV: 1
-  SamplerAddressW: 1
+  SamplerAddressU: 0
+  SamplerAddressV: 0
+  SamplerAddressW: 0

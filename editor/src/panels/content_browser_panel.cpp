@@ -1416,6 +1416,10 @@ namespace ignite
             createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
             createInfo.width = thumbnailSize;
             createInfo.height = thumbnailSize;
+            createInfo.samplerAddressU = nvrhi::SamplerAddressMode::ClampToEdge;
+            createInfo.samplerAddressV = nvrhi::SamplerAddressMode::ClampToEdge;
+            createInfo.samplerAddressW = nvrhi::SamplerAddressMode::ClampToEdge;
+            createInfo.samplerLinearFiltering = false;
 
             // Load texture data on worker thread (no command list yet)
             Ref<Texture> loadedTexture = Texture::Create(capturedPath.string().c_str(), createInfo, nullptr);

@@ -100,6 +100,7 @@ namespace ignite
     {
         Layer::OnDetach();
 
+        m_ActiveProject.reset();
 		s_EditorLayerInstance = nullptr;
     }
 

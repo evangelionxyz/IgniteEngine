@@ -339,13 +339,14 @@ namespace ignite
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         nvrhi::SamplerHandle sampler;
-        for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
+        Ref<Texture> whiteTexture = Renderer::GetWhiteTexture();
+        for (uint8_t i = 1; i < MAX_TEXTURE_BATCH_COUNT; ++i)
         {
             if (i >= textures.size())
                 break;
 
             Ref<Texture> tex = textures[i];
-            if (tex && tex->GetSampler())
+            if (tex && tex.get() != whiteTexture.get() && tex->GetSampler())
             {
                 sampler = tex->GetSampler();
                 break;
@@ -386,14 +387,15 @@ namespace ignite
 
 		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
-        nvrhi::SamplerHandle sampler;
-        for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
+       nvrhi::SamplerHandle sampler;
+        Ref<Texture> whiteTexture = Renderer::GetWhiteTexture();
+        for (uint8_t i = 1; i < MAX_TEXTURE_BATCH_COUNT; ++i)
         {
             if (i >= textures.size())
                 break;
 
             Ref<Texture> tex = textures[i];
-            if (tex && tex->GetSampler())
+           if (tex && tex.get() != whiteTexture.get() && tex->GetSampler())
             {
                 sampler = tex->GetSampler();
                 break;
