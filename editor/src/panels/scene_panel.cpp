@@ -305,11 +305,43 @@ namespace ignite
         if (!entity.IsValid())
             return;
 
+        static UUID s_LastAutoScrolledTarget = UUID(0);
+        if (m_TrackingSelectedEntity == UUID(0))
+        {
+            s_LastAutoScrolledTarget = UUID(0);
+        }
+
         IDComponent &idComp = entity.GetComponent<IDComponent>();
         bool isDeleting = false;
         const bool isPrefab = idComp.IsInType(EntityType_Prefab);
 
-        ImGuiTreeNodeFlags flags = (GetSelectedEntity() == entity ? ImGuiTreeNodeFlags_Selected : 0) | (!idComp.HasChild() ? ImGuiTreeNodeFlags_Leaf : 0)
+        const bool isSelected = m_SelectedEntities.contains(entity.GetUUID());
+
+        const std::function<bool(Entity)> hasSelectedDescendant = [&](Entity current) -> bool
+        {
+            if (!current.IsValid())
+                return false;
+
+            const IDComponent& currentID = current.GetComponent<IDComponent>();
+            for (const UUID childUuid : currentID.children)
+            {
+                if (m_SelectedEntities.contains(childUuid))
+                    return true;
+
+                Entity child = SceneManager::GetEntity(m_Scene.get(), childUuid);
+                if (child.IsValid() && hasSelectedDescendant(child))
+                    return true;
+            }
+
+            return false;
+        };
+
+        if (hasSelectedDescendant(entity))
+        {
+            ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+        }
+
+        ImGuiTreeNodeFlags flags = (isSelected ? ImGuiTreeNodeFlags_Selected : 0) | (!idComp.HasChild() ? ImGuiTreeNodeFlags_Leaf : 0)
             | ImGuiTreeNodeFlags_OpenOnDoubleClick
             | ImGuiTreeNodeFlags_SpanAvailWidth
             | ImGuiTreeNodeFlags_OpenOnArrow
@@ -324,6 +356,16 @@ namespace ignite
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, { 0.780f, 0.520f, 0.000f, 1.000f });
         
         const bool opened = ImGui::TreeNodeEx(reinterpret_cast<void *>(imguiPushId), flags, "%s", idComp.name.c_str());
+
+        if (isSelected && entity.GetUUID() == m_TrackingSelectedEntity && s_LastAutoScrolledTarget != m_TrackingSelectedEntity)
+        {
+            if (!ImGui::IsItemVisible())
+            {
+                ImGui::SetScrollHereY(0.5f);
+            }
+
+            s_LastAutoScrolledTarget = m_TrackingSelectedEntity;
+        }
         
         ImGui::PopStyleColor(3);
 
