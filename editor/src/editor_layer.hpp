@@ -32,7 +32,6 @@ namespace ignite
             bool settingsWindow = false;
             bool popupNewProjectModal = false;
             bool assetRegistryWindow = false;
-            bool isPickingEntity = false;
             bool takeScreenshot = false;
 
             uint32_t hoveredEntity = static_cast<uint32_t>(-1);

@@ -2357,8 +2357,11 @@ namespace ignite
 
 	void ScenePanel::RenderSceneGameViewport()
 	{
-        if (ImGui::Begin("Game"))
+		m_Data.sceneViewportGameplayVisible = ImGui::Begin("Game");
+
+        if (m_Data.sceneViewportGameplayVisible)
         {
+
 			// Calculating Scene Viewport location
 			const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
 			const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
@@ -2550,7 +2553,7 @@ namespace ignite
 			m_Gizmo.SetOperation(ImGuizmo::ROTATE);
 			break;
 		case GizmoOperation::SCALE:
-			m_Gizmo.SetOperation(ImGuizmo::ROTATE);
+			m_Gizmo.SetOperation(ImGuizmo::SCALE);
 			break;
 		case GizmoOperation::BOUND_SIZING_2D:
 			m_Gizmo.SetOperation(ImGuizmo::NONE);

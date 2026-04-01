@@ -127,6 +127,9 @@ namespace ignite
 			bool isGizmoManipulating = false;
 			bool isGizmoBeingUse = false;
 
+            bool sceneViewportGameplayVisible = false;
+            bool sceneViewportEditorVisible = false;
+
             bool is2DBoundsSizing = false;
             bool is2DBoundsHovered = false;
             int active2DCorner = -1;
@@ -138,5 +141,7 @@ namespace ignite
             GizmoOperation gizmoOp;
             TransformComponent before2DResize;
 		} m_Data;
+
+        friend class EditorLayer;
     };
 }

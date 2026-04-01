@@ -250,11 +250,6 @@ namespace ignite
 
     bool EditorLayer::OnMouseButtonPressed(MouseButtonPressedEvent &event)
     {
-        if (event.Is(Mouse::ButtonLeft) && !m_ScenePanel->IsGizmoBeingUse() && m_ScenePanel->IsHovered())
-        {
-            m_Data.isPickingEntity = true;
-        }
-
         return false;
     }
 
@@ -341,30 +336,25 @@ namespace ignite
         // Prevent shared camera constant-buffer hazards between back-to-back viewport renders.
         m_Device->waitForIdle();
 
-        // Render to Game Viewport
-        if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
+        if (m_ScenePanel->m_Data.sceneViewportGameplayVisible)
         {
-            ICamera *gameCamera = &primaryCam.GetComponent<CameraComponent>().camera;
-            if (const glm::uvec2 gameSize = m_ScenePanel->GetViewportGameCompRT()->GetSize(); gameSize.x > 0u && gameSize.y > 0u)
-            {
-                gameCamera->UpdateProjection(static_cast<float>(gameSize.x), static_cast<float>(gameSize.y));
-            }
+			// Render to Game Viewport
+			if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
+			{
+				ICamera *gameCamera = &primaryCam.GetComponent<CameraComponent>().camera;
+				if (const glm::uvec2 gameSize = m_ScenePanel->GetViewportGameCompRT()->GetSize(); gameSize.x > 0u && gameSize.y > 0u)
+				{
+					gameCamera->UpdateProjection(static_cast<float>(gameSize.x), static_cast<float>(gameSize.y));
+				}
 
-            m_SceneRenderer->RenderGameplayTo(gameCamera,
-                m_ScenePanel->GetViewportGameSceneRT(),
-                m_ScenePanel->GetViewportGameUIRT(),
-                m_ScenePanel->GetViewportGameCompRT());
+				m_SceneRenderer->RenderGameplayTo(gameCamera,
+					m_ScenePanel->GetViewportGameSceneRT(),
+					m_ScenePanel->GetViewportGameUIRT(),
+					m_ScenePanel->GetViewportGameCompRT());
+			}
         }
 
         m_Cmd->open();
-        // Create staging texture for read-back
-        if (m_Data.isPickingEntity && false) // FIXME: No mouse picking
-        {
-            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetViewportEditCompRT()->GetColorAttachment(1)->GetHandle()->getDesc();
-            stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
-            m_MousePickingStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            m_Cmd->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetViewportEditCompRT()->GetColorAttachment(1)->GetHandle(), nvrhi::TextureSlice());
-        }
 
         if (m_Data.takeScreenshot)
         {
@@ -405,45 +395,6 @@ namespace ignite
                     "Screenshot.png");
             }
             m_Data.takeScreenshot = false;
-        }
-
-        if (m_Data.isPickingEntity && false) // FIXME: No mouse picking
-        {
-            // Map and read the pixel data
-            size_t rowPitch = 0;
-            if (void *mappedData = m_Device->mapStagingTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch)) {
-                uint32_t *pixelData = static_cast<uint32_t *>(mappedData);
-
-                glm::vec2 mousePos = m_ScenePanel->GetViewportMousePos();
-                const int pixelX = static_cast<i32>(mousePos.x);
-                const int pixelY = static_cast<i32>(mousePos.y);
-
-                // Get row pitch from texture mapping
-                m_Data.hoveredEntity = pixelData[pixelY * (rowPitch / sizeof(uint32_t)) + pixelX];
-
-                bool found = false;
-                auto view = m_ActiveScene->registry->view<TransformComponent>();
-                for (entt::entity e : view)
-                {
-                    if (uint32_t eId = static_cast<uint32_t>(e); eId == m_Data.hoveredEntity)
-                    {
-                        Entity entity{ e, m_ActiveScene.get() };
-                        m_ScenePanel->SetSelectedEntity(entity);
-                        found = true;
-                        break;
-                    }
-                }
-
-                if (!found && !m_Data.multiSelect)
-                {
-                    m_ScenePanel->SetSelectedEntity(Entity{});
-                    m_ScenePanel->SetGizmoOperation(GizmoOperation::NONE);
-                }
-
-                m_Device->unmapStagingTexture(m_MousePickingStagingTexture);
-            }
-
-            m_Data.isPickingEntity = false;
         }
     }
 
