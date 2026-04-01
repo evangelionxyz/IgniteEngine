@@ -68,7 +68,7 @@ namespace ignite
 			case nvrhi::Format::RGBA32_FLOAT: return "RGBA32_FLOAT";
 			default: return "UNKNOWN";
 			}
-       }
+		}
 
 		static const char *SamplerAddressModeToString(nvrhi::SamplerAddressMode mode)
 		{
@@ -629,11 +629,11 @@ namespace ignite
 
 		const bool hasValidSelectionArea = uvMax.x > uvMin.x && uvMax.y > uvMin.y;
 		const bool editingSelectedSprite = state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size());
-     if (editingSelectedSprite && ImGui::Button("Apply To Selected"))
+		if (editingSelectedSprite && ImGui::Button("Apply To Selected"))
 		{
 			if (hasValidSelectionArea)
 			{
-              auto &selectedSprite = sprites[static_cast<size_t>(state.selectedSpriteIndex)];
+				auto &selectedSprite = sprites[static_cast<size_t>(state.selectedSpriteIndex)];
 				selectedSprite.uv0 = uvMin;
 				selectedSprite.uv1 = uvMax;
 				spriteSheet->SetDirtyFlag(true);
@@ -653,36 +653,6 @@ namespace ignite
 			state.renamingSpriteIndex = -1;
 			spriteSheet->SetDirtyFlag(true);
 		}
-
-		ImGui::SameLine();
-		const bool canMoveUp = state.selectedSpriteIndex > 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size());
-		if (!canMoveUp)
-			ImGui::BeginDisabled();
-		if (ImGui::Button("Move Up"))
-		{
-			const int i = state.selectedSpriteIndex;
-			std::swap(sprites[static_cast<size_t>(i)], sprites[static_cast<size_t>(i - 1)]);
-			std::swap(state.spriteNames[static_cast<size_t>(i)], state.spriteNames[static_cast<size_t>(i - 1)]);
-			state.selectedSpriteIndex = i - 1;
-			spriteSheet->SetDirtyFlag(true);
-		}
-		if (!canMoveUp)
-			ImGui::EndDisabled();
-
-		ImGui::SameLine();
-		const bool canMoveDown = state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size()) - 1;
-		if (!canMoveDown)
-			ImGui::BeginDisabled();
-		if (ImGui::Button("Move Down"))
-		{
-			const int i = state.selectedSpriteIndex;
-			std::swap(sprites[static_cast<size_t>(i)], sprites[static_cast<size_t>(i + 1)]);
-			std::swap(state.spriteNames[static_cast<size_t>(i)], state.spriteNames[static_cast<size_t>(i + 1)]);
-			state.selectedSpriteIndex = i + 1;
-			spriteSheet->SetDirtyFlag(true);
-		}
-		if (!canMoveDown)
-			ImGui::EndDisabled();
 
 		ImGui::BeginChild("##sprite_sheet_sprite_list", ImVec2(0.0f, 130.0f), ImGuiChildFlags_Borders);
 		for (size_t i = 0; i < sprites.size(); ++i)
@@ -718,6 +688,35 @@ namespace ignite
 			ImGui::TextDisabled("(%.3f, %.3f) -> (%.3f, %.3f)", sprite.uv0.x, sprite.uv0.y, sprite.uv1.x, sprite.uv1.y);
 		}
 		ImGui::EndChild();
+
+		const bool canMoveUp = state.selectedSpriteIndex > 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size());
+		if (!canMoveUp)
+			ImGui::BeginDisabled();
+		if (ImGui::Button("Move Up"))
+		{
+			const int i = state.selectedSpriteIndex;
+			std::swap(sprites[static_cast<size_t>(i)], sprites[static_cast<size_t>(i - 1)]);
+			std::swap(state.spriteNames[static_cast<size_t>(i)], state.spriteNames[static_cast<size_t>(i - 1)]);
+			state.selectedSpriteIndex = i - 1;
+			spriteSheet->SetDirtyFlag(true);
+		}
+		if (!canMoveUp)
+			ImGui::EndDisabled();
+
+		ImGui::SameLine();
+		const bool canMoveDown = state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size()) - 1;
+		if (!canMoveDown)
+			ImGui::BeginDisabled();
+		if (ImGui::Button("Move Down"))
+		{
+			const int i = state.selectedSpriteIndex;
+			std::swap(sprites[static_cast<size_t>(i)], sprites[static_cast<size_t>(i + 1)]);
+			std::swap(state.spriteNames[static_cast<size_t>(i)], state.spriteNames[static_cast<size_t>(i + 1)]);
+			state.selectedSpriteIndex = i + 1;
+			spriteSheet->SetDirtyFlag(true);
+		}
+		if (!canMoveDown)
+			ImGui::EndDisabled();
 
 		if (state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size()))
 		{
@@ -936,6 +935,7 @@ namespace ignite
 			if (ImGui::Button("Create"))
 				tryCreateAsset();
 			ImGui::SameLine();
+
 			if (ImGui::Button("Cancel"))
 				m_CreateRequest = {};
 			ImGui::Separator();
@@ -1193,6 +1193,8 @@ namespace ignite
 		ImGui::Separator();
 		if (ImGui::Button("ReImport"))
 		{
+			assetManager.SetTextureCreateInfo(assetData.handle, state.createInfo);
+
 			AssetMetaData importMetadata = assetData.metadata;
 			importMetadata.filepath = project->GetAssetFilepath(assetData.metadata.filepath);
 
@@ -1201,6 +1203,7 @@ namespace ignite
 			{
 				reimportedTexture->handle = assetData.handle;
 				assetManager.AssignAsset(assetData.handle, reimportedTexture);
+                assetManager.SetTextureCreateInfo(assetData.handle, reimportedTexture->GetCreateInfo());
 				assetData.asset = reimportedTexture;
 				state.createInfo = reimportedTexture->GetCreateInfo();
 				reimportedTexture->SetDirtyFlag(false);
@@ -1264,9 +1267,9 @@ namespace ignite
 			bool isOpen = assetData.isOpen;
 			ImGui::SetNextWindowSize(ImVec2(1200.0f, 760.0f), ImGuiCond_FirstUseEver);
 			ImGui::SetNextWindowSizeConstraints(ImVec2(900.0f, 640.0f), ImVec2(FLT_MAX, FLT_MAX));
-			if (!ImGui::Begin(assetData.windowTitle.c_str(), &isOpen, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+			if (!ImGui::Begin(assetData.windowTitle.c_str(), &isOpen, ImGuiWindowFlags_NoScrollWithMouse))
 			{
-              if (!isOpen && assetData.asset && assetData.asset->IsDirty())
+				if (!isOpen && assetData.asset && assetData.asset->IsDirty())
 				{
 					isOpen = true;
 					assetData.showUnsavedClosePopup = true;

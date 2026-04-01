@@ -338,12 +338,25 @@ namespace ignite
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
-        // then add textures
-        const auto samplerDesc = nvrhi::SamplerDesc()
-          .setAllAddressModes(nvrhi::SamplerAddressMode::ClampToEdge)
-            .setAllFilters(true);
+        nvrhi::SamplerHandle sampler;
+        for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
+        {
+            if (i >= textures.size())
+                break;
 
-        nvrhi::SamplerHandle sampler = device->createSampler(samplerDesc);
+            Ref<Texture> tex = textures[i];
+            if (tex && tex->GetSampler())
+            {
+                sampler = tex->GetSampler();
+                break;
+            }
+        }
+
+        if (!sampler)
+        {
+            Ref<Texture> fallback = Renderer::GetWhiteTexture();
+            sampler = fallback ? fallback->GetSampler() : nullptr;
+        }
 
         nvrhi::BindingSetDesc bindingSetDesc;
         bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
@@ -373,12 +386,25 @@ namespace ignite
 
 		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
-		// then add textures
-		const auto samplerDesc = nvrhi::SamplerDesc()
-			.setAllAddressModes(nvrhi::SamplerAddressMode::Repeat)
-			.setAllFilters(true);
+        nvrhi::SamplerHandle sampler;
+        for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
+        {
+            if (i >= textures.size())
+                break;
 
-		nvrhi::SamplerHandle sampler = device->createSampler(samplerDesc);
+            Ref<Texture> tex = textures[i];
+            if (tex && tex->GetSampler())
+            {
+                sampler = tex->GetSampler();
+                break;
+            }
+        }
+
+        if (!sampler)
+        {
+            Ref<Texture> fallback = Renderer::GetWhiteTexture();
+            sampler = fallback ? fallback->GetSampler() : nullptr;
+        }
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));

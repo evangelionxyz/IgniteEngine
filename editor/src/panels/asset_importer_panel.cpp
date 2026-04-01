@@ -14,7 +14,7 @@
 
 namespace ignite
 {
-   namespace
+	namespace
 	{
 		bool IsFbxFile(const std::filesystem::path &filepath)
 		{

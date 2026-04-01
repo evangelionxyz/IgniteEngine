@@ -85,6 +85,7 @@ namespace ignite
 
         TextureCreateInfo GetCreateInfo() const { return m_CreateInfo; }
         nvrhi::TextureHandle GetHandle() { return m_Handle; }
+        nvrhi::SamplerHandle GetSampler() const { return m_Sampler; }
 
         static void *GetPixelData(Ref<Texture> texture, size_t *outRowPitch, nvrhi::ICommandList *cmd, nvrhi::IDevice *device);
 
@@ -111,6 +112,7 @@ namespace ignite
         TextureCreateInfo m_CreateInfo;
         std::filesystem::path m_Filepath;
         nvrhi::TextureHandle m_Handle;
+        nvrhi::SamplerHandle m_Sampler;
         std::string m_DebugName;
     };
 

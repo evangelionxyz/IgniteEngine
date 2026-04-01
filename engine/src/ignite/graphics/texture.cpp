@@ -89,7 +89,11 @@ namespace ignite
     Texture::Texture(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName)
         : m_CreateInfo(createInfo), m_Filepath(filepath), m_DebugName(debugName)
     {
-        LOG_ASSERT(std::filesystem::exists(filepath), "File does not found!");
+        if (!std::filesystem::exists(filepath))
+        {
+            LOG_ERROR("[Texture] File does not found! {}", filepath.generic_string());
+            return;
+        }
 
         // always use RGBA
         const int channels = 4;
@@ -148,6 +152,7 @@ namespace ignite
     {
         m_Buffer.Release();
 
+        m_Sampler = nullptr;
         m_Handle = nullptr;
     }
 
@@ -274,8 +279,16 @@ namespace ignite
         {
             m_Handle = device->createTexture(textureDesc);
         }
+
+        nvrhi::SamplerDesc samplerDesc;
+        samplerDesc.addressU = m_CreateInfo.samplerAddressU;
+        samplerDesc.addressV = m_CreateInfo.samplerAddressV;
+        samplerDesc.addressW = m_CreateInfo.samplerAddressW;
+        samplerDesc.setAllFilters(m_CreateInfo.samplerLinearFiltering);
+        m_Sampler = device->createSampler(samplerDesc);
        
         LOG_ASSERT(m_Handle, "Failed to create texture");
+        LOG_ASSERT(m_Sampler, "Failed to create texture sampler");
     }
 
 	void Texture::EnsureTextureHandle()
