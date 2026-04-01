@@ -679,7 +679,7 @@ namespace ignite
         // Text data
         m_TextBatch.indexCount = 0;
         m_TextBatch.count = 0;
-       m_TextBatch.textureSlotIndex = 1;
+        m_TextBatch.textureSlotIndex = 1;
         m_TextBatch.vertexBufferPtr = m_TextBatch.vertexBufferBase;
 
         if (m_Material2DLightingBuffer && m_Material2DLightingDirty)
@@ -772,7 +772,7 @@ namespace ignite
             m_TextBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_TextBatch.vertexBufferBase, bufferSize));
 
             Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode);
-          nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_TextBatch.textureSlots, m_Material2DLightingBuffer);
+            nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_TextBatch.textureSlots, m_Material2DLightingBuffer);
 
             const auto graphicsState = nvrhi::GraphicsState()
                 .setPipeline(gp->GetHandle())
@@ -784,7 +784,7 @@ namespace ignite
             m_Cmd->setGraphicsState(graphicsState);
 
             nvrhi::DrawArguments args;
-          args.vertexCount = m_TextBatch.indexCount;
+            args.vertexCount = m_TextBatch.indexCount;
             args.instanceCount = 1;
 
             m_Cmd->drawIndexed(args);
@@ -944,12 +944,12 @@ namespace ignite
         DrawLine({ {aabb.min.x, aabb.min.y, aabb.max.z}, {aabb.min.x, aabb.max.y, aabb.max.z} }, color);
     }
 
-    void Renderer2D::DrawCircle(const glm::vec3 &position, const glm::vec3 &scale, const glm::vec4 &color, float thickness, float fade)
+    void Renderer2D::DrawCircle(const glm::vec3 &position, const glm::vec3 &scale, const glm::vec4 &color, float thickness, float fade, uint32_t objectID)
     {
-        DrawCircle(glm::translate(position) * glm::scale(scale), color, thickness, fade);
+        DrawCircle(glm::translate(position) * glm::scale(scale), color, thickness, fade, objectID);
     }
 
-	void Renderer2D::DrawCircle(const glm::mat4 &transform, const glm::vec4 &color, float thickness, float fade)
+    void Renderer2D::DrawCircle(const glm::mat4 &transform, const glm::vec4 &color, float thickness, float fade, uint32_t objectID)
 	{
       EnsureBatchCapacity(m_CircleBatch, 4, 6, true, m_Cmd);
 
@@ -958,6 +958,7 @@ namespace ignite
 			m_CircleBatch.vertexBufferPtr->position = transform * QUAD_POSITIONS[i];
 			m_CircleBatch.vertexBufferPtr->localPosition = QUAD_POSITIONS[i];
 			m_CircleBatch.vertexBufferPtr->color = color;
+            m_CircleBatch.vertexBufferPtr->objectID = objectID;
 			m_CircleBatch.vertexBufferPtr++;
 		}
 
@@ -965,7 +966,7 @@ namespace ignite
 		m_CircleBatch.count++;
 	}
 
-	void Renderer2D::DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor)
+    void Renderer2D::DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor, uint32_t objectID)
     {
         EnsureBatchCapacity(m_QuadBatch, 4, 6, true, m_Cmd);
 
@@ -997,6 +998,7 @@ namespace ignite
             m_QuadBatch.vertexBufferPtr->additiveColor = glm::vec4(0.0f);
             m_QuadBatch.vertexBufferPtr->texIndex = texIndex;
             m_QuadBatch.vertexBufferPtr->materialType = MATERIAL_2D_TYPE_UNLIT;
+            m_QuadBatch.vertexBufferPtr->objectID = objectID;
             m_QuadBatch.vertexBufferPtr++;
         }
 
@@ -1004,26 +1006,26 @@ namespace ignite
         m_QuadBatch.count++;
     }
 
-    void Renderer2D::DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor)
+    void Renderer2D::DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor, uint32_t objectID)
     {
         glm::mat4 transform = glm::translate(glm::mat4(1.0f), position)
             * glm::rotate(glm::mat4(1.0f), rotation, { 0.0f, 0.0f, 1.0f })
             * glm::scale(glm::mat4(1.0f), { size.x, size.y, 1.0f });
-        DrawQuad(transform, color, texture, uv0, uv1, tilingFactor);
+        DrawQuad(transform, color, texture, uv0, uv1, tilingFactor, objectID);
     }
 
-    void Renderer2D::DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor)
+    void Renderer2D::DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor, uint32_t objectID)
     {
         glm::mat4 transform = glm::translate(glm::mat4(1.0f), position) * glm::scale(glm::mat4(1.0f), { size.x, size.y, 1.0f });
-        DrawQuad(transform, color, texture, uv0, uv1, tilingFactor);
+        DrawQuad(transform, color, texture, uv0, uv1, tilingFactor, objectID);
     }
 
-    void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor)
+    void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor, uint32_t objectID)
     {
-        DrawQuad(transform, color, glm::vec4(0.0f), MATERIAL_2D_TYPE_UNLIT, texture, uv0, uv1, tilingFactor);
+       DrawQuad(transform, color, glm::vec4(0.0f), MATERIAL_2D_TYPE_UNLIT, texture, uv0, uv1, tilingFactor, objectID);
     }
 
-    void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const glm::vec4 &additiveColor, Material2DType materialType, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor)
+    void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const glm::vec4 &additiveColor, Material2DType materialType, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor, uint32_t objectID)
     {
         EnsureBatchCapacity(m_QuadBatch, 4, 6, true, m_Cmd);
 
@@ -1047,6 +1049,7 @@ namespace ignite
             m_QuadBatch.vertexBufferPtr->additiveColor = additiveColor;
             m_QuadBatch.vertexBufferPtr->texIndex = texIndex;
             m_QuadBatch.vertexBufferPtr->materialType = static_cast<uint32_t>(materialType);
+            m_QuadBatch.vertexBufferPtr->objectID = objectID;
             m_QuadBatch.vertexBufferPtr++;
         }
 
@@ -1070,7 +1073,7 @@ namespace ignite
         m_Material2DLightingDirty = true;
     }
 
-	void Renderer2D::DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing)
+	void Renderer2D::DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing, uint32_t objectID)
 	{
         if (!font)
             return;
@@ -1165,24 +1168,28 @@ namespace ignite
                 m_TextBatch.vertexBufferPtr->color = color;
                 m_TextBatch.vertexBufferPtr->texCoord = texCoordMin;
                 m_TextBatch.vertexBufferPtr->texIndex = texIndex;
+                m_TextBatch.vertexBufferPtr->objectID = objectID;
                 m_TextBatch.vertexBufferPtr++;
 
                 m_TextBatch.vertexBufferPtr->position = transform * glm::vec4(quadMax, 0.0f, 1.0f);
 				m_TextBatch.vertexBufferPtr->color = color;
                 m_TextBatch.vertexBufferPtr->texCoord = texCoordMax;
 				m_TextBatch.vertexBufferPtr->texIndex = texIndex;
+				m_TextBatch.vertexBufferPtr->objectID = objectID;
 				m_TextBatch.vertexBufferPtr++;
 
                 m_TextBatch.vertexBufferPtr->position = transform * glm::vec4(quadMin.x, quadMax.y, 0.0f, 1.0f);
 				m_TextBatch.vertexBufferPtr->color = color;
                 m_TextBatch.vertexBufferPtr->texCoord = { texCoordMin.x, texCoordMax.y };
 				m_TextBatch.vertexBufferPtr->texIndex = texIndex;
+				m_TextBatch.vertexBufferPtr->objectID = objectID;
 				m_TextBatch.vertexBufferPtr++;
 
 				m_TextBatch.vertexBufferPtr->position = transform * glm::vec4(quadMax.x, quadMin.y, 0.0f, 1.0f);
 				m_TextBatch.vertexBufferPtr->color = color;
                 m_TextBatch.vertexBufferPtr->texCoord = { texCoordMax.x, texCoordMin.y };
 				m_TextBatch.vertexBufferPtr->texIndex = texIndex;
+				m_TextBatch.vertexBufferPtr->objectID = objectID;
 				m_TextBatch.vertexBufferPtr++;
 
                 m_TextBatch.indexCount += 6;

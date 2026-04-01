@@ -15,6 +15,7 @@
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/font.hpp"
+#include "ignite/math/math.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/script_field.hpp"
 #include "ignite/scripting/script_instance.hpp"
@@ -55,22 +56,6 @@ namespace ignite
             glm::vec2( 0.5f,  0.5f),
             glm::vec2(-0.5f,  0.5f)
         };
-
-        bool ProjectWorldToScreen(const glm::vec3 &worldPos, const glm::mat4 &viewProjection, const Rect &viewportRect, ImVec2 &outScreen)
-        {
-            const glm::vec4 clip = viewProjection * glm::vec4(worldPos, 1.0f);
-            if (clip.w == 0.0f)
-                return false;
-
-            const glm::vec3 ndc = glm::vec3(clip) / clip.w;
-            if (ndc.z < 0.0f || ndc.z > 1.0f)
-                return false;
-
-            const glm::vec2 viewportSize = viewportRect.GetSize();
-            outScreen.x = viewportRect.min.x + ((ndc.x + 1.0f) * 0.5f) * viewportSize.x;
-            outScreen.y = viewportRect.min.y + ((1.0f - ndc.y) * 0.5f) * viewportSize.y;
-            return true;
-        }
     }
 
     UUID ScenePanel::m_TrackingSelectedEntity = UUID(0);
@@ -121,7 +106,8 @@ namespace ignite
         rtCreateInfo.attachments =
         {
             FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
-            FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget} // Main Color
+            FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}, // Main Color
+            FramebufferAttachments{ "[Scene ObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget} // Object ID
         };
 
         // Edit RT
@@ -292,6 +278,10 @@ namespace ignite
 			if (ImGui::MenuItem("Circle"))
 			{
 				entity = SetSelectedEntity(SceneManager::CreateCircle(m_Scene.get(), "Circle"));
+			}
+			if (ImGui::MenuItem("Point Light"))
+			{
+				entity = SetSelectedEntity(SceneManager::CreatePointLight2D(m_Scene.get(), "Point Light 2D"));
 			}
             ImGui::EndMenu();
         }
@@ -995,6 +985,8 @@ namespace ignite
 						ImGui::Spacing();
 						ImGui::Separator();
 						ImGui::Spacing();
+
+                        UI::DrawCheckbox("Play Anim", &sm->isPlaying);
 
 						// Display mesh instances with materials
 						int meshIndex = 0;
@@ -2066,6 +2058,92 @@ namespace ignite
         // Render scene texture to imgui
         ImTextureID sceneImage = (ImTextureID)m_ViewportEditRT.composite->GetColorAttachment(0)->GetHandle().Get(); // Current composite RT
         ImGui::Image(sceneImage, canvasSize);
+
+        // Mouse picking from viewport object-id attachment (on mouse down only)
+        {
+            const bool imageHovered = ImGui::IsItemHovered();
+            const bool mouseDown = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+            const bool mouseDoubleDown = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
+
+            if (m_Scene && imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
+            {
+                Ref<Texture> objectIdTexture = m_ViewportEditRT.scene->GetColorAttachment(1);
+                if (objectIdTexture && objectIdTexture->GetHandle())
+                {
+                    const glm::vec2 viewSize = m_ViewportEditRT.rect.GetSize();
+                    const int texWidth = objectIdTexture->GetWidth();
+                    const int texHeight = objectIdTexture->GetHeight();
+
+                    if (viewSize.x > 0.0f && viewSize.y > 0.0f && texWidth > 0 && texHeight > 0)
+                    {
+                        const int pixelX = std::clamp(static_cast<int>((m_ViewportData.mousePos.x / viewSize.x) * static_cast<float>(texWidth)), 0, texWidth - 1);
+                        const int pixelY = std::clamp(static_cast<int>((m_ViewportData.mousePos.y / viewSize.y) * static_cast<float>(texHeight)), 0, texHeight - 1);
+
+                        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+                        nvrhi::TextureDesc stagingDesc = objectIdTexture->GetHandle()->getDesc();
+                        stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
+                        nvrhi::StagingTextureHandle stagingTexture = device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
+
+                        nvrhi::CommandListHandle copyCmd = device->createCommandList();
+                        copyCmd->open();
+                        copyCmd->copyTexture(stagingTexture, nvrhi::TextureSlice(), objectIdTexture->GetHandle(), nvrhi::TextureSlice());
+                        copyCmd->close();
+                        device->executeCommandList(copyCmd);
+
+                        size_t rowPitch = 0;
+                        if (void *mapped = device->mapStagingTexture(stagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch))
+                        {
+                            const uint32_t *pixelData = static_cast<const uint32_t *>(mapped);
+                            const uint32_t pickedObjectId = pixelData[pixelY * (rowPitch / sizeof(uint32_t)) + pixelX];
+                            device->unmapStagingTexture(stagingTexture);
+
+                            Entity pickedEntity = {};
+                            if (pickedObjectId != 0xFFFFFFFFu)
+                            {
+                                m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const IDComponent &id)
+                                {
+                                    if (pickedEntity.IsValid())
+                                        return;
+
+                                    const uint32_t objectId = static_cast<uint32_t>(static_cast<uint64_t>(id.uuid));
+                                    if (objectId == pickedObjectId)
+                                    {
+                                        pickedEntity = Entity{ e, m_Scene.get() };
+                                    }
+                                });
+                            }
+
+                            if (pickedEntity.IsValid())
+                            {
+                                Entity targetSelection = pickedEntity;
+
+                                // Single click: prefer selecting the direct parent group first.
+                                // Double click: select the exact clicked entity.
+                                if (!mouseDoubleDown)
+                                {
+                                    const UUID parent = pickedEntity.GetParentUUID();
+                                    if (parent != UUID(0))
+                                    {
+                                        if (Entity parentEntity = SceneManager::GetEntity(m_Scene.get(), parent); parentEntity.IsValid())
+                                        {
+                                            targetSelection = parentEntity;
+                                        }
+                                    }
+                                }
+
+                                SetSelectedEntity(targetSelection);
+                            }
+                            else if (!EditorLayer::GetInstance()->GetState().multiSelect)
+                            {
+                                SetSelectedEntity(Entity{});
+                                SetGizmoOperation(ImGuizmo::OPERATION::NONE);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if (ImGui::BeginDragDropTarget())
         {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("content_browser_item"))
@@ -2245,23 +2323,45 @@ namespace ignite
 
 				if (m_Gizmo.IsManipulating())
 				{
+                    const glm::vec3 preservedLocalScale = tr.localScale;
 					glm::vec3 translation, rotation, scale;
 					Math::DecomposeTransformEuler(transformMatrix, translation, rotation, scale);
+                    const ImGuizmo::OPERATION op = m_Gizmo.GetOperation();
 
 					if (entity.GetParentUUID() != UUID(0))
 					{
 						Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
 						const TransformComponent &parentTr = parent.GetTransform();
-						glm::vec4 localTranslation = glm::inverse(parentTr.GetWorldMatrix()) * glm::vec4(translation, 1.0f);
-						tr.localTranslation = localTranslation;
-						tr.localRotation = glm::inverse(parentTr.rotation) * glm::quat(rotation);
-						tr.localScale = scale / parentTr.scale;
+                        const glm::mat4 parentWorld = parentTr.GetWorldMatrix();
+                        const glm::mat4 localMatrix = glm::inverse(parentWorld) * transformMatrix;
+
+                        glm::vec3 localTranslation, localEuler, localScale;
+                        Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                        tr.localTranslation = localTranslation;
+                        tr.localRotation = glm::quat(localEuler);
+
+                        if (op == ImGuizmo::SCALE)
+                        {
+                            tr.localScale = localScale;
+                        }
+                        else
+                        {
+                            tr.localScale = preservedLocalScale;
+                        }
 					}
 					else
 					{
 						tr.localTranslation = translation;
 						tr.localRotation = glm::quat(rotation);
-						tr.localScale = scale;
+
+                        if (op == ImGuizmo::SCALE)
+                        {
+                            tr.localScale = scale;
+                        }
+                        else
+                        {
+                            tr.localScale = preservedLocalScale;
+                        }
 					}
 					tr.dirty = true;
 				}
@@ -2289,36 +2389,7 @@ namespace ignite
 
     glm::vec3 ScenePanel::ScreenToWorldOnPlane(const glm::vec2 &screenPos, float planeZ, bool *isValid)
     {
-        if (isValid)
-            *isValid = false;
-
-        const glm::vec2 viewportSize = m_ViewportEditRT.rect.GetSize();
-        if (viewportSize.x <= 0.0f || viewportSize.y <= 0.0f)
-            return glm::vec3(0.0f);
-
-        const float ndcX = ((screenPos.x - m_ViewportEditRT.rect.min.x) / viewportSize.x) * 2.0f - 1.0f;
-        const float ndcY = 1.0f - ((screenPos.y - m_ViewportEditRT.rect.min.y) / viewportSize.y) * 2.0f;
-
-        const glm::mat4 invViewProjection = glm::inverse(m_EditorCamera.GetProjection() * m_EditorCamera.GetView());
-
-        glm::vec4 nearPoint = invViewProjection * glm::vec4(ndcX, ndcY, 0.0f, 1.0f);
-        glm::vec4 farPoint = invViewProjection * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
-        if (nearPoint.w == 0.0f || farPoint.w == 0.0f)
-            return glm::vec3(0.0f);
-
-        nearPoint /= nearPoint.w;
-        farPoint /= farPoint.w;
-
-        const glm::vec3 origin = glm::vec3(nearPoint);
-        const glm::vec3 rayDir = glm::normalize(glm::vec3(farPoint - nearPoint));
-        if (glm::abs(rayDir.z) < 0.00001f)
-            return glm::vec3(0.0f);
-
-        const float t = (planeZ - origin.z) / rayDir.z;
-        if (isValid)
-            *isValid = true;
-
-        return origin + rayDir * t;
+        return Math::ScreenToWorldOnPlane(screenPos, planeZ, m_EditorCamera.GetProjection() * m_EditorCamera.GetView(), m_ViewportEditRT.rect, isValid);
     }
 
     void ScenePanel::Render2DBoundsSizing()
@@ -2378,7 +2449,7 @@ namespace ignite
         {
             const glm::vec4 world = worldMatrix * glm::vec4(kBoundsCorners[i].x, kBoundsCorners[i].y, 0.0f, 1.0f);
             worldCorners[i] = glm::vec3(world);
-            if (!ProjectWorldToScreen(worldCorners[i], viewProjection, m_ViewportEditRT.rect, screenCorners[i]))
+            if (!Math::ProjectWorldToScreen(worldCorners[i], viewProjection, m_ViewportEditRT.rect, screenCorners[i]))
             {
                 if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
                     releaseResizeCommand();
@@ -2467,19 +2538,36 @@ namespace ignite
                         + (m_Data.active2DAxisX * (cornerSign.x * halfX))
                         + (m_Data.active2DAxisY * (cornerSign.y * halfY));
 
-                    tr.localScale.x = halfX * 2.0f;
-                    tr.localScale.y = halfY * 2.0f;
+                    const float targetWorldScaleX = halfX * 2.0f;
+                    const float targetWorldScaleY = halfY * 2.0f;
+
+                    const float currentWorldScaleZ = glm::max(glm::length(glm::vec3(worldMatrix[2])), 0.0001f);
+
+                    glm::mat4 worldRotation = Math::RemoveScale(worldMatrix);
+                    worldRotation[3] = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+
+                    const glm::mat4 targetWorld =
+                        glm::translate(glm::mat4(1.0f), centerWorld)
+                        * worldRotation
+                        * glm::scale(glm::mat4(1.0f), glm::vec3(targetWorldScaleX, targetWorldScaleY, currentWorldScaleZ));
 
                     if (entity.GetParentUUID() != UUID(0))
                     {
                         Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
                         const glm::mat4 parentWorld = parent.GetTransform().GetWorldMatrix();
-                        const glm::vec4 localCenter = glm::inverse(parentWorld) * glm::vec4(centerWorld, 1.0f);
-                        tr.localTranslation = glm::vec3(localCenter);
+                        const glm::mat4 localMatrix = glm::inverse(parentWorld) * targetWorld;
+
+                        glm::vec3 localTranslation, localEuler, localScale;
+                        Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                        tr.localTranslation = localTranslation;
+                        tr.localRotation = glm::quat(localEuler);
+                        tr.localScale = localScale;
                     }
                     else
                     {
                         tr.localTranslation = centerWorld;
+                        tr.localScale.x = targetWorldScaleX;
+                        tr.localScale.y = targetWorldScaleY;
                     }
 
                     tr.dirty = true;

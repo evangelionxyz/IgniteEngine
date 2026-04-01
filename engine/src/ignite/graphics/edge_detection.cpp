@@ -37,17 +37,9 @@ namespace ignite
     {
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
-        auto bufferDesc = nvrhi::BufferDesc();
-        bufferDesc.byteSize = sizeof(EdgeDetectionParameter);
-        bufferDesc.isConstantBuffer = true;
-        bufferDesc.isVolatile = true;
-        bufferDesc.debugName = "Edge detection constant buffer";
-        bufferDesc.initialState = nvrhi::ResourceStates::ConstantBuffer;
-        bufferDesc.keepInitialState = true;
-        bufferDesc.maxVersions = 16;
-        m_ConstantBuffer = device->createBuffer(bufferDesc);
+        m_ConstantBuffer = ConstantBuffer::Create(sizeof(EdgeDetectionParameter), true, 16, "[Edge Detection] Constant buffer");
 
-        bufferDesc = nvrhi::BufferDesc();
+        auto bufferDesc = nvrhi::BufferDesc();
         bufferDesc.byteSize = sizeof(uint32_t) * 100; // allocate enough memory for selection
         bufferDesc.structStride = sizeof(uint32_t);
         bufferDesc.cpuAccess = nvrhi::CpuAccessMode::None;
@@ -79,7 +71,7 @@ namespace ignite
 
         m_BindingLayout = device->createBindingLayout(layoutDesc);
 
-        m_Shader = Shader::Create("resources/shaders/sobel_edge_detection.compute.hlsl", ShaderType::Compute);
+        m_Shader = Shader::Create("resources/shaders/sobel_edge_detection.compute.hlsl", ShaderType::Compute, true);
     }
 
     EdgeDetection::~EdgeDetection()
@@ -105,7 +97,7 @@ namespace ignite
         nvrhi::BindingSetDesc desc;
         desc.bindings =
         {
-            nvrhi::BindingSetItem::ConstantBuffer(0, m_ConstantBuffer),
+            nvrhi::BindingSetItem::ConstantBuffer(0, m_ConstantBuffer->GetHandle()),
             nvrhi::BindingSetItem::Texture_SRV(0, sceneTexture->GetHandle()),
             nvrhi::BindingSetItem::Texture_SRV(1, objectIDTexture->GetHandle()),
             nvrhi::BindingSetItem::Texture_SRV(2, depth->GetHandle()),
@@ -121,7 +113,7 @@ namespace ignite
     void EdgeDetection::ExecuteCompute(nvrhi::ICommandList *commandList, const EdgeDetectionParameter &params, uint32_t width, uint32_t height)
     {
         // Update constant buffer
-        commandList->writeBuffer(m_ConstantBuffer, &params, sizeof(params));
+        commandList->writeBuffer(m_ConstantBuffer->GetHandle(), &params, sizeof(params));
 
         // Transition output texture to UAV state before compute
         commandList->setTextureState(m_OutputTexture->GetHandle(), nvrhi::TextureSubresourceSet(), nvrhi::ResourceStates::UnorderedAccess);
@@ -160,10 +152,10 @@ namespace ignite
         createInfo.height = height;
         createInfo.format = nvrhi::Format::RGBA8_UNORM;
         createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+        createInfo.keepInitialState = true;
         createInfo.isUAV = true;
         
-        // createInfo.debugName = "SobelDetection Output Texture";
-        m_OutputTexture = Texture::Create(createInfo);
+        m_OutputTexture = Texture::Create(createInfo, "[Edge Detection] Output Texture");
 
     	auto samplerDesc = nvrhi::SamplerDesc();
     	samplerDesc.addressU = nvrhi::SamplerAddressMode::Repeat;

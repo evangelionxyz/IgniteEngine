@@ -25,6 +25,7 @@
 #define EDGE_DETECTION_HPP
 
 #include "ignite/core/types.hpp"
+#include "buffers/constant_buffer.hpp"
 
 #include <glm/glm.hpp>
 #include <nvrhi/nvrhi.h>
@@ -67,8 +68,9 @@ namespace ignite
         Ref<Shader> m_Shader;
         nvrhi::ComputePipelineHandle m_Pipeline;
 
+        Ref<ConstantBuffer> m_ConstantBuffer;
+
         // Resources
-        nvrhi::BufferHandle m_ConstantBuffer;
         nvrhi::BufferHandle m_SelectedIDBuffer;
         nvrhi::BindingLayoutHandle m_BindingLayout;
         nvrhi::BindingSetHandle m_BindingSet;

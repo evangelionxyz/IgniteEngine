@@ -295,6 +295,37 @@ namespace ignite
 
 			bool isSucceeded = SUCCEEDED(hr) && shaderBlob;
 
+			if (errorBlob && errorBlob->GetBufferPointer() && errorBlob->GetBufferSize() > 0)
+			{
+				std::string compilerOutput(
+					reinterpret_cast<const char*>(errorBlob->GetBufferPointer()),
+					errorBlob->GetBufferSize());
+
+				if (!compilerOutput.empty())
+				{
+					LOG_ERROR("[ShaderCompiler][DXC] Compiler output for '{}':\n{}", options.filepath.generic_string(), compilerOutput);
+				}
+			}
+
+			if (!isSucceeded)
+			{
+				std::string cmdLine;
+				cmdLine.reserve(args.size() * 16);
+				for (const std::wstring& arg : args)
+				{
+					cmdLine += std::string(arg.begin(), arg.end());
+					cmdLine += " ";
+				}
+
+				LOG_ERROR("[ShaderCompiler][DXC] Failed to compile shader '{}' (entry='{}', profile='{}_{}', platform='{}').",
+					options.filepath.generic_string(),
+					options.shaderDesc.entryPoint,
+					ShaderTypeToProfile(options.shaderDesc.shaderType),
+					options.shaderDesc.shaderModel,
+					ShaderPlatformToString(options.platformType));
+				LOG_ASSERT(false, "[ShaderCompiler][DXC] Full command line : {}", cmdLine);
+			}
+
 			// Dump PDB
 			if (isSucceeded && options.pdb)
 			{

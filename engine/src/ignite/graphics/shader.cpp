@@ -101,7 +101,7 @@ namespace ignite
         CreateShaderCachedDirectoryIfNeeded();
 
         std::vector<uint8_t> shaderCode = CompileOrGetShader(filepath, type, recompile);
-        LOG_ASSERT(shaderCode.data(), "[Shader] Blob data is not valid");
+        LOG_ASSERT(shaderCode.data(), "[Shader] Blob data is not valid {}", filepath);
 
         nvrhi::ShaderDesc shaderDesc;
         shaderDesc.shaderType = GetNVRHIShaderType(type);

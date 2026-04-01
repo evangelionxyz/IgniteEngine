@@ -13,6 +13,7 @@ struct PSInput
     float4 additiveColor: ADDITIVECOLOR;
     uint texIndex       : TEXINDEX;
     uint materialType   : MATTYPE;
+    uint objectID       : OBJECTID;
 };
 
 cbuffer Material2DLightingBuffer : register(b1, space0)
@@ -26,6 +27,7 @@ SamplerState samplerState : register(s0);
 struct PSOutput
 {
     float4 color : SV_TARGET0;
+    uint objectID : SV_TARGET1;
 };
 
 PSOutput main(PSInput input)
@@ -46,6 +48,7 @@ PSOutput main(PSInput input)
     
     PSOutput result;
     result.color = finalColor;
+    result.objectID = input.objectID;
 
     return result;
 }

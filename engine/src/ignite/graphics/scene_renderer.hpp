@@ -105,7 +105,7 @@ namespace ignite
 
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer);
-        void CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture);
+        void CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture = nullptr);
         void DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const DebugGridStyle &style, bool is2D);
         
     private:
@@ -117,6 +117,7 @@ namespace ignite
 
         Ref<Renderer2D> m_Renderer2D;
         Ref<UIRenderer> m_UIRenderer;
+        Ref<EdgeDetection> m_EdgeDetection;
 
         std::vector<uint32_t> m_SelectedEntities;
         nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;

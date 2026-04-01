@@ -43,6 +43,7 @@
 namespace ignite
 {
     class TransformComponent;
+    struct Rect;
 
     class Math
     {
@@ -55,10 +56,12 @@ namespace ignite
 
         static glm::vec3 Normalize(const glm::vec3 &v);
         static glm::vec3 WorldToScreen(const glm::vec3 &world_position, const glm::mat4 &model_transform, const glm::mat4 &view_projection, const glm::vec2 &screen_size);
+        static bool ProjectWorldToScreen(const glm::vec3 &worldPos, const glm::mat4 &viewProjection, const Rect &viewportRect, ImVec2 &outScreen);
         static glm::vec2 GetNormalizedDeviceCoord(const glm::vec2 &mouse, const glm::vec2 &screen);
         static glm::vec4 GetEyeCoord(glm::vec4 clipCoords, const glm::mat4 &projectionMatrix);
         static glm::vec3 GetWorldPosition(const glm::vec4 &eyeCoords, const glm::mat4 &viewMatrix);
         static glm::vec3 GetRayFromScreenCoords(const glm::vec2 &coord, const glm::vec2 &screen, const glm::mat4 &projection, const glm::mat4 &view, bool isPerspective, glm::vec3 &rayOrigin);
+        static glm::vec3 ScreenToWorldOnPlane(const glm::vec2 &screenPos, float planeZ, const glm::mat4 &viewProjection, const Rect &viewportRect, bool *isValid = nullptr);
         static bool RaySphereIntersection(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, const glm::vec3 &sphereCenter, float sphereRadius);
 
         static glm::mat4 RemoveScale(const glm::mat4 &matrix);

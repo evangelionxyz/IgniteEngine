@@ -92,20 +92,20 @@ namespace ignite
         void DrawLine(const glm::vec3 &pos0, const glm::vec3 &pos1, const glm::vec4& color = glm::vec4(1.0f));
         void DrawAABB(const AABB& aabb, const glm::vec4& color = glm::vec4(1.0f));
 
-        void DrawCircle(const glm::vec3& position, const glm::vec3 &scale, const glm::vec4& color = glm::vec4(1.0f), float thickness = -1.0f, float fade = 0.005f);
-        void DrawCircle(const glm::mat4 &transform, const glm::vec4 &color = glm::vec4(1.0f), float thickness = -1.0f, float fade = 0.005f);
+        void DrawCircle(const glm::vec3& position, const glm::vec3 &scale, const glm::vec4& color = glm::vec4(1.0f), float thickness = -1.0f, float fade = 0.005f, uint32_t objectID = 0xFFFFFFFFu);
+        void DrawCircle(const glm::mat4 &transform, const glm::vec4 &color = glm::vec4(1.0f), float thickness = -1.0f, float fade = 0.005f, uint32_t objectID = 0xFFFFFFFFu);
 
-		void DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
-        void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture>& texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
-        void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture>& texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
-        void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture>& texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
+        void DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t objectID = 0xFFFFFFFFu);
+        void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture>& texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t objectID = 0xFFFFFFFFu);
+        void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture>& texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t objectID = 0xFFFFFFFFu);
+        void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture>& texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t objectID = 0xFFFFFFFFu);
 
         void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const glm::vec4 &additiveColor, Material2DType materialType, const Ref<Texture> &texture, 
-            const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
+            const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t objectID = 0xFFFFFFFFu);
 
         void SetPointLights2D(const std::vector<PointLight2D_GPUData> &pointLights);
 
-        void DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing);
+        void DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing, uint32_t objectID = 0xFFFFFFFFu);
 
         void InitQuadData();
         void InitLineData();

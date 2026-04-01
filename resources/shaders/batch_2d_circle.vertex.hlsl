@@ -17,6 +17,7 @@ struct VSInput
     float4 position      : POSITION;
     float2 localPosition : TEXCOORD;
     float4 color         : COLOR;
+    uint objectID        : OBJECTID;
 };
 
 struct PSInput
@@ -24,6 +25,7 @@ struct PSInput
     float4 position      : SV_POSITION;
     float2 localPosition : TEXCOORD;
     float4 color         : COLOR;
+    uint objectID        : OBJECTID;
 };
 
 PSInput main(VSInput input)
@@ -32,5 +34,6 @@ PSInput main(VSInput input)
     output.position = mul(mul(camera.projection, camera.view), input.position);
     output.localPosition = input.localPosition;
     output.color = input.color;
+    output.objectID = input.objectID;
     return output;
 }
