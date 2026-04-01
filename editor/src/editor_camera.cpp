@@ -178,8 +178,6 @@ namespace ignite
 		if (Input::IsKeyPressed(Key::S)) moveDir -= GetForwardDirection();
 		if (Input::IsKeyPressed(Key::D)) moveDir += GetRightDirection();
 		if (Input::IsKeyPressed(Key::A)) moveDir -= GetRightDirection();
-		if (Input::IsKeyPressed(Key::E)) moveDir += glm::vec3(0.0f, 1.0f, 0.0f);
-		if (Input::IsKeyPressed(Key::Q)) moveDir -= glm::vec3(0.0f, 1.0f, 0.0f);
 
 		if (glm::length(moveDir) > 0.0f)
 		{

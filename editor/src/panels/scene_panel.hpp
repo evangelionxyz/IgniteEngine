@@ -45,7 +45,7 @@ namespace ignite
         bool OnMouseMovedEvent(MouseMovedEvent &event);
         bool OnJoystickConnectionEvent(JoystickConnectionEvent &event);
 
-        void SetGizmoOperation(ImGuizmo::OPERATION op);
+        void SetGizmoOperation(GizmoOperation op);
         void SetGizmoMode(ImGuizmo::MODE mode);
 
         bool IsGizmoBeingUse() const { return m_Data.isGizmoBeingUse; }
@@ -135,6 +135,7 @@ namespace ignite
             glm::vec3 active2DAxisX = glm::vec3(1.0f, 0.0f, 0.0f);
             glm::vec3 active2DAxisY = glm::vec3(0.0f, 1.0f, 0.0f);
             glm::vec3 active2DOppositeWorld = glm::vec3(0.0f);
+            GizmoOperation gizmoOp;
             TransformComponent before2DResize;
 		} m_Data;
     };

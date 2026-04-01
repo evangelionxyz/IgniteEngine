@@ -172,7 +172,7 @@ namespace ignite
             {
                 if (m_ScenePanel->IsFocused())
                 {
-                    m_ScenePanel->SetGizmoOperation(ImGuizmo::OPERATION::NONE);
+                    m_ScenePanel->SetGizmoOperation(GizmoOperation::NONE);
                 }
                 break;
             }
@@ -187,22 +187,28 @@ namespace ignite
                 }
                 break;
             }
+			case Key::Q:
+			{
+				if (!Input::IsMouseButtonPressed(Mouse::ButtonRight))
+					m_ScenePanel->SetGizmoOperation(GizmoOperation::BOUND_SIZING_2D);
+				break;
+			}
             case Key::T:
             {
                 if (!Input::IsMouseButtonPressed(Mouse::ButtonRight))
-                    m_ScenePanel->SetGizmoOperation(ImGuizmo::OPERATION::TRANSLATE);
+                    m_ScenePanel->SetGizmoOperation(GizmoOperation::TRANSLATE);
                 break;
             }
             case Key::R:
             {
                 if (!Input::IsMouseButtonPressed(Mouse::ButtonRight))
-                    m_ScenePanel->SetGizmoOperation(ImGuizmo::OPERATION::ROTATE);
+                    m_ScenePanel->SetGizmoOperation(GizmoOperation::ROTATE);
                 break;
             }
             case Key::E:
             {
                 if (!Input::IsMouseButtonPressed(Mouse::ButtonRight))
-                    m_ScenePanel->SetGizmoOperation(ImGuizmo::OPERATION::SCALE);
+                    m_ScenePanel->SetGizmoOperation(GizmoOperation::SCALE);
                 break;
             }
             case Key::F5:
@@ -431,7 +437,7 @@ namespace ignite
                 if (!found && !m_Data.multiSelect)
                 {
                     m_ScenePanel->SetSelectedEntity(Entity{});
-                    m_ScenePanel->SetGizmoOperation(ImGuizmo::OPERATION::NONE);
+                    m_ScenePanel->SetGizmoOperation(GizmoOperation::NONE);
                 }
 
                 m_Device->unmapStagingTexture(m_MousePickingStagingTexture);
@@ -810,7 +816,7 @@ namespace ignite
             m_EditorScene->OnStop();
         }
 
-        m_ScenePanel->SetGizmoOperation(ImGuizmo::OPERATION::NONE);
+        m_ScenePanel->SetGizmoOperation(GizmoOperation::NONE);
 
         if (m_Data.sceneState != State::SceneEdit)
             OnSceneStop();

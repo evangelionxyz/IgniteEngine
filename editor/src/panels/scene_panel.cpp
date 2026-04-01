@@ -789,144 +789,6 @@ namespace ignite
                     ImGui::Unindent(8.0f);
 
                     Ref<StaticMesh> sm = Project::GetInstance()->GetAsset<StaticMesh>(c.handle);
-                    if (sm)
-                    {
-                        ImGui::Spacing();
-                        ImGui::Separator();
-                        ImGui::Spacing();
-
-
-                        // Display mesh instances with materials
-                        int meshIndex = 0;
-                        for (auto &m : sm->GetMeshInstances())
-                        {
-                            ImGui::PushID(meshIndex++);
-
-                            // Mesh instance header
-                            std::string meshLabel = "Mesh: " + m->GetName();
-
-#if 0
-                            bool meshTreeOpen = ImGui::TreeNodeEx(meshLabel.c_str(),
-                                ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
-                                ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_FramePadding);
-
-                            if (meshTreeOpen)
-                            {
-                                ImGui::Indent(8.0f);
-
-                                // Material section
-                                Ref<Material> mat = Project::GetInstance()->GetAsset<Material>(m->GetMaterialHandle());
-                                if (mat)
-                                {
-                                    ImGui::Spacing();
-                                    ImGui::Text("Material: %s", mat->name.c_str());
-                                    ImGui::Spacing();
-
-                                    // Material properties in columns
-                                    ImGui::Columns(2, "material_props", false);
-                                    ImGui::SetColumnWidth(0, 120.0f);
-
-                                    // Base Color
-                                    ImGui::Text("Base Color:");
-                                    ImGui::NextColumn();
-                                    ImGui::ColorEdit3("##BaseColor", &mat->gpuData.baseColorFactor.x,
-                                        ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
-                                    ImGui::NextColumn();
-
-                                    // Metallic
-                                    ImGui::Text("Metallic:");
-                                    ImGui::NextColumn();
-                                    ImGui::SliderFloat("##Metallic", &mat->gpuData.metallicFactor, 0.0f, 1.0f);
-                                    ImGui::NextColumn();
-
-                                    // Roughness
-                                    ImGui::Text("Roughness:");
-                                    ImGui::NextColumn();
-                                    ImGui::SliderFloat("##Roughness", &mat->gpuData.roughnessFactor, 0.0f, 1.0f);
-                                    ImGui::NextColumn();
-
-                                    // Emissive
-                                    ImGui::Text("Emissive:");
-                                    ImGui::NextColumn();
-                                    ImGui::ColorEdit4("##Emissive", &mat->gpuData.emissiveFactor.x,
-                                        ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
-                                    ImGui::NextColumn();
-
-                                    // Occlusion Strength
-                                    ImGui::Text("Occlusion:");
-                                    ImGui::NextColumn();
-                                    ImGui::SliderFloat("##Occlusion", &mat->gpuData.occlusionStrength, 0.0f, 1.0f);
-                                    ImGui::NextColumn();
-
-                                    ImGui::Columns(1);
-
-                                    ImGui::Spacing();
-                                    ImGui::Separator();
-                                    ImGui::Spacing();
-
-                                    // Texture previews
-                                    ImGui::Text("Textures:");
-                                    ImGui::Spacing();
-
-                                    constexpr float thumbnailSize = 64.0f;
-                                    constexpr float spacing = 8.0f;
-
-                                    auto renderTexturePreview = [](const char *label, AssetHandle handle)
-                                        {
-                                            ImGui::PushID(label);
-                                            ImGui::PushID(static_cast<int>(static_cast<uint64_t>(handle)));
-                                            Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(handle);
-
-                                            if (texture && texture->GetHandle())
-                                            {
-                                                ImGui::BeginGroup();
-                                                ImTextureID texID = (ImTextureID)texture->GetHandle().Get();
-                                                ImGui::Image(texID, ImVec2(thumbnailSize, thumbnailSize));
-                                                if (ImGui::IsItemHovered())
-                                                {
-                                                    ImGui::BeginTooltip();
-                                                    ImGui::Image(texID, ImVec2(256.0f, 256.0f));
-                                                    ImGui::EndTooltip();
-                                                }
-                                                ImGui::TextWrapped("%s", label);
-                                                ImGui::EndGroup();
-                                            }
-                                            else
-                                            {
-                                                ImGui::BeginGroup();
-                                                ImGui::Button("None", ImVec2(thumbnailSize, thumbnailSize));
-                                                ImGui::TextWrapped("%s", label);
-                                                ImGui::EndGroup();
-                                            }
-                                            ImGui::PopID();
-                                            ImGui::PopID();
-                                        };
-
-                                    // First row of textures
-                                    renderTexturePreview("Base Color", mat->baseColorTextureHandle);
-                                    ImGui::SameLine(0.0f, spacing);
-                                    renderTexturePreview("Normal", mat->normalTextureHandle);
-                                    ImGui::SameLine(0.0f, spacing);
-                                    renderTexturePreview("Metallic/Rough", mat->metallicRoughnessTextureHandle);
-
-                                    // Second row of textures
-                                    renderTexturePreview("Emissive", mat->emissiveTextureHandle);
-                                    ImGui::SameLine(0.0f, spacing);
-                                    renderTexturePreview("Occlusion", mat->occlusionTextureHandle);
-                                }
-                                else
-                                {
-                                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "No Material Assigned");
-                                }
-
-                                ImGui::Unindent(8.0f);
-                                ImGui::TreePop();
-                            }
-#endif
-                            ImGui::PopID();
-                            ImGui::Spacing();
-                        }
-                    }
                 }
             });
 
@@ -982,143 +844,7 @@ namespace ignite
                     Ref<SkeletalMesh> sm = Project::GetInstance()->GetAsset<SkeletalMesh>(c.handle);
 					if (sm)
 					{
-						ImGui::Spacing();
-						ImGui::Separator();
-						ImGui::Spacing();
-
                         UI::DrawCheckbox("Play Anim", &sm->isPlaying);
-
-						// Display mesh instances with materials
-						int meshIndex = 0;
-						for (auto &m : sm->GetMeshInstances())
-						{
-							ImGui::PushID(meshIndex++);
-
-							// Mesh instance header
-
-#if 0
-							std::string meshLabel = "Mesh: " + m->GetName();
-							bool meshTreeOpen = ImGui::TreeNodeEx(meshLabel.c_str(),
-								ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed |
-								ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_FramePadding);
-
-							if (meshTreeOpen)
-							{
-								ImGui::Indent(8.0f);
-
-								// Material section
-								Ref<Material> mat = Project::GetInstance()->GetAsset<Material>(m->GetMaterialHandle());
-								if (mat)
-								{
-									ImGui::Spacing();
-									ImGui::Text("Material: %s", mat->name.c_str());
-									ImGui::Spacing();
-
-									// Material properties in columns
-									ImGui::Columns(2, "material_props", false);
-									ImGui::SetColumnWidth(0, 120.0f);
-
-									// Base Color
-									ImGui::Text("Base Color:");
-									ImGui::NextColumn();
-									ImGui::ColorEdit3("##BaseColor", &mat->gpuData.baseColorFactor.x,
-										ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
-									ImGui::NextColumn();
-
-									// Metallic
-									ImGui::Text("Metallic:");
-									ImGui::NextColumn();
-									ImGui::SliderFloat("##Metallic", &mat->gpuData.metallicFactor, 0.0f, 1.0f);
-									ImGui::NextColumn();
-
-									// Roughness
-									ImGui::Text("Roughness:");
-									ImGui::NextColumn();
-									ImGui::SliderFloat("##Roughness", &mat->gpuData.roughnessFactor, 0.0f, 1.0f);
-									ImGui::NextColumn();
-
-									// Emissive
-									ImGui::Text("Emissive:");
-									ImGui::NextColumn();
-									ImGui::ColorEdit4("##Emissive", &mat->gpuData.emissiveFactor.x,
-										ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
-									ImGui::NextColumn();
-
-									// Occlusion Strength
-									ImGui::Text("Occlusion:");
-									ImGui::NextColumn();
-									ImGui::SliderFloat("##Occlusion", &mat->gpuData.occlusionStrength, 0.0f, 1.0f);
-									ImGui::NextColumn();
-
-									ImGui::Columns(1);
-
-									ImGui::Spacing();
-									ImGui::Separator();
-									ImGui::Spacing();
-
-									// Texture previews
-									ImGui::Text("Textures:");
-									ImGui::Spacing();
-
-									constexpr float thumbnailSize = 64.0f;
-									constexpr float spacing = 8.0f;
-
-									auto renderTexturePreview = [](const char *label, AssetHandle handle)
-										{
-											ImGui::PushID(label);
-											ImGui::PushID(static_cast<int>(static_cast<uint64_t>(handle)));
-											Ref<Texture> texture = Project::GetInstance()->GetAsset<Texture>(handle);
-
-											if (texture && texture->GetHandle())
-											{
-												ImGui::BeginGroup();
-												ImTextureID texID = (ImTextureID)texture->GetHandle().Get();
-												ImGui::Image(texID, ImVec2(thumbnailSize, thumbnailSize));
-												if (ImGui::IsItemHovered())
-												{
-													ImGui::BeginTooltip();
-													ImGui::Image(texID, ImVec2(256.0f, 256.0f));
-													ImGui::EndTooltip();
-												}
-												ImGui::TextWrapped("%s", label);
-												ImGui::EndGroup();
-											}
-											else
-											{
-												ImGui::BeginGroup();
-												ImGui::Button("None", ImVec2(thumbnailSize, thumbnailSize));
-												ImGui::TextWrapped("%s", label);
-												ImGui::EndGroup();
-											}
-											ImGui::PopID();
-											ImGui::PopID();
-										};
-
-									// First row of textures
-									renderTexturePreview("Base Color", mat->baseColorTextureHandle);
-									ImGui::SameLine(0.0f, spacing);
-									renderTexturePreview("Normal", mat->normalTextureHandle);
-									ImGui::SameLine(0.0f, spacing);
-									renderTexturePreview("Metallic/Rough", mat->metallicRoughnessTextureHandle);
-
-									// Second row of textures
-									renderTexturePreview("Emissive", mat->emissiveTextureHandle);
-									ImGui::SameLine(0.0f, spacing);
-									renderTexturePreview("Occlusion", mat->occlusionTextureHandle);
-								}
-								else
-								{
-									ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "No Material Assigned");
-								}
-
-								ImGui::Unindent(8.0f);
-								ImGui::TreePop();
-							}
-#endif
-
-							ImGui::PopID();
-							ImGui::Spacing();
-						}
 					}
 				}
 			});
@@ -1936,7 +1662,7 @@ namespace ignite
 
         ImGui::SameLine();
 
-		static std::array<const char *, 3> kGizmoOperationLabels = { "Translate", "Rotate", "Scale" };
+		static std::array<const char *, 4> kGizmoOperationLabels = { "Translate", "Rotate", "Scale", "Bound Sizing 2D"};
 		int operationIndex = 0;
 		switch (m_Gizmo.GetOperation())
 		{
@@ -1945,10 +1671,14 @@ namespace ignite
 		    default: operationIndex = 0; break;
 		}
 		ImGui::SetNextItemWidth(90.0f);
-		if (ImGui::Combo("##GizmoOperation", &operationIndex, kGizmoOperationLabels.data(), static_cast<int>(kGizmoOperationLabels.size())))
+
+        int gizmoOpCount = static_cast<int>(kGizmoOperationLabels.size()) - 1;
+        if (m_EditorCamera.GetNavigationMode() == EditorCamera::NavigationMode::Mode2D)
+            gizmoOpCount = static_cast<int>(kGizmoOperationLabels.size());
+		
+        if (ImGui::Combo("##GizmoOperation", &operationIndex, kGizmoOperationLabels.data(), gizmoOpCount))
 		{
-			auto op = operationIndex == 0 ? ImGuizmo::TRANSLATE : operationIndex == 1 ? ImGuizmo::ROTATE : ImGuizmo::SCALE;
-			m_Gizmo.SetOperation(op);
+			SetGizmoOperation((GizmoOperation)operationIndex);
 		}
 		ImGui::SameLine();
 
@@ -2136,7 +1866,7 @@ namespace ignite
                             else if (!EditorLayer::GetInstance()->GetState().multiSelect)
                             {
                                 SetSelectedEntity(Entity{});
-                                SetGizmoOperation(ImGuizmo::OPERATION::NONE);
+                                SetGizmoOperation(GizmoOperation::NONE);
                             }
                         }
                     }
@@ -2424,7 +2154,7 @@ namespace ignite
             clearResizeState();
         };
 
-        if (!m_Scene || m_EditorCamera.GetNavigationMode() != EditorCamera::NavigationMode::Mode2D || m_SelectedEntities.size() != 1)
+        if (!m_Scene || m_EditorCamera.GetNavigationMode() != EditorCamera::NavigationMode::Mode2D || m_SelectedEntities.size() != 1 || m_Data.gizmoOp != GizmoOperation::BOUND_SIZING_2D)
         {
             if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
                 releaseResizeCommand();
@@ -2485,19 +2215,22 @@ namespace ignite
 
         m_Data.is2DBoundsHovered = mouseInViewport && hoveredCorner != -1;
 
-        for (int i = 0; i < static_cast<int>(screenCorners.size()); ++i)
+        if (m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D)
         {
-            const bool isActive = m_Data.is2DBoundsSizing && m_Data.active2DCorner == i;
-            const bool isHovered = hoveredCorner == i;
-            const ImU32 fillColor = isActive ? IM_COL32(255, 185, 0, 255) : (isHovered ? IM_COL32(255, 220, 110, 255) : IM_COL32(240, 240, 240, 230));
+            for (int i = 0; i < static_cast<int>(screenCorners.size()); ++i)
+            {
+                const bool isActive = m_Data.is2DBoundsSizing && m_Data.active2DCorner == i;
+                const bool isHovered = hoveredCorner == i;
+                const ImU32 fillColor = isActive ? IM_COL32(255, 185, 0, 255) : (isHovered ? IM_COL32(255, 220, 110, 255) : IM_COL32(240, 240, 240, 230));
 
-            const ImVec2 min = { screenCorners[i].x - handleRadius, screenCorners[i].y - handleRadius };
-            const ImVec2 max = { screenCorners[i].x + handleRadius, screenCorners[i].y + handleRadius };
-            drawList->AddRectFilled(min, max, fillColor, 2.0f);
-            drawList->AddRect(min, max, IM_COL32(30, 30, 30, 255), 2.0f, 0, 1.0f);
+                const ImVec2 min = { screenCorners[i].x - handleRadius, screenCorners[i].y - handleRadius };
+                const ImVec2 max = { screenCorners[i].x + handleRadius, screenCorners[i].y + handleRadius };
+                drawList->AddRectFilled(min, max, fillColor, 2.0f);
+                drawList->AddRect(min, max, IM_COL32(30, 30, 30, 255), 2.0f, 0, 1.0f);
+            }
         }
 
-        if (!m_Data.is2DBoundsSizing && mouseInViewport && hoveredCorner != -1 && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !m_Gizmo.IsManipulating())
+        if (!m_Data.is2DBoundsSizing && m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D && mouseInViewport && hoveredCorner != -1 && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !m_Gizmo.IsManipulating())
         {
             m_Data.is2DBoundsSizing = true;
             m_Data.active2DCorner = hoveredCorner;
@@ -2511,7 +2244,7 @@ namespace ignite
             m_Data.active2DOppositeWorld = worldCorners[oppositeCorner];
         }
 
-        if (m_Data.is2DBoundsSizing)
+        if (m_Data.is2DBoundsSizing && m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D)
         {
             if (m_Data.active2DEntity != entity.GetUUID())
             {
@@ -2756,9 +2489,31 @@ namespace ignite
         return false;
     }
 
-    void ScenePanel::SetGizmoOperation(ImGuizmo::OPERATION op)
+    void ScenePanel::SetGizmoOperation(GizmoOperation op)
     {
-        m_Gizmo.SetOperation(op);
+        if (m_EditorCamera.GetNavigationMode() != EditorCamera::NavigationMode::Mode2D && op == GizmoOperation::BOUND_SIZING_2D)
+            return;
+
+        m_Data.gizmoOp = op;
+
+        switch (op)
+        {
+		case GizmoOperation::NONE:
+			m_Gizmo.SetOperation(ImGuizmo::NONE);
+			break;
+        case GizmoOperation::TRANSLATE:
+            m_Gizmo.SetOperation(ImGuizmo::TRANSLATE);
+            break;
+		case GizmoOperation::ROTATE:
+			m_Gizmo.SetOperation(ImGuizmo::ROTATE);
+			break;
+		case GizmoOperation::SCALE:
+			m_Gizmo.SetOperation(ImGuizmo::ROTATE);
+			break;
+		case GizmoOperation::BOUND_SIZING_2D:
+			m_Gizmo.SetOperation(ImGuizmo::NONE);
+			break;
+        }
     }
 
     void ScenePanel::SetGizmoMode(ImGuizmo::MODE mode)
@@ -2868,7 +2623,7 @@ namespace ignite
 
         if (m_SelectedEntities.empty())
         {
-            m_Gizmo.SetOperation(ImGuizmo::OPERATION::NONE);
+            SetGizmoOperation(GizmoOperation::NONE);
         }
 
         m_TrackingSelectedEntity = entity.GetUUID();
