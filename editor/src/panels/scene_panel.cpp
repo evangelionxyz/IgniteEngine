@@ -172,7 +172,7 @@ namespace ignite
         // target drop
         if (ImGui::BeginDragDropTarget())
         {
-            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY_SOURCE_ITEM"))
+            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
             {
                 LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ITEM, that should be an entity");
                 Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
@@ -403,7 +403,7 @@ namespace ignite
             // drag and drop
             if (isPrefab == false && ImGui::BeginDragDropSource())
             {
-                ImGui::SetDragDropPayload("ENTITY_SOURCE_ITEM", &entity, sizeof(Entity));
+                ImGui::SetDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM, &entity, sizeof(Entity));
 
                 ImGui::BeginTooltip();
                 ImGui::Text("%s %llu", idComp.name.c_str(), static_cast<u64>(idComp.uuid));
@@ -415,7 +415,7 @@ namespace ignite
             // target drop
             if (isPrefab == false && ImGui::BeginDragDropTarget())
             {
-                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY_SOURCE_ITEM"))
+                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
                 {
                     LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ITEM, that should be an entity");
                     Entity src { *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
@@ -531,7 +531,7 @@ namespace ignite
                     {
 						if (ImGui::BeginDragDropTarget())
 						{
-							if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+							if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
 							{
 								LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
 								AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
@@ -587,7 +587,7 @@ namespace ignite
                     {
 						if (ImGui::BeginDragDropTarget())
 						{
-							if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+							if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
 							{
 								LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
 								AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
@@ -630,7 +630,7 @@ namespace ignite
 						{
 							if (ImGui::BeginDragDropTarget())
 							{
-								if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+								if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
 								{
 									LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
 									AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
@@ -640,7 +640,7 @@ namespace ignite
 										c.handle = handle;
 									}
 								}
-								else if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("sprite_sheet_item"))
+								else if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_SPRITE_SHEET_ITEM))
 								{
 									if (payload->Data && payload->DataSize == sizeof(SpriteSheetSpritePayload))
 									{
@@ -696,64 +696,56 @@ namespace ignite
                 if (uv1State.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
             });
 
-            RenderComponent<Sprite2DAnimationComponent>("Sprite 2D Animation", selectedEntity, [&]()
+            RenderComponent<Animator2DComponent>("Animator 2D", selectedEntity, [&]()
             {
-                auto &c = selectedEntity.GetComponent<Sprite2DAnimationComponent>();
+                auto &c = selectedEntity.GetComponent<Animator2DComponent>();
 
-                UI::DrawCheckbox("Playing", &c.playing);
-                UI::DrawCheckbox("Loop", &c.loop);
-                UI::DrawFloatControl("FPS", &c.fps, 0.25f, 1.0f, 240.0f);
-                UI::DrawFloatControl("Speed", &c.speed, 0.01f, 0.0f, 16.0f);
-
-                std::string animDropLabel = c.frames.empty() ? "Drop Sprite Frame" : std::format("{} Frame(s)", c.frames.size());
-                UI::DrawButtonWithColumn("Add Frame", animDropLabel.c_str(), nullptr, [&c]()
+                bool isAnimatorLoaded = c.controllerHandle != AssetHandle(0);
+                std::string animDropLabel = !isAnimatorLoaded ? "Drop Here" : std::to_string(c.controllerHandle);
+                UI::DrawButtonWithColumn("Controller", animDropLabel.c_str(), nullptr, [&c]()
+                {
+                    if (ImGui::BeginDragDropTarget())
                     {
-                        if (ImGui::BeginDragDropTarget())
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                         {
-                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("sprite_sheet_item"))
+                            if (payload->Data && payload->DataSize == sizeof(AssetHandle))
                             {
-                                if (payload->Data && payload->DataSize == sizeof(SpriteSheetSpritePayload))
+								AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                if (handle != AssetHandle(0))
                                 {
-									auto dropped = *static_cast<const SpriteSheetSpritePayload *>(payload->Data);
-									std::swap(dropped.uv0.y, dropped.uv1.y);
-                                    if (c.textureHandle != AssetHandle(0) && c.textureHandle != dropped.textureHandle)
-                                    {
-                                        c.frames.clear();
-                                        c.currentFrame = 0;
-                                        c.elapsed = 0.0f;
-                                    }
-
-                                    c.textureHandle = dropped.textureHandle;
-                                    c.frames.push_back({ dropped.uv0, dropped.uv1 });
-                                    c.playing = true;
+                                    c.controllerHandle = handle;
                                 }
                             }
-                            ImGui::EndDragDropTarget();
                         }
-                    });
-
-                ImGui::SameLine();
-                if (ImGui::Button("Clear Frames"))
-                {
-                    c.frames.clear();
-                    c.currentFrame = 0;
-                    c.elapsed = 0.0f;
-                }
-
-                if (!c.frames.empty())
-                {
-                    c.currentFrame = std::clamp(c.currentFrame, 0, static_cast<int>(c.frames.size()) - 1);
-                    UI::DrawIntControl("Frame", &c.currentFrame, 1.0f, 0, static_cast<int>(c.frames.size()) - 1);
-
-                    if (c.textureHandle != AssetHandle(0))
-                    {
-                        if (Ref<Texture> previewTexture = Project::GetInstance()->GetAsset<Texture>(c.textureHandle))
-                        {
-                            const auto &frame = c.frames[static_cast<size_t>(c.currentFrame)];
-                            ImTextureID texId = reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get());
-                            ImGui::Image(texId, ImVec2(96.0f, 96.0f), ImVec2(frame.uv0.x, frame.uv1.y), ImVec2(frame.uv1.x, frame.uv0.y));
-                        }
+                        ImGui::EndDragDropTarget();
                     }
+                });
+
+                if (isAnimatorLoaded)
+                {
+                    Ref<AnimatorController2D> animCtrl = m_EditorLayer->GetActiveProject()->GetAsset<AnimatorController2D>(c.controllerHandle);
+                    if (animCtrl)
+                    {
+                        if (ImGui::BeginCombo("Current State", c.currentStateName.c_str()))
+                        {
+                            for (size_t i = 0; i < animCtrl->states.size(); ++i)
+                            {
+                                bool isSelected = strcmp(animCtrl->states[i].name.c_str(), c.currentStateName.c_str()) == 0;
+                                if (ImGui::Selectable(animCtrl->states[i].name.c_str(), isSelected))
+                                {
+                                    c.currentStateName = animCtrl->states[i].name;
+                                }
+
+                                if (isSelected)
+                                {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
+
+                    }
+
                 }
             });
 
@@ -791,7 +783,7 @@ namespace ignite
                     {
                         if (ImGui::BeginDragDropTarget())
                         {
-                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                             {
                                 LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
                                 AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
@@ -845,7 +837,7 @@ namespace ignite
                     {
 						if (ImGui::BeginDragDropTarget())
 						{
-							if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+							if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
 							{
 								LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
 								AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
@@ -1127,7 +1119,7 @@ namespace ignite
                         {
                             if (ImGui::BeginDragDropTarget())
                             {
-                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                                 {
                                     LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
                                     AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
@@ -1155,7 +1147,7 @@ namespace ignite
                         {
                             if (ImGui::BeginDragDropTarget())
                             {
-                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                                 {
                                     LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
                                     AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
@@ -1201,7 +1193,7 @@ namespace ignite
                     {
 						if (ImGui::BeginDragDropTarget())
 						{
-							if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+							if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
 							{
 								if (payload->DataSize == sizeof(AssetHandle))
 								{
@@ -1444,7 +1436,7 @@ namespace ignite
                                             {
 												if (ImGui::BeginDragDropTarget())
 												{
-													if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY_SOURCE_ITEM"))
+													if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
 													{
 														LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ENTITY ITEM");
 														if (payload->DataSize == sizeof(Entity))
@@ -1559,8 +1551,8 @@ namespace ignite
                     case CompType_Sprite2D:
                         entity.AddComponent<Sprite2DComponent>();
                         break;
-                 case CompType_Sprite2DAnimation:
-                        entity.AddComponent<Sprite2DAnimationComponent>();
+                 case CompType_Animator2D:
+                        entity.AddComponent<Animator2DComponent>();
                         break;
 					case CompType_Circle2D:
 						entity.AddComponent<Circle2DComponent>();
@@ -1918,7 +1910,7 @@ namespace ignite
 
         if (ImGui::BeginDragDropTarget())
         {
-            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
             {
                 if (payload->DataSize == sizeof(AssetHandle))
                 {
@@ -2488,11 +2480,10 @@ namespace ignite
                         baseImagePos.y + (baseImageSize.y - imageSize.y) * 0.5f + m_Data.gamePreviewPan.y
                     };
 
-                    const bool imageHovered =
-                        ImGui::GetMousePos().x >= imagePos.x && ImGui::GetMousePos().x <= imagePos.x + imageSize.x &&
+                    const bool imageHovered = ImGui::GetMousePos().x >= imagePos.x && ImGui::GetMousePos().x <= imagePos.x + imageSize.x &&
                         ImGui::GetMousePos().y >= imagePos.y && ImGui::GetMousePos().y <= imagePos.y + imageSize.y;
 
-                    if (imageHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
+                    if (ImGui::IsWindowFocused() && ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
                     {
                         const ImVec2 delta = ImGui::GetIO().MouseDelta;
                         m_Data.gamePreviewPan += glm::vec2(delta.x, delta.y);

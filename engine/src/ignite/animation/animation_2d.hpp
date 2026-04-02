@@ -5,45 +5,52 @@
 
 #include "ignite/asset/asset.hpp"
 #include <glm/glm.hpp>
+#include <string>
+#include <vector>
+#include <filesystem>
 
 namespace ignite
 {
-	class Sprite2DAnimation : public Asset
-	{
-	public:
-		struct Data
-		{
-			glm::vec2 uv0 = glm::vec2(0.0f);
-			glm::vec2 uv1 = glm::vec2(1.0f);
-		};
+    // Animation2D: a single animation clip (e.g. "Idle", "Run")
+    // Serialized to .anim2d (YAML)
+    class Animation2D : public Asset
+    {
+    public:
+        struct Frame
+        {
+            glm::vec2 uv0 = glm::vec2(0.0f);
+            glm::vec2 uv1 = glm::vec2(1.0f);
+        };
 
-	public:
-		Sprite2DAnimation() = default;
+        std::string   name;
+        AssetHandle   textureHandle = AssetHandle(0);
+        std::vector<Frame> frames;
+        float fps  = 12.0f;
+        bool  loop = true;
 
-		void OnUpdate(float deltaTime);
+        // Runtime state (not serialized, per-instance on component)
+        int   currentFrame = 0;
+        float elapsed      = 0.0f;
 
-		void SetLoop(bool enable) { m_IsLooping = enable; }
-		bool IsLooping() const { return m_IsLooping; }
+        Animation2D() = default;
+        explicit Animation2D(const std::string &_name) : name(_name) {}
 
-		float GetFrameTime() const { return m_FrameTime; }
+        // Advance playback. Returns true if the frame changed.
+        bool OnUpdate(float deltaTime);
 
-		virtual bool Serialize(const std::filesystem::path &filepath);
-		const Ref<Sprite2DAnimation> Deserialize(const std::filesystem::path &filepath);
+        void Reset() { currentFrame = 0; elapsed = 0.0f; }
 
-		const std::vector<Data> &GetAnimations() { return m_Animations; }
-		const Data GetCurrentAnimation();
+        const Frame &GetCurrentFrame() const;
 
-	private:
-		std::vector<Data> m_Animations;
+        // Returns normalized playback position [0..1]
+        float GetNormalizedTime() const;
 
-		int m_CurrentFrame = 0;
-		float m_FrameTime = 0.0f; // Frame duration in seconds
-		float m_CurrentTime = 0.0f;
-		bool m_IsLooping = false;
-	};
+        virtual bool Serialize(const std::filesystem::path &filepath) override;
+        static Ref<Animation2D> Deserialize(const std::filesystem::path &filepath);
+        static Ref<Animation2D> Create(const std::string &name);
 
-
-	// Other animations
+        virtual AssetType GetAssetType() override { return AssetType::Animation2D; }
+    };
 }
 
-#endif
+#endif // ANIMATION_2D_HPP

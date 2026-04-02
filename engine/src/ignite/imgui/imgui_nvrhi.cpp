@@ -138,7 +138,10 @@ namespace ignite
     bool ImGui_NVRHI::Init(nvrhi::IDevice *device)
     {
         m_Device = device;
-        commandList = device->createCommandList();
+        commandList = device->createCommandList(
+            nvrhi::CommandListParameters()
+                .setEnableImmediateExecution(false)
+                .setQueueType(nvrhi::CommandQueue::Graphics));
         m_IsShuttingDown = false;
 
         ImGuiIO &io = ImGui::GetIO();

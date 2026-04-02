@@ -3,6 +3,9 @@ AssetRegistry:
     - Handle: 23797601587078018
       Type: SkeletalAnimation
       Filepath: Great Sword Jump Attack/Animation/Great Sword Jump Attack_0.ixanim
+    - Handle: 442989705455172397
+      Type: Invalid
+      Filepath: LUNARIS-LOGO-2.png.ixtex
     - Handle: 995434377171723589
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/rock_1.png
@@ -21,27 +24,54 @@ AssetRegistry:
     - Handle: 1595657205177314199
       Type: Texture
       Filepath: oak_woods_v1.0/character/char_blue.png
+    - Handle: 1651012710745940794
+      Type: Invalid
+      Filepath: oak_woods_v1.0/background/background_layer_3.png.ixtex
     - Handle: 2096283219806534382
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/fence_1.png
+    - Handle: 2161298842670855880
+      Type: Invalid
+      Filepath: oak_woods_v1.0/decorations/rock_2.png.ixtex
+    - Handle: 2561988360365062798
+      Type: Invalid
+      Filepath: oak_woods_v1.0/background/background_layer_1.png.ixtex
     - Handle: 2730403899731088208
       Type: SkeletalAnimation
       Filepath: Great Sword Jump Attack/Animation/Great Sword Jump Attack_0.ixanim
+    - Handle: 3041406261178892380
+      Type: Animation2D
+      Filepath: Animation/Idle.anim2d
     - Handle: 3090420985205604540
       Type: Invalid
       Filepath: oak_woods_v1.0
+    - Handle: 3185344157897316389
+      Type: Invalid
+      Filepath: segoeui_msdf.png.ixtex
+    - Handle: 3389315191378227768
+      Type: Invalid
+      Filepath: oak_woods_v1.0/decorations/shop_anim.png.ixtex
+    - Handle: 3845180596775616070
+      Type: Invalid
+      Filepath: oak_woods_v1.0/decorations/rock_3.png.ixtex
+    - Handle: 4052377181456289719
+      Type: Invalid
+      Filepath: klippad_sunrise_2_2k.hdr.ixtex
     - Handle: 4136522683356979229
       Type: SpriteSheet
       Filepath: oak_woods_v1.0/character/Character_Animation.ixsp
+    - Handle: 4153071628888176982
+      Type: Invalid
+      Filepath: oak_woods_v1.0/decorations/sign.png.ixtex
+    - Handle: 4518632332542533281
+      Type: Invalid
+      Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_0_.png.ixtex
     - Handle: 5784425294381670522
       Type: Texture
       Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_2_.png
     - Handle: 5850886667373479827
       Type: Skeleton
       Filepath: Great Sword Jump Attack/SkeletalMesh/Great Sword Jump Attack.ixskel
-    - Handle: 5867990243395963258
-      Type: Texture
-      Filepath: LUNARIS-LOGO-2.png
     - Handle: 5883949835432046130
       Type: SkeletalAnimation
       Filepath: Great Sword Jump Attack/Animation/Great Sword Jump Attack_0.ixanim
@@ -51,15 +81,27 @@ AssetRegistry:
     - Handle: 6496642200112123619
       Type: Scene
       Filepath: Scene/Animations.ixscene
+    - Handle: 6524363955388687950
+      Type: Invalid
+      Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_2_.png.ixtex
     - Handle: 6536254144797540605
       Type: Material2D
       Filepath: oak_woods_v1.0/decorations/Grass_01.ixmat2d
     - Handle: 6895963861277518904
       Type: Texture
       Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_0_.png
+    - Handle: 7218779416096983541
+      Type: Scene
+      Filepath: Scene/TestAnimation2D.ixscene
+    - Handle: 7329514183016406842
+      Type: Invalid
+      Filepath: oak_woods_v1.0/decorations/shop.png.ixtex
     - Handle: 7674180753406550397
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/grass_3.png
+    - Handle: 7880560588100442947
+      Type: Invalid
+      Filepath: oak_woods_v1.0/decorations/fence_2.png.ixtex
     - Handle: 7950879191016284909
       Type: SpriteSheet
       Filepath: NewSpriteSheet.ixsp
@@ -69,15 +111,24 @@ AssetRegistry:
     - Handle: 8598032598345587515
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/rock_3.png
+    - Handle: 8639085224443364618
+      Type: Invalid
+      Filepath: oak_woods_v1.0/background/background_layer_2.png.ixtex
     - Handle: 9201043509904246564
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/shop_anim.png
     - Handle: 9420462621085832834
       Type: Font
       Filepath: segoeui.ttf
+    - Handle: 9553757242853296517
+      Type: Invalid
+      Filepath: oak_woods_v1.0/oak_woods_tileset.png.ixtex
     - Handle: 9637491453112083221
       Type: Scene
       Filepath: Scene/TestScene.ixscene
+    - Handle: 10584338476988751194
+      Type: AnimatorController2D
+      Filepath: Animation/PlayerAnimController.ac2d
     - Handle: 10607535596036951705
       Type: Material
       Filepath: Great Sword Jump Attack/Material/MariaMat.ixmat
@@ -87,6 +138,12 @@ AssetRegistry:
     - Handle: 11616100263721429172
       Type: Material2D
       Filepath: oak_woods_v1.0/background/BG_03.ixmat2d
+    - Handle: 11885910304381050851
+      Type: Invalid
+      Filepath: oak_woods_v1.0/decorations/fence_1.png.ixtex
+    - Handle: 11905056758873041293
+      Type: Invalid
+      Filepath: oak_woods_v1.0/decorations/grass_1.png.ixtex
     - Handle: 12217278547325118582
       Type: Texture
       Filepath: oak_woods_v1.0/background/background_layer_3.png
@@ -108,6 +165,9 @@ AssetRegistry:
     - Handle: 13858284188598339881
       Type: Material2D
       Filepath: oak_woods_v1.0/background/BG_02.ixmat2d
+    - Handle: 13911563952830496492
+      Type: Invalid
+      Filepath: oak_woods_v1.0/decorations/grass_2.png.ixtex
     - Handle: 13956626230384988686
       Type: Material2D
       Filepath: oak_woods_v1.0/decorations/Sign_01.ixmat2d
@@ -126,6 +186,9 @@ AssetRegistry:
     - Handle: 15111561572354869003
       Type: Material2D
       Filepath: oak_woods_v1.0/decorations/LAMP_LIT.ixmat2d
+    - Handle: 15232903694076139444
+      Type: Invalid
+      Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_1_.png.ixtex
     - Handle: 15618750618960578444
       Type: Skeleton
       Filepath: Great Sword Jump Attack/SkeletalMesh/Great Sword Jump Attack.ixskel
@@ -144,15 +207,30 @@ AssetRegistry:
     - Handle: 16279785193974150571
       Type: Texture
       Filepath: oak_woods_v1.0/oak_woods_tileset.png
+    - Handle: 16385433897060038172
+      Type: Invalid
+      Filepath: oak_woods_v1.0/decorations/lamp.png.ixtex
+    - Handle: 16415925361187136886
+      Type: Invalid
+      Filepath: oak_woods_v1.0/decorations/grass_3.png.ixtex
     - Handle: 16477014767729516534
       Type: Skeleton
       Filepath: Great Sword Jump Attack/SkeletalMesh/Great Sword Jump Attack.ixskel
     - Handle: 16733559418084721288
       Type: Material2D
       Filepath: Background_Mat2d.ixmat2d
+    - Handle: 17327628186214966928
+      Type: Invalid
+      Filepath: oak_woods_v1.0/decorations/rock_1.png.ixtex
+    - Handle: 17889693000563470110
+      Type: Invalid
+      Filepath: oak_woods_v1.0/character/char_blue.png.ixtex
     - Handle: 17980563881130575912
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/grass_2.png
     - Handle: 18141019710842340681
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/sign.png
+    - Handle: 18148575872844501869
+      Type: Animation2D
+      Filepath: Animation/Run.anim2d

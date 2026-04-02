@@ -287,24 +287,30 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 
     bool Project::BuildSolution()
     {
-		// restore NuGet
-        {
-			std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /t:Restore /p:Configuration=Release /p:Platform=\"Any CPU\"";
-			std::system(buildCommand.c_str());
-		}
+		m_Info.scriptModuleFilepath = std::format("{}/{}.dll", GetScriptBinDirectory().string(), m_Info.name);
+		bool appAssemblyAvailable = std::filesystem::exists(GetDirectory() / m_Info.scriptModuleFilepath);
 
-        // Build
+        if (!appAssemblyAvailable)
         {
-			std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /p:Configuration=Release /p:Platform=\"Any CPU\"";
-			std::system(buildCommand.c_str());
+		    // restore NuGet
+            {
+			    std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /t:Restore /p:Configuration=Release /p:Platform=\"Any CPU\"";
+			    std::system(buildCommand.c_str());
+		    }
+
+            // Build
+            {
+			    std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /p:Configuration=Release /p:Platform=\"Any CPU\"";
+			    std::system(buildCommand.c_str());
+            }
         }
         
         m_Info.scriptModuleFilepath = std::format("{}/{}.dll", GetScriptBinDirectory().string(), m_Info.name);
-        bool success = std::filesystem::exists(GetDirectory() / m_Info.scriptModuleFilepath);
+        appAssemblyAvailable = std::filesystem::exists(GetDirectory() / m_Info.scriptModuleFilepath);
 
         // Validate .dll file
-        LOG_ASSERT(success, "[Project] Failed to build Solution");
-        return success;
+        LOG_ASSERT(appAssemblyAvailable, "[Project] Failed to build Solution");
+        return appAssemblyAvailable;
     }
 
 	void Project::CreateDirectories()
@@ -502,6 +508,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         }
 
         CopyDependencies();
+
         BuildSolution();
     }
 }

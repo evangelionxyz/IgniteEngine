@@ -603,7 +603,7 @@ namespace ignite
                                                     payload.uv0 = sprite.uv0;
                                                     payload.uv1 = sprite.uv1;
 
-                                                    ImGui::SetDragDropPayload("sprite_sheet_item", &payload, sizeof(payload));
+                                                    ImGui::SetDragDropPayload(DND_PAYLOAD_SPRITE_SHEET_ITEM, &payload, sizeof(payload));
                                                     ImGui::Text("Sprite %zu", spriteIndex);
                                                     ImGui::EndDragDropSource();
                                                 }
@@ -643,6 +643,21 @@ namespace ignite
                         if (ImGui::MenuItem("Sprite Sheet"))
                         {
 							DispatchCreateAssetEditorEvent(AssetType::SpriteSheet, m_CurrentDirectory);
+                        }
+
+                        if (ImGui::BeginMenu("Animation"))
+                        {
+                            if (ImGui::MenuItem("Animation 2D"))
+                            {
+                                DispatchCreateAssetEditorEvent(AssetType::Animation2D, m_CurrentDirectory);
+                            }
+
+                            if (ImGui::MenuItem("Animator Controller 2D"))
+                            {
+                                DispatchCreateAssetEditorEvent(AssetType::AnimatorController2D, m_CurrentDirectory);
+                            }
+
+                            ImGui::EndMenu();
                         }
 
                         if (ImGui::BeginMenu("Material"))
@@ -1256,7 +1271,7 @@ namespace ignite
                 AssetHandle handle = project ? project->GetAssetManager().GetAssetHandle(relativeAssetPath) : AssetHandle(0);
 				if (handle != AssetHandle(0))
 				{
-					ImGui::SetDragDropPayload("content_browser_item", &handle, sizeof(AssetHandle));
+					ImGui::SetDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM, &handle, sizeof(AssetHandle));
 				}
 			}
 

@@ -1,5 +1,3 @@
-// Copyright (c) 2026 Evangelion Manuhutu
-
 #include "asset_importer.hpp"
 
 #include "ignite/audio/fmod_audio.hpp"
@@ -16,6 +14,8 @@
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
+#include "ignite/animation/animation_2d.hpp"
+#include "ignite/animation/animator_controller_2d.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/sprite_sheet.hpp"
 #include "ignite/graphics/font.hpp"
@@ -39,6 +39,8 @@ namespace ignite {
         { AssetType::Font, AssetImporter::ImportFont },
         { AssetType::Skeleton, AssetImporter::ImportSkeleton },
         { AssetType::SkeletalAnimation, AssetImporter::ImportSkeletalAnimation },
+        { AssetType::Animation2D, AssetImporter::ImportAnimation2D },
+        { AssetType::AnimatorController2D, AssetImporter::ImportAnimatorController2D },
     };
 
     Ref<Asset> AssetImporter::Import(AssetHandle handle, const AssetMetaData &metadata)
@@ -642,6 +644,42 @@ namespace ignite {
         {
             asset->handle = handle;
 			asset->SetReadyFlag(true);
+        }
+        return asset;
+    }
+
+    Ref<Animation2D> AssetImporter::ImportAnimation2D(AssetHandle handle, const AssetMetaData &metadata)
+    {
+        if (!std::filesystem::exists(metadata.filepath))
+        {
+            LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
+            return nullptr;
+        }
+
+        Ref<Animation2D> asset = Animation2D::Deserialize(metadata.filepath);
+        if (asset)
+        {
+            asset->handle = handle;
+            asset->SetReadyFlag(true);
+            asset->SetDirtyFlag(false);
+        }
+        return asset;
+    }
+
+    Ref<AnimatorController2D> AssetImporter::ImportAnimatorController2D(AssetHandle handle, const AssetMetaData &metadata)
+    {
+        if (!std::filesystem::exists(metadata.filepath))
+        {
+            LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
+            return nullptr;
+        }
+
+        Ref<AnimatorController2D> asset = AnimatorController2D::Deserialize(metadata.filepath);
+        if (asset)
+        {
+            asset->handle = handle;
+            asset->SetReadyFlag(true);
+            asset->SetDirtyFlag(false);
         }
         return asset;
     }

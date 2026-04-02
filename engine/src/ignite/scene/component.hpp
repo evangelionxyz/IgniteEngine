@@ -1,25 +1,4 @@
-﻿/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
 
@@ -27,6 +6,8 @@
 
 #include "icomponent.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
+#include "ignite/animation/animation_2d.hpp"
+#include "ignite/animation/animator_controller_2d.hpp"
 #include "ignite/core/uuid.hpp"
 #include "ignite/graphics/objects/material.hpp"
 #include "ignite/graphics/objects/material_2d.hpp"
@@ -60,7 +41,6 @@ namespace ignite
         { "Box Collider 2D", CompType_BoxCollider2D },
         { "Circle Collider 2D", CompType_CircleCollider2D },
         { "Sprite 2D", CompType_Sprite2D },
-        { "Sprite 2D Animation", CompType_Sprite2DAnimation },
         { "Circle 2D", CompType_Circle2D },
         { "Point Light 2D", CompType_PointLight2D },
         { "Font", CompType_Font },
@@ -74,6 +54,7 @@ namespace ignite
         { "Audio Source", CompType_AudioSource },
         { "World Environment", CompType_WorldEnvironment },
         { "C# Script", CompType_Script },
+        { "Animator 2D", CompType_Animator2D },
     };
 
     enum EntityType : uint8_t
@@ -364,29 +345,6 @@ namespace ignite
         COMPONENT_CLASS_TYPE(CompType_Sprite2D)
     };
 
-    class Sprite2DAnimationComponent : public IComponent
-    {
-    public:
-        struct Frame
-        {
-            glm::vec2 uv0 = { 0.0f, 1.0f };
-            glm::vec2 uv1 = { 1.0f, 0.0f };
-        };
-
-        AssetHandle textureHandle = AssetHandle(0);
-        std::vector<Frame> frames;
-
-        float fps = 12.0f;
-        float speed = 1.0f;
-        float elapsed = 0.0f;
-
-        int currentFrame = 0;
-        bool playing = true;
-        bool loop = true;
-
-        COMPONENT_CLASS_TYPE(CompType_Sprite2DAnimation)
-    };
-
     class PointLight2DComponent : public IComponent
     {
     public:
@@ -555,6 +513,30 @@ namespace ignite
 
 
         COMPONENT_CLASS_TYPE(CompType_Script)
+    };
+
+    // -------------------------------------------------------------------------
+    // Animator2DComponent: references an AnimatorController2D asset and holds
+    // per-entity runtime playback state so multiple entities can run the same
+    // controller independently.
+    // -------------------------------------------------------------------------
+    class Animator2DComponent : public IComponent
+    {
+    public:
+        AssetHandle controllerHandle = AssetHandle(0);
+
+        // Runtime state (not serialized except currentStateName)
+        std::string currentStateName;
+        float       stateElapsed    = 0.0f;  // absolute time in current state (seconds)
+        float       stateNormalized = 0.0f;  // normalized time [0..1]
+
+        // Per-entity animation runtime (copy of Animation2D playback state)
+        int   currentFrame = 0;
+        float elapsed      = 0.0f;
+
+        Animator2DComponent() = default;
+
+        COMPONENT_CLASS_TYPE(CompType_Animator2D)
     };
 
 }
