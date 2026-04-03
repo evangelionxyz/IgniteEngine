@@ -25,11 +25,13 @@
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 
 namespace ignite
 {
     IndexBuffer::IndexBuffer(size_t size, const std::string &debugName)
     {
+        IGN_PROFILE_FUNCTION();
         m_Count = static_cast<uint32_t>(size) / sizeof(uint32_t);
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
@@ -42,10 +44,24 @@ namespace ignite
 
         m_Handle = device->createBuffer(desc);
         LOG_ASSERT(m_Handle, "[Index Buffer] Failed to create handle!");
+        if (m_Handle)
+        {
+            IGN_PROFILE_ALLOC_N(m_Handle.Get(), size, "GPU Index Buffer");
+        }
+    }
+
+    IndexBuffer::~IndexBuffer()
+    {
+        if (m_Handle)
+        {
+            IGN_PROFILE_FREE_N(m_Handle.Get(), "GPU Index Buffer");
+            m_Handle = nullptr;
+        }
     }
 
     void IndexBuffer::SetData(nvrhi::ICommandList *cmd, Buffer buffer, size_t offset) const
     {
+        IGN_PROFILE_SCOPE("IndexBuffer::SetData");
         cmd->writeBuffer(m_Handle, buffer.data, buffer.size, offset);
     }
 

@@ -126,14 +126,13 @@ namespace ignite
         virtual bool Serialize(const std::filesystem::path &filepath) override;
         static Ref<Project> Deserialize(const std::filesystem::path &filepath);
 
-        AssetManager &GetAssetManager() { return *m_AssetManager; }
+        AssetManager *GetAssetManager() { return m_AssetManager; }
         MaterialManager &GetMaterialManager() { return m_MaterialManager; }
 
         ScriptEngine *GetScriptEngine() { return m_ScriptEngine; }
         ProjectInfo &GetInfo() { return m_Info; }
         Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
 
-        static Project *GetInstance();
         static Ref<Project> Create(const ProjectInfo &info);
 
         static AssetType GetStaticType() { return AssetType::Project; }

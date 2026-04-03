@@ -41,6 +41,7 @@ project "IgniteEngine"
         "%{IncludeDir.MSDFATLASGEN}",
         "%{IncludeDir.MSDFGEN}",
         "%{IncludeDir.FREETYPE}",
+        "%{IncludeDir.TRACY}",
         "%{IncludeDir.FBX_SDK}"
     }
 
@@ -57,6 +58,7 @@ project "IgniteEngine"
         "msdf-atlas-gen",
         "msdfgen",
         "freetype",
+        "tracy",
         "MochiSharp.Native"
     }
 
@@ -144,6 +146,7 @@ project "IgniteEngine"
             symbols "on"
             defines {
                 "IGN_DEBUG_BUILD",
+                "IGN_ENABLE_TRACY",
                 "DEBUG",
                 "_DEBUG"
             }
@@ -168,6 +171,7 @@ project "IgniteEngine"
             symbols "on" -- with debug info
             defines {
                 "IGN_RELEASE_BUILD",
+                "IGN_ENABLE_TRACY",
                 "NDEBUG"
             }
             links {

@@ -29,6 +29,7 @@
 #include "ignite/audio/fmod_audio.hpp"
 #include "ignite/physics/jolt/jolt_physics.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 
 #include <nvrhi/utils.h>
 
@@ -39,6 +40,7 @@ namespace ignite
     Application::Application(const ApplicationCreateInfo &createInfo)
         : m_CreateInfo(createInfo)
     {
+        IGN_PROFILE_FUNCTION();
         s_AppInstance = this;
         m_MainThreadId = std::this_thread::get_id();
 
@@ -59,7 +61,7 @@ namespace ignite
         deviceParams.backBufferWidth = m_CreateInfo.width;
         deviceParams.backBufferHeight = m_CreateInfo.height;
         deviceParams.startMaximized = m_CreateInfo.maximized;
-		deviceParams.startBorderless = m_CreateInfo.borderless;
+        deviceParams.startBorderless = m_CreateInfo.borderless;
 #if _DEBUG
         deviceParams.enableDebugRuntime = true;
 #endif
@@ -124,33 +126,35 @@ namespace ignite
         }
     }
 
-	void Application::ProcessRenderThreadSubmissions()
-	{
-		std::queue<std::function<void()>> pending;
-		{
-			std::lock_guard lock(m_RenderThreadFuncsMutex);
-			pending.swap(m_RenderThreadFuncs);
-			m_RenderThreadHasTasks = !pending.empty();
-		}
+    void Application::ProcessRenderThreadSubmissions()
+    {
+        IGN_PROFILE_FUNCTION();
+        std::queue<std::function<void()>> pending;
+        {
+            std::lock_guard lock(m_RenderThreadFuncsMutex);
+            pending.swap(m_RenderThreadFuncs);
+            m_RenderThreadHasTasks = !pending.empty();
+        }
 
-		while (!pending.empty())
-		{
-			auto func = std::move(pending.front());
-			pending.pop();
-			if (func)
-			{
-				func();
-			}
-		}
+        while (!pending.empty())
+        {
+            auto func = std::move(pending.front());
+            pending.pop();
+            if (func)
+            {
+                func();
+            }
+        }
 
-		{
-			std::lock_guard lock(m_RenderThreadFuncsMutex);
-			m_RenderThreadHasTasks = !m_RenderThreadFuncs.empty();
-		}
-	}
+        {
+            std::lock_guard lock(m_RenderThreadFuncsMutex);
+            m_RenderThreadHasTasks = !m_RenderThreadFuncs.empty();
+        }
+    }
 
     void Application::ProcessMainThreadSubmissions()
     {
+        IGN_PROFILE_FUNCTION();
         // Process all pending submissions
         if (!m_ThreadFuncs.empty())
         {
@@ -172,16 +176,19 @@ namespace ignite
         }
     }
 
-	void Application::RenderThreadFunc()
-	{
-		DeviceManager *deviceManager = m_Window->GetDeviceManager();
+    void Application::RenderThreadFunc()
+    {
+        IGN_PROFILE_THREAD_NAME("Render Thread");
+        IGN_PROFILE_SCOPE("Application::RenderThread");
+        DeviceManager *deviceManager = m_Window->GetDeviceManager();
         nvrhi::IDevice *device = deviceManager->GetDevice();
 
-		// Create per-thread command list
-		auto renderCommandList = device->createCommandList();
+        // Create per-thread command list
+        auto renderCommandList = device->createCommandList();
 
         while (m_RenderThreadRunning)
         {
+            IGN_PROFILE_SCOPE("RenderThread::Frame");
             uint64_t currentFrame;
             nvrhi::IFramebuffer *framebuffer = nullptr;
             {
@@ -195,6 +202,7 @@ namespace ignite
 
                 if (m_RenderThreadHasTasks.load())
                 {
+                    IGN_PROFILE_SCOPE("RenderThread::Submissions");
                     lock.unlock();
                     ProcessRenderThreadSubmissions();
                     lock.lock();
@@ -226,15 +234,19 @@ namespace ignite
             }
 
             // Render layers
-            for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
             {
-                Layer *layer = *it;
-                layer->OnRender(framebuffer);
+                IGN_PROFILE_SCOPE("RenderThread::LayerRender");
+                for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
+                {
+                    Layer *layer = *it;
+                    layer->OnRender(framebuffer);
+                }
             }
 
             // ImGui rendering
             if (m_CreateInfo.useGui && m_ImGuiLayer)
             {
+                IGN_PROFILE_SCOPE("RenderThread::ImGuiRender");
                 m_ImGuiLayer->BeginFrame();
 
                 for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
@@ -249,8 +261,8 @@ namespace ignite
                 m_ImGuiLayer->EndFrame(framebuffer);
             }
 
-			// Collect and execute worker command lists if any
-			{
+            // Collect and execute worker command lists if any
+            {
                 std::vector<std::function<void()>> callbacks;
                 {
                     std::lock_guard<std::mutex> lock(m_CommandListMutex);
@@ -280,7 +292,7 @@ namespace ignite
                         callback();
                     }
                 }
-			}
+            }
 
             // Signal frame complete
             {
@@ -289,22 +301,26 @@ namespace ignite
             }
             m_FrameCV.notify_all();
         }
-	}
+    }
 
-	void Application::PushLayer(Layer *layer)
+    void Application::PushLayer(Layer *layer)
     {
+        IGN_PROFILE_FUNCTION();
         layer->OnAttach();
         m_LayerStack.PushLayer(layer);
     }
 
     void Application::PopLayer(Layer *layer)
     {
+        IGN_PROFILE_FUNCTION();
         layer->OnDetach();
         m_LayerStack.PopLayer(layer);
     }
 
     void Application::Run()
     {
+        IGN_PROFILE_THREAD_NAME("Main Thread");
+        IGN_PROFILE_SCOPE("Application::Run");
         DeviceManager *deviceManager = m_Window->GetDeviceManager();
         nvrhi::IDevice *device = deviceManager->GetDevice();
         
@@ -312,15 +328,16 @@ namespace ignite
         m_RenderThreadRunning = true;
         m_RenderThread = CreateScope<std::thread>(&Application::RenderThreadFunc, this);
 
-		std::stringstream ss;
-		ss << m_RenderThread->get_id();
-		unsigned long long id = std::stoull(ss.str());
-		LOG_WARN("[Application] Render thread: {}", id);
+        std::stringstream ss;
+        ss << m_RenderThread->get_id();
+        unsigned long long id = std::stoull(ss.str());
+        LOG_WARN("[Application] Render thread: {}", id);
         
         SDL_Event sdlEvent;
         
         while (m_Window->IsLooping())
         {
+            IGN_PROFILE_SCOPE("MainThread::Frame");
             while (SDL_PollEvent(&sdlEvent))
             {
                 m_Window->PollEvents(sdlEvent);
@@ -332,6 +349,7 @@ namespace ignite
 
             const float currTime = static_cast<float>(SDL_GetTicks());
             m_DeltaTime = static_cast<float>(currTime - m_PreviousTime) / 1000.0f;
+            IGN_PROFILE_PLOT("Delta Time (s)", m_DeltaTime);
 
             ProcessMainThreadSubmissions();
 
@@ -373,6 +391,7 @@ namespace ignite
 
             if (m_Window->IsVisible() && m_Window->IsInFocus())
             {
+                IGN_PROFILE_SCOPE("MainThread::SimulationAndPresent");
                 // update system (physics etc..)
                 for (auto layer = m_LayerStack.rbegin(); layer != m_LayerStack.rend(); ++layer)
                     (*layer)->OnUpdate(m_DeltaTime);
@@ -442,6 +461,7 @@ namespace ignite
             // set previous time
             m_PreviousTime = currTime;
             ++m_FrameIndex;
+            IGN_PROFILE_FRAME_NAMED("Main Frame");
         }
 
         // Shutdown render thread
@@ -450,7 +470,7 @@ namespace ignite
         if (m_RenderThread && m_RenderThread->joinable())
             m_RenderThread->join();
         
-		GPUUploadSync::DeviceWaitIdle(device);
+        GPUUploadSync::DeviceWaitIdle(device);
         
         for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
         {
@@ -544,12 +564,12 @@ namespace ignite
         GetInstance()->m_PendingCommandListCallbacks.push_back(std::move(onExecuted));
     }
 
-	const std::thread *Application::GetRenderThread() const
-	{
+    const std::thread *Application::GetRenderThread() const
+    {
         return m_RenderThread.get();
-	}
+    }
 
-	CommandManager *Application::GetCommandManager()
+    CommandManager *Application::GetCommandManager()
     {
         return GetInstance()->m_CommandManager.get();
     }

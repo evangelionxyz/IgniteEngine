@@ -78,27 +78,22 @@ namespace ignite
 
         static const char *TextureFormatToString(nvrhi::Format format) 
         {
-            switch (format) {
-            case nvrhi::Format::RGBA8_UNORM:
-                return "RGBA8_UNORM";
-            case nvrhi::Format::RGBA32_FLOAT:
-                return "RGBA32_FLOAT";
-            default:
-                return "UNKNOWN";
+            switch (format)
+            {
+                case nvrhi::Format::RGBA8_UNORM: return "RGBA8_UNORM";
+                case nvrhi::Format::RGBA32_FLOAT: return "RGBA32_FLOAT";
+                default: return "UNKNOWN";
             }
         }
 
         static const char *SamplerAddressModeToString(nvrhi::SamplerAddressMode mode) 
         {
-            switch (mode) {
-            case nvrhi::SamplerAddressMode::Repeat:
-                return "Repeat";
-            case nvrhi::SamplerAddressMode::ClampToEdge:
-                return "ClampToEdge";
-            case nvrhi::SamplerAddressMode::ClampToBorder:
-                return "ClampToBorder";
-            default:
-                return "Other";
+            switch (mode)
+            {
+                case nvrhi::SamplerAddressMode::Repeat: return "Repeat";
+                case nvrhi::SamplerAddressMode::ClampToEdge: return "ClampToEdge";
+                case nvrhi::SamplerAddressMode::ClampToBorder: return "ClampToBorder";
+                default: return "Other";
             }
         }
     } // namespace
@@ -136,7 +131,7 @@ namespace ignite
         }
 
         Project *project = m_EditorLayer->GetActiveProject().get();
-        auto &assetManager = project->GetAssetManager();
+        auto assetManager = project->GetAssetManager();
 
         if (m_CreateRequest.type == AssetType::Material2D && !m_CreateRequest.asset)
         {
@@ -149,8 +144,7 @@ namespace ignite
         }
 
         ImGui::SetNextWindowSize(ImVec2(1200.0f, 760.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSizeConstraints(ImVec2(900.0f, 640.0f),
-            ImVec2(FLT_MAX, FLT_MAX));
+        ImGui::SetNextWindowSizeConstraints(ImVec2(900.0f, 640.0f), ImVec2(FLT_MAX, FLT_MAX));
         if (ImGui::Begin("Create Asset", &m_CreateRequest.open, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
         {
             ImGui::Text("Asset Type: %s", AssetTypeToString(m_CreateRequest.type).c_str());
@@ -241,8 +235,8 @@ namespace ignite
                     metadata.filepath = project->GetAssetRelativeFilepath(fullAssetPath);
 
                     createdAsset->handle = handle;
-                    assetManager.AssignMetaData(handle, metadata);
-                    assetManager.AssignAsset(handle, createdAsset);
+                    assetManager->AssignMetaData(handle, metadata);
+                    assetManager->AssignAsset(handle, createdAsset);
 
                     // TODO: Fix save project assets
                     m_EditorLayer->SaveProject();
@@ -349,7 +343,7 @@ namespace ignite
         }
 
         Project *project = m_EditorLayer->GetActiveProject().get();
-        auto &assetManager = project->GetAssetManager();
+        auto assetManager = project->GetAssetManager();
 
         const uint64_t stateKey = static_cast<uint64_t>(spriteSheet->handle);
         SpriteSheetEditorState &state = s_SpriteSheetEditorState[stateKey];
@@ -564,9 +558,7 @@ namespace ignite
                     ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
                 else if (hoveredHandle == 5 || hoveredHandle == 7)
                     ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-                else if (mouseInsideImage && hasSelection && hoveredHandle == -1 &&
-                    ImRect(currentSelMin, currentSelMax)
-                    .Contains(ImGui::GetMousePos()))
+                else if (mouseInsideImage && hasSelection && hoveredHandle == -1 && ImRect(currentSelMin, currentSelMax).Contains(ImGui::GetMousePos()))
                     ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
 
                 int clickedSpriteIndex = -1;
@@ -599,8 +591,7 @@ namespace ignite
                         state.dragStartMaxUV = currentUVMax;
                         state.selecting = false;
                     }
-                    else if (hasSelection && ImRect(currentSelMin, currentSelMax)
-                        .Contains(ImGui::GetMousePos()))
+                    else if (hasSelection && ImRect(currentSelMin, currentSelMax).Contains(ImGui::GetMousePos()))
                     {
                         state.activeHandle = 8;
                         state.dragStartMinUV = currentUVMin;
@@ -611,8 +602,7 @@ namespace ignite
                     else if (clickedSpriteIndex != -1)
                     {
                         state.selectedSpriteIndex = clickedSpriteIndex;
-                        const auto &selectedSprite =
-                            sprites[static_cast<size_t>(clickedSpriteIndex)];
+                        const auto &selectedSprite = sprites[static_cast<size_t>(clickedSpriteIndex)];
                         state.selectionStartUV = selectedSprite.uv0;
                         state.selectionEndUV = selectedSprite.uv1;
                         state.activeHandle = -1;
@@ -637,8 +627,7 @@ namespace ignite
 
                         if (state.activeHandle == 8)
                         {
-                            const glm::vec2 sizeUV =
-                                state.dragStartMaxUV - state.dragStartMinUV;
+                            const glm::vec2 sizeUV = state.dragStartMaxUV - state.dragStartMinUV;
                             minUV = mouseUV - state.dragOffsetUV;
                             minUV.x = std::clamp(minUV.x, 0.0f, 1.0f - sizeUV.x);
                             minUV.y = std::clamp(minUV.y, 0.0f, 1.0f - sizeUV.y);
@@ -650,47 +639,35 @@ namespace ignite
                             switch (state.activeHandle)
                             {
                                 case 0: // top-left
-                                minUV.x =
-                                    std::clamp(mouseUV.x, 0.0f, state.dragStartMaxUV.x - epsilon);
-                                minUV.y =
-                                    std::clamp(mouseUV.y, 0.0f, state.dragStartMaxUV.y - epsilon);
-                                break;
+                                    minUV.x = std::clamp(mouseUV.x, 0.0f, state.dragStartMaxUV.x - epsilon);
+                                    minUV.y = std::clamp(mouseUV.y, 0.0f, state.dragStartMaxUV.y - epsilon);
+                                    break;
                                 case 1: // top-right
-                                maxUV.x =
-                                    std::clamp(mouseUV.x, state.dragStartMinUV.x + epsilon, 1.0f);
-                                minUV.y =
-                                    std::clamp(mouseUV.y, 0.0f, state.dragStartMaxUV.y - epsilon);
-                                break;
+                                    maxUV.x = std::clamp(mouseUV.x, state.dragStartMinUV.x + epsilon, 1.0f);
+                                    minUV.y = std::clamp(mouseUV.y, 0.0f, state.dragStartMaxUV.y - epsilon);
+                                    break;
                                 case 2: // bottom-right
-                                maxUV.x =
-                                    std::clamp(mouseUV.x, state.dragStartMinUV.x + epsilon, 1.0f);
-                                maxUV.y =
-                                    std::clamp(mouseUV.y, state.dragStartMinUV.y + epsilon, 1.0f);
-                                break;
+                                    maxUV.x = std::clamp(mouseUV.x, state.dragStartMinUV.x + epsilon, 1.0f);
+                                    maxUV.y = std::clamp(mouseUV.y, state.dragStartMinUV.y + epsilon, 1.0f);
+                                    break;
                                 case 3: // bottom-left
-                                minUV.x =
-                                    std::clamp(mouseUV.x, 0.0f, state.dragStartMaxUV.x - epsilon);
-                                maxUV.y =
-                                    std::clamp(mouseUV.y, state.dragStartMinUV.y + epsilon, 1.0f);
-                                break;
+                                    minUV.x = std::clamp(mouseUV.x, 0.0f, state.dragStartMaxUV.x - epsilon);
+                                    maxUV.y = std::clamp(mouseUV.y, state.dragStartMinUV.y + epsilon, 1.0f);
+                                    break;
                                 case 4: // top
-                                minUV.y =
-                                    std::clamp(mouseUV.y, 0.0f, state.dragStartMaxUV.y - epsilon);
-                                break;
+                                    minUV.y = std::clamp(mouseUV.y, 0.0f, state.dragStartMaxUV.y - epsilon);
+                                    break;
                                 case 5: // right
-                                maxUV.x =
-                                    std::clamp(mouseUV.x, state.dragStartMinUV.x + epsilon, 1.0f);
-                                break;
+                                    maxUV.x = std::clamp(mouseUV.x, state.dragStartMinUV.x + epsilon, 1.0f);
+                                    break;
                                 case 6: // bottom
-                                maxUV.y =
-                                    std::clamp(mouseUV.y, state.dragStartMinUV.y + epsilon, 1.0f);
-                                break;
+                                    maxUV.y = std::clamp(mouseUV.y, state.dragStartMinUV.y + epsilon, 1.0f);
+                                    break;
                                 case 7: // left
-                                minUV.x =
-                                    std::clamp(mouseUV.x, 0.0f, state.dragStartMaxUV.x - epsilon);
-                                break;
+                                    minUV.x = std::clamp(mouseUV.x, 0.0f, state.dragStartMaxUV.x - epsilon);
+                                    break;
                                 default:
-                                break;
+                                    break;
                             }
                         }
 
@@ -714,41 +691,32 @@ namespace ignite
                     }
                 }
 
-                const glm::vec2 uvMin =
-                    glm::min(state.selectionStartUV, state.selectionEndUV);
-                const glm::vec2 uvMax =
-                    glm::max(state.selectionStartUV, state.selectionEndUV);
+                const glm::vec2 uvMin = glm::min(state.selectionStartUV, state.selectionEndUV);
+                const glm::vec2 uvMax = glm::max(state.selectionStartUV, state.selectionEndUV);
 
                 if (selectionFinishedThisFrame && state.selectedSpriteIndex == -1)
                 {
                     if ((uvMax.x - uvMin.x) > 0.0001f && (uvMax.y - uvMin.y) > 0.0001f)
                     {
                         sprites.push_back({ uvMin, uvMax });
-                        state.spriteNames.push_back(
-                            std::format("Sprite {}", sprites.size() - 1));
+                        state.spriteNames.push_back(std::format("Sprite {}", sprites.size() - 1));
                         state.selectedSpriteIndex = static_cast<int>(sprites.size()) - 1;
                         spriteSheet->SetDirtyFlag(true);
                     }
                 }
 
-                if (state.selectedSpriteIndex >= 0 &&
-                    state.selectedSpriteIndex < static_cast<int>(sprites.size()) &&
-                    state.activeHandle != -1)
+                if (state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size()) && state.activeHandle != -1)
                 {
-                    auto &selectedSprite =
-                        sprites[static_cast<size_t>(state.selectedSpriteIndex)];
+                    auto &selectedSprite = sprites[static_cast<size_t>(state.selectedSpriteIndex)];
                     selectedSprite.uv0 = uvMin;
                     selectedSprite.uv1 = uvMax;
                     spriteSheet->SetDirtyFlag(true);
                 }
 
-                const ImVec2 selMin = { imagePos.x + uvMin.x * imageSize.x,
-                                       imagePos.y + uvMin.y * imageSize.y };
-                const ImVec2 selMax = { imagePos.x + uvMax.x * imageSize.x,
-                                       imagePos.y + uvMax.y * imageSize.y };
+                const ImVec2 selMin = { imagePos.x + uvMin.x * imageSize.x, imagePos.y + uvMin.y * imageSize.y };
+                const ImVec2 selMax = { imagePos.x + uvMax.x * imageSize.x, imagePos.y + uvMax.y * imageSize.y };
                 drawList->AddRectFilled(selMin, selMax, IM_COL32(255, 220, 50, 30));
-                drawList->AddRect(selMin, selMax, IM_COL32(255, 220, 50, 255), 0.0f, 0,
-                    2.0f);
+                drawList->AddRect(selMin, selMax, IM_COL32(255, 220, 50, 255), 0.0f, 0, 2.0f);
 
                 if ((uvMax.x - uvMin.x) > 0.0001f && (uvMax.y - uvMin.y) > 0.0001f)
                 {
@@ -757,18 +725,16 @@ namespace ignite
                     const ImVec2 midBottom = ImVec2((selMin.x + selMax.x) * 0.5f, selMax.y);
                     const ImVec2 midLeft = ImVec2(selMin.x, (selMin.y + selMax.y) * 0.5f);
 
-                    const ImVec2 handlesDraw[8] = { selMin,    ImVec2(selMax.x, selMin.y),
-                                                   selMax,    ImVec2(selMin.x, selMax.y),
-                                                   midTop,    midRight,
-                                                   midBottom, midLeft };
+                    const ImVec2 handlesDraw[8] = { selMin, ImVec2(selMax.x, selMin.y),
+                                                   selMax, ImVec2(selMin.x, selMax.y),
+                                                   midTop, midRight, midBottom, midLeft };
 
                     for (const ImVec2 &handlePos : handlesDraw)
                     {
                         const ImVec2 hMin = ImVec2(handlePos.x - 4.0f, handlePos.y - 4.0f);
                         const ImVec2 hMax = ImVec2(handlePos.x + 4.0f, handlePos.y + 4.0f);
                         drawList->AddRectFilled(hMin, hMax, IM_COL32(255, 255, 255, 230));
-                        drawList->AddRect(hMin, hMax, IM_COL32(20, 20, 20, 255), 0.0f, 0,
-                            1.0f);
+                        drawList->AddRect(hMin, hMax, IM_COL32(20, 20, 20, 255), 0.0f, 0, 1.0f);
                     }
                 }
 
@@ -779,67 +745,55 @@ namespace ignite
                                              imagePos.y + sprite.uv0.y * imageSize.y };
                     const ImVec2 blockMax = { imagePos.x + sprite.uv1.x * imageSize.x,
                                              imagePos.y + sprite.uv1.y * imageSize.y };
-                    const bool isSelectedSprite =
-                        state.selectedSpriteIndex == static_cast<int>(i);
-                    drawList->AddRect(blockMin, blockMax,
-                        isSelectedSprite ? IM_COL32(255, 128, 0, 255)
-                        : IM_COL32(0, 220, 255, 200),
-                        0.0f, 0, isSelectedSprite ? 2.0f : 1.5f);
+                    const bool isSelectedSprite = state.selectedSpriteIndex == static_cast<int>(i);
+                    drawList->AddRect(blockMin, blockMax, isSelectedSprite 
+                        ? IM_COL32(255, 128, 0, 255)
+                        : IM_COL32(0, 220, 255, 200), 0.0f, 0, isSelectedSprite
+                        ? 2.0f : 1.5f);
                 }
             }
             else
             {
-                ImGui::SetCursorScreenPos(
-                    ImVec2(viewportPos.x + 12.0f, viewportPos.y + 12.0f));
+                ImGui::SetCursorScreenPos(ImVec2(viewportPos.x + 12.0f, viewportPos.y + 12.0f));
                 ImGui::Text("Drop a texture to preview SpriteSheet");
             }
         }
         ImGui::EndChild();
 
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-            ImVec4(0.28f, 0.28f, 0.28f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-            ImVec4(0.32f, 0.32f, 0.32f, 1.0f));
-        ImGui::Button("##sprite_sheet_vertical_splitter",
-            ImVec2(-1.0f, splitterThickness));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.28f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.32f, 0.32f, 0.32f, 1.0f));
+        ImGui::Button("##sprite_sheet_vertical_splitter", ImVec2(-1.0f, splitterThickness));
+        
         if (ImGui::IsItemHovered() || ImGui::IsItemActive())
         {
             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
         }
+
         if (ImGui::IsItemActive())
         {
             state.extractedPanelHeight -= ImGui::GetIO().MouseDelta.y;
-            state.extractedPanelHeight = std::clamp(
-                state.extractedPanelHeight, minExtractedHeight,
-                std::max(minExtractedHeight,
-                    totalLeftHeight - minViewportHeight - splitterThickness));
+            state.extractedPanelHeight = std::clamp(state.extractedPanelHeight, minExtractedHeight,
+                std::max(minExtractedHeight, totalLeftHeight - minViewportHeight - splitterThickness));
         }
         ImGui::PopStyleColor(3);
 
         ImGui::Text("Extracted Sprites");
-        ImGui::BeginChild("##sprite_sheet_extracted_preview",
-            ImVec2(0.0f, state.extractedPanelHeight),
-            ImGuiChildFlags_Borders);
+        ImGui::BeginChild("##sprite_sheet_extracted_preview", ImVec2(0.0f, state.extractedPanelHeight), ImGuiChildFlags_Borders);
         if (texture && texture->GetHandle())
         {
             const float previewSize = 56.0f;
             const float spacing = ImGui::GetStyle().ItemSpacing.x;
             const float contentWidth = ImGui::GetContentRegionAvail().x;
-            const int spritesPerRow = std::max(
-                1, static_cast<int>((contentWidth + spacing) /
-                    (previewSize + spacing + horizontalSplitterWidth)));
+            const int spritesPerRow = std::max(1, static_cast<int>((contentWidth + spacing) / (previewSize + spacing + horizontalSplitterWidth)));
+            
             for (size_t i = 0; i < sprites.size(); ++i)
             {
                 const auto &sprite = sprites[i];
                 ImGui::PushID(static_cast<int>(i));
 
-                ImTextureID texId =
-                    reinterpret_cast<ImTextureID>(texture->GetHandle().Get());
-                ImGui::ImageButton("##sprite_preview", texId,
-                    ImVec2(previewSize, previewSize),
-                    ImVec2(sprite.uv0.x, sprite.uv0.y),
-                    ImVec2(sprite.uv1.x, sprite.uv1.y));
+                ImTextureID texId = reinterpret_cast<ImTextureID>(texture->GetHandle().Get());
+                ImGui::ImageButton("##sprite_preview", texId, ImVec2(previewSize, previewSize), ImVec2(sprite.uv0.x, sprite.uv0.y), ImVec2(sprite.uv1.x, sprite.uv1.y));
 
                 if (ImGui::BeginDragDropSource())
                 {
@@ -850,8 +804,7 @@ namespace ignite
                     payload.uv0 = sprite.uv0;
                     payload.uv1 = sprite.uv1;
 
-                    ImGui::SetDragDropPayload("sprite_sheet_item", &payload,
-                        sizeof(payload));
+                    ImGui::SetDragDropPayload("sprite_sheet_item", &payload, sizeof(payload));
                     ImGui::Text("Sprite %zu", i);
                     ImGui::EndDragDropSource();
                 }
@@ -859,9 +812,7 @@ namespace ignite
                 if (state.selectedSpriteIndex == static_cast<int>(i))
                 {
                     ImDrawList *selectionDrawList = ImGui::GetWindowDrawList();
-                    selectionDrawList->AddRect(ImGui::GetItemRectMin(),
-                        ImGui::GetItemRectMax(),
-                        IM_COL32(255, 180, 0, 255), 2.0f, 0, 2.0f);
+                    selectionDrawList->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), IM_COL32(255, 180, 0, 255), 2.0f, 0, 2.0f);
                 }
 
                 if ((i + 1) % spritesPerRow != 0)
@@ -881,13 +832,9 @@ namespace ignite
 
         ImGui::SameLine(0.0f, 0.0f);
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-            ImVec4(0.28f, 0.28f, 0.28f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-            ImVec4(0.32f, 0.32f, 0.32f, 1.0f));
-        ImGui::BeginChild("##sprite_sheet_horizontal_splitter",
-            ImVec2(horizontalSplitterWidth, 0.0f),
-            ImGuiChildFlags_None);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.28f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.32f, 0.32f, 0.32f, 1.0f));
+        ImGui::BeginChild("##sprite_sheet_horizontal_splitter", ImVec2(horizontalSplitterWidth, 0.0f), ImGuiChildFlags_None);
         ImGui::Button("##sprite_sheet_horizontal_splitter_btn", ImVec2(-1.0f, -1.0f));
 
         if (ImGui::IsItemHovered() || ImGui::IsItemActive())
@@ -898,33 +845,29 @@ namespace ignite
         if (ImGui::IsItemActive())
         {
             state.previewColumnWidth += ImGui::GetIO().MouseDelta.x;
-            state.previewColumnWidth = std::clamp(
-                state.previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
+            state.previewColumnWidth = std::clamp(state.previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
         }
 
         ImGui::EndChild();
         ImGui::PopStyleColor(3);
 
         ImGui::SameLine(0.0f, 0.0f);
-        ImGui::BeginChild("##sprite_sheet_tools_column", ImVec2(0.0f, 0.0f),
-            ImGuiChildFlags_None);
+        ImGui::BeginChild("##sprite_sheet_tools_column", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
 
         ImGui::Spacing();
         std::string textureLabel = spriteSheet->GetTextureHandle() == AssetHandle(0)
             ? "Drop Texture Here"
             : "Texture Loaded";
+
         ImGui::Button(textureLabel.c_str(), ImVec2(220.0f, 0.0f));
         if (ImGui::BeginDragDropTarget())
         {
-            if (const ImGuiPayload *payload =
-                ImGui::AcceptDragDropPayload("content_browser_item"))
+            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
             {
                 if (payload->Data && payload->DataSize == sizeof(AssetHandle))
                 {
-                    const AssetHandle droppedHandle =
-                        *static_cast<const AssetHandle *>(payload->Data);
-                    const AssetMetaData &droppedMetadata =
-                        assetManager.GetMetaData(droppedHandle);
+                    const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                    const AssetMetaData &droppedMetadata = assetManager->GetMetaData(droppedHandle);
                     if (droppedMetadata.type == AssetType::Texture)
                     {
                         spriteSheet->SetTextureHandle(droppedHandle);
@@ -942,36 +885,28 @@ namespace ignite
             spriteSheet->SetDirtyFlag(true);
         }
 
-        ImGui::Text("Texture Handle: %llu",
-            static_cast<unsigned long long>(
-                static_cast<uint64_t>(spriteSheet->GetTextureHandle())));
+        ImGui::Text("Texture Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(spriteSheet->GetTextureHandle())));
 
         glm::vec2 atlasSize = spriteSheet->GetAtlasSize();
-        if (ImGui::DragFloat2("Atlas Cell Size", &atlasSize.x, 1.0f, 1.0f, 8192.0f,
-            "%.0f"))
+        if (ImGui::DragFloat2("Atlas Cell Size", &atlasSize.x, 1.0f, 1.0f, 8192.0f, "%.0f"))
         {
             spriteSheet->SetAtlasSize(atlasSize);
             spriteSheet->SetDirtyFlag(true);
         }
 
-        const glm::vec2 uvMin =
-            glm::min(state.selectionStartUV, state.selectionEndUV);
-        const glm::vec2 uvMax =
-            glm::max(state.selectionStartUV, state.selectionEndUV);
+        const glm::vec2 uvMin = glm::min(state.selectionStartUV, state.selectionEndUV);
+        const glm::vec2 uvMax = glm::max(state.selectionStartUV, state.selectionEndUV);
 
         ImGui::Text("Selected UV0: %.3f, %.3f", uvMin.x, uvMin.y);
         ImGui::Text("Selected UV1: %.3f, %.3f", uvMax.x, uvMax.y);
 
         const bool hasValidSelectionArea = uvMax.x > uvMin.x && uvMax.y > uvMin.y;
-        const bool editingSelectedSprite =
-            state.selectedSpriteIndex >= 0 &&
-            state.selectedSpriteIndex < static_cast<int>(sprites.size());
+        const bool editingSelectedSprite = state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size());
         if (editingSelectedSprite && ImGui::Button("Apply To Selected"))
         {
             if (hasValidSelectionArea)
             {
-                auto &selectedSprite =
-                    sprites[static_cast<size_t>(state.selectedSpriteIndex)];
+                auto &selectedSprite = sprites[static_cast<size_t>(state.selectedSpriteIndex)];
                 selectedSprite.uv0 = uvMin;
                 selectedSprite.uv1 = uvMax;
                 spriteSheet->SetDirtyFlag(true);
@@ -983,33 +918,28 @@ namespace ignite
         }
 
         ImGui::SameLine();
-        if (ImGui::Button("Remove Selected") && state.selectedSpriteIndex >= 0 &&
-            state.selectedSpriteIndex < static_cast<int>(sprites.size()))
+        if (ImGui::Button("Remove Selected") && state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size()))
         {
             sprites.erase(sprites.begin() + state.selectedSpriteIndex);
-            state.spriteNames.erase(state.spriteNames.begin() +
-                state.selectedSpriteIndex);
+            state.spriteNames.erase(state.spriteNames.begin() + state.selectedSpriteIndex);
             state.selectedSpriteIndex = -1;
             state.renamingSpriteIndex = -1;
             spriteSheet->SetDirtyFlag(true);
         }
 
-        ImGui::BeginChild("##sprite_sheet_sprite_list", ImVec2(0.0f, 130.0f),
-            ImGuiChildFlags_Borders);
+        ImGui::BeginChild("##sprite_sheet_sprite_list", ImVec2(0.0f, 130.0f), ImGuiChildFlags_Borders);
         for (size_t i = 0; i < sprites.size(); ++i)
         {
             const auto &sprite = sprites[i];
             const bool selected = state.selectedSpriteIndex == static_cast<int>(i);
-            const std::string rowLabel =
-                std::format("{}##sprite_row_{}", state.spriteNames[i], i);
+            const std::string rowLabel = std::format("{}##sprite_row_{}", state.spriteNames[i], i);
             if (ImGui::Selectable(rowLabel.c_str(), selected))
             {
                 state.selectedSpriteIndex = static_cast<int>(i);
                 state.selectionStartUV = sprite.uv0;
                 state.selectionEndUV = sprite.uv1;
                 state.renamingSpriteIndex = state.selectedSpriteIndex;
-                std::strncpy(state.renameBuffer, state.spriteNames[i].c_str(),
-                    sizeof(state.renameBuffer) - 1);
+                std::strncpy(state.renameBuffer, state.spriteNames[i].c_str(), sizeof(state.renameBuffer) - 1);
                 state.renameBuffer[sizeof(state.renameBuffer) - 1] = '\0';
             }
 
@@ -1028,80 +958,74 @@ namespace ignite
             }
 
             ImGui::SameLine();
-            ImGui::TextDisabled("(%.3f, %.3f) -> (%.3f, %.3f)", sprite.uv0.x,
-                sprite.uv0.y, sprite.uv1.x, sprite.uv1.y);
+            ImGui::TextDisabled("(%.3f, %.3f) -> (%.3f, %.3f)", sprite.uv0.x, sprite.uv0.y, sprite.uv1.x, sprite.uv1.y);
         }
         ImGui::EndChild();
 
-        const bool canMoveUp =
-            state.selectedSpriteIndex > 0 &&
-            state.selectedSpriteIndex < static_cast<int>(sprites.size());
+        const bool canMoveUp = state.selectedSpriteIndex > 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size());
         if (!canMoveUp)
+        {
             ImGui::BeginDisabled();
+        }
+
         if (ImGui::Button("Move Up"))
         {
             const int i = state.selectedSpriteIndex;
-            std::swap(sprites[static_cast<size_t>(i)],
-                sprites[static_cast<size_t>(i - 1)]);
-            std::swap(state.spriteNames[static_cast<size_t>(i)],
-                state.spriteNames[static_cast<size_t>(i - 1)]);
+            std::swap(sprites[static_cast<size_t>(i)], sprites[static_cast<size_t>(i - 1)]);
+            std::swap(state.spriteNames[static_cast<size_t>(i)], state.spriteNames[static_cast<size_t>(i - 1)]);
             state.selectedSpriteIndex = i - 1;
             spriteSheet->SetDirtyFlag(true);
         }
+
         if (!canMoveUp)
+        {
             ImGui::EndDisabled();
+        }
 
         ImGui::SameLine();
-        const bool canMoveDown =
-            state.selectedSpriteIndex >= 0 &&
-            state.selectedSpriteIndex < static_cast<int>(sprites.size()) - 1;
+        const bool canMoveDown = state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size()) - 1;
         if (!canMoveDown)
+        {
             ImGui::BeginDisabled();
+        }
+
         if (ImGui::Button("Move Down"))
         {
             const int i = state.selectedSpriteIndex;
-            std::swap(sprites[static_cast<size_t>(i)],
-                sprites[static_cast<size_t>(i + 1)]);
-            std::swap(state.spriteNames[static_cast<size_t>(i)],
-                state.spriteNames[static_cast<size_t>(i + 1)]);
+            std::swap(sprites[static_cast<size_t>(i)], sprites[static_cast<size_t>(i + 1)]);
+            std::swap(state.spriteNames[static_cast<size_t>(i)], state.spriteNames[static_cast<size_t>(i + 1)]);
             state.selectedSpriteIndex = i + 1;
             spriteSheet->SetDirtyFlag(true);
         }
         if (!canMoveDown)
+        {
             ImGui::EndDisabled();
+        }
 
-        if (state.selectedSpriteIndex >= 0 &&
-            state.selectedSpriteIndex < static_cast<int>(sprites.size()))
+        if (state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size()))
         {
             if (state.renamingSpriteIndex != state.selectedSpriteIndex)
             {
                 state.renamingSpriteIndex = state.selectedSpriteIndex;
-                std::strncpy(
-                    state.renameBuffer,
-                    state.spriteNames[static_cast<size_t>(state.selectedSpriteIndex)]
-                    .c_str(),
+                std::strncpy(state.renameBuffer, state.spriteNames[static_cast<size_t>(state.selectedSpriteIndex)].c_str(),
                     sizeof(state.renameBuffer) - 1);
+
                 state.renameBuffer[sizeof(state.renameBuffer) - 1] = '\0';
             }
-            if (ImGui::InputText("Sprite Name", state.renameBuffer,
-                sizeof(state.renameBuffer)))
+
+            if (ImGui::InputText("Sprite Name", state.renameBuffer, sizeof(state.renameBuffer)))
             {
-                state.spriteNames[static_cast<size_t>(state.selectedSpriteIndex)] =
-                    state.renameBuffer;
+                state.spriteNames[static_cast<size_t>(state.selectedSpriteIndex)] = state.renameBuffer;
             }
 
             auto &sprite = sprites[static_cast<size_t>(state.selectedSpriteIndex)];
             glm::vec2 selectedUv0 = sprite.uv0;
             glm::vec2 selectedUv1 = sprite.uv1;
-            if (ImGui::DragFloat2("Sprite UV0", &selectedUv0.x, 0.001f, 0.0f, 1.0f,
-                "%.3f") ||
-                ImGui::DragFloat2("Sprite UV1", &selectedUv1.x, 0.001f, 0.0f, 1.0f,
-                    "%.3f"))
+            if (ImGui::DragFloat2("Sprite UV0", &selectedUv0.x, 0.001f, 0.0f, 1.0f, "%.3f")
+                || ImGui::DragFloat2("Sprite UV1", &selectedUv1.x, 0.001f, 0.0f, 1.0f, "%.3f"))
             {
-                sprite.uv0 = glm::clamp(glm::min(selectedUv0, selectedUv1),
-                    glm::vec2(0.0f), glm::vec2(1.0f));
-                sprite.uv1 = glm::clamp(glm::max(selectedUv0, selectedUv1),
-                    glm::vec2(0.0f), glm::vec2(1.0f));
+                sprite.uv0 = glm::clamp(glm::min(selectedUv0, selectedUv1), glm::vec2(0.0f), glm::vec2(1.0f));
+                sprite.uv1 = glm::clamp(glm::max(selectedUv0, selectedUv1), glm::vec2(0.0f), glm::vec2(1.0f));
                 state.selectionStartUV = sprite.uv0;
                 state.selectionEndUV = sprite.uv1;
                 spriteSheet->SetDirtyFlag(true);
@@ -1112,17 +1036,17 @@ namespace ignite
         ImGui::DragInt("Grid Columns", &state.gridColumns, 1.0f, 1, 512);
         ImGui::DragInt("Grid Rows", &state.gridRows, 1.0f, 1, 512);
         ImGui::Checkbox("Enable Snapping", &state.snappingEnabled);
+
         if (state.snappingEnabled)
         {
             ImGui::Checkbox("Snap To Grid", &state.snapToGrid);
             if (!state.snapToGrid)
             {
-                ImGui::DragFloat("Snap Step U", &state.snapStepU, 0.001f, 0.001f, 1.0f,
-                    "%.3f");
-                ImGui::DragFloat("Snap Step V", &state.snapStepV, 0.001f, 0.001f, 1.0f,
-                    "%.3f");
+                ImGui::DragFloat("Snap Step U", &state.snapStepU, 0.001f, 0.001f, 1.0f, "%.3f");
+                ImGui::DragFloat("Snap Step V", &state.snapStepV, 0.001f, 0.001f, 1.0f, "%.3f");
             }
         }
+
         if (ImGui::Button("Auto Slice Grid"))
         {
             sprites.clear();
@@ -1141,17 +1065,14 @@ namespace ignite
                     const glm::vec2 blockUV0 = { x * cellU, y * cellV };
                     const glm::vec2 blockUV1 = { (x + 1) * cellU, (y + 1) * cellV };
                     sprites.push_back({ blockUV0, blockUV1 });
-                    state.spriteNames.push_back(
-                        std::format("Sprite {}", sprites.size() - 1));
+                    state.spriteNames.push_back(std::format("Sprite {}", sprites.size() - 1));
                 }
             }
 
             if (texture && texture->GetWidth() > 0 && texture->GetHeight() > 0)
             {
-                spriteSheet->SetAtlasSize(
-                    { static_cast<float>(texture->GetWidth()) / static_cast<float>(cols),
-                     static_cast<float>(texture->GetHeight()) /
-                         static_cast<float>(rows) });
+                spriteSheet->SetAtlasSize({ static_cast<float>(texture->GetWidth()) / static_cast<float>(cols),
+                     static_cast<float>(texture->GetHeight()) / static_cast<float>(rows) });
             }
 
             spriteSheet->SetDirtyFlag(true);
@@ -1177,14 +1098,13 @@ namespace ignite
             return;
         }
 
-        auto &assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+        auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
 
         const char *materialTypeLabel =
             material2D->data.type == MATERIAL_2D_TYPE_LIT ? "Lit" : "Unlit";
         if (ImGui::BeginCombo("Material Type", materialTypeLabel))
         {
-            if (ImGui::Selectable("Unlit",
-                material2D->data.type == MATERIAL_2D_TYPE_UNLIT))
+            if (ImGui::Selectable("Unlit", material2D->data.type == MATERIAL_2D_TYPE_UNLIT))
             {
                 material2D->data.type = MATERIAL_2D_TYPE_UNLIT;
                 material2D->SetDirtyFlag(true);
@@ -1225,7 +1145,7 @@ namespace ignite
                 if (payload->Data && payload->DataSize == sizeof(AssetHandle))
                 {
                     const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-                    const AssetMetaData &droppedMetadata = assetManager.GetMetaData(droppedHandle);
+                    const AssetMetaData &droppedMetadata = assetManager->GetMetaData(droppedHandle);
                     if (droppedMetadata.type == AssetType::Texture)
                     {
                         material2D->textureHandle = droppedHandle;
@@ -1249,15 +1169,15 @@ namespace ignite
         ImGui::Text("Texture Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(material2D->textureHandle)));
     }
 
-    void AssetEditorPanel::RenderTextureEditor(AssetEditorData &assetData,
-        const Ref<Texture> &texture) {
+    void AssetEditorPanel::RenderTextureEditor(AssetEditorData &assetData, const Ref<Texture> &texture)
+    {
         if (!texture || !m_EditorLayer || !m_EditorLayer->GetActiveProject())
         {
             return;
         }
 
         Project *project = m_EditorLayer->GetActiveProject().get();
-        auto &assetManager = project->GetAssetManager();
+        auto assetManager = project->GetAssetManager();
 
         const uint64_t stateKey = static_cast<uint64_t>(assetData.handle);
         TextureEditorState &state = s_TextureEditorState[stateKey];
@@ -1270,16 +1190,12 @@ namespace ignite
         ImGui::Text("Path: %s", assetData.metadata.filepath.generic_string().c_str());
         ImGui::Text("Resolution: %d x %d", texture->GetWidth(), texture->GetHeight());
         ImGui::Text("Channels: %d", texture->GetChannels());
-        ImGui::Text("Current Format: %s",
-            TextureFormatToString(texture->GetFormat()));
+        ImGui::Text("Current Format: %s", TextureFormatToString(texture->GetFormat()));
 
-        const float previewMaxWidth =
-            std::min(320.0f, ImGui::GetContentRegionAvail().x);
-        if (previewMaxWidth > 0.0f && texture->GetWidth() > 0 &&
-            texture->GetHeight() > 0)
+        const float previewMaxWidth = std::min(320.0f, ImGui::GetContentRegionAvail().x);
+        if (previewMaxWidth > 0.0f && texture->GetWidth() > 0 && texture->GetHeight() > 0)
         {
-            const float aspectRatio = static_cast<float>(texture->GetWidth()) /
-                static_cast<float>(texture->GetHeight());
+            const float aspectRatio = static_cast<float>(texture->GetWidth()) / static_cast<float>(texture->GetHeight());
             ImVec2 previewSize(previewMaxWidth, previewMaxWidth);
             if (aspectRatio > 1.0f)
             {
@@ -1291,8 +1207,7 @@ namespace ignite
             }
 
             ImGui::Text("Preview");
-            ImTextureID textureId =
-                reinterpret_cast<ImTextureID>(texture->GetHandle().Get());
+            ImTextureID textureId = reinterpret_cast<ImTextureID>(texture->GetHandle().Get());
             ImGui::Image(textureId, previewSize);
         }
 
@@ -1313,19 +1228,17 @@ namespace ignite
         int sampleCount = static_cast<int>(state.createInfo.sampleCount);
         if (ImGui::DragInt("Sample Count", &sampleCount, 1.0f, 1, 16))
         {
-            state.createInfo.sampleCount =
-                static_cast<uint32_t>(std::max(sampleCount, 1));
+            state.createInfo.sampleCount = static_cast<uint32_t>(std::max(sampleCount, 1));
         }
 
         int sampleQuality = static_cast<int>(state.createInfo.sampleQuality);
         if (ImGui::DragInt("Sample Quality", &sampleQuality, 1.0f, 0, 16))
         {
-            state.createInfo.sampleQuality =
-                static_cast<uint32_t>(std::max(sampleQuality, 0));
+            state.createInfo.sampleQuality = static_cast<uint32_t>(std::max(sampleQuality, 0));
         }
 
-        const nvrhi::Format formatOptions[] = { nvrhi::Format::RGBA8_UNORM,
-                                               nvrhi::Format::RGBA32_FLOAT };
+        const nvrhi::Format formatOptions[] = { nvrhi::Format::RGBA8_UNORM, nvrhi::Format::RGBA32_FLOAT };
+        
         int currentFormatIndex = 0;
         for (int i = 0; i < static_cast<int>(std::size(formatOptions)); ++i)
         {
@@ -1336,9 +1249,7 @@ namespace ignite
             }
         }
 
-        if (ImGui::BeginCombo(
-            "Import Format",
-            TextureFormatToString(formatOptions[currentFormatIndex])))
+        if (ImGui::BeginCombo("Import Format", TextureFormatToString(formatOptions[currentFormatIndex])))
         {
             for (int i = 0; i < static_cast<int>(std::size(formatOptions)); ++i)
             {
@@ -1357,13 +1268,14 @@ namespace ignite
             ImGui::EndCombo();
         }
 
-        const nvrhi::SamplerAddressMode addressModeOptions[] = {
-            nvrhi::SamplerAddressMode::Repeat, nvrhi::SamplerAddressMode::ClampToEdge,
-            nvrhi::SamplerAddressMode::ClampToBorder };
+        const nvrhi::SamplerAddressMode addressModeOptions[] =
+        {
+            nvrhi::SamplerAddressMode::Repeat,
+            nvrhi::SamplerAddressMode::ClampToEdge,
+            nvrhi::SamplerAddressMode::ClampToBorder
+        };
 
-        auto drawAddressModeCombo = [&addressModeOptions](
-            const char *label,
-            nvrhi::SamplerAddressMode &mode)
+        auto drawAddressModeCombo = [&addressModeOptions](const char *label, nvrhi::SamplerAddressMode &mode)
         {
             if (ImGui::BeginCombo(label, SamplerAddressModeToString(mode)))
             {
@@ -1396,20 +1308,17 @@ namespace ignite
         ImGui::Separator();
         if (ImGui::Button("ReImport"))
         {
-            assetManager.SetTextureCreateInfo(assetData.handle, state.createInfo);
+            assetManager->SetTextureCreateInfo(assetData.handle, state.createInfo);
 
             AssetMetaData importMetadata = assetData.metadata;
-            importMetadata.filepath =
-                project->GetAssetFilepath(assetData.metadata.filepath);
+            importMetadata.filepath = project->GetAssetFilepath(assetData.metadata.filepath);
 
-            Ref<Texture> reimportedTexture = AssetImporter::ImportTexture(
-                assetData.handle, importMetadata, state.createInfo);
+            Ref<Texture> reimportedTexture = AssetImporter::ImportTexture(assetData.handle, importMetadata, state.createInfo, assetManager);
             if (reimportedTexture)
             {
                 reimportedTexture->handle = assetData.handle;
-                assetManager.AssignAsset(assetData.handle, reimportedTexture);
-                assetManager.SetTextureCreateInfo(assetData.handle,
-                    reimportedTexture->GetCreateInfo());
+                assetManager->AssignAsset(assetData.handle, reimportedTexture);
+                assetManager->SetTextureCreateInfo(assetData.handle, reimportedTexture->GetCreateInfo());
                 assetData.asset = reimportedTexture;
                 state.createInfo = reimportedTexture->GetCreateInfo();
                 reimportedTexture->SetDirtyFlag(false);
@@ -1417,7 +1326,8 @@ namespace ignite
         }
     }
 
-    bool AssetEditorPanel::DrawAssetEditorHeader(AssetEditorData &assetData) {
+    bool AssetEditorPanel::DrawAssetEditorHeader(AssetEditorData &assetData)
+    {
         ImGui::Text("Asset: %s", assetData.metadata.filepath.filename().string().c_str());
         ImGui::Text("Type: %s", AssetTypeToString(assetData.metadata.type).c_str());
         ImGui::Separator();
@@ -1445,31 +1355,25 @@ namespace ignite
         ImGui::Text("Ticks Per Second: %.3f", animation->ticksPerSeconds);
         ImGui::Text("Channels: %zu", animation->channels.size());
 
-        Project *project =
-            m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
+        Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
         if (!project)
         {
             return;
         }
 
-        auto &assetManager = project->GetAssetManager();
+        auto assetManager = project->GetAssetManager();
 
-        const AssetHandle skeletonHandle =
-            AssetHandle(animation->GetSkeletonHandle());
+        const AssetHandle skeletonHandle = AssetHandle(animation->GetSkeletonHandle());
         if (skeletonHandle != AssetHandle(0))
         {
-            const AssetMetaData &skeletonMetadata =
-                assetManager.GetMetaData(skeletonHandle);
+            const AssetMetaData &skeletonMetadata = assetManager->GetMetaData(skeletonHandle);
             if (skeletonMetadata.type == AssetType::Skeleton)
             {
-                ImGui::Text("Skeleton: %s",
-                    skeletonMetadata.filepath.generic_string().c_str());
+                ImGui::Text("Skeleton: %s", skeletonMetadata.filepath.generic_string().c_str());
             }
             else
             {
-                ImGui::Text("Skeleton Handle: %llu",
-                    static_cast<unsigned long long>(
-                        static_cast<uint64_t>(skeletonHandle)));
+                ImGui::Text("Skeleton Handle: %llu", static_cast<uint64_t>(skeletonHandle));
             }
         }
         else
@@ -1480,19 +1384,15 @@ namespace ignite
         ImGui::Button("Drop Skeleton Here", ImVec2(220.0f, 0.0f));
         if (ImGui::BeginDragDropTarget())
         {
-            if (const ImGuiPayload *payload =
-                ImGui::AcceptDragDropPayload("content_browser_item"))
+            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
             {
                 if (payload->Data && payload->DataSize == sizeof(AssetHandle))
                 {
-                    const AssetHandle droppedHandle =
-                        *static_cast<const AssetHandle *>(payload->Data);
-                    const AssetMetaData &droppedMetadata =
-                        assetManager.GetMetaData(droppedHandle);
+                    const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                    const AssetMetaData &droppedMetadata = assetManager->GetMetaData(droppedHandle);
                     if (droppedMetadata.type == AssetType::Skeleton)
                     {
-                        animation->SetSkeletonHandle(
-                            UUID(static_cast<uint64_t>(droppedHandle)));
+                        animation->SetSkeletonHandle(UUID(static_cast<uint64_t>(droppedHandle)));
                         animation->SetDirtyFlag(true);
                     }
                 }
@@ -1509,15 +1409,13 @@ namespace ignite
         }
 
         Project *project = m_EditorLayer->GetActiveProject().get();
-        const std::filesystem::path savePath =
-            project->GetAssetFilepath(assetData.metadata.filepath);
+        const std::filesystem::path savePath = project->GetAssetFilepath(assetData.metadata.filepath);
 
         switch (assetData.metadata.type)
         {
             case AssetType::SpriteSheet:
             {
-                Ref<SpriteSheet> spriteSheet =
-                    std::dynamic_pointer_cast<SpriteSheet>(assetData.asset);
+                Ref<SpriteSheet> spriteSheet = std::dynamic_pointer_cast<SpriteSheet>(assetData.asset);
                 if (!spriteSheet)
                 {
                     return false;
@@ -1534,8 +1432,7 @@ namespace ignite
 
             case AssetType::Material2D:
             {
-                Ref<Material2D> material2D =
-                    std::dynamic_pointer_cast<Material2D>(assetData.asset);
+                Ref<Material2D> material2D = std::dynamic_pointer_cast<Material2D>(assetData.asset);
                 if (!material2D)
                 {
                     return false;
@@ -1552,8 +1449,7 @@ namespace ignite
 
             case AssetType::SkeletalAnimation:
             {
-                Ref<SkeletalAnimation> animation =
-                    std::dynamic_pointer_cast<SkeletalAnimation>(assetData.asset);
+                Ref<SkeletalAnimation> animation = std::dynamic_pointer_cast<SkeletalAnimation>(assetData.asset);
                 if (!animation)
                 {
                     return false;
@@ -1565,24 +1461,22 @@ namespace ignite
 
             case AssetType::Animation2D:
             {
-                Ref<Animation2D> anim =
-                    std::dynamic_pointer_cast<Animation2D>(assetData.asset);
+                Ref<Animation2D> anim = std::dynamic_pointer_cast<Animation2D>(assetData.asset);
                 if (!anim)
+                {
                     return false;
-                std::filesystem::path fullPath =
-                    m_EditorLayer->GetActiveProject()->GetAssetDirectory() /
-                    assetData.metadata.filepath;
+                }
+                std::filesystem::path fullPath = m_EditorLayer->GetActiveProject()->GetAssetDirectory() / assetData.metadata.filepath;
                 return anim->Serialize(fullPath);
             }
             case AssetType::AnimatorController2D:
             {
-                Ref<AnimatorController2D> ctrl =
-                    std::dynamic_pointer_cast<AnimatorController2D>(assetData.asset);
+                Ref<AnimatorController2D> ctrl = std::dynamic_pointer_cast<AnimatorController2D>(assetData.asset);
                 if (!ctrl)
+                {
                     return false;
-                std::filesystem::path fullPath =
-                    m_EditorLayer->GetActiveProject()->GetAssetDirectory() /
-                    assetData.metadata.filepath;
+                }
+                std::filesystem::path fullPath = m_EditorLayer->GetActiveProject()->GetAssetDirectory() / assetData.metadata.filepath;
                 return ctrl->Serialize(fullPath);
             }
             default:
@@ -1601,9 +1495,10 @@ namespace ignite
     {
         auto handle = event.GetAssetHandle();
         auto &metadata = event.GetAssetMetaData();
-        if (metadata.type == AssetType::Invalid || handle == AssetHandle(0) ||
-            !m_EditorLayer || !m_EditorLayer->GetActiveProject())
+        if (metadata.type == AssetType::Invalid || handle == AssetHandle(0) || !m_EditorLayer || !m_EditorLayer->GetActiveProject())
+        {
             return false;
+        }
 
         // Check if the asset window is already open.
         auto it = std::ranges::find(m_Assets, handle, &AssetEditorData::handle);
@@ -1614,11 +1509,11 @@ namespace ignite
             return true;
         }
 
-        auto &assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-        Ref<Asset> asset = assetManager.GetAsset(handle);
+        auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+        Ref<Asset> asset = assetManager->GetAsset(handle);
         if (!asset)
         {
-            asset = assetManager.GetAssetImmediate(handle);
+            asset = assetManager->GetAssetImmediate(handle);
         }
 
         if (asset)
@@ -1647,10 +1542,14 @@ namespace ignite
     bool AssetEditorPanel::OnAssetEditorCreateEvent(AssetEditorCreateEvent &event)
     {
         if (!m_EditorLayer || !m_EditorLayer->GetActiveProject())
+        {
             return false;
+        }
 
         if (event.GetAssetType() == AssetType::Invalid)
+        {
             return false;
+        }
 
         m_CreateRequest = {};
         m_CreateRequest.type = event.GetAssetType();
@@ -1695,19 +1594,17 @@ namespace ignite
 
             auto renderUnsavedClosePopup = [&](bool &isOpen)
             {
-                const std::string popupId =
-                    std::format("Unsaved Changes###asset_unsaved_close_{}",
-                        static_cast<uint64_t>(assetData.handle));
+                const std::string popupId = std::format("Unsaved Changes###asset_unsaved_close_{}", static_cast<uint64_t>(assetData.handle));
                 if (assetData.showUnsavedClosePopup)
                 {
                     ImGui::OpenPopup(popupId.c_str());
                 }
 
-                if (ImGui::BeginPopupModal(popupId.c_str(), nullptr,
-                    ImGuiWindowFlags_AlwaysAutoResize))
+                if (ImGui::BeginPopupModal(popupId.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize))
                 {
                     ImGui::Text("This asset has unsaved changes.");
                     ImGui::Separator();
+
                     if (ImGui::Button("Save and Close"))
                     {
                         if (SaveAsset(assetData))
@@ -1742,10 +1639,8 @@ namespace ignite
 
             bool isOpen = assetData.isOpen;
             ImGui::SetNextWindowSize(ImVec2(1280.0f, 1080.0f), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowSizeConstraints(ImVec2(420.0f, 640.0f),
-                ImVec2(FLT_MAX, FLT_MAX));
-            if (!ImGui::Begin(assetData.windowTitle.c_str(), &isOpen,
-                ImGuiWindowFlags_NoScrollWithMouse))
+            ImGui::SetNextWindowSizeConstraints(ImVec2(420.0f, 640.0f), ImVec2(FLT_MAX, FLT_MAX));
+            if (!ImGui::Begin(assetData.windowTitle.c_str(), &isOpen, ImGuiWindowFlags_NoScrollWithMouse))
             {
                 if (!isOpen && assetData.asset && assetData.asset->IsDirty())
                 {
@@ -1782,59 +1677,79 @@ namespace ignite
                 {
                     Ref<SpriteSheet> spriteSheet = std::dynamic_pointer_cast<SpriteSheet>(assetData.asset);
                     if (!spriteSheet)
+                    {
                         break;
+                    }
 
                     RenderSpriteSheetEditor(spriteSheet);
-                } break;
+                    break;
+                }
 
                 case AssetType::Texture:
                 {
                     Ref<Texture> texture = std::dynamic_pointer_cast<Texture>(assetData.asset);
                     if (!texture)
+                    {
                         break;
+                    }
 
                     RenderTextureEditor(assetData, texture);
-                } break;
+                    break;
+                }
 
                 case AssetType::Material2D:
                 {
                     Ref<Material2D> material2D = std::dynamic_pointer_cast<Material2D>(assetData.asset);
                     if (!material2D)
+                    {
                         break;
+                    }
 
                     RenderMaterial2DEditor(material2D);
-                } break;
+                    break;
+                }
 
                 case AssetType::SkeletalAnimation:
                 {
                     Ref<SkeletalAnimation> anim = std::dynamic_pointer_cast<SkeletalAnimation>(assetData.asset);
                     if (!anim)
+                    {
                         break;
+                    }
 
                     RenderSkeletalAnimationEditor(anim);
-                } break;
+                    break;
+                }
 
                 case AssetType::Animation2D:
                 {
                     Ref<Animation2D> anim2d = std::dynamic_pointer_cast<Animation2D>(assetData.asset);
                     if (!anim2d)
+                    {
                         break;
+                    }
 
                     RenderAnimation2DEditor(anim2d);
-                } break;
+                    break;
+                }
 
                 case AssetType::AnimatorController2D:
                 {
                     Ref<AnimatorController2D> ctrl = std::dynamic_pointer_cast<AnimatorController2D>(assetData.asset);
                     if (!ctrl)
+                    {
                         break;
+                    }
 
                     RenderAnimatorController2DEditor(ctrl);
-                } break;
+                    break;
+                }
 
                 default:
-                ImGui::Text("Asset type '%s' editor is not implemented yet.", AssetTypeToString(assetData.metadata.type).c_str());
-                break;
+                {
+                    ImGui::Text("Asset type '%s' editor is not implemented yet.", AssetTypeToString(assetData.metadata.type).c_str());
+                    break;
+                }
             }
 
             if (!isOpen && assetData.asset && assetData.asset->IsDirty())
@@ -1885,7 +1800,9 @@ namespace ignite
             if (st.playbackTime >= totalDur)
             {
                 if (anim->loop)
+                {
                     st.playbackTime = std::fmod(st.playbackTime, totalDur);
+                }
                 else
                 {
                     st.playbackTime = totalDur;
@@ -1921,7 +1838,9 @@ namespace ignite
                 const ImVec2 vpSize = ImGui::GetContentRegionAvail();
 
                 if (vpSize.x > 0 && vpSize.y > 0)
+                {
                     ImGui::InvisibleButton("##anim2d_view_ibt", vpSize);
+                }
 
                 // Mouse-wheel zoom
                 if (ImGui::IsItemHovered())
@@ -1940,12 +1859,14 @@ namespace ignite
                     const int cols = static_cast<int>(vpSize.x / cs) + 2;
                     const int rows = static_cast<int>(vpSize.y / cs) + 2;
                     for (int ry = 0; ry < rows; ++ry)
+                    {
                         for (int cx = 0; cx < cols; ++cx)
                         {
                             const ImVec2 tMin = { vpPos.x + cx * cs, vpPos.y + ry * cs };
                             const ImVec2 tMax = { tMin.x + cs, tMin.y + cs };
                             dl->AddRectFilled(tMin, tMax, ((cx + ry) % 2 == 0) ? cA : cB);
                         }
+                    }
                 }
 
                 if (texture && texture->GetHandle() && frameCount > 0)
@@ -1969,10 +1890,8 @@ namespace ignite
                         vpPos.y + (vpSize.y - imgH) * 0.5f
                     };
 
-                    dl->AddImage(
-                        reinterpret_cast<ImTextureID>(texture->GetHandle().Get()),
-                        imgPos, ImVec2(imgPos.x + imgW, imgPos.y + imgH),
-                        ImVec2(fr.uv0.x, fr.uv1.y), ImVec2(fr.uv1.x, fr.uv0.y));
+                    dl->AddImage(reinterpret_cast<ImTextureID>(texture->GetHandle().Get()),
+                        imgPos, ImVec2(imgPos.x + imgW, imgPos.y + imgH), ImVec2(fr.uv0.x, fr.uv1.y), ImVec2(fr.uv1.x, fr.uv0.y));
 
                     // Frame label
                     const std::string lbl = std::format("Frame {} / {}", fi, frameCount - 1);
@@ -1982,8 +1901,7 @@ namespace ignite
                 {
                     const char *msg = texture ? "No frames" : "No texture";
                     const ImVec2 ts = ImGui::CalcTextSize(msg);
-                    ImGui::GetWindowDrawList()->AddText(
-                        ImVec2(vpPos.x + (vpSize.x - ts.x) * 0.5f, vpPos.y + (vpSize.y - ts.y) * 0.5f),
+                    ImGui::GetWindowDrawList()->AddText(ImVec2(vpPos.x + (vpSize.x - ts.x) * 0.5f, vpPos.y + (vpSize.y - ts.y) * 0.5f),
                         IM_COL32(160, 160, 160, 200), msg);
                 }
             }
@@ -1999,16 +1917,24 @@ namespace ignite
             if (ImGui::Button(st.playing ? "Pause##anim2d_pause" : "Play##anim2d_play", ImVec2(btnW, 0)))
             {
                 if (st.playing)
+                {
                     st.playing = false;
+                }
                 else
                 {
                     // If at end and not looping, restart
                     if (!anim->loop && st.playbackTime >= totalDur)
+                    {
                         st.playbackTime = 0.0f;
+                    }
                     st.playing = true;
                 }
             }
-            if (playDisabled) ImGui::EndDisabled();
+
+            if (playDisabled)
+            {
+                ImGui::EndDisabled();
+            }
 
             ImGui::SameLine();
             if (ImGui::Button("Stop##anim2d_stop", ImVec2(btnW, 0)))
@@ -2056,8 +1982,7 @@ namespace ignite
                         const ImVec2 tsz = ImGui::CalcTextSize(ts.c_str());
                         if (cellW >= tsz.x + 4.0f || i % std::max(1, static_cast<int>(tsz.x / cellW) + 1) == 0)
                         {
-                            dl->AddText(ImVec2(cx - tsz.x * 0.5f, tlPos.y + 1.0f),
-                                IM_COL32(160, 160, 180, 200), ts.c_str());
+                            dl->AddText(ImVec2(cx - tsz.x * 0.5f, tlPos.y + 1.0f), IM_COL32(160, 160, 180, 200), ts.c_str());
                         }
                     }
 
@@ -2071,14 +1996,11 @@ namespace ignite
                         const float cx = tlPos.x + (i + 0.5f) * cellW;
 
                         // Cell separator tick
-                        dl->AddLine(ImVec2(cx - cellW * 0.5f, tlPos.y + rulerH),
-                            ImVec2(cx - cellW * 0.5f, tlPos.y + tlH), IM_COL32(55, 55, 65, 255));
+                        dl->AddLine(ImVec2(cx - cellW * 0.5f, tlPos.y + rulerH), ImVec2(cx - cellW * 0.5f, tlPos.y + tlH), IM_COL32(55, 55, 65, 255));
 
                         const bool isActive = (i == st.previewFrame);
                         const float dotR = isActive ? 7.0f : 5.0f;
-                        const ImU32 dotCol = isActive
-                            ? IM_COL32(80, 200, 120, 255)
-                            : IM_COL32(120, 130, 160, 220);
+                        const ImU32 dotCol = isActive ? IM_COL32(80, 200, 120, 255) : IM_COL32(120, 130, 160, 220);
                         dl->AddCircleFilled(ImVec2(cx, dotY), dotR, dotCol);
                         dl->AddCircle(ImVec2(cx, dotY), dotR, IM_COL32(200, 200, 220, 255), 0, 1.3f);
                     }
@@ -2088,12 +2010,9 @@ namespace ignite
                     {
                         const float phX = tlPos.x + (st.playbackTime / totalDur) * tlW;
                         dl->AddLine(ImVec2(phX, tlPos.y), ImVec2(phX, tlPos.y + tlH), IM_COL32(255, 100, 60, 230), 2.0f);
+
                         // Playhead handle triangle
-                        dl->AddTriangleFilled(
-                            ImVec2(phX - 5, tlPos.y),
-                            ImVec2(phX + 5, tlPos.y),
-                            ImVec2(phX, tlPos.y + 10),
-                            IM_COL32(255, 100, 60, 230));
+                        dl->AddTriangleFilled(ImVec2(phX - 5, tlPos.y), ImVec2(phX + 5, tlPos.y), ImVec2(phX, tlPos.y + 10), IM_COL32(255, 100, 60, 230));
                     }
 
                     // Scrubbing
@@ -2124,9 +2043,14 @@ namespace ignite
         ImGui::BeginChild("##anim2d_splitter", ImVec2(splitter, 0.0f), ImGuiChildFlags_None);
         ImGui::Button("##anim2d_splitter_btn", ImVec2(-1.0f, -1.0f));
         if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+        {
             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+        }
         if (ImGui::IsItemActive())
+        {
             st.toolsWidth = std::clamp(st.toolsWidth - ImGui::GetIO().MouseDelta.x, minRight, available.x - minLeft - splitter);
+        }
+
         ImGui::EndChild();
         ImGui::PopStyleColor(3);
 
@@ -2180,7 +2104,7 @@ namespace ignite
                 if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                 {
                     const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
-                    const AssetMetaData &md = project->GetAssetManager().GetMetaData(handle);
+                    const AssetMetaData &md = project->GetAssetManager()->GetMetaData(handle);
                     if (md.type == AssetType::Texture)
                     {
                         anim->textureHandle = handle;
@@ -2217,7 +2141,7 @@ namespace ignite
                     if (payload->Data && payload->DataSize == sizeof(AssetHandle))
                     {
                         const AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                        const auto &md = project->GetAssetManager().GetMetaData(handle);
+                        const auto &md = project->GetAssetManager()->GetMetaData(handle);
                         if (md.type == AssetType::SpriteSheet)
                         {
                             Ref<SpriteSheet> ss = project->GetAsset<SpriteSheet>(handle);
@@ -2332,7 +2256,7 @@ namespace ignite
                     if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                     {
                         const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
-                        const AssetMetaData &md = project->GetAssetManager().GetMetaData(handle);
+                        const AssetMetaData &md = project->GetAssetManager()->GetMetaData(handle);
                         if (md.type == AssetType::Animation2D)
                         {
                             state.animHandle = handle;

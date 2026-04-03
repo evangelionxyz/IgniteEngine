@@ -40,7 +40,8 @@ IncludeDir["FBX_SDK"]          = "%{FBX_SDK_PATH}/include"
 IncludeDir["Hostfxr"]          = "%{THIRDPARTY_DIR}/MochiSharp/NetCore/include"
 IncludeDir["MSDFATLASGEN"]     = "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdf-atlas-gen"
 IncludeDir["MSDFGEN"]          = "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdfgen"
-IncludeDir["FREETYPE"]     = "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdfgen/freetype/include"
+IncludeDir["FREETYPE"]         = "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdfgen/freetype/include"
+IncludeDir["TRACY"]            = "%{THIRDPARTY_DIR}/tracy/public"
 
 --library dirs
 LibraryDir = {}
@@ -100,6 +101,7 @@ group "Third Party"
     include "msdf-atlas-gen.lua"
     include "msdfgen.lua"
     include "freetype.lua"
+    include "tracy.lua"
 group ""
 
 group "NVIDIA"

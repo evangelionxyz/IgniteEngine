@@ -34,7 +34,7 @@ project "BOX2D"
             "/experimental:c11atomics",
         }
 
-    filter "configurations:Ddebug"
+    filter "configurations:Debug"
         runtime "debug"
         symbols "on"
 

@@ -81,6 +81,8 @@ namespace ignite
         
         m_EditorCamera2D = m_EditorCamera;
         m_EditorCamera3D = m_EditorCamera;
+        m_EditorCamera2D->SetNavigationMode(EditorCamera::NavigationMode::Mode2D);
+        m_EditorCamera3D->SetNavigationMode(EditorCamera::NavigationMode::Orbit);
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
@@ -529,7 +531,7 @@ namespace ignite
 
                 const bool hasHDR = c.hdrHandle != AssetHandle(0);
                 std::string buttonLabel = hasHDR ? "HDR Loaded" : "Drag Here";
-                UI::DrawButtonWithColumn("HDR", buttonLabel.c_str(), nullptr, [&c, &hasHDR]()
+                UI::DrawButtonWithColumn("HDR", buttonLabel.c_str(), nullptr, [&c, this, &hasHDR]()
                     {
 						if (ImGui::BeginDragDropTarget())
 						{
@@ -537,7 +539,7 @@ namespace ignite
 							{
 								LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
 								AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-								AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(handle);
+								AssetMetaData metadata = m_EditorLayer->GetActiveProject()->GetAssetManager()->GetMetaData(handle);
 								if (metadata.type == AssetType::Texture && metadata.filepath.extension() == ".hdr")
 								{
 									c.hdrHandle = handle;
@@ -593,7 +595,7 @@ namespace ignite
 							{
 								LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
 								AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-								AssetType type = Project::GetInstance()->GetAssetManager().GetAssetType(handle);
+                                AssetType type = m_EditorLayer->GetActiveProject()->GetAssetManager()->GetAssetType(handle);
 								if (type == AssetType::Material2D)
 								{
 									Sprite2DComponent before = c;
@@ -620,7 +622,7 @@ namespace ignite
                 Ref<Material2D> mat2d = nullptr;
                 if (isMat2dLoaded)
                 {
-                    Project::GetInstance()->GetAsset<Material2D>(c.materialHandle, AssetType::Material2D);
+                    m_EditorLayer->GetActiveProject()->GetAsset<Material2D>(c.materialHandle, AssetType::Material2D);
                 }
 
                 if (!isMat2dLoaded)
@@ -636,7 +638,7 @@ namespace ignite
 								{
 									LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
 									AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-									AssetType type = Project::GetInstance()->GetAssetManager().GetAssetType(handle);
+									AssetType type = m_EditorLayer->GetActiveProject()->GetAssetManager()->GetAssetType(handle);
 									if (type == AssetType::Texture)
 									{
 										c.handle = handle;
@@ -781,7 +783,7 @@ namespace ignite
 				bool isMeshLoaded = c.handle != AssetHandle(0);
 
 				std::string buttonLabel = isMeshLoaded ? "Loaded" : "Drag Mesh Here";
-                UI::DrawButtonWithColumn("Mesh Asset", buttonLabel.c_str(), nullptr, [&c, &isMeshLoaded]()
+                UI::DrawButtonWithColumn("Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
                     {
                         if (ImGui::BeginDragDropTarget())
                         {
@@ -789,17 +791,17 @@ namespace ignite
                             {
                                 LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
                                 AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                auto &assetManager = Project::GetInstance()->GetAssetManager();
-                                AssetMetaData metadata = assetManager.GetMetaData(handle);
+                                auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                                AssetMetaData metadata = assetManager->GetMetaData(handle);
 
                                 if (metadata.type == AssetType::GLTF)
                                 {
                                     metadata.type = AssetType::StaticMesh;
-                                    assetManager.AssignMetaData(handle, metadata);
-                                    assetManager.UnloadAsset(handle);
+                                    assetManager->AssignMetaData(handle, metadata);
+                                    assetManager->UnloadAsset(handle);
                                 }
 
-                                if (assetManager.GetAssetType(handle) == AssetType::StaticMesh)
+                                if (assetManager->GetAssetType(handle) == AssetType::StaticMesh)
                                 {
                                     c.handle = handle;
                                 }
@@ -824,7 +826,7 @@ namespace ignite
                     ImGui::TextDisabled("Handle: %llu", static_cast<u64>(c.handle));
                     ImGui::Unindent(8.0f);
 
-                    Ref<StaticMesh> sm = Project::GetInstance()->GetAsset<StaticMesh>(c.handle);
+                    Ref<StaticMesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<StaticMesh>(c.handle);
                 }
             });
 
@@ -835,7 +837,7 @@ namespace ignite
 				bool isMeshLoaded = c.handle != AssetHandle(0);
 
 				std::string buttonLabel = isMeshLoaded ? "Loaded" : "Drag Mesh Here";
-                UI::DrawButtonWithColumn("Mesh Asset", buttonLabel.c_str(), nullptr, [&c, &isMeshLoaded]()
+                UI::DrawButtonWithColumn("Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
                     {
 						if (ImGui::BeginDragDropTarget())
 						{
@@ -843,17 +845,17 @@ namespace ignite
 							{
 								LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
 								AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-								auto &assetManager = Project::GetInstance()->GetAssetManager();
-								AssetMetaData metadata = assetManager.GetMetaData(handle);
+								auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+								AssetMetaData metadata = assetManager->GetMetaData(handle);
 
 								if (metadata.type == AssetType::FBX)
 								{
 									metadata.type = AssetType::SkeletalMesh;
-									assetManager.AssignMetaData(handle, metadata);
-									assetManager.UnloadAsset(handle);
+									assetManager->AssignMetaData(handle, metadata);
+									assetManager->UnloadAsset(handle);
 								}
 
-								if (assetManager.GetAssetType(handle) == AssetType::SkeletalMesh)
+								if (assetManager->GetAssetType(handle) == AssetType::SkeletalMesh)
 								{
 									c.handle = handle;
 								}
@@ -877,7 +879,7 @@ namespace ignite
 					ImGui::TextDisabled("Handle: %llu", static_cast<u64>(c.handle));
 					ImGui::Unindent(8.0f);
 
-                    Ref<SkeletalMesh> sm = Project::GetInstance()->GetAsset<SkeletalMesh>(c.handle);
+                    Ref<SkeletalMesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<SkeletalMesh>(c.handle);
 					if (sm)
 					{
                         UI::DrawCheckbox("Play Anim", &sm->isPlaying);
@@ -1117,7 +1119,7 @@ namespace ignite
 
                     const bool isFontLoaded = c.fontHandle != AssetHandle(0);
                     std::string fontLabel = isFontLoaded ? "Font Loaded" : "Drag Here";
-                    UI::DrawButtonWithColumn("Font", fontLabel.c_str(), nullptr, [&]()
+                    UI::DrawButtonWithColumn("Font", fontLabel.c_str(), nullptr, [&, this]()
                         {
                             if (ImGui::BeginDragDropTarget())
                             {
@@ -1125,7 +1127,7 @@ namespace ignite
                                 {
                                     LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
                                     AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                    if (Project::GetInstance()->GetAssetManager().GetAssetType(handle) == AssetType::Font)
+                                    if (m_EditorLayer->GetActiveProject()->GetAssetManager()->GetAssetType(handle) == AssetType::Font)
                                     {
                                         c.fontHandle = handle;
                                     }
@@ -1145,7 +1147,7 @@ namespace ignite
 
                     const bool isMaterialLoaded = c.material2dHandle != AssetHandle(0);
                     std::string materialLabel = isMaterialLoaded ? "Material Loaded" : "Drag Here";
-                    UI::DrawButtonWithColumn("Material", materialLabel.c_str(), nullptr, [&c, &isMaterialLoaded]()
+                    UI::DrawButtonWithColumn("Material", materialLabel.c_str(), nullptr, [&c, this, &isMaterialLoaded]()
                         {
                             if (ImGui::BeginDragDropTarget())
                             {
@@ -1153,7 +1155,7 @@ namespace ignite
                                 {
                                     LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
                                     AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                    if (Project::GetInstance()->GetAssetManager().GetAssetType(handle) == AssetType::Material2D)
+                                    if (m_EditorLayer->GetActiveProject()->GetAssetManager()->GetAssetType(handle) == AssetType::Material2D)
                                     {
                                         c.material2dHandle = handle;
                                     }
@@ -1191,7 +1193,7 @@ namespace ignite
                 bool isLoaded = c.handle != AssetHandle(0);
                 std::string label = isLoaded ? std::to_string((uint64_t)c.handle) : "Drag Here";
 
-                UI::DrawButtonWithColumn("Audio", label.c_str(), nullptr, [&c, &isLoaded]()
+                UI::DrawButtonWithColumn("Audio", label.c_str(), nullptr, [&c, this, &isLoaded]()
                     {
 						if (ImGui::BeginDragDropTarget())
 						{
@@ -1202,11 +1204,11 @@ namespace ignite
 									AssetHandle *handle = static_cast<AssetHandle *>(payload->Data);
 									if (handle && *handle != AssetHandle(0))
 									{
-										AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(*handle);
+										AssetMetaData metadata = m_EditorLayer->GetActiveProject()->GetAssetManager()->GetMetaData(*handle);
 										if (metadata.type == AssetType::Audio)
 										{
 											c.handle = *handle;
-											Ref<FmodSound> sound = Project::GetInstance()->GetAsset<FmodSound>(*handle);
+											Ref<FmodSound> sound = m_EditorLayer->GetActiveProject()->GetAsset<FmodSound>(*handle);
 										}
 									}
 								}
@@ -1226,7 +1228,7 @@ namespace ignite
                 
                 if (isLoaded)
                 {
-                    if (Ref<FmodSound> sound = Project::GetInstance()->GetAsset<FmodSound>(c.handle))
+                    if (Ref<FmodSound> sound = m_EditorLayer->GetActiveProject()->GetAsset<FmodSound>(c.handle))
                     {
                         if (ImGui::Button("Play", { 55.0f, 30.0f }))
                         {
@@ -1664,19 +1666,33 @@ namespace ignite
         if (ImGui::Combo("##CameraMode", &cameraModeIndex, kCameraModeLabels.data(), static_cast<int>(kCameraModeLabels.size())))
         {
             const auto mode = cameraModeIndex == 0 ? EditorCamera::NavigationMode::Orbit : (cameraModeIndex == 1 ? EditorCamera::NavigationMode::Fly : EditorCamera::NavigationMode::Mode2D);
+            const auto previousMode = m_EditorCamera.GetNavigationMode();
 
-            if (mode == EditorCamera::NavigationMode::Mode2D)
+            if (previousMode == EditorCamera::NavigationMode::Mode2D)
             {
-                m_EditorCamera3D = m_EditorCamera;
-                m_EditorCamera = *m_EditorCamera2D;
+                m_EditorCamera2D = m_EditorCamera;
             }
             else
             {
-                m_EditorCamera2D = m_EditorCamera;
-                m_EditorCamera = *m_EditorCamera2D;
+                m_EditorCamera3D = m_EditorCamera;
             }
 
-            // m_EditorCamera.SetNavigationMode(mode);
+            if (mode == EditorCamera::NavigationMode::Mode2D)
+            {
+                if (m_EditorCamera2D)
+                {
+                    m_EditorCamera = *m_EditorCamera2D;
+                }
+            }
+            else
+            {
+                if (m_EditorCamera3D)
+                {
+                    m_EditorCamera = *m_EditorCamera3D;
+                }
+            }
+
+            m_EditorCamera.SetNavigationMode(mode);
         }
 
         ImGui::SameLine();
@@ -1916,10 +1932,10 @@ namespace ignite
                     auto* handle = static_cast<AssetHandle*>(payload->Data);
                     if (handle && *handle != AssetHandle(0))
                     {
-                        AssetMetaData metadata = Project::GetInstance()->GetAssetManager().GetMetaData(*handle);
+                        AssetMetaData metadata = m_EditorLayer->GetActiveProject()->GetAssetManager()->GetMetaData(*handle);
                         if (metadata.type == AssetType::Scene)
                         {
-                            std::filesystem::path filepath = Project::GetInstance()->GetAssetFilepath(metadata.filepath);
+                            std::filesystem::path filepath = m_EditorLayer->GetActiveProject()->GetAssetFilepath(metadata.filepath);
                             m_EditorLayer->OpenScene(filepath);
                         }
                     }

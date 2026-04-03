@@ -5,6 +5,7 @@
 
 #include "ignite/scene/component.hpp"
 #include "ignite/scene/scene_manager.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 
 namespace ignite
 {
@@ -20,6 +21,7 @@ namespace ignite
 
     void Physics2D::SimulationStart()
     {
+        IGN_PROFILE_FUNCTION();
         b2WorldDef worldDef = b2DefaultWorldDef();
         m_WorldId = b2CreateWorld(&worldDef);
 
@@ -69,6 +71,7 @@ namespace ignite
 
     void Physics2D::SimulationStop()
     {
+        IGN_PROFILE_FUNCTION();
         if (B2_IS_NULL(m_WorldId) == false)
             b2DestroyWorld(m_WorldId);
 
@@ -155,12 +158,18 @@ namespace ignite
 
     void Physics2D::Simulate(float deltaTime)
     {
+        IGN_PROFILE_FUNCTION();
         constexpr i32 subStepCount = 12;
-        b2World_Step(m_WorldId, deltaTime, subStepCount);
+        {
+            IGN_PROFILE_SCOPE("Physics2D::StepWorld");
+            b2World_Step(m_WorldId, deltaTime, subStepCount);
+        }
 
         const auto reg = m_Scene->registry;
-        for (const auto e : reg->view<Rigidbody2DComponent>())
-        {
+       {
+            IGN_PROFILE_SCOPE("Physics2D::SyncEntities");
+            for (const auto e : reg->view<Rigidbody2DComponent>())
+            {
             TransformComponent &tr = reg->get<TransformComponent>(e);
             Rigidbody2DComponent &rb = reg->get<Rigidbody2DComponent>(e);
 
@@ -235,7 +244,8 @@ namespace ignite
             rb.linearVelocity = { linearVelocity.x, linearVelocity.y };
             rb.angularVelocity = b2Body_GetAngularVelocity(rb.bodyId);
             rb.isAwake = b2Body_IsAwake(rb.bodyId);
-            rb.isEnabled = b2Body_IsEnabled(rb.bodyId);
+             rb.isEnabled = b2Body_IsEnabled(rb.bodyId);
+            }
         }
     }
 

@@ -107,6 +107,7 @@ namespace ignite
     private:
         void CreateTextureHandle();
         void EnsureTextureHandle();
+        size_t GetApproxSizeBytes() const;
 
         Buffer m_Buffer;
         TextureCreateInfo m_CreateInfo;
@@ -114,6 +115,7 @@ namespace ignite
         nvrhi::TextureHandle m_Handle;
         nvrhi::SamplerHandle m_Sampler;
         std::string m_DebugName;
+        bool m_TracyAllocationTracked = false;
     };
 
 }

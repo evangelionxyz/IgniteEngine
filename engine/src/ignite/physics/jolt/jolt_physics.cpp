@@ -23,6 +23,7 @@
 
 #include "jolt_physics.hpp"
 #include "ignite/core/types.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 
 #include "ignite/scene/scene.hpp"
 
@@ -93,6 +94,7 @@ namespace ignite
 
     void JoltScene::SimulationStart()
     {
+        IGN_PROFILE_FUNCTION();
         m_PhysicsSystem.Init(cNumBodies, cNumBodyMutexes, cMaxBodyPairs,
             cMaxContactConstraints, s_JoltInstance->broadPhaseLayer,
             s_JoltInstance->objectVsBroadPhaseLayerFilter, s_JoltInstance->objectLayerPairFilter);
@@ -108,45 +110,53 @@ namespace ignite
 
         for (entt::entity e : m_Scene->registry->view<RigibodyComponent>())
         {
-            InstantiateEntity(Entity{ e, m_Scene });
+            InstantiateEntity(Entity { e, m_Scene });
         }
     }
 
     void JoltScene::SimulationStop()
     {
-		if (!m_BodyInterface)
-		{
-			return;
-		}
+        IGN_PROFILE_FUNCTION();
+        if (!m_BodyInterface)
+        {
+            return;
+        }
 
         for (entt::entity e : m_Scene->registry->view<RigibodyComponent>())
         {
-            DestroyEntity(Entity{ e, m_Scene });
+            DestroyEntity(Entity { e, m_Scene });
         }
 
-		m_BodyInterface = nullptr;
+        m_BodyInterface = nullptr;
     }
 
     void JoltScene::Simulate(float deltaTime)
     {
-        for (const auto id : m_Scene->registry->view<RigibodyComponent>())
+        IGN_PROFILE_FUNCTION();
         {
-            Entity entity = { id, m_Scene };
-            const RigibodyComponent &rb = entity.GetComponent<RigibodyComponent>();
-            TransformComponent &tc = entity.GetComponent<TransformComponent>();
-            IDComponent &idc = entity.GetComponent<IDComponent>();
+            IGN_PROFILE_SCOPE("JoltScene::SyncEntitiesFromPhysics");
+            for (const auto id : m_Scene->registry->view<RigibodyComponent>())
+            {
+                Entity entity = { id, m_Scene };
+                const RigibodyComponent &rb = entity.GetComponent<RigibodyComponent>();
+                TransformComponent &tc = entity.GetComponent<TransformComponent>();
+                IDComponent &idc = entity.GetComponent<IDComponent>();
 
-            if (!rb.body)
-                continue;
+                if (!rb.body)
+                    continue;
 
-            // we don't care about the parent
-            tc.localTranslation = JoltToGlmVec3(rb.body->GetPosition());
-            tc.localRotation = JoltToGlmQuat(rb.body->GetRotation());
-            tc.translation = tc.localTranslation;
-            tc.rotation = tc.localRotation;
+                // we don't care about the parent
+                tc.localTranslation = JoltToGlmVec3(rb.body->GetPosition());
+                tc.localRotation = JoltToGlmQuat(rb.body->GetRotation());
+                tc.translation = tc.localTranslation;
+                tc.rotation = tc.localRotation;
+            }
         }
 
-        m_PhysicsSystem.Update(deltaTime, 1, s_JoltInstance->tempAllocator.get(), s_JoltInstance->jobSystem.get());
+        {
+            IGN_PROFILE_SCOPE("JoltScene::PhysicsUpdate");
+            m_PhysicsSystem.Update(deltaTime, 1, s_JoltInstance->tempAllocator.get(), s_JoltInstance->jobSystem.get());
+        }
     }
 
     void JoltScene::InstantiateEntity(Entity entity)

@@ -9,6 +9,8 @@
 #include "ignite/serializer/binary_serializer.hpp"
 #include "ignite/serializer/serializer.hpp"
 
+#include "editor_layer.hpp"
+
 #include <algorithm>
 #include <format>
 
@@ -41,7 +43,7 @@ namespace ignite
 		m_TargetDirectory = event.GetTargetDirectory();
 		if (m_TargetDirectory.empty())
 		{
-			m_TargetDirectory = Project::GetInstance() ? Project::GetInstance()->GetAssetDirectory() : std::filesystem::path();
+            m_TargetDirectory = m_EditorLayer->GetActiveProject() ? m_EditorLayer->GetActiveProject()->GetAssetDirectory() : std::filesystem::path();
 		}
 		m_SelectedAssetType = event.GetAssetType();
 		m_SkeletalMeshOptions = {};
@@ -151,7 +153,7 @@ namespace ignite
 			return;
 		}
 
-		if (!Project::GetInstance())
+		if (!m_EditorLayer->GetActiveProject())
 		{
 			LOG_ERROR("[Asset Importer] No active project to import assets");
 			m_ShowImporterWindow = false;
@@ -228,13 +230,13 @@ namespace ignite
 
 	void AssetImporterPanel::ProcessImportRequest(const ImportRequest &request)
 	{
-		Project *project = Project::GetInstance();
+		auto project = m_EditorLayer->GetActiveProject();
 		if (!project)
 		{
 			return;
 		}
 
-		auto &assetManager = project->GetAssetManager();
+		auto assetManager = project->GetAssetManager();
 		bool importedAny = false;
 
 		for (const auto &filepath : request.filepaths)
@@ -260,7 +262,7 @@ namespace ignite
 				continue;
 			}
 
-			assetManager.ImportAsset(filepath);
+			assetManager->ImportAsset(filepath);
 			importedAny = true;
 		}
 
@@ -272,13 +274,13 @@ namespace ignite
 
 	void AssetImporterPanel::ImportFontAsset(const std::filesystem::path &filepath)
 	{
-		Project *project = Project::GetInstance();
+		auto project = m_EditorLayer->GetActiveProject();
 		if (!project || !std::filesystem::exists(filepath))
 		{
 			return;
 		}
 
-		auto &assetManager = project->GetAssetManager();
+		auto assetManager = project->GetAssetManager();
 		const std::filesystem::path assetDirectory = m_TargetDirectory.empty() ? project->GetAssetDirectory() : m_TargetDirectory;
 		if (!std::filesystem::exists(assetDirectory))
 		{
@@ -303,13 +305,13 @@ namespace ignite
 		importMetadata.type = AssetType::Font;
 
 		const std::filesystem::path relativeFontPath = project->GetAssetRelativeFilepath(targetFontPath);
-		AssetHandle fontHandle = assetManager.GetAssetHandle(relativeFontPath);
+		AssetHandle fontHandle = assetManager->GetAssetHandle(relativeFontPath);
 		if (fontHandle == AssetHandle(0))
 		{
 			fontHandle = AssetHandle();
 		}
 
-		Ref<Font> importedFont = AssetImporter::ImportFont(fontHandle, importMetadata);
+		Ref<Font> importedFont = AssetImporter::ImportFont(fontHandle, importMetadata, assetManager);
 		if (!importedFont)
 		{
 			LOG_ERROR("[Asset Importer] Failed to import font {}", filepath.generic_string());
@@ -319,8 +321,8 @@ namespace ignite
 		AssetMetaData fontRegistryMetadata;
 		fontRegistryMetadata.filepath = relativeFontPath;
 		fontRegistryMetadata.type = AssetType::Font;
-		assetManager.AssignMetaData(fontHandle, fontRegistryMetadata);
-		assetManager.AssignAsset(fontHandle, importedFont);
+		assetManager->AssignMetaData(fontHandle, fontRegistryMetadata);
+		assetManager->AssignAsset(fontHandle, importedFont);
 
         if (Ref<Texture> atlasTexture = importedFont->GetAtlasTexture())
 		{
@@ -334,7 +336,7 @@ namespace ignite
 			if (BinarySerializer::SerializeTextureToPNG(atlasTexture, atlasPath))
 			{
 				const std::filesystem::path relativeAtlasPath = project->GetAssetRelativeFilepath(atlasPath);
-				AssetHandle atlasHandle = assetManager.GetAssetHandle(relativeAtlasPath);
+				AssetHandle atlasHandle = assetManager->GetAssetHandle(relativeAtlasPath);
 				if (atlasHandle == AssetHandle(0))
 				{
 					atlasHandle = AssetHandle();
@@ -347,8 +349,8 @@ namespace ignite
 				AssetMetaData atlasMetadata;
 				atlasMetadata.filepath = relativeAtlasPath;
 				atlasMetadata.type = AssetType::Texture;
-				assetManager.AssignMetaData(atlasHandle, atlasMetadata);
-				assetManager.AssignAsset(atlasHandle, atlasTexture);
+				assetManager->AssignMetaData(atlasHandle, atlasMetadata);
+				assetManager->AssignAsset(atlasHandle, atlasTexture);
 			}
 		}
 	}
@@ -375,18 +377,18 @@ namespace ignite
 
 	void AssetImporterPanel::ImportFbxAsSkeletalMesh(const std::filesystem::path &filepath)
 	{
-		Project *project = Project::GetInstance();
+		auto project = m_EditorLayer->GetActiveProject();
 		if (!project)
 		{
 			return;
 		}
 
-		auto &assetManager = project->GetAssetManager();
+		auto assetManager = project->GetAssetManager();
 		const std::filesystem::path filename = filepath.stem();
 		const std::filesystem::path skmBinaryPath = project->GetAssetDirectory() / filename / "SkeletalMesh" / (filename.string() + GetAssetExtensionFromType(AssetType::SkeletalMesh));
 		const std::filesystem::path skmRelativePath = project->GetAssetRelativeFilepath(skmBinaryPath);
 
-		AssetHandle handle = assetManager.GetAssetHandle(skmRelativePath);
+		AssetHandle handle = assetManager->GetAssetHandle(skmRelativePath);
 		if (handle == AssetHandle(0))
 		{
 			handle = AssetHandle();
@@ -396,7 +398,7 @@ namespace ignite
 		sourceMetadata.filepath = filepath;
 		sourceMetadata.type = AssetType::SkeletalMesh;
 
-		Ref<SkeletalMesh> importedAsset = AssetImporter::ImportSkeletalMesh(handle, sourceMetadata);
+		Ref<SkeletalMesh> importedAsset = AssetImporter::ImportSkeletalMesh(handle, sourceMetadata, assetManager);
 		if (!importedAsset)
 		{
 			LOG_ERROR("[Asset Importer] Failed to import skeletal mesh from {}", filepath.generic_string());
@@ -407,8 +409,8 @@ namespace ignite
 		registryMetadata.filepath = skmRelativePath;
 		registryMetadata.type = AssetType::SkeletalMesh;
 
-		assetManager.AssignMetaData(handle, registryMetadata);
-		assetManager.AssignAsset(handle, importedAsset);
+		assetManager->AssignMetaData(handle, registryMetadata);
+		assetManager->AssignAsset(handle, importedAsset);
 	}
 
 	void AssetImporterPanel::ImportFbxSkeletonAndAnimations(const std::filesystem::path &filepath, const SkeletalMeshImportOptions &options)
@@ -418,13 +420,13 @@ namespace ignite
 			return;
 		}
 
-		Project *project = Project::GetInstance();
+		auto project = m_EditorLayer->GetActiveProject();
 		if (!project)
 		{
 			return;
 		}
 
-		auto &assetManager = project->GetAssetManager();
+		auto assetManager = project->GetAssetManager();
 		const std::filesystem::path assetDirectory = project->GetAssetDirectory();
 		const std::filesystem::path filename = filepath.stem();
 
@@ -446,7 +448,7 @@ namespace ignite
 		}
 
 		Ref<Skeleton> skeleton = CreateRef<Skeleton>();
-		FBXMeshLoader::LoadSkeletonOnlyFromFBX(filepath.generic_string(), skeleton);
+		FBXMeshLoader::LoadSkeletonOnlyFromFBX(filepath.generic_string(), skeleton, assetManager);
 
 		if (!skeleton)
 		{
@@ -466,7 +468,7 @@ namespace ignite
 			skeletonMD.filepath = project->GetAssetRelativeFilepath(skeletonPath);
 			skeletonMD.type = AssetType::Skeleton;
 
-			AssetHandle skeletonHandle = assetManager.GetAssetHandle(skeletonMD.filepath);
+			AssetHandle skeletonHandle = assetManager->GetAssetHandle(skeletonMD.filepath);
 			if (skeletonHandle == AssetHandle(0))
 			{
 				skeletonHandle = AssetHandle();
@@ -474,14 +476,14 @@ namespace ignite
 
 			skeleton->handle = skeletonHandle;
 			skeleton->SetReadyFlag(true);
-			assetManager.AssignMetaData(skeletonHandle, skeletonMD);
-			assetManager.AssignAsset(skeletonHandle, skeleton);
+			assetManager->AssignMetaData(skeletonHandle, skeletonMD);
+			assetManager->AssignAsset(skeletonHandle, skeleton);
 		}
 
 		if (options.importAnimations)
 		{
 			std::vector<Ref<SkeletalAnimation>> animations;
-			FBXMeshLoader::LoadAnimationsOnlyFromFBX(filepath.generic_string(), skeleton, animations);
+			FBXMeshLoader::LoadAnimationsOnlyFromFBX(filepath.generic_string(), skeleton, animations, assetManager);
 
 			if (animations.empty())
 			{
@@ -504,7 +506,7 @@ namespace ignite
 				animationMD.filepath = project->GetAssetRelativeFilepath(animationPath);
 				animationMD.type = AssetType::SkeletalAnimation;
 
-				AssetHandle animationHandle = assetManager.GetAssetHandle(animationMD.filepath);
+				AssetHandle animationHandle = assetManager->GetAssetHandle(animationMD.filepath);
 				if (animationHandle == AssetHandle(0))
 				{
 					animationHandle = AssetHandle();
@@ -512,8 +514,8 @@ namespace ignite
 
 				animation->handle = animationHandle;
 				animation->SetReadyFlag(true);
-				assetManager.AssignMetaData(animationHandle, animationMD);
-				assetManager.AssignAsset(animationHandle, animation);
+				assetManager->AssignMetaData(animationHandle, animationMD);
+				assetManager->AssignAsset(animationHandle, animation);
 			}
 		}
 	}

@@ -971,12 +971,9 @@ namespace ignite
         return &buffer.data[accessor.byteOffset + bufferView.byteOffset];
     }
 
-    void FBXMeshLoader::LoadSceneGraphFromFBX(const std::string &filename, MeshScene &outScene)
+    void FBXMeshLoader::LoadSceneGraphFromFBX(const std::string &filename, MeshScene &outScene, AssetManager *assetManager)
     {
-        AssetManager &assetManager = Project::GetInstance()->GetAssetManager();
-        std::lock_guard<std::mutex> lock(assetManager.GetFbxSdkMutex());
-
-        FbxManager *sdkManager = assetManager.GetOrCreateFbxSdkManager();
+        FbxManager *sdkManager = assetManager->GetOrCreateFbxSdkManager();
         if (!sdkManager)
         {
             LOG_ASSERT(false, "[FBX Loader] Failed to create FBX SDK Manager");
@@ -1047,7 +1044,7 @@ namespace ignite
         fbxScene->Destroy();
     }
 
-	void FBXMeshLoader::LoadSkeletonOnlyFromFBX(const std::string &filename, Ref<Skeleton> &skeleton)
+	void FBXMeshLoader::LoadSkeletonOnlyFromFBX(const std::string &filename, Ref<Skeleton> &skeleton, AssetManager *assetManager)
 	{
 		if (!skeleton)
 		{
@@ -1055,10 +1052,7 @@ namespace ignite
 			return;
 		}
 
-		AssetManager &assetManager = Project::GetInstance()->GetAssetManager();
-		std::lock_guard<std::mutex> lock(assetManager.GetFbxSdkMutex());
-
-		FbxManager *sdkManager = assetManager.GetOrCreateFbxSdkManager();
+		FbxManager *sdkManager = assetManager->GetOrCreateFbxSdkManager();
 		if (!sdkManager)
 		{
 			LOG_ASSERT(false, "[FBX Loader] Failed to create FBX SDK Manager");
@@ -1106,7 +1100,7 @@ namespace ignite
 		fbxScene->Destroy();
 	}
 
-	void FBXMeshLoader::LoadAnimationsOnlyFromFBX(const std::string &filename, Ref<Skeleton> skeleton, std::vector<Ref<SkeletalAnimation>> &outAnimations)
+	void FBXMeshLoader::LoadAnimationsOnlyFromFBX(const std::string &filename, Ref<Skeleton> skeleton, std::vector<Ref<SkeletalAnimation>> &outAnimations, AssetManager *assetManager)
 	{
         if (!skeleton)
         {
@@ -1114,10 +1108,7 @@ namespace ignite
             return;
         }
 
-		AssetManager &assetManager = Project::GetInstance()->GetAssetManager();
-		std::lock_guard<std::mutex> lock(assetManager.GetFbxSdkMutex());
-
-		FbxManager *sdkManager = assetManager.GetOrCreateFbxSdkManager();
+		FbxManager *sdkManager = assetManager->GetOrCreateFbxSdkManager();
 		if (!sdkManager)
 		{
 			LOG_ASSERT(false, "[FBX Loader] Failed to create FBX SDK Manager");
@@ -1676,12 +1667,12 @@ namespace ignite
 		}
 	}
 
-	void MeshLoader::LoadSceneGraph(const std::string &filename, MeshScene &outScene)
+	void MeshLoader::LoadSceneGraph(const std::string &filename, MeshScene &outScene, AssetManager *assetManager)
     {
         const std::string extension = ToLowerCopy(std::filesystem::path(filename).extension().string());
         if (extension == ".fbx")
         {
-            FBXMeshLoader::LoadSceneGraphFromFBX(filename, outScene);
+            FBXMeshLoader::LoadSceneGraphFromFBX(filename, outScene, assetManager);
             return;
         }
 

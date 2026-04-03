@@ -57,6 +57,7 @@ namespace ignite
 
         Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata, AssetType requestedAssetType = AssetType::Auto);
         AssetHandle ImportAsset(const std::filesystem::path &filepath);
+
         void AssignMetaData(AssetHandle handle, const AssetMetaData &metadata);
         TextureCreateInfo GetTextureCreateInfo(AssetHandle handle) const;
         void SetTextureCreateInfo(AssetHandle handle, const TextureCreateInfo &createInfo, bool saveToDisk = true);
@@ -109,10 +110,10 @@ namespace ignite
     
         AssetRegistry &GetAssetAssetRegistry() { return m_AssetRegistry; }
 
+        Project *GetProject() { return m_Project; }
+
         fbxsdk::FbxManager *GetOrCreateFbxSdkManager();
         std::mutex &GetFbxSdkMutex() { return m_FbxSdkMutex; }
-
-        static Project *GetProject();
 
     private:
         void WorkerLoop();
@@ -126,6 +127,8 @@ namespace ignite
         std::condition_variable m_ConditionVariable;
         std::vector<std::thread> m_Workers;
         std::queue<AssetJob> m_Jobs;
+        Project *m_Project;
+
         bool m_Running;
 
         std::mutex m_FbxSdkMutex;

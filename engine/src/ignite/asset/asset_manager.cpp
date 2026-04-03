@@ -152,13 +152,9 @@ namespace ignite {
         }
     }
 
-    static Project *s_Project = nullptr;
-
     AssetManager::AssetManager(Project *project)
-        : m_Running(true)
+        : m_Running(true), m_Project(project)
     {
-        s_Project = project;
-
         const uint32_t THREAD_COUNT = std::max(std::thread::hardware_concurrency() / 2u, 1u);
         LOG_WARN("[Asset Manager] Creating {} worker threads!", THREAD_COUNT);
 
@@ -286,7 +282,7 @@ namespace ignite {
         if (metadata.type == AssetType::Texture)
         {
             TextureCreateInfo createInfo = GetDefaultTextureCreateInfo(metadata);
-            const std::filesystem::path infoPath = GetTextureInfoPath(s_Project, metadata);
+            const std::filesystem::path infoPath = GetTextureInfoPath(m_Project, metadata);
             if (!LoadTextureCreateInfoFile(infoPath, createInfo))
             {
                 SaveTextureCreateInfoFile(infoPath, createInfo);
@@ -319,7 +315,7 @@ namespace ignite {
 
         const AssetMetaData &metadata = GetMetaData(handle);
         TextureCreateInfo createInfo = GetDefaultTextureCreateInfo(metadata);
-        const std::filesystem::path infoPath = GetTextureInfoPath(s_Project, metadata);
+        const std::filesystem::path infoPath = GetTextureInfoPath(m_Project, metadata);
         if (!LoadTextureCreateInfoFile(infoPath, createInfo))
         {
             SaveTextureCreateInfoFile(infoPath, createInfo);
@@ -348,7 +344,7 @@ namespace ignite {
 
         if (saveToDisk)
         {
-            SaveTextureCreateInfoFile(GetTextureInfoPath(s_Project, metadata), createInfo);
+            SaveTextureCreateInfoFile(GetTextureInfoPath(m_Project, metadata), createInfo);
         }
     }
 
@@ -576,13 +572,13 @@ namespace ignite {
     AssetHandle AssetManager::GetAssetHandle(const std::filesystem::path& filepath)
     {
         // Normalize the input filepath to absolute path for comparison
-        std::filesystem::path absoluteFilepath = std::filesystem::absolute(s_Project->GetAssetFilepath(filepath));
+        std::filesystem::path absoluteFilepath = std::filesystem::absolute(m_Project->GetAssetFilepath(filepath));
 
         for (const auto &[handle, metadata] : m_AssetRegistry)
         {
             // Convert metadata filepath (relative) to absolute using project base path
-            std::filesystem::path absoluteMetadataPath = s_Project 
-                ? std::filesystem::absolute(s_Project->GetAssetFilepath(metadata.filepath))
+            std::filesystem::path absoluteMetadataPath = m_Project 
+                ? std::filesystem::absolute(m_Project->GetAssetFilepath(metadata.filepath))
                 : std::filesystem::absolute(metadata.filepath);
             
             // Compare normalized absolute paths
@@ -603,11 +599,6 @@ namespace ignite {
     bool AssetManager::IsAssetHandleValid(AssetHandle handle) const
     {
         return static_cast<uint64_t>(handle) != 0 && m_AssetRegistry.contains(handle);
-    }
-
-	Project *AssetManager::GetProject()
-    {
-        return s_Project;
     }
 
 	void AssetManager::WorkerLoop()
@@ -683,7 +674,7 @@ namespace ignite {
         case AssetType::AnimatorController2D:
         case AssetType::Animation2D:
         {
-            asset = AssetImporter::Import(handle, getterMetadata);
+            asset = AssetImporter::Import(handle, getterMetadata, this);
             
             // Thread-safe assignment
             {
@@ -704,13 +695,13 @@ namespace ignite {
             if (getterMetadata.type == AssetType::Texture)
             {
                 AssetMetaData textureMetadata = getterMetadata;
-                textureMetadata.filepath = AssetManager::GetProject()->GetAssetFilepath(getterMetadata.filepath);
+                textureMetadata.filepath = m_Project->GetAssetFilepath(getterMetadata.filepath);
                 const TextureCreateInfo createInfo = GetTextureCreateInfo(handle);
-                asset = AssetImporter::ImportTexture(handle, textureMetadata, createInfo);
+                asset = AssetImporter::ImportTexture(handle, textureMetadata, createInfo, this);
             }
             else
             {
-                asset = AssetImporter::Import(handle, getterMetadata);
+                asset = AssetImporter::Import(handle, getterMetadata, this);
             }
             
             // Thread-safe assignment
@@ -731,7 +722,7 @@ namespace ignite {
                 std::unique_lock lock(s_AssetThreadMutex);
                 AssignAsset(handle, asset);
             }
-            AssetImporter::ImportAsync(handle, metadata, [&](Ref<Asset> assetResult, AssetHandle assetHandle)
+            AssetImporter::ImportAsync(handle, metadata, this, [&](Ref<Asset> assetResult, AssetHandle assetHandle)
             {
                 assetResult->SetReadyFlag(true);
                 std::unique_lock lock(s_AssetThreadMutex);

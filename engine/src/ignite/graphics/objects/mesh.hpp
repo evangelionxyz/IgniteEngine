@@ -224,9 +224,9 @@ namespace ignite
 			std::array<float, VERTEX_MAX_BONES> weights = { 0.0f, 0.0f, 0.0f, 0.0f };
 		};
 
-        static void LoadSceneGraphFromFBX(const std::string &filename, MeshScene &outScene);
-        static void LoadSkeletonOnlyFromFBX(const std::string &filename, Ref<Skeleton> &skeleton);
-        static void LoadAnimationsOnlyFromFBX(const std::string &filename, Ref<Skeleton> skeleton, std::vector<Ref<SkeletalAnimation>> &outAnimations);
+        static void LoadSceneGraphFromFBX(const std::string &filename, MeshScene &outScene, AssetManager *assetManager);
+        static void LoadSkeletonOnlyFromFBX(const std::string &filename, Ref<Skeleton> &skeleton, AssetManager *assetManager);
+        static void LoadAnimationsOnlyFromFBX(const std::string &filename, Ref<Skeleton> skeleton, std::vector<Ref<SkeletalAnimation>> &outAnimations, AssetManager *assetManager);
 
         static void BuildNode(fbxsdk::FbxNode *node, fbxsdk::FbxScene *fbxScene, MeshScene &outscene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal);
 
@@ -241,6 +241,6 @@ namespace ignite
     class MeshLoader
     {
     public:
-        static void LoadSceneGraph(const std::string &filename, MeshScene &outScene);
+        static void LoadSceneGraph(const std::string &filename, MeshScene &outScene, AssetManager *assetManager);
     };
 }

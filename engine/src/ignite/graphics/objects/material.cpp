@@ -57,7 +57,7 @@ namespace ignite
         sampler = nullptr;
     }
 
-    void Material::UpdateBindingSet(SceneRenderer *sceneRenderer, MaterialTextures *textures)
+    void Material::UpdateBindingSet(SceneRenderer *sceneRenderer, MaterialTextures *textures, AssetManager *assetManager)
     {
         if (m_BindingSet && !m_BindingSetDirty)
             return;
@@ -107,7 +107,6 @@ namespace ignite
         {
             m_BindingSet = newBindingSet;
 
-            auto* assetManager = &Project::GetInstance()->GetAssetManager();
             auto isTextureReady = [assetManager](AssetHandle textureHandle)
             {
                 if (textureHandle == 0)

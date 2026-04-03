@@ -27,8 +27,10 @@
 
 #include "ignite/core/logger.hpp"
 #include "ignite/core/device/device_manager.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include <stb_image.h>
+#include <algorithm>
 
 namespace ignite
 {
@@ -52,6 +54,33 @@ namespace ignite
 
         // Copy the flipped data back to the original buffer
         memcpy(buffer.data, flipped.data(), flipped.size());
+    }
+
+    size_t Texture::GetApproxSizeBytes() const
+    {
+        const size_t bytesPerPixel =
+            (m_CreateInfo.format == nvrhi::Format::RGBA32_FLOAT) ? sizeof(float) * 4u : 4u;
+
+        const size_t width = static_cast<size_t>(std::max(m_CreateInfo.width, 1u));
+        const size_t height = static_cast<size_t>(std::max(m_CreateInfo.height, 1u));
+        const size_t depth = static_cast<size_t>(std::max(m_CreateInfo.depth, 1u));
+        const size_t arraySize = static_cast<size_t>(std::max(m_CreateInfo.arraySize, 1u));
+        const size_t sampleCount = static_cast<size_t>(std::max(m_CreateInfo.sampleCount, 1u));
+        const size_t mipLevels = static_cast<size_t>(std::max(m_CreateInfo.mipLevels, 1u));
+
+        size_t total = 0;
+        size_t mipWidth = width;
+        size_t mipHeight = height;
+        size_t mipDepth = depth;
+        for (size_t mip = 0; mip < mipLevels; ++mip)
+        {
+            total += mipWidth * mipHeight * mipDepth * bytesPerPixel;
+            mipWidth = std::max<size_t>(1, mipWidth / 2);
+            mipHeight = std::max<size_t>(1, mipHeight / 2);
+            mipDepth = std::max<size_t>(1, mipDepth / 2);
+        }
+
+        return total * arraySize * sampleCount;
     }
 
     Texture::Texture(TextureCreateInfo createInfo, const std::string &debugName)
@@ -150,6 +179,13 @@ namespace ignite
 
 	Texture::~Texture()
     {
+        IGN_PROFILE_FUNCTION();
+        if (m_Handle && m_TracyAllocationTracked)
+        {
+            IGN_PROFILE_FREE_N(m_Handle.Get(), "GPU Texture");
+            m_TracyAllocationTracked = false;
+        }
+
         m_Buffer.Release();
 
         m_Sampler = nullptr;
@@ -158,6 +194,7 @@ namespace ignite
 
     void Texture::SetData(nvrhi::ICommandList *cmd, uint32_t rowPitch, uint32_t depthPitch)
     {
+        IGN_PROFILE_FUNCTION();
         if (!m_Buffer.data)
         {
             return;
@@ -242,6 +279,7 @@ namespace ignite
 
 	void Texture::CreateTextureHandle()
     {
+        IGN_PROFILE_FUNCTION();
 		if (m_Handle)
 		{
 			return;
@@ -278,6 +316,12 @@ namespace ignite
         else
         {
             m_Handle = device->createTexture(textureDesc);
+        }
+
+        if (m_Handle)
+        {
+            IGN_PROFILE_ALLOC_N(m_Handle.Get(), GetApproxSizeBytes(), "GPU Texture");
+            m_TracyAllocationTracked = true;
         }
 
         nvrhi::SamplerDesc samplerDesc;

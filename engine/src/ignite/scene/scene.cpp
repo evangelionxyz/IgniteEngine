@@ -23,6 +23,7 @@
 #include "ignite/animation/animator_controller_2d.hpp"
 
 #include "ignite/project/project.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 
 #include <ranges>
 
@@ -159,6 +160,7 @@ namespace ignite
 
 	void Scene::UpdateTransforms(float deltaTime)
     {
+        IGN_PROFILE_FUNCTION();
         auto skeletalMeshView = registry->view<SkeletalMeshComponent>();
         for (auto ent : skeletalMeshView)
         {
@@ -330,6 +332,7 @@ namespace ignite
 
     void Scene::OnUpdateEdit(f32 deltaTime)
     {
+        IGN_PROFILE_FUNCTION();
         timeInSeconds += deltaTime;
         m_StepFrame++;
     
@@ -391,20 +394,33 @@ namespace ignite
 
     void Scene::OnUpdateRuntimeSimulate(f32 deltaTime)
     {
+        IGN_PROFILE_FUNCTION();
         if (!m_IsPaused || m_StepFrame-- > 0)
         {
+            IGN_PROFILE_SCOPE("Scene::RuntimeTick");
             timeInSeconds += deltaTime;
 
-            registry->view<ScriptComponent>().each([this, deltaTime](entt::entity e, ScriptComponent &sc)
             {
-                Entity entity { e, this };
-                ScriptEngine::GetInstance()->OnUpdateEntity(entity, deltaTime);
-            });
+                IGN_PROFILE_SCOPE("Scene::ScriptUpdate");
+                registry->view<ScriptComponent>().each([this, deltaTime](entt::entity e, ScriptComponent &sc)
+                {
+                    IGN_PROFILE_SCOPE("Scene::ScriptUpdateEntity");
+                    Entity entity { e, this };
+                    ScriptEngine::GetInstance()->OnUpdateEntity(entity, deltaTime);
+                });
+            }
 
             UpdateTransforms(deltaTime);
 
-            physics2D->Simulate(deltaTime);
-            physics->Simulate(deltaTime);
+            {
+                IGN_PROFILE_SCOPE("Scene::Physics2D");
+                physics2D->Simulate(deltaTime);
+            }
+
+            {
+                IGN_PROFILE_SCOPE("Scene::Physics3D");
+                physics->Simulate(deltaTime);
+            }
         }
     }
 

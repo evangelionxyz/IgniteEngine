@@ -34,6 +34,7 @@ namespace ignite
     {
     public:
         IndexBuffer(size_t size, const std::string &debugName = "Index Buffer");
+        ~IndexBuffer();
 
         void SetData(nvrhi::ICommandList *cmd, Buffer buffer, size_t offset = 0) const;
 

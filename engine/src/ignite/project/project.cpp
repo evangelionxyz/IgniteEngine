@@ -88,12 +88,9 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 </Project>
 )";
 
-    Project *project = nullptr;
-
     Project::Project(const ProjectInfo &info)
         : m_Info(info)
     {
-        project = this;
         GenerateProject();
 
         m_AssetManager = new AssetManager(this);
@@ -102,8 +99,6 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 
     Project::~Project()
     {
-        project = nullptr;
-
         delete m_ScriptEngine;
         delete m_AssetManager;
     }
@@ -137,7 +132,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
     std::vector<std::pair<AssetHandle, AssetMetaData>> Project::ValidateAssetRegistry()
     {
         std::vector<std::pair<AssetHandle, AssetMetaData>> invalidRegistry;
-        AssetRegistry &assetRegistry = GetAssetManager().GetAssetAssetRegistry();
+        AssetRegistry &assetRegistry = m_AssetManager->GetAssetAssetRegistry();
 
         for (auto it = assetRegistry.begin(); it != assetRegistry.end();)
         {
@@ -251,7 +246,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 
 		Ref<Project> project = Project::Create(info);
 
-		auto &assetManager = project->GetAssetManager();
+		auto assetManager = project->GetAssetManager();
 
 		// import registry
 		if (!info.assetRegistryFilepath.empty())
@@ -268,17 +263,12 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 				metadata.type = AssetTypeFromString(assetNode["Type"].as<std::string>());
 				metadata.filepath = assetNode["Filepath"].as<std::string>();
 
-				assetManager.AssignMetaData(handle, metadata);
+				assetManager->AssignMetaData(handle, metadata);
 			}
 		}
 
 		return project;
 	}
-
-	Project *Project::GetInstance()
-    {
-        return project;
-    }
 
     Ref<Project> Project::Create(const ProjectInfo &info)
     {

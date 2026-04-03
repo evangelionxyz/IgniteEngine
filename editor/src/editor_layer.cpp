@@ -12,6 +12,7 @@
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/core/platform_utils.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 #include "stb_image_write.h"
 
 #include <cmath>
@@ -247,6 +248,7 @@ namespace ignite
 
     void EditorLayer::OnRender(nvrhi::IFramebuffer *mainFramebuffer)
     {
+        IGN_PROFILE_FUNCTION();
         Layer::OnRender(mainFramebuffer);
 
         if (!m_ActiveScene)
@@ -298,10 +300,13 @@ namespace ignite
                 editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
             }
 
-            m_SceneRenderer->RenderEditorTo(editCamera,
-                m_ScenePanel->GetViewportEditSceneRT(),
-                m_ScenePanel->GetViewportEditUIRT(),
-                m_ScenePanel->GetViewportEditCompRT());
+            {
+                IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
+                m_SceneRenderer->RenderEditorTo(editCamera,
+                    m_ScenePanel->GetViewportEditSceneRT(),
+                    m_ScenePanel->GetViewportEditUIRT(),
+                    m_ScenePanel->GetViewportEditCompRT());
+            }
             break;
         }
         case State::ScenePlay:
@@ -317,10 +322,13 @@ namespace ignite
                 editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
             }
 
-            m_SceneRenderer->RenderEditorTo(editCamera,
-                m_ScenePanel->GetViewportEditSceneRT(),
-                m_ScenePanel->GetViewportEditUIRT(),
-                m_ScenePanel->GetViewportEditCompRT());
+            {
+                IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
+                m_SceneRenderer->RenderEditorTo(editCamera,
+                    m_ScenePanel->GetViewportEditSceneRT(),
+                    m_ScenePanel->GetViewportEditUIRT(),
+                    m_ScenePanel->GetViewportEditCompRT());
+            }
             break;
         }
         }
@@ -339,10 +347,13 @@ namespace ignite
 					gameCamera->UpdateProjection(static_cast<float>(gameSize.x), static_cast<float>(gameSize.y));
 				}
 
-				m_SceneRenderer->RenderGameplayTo(gameCamera,
-					m_ScenePanel->GetViewportGameSceneRT(),
-					m_ScenePanel->GetViewportGameUIRT(),
-					m_ScenePanel->GetViewportGameCompRT());
+                {
+                    IGN_PROFILE_SCOPE("SceneRenderer::RenderGameplayTo");
+                    m_SceneRenderer->RenderGameplayTo(gameCamera,
+                        m_ScenePanel->GetViewportGameSceneRT(),
+                        m_ScenePanel->GetViewportGameUIRT(),
+                        m_ScenePanel->GetViewportGameCompRT());
+                }
 			}
         }
 
@@ -542,7 +553,7 @@ namespace ignite
         // Unload unused assets (assets not referenced by anything else)
         if (m_ActiveProject)
         {
-            m_ActiveProject->GetAssetManager().UnloadUnusedAssets();
+            m_ActiveProject->GetAssetManager()->UnloadUnusedAssets();
         }
         
         // Force a brief wait to allow cleanup
@@ -591,7 +602,7 @@ namespace ignite
 
     void EditorLayer::OpenScene(const std::filesystem::path &filepath)
     {
-        AssetHandle openSceneHandle = m_ActiveProject->GetAssetManager().GetAssetHandle(filepath);
+        AssetHandle openSceneHandle = m_ActiveProject->GetAssetManager()->GetAssetHandle(filepath);
 
         if (m_CurrentSceneHandle == openSceneHandle)
             return;
@@ -626,7 +637,7 @@ namespace ignite
             // Unload unused assets from previous scene
             if (m_ActiveProject)
             {
-                m_ActiveProject->GetAssetManager().UnloadUnusedAssets();
+                m_ActiveProject->GetAssetManager()->UnloadUnusedAssets();
             }
             
             m_EditorScene = SceneManager::Copy(openScene);
@@ -674,8 +685,7 @@ namespace ignite
             m_EditorScene.reset();
             m_ActiveScene.reset();
 
-            // Clear all assets from old project
-            m_ActiveProject->GetAssetManager().ClearAllLoadedAssets();
+            m_ActiveProject->GetAssetManager()->ClearAllLoadedAssets();
         }
 
         if (const Ref<Project> openedProject = Project::Deserialize(filepath))
@@ -684,7 +694,7 @@ namespace ignite
             m_CurrentProjectFilepath = filepath;
 
             // Reload project files
-            m_ContentBrowserPanel->LoadProjectFiles();
+            m_ContentBrowserPanel->LoadProjectFiles(m_ActiveProject->GetAssetManager());
 
             // Get Project default scene (use immediate load for synchronous path)
             if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
@@ -697,7 +707,7 @@ namespace ignite
 
                     SetActiveScene(m_EditorScene);
 
-                    const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
+                    const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
 
                     m_CurrentSceneFilePath = m_ActiveProject->GetAssetFilepath(assetFilepath);
                     m_CurrentSceneHandle = activeScene->handle;
@@ -715,13 +725,13 @@ namespace ignite
             }
 
 			// Register callback for when textures are loaded to invalidate material binding sets
-			openedProject->GetAssetManager().RegisterAssetLoadedCallback(
+			openedProject->GetAssetManager()->RegisterAssetLoadedCallback(
 				[this](AssetHandle handle, AssetType type)
 				{
 					if (type == AssetType::Texture)
 					{
 						// Find all materials that use this texture and mark them dirty
-						const auto &assets = Project::GetInstance()->GetAssetManager().GetLoadedAssets();
+						const auto &assets = m_ActiveProject->GetAssetManager()->GetLoadedAssets();
 						for (const auto &[matHandle, asset] : assets)
 						{
 							if (asset->GetAssetType() == AssetType::Material)
@@ -1020,7 +1030,7 @@ namespace ignite
                     {
                         // Submit scene loading to asset worker
                         std::filesystem::path filepath = pf.metadata.filepath;
-                        AssetHandle sceneHandle = m_ActiveProject->GetAssetManager().GetAssetHandle(filepath);
+                        AssetHandle sceneHandle = m_ActiveProject->GetAssetManager()->GetAssetHandle(filepath);
                         
                         if (m_CurrentSceneHandle == sceneHandle)
                             break;
@@ -1028,7 +1038,7 @@ namespace ignite
                         m_CurrentSceneHandle = sceneHandle;
                         
                         // Submit heavy I/O work to asset worker
-                        m_ActiveProject->GetAssetManager().SubmitJob([this, filepath, sceneHandle]()
+                        m_ActiveProject->GetAssetManager()->SubmitJob([this, filepath, sceneHandle]()
                         {
                             // Load scene on worker thread (I/O happens here)
                             Ref<Scene> loadedScene = SceneSerializer::Deserialize(filepath, m_ActiveProject.get());
@@ -1063,7 +1073,7 @@ namespace ignite
                                     // Unload unused assets
                                     if (m_ActiveProject)
                                     {
-                                        m_ActiveProject->GetAssetManager().UnloadUnusedAssets();
+                                        m_ActiveProject->GetAssetManager()->UnloadUnusedAssets();
                                     }
                                     
                                     // Copy and activate new scene
@@ -1106,14 +1116,15 @@ namespace ignite
 
                                     m_EditorScene.reset();
                                     m_ActiveScene.reset();
-                                    m_ActiveProject->GetAssetManager().ClearAllLoadedAssets();
+                                    m_ActiveProject->GetAssetManager()->ClearAllLoadedAssets();
                                 }
+
 
                                 m_ActiveProject = loadedProject;
                                 m_CurrentProjectFilepath = filepath;
 
                                 // Reload content browser
-                                m_ContentBrowserPanel->LoadProjectFiles();
+                                m_ContentBrowserPanel->LoadProjectFiles(m_ActiveProject->GetAssetManager());
 
                                 // Load default scene
                                 if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
@@ -1124,7 +1135,7 @@ namespace ignite
                                         m_EditorScene->SetDirtyFlag(false);
                                         SetActiveScene(m_EditorScene);
 
-                                        const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
+                                        const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
                                         m_CurrentSceneFilePath = m_ActiveProject->GetAssetFilepath(assetFilepath);
                                         m_CurrentSceneHandle = activeScene->handle;
                                     }
@@ -1153,7 +1164,7 @@ namespace ignite
                         // Submit scene save to asset worker
                         std::filesystem::path filepath = pf.metadata.filepath;
                         
-                        m_ActiveProject->GetAssetManager().SubmitJob([this, filepath]() {
+                        m_ActiveProject->GetAssetManager()->SubmitJob([this, filepath]() {
                             SceneSerializer serializer(m_ActiveScene, m_ActiveProject.get());
                             serializer.Serialize(filepath);
                             
@@ -1258,7 +1269,8 @@ namespace ignite
                 m_ActiveProject->Serialize(m_Data.projectCreateInfo.filepath);
 
                 // Reload content browser
-                m_ContentBrowserPanel->LoadProjectFiles();
+                m_ContentBrowserPanel->LoadProjectFiles(m_ActiveProject->GetAssetManager());
+
 
                 if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
                 {
@@ -1269,7 +1281,7 @@ namespace ignite
 
                         SetActiveScene(m_EditorScene);
 
-                        AssetMetaData metadata = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
+                        AssetMetaData metadata = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
                         auto scenePath = m_ActiveProject->GetAssetFilepath(metadata.filepath);
                         m_CurrentSceneFilePath = scenePath;
                     }
@@ -1410,8 +1422,8 @@ namespace ignite
 
         if (m_Data.assetRegistryWindow)
         {
-            AssetRegistry assetRegistry = m_ActiveProject->GetAssetManager().GetAssetAssetRegistry();
-            const auto &loadedAssets = m_ActiveProject->GetAssetManager().GetLoadedAssets();
+            AssetRegistry assetRegistry = m_ActiveProject->GetAssetManager()->GetAssetAssetRegistry();
+            const auto &loadedAssets = m_ActiveProject->GetAssetManager()->GetLoadedAssets();
 
             struct AssetPairCompare
             {
@@ -1450,7 +1462,7 @@ namespace ignite
 			{
 				if (asset)
 				{
-					AssetType type = m_ActiveProject->GetAssetManager().GetAssetType(handle);
+					AssetType type = m_ActiveProject->GetAssetManager()->GetAssetType(handle);
 					loadedCounts[type]++;
 					// Estimate memory usage (this is approximate)
 					memoryUsage[type] += asset.use_count() * 8; // Basic pointer overhead
@@ -1574,7 +1586,7 @@ namespace ignite
 				}
 				if (ImGui::SmallButton("Unload Unused Assets"))
 				{
-					m_ActiveProject->GetAssetManager().UnloadUnusedAssets();
+					m_ActiveProject->GetAssetManager()->UnloadUnusedAssets();
 				}
 				ImGui::EndGroup();
 				ImGui::EndTable();

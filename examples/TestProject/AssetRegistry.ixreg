@@ -3,9 +3,6 @@ AssetRegistry:
     - Handle: 23797601587078018
       Type: SkeletalAnimation
       Filepath: Great Sword Jump Attack/Animation/Great Sword Jump Attack_0.ixanim
-    - Handle: 442989705455172397
-      Type: Invalid
-      Filepath: LUNARIS-LOGO-2.png.ixtex
     - Handle: 995434377171723589
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/rock_1.png

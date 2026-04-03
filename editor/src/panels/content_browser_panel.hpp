@@ -26,6 +26,7 @@ namespace ignite
         std::filesystem::path path;
         // path, index
         std::map<std::filesystem::path, uint32_t> children;
+        std::vector<uint32_t> sortedChildren;
         uint32_t parent = static_cast<uint32_t>(-1);
         bool isDeleted = false;
 
@@ -51,14 +52,17 @@ namespace ignite
         virtual void OnGuiRender() override;
         virtual void OnUpdate(float deltaTime) override;
 
-        void LoadProjectFiles();
+        void LoadProjectFiles(AssetManager *assetManager);
 
     private:
-        void RenderFileTree(FileTreeNode *node);
         void RefreshEntryPathList();
         void RefreshAssetTree();
         void LoadAssetTree(const std::filesystem::path &directory);
+        void RebuildSortedTreeCache();
 
+        void UIRenderFileTree(FileTreeNode *node);
+        void UIRenderFileButton(const std::filesystem::path &item);
+        void UIRenderNavigationBar();
         void UIShowAssetImportContext();
 
         void PruneMissingNodes(uint32_t nodeIndex, const std::filesystem::path &basePath);
@@ -84,9 +88,11 @@ namespace ignite
         void ClearThumbnails();
 
         std::vector<FileTreeNode> m_TreeNodes;
+        std::vector<uint32_t> m_SortedRootNodeIndices;
         std::queue<PendingFileLoading> m_PendingAssetLoading;
 
         AssetEditorPanel *m_AssetEditorPanel;
+        AssetManager *m_AssetManager = nullptr;
 
         int m_ThumbnailSize = 64;
         int m_LastThumbnailSize = 64;

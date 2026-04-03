@@ -34,6 +34,7 @@ namespace ignite
     {
     public:
         VertexBuffer(const size_t size, const std::string &debugName = "Vertex Buffer");
+        ~VertexBuffer();
 
         void SetData(nvrhi::ICommandList *cmd, Buffer buffer, size_t offset = 0) const;
 
