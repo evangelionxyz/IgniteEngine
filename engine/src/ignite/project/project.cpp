@@ -287,8 +287,8 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 
     bool Project::BuildSolution()
     {
-		m_Info.scriptModuleFilepath = std::format("{}/{}.dll", GetScriptBinDirectory().string(), m_Info.name);
-		bool appAssemblyAvailable = std::filesystem::exists(GetDirectory() / m_Info.scriptModuleFilepath);
+		m_Info.scriptModuleFilepath = std::format("Bin/{}.dll", m_Info.name);
+		bool appAssemblyAvailable = std::filesystem::exists(GetScriptModulePath());
 
         if (!appAssemblyAvailable)
         {
@@ -305,8 +305,8 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
             }
         }
         
-        m_Info.scriptModuleFilepath = std::format("{}/{}.dll", GetScriptBinDirectory().string(), m_Info.name);
-        appAssemblyAvailable = std::filesystem::exists(GetDirectory() / m_Info.scriptModuleFilepath);
+        m_Info.scriptModuleFilepath = std::format("Bin/{}.dll", m_Info.name);
+        appAssemblyAvailable = std::filesystem::exists(GetScriptModulePath());
 
         // Validate .dll file
         LOG_ASSERT(appAssemblyAvailable, "[Project] Failed to build Solution");
