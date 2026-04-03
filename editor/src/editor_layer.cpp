@@ -42,17 +42,9 @@ namespace ignite
         };
     }
 
-    EditorLayer *s_EditorLayerInstance = nullptr;
-
-    EditorLayer *EditorLayer::GetInstance()
-    {
-        return s_EditorLayerInstance;
-    }
-
     EditorLayer::EditorLayer(const std::string &name)
         : Layer(name)
     {
-        s_EditorLayerInstance = this;
     }
 
     EditorLayer::~EditorLayer()
@@ -101,7 +93,6 @@ namespace ignite
         Layer::OnDetach();
 
         m_ActiveProject.reset();
-		s_EditorLayerInstance = nullptr;
     }
 
     void EditorLayer::OnUpdate(float deltaTime)
@@ -802,8 +793,10 @@ namespace ignite
 
     void EditorLayer::OnSceneSaveFileSelected(void* userData, const char* const* filelist, int filter)
     {
+        EditorLayer *editor = (EditorLayer *)userData;
+
         // Check for errors
-        if (filelist == nullptr)
+        if (editor == nullptr || filelist == nullptr)
         {
             const char* error = SDL_GetError();
             LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
@@ -826,17 +819,19 @@ namespace ignite
                 filepath += ".ixscene";
             }
 
-            s_EditorLayerInstance->m_CurrentSceneFilePath = filepath;
+            editor->m_CurrentSceneFilePath = filepath;
 
             PendingFileLoading pf = { PendingFileLoading::Save, AssetMetaData(filepath, AssetType::Scene), userData };
-            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
+            editor->m_PendingFileLoading.push(pf);
         }
     }
 
     void EditorLayer::OnSceneOpenFileSelected(void* userData, const char* const* filelist, int filter)
     {
+        EditorLayer *editor = (EditorLayer *)userData;
+
         // Check for errors
-        if (filelist == nullptr)
+        if (editor == nullptr || filelist == nullptr)
         {
             const char* error = SDL_GetError();
             LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
@@ -854,14 +849,16 @@ namespace ignite
         if (!filepath.empty())
         {
             PendingFileLoading pf = { PendingFileLoading::Open, AssetMetaData(filepath, AssetType::Scene), userData };
-            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
+            editor->m_PendingFileLoading.push(pf);
         }
     }
 
     void EditorLayer::OnProjectSaveFileSelected(void* userData, const char* const* filelist, int filter)
     {
+        EditorLayer *editor = (EditorLayer *)userData;
+
         // Check for errors
-        if (filelist == nullptr)
+        if (editor == nullptr || filelist == nullptr)
         {
             const char* error = SDL_GetError();
             LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
@@ -885,12 +882,14 @@ namespace ignite
             }
 
             PendingFileLoading pf = { PendingFileLoading::Open, AssetMetaData(filepath, AssetType::Project), userData };
-            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
+            editor->m_PendingFileLoading.push(pf);
         }
     }
 
     void EditorLayer::OnProjectOpenFileSelected(void *userData, const char *const *filelist, int filter)
     {
+        EditorLayer *editor = (EditorLayer *)userData;
+
         // Check for errors
         if (filelist == nullptr)
         {
@@ -909,7 +908,7 @@ namespace ignite
         if (!filepath.empty())
         {
             PendingFileLoading pf = { PendingFileLoading::Open, AssetMetaData(filepath, AssetType::Project), userData };
-            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
+            editor->m_PendingFileLoading.push(pf);
         }
     }
 

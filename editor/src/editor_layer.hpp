@@ -81,9 +81,6 @@ namespace ignite
         SceneRenderer *GetSceneRenderer() { return m_SceneRenderer.get(); }
 
         EditorData &GetState() { return m_Data; }
-
-        static EditorLayer *GetInstance();
-
     private:
         static void OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter);
         static void OnSceneOpenFileSelected(void *userData, const char *const *filelist, int filter);

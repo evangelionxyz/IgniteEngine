@@ -26,9 +26,13 @@ namespace ignite
 		const NavigationMode previousMode = m_NavigationMode;
 		glm::vec3 previousForward = m_Target - position;
 		if (glm::length(previousForward) < 0.0001f)
+		{
 			previousForward = { 0.0f, 0.0f, -1.0f };
+		}
 		else
+		{
 			previousForward = glm::normalize(previousForward);
+		}
 
 		m_NavigationMode = mode;
 
@@ -44,7 +48,9 @@ namespace ignite
 		else
 		{
 			if (projectionType == ProjectionType::Orthographic)
+			{
 				projectionType = ProjectionType::Perspective;
+			}
 
 			if (previousMode == NavigationMode::Fly && m_NavigationMode == NavigationMode::Orbit)
 			{
@@ -70,6 +76,7 @@ namespace ignite
 		{
 			UpdateProjection(width, height);
 		}
+
 		UpdateView();
 	}
 
@@ -97,7 +104,9 @@ namespace ignite
 	void EditorCamera::HandleOrbit(float deltaTime)
 	{
 		if (m_NavigationMode != NavigationMode::Orbit)
+		{
 			return;
+		}
 
 		// auto window = Application::GetInstance()->GetWindow()->GetWindowHandle();
 
@@ -199,11 +208,15 @@ namespace ignite
 		(void)deltaTime;
 
 		if (!mouse.middleButtonDown && !(m_NavigationMode == NavigationMode::Mode2D && mouse.rightButtonDown))
+		{
 			return;
+		}
 
 		const glm::vec2 delta = mouse.position - mouse.lastPosition;
 		if (delta.x == 0.0f && delta.y == 0.0f)
+		{
 			return;
+		}
 
 		const float safeHeight = glm::max(height, 1.0f);
 		float panUnitsPerPixel = controls.panSensitivity;
@@ -362,7 +375,7 @@ namespace ignite
 
 	void EditorCamera::ApplyInertia(float deltaTime)
 	{
-      if (projectionType == ProjectionType::Orthographic)
+		if (projectionType == ProjectionType::Orthographic)
 		{
 			m_AngularVelocity = glm::vec2(0.0f);
 			m_PanVelocity = glm::vec2(0.0f);
@@ -371,7 +384,9 @@ namespace ignite
 		}
 
 		if (m_NavigationMode != NavigationMode::Orbit)
+		{
 			return;
+		}
 
 		// apply angular intertia
 		if (glm::length(m_AngularVelocity) > 0.001f)
@@ -469,7 +484,9 @@ namespace ignite
 	glm::vec3 EditorCamera::GetUpDirection() const
 	{
 		if (m_NavigationMode == NavigationMode::Mode2D)
+		{
 			return { 0.0f, 1.0f, 0.0f };
+		}
 
 		return glm::normalize(glm::cross(GetRightDirection(), GetForwardDirection()));
 	}
@@ -477,7 +494,9 @@ namespace ignite
 	glm::vec3 EditorCamera::GetRightDirection() const
 	{
 		if (m_NavigationMode == NavigationMode::Mode2D)
+		{
 			return { 1.0f, 0.0f, 0.0f };
+		}
 
 		return glm::normalize(glm::cross(GetForwardDirection(), { 0.0f, 1.0f, 0.0f }));
 	}
@@ -485,7 +504,9 @@ namespace ignite
 	glm::vec3 EditorCamera::GetForwardDirection() const
 	{
 		if (m_NavigationMode == NavigationMode::Mode2D)
+		{
 			return { 0.0f, 0.0f, -1.0f };
+		}
 
 		if (m_NavigationMode == NavigationMode::Fly)
 		{

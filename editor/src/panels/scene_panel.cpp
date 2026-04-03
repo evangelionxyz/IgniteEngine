@@ -96,6 +96,8 @@ namespace ignite
         m_Icons["simulate"] = Texture::Create("resources/ui/ic_simulate.png", createInfo, cmd);
         m_Icons["play"] = Texture::Create("resources/ui/ic_play.png", createInfo, cmd);
         m_Icons["stop"] = Texture::Create("resources/ui/ic_stop.png", createInfo, cmd);
+        m_Icons["pause"] = Texture::Create("resources/ui/ic_pause.png", createInfo, cmd);
+        m_Icons["stepping"] = Texture::Create("resources/ui/ic_stepping.png", createInfo, cmd);
         m_Icons["checker128"] = Texture::Create("resources/ui/checker-128px.jpg", createInfo, cmd);
 
         cmd->close();
@@ -1610,20 +1612,6 @@ namespace ignite
                 {
                     for (const auto &[strName, type] : s_ComponentsName)
                     {
-                        /*bool found = false;
-                        for (IComponent *comp : comps)
-                        {
-                            if (comp->GetType() == type)
-                            {
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (found)
-                        {
-                            continue;
-                        }*/
-
                         if (ImGui::Selectable(strName.c_str()))
                         {
                             addCompFunc(Entity{ selectedEntity, m_Scene.get()}, type);
@@ -1667,17 +1655,28 @@ namespace ignite
         int cameraModeIndex = 0;
         switch (m_EditorCamera.GetNavigationMode())
         {
-        case EditorCamera::NavigationMode::Fly: cameraModeIndex = 1; break;
-        case EditorCamera::NavigationMode::Mode2D: cameraModeIndex = 2; break;
-        default: cameraModeIndex = 0; break;
+            case EditorCamera::NavigationMode::Fly: cameraModeIndex = 1; break;
+            case EditorCamera::NavigationMode::Mode2D: cameraModeIndex = 2; break;
+            default: cameraModeIndex = 0; break;
         }
+
         ImGui::SetNextItemWidth(80.0f);
         if (ImGui::Combo("##CameraMode", &cameraModeIndex, kCameraModeLabels.data(), static_cast<int>(kCameraModeLabels.size())))
         {
-            const auto mode = cameraModeIndex == 0
-                ? EditorCamera::NavigationMode::Orbit
-                : (cameraModeIndex == 1 ? EditorCamera::NavigationMode::Fly : EditorCamera::NavigationMode::Mode2D);
-            m_EditorCamera.SetNavigationMode(mode);
+            const auto mode = cameraModeIndex == 0 ? EditorCamera::NavigationMode::Orbit : (cameraModeIndex == 1 ? EditorCamera::NavigationMode::Fly : EditorCamera::NavigationMode::Mode2D);
+
+            if (mode == EditorCamera::NavigationMode::Mode2D)
+            {
+                m_EditorCamera3D = m_EditorCamera;
+                m_EditorCamera = *m_EditorCamera2D;
+            }
+            else
+            {
+                m_EditorCamera2D = m_EditorCamera;
+                m_EditorCamera = *m_EditorCamera2D;
+            }
+
+            // m_EditorCamera.SetNavigationMode(mode);
         }
 
         ImGui::SameLine();
@@ -1736,7 +1735,7 @@ namespace ignite
         // TOOLBAR: 
         constexpr ImVec2 buttonSize = { 24.0f, 24.0f };
 
-        State sceneState = EditorLayer::GetInstance()->GetState().sceneState;
+        State sceneState = m_EditorLayer->GetState().sceneState;
         const bool isScenePlaying = sceneState == ignite::State::ScenePlay;
         Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
         ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
@@ -1747,7 +1746,7 @@ namespace ignite
         {  
             if (isScenePlaying)
             {
-                EditorLayer::GetInstance()->OnSceneStop();
+                m_EditorLayer->OnSceneStop();
 #if _WIN32
 				HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
@@ -1756,7 +1755,7 @@ namespace ignite
             }
             else
             {
-                EditorLayer::GetInstance()->OnScenePlay();
+                m_EditorLayer->OnScenePlay();
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
@@ -1775,7 +1774,7 @@ namespace ignite
         {            
             if (isSceneSimulate)
             {
-                EditorLayer::GetInstance()->OnSceneStop();
+                m_EditorLayer->OnSceneStop();
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
@@ -1784,7 +1783,7 @@ namespace ignite
             }
             else
             {
-                EditorLayer::GetInstance()->OnSceneSimulate();
+                m_EditorLayer->OnSceneSimulate();
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
@@ -1897,7 +1896,7 @@ namespace ignite
 
                                 SetSelectedEntity(targetSelection);
                             }
-                            else if (!EditorLayer::GetInstance()->GetState().multiSelect)
+                            else if (!m_EditorLayer->GetState().multiSelect)
                             {
                                 SetSelectedEntity(Entity{});
                                 SetGizmoOperation(GizmoOperation::NONE);
@@ -1921,7 +1920,7 @@ namespace ignite
                         if (metadata.type == AssetType::Scene)
                         {
                             std::filesystem::path filepath = Project::GetInstance()->GetAssetFilepath(metadata.filepath);
-                            EditorLayer::GetInstance()->OpenScene(filepath);
+                            m_EditorLayer->OpenScene(filepath);
                         }
                     }
                 }
@@ -2359,7 +2358,7 @@ namespace ignite
                 // TOOLBAR: 
                 constexpr ImVec2 buttonSize = { 24.0f, 24.0f };
 
-                State sceneState = EditorLayer::GetInstance()->GetState().sceneState;
+                State sceneState = m_EditorLayer->GetState().sceneState;
                 const bool isScenePlaying = sceneState == ignite::State::ScenePlay;
                 Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
                 ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
@@ -2370,7 +2369,7 @@ namespace ignite
                 {
                     if (isScenePlaying)
                     {
-                        EditorLayer::GetInstance()->OnSceneStop();
+                        m_EditorLayer->OnSceneStop();
 #if _WIN32
                         HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                         COLORREF rgbRed = 0x00E86071;
@@ -2379,7 +2378,7 @@ namespace ignite
                     }
                     else
                     {
-                        EditorLayer::GetInstance()->OnScenePlay();
+                        m_EditorLayer->OnScenePlay();
 #if _WIN32
                         HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                         COLORREF rgbRed = 0x000000AB;
@@ -2398,7 +2397,7 @@ namespace ignite
                 {
                     if (isSceneSimulate)
                     {
-                        EditorLayer::GetInstance()->OnSceneStop();
+                        m_EditorLayer->OnSceneStop();
 #if _WIN32
                         HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                         COLORREF rgbRed = 0x00E86071;
@@ -2407,7 +2406,7 @@ namespace ignite
                     }
                     else
                     {
-                        EditorLayer::GetInstance()->OnSceneSimulate();
+                        m_EditorLayer->OnSceneSimulate();
 #if _WIN32
                         HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                         COLORREF rgbRed = 0x000000AB;
@@ -2730,7 +2729,7 @@ namespace ignite
         }
 
         // multi select
-        if (EditorLayer::GetInstance()->GetState().multiSelect)
+        if (m_EditorLayer->GetState().multiSelect)
         {
             if (auto it = m_SelectedEntities.find(entity.GetUUID()); it != m_SelectedEntities.end())
             {

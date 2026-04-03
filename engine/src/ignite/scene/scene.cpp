@@ -149,12 +149,12 @@ namespace ignite
 
 	void Scene::Pause()
 	{
-        m_IsPaused = true;
+        m_IsPaused = !m_IsPaused;
 	}
 
 	void Scene::Step(int frame)
 	{
-
+        m_StepFrame = frame;
 	}
 
 	void Scene::UpdateTransforms(float deltaTime)
@@ -391,18 +391,21 @@ namespace ignite
 
     void Scene::OnUpdateRuntimeSimulate(f32 deltaTime)
     {
-        timeInSeconds += deltaTime;
-
-        registry->view<ScriptComponent>().each([this, deltaTime](entt::entity e, ScriptComponent &sc)
+        if (!m_IsPaused || m_StepFrame-- > 0)
         {
-            Entity entity{ e, this };
-            ScriptEngine::GetInstance()->OnUpdateEntity(entity, deltaTime);
-        });
+            timeInSeconds += deltaTime;
 
-        UpdateTransforms(deltaTime);
+            registry->view<ScriptComponent>().each([this, deltaTime](entt::entity e, ScriptComponent &sc)
+            {
+                Entity entity { e, this };
+                ScriptEngine::GetInstance()->OnUpdateEntity(entity, deltaTime);
+            });
 
-        physics2D->Simulate(deltaTime);
-        physics->Simulate(deltaTime);
+            UpdateTransforms(deltaTime);
+
+            physics2D->Simulate(deltaTime);
+            physics->Simulate(deltaTime);
+        }
     }
 
     Ref<Scene> Scene::Create(Project *project, const std::string &name)

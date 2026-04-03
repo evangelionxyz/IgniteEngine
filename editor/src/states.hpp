@@ -14,6 +14,7 @@ namespace ignite
     {
         SceneEdit,
         ScenePlay,
+        ScenePaused,
         SceneSimulate
     };
 
