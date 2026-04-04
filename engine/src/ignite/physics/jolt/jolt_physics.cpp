@@ -245,7 +245,7 @@ namespace ignite
         JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
         JPH::ShapeRefC shape = shapeResult.Get();
 
-        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation, tc.rotation);
+        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation + col.center, tc.rotation);
 
         JPH::Body *body = m_BodyInterface->CreateBody(bodySettings);
         if (body)
@@ -266,14 +266,23 @@ namespace ignite
         auto &rb = entity.GetComponent<RigibodyComponent>();
         auto &col = entity.GetComponent<CapsuleColliderComponent>();
 
-        // Create capsule shape with radius and half height
-        float halfHeight = col.height * 0.5f;
-        JPH::CapsuleShapeSettings shapeSettings(halfHeight, col.radius);
+        // Create a horizontal capsule by rotating the default vertical capsule 90 degrees around X.
+        const float maxScale = glm::compMax(tc.scale);
+        const float halfHeight = col.height * 0.5f * maxScale;
+        const float radius = col.radius * maxScale;
+
+        JPH::CapsuleShapeSettings capsuleShapeSettings(halfHeight, radius);
+
+        JPH::ShapeSettings::ShapeResult capsuleShapeResult = capsuleShapeSettings.Create();
+        JPH::ShapeRefC capsuleShape = capsuleShapeResult.Get();
+
+        const glm::quat horizontalRotation = glm::angleAxis(1.57079632679f, glm::vec3(1.0f, 0.0f, 0.0f));
+        JPH::RotatedTranslatedShapeSettings shapeSettings(JPH::Vec3::sZero(), GlmToJoltQuat(horizontalRotation), capsuleShape.GetPtr());
 
         JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
         JPH::ShapeRefC shape = shapeResult.Get();
 
-        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation, tc.rotation);
+        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation + col.center, tc.rotation);
 
         JPH::Body *body = m_BodyInterface->CreateBody(bodySettings);
         if (body)
@@ -294,12 +303,12 @@ namespace ignite
         auto &rb = entity.GetComponent<RigibodyComponent>();
         auto &col = entity.GetComponent<SphereColliderComponent>();
 
-        JPH::SphereShapeSettings shapeSettings(col.radius * 2.0f);
+        JPH::SphereShapeSettings shapeSettings(col.radius * glm::compMax(tc.scale));
 
         JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
         JPH::ShapeRefC shape = shapeResult.Get();
 
-        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation, tc.rotation);
+        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation + col.center, tc.rotation);
 
         JPH::Body *body = m_BodyInterface->CreateBody(bodySettings);
         if (body)

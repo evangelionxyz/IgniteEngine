@@ -450,6 +450,7 @@ namespace ignite
     class BoxColliderComponent : public PhysicsColliderComponent, public IComponent
     {
     public:
+        glm::vec3 center = { 0.0f, 0.0f, 0.0f };
         glm::vec3 scale = { 1.0f, 1.0f, 1.0f };
 
         BoxColliderComponent() = default;
@@ -460,7 +461,8 @@ namespace ignite
     class SphereColliderComponent: public PhysicsColliderComponent, public IComponent
     {
     public:
-        float radius = 0.5f;
+        glm::vec3 center = { 0.0f, 0.0f, 0.0f };
+        float radius = 1.0f;
 
         SphereColliderComponent() = default;
 
@@ -470,8 +472,9 @@ namespace ignite
     class CapsuleColliderComponent : public PhysicsColliderComponent, public IComponent
     {
     public:
-        float radius = 0.5f;
-        float height = 1.0f;
+        glm::vec3 center = { 0.0f, 0.0f, 0.0f };
+        float radius = 1.0f;
+        float height = 2.0f;
 
         CapsuleColliderComponent() = default;
 

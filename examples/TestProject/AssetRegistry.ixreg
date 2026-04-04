@@ -21,6 +21,9 @@ AssetRegistry:
     - Handle: 1595657205177314199
       Type: Texture
       Filepath: oak_woods_v1.0/character/char_blue.png
+    - Handle: 1984184665518679683
+      Type: Material
+      Filepath: new_capsule/Material/DefaultMaterial.ixmat
     - Handle: 2096283219806534382
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/fence_1.png
@@ -57,6 +60,9 @@ AssetRegistry:
     - Handle: 6895963861277518904
       Type: Texture
       Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_0_.png
+    - Handle: 7078707562477107759
+      Type: StaticMesh
+      Filepath: new_capsule/StaticMesh/new_capsule.ixsm
     - Handle: 7218779416096983541
       Type: Scene
       Filepath: Scene/TestAnimation2D.ixscene
@@ -81,6 +87,9 @@ AssetRegistry:
     - Handle: 9420462621085832834
       Type: Font
       Filepath: segoeui.ttf
+    - Handle: 9554496557541511132
+      Type: Material
+      Filepath: sphere/Material/DefaultMaterial.ixmat
     - Handle: 9637491453112083221
       Type: Scene
       Filepath: Scene/TestScene.ixscene
@@ -108,15 +117,15 @@ AssetRegistry:
     - Handle: 13076240160514272371
       Type: Material2D
       Filepath: Default_Mat2d.ixmat2d
+    - Handle: 13173322397608345167
+      Type: StaticMesh
+      Filepath: sphere/StaticMesh/sphere.ixsm
     - Handle: 13420973135166490331
       Type: Material2D
       Filepath: oak_woods_v1.0/decorations/SHOP_LIT.ixmat2d
     - Handle: 13528834060294667901
       Type: Material2D
       Filepath: oak_woods_v1.0/decorations/ROCK_01.ixmat2d
-    - Handle: 13648815870549695575
-      Type: SkeletalMesh
-      Filepath: cube/SkeletalMesh/cube.ixskm
     - Handle: 13718421009327739972
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/grass_1.png
@@ -153,6 +162,9 @@ AssetRegistry:
     - Handle: 16006657743572200641
       Type: Texture
       Filepath: oak_woods_v1.0/background/background_layer_2.png
+    - Handle: 16080573997253365690
+      Type: Material
+      Filepath: ico_sphere/Material/DefaultMaterial.ixmat
     - Handle: 16099940366770328639
       Type: Invalid
       Filepath: Scene/imgui.ini
@@ -165,6 +177,9 @@ AssetRegistry:
     - Handle: 16733559418084721288
       Type: Material2D
       Filepath: Background_Mat2d.ixmat2d
+    - Handle: 17269684607766100826
+      Type: StaticMesh
+      Filepath: ico_sphere/StaticMesh/ico_sphere.ixsm
     - Handle: 17360739226101978199
       Type: Scene
       Filepath: Scene/StaticMeshTest.ixscene
