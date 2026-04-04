@@ -931,6 +931,10 @@ namespace ignite
 				IGN_PROFILE_SCOPE("SceneRenderer::ColorPass");
 				ColorPass(cmd, camera, framebuffer);
 			}
+            {
+                IGN_PROFILE_SCOPE("SceneRenderer::ShadowPass");
+                ShadowPass(cmd, camera);
+            }
 			{
 				IGN_PROFILE_SCOPE("SceneRenderer::CompositePass");
 				CompositePass(cmd, compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
@@ -948,7 +952,6 @@ namespace ignite
 	void SceneRenderer::ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera)
 	{
 		IGN_PROFILE_FUNCTION();
-		auto meshView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
 
 		nvrhi::GraphicsState csmState = nvrhi::GraphicsState();
 		Ref<GraphicsPipeline> csmPipeline = m_CascadedShadowMap->GetPipeline();
@@ -966,9 +969,6 @@ namespace ignite
 			cos(elevation) * cos(azimuth)    // Z: front/back
 		};
 
-		// Pass sunDirection directly (surface -> sun); the shadow map logic flips it so
-		// the light camera looks back toward the scene while the shader still uses
-		// the surface-to-light vector for shading.
 		m_CascadedShadowMap->ComputeMatrices(camera, sunDirection);
 
 		// Share cascade data with the main scene pass (cascadeIndex is unused there)
@@ -985,48 +985,141 @@ namespace ignite
 			// Clear the specific array layer for this cascade
 			m_CascadedShadowMap->BeginCascade(cmd, i);
 
-			// Get the framebuffer for this specific cascade layer
 			nvrhi::IFramebuffer *csmFramebuffer = m_CascadedShadowMap->GetCascadeFramebuffer(i);
-			csmState.framebuffer = csmFramebuffer;
-
-			// Set viewport for this cascade
 			nvrhi::Viewport viewport = csmFramebuffer->getFramebufferInfo().getViewport();
+
+			csmState.framebuffer = csmFramebuffer;
 			csmState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
 
-			for (entt::entity e : meshView)
+			auto ensurePerEntityResources = [this](Ref<ConstantBuffer> &buffer, nvrhi::BindingSetHandle &bindingSet)
 			{
-				auto &tr = m_Scene->registry->get<TransformComponent>(e);
-				auto &smc = m_Scene->registry->get<StaticMeshComponent>(e);
-#if 0
-				if (!mesh.model)
-					continue;
-
-				MeshScene &meshScene = mesh.model->GetScene();
-				for (auto &mesh : meshScene.flatMeshes)
+				if (!buffer)
 				{
-					CascadedShadowMapModel_GPUData gpuData;
-					gpuData.transformation = tr.GetLocalMatrix() * mesh->local;
-					std::fill(std::begin(gpuData.boneTransforms), std::end(gpuData.boneTransforms), glm::mat4(1.0f));
-
-					m_CascadedShadowMap->GetModelGPUDataBuffer()->SetData(cmd, Buffer(&gpuData, sizeof(CascadedShadowMapModel_GPUData)));
-					nvrhi::BindingSetHandle bindingSet = GetOrCreateCSMBindingSet(csmPipeline->GetBindingLayout(0),
-						m_CascadedShadowMap->GetModelGPUDataBuffer(),
-						m_CascadedShadowMap->GetGPUDataBuffer()
-					);
-
-					csmState.bindings = { bindingSet };
-					csmState.vertexBuffers = { { mesh->vertexBuffer->GetHandle(), 0, 0 } };
-					csmState.setIndexBuffer({ mesh->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
-
-					cmd->setGraphicsState(csmState);
-
-					nvrhi::DrawArguments args;
-					args.setVertexCount(mesh->indexBuffer->GetCount());
-					args.instanceCount = 1;
-
-					cmd->drawIndexed(args);
+					buffer = ConstantBuffer::Create(sizeof(SkinnedMesh_GPUData), true, 512, "Per-Entity Transform Buffer");
 				}
-#endif
+
+				if (!bindingSet)
+				{
+					nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+					auto desc = nvrhi::BindingSetDesc();
+					desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
+					desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, buffer->GetHandle()));
+					desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, m_Scene->GetSceneGPUDataBuffer()->GetHandle()));
+					desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, m_Scene->GetCSMGPUDataBuffer()->GetHandle()));
+
+					bindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
+					LOG_ASSERT(bindingSet, "Failed to create mesh binding set");
+				}
+			};
+
+			// ===========================
+			// Static Meshes
+			// ===========================
+           {
+				IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshes");
+				auto staticMeshView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
+				for (entt::entity e : staticMeshView)
+				{
+					TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+					if (!tr.visible)
+						continue;
+
+					StaticMeshComponent &smc = m_Scene->registry->get<StaticMeshComponent>(e);
+					if (smc.handle == AssetHandle(0))
+						continue;
+
+					ensurePerEntityResources(smc.perEntityBuffer, smc.meshBindingSet);
+
+					Ref<StaticMesh> sm = m_Scene->GetProject()->GetAsset<StaticMesh>(smc.handle, AssetType::StaticMesh);
+					if (!sm)
+						continue;
+
+					for (auto &m : sm->GetMeshInstances())
+					{
+						SkinnedMesh_GPUData gpuData;
+						gpuData.transformation = tr.GetWorldMatrix() * m->global;
+						gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+
+						const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
+						gpuData.normal = glm::mat4(normalMat3);
+
+						std::fill(std::begin(gpuData.boneTransforms), std::end(gpuData.boneTransforms), glm::mat4(1.0f));
+						smc.perEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
+
+						auto &primitive = m->GetPrimitive();
+						if (smc.meshBindingSet && primitive->vertexBuffer && primitive->indexBuffer)
+						{
+							csmState.bindings = { smc.meshBindingSet };
+							csmState.vertexBuffers.resize(0);
+							csmState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
+							csmState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+
+							cmd->setGraphicsState(csmState);
+
+							nvrhi::DrawArguments args;
+							args.setVertexCount(primitive->indexBuffer->GetCount());
+							args.instanceCount = 1;
+							cmd->drawIndexed(args);
+						}
+					}
+				}
+			}
+
+			{
+				IGN_PROFILE_SCOPE("SceneRenderer::SkeletalMeshesShadow");
+				auto skelMeshView = m_Scene->registry->view<TransformComponent, SkeletalMeshComponent>();
+				for (entt::entity e : skelMeshView)
+				{
+					TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+					if (!tr.visible)
+						continue;
+
+					SkeletalMeshComponent &smc = m_Scene->registry->get<SkeletalMeshComponent>(e);
+					if (smc.handle == AssetHandle(0))
+						continue;
+
+					ensurePerEntityResources(smc.perEntityBuffer, smc.meshBindingSet);
+
+					Ref<SkeletalMesh> sm = m_Scene->GetProject()->GetAsset<SkeletalMesh>(smc.handle, AssetType::SkeletalMesh);
+					if (!sm)
+						continue;
+
+					for (auto &m : sm->GetMeshInstances())
+					{
+						SkinnedMesh_GPUData gpuData;
+						gpuData.transformation = tr.GetWorldMatrix() * m->global;
+						gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+
+						const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
+						gpuData.normal = glm::mat4(normalMat3);
+
+						std::fill(std::begin(gpuData.boneTransforms), std::end(gpuData.boneTransforms), glm::mat4(1.0f));
+
+						const size_t transformCount = std::min(static_cast<size_t>(MAX_BONES), sm->boneTransforms.size());
+						for (size_t j = 0; j < transformCount; ++j)
+						{
+							gpuData.boneTransforms[j] = sm->boneTransforms[j];
+						}
+
+						smc.perEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
+
+						auto &primitive = m->GetPrimitive();
+						if (smc.meshBindingSet && primitive->vertexBuffer && primitive->indexBuffer)
+						{
+							csmState.bindings = { smc.meshBindingSet };
+							csmState.vertexBuffers.resize(0);
+							csmState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
+							csmState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+
+							cmd->setGraphicsState(csmState);
+
+							nvrhi::DrawArguments args;
+							args.setVertexCount(primitive->indexBuffer->GetCount());
+							args.instanceCount = 1;
+							cmd->drawIndexed(args);
+						}
+					}
+				}
 			}
 		}
 	}
