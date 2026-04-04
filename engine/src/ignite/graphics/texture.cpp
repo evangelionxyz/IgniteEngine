@@ -27,8 +27,10 @@
 
 #include "ignite/core/logger.hpp"
 #include "ignite/core/device/device_manager.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include <stb_image.h>
+#include <algorithm>
 
 namespace ignite
 {
@@ -52,6 +54,33 @@ namespace ignite
 
         // Copy the flipped data back to the original buffer
         memcpy(buffer.data, flipped.data(), flipped.size());
+    }
+
+    size_t Texture::GetApproxSizeBytes() const
+    {
+        const size_t bytesPerPixel =
+            (m_CreateInfo.format == nvrhi::Format::RGBA32_FLOAT) ? sizeof(float) * 4u : 4u;
+
+        const size_t width = static_cast<size_t>(std::max(m_CreateInfo.width, 1u));
+        const size_t height = static_cast<size_t>(std::max(m_CreateInfo.height, 1u));
+        const size_t depth = static_cast<size_t>(std::max(m_CreateInfo.depth, 1u));
+        const size_t arraySize = static_cast<size_t>(std::max(m_CreateInfo.arraySize, 1u));
+        const size_t sampleCount = static_cast<size_t>(std::max(m_CreateInfo.sampleCount, 1u));
+        const size_t mipLevels = static_cast<size_t>(std::max(m_CreateInfo.mipLevels, 1u));
+
+        size_t total = 0;
+        size_t mipWidth = width;
+        size_t mipHeight = height;
+        size_t mipDepth = depth;
+        for (size_t mip = 0; mip < mipLevels; ++mip)
+        {
+            total += mipWidth * mipHeight * mipDepth * bytesPerPixel;
+            mipWidth = std::max<size_t>(1, mipWidth / 2);
+            mipHeight = std::max<size_t>(1, mipHeight / 2);
+            mipDepth = std::max<size_t>(1, mipDepth / 2);
+        }
+
+        return total * arraySize * sampleCount;
     }
 
     Texture::Texture(TextureCreateInfo createInfo, const std::string &debugName)
@@ -89,7 +118,11 @@ namespace ignite
     Texture::Texture(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName)
         : m_CreateInfo(createInfo), m_Filepath(filepath), m_DebugName(debugName)
     {
-        LOG_ASSERT(std::filesystem::exists(filepath), "File does not found!");
+        if (!std::filesystem::exists(filepath))
+        {
+            LOG_ERROR("[Texture] File does not found! {}", filepath.generic_string());
+            return;
+        }
 
         // always use RGBA
         const int channels = 4;
@@ -146,13 +179,72 @@ namespace ignite
 
 	Texture::~Texture()
     {
+        IGN_PROFILE_FUNCTION();
+        if (m_Handle && m_TracyAllocationTracked)
+        {
+            IGN_PROFILE_FREE_N(m_Handle.Get(), "GPU Texture");
+            m_TracyAllocationTracked = false;
+        }
+
         m_Buffer.Release();
 
+        m_Sampler = nullptr;
         m_Handle = nullptr;
+    }
+
+    void Texture::PrepareUploadData(uint32_t rowPitch, uint32_t depthPitch)
+    {
+        IGN_PROFILE_FUNCTION();
+        (void)depthPitch;
+        if (!m_Buffer.data)
+        {
+            return;
+        }
+
+        if (m_UploadDataPrepared)
+        {
+            return;
+        }
+
+        if (m_CreateInfo.format == nvrhi::Format::RGBA8_UNORM)
+        {
+            if (m_CreateInfo.flip)
+            {
+                FlipImageBuffer(m_Buffer, m_CreateInfo.width, m_CreateInfo.height, rowPitch);
+            }
+
+            uint8_t *byteData = static_cast<uint8_t *>(m_Buffer.data);
+            m_PreparedMipChain = CPUMipGenerator::GenerateMipChain(byteData,
+                m_CreateInfo.width, m_CreateInfo.height, rowPitch,
+                m_CreateInfo.format, m_CreateInfo.mipLevels);
+            m_UploadDataPrepared = true;
+        }
+        else if (m_CreateInfo.format == nvrhi::Format::RGBA32_FLOAT)
+        {
+            if (m_CreateInfo.flip)
+            {
+                FlipImageBuffer(m_Buffer, m_CreateInfo.width, m_CreateInfo.height, rowPitch * sizeof(float));
+            }
+
+            float *floatData = reinterpret_cast<float *>(m_Buffer.data);
+            m_PreparedMipChain = CPUMipGenerator::GenerateMipChain(floatData,
+                m_CreateInfo.width, m_CreateInfo.height, rowPitch * sizeof(float),
+                m_CreateInfo.format, m_CreateInfo.mipLevels);
+            m_UploadDataPrepared = true;
+        }
+    }
+
+    void Texture::PrepareUploadData(uint32_t channelCount)
+    {
+        const uint32_t rowPitch = m_CreateInfo.width * channelCount;
+        const uint32_t depthPitch = rowPitch * m_CreateInfo.height;
+        PrepareUploadData(rowPitch, depthPitch);
     }
 
     void Texture::SetData(nvrhi::ICommandList *cmd, uint32_t rowPitch, uint32_t depthPitch)
     {
+        IGN_PROFILE_FUNCTION();
+        (void)depthPitch;
         if (!m_Buffer.data)
         {
             return;
@@ -160,52 +252,21 @@ namespace ignite
 
         EnsureTextureHandle();
 
-        if (m_CreateInfo.format == nvrhi::Format::RGBA8_UNORM)
+        PrepareUploadData(rowPitch, depthPitch);
+
+        if (!m_PreparedMipChain.empty())
         {
-            // char = 1 byte, 8 bit
-            if (m_CreateInfo.flip)
+            for (uint32_t mip = 0; mip < m_CreateInfo.mipLevels && mip < m_PreparedMipChain.size(); ++mip)
             {
-                FlipImageBuffer(m_Buffer, m_CreateInfo.width, m_CreateInfo.height, rowPitch);
-            }
-
-            uint8_t *byteData = static_cast<uint8_t *>(m_Buffer.data);
-
-            auto mipChain = CPUMipGenerator::GenerateMipChain(byteData,
-                m_CreateInfo.width, m_CreateInfo.height, rowPitch,
-                m_CreateInfo.format, m_CreateInfo.mipLevels);
-
-            // Upload all mip levels
-            for (uint32_t mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
-            {
-                const auto &mipData = mipChain[mip];
-                cmd->writeTexture(m_Handle, 0, mip, mipData.data.data(), mipData.rowPitch);
-            }
-        }
-        else if (m_CreateInfo.format == nvrhi::Format::RGBA32_FLOAT)
-        {
-            // float = 4 bytes, 32 bit, we need to multiply sizeof(float)
-            if (m_CreateInfo.flip)
-            {
-                FlipImageBuffer(m_Buffer, m_CreateInfo.width, m_CreateInfo.height, rowPitch * sizeof(float));
-            }
-
-            float *floatData = reinterpret_cast<float *>(m_Buffer.data);
-
-            auto mipChain = CPUMipGenerator::GenerateMipChain(floatData,
-                m_CreateInfo.width, m_CreateInfo.height, rowPitch * sizeof(float),
-                m_CreateInfo.format, m_CreateInfo.mipLevels);
-
-
-            // Upload all mip levels
-            for (uint32_t mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
-            {
-                const auto &mipData = mipChain[mip];
-                cmd->writeTexture(m_Handle, 0, mip, mipData.data.data(), rowPitch * sizeof(float), depthPitch * sizeof(float));
+                const auto &mipData = m_PreparedMipChain[mip];
+                cmd->writeTexture(m_Handle, 0, mip, mipData.data.data(), mipData.rowPitch, mipData.slicePitch);
             }
         }
 
         if (!m_CreateInfo.keepCpuData)
         {
+            m_PreparedMipChain.clear();
+            m_UploadDataPrepared = false;
             m_Buffer.Release();
         }
     }
@@ -237,6 +298,7 @@ namespace ignite
 
 	void Texture::CreateTextureHandle()
     {
+        IGN_PROFILE_FUNCTION();
 		if (m_Handle)
 		{
 			return;
@@ -274,8 +336,22 @@ namespace ignite
         {
             m_Handle = device->createTexture(textureDesc);
         }
+
+        if (m_Handle)
+        {
+            IGN_PROFILE_ALLOC_N(m_Handle.Get(), GetApproxSizeBytes(), "GPU Texture");
+            m_TracyAllocationTracked = true;
+        }
+
+        nvrhi::SamplerDesc samplerDesc;
+        samplerDesc.addressU = m_CreateInfo.samplerAddressU;
+        samplerDesc.addressV = m_CreateInfo.samplerAddressV;
+        samplerDesc.addressW = m_CreateInfo.samplerAddressW;
+        samplerDesc.setAllFilters(m_CreateInfo.samplerLinearFiltering);
+        m_Sampler = device->createSampler(samplerDesc);
        
         LOG_ASSERT(m_Handle, "Failed to create texture");
+        LOG_ASSERT(m_Sampler, "Failed to create texture sampler");
     }
 
 	void Texture::EnsureTextureHandle()

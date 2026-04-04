@@ -25,7 +25,9 @@
 #include "asset_importer.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/core/device/device_manager.hpp"
+#include "ignite/core/base.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/serializer/serializer.hpp"
 
 #include "ignite/core/logger.hpp"
 #include <cstdint>
@@ -37,13 +39,149 @@ namespace ignite {
 	static std::mutex s_AssetThreadMutex;
 	static AssetMetaData s_NullMetaData;
 
-    static Project *s_Project = nullptr;
+    namespace
+    {
+        static TextureCreateInfo GetDefaultTextureCreateInfo(const AssetMetaData &metadata)
+        {
+            TextureCreateInfo createInfo;
+            const std::string extension = metadata.filepath.extension().string();
+            const bool isHDR = extension == ".hdr";
+
+            createInfo.format = isHDR ? nvrhi::Format::RGBA32_FLOAT : nvrhi::Format::RGBA8_UNORM;
+            createInfo.mipLevels = isHDR ? 1 : 4;
+            createInfo.flip = isHDR;
+            createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+            createInfo.keepInitialState = true;
+            createInfo.deferGpuCreate = true;
+
+            return createInfo;
+        }
+
+        static std::filesystem::path GetAssetMetaPath(Project *project, const AssetMetaData &metadata)
+        {
+            if (!project)
+            {
+                return {};
+            }
+
+            std::filesystem::path texturePath = project->GetAssetFilepath(metadata.filepath);
+            texturePath += ".meta";
+            return texturePath;
+        }
+
+        static std::filesystem::path GetLegacyTextureInfoPath(Project *project, const AssetMetaData &metadata)
+        {
+            if (!project)
+            {
+                return {};
+            }
+
+            std::filesystem::path texturePath = project->GetAssetFilepath(metadata.filepath);
+            texturePath += ".ixtex";
+            return texturePath;
+        }
+
+        static void SaveAssetMetaFile(const std::filesystem::path &filepath, AssetHandle handle, const AssetMetaData &metadata, const TextureCreateInfo *textureCreateInfo)
+        {
+            if (filepath.empty())
+            {
+                return;
+            }
+
+            Serializer sr(filepath);
+            sr.BeginMap();
+            sr.AddKeyValue("ENGINE_VERSION", ENGINE_VERSION);
+            sr.AddKeyValue("ASSET_HANDLE", static_cast<uint64_t>(handle));
+            sr.AddKeyValue("ASSET_TYPE", AssetTypeToString(metadata.type));
+
+            sr.BeginMap("DATA");
+
+            if (textureCreateInfo)
+            {
+                const TextureCreateInfo &createInfo = *textureCreateInfo;
+
+                sr.AddKeyValue("Width", createInfo.width);
+                sr.AddKeyValue("Height", createInfo.height);
+                sr.AddKeyValue("Depth", createInfo.depth);
+                sr.AddKeyValue("MipLevels", createInfo.mipLevels);
+                sr.AddKeyValue("ArraySize", createInfo.arraySize);
+                sr.AddKeyValue("SampleCount", createInfo.sampleCount);
+                sr.AddKeyValue("SampleQuality", createInfo.sampleQuality);
+
+                sr.AddKeyValue("Flip", createInfo.flip);
+                sr.AddKeyValue("IsRenderTarget", createInfo.isRenderTarget);
+                sr.AddKeyValue("IsTypeless", createInfo.isTypeless);
+                sr.AddKeyValue("IsUAV", createInfo.isUAV);
+                sr.AddKeyValue("IsShadingRateSurface", createInfo.isShadingRateSurface);
+                sr.AddKeyValue("KeepCpuData", createInfo.keepCpuData);
+                sr.AddKeyValue("DeferGpuCreate", createInfo.deferGpuCreate);
+                sr.AddKeyValue("KeepInitialState", createInfo.keepInitialState);
+                sr.AddKeyValue("SamplerLinearFiltering", createInfo.samplerLinearFiltering);
+
+                sr.AddKeyValue("Format", static_cast<uint32_t>(createInfo.format));
+                sr.AddKeyValue("InitialState", static_cast<uint32_t>(createInfo.initialState));
+                sr.AddKeyValue("Dimension", static_cast<uint32_t>(createInfo.dimension));
+                sr.AddKeyValue("SamplerAddressU", static_cast<uint32_t>(createInfo.samplerAddressU));
+                sr.AddKeyValue("SamplerAddressV", static_cast<uint32_t>(createInfo.samplerAddressV));
+                sr.AddKeyValue("SamplerAddressW", static_cast<uint32_t>(createInfo.samplerAddressW));
+            }
+
+            sr.EndMap();
+            sr.EndMap();
+            sr.Serialize();
+        }
+
+        static bool LoadTextureCreateInfoFile(const std::filesystem::path &filepath, TextureCreateInfo &outCreateInfo)
+        {
+            if (filepath.empty() || !std::filesystem::exists(filepath))
+            {
+                return false;
+            }
+
+            YAML::Node root = Serializer::Deserialize(filepath);
+            YAML::Node node = root["DATA"];
+            if (!node)
+            {
+                // Backward compatibility with legacy texture settings files.
+                node = root["TextureImportSettings"];
+            }
+            if (!node)
+            {
+                return false;
+            }
+
+            if (node["Width"]) outCreateInfo.width = node["Width"].as<uint32_t>();
+            if (node["Height"]) outCreateInfo.height = node["Height"].as<uint32_t>();
+            if (node["Depth"]) outCreateInfo.depth = node["Depth"].as<uint32_t>();
+            if (node["MipLevels"]) outCreateInfo.mipLevels = node["MipLevels"].as<uint32_t>();
+            if (node["ArraySize"]) outCreateInfo.arraySize = node["ArraySize"].as<uint32_t>();
+            if (node["SampleCount"]) outCreateInfo.sampleCount = node["SampleCount"].as<uint32_t>();
+            if (node["SampleQuality"]) outCreateInfo.sampleQuality = node["SampleQuality"].as<uint32_t>();
+
+            if (node["Flip"]) outCreateInfo.flip = node["Flip"].as<bool>();
+            if (node["IsRenderTarget"]) outCreateInfo.isRenderTarget = node["IsRenderTarget"].as<bool>();
+            if (node["IsTypeless"]) outCreateInfo.isTypeless = node["IsTypeless"].as<bool>();
+            if (node["IsUAV"]) outCreateInfo.isUAV = node["IsUAV"].as<bool>();
+            if (node["IsShadingRateSurface"]) outCreateInfo.isShadingRateSurface = node["IsShadingRateSurface"].as<bool>();
+            if (node["KeepCpuData"]) outCreateInfo.keepCpuData = node["KeepCpuData"].as<bool>();
+            if (node["DeferGpuCreate"]) outCreateInfo.deferGpuCreate = node["DeferGpuCreate"].as<bool>();
+            if (node["KeepInitialState"]) outCreateInfo.keepInitialState = node["KeepInitialState"].as<bool>();
+            if (node["SamplerLinearFiltering"]) outCreateInfo.samplerLinearFiltering = node["SamplerLinearFiltering"].as<bool>();
+
+            if (node["Format"]) outCreateInfo.format = static_cast<nvrhi::Format>(node["Format"].as<uint32_t>());
+            if (node["InitialState"]) outCreateInfo.initialState = static_cast<nvrhi::ResourceStates>(node["InitialState"].as<uint32_t>());
+            if (node["Dimension"]) outCreateInfo.dimension = static_cast<nvrhi::TextureDimension>(node["Dimension"].as<uint32_t>());
+            if (node["SamplerAddressU"]) outCreateInfo.samplerAddressU = static_cast<nvrhi::SamplerAddressMode>(node["SamplerAddressU"].as<uint32_t>());
+            if (node["SamplerAddressV"]) outCreateInfo.samplerAddressV = static_cast<nvrhi::SamplerAddressMode>(node["SamplerAddressV"].as<uint32_t>());
+            if (node["SamplerAddressW"]) outCreateInfo.samplerAddressW = static_cast<nvrhi::SamplerAddressMode>(node["SamplerAddressW"].as<uint32_t>());
+
+            return true;
+        }
+    }
 
     AssetManager::AssetManager(Project *project)
-        : m_Running(true)
+        : m_Running(true), m_Project(project)
     {
-        s_Project = project;
-
         const uint32_t THREAD_COUNT = std::max(std::thread::hardware_concurrency() / 2u, 1u);
         LOG_WARN("[Asset Manager] Creating {} worker threads!", THREAD_COUNT);
 
@@ -132,6 +270,8 @@ namespace ignite {
 
     AssetHandle AssetManager::ImportAsset(const std::filesystem::path &filepath)
     {
+        IGN_PROFILE_FUNCTION();
+
         // Invalid 
         if (GetAssetTypeFromExtension(filepath.extension().generic_string()) == AssetType::Invalid)
         {
@@ -166,11 +306,99 @@ namespace ignite {
 
     void AssetManager::AssignMetaData(AssetHandle handle, const AssetMetaData &metadata)
     {
+        IGN_PROFILE_FUNCTION();
+
         m_AssetRegistry[handle] = metadata;
+        const std::filesystem::path metadataPath = GetAssetMetaPath(m_Project, metadata);
+
+        if (metadata.type == AssetType::Texture)
+        {
+            TextureCreateInfo createInfo = GetDefaultTextureCreateInfo(metadata);
+            if (!LoadTextureCreateInfoFile(metadataPath, createInfo))
+            {
+                const std::filesystem::path legacyTextureInfoPath = GetLegacyTextureInfoPath(m_Project, metadata);
+                LoadTextureCreateInfoFile(legacyTextureInfoPath, createInfo);
+            }
+
+            {
+                std::unique_lock lock(s_AssetThreadMutex);
+                m_TextureCreateInfos[handle] = createInfo;
+            }
+
+            SaveAssetMetaFile(metadataPath, handle, metadata, &createInfo);
+        }
+        else
+        {
+            {
+                std::unique_lock lock(s_AssetThreadMutex);
+                m_TextureCreateInfos.erase(handle);
+            }
+
+            SaveAssetMetaFile(metadataPath, handle, metadata, nullptr);
+        }
+    }
+
+    TextureCreateInfo AssetManager::GetTextureCreateInfo(AssetHandle handle) const
+    {
+        IGN_PROFILE_FUNCTION();
+
+        if (!IsAssetHandleValid(handle))
+        {
+            return TextureCreateInfo{};
+        }
+
+        {
+            std::unique_lock lock(s_AssetThreadMutex);
+            if (auto it = m_TextureCreateInfos.find(handle); it != m_TextureCreateInfos.end())
+            {
+                return it->second;
+            }
+        }
+
+        const AssetMetaData &metadata = GetMetaData(handle);
+        TextureCreateInfo createInfo = GetDefaultTextureCreateInfo(metadata);
+        const std::filesystem::path metadataPath = GetAssetMetaPath(m_Project, metadata);
+        if (!LoadTextureCreateInfoFile(metadataPath, createInfo))
+        {
+            const std::filesystem::path legacyTextureInfoPath = GetLegacyTextureInfoPath(m_Project, metadata);
+            LoadTextureCreateInfoFile(legacyTextureInfoPath, createInfo);
+        }
+
+        SaveAssetMetaFile(metadataPath, handle, metadata, &createInfo);
+
+        return createInfo;
+    }
+
+    void AssetManager::SetTextureCreateInfo(AssetHandle handle, const TextureCreateInfo &createInfo, bool saveToDisk)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        if (!IsAssetHandleValid(handle))
+        {
+            return;
+        }
+
+        const AssetMetaData &metadata = GetMetaData(handle);
+        if (metadata.type != AssetType::Texture)
+        {
+            return;
+        }
+
+        {
+            std::unique_lock lock(s_AssetThreadMutex);
+            m_TextureCreateInfos[handle] = createInfo;
+        }
+
+        if (saveToDisk)
+        {
+            SaveAssetMetaFile(GetAssetMetaPath(m_Project, metadata), handle, metadata, &createInfo);
+        }
     }
 
 	void AssetManager::RemoveAsset(AssetHandle handle)
     {
+        IGN_PROFILE_FUNCTION();
+
         auto it = m_AssetRegistry.find(handle);
         if (it != m_AssetRegistry.end())
             m_AssetRegistry.erase(it);
@@ -178,6 +406,8 @@ namespace ignite {
 
     void AssetManager::ClearAllLoadedAssets()
     {
+        IGN_PROFILE_FUNCTION();
+
         LOG_TRACE("[Asset Manager] Clearing all loaded assets (Count: {})", m_LoadedAssets.size());
         
         // Wait for GPU operations to complete before releasing assets
@@ -196,6 +426,8 @@ namespace ignite {
 
     void AssetManager::UnloadAsset(AssetHandle handle)
     {
+        IGN_PROFILE_FUNCTION();
+
         std::unique_lock lock(s_AssetThreadMutex);
         
         auto it = m_LoadedAssets.find(handle);
@@ -220,6 +452,8 @@ namespace ignite {
 
     void AssetManager::UnloadUnusedAssets()
     {
+        IGN_PROFILE_FUNCTION();
+
         LOG_TRACE("[Asset Manager] Checking for unused assets (Loaded: {})", m_LoadedAssets.size());
 
         std::vector<AssetHandle> assetsToUnload;
@@ -270,6 +504,8 @@ namespace ignite {
 
     void AssetManager::SubmitJob(AssetJob job)
     {
+        IGN_PROFILE_FUNCTION();
+
         {
             std::unique_lock lock(s_AssetThreadMutex);
             m_Jobs.push(std::move(job));
@@ -280,6 +516,8 @@ namespace ignite {
 
     Ref<Asset> AssetManager::GetAsset(AssetHandle handle, AssetType requestedAssetType)
     {
+        IGN_PROFILE_FUNCTION();
+
         if (!IsAssetHandleValid(handle))
         {
             return nullptr;
@@ -393,13 +631,13 @@ namespace ignite {
     AssetHandle AssetManager::GetAssetHandle(const std::filesystem::path& filepath)
     {
         // Normalize the input filepath to absolute path for comparison
-        std::filesystem::path absoluteFilepath = std::filesystem::absolute(s_Project->GetAssetFilepath(filepath));
+        std::filesystem::path absoluteFilepath = std::filesystem::absolute(m_Project->GetAssetFilepath(filepath));
 
         for (const auto &[handle, metadata] : m_AssetRegistry)
         {
             // Convert metadata filepath (relative) to absolute using project base path
-            std::filesystem::path absoluteMetadataPath = s_Project 
-                ? std::filesystem::absolute(s_Project->GetAssetFilepath(metadata.filepath))
+            std::filesystem::path absoluteMetadataPath = m_Project 
+                ? std::filesystem::absolute(m_Project->GetAssetFilepath(metadata.filepath))
                 : std::filesystem::absolute(metadata.filepath);
             
             // Compare normalized absolute paths
@@ -422,11 +660,6 @@ namespace ignite {
         return static_cast<uint64_t>(handle) != 0 && m_AssetRegistry.contains(handle);
     }
 
-	Project *AssetManager::GetProject()
-    {
-        return s_Project;
-    }
-
 	void AssetManager::WorkerLoop()
     {
         while (true)
@@ -434,6 +667,8 @@ namespace ignite {
             AssetJob job;
             
             {
+                IGN_PROFILE_SCOPE("AssetManager::WorkerLoop");
+
                 std::unique_lock lock(s_AssetThreadMutex);
                 m_ConditionVariable.wait(lock, [this]() { return !m_Running || !m_Jobs.empty(); });
 
@@ -450,6 +685,7 @@ namespace ignite {
             // Execute job outside lock with exception handling
             try
             {
+                IGN_PROFILE_SCOPE_COLOR("AssetManager::WorkerLoop::Execute", 0x00AABCFF);
                 job();
             }
             catch (const std::exception& e)
@@ -465,6 +701,8 @@ namespace ignite {
 
     Ref<Asset> AssetManager::Import(AssetHandle handle, const AssetMetaData &metadata, AssetType requestedAssetType)
     {
+        IGN_PROFILE_FUNCTION();
+
         // Check if already loaded (thread-safe read)
         {
             std::unique_lock lock(s_AssetThreadMutex);
@@ -497,8 +735,10 @@ namespace ignite {
         case AssetType::SkeletalMesh:
         case AssetType::SpriteSheet:
         case AssetType::Font:
+        case AssetType::AnimatorController2D:
+        case AssetType::Animation2D:
         {
-            asset = AssetImporter::Import(handle, getterMetadata);
+            asset = AssetImporter::Import(handle, getterMetadata, this);
             
             // Thread-safe assignment
             {
@@ -516,7 +756,17 @@ namespace ignite {
         case AssetType::Scene:
         case AssetType::Texture:
         {
-            asset = AssetImporter::Import(handle, getterMetadata);
+            if (getterMetadata.type == AssetType::Texture)
+            {
+                AssetMetaData textureMetadata = getterMetadata;
+                textureMetadata.filepath = m_Project->GetAssetFilepath(getterMetadata.filepath);
+                const TextureCreateInfo createInfo = GetTextureCreateInfo(handle);
+                asset = AssetImporter::ImportTexture(handle, textureMetadata, createInfo, this);
+            }
+            else
+            {
+                asset = AssetImporter::Import(handle, getterMetadata, this);
+            }
             
             // Thread-safe assignment
             {
@@ -536,7 +786,7 @@ namespace ignite {
                 std::unique_lock lock(s_AssetThreadMutex);
                 AssignAsset(handle, asset);
             }
-            AssetImporter::ImportAsync(handle, metadata, [&](Ref<Asset> assetResult, AssetHandle assetHandle)
+            AssetImporter::ImportAsync(handle, metadata, this, [&](Ref<Asset> assetResult, AssetHandle assetHandle)
             {
                 assetResult->SetReadyFlag(true);
                 std::unique_lock lock(s_AssetThreadMutex);

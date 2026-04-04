@@ -37,6 +37,8 @@ namespace ignite
 		glm::mat4 transformation;
 		glm::mat4 normal;
 		glm::mat4 boneTransforms[MAX_BONES];
+	    uint32_t objectID = 0xFFFFFFFFu;
+		glm::vec3 _padding = glm::vec3(0.0f);
 	};
 
 	struct Frame_GPUData

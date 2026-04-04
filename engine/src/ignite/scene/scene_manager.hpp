@@ -36,6 +36,7 @@ namespace ignite
         
         static Entity CreateSprite(Scene *scene, const std::string &name, UUID uuid = UUID());
         static Entity CreateCircle(Scene *scene, const std::string &name, UUID uuid = UUID());
+        static Entity CreatePointLight2D(Scene *scene, const std::string &name, UUID uuid = UUID());
 
         static Entity CreateMesh(Scene *scene, const std::string &name, UUID uuid = UUID());
         static Entity CreateCamera(Scene *scene, const std::string &name, UUID uuid = UUID());

@@ -19,8 +19,11 @@
 #include "ignite/core/application.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/animation_system.hpp"
+#include "ignite/animation/animation_2d.hpp"
+#include "ignite/animation/animator_controller_2d.hpp"
 
 #include "ignite/project/project.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 
 #include <ranges>
 
@@ -147,16 +150,17 @@ namespace ignite
 
 	void Scene::Pause()
 	{
-        m_IsPaused = true;
+        m_IsPaused = !m_IsPaused;
 	}
 
 	void Scene::Step(int frame)
 	{
-
+        m_StepFrame = frame;
 	}
 
 	void Scene::UpdateTransforms(float deltaTime)
     {
+        IGN_PROFILE_FUNCTION();
         auto skeletalMeshView = registry->view<SkeletalMeshComponent>();
         for (auto ent : skeletalMeshView)
         {
@@ -191,52 +195,93 @@ namespace ignite
             }
         }
 
-        auto spriteAnimView = registry->view<Sprite2DComponent, Sprite2DAnimationComponent>();
-        for (entt::entity e : spriteAnimView)
+        // ---------------------------------------------------------------
+        // Animator2D update: state machine driven 2D animation
+        // ---------------------------------------------------------------
+        if (m_Project)
         {
-            auto &sprite = spriteAnimView.get<Sprite2DComponent>(e);
-            auto &anim = spriteAnimView.get<Sprite2DAnimationComponent>(e);
-            
-            if (anim.frames.empty())
+            auto animator2dView = registry->view<Sprite2DComponent, Animator2DComponent>();
+            for (entt::entity e : animator2dView)
             {
-                continue;
-            }
+                auto &sprite     = animator2dView.get<Sprite2DComponent>(e);
+                auto &animComp   = animator2dView.get<Animator2DComponent>(e);
 
-            anim.currentFrame = std::clamp(anim.currentFrame, 0, static_cast<int>(anim.frames.size()) - 1);
+                if (animComp.controllerHandle == AssetHandle(0))
+                    continue;
 
-            if (anim.playing)
-            {
-                const float fps = glm::max(anim.fps, 0.001f);
-                const float stepDuration = 1.0f / fps;
-                anim.elapsed += deltaTime * glm::max(anim.speed, 0.0f);
-
-                while (anim.elapsed >= stepDuration)
+                Ref<AnimatorController2D> ctrl = m_Project->GetAsset<AnimatorController2D>(animComp.controllerHandle);
+                if (!ctrl)
                 {
-                    anim.elapsed -= stepDuration;
-                    anim.currentFrame++;
+                    continue;
+                }
 
-                    if (anim.currentFrame >= static_cast<int>(anim.frames.size()))
+                // Initialize state if empty
+                if (animComp.currentStateName.empty())
+                {
+                    animComp.currentStateName = ctrl->defaultState;
+                    animComp.currentFrame     = 0;
+                    animComp.elapsed          = 0.0f;
+                    animComp.stateElapsed     = 0.0f;
+                    animComp.stateNormalized  = 0.0f;
+                }
+
+                const AnimState2D *state = ctrl->FindState(animComp.currentStateName);
+                if (!state || state->animHandle == AssetHandle(0))
+                    continue;
+
+                Ref<Animation2D> anim = m_Project->GetAsset<Animation2D>(state->animHandle);
+                if (!anim || anim->frames.empty())
+                {
+                    continue;
+                }
+
+                // Advance per-entity frame counter
+                const float frameDuration = (anim->fps > 0.0f) ? (1.0f / anim->fps) : 1.0f;
+                animComp.elapsed      += deltaTime;
+                animComp.stateElapsed += deltaTime;
+
+                while (animComp.elapsed >= frameDuration)
+                {
+                    animComp.elapsed -= frameDuration;
+                    animComp.currentFrame++;
+                    if (animComp.currentFrame >= static_cast<int>(anim->frames.size()))
                     {
-                        if (anim.loop)
+                        if (anim->loop)
                         {
-                            anim.currentFrame = 0;
+                            animComp.currentFrame = 0;
                         }
                         else
                         {
-                            anim.currentFrame = static_cast<int>(anim.frames.size()) - 1;
-                            anim.playing = false;
+                            animComp.currentFrame = static_cast<int>(anim->frames.size()) - 1;
+                            animComp.elapsed = 0.0f;
                             break;
                         }
                     }
                 }
-            }
 
-            const auto &frame = anim.frames[static_cast<size_t>(anim.currentFrame)];
-            sprite.uv0 = frame.uv0;
-            sprite.uv1 = frame.uv1;
-            if (anim.textureHandle != AssetHandle(0))
-            {
-                sprite.handle = anim.textureHandle;
+                // Update normalized time
+                const float totalDur = static_cast<float>(anim->frames.size()) * frameDuration;
+                animComp.stateNormalized = (totalDur > 0.0f) ? std::min(animComp.stateElapsed / totalDur, 1.0f) : 0.0f;
+
+                // Push UV to sprite
+                const int clamped = std::max(0, std::min(animComp.currentFrame, static_cast<int>(anim->frames.size()) - 1));
+                sprite.uv0 = anim->frames[static_cast<size_t>(clamped)].uv0;
+                sprite.uv1 = anim->frames[static_cast<size_t>(clamped)].uv1;
+                if (anim->textureHandle != AssetHandle(0))
+                {
+                    sprite.handle = anim->textureHandle;
+                }
+
+                // Evaluate transitions
+                std::string nextState = ctrl->EvaluateTransitions(animComp.currentStateName, animComp.stateNormalized);
+                if (!nextState.empty() && nextState != animComp.currentStateName)
+                {
+                    animComp.currentStateName = nextState;
+                    animComp.currentFrame     = 0;
+                    animComp.elapsed          = 0.0f;
+                    animComp.stateElapsed     = 0.0f;
+                    animComp.stateNormalized  = 0.0f;
+                }
             }
         }
 
@@ -287,6 +332,7 @@ namespace ignite
 
     void Scene::OnUpdateEdit(f32 deltaTime)
     {
+        IGN_PROFILE_FUNCTION();
         timeInSeconds += deltaTime;
         m_StepFrame++;
     
@@ -348,18 +394,34 @@ namespace ignite
 
     void Scene::OnUpdateRuntimeSimulate(f32 deltaTime)
     {
-        timeInSeconds += deltaTime;
-
-        registry->view<ScriptComponent>().each([this, deltaTime](entt::entity e, ScriptComponent &sc)
+        IGN_PROFILE_FUNCTION();
+        if (!m_IsPaused || m_StepFrame-- > 0)
         {
-            Entity entity{ e, this };
-            ScriptEngine::GetInstance()->OnUpdateEntity(entity, deltaTime);
-        });
+            IGN_PROFILE_SCOPE("Scene::RuntimeTick");
+            timeInSeconds += deltaTime;
 
-        UpdateTransforms(deltaTime);
+            {
+                IGN_PROFILE_SCOPE("Scene::ScriptUpdate");
+                registry->view<ScriptComponent>().each([this, deltaTime](entt::entity e, ScriptComponent &sc)
+                {
+                    IGN_PROFILE_SCOPE("Scene::ScriptUpdateEntity");
+                    Entity entity { e, this };
+                    ScriptEngine::GetInstance()->OnUpdateEntity(entity, deltaTime);
+                });
+            }
 
-        physics2D->Simulate(deltaTime);
-        physics->Simulate(deltaTime);
+            UpdateTransforms(deltaTime);
+
+            {
+                IGN_PROFILE_SCOPE("Scene::Physics2D");
+                physics2D->Simulate(deltaTime);
+            }
+
+            {
+                IGN_PROFILE_SCOPE("Scene::Physics3D");
+                physics->Simulate(deltaTime);
+            }
+        }
     }
 
     Ref<Scene> Scene::Create(Project *project, const std::string &name)
@@ -471,14 +533,20 @@ namespace ignite
 	{
 	}
 
-	template<>
-	void Scene::OnComponentAdded<Sprite2DAnimationComponent>(Entity entity, Sprite2DAnimationComponent &comp)
-	{
-	}
-
     template<>
     void Scene::OnComponentAdded<ScriptComponent>(Entity entity, ScriptComponent &comp)
     {
+    }
+
+    template<>
+    void Scene::OnComponentAdded<Animator2DComponent>(Entity entity, Animator2DComponent &comp)
+    {
+        // Will initialize from controller's default state on first update tick
+        comp.currentStateName = "";
+        comp.currentFrame     = 0;
+        comp.elapsed          = 0.0f;
+        comp.stateElapsed     = 0.0f;
+        comp.stateNormalized  = 0.0f;
     }
 
     template<>

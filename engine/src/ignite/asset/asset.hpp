@@ -37,6 +37,8 @@ namespace ignite {
     enum class AssetType
     {
         Invalid,
+        Metadata,
+
         Auto,
         Audio,
         Model,
@@ -56,8 +58,8 @@ namespace ignite {
 
         Material2D,
 
-        FBX,
-        GLTF,
+        Animation2D,          // .anim2d  - single 2D animation clip
+        AnimatorController2D, // .ac2d    - 2D animator state machine
     };
 
     static std::string AssetTypeToString(AssetType type)
@@ -79,9 +81,9 @@ namespace ignite {
             case ignite::AssetType::StaticMesh: return "StaticMesh";
             case ignite::AssetType::Skeleton: return "Skeleton";
             case ignite::AssetType::Environment: return "Environment";
-            case ignite::AssetType::FBX: return "FBX";
-            case ignite::AssetType::GLTF: return "GLTF";
             case ignite::AssetType::Material2D: return "Material2D";
+            case ignite::AssetType::Animation2D: return "Animation2D";
+            case ignite::AssetType::AnimatorController2D: return "AnimatorController2D";
             case ignite::AssetType::Invalid:
             default: return "Invalid";
         }
@@ -89,6 +91,8 @@ namespace ignite {
 
     static std::map<std::string, AssetType> s_AssetExtensionMap =
     {
+        { ".meta", AssetType::Metadata },
+
         { ".ixproj", AssetType::Project },
         { ".ixscene", AssetType::Scene },
         { ".jpg", AssetType::Texture },
@@ -102,10 +106,6 @@ namespace ignite {
         { ".flac", AssetType::Audio },
         { ".wav", AssetType::Audio },
 
-        { ".fbx", AssetType::FBX },
-        { ".gltf", AssetType::GLTF },
-        { ".bin", AssetType::GLTF },
-
         { ".ixsm", AssetType::StaticMesh },
         { ".ixskm", AssetType::SkeletalMesh },
 
@@ -115,12 +115,15 @@ namespace ignite {
         { ".ixmat", AssetType::Material},
         { ".ixenv", AssetType::Environment},
 
-
         { ".ixmat2d", AssetType::Material2D},
+        { ".anim2d", AssetType::Animation2D},
+        { ".ac2d",   AssetType::AnimatorController2D},
     };
 
     static AssetType AssetTypeFromString(const std::string &typeStr)
     {
+        if (typeStr == "Metadata") return AssetType::Metadata;
+
         if (typeStr == "Scene") return AssetType::Scene;
         if (typeStr == "Texture") return AssetType::Texture;
         if (typeStr == "TextureCube") return AssetType::TextureCube;
@@ -135,10 +138,10 @@ namespace ignite {
         if (typeStr == "Skeleton")  return AssetType::Skeleton;
         if (typeStr == "Material")  return AssetType::Material;
         if (typeStr == "Environment")  return AssetType::Environment;
-        if (typeStr == "FBX")  return AssetType::FBX;
-        if (typeStr == "GLTF")  return AssetType::GLTF;
         if (typeStr == "Font")  return AssetType::Font;
         if (typeStr == "Material2D")  return AssetType::Material2D;
+        if (typeStr == "Animation2D")  return AssetType::Animation2D;
+        if (typeStr == "AnimatorController2D")  return AssetType::AnimatorController2D;
         return AssetType::Invalid;
     }
 
@@ -147,6 +150,8 @@ namespace ignite {
     {
         switch (type)
         {
+        case AssetType::Metadata: return ".meta";
+
         case AssetType::StaticMesh: return ".ixsm";
         case AssetType::SkeletalMesh: return ".ixskm";
         case AssetType::Skeleton: return ".ixskel";
@@ -157,6 +162,8 @@ namespace ignite {
         case AssetType::Material: return ".ixmat";
         case AssetType::Material2D: return ".ixmat2d";
         case AssetType::Environment: return ".ixenv";
+        case AssetType::Animation2D: return ".anim2d";
+        case AssetType::AnimatorController2D: return ".ac2d";
         default: return ".invalid";
         }
     }
@@ -171,12 +178,13 @@ namespace ignite {
         return AssetType::Invalid;
     }
 
-    struct AssetMetaData
+    class AssetMetaData
     {
+    public:
         AssetMetaData() = default;
         AssetMetaData(const std::filesystem::path &filepath, const AssetType type)
             : filepath(filepath), type(type)
-        {}
+        { }
 
         std::filesystem::path filepath;
         AssetType type = AssetType::Invalid;

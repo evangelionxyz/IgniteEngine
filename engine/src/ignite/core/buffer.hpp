@@ -27,6 +27,8 @@
 #include <cstdlib>
 #include <string.h>
 
+#include "ignite/core/profiler/profiler.hpp"
+
 namespace ignite
 {
     struct Buffer
@@ -64,12 +66,17 @@ namespace ignite
 
             data = static_cast<uint8_t *>(std::malloc(size));
             this->size = size;
+            if (data && size > 0)
+            {
+                IGN_PROFILE_ALLOC_N(data, size, "CPU Buffer");
+            }
         }
 
         void Release()
         {
             if (data != nullptr)
             {
+                IGN_PROFILE_FREE_N(data, "CPU Buffer");
                 std::free(data);
                 data = nullptr;
                 size = 0;

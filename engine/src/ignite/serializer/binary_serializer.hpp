@@ -352,6 +352,10 @@ namespace ignite
             }
 
             inFile.close();
+
+            if (meshCount == 0)
+                return nullptr;
+
             return staticMesh;
         }
 

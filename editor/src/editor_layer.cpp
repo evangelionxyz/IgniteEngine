@@ -12,6 +12,7 @@
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/core/platform_utils.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 #include "stb_image_write.h"
 
 #include <cmath>
@@ -42,17 +43,9 @@ namespace ignite
         };
     }
 
-    EditorLayer *s_EditorLayerInstance = nullptr;
-
-    EditorLayer *EditorLayer::GetInstance()
-    {
-        return s_EditorLayerInstance;
-    }
-
     EditorLayer::EditorLayer(const std::string &name)
         : Layer(name)
     {
-        s_EditorLayerInstance = this;
     }
 
     EditorLayer::~EditorLayer()
@@ -100,7 +93,7 @@ namespace ignite
     {
         Layer::OnDetach();
 
-		s_EditorLayerInstance = nullptr;
+        m_ActiveProject.reset();
     }
 
     void EditorLayer::OnUpdate(float deltaTime)
@@ -172,7 +165,7 @@ namespace ignite
             {
                 if (m_ScenePanel->IsFocused())
                 {
-                    m_ScenePanel->SetGizmoOperation(ImGuizmo::OPERATION::NONE);
+                    m_ScenePanel->SetGizmoOperation(GizmoOperation::NONE);
                 }
                 break;
             }
@@ -187,22 +180,28 @@ namespace ignite
                 }
                 break;
             }
+			case Key::Q:
+			{
+				if (!Input::IsMouseButtonPressed(Mouse::ButtonRight))
+					m_ScenePanel->SetGizmoOperation(GizmoOperation::BOUND_SIZING_2D);
+				break;
+			}
             case Key::T:
             {
                 if (!Input::IsMouseButtonPressed(Mouse::ButtonRight))
-                    m_ScenePanel->SetGizmoOperation(ImGuizmo::OPERATION::TRANSLATE);
+                    m_ScenePanel->SetGizmoOperation(GizmoOperation::TRANSLATE);
                 break;
             }
             case Key::R:
             {
                 if (!Input::IsMouseButtonPressed(Mouse::ButtonRight))
-                    m_ScenePanel->SetGizmoOperation(ImGuizmo::OPERATION::ROTATE);
+                    m_ScenePanel->SetGizmoOperation(GizmoOperation::ROTATE);
                 break;
             }
             case Key::E:
             {
                 if (!Input::IsMouseButtonPressed(Mouse::ButtonRight))
-                    m_ScenePanel->SetGizmoOperation(ImGuizmo::OPERATION::SCALE);
+                    m_ScenePanel->SetGizmoOperation(GizmoOperation::SCALE);
                 break;
             }
             case Key::F5:
@@ -244,121 +243,158 @@ namespace ignite
 
     bool EditorLayer::OnMouseButtonPressed(MouseButtonPressedEvent &event)
     {
-        if (event.Is(Mouse::ButtonLeft) && !m_ScenePanel->IsGizmoBeingUse() && m_ScenePanel->IsHovered())
-        {
-            m_Data.isPickingEntity = true;
-        }
-
         return false;
     }
 
     void EditorLayer::OnRender(nvrhi::IFramebuffer *mainFramebuffer)
     {
+        IGN_PROFILE_FUNCTION();
         Layer::OnRender(mainFramebuffer);
 
         if (!m_ActiveScene)
             return;
 
-        // Resize Edit Viewport Framebuffer
+        if (m_SceneRenderer)
         {
+            m_SceneRenderer->BeginFrame();
+        }
+
+        const bool isMouseDraggingUi = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+
+        // Resize Edit Viewport Framebuffer
+        if (m_ScenePanel->m_Data.sceneViewportEditorVisible)
+        {
+            static glm::uvec2 s_LastEditDesiredSize{ 0u, 0u };
+            static uint32_t s_EditStableFrames = 0u;
+
             const glm::uvec2 framebufferSize = m_ScenePanel->GetViewportEditCompRT()->GetSize();
             const glm::vec2 currentViewportSize = m_ScenePanel->GetViewportEditSize();
             const glm::uvec2 desiredSize
             {
-                static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.x))),
-                static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.y)))
+                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.x)),
+                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.y))
             };
 
+            if (desiredSize == s_LastEditDesiredSize)
+            {
+                ++s_EditStableFrames;
+            }
+            else
+            {
+                s_LastEditDesiredSize = desiredSize;
+                s_EditStableFrames = 0u;
+            }
+
             const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
-            if (framebufferNeedsResize && desiredSize.x > 0u && desiredSize.y > 0u)
+            const bool allowResizeNow = !isMouseDraggingUi || s_EditStableFrames >= 2u;
+            if (framebufferNeedsResize && allowResizeNow && desiredSize.x > 0u && desiredSize.y > 0u)
             {
                 m_ScenePanel->ViewportEditResize(desiredSize.x, desiredSize.y);
             }
         }
 
         // Resize Game Viewport Framebuffer
+        if (m_ScenePanel->m_Data.sceneViewportGameplayVisible)
         {
+            static glm::uvec2 s_LastGameDesiredSize{ 0u, 0u };
+            static uint32_t s_GameStableFrames = 0u;
+
             const glm::uvec2 framebufferSize = m_ScenePanel->GetViewportGameCompRT()->GetSize();
             const glm::vec2 currentViewportSize = m_ScenePanel->GetViewportGameSize();
             const glm::uvec2 desiredSize
             {
-                static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.x))),
-                static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.y)))
+                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.x)),
+                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.y))
             };
 
+            if (desiredSize == s_LastGameDesiredSize)
+            {
+                ++s_GameStableFrames;
+            }
+            else
+            {
+                s_LastGameDesiredSize = desiredSize;
+                s_GameStableFrames = 0u;
+            }
+
             const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
-            if (framebufferNeedsResize && desiredSize.x > 0u && desiredSize.y > 0u)
+            const bool allowResizeNow = !isMouseDraggingUi || s_GameStableFrames >= 2u;
+            if (framebufferNeedsResize && allowResizeNow && desiredSize.x > 0u && desiredSize.y > 0u)
             {
                 m_ScenePanel->ViewportGameResize(desiredSize.x, desiredSize.y);
             }
         }
 
         // Render to Edit Viewport
-        switch (m_Data.sceneState)
+        if (m_ScenePanel->m_Data.sceneViewportEditorVisible)
         {
-        case State::SceneSimulate:
-        case State::SceneEdit:
-        {
-            ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
-            if (const glm::uvec2 editSize = m_ScenePanel->GetViewportEditCompRT()->GetSize(); editSize.x > 0u && editSize.y > 0u)
+            switch (m_Data.sceneState)
             {
-                editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
-            }
+                case State::SceneSimulate:
+                case State::SceneEdit:
+                {
+                    ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
+                    if (const glm::uvec2 editSize = m_ScenePanel->GetViewportEditCompRT()->GetSize(); editSize.x > 0u && editSize.y > 0u)
+                    {
+                        editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
+                    }
 
-            m_SceneRenderer->RenderEditorTo(editCamera,
-                m_ScenePanel->GetViewportEditSceneRT(),
-                m_ScenePanel->GetViewportEditUIRT(),
-                m_ScenePanel->GetViewportEditCompRT());
-            break;
+                    {
+                        IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
+                        m_SceneRenderer->RenderEditorTo(editCamera,
+                            m_ScenePanel->GetViewportEditSceneRT(),
+                            m_ScenePanel->GetViewportEditUIRT(),
+                            m_ScenePanel->GetViewportEditCompRT());
+                    }
+                    break;
+                }
+                case State::ScenePlay:
+                {
+                    ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
+                    if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
+                    {
+                        editCamera = &primaryCam.GetComponent<CameraComponent>().camera;
+                    }
+
+                    if (const glm::uvec2 editSize = m_ScenePanel->GetViewportEditCompRT()->GetSize(); editSize.x > 0u && editSize.y > 0u)
+                    {
+                        editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
+                    }
+
+                    {
+                        IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
+                        m_SceneRenderer->RenderEditorTo(editCamera,
+                            m_ScenePanel->GetViewportEditSceneRT(),
+                            m_ScenePanel->GetViewportEditUIRT(),
+                            m_ScenePanel->GetViewportEditCompRT());
+                    }
+                    break;
+                }
+            }
         }
-        case State::ScenePlay:
+
+        if (m_ScenePanel->m_Data.sceneViewportGameplayVisible)
         {
-            ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
-            if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
-            {
-                editCamera = &primaryCam.GetComponent<CameraComponent>().camera;
-            }
+			// Render to Game Viewport
+			if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
+			{
+				ICamera *gameCamera = &primaryCam.GetComponent<CameraComponent>().camera;
+				if (const glm::uvec2 gameSize = m_ScenePanel->GetViewportGameCompRT()->GetSize(); gameSize.x > 0u && gameSize.y > 0u)
+				{
+					gameCamera->UpdateProjection(static_cast<float>(gameSize.x), static_cast<float>(gameSize.y));
+				}
 
-            if (const glm::uvec2 editSize = m_ScenePanel->GetViewportEditCompRT()->GetSize(); editSize.x > 0u && editSize.y > 0u)
-            {
-                editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
-            }
-
-            m_SceneRenderer->RenderEditorTo(editCamera,
-                m_ScenePanel->GetViewportEditSceneRT(),
-                m_ScenePanel->GetViewportEditUIRT(),
-                m_ScenePanel->GetViewportEditCompRT());
-            break;
-        }
-        }
-
-        // Prevent shared camera constant-buffer hazards between back-to-back viewport renders.
-        m_Device->waitForIdle();
-
-        // Render to Game Viewport
-        if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
-        {
-            ICamera *gameCamera = &primaryCam.GetComponent<CameraComponent>().camera;
-            if (const glm::uvec2 gameSize = m_ScenePanel->GetViewportGameCompRT()->GetSize(); gameSize.x > 0u && gameSize.y > 0u)
-            {
-                gameCamera->UpdateProjection(static_cast<float>(gameSize.x), static_cast<float>(gameSize.y));
-            }
-
-            m_SceneRenderer->RenderGameplayTo(gameCamera,
-                m_ScenePanel->GetViewportGameSceneRT(),
-                m_ScenePanel->GetViewportGameUIRT(),
-                m_ScenePanel->GetViewportGameCompRT());
+                {
+                    IGN_PROFILE_SCOPE("SceneRenderer::RenderGameplayTo");
+                    m_SceneRenderer->RenderGameplayTo(gameCamera,
+                        m_ScenePanel->GetViewportGameSceneRT(),
+                        m_ScenePanel->GetViewportGameUIRT(),
+                        m_ScenePanel->GetViewportGameCompRT());
+                }
+			}
         }
 
         m_Cmd->open();
-        // Create staging texture for read-back
-        if (m_Data.isPickingEntity && false) // FIXME: No mouse picking
-        {
-            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetViewportEditCompRT()->GetColorAttachment(1)->GetHandle()->getDesc();
-            stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
-            m_MousePickingStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            m_Cmd->copyTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetViewportEditCompRT()->GetColorAttachment(1)->GetHandle(), nvrhi::TextureSlice());
-        }
 
         if (m_Data.takeScreenshot)
         {
@@ -400,49 +436,11 @@ namespace ignite
             }
             m_Data.takeScreenshot = false;
         }
-
-        if (m_Data.isPickingEntity && false) // FIXME: No mouse picking
-        {
-            // Map and read the pixel data
-            size_t rowPitch = 0;
-            if (void *mappedData = m_Device->mapStagingTexture(m_MousePickingStagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch)) {
-                uint32_t *pixelData = static_cast<uint32_t *>(mappedData);
-
-                glm::vec2 mousePos = m_ScenePanel->GetViewportMousePos();
-                const int pixelX = static_cast<i32>(mousePos.x);
-                const int pixelY = static_cast<i32>(mousePos.y);
-
-                // Get row pitch from texture mapping
-                m_Data.hoveredEntity = pixelData[pixelY * (rowPitch / sizeof(uint32_t)) + pixelX];
-
-                bool found = false;
-                auto view = m_ActiveScene->registry->view<TransformComponent>();
-                for (entt::entity e : view)
-                {
-                    if (uint32_t eId = static_cast<uint32_t>(e); eId == m_Data.hoveredEntity)
-                    {
-                        Entity entity{ e, m_ActiveScene.get() };
-                        m_ScenePanel->SetSelectedEntity(entity);
-                        found = true;
-                        break;
-                    }
-                }
-
-                if (!found && !m_Data.multiSelect)
-                {
-                    m_ScenePanel->SetSelectedEntity(Entity{});
-                    m_ScenePanel->SetGizmoOperation(ImGuizmo::OPERATION::NONE);
-                }
-
-                m_Device->unmapStagingTexture(m_MousePickingStagingTexture);
-            }
-
-            m_Data.isPickingEntity = false;
-        }
     }
 
     void EditorLayer::OnGuiRender()
     {
+        IGN_PROFILE_FUNCTION();
         constexpr ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_MenuBar
             | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
 
@@ -593,7 +591,7 @@ namespace ignite
         // Unload unused assets (assets not referenced by anything else)
         if (m_ActiveProject)
         {
-            m_ActiveProject->GetAssetManager().UnloadUnusedAssets();
+            m_ActiveProject->GetAssetManager()->UnloadUnusedAssets();
         }
         
         // Force a brief wait to allow cleanup
@@ -642,7 +640,7 @@ namespace ignite
 
     void EditorLayer::OpenScene(const std::filesystem::path &filepath)
     {
-        AssetHandle openSceneHandle = m_ActiveProject->GetAssetManager().GetAssetHandle(filepath);
+        AssetHandle openSceneHandle = m_ActiveProject->GetAssetManager()->GetAssetHandle(filepath);
 
         if (m_CurrentSceneHandle == openSceneHandle)
             return;
@@ -677,7 +675,7 @@ namespace ignite
             // Unload unused assets from previous scene
             if (m_ActiveProject)
             {
-                m_ActiveProject->GetAssetManager().UnloadUnusedAssets();
+                m_ActiveProject->GetAssetManager()->UnloadUnusedAssets();
             }
             
             m_EditorScene = SceneManager::Copy(openScene);
@@ -725,8 +723,7 @@ namespace ignite
             m_EditorScene.reset();
             m_ActiveScene.reset();
 
-            // Clear all assets from old project
-            m_ActiveProject->GetAssetManager().ClearAllLoadedAssets();
+            m_ActiveProject->GetAssetManager()->ClearAllLoadedAssets();
         }
 
         if (const Ref<Project> openedProject = Project::Deserialize(filepath))
@@ -735,7 +732,7 @@ namespace ignite
             m_CurrentProjectFilepath = filepath;
 
             // Reload project files
-            m_ContentBrowserPanel->LoadProjectFiles();
+            m_ContentBrowserPanel->LoadProjectFiles(m_ActiveProject->GetAssetManager());
 
             // Get Project default scene (use immediate load for synchronous path)
             if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
@@ -748,7 +745,7 @@ namespace ignite
 
                     SetActiveScene(m_EditorScene);
 
-                    const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
+                    const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
 
                     m_CurrentSceneFilePath = m_ActiveProject->GetAssetFilepath(assetFilepath);
                     m_CurrentSceneHandle = activeScene->handle;
@@ -766,13 +763,13 @@ namespace ignite
             }
 
 			// Register callback for when textures are loaded to invalidate material binding sets
-			openedProject->GetAssetManager().RegisterAssetLoadedCallback(
+			openedProject->GetAssetManager()->RegisterAssetLoadedCallback(
 				[this](AssetHandle handle, AssetType type)
 				{
 					if (type == AssetType::Texture)
 					{
 						// Find all materials that use this texture and mark them dirty
-						const auto &assets = Project::GetInstance()->GetAssetManager().GetLoadedAssets();
+						const auto &assets = m_ActiveProject->GetAssetManager()->GetLoadedAssets();
 						for (const auto &[matHandle, asset] : assets)
 						{
 							if (asset->GetAssetType() == AssetType::Material)
@@ -810,7 +807,7 @@ namespace ignite
             m_EditorScene->OnStop();
         }
 
-        m_ScenePanel->SetGizmoOperation(ImGuizmo::OPERATION::NONE);
+        m_ScenePanel->SetGizmoOperation(GizmoOperation::NONE);
 
         if (m_Data.sceneState != State::SceneEdit)
             OnSceneStop();
@@ -844,8 +841,10 @@ namespace ignite
 
     void EditorLayer::OnSceneSaveFileSelected(void* userData, const char* const* filelist, int filter)
     {
+        EditorLayer *editor = (EditorLayer *)userData;
+
         // Check for errors
-        if (filelist == nullptr)
+        if (editor == nullptr || filelist == nullptr)
         {
             const char* error = SDL_GetError();
             LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
@@ -868,17 +867,19 @@ namespace ignite
                 filepath += ".ixscene";
             }
 
-            s_EditorLayerInstance->m_CurrentSceneFilePath = filepath;
+            editor->m_CurrentSceneFilePath = filepath;
 
             PendingFileLoading pf = { PendingFileLoading::Save, AssetMetaData(filepath, AssetType::Scene), userData };
-            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
+            editor->m_PendingFileLoading.push(pf);
         }
     }
 
     void EditorLayer::OnSceneOpenFileSelected(void* userData, const char* const* filelist, int filter)
     {
+        EditorLayer *editor = (EditorLayer *)userData;
+
         // Check for errors
-        if (filelist == nullptr)
+        if (editor == nullptr || filelist == nullptr)
         {
             const char* error = SDL_GetError();
             LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
@@ -896,14 +897,16 @@ namespace ignite
         if (!filepath.empty())
         {
             PendingFileLoading pf = { PendingFileLoading::Open, AssetMetaData(filepath, AssetType::Scene), userData };
-            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
+            editor->m_PendingFileLoading.push(pf);
         }
     }
 
     void EditorLayer::OnProjectSaveFileSelected(void* userData, const char* const* filelist, int filter)
     {
+        EditorLayer *editor = (EditorLayer *)userData;
+
         // Check for errors
-        if (filelist == nullptr)
+        if (editor == nullptr || filelist == nullptr)
         {
             const char* error = SDL_GetError();
             LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
@@ -927,12 +930,14 @@ namespace ignite
             }
 
             PendingFileLoading pf = { PendingFileLoading::Open, AssetMetaData(filepath, AssetType::Project), userData };
-            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
+            editor->m_PendingFileLoading.push(pf);
         }
     }
 
     void EditorLayer::OnProjectOpenFileSelected(void *userData, const char *const *filelist, int filter)
     {
+        EditorLayer *editor = (EditorLayer *)userData;
+
         // Check for errors
         if (filelist == nullptr)
         {
@@ -951,7 +956,7 @@ namespace ignite
         if (!filepath.empty())
         {
             PendingFileLoading pf = { PendingFileLoading::Open, AssetMetaData(filepath, AssetType::Project), userData };
-            s_EditorLayerInstance->m_PendingFileLoading.push(pf);
+            editor->m_PendingFileLoading.push(pf);
         }
     }
 
@@ -1063,7 +1068,7 @@ namespace ignite
                     {
                         // Submit scene loading to asset worker
                         std::filesystem::path filepath = pf.metadata.filepath;
-                        AssetHandle sceneHandle = m_ActiveProject->GetAssetManager().GetAssetHandle(filepath);
+                        AssetHandle sceneHandle = m_ActiveProject->GetAssetManager()->GetAssetHandle(filepath);
                         
                         if (m_CurrentSceneHandle == sceneHandle)
                             break;
@@ -1071,7 +1076,7 @@ namespace ignite
                         m_CurrentSceneHandle = sceneHandle;
                         
                         // Submit heavy I/O work to asset worker
-                        m_ActiveProject->GetAssetManager().SubmitJob([this, filepath, sceneHandle]()
+                        m_ActiveProject->GetAssetManager()->SubmitJob([this, filepath, sceneHandle]()
                         {
                             // Load scene on worker thread (I/O happens here)
                             Ref<Scene> loadedScene = SceneSerializer::Deserialize(filepath, m_ActiveProject.get());
@@ -1106,7 +1111,7 @@ namespace ignite
                                     // Unload unused assets
                                     if (m_ActiveProject)
                                     {
-                                        m_ActiveProject->GetAssetManager().UnloadUnusedAssets();
+                                        m_ActiveProject->GetAssetManager()->UnloadUnusedAssets();
                                     }
                                     
                                     // Copy and activate new scene
@@ -1149,14 +1154,15 @@ namespace ignite
 
                                     m_EditorScene.reset();
                                     m_ActiveScene.reset();
-                                    m_ActiveProject->GetAssetManager().ClearAllLoadedAssets();
+                                    m_ActiveProject->GetAssetManager()->ClearAllLoadedAssets();
                                 }
+
 
                                 m_ActiveProject = loadedProject;
                                 m_CurrentProjectFilepath = filepath;
 
                                 // Reload content browser
-                                m_ContentBrowserPanel->LoadProjectFiles();
+                                m_ContentBrowserPanel->LoadProjectFiles(m_ActiveProject->GetAssetManager());
 
                                 // Load default scene
                                 if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
@@ -1167,7 +1173,7 @@ namespace ignite
                                         m_EditorScene->SetDirtyFlag(false);
                                         SetActiveScene(m_EditorScene);
 
-                                        const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
+                                        const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
                                         m_CurrentSceneFilePath = m_ActiveProject->GetAssetFilepath(assetFilepath);
                                         m_CurrentSceneHandle = activeScene->handle;
                                     }
@@ -1196,7 +1202,7 @@ namespace ignite
                         // Submit scene save to asset worker
                         std::filesystem::path filepath = pf.metadata.filepath;
                         
-                        m_ActiveProject->GetAssetManager().SubmitJob([this, filepath]() {
+                        m_ActiveProject->GetAssetManager()->SubmitJob([this, filepath]() {
                             SceneSerializer serializer(m_ActiveScene, m_ActiveProject.get());
                             serializer.Serialize(filepath);
                             
@@ -1301,7 +1307,8 @@ namespace ignite
                 m_ActiveProject->Serialize(m_Data.projectCreateInfo.filepath);
 
                 // Reload content browser
-                m_ContentBrowserPanel->LoadProjectFiles();
+                m_ContentBrowserPanel->LoadProjectFiles(m_ActiveProject->GetAssetManager());
+
 
                 if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
                 {
@@ -1312,7 +1319,7 @@ namespace ignite
 
                         SetActiveScene(m_EditorScene);
 
-                        AssetMetaData metadata = m_ActiveProject->GetAssetManager().GetMetaData(activeScene->handle);
+                        AssetMetaData metadata = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
                         auto scenePath = m_ActiveProject->GetAssetFilepath(metadata.filepath);
                         m_CurrentSceneFilePath = scenePath;
                     }
@@ -1453,8 +1460,8 @@ namespace ignite
 
         if (m_Data.assetRegistryWindow)
         {
-            AssetRegistry assetRegistry = m_ActiveProject->GetAssetManager().GetAssetAssetRegistry();
-            const auto &loadedAssets = m_ActiveProject->GetAssetManager().GetLoadedAssets();
+            AssetRegistry assetRegistry = m_ActiveProject->GetAssetManager()->GetAssetAssetRegistry();
+            const auto &loadedAssets = m_ActiveProject->GetAssetManager()->GetLoadedAssets();
 
             struct AssetPairCompare
             {
@@ -1493,7 +1500,7 @@ namespace ignite
 			{
 				if (asset)
 				{
-					AssetType type = m_ActiveProject->GetAssetManager().GetAssetType(handle);
+					AssetType type = m_ActiveProject->GetAssetManager()->GetAssetType(handle);
 					loadedCounts[type]++;
 					// Estimate memory usage (this is approximate)
 					memoryUsage[type] += asset.use_count() * 8; // Basic pointer overhead
@@ -1617,7 +1624,7 @@ namespace ignite
 				}
 				if (ImGui::SmallButton("Unload Unused Assets"))
 				{
-					m_ActiveProject->GetAssetManager().UnloadUnusedAssets();
+					m_ActiveProject->GetAssetManager()->UnloadUnusedAssets();
 				}
 				ImGui::EndGroup();
 				ImGui::EndTable();

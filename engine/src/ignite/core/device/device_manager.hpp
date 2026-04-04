@@ -96,7 +96,7 @@ namespace ignite
         uint32_t swapChainBufferCount = 3;
         uint32_t swapChainSampleCount = 1;
         uint32_t swapChainSampleQuality = 0;
-        uint32_t maxFramesInFlight = 2;
+        uint32_t maxFramesInFlight = 3;
 
         nvrhi::Format swapChainFormat = nvrhi::Format::RGBA8_UNORM;
 

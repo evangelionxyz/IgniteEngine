@@ -77,6 +77,7 @@ namespace ignite
         glm::vec4 additiveColor;
         uint32_t texIndex;
         uint32_t materialType;
+        uint32_t objectID;
     };
 
     struct Vertex2DLine
@@ -90,6 +91,7 @@ namespace ignite
         glm::vec4 position;
         glm::vec2 localPosition;
         glm::vec4 color;
+        uint32_t objectID;
     };
 
 	struct VertexText
@@ -98,6 +100,7 @@ namespace ignite
 		glm::vec4 color;
 		glm::vec2 texCoord;
 		uint32_t texIndex;
+		uint32_t objectID;
 	};
 
 }

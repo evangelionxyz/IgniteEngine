@@ -15,6 +15,8 @@ struct Object
     float4x4 transformMatrix;
     float4x4 normalMatrix;
     float4x4 boneTransforms[MAX_BONES];
+    uint objectID;
+    float3 _padding;
 };
 
 cbuffer CameraBuffer : register(b0, space0)

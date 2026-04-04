@@ -25,7 +25,11 @@ Texture2D<float> depthTexture : register(t2); // depth buffer
 StructuredBuffer<uint> selectedIDs : register(t3);
 
 // Output texture (for compute shader)
-RWTexture2D<float4> outputTexture : register(u0); // output texture
+// Vulkan/SPIR-V needs an explicit image format for storage images.
+#ifdef TARGET_VULKAN
+    [[vk::image_format("rgba8")]]
+#endif
+RWTexture2D<unorm float4> outputTexture : register(u0); // output texture
 
 // Sampler
 SamplerState linearSampler : register(s0);

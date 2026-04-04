@@ -33,6 +33,7 @@
 
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/scripting/script_engine.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 
 namespace ignite
 {
@@ -123,6 +124,7 @@ namespace ignite
 
     void RuntimeLayer::OnUpdate(float deltaTime) 
     {
+        IGN_PROFILE_FUNCTION();
         Layer::OnUpdate(deltaTime);
         const auto &window = Application::GetInstance()->GetWindow();
 
@@ -130,6 +132,7 @@ namespace ignite
 
         if (m_ActiveScene)
         {
+            IGN_PROFILE_SCOPE("RuntimeLayer::SceneUpdate");
             m_ViewportData.position = glm::vec2(0.0f);
             m_ViewportData.size = window->GetFramebufferSize();
             m_ViewportData.mousePosition = Input::GetMousePosition();
@@ -145,6 +148,7 @@ namespace ignite
 
     void RuntimeLayer::OnRender(nvrhi::IFramebuffer *framebuffer) 
     {
+        IGN_PROFILE_FUNCTION();
         Layer::OnRender(framebuffer);
 
         if (m_ActiveScene)
@@ -154,6 +158,7 @@ namespace ignite
             if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
             {
                 ICamera *camera = &primaryCam.GetComponent<Camera>().camera;
+                IGN_PROFILE_SCOPE("SceneRenderer::RenderTo");
                 m_SceneRenderer.RenderTo(camera, m_SceneRT, m_UIRT, m_CompositeRT, camera->projectionType == ProjectionType::Perspective);
             }
 

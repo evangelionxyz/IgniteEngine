@@ -10,6 +10,7 @@
 #include "ignite/core/application.hpp"
 #include "ignite/core/string_utils.hpp"
 #include "ignite/core/platform_utils.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 
 #include <cstdlib>
 #include <format>
@@ -439,6 +440,7 @@ namespace ignite
 
     void ScriptEngine::OnCreateEntity(Entity entity)
     {
+        IGN_PROFILE_FUNCTION();
         if (!entity.HasComponent<ScriptComponent>())
             return;
 
@@ -457,6 +459,7 @@ namespace ignite
 
 	void ScriptEngine::OnDestroyEntity(Entity entity)
 	{
+        IGN_PROFILE_FUNCTION();
 		if (!entity.HasComponent<ScriptComponent>())
 			return;
 
@@ -472,6 +475,7 @@ namespace ignite
 
 	void ScriptEngine::OnUpdateEntity(Entity entity, float time)
     {
+        IGN_PROFILE_FUNCTION();
         const UUID uuid = entity.GetUUID();
         if (const auto &it = scriptEngineData->entityInstances.find(uuid);
             it == scriptEngineData->entityInstances.end())

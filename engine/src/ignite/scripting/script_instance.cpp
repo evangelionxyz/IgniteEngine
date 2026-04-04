@@ -4,12 +4,14 @@
 #include "script_engine.hpp"
 #include "ignite/scene/entity.hpp"
 #include "script_class.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 
 namespace ignite
 {
     ScriptInstance::ScriptInstance(Ref<ScriptClass> scriptClass, Entity entity)
         : m_ScriptClass(scriptClass), m_InstanceId(0)
     {
+        IGN_PROFILE_FUNCTION();
         m_ScriptHost = ScriptEngine::GetInstance()->GetScriptHost();
         LOG_ASSERT(m_ScriptHost, "[Script Instance] ScriptHost is null");
 
@@ -162,6 +164,7 @@ namespace ignite
 
     void ScriptInstance::InvokeOnCreate()
     {
+        IGN_PROFILE_FUNCTION();
         if (m_OnCreateMethodId)
         {
             m_ScriptHost->Invoke(m_OnCreateMethodId, nullptr, 0, nullptr);
@@ -170,6 +173,7 @@ namespace ignite
 
 	void ScriptInstance::InvokeOnDestroy()
 	{
+    IGN_PROFILE_FUNCTION();
         if (m_OnDestroyMethodId)
         {
             m_ScriptHost->Invoke(m_OnDestroyMethodId, nullptr, 0, nullptr);
@@ -178,6 +182,7 @@ namespace ignite
 
 	void ScriptInstance::InvokeOnUpdate(float time)
     {
+        IGN_PROFILE_FUNCTION();
         if (m_OnUpdateMethodId)
         {
             void *args[] = { &time };

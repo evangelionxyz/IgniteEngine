@@ -184,27 +184,13 @@ namespace ignite
                     sr.EndMap();
                 }
 
-                if (entity.HasComponent<Sprite2DAnimationComponent>())
+                if (entity.HasComponent<Animator2DComponent>())
                 {
-                    const Sprite2DAnimationComponent &comp = entity.GetComponent<Sprite2DAnimationComponent>();
-                    sr.BeginMap("Sprite2DAnimation");
+                    const Animator2DComponent &comp = entity.GetComponent<Animator2DComponent>();
+                    sr.BeginMap("Animator2D");
                     {
-                        sr.AddKeyValue("TextureHandle", comp.textureHandle);
-                        sr.AddKeyValue("FPS", comp.fps);
-                        sr.AddKeyValue("Speed", comp.speed);
-                        sr.AddKeyValue("CurrentFrame", comp.currentFrame);
-                        sr.AddKeyValue("Playing", comp.playing);
-                        sr.AddKeyValue("Loop", comp.loop);
-
-                        sr.BeginSequence("Frames");
-                        for (const auto &frame : comp.frames)
-                        {
-                            sr.BeginMap();
-                            sr.AddKeyValue("UV0", frame.uv0);
-                            sr.AddKeyValue("UV1", frame.uv1);
-                            sr.EndMap();
-                        }
-                        sr.EndSequence();
+                        sr.AddKeyValue("ControllerHandle", static_cast<uint64_t>(comp.controllerHandle));
+                        sr.AddKeyValue("CurrentState", comp.currentStateName);
                     }
                     sr.EndMap();
                 }
@@ -295,6 +281,7 @@ namespace ignite
 					sr.BeginMap("StaticMesh");
 					{
 						sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
+						sr.AddKeyValue("MaterialHandle", static_cast<uint64_t>(comp.materialHandle));
 					}
 					sr.EndMap();
 				}
@@ -667,27 +654,11 @@ namespace ignite
 				if (auto n = node["FlipY"]) comp.flipY = n.as<bool>();
             }
 
-            if (YAML::Node node = entityNode["Sprite2DAnimation"])
+            if (YAML::Node node = entityNode["Animator2D"])
             {
-                auto &comp = desEntity.AddComponent<Sprite2DAnimationComponent>();
-                if (auto n = node["TextureHandle"]) comp.textureHandle = AssetHandle(n.as<uint64_t>());
-                if (auto n = node["FPS"]) comp.fps = n.as<float>();
-                if (auto n = node["Speed"]) comp.speed = n.as<float>();
-                if (auto n = node["CurrentFrame"]) comp.currentFrame = n.as<int>();
-                if (auto n = node["Playing"]) comp.playing = n.as<bool>();
-                if (auto n = node["Loop"]) comp.loop = n.as<bool>();
-
-                if (auto framesNode = node["Frames"]; framesNode && framesNode.IsSequence())
-                {
-                    comp.frames.clear();
-                    for (const auto &frameNode : framesNode)
-                    {
-                        Sprite2DAnimationComponent::Frame frame;
-                        if (auto uv0Node = frameNode["UV0"]) frame.uv0 = uv0Node.as<glm::vec2>();
-                        if (auto uv1Node = frameNode["UV1"]) frame.uv1 = uv1Node.as<glm::vec2>();
-                        comp.frames.push_back(frame);
-                    }
-                }
+                auto &comp = desEntity.AddComponent<Animator2DComponent>();
+                if (auto n = node["ControllerHandle"]) comp.controllerHandle = AssetHandle(n.as<uint64_t>());
+                if (auto n = node["CurrentState"])    comp.currentStateName  = n.as<std::string>();
             }
 
             // Circle 2D component
@@ -934,7 +905,14 @@ namespace ignite
             if (YAML::Node node = entityNode["StaticMesh"])
             {
                 auto &comp = desEntity.AddComponent<StaticMeshComponent>();
-                comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
+                if (auto n = node["Handle"])
+                {
+                    comp.handle = AssetHandle(n.as<uint64_t>());
+                }
+                if (auto n = node["MaterialHandle"])
+                {
+                    comp.materialHandle = AssetHandle(n.as<uint64_t>());
+                }
             }
 
             if (YAML::Node node = entityNode["SkeletalMesh"])

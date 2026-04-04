@@ -32,7 +32,6 @@ namespace ignite
             bool settingsWindow = false;
             bool popupNewProjectModal = false;
             bool assetRegistryWindow = false;
-            bool isPickingEntity = false;
             bool takeScreenshot = false;
 
             uint32_t hoveredEntity = static_cast<uint32_t>(-1);
@@ -81,10 +80,7 @@ namespace ignite
 
         SceneRenderer *GetSceneRenderer() { return m_SceneRenderer.get(); }
 
-        EditorData &GetState() { return m_Data; }
-
-        static EditorLayer *GetInstance();
-
+        EditorData &GetData() { return m_Data; }
     private:
         static void OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter);
         static void OnSceneOpenFileSelected(void *userData, const char *const *filelist, int filter);

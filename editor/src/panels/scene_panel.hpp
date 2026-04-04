@@ -45,7 +45,7 @@ namespace ignite
         bool OnMouseMovedEvent(MouseMovedEvent &event);
         bool OnJoystickConnectionEvent(JoystickConnectionEvent &event);
 
-        void SetGizmoOperation(ImGuizmo::OPERATION op);
+        void SetGizmoOperation(GizmoOperation op);
         void SetGizmoMode(ImGuizmo::MODE mode);
 
         bool IsGizmoBeingUse() const { return m_Data.isGizmoBeingUse; }
@@ -127,6 +127,12 @@ namespace ignite
 			bool isGizmoManipulating = false;
 			bool isGizmoBeingUse = false;
 
+            bool sceneViewportGameplayVisible = false;
+            bool sceneViewportEditorVisible = false;
+
+            float gamePreviewZoom = 1.0f;
+            glm::vec2 gamePreviewPan = glm::vec2(0.0f);
+
             bool is2DBoundsSizing = false;
             bool is2DBoundsHovered = false;
             int active2DCorner = -1;
@@ -135,7 +141,10 @@ namespace ignite
             glm::vec3 active2DAxisX = glm::vec3(1.0f, 0.0f, 0.0f);
             glm::vec3 active2DAxisY = glm::vec3(0.0f, 1.0f, 0.0f);
             glm::vec3 active2DOppositeWorld = glm::vec3(0.0f);
+            GizmoOperation gizmoOp;
             TransformComponent before2DResize;
 		} m_Data;
+
+        friend class EditorLayer;
     };
 }

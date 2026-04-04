@@ -47,6 +47,7 @@ project "IgniteEditor"
         "%{IncludeDir.MSDFATLASGEN}",
         "%{IncludeDir.MSDFGEN}",
         "%{IncludeDir.FREETYPE}",
+        "%{IncludeDir.TRACY}",
         "%{IncludeDir.JSON}",
         "%{IncludeDir.MochiSharpNative}",
         "%{IncludeDir.Hostfxr}"
@@ -88,8 +89,9 @@ project "IgniteEditor"
         optimize "off"
         symbols "on"
         defines {
+            "IGN_DEBUG_BUILD",
             "DEBUG",
-            "_DEBUG",
+            "_DEBUG"
         }
 
     filter "configurations:Release"
@@ -97,6 +99,7 @@ project "IgniteEditor"
         optimize "on"
         symbols "on"
         defines {
+            "IGN_RELEASE_BUILD",
             "NDEBUG"
         }
 
@@ -105,5 +108,6 @@ project "IgniteEditor"
         optimize "on"
         symbols "off"
         defines {
+            "IGN_SHIPPING_BUILD",
             "NDEBUG"
         }

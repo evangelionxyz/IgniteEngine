@@ -38,7 +38,6 @@ namespace ignite
         
         CompType_Sprite2D,
         CompType_Circle2D,
-        CompType_Sprite2DAnimation,
         CompType_PointLight2D,
 
         CompType_Font,
@@ -57,6 +56,7 @@ namespace ignite
         CompType_AudioSource,
         CompType_Script,
         CompType_WorldEnvironment,
+        CompType_Animator2D,
         CompType_LAST
     };
 

@@ -28,6 +28,11 @@
     #define ENABLE_VERIFY
 #endif
 
+#if defined(IGN_ENABLE_TRACY)
+    #define TRACY_ENABLE
+    #include <tracy/Tracy.hpp>
+#endif
+
 #define ENGINE_VERSION "Alpha-0.1"
 
 #define EXPAND_MACRO(x)

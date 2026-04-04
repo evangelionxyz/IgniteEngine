@@ -6,6 +6,7 @@ struct PSInput
     float4 color        : COLOR;
     float2 texCoord     : TEXCOORD;
     uint texIndex       : TEXINDEX;
+    uint objectID       : OBJECTID;
 };
 
 Texture2D textures[]    : register(t0);
@@ -14,6 +15,7 @@ SamplerState samplerState : register(s0);
 struct PSOutput
 {
     float4 color : SV_TARGET0;
+    uint objectID : SV_TARGET1;
 };
 
 float Median(float3 value)
@@ -44,6 +46,7 @@ PSOutput main(PSInput input)
 
     PSOutput result;
     result.color = float4(input.color.rgb, input.color.a * opacity);
+    result.objectID = input.objectID;
 
     return result;
 }

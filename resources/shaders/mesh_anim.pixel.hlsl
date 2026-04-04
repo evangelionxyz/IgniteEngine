@@ -8,6 +8,8 @@
 #define RENDER_MODE_METALLIC 3
 #define RENDER_MODE_ROUGHNESS 4
 
+#define MAX_BONES 100
+
 #define NUM_CASCADES 4
 
 struct Camera
@@ -33,6 +35,9 @@ struct Object
 {
     float4x4 transformMatrix;
     float4x4 normalMatrix;
+    float4x4 boneTransforms[MAX_BONES];
+    uint objectID;
+    float3 _padding;
 };
 
 struct Material
@@ -93,6 +98,7 @@ struct PSInput
 struct PSOutput
 {
     float4 color : SV_TARGET0;
+    uint objectID : SV_TARGET1;
 };
 
 float3 GenNormalFromMap(float3x3 TBN, float2 uv)
@@ -164,6 +170,7 @@ float SampleShadow(float3 worldPos, float3 normal, float3 lightDirection)
 PSOutput main(PSInput input)
 {
     PSOutput result;
+    result.objectID = object.objectID;
 
     float3 N = normalize(input.normal);
     float3 viewDirection = normalize(camera.position.xyz - input.worldPos);

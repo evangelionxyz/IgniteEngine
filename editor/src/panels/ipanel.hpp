@@ -3,6 +3,7 @@
 #ifndef IPANEL_HPP
 #define IPANEL_HPP
 
+#include "ignite/core/base.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/core/types.hpp"
 #include "ignite/core/layer.hpp"

@@ -4,6 +4,7 @@ workspace "IGN"
     multiprocessorcompile("On")
     configurations {
         "Debug",
+        "Debug",
         "Release",
         "Shipping"
     }

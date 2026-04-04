@@ -5,6 +5,7 @@
 
 #include "ignite/scene/component.hpp"
 #include "ignite/scene/scene_manager.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 
 namespace ignite
 {
@@ -20,6 +21,7 @@ namespace ignite
 
     void Physics2D::SimulationStart()
     {
+        IGN_PROFILE_FUNCTION();
         b2WorldDef worldDef = b2DefaultWorldDef();
         m_WorldId = b2CreateWorld(&worldDef);
 
@@ -30,12 +32,6 @@ namespace ignite
             IDComponent &id          = reg->get<IDComponent>(e);
             Rigidbody2DComponent &rb = reg->get<Rigidbody2DComponent>(e);
             TransformComponent &tr   = reg->get<TransformComponent>(e);
-
-            // first, calculate the transformed matrix from parent
-            if (id.parent != 0)
-            {
-                // SceneManager::CalculateParentTransform(m_Scene, tr, id.parent);
-            }
 
             b2BodyDef bodyDef        = b2DefaultBodyDef();
             bodyDef.type             = GetB2BodyType(rb.type);
@@ -75,6 +71,7 @@ namespace ignite
 
     void Physics2D::SimulationStop()
     {
+        IGN_PROFILE_FUNCTION();
         if (B2_IS_NULL(m_WorldId) == false)
             b2DestroyWorld(m_WorldId);
 
@@ -85,12 +82,6 @@ namespace ignite
     {
         auto &id = entity.GetComponent<IDComponent>();
         auto &tr = entity.GetComponent<TransformComponent>();
-
-        // first, calculate the transformed matrix from parent
-        if (id.parent != 0)
-        {
-            // SceneManager::CalculateParentTransform(m_Scene, tr, id.parent);
-        }
 
         auto &rb = entity.GetComponent<Rigidbody2DComponent>();
 
@@ -167,12 +158,18 @@ namespace ignite
 
     void Physics2D::Simulate(float deltaTime)
     {
+        IGN_PROFILE_FUNCTION();
         constexpr i32 subStepCount = 12;
-        b2World_Step(m_WorldId, deltaTime, subStepCount);
+        {
+            IGN_PROFILE_SCOPE("Physics2D::StepWorld");
+            b2World_Step(m_WorldId, deltaTime, subStepCount);
+        }
 
         const auto reg = m_Scene->registry;
-        for (const auto e : reg->view<Rigidbody2DComponent>())
-        {
+       {
+            IGN_PROFILE_SCOPE("Physics2D::SyncEntities");
+            for (const auto e : reg->view<Rigidbody2DComponent>())
+            {
             TransformComponent &tr = reg->get<TransformComponent>(e);
             Rigidbody2DComponent &rb = reg->get<Rigidbody2DComponent>(e);
 
@@ -208,7 +205,8 @@ namespace ignite
 
 					width = glm::max(width, glm::epsilon<float>());
 					height = glm::max(height, glm::epsilon<float>());
-					const b2Polygon boxShape = b2MakeBox(width, height);
+                    const b2Vec2 offset = { bc.offset.x * tr.scale.x, bc.offset.y * tr.scale.y };
+                    const b2Polygon boxShape = b2MakeOffsetBox(width, height, offset, b2MakeRot(0.0f));
 					b2Shape_SetPolygon(bc.shapeId, &boxShape);
                     bc.dirty = false;
                 }
@@ -246,7 +244,8 @@ namespace ignite
             rb.linearVelocity = { linearVelocity.x, linearVelocity.y };
             rb.angularVelocity = b2Body_GetAngularVelocity(rb.bodyId);
             rb.isAwake = b2Body_IsAwake(rb.bodyId);
-            rb.isEnabled = b2Body_IsEnabled(rb.bodyId);
+             rb.isEnabled = b2Body_IsEnabled(rb.bodyId);
+            }
         }
     }
 
@@ -259,7 +258,15 @@ namespace ignite
         
         box->currentSize = { width, height };
 
-        const b2Polygon boxShape = b2MakeBox(width, height);
+        float scaleX = 1.0f;
+        float scaleY = 1.0f;
+        if (glm::abs(box->size.x) > glm::epsilon<float>())
+            scaleX = size.x / box->size.x;
+        if (glm::abs(box->size.y) > glm::epsilon<float>())
+            scaleY = size.y / box->size.y;
+
+        const b2Vec2 offset = { box->offset.x * scaleX, box->offset.y * scaleY };
+        const b2Polygon boxShape = b2MakeOffsetBox(width, height, offset, b2MakeRot(0.0f));
 
         b2ShapeDef shapeDef           = b2DefaultShapeDef();
         shapeDef.density              = box->density;

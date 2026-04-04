@@ -57,7 +57,7 @@ namespace ignite
         sampler = nullptr;
     }
 
-    void Material::UpdateBindingSet(SceneRenderer *sceneRenderer, MaterialTextures *textures)
+    void Material::UpdateBindingSet(SceneRenderer *sceneRenderer, MaterialTextures *textures, AssetManager *assetManager)
     {
         if (m_BindingSet && !m_BindingSetDirty)
             return;
@@ -107,7 +107,6 @@ namespace ignite
         {
             m_BindingSet = newBindingSet;
 
-            auto* assetManager = &Project::GetInstance()->GetAssetManager();
             auto isTextureReady = [assetManager](AssetHandle textureHandle)
             {
                 if (textureHandle == 0)
@@ -200,6 +199,9 @@ namespace ignite
         }
 		sr.EndMap();
 
+        SetReadyFlag(true);
+        SetDirtyFlag(false);
+
 		sr.Serialize(filepath);
 		return true;
 	}
@@ -230,6 +232,9 @@ namespace ignite
 			if (gpuDataNode["RoughnessFactor"]) material->gpuData.roughnessFactor = gpuDataNode["RoughnessFactor"].as<float>();
 			if (gpuDataNode["OcclusionStrength"]) material->gpuData.occlusionStrength = gpuDataNode["OcclusionStrength"].as<float>();
 		}
+
+        material->SetReadyFlag(true);
+        material->SetDirtyFlag(false);
 
 		return material;
 	}

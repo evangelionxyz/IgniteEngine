@@ -18,6 +18,7 @@ struct VSInput
     float4 color        : COLOR;
     float2 texCoord     : TEXCOORD;
     uint texIndex       : TEXINDEX;
+    uint objectID       : OBJECTID;
 };
 
 struct PSInput
@@ -26,6 +27,7 @@ struct PSInput
     float4 color        : COLOR;
     float2 texCoord     : TEXCOORD;
     uint texIndex       : TEXINDEX;
+    uint objectID       : OBJECTID;
 };
 
 PSInput main(VSInput input)
@@ -36,6 +38,7 @@ PSInput main(VSInput input)
     output.color        = input.color;
     output.texCoord     = input.texCoord;
     output.texIndex     = input.texIndex;
+    output.objectID     = input.objectID;
     
     return output;
 }

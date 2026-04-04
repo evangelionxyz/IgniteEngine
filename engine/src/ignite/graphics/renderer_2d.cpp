@@ -13,6 +13,7 @@
 
 #include "font.hpp"
 #include "texture.hpp"
+#include "ignite/project/project.hpp"
 
 #include <stb_image.h>
 #include <algorithm>
@@ -41,6 +42,8 @@ namespace ignite
     template<typename VertexType>
     static void ResizeBatch(BatchRender<VertexType> &batch, uint32_t newMaxCount, bool recreateIndexBuffer, nvrhi::ICommandList *uploadCmd)
     {
+        IGN_PROFILE_FUNCTION();
+
         if (newMaxCount == 0 || newMaxCount == batch.maxCount)
             return;
 
@@ -111,6 +114,8 @@ namespace ignite
     template<typename VertexType>
     static void EnsureBatchCapacity(BatchRender<VertexType> &batch, uint32_t additionalVertices, uint32_t additionalIndices, bool recreateIndexBuffer, nvrhi::ICommandList *uploadCmd)
     {
+        IGN_PROFILE_FUNCTION();
+
         const uint32_t usedVertices = batch.vertexBufferPtr
             ? static_cast<uint32_t>(batch.vertexBufferPtr - batch.vertexBufferBase)
             : 0;
@@ -152,6 +157,8 @@ namespace ignite
     template<typename VertexType>
     static void TryShrinkBatch(BatchRender<VertexType> &batch, uint32_t usedVertices, uint32_t usedIndices, bool recreateIndexBuffer, nvrhi::ICommandList *uploadCmd)
     {
+        IGN_PROFILE_FUNCTION();
+
         if (batch.maxCount <= batch.minCount)
             return;
 
@@ -193,10 +200,15 @@ namespace ignite
     // Helper to build a quad pipeline for a framebuffer (once) and cache it.
     static Ref<GraphicsPipeline> GetQuadPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
     {
+        IGN_PROFILE_FUNCTION();
+
         auto key = MakeFramebufferKey(framebuffer);
         auto it = s_QuadPSOCache.find(key);
         if (it != s_QuadPSOCache.end())
             return it->second;
+
+        s_QuadPSOCache.clear();
+        s_QuadBindingSetCache.clear();
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
@@ -242,10 +254,15 @@ namespace ignite
 
 	static Ref<GraphicsPipeline> GetTextPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
 	{
+        IGN_PROFILE_FUNCTION();
+
 		auto key = MakeFramebufferKey(framebuffer);
 		auto it = s_TextPSOCache.find(key);
 		if (it != s_TextPSOCache.end())
 			return it->second;
+
+        s_TextPSOCache.clear();
+        s_TextBindingSetCache.clear();
 
 		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
@@ -292,10 +309,15 @@ namespace ignite
     // Helper to build a line pipeline for a framebuffer (once) and cache it.
     static Ref<GraphicsPipeline> GetLinePipelineForFB(nvrhi::IFramebuffer *framebuffer)
     {
+        IGN_PROFILE_FUNCTION();
+
         auto key = MakeFramebufferKey(framebuffer);
         auto it = s_LinePSOCache.find(key);
         if (it != s_LinePSOCache.end())
             return it->second;
+
+        s_LinePSOCache.clear();
+        s_LineBindingSetCache.clear();
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
@@ -332,18 +354,34 @@ namespace ignite
 
     static nvrhi::BindingSetHandle GetQuadBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &lightingBuffer)
     {
+        IGN_PROFILE_FUNCTION();
+
         auto it = s_QuadBindingSetCache.find(bindingLayout);
         if (it != s_QuadBindingSetCache.end())
             return it->second;
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
-        // then add textures
-        const auto samplerDesc = nvrhi::SamplerDesc()
-          .setAllAddressModes(nvrhi::SamplerAddressMode::ClampToEdge)
-            .setAllFilters(true);
+        nvrhi::SamplerHandle sampler;
+        Ref<Texture> whiteTexture = Renderer::GetWhiteTexture();
+        for (uint8_t i = 1; i < MAX_TEXTURE_BATCH_COUNT; ++i)
+        {
+            if (i >= textures.size())
+                break;
 
-        nvrhi::SamplerHandle sampler = device->createSampler(samplerDesc);
+            Ref<Texture> tex = textures[i];
+            if (tex && tex.get() != whiteTexture.get() && tex->GetSampler())
+            {
+                sampler = tex->GetSampler();
+                break;
+            }
+        }
+
+        if (!sampler)
+        {
+            Ref<Texture> fallback = Renderer::GetWhiteTexture();
+            sampler = fallback ? fallback->GetSampler() : nullptr;
+        }
 
         nvrhi::BindingSetDesc bindingSetDesc;
         bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
@@ -367,18 +405,34 @@ namespace ignite
 
 	static nvrhi::BindingSetHandle GetTextBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &lightingBuffer)
 	{
+        IGN_PROFILE_FUNCTION();
+
         auto it = s_TextBindingSetCache.find(bindingLayout);
         if (it != s_TextBindingSetCache.end())
 			return it->second;
 
 		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
-		// then add textures
-		const auto samplerDesc = nvrhi::SamplerDesc()
-			.setAllAddressModes(nvrhi::SamplerAddressMode::Repeat)
-			.setAllFilters(true);
+       nvrhi::SamplerHandle sampler;
+        Ref<Texture> whiteTexture = Renderer::GetWhiteTexture();
+        for (uint8_t i = 1; i < MAX_TEXTURE_BATCH_COUNT; ++i)
+        {
+            if (i >= textures.size())
+                break;
 
-		nvrhi::SamplerHandle sampler = device->createSampler(samplerDesc);
+            Ref<Texture> tex = textures[i];
+           if (tex && tex.get() != whiteTexture.get() && tex->GetSampler())
+            {
+                sampler = tex->GetSampler();
+                break;
+            }
+        }
+
+        if (!sampler)
+        {
+            Ref<Texture> fallback = Renderer::GetWhiteTexture();
+            sampler = fallback ? fallback->GetSampler() : nullptr;
+        }
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
@@ -402,6 +456,8 @@ namespace ignite
 
     static nvrhi::BindingSetHandle GetLineBindingSet(nvrhi::IBindingLayout *bindingLayout)
     {
+        IGN_PROFILE_FUNCTION();
+
         auto it = s_LineBindingSetCache.find(bindingLayout);
         if (it != s_LineBindingSetCache.end())
             return it->second;
@@ -423,10 +479,15 @@ namespace ignite
 
     static Ref<GraphicsPipeline> GetCirclePipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
     {
+        IGN_PROFILE_FUNCTION();
+
         auto key = MakeFramebufferKey(framebuffer);
         auto it = s_CirclePSOCache.find(key);
         if (it != s_CirclePSOCache.end())
             return it->second;
+
+        s_CirclePSOCache.clear();
+        s_CircleBindingSetCache.clear();
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
@@ -463,6 +524,8 @@ namespace ignite
 
     static nvrhi::BindingSetHandle GetCircleBindingSet(nvrhi::IBindingLayout *bindingLayout)
     {
+        IGN_PROFILE_FUNCTION();
+
         auto it = s_CircleBindingSetCache.find(bindingLayout);
         if (it != s_CircleBindingSetCache.end())
             return it->second;
@@ -507,6 +570,185 @@ namespace ignite
         s_LineBindingSetCache.clear();
         s_CircleBindingSetCache.clear();
         s_TextBindingSetCache.clear();
+
+        m_TextureResolveCache.clear();
+        m_Material2DResolveCache.clear();
+    }
+
+    Ref<Texture> Renderer2D::ResolveTexture(Project *project, AssetHandle handle)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        if (!project || handle == AssetHandle(0))
+            return nullptr;
+
+        const AssetResolveKey key{ project, handle };
+        auto it = m_TextureResolveCache.find(key);
+        if (it != m_TextureResolveCache.end())
+            return it->second;
+
+        Ref<Texture> texture = project->GetAsset<Texture>(handle);
+        if (texture)
+        {
+            m_TextureResolveCache.emplace(key, texture);
+        }
+
+        return texture;
+    }
+
+    Ref<Material2D> Renderer2D::ResolveMaterial2D(Project *project, AssetHandle handle)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        if (!project || handle == AssetHandle(0))
+            return nullptr;
+
+        const AssetResolveKey key{ project, handle };
+        auto it = m_Material2DResolveCache.find(key);
+        if (it != m_Material2DResolveCache.end())
+            return it->second;
+
+        Ref<Material2D> material = project->GetAsset<Material2D>(handle, AssetType::Material2D);
+        if (material)
+        {
+            m_Material2DResolveCache.emplace(key, material);
+        }
+
+        return material;
+    }
+
+    void Renderer2D::ClearAssetResolveCache()
+    {
+        m_TextureResolveCache.clear();
+        m_Material2DResolveCache.clear();
+    }
+
+    void Renderer2D::BuildPreRenderCache()
+    {
+        IGN_PROFILE_FUNCTION();
+
+        m_PreRenderCache.valid = true;
+        m_PreRenderCache.lightingData = m_Material2DLightingData;
+
+        const uint32_t circleVertexCount = m_CircleBatch.vertexBufferPtr
+            ? static_cast<uint32_t>(m_CircleBatch.vertexBufferPtr - m_CircleBatch.vertexBufferBase)
+            : 0;
+        m_PreRenderCache.circleVertices.assign(m_CircleBatch.vertexBufferBase, m_CircleBatch.vertexBufferBase + circleVertexCount);
+        m_PreRenderCache.circleIndexCount = m_CircleBatch.indexCount;
+
+        const uint32_t quadVertexCount = m_QuadBatch.vertexBufferPtr
+            ? static_cast<uint32_t>(m_QuadBatch.vertexBufferPtr - m_QuadBatch.vertexBufferBase)
+            : 0;
+        m_PreRenderCache.quadVertices.assign(m_QuadBatch.vertexBufferBase, m_QuadBatch.vertexBufferBase + quadVertexCount);
+        m_PreRenderCache.quadIndexCount = m_QuadBatch.indexCount;
+        m_PreRenderCache.quadTextureSlots = m_QuadBatch.textureSlots;
+
+        const uint32_t textVertexCount = m_TextBatch.vertexBufferPtr
+            ? static_cast<uint32_t>(m_TextBatch.vertexBufferPtr - m_TextBatch.vertexBufferBase)
+            : 0;
+        m_PreRenderCache.textVertices.assign(m_TextBatch.vertexBufferBase, m_TextBatch.vertexBufferBase + textVertexCount);
+        m_PreRenderCache.textIndexCount = m_TextBatch.indexCount;
+        m_PreRenderCache.textTextureSlots = m_TextBatch.textureSlots;
+    }
+
+    bool Renderer2D::ReplayPreRenderCache(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        if (!m_PreRenderCache.valid || !cmd || !framebuffer)
+        {
+            return false;
+        }
+
+        m_Cmd = cmd;
+
+        if (m_Material2DLightingBuffer)
+        {
+            m_Material2DLightingBuffer->SetData(m_Cmd, Buffer(&m_PreRenderCache.lightingData, sizeof(m_PreRenderCache.lightingData)));
+        }
+
+        const nvrhi::Viewport &viewport = framebuffer->getFramebufferInfo().getViewport();
+
+        if (m_PreRenderCache.circleIndexCount > 0 && !m_PreRenderCache.circleVertices.empty())
+        {
+            m_CircleBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache.circleVertices.data(), m_PreRenderCache.circleVertices.size() * sizeof(Vertex2DCircle)));
+
+            Ref<GraphicsPipeline> gp = GetCirclePipelineForFB(framebuffer, m_FillMode);
+            nvrhi::BindingSetHandle bindingSet = GetCircleBindingSet(gp->GetBindingLayout(0));
+
+            const auto graphicsState = nvrhi::GraphicsState()
+                .setPipeline(gp->GetHandle())
+                .setFramebuffer(framebuffer)
+                .addBindingSet(bindingSet)
+                .setViewport(nvrhi::ViewportState().addViewportAndScissorRect(viewport))
+                .addVertexBuffer(nvrhi::VertexBufferBinding{ m_CircleBatch.vertexBuffer->GetHandle(), 0, 0 })
+                .setIndexBuffer({ m_CircleBatch.indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+            m_Cmd->setGraphicsState(graphicsState);
+
+            nvrhi::DrawArguments args;
+            args.vertexCount = m_PreRenderCache.circleIndexCount;
+            args.instanceCount = 1;
+            m_Cmd->drawIndexed(args);
+        }
+
+        if (m_PreRenderCache.quadIndexCount > 0 && !m_PreRenderCache.quadVertices.empty())
+        {
+            m_QuadBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache.quadVertices.data(), m_PreRenderCache.quadVertices.size() * sizeof(Vertex2DQuad)));
+
+            Ref<GraphicsPipeline> gp = GetQuadPipelineForFB(framebuffer, m_FillMode);
+            nvrhi::BindingSetHandle bindingSet = GetQuadBindingSet(gp->GetBindingLayout(0), m_PreRenderCache.quadTextureSlots, m_Material2DLightingBuffer);
+
+            const auto graphicsState = nvrhi::GraphicsState()
+                .setPipeline(gp->GetHandle())
+                .setFramebuffer(framebuffer)
+                .addBindingSet(bindingSet)
+                .setViewport(nvrhi::ViewportState().addViewportAndScissorRect(viewport))
+                .addVertexBuffer(nvrhi::VertexBufferBinding{ m_QuadBatch.vertexBuffer->GetHandle(), 0, 0 })
+                .setIndexBuffer({ m_QuadBatch.indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+            m_Cmd->setGraphicsState(graphicsState);
+
+            nvrhi::DrawArguments args;
+            args.vertexCount = m_PreRenderCache.quadIndexCount;
+            args.instanceCount = 1;
+            m_Cmd->drawIndexed(args);
+        }
+
+        if (m_PreRenderCache.textIndexCount > 0 && !m_PreRenderCache.textVertices.empty())
+        {
+            m_TextBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache.textVertices.data(), m_PreRenderCache.textVertices.size() * sizeof(VertexText)));
+
+            Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode);
+            nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_PreRenderCache.textTextureSlots, m_Material2DLightingBuffer);
+
+            const auto graphicsState = nvrhi::GraphicsState()
+                .setPipeline(gp->GetHandle())
+                .setFramebuffer(framebuffer)
+                .addBindingSet(bindingSet)
+                .setViewport(nvrhi::ViewportState().addViewportAndScissorRect(viewport))
+                .addVertexBuffer(nvrhi::VertexBufferBinding{ m_TextBatch.vertexBuffer->GetHandle(), 0, 0 })
+                .setIndexBuffer({ m_TextBatch.indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+            m_Cmd->setGraphicsState(graphicsState);
+
+            nvrhi::DrawArguments args;
+            args.vertexCount = m_PreRenderCache.textIndexCount;
+            args.instanceCount = 1;
+            m_Cmd->drawIndexed(args);
+        }
+
+        return true;
+    }
+
+    void Renderer2D::InvalidatePreRenderCache()
+    {
+        m_PreRenderCache.valid = false;
+        m_PreRenderCache.circleVertices.clear();
+        m_PreRenderCache.quadVertices.clear();
+        m_PreRenderCache.textVertices.clear();
+        m_PreRenderCache.quadTextureSlots.clear();
+        m_PreRenderCache.textTextureSlots.clear();
+        m_PreRenderCache.circleIndexCount = 0;
+        m_PreRenderCache.quadIndexCount = 0;
+        m_PreRenderCache.textIndexCount = 0;
     }
 
     void Renderer2D::InitQuadData()
@@ -652,6 +894,8 @@ namespace ignite
 
 	void Renderer2D::ClearPipelineCache()
     {
+        IGN_PROFILE_FUNCTION();
+
         s_LinePSOCache.clear();
         s_QuadPSOCache.clear();
         s_CirclePSOCache.clear();
@@ -660,6 +904,8 @@ namespace ignite
 
     void Renderer2D::Begin(nvrhi::ICommandList *cmd)
     {
+        IGN_PROFILE_FUNCTION();
+
         // Quad data
         m_QuadBatch.indexCount = 0;
         m_QuadBatch.count = 0;
@@ -679,7 +925,7 @@ namespace ignite
         // Text data
         m_TextBatch.indexCount = 0;
         m_TextBatch.count = 0;
-       m_TextBatch.textureSlotIndex = 1;
+        m_TextBatch.textureSlotIndex = 1;
         m_TextBatch.vertexBufferPtr = m_TextBatch.vertexBufferBase;
 
         if (m_Material2DLightingBuffer && m_Material2DLightingDirty)
@@ -693,6 +939,8 @@ namespace ignite
 
     void Renderer2D::Flush(nvrhi::IFramebuffer *framebuffer)
     {
+        IGN_PROFILE_FUNCTION();
+
         const nvrhi::Viewport &viewport = framebuffer->getFramebufferInfo().getViewport();
 
         if (m_LineBatch.indexCount > 0)
@@ -772,7 +1020,7 @@ namespace ignite
             m_TextBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_TextBatch.vertexBufferBase, bufferSize));
 
             Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode);
-          nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_TextBatch.textureSlots, m_Material2DLightingBuffer);
+            nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_TextBatch.textureSlots, m_Material2DLightingBuffer);
 
             const auto graphicsState = nvrhi::GraphicsState()
                 .setPipeline(gp->GetHandle())
@@ -784,7 +1032,7 @@ namespace ignite
             m_Cmd->setGraphicsState(graphicsState);
 
             nvrhi::DrawArguments args;
-          args.vertexCount = m_TextBatch.indexCount;
+            args.vertexCount = m_TextBatch.indexCount;
             args.instanceCount = 1;
 
             m_Cmd->drawIndexed(args);
@@ -793,6 +1041,8 @@ namespace ignite
 
     void Renderer2D::End()
     {
+        IGN_PROFILE_FUNCTION();
+
         const uint32_t quadUsedVertices = m_QuadBatch.vertexBufferPtr
             ? static_cast<uint32_t>(m_QuadBatch.vertexBufferPtr - m_QuadBatch.vertexBufferBase)
             : 0;
@@ -828,6 +1078,8 @@ namespace ignite
 
     void Renderer2D::DrawBox(const glm::mat4 &transform, const glm::vec4 &color)
     {
+        IGN_PROFILE_FUNCTION();
+
         EnsureBatchCapacity(m_LineBatch, 24, 0, false, m_Cmd);
 
         static glm::vec4 cubeVertices[8] =
@@ -866,6 +1118,8 @@ namespace ignite
 
     void Renderer2D::DrawRect(const glm::mat4 &transform, const glm::vec4 &color)
     {
+        IGN_PROFILE_FUNCTION();
+
         EnsureBatchCapacity(m_LineBatch, 8, 0, false, m_Cmd);
 
         static constexpr int indices[8][2] =
@@ -893,6 +1147,8 @@ namespace ignite
 
     void Renderer2D::DrawLine(const std::vector<glm::vec3> &positions, const glm::vec4 &color)
     {
+        IGN_PROFILE_FUNCTION();
+
         EnsureBatchCapacity(m_LineBatch, static_cast<uint32_t>(positions.size()), 0, false, m_Cmd);
 
         for (auto &pos : positions)
@@ -909,6 +1165,8 @@ namespace ignite
 
     void Renderer2D::DrawLine(const glm::vec3 &pos0, const glm::vec3 &pos1, const glm::vec4 &color)
     {
+        IGN_PROFILE_FUNCTION();
+
         EnsureBatchCapacity(m_LineBatch, 2, 0, false, m_Cmd);
 
         m_LineBatch.vertexBufferPtr->position = pos0;
@@ -925,6 +1183,8 @@ namespace ignite
 
     void Renderer2D::DrawAABB(const AABB &aabb, const glm::vec4 &color)
     {
+        IGN_PROFILE_FUNCTION();
+
         // Bottom face
         DrawLine({ {aabb.min.x, aabb.min.y, aabb.min.z}, {aabb.max.x, aabb.min.y, aabb.min.z} }, color);
         DrawLine({ {aabb.max.x, aabb.min.y, aabb.min.z}, {aabb.max.x, aabb.min.y, aabb.max.z} }, color);
@@ -944,13 +1204,15 @@ namespace ignite
         DrawLine({ {aabb.min.x, aabb.min.y, aabb.max.z}, {aabb.min.x, aabb.max.y, aabb.max.z} }, color);
     }
 
-    void Renderer2D::DrawCircle(const glm::vec3 &position, const glm::vec3 &scale, const glm::vec4 &color, float thickness, float fade)
+    void Renderer2D::DrawCircle(const glm::vec3 &position, const glm::vec3 &scale, const glm::vec4 &color, float thickness, float fade, uint32_t objectID)
     {
-        DrawCircle(glm::translate(position) * glm::scale(scale), color, thickness, fade);
+        DrawCircle(glm::translate(position) * glm::scale(scale), color, thickness, fade, objectID);
     }
 
-	void Renderer2D::DrawCircle(const glm::mat4 &transform, const glm::vec4 &color, float thickness, float fade)
+    void Renderer2D::DrawCircle(const glm::mat4 &transform, const glm::vec4 &color, float thickness, float fade, uint32_t objectID)
 	{
+        IGN_PROFILE_FUNCTION();
+
       EnsureBatchCapacity(m_CircleBatch, 4, 6, true, m_Cmd);
 
 		for (uint32_t i = 0; i < 4; ++i)
@@ -958,6 +1220,7 @@ namespace ignite
 			m_CircleBatch.vertexBufferPtr->position = transform * QUAD_POSITIONS[i];
 			m_CircleBatch.vertexBufferPtr->localPosition = QUAD_POSITIONS[i];
 			m_CircleBatch.vertexBufferPtr->color = color;
+            m_CircleBatch.vertexBufferPtr->objectID = objectID;
 			m_CircleBatch.vertexBufferPtr++;
 		}
 
@@ -965,8 +1228,10 @@ namespace ignite
 		m_CircleBatch.count++;
 	}
 
-	void Renderer2D::DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor)
+    void Renderer2D::DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor, uint32_t objectID)
     {
+        IGN_PROFILE_FUNCTION();
+
         EnsureBatchCapacity(m_QuadBatch, 4, 6, true, m_Cmd);
 
         static constexpr uint32_t quadVertexCount = 4;
@@ -997,6 +1262,7 @@ namespace ignite
             m_QuadBatch.vertexBufferPtr->additiveColor = glm::vec4(0.0f);
             m_QuadBatch.vertexBufferPtr->texIndex = texIndex;
             m_QuadBatch.vertexBufferPtr->materialType = MATERIAL_2D_TYPE_UNLIT;
+            m_QuadBatch.vertexBufferPtr->objectID = objectID;
             m_QuadBatch.vertexBufferPtr++;
         }
 
@@ -1004,27 +1270,29 @@ namespace ignite
         m_QuadBatch.count++;
     }
 
-    void Renderer2D::DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor)
+    void Renderer2D::DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor, uint32_t objectID)
     {
         glm::mat4 transform = glm::translate(glm::mat4(1.0f), position)
             * glm::rotate(glm::mat4(1.0f), rotation, { 0.0f, 0.0f, 1.0f })
             * glm::scale(glm::mat4(1.0f), { size.x, size.y, 1.0f });
-        DrawQuad(transform, color, texture, uv0, uv1, tilingFactor);
+        DrawQuad(transform, color, texture, uv0, uv1, tilingFactor, objectID);
     }
 
-    void Renderer2D::DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor)
+    void Renderer2D::DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor, uint32_t objectID)
     {
         glm::mat4 transform = glm::translate(glm::mat4(1.0f), position) * glm::scale(glm::mat4(1.0f), { size.x, size.y, 1.0f });
-        DrawQuad(transform, color, texture, uv0, uv1, tilingFactor);
+        DrawQuad(transform, color, texture, uv0, uv1, tilingFactor, objectID);
     }
 
-    void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor)
+    void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor, uint32_t objectID)
     {
-        DrawQuad(transform, color, glm::vec4(0.0f), MATERIAL_2D_TYPE_UNLIT, texture, uv0, uv1, tilingFactor);
+       DrawQuad(transform, color, glm::vec4(0.0f), MATERIAL_2D_TYPE_UNLIT, texture, uv0, uv1, tilingFactor, objectID);
     }
 
-    void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const glm::vec4 &additiveColor, Material2DType materialType, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor)
+    void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const glm::vec4 &additiveColor, Material2DType materialType, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor, uint32_t objectID)
     {
+        IGN_PROFILE_FUNCTION();
+
         EnsureBatchCapacity(m_QuadBatch, 4, 6, true, m_Cmd);
 
         static constexpr uint32_t quadVertexCount = 4;
@@ -1047,6 +1315,7 @@ namespace ignite
             m_QuadBatch.vertexBufferPtr->additiveColor = additiveColor;
             m_QuadBatch.vertexBufferPtr->texIndex = texIndex;
             m_QuadBatch.vertexBufferPtr->materialType = static_cast<uint32_t>(materialType);
+            m_QuadBatch.vertexBufferPtr->objectID = objectID;
             m_QuadBatch.vertexBufferPtr++;
         }
 
@@ -1070,8 +1339,10 @@ namespace ignite
         m_Material2DLightingDirty = true;
     }
 
-	void Renderer2D::DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing)
+	void Renderer2D::DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing, uint32_t objectID)
 	{
+        IGN_PROFILE_FUNCTION();
+
         if (!font)
             return;
 
@@ -1165,24 +1436,28 @@ namespace ignite
                 m_TextBatch.vertexBufferPtr->color = color;
                 m_TextBatch.vertexBufferPtr->texCoord = texCoordMin;
                 m_TextBatch.vertexBufferPtr->texIndex = texIndex;
+                m_TextBatch.vertexBufferPtr->objectID = objectID;
                 m_TextBatch.vertexBufferPtr++;
 
                 m_TextBatch.vertexBufferPtr->position = transform * glm::vec4(quadMax, 0.0f, 1.0f);
 				m_TextBatch.vertexBufferPtr->color = color;
                 m_TextBatch.vertexBufferPtr->texCoord = texCoordMax;
 				m_TextBatch.vertexBufferPtr->texIndex = texIndex;
+				m_TextBatch.vertexBufferPtr->objectID = objectID;
 				m_TextBatch.vertexBufferPtr++;
 
                 m_TextBatch.vertexBufferPtr->position = transform * glm::vec4(quadMin.x, quadMax.y, 0.0f, 1.0f);
 				m_TextBatch.vertexBufferPtr->color = color;
                 m_TextBatch.vertexBufferPtr->texCoord = { texCoordMin.x, texCoordMax.y };
 				m_TextBatch.vertexBufferPtr->texIndex = texIndex;
+				m_TextBatch.vertexBufferPtr->objectID = objectID;
 				m_TextBatch.vertexBufferPtr++;
 
 				m_TextBatch.vertexBufferPtr->position = transform * glm::vec4(quadMax.x, quadMin.y, 0.0f, 1.0f);
 				m_TextBatch.vertexBufferPtr->color = color;
                 m_TextBatch.vertexBufferPtr->texCoord = { texCoordMax.x, texCoordMin.y };
 				m_TextBatch.vertexBufferPtr->texIndex = texIndex;
+				m_TextBatch.vertexBufferPtr->objectID = objectID;
 				m_TextBatch.vertexBufferPtr++;
 
                 m_TextBatch.indexCount += 6;
@@ -1209,6 +1484,8 @@ namespace ignite
 
 	uint32_t Renderer2D::GetOrInsertQuadTexture(const Ref<Texture> &texture)
     {
+        IGN_PROFILE_FUNCTION();
+
         if (texture == nullptr || (texture && !texture->GetHandle()))
             return 0;
 
@@ -1245,6 +1522,8 @@ namespace ignite
 
 	uint32_t Renderer2D::GetOrInsertFontTexture(const Ref<Texture> &texture)
 	{
+        IGN_PROFILE_FUNCTION();
+
 		if (texture == nullptr || (texture && !texture->GetHandle()))
 			return 0;
 
@@ -1278,5 +1557,4 @@ namespace ignite
 
 		return textureIndex;
 	}
-
 }

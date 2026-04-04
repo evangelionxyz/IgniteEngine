@@ -30,16 +30,21 @@
 #include "ignite/scene/entity.hpp"
 
 #include <nvrhi/nvrhi.h>
+#include <unordered_map>
 
 namespace ignite
 {
     class Scene;
     class ICamera;
+    class Project;
     class RenderTarget;
     class UIRenderer;
     class Renderer2D;
 	class CascadedShadowMap;
     class MeshPrimitive;
+    class StaticMesh;
+    class SkeletalMesh;
+    class Material;
 
     struct DebugGridStyle
     {
@@ -77,6 +82,8 @@ namespace ignite
     public:
         SceneRenderer();
         ~SceneRenderer();
+
+        void BeginFrame();
         
         void SetActiveScene(const Ref<Scene> &scene);
         
@@ -103,10 +110,40 @@ namespace ignite
         const DebugGridSettings &GetDebugGridSettings() const { return m_DebugGridSettings; }
         void SetDebugGridSettings(const DebugGridSettings &settings) { m_DebugGridSettings = settings; }
 
+    private:
+        struct AssetResolveKey
+        {
+            Project *project = nullptr;
+            AssetHandle handle = AssetHandle(0);
+
+            bool operator==(const AssetResolveKey &other) const noexcept
+            {
+                return project == other.project && handle == other.handle;
+            }
+        };
+
+        struct AssetResolveKeyHash
+        {
+            size_t operator()(const AssetResolveKey &key) const noexcept
+            {
+                size_t h = std::hash<const void *>{}(key.project);
+                h ^= (std::hash<AssetHandle>{}(key.handle) + 0x9e3779b9 + (h << 6) + (h >> 2));
+                return h;
+            }
+        };
+
+        Ref<StaticMesh> ResolveStaticMesh(Project *project, AssetHandle handle);
+        Ref<SkeletalMesh> ResolveSkeletalMesh(Project *project, AssetHandle handle);
+        Ref<Material> ResolveMaterial(Project *project, AssetHandle handle);
+        void Clear3DAssetResolveCache();
+
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer);
-        void CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture);
+        void CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture = nullptr);
+
         void DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const DebugGridStyle &style, bool is2D);
+        void DrawDebug2DPhysics(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
+        void DrawDebug3DPhysics(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
         
     private:
 		Ref<CascadedShadowMap> m_CascadedShadowMap;
@@ -117,6 +154,7 @@ namespace ignite
 
         Ref<Renderer2D> m_Renderer2D;
         Ref<UIRenderer> m_UIRenderer;
+        Ref<EdgeDetection> m_EdgeDetection;
 
         std::vector<uint32_t> m_SelectedEntities;
         nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
@@ -125,5 +163,12 @@ namespace ignite
 
         nvrhi::IDevice *m_Device = nullptr;
         Ref<Scene> m_Scene;
+
+        std::unordered_map<AssetResolveKey, Ref<StaticMesh>, AssetResolveKeyHash> m_StaticMeshResolveCache;
+        std::unordered_map<AssetResolveKey, Ref<SkeletalMesh>, AssetResolveKeyHash> m_SkeletalMeshResolveCache;
+        std::unordered_map<AssetResolveKey, Ref<Material>, AssetResolveKeyHash> m_MaterialResolveCache;
+
+        bool m_Has2DPreRenderCache = false;
+
     };
 }

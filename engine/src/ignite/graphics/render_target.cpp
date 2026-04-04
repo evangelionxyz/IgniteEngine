@@ -124,6 +124,8 @@ namespace ignite {
     {
         if (m_FramebufferHandle != nullptr)
             m_FramebufferHandle.Reset();
+
+        m_FramebufferDesc = nvrhi::FramebufferDesc();
         
         if (m_FramebufferHandle == nullptr)
         {
@@ -148,9 +150,24 @@ namespace ignite {
 
     void RenderTarget::Resize(const uint32_t width, const uint32_t height)
     {
+        if (width == 0 || height == 0)
+        {
+            return;
+        }
+
+        if (m_CreateInfo.width == width && m_CreateInfo.height == height)
+        {
+            return;
+        }
+
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         device->waitForIdle();
+
+        if (m_FramebufferHandle != nullptr)
+            m_FramebufferHandle.Reset();
+
+        m_FramebufferDesc = nvrhi::FramebufferDesc();
 
         m_CreateInfo.width = width;
         m_CreateInfo.height = height;
@@ -188,9 +205,6 @@ namespace ignite {
             Ref<Texture> colorAttachment = Texture::Create(colorDesc);
             m_ColorAttachments.push_back(colorAttachment);
         }
-
-        // reset create desc
-        m_FramebufferDesc = nvrhi::FramebufferDesc();
 
         CreateFramebuffer();
     }

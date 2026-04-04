@@ -88,12 +88,9 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 </Project>
 )";
 
-    Project *project = nullptr;
-
     Project::Project(const ProjectInfo &info)
         : m_Info(info)
     {
-        project = this;
         GenerateProject();
 
         m_AssetManager = new AssetManager(this);
@@ -135,7 +132,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
     std::vector<std::pair<AssetHandle, AssetMetaData>> Project::ValidateAssetRegistry()
     {
         std::vector<std::pair<AssetHandle, AssetMetaData>> invalidRegistry;
-        AssetRegistry &assetRegistry = GetAssetManager().GetAssetAssetRegistry();
+        AssetRegistry &assetRegistry = m_AssetManager->GetAssetAssetRegistry();
 
         for (auto it = assetRegistry.begin(); it != assetRegistry.end();)
         {
@@ -249,7 +246,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 
 		Ref<Project> project = Project::Create(info);
 
-		auto &assetManager = project->GetAssetManager();
+		auto assetManager = project->GetAssetManager();
 
 		// import registry
 		if (!info.assetRegistryFilepath.empty())
@@ -266,17 +263,12 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 				metadata.type = AssetTypeFromString(assetNode["Type"].as<std::string>());
 				metadata.filepath = assetNode["Filepath"].as<std::string>();
 
-				assetManager.AssignMetaData(handle, metadata);
+				assetManager->AssignMetaData(handle, metadata);
 			}
 		}
 
 		return project;
 	}
-
-	Project *Project::GetInstance()
-    {
-        return project;
-    }
 
     Ref<Project> Project::Create(const ProjectInfo &info)
     {
@@ -285,24 +277,30 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 
     bool Project::BuildSolution()
     {
-		// restore NuGet
-        {
-			std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /t:Restore /p:Configuration=Release /p:Platform=\"Any CPU\"";
-			std::system(buildCommand.c_str());
-		}
+		m_Info.scriptModuleFilepath = std::format("Bin/{}.dll", m_Info.name);
+		bool appAssemblyAvailable = std::filesystem::exists(GetScriptModulePath());
 
-        // Build
+        if (!appAssemblyAvailable)
         {
-			std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /p:Configuration=Release /p:Platform=\"Any CPU\"";
-			std::system(buildCommand.c_str());
+		    // restore NuGet
+            {
+			    std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /t:Restore /p:Configuration=Release /p:Platform=\"Any CPU\"";
+			    std::system(buildCommand.c_str());
+		    }
+
+            // Build
+            {
+			    std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /p:Configuration=Release /p:Platform=\"Any CPU\"";
+			    std::system(buildCommand.c_str());
+            }
         }
         
-        m_Info.scriptModuleFilepath = std::format("{}/{}.dll", GetScriptBinDirectory().string(), m_Info.name);
-        bool success = std::filesystem::exists(GetDirectory() / m_Info.scriptModuleFilepath);
+        m_Info.scriptModuleFilepath = std::format("Bin/{}.dll", m_Info.name);
+        appAssemblyAvailable = std::filesystem::exists(GetScriptModulePath());
 
         // Validate .dll file
-        LOG_ASSERT(success, "[Project] Failed to build Solution");
-        return success;
+        LOG_ASSERT(appAssemblyAvailable, "[Project] Failed to build Solution");
+        return appAssemblyAvailable;
     }
 
 	void Project::CreateDirectories()
@@ -500,6 +498,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         }
 
         CopyDependencies();
+
         BuildSolution();
     }
 }

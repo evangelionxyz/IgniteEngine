@@ -21,6 +21,7 @@ struct VSInput
     float4 additiveColor: ADDITIVECOLOR;
     uint texIndex       : TEXINDEX;
     uint materialType   : MATTYPE;
+    uint objectID       : OBJECTID;
 };
 
 struct PSInput
@@ -33,6 +34,7 @@ struct PSInput
     float4 additiveColor: ADDITIVECOLOR;
     uint texIndex       : TEXINDEX;
     uint materialType   : MATTYPE;
+    uint objectID       : OBJECTID;
 };
 
 PSInput main(VSInput input)
@@ -47,6 +49,7 @@ PSInput main(VSInput input)
     output.texCoord     = input.texCoord;
     output.texIndex     = input.texIndex;
     output.materialType = input.materialType;
+    output.objectID     = input.objectID;
     
     return output;
 }

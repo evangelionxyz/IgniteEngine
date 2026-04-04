@@ -1,0 +1,13 @@
+AnimatorController2D:
+  DefaultState: Idle
+  States:
+    - Name: Idle
+      AnimHandle: 3041406261178892380
+      EditorPos: [100, 100]
+    - Name: Run
+      AnimHandle: 18148575872844501869
+      EditorPos: [220, 100]
+  Params:
+    []
+  Transitions:
+    []

@@ -24,6 +24,7 @@
 #include "ignite/graphics/gpu_data.hpp"
 
 #include "ignite/graphics/texture.hpp"
+#include "ignite/graphics/renderer.hpp"
 
 #include "shadow_map.hpp"
 #include "ignite/scene/icamera.hpp"
@@ -286,16 +287,7 @@ namespace ignite
 		params.cullMode = nvrhi::RasterCullMode::Front;
 		params.fillMode = nvrhi::RasterFillMode::Solid;
 
-		nvrhi::BindingLayoutDesc layoutDesc = {};
-		layoutDesc.setVisibility(nvrhi::ShaderType::All);
-		layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0));
-		layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1));
-
-		if (!m_BindingLayout)
-		{
-			auto device = DeviceManager::GetInstance()->GetDevice();
-			m_BindingLayout = device->createBindingLayout(layoutDesc);
-		}
+       m_BindingLayout = Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM);
 
 		m_Pipeline = GraphicsPipeline::Create();
 		m_Pipeline->SetShaders({ m_VS, m_PS }).AddBindingLayout(m_BindingLayout).Build(framebuffer, params);
@@ -312,7 +304,6 @@ namespace ignite
 	{
 		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
-	    // Create All depth map layers
 
 	    nvrhi::Format depthFormat = nvrhi::Format::D32;
 
@@ -333,22 +324,6 @@ namespace ignite
 		// Create a framebuffer for each cascade layer
 		for (int i = 0; i < NUM_CASCADES; ++i)
 		{
-#if 0
-		    TextureCreateInfo viewCI;
-		    viewCI.width = m_Resolution;
-		    viewCI.height = m_Resolution;
-		    viewCI.mipLevels = 1;
-		    viewCI.arraySize = 1;
-		    viewCI.format = nvrhi::Format::RGBA32_FLOAT; // Color format for ImGui
-		    viewCI.dimension = nvrhi::TextureDimension::Texture2D;
-		    viewCI.debugName = std::format("Cascade {} Layer View", i);
-		    viewCI.isRenderTarget = false;
-		    viewCI.isUAV = true; // Enable UAV for compute shader write
-		    viewCI.isTypeless = false;
-		    viewCI.initialState = nvrhi::ResourceStates::UnorderedAccess;
-		    viewCI.keepInitialState = true;
-		    m_CascadeLayerViews[i] = Texture::Create(viewCI);
-#endif
 		    // Create framebuffer
 			auto fbDesc = nvrhi::FramebufferDesc();
 			nvrhi::FramebufferAttachment depthAttachment;

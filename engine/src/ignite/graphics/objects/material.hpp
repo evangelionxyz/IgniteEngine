@@ -73,7 +73,7 @@ namespace ignite
         nvrhi::SamplerHandle sampler;
         void SetSamplerDesc(const nvrhi::SamplerDesc &desc);
 
-        void UpdateBindingSet(SceneRenderer *sceneRenderer, MaterialTextures *textures);
+        void UpdateBindingSet(SceneRenderer *sceneRenderer, MaterialTextures *textures, AssetManager *assetManager);
         void UploadToGpu(nvrhi::ICommandList *cmd);
         void SetType(MaterialType type) { m_Type = type; }
 		void RetrieveTextures(AssetManager *assetManager, MaterialTextures *textures) const;
@@ -100,11 +100,12 @@ namespace ignite
 
     private:
         void EnsureGpuResources();
+
         MaterialType m_Type = MaterialType::Opaque;
         Ref<ConstantBuffer> m_GPUDataBuffer;
         nvrhi::BindingSetHandle m_BindingSet;
-        bool m_BindingSetDirty = true;
         nvrhi::SamplerDesc m_SamplerDesc{};
+        bool m_BindingSetDirty = true;
         bool m_HasSamplerDesc = false;
     };
 }

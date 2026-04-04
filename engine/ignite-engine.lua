@@ -41,6 +41,7 @@ project "IgniteEngine"
         "%{IncludeDir.MSDFATLASGEN}",
         "%{IncludeDir.MSDFGEN}",
         "%{IncludeDir.FREETYPE}",
+        "%{IncludeDir.TRACY}",
         "%{IncludeDir.FBX_SDK}"
     }
 
@@ -57,6 +58,7 @@ project "IgniteEngine"
         "msdf-atlas-gen",
         "msdfgen",
         "freetype",
+        "tracy",
         "MochiSharp.Native"
     }
 

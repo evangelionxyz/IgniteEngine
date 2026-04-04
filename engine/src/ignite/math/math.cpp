@@ -229,6 +229,22 @@ namespace ignite
         return screenSpacePos;
     }
 
+    bool Math::ProjectWorldToScreen(const glm::vec3 &worldPos, const glm::mat4 &viewProjection, const Rect &viewportRect, ImVec2 &outScreen)
+    {
+        const glm::vec4 clip = viewProjection * glm::vec4(worldPos, 1.0f);
+        if (clip.w == 0.0f)
+            return false;
+
+        const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+        if (ndc.z < 0.0f || ndc.z > 1.0f)
+            return false;
+
+        const glm::vec2 viewportSize = viewportRect.GetSize();
+        outScreen.x = viewportRect.min.x + ((ndc.x + 1.0f) * 0.5f) * viewportSize.x;
+        outScreen.y = viewportRect.min.y + ((1.0f - ndc.y) * 0.5f) * viewportSize.y;
+        return true;
+    }
+
     glm::vec2 Math::GetNormalizedDeviceCoord(const glm::vec2 &position, const glm::vec2 &screen)
     {
         float x = (2.0f * position.x) / screen.x - 1.0f;
@@ -267,6 +283,40 @@ namespace ignite
             outRayOrigin = glm::vec3(worldCoords) / worldCoords.w;
             return -glm::normalize(glm::vec3(view[2])); // Forward direction in world space
         }
+    }
+
+    glm::vec3 Math::ScreenToWorldOnPlane(const glm::vec2 &screenPos, float planeZ, const glm::mat4 &viewProjection, const Rect &viewportRect, bool *isValid)
+    {
+        if (isValid)
+            *isValid = false;
+
+        const glm::vec2 viewportSize = viewportRect.GetSize();
+        if (viewportSize.x <= 0.0f || viewportSize.y <= 0.0f)
+            return glm::vec3(0.0f);
+
+        const float ndcX = ((screenPos.x - viewportRect.min.x) / viewportSize.x) * 2.0f - 1.0f;
+        const float ndcY = 1.0f - ((screenPos.y - viewportRect.min.y) / viewportSize.y) * 2.0f;
+
+        const glm::mat4 invViewProjection = glm::inverse(viewProjection);
+
+        glm::vec4 nearPoint = invViewProjection * glm::vec4(ndcX, ndcY, 0.0f, 1.0f);
+        glm::vec4 farPoint = invViewProjection * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
+        if (nearPoint.w == 0.0f || farPoint.w == 0.0f)
+            return glm::vec3(0.0f);
+
+        nearPoint /= nearPoint.w;
+        farPoint /= farPoint.w;
+
+        const glm::vec3 origin = glm::vec3(nearPoint);
+        const glm::vec3 rayDir = glm::normalize(glm::vec3(farPoint - nearPoint));
+        if (glm::abs(rayDir.z) < 0.00001f)
+            return glm::vec3(0.0f);
+
+        const float t = (planeZ - origin.z) / rayDir.z;
+        if (isValid)
+            *isValid = true;
+
+        return origin + rayDir * t;
     }
 
     bool Math::RaySphereIntersection(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, const glm::vec3 &sphereCenter, float sphereRadius)

@@ -3,5 +3,5 @@ Project:
   Name: TestProject
   AssetPath: Assets
   AssetRegistry: AssetRegistry.ixreg
-  ScriptModule: C:/Dev/Ignite/examples/TestProject/Bin/TestProject.dll
-  DefaultSceneHandle: 0
+  ScriptModule: Bin/TestProject.dll
+  DefaultSceneHandle: 17360739226101978199

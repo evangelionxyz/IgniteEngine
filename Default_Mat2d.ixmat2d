@@ -1,0 +1,8 @@
+Material2D:
+  Version: Alpha-0.1
+  Name: Default_Mat2d
+  TextureHandle: 0
+  BaseColor: [1, 1, 1, 1]
+  AdditiveColor: [0, 0, 0, 0]
+  TilingFactor: [1, 1]
+  Type: 1

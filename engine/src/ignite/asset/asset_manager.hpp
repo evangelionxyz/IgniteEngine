@@ -25,6 +25,7 @@
 #define ASSET_MANAGER_HPP
 
 #include "asset.hpp"
+#include "ignite/graphics/texture.hpp"
 
 #include <map>
 #include <unordered_set>
@@ -56,7 +57,10 @@ namespace ignite
 
         Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata, AssetType requestedAssetType = AssetType::Auto);
         AssetHandle ImportAsset(const std::filesystem::path &filepath);
+
         void AssignMetaData(AssetHandle handle, const AssetMetaData &metadata);
+        TextureCreateInfo GetTextureCreateInfo(AssetHandle handle) const;
+        void SetTextureCreateInfo(AssetHandle handle, const TextureCreateInfo &createInfo, bool saveToDisk = true);
 
         template<typename T>
         void AssignAsset(AssetHandle handle, const Ref<T> &asset)
@@ -106,15 +110,16 @@ namespace ignite
     
         AssetRegistry &GetAssetAssetRegistry() { return m_AssetRegistry; }
 
+        Project *GetProject() { return m_Project; }
+
         fbxsdk::FbxManager *GetOrCreateFbxSdkManager();
         std::mutex &GetFbxSdkMutex() { return m_FbxSdkMutex; }
-
-        static Project *GetProject();
 
     private:
         void WorkerLoop();
 
         AssetRegistry m_AssetRegistry;
+        std::unordered_map<AssetHandle, TextureCreateInfo> m_TextureCreateInfos;
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
         std::unordered_set<AssetHandle> m_LoadingAssets; // Track assets currently being loaded
         std::vector<AssetLoadedCallback> m_LoadedCallbacks;
@@ -122,6 +127,8 @@ namespace ignite
         std::condition_variable m_ConditionVariable;
         std::vector<std::thread> m_Workers;
         std::queue<AssetJob> m_Jobs;
+        Project *m_Project;
+
         bool m_Running;
 
         std::mutex m_FbxSdkMutex;

@@ -18,6 +18,7 @@
 #include "ignite/graphics/objects/material_2d.hpp"
 
 #include <array>
+#include <unordered_map>
 
 namespace ignite
 {
@@ -44,6 +45,7 @@ namespace ignite
     class Texture;
     class RenderTarget;
     class Font;
+    class Project;
 
     class Sprite2DComponent;
 
@@ -92,20 +94,28 @@ namespace ignite
         void DrawLine(const glm::vec3 &pos0, const glm::vec3 &pos1, const glm::vec4& color = glm::vec4(1.0f));
         void DrawAABB(const AABB& aabb, const glm::vec4& color = glm::vec4(1.0f));
 
-        void DrawCircle(const glm::vec3& position, const glm::vec3 &scale, const glm::vec4& color = glm::vec4(1.0f), float thickness = -1.0f, float fade = 0.005f);
-        void DrawCircle(const glm::mat4 &transform, const glm::vec4 &color = glm::vec4(1.0f), float thickness = -1.0f, float fade = 0.005f);
+        void DrawCircle(const glm::vec3& position, const glm::vec3 &scale, const glm::vec4& color = glm::vec4(1.0f), float thickness = -1.0f, float fade = 0.005f, uint32_t objectID = 0xFFFFFFFFu);
+        void DrawCircle(const glm::mat4 &transform, const glm::vec4 &color = glm::vec4(1.0f), float thickness = -1.0f, float fade = 0.005f, uint32_t objectID = 0xFFFFFFFFu);
 
-		void DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
-        void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture>& texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
-        void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture>& texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
-        void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture>& texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
+        void DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t objectID = 0xFFFFFFFFu);
+        void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture>& texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t objectID = 0xFFFFFFFFu);
+        void DrawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, const Ref<Texture>& texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t objectID = 0xFFFFFFFFu);
+        void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const Ref<Texture>& texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t objectID = 0xFFFFFFFFu);
 
         void DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const glm::vec4 &additiveColor, Material2DType materialType, const Ref<Texture> &texture, 
-            const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f));
+            const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor = glm::vec2(1.0f), uint32_t objectID = 0xFFFFFFFFu);
 
         void SetPointLights2D(const std::vector<PointLight2D_GPUData> &pointLights);
 
-        void DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing);
+        void DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing, uint32_t objectID = 0xFFFFFFFFu);
+
+        Ref<Texture> ResolveTexture(Project *project, AssetHandle handle);
+        Ref<Material2D> ResolveMaterial2D(Project *project, AssetHandle handle);
+        void ClearAssetResolveCache();
+
+        void BuildPreRenderCache();
+        bool ReplayPreRenderCache(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
+        void InvalidatePreRenderCache();
 
         void InitQuadData();
         void InitLineData();
@@ -131,6 +141,50 @@ namespace ignite
         Ref<ConstantBuffer> m_Material2DLightingBuffer;
         Material2DLighting_GPUData m_Material2DLightingData;
         bool m_Material2DLightingDirty = true;
+
+        struct AssetResolveKey
+        {
+            Project *project = nullptr;
+            AssetHandle handle = AssetHandle(0);
+
+            bool operator==(const AssetResolveKey &other) const noexcept
+            {
+                return project == other.project && handle == other.handle;
+            }
+        };
+
+        struct AssetResolveKeyHash
+        {
+            size_t operator()(const AssetResolveKey &key) const noexcept
+            {
+                size_t h = std::hash<const void *>{}(key.project);
+                h ^= (std::hash<AssetHandle>{}(key.handle) + 0x9e3779b9 + (h << 6) + (h >> 2));
+                return h;
+            }
+        };
+
+        std::unordered_map<AssetResolveKey, Ref<Texture>, AssetResolveKeyHash> m_TextureResolveCache;
+        std::unordered_map<AssetResolveKey, Ref<Material2D>, AssetResolveKeyHash> m_Material2DResolveCache;
+
+        struct PreRenderCacheData
+        {
+            bool valid = false;
+
+            Material2DLighting_GPUData lightingData;
+
+            std::vector<Vertex2DCircle> circleVertices;
+            uint32_t circleIndexCount = 0;
+
+            std::vector<Vertex2DQuad> quadVertices;
+            uint32_t quadIndexCount = 0;
+            std::vector<Ref<Texture>> quadTextureSlots;
+
+            std::vector<VertexText> textVertices;
+            uint32_t textIndexCount = 0;
+            std::vector<Ref<Texture>> textTextureSlots;
+        };
+
+        PreRenderCacheData m_PreRenderCache;
     };
 }
 
