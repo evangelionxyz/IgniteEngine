@@ -4,7 +4,7 @@
 #include "panels/scene_panel.hpp"
 #include "panels/content_browser_panel.hpp"
 #include "panels/asset_importer_panel.hpp"
-
+#include "ext/editor_ui.hpp"
 #include "ignite/core/command.hpp"
 #include "ignite/graphics/renderer_2d.hpp"
 #include "ignite/asset/asset.hpp"
@@ -1335,7 +1335,54 @@ namespace ignite
             {
                 auto &sceneData = m_ActiveScene->gpuData;
 
-                ImGui::TextDisabled("Sun/Shadow settings moved to Directional Light component");
+                ImGui::SeparatorText("Post Processing");
+
+                auto &cam = m_ScenePanel->GetViewportCamera();
+                UI::DrawCheckbox("Bloom", &cam.postProcessing.enableBloom);
+                UI::DrawCheckbox("Vignette", &cam.postProcessing.enableVignette);
+                UI::DrawCheckbox("Chromatic Aberration", &cam.postProcessing.enableChromAb);
+                UI::DrawCheckbox("SSAO", &cam.postProcessing.enableSSAO);
+                UI::DrawCheckbox("Debug SSAO", &cam.postProcessing.debugSSAO);
+
+                if (cam.postProcessing.enableBloom)
+                {
+                    ImGui::SeparatorText("Bloom");
+
+                    UI::DrawFloatControl("Bloom Intensity", &cam.postProcessing.bloomIntensity, 0.01f, 0.0f, 10.0f, 1.0f);
+                    UI::DrawFloatControl("Bloom Radius", &cam.postProcessing.bloomRadius, 0.01f, 0.0f, 10.0f, 0.0f);
+                    UI::DrawFloatControl("Bloom Knee", &cam.postProcessing.bloomKnee, 0.01f, 0.0f, 10.0f, 0.0f);
+                    UI::DrawFloatControl("Bloom Threshold", &cam.postProcessing.bloomThreshold, 0.01f, 0.005f, 10.0f, 0.005f);
+                    UI::DrawIntControl("Bloom Iterations", &cam.postProcessing.bloomIterations, 1, 1, 8, 1);
+                }
+
+                if (cam.postProcessing.enableVignette)
+                {
+                    ImGui::SeparatorText("Vignette");
+
+                    UI::DrawFloatControl("Vignette Radius", &cam.postProcessing.vignetteRadius, 0.01f, 0.0f, 3.0f, 1.1f);
+                    UI::DrawFloatControl("Vignette Softness", &cam.postProcessing.vignetteSoftness, 0.01f, 0.0f, 2.0f, 0.7f);
+                    UI::DrawFloatControl("Vignette Intensity", &cam.postProcessing.vignetteIntensity, 0.01f, 0.0f, 2.0f, 0.8f);
+                    UI::DrawColorVec3("Vignette Color", cam.postProcessing.vignetteColor);
+                }
+
+                if (cam.postProcessing.enableChromAb)
+                {
+                    ImGui::SeparatorText("Chromatic Aberration");
+
+                    UI::DrawFloatControl("ChromAb Amount", &cam.postProcessing.chromAbAmount, 0.0001f, 0.0f, 0.02f, 0.001f);
+                    UI::DrawFloatControl("ChromAb Radial", &cam.postProcessing.chromAbRadial, 0.01f, 0.0f, 2.0f, 0.1f);
+                }
+
+                if (cam.postProcessing.enableSSAO)
+                {
+                    ImGui::SeparatorText("SSAO");
+
+                    UI::DrawFloatControl("SSAO Radius", &cam.postProcessing.aoRadius, 0.01f, 0.0f, 5.0f, 0.5f);
+                    UI::DrawFloatControl("SSAO Bias", &cam.postProcessing.aoBias, 0.001f, 0.0f, 0.2f, 0.025f);
+                    UI::DrawFloatControl("SSAO Intensity", &cam.postProcessing.aoIntensity, 0.01f, 0.0f, 4.0f, 1.0f);
+                    UI::DrawFloatControl("SSAO Power", &cam.postProcessing.aoPower, 0.01f, 0.0f, 4.0f, 1.0f);
+                }
+
                 ImGui::SeparatorText("Shadow Debug");
                 ImGui::RadioButton("Off##ShadowDbg", &sceneData.debugShadow, 0); ImGui::SameLine();
                 ImGui::SameLine();

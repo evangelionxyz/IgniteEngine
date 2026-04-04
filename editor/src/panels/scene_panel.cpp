@@ -2710,8 +2710,6 @@ namespace ignite
 
     bool ScenePanel::OnMouseMovedEvent(MouseMovedEvent &event)
     {
-        // glm::vec2 mouse = { event.GetX(), event.GetY() };
-		// LOG_INFO("Mouse Moved: {0}, {1}", mouse.x, mouse.y);
         return false;
     }
 

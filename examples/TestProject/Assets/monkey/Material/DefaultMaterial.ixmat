@@ -11,5 +11,5 @@ Material:
     BaseColorFactor: [1, 1, 1, 1]
     EmissiveFactor: [1, 1, 1, 1]
     MetallicFactor: 1
-    RoughnessFactor: 1
+    RoughnessFactor: 0
     OcclusionStrength: 0

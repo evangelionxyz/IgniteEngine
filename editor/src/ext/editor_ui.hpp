@@ -307,6 +307,22 @@ namespace ignite::UI
 		return state;
 	}
 
+    static State DrawColorVec3(const char *label, glm::vec3 &v, float coloumnWidth = defColWidth)
+    {
+        State state;
+
+        ImGui::PushID(label);
+        ImGui::BeginColumns(label, 2, ImGuiOldColumnFlags_GrowParentContentsSize);
+        ImGui::SetColumnWidth(0, coloumnWidth);
+        ImGui::Text("%s", label);
+        ImGui::NextColumn();
+        ImGui::ColorEdit3("##Color", &v.x);
+        ImGui::EndColumns();
+        ImGui::PopID();
+
+        return state;
+    }
+
 	static State DrawColorVec4(const char *label, glm::vec4 &v, float coloumnWidth = defColWidth)
 	{
 		State state;

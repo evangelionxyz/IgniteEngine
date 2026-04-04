@@ -47,9 +47,8 @@ namespace ignite
 		CascadedShadowMap(ShadowMapQuality quality = ShadowMapQuality::MEDIUM);
 		~CascadedShadowMap();
 
-		void Resize(ShadowMapQuality quality);
-		void BeginCascade(nvrhi::ICommandList *cmd, int cascadeIndex);
-		void EndCascade(nvrhi::ICommandList *cmd);
+        void Resize(ShadowMapQuality quality);
+        void BeginCascade(nvrhi::ICommandList *cmd, int cascadeIndex);
 
 		nvrhi::IFramebuffer* GetCascadeFramebuffer(int cascadeIndex) const;
 		Ref<ConstantBuffer> GetGPUDataBuffer() const { return m_GPUDataBuffer; }

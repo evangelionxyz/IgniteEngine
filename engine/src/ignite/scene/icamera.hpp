@@ -66,6 +66,13 @@ namespace ignite
 		bool enableSSAO = true; // Screen space ambient occlusion
 		bool debugSSAO = false; // Visualize raw AO buffer
 
+		// Bloom
+		float bloomIntensity = 1.5f;
+        float bloomThreshold = 0.85f;    // HDR threshold
+        float bloomKnee = 0.5f;         // Soft knee for smooth transition
+        float bloomRadius = 1.0f;       // Blur radius multiplier
+        int bloomIterations = 6;        // More levels for higher quality
+
 		// Vignette params
 		float vignetteRadius = 1.1f;
 		float vignetteSoftness = 0.7f;
