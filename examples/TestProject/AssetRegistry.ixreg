@@ -15,6 +15,9 @@ AssetRegistry:
     - Handle: 1274032632334616296
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/shop.png
+    - Handle: 1385067185104004383
+      Type: Texture
+      Filepath: Tut Hip Hop Dance/Textures/Tut Hip Hop Dance_1_.png
     - Handle: 1588509804001943517
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/rock_2.png
@@ -51,6 +54,9 @@ AssetRegistry:
     - Handle: 6125058479216975440
       Type: Invalid
       Filepath: oak_woods_v1.0/readme.TXT
+    - Handle: 6382678320413337663
+      Type: Texture
+      Filepath: Tut Hip Hop Dance/Textures/Tut Hip Hop Dance_0_.png
     - Handle: 6496642200112123619
       Type: Scene
       Filepath: Scene/Animations.ixscene
@@ -84,6 +90,9 @@ AssetRegistry:
     - Handle: 9201043509904246564
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/shop_anim.png
+    - Handle: 9297076932640637832
+      Type: SkeletalMesh
+      Filepath: Tut Hip Hop Dance/SkeletalMesh/Tut Hip Hop Dance.ixskm
     - Handle: 9420462621085832834
       Type: Font
       Filepath: segoeui.ttf
@@ -108,9 +117,15 @@ AssetRegistry:
     - Handle: 11616100263721429172
       Type: Material2D
       Filepath: oak_woods_v1.0/background/BG_03.ixmat2d
+    - Handle: 11776459511892231412
+      Type: SkeletalAnimation
+      Filepath: Tut Hip Hop Dance/Animation/Tut Hip Hop Dance_0.ixanim
     - Handle: 12217278547325118582
       Type: Texture
       Filepath: oak_woods_v1.0/background/background_layer_3.png
+    - Handle: 12674773891731727696
+      Type: Texture
+      Filepath: Tut Hip Hop Dance/Textures/Tut Hip Hop Dance_2_.png
     - Handle: 12873815896187692576
       Type: Scene
       Filepath: Scene/DefaultScene.ixscene
@@ -147,12 +162,18 @@ AssetRegistry:
     - Handle: 14453045701345899493
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/lamp.png
+    - Handle: 14580958494333747827
+      Type: Material
+      Filepath: Tut Hip Hop Dance/Material/Arissa_MAT.ixmat
     - Handle: 14651447316888264835
       Type: Material2D
       Filepath: Secondary_Mater2d.ixmat2d
     - Handle: 15111561572354869003
       Type: Material2D
       Filepath: oak_woods_v1.0/decorations/LAMP_LIT.ixmat2d
+    - Handle: 15234153275258604094
+      Type: Skeleton
+      Filepath: Tut Hip Hop Dance/SkeletalMesh/Tut Hip Hop Dance.ixskel
     - Handle: 15618750618960578444
       Type: Skeleton
       Filepath: Great Sword Jump Attack/SkeletalMesh/Great Sword Jump Attack.ixskel

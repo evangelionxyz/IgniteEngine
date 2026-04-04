@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <unordered_set>
 
 #include "ignite/project/project.hpp"
 #include "ignite/core/profiler/profiler.hpp"
@@ -148,6 +149,8 @@ namespace ignite
 			return layout == other.layout && gridBuffer == other.gridBuffer;
 		}
 	};
+
+	std::unordered_set<Material *> s_UploadedMaterialsThisPass;
 
 	struct DebugGridBindingKeyHash
 	{
@@ -469,6 +472,7 @@ namespace ignite
 		s_CompositeBindingSetCache.clear();
 		s_DebugGridBindingSetCache.clear();
 		s_CSMBindingSetCache.clear();
+		Clear3DAssetResolveCache();
 	
         if (m_Renderer2D)
         {
@@ -476,6 +480,83 @@ namespace ignite
 			m_Renderer2D->InvalidatePreRenderCache();
         }
 		m_Has2DPreRenderCache = false;
+	}
+
+	Ref<StaticMesh> SceneRenderer::ResolveStaticMesh(Project *project, AssetHandle handle)
+	{
+		if (!project || handle == AssetHandle(0))
+		{
+			return nullptr;
+		}
+
+		AssetResolveKey key{ project, handle };
+		auto it = m_StaticMeshResolveCache.find(key);
+		if (it != m_StaticMeshResolveCache.end())
+		{
+			return it->second;
+		}
+
+		Ref<StaticMesh> mesh = project->GetAsset<StaticMesh>(handle, AssetType::StaticMesh);
+		if (mesh)
+		{
+			m_StaticMeshResolveCache.emplace(key, mesh);
+		}
+
+		return mesh;
+	}
+
+	Ref<SkeletalMesh> SceneRenderer::ResolveSkeletalMesh(Project *project, AssetHandle handle)
+	{
+		if (!project || handle == AssetHandle(0))
+		{
+			return nullptr;
+		}
+
+		AssetResolveKey key{ project, handle };
+		auto it = m_SkeletalMeshResolveCache.find(key);
+		if (it != m_SkeletalMeshResolveCache.end())
+		{
+			return it->second;
+		}
+
+		Ref<SkeletalMesh> mesh = project->GetAsset<SkeletalMesh>(handle, AssetType::SkeletalMesh);
+		if (mesh)
+		{
+			m_SkeletalMeshResolveCache.emplace(key, mesh);
+		}
+
+		return mesh;
+	}
+
+	Ref<Material> SceneRenderer::ResolveMaterial(Project *project, AssetHandle handle)
+	{
+		if (!project || handle == AssetHandle(0))
+		{
+			return nullptr;
+		}
+
+		AssetResolveKey key{ project, handle };
+		auto it = m_MaterialResolveCache.find(key);
+		if (it != m_MaterialResolveCache.end())
+		{
+			return it->second;
+		}
+
+		Ref<Material> material = project->GetAsset<Material>(handle);
+		if (material)
+		{
+			m_MaterialResolveCache.emplace(key, material);
+		}
+
+		return material;
+	}
+
+	void SceneRenderer::Clear3DAssetResolveCache()
+	{
+		m_StaticMeshResolveCache.clear();
+		m_SkeletalMeshResolveCache.clear();
+		m_MaterialResolveCache.clear();
+        s_UploadedMaterialsThisPass.clear();
 	}
 
 	void SceneRenderer::SetActiveScene(const Ref<Scene> &scene)
@@ -492,6 +573,7 @@ namespace ignite
 
 		m_SelectedEntities.clear();
 		m_Has2DPreRenderCache = false;
+		Clear3DAssetResolveCache();
 
 		m_Scene = scene;
 
@@ -952,6 +1034,7 @@ namespace ignite
 	void SceneRenderer::ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera)
 	{
 		IGN_PROFILE_FUNCTION();
+		Project *project = m_Scene ? m_Scene->GetProject() : nullptr;
 
 		nvrhi::GraphicsState csmState = nvrhi::GraphicsState();
 		Ref<GraphicsPipeline> csmPipeline = m_CascadedShadowMap->GetPipeline();
@@ -1030,7 +1113,7 @@ namespace ignite
 
 					ensurePerEntityResources(smc.perEntityBuffer, smc.meshBindingSet);
 
-					Ref<StaticMesh> sm = m_Scene->GetProject()->GetAsset<StaticMesh>(smc.handle, AssetType::StaticMesh);
+                    Ref<StaticMesh> sm = ResolveStaticMesh(project, smc.handle);
 					if (!sm)
 						continue;
 
@@ -1080,7 +1163,7 @@ namespace ignite
 
 					ensurePerEntityResources(smc.perEntityBuffer, smc.meshBindingSet);
 
-					Ref<SkeletalMesh> sm = m_Scene->GetProject()->GetAsset<SkeletalMesh>(smc.handle, AssetType::SkeletalMesh);
+					Ref<SkeletalMesh> sm = ResolveSkeletalMesh(project, smc.handle);
 					if (!sm)
 						continue;
 
@@ -1101,7 +1184,7 @@ namespace ignite
 							gpuData.boneTransforms[j] = sm->boneTransforms[j];
 						}
 
-						smc.perEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
+                      smc.perEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
 
 						auto &primitive = m->GetPrimitive();
 						if (smc.meshBindingSet && primitive->vertexBuffer && primitive->indexBuffer)
@@ -1127,12 +1210,14 @@ namespace ignite
 	void SceneRenderer::ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer)
 	{
 		IGN_PROFILE_FUNCTION();
+		Project *project = m_Scene ? m_Scene->GetProject() : nullptr;
 		Ref<GraphicsPipeline> geomPSO = GetGeomPipelineForFB(framebuffer, m_FillMode);
 
 		nvrhi::GraphicsState geomGState = nvrhi::GraphicsState();
 		geomGState.pipeline = geomPSO->GetHandle();
 		geomGState.framebuffer = framebuffer;
 		geomGState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+
 
 		auto ensurePerEntityResources = [this](Ref<ConstantBuffer> &buffer, nvrhi::BindingSetHandle &bindingSet)
 		{
@@ -1175,7 +1260,7 @@ namespace ignite
 
 				ensurePerEntityResources(smc.perEntityBuffer, smc.meshBindingSet);
 
-				Ref<SkeletalMesh> sm = m_Scene->GetProject()->GetAsset<SkeletalMesh>(smc.handle, AssetType::SkeletalMesh);
+				Ref<SkeletalMesh> sm = ResolveSkeletalMesh(project, smc.handle);
 				if (!sm)
 				{
 					continue;
@@ -1198,11 +1283,11 @@ namespace ignite
 						gpuData.boneTransforms[i] = sm->boneTransforms[i];
 					}
 
-					smc.perEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
+                  smc.perEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
 
 					auto &primitive = m->GetPrimitive();
 
-					Ref<Material> material = m_Scene->GetProject()->GetAsset<Material>(m->GetMaterialHandle());
+					Ref<Material> material = ResolveMaterial(project, m->GetMaterialHandle());
 					if (!material)
 					{
 						continue;
@@ -1221,7 +1306,10 @@ namespace ignite
 						}
 					}
 
-					material->UploadToGpu(cmd);
+					if (s_UploadedMaterialsThisPass.insert(material.get()).second)
+					{
+						material->UploadToGpu(cmd);
+					}
 
 					if (smc.meshBindingSet && material->GetBindingSet() && primitive->vertexBuffer && primitive->indexBuffer)
 					{
@@ -1263,7 +1351,7 @@ namespace ignite
 
 				ensurePerEntityResources(smc.perEntityBuffer, smc.meshBindingSet);
 
-				Ref<StaticMesh> sm = m_Scene->GetProject()->GetAsset<StaticMesh>(smc.handle, AssetType::StaticMesh);
+				Ref<StaticMesh> sm = ResolveStaticMesh(project, smc.handle);
 				if (!sm)
 				{
 					continue;
@@ -1280,8 +1368,7 @@ namespace ignite
 
 					std::fill(std::begin(gpuData.boneTransforms), std::end(gpuData.boneTransforms), glm::mat4(1.0f));
 
-					// Write updated transform to buffer (every frame)
-					smc.perEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
+                  smc.perEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
 
 					auto &primitive = m->GetPrimitive();
 
@@ -1289,11 +1376,11 @@ namespace ignite
 					Ref<Material> material;
 					if (smc.materialHandle != AssetHandle(0))
 					{
-						material = m_Scene->GetProject()->GetAsset<Material>(smc.materialHandle);
+						material = ResolveMaterial(project, smc.materialHandle);
 					}
 					else
 					{
-						material = m_Scene->GetProject()->GetAsset<Material>(m->GetMaterialHandle());
+						material = ResolveMaterial(project, m->GetMaterialHandle());
 					}
 
 					if (!material)
@@ -1314,7 +1401,10 @@ namespace ignite
 						}
 					}
 
-					material->UploadToGpu(cmd);
+					if (s_UploadedMaterialsThisPass.insert(material.get()).second)
+					{
+						material->UploadToGpu(cmd);
+					}
 
 					if (smc.meshBindingSet && material->GetBindingSet() && primitive->vertexBuffer && primitive->indexBuffer)
 					{
