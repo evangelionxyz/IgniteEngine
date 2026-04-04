@@ -90,8 +90,7 @@ project "IgniteEditor"
         symbols "on"
         defines {
             "DEBUG",
-            "_DEBUG",
-            "IGN_ENABLE_TRACY"
+            "_DEBUG"
         }
 
     filter "configurations:Release"
@@ -99,7 +98,6 @@ project "IgniteEditor"
         optimize "on"
         symbols "on"
         defines {
-            "IGN_ENABLE_TRACY",
             "NDEBUG"
         }
 

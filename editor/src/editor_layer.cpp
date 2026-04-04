@@ -254,85 +254,124 @@ namespace ignite
         if (!m_ActiveScene)
             return;
 
-        // Resize Edit Viewport Framebuffer
+        if (m_SceneRenderer)
         {
+            m_SceneRenderer->BeginFrame();
+        }
+
+        const bool isMouseDraggingUi = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+
+        // Resize Edit Viewport Framebuffer
+        if (m_ScenePanel->m_Data.sceneViewportEditorVisible)
+        {
+            static glm::uvec2 s_LastEditDesiredSize{ 0u, 0u };
+            static uint32_t s_EditStableFrames = 0u;
+
             const glm::uvec2 framebufferSize = m_ScenePanel->GetViewportEditCompRT()->GetSize();
             const glm::vec2 currentViewportSize = m_ScenePanel->GetViewportEditSize();
             const glm::uvec2 desiredSize
             {
-                static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.x))),
-                static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.y)))
+                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.x)),
+                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.y))
             };
 
+            if (desiredSize == s_LastEditDesiredSize)
+            {
+                ++s_EditStableFrames;
+            }
+            else
+            {
+                s_LastEditDesiredSize = desiredSize;
+                s_EditStableFrames = 0u;
+            }
+
             const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
-            if (framebufferNeedsResize && desiredSize.x > 0u && desiredSize.y > 0u)
+            const bool allowResizeNow = !isMouseDraggingUi || s_EditStableFrames >= 2u;
+            if (framebufferNeedsResize && allowResizeNow && desiredSize.x > 0u && desiredSize.y > 0u)
             {
                 m_ScenePanel->ViewportEditResize(desiredSize.x, desiredSize.y);
             }
         }
 
         // Resize Game Viewport Framebuffer
+        if (m_ScenePanel->m_Data.sceneViewportGameplayVisible)
         {
+            static glm::uvec2 s_LastGameDesiredSize{ 0u, 0u };
+            static uint32_t s_GameStableFrames = 0u;
+
             const glm::uvec2 framebufferSize = m_ScenePanel->GetViewportGameCompRT()->GetSize();
             const glm::vec2 currentViewportSize = m_ScenePanel->GetViewportGameSize();
             const glm::uvec2 desiredSize
             {
-                static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.x))),
-                static_cast<uint32_t>(std::round(std::max(0.0f, currentViewportSize.y)))
+                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.x)),
+                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.y))
             };
 
+            if (desiredSize == s_LastGameDesiredSize)
+            {
+                ++s_GameStableFrames;
+            }
+            else
+            {
+                s_LastGameDesiredSize = desiredSize;
+                s_GameStableFrames = 0u;
+            }
+
             const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
-            if (framebufferNeedsResize && desiredSize.x > 0u && desiredSize.y > 0u)
+            const bool allowResizeNow = !isMouseDraggingUi || s_GameStableFrames >= 2u;
+            if (framebufferNeedsResize && allowResizeNow && desiredSize.x > 0u && desiredSize.y > 0u)
             {
                 m_ScenePanel->ViewportGameResize(desiredSize.x, desiredSize.y);
             }
         }
 
         // Render to Edit Viewport
-        switch (m_Data.sceneState)
+        if (m_ScenePanel->m_Data.sceneViewportEditorVisible)
         {
-        case State::SceneSimulate:
-        case State::SceneEdit:
-        {
-            ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
-            if (const glm::uvec2 editSize = m_ScenePanel->GetViewportEditCompRT()->GetSize(); editSize.x > 0u && editSize.y > 0u)
+            switch (m_Data.sceneState)
             {
-                editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
-            }
+                case State::SceneSimulate:
+                case State::SceneEdit:
+                {
+                    ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
+                    if (const glm::uvec2 editSize = m_ScenePanel->GetViewportEditCompRT()->GetSize(); editSize.x > 0u && editSize.y > 0u)
+                    {
+                        editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
+                    }
 
-            {
-                IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
-                m_SceneRenderer->RenderEditorTo(editCamera,
-                    m_ScenePanel->GetViewportEditSceneRT(),
-                    m_ScenePanel->GetViewportEditUIRT(),
-                    m_ScenePanel->GetViewportEditCompRT());
+                    {
+                        IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
+                        m_SceneRenderer->RenderEditorTo(editCamera,
+                            m_ScenePanel->GetViewportEditSceneRT(),
+                            m_ScenePanel->GetViewportEditUIRT(),
+                            m_ScenePanel->GetViewportEditCompRT());
+                    }
+                    break;
+                }
+                case State::ScenePlay:
+                {
+                    ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
+                    if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
+                    {
+                        editCamera = &primaryCam.GetComponent<CameraComponent>().camera;
+                    }
+
+                    if (const glm::uvec2 editSize = m_ScenePanel->GetViewportEditCompRT()->GetSize(); editSize.x > 0u && editSize.y > 0u)
+                    {
+                        editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
+                    }
+
+                    {
+                        IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
+                        m_SceneRenderer->RenderEditorTo(editCamera,
+                            m_ScenePanel->GetViewportEditSceneRT(),
+                            m_ScenePanel->GetViewportEditUIRT(),
+                            m_ScenePanel->GetViewportEditCompRT());
+                    }
+                    break;
+                }
             }
-            break;
         }
-        case State::ScenePlay:
-        {
-            ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
-            if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
-            {
-                editCamera = &primaryCam.GetComponent<CameraComponent>().camera;
-            }
-
-            if (const glm::uvec2 editSize = m_ScenePanel->GetViewportEditCompRT()->GetSize(); editSize.x > 0u && editSize.y > 0u)
-            {
-                editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
-            }
-
-            {
-                IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
-                m_SceneRenderer->RenderEditorTo(editCamera,
-                    m_ScenePanel->GetViewportEditSceneRT(),
-                    m_ScenePanel->GetViewportEditUIRT(),
-                    m_ScenePanel->GetViewportEditCompRT());
-            }
-            break;
-        }
-        }
-
 
         if (m_ScenePanel->m_Data.sceneViewportGameplayVisible)
         {

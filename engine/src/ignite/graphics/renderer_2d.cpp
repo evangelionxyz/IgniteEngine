@@ -207,6 +207,9 @@ namespace ignite
         if (it != s_QuadPSOCache.end())
             return it->second;
 
+        s_QuadPSOCache.clear();
+        s_QuadBindingSetCache.clear();
+
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
 		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
@@ -257,6 +260,9 @@ namespace ignite
 		auto it = s_TextPSOCache.find(key);
 		if (it != s_TextPSOCache.end())
 			return it->second;
+
+        s_TextPSOCache.clear();
+        s_TextBindingSetCache.clear();
 
 		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
@@ -309,6 +315,9 @@ namespace ignite
         auto it = s_LinePSOCache.find(key);
         if (it != s_LinePSOCache.end())
             return it->second;
+
+        s_LinePSOCache.clear();
+        s_LineBindingSetCache.clear();
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
@@ -476,6 +485,9 @@ namespace ignite
         auto it = s_CirclePSOCache.find(key);
         if (it != s_CirclePSOCache.end())
             return it->second;
+
+        s_CirclePSOCache.clear();
+        s_CircleBindingSetCache.clear();
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 

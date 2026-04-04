@@ -19,6 +19,7 @@
     #define IGN_PROFILE_FREE(ptr) TracyFree(ptr)
     #define IGN_PROFILE_ALLOC_N(ptr, size, name) TracyAllocN(ptr, size, name)
     #define IGN_PROFILE_FREE_N(ptr, name) TracyFreeN(ptr, name)
+    #define IGN_PROFILE_IS_CONNECTED() tracy::GetProfiler().IsConnected()
 #else
     #define IGN_PROFILE_FRAME() ((void)0)
     #define IGN_PROFILE_FRAME_NAMED(name) ((void)0)
@@ -31,6 +32,7 @@
     #define IGN_PROFILE_FREE(ptr) ((void)0)
     #define IGN_PROFILE_ALLOC_N(ptr, size, name) ((void)0)
     #define IGN_PROFILE_FREE_N(ptr, name) ((void)0)
+    #define IGN_PROFILE_IS_CONNECTED() (false)
 #endif
 
 #endif

@@ -77,6 +77,8 @@ namespace ignite
     public:
         SceneRenderer();
         ~SceneRenderer();
+
+        void BeginFrame();
         
         void SetActiveScene(const Ref<Scene> &scene);
         

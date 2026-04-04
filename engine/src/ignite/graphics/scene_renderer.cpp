@@ -67,6 +67,17 @@ namespace ignite
 	static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_CompositePSOCache;
 	static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_DebugGridPSOCache;
 
+	static void EmitSceneRendererCacheStatsToProfiler(size_t selectedEntityCount)
+	{
+		IGN_PROFILE_FUNCTION();
+
+		IGN_PROFILE_PLOT("SceneRenderer.Cache.PSO.Geometry", static_cast<double>(s_GeometryPSOCache.size()));
+		IGN_PROFILE_PLOT("SceneRenderer.Cache.PSO.Environment", static_cast<double>(s_EnvironmentPSOCache.size()));
+		IGN_PROFILE_PLOT("SceneRenderer.Cache.PSO.Composite", static_cast<double>(s_CompositePSOCache.size()));
+		IGN_PROFILE_PLOT("SceneRenderer.Cache.PSO.DebugGrid", static_cast<double>(s_DebugGridPSOCache.size()));
+		IGN_PROFILE_PLOT("SceneRenderer.State.SelectedEntities", static_cast<double>(selectedEntityCount));
+	}
+
 	struct DebugGrid_GPUData
 	{
 		glm::vec4 thinColor = glm::vec4(0.0f);
@@ -87,6 +98,8 @@ namespace ignite
 		{
 			return it->second;
 		}
+
+		s_DebugGridPSOCache.clear();
 
 		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
@@ -147,6 +160,7 @@ namespace ignite
 	};
 
 	static std::unordered_map<DebugGridBindingKey, nvrhi::BindingSetHandle, DebugGridBindingKeyHash> s_DebugGridBindingSetCache;
+
 	static nvrhi::BindingSetHandle GetOrCreateDebugGridBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<ConstantBuffer> gridBuffer)
 	{
 		DebugGridBindingKey key{ bindingLayout, gridBuffer ? gridBuffer->GetHandle() : nullptr };
@@ -178,19 +192,10 @@ namespace ignite
 		auto it = s_GeometryPSOCache.find(key);
 		if (it != s_GeometryPSOCache.end())
 		{
-			for (auto itErase = s_GeometryPSOCache.begin(); itErase != s_GeometryPSOCache.end();)
-			{
-				if (itErase != it)
-				{
-					itErase = s_GeometryPSOCache.erase(itErase);
-				}
-				else
-				{
-					++itErase;
-				}
-			}
 			return it->second;
 		}
+
+		s_GeometryPSOCache.clear();
 
 		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
 		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
@@ -224,19 +229,10 @@ namespace ignite
 		auto it = s_EnvironmentPSOCache.find(key);
 		if (it != s_EnvironmentPSOCache.end())
 		{
-			for (auto itErase = s_EnvironmentPSOCache.begin(); itErase != s_EnvironmentPSOCache.end();)
-			{
-				if (itErase != it)
-				{
-					itErase = s_EnvironmentPSOCache.erase(itErase);
-				}
-				else
-				{
-					++itErase;
-				}
-			}
 			return it->second;
 		}
+
+		s_EnvironmentPSOCache.clear();
 
 		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
 		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
@@ -270,19 +266,10 @@ namespace ignite
 
 		if (it != s_CompositePSOCache.end())
 		{
-			for (auto itErase = s_CompositePSOCache.begin(); itErase != s_CompositePSOCache.end();)
-			{
-				if (itErase != it)
-				{
-					itErase = s_CompositePSOCache.erase(itErase);
-				}
-				else
-				{
-					++itErase;
-				}
-			}
 			return it->second;
 		}
+
+		s_CompositePSOCache.clear();
 
 		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
@@ -347,6 +334,7 @@ namespace ignite
 	};
 
 	static std::unordered_map<CompositeBindingKey, nvrhi::BindingSetHandle, CompositeBindingKeyHash> s_CompositeBindingSetCache;
+
 	static nvrhi::BindingSetHandle GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout,
         Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture, nvrhi::SamplerHandle sampler)
 	{
@@ -355,20 +343,10 @@ namespace ignite
 		auto it = s_CompositeBindingSetCache.find(key);
 		if (it != s_CompositeBindingSetCache.end())
 		{
-			for (auto itErase = s_CompositeBindingSetCache.begin(); itErase != s_CompositeBindingSetCache.end();)
-			{
-				if (itErase != it)
-				{
-					itErase = s_CompositeBindingSetCache.erase(itErase);
-				}
-				else
-				{
-					++itErase;
-				}
-			}
-
 			return it->second;
 		}
+
+		s_CompositeBindingSetCache.clear();
 
 		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 		// Composite Binding set
@@ -404,6 +382,7 @@ namespace ignite
 	};
 
 	static std::unordered_map<CSMBindingKey, nvrhi::BindingSetHandle, CSMBindingKeyHash> s_CSMBindingSetCache;
+
 	static nvrhi::BindingSetHandle GetOrCreateCSMBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<ConstantBuffer> skinnedMeshGPUDataBuffer, Ref<ConstantBuffer> csmGPUDataBuffer)
 	{
 		CSMBindingKey key{ bindingLayout };
@@ -506,24 +485,42 @@ namespace ignite
 			return;
 		}
 
-		m_Scene = scene;
 		if (m_Scene)
 		{
-			m_Scene->SetSceneRenderer(this);
-
-			// Clear environment-related caches to release GPU resources
-			s_GeometryPSOCache.clear();
-			s_EnvironmentPSOCache.clear();
-			s_CompositePSOCache.clear();
-			s_DebugGridPSOCache.clear();
-			s_CompositeBindingSetCache.clear();
-			s_DebugGridBindingSetCache.clear();
-			s_CSMBindingSetCache.clear();
+			m_Scene->SetSceneRenderer(nullptr);
 		}
+
+		m_SelectedEntities.clear();
+		m_Has2DPreRenderCache = false;
+
+		m_Scene = scene;
+
+		s_GeometryPSOCache.clear();
+		s_EnvironmentPSOCache.clear();
+		s_CompositePSOCache.clear();
+		s_DebugGridPSOCache.clear();
+		s_CompositeBindingSetCache.clear();
+		s_DebugGridBindingSetCache.clear();
+		s_CSMBindingSetCache.clear();
 
 		if (m_Renderer2D)
 		{
 			m_Renderer2D->ClearAssetResolveCache();
+			m_Renderer2D->InvalidatePreRenderCache();
+		}
+
+		if (m_Scene)
+		{
+			m_Scene->SetSceneRenderer(this);
+		}
+	}
+
+	void SceneRenderer::BeginFrame()
+	{
+		m_Has2DPreRenderCache = false;
+		if (m_Renderer2D)
+		{
+			m_Renderer2D->InvalidatePreRenderCache();
 		}
 	}
 
@@ -531,12 +528,6 @@ namespace ignite
 	{
 		IGN_PROFILE_FUNCTION();
 		IGN_PROFILE_FRAME_NAMED("Editor Frame");
-
-		m_Has2DPreRenderCache = false;
-		if (m_Renderer2D)
-		{
-			m_Renderer2D->InvalidatePreRenderCache();
-		}
 
 		WorldEnvironment *worldEnvironment = renderEnvironment ? GetActiveWorldEnvironment(m_Scene.get()) : nullptr;
 

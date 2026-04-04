@@ -146,7 +146,6 @@ project "IgniteEngine"
             symbols "on"
             defines {
                 "IGN_DEBUG_BUILD",
-                "IGN_ENABLE_TRACY",
                 "DEBUG",
                 "_DEBUG"
             }
@@ -170,7 +169,6 @@ project "IgniteEngine"
             optimize "on"
             symbols "on" -- with debug info
             defines {
-                "IGN_ENABLE_TRACY",
                 "IGN_RELEASE_BUILD",
                 "NDEBUG"
             }
