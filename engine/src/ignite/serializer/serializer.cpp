@@ -281,6 +281,7 @@ namespace ignite
 					sr.BeginMap("StaticMesh");
 					{
 						sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
+						sr.AddKeyValue("MaterialHandle", static_cast<uint64_t>(comp.materialHandle));
 					}
 					sr.EndMap();
 				}
@@ -904,7 +905,14 @@ namespace ignite
             if (YAML::Node node = entityNode["StaticMesh"])
             {
                 auto &comp = desEntity.AddComponent<StaticMeshComponent>();
-                comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
+                if (auto n = node["Handle"])
+                {
+                    comp.handle = AssetHandle(n.as<uint64_t>());
+                }
+                if (auto n = node["MaterialHandle"])
+                {
+                    comp.materialHandle = AssetHandle(n.as<uint64_t>());
+                }
             }
 
             if (YAML::Node node = entityNode["SkeletalMesh"])

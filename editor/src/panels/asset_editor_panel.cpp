@@ -46,6 +46,7 @@ namespace ignite
             glm::vec2 dragStartMaxUV = { 0.0f, 0.0f };
             glm::vec2 dragOffsetUV = { 0.0f, 0.0f };
             glm::vec2 pan = { 0.0f, 0.0f };
+            std::vector<std::string> spriteNames;
             int selectedSpriteIndex = -1;
             int renamingSpriteIndex = -1;
             int activeHandle = -1;
@@ -60,20 +61,18 @@ namespace ignite
             bool snapToGrid = false;
             bool selecting = false;
             char renameBuffer[128] = {};
-            std::vector<std::string> spriteNames;
         };
 
         static std::unordered_map<uint64_t, SpriteSheetEditorState> s_SpriteSheetEditorState;
 
-        // ---- Animation2D per-asset playback preview state ----
         struct Animation2DEditorState
         {
-            float   playbackTime = 0.0f;  // seconds into animation
-            float   lastRealTime = 0.0f;  // ImGui time stamp when last ticked
-            bool    playing = false;
-            int     previewFrame = 0;
+            float   playbackTime = 0.0f;
+            float   lastRealTime = 0.0f;
             float   previewZoom = 1.0f;
             float   toolsWidth = 280.0f;
+            int     previewFrame = 0;
+            bool    playing = false;
         };
 
         static std::unordered_map<uint64_t, Animation2DEditorState> s_Anim2DEditorState;
@@ -86,7 +85,6 @@ namespace ignite
                 case nvrhi::Format::RGBA32_FLOAT: return "RGBA32_FLOAT";
                 default: return "UNKNOWN";
             }
-
         }
 
         static const char *SamplerAddressModeToString(nvrhi::SamplerAddressMode mode)

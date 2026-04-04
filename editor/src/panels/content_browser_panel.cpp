@@ -5,6 +5,7 @@
 #include "editor_layer.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/core/profiler/profiler.hpp"
+#include "ignite/graphics/objects/material.hpp"
 #include "ignite/scene/sprite_sheet.hpp"
 
 #include "ignite/core/input/asset_import_event.hpp"
@@ -46,6 +47,24 @@ namespace ignite
                 AssetEditorCreateEvent createEvent(assetType, targetDirectory);
                 Application::GetInstance()->OnEvent(createEvent);
             });
+        }
+
+        static std::filesystem::path BuildUniqueSiblingPath(const std::filesystem::path &sourcePath)
+        {
+            const std::filesystem::path parentPath = sourcePath.parent_path();
+            const bool isDirectory = std::filesystem::is_directory(sourcePath);
+            const std::string baseName = isDirectory ? sourcePath.filename().string() : sourcePath.stem().string();
+            const std::string extension = isDirectory ? std::string() : sourcePath.extension().string();
+
+            std::filesystem::path candidate = parentPath / (baseName + "_Copy" + extension);
+            uint32_t suffix = 1;
+            while (std::filesystem::exists(candidate))
+            {
+                candidate = parentPath / std::format("{}_Copy{}{}", baseName, suffix, extension);
+                ++suffix;
+            }
+
+            return candidate;
         }
 
         static const SDL_DialogFileFilter kSkeletalMeshFilters[]
@@ -335,6 +354,48 @@ namespace ignite
                             if (ImGui::MenuItem("Material2D"))
                             {
                                 DispatchCreateAssetEditorEvent(AssetType::Material2D, m_CurrentDirectory);
+                            }
+
+                            if (ImGui::MenuItem("Material"))
+                            {
+                                Project *project = m_EditorLayer->GetActiveProject().get();
+                                if (project && m_AssetManager)
+                                {
+                                    std::string assetName = "NewMaterial";
+                                    std::filesystem::path targetDirectory = m_CurrentDirectory;
+                                    if (!std::filesystem::exists(targetDirectory))
+                                    {
+                                        std::filesystem::create_directories(targetDirectory);
+                                    }
+
+                                    std::filesystem::path fullAssetPath = targetDirectory / (assetName + GetAssetExtensionFromType(AssetType::Material));
+                                    uint32_t suffix = 1;
+                                    while (std::filesystem::exists(fullAssetPath))
+                                    {
+                                        fullAssetPath = targetDirectory / std::format("{}_{}{}", assetName, suffix, GetAssetExtensionFromType(AssetType::Material));
+                                        ++suffix;
+                                    }
+
+                                    Ref<Material> material = CreateRef<Material>();
+                                    material->name = assetName;
+                                    if (material->Serialize(fullAssetPath))
+                                    {
+                                        AssetHandle handle = AssetHandle();
+                                        AssetMetaData metadata;
+                                        metadata.type = AssetType::Material;
+                                        metadata.filepath = project->GetAssetRelativeFilepath(fullAssetPath);
+
+                                        material->handle = handle;
+                                        material->SetDirtyFlag(false);
+                                        material->SetReadyFlag(true);
+                                        m_AssetManager->AssignMetaData(handle, metadata);
+                                        m_AssetManager->AssignAsset(handle, material);
+                                        m_EditorLayer->SaveProject();
+
+                                        DispatchOpenAssetEditorEvent(handle, metadata);
+                                        m_NeedsRefresh = true;
+                                    }
+                                }
                             }
 
                             ImGui::EndMenu();
@@ -804,6 +865,11 @@ namespace ignite
                 m_ShowRenameModal = true;
             }
 
+            if (!isDirectory && ImGui::MenuItem("Duplicate"))
+            {
+                DuplicateItem(path);
+            }
+
             // Delete
             if (ImGui::MenuItem("Delete"))
             {
@@ -938,6 +1004,39 @@ namespace ignite
                 }
             }
         }
+    }
+
+    bool ContentBrowserPanel::DuplicateItem(const std::filesystem::path &filepath)
+    {
+        if (!m_EditorLayer || !m_EditorLayer->GetActiveProject() || !m_AssetManager || !std::filesystem::exists(filepath))
+        {
+            return false;
+        }
+
+        if (std::filesystem::is_directory(filepath))
+        {
+            return false;
+        }
+
+        const std::filesystem::path duplicatePath = BuildUniqueSiblingPath(filepath);
+        std::error_code ec;
+        std::filesystem::copy_file(filepath, duplicatePath, std::filesystem::copy_options::overwrite_existing, ec);
+        if (ec)
+        {
+            LOG_ERROR("[Content Browser] Failed to duplicate '{}' to '{}': {}", filepath.generic_string(), duplicatePath.generic_string(), ec.message());
+            return false;
+        }
+
+        Project *project = m_EditorLayer->GetActiveProject().get();
+        const std::filesystem::path relativeDuplicatePath = project->GetAssetRelativeFilepath(duplicatePath);
+        AssetHandle duplicateHandle = m_AssetManager->ImportAsset(relativeDuplicatePath);
+        if (duplicateHandle != AssetHandle(0))
+        {
+            DispatchOpenAssetEditorEvent(duplicateHandle, m_AssetManager->GetMetaData(duplicateHandle));
+        }
+
+        m_NeedsRefresh = true;
+        return true;
     }
 
     void ContentBrowserPanel::UIRenderNavigationBar()

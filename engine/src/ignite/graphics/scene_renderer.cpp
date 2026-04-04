@@ -1192,7 +1192,17 @@ namespace ignite
 
 					auto &primitive = m->GetPrimitive();
 
-					Ref<Material> material = m_Scene->GetProject()->GetAsset<Material>(m->GetMaterialHandle());
+					// Get override material first
+					Ref<Material> material;
+					if (smc.materialHandle != AssetHandle(0))
+					{
+						material = m_Scene->GetProject()->GetAsset<Material>(smc.materialHandle);
+					}
+					else
+					{
+						material = m_Scene->GetProject()->GetAsset<Material>(m->GetMaterialHandle());
+					}
+
 					if (!material)
 					{
 						continue;

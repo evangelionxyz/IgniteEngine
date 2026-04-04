@@ -90,9 +90,9 @@ AssetRegistry:
     - Handle: 9554496557541511132
       Type: Material
       Filepath: sphere/Material/DefaultMaterial.ixmat
-    - Handle: 9637491453112083221
-      Type: Scene
-      Filepath: Scene/TestScene.ixscene
+    - Handle: 10259601621661226170
+      Type: Material
+      Filepath: MyMaterial.ixmat
     - Handle: 10584338476988751194
       Type: AnimatorController2D
       Filepath: Animation/PlayerAnimController.ac2d

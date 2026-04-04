@@ -806,8 +806,8 @@ namespace ignite
 
 				bool isMeshLoaded = c.handle != AssetHandle(0);
 
-				std::string buttonLabel = isMeshLoaded ? "Loaded" : "Drag Mesh Here";
-                UI::DrawButtonWithColumn("Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
+				std::string buttonLabel = isMeshLoaded ? std::format("{}", (uint64_t)c.handle) : "Drag Here";
+                UI::DrawButtonWithColumn("Static Mesh", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
                     {
                         if (ImGui::BeginDragDropTarget())
                         {
@@ -833,7 +833,7 @@ namespace ignite
                             ImGui::SameLine();
                             if (ImGui::Button("X"))
                             {
-                                c.handle = AssetHandle(0); // reset the mesh
+                                c.handle = AssetHandle(0); // reset mesh handle
                             }
                         }
                     });
@@ -841,11 +841,35 @@ namespace ignite
 
                 if (isMeshLoaded)
                 {
-                    ImGui::Indent(8.0f);
-                    ImGui::TextDisabled("Handle: %llu", static_cast<u64>(c.handle));
-                    ImGui::Unindent(8.0f);
+                    const bool isMaterialLoaded = c.materialHandle != AssetHandle(0);
+                    std::string buttonLabel = isMaterialLoaded ? std::format("{}", (uint64_t)c.materialHandle) : "Drag Here";
+                    UI::DrawButtonWithColumn("Material", buttonLabel.c_str(), nullptr, [&c, this, &isMaterialLoaded]()
+                    {
+                        if (ImGui::BeginDragDropTarget())
+                        {
+                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                            {
+                                LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                                AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                                AssetMetaData metadata = assetManager->GetMetaData(handle);
+                                if (metadata.type == AssetType::Material)
+                                {
+                                    c.materialHandle = handle;
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
 
-                    Ref<StaticMesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<StaticMesh>(c.handle);
+                        if (isMaterialLoaded)
+                        {
+                            ImGui::SameLine();
+                            if (ImGui::Button("X"))
+                            {
+                                c.materialHandle = AssetHandle(0); // reset material handle
+                            }
+                        }
+                    });
                 }
             });
 

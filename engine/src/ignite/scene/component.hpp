@@ -388,6 +388,8 @@ namespace ignite
     {
     public:
         AssetHandle handle = AssetHandle(0); // class StaticMesh in mesh.h
+        AssetHandle materialHandle = AssetHandle(0); // override material
+
         Ref<ConstantBuffer> perEntityBuffer;
         nvrhi::BindingSetHandle meshBindingSet = nullptr; // Cached binding set - reused across frames
 
