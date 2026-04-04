@@ -37,6 +37,8 @@ namespace ignite {
     enum class AssetType
     {
         Invalid,
+        Metadata,
+
         Auto,
         Audio,
         Model,
@@ -94,6 +96,8 @@ namespace ignite {
 
     static std::map<std::string, AssetType> s_AssetExtensionMap =
     {
+        { ".meta", AssetType::Metadata },
+
         { ".ixproj", AssetType::Project },
         { ".ixscene", AssetType::Scene },
         { ".jpg", AssetType::Texture },
@@ -127,6 +131,8 @@ namespace ignite {
 
     static AssetType AssetTypeFromString(const std::string &typeStr)
     {
+        if (typeStr == "Metadata") return AssetType::Metadata;
+
         if (typeStr == "Scene") return AssetType::Scene;
         if (typeStr == "Texture") return AssetType::Texture;
         if (typeStr == "TextureCube") return AssetType::TextureCube;
@@ -155,6 +161,8 @@ namespace ignite {
     {
         switch (type)
         {
+        case AssetType::Metadata: return ".meta";
+
         case AssetType::StaticMesh: return ".ixsm";
         case AssetType::SkeletalMesh: return ".ixskm";
         case AssetType::Skeleton: return ".ixskel";
@@ -181,12 +189,13 @@ namespace ignite {
         return AssetType::Invalid;
     }
 
-    struct AssetMetaData
+    class AssetMetaData
     {
+    public:
         AssetMetaData() = default;
         AssetMetaData(const std::filesystem::path &filepath, const AssetType type)
             : filepath(filepath), type(type)
-        {}
+        { }
 
         std::filesystem::path filepath;
         AssetType type = AssetType::Invalid;

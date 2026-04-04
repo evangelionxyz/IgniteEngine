@@ -56,7 +56,6 @@ namespace ignite {
         return nullptr;
 	}
 
-
     Ref<SpriteSheet> AssetImporter::ImportSpriteSheet(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
     {
         if (!std::filesystem::exists(metadata.filepath))

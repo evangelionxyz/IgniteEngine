@@ -25,6 +25,7 @@
 #include "asset_importer.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/core/device/device_manager.hpp"
+#include "ignite/core/base.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/serializer/serializer.hpp"
 
@@ -56,7 +57,19 @@ namespace ignite {
             return createInfo;
         }
 
-        static std::filesystem::path GetTextureInfoPath(Project *project, const AssetMetaData &metadata)
+        static std::filesystem::path GetAssetMetaPath(Project *project, const AssetMetaData &metadata)
+        {
+            if (!project)
+            {
+                return {};
+            }
+
+            std::filesystem::path texturePath = project->GetAssetFilepath(metadata.filepath);
+            texturePath += ".meta";
+            return texturePath;
+        }
+
+        static std::filesystem::path GetLegacyTextureInfoPath(Project *project, const AssetMetaData &metadata)
         {
             if (!project)
             {
@@ -68,7 +81,7 @@ namespace ignite {
             return texturePath;
         }
 
-        static void SaveTextureCreateInfoFile(const std::filesystem::path &filepath, const TextureCreateInfo &createInfo)
+        static void SaveAssetMetaFile(const std::filesystem::path &filepath, AssetHandle handle, const AssetMetaData &metadata, const TextureCreateInfo *textureCreateInfo)
         {
             if (filepath.empty())
             {
@@ -77,32 +90,41 @@ namespace ignite {
 
             Serializer sr(filepath);
             sr.BeginMap();
-            sr.BeginMap("TextureImportSettings");
+            sr.AddKeyValue("ENGINE_VERSION", ENGINE_VERSION);
+            sr.AddKeyValue("ASSET_HANDLE", static_cast<uint64_t>(handle));
+            sr.AddKeyValue("ASSET_TYPE", AssetTypeToString(metadata.type));
 
-            sr.AddKeyValue("Width", createInfo.width);
-            sr.AddKeyValue("Height", createInfo.height);
-            sr.AddKeyValue("Depth", createInfo.depth);
-            sr.AddKeyValue("MipLevels", createInfo.mipLevels);
-            sr.AddKeyValue("ArraySize", createInfo.arraySize);
-            sr.AddKeyValue("SampleCount", createInfo.sampleCount);
-            sr.AddKeyValue("SampleQuality", createInfo.sampleQuality);
+            sr.BeginMap("DATA");
 
-            sr.AddKeyValue("Flip", createInfo.flip);
-            sr.AddKeyValue("IsRenderTarget", createInfo.isRenderTarget);
-            sr.AddKeyValue("IsTypeless", createInfo.isTypeless);
-            sr.AddKeyValue("IsUAV", createInfo.isUAV);
-            sr.AddKeyValue("IsShadingRateSurface", createInfo.isShadingRateSurface);
-            sr.AddKeyValue("KeepCpuData", createInfo.keepCpuData);
-            sr.AddKeyValue("DeferGpuCreate", createInfo.deferGpuCreate);
-            sr.AddKeyValue("KeepInitialState", createInfo.keepInitialState);
-            sr.AddKeyValue("SamplerLinearFiltering", createInfo.samplerLinearFiltering);
+            if (textureCreateInfo)
+            {
+                const TextureCreateInfo &createInfo = *textureCreateInfo;
 
-            sr.AddKeyValue("Format", static_cast<uint32_t>(createInfo.format));
-            sr.AddKeyValue("InitialState", static_cast<uint32_t>(createInfo.initialState));
-            sr.AddKeyValue("Dimension", static_cast<uint32_t>(createInfo.dimension));
-            sr.AddKeyValue("SamplerAddressU", static_cast<uint32_t>(createInfo.samplerAddressU));
-            sr.AddKeyValue("SamplerAddressV", static_cast<uint32_t>(createInfo.samplerAddressV));
-            sr.AddKeyValue("SamplerAddressW", static_cast<uint32_t>(createInfo.samplerAddressW));
+                sr.AddKeyValue("Width", createInfo.width);
+                sr.AddKeyValue("Height", createInfo.height);
+                sr.AddKeyValue("Depth", createInfo.depth);
+                sr.AddKeyValue("MipLevels", createInfo.mipLevels);
+                sr.AddKeyValue("ArraySize", createInfo.arraySize);
+                sr.AddKeyValue("SampleCount", createInfo.sampleCount);
+                sr.AddKeyValue("SampleQuality", createInfo.sampleQuality);
+
+                sr.AddKeyValue("Flip", createInfo.flip);
+                sr.AddKeyValue("IsRenderTarget", createInfo.isRenderTarget);
+                sr.AddKeyValue("IsTypeless", createInfo.isTypeless);
+                sr.AddKeyValue("IsUAV", createInfo.isUAV);
+                sr.AddKeyValue("IsShadingRateSurface", createInfo.isShadingRateSurface);
+                sr.AddKeyValue("KeepCpuData", createInfo.keepCpuData);
+                sr.AddKeyValue("DeferGpuCreate", createInfo.deferGpuCreate);
+                sr.AddKeyValue("KeepInitialState", createInfo.keepInitialState);
+                sr.AddKeyValue("SamplerLinearFiltering", createInfo.samplerLinearFiltering);
+
+                sr.AddKeyValue("Format", static_cast<uint32_t>(createInfo.format));
+                sr.AddKeyValue("InitialState", static_cast<uint32_t>(createInfo.initialState));
+                sr.AddKeyValue("Dimension", static_cast<uint32_t>(createInfo.dimension));
+                sr.AddKeyValue("SamplerAddressU", static_cast<uint32_t>(createInfo.samplerAddressU));
+                sr.AddKeyValue("SamplerAddressV", static_cast<uint32_t>(createInfo.samplerAddressV));
+                sr.AddKeyValue("SamplerAddressW", static_cast<uint32_t>(createInfo.samplerAddressW));
+            }
 
             sr.EndMap();
             sr.EndMap();
@@ -117,7 +139,12 @@ namespace ignite {
             }
 
             YAML::Node root = Serializer::Deserialize(filepath);
-            YAML::Node node = root["TextureImportSettings"];
+            YAML::Node node = root["DATA"];
+            if (!node)
+            {
+                // Backward compatibility with legacy texture settings files.
+                node = root["TextureImportSettings"];
+            }
             if (!node)
             {
                 return false;
@@ -282,23 +309,32 @@ namespace ignite {
         IGN_PROFILE_FUNCTION();
 
         m_AssetRegistry[handle] = metadata;
+        const std::filesystem::path metadataPath = GetAssetMetaPath(m_Project, metadata);
 
         if (metadata.type == AssetType::Texture)
         {
             TextureCreateInfo createInfo = GetDefaultTextureCreateInfo(metadata);
-            const std::filesystem::path infoPath = GetTextureInfoPath(m_Project, metadata);
-            if (!LoadTextureCreateInfoFile(infoPath, createInfo))
+            if (!LoadTextureCreateInfoFile(metadataPath, createInfo))
             {
-                SaveTextureCreateInfoFile(infoPath, createInfo);
+                const std::filesystem::path legacyTextureInfoPath = GetLegacyTextureInfoPath(m_Project, metadata);
+                LoadTextureCreateInfoFile(legacyTextureInfoPath, createInfo);
             }
 
-            std::unique_lock lock(s_AssetThreadMutex);
-            m_TextureCreateInfos[handle] = createInfo;
+            {
+                std::unique_lock lock(s_AssetThreadMutex);
+                m_TextureCreateInfos[handle] = createInfo;
+            }
+
+            SaveAssetMetaFile(metadataPath, handle, metadata, &createInfo);
         }
         else
         {
-            std::unique_lock lock(s_AssetThreadMutex);
-            m_TextureCreateInfos.erase(handle);
+            {
+                std::unique_lock lock(s_AssetThreadMutex);
+                m_TextureCreateInfos.erase(handle);
+            }
+
+            SaveAssetMetaFile(metadataPath, handle, metadata, nullptr);
         }
     }
 
@@ -321,11 +357,14 @@ namespace ignite {
 
         const AssetMetaData &metadata = GetMetaData(handle);
         TextureCreateInfo createInfo = GetDefaultTextureCreateInfo(metadata);
-        const std::filesystem::path infoPath = GetTextureInfoPath(m_Project, metadata);
-        if (!LoadTextureCreateInfoFile(infoPath, createInfo))
+        const std::filesystem::path metadataPath = GetAssetMetaPath(m_Project, metadata);
+        if (!LoadTextureCreateInfoFile(metadataPath, createInfo))
         {
-            SaveTextureCreateInfoFile(infoPath, createInfo);
+            const std::filesystem::path legacyTextureInfoPath = GetLegacyTextureInfoPath(m_Project, metadata);
+            LoadTextureCreateInfoFile(legacyTextureInfoPath, createInfo);
         }
+
+        SaveAssetMetaFile(metadataPath, handle, metadata, &createInfo);
 
         return createInfo;
     }
@@ -352,7 +391,7 @@ namespace ignite {
 
         if (saveToDisk)
         {
-            SaveTextureCreateInfoFile(GetTextureInfoPath(m_Project, metadata), createInfo);
+            SaveAssetMetaFile(GetAssetMetaPath(m_Project, metadata), handle, metadata, &createInfo);
         }
     }
 

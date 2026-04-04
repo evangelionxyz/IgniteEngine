@@ -652,6 +652,11 @@ namespace ignite
 
         for (const auto &entry : std::filesystem::directory_iterator(directory))
         {
+            if (!entry.is_directory() && entry.path().extension() == ".meta")
+            {
+                continue;
+            }
+
             const std::filesystem::path &relativePath = std::filesystem::relative(entry.path(), assetPath);
             uint32_t currentNodeIndex = 0;
             
