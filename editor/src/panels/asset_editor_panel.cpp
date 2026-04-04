@@ -13,6 +13,7 @@
 #include "ignite/scene/sprite_sheet.hpp"
 #include "ignite/serializer/binary_serializer.hpp"
 #include "ignite/serializer/serializer.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -1585,6 +1586,7 @@ namespace ignite
 
     void AssetEditorPanel::OnGuiRender()
     {
+        IGN_PROFILE_FUNCTION();
         RenderCreateAssetPopup();
 
         for (auto &assetData : m_Assets)

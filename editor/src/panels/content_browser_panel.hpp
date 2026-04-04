@@ -81,7 +81,7 @@ namespace ignite
         std::filesystem::path GetNodeFullpath(uint32_t nodeIndex) const;
         
         bool IsImageFile(const std::filesystem::path &filepath) const;
-        Ref<Texture> GetOrCreateThumbnail(const std::filesystem::path &filepath);
+        Ref<Texture> GetOrCreateThumbnail(const std::filesystem::path &filepath, bool isDirectory);
         ImVec2 CalculateThumbnailDisplaySize(Ref<Texture> texture, float maxSize) const;
         void StartThumbnailLoad(const std::filesystem::path &filepath);
         void UnloadUnusedThumbnails();

@@ -104,6 +104,8 @@ namespace ignite
         template<typename T>
         Ref<T> GetAsset(AssetHandle handle, AssetType requestAssetType = AssetType::Auto)
         {
+            IGN_PROFILE_FUNCTION();
+
             Ref<Asset> asset = m_AssetManager->GetAsset(handle, requestAssetType);
             if (!asset)
             {

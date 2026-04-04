@@ -333,8 +333,6 @@ namespace ignite
         }
         }
 
-        // Prevent shared camera constant-buffer hazards between back-to-back viewport renders.
-        m_Device->waitForIdle();
 
         if (m_ScenePanel->m_Data.sceneViewportGameplayVisible)
         {
@@ -403,6 +401,7 @@ namespace ignite
 
     void EditorLayer::OnGuiRender()
     {
+        IGN_PROFILE_FUNCTION();
         constexpr ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_MenuBar
             | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
 

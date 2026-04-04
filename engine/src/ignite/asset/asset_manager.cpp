@@ -459,6 +459,8 @@ namespace ignite {
 
     Ref<Asset> AssetManager::GetAsset(AssetHandle handle, AssetType requestedAssetType)
     {
+        IGN_PROFILE_FUNCTION();
+
         if (!IsAssetHandleValid(handle))
         {
             return nullptr;
@@ -639,6 +641,8 @@ namespace ignite {
 
     Ref<Asset> AssetManager::Import(AssetHandle handle, const AssetMetaData &metadata, AssetType requestedAssetType)
     {
+        IGN_PROFILE_FUNCTION();
+
         // Check if already loaded (thread-safe read)
         {
             std::unique_lock lock(s_AssetThreadMutex);

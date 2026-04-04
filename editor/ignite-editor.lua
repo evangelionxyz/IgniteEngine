@@ -47,6 +47,7 @@ project "IgniteEditor"
         "%{IncludeDir.MSDFATLASGEN}",
         "%{IncludeDir.MSDFGEN}",
         "%{IncludeDir.FREETYPE}",
+        "%{IncludeDir.TRACY}",
         "%{IncludeDir.JSON}",
         "%{IncludeDir.MochiSharpNative}",
         "%{IncludeDir.Hostfxr}"
@@ -90,6 +91,7 @@ project "IgniteEditor"
         defines {
             "DEBUG",
             "_DEBUG",
+            "IGN_ENABLE_TRACY"
         }
 
     filter "configurations:Release"

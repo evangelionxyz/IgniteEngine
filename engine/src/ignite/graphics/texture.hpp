@@ -27,6 +27,7 @@
 #include "ignite/asset/asset.hpp"
 #include "ignite/core/types.hpp"
 #include "ignite/core/buffer.hpp"
+#include "mip_generator.hpp"
 #include <filesystem>
 
 namespace ignite
@@ -82,6 +83,8 @@ namespace ignite
 
         void SetData(nvrhi::ICommandList *cmd, uint32_t channelCount);
         void SetData(nvrhi::ICommandList *cmd, uint32_t rowPitch, uint32_t depthPitch);
+        void PrepareUploadData(uint32_t channelCount);
+        void PrepareUploadData(uint32_t rowPitch, uint32_t depthPitch);
 
         TextureCreateInfo GetCreateInfo() const { return m_CreateInfo; }
         nvrhi::TextureHandle GetHandle() { return m_Handle; }
@@ -116,6 +119,8 @@ namespace ignite
         nvrhi::SamplerHandle m_Sampler;
         std::string m_DebugName;
         bool m_TracyAllocationTracked = false;
+        bool m_UploadDataPrepared = false;
+        std::vector<MipLevelData> m_PreparedMipChain;
     };
 
 }

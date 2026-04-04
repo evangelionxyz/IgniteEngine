@@ -18,6 +18,7 @@
 #include "ignite/graphics/objects/material_2d.hpp"
 
 #include <array>
+#include <unordered_map>
 
 namespace ignite
 {
@@ -44,6 +45,7 @@ namespace ignite
     class Texture;
     class RenderTarget;
     class Font;
+    class Project;
 
     class Sprite2DComponent;
 
@@ -107,6 +109,10 @@ namespace ignite
 
         void DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing, uint32_t objectID = 0xFFFFFFFFu);
 
+        Ref<Texture> ResolveTexture(Project *project, AssetHandle handle);
+        Ref<Material2D> ResolveMaterial2D(Project *project, AssetHandle handle);
+        void ClearAssetResolveCache();
+
         void InitQuadData();
         void InitLineData();
         void InitCircleData();
@@ -131,6 +137,30 @@ namespace ignite
         Ref<ConstantBuffer> m_Material2DLightingBuffer;
         Material2DLighting_GPUData m_Material2DLightingData;
         bool m_Material2DLightingDirty = true;
+
+        struct AssetResolveKey
+        {
+            Project *project = nullptr;
+            AssetHandle handle = AssetHandle(0);
+
+            bool operator==(const AssetResolveKey &other) const noexcept
+            {
+                return project == other.project && handle == other.handle;
+            }
+        };
+
+        struct AssetResolveKeyHash
+        {
+            size_t operator()(const AssetResolveKey &key) const noexcept
+            {
+                size_t h = std::hash<const void *>{}(key.project);
+                h ^= (std::hash<AssetHandle>{}(key.handle) + 0x9e3779b9 + (h << 6) + (h >> 2));
+                return h;
+            }
+        };
+
+        std::unordered_map<AssetResolveKey, Ref<Texture>, AssetResolveKeyHash> m_TextureResolveCache;
+        std::unordered_map<AssetResolveKey, Ref<Material2D>, AssetResolveKeyHash> m_Material2DResolveCache;
     };
 }
 

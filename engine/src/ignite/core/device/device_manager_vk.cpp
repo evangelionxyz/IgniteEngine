@@ -23,6 +23,7 @@
 
 #include "ignite/graphics/window.hpp"
 #include "ignite/graphics/texture.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 
 #include "device_manager_vk.hpp"
 #include "device_manager.hpp"
@@ -387,11 +388,11 @@ namespace ignite
         {
             res = m_VulkanDevice.acquireNextImageKHR(
                 m_SwapChain,
-                0, // non-blocking acquire to avoid indefinite wait issues on surfaces without guaranteed forward progress
+                std::numeric_limits<uint64_t>::max(), // blocking acquire to wait for vsync or swapchain images
                 semaphore,
                 vk::Fence(),
                 &m_SwapChainIndex);
-            
+
             if (res == vk::Result::eErrorOutOfDateKHR && attempt < maxAttempts)
             {
                 ResizeSwapChain();
@@ -422,43 +423,15 @@ namespace ignite
 
     bool DeviceManager_VK::Present()
     {
+        IGN_PROFILE_FUNCTION();
         const auto &semaphore = m_PresentSemaphores[m_PresentSemaphoreIndex];
-
-        m_NvrhiDevice->queueSignalSemaphore(nvrhi::CommandQueue::Graphics, semaphore, 0);
-
-        // NVRHI buffers the semaphores and signals them when something is submitted to a queue.
-        // Call 'executeCommandLists' with no command lists to actually signal the semaphore.
-        m_NvrhiDevice->executeCommandLists(nullptr, 0);
-
-        vk::PresentInfoKHR info = vk::PresentInfoKHR()
-            .setWaitSemaphoreCount(1)
-            .setPWaitSemaphores(&semaphore)
-            .setSwapchainCount(1)
-            .setPSwapchains(&m_SwapChain)
-            .setPImageIndices(&m_SwapChainIndex);
-
-        const vk::Result res = m_PresentQueue.presentKHR(&info);
-        if (!(res == vk::Result::eSuccess || res == vk::Result::eErrorOutOfDateKHR))
-        {
-            return false;
-        }
-
-        m_PresentSemaphoreIndex = (m_PresentSemaphoreIndex + 1) % m_PresentSemaphores.size();
-
-#ifndef PLATFORM_WINDOWS
-        if (m_DeviceParameters.vsyncEnable || m_DeviceParameters.enableDebugRuntime)
-        {
-            // according to vulkan-tutorial.com, "the validation layer implementation expects
-            // the application to explicitly synchronize with the GPU"
-            m_PresentQueue.waitIdle();
-        }
-#endif
 
         while (m_FramesInFlight.size() >= m_DeviceParameters.maxFramesInFlight)
         {
             auto query = m_FramesInFlight.front();
             m_FramesInFlight.pop();
 
+            IGN_PROFILE_SCOPE("DeviceManager_VK::Present::WaitEventQuery");
             m_NvrhiDevice->waitEventQuery(query);
 
             m_QueryPool.push_back(query);
@@ -478,6 +451,43 @@ namespace ignite
         m_NvrhiDevice->resetEventQuery(query);
         m_NvrhiDevice->setEventQuery(query, nvrhi::CommandQueue::Graphics);
         m_FramesInFlight.push(query);
+
+        {
+            IGN_PROFILE_SCOPE("DeviceManager_VK::Present::SignalSemaphore");
+            m_NvrhiDevice->queueSignalSemaphore(nvrhi::CommandQueue::Graphics, semaphore, 0);
+
+            // NVRHI buffers the semaphores and signals them when something is submitted to a queue.
+            // Call 'executeCommandLists' with no command lists to actually signal the semaphore.
+            m_NvrhiDevice->executeCommandLists(nullptr, 0);
+        }
+
+        vk::PresentInfoKHR info = vk::PresentInfoKHR()
+            .setWaitSemaphoreCount(1)
+            .setPWaitSemaphores(&semaphore)
+            .setSwapchainCount(1)
+            .setPSwapchains(&m_SwapChain)
+            .setPImageIndices(&m_SwapChainIndex);
+
+        vk::Result res;
+        {
+            IGN_PROFILE_SCOPE("DeviceManager_VK::Present::PresentKHR");
+            res = m_PresentQueue.presentKHR(&info);
+        }
+        if (!(res == vk::Result::eSuccess || res == vk::Result::eErrorOutOfDateKHR))
+        {
+            return false;
+        }
+
+        m_PresentSemaphoreIndex = (m_PresentSemaphoreIndex + 1) % m_PresentSemaphores.size();
+
+#ifndef PLATFORM_WINDOWS
+        if (m_DeviceParameters.vsyncEnable || m_DeviceParameters.enableDebugRuntime)
+        {
+            // according to vulkan-tutorial.com, "the validation layer implementation expects
+            // the application to explicitly synchronize with the GPU"
+            m_PresentQueue.waitIdle();
+        }
+#endif
 
         return true;
     }

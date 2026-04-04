@@ -20,6 +20,7 @@
 #include "ignite/scripting/script_field.hpp"
 #include "ignite/scripting/script_instance.hpp"
 #include "ignite/asset/asset_importer.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/sprite_sheet.hpp"
 #include "ignite/scene/entity_destroy_command.hpp"
@@ -151,16 +152,31 @@ namespace ignite
 
     void ScenePanel::OnGuiRender()
     {
+        IGN_PROFILE_FUNCTION();
         ImGui::ShowDemoWindow();
 
         if (m_Scene)
         {
-            RenderInspector();
-            RenderHierarchy();
+            {
+                IGN_PROFILE_SCOPE("ScenePanel::RenderInspector");
+                RenderInspector();
+            }
+
+            {
+                IGN_PROFILE_SCOPE("ScenePanel::RenderHierarchy");
+                RenderHierarchy();
+            }
         }
-        
-        RenderSceneGameViewport();
-        RenderSceneEditViewport();
+
+        {
+            IGN_PROFILE_SCOPE("ScenePanel::RenderSceneGameViewport");
+            RenderSceneGameViewport();
+        }
+
+        {
+            IGN_PROFILE_SCOPE("ScenePanel::RenderSceneEditViewport");
+            RenderSceneEditViewport();
+        }
     }
 
     void ScenePanel::OnUpdate(float deltaTime)
@@ -170,6 +186,7 @@ namespace ignite
 
     void ScenePanel::RenderHierarchy()
     {
+        IGN_PROFILE_FUNCTION();
         ImGui::Begin("Hierarchy");
         ImGui::Button(m_Scene->name.c_str(), { ImGui::GetContentRegionAvail().x, 0.0f });
 
@@ -306,6 +323,7 @@ namespace ignite
 
     void ScenePanel::RenderEntityNode(Entity entity)
     {
+        IGN_PROFILE_FUNCTION();
         if (!entity.IsValid())
             return;
 
@@ -461,6 +479,7 @@ namespace ignite
 
     void ScenePanel::RenderInspector()
     {
+        IGN_PROFILE_FUNCTION();
         ImGui::Begin("Inspector");
 
         Entity selectedEntity = GetSelectedEntity();
@@ -1639,6 +1658,7 @@ namespace ignite
 
     void ScenePanel::RenderSceneEditViewport()
     {
+        IGN_PROFILE_FUNCTION();
         ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 
         if (m_Scene && m_Scene->IsDirty())
@@ -2173,6 +2193,7 @@ namespace ignite
 
     void ScenePanel::Render2DBoundsSizing()
     {
+        IGN_PROFILE_FUNCTION();
         m_Data.is2DBoundsHovered = false;
 
         auto clearResizeState = [this]()
@@ -2364,6 +2385,7 @@ namespace ignite
 
 	void ScenePanel::RenderSceneGameViewport()
 	{
+        IGN_PROFILE_FUNCTION();
 		m_Data.sceneViewportGameplayVisible = ImGui::Begin("Game");
 
         if (m_Data.sceneViewportGameplayVisible)

@@ -6,6 +6,7 @@
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/font.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 #include "ignite/serializer/binary_serializer.hpp"
 #include "ignite/serializer/serializer.hpp"
 
@@ -71,6 +72,7 @@ namespace ignite
 
 	void AssetImporterPanel::OnGuiRender()
 	{
+		IGN_PROFILE_FUNCTION();
 		if (!m_ShowImporterWindow)
 		{
 			return;

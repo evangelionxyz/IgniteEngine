@@ -4,6 +4,7 @@
 #include "ignite/project/project.hpp"
 #include "editor_layer.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 #include "ignite/scene/sprite_sheet.hpp"
 
 #include "ignite/core/input/asset_import_event.hpp"
@@ -145,6 +146,8 @@ namespace ignite
 
     void ContentBrowserPanel::UIRenderFileTree(FileTreeNode *node)
     {
+        IGN_PROFILE_SCOPE_COLOR("ContentBrowser::UIRenderFileTree", 0xCD5C5C);
+
         if (node->path.empty())
             return;
 
@@ -208,6 +211,7 @@ namespace ignite
 
     void ContentBrowserPanel::OnGuiRender()
     {
+        IGN_PROFILE_FUNCTION();
         if (ImGui::Begin("Content Browser"))
         {
             if (!m_EditorLayer->GetActiveProject())
@@ -223,6 +227,8 @@ namespace ignite
             // ---------- FILE TREE ----------
             // -------------------------------
             {
+                IGN_PROFILE_SCOPE_COLOR("ContentBrowser::FileTree", 0xCD5C5C);
+
                 // Left side directory tree
                 ImGui::BeginChild("left_item_browser", { 300.0f, 0.0f }, ImGuiChildFlags_ResizeX);
                 if (!m_TreeNodes.empty())
@@ -242,6 +248,8 @@ namespace ignite
             // ---------- FILE LIST ----------
             // -------------------------------
             {
+                IGN_PROFILE_SCOPE_COLOR("ContentBrowser::FileList", 0xCD5C5C);
+
                 ImGui::BeginChild("##file_lists", { 0.0f, 0.0f });
 
                 // Insert path nodes
@@ -251,16 +259,19 @@ namespace ignite
                     auto f = m_EditorLayer->GetActiveProject()->GetAssetDirectory();
                     const auto &relativePath = std::filesystem::relative(m_CurrentDirectory, f);
 
-                    for (const auto &path : relativePath)
                     {
-                        if (node->path == relativePath)
+                        IGN_PROFILE_SCOPE_COLOR("ContentBrowser::Submitting paths", 0xCD5C5C);
+                        for (const auto &path : relativePath)
                         {
-                            break;
-                        }
+                            if (node->path == relativePath)
+                            {
+                                break;
+                            }
 
-                        if (node->children.contains(path))
-                        {
-                            node = &m_TreeNodes[node->children[path]];
+                            if (node->children.contains(path))
+                            {
+                                node = &m_TreeNodes[node->children[path]];
+                            }
                         }
                     }
 
@@ -696,12 +707,16 @@ namespace ignite
 
     void ContentBrowserPanel::UIRenderFileButton(const std::filesystem::path &item)
     {
+        IGN_PROFILE_SCOPE_COLOR("ContentBrowser::UIRenderFileButton", 0xCD5C5C);
+
         std::filesystem::path path = m_CurrentDirectory / item;
-        if (!std::filesystem::exists(path))
+        std::error_code statusError;
+        const std::filesystem::file_status fileStatus = std::filesystem::status(path, statusError);
+        if (statusError || !std::filesystem::exists(fileStatus))
             return;
 
-        const bool isDirectory = std::filesystem::is_directory(path);
-        Ref<Texture> icon = GetOrCreateThumbnail(path);
+        const bool isDirectory = std::filesystem::is_directory(fileStatus);
+        Ref<Texture> icon = GetOrCreateThumbnail(path, isDirectory);
         if (!icon)
         {
             // fallback, because it is generated asynchronously
@@ -837,7 +852,7 @@ namespace ignite
         DragDropSource(m_CurrentDirectory / item);
         ImGui::TextWrapped("%s", item.generic_string().c_str());
 
-        if (!isDirectory)
+        if (!isDirectory && item.extension() == ".ixsp")
         {
             Project *project = m_EditorLayer->GetActiveProject().get();
             const std::filesystem::path relativeAssetPath = project->GetAssetRelativeFilepath(path);
@@ -923,6 +938,8 @@ namespace ignite
 
     void ContentBrowserPanel::UIRenderNavigationBar()
     {
+        IGN_PROFILE_SCOPE_COLOR("ContentBrowser::UIRenderNavigationBar", 0xCD5C5C);
+
         const ImGuiStyle &style = ImGui::GetStyle();
 
         const auto navbarBtSize = ImVec2(40.0f, 24.0f);
@@ -1364,13 +1381,17 @@ namespace ignite
     ImVec2 ContentBrowserPanel::CalculateThumbnailDisplaySize(Ref<Texture> texture, float maxSize) const
     {
         if (!texture)
+        {
             return ImVec2(maxSize, maxSize);
+        }
 
         float textureWidth = static_cast<float>(texture->GetWidth());
         float textureHeight = static_cast<float>(texture->GetHeight());
 
         if (textureWidth <= 0 || textureHeight <= 0)
+        {
             return ImVec2(maxSize, maxSize);
+        }
 
         float aspectRatio = textureWidth / textureHeight;
         ImVec2 displaySize;
@@ -1391,11 +1412,11 @@ namespace ignite
         return displaySize;
     }
 
-    Ref<Texture> ContentBrowserPanel::GetOrCreateThumbnail(const std::filesystem::path &filepath)
+    Ref<Texture> ContentBrowserPanel::GetOrCreateThumbnail(const std::filesystem::path &filepath, bool isDirectory)
     {
-        LOG_ASSERT(std::filesystem::exists(filepath), "Failed to generate {}", filepath.generic_string());
+        IGN_PROFILE_SCOPE_COLOR("ContentBrowser::GetOrCreateThumbnail", 0xFFFFF0);
         
-        if (std::filesystem::is_directory(filepath))
+        if (isDirectory)
             return m_Icons["folder"];
 
         auto it = m_Thumbnails.find(filepath);
@@ -1413,9 +1434,8 @@ namespace ignite
             return it->second.thumbnail;
         }
 
-        // Genrate image only
-        const std::string ext = filepath.extension().string();
-        if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".hdr")
+        // Generate image only
+        if (IsImageFile(filepath))
         {
             // Create placeholder entry to prevent duplicate jobs
             FileThumbnail placeholder;

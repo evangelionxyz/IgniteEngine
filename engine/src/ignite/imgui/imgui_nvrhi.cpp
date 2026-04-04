@@ -95,8 +95,6 @@ namespace ignite
 
     bool ImGui_NVRHI::UpdateFontTexture()
     {
-        std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
-
         ImGuiIO &io = ImGui::GetIO();
 
         // If the font texture exists and is bound to ImGui, we're done.
@@ -107,6 +105,7 @@ namespace ignite
         unsigned char *pixels;
         i32 width, height;
 
+        // Atlas build is CPU-only — no GPU lock needed here.
         io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
         if (!pixels)
             return false;
@@ -121,14 +120,17 @@ namespace ignite
         LOG_ASSERT(fontTexture, "Failed to create imgui font texture");
 
         commandList->open();
-
         commandList->beginTrackingTextureState(fontTexture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
         commandList->writeTexture(fontTexture, 0, 0, pixels, width * 4);
         commandList->setPermanentTextureState(fontTexture, nvrhi::ResourceStates::ShaderResource);
         commandList->commitBarriers();
-
         commandList->close();
-        m_Device->executeCommandList(commandList);
+
+        // Narrow the GPU-queue lock to the submit only.
+        {
+            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+            m_Device->executeCommandList(commandList);
+        }
 
         io.Fonts->TexID = (ImTextureID)fontTexture.Get();
 
@@ -198,7 +200,9 @@ namespace ignite
 
     bool ImGui_NVRHI::Render(ImDrawData *drawData, nvrhi::IFramebuffer *framebuffer)
     {
-        std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+        // No top-level queue lock — the main thread contends on this mutex during
+        // BeginFrame and Present, so holding it for the full command-list build
+        // causes WaitForFrameReady to stall. We scope it to the submit only.
 
         if (!drawData || drawData->CmdListsCount <= 0)
             return true;
@@ -300,7 +304,12 @@ namespace ignite
 
         commandList->endMarker();
         commandList->close();
-        m_Device->executeCommandList(commandList);
+
+        // Narrow the GPU-queue lock to the submit only.
+        {
+            std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+            m_Device->executeCommandList(commandList);
+        }
 
         return true;
     }
@@ -460,8 +469,11 @@ namespace ignite
             idxDst += cmdList->IdxBuffer.Size;
         }
 
-        commandList->writeBuffer(vertexBuffer, imguiVertexBuffer.data(), vertexBuffer->getDesc().byteSize);
-        commandList->writeBuffer(indexBuffer, imguiIndexBuffer.data(), indexBuffer->getDesc().byteSize);
+        // Upload only the bytes actually written — not the full over-allocated capacity.
+        const size_t actualVtxBytes = static_cast<size_t>(drawData->TotalVtxCount) * sizeof(ImGuiVertexData);
+        const size_t actualIdxBytes = static_cast<size_t>(drawData->TotalIdxCount) * sizeof(ImDrawIdx);
+        commandList->writeBuffer(vertexBuffer, imguiVertexBuffer.data(), actualVtxBytes);
+        commandList->writeBuffer(indexBuffer,  imguiIndexBuffer.data(),  actualIdxBytes);
 
         return true;
     }

@@ -755,6 +755,7 @@ namespace ignite {
         }
 
         result->handle = handle;
+        result->PrepareUploadData(4);
 
         // Submit GPU upload to main thread with proper synchronization
         Application::SubmitToRenderThread([texture = result]()

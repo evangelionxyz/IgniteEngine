@@ -573,7 +573,11 @@ namespace ignite
         }
 
         const UINT bufferIndex = m_SwapChain->GetCurrentBackBufferIndex();
-        WaitForSingleObject(m_FrameFenceEvents[bufferIndex], INFINITE);
+        const DWORD waitResult = WaitForSingleObject(m_FrameFenceEvents[bufferIndex], 0);
+        if (waitResult != WAIT_OBJECT_0)
+        {
+            return false;
+        }
         return true;
     }
 

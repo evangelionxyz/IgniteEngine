@@ -171,7 +171,6 @@ project "IgniteEngine"
             symbols "on" -- with debug info
             defines {
                 "IGN_RELEASE_BUILD",
-                "IGN_ENABLE_TRACY",
                 "NDEBUG"
             }
             links {

@@ -192,9 +192,59 @@ namespace ignite
         m_Handle = nullptr;
     }
 
+    void Texture::PrepareUploadData(uint32_t rowPitch, uint32_t depthPitch)
+    {
+        IGN_PROFILE_FUNCTION();
+        (void)depthPitch;
+        if (!m_Buffer.data)
+        {
+            return;
+        }
+
+        if (m_UploadDataPrepared)
+        {
+            return;
+        }
+
+        if (m_CreateInfo.format == nvrhi::Format::RGBA8_UNORM)
+        {
+            if (m_CreateInfo.flip)
+            {
+                FlipImageBuffer(m_Buffer, m_CreateInfo.width, m_CreateInfo.height, rowPitch);
+            }
+
+            uint8_t *byteData = static_cast<uint8_t *>(m_Buffer.data);
+            m_PreparedMipChain = CPUMipGenerator::GenerateMipChain(byteData,
+                m_CreateInfo.width, m_CreateInfo.height, rowPitch,
+                m_CreateInfo.format, m_CreateInfo.mipLevels);
+            m_UploadDataPrepared = true;
+        }
+        else if (m_CreateInfo.format == nvrhi::Format::RGBA32_FLOAT)
+        {
+            if (m_CreateInfo.flip)
+            {
+                FlipImageBuffer(m_Buffer, m_CreateInfo.width, m_CreateInfo.height, rowPitch * sizeof(float));
+            }
+
+            float *floatData = reinterpret_cast<float *>(m_Buffer.data);
+            m_PreparedMipChain = CPUMipGenerator::GenerateMipChain(floatData,
+                m_CreateInfo.width, m_CreateInfo.height, rowPitch * sizeof(float),
+                m_CreateInfo.format, m_CreateInfo.mipLevels);
+            m_UploadDataPrepared = true;
+        }
+    }
+
+    void Texture::PrepareUploadData(uint32_t channelCount)
+    {
+        const uint32_t rowPitch = m_CreateInfo.width * channelCount;
+        const uint32_t depthPitch = rowPitch * m_CreateInfo.height;
+        PrepareUploadData(rowPitch, depthPitch);
+    }
+
     void Texture::SetData(nvrhi::ICommandList *cmd, uint32_t rowPitch, uint32_t depthPitch)
     {
         IGN_PROFILE_FUNCTION();
+        (void)depthPitch;
         if (!m_Buffer.data)
         {
             return;
@@ -202,52 +252,21 @@ namespace ignite
 
         EnsureTextureHandle();
 
-        if (m_CreateInfo.format == nvrhi::Format::RGBA8_UNORM)
+        PrepareUploadData(rowPitch, depthPitch);
+
+        if (!m_PreparedMipChain.empty())
         {
-            // char = 1 byte, 8 bit
-            if (m_CreateInfo.flip)
+            for (uint32_t mip = 0; mip < m_CreateInfo.mipLevels && mip < m_PreparedMipChain.size(); ++mip)
             {
-                FlipImageBuffer(m_Buffer, m_CreateInfo.width, m_CreateInfo.height, rowPitch);
-            }
-
-            uint8_t *byteData = static_cast<uint8_t *>(m_Buffer.data);
-
-            auto mipChain = CPUMipGenerator::GenerateMipChain(byteData,
-                m_CreateInfo.width, m_CreateInfo.height, rowPitch,
-                m_CreateInfo.format, m_CreateInfo.mipLevels);
-
-            // Upload all mip levels
-            for (uint32_t mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
-            {
-                const auto &mipData = mipChain[mip];
-                cmd->writeTexture(m_Handle, 0, mip, mipData.data.data(), mipData.rowPitch);
-            }
-        }
-        else if (m_CreateInfo.format == nvrhi::Format::RGBA32_FLOAT)
-        {
-            // float = 4 bytes, 32 bit, we need to multiply sizeof(float)
-            if (m_CreateInfo.flip)
-            {
-                FlipImageBuffer(m_Buffer, m_CreateInfo.width, m_CreateInfo.height, rowPitch * sizeof(float));
-            }
-
-            float *floatData = reinterpret_cast<float *>(m_Buffer.data);
-
-            auto mipChain = CPUMipGenerator::GenerateMipChain(floatData,
-                m_CreateInfo.width, m_CreateInfo.height, rowPitch * sizeof(float),
-                m_CreateInfo.format, m_CreateInfo.mipLevels);
-
-
-            // Upload all mip levels
-            for (uint32_t mip = 0; mip < m_CreateInfo.mipLevels && mip < mipChain.size(); ++mip)
-            {
-                const auto &mipData = mipChain[mip];
-                cmd->writeTexture(m_Handle, 0, mip, mipData.data.data(), rowPitch * sizeof(float), depthPitch * sizeof(float));
+                const auto &mipData = m_PreparedMipChain[mip];
+                cmd->writeTexture(m_Handle, 0, mip, mipData.data.data(), mipData.rowPitch, mipData.slicePitch);
             }
         }
 
         if (!m_CreateInfo.keepCpuData)
         {
+            m_PreparedMipChain.clear();
+            m_UploadDataPrepared = false;
             m_Buffer.Release();
         }
     }

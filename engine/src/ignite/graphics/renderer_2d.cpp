@@ -13,6 +13,7 @@
 
 #include "font.hpp"
 #include "texture.hpp"
+#include "ignite/project/project.hpp"
 
 #include <stb_image.h>
 #include <algorithm>
@@ -41,6 +42,8 @@ namespace ignite
     template<typename VertexType>
     static void ResizeBatch(BatchRender<VertexType> &batch, uint32_t newMaxCount, bool recreateIndexBuffer, nvrhi::ICommandList *uploadCmd)
     {
+        IGN_PROFILE_FUNCTION();
+
         if (newMaxCount == 0 || newMaxCount == batch.maxCount)
             return;
 
@@ -111,6 +114,8 @@ namespace ignite
     template<typename VertexType>
     static void EnsureBatchCapacity(BatchRender<VertexType> &batch, uint32_t additionalVertices, uint32_t additionalIndices, bool recreateIndexBuffer, nvrhi::ICommandList *uploadCmd)
     {
+        IGN_PROFILE_FUNCTION();
+
         const uint32_t usedVertices = batch.vertexBufferPtr
             ? static_cast<uint32_t>(batch.vertexBufferPtr - batch.vertexBufferBase)
             : 0;
@@ -152,6 +157,8 @@ namespace ignite
     template<typename VertexType>
     static void TryShrinkBatch(BatchRender<VertexType> &batch, uint32_t usedVertices, uint32_t usedIndices, bool recreateIndexBuffer, nvrhi::ICommandList *uploadCmd)
     {
+        IGN_PROFILE_FUNCTION();
+
         if (batch.maxCount <= batch.minCount)
             return;
 
@@ -193,6 +200,8 @@ namespace ignite
     // Helper to build a quad pipeline for a framebuffer (once) and cache it.
     static Ref<GraphicsPipeline> GetQuadPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
     {
+        IGN_PROFILE_FUNCTION();
+
         auto key = MakeFramebufferKey(framebuffer);
         auto it = s_QuadPSOCache.find(key);
         if (it != s_QuadPSOCache.end())
@@ -242,6 +251,8 @@ namespace ignite
 
 	static Ref<GraphicsPipeline> GetTextPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
 	{
+        IGN_PROFILE_FUNCTION();
+
 		auto key = MakeFramebufferKey(framebuffer);
 		auto it = s_TextPSOCache.find(key);
 		if (it != s_TextPSOCache.end())
@@ -292,6 +303,8 @@ namespace ignite
     // Helper to build a line pipeline for a framebuffer (once) and cache it.
     static Ref<GraphicsPipeline> GetLinePipelineForFB(nvrhi::IFramebuffer *framebuffer)
     {
+        IGN_PROFILE_FUNCTION();
+
         auto key = MakeFramebufferKey(framebuffer);
         auto it = s_LinePSOCache.find(key);
         if (it != s_LinePSOCache.end())
@@ -332,6 +345,8 @@ namespace ignite
 
     static nvrhi::BindingSetHandle GetQuadBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &lightingBuffer)
     {
+        IGN_PROFILE_FUNCTION();
+
         auto it = s_QuadBindingSetCache.find(bindingLayout);
         if (it != s_QuadBindingSetCache.end())
             return it->second;
@@ -381,6 +396,8 @@ namespace ignite
 
 	static nvrhi::BindingSetHandle GetTextBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &lightingBuffer)
 	{
+        IGN_PROFILE_FUNCTION();
+
         auto it = s_TextBindingSetCache.find(bindingLayout);
         if (it != s_TextBindingSetCache.end())
 			return it->second;
@@ -430,6 +447,8 @@ namespace ignite
 
     static nvrhi::BindingSetHandle GetLineBindingSet(nvrhi::IBindingLayout *bindingLayout)
     {
+        IGN_PROFILE_FUNCTION();
+
         auto it = s_LineBindingSetCache.find(bindingLayout);
         if (it != s_LineBindingSetCache.end())
             return it->second;
@@ -451,6 +470,8 @@ namespace ignite
 
     static Ref<GraphicsPipeline> GetCirclePipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
     {
+        IGN_PROFILE_FUNCTION();
+
         auto key = MakeFramebufferKey(framebuffer);
         auto it = s_CirclePSOCache.find(key);
         if (it != s_CirclePSOCache.end())
@@ -491,6 +512,8 @@ namespace ignite
 
     static nvrhi::BindingSetHandle GetCircleBindingSet(nvrhi::IBindingLayout *bindingLayout)
     {
+        IGN_PROFILE_FUNCTION();
+
         auto it = s_CircleBindingSetCache.find(bindingLayout);
         if (it != s_CircleBindingSetCache.end())
             return it->second;
@@ -535,6 +558,57 @@ namespace ignite
         s_LineBindingSetCache.clear();
         s_CircleBindingSetCache.clear();
         s_TextBindingSetCache.clear();
+
+        m_TextureResolveCache.clear();
+        m_Material2DResolveCache.clear();
+    }
+
+    Ref<Texture> Renderer2D::ResolveTexture(Project *project, AssetHandle handle)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        if (!project || handle == AssetHandle(0))
+            return nullptr;
+
+        const AssetResolveKey key{ project, handle };
+        auto it = m_TextureResolveCache.find(key);
+        if (it != m_TextureResolveCache.end())
+            return it->second;
+
+        Ref<Texture> texture = project->GetAsset<Texture>(handle);
+        if (texture)
+        {
+            m_TextureResolveCache.emplace(key, texture);
+        }
+
+        return texture;
+    }
+
+    Ref<Material2D> Renderer2D::ResolveMaterial2D(Project *project, AssetHandle handle)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        if (!project || handle == AssetHandle(0))
+            return nullptr;
+
+        const AssetResolveKey key{ project, handle };
+        auto it = m_Material2DResolveCache.find(key);
+        if (it != m_Material2DResolveCache.end())
+            return it->second;
+
+        Ref<Material2D> material = project->GetAsset<Material2D>(handle, AssetType::Material2D);
+        if (material)
+        {
+            m_Material2DResolveCache.emplace(key, material);
+        }
+
+        return material;
+    }
+
+    void Renderer2D::ClearAssetResolveCache()
+    {
+        m_TextureResolveCache.clear();
+        m_Material2DResolveCache.clear();
     }
 
     void Renderer2D::InitQuadData()
@@ -680,6 +754,8 @@ namespace ignite
 
 	void Renderer2D::ClearPipelineCache()
     {
+        IGN_PROFILE_FUNCTION();
+
         s_LinePSOCache.clear();
         s_QuadPSOCache.clear();
         s_CirclePSOCache.clear();
@@ -688,6 +764,8 @@ namespace ignite
 
     void Renderer2D::Begin(nvrhi::ICommandList *cmd)
     {
+        IGN_PROFILE_FUNCTION();
+
         // Quad data
         m_QuadBatch.indexCount = 0;
         m_QuadBatch.count = 0;
@@ -721,6 +799,8 @@ namespace ignite
 
     void Renderer2D::Flush(nvrhi::IFramebuffer *framebuffer)
     {
+        IGN_PROFILE_FUNCTION();
+
         const nvrhi::Viewport &viewport = framebuffer->getFramebufferInfo().getViewport();
 
         if (m_LineBatch.indexCount > 0)
@@ -821,6 +901,8 @@ namespace ignite
 
     void Renderer2D::End()
     {
+        IGN_PROFILE_FUNCTION();
+
         const uint32_t quadUsedVertices = m_QuadBatch.vertexBufferPtr
             ? static_cast<uint32_t>(m_QuadBatch.vertexBufferPtr - m_QuadBatch.vertexBufferBase)
             : 0;
@@ -856,6 +938,8 @@ namespace ignite
 
     void Renderer2D::DrawBox(const glm::mat4 &transform, const glm::vec4 &color)
     {
+        IGN_PROFILE_FUNCTION();
+
         EnsureBatchCapacity(m_LineBatch, 24, 0, false, m_Cmd);
 
         static glm::vec4 cubeVertices[8] =
@@ -894,6 +978,8 @@ namespace ignite
 
     void Renderer2D::DrawRect(const glm::mat4 &transform, const glm::vec4 &color)
     {
+        IGN_PROFILE_FUNCTION();
+
         EnsureBatchCapacity(m_LineBatch, 8, 0, false, m_Cmd);
 
         static constexpr int indices[8][2] =
@@ -921,6 +1007,8 @@ namespace ignite
 
     void Renderer2D::DrawLine(const std::vector<glm::vec3> &positions, const glm::vec4 &color)
     {
+        IGN_PROFILE_FUNCTION();
+
         EnsureBatchCapacity(m_LineBatch, static_cast<uint32_t>(positions.size()), 0, false, m_Cmd);
 
         for (auto &pos : positions)
@@ -937,6 +1025,8 @@ namespace ignite
 
     void Renderer2D::DrawLine(const glm::vec3 &pos0, const glm::vec3 &pos1, const glm::vec4 &color)
     {
+        IGN_PROFILE_FUNCTION();
+
         EnsureBatchCapacity(m_LineBatch, 2, 0, false, m_Cmd);
 
         m_LineBatch.vertexBufferPtr->position = pos0;
@@ -953,6 +1043,8 @@ namespace ignite
 
     void Renderer2D::DrawAABB(const AABB &aabb, const glm::vec4 &color)
     {
+        IGN_PROFILE_FUNCTION();
+
         // Bottom face
         DrawLine({ {aabb.min.x, aabb.min.y, aabb.min.z}, {aabb.max.x, aabb.min.y, aabb.min.z} }, color);
         DrawLine({ {aabb.max.x, aabb.min.y, aabb.min.z}, {aabb.max.x, aabb.min.y, aabb.max.z} }, color);
@@ -979,6 +1071,8 @@ namespace ignite
 
     void Renderer2D::DrawCircle(const glm::mat4 &transform, const glm::vec4 &color, float thickness, float fade, uint32_t objectID)
 	{
+        IGN_PROFILE_FUNCTION();
+
       EnsureBatchCapacity(m_CircleBatch, 4, 6, true, m_Cmd);
 
 		for (uint32_t i = 0; i < 4; ++i)
@@ -996,6 +1090,8 @@ namespace ignite
 
     void Renderer2D::DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor, uint32_t objectID)
     {
+        IGN_PROFILE_FUNCTION();
+
         EnsureBatchCapacity(m_QuadBatch, 4, 6, true, m_Cmd);
 
         static constexpr uint32_t quadVertexCount = 4;
@@ -1055,6 +1151,8 @@ namespace ignite
 
     void Renderer2D::DrawQuad(const glm::mat4 &transform, const glm::vec4 &color, const glm::vec4 &additiveColor, Material2DType materialType, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor, uint32_t objectID)
     {
+        IGN_PROFILE_FUNCTION();
+
         EnsureBatchCapacity(m_QuadBatch, 4, 6, true, m_Cmd);
 
         static constexpr uint32_t quadVertexCount = 4;
@@ -1103,6 +1201,8 @@ namespace ignite
 
 	void Renderer2D::DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing, uint32_t objectID)
 	{
+        IGN_PROFILE_FUNCTION();
+
         if (!font)
             return;
 
@@ -1244,6 +1344,8 @@ namespace ignite
 
 	uint32_t Renderer2D::GetOrInsertQuadTexture(const Ref<Texture> &texture)
     {
+        IGN_PROFILE_FUNCTION();
+
         if (texture == nullptr || (texture && !texture->GetHandle()))
             return 0;
 
@@ -1280,6 +1382,8 @@ namespace ignite
 
 	uint32_t Renderer2D::GetOrInsertFontTexture(const Ref<Texture> &texture)
 	{
+        IGN_PROFILE_FUNCTION();
+
 		if (texture == nullptr || (texture && !texture->GetHandle()))
 			return 0;
 
@@ -1313,5 +1417,4 @@ namespace ignite
 
 		return textureIndex;
 	}
-
 }
