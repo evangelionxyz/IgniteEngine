@@ -328,7 +328,9 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
         if (!entity.IsValid())
+        {
             return;
+        }
 
         static UUID s_LastAutoScrolledTarget = UUID(0);
         if (m_TrackingSelectedEntity == UUID(0))
@@ -815,16 +817,11 @@ namespace ignite
                                 AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
                                 auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
                                 AssetMetaData metadata = assetManager->GetMetaData(handle);
-
-                                if (metadata.type == AssetType::GLTF)
+                                if (metadata.type == AssetType::StaticMesh)
                                 {
                                     metadata.type = AssetType::StaticMesh;
                                     assetManager->AssignMetaData(handle, metadata);
                                     assetManager->UnloadAsset(handle);
-                                }
-
-                                if (assetManager->GetAssetType(handle) == AssetType::StaticMesh)
-                                {
                                     c.handle = handle;
                                 }
                             }
@@ -852,62 +849,59 @@ namespace ignite
                 }
             });
 
-         RenderComponent<SkeletalMeshComponent>("Skeletal Mesh", selectedEntity, [&]()
-			{
-				SkeletalMeshComponent &c = selectedEntity.GetComponent<SkeletalMeshComponent>();
+            RenderComponent<SkeletalMeshComponent>("Skeletal Mesh", selectedEntity, [&]()
+            {
+                SkeletalMeshComponent &c = selectedEntity.GetComponent<SkeletalMeshComponent>();
 
-				bool isMeshLoaded = c.handle != AssetHandle(0);
+                bool isMeshLoaded = c.handle != AssetHandle(0);
 
-				std::string buttonLabel = isMeshLoaded ? "Loaded" : "Drag Mesh Here";
+                std::string buttonLabel = isMeshLoaded ? "Loaded" : "Drag Mesh Here";
                 UI::DrawButtonWithColumn("Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
+                {
+                    if (ImGui::BeginDragDropTarget())
                     {
-						if (ImGui::BeginDragDropTarget())
-						{
-							if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-							{
-								LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-								AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-								auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-								AssetMetaData metadata = assetManager->GetMetaData(handle);
-
-								if (metadata.type == AssetType::FBX)
-								{
-									metadata.type = AssetType::SkeletalMesh;
-									assetManager->AssignMetaData(handle, metadata);
-									assetManager->UnloadAsset(handle);
-								}
-
-								if (assetManager->GetAssetType(handle) == AssetType::SkeletalMesh)
-								{
-									c.handle = handle;
-								}
-							}
-							ImGui::EndDragDropTarget();
-						}
-
-                        if (isMeshLoaded)
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                         {
-                            ImGui::SameLine();
-                            if (ImGui::Button("X"))
+                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                            auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                            AssetMetaData metadata = assetManager->GetMetaData(handle);
+
+                            if (metadata.type == AssetType::SkeletalMesh)
                             {
-                                c.handle = AssetHandle(0); // reset the mesh
+                                metadata.type = AssetType::SkeletalMesh;
+                                assetManager->AssignMetaData(handle, metadata);
+                                assetManager->UnloadAsset(handle);
+                                c.handle = handle;
+
                             }
                         }
-                    });
+                        ImGui::EndDragDropTarget();
+                    }
 
-				if (isMeshLoaded)
-				{
-					ImGui::Indent(8.0f);
-					ImGui::TextDisabled("Handle: %llu", static_cast<u64>(c.handle));
-					ImGui::Unindent(8.0f);
+                    if (isMeshLoaded)
+                    {
+                        ImGui::SameLine();
+                        if (ImGui::Button("X"))
+                        {
+                            c.handle = AssetHandle(0); // reset the mesh
+                        }
+                    }
+                });
+
+                if (isMeshLoaded)
+                {
+                    ImGui::Indent(8.0f);
+                    ImGui::TextDisabled("Handle: %llu", static_cast<u64>(c.handle));
+                    ImGui::Unindent(8.0f);
 
                     Ref<SkeletalMesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<SkeletalMesh>(c.handle);
-					if (sm)
-					{
+                    if (sm)
+                    {
                         UI::DrawCheckbox("Play Anim", &sm->isPlaying);
-					}
-				}
-			});
+                    }
+                }
+            });
 
 			RenderComponent<Rigidbody2DComponent>("Rigid Body 2D", selectedEntity, [&]()
             {
@@ -1843,24 +1837,23 @@ namespace ignite
             const ImVec2 &mousePos = ImGui::GetMousePos();
             m_ViewportData.mousePos = { mousePos.x - canvasPos.x, mousePos.y - canvasPos.y };
 
-            // Update UI input handling
-            if (m_Scene)
-            {
-                auto sceneRenderer = m_Scene->GetSceneRenderer();
-                if (sceneRenderer)
-                {
-                    glm::vec2 viewportPos = { canvasPos.x, canvasPos.y };
-                    glm::vec2 viewportSize = { canvasSize.x, canvasSize.y };
-                    glm::vec2 screenMousePos = { mousePos.x, mousePos.y };
-                    bool mousePressed = ImGui::IsMouseDown(ImGuiMouseButton_Left);
-
-                    sceneRenderer->UpdateUIInput(screenMousePos, viewportPos, viewportSize, mousePressed);
-                }
-            }
-
             // Render scene texture to imgui
-            ImTextureID sceneImage = (ImTextureID)m_ViewportEditRT.composite->GetColorAttachment(0)->GetHandle().Get(); // Current composite RT
-            ImGui::Image(sceneImage, canvasSize);
+            ImTextureID editorSceneImage = (ImTextureID)m_ViewportEditRT.composite->GetColorAttachment(0)->GetHandle().Get(); // Current composite RT
+            ImGui::Image(editorSceneImage, canvasSize);
+
+            ImDrawList *drawList = ImGui::GetWindowDrawList();
+
+            {
+                const float padding = 18.0f;
+                float yPosition = 6.0f;
+                const float fps = ImGui::GetIO().Framerate;
+                std::string statusStr = std::format("FPS {:.3}", fps);
+                drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
+                
+                yPosition += padding;
+                statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
+                drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+            }
 
             // Mouse picking from viewport object-id attachment (on mouse down only)
             {
@@ -2356,8 +2349,7 @@ namespace ignite
 
     bool ScenePanel::Is2DResizableEntity(Entity entity) const
     {
-        return entity.IsValid() &&
-            (entity.HasComponent<Sprite2DComponent>() || entity.HasComponent<Circle2DComponent>() || entity.HasComponent<TextComponent>());
+        return entity.IsValid() && (entity.HasComponent<Sprite2DComponent>() || entity.HasComponent<Circle2DComponent>() || entity.HasComponent<TextComponent>());
     }
 
     glm::vec3 ScenePanel::ScreenToWorldOnPlane(const glm::vec2 &screenPos, float planeZ, bool *isValid)
@@ -2401,7 +2393,9 @@ namespace ignite
         if (!m_Scene || m_EditorCamera.GetNavigationMode() != EditorCamera::NavigationMode::Mode2D || m_SelectedEntities.size() != 1 || m_Data.gizmoOp != GizmoOperation::BOUND_SIZING_2D)
         {
             if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+            {
                 releaseResizeCommand();
+            }
             return;
         }
 
@@ -2426,7 +2420,9 @@ namespace ignite
             if (!Math::ProjectWorldToScreen(worldCorners[i], viewProjection, m_ViewportEditRT.rect, screenCorners[i]))
             {
                 if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                {
                     releaseResizeCommand();
+                }
                 return;
             }
         }

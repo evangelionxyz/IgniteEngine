@@ -36,9 +36,6 @@ AssetRegistry:
     - Handle: 4136522683356979229
       Type: SpriteSheet
       Filepath: oak_woods_v1.0/character/Character_Animation.ixsp
-    - Handle: 4518632332542533281
-      Type: Invalid
-      Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_0_.png.ixtex
     - Handle: 5784425294381670522
       Type: Texture
       Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_2_.png
@@ -54,9 +51,6 @@ AssetRegistry:
     - Handle: 6496642200112123619
       Type: Scene
       Filepath: Scene/Animations.ixscene
-    - Handle: 6524363955388687950
-      Type: Invalid
-      Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_2_.png.ixtex
     - Handle: 6536254144797540605
       Type: Material2D
       Filepath: oak_woods_v1.0/decorations/Grass_01.ixmat2d
@@ -75,6 +69,9 @@ AssetRegistry:
     - Handle: 8487866291550668718
       Type: Texture
       Filepath: klippad_sunrise_2_2k.hdr
+    - Handle: 8562597306584449002
+      Type: StaticMesh
+      Filepath: monkey/StaticMesh/monkey.ixsm
     - Handle: 8598032598345587515
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/rock_3.png
@@ -93,6 +90,9 @@ AssetRegistry:
     - Handle: 10607535596036951705
       Type: Material
       Filepath: Great Sword Jump Attack/Material/MariaMat.ixmat
+    - Handle: 11149722755453565602
+      Type: Material
+      Filepath: cube/Material/Material.ixmat
     - Handle: 11315724973964600346
       Type: Scene
       Filepath: Scene/test.ixscene
@@ -114,6 +114,9 @@ AssetRegistry:
     - Handle: 13528834060294667901
       Type: Material2D
       Filepath: oak_woods_v1.0/decorations/ROCK_01.ixmat2d
+    - Handle: 13648815870549695575
+      Type: SkeletalMesh
+      Filepath: cube/SkeletalMesh/cube.ixskm
     - Handle: 13718421009327739972
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/grass_1.png
@@ -138,9 +141,6 @@ AssetRegistry:
     - Handle: 15111561572354869003
       Type: Material2D
       Filepath: oak_woods_v1.0/decorations/LAMP_LIT.ixmat2d
-    - Handle: 15232903694076139444
-      Type: Invalid
-      Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_1_.png.ixtex
     - Handle: 15618750618960578444
       Type: Skeleton
       Filepath: Great Sword Jump Attack/SkeletalMesh/Great Sword Jump Attack.ixskel
@@ -165,6 +165,15 @@ AssetRegistry:
     - Handle: 16733559418084721288
       Type: Material2D
       Filepath: Background_Mat2d.ixmat2d
+    - Handle: 17360739226101978199
+      Type: Scene
+      Filepath: Scene/StaticMeshTest.ixscene
+    - Handle: 17416901312734524518
+      Type: Material
+      Filepath: monkey/Material/DefaultMaterial.ixmat
+    - Handle: 17604633582810232567
+      Type: StaticMesh
+      Filepath: cube/StaticMesh/cube.ixsm
     - Handle: 17980563881130575912
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/grass_2.png

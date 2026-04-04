@@ -129,12 +129,12 @@ namespace ignite {
 		Ref<StaticMesh> asset;
 
 		// Load the mesh from .ixsm
-        if (metadata.filepath.extension() == staticMeshBinExt && false)
+        if (metadata.filepath.extension() == staticMeshBinExt)
         {
 		    asset = BinarySerializer::DeserializeStaticMesh(metadata.filepath);
         }
 
-        if (asset && false)
+        if (asset)
         {
 			for (auto &mesh : asset->GetMeshInstances())
 			{
@@ -144,9 +144,9 @@ namespace ignite {
 				if (metadata.type == AssetType::Material)
 				{
 					const auto &materialFilepath = assetManager->GetProject()->GetAssetFilepath(metadata.filepath);
-					Ref<Material> material = BinarySerializer::DeserializeMaterial(materialFilepath);
+					Ref<Material> material = Material::Deserialize(materialFilepath);
                     assetManager->AssignAsset(materialHandle, material);
-
+                    
                     // Submit GPU upload command list to render thread (thread-safe)
                     Application::SubmitToRenderThread([m = mesh]()
                     {
@@ -195,7 +195,15 @@ namespace ignite {
         {
             // Generate folders
             MeshScene meshScene;
-            MeshLoader::LoadSceneGraph(metadata.filepath.generic_string(), meshScene, assetManager);
+            const std::string sourceExtension = metadata.filepath.extension().string();
+            if (sourceExtension == ".fbx" || sourceExtension == ".FBX")
+            {
+                FBXMeshLoader::LoadSceneGraphFromFBX(metadata.filepath.generic_string(), meshScene, assetManager, false);
+            }
+            else
+            {
+                MeshLoader::LoadSceneGraph(metadata.filepath.generic_string(), meshScene, assetManager);
+            }
 
             // Prepare AssetHandle map for texture material textures
             // we need 5 textures

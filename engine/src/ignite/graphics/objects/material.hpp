@@ -100,11 +100,12 @@ namespace ignite
 
     private:
         void EnsureGpuResources();
+
         MaterialType m_Type = MaterialType::Opaque;
         Ref<ConstantBuffer> m_GPUDataBuffer;
         nvrhi::BindingSetHandle m_BindingSet;
-        bool m_BindingSetDirty = true;
         nvrhi::SamplerDesc m_SamplerDesc{};
+        bool m_BindingSetDirty = true;
         bool m_HasSamplerDesc = false;
     };
 }

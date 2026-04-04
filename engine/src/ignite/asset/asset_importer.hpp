@@ -42,6 +42,17 @@ namespace ignite {
 		void *userData = nullptr;
 	};
 
+    struct AssetImporterPayload
+    {
+        std::filesystem::path targetDirectory;
+        AssetType assetType = AssetType::Invalid;
+    };
+
+    struct AssetImportOptions
+    {
+
+    };
+
     class AssetImporter
     {
     public:

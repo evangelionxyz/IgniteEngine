@@ -55,7 +55,7 @@ namespace ignite
     {
         nvrhi::IDevice* device = DeviceManager::GetInstance()->GetDevice();
 
-        LOG_ASSERT(m_Handle == nullptr, "[GraphicsPipeline] Should not re-create pipeline")
+        LOG_ASSERT(m_Handle == nullptr, "[GraphicsPipeline] Should not re-create pipeline");
         
         m_Params = params;
 
@@ -94,7 +94,7 @@ namespace ignite
 
 				const auto &vertexAttributes = shader->GetVertexAttributes();
                 m_InputLayout = device->createInputLayout(vertexAttributes.data(), static_cast<uint32_t>(vertexAttributes.size()), nullptr);
-                LOG_ASSERT(m_InputLayout, "[Graphics Pipeline] Failed to create input layout")
+                LOG_ASSERT(m_InputLayout, "[Graphics Pipeline] Failed to create input layout");
             }
             else if (shader->GetType() == ShaderType::Pixel)
             {
@@ -117,7 +117,7 @@ namespace ignite
 
         // create with the same framebuffer to be rendered
         m_Handle = device->createGraphicsPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
-        LOG_ASSERT(m_Handle, "Failed to create graphics pipeline")
+        LOG_ASSERT(m_Handle, "Failed to create graphics pipeline");
     }
 
     Ref<GraphicsPipeline> GraphicsPipeline::Create()

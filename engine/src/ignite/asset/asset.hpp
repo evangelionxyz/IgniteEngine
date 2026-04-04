@@ -60,9 +60,6 @@ namespace ignite {
 
         Animation2D,          // .anim2d  - single 2D animation clip
         AnimatorController2D, // .ac2d    - 2D animator state machine
-
-        FBX,
-        GLTF,
     };
 
     static std::string AssetTypeToString(AssetType type)
@@ -84,8 +81,6 @@ namespace ignite {
             case ignite::AssetType::StaticMesh: return "StaticMesh";
             case ignite::AssetType::Skeleton: return "Skeleton";
             case ignite::AssetType::Environment: return "Environment";
-            case ignite::AssetType::FBX: return "FBX";
-            case ignite::AssetType::GLTF: return "GLTF";
             case ignite::AssetType::Material2D: return "Material2D";
             case ignite::AssetType::Animation2D: return "Animation2D";
             case ignite::AssetType::AnimatorController2D: return "AnimatorController2D";
@@ -110,10 +105,6 @@ namespace ignite {
         { ".mp3", AssetType::Audio },
         { ".flac", AssetType::Audio },
         { ".wav", AssetType::Audio },
-
-        { ".fbx", AssetType::FBX },
-        { ".gltf", AssetType::GLTF },
-        { ".bin", AssetType::GLTF },
 
         { ".ixsm", AssetType::StaticMesh },
         { ".ixskm", AssetType::SkeletalMesh },
@@ -147,8 +138,6 @@ namespace ignite {
         if (typeStr == "Skeleton")  return AssetType::Skeleton;
         if (typeStr == "Material")  return AssetType::Material;
         if (typeStr == "Environment")  return AssetType::Environment;
-        if (typeStr == "FBX")  return AssetType::FBX;
-        if (typeStr == "GLTF")  return AssetType::GLTF;
         if (typeStr == "Font")  return AssetType::Font;
         if (typeStr == "Material2D")  return AssetType::Material2D;
         if (typeStr == "Animation2D")  return AssetType::Animation2D;

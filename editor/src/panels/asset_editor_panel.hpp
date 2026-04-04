@@ -10,11 +10,12 @@
 
 namespace ignite
 {
-  class SkeletalAnimation;
-  class Material2D;
+  class Material;
   class Texture;
   class SpriteSheet;
+  class Material2D;
   class Animation2D;
+  class SkeletalAnimation;
   class AnimatorController2D;
 
 	class AssetEditorPanel : public IPanel
@@ -52,6 +53,7 @@ namespace ignite
         bool DrawAssetEditorHeader(AssetEditorData &assetData);
         void RenderSkeletalAnimationEditor(const Ref<SkeletalAnimation> &animation);
         void RenderMaterial2DEditor(const Ref<Material2D> &material2D);
+        void RenderMaterialEditor(const Ref<Material> &material);
         void RenderTextureEditor(AssetEditorData &assetData, const Ref<Texture> &texture);
         void RenderSpriteSheetEditor(const Ref<SpriteSheet> &spriteSheet);
         void RenderAnimation2DEditor(const Ref<Animation2D> &animation);

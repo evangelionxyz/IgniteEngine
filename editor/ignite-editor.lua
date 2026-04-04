@@ -89,6 +89,7 @@ project "IgniteEditor"
         optimize "off"
         symbols "on"
         defines {
+            "IGN_DEBUG_BUILD",
             "DEBUG",
             "_DEBUG"
         }
@@ -98,6 +99,7 @@ project "IgniteEditor"
         optimize "on"
         symbols "on"
         defines {
+            "IGN_RELEASE_BUILD",
             "NDEBUG"
         }
 
@@ -106,5 +108,6 @@ project "IgniteEditor"
         optimize "on"
         symbols "off"
         defines {
+            "IGN_SHIPPING_BUILD",
             "NDEBUG"
         }

@@ -14,6 +14,7 @@
 #include "ignite/serializer/binary_serializer.hpp"
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/core/profiler/profiler.hpp"
+#include "ignite/graphics/objects/material.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -172,7 +173,7 @@ namespace ignite
                 Ref<Asset> createdAsset = nullptr;
                 if (m_CreateRequest.type == AssetType::Material2D)
                 {
-                    Ref<Material2D> asset = std::dynamic_pointer_cast<Material2D>(m_CreateRequest.asset);
+                    Ref<Material2D> asset = createdAsset->As<Material2D>();
                     if (asset)
                     {
                         asset->name = assetName;
@@ -187,7 +188,7 @@ namespace ignite
                 }
                 else if (m_CreateRequest.type == AssetType::SpriteSheet)
                 {
-                    Ref<SpriteSheet> asset = std::dynamic_pointer_cast<SpriteSheet>(m_CreateRequest.asset);
+                    Ref<SpriteSheet> asset = createdAsset->As<SpriteSheet>();
                     if (asset)
                     {
                         created = asset->Serialize(fullAssetPath);
@@ -201,7 +202,7 @@ namespace ignite
                 }
                 else if (m_CreateRequest.type == AssetType::Animation2D)
                 {
-                    Ref<Animation2D> asset = std::dynamic_pointer_cast<Animation2D>(m_CreateRequest.asset);
+                    Ref<Animation2D> asset = createdAsset->As<Animation2D>();
                     if (asset)
                     {
                         created = asset->Serialize(fullAssetPath);
@@ -215,7 +216,7 @@ namespace ignite
                 }
                 else if (m_CreateRequest.type == AssetType::AnimatorController2D)
                 {
-                    Ref<AnimatorController2D> asset = std::dynamic_pointer_cast<AnimatorController2D>(m_CreateRequest.asset);
+                    Ref<AnimatorController2D> asset = createdAsset->As<AnimatorController2D>();
                     if (asset)
                     {
                         created = asset->Serialize(fullAssetPath);
@@ -269,7 +270,7 @@ namespace ignite
 
             if (m_CreateRequest.type == AssetType::Material2D)
             {
-                Ref<Material2D> asset = std::dynamic_pointer_cast<Material2D>(m_CreateRequest.asset);
+                Ref<Material2D> asset = asset->As<Material2D>();
                 if (!asset)
                 {
                     ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Invalid asset instance for Material2D creation.");
@@ -283,7 +284,7 @@ namespace ignite
 
             if (m_CreateRequest.type == AssetType::SpriteSheet)
             {
-                Ref<SpriteSheet> asset = std::dynamic_pointer_cast<SpriteSheet>(m_CreateRequest.asset);
+                Ref<SpriteSheet> asset = asset->As<SpriteSheet>();
                 if (!asset)
                 {
                     ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Invalid asset instance for SpriteSheet creation.");
@@ -297,7 +298,7 @@ namespace ignite
 
             if (m_CreateRequest.type == AssetType::Animation2D)
             {
-                Ref<Animation2D> asset = std::dynamic_pointer_cast<Animation2D>(m_CreateRequest.asset);
+                Ref<Animation2D> asset = asset->As<Animation2D>();
                 if (!asset)
                 {
                     ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Invalid asset instance for Animation2D creation.");
@@ -311,7 +312,7 @@ namespace ignite
 
             if (m_CreateRequest.type == AssetType::AnimatorController2D)
             {
-                Ref<AnimatorController2D> asset = std::dynamic_pointer_cast<AnimatorController2D>(m_CreateRequest.asset);
+                Ref<AnimatorController2D> asset = asset->As<AnimatorController2D>();
                 if (!asset)
                 {
                     ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Invalid asset instance for AnimatorController2D creation.");
@@ -1170,6 +1171,42 @@ namespace ignite
         ImGui::Text("Texture Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(material2D->textureHandle)));
     }
 
+    void AssetEditorPanel::RenderMaterialEditor(const Ref<Material> &material)
+    {
+        if (!material || !m_EditorLayer || !m_EditorLayer->GetActiveProject())
+        {
+            return;
+        }
+
+        auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+
+
+        if (ImGui::ColorEdit4("Base Color", &material->gpuData.baseColorFactor.x))
+        {
+            material->SetDirtyFlag(true);
+        }
+
+        if (ImGui::ColorEdit4("Emissive Color", &material->gpuData.emissiveFactor.x))
+        {
+            material->SetDirtyFlag(true);
+        }
+
+        if (ImGui::DragFloat("Metallic Factor", &material->gpuData.metallicFactor, 0.025f, 0.0f, 1.0f))
+        {
+            material->SetDirtyFlag(true);
+        }
+
+        if (ImGui::DragFloat("Roughness Factor", &material->gpuData.roughnessFactor, 0.025f, 0.0f, 1.0f))
+        {
+            material->SetDirtyFlag(true);
+        }
+
+        if (ImGui::DragFloat("Occlusion Strength", &material->gpuData.occlusionStrength, 0.025f, 0.0f, 1.0f))
+        {
+            material->SetDirtyFlag(true);
+        }
+    }
+
     void AssetEditorPanel::RenderTextureEditor(AssetEditorData &assetData, const Ref<Texture> &texture)
     {
         if (!texture || !m_EditorLayer || !m_EditorLayer->GetActiveProject())
@@ -1416,7 +1453,7 @@ namespace ignite
         {
             case AssetType::SpriteSheet:
             {
-                Ref<SpriteSheet> spriteSheet = std::dynamic_pointer_cast<SpriteSheet>(assetData.asset);
+                Ref<SpriteSheet> spriteSheet = assetData.asset->As<SpriteSheet>();
                 if (!spriteSheet)
                 {
                     return false;
@@ -1433,7 +1470,7 @@ namespace ignite
 
             case AssetType::Material2D:
             {
-                Ref<Material2D> material2D = std::dynamic_pointer_cast<Material2D>(assetData.asset);
+                Ref<Material2D> material2D = assetData.asset->As<Material2D>();
                 if (!material2D)
                 {
                     return false;
@@ -1450,7 +1487,7 @@ namespace ignite
 
             case AssetType::SkeletalAnimation:
             {
-                Ref<SkeletalAnimation> animation = std::dynamic_pointer_cast<SkeletalAnimation>(assetData.asset);
+                Ref<SkeletalAnimation> animation = assetData.asset->As<SkeletalAnimation>();
                 if (!animation)
                 {
                     return false;
@@ -1462,7 +1499,7 @@ namespace ignite
 
             case AssetType::Animation2D:
             {
-                Ref<Animation2D> anim = std::dynamic_pointer_cast<Animation2D>(assetData.asset);
+                Ref<Animation2D> anim = assetData.asset->As<Animation2D>();
                 if (!anim)
                 {
                     return false;
@@ -1472,13 +1509,25 @@ namespace ignite
             }
             case AssetType::AnimatorController2D:
             {
-                Ref<AnimatorController2D> ctrl = std::dynamic_pointer_cast<AnimatorController2D>(assetData.asset);
+                Ref<AnimatorController2D> ctrl = assetData.asset->As<AnimatorController2D>();
                 if (!ctrl)
                 {
                     return false;
                 }
                 std::filesystem::path fullPath = m_EditorLayer->GetActiveProject()->GetAssetDirectory() / assetData.metadata.filepath;
                 return ctrl->Serialize(fullPath);
+            }
+            case AssetType::Material:
+            {
+                Ref<Material> mat = assetData.asset->As<Material>();
+                if (!mat)
+                {
+                    return false;
+                }
+
+                std::filesystem::path fullPath = m_EditorLayer->GetActiveProject()->GetAssetDirectory() / assetData.metadata.filepath;
+                mat->SetBindingSetClean();
+                return mat->Serialize(fullPath);
             }
             default:
             return false;
@@ -1677,73 +1726,72 @@ namespace ignite
             {
                 case AssetType::SpriteSheet:
                 {
-                    Ref<SpriteSheet> spriteSheet = std::dynamic_pointer_cast<SpriteSheet>(assetData.asset);
-                    if (!spriteSheet)
+                    Ref<SpriteSheet> spriteSheet = assetData.asset->As<SpriteSheet>();
+                    if (spriteSheet)
                     {
-                        break;
+                        RenderSpriteSheetEditor(spriteSheet);
                     }
-
-                    RenderSpriteSheetEditor(spriteSheet);
                     break;
                 }
 
                 case AssetType::Texture:
                 {
-                    Ref<Texture> texture = std::dynamic_pointer_cast<Texture>(assetData.asset);
-                    if (!texture)
+                    Ref<Texture> texture = assetData.asset->As<Texture>();
+                    if (texture)
                     {
-                        break;
+                        RenderTextureEditor(assetData, texture);
                     }
 
-                    RenderTextureEditor(assetData, texture);
                     break;
                 }
 
                 case AssetType::Material2D:
                 {
-                    Ref<Material2D> material2D = std::dynamic_pointer_cast<Material2D>(assetData.asset);
-                    if (!material2D)
+                    Ref<Material2D> material2D = assetData.asset->As<Material2D>();
+                    if (material2D)
                     {
-                        break;
+                        RenderMaterial2DEditor(material2D);
                     }
-
-                    RenderMaterial2DEditor(material2D);
                     break;
                 }
 
                 case AssetType::SkeletalAnimation:
                 {
-                    Ref<SkeletalAnimation> anim = std::dynamic_pointer_cast<SkeletalAnimation>(assetData.asset);
-                    if (!anim)
+                    Ref<SkeletalAnimation> anim = assetData.asset->As<SkeletalAnimation>();
+                    if (anim)
                     {
-                        break;
+                        RenderSkeletalAnimationEditor(anim);
                     }
-
-                    RenderSkeletalAnimationEditor(anim);
                     break;
                 }
 
                 case AssetType::Animation2D:
                 {
-                    Ref<Animation2D> anim2d = std::dynamic_pointer_cast<Animation2D>(assetData.asset);
-                    if (!anim2d)
+                    Ref<Animation2D> anim2d = assetData.asset->As<Animation2D>();
+                    if (anim2d)
                     {
-                        break;
+                        RenderAnimation2DEditor(anim2d);
                     }
-
-                    RenderAnimation2DEditor(anim2d);
                     break;
                 }
 
                 case AssetType::AnimatorController2D:
                 {
-                    Ref<AnimatorController2D> ctrl = std::dynamic_pointer_cast<AnimatorController2D>(assetData.asset);
-                    if (!ctrl)
+                    Ref<AnimatorController2D> ctrl = assetData.asset->As<AnimatorController2D>();
+                    if (ctrl)
                     {
-                        break;
+                        RenderAnimatorController2DEditor(ctrl);
                     }
+                    break;
+                }
 
-                    RenderAnimatorController2DEditor(ctrl);
+                case AssetType::Material:
+                {
+                    Ref<Material> mat = assetData.asset->As<Material>();
+                    if (mat)
+                    {
+                        RenderMaterialEditor(mat);
+                    }
                     break;
                 }
 
@@ -1903,7 +1951,7 @@ namespace ignite
                 {
                     const char *msg = texture ? "No frames" : "No texture";
                     const ImVec2 ts = ImGui::CalcTextSize(msg);
-                    ImGui::GetWindowDrawList()->AddText(ImVec2(vpPos.x + (vpSize.x - ts.x) * 0.5f, vpPos.y + (vpSize.y - ts.y) * 0.5f),
+                    dl->AddText(ImVec2(vpPos.x + (vpSize.x - ts.x) * 0.5f, vpPos.y + (vpSize.y - ts.y) * 0.5f),
                         IM_COL32(160, 160, 160, 200), msg);
                 }
             }

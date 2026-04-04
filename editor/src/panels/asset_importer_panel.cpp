@@ -107,7 +107,14 @@ namespace ignite
 
 		if (hasFbx)
 		{
-			DrawSkeletalMeshImportOptions();
+			if (m_SelectedAssetType == AssetType::SkeletalMesh)
+			{
+				DrawSkeletalMeshImportOptions();
+			}
+			else if (m_SelectedAssetType == AssetType::StaticMesh)
+			{
+				DrawStaticMeshImportOptions();
+			}
 		}
 
 		if (m_SelectedAssetType == AssetType::Font)
@@ -167,7 +174,14 @@ namespace ignite
 			return;
 		}
 
-		if (!m_SkeletalMeshOptions.importSkeletalMesh
+       const bool hasFbx = std::ranges::any_of(m_SelectedFilepaths, [](const std::filesystem::path &filepath)
+			{
+				return IsFbxFile(filepath);
+			});
+
+		if (hasFbx
+			&& m_SelectedAssetType != AssetType::StaticMesh
+			&& !m_SkeletalMeshOptions.importSkeletalMesh
 			&& !m_SkeletalMeshOptions.importSkeleton
 			&& !m_SkeletalMeshOptions.importAnimations)
 		{
@@ -237,7 +251,98 @@ namespace ignite
 		}
 	}
 
-	void AssetImporterPanel::ProcessImportRequest(const ImportRequest &request)
+	void AssetImporterPanel::DrawStaticMeshImportOptions()
+	{
+		IGN_PROFILE_FUNCTION();
+
+		if (ImGui::TreeNodeEx("Static Mesh (FBX) Import", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			const uint32_t fbxCount = static_cast<uint32_t>(std::count_if(m_SelectedFilepaths.begin(), m_SelectedFilepaths.end(), [](const std::filesystem::path &filepath)
+			{
+				return IsFbxFile(filepath);
+			}));
+
+			ImGui::Text("FBX files selected: %u", fbxCount);
+			ImGui::TextWrapped("This import path creates a Static Mesh asset only. Skeleton and animation tracks are ignored.");
+
+			ImGui::Spacing();
+			ImGui::SeparatorText("Pipeline");
+			ImGui::BulletText("Triangulate geometry");
+			ImGui::BulletText("Extract materials and texture maps");
+			ImGui::BulletText("Create static mesh binary (.ixsm)");
+			ImGui::BulletText("Queue GPU buffer upload for mesh primitives");
+
+			auto project = m_EditorLayer->GetActiveProject();
+			if (project)
+			{
+				ImGui::Spacing();
+				ImGui::SeparatorText("Output Preview");
+
+				uint32_t previewCount = 0;
+				for (const auto &filepath : m_SelectedFilepaths)
+				{
+					if (!IsFbxFile(filepath))
+					{
+						continue;
+					}
+
+					const std::filesystem::path filename = filepath.stem();
+					const std::filesystem::path rootOutput = project->GetAssetDirectory() / filename;
+					const std::filesystem::path meshOutput = rootOutput / "StaticMesh" / (filename.string() + GetAssetExtensionFromType(AssetType::StaticMesh));
+					const std::filesystem::path materialOutput = rootOutput / "Material";
+					const std::filesystem::path textureOutput = rootOutput / "Textures";
+
+					ImGui::PushID(filepath.generic_string().c_str());
+					if (ImGui::TreeNodeEx(filepath.filename().generic_string().c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+					{
+						ImGui::Text("Source: %s", filepath.generic_string().c_str());
+						ImGui::Text("Mesh: %s", meshOutput.generic_string().c_str());
+						ImGui::Text("Materials: %s", materialOutput.generic_string().c_str());
+						ImGui::Text("Textures: %s", textureOutput.generic_string().c_str());
+
+						if (std::filesystem::exists(meshOutput))
+						{
+							ImGui::TextColored(ImVec4(0.80f, 0.95f, 0.80f, 1.0f), "Existing cached static mesh binary found.");
+						}
+						else
+						{
+							ImGui::TextColored(ImVec4(0.95f, 0.85f, 0.65f, 1.0f), "No cached binary found. A new one will be generated.");
+						}
+
+						ImGui::TreePop();
+					}
+					ImGui::PopID();
+
+					++previewCount;
+					if (previewCount >= 3 && fbxCount > previewCount)
+					{
+						ImGui::TextDisabled("...and %u more file(s)", fbxCount - previewCount);
+						break;
+					}
+				}
+
+				ImGui::Spacing();
+				ImGui::SeparatorText("Notes");
+				ImGui::TextWrapped("Material and texture assets are generated from FBX material slots. Reimporting can overwrite generated source files in target folders.");
+			}
+			else
+			{
+				ImGui::TextDisabled("No active project. Output preview is unavailable.");
+			}
+
+			ImGui::TreePop();
+		}
+
+		if (ImGui::TreeNodeEx("Compatibility", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::BulletText("Best with FBX meshes using standard PBR-like material naming");
+			ImGui::BulletText("Non-triangulated meshes are automatically triangulated");
+			ImGui::BulletText("Skeletal data in FBX is ignored for static mesh import");
+			ImGui::TreePop();
+		}
+	}
+
+    void AssetImporterPanel::ProcessImportRequest(const ImportRequest &request)
 	{
 		IGN_PROFILE_FUNCTION();
 		auto project = m_EditorLayer->GetActiveProject();
@@ -252,6 +357,14 @@ namespace ignite
 		for (const auto &filepath : request.filepaths)
 		{
 			IGN_PROFILE_SCOPE("AssetImporterPanel::ProcessImportRequest::File");
+			if (request.assetType == AssetType::StaticMesh && IsFbxFile(filepath))
+			{
+				IGN_PROFILE_SCOPE("AssetImporterPanel::ProcessImportRequest::FBXStaticMesh");
+				ImportFbxAsStaticMesh(filepath);
+				importedAny = true;
+				continue;
+			}
+
 			if (request.assetType == AssetType::Font)
 			{
 				IGN_PROFILE_SCOPE("AssetImporterPanel::ProcessImportRequest::Font");
@@ -388,6 +501,45 @@ namespace ignite
 			}
 			++suffix;
 		}
+	}
+
+	void AssetImporterPanel::ImportFbxAsStaticMesh(const std::filesystem::path &filepath)
+	{
+		IGN_PROFILE_FUNCTION();
+		auto project = m_EditorLayer->GetActiveProject();
+		if (!project)
+		{
+			return;
+		}
+
+		auto assetManager = project->GetAssetManager();
+		const std::filesystem::path filename = filepath.stem();
+		const std::filesystem::path smBinaryPath = project->GetAssetDirectory() / filename / "StaticMesh" / (filename.string() + GetAssetExtensionFromType(AssetType::StaticMesh));
+		const std::filesystem::path smRelativePath = project->GetAssetRelativeFilepath(smBinaryPath);
+
+		AssetHandle handle = assetManager->GetAssetHandle(smRelativePath);
+		if (handle == AssetHandle(0))
+		{
+			handle = AssetHandle();
+		}
+
+		AssetMetaData sourceMetadata;
+		sourceMetadata.filepath = filepath;
+		sourceMetadata.type = AssetType::StaticMesh;
+
+		Ref<StaticMesh> importedAsset = AssetImporter::ImportStaticMesh(handle, sourceMetadata, assetManager);
+		if (!importedAsset)
+		{
+			LOG_ERROR("[Asset Importer] Failed to import static mesh from {}", filepath.generic_string());
+			return;
+		}
+
+		AssetMetaData registryMetadata;
+		registryMetadata.filepath = smRelativePath;
+		registryMetadata.type = AssetType::StaticMesh;
+
+		assetManager->AssignMetaData(handle, registryMetadata);
+		assetManager->AssignAsset(handle, importedAsset);
 	}
 
 	void AssetImporterPanel::ImportFbxAsSkeletalMesh(const std::filesystem::path &filepath)

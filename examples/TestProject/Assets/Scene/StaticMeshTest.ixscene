@@ -1,0 +1,66 @@
+Scene:
+  Version: Alpha-0.1
+  Title: New Scene
+  Entities:
+    - ID: 4162242178425563965
+      Name: Floor
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [0, 0.19999999, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [3.75, 0.21000001, 4.8]
+        LocalTranslation: [0, 0.19999999, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [3.75, 0.21000001, 4.8]
+        Visible: true
+      StaticMesh:
+        Handle: 17604633582810232567
+    - ID: 15587447324447760219
+      Name: Cube
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [-0.7999999, 2.1000001, 0]
+        WorldRotation: [-0.01837898, -0.2678698, -0.06593681, 0.96102047]
+        WorldScale: [0.72, 0.6615, 0.80640006]
+        LocalTranslation: [-0.7999999, 2.1000001, 0]
+        LocalRotation: [-0.018378977, -0.2678698, -0.065936804, 0.96102047]
+        LocalScale: [0.72, 0.66150004, 0.80640006]
+        Visible: true
+      StaticMesh:
+        Handle: 17604633582810232567
+    - ID: 61534230024644459
+      Name: Camera
+      Type: Camera
+      Parent: 0
+      Transform:
+        WorldTranslation: [4.147116, 2.85, 4.77622]
+        WorldRotation: [-0.16431786, 0.36137867, 0.06485949, 0.91553175]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [4.147116, 2.85, 4.77622]
+        LocalRotation: [-0.16431788, 0.36137867, 0.06485949, 0.91553175]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      Camera:
+        ProjectionType: 1
+        AspectRatioPreset: 0
+        OrthoSize: 10
+        NearClip: 0.1
+        FarClip: 1000
+        Fov: 90
+        Primary: true
+    - ID: 12032466883160130762
+      Name: Monkey
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [1.5500002, 1.6, 0]
+        WorldRotation: [-0.70339686, 0, 0, 0.71079737]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [1.5500002, 1.6, 0]
+        LocalRotation: [-0.70339686, -0, 0, 0.71079737]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      StaticMesh:
+        Handle: 8562597306584449002

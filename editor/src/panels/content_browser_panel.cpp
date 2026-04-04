@@ -56,8 +56,8 @@ namespace ignite
 
         static const SDL_DialogFileFilter kStaticMeshFilters[]
         {
-            {"GLTF File (.gltf)", "gltf"},
             {"FBX File (.fbx)", "fbx"},
+            {"GLTF File (.gltf)", "gltf"},
             {"Ignite Static Mesh (.ixsm)", "ixsm"}
         };
 
@@ -998,11 +998,15 @@ namespace ignite
 
     void ContentBrowserPanel::UIShowAssetImportContext()
     {
+        static AssetImporterPayload importPayload;
+
         if (ImGui::BeginMenu("Mesh"))
         {
             if (ImGui::MenuItem("Skeletal Mesh"))
             {
-                SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+                importPayload = { .targetDirectory = m_CurrentDirectory, .assetType = AssetType::SkeletalMesh };
+
+                SDL_ShowOpenFileDialog(OnImportAssetDialog, &importPayload,
                     Application::GetInstance()->GetWindow()->GetWindowHandle(),
                     kSkeletalMeshFilters, IM_ARRAYSIZE(kSkeletalMeshFilters),
                     nullptr, true);
@@ -1010,7 +1014,9 @@ namespace ignite
 
             if (ImGui::MenuItem("Static Mesh"))
             {
-                SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+                importPayload = { .targetDirectory = m_CurrentDirectory, .assetType = AssetType::StaticMesh };
+
+                SDL_ShowOpenFileDialog(OnImportAssetDialog, &importPayload,
                     Application::GetInstance()->GetWindow()->GetWindowHandle(),
                     kStaticMeshFilters, IM_ARRAYSIZE(kStaticMeshFilters),
                     nullptr, true);
@@ -1023,7 +1029,9 @@ namespace ignite
         {
             if (ImGui::MenuItem("2D Texture"))
             {
-                SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+                importPayload = { .targetDirectory = m_CurrentDirectory, .assetType = AssetType::Texture };
+
+                SDL_ShowOpenFileDialog(OnImportAssetDialog, &importPayload,
                     Application::GetInstance()->GetWindow()->GetWindowHandle(),
                     kTextureFilters, IM_ARRAYSIZE(kTextureFilters),
                     nullptr, true);
@@ -1035,7 +1043,9 @@ namespace ignite
         {
             if (ImGui::MenuItem("MSDF Font"))
             {
-                SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+                importPayload = { .targetDirectory = m_CurrentDirectory, .assetType = AssetType::Font };
+
+                SDL_ShowOpenFileDialog(OnImportAssetDialog, &importPayload,
                     Application::GetInstance()->GetWindow()->GetWindowHandle(),
                     kFontFilters, IM_ARRAYSIZE(kFontFilters),
                     nullptr, true);
@@ -1047,7 +1057,9 @@ namespace ignite
         {
             if (ImGui::MenuItem("Sound"))
             {
-                SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+                importPayload = { .targetDirectory = m_CurrentDirectory, .assetType = AssetType::Audio };
+
+                SDL_ShowOpenFileDialog(OnImportAssetDialog, &importPayload,
                     Application::GetInstance()->GetWindow()->GetWindowHandle(),
                     kAudioFilters, IM_ARRAYSIZE(kAudioFilters),
                     nullptr, true);
@@ -1057,9 +1069,11 @@ namespace ignite
 
         if (ImGui::BeginMenu("Scene"))
         {
-            if (ImGui::MenuItem("Ignite Scene"))
+            if (ImGui::MenuItem("Scene"))
             {
-                SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+                importPayload = { .targetDirectory = m_CurrentDirectory, .assetType = AssetType::Scene };
+
+                SDL_ShowOpenFileDialog(OnImportAssetDialog, &importPayload,
                     Application::GetInstance()->GetWindow()->GetWindowHandle(),
                     kSceneFilters, IM_ARRAYSIZE(kSceneFilters),
                     nullptr, true);
@@ -1069,17 +1083,21 @@ namespace ignite
 
         if (ImGui::BeginMenu("Material"))
         {
-            if (ImGui::MenuItem("Ignite Material"))
+            if (ImGui::MenuItem("Material"))
             {
-                SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+                importPayload = { .targetDirectory = m_CurrentDirectory, .assetType = AssetType::Material };
+
+                SDL_ShowOpenFileDialog(OnImportAssetDialog, &importPayload,
                     Application::GetInstance()->GetWindow()->GetWindowHandle(),
                     kMaterialFilters, IM_ARRAYSIZE(kMaterialFilters),
                     nullptr, true);
             }
 
-            if (ImGui::MenuItem("Ignite Material2D"))
+            if (ImGui::MenuItem("Material2D"))
             {
-                SDL_ShowOpenFileDialog(OnImportAssetDialog, this,
+                importPayload = { .targetDirectory = m_CurrentDirectory, .assetType = AssetType::Material2D };
+
+                SDL_ShowOpenFileDialog(OnImportAssetDialog, &importPayload,
                     Application::GetInstance()->GetWindow()->GetWindowHandle(),
                     kMaterial2DFilters, IM_ARRAYSIZE(kMaterial2DFilters),
                     nullptr, true);
@@ -1331,8 +1349,8 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        ContentBrowserPanel *cb = (ContentBrowserPanel *)userData;
-        if (!cb)
+        AssetImporterPayload *payload = (AssetImporterPayload *)userData;
+        if (!payload)
         {
             LOG_ERROR("Import Asset Dialog: Content browser data");
             return;
@@ -1348,18 +1366,9 @@ namespace ignite
         for (const char *const *file = filelist; *file != nullptr; file++)
         {
             std::filesystem::path filepath = std::string(*file);
-            std::filesystem::path targetDirectory = cb->m_CurrentDirectory;
-
-            Application::SubmitToMainThread([filepath, targetDirectory]()
+            Application::SubmitToMainThread([filepath, payload]()
             {
-                AssetType assetType = GetAssetTypeFromExtension(filepath.extension().string());
-                if (assetType == AssetType::Invalid)
-                {
-                    LOG_WARN("Import Asset Dialog: Unsupported asset extension '{}'", filepath.extension().string());
-                    return;
-                }
-
-                AssetImportEvent importEvent({ filepath }, assetType, targetDirectory);
+                AssetImportEvent importEvent({ filepath }, payload->assetType, payload->targetDirectory);
                 Application::GetInstance()->OnEvent(importEvent);
             });
         }

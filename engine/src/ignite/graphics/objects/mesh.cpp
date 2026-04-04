@@ -971,7 +971,7 @@ namespace ignite
         return &buffer.data[accessor.byteOffset + bufferView.byteOffset];
     }
 
-    void FBXMeshLoader::LoadSceneGraphFromFBX(const std::string &filename, MeshScene &outScene, AssetManager *assetManager)
+    void FBXMeshLoader::LoadSceneGraphFromFBX(const std::string &filename, MeshScene &outScene, AssetManager *assetManager, bool importSkeletonAndAnimations)
     {
         FbxManager *sdkManager = assetManager->GetOrCreateFbxSdkManager();
         if (!sdkManager)
@@ -1026,8 +1026,16 @@ namespace ignite
         }
 
         JointLoader jointLoader;
-        outScene.skeleton = LoadSkeletonFBX(fbxScene, jointLoader);
-        LoadAnimationsFBX(fbxScene, outScene.skeleton, jointLoader.jointNodes, outScene.animations);
+        if (importSkeletonAndAnimations)
+        {
+            outScene.skeleton = LoadSkeletonFBX(fbxScene, jointLoader);
+            LoadAnimationsFBX(fbxScene, outScene.skeleton, jointLoader.jointNodes, outScene.animations);
+        }
+        else
+        {
+            outScene.skeleton = nullptr;
+            outScene.animations.clear();
+        }
 
         const std::filesystem::path sourceDir = std::filesystem::path(filename).parent_path();
 
@@ -1037,7 +1045,7 @@ namespace ignite
         {
             for (int i = 0; i < rootNode->GetChildCount(); ++i)
             {
-                BuildNode(rootNode->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, -1, glm::mat4(1.0f));
+                BuildNode(rootNode->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, -1, glm::mat4(1.0f), importSkeletonAndAnimations);
             }
         }
 
@@ -1158,7 +1166,7 @@ namespace ignite
         fbxScene->Destroy();
 	}
 
-	void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene &outScene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal)
+    void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene &outScene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, bool importSkinningData)
     {
         if (!node)
         {
@@ -1196,7 +1204,7 @@ namespace ignite
             std::vector<FBXBoneInfluence> controlPointInfluence;
             controlPointInfluence.resize(static_cast<size_t>(fbxMesh->GetControlPointsCount()));
 
-            bool isSkinned = fbxMesh->GetDeformerCount(FbxDeformer::eSkin) > 0;
+            bool isSkinned = importSkinningData && fbxMesh->GetDeformerCount(FbxDeformer::eSkin) > 0;
             LOG_INFO("[FBX SKIN DEBUG] Node='{}' parent='{}' mesh='{}' skinned={} deformers={} cpCount={}",
                 meshNode.name,
                 (parentIdx >= 0 ? outScene.nodes[parentIdx].name : std::string("<root>")),
@@ -1215,112 +1223,118 @@ namespace ignite
                 }
             }
 
-            for (int deformerIndex = 0; deformerIndex < fbxMesh->GetDeformerCount(FbxDeformer::eSkin); ++deformerIndex)
+            if (importSkinningData)
             {
-                FbxSkin *skin = static_cast<FbxSkin *>(fbxMesh->GetDeformer(deformerIndex, FbxDeformer::eSkin));
-                if (!skin)
+                for (int deformerIndex = 0; deformerIndex < fbxMesh->GetDeformerCount(FbxDeformer::eSkin); ++deformerIndex)
                 {
-                    continue;
-                }
-
-                if (!outScene.skeleton)
-                {
-                    outScene.skeleton = CreateRef<Skeleton>();
-                }
-
-                for (int clusterIndex = 0; clusterIndex < skin->GetClusterCount(); ++clusterIndex)
-                {
-                    FbxCluster *cluster = skin->GetCluster(clusterIndex);
-                    if (!cluster)
+                    FbxSkin *skin = static_cast<FbxSkin *>(fbxMesh->GetDeformer(deformerIndex, FbxDeformer::eSkin));
+                    if (!skin)
                     {
                         continue;
                     }
 
-                    FbxNode *jointNode = cluster->GetLink();
-                    if (!jointNode)
+                    if (!outScene.skeleton)
                     {
-                        continue;
+                        outScene.skeleton = CreateRef<Skeleton>();
                     }
 
-                    const int32_t jointId = SkeletonFindOrAddJoint(jointNode, outScene.skeleton, jointLoader);
-                    if (jointId < 0)
+                    for (int clusterIndex = 0; clusterIndex < skin->GetClusterCount(); ++clusterIndex)
                     {
-                        continue;
-                    }
-
-                    if (jointId >= MAX_BONES)
-                    {
-                        static bool s_MaxBonesWarningPrinted = false;
-                        if (!s_MaxBonesWarningPrinted)
-                        {
-                            LOG_WARN("[FBX Loader] Joint count exceeds MAX_BONES ({}) - extra joints will be ignored for skinning", MAX_BONES);
-                            s_MaxBonesWarningPrinted = true;
-                        }
-                        continue;
-                    }
-
-                    
-                    FbxAMatrix meshBind;
-                    FbxAMatrix jointBind;
-
-                    // Cluster matrices (FBX bind pose)
-                    cluster->GetTransformMatrix(meshBind);
-                    cluster->GetTransformLinkMatrix(jointBind);
-
-                    // Keep a joint-space inverse bind (shared safely across multiple skinned meshes).
-                    // Mesh node placement is applied in object transform during rendering.
-                    const FbxAMatrix invBind = jointBind.Inverse();
-                    const glm::mat4 invBindGlm = ToGlmMatrix(invBind);
-                    glm::mat4 &existingInvBind = outScene.skeleton->joints[jointId].inverseBindPose;
-                    const bool hasExistingInvBind = !Mat4NearEqual(existingInvBind, glm::mat4(1.0f));
-                    if (hasExistingInvBind && !Mat4NearEqual(existingInvBind, invBindGlm, 0.001f))
-                    {
-                        const glm::vec3 oldT = ExtractTranslation(existingInvBind);
-                        const glm::vec3 newT = ExtractTranslation(invBindGlm);
-                        LOG_WARN("[FBX SKIN DEBUG] InverseBind mismatch joint='{}' id={} meshNode='{}' oldT=({:.4f},{:.4f},{:.4f}) newT=({:.4f},{:.4f},{:.4f})",
-                            outScene.skeleton->joints[jointId].name,
-                            jointId,
-                            meshNode.name,
-                            oldT.x, oldT.y, oldT.z,
-                            newT.x, newT.y, newT.z);
-                    }
-
-                    existingInvBind = invBindGlm;
-
-                    if (clusterIndex < 6)
-                    {
-                        const glm::vec3 meshBindT = ExtractTranslation(ToGlmMatrix(meshBind));
-                        const glm::vec3 jointBindT = ExtractTranslation(ToGlmMatrix(jointBind));
-                        const glm::vec3 invBindT = ExtractTranslation(invBindGlm);
-                        LOG_INFO("[FBX SKIN DEBUG] joint='{}' id={} cpInfluences={} meshBindT=({:.3f},{:.3f},{:.3f}) jointBindT=({:.3f},{:.3f},{:.3f}) invBindT=({:.3f},{:.3f},{:.3f})",
-                            outScene.skeleton->joints[jointId].name,
-                            jointId,
-                            cluster->GetControlPointIndicesCount(),
-                            meshBindT.x, meshBindT.y, meshBindT.z,
-                            jointBindT.x, jointBindT.y, jointBindT.z,
-                            invBindT.x, invBindT.y, invBindT.z);
-                    }
-
-                    const int *controlPointIndices = cluster->GetControlPointIndices();
-                    const double *controlPointWeights = cluster->GetControlPointWeights();
-                    const int controlPointIndexCount = cluster->GetControlPointIndicesCount();
-
-                    for (int i = 0; i < controlPointIndexCount; ++i)
-                    {
-                        const int controlPointIndex = controlPointIndices[i];
-                        if (controlPointIndex < 0 || controlPointIndex >= static_cast<int>(controlPointInfluence.size()))
+                        FbxCluster *cluster = skin->GetCluster(clusterIndex);
+                        if (!cluster)
                         {
                             continue;
                         }
 
-                        AddBoneInfluence(controlPointInfluence[controlPointIndex], static_cast<uint32_t>(jointId), static_cast<float>(controlPointWeights[i]));
+                        FbxNode *jointNode = cluster->GetLink();
+                        if (!jointNode)
+                        {
+                            continue;
+                        }
+
+                        const int32_t jointId = SkeletonFindOrAddJoint(jointNode, outScene.skeleton, jointLoader);
+                        if (jointId < 0)
+                        {
+                            continue;
+                        }
+
+                        if (jointId >= MAX_BONES)
+                        {
+                            static bool s_MaxBonesWarningPrinted = false;
+                            if (!s_MaxBonesWarningPrinted)
+                            {
+                                LOG_WARN("[FBX Loader] Joint count exceeds MAX_BONES ({}) - extra joints will be ignored for skinning", MAX_BONES);
+                                s_MaxBonesWarningPrinted = true;
+                            }
+                            continue;
+                        }
+
+
+                        FbxAMatrix meshBind;
+                        FbxAMatrix jointBind;
+
+                        // Cluster matrices (FBX bind pose)
+                        cluster->GetTransformMatrix(meshBind);
+                        cluster->GetTransformLinkMatrix(jointBind);
+
+                        // Keep a joint-space inverse bind (shared safely across multiple skinned meshes).
+                        // Mesh node placement is applied in object transform during rendering.
+                        const FbxAMatrix invBind = jointBind.Inverse();
+                        const glm::mat4 invBindGlm = ToGlmMatrix(invBind);
+                        glm::mat4 &existingInvBind = outScene.skeleton->joints[jointId].inverseBindPose;
+                        const bool hasExistingInvBind = !Mat4NearEqual(existingInvBind, glm::mat4(1.0f));
+                        if (hasExistingInvBind && !Mat4NearEqual(existingInvBind, invBindGlm, 0.001f))
+                        {
+                            const glm::vec3 oldT = ExtractTranslation(existingInvBind);
+                            const glm::vec3 newT = ExtractTranslation(invBindGlm);
+                            LOG_WARN("[FBX SKIN DEBUG] InverseBind mismatch joint='{}' id={} meshNode='{}' oldT=({:.4f},{:.4f},{:.4f}) newT=({:.4f},{:.4f},{:.4f})",
+                                outScene.skeleton->joints[jointId].name,
+                                jointId,
+                                meshNode.name,
+                                oldT.x, oldT.y, oldT.z,
+                                newT.x, newT.y, newT.z);
+                        }
+
+                        existingInvBind = invBindGlm;
+
+                        if (clusterIndex < 6)
+                        {
+                            const glm::vec3 meshBindT = ExtractTranslation(ToGlmMatrix(meshBind));
+                            const glm::vec3 jointBindT = ExtractTranslation(ToGlmMatrix(jointBind));
+                            const glm::vec3 invBindT = ExtractTranslation(invBindGlm);
+                            LOG_INFO("[FBX SKIN DEBUG] joint='{}' id={} cpInfluences={} meshBindT=({:.3f},{:.3f},{:.3f}) jointBindT=({:.3f},{:.3f},{:.3f}) invBindT=({:.3f},{:.3f},{:.3f})",
+                                outScene.skeleton->joints[jointId].name,
+                                jointId,
+                                cluster->GetControlPointIndicesCount(),
+                                meshBindT.x, meshBindT.y, meshBindT.z,
+                                jointBindT.x, jointBindT.y, jointBindT.z,
+                                invBindT.x, invBindT.y, invBindT.z);
+                        }
+
+                        const int *controlPointIndices = cluster->GetControlPointIndices();
+                        const double *controlPointWeights = cluster->GetControlPointWeights();
+                        const int controlPointIndexCount = cluster->GetControlPointIndicesCount();
+
+                        for (int i = 0; i < controlPointIndexCount; ++i)
+                        {
+                            const int controlPointIndex = controlPointIndices[i];
+                            if (controlPointIndex < 0 || controlPointIndex >= static_cast<int>(controlPointInfluence.size()))
+                            {
+                                continue;
+                            }
+
+                            AddBoneInfluence(controlPointInfluence[controlPointIndex], static_cast<uint32_t>(jointId), static_cast<float>(controlPointWeights[i]));
+                        }
                     }
                 }
             }
 
-            for (FBXMeshLoader::FBXBoneInfluence &influence : controlPointInfluence)
+            if (importSkinningData)
             {
-                NormalizeBoneInfluence(influence);
+                for (FBXMeshLoader::FBXBoneInfluence &influence : controlPointInfluence)
+                {
+                    NormalizeBoneInfluence(influence);
+                }
             }
 
             size_t influencedControlPoints = 0;
@@ -1386,7 +1400,7 @@ namespace ignite
                 vertex.tangent = glm::vec3(1.0f, 0.0f, 0.0f);
                 vertex.bitangent = glm::cross(vertex.normal, vertex.tangent);
 
-                if (controlPointIndex >= 0 && controlPointIndex < static_cast<int>(controlPointInfluence.size()))
+                if (importSkinningData && controlPointIndex >= 0 && controlPointIndex < static_cast<int>(controlPointInfluence.size()))
                 {
                     const FBXBoneInfluence &influence = controlPointInfluence[controlPointIndex];
                     for (size_t i = 0; i < VERTEX_MAX_BONES; ++i)
@@ -1457,7 +1471,7 @@ namespace ignite
 
         for (int i = 0; i < node->GetChildCount(); ++i)
         {
-            BuildNode(node->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, nodeIndex, meshNode.global);
+            BuildNode(node->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, nodeIndex, meshNode.global, importSkinningData);
         }
     }
 

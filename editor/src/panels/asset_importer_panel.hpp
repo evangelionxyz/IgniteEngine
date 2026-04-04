@@ -50,12 +50,16 @@ namespace ignite
 		};
 
 		void QueueImportRequest();
-		void DrawSkeletalMeshImportOptions();
 		void DrawFontImportPreview();
 		void ProcessImportRequest(const ImportRequest &request);
 		void ImportFontAsset(const std::filesystem::path &filepath);
+		
+		void DrawSkeletalMeshImportOptions();
+		void DrawStaticMeshImportOptions();
+        void ImportFbxAsStaticMesh(const std::filesystem::path &filepath);
 		void ImportFbxAsSkeletalMesh(const std::filesystem::path &filepath);
 		void ImportFbxSkeletonAndAnimations(const std::filesystem::path &filepath, const SkeletalMeshImportOptions &options);
+		
 		std::filesystem::path BuildUniquePath(const std::filesystem::path &directory, const std::string &baseName, const std::string &extension) const;
 
 		std::vector<std::filesystem::path> m_SelectedFilepaths;
