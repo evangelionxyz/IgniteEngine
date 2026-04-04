@@ -997,62 +997,6 @@ namespace ignite
         }
     }
 
-    void EditorLayer::OnLoadHDRTextureSelected(void* userData, const char* const* filelist, int filter)
-    {
-        if (filelist == nullptr || *filelist == nullptr) return;
-
-        std::string filepath = filelist[0];
-        if (!filepath.empty())
-        {
-            EditorLayer* editor = static_cast<EditorLayer*>(userData);
-            if (!editor || !editor->m_ActiveScene)
-            {
-                return;
-            }
-
-            WorldEnvironment *world = nullptr;
-            auto view = editor->m_ActiveScene->registry->view<WorldEnvironment>();
-            for (entt::entity e : view)
-            {
-                auto &candidate = view.get<WorldEnvironment>(e);
-                if (candidate.primary)
-                {
-                    world = &candidate;
-                    break;
-                }
-
-                if (!world)
-                {
-                    world = &candidate;
-                }
-            }
-
-            if (!world)
-            {
-                Entity envEntity = SceneManager::CreateWorldEnvironment(editor->m_ActiveScene.get(), "World Environment");
-                if (envEntity && envEntity.HasComponent<WorldEnvironment>())
-                {
-                    world = &envEntity.GetComponent<WorldEnvironment>();
-                }
-            }
-
-            if (!world)
-            {
-                return;
-            }
-
-            if (!world->environment)
-            {
-                world->environment = Environment::Create(editor->m_ActiveScene.get());
-            }
-
-            world->environment->LoadTexture(filepath);
-            world->hdrHandle = AssetHandle(0);
-            world->loadedHDRHandle = AssetHandle(0);
-            world->dirtyEnvironment = true;
-        }
-    }
-
     void EditorLayer::ProcessPendingFileLoading()
     {
         while (!m_PendingFileLoading.empty())
@@ -1389,55 +1333,15 @@ namespace ignite
             // Scene
             if (ImGui::TreeNodeEx("Scene", treeFlags))
             {
-                if (ImGui::Button("Load HDR Texture"))
-                {
-                    SDL_ShowOpenFileDialog(OnLoadHDRTextureSelected, this,
-                        Application::GetInstance()->GetWindow()->GetWindowHandle(),
-                        kHDRFileFilters, IM_ARRAYSIZE(kHDRFileFilters),
-                        nullptr, false);
-                }
-
                 auto &sceneData = m_ActiveScene->gpuData;
 
-                ImGui::ColorEdit3("Color", &sceneData.sunColor.x);
-                ImGui::DragFloat("Intensity", &sceneData.sunColor.w, 0.025f, 0.0f, 10.0f);
-                ImGui::SliderFloat("Azimuth", &sceneData.sungAngles.x, -glm::radians(90.0f), glm::radians(90.0f));
-                ImGui::SliderFloat("Elevation", &sceneData.sungAngles.y, 0.0f, glm::radians(90.0f));
-                float angularRadius = glm::degrees(sceneData.sunAngularRadius);
-                if (ImGui::SliderFloat("Angular Size", &angularRadius, 0.0f, 45.0f))
-                {
-                    sceneData.sunAngularRadius = glm::radians(angularRadius);
-                }
-                ImGui::DragFloat("Exposure", &sceneData.exposure, 0.005f, 0.1f, 10.0f);
-                ImGui::DragFloat("Gamma", &sceneData.gamma, 0.005f, 0.1f, 10.0f);
-                ImGui::DragFloat("Ambient", &sceneData.ambient, 0.005f, 0.01f, 100.0f);
-
-                ImGui::SeparatorText("Shadows");
-                {
-                    auto csm = m_SceneRenderer->GetCascadedShadowMap();
-                    auto &data = csm->GetGPUData();
-                    ImGui::SliderFloat("Strength", &data.shadowStrength, 0.0f, 1.0f);
-                    ImGui::DragFloat("Min Bias", &data.minBias, 0.0001f, 0.0f, 0.1f, "%.6f");
-                    ImGui::DragFloat("Max Bias", &data.maxBias, 0.0001f, 0.0f, 0.1f, "%.6f");
-                    ImGui::SliderFloat("PCF Radius", &data.pcfRadius, 0.1f, 4.0f);
-
-                    static const char *resolutionLabels[] = { "Low - 512px", "Medium - 1024px", "High - 2048px", "Ultra - 4096px" };
-                    int cascadeQualityIndex = static_cast<int>(csm->GetQuality());
-
-                    if (ImGui::Combo("Resolution", &cascadeQualityIndex, resolutionLabels, IM_ARRAYSIZE(resolutionLabels)))
-                    {
-                        auto quality = static_cast<ShadowMapQuality>(cascadeQualityIndex);
-                        csm->Resize(quality);
-                    }
-
-                    ImGui::Separator();
-                    ImGui::Text("Shadow Debug");
-                    ImGui::RadioButton("Off##ShadowDbg", &sceneData.debugShadow, 0); ImGui::SameLine();
-                    ImGui::SameLine();
-                    ImGui::RadioButton("Cascades", &sceneData.debugShadow, 1); ImGui::SameLine();
-                    ImGui::SameLine();
-                    ImGui::RadioButton("Visibility", &sceneData.debugShadow, 2);
-                }
+                ImGui::TextDisabled("Sun/Shadow settings moved to Directional Light component");
+                ImGui::SeparatorText("Shadow Debug");
+                ImGui::RadioButton("Off##ShadowDbg", &sceneData.debugShadow, 0); ImGui::SameLine();
+                ImGui::SameLine();
+                ImGui::RadioButton("Cascades", &sceneData.debugShadow, 1); ImGui::SameLine();
+                ImGui::SameLine();
+                ImGui::RadioButton("Visibility", &sceneData.debugShadow, 2);
 
                 if (ImGui::CollapsingHeader("Render Mode", ImGuiTreeNodeFlags_DefaultOpen))
                 {
@@ -1535,9 +1439,7 @@ namespace ignite
 			{
 				if (type != AssetType::Invalid)
 				{
-					float percentage = registeredCounts[type] > 0
-						? (float)count / registeredCounts[type] * 100.0f
-						: 0.0f;
+					float percentage = registeredCounts[type] > 0 ? (float)count / registeredCounts[type] * 100.0f : 0.0f;
 
 					// Color code by type
 					ImVec4 color = ImVec4(0.5f, 0.8f, 0.5f, 1.0f);

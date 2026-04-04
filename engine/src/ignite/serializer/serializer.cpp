@@ -147,6 +147,28 @@ namespace ignite
                     sr.EndMap();
                 }
 
+                // Directional Light
+                if (entity.HasComponent<DirectionalLight>())
+                {
+                    const DirectionalLight &comp = entity.GetComponent<DirectionalLight>();
+                    sr.BeginMap("DirectionalLight");
+                    {
+                        sr.AddKeyValue("Color", comp.color);
+                        sr.AddKeyValue("Intensity", comp.intensity);
+                        sr.AddKeyValue("AngularRadius", comp.angularRadius);
+                        sr.AddKeyValue("Exposure", comp.exposure);
+                        sr.AddKeyValue("Gamma", comp.gamma);
+                        sr.AddKeyValue("Ambient", comp.ambient);
+                        sr.AddKeyValue("ShadowStrength", comp.shadowStrength);
+                        sr.AddKeyValue("ShadowMinBias", comp.shadowMinBias);
+                        sr.AddKeyValue("ShadowMaxBias", comp.shadowMaxBias);
+                        sr.AddKeyValue("PCFRadius", comp.pcfRadius);
+                        sr.AddKeyValue("ShadowResolution", comp.shadowResolution);
+                        sr.AddKeyValue("CascadeShadow", comp.cascadeShadow);
+                    }
+                    sr.EndMap();
+                }
+
                 // Camera
                 if (entity.HasComponent<CameraComponent>())
                 {
@@ -432,7 +454,7 @@ namespace ignite
                     }
                     sr.EndMap();
                 }
-
+                
 				// Text Component
 				if (entity.HasComponent<TextComponent>())
 				{
@@ -496,7 +518,6 @@ namespace ignite
                                 sr.EndSequence();
                             }
                         }
-
                     }
                     sr.EndMap();
                 }
@@ -803,6 +824,24 @@ namespace ignite
                         comp.indices.push_back(indexNode.as<uint32_t>());
                     }
                 }
+            }
+
+            // Directional Light component
+            if (YAML::Node node = entityNode["DirectionalLight"])
+            {
+                auto &comp = desEntity.AddComponent<DirectionalLight>();
+                if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
+                if (auto n = node["Intensity"]) comp.intensity = n.as<float>();
+                if (auto n = node["AngularRadius"]) comp.angularRadius = n.as<float>();
+                if (auto n = node["Exposure"]) comp.exposure = n.as<float>();
+                if (auto n = node["Gamma"]) comp.gamma = n.as<float>();
+                if (auto n = node["Ambient"]) comp.ambient = n.as<float>();
+                if (auto n = node["ShadowStrength"]) comp.shadowStrength = n.as<float>();
+                if (auto n = node["ShadowMinBias"]) comp.shadowMinBias = n.as<float>();
+                if (auto n = node["ShadowMaxBias"]) comp.shadowMaxBias = n.as<float>();
+                if (auto n = node["PCFRadius"]) comp.pcfRadius = n.as<float>();
+                if (auto n = node["ShadowResolution"]) comp.shadowResolution = n.as<int>();
+                if (auto n = node["CascadeShadow"]) comp.cascadeShadow = n.as<bool>();
             }
 
             // Audio Source

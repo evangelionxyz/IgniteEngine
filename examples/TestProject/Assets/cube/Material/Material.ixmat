@@ -2,13 +2,13 @@ Material:
   Version: Alpha-0.1
   Name: Material
   Type: 0
-  BaseColorTextureHandle: 13589769746383350053
+  BaseColorTextureHandle: 0
   EmissiveTextureHandle: 0
   MetallicRoughnessTextureHandle: 0
   NormalTextureHandle: 0
   OcclusionTextureHandle: 0
   GPUData:
-    BaseColorFactor: [1, 1, 1, 1]
+    BaseColorFactor: [0, 1, 0.023255825, 1]
     EmissiveFactor: [1, 1, 1, 1]
     MetallicFactor: 0.35
     RoughnessFactor: 0.75

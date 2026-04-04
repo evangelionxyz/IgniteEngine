@@ -44,6 +44,8 @@ namespace ignite
 
         CompType_SkeletalMesh,
         CompType_StaticMesh,
+
+        CompType_DirectionalLight,
         
         CompType_BoxCollider2D,
         CompType_CircleCollider2D,

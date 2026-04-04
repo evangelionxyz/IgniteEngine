@@ -3,22 +3,20 @@
 #include "scene_renderer.hpp"
 #include "framebuffer_key.hpp"
 #include "gpu_upload_sync.hpp"
-
 #include "renderer.hpp"
 #include "renderer_2d.hpp"
 #include "ui_renderer.hpp"
 #include "ui/ui_manager.hpp"
 #include "font.hpp"
-
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/icamera.hpp"
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/component.hpp"
 #include "ignite/physics/2d/physics_2d_component.hpp"
-
 #include "ignite/core/application.hpp"
-
 #include "objects/shadow_map.hpp"
+#include "ignite/project/project.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 
 #include <ranges>
 #include <cstdlib>
@@ -26,9 +24,6 @@
 #include <array>
 #include <cmath>
 #include <unordered_set>
-
-#include "ignite/project/project.hpp"
-#include "ignite/core/profiler/profiler.hpp"
 
 namespace ignite
 {
@@ -67,17 +62,6 @@ namespace ignite
 	static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_EnvironmentPSOCache;
 	static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_CompositePSOCache;
 	static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_DebugGridPSOCache;
-
-	static void EmitSceneRendererCacheStatsToProfiler(size_t selectedEntityCount)
-	{
-		IGN_PROFILE_FUNCTION();
-
-		IGN_PROFILE_PLOT("SceneRenderer.Cache.PSO.Geometry", static_cast<double>(s_GeometryPSOCache.size()));
-		IGN_PROFILE_PLOT("SceneRenderer.Cache.PSO.Environment", static_cast<double>(s_EnvironmentPSOCache.size()));
-		IGN_PROFILE_PLOT("SceneRenderer.Cache.PSO.Composite", static_cast<double>(s_CompositePSOCache.size()));
-		IGN_PROFILE_PLOT("SceneRenderer.Cache.PSO.DebugGrid", static_cast<double>(s_DebugGridPSOCache.size()));
-		IGN_PROFILE_PLOT("SceneRenderer.State.SelectedEntities", static_cast<double>(selectedEntityCount));
-	}
 
 	struct DebugGrid_GPUData
 	{
@@ -149,8 +133,6 @@ namespace ignite
 			return layout == other.layout && gridBuffer == other.gridBuffer;
 		}
 	};
-
-	std::unordered_set<Material *> s_UploadedMaterialsThisPass;
 
 	struct DebugGridBindingKeyHash
 	{
@@ -556,7 +538,6 @@ namespace ignite
 		m_StaticMeshResolveCache.clear();
 		m_SkeletalMeshResolveCache.clear();
 		m_MaterialResolveCache.clear();
-        s_UploadedMaterialsThisPass.clear();
 	}
 
 	void SceneRenderer::SetActiveScene(const Ref<Scene> &scene)
@@ -1040,17 +1021,37 @@ namespace ignite
 		Ref<GraphicsPipeline> csmPipeline = m_CascadedShadowMap->GetPipeline();
 		csmState.pipeline = csmPipeline->GetHandle();
 
-		// Compute sun / light direction for shadows
-		// Using spherical coordinates: x = azimuth (horizontal), y = elevation (vertical)
-		// sunDirection points FROM scene TOWARD the sun
-		const float azimuth = m_Scene->gpuData.sungAngles.x;
-		const float elevation = m_Scene->gpuData.sungAngles.y;
-
-		const glm::vec3 sunDirection = {
-			cos(elevation) * sin(azimuth),   // X: left/right
-			sin(elevation),                   // Y: up/down
-			cos(elevation) * cos(azimuth)    // Z: front/back
+        glm::vec3 sunDirection = {
+			cos(m_Scene->gpuData.sungAngles.y) * sin(m_Scene->gpuData.sungAngles.x),
+			sin(m_Scene->gpuData.sungAngles.y),
+			cos(m_Scene->gpuData.sungAngles.y) * cos(m_Scene->gpuData.sungAngles.x)
 		};
+
+		auto lightView = m_Scene->registry->view<TransformComponent, DirectionalLight>();
+		for (entt::entity e : lightView)
+		{
+			const TransformComponent &tr = lightView.get<TransformComponent>(e);
+			const DirectionalLight &light = lightView.get<DirectionalLight>(e);
+
+			sunDirection = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+
+			auto &csmData = m_CascadedShadowMap->GetGPUData();
+			csmData.shadowStrength = light.cascadeShadow ? light.shadowStrength : 0.0f;
+			csmData.minBias = light.shadowMinBias;
+			csmData.maxBias = light.shadowMaxBias;
+			csmData.pcfRadius = light.pcfRadius;
+
+			const int qualityIndex = std::clamp(light.shadowResolution, 0, 3);
+			auto quality = static_cast<ShadowMapQuality>(qualityIndex);
+			if (m_CascadedShadowMap->GetQuality() != quality)
+			{
+				m_CascadedShadowMap->Resize(quality);
+				csmPipeline = m_CascadedShadowMap->GetPipeline();
+				csmState.pipeline = csmPipeline->GetHandle();
+			}
+
+			break;
+		}
 
 		m_CascadedShadowMap->ComputeMatrices(camera, sunDirection);
 
@@ -1098,7 +1099,7 @@ namespace ignite
 			// ===========================
 			// Static Meshes
 			// ===========================
-           {
+			{
 				IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshes");
 				auto staticMeshView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
 				for (entt::entity e : staticMeshView)
@@ -1113,7 +1114,7 @@ namespace ignite
 
 					ensurePerEntityResources(smc.perEntityBuffer, smc.meshBindingSet);
 
-                    Ref<StaticMesh> sm = ResolveStaticMesh(project, smc.handle);
+					Ref<StaticMesh> sm = ResolveStaticMesh(project, smc.handle);
 					if (!sm)
 						continue;
 
@@ -1211,6 +1212,7 @@ namespace ignite
 	{
 		IGN_PROFILE_FUNCTION();
 		Project *project = m_Scene ? m_Scene->GetProject() : nullptr;
+      std::unordered_set<Material *> uploadedMaterialsThisPass;
 		Ref<GraphicsPipeline> geomPSO = GetGeomPipelineForFB(framebuffer, m_FillMode);
 
 		nvrhi::GraphicsState geomGState = nvrhi::GraphicsState();
@@ -1283,7 +1285,7 @@ namespace ignite
 						gpuData.boneTransforms[i] = sm->boneTransforms[i];
 					}
 
-                  smc.perEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
+					smc.perEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
 
 					auto &primitive = m->GetPrimitive();
 
@@ -1306,7 +1308,7 @@ namespace ignite
 						}
 					}
 
-					if (s_UploadedMaterialsThisPass.insert(material.get()).second)
+                  if (uploadedMaterialsThisPass.insert(material.get()).second)
 					{
 						material->UploadToGpu(cmd);
 					}
@@ -1401,7 +1403,7 @@ namespace ignite
 						}
 					}
 
-					if (s_UploadedMaterialsThisPass.insert(material.get()).second)
+                  if (uploadedMaterialsThisPass.insert(material.get()).second)
 					{
 						material->UploadToGpu(cmd);
 					}

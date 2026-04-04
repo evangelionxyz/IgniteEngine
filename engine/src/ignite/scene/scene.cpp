@@ -26,6 +26,7 @@
 #include "ignite/core/profiler/profiler.hpp"
 
 #include <ranges>
+#include <cmath>
 
 namespace ignite
 {
@@ -347,35 +348,68 @@ namespace ignite
 
     void Scene::WriteBuffer(nvrhi::ICommandList *cmd)
     {
-        const Scene_GPUData *sceneGPUData = &gpuData;
+        Scene_GPUData mergedGPUData = gpuData;
 
-        auto view = registry->view<WorldEnvironment>();
-        WorldEnvironment *fallback = nullptr;
-        for (entt::entity e : view)
+        bool hasDirectionalLight = false;
+        auto dirLightView = registry->view<TransformComponent, DirectionalLight>();
+        for (entt::entity e : dirLightView)
         {
-            WorldEnvironment &world = view.get<WorldEnvironment>(e);
-            if (!world.enabled)
-                continue;
+            const TransformComponent &tr = dirLightView.get<TransformComponent>(e);
+            const DirectionalLight &light = dirLightView.get<DirectionalLight>(e);
 
-            if (world.primary)
-            {
-                sceneGPUData = &world.sceneGPUData;
-                fallback = nullptr;
-                break;
-            }
+            const glm::vec3 forward = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
 
-            if (!fallback)
-            {
-                fallback = &world;
-            }
+            mergedGPUData.sunColor = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
+            mergedGPUData.sungAngles.x = std::atan2(forward.x, forward.z);
+            mergedGPUData.sungAngles.y = std::asin(glm::clamp(forward.y, -1.0f, 1.0f));
+            mergedGPUData.sunAngularRadius = glm::radians(light.angularRadius);
+            mergedGPUData.exposure = light.exposure;
+            mergedGPUData.gamma = light.gamma;
+            mergedGPUData.ambient = light.ambient;
+
+            hasDirectionalLight = true;
+            break;
         }
 
-        if (fallback)
+        if (!hasDirectionalLight)
         {
-            sceneGPUData = &fallback->sceneGPUData;
+            const Scene_GPUData *sceneGPUData = &gpuData;
+
+            auto view = registry->view<WorldEnvironment>();
+            WorldEnvironment *fallback = nullptr;
+            for (entt::entity e : view)
+            {
+                WorldEnvironment &world = view.get<WorldEnvironment>(e);
+                if (!world.enabled)
+                    continue;
+
+                if (world.primary)
+                {
+                    sceneGPUData = &world.sceneGPUData;
+                    fallback = nullptr;
+                    break;
+                }
+
+                if (!fallback)
+                {
+                    fallback = &world;
+                }
+            }
+
+            if (fallback)
+            {
+                sceneGPUData = &fallback->sceneGPUData;
+            }
+
+            mergedGPUData.sunColor = sceneGPUData->sunColor;
+            mergedGPUData.sungAngles = sceneGPUData->sungAngles;
+            mergedGPUData.sunAngularRadius = sceneGPUData->sunAngularRadius;
+            mergedGPUData.exposure = sceneGPUData->exposure;
+            mergedGPUData.gamma = sceneGPUData->gamma;
+            mergedGPUData.ambient = sceneGPUData->ambient;
         }
 
-        gpuData = *sceneGPUData;
+        gpuData = mergedGPUData;
         m_SceneGPUDataBuffer->SetData(cmd, Buffer((void *)&gpuData, sizeof(Scene_GPUData)));
     }
 
@@ -480,6 +514,11 @@ namespace ignite
 
     template<>
     void Scene::OnComponentAdded<PointLight2DComponent>(Entity entity, PointLight2DComponent &comp)
+    {
+    }
+
+    template<>
+    void Scene::OnComponentAdded<DirectionalLight>(Entity entity, DirectionalLight &comp)
     {
     }
 

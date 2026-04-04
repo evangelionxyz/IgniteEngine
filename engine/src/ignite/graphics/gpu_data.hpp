@@ -74,8 +74,8 @@ namespace ignite
 		glm::mat4 lightViewProj[NUM_CASCADES];
 		float cascadeSplits[NUM_CASCADES]; // view-space distances to end of each cascade
 		float shadowStrength;
-		float minBias = 0.0f;
-		float maxBias = 0.01f;
+		float minBias = 0.001f;
+		float maxBias = 0.05f;
 		float pcfRadius = 0.3f; // in texels (multiplier)
 
 		int cascadeIndex;

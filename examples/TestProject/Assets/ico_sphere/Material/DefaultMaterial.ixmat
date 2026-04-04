@@ -8,7 +8,7 @@ Material:
   NormalTextureHandle: 0
   OcclusionTextureHandle: 0
   GPUData:
-    BaseColorFactor: [1, 1, 1, 1]
+    BaseColorFactor: [1, 0, 0, 1]
     EmissiveFactor: [1, 1, 1, 1]
     MetallicFactor: 1
     RoughnessFactor: 1

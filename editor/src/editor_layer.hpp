@@ -90,7 +90,6 @@ namespace ignite
 
         static void OnScreenshotSaveFileSelected(void *userData, const char *const *filelist, int filter);
         static void OnProjectFolderSelected(void *userData, const char *const *filelist, int filter);
-        static void OnLoadHDRTextureSelected(void *userData, const char *const *filelist, int filter);
 
         void ProcessPendingFileLoading();
 

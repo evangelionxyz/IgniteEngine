@@ -41,6 +41,7 @@
 #include <format>
 #include <algorithm>
 #include <ranges>
+#include <cmath>
 
 #ifdef _WIN32
     #include <dwmapi.h>
@@ -313,6 +314,15 @@ namespace ignite
 
         if (ImGui::BeginMenu("3D"))
         {
+            if (ImGui::MenuItem("Directional Light"))
+            {
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Directional Light"));
+                if (entity.IsValid() && !entity.HasComponent<DirectionalLight>())
+                {
+                    entity.AddComponent<DirectionalLight>();
+                }
+            }
+
             if (ImGui::MenuItem("World Environment"))
             {
                 entity = SetSelectedEntity(SceneManager::CreateWorldEnvironment(m_Scene.get(), "World Environment"));
@@ -585,21 +595,40 @@ namespace ignite
 							}
 						}
                     });
-                
+            });
 
-                ImGui::Separator();
-                ImGui::ColorEdit4("Sun Color", &c.sceneGPUData.sunColor.x);
-                UI::DrawVec2Control("Sun Angles", c.sceneGPUData.sungAngles, 0.01f);
-                UI::DrawFloatControl("Sun Angular Radius", &c.sceneGPUData.sunAngularRadius, 0.01f, 0.0f, 10.0f);
-                UI::DrawIntControl("Render Mode", &c.sceneGPUData.renderMode, 1.0f, 0, 16);
-                bool debugShadow = c.sceneGPUData.debugShadow != 0;
-                if (UI::DrawCheckbox("Debug Shadow", &debugShadow).isItemEdited)
+            RenderComponent<DirectionalLight>("Directional Light", selectedEntity, [&]()
+            {
+                DirectionalLight &c = selectedEntity.GetComponent<DirectionalLight>();
+                TransformComponent &tr = selectedEntity.GetComponent<TransformComponent>();
+
+                ImGui::ColorEdit4("Color", &c.color.x);
+                UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
+                UI::DrawFloatControl("Angular Radius", &c.angularRadius, 0.01f, 0.0f, 45.0f);
+                UI::DrawFloatControl("Exposure", &c.exposure, 0.01f, 0.0f, 32.0f);
+                UI::DrawFloatControl("Gamma", &c.gamma, 0.01f, 0.1f, 8.0f);
+                UI::DrawFloatControl("Ambient", &c.ambient, 0.01f, 0.0f, 4.0f);
+
+                const glm::vec3 sunDirection = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+                const float azimuth = std::atan2(sunDirection.x, sunDirection.z);
+                const float elevation = std::asin(glm::clamp(sunDirection.y, -1.0f, 1.0f));
+
+                ImGui::TextDisabled("Azimuth: %.3f rad", azimuth);
+                ImGui::TextDisabled("Elevation: %.3f rad", elevation);
+
+                ImGui::SeparatorText("Shadow");
+                UI::DrawCheckbox("Cascade Shadow", &c.cascadeShadow);
+                UI::DrawFloatControl("Strength", &c.shadowStrength, 0.01f, 0.0f, 1.0f);
+                UI::DrawFloatControl("Min Bias", &c.shadowMinBias, 0.0001f, 0.0f, 0.1f);
+                UI::DrawFloatControl("Max Bias", &c.shadowMaxBias, 0.0001f, 0.0f, 0.1f);
+                UI::DrawFloatControl("PCF Radius", &c.pcfRadius, 0.01f, 0.0f, 8.0f);
+
+                static const char *resolutionLabels[] = { "Low - 512px", "Medium - 1024px", "High - 2048px", "Ultra - 4096px" };
+                int resolution = std::clamp(c.shadowResolution, 0, 3);
+                if (ImGui::Combo("Resolution", &resolution, resolutionLabels, IM_ARRAYSIZE(resolutionLabels)))
                 {
-                    c.sceneGPUData.debugShadow = debugShadow ? 1 : 0;
+                    c.shadowResolution = resolution;
                 }
-                UI::DrawFloatControl("Exposure", &c.sceneGPUData.exposure, 0.01f, 0.0f, 32.0f);
-                UI::DrawFloatControl("Gamma", &c.sceneGPUData.gamma, 0.01f, 0.1f, 8.0f);
-                UI::DrawFloatControl("Ambient", &c.sceneGPUData.ambient, 0.01f, 0.0f, 4.0f);
             });
 
             RenderComponent<Sprite2DComponent>("Sprite 2D", selectedEntity, [&]()
@@ -1603,6 +1632,9 @@ namespace ignite
 						break;
                     case CompType_PointLight2D:
                         entity.AddComponent<PointLight2DComponent>();
+                        break;
+                    case CompType_DirectionalLight:
+                        entity.AddComponent<DirectionalLight>();
                         break;
                     case CompType_Font:
                         entity.AddComponent<TextComponent>();
