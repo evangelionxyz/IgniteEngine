@@ -80,7 +80,7 @@ namespace ignite
 
         SceneRenderer *GetSceneRenderer() { return m_SceneRenderer.get(); }
 
-        EditorData &GetState() { return m_Data; }
+        EditorData &GetData() { return m_Data; }
     private:
         static void OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter);
         static void OnSceneOpenFileSelected(void *userData, const char *const *filelist, int filter);

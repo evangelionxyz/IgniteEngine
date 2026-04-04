@@ -181,7 +181,10 @@ namespace ignite
 
     void ScenePanel::OnUpdate(float deltaTime)
     {
-        UpdateCameraInput(deltaTime);
+        if (m_Scene && m_EditorLayer->GetData().sceneState != State::ScenePlay)
+        {
+            UpdateCameraInput(deltaTime);
+        }
     }
 
     void ScenePanel::RenderHierarchy()
@@ -1772,7 +1775,7 @@ namespace ignite
             // TOOLBAR: 
             constexpr ImVec2 buttonSize = { 24.0f, 24.0f };
 
-            State sceneState = m_EditorLayer->GetState().sceneState;
+            State sceneState = m_EditorLayer->GetData().sceneState;
             const bool isScenePlaying = sceneState == ignite::State::ScenePlay;
             Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
             ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
@@ -1933,7 +1936,7 @@ namespace ignite
 
                                     SetSelectedEntity(targetSelection);
                                 }
-                                else if (!m_EditorLayer->GetState().multiSelect)
+                                else if (!m_EditorLayer->GetData().multiSelect)
                                 {
                                     SetSelectedEntity(Entity {});
                                     SetGizmoOperation(GizmoOperation::NONE);
@@ -2194,7 +2197,7 @@ namespace ignite
                 // TOOLBAR: 
                 constexpr ImVec2 buttonSize = { 24.0f, 24.0f };
 
-                State sceneState = m_EditorLayer->GetState().sceneState;
+                State sceneState = m_EditorLayer->GetData().sceneState;
                 const bool isScenePlaying = sceneState == ignite::State::ScenePlay;
                 Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
                 ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
@@ -2768,7 +2771,7 @@ namespace ignite
         }
 
         // multi select
-        if (m_EditorLayer->GetState().multiSelect)
+        if (m_EditorLayer->GetData().multiSelect)
         {
             if (auto it = m_SelectedEntities.find(entity.GetUUID()); it != m_SelectedEntities.end())
             {
