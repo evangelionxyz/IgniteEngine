@@ -146,7 +146,7 @@ namespace ignite
 
     void ContentBrowserPanel::UIRenderFileTree(FileTreeNode *node)
     {
-        IGN_PROFILE_SCOPE_COLOR("ContentBrowser::UIRenderFileTree", 0xCD5C5C);
+        IGN_PROFILE_FUNCTION();
 
         if (node->path.empty())
             return;
@@ -204,7 +204,6 @@ namespace ignite
             {
                 UIRenderFileTree(&m_TreeNodes[childNodeIndex]);
             }
-            
             ImGui::TreePop();
         }
     }
@@ -1086,6 +1085,8 @@ namespace ignite
 
     void ContentBrowserPanel::PruneMissingNodes(uint32_t nodeIndex, const std::filesystem::path &basePath)
     {
+        IGN_PROFILE_FUNCTION();
+
         if (nodeIndex >= m_TreeNodes.size() || m_TreeNodes[nodeIndex].isDeleted)
             return;
 
@@ -1128,6 +1129,8 @@ namespace ignite
 
     void ContentBrowserPanel::PruneMissingNodesAlt(uint32_t nodeIndex, const std::filesystem::path &basePath)
     {
+        IGN_PROFILE_FUNCTION();
+
         std::vector<uint32_t> nodesToDelete;
         CollectNodesToDelete(nodeIndex, basePath, nodesToDelete);
 
@@ -1141,6 +1144,8 @@ namespace ignite
 
     void ContentBrowserPanel::CollectNodesToDelete(uint32_t nodeIndex, const std::filesystem::path &basePath, std::vector<uint32_t> &nodesToDelete)
     {
+        IGN_PROFILE_FUNCTION();
+
         FileTreeNode &node = m_TreeNodes[nodeIndex];
 
         for (auto &childIndex : node.children | std::views::values)
@@ -1159,6 +1164,8 @@ namespace ignite
 
     void ContentBrowserPanel::CollectNodeAndDescendants(uint32_t nodeIndex, std::vector<uint32_t> &nodesToDelete)
     {
+        IGN_PROFILE_FUNCTION();
+
         FileTreeNode &node = m_TreeNodes[nodeIndex];
 
         for (auto &childIndex : node.children | std::views::values)
@@ -1171,6 +1178,8 @@ namespace ignite
 
     void ContentBrowserPanel::MarkNodeDeletedRecursive(uint32_t nodeIndex)
     {
+        IGN_PROFILE_FUNCTION();
+
         if (nodeIndex >= m_TreeNodes.size() || m_TreeNodes[nodeIndex].isDeleted)
             return;
 
@@ -1187,6 +1196,8 @@ namespace ignite
 
     void ContentBrowserPanel::DeleteSingleNode(uint32_t nodeIndex)
     {
+        IGN_PROFILE_FUNCTION();
+
         // Remove this node from its parent's children map
         if (nodeIndex < m_TreeNodes.size())
         {
@@ -1214,6 +1225,8 @@ namespace ignite
 
     void ContentBrowserPanel::UpdateIndicesAfterDeletion(uint32_t deletedIndex)
     {
+        IGN_PROFILE_FUNCTION();
+
         for (auto &node : m_TreeNodes)
         {
             // Update parent index
@@ -1235,6 +1248,8 @@ namespace ignite
 
     void ContentBrowserPanel::CompactTree()
     {
+        IGN_PROFILE_FUNCTION();
+
         std::vector<FileTreeNode> newNodes;
         std::unordered_map<uint32_t, uint32_t> indexMapping;
 
@@ -1290,6 +1305,8 @@ namespace ignite
     {
         if (ImGui::BeginDragDropSource())
         {
+            IGN_PROFILE_SCOPE("ContentBrowser::DragDropSource");
+
             if (!std::filesystem::is_directory(filepath))
             {
                 auto project = m_EditorLayer->GetActiveProject();
@@ -1307,6 +1324,8 @@ namespace ignite
 
     void ContentBrowserPanel::OnImportAssetDialog(void *userData, const char *const *filelist, int filter)
     {
+        IGN_PROFILE_FUNCTION();
+
         ContentBrowserPanel *cb = (ContentBrowserPanel *)userData;
         if (!cb)
         {
@@ -1368,6 +1387,8 @@ namespace ignite
 
     bool ContentBrowserPanel::IsImageFile(const std::filesystem::path &filepath) const
     {
+        IGN_PROFILE_FUNCTION();
+
         if (!std::filesystem::exists(filepath))
             return false;
 
@@ -1380,6 +1401,8 @@ namespace ignite
 
     ImVec2 ContentBrowserPanel::CalculateThumbnailDisplaySize(Ref<Texture> texture, float maxSize) const
     {
+        IGN_PROFILE_FUNCTION();
+
         if (!texture)
         {
             return ImVec2(maxSize, maxSize);
@@ -1414,8 +1437,8 @@ namespace ignite
 
     Ref<Texture> ContentBrowserPanel::GetOrCreateThumbnail(const std::filesystem::path &filepath, bool isDirectory)
     {
-        IGN_PROFILE_SCOPE_COLOR("ContentBrowser::GetOrCreateThumbnail", 0xFFFFF0);
-        
+        IGN_PROFILE_FUNCTION();
+
         if (isDirectory)
             return m_Icons["folder"];
 
@@ -1457,6 +1480,8 @@ namespace ignite
 
     void ContentBrowserPanel::StartThumbnailLoad(const std::filesystem::path &filepath)
     {
+        IGN_PROFILE_FUNCTION();
+
         // Capture by value to avoid dangling references
         std::filesystem::path capturedPath = filepath;
         int thumbnailSize = m_ThumbnailSize;
@@ -1540,6 +1565,8 @@ namespace ignite
 
     void ContentBrowserPanel::UnloadUnusedThumbnails()
     {
+        IGN_PROFILE_FUNCTION();
+
         std::vector<std::filesystem::path> toUnload;
         
         for (const auto& [path, thumbnail] : m_Thumbnails)

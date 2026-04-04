@@ -99,6 +99,7 @@ project "IgniteEditor"
         optimize "on"
         symbols "on"
         defines {
+            "IGN_ENABLE_TRACY",
             "NDEBUG"
         }
 

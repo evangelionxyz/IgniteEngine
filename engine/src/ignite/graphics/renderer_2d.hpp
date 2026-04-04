@@ -113,6 +113,10 @@ namespace ignite
         Ref<Material2D> ResolveMaterial2D(Project *project, AssetHandle handle);
         void ClearAssetResolveCache();
 
+        void BuildPreRenderCache();
+        bool ReplayPreRenderCache(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
+        void InvalidatePreRenderCache();
+
         void InitQuadData();
         void InitLineData();
         void InitCircleData();
@@ -161,6 +165,26 @@ namespace ignite
 
         std::unordered_map<AssetResolveKey, Ref<Texture>, AssetResolveKeyHash> m_TextureResolveCache;
         std::unordered_map<AssetResolveKey, Ref<Material2D>, AssetResolveKeyHash> m_Material2DResolveCache;
+
+        struct PreRenderCacheData
+        {
+            bool valid = false;
+
+            Material2DLighting_GPUData lightingData;
+
+            std::vector<Vertex2DCircle> circleVertices;
+            uint32_t circleIndexCount = 0;
+
+            std::vector<Vertex2DQuad> quadVertices;
+            uint32_t quadIndexCount = 0;
+            std::vector<Ref<Texture>> quadTextureSlots;
+
+            std::vector<VertexText> textVertices;
+            uint32_t textIndexCount = 0;
+            std::vector<Ref<Texture>> textTextureSlots;
+        };
+
+        PreRenderCacheData m_PreRenderCache;
     };
 }
 

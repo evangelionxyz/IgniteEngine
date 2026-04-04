@@ -34,12 +34,14 @@ namespace ignite
 
 	void AssetImporterPanel::OnEvent(Event &event)
 	{
+		IGN_PROFILE_FUNCTION();
 		EventDispatcher dispatcher(event);
 		dispatcher.Dispatch<AssetImportEvent>(BIND_CLASS_EVENT_FN(AssetImporterPanel::OnAssetImportEvent));
 	}
 
 	bool AssetImporterPanel::OnAssetImportEvent(AssetImportEvent &event)
 	{
+		IGN_PROFILE_FUNCTION();
 		m_SelectedFilepaths = event.GetFilepaths();
 		m_TargetDirectory = event.GetTargetDirectory();
 		if (m_TargetDirectory.empty())
@@ -62,8 +64,10 @@ namespace ignite
 
 	void AssetImporterPanel::OnUpdate(float deltaTime)
 	{
+		IGN_PROFILE_FUNCTION();
 		while (!m_ImportRequests.empty())
 		{
+			IGN_PROFILE_SCOPE("AssetImporterPanel::OnUpdate::ProcessRequest");
 			ImportRequest request = m_ImportRequests.front();
 			m_ImportRequests.pop();
 			ProcessImportRequest(request);
@@ -149,6 +153,7 @@ namespace ignite
 
 	void AssetImporterPanel::QueueImportRequest()
 	{
+        IGN_PROFILE_FUNCTION();
 		if (m_SelectedFilepaths.empty())
 		{
 			m_ShowImporterWindow = false;
@@ -181,6 +186,7 @@ namespace ignite
 
 	void AssetImporterPanel::DrawFontImportPreview()
 	{
+		IGN_PROFILE_FUNCTION();
 		ImGui::SeparatorText("Font MSDF Preview");
 		if (!m_FontPreview.font)
 		{
@@ -206,6 +212,7 @@ namespace ignite
 
 	void AssetImporterPanel::DrawSkeletalMeshImportOptions()
 	{
+        IGN_PROFILE_FUNCTION();
 		if (ImGui::TreeNodeEx("Skeletal Mesh (FBX) Import", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::Checkbox("Import Skeletal Mesh", &m_SkeletalMeshOptions.importSkeletalMesh);
@@ -232,6 +239,7 @@ namespace ignite
 
 	void AssetImporterPanel::ProcessImportRequest(const ImportRequest &request)
 	{
+		IGN_PROFILE_FUNCTION();
 		auto project = m_EditorLayer->GetActiveProject();
 		if (!project)
 		{
@@ -243,8 +251,10 @@ namespace ignite
 
 		for (const auto &filepath : request.filepaths)
 		{
+			IGN_PROFILE_SCOPE("AssetImporterPanel::ProcessImportRequest::File");
 			if (request.assetType == AssetType::Font)
 			{
+				IGN_PROFILE_SCOPE("AssetImporterPanel::ProcessImportRequest::Font");
 				ImportFontAsset(filepath);
 				importedAny = true;
 				continue;
@@ -252,6 +262,7 @@ namespace ignite
 
 			if (IsFbxFile(filepath))
 			{
+				IGN_PROFILE_SCOPE("AssetImporterPanel::ProcessImportRequest::FBX");
 				if (request.skeletalMeshOptions.importSkeletalMesh)
 				{
 					ImportFbxAsSkeletalMesh(filepath);
@@ -276,6 +287,7 @@ namespace ignite
 
 	void AssetImporterPanel::ImportFontAsset(const std::filesystem::path &filepath)
 	{
+		IGN_PROFILE_FUNCTION();
 		auto project = m_EditorLayer->GetActiveProject();
 		if (!project || !std::filesystem::exists(filepath))
 		{
@@ -359,6 +371,7 @@ namespace ignite
 
 	std::filesystem::path AssetImporterPanel::BuildUniquePath(const std::filesystem::path &directory, const std::string &baseName, const std::string &extension) const
 	{
+		IGN_PROFILE_FUNCTION();
 		std::filesystem::path candidate = directory / (baseName + extension);
 		if (!std::filesystem::exists(candidate))
 		{
@@ -379,6 +392,7 @@ namespace ignite
 
 	void AssetImporterPanel::ImportFbxAsSkeletalMesh(const std::filesystem::path &filepath)
 	{
+		IGN_PROFILE_FUNCTION();
 		auto project = m_EditorLayer->GetActiveProject();
 		if (!project)
 		{
@@ -417,6 +431,7 @@ namespace ignite
 
 	void AssetImporterPanel::ImportFbxSkeletonAndAnimations(const std::filesystem::path &filepath, const SkeletalMeshImportOptions &options)
 	{
+		IGN_PROFILE_FUNCTION();
 		if (!options.importSkeleton && !options.importAnimations)
 		{
 			return;

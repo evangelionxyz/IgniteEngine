@@ -494,7 +494,9 @@ namespace ignite
         if (m_Renderer2D)
         {
             m_Renderer2D->ClearAssetResolveCache();
+			m_Renderer2D->InvalidatePreRenderCache();
         }
+		m_Has2DPreRenderCache = false;
 	}
 
 	void SceneRenderer::SetActiveScene(const Ref<Scene> &scene)
@@ -529,6 +531,12 @@ namespace ignite
 	{
 		IGN_PROFILE_FUNCTION();
 		IGN_PROFILE_FRAME_NAMED("Editor Frame");
+
+		m_Has2DPreRenderCache = false;
+		if (m_Renderer2D)
+		{
+			m_Renderer2D->InvalidatePreRenderCache();
+		}
 
 		WorldEnvironment *worldEnvironment = renderEnvironment ? GetActiveWorldEnvironment(m_Scene.get()) : nullptr;
 
@@ -1233,135 +1241,144 @@ namespace ignite
 		// 2D Pass
 		{
 			IGN_PROFILE_SCOPE("SceneRenderer::2DPass");
-            std::vector<PointLight2D_GPUData> pointLights2D;
-            {
-                IGN_PROFILE_SCOPE("SceneRenderer::2DPass::PointLightsView");
-
-                auto pointLight2DView = m_Scene->registry->view<TransformComponent, PointLight2DComponent>();
-                for (entt::entity e : pointLight2DView)
-                {
-                    TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-                    if (!tr.visible)
-                        continue;
-
-                    PointLight2DComponent &light = m_Scene->registry->get<PointLight2DComponent>(e);
-                    if (!light.enabled)
-                        continue;
-
-                    PointLight2D_GPUData gpuLight;
-                    gpuLight.position = glm::vec4(tr.translation, 1.0f);
-                    gpuLight.color = light.color;
-                    gpuLight.radius = light.radius;
-                    gpuLight.intensity = light.intensity;
-                    pointLights2D.push_back(gpuLight);
-                }
-            }
-
-			m_Renderer2D->SetPointLights2D(pointLights2D);
-			m_Renderer2D->Begin(cmd);
+			if (m_Has2DPreRenderCache && m_Renderer2D->ReplayPreRenderCache(cmd, framebuffer))
 			{
-                IGN_PROFILE_SCOPE("SceneRenderer::2DPass::Circle2DView");
-                auto circle2DView = m_Scene->registry->view<TransformComponent, Circle2DComponent>();
-                for (entt::entity e : circle2DView)
-                {
-                    TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-                    if (!tr.visible)
-                        continue;
-
-                    if (m_Scene->registry->all_of<Circle2DComponent>(e))
-                    {
-                        Circle2DComponent &circle = m_Scene->registry->get<Circle2DComponent>(e);
-                        const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                        m_Renderer2D->DrawCircle(tr.GetWorldMatrix(), circle.color, circle.thickness, circle.fade, objectID);
-                    }
-                }
+				IGN_PROFILE_SCOPE("SceneRenderer::2DPass::ReplayCache");
 			}
+			else
 			{
-                IGN_PROFILE_SCOPE("SceneRenderer::2DPass::Quad2DView");
-                Project *project = m_Scene->GetProject();
-                auto quad2DView = m_Scene->registry->view<TransformComponent, Sprite2DComponent>();
-				for (entt::entity e : quad2DView)
+				std::vector<PointLight2D_GPUData> pointLights2D;
 				{
-					TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-					if (!tr.visible)
-						continue;
+					IGN_PROFILE_SCOPE("SceneRenderer::2DPass::PointLightsView");
 
-					Sprite2DComponent &sprite = m_Scene->registry->get<Sprite2DComponent>(e);
-					const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-
-					// Copy UV
-					glm::vec2 uv0 = sprite.uv0;
-					glm::vec2 uv1 = sprite.uv1;
-
-					if (sprite.flipY)
+					auto pointLight2DView = m_Scene->registry->view<TransformComponent, PointLight2DComponent>();
+					for (entt::entity e : pointLight2DView)
 					{
-						std::swap(uv0.y, uv1.y);
-					}
+						TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+						if (!tr.visible)
+							continue;
 
-					if (sprite.flipX)
-					{
-						std::swap(uv0.x, uv1.x);
-					}
+						PointLight2DComponent &light = m_Scene->registry->get<PointLight2DComponent>(e);
+						if (!light.enabled)
+							continue;
 
-					// Find material if available (use frame cache — avoids repeated AssetManager map lookups)
-                   Ref<Material2D> mat2d = m_Renderer2D->ResolveMaterial2D(project, sprite.materialHandle);
-
-					// Render with Material2D
-					if (mat2d)
-					{
-                        Ref<Texture> texture = m_Renderer2D->ResolveTexture(project, mat2d->textureHandle);
-						m_Renderer2D->DrawQuad(tr.GetWorldMatrix(), mat2d->data.baseColor, mat2d->data.additiveColor,
-							mat2d->data.type, texture, uv0, uv1, mat2d->data.tilingFactor, objectID);
+						PointLight2D_GPUData gpuLight;
+						gpuLight.position = glm::vec4(tr.translation, 1.0f);
+						gpuLight.color = light.color;
+						gpuLight.radius = light.radius;
+						gpuLight.intensity = light.intensity;
+						pointLights2D.push_back(gpuLight);
 					}
-					else // Render with default
-					{
-                       Ref<Texture> texture = m_Renderer2D->ResolveTexture(project, sprite.handle);
-						m_Renderer2D->DrawQuad(tr.GetWorldMatrix(), sprite.color, texture, uv0, uv1, sprite.tilingFactor, objectID);
-					}
-
 				}
+
+				m_Renderer2D->SetPointLights2D(pointLights2D);
+				m_Renderer2D->Begin(cmd);
+				{
+					IGN_PROFILE_SCOPE("SceneRenderer::2DPass::Circle2DView");
+					auto circle2DView = m_Scene->registry->view<TransformComponent, Circle2DComponent>();
+					for (entt::entity e : circle2DView)
+					{
+						TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+						if (!tr.visible)
+							continue;
+
+						if (m_Scene->registry->all_of<Circle2DComponent>(e))
+						{
+							Circle2DComponent &circle = m_Scene->registry->get<Circle2DComponent>(e);
+							const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+							m_Renderer2D->DrawCircle(tr.GetWorldMatrix(), circle.color, circle.thickness, circle.fade, objectID);
+						}
+					}
+				}
+				{
+					IGN_PROFILE_SCOPE("SceneRenderer::2DPass::Quad2DView");
+					Project *project = m_Scene->GetProject();
+					auto quad2DView = m_Scene->registry->view<TransformComponent, Sprite2DComponent>();
+					for (entt::entity e : quad2DView)
+					{
+						TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+						if (!tr.visible)
+							continue;
+
+						Sprite2DComponent &sprite = m_Scene->registry->get<Sprite2DComponent>(e);
+						const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+
+						// Copy UV
+						glm::vec2 uv0 = sprite.uv0;
+						glm::vec2 uv1 = sprite.uv1;
+
+						if (sprite.flipY)
+						{
+							std::swap(uv0.y, uv1.y);
+						}
+
+						if (sprite.flipX)
+						{
+							std::swap(uv0.x, uv1.x);
+						}
+
+						// Find material if available (use frame cache — avoids repeated AssetManager map lookups)
+						Ref<Material2D> mat2d = m_Renderer2D->ResolveMaterial2D(project, sprite.materialHandle);
+
+						// Render with Material2D
+						if (mat2d)
+						{
+							Ref<Texture> texture = m_Renderer2D->ResolveTexture(project, mat2d->textureHandle);
+							m_Renderer2D->DrawQuad(tr.GetWorldMatrix(), mat2d->data.baseColor, mat2d->data.additiveColor,
+								mat2d->data.type, texture, uv0, uv1, mat2d->data.tilingFactor, objectID);
+						}
+						else // Render with default
+						{
+							Ref<Texture> texture = m_Renderer2D->ResolveTexture(project, sprite.handle);
+							m_Renderer2D->DrawQuad(tr.GetWorldMatrix(), sprite.color, texture, uv0, uv1, sprite.tilingFactor, objectID);
+						}
+
+					}
+				}
+
+				{
+					IGN_PROFILE_SCOPE("SceneRenderer::2DPass::TextView");
+					auto textView = m_Scene->registry->view<TransformComponent, TextComponent>();
+					for (entt::entity e : textView)
+					{
+						TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+						if (!tr.visible)
+							continue;
+
+						const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+
+						TextComponent &text = m_Scene->registry->get<TextComponent>(e);
+						if (text.fontHandle == AssetHandle(0) || text.text.empty())
+							continue;
+
+						Ref<Font> font = m_Scene->GetProject()->GetAsset<Font>(text.fontHandle, AssetType::Font);
+						if (!font)
+							continue;
+
+						Ref<Texture> fontAtlas = font->GetAtlasTexture();
+						if (!fontAtlas || !fontAtlas->IsReady())
+							continue;
+
+						glm::vec4 textColor = text.color;
+						if (text.material2dHandle != AssetHandle(0))
+						{
+							if (Ref<Material2D> material = m_Scene->GetProject()->GetAsset<Material2D>(text.material2dHandle, AssetType::Material2D))
+							{
+								textColor = text.color + material->data.baseColor;
+							}
+						}
+
+						m_Renderer2D->DrawString(text.text, font, textColor, tr.GetWorldMatrix(), text.kerning, text.lineSpacing, objectID);
+					}
+				}
+
+				m_Renderer2D->Flush(framebuffer);
+				m_Renderer2D->BuildPreRenderCache();
+				m_Has2DPreRenderCache = true;
+				m_Renderer2D->End();
 			}
-
-			{
-                IGN_PROFILE_SCOPE("SceneRenderer::2DPass::TextView");
-                auto textView = m_Scene->registry->view<TransformComponent, TextComponent>();
-                for (entt::entity e : textView)
-                {
-                    TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-                    if (!tr.visible)
-                        continue;
-
-                    const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-
-                    TextComponent &text = m_Scene->registry->get<TextComponent>(e);
-                    if (text.fontHandle == AssetHandle(0) || text.text.empty())
-                        continue;
-
-                    Ref<Font> font = m_Scene->GetProject()->GetAsset<Font>(text.fontHandle, AssetType::Font);
-                    if (!font)
-                        continue;
-
-                    Ref<Texture> fontAtlas = font->GetAtlasTexture();
-                    if (!fontAtlas || !fontAtlas->IsReady())
-                        continue;
-
-                    glm::vec4 textColor = text.color;
-                    if (text.material2dHandle != AssetHandle(0))
-                    {
-                        if (Ref<Material2D> material = m_Scene->GetProject()->GetAsset<Material2D>(text.material2dHandle, AssetType::Material2D))
-                        {
-                            textColor = text.color + material->data.baseColor;
-                        }
-                    }
-
-                    m_Renderer2D->DrawString(text.text, font, textColor, tr.GetWorldMatrix(), text.kerning, text.lineSpacing, objectID);
-                }
-			}
-
-			m_Renderer2D->Flush(framebuffer);
-			m_Renderer2D->End();
 		} // !2D Pass
-	}	
+	}
 
 	void SceneRenderer::DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const DebugGridStyle &style, bool is2D)
 	{

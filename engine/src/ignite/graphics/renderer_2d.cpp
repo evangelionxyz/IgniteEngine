@@ -611,6 +611,134 @@ namespace ignite
         m_Material2DResolveCache.clear();
     }
 
+    void Renderer2D::BuildPreRenderCache()
+    {
+        IGN_PROFILE_FUNCTION();
+
+        m_PreRenderCache.valid = true;
+        m_PreRenderCache.lightingData = m_Material2DLightingData;
+
+        const uint32_t circleVertexCount = m_CircleBatch.vertexBufferPtr
+            ? static_cast<uint32_t>(m_CircleBatch.vertexBufferPtr - m_CircleBatch.vertexBufferBase)
+            : 0;
+        m_PreRenderCache.circleVertices.assign(m_CircleBatch.vertexBufferBase, m_CircleBatch.vertexBufferBase + circleVertexCount);
+        m_PreRenderCache.circleIndexCount = m_CircleBatch.indexCount;
+
+        const uint32_t quadVertexCount = m_QuadBatch.vertexBufferPtr
+            ? static_cast<uint32_t>(m_QuadBatch.vertexBufferPtr - m_QuadBatch.vertexBufferBase)
+            : 0;
+        m_PreRenderCache.quadVertices.assign(m_QuadBatch.vertexBufferBase, m_QuadBatch.vertexBufferBase + quadVertexCount);
+        m_PreRenderCache.quadIndexCount = m_QuadBatch.indexCount;
+        m_PreRenderCache.quadTextureSlots = m_QuadBatch.textureSlots;
+
+        const uint32_t textVertexCount = m_TextBatch.vertexBufferPtr
+            ? static_cast<uint32_t>(m_TextBatch.vertexBufferPtr - m_TextBatch.vertexBufferBase)
+            : 0;
+        m_PreRenderCache.textVertices.assign(m_TextBatch.vertexBufferBase, m_TextBatch.vertexBufferBase + textVertexCount);
+        m_PreRenderCache.textIndexCount = m_TextBatch.indexCount;
+        m_PreRenderCache.textTextureSlots = m_TextBatch.textureSlots;
+    }
+
+    bool Renderer2D::ReplayPreRenderCache(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        if (!m_PreRenderCache.valid || !cmd || !framebuffer)
+        {
+            return false;
+        }
+
+        m_Cmd = cmd;
+
+        if (m_Material2DLightingBuffer)
+        {
+            m_Material2DLightingBuffer->SetData(m_Cmd, Buffer(&m_PreRenderCache.lightingData, sizeof(m_PreRenderCache.lightingData)));
+        }
+
+        const nvrhi::Viewport &viewport = framebuffer->getFramebufferInfo().getViewport();
+
+        if (m_PreRenderCache.circleIndexCount > 0 && !m_PreRenderCache.circleVertices.empty())
+        {
+            m_CircleBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache.circleVertices.data(), m_PreRenderCache.circleVertices.size() * sizeof(Vertex2DCircle)));
+
+            Ref<GraphicsPipeline> gp = GetCirclePipelineForFB(framebuffer, m_FillMode);
+            nvrhi::BindingSetHandle bindingSet = GetCircleBindingSet(gp->GetBindingLayout(0));
+
+            const auto graphicsState = nvrhi::GraphicsState()
+                .setPipeline(gp->GetHandle())
+                .setFramebuffer(framebuffer)
+                .addBindingSet(bindingSet)
+                .setViewport(nvrhi::ViewportState().addViewportAndScissorRect(viewport))
+                .addVertexBuffer(nvrhi::VertexBufferBinding{ m_CircleBatch.vertexBuffer->GetHandle(), 0, 0 })
+                .setIndexBuffer({ m_CircleBatch.indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+            m_Cmd->setGraphicsState(graphicsState);
+
+            nvrhi::DrawArguments args;
+            args.vertexCount = m_PreRenderCache.circleIndexCount;
+            args.instanceCount = 1;
+            m_Cmd->drawIndexed(args);
+        }
+
+        if (m_PreRenderCache.quadIndexCount > 0 && !m_PreRenderCache.quadVertices.empty())
+        {
+            m_QuadBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache.quadVertices.data(), m_PreRenderCache.quadVertices.size() * sizeof(Vertex2DQuad)));
+
+            Ref<GraphicsPipeline> gp = GetQuadPipelineForFB(framebuffer, m_FillMode);
+            nvrhi::BindingSetHandle bindingSet = GetQuadBindingSet(gp->GetBindingLayout(0), m_PreRenderCache.quadTextureSlots, m_Material2DLightingBuffer);
+
+            const auto graphicsState = nvrhi::GraphicsState()
+                .setPipeline(gp->GetHandle())
+                .setFramebuffer(framebuffer)
+                .addBindingSet(bindingSet)
+                .setViewport(nvrhi::ViewportState().addViewportAndScissorRect(viewport))
+                .addVertexBuffer(nvrhi::VertexBufferBinding{ m_QuadBatch.vertexBuffer->GetHandle(), 0, 0 })
+                .setIndexBuffer({ m_QuadBatch.indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+            m_Cmd->setGraphicsState(graphicsState);
+
+            nvrhi::DrawArguments args;
+            args.vertexCount = m_PreRenderCache.quadIndexCount;
+            args.instanceCount = 1;
+            m_Cmd->drawIndexed(args);
+        }
+
+        if (m_PreRenderCache.textIndexCount > 0 && !m_PreRenderCache.textVertices.empty())
+        {
+            m_TextBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache.textVertices.data(), m_PreRenderCache.textVertices.size() * sizeof(VertexText)));
+
+            Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode);
+            nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_PreRenderCache.textTextureSlots, m_Material2DLightingBuffer);
+
+            const auto graphicsState = nvrhi::GraphicsState()
+                .setPipeline(gp->GetHandle())
+                .setFramebuffer(framebuffer)
+                .addBindingSet(bindingSet)
+                .setViewport(nvrhi::ViewportState().addViewportAndScissorRect(viewport))
+                .addVertexBuffer(nvrhi::VertexBufferBinding{ m_TextBatch.vertexBuffer->GetHandle(), 0, 0 })
+                .setIndexBuffer({ m_TextBatch.indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+            m_Cmd->setGraphicsState(graphicsState);
+
+            nvrhi::DrawArguments args;
+            args.vertexCount = m_PreRenderCache.textIndexCount;
+            args.instanceCount = 1;
+            m_Cmd->drawIndexed(args);
+        }
+
+        return true;
+    }
+
+    void Renderer2D::InvalidatePreRenderCache()
+    {
+        m_PreRenderCache.valid = false;
+        m_PreRenderCache.circleVertices.clear();
+        m_PreRenderCache.quadVertices.clear();
+        m_PreRenderCache.textVertices.clear();
+        m_PreRenderCache.quadTextureSlots.clear();
+        m_PreRenderCache.textTextureSlots.clear();
+        m_PreRenderCache.circleIndexCount = 0;
+        m_PreRenderCache.quadIndexCount = 0;
+        m_PreRenderCache.textIndexCount = 0;
+    }
+
     void Renderer2D::InitQuadData()
     {
         m_QuadBatch.minCount = 256;

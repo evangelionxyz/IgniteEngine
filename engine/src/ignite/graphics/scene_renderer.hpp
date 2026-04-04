@@ -128,5 +128,7 @@ namespace ignite
         nvrhi::IDevice *m_Device = nullptr;
         Ref<Scene> m_Scene;
 
+        bool m_Has2DPreRenderCache = false;
+
     };
 }

@@ -243,6 +243,8 @@ namespace ignite {
 
     AssetHandle AssetManager::ImportAsset(const std::filesystem::path &filepath)
     {
+        IGN_PROFILE_FUNCTION();
+
         // Invalid 
         if (GetAssetTypeFromExtension(filepath.extension().generic_string()) == AssetType::Invalid)
         {
@@ -277,6 +279,8 @@ namespace ignite {
 
     void AssetManager::AssignMetaData(AssetHandle handle, const AssetMetaData &metadata)
     {
+        IGN_PROFILE_FUNCTION();
+
         m_AssetRegistry[handle] = metadata;
 
         if (metadata.type == AssetType::Texture)
@@ -300,6 +304,8 @@ namespace ignite {
 
     TextureCreateInfo AssetManager::GetTextureCreateInfo(AssetHandle handle) const
     {
+        IGN_PROFILE_FUNCTION();
+
         if (!IsAssetHandleValid(handle))
         {
             return TextureCreateInfo{};
@@ -326,6 +332,8 @@ namespace ignite {
 
     void AssetManager::SetTextureCreateInfo(AssetHandle handle, const TextureCreateInfo &createInfo, bool saveToDisk)
     {
+        IGN_PROFILE_FUNCTION();
+
         if (!IsAssetHandleValid(handle))
         {
             return;
@@ -350,6 +358,8 @@ namespace ignite {
 
 	void AssetManager::RemoveAsset(AssetHandle handle)
     {
+        IGN_PROFILE_FUNCTION();
+
         auto it = m_AssetRegistry.find(handle);
         if (it != m_AssetRegistry.end())
             m_AssetRegistry.erase(it);
@@ -357,6 +367,8 @@ namespace ignite {
 
     void AssetManager::ClearAllLoadedAssets()
     {
+        IGN_PROFILE_FUNCTION();
+
         LOG_TRACE("[Asset Manager] Clearing all loaded assets (Count: {})", m_LoadedAssets.size());
         
         // Wait for GPU operations to complete before releasing assets
@@ -375,6 +387,8 @@ namespace ignite {
 
     void AssetManager::UnloadAsset(AssetHandle handle)
     {
+        IGN_PROFILE_FUNCTION();
+
         std::unique_lock lock(s_AssetThreadMutex);
         
         auto it = m_LoadedAssets.find(handle);
@@ -399,6 +413,8 @@ namespace ignite {
 
     void AssetManager::UnloadUnusedAssets()
     {
+        IGN_PROFILE_FUNCTION();
+
         LOG_TRACE("[Asset Manager] Checking for unused assets (Loaded: {})", m_LoadedAssets.size());
 
         std::vector<AssetHandle> assetsToUnload;
@@ -449,6 +465,8 @@ namespace ignite {
 
     void AssetManager::SubmitJob(AssetJob job)
     {
+        IGN_PROFILE_FUNCTION();
+
         {
             std::unique_lock lock(s_AssetThreadMutex);
             m_Jobs.push(std::move(job));
@@ -610,6 +628,8 @@ namespace ignite {
             AssetJob job;
             
             {
+                IGN_PROFILE_SCOPE("AssetManager::WorkerLoop");
+
                 std::unique_lock lock(s_AssetThreadMutex);
                 m_ConditionVariable.wait(lock, [this]() { return !m_Running || !m_Jobs.empty(); });
 
@@ -626,6 +646,7 @@ namespace ignite {
             // Execute job outside lock with exception handling
             try
             {
+                IGN_PROFILE_SCOPE_COLOR("AssetManager::WorkerLoop::Execute", 0x00AABCFF);
                 job();
             }
             catch (const std::exception& e)
