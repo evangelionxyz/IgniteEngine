@@ -68,17 +68,17 @@ namespace ignite
         // ---- Animation2D per-asset playback preview state ----
         struct Animation2DEditorState
         {
-            float   playbackTime  = 0.0f;  // seconds into animation
-            float   lastRealTime  = 0.0f;  // ImGui time stamp when last ticked
-            bool    playing       = false;
-            int     previewFrame  = 0;
-            float   previewZoom   = 1.0f;
-            float   toolsWidth    = 280.0f;
+            float   playbackTime = 0.0f;  // seconds into animation
+            float   lastRealTime = 0.0f;  // ImGui time stamp when last ticked
+            bool    playing = false;
+            int     previewFrame = 0;
+            float   previewZoom = 1.0f;
+            float   toolsWidth = 280.0f;
         };
 
         static std::unordered_map<uint64_t, Animation2DEditorState> s_Anim2DEditorState;
 
-        static const char *TextureFormatToString(nvrhi::Format format) 
+        static const char *TextureFormatToString(nvrhi::Format format)
         {
             switch (format)
             {
@@ -86,9 +86,10 @@ namespace ignite
                 case nvrhi::Format::RGBA32_FLOAT: return "RGBA32_FLOAT";
                 default: return "UNKNOWN";
             }
+
         }
 
-        static const char *SamplerAddressModeToString(nvrhi::SamplerAddressMode mode) 
+        static const char *SamplerAddressModeToString(nvrhi::SamplerAddressMode mode)
         {
             switch (mode)
             {
@@ -98,7 +99,158 @@ namespace ignite
                 default: return "Other";
             }
         }
-    } // namespace
+
+        template<typename TOnChanged>
+        static void DrawTexturePreviewDropTarget(Project *project, const char *label, AssetHandle &textureHandle, TOnChanged &&onChanged)
+        {
+            if (!project)
+            {
+                return;
+            }
+
+            auto assetManager = project->GetAssetManager();
+
+            ImGui::PushID(label);
+            ImGui::TextUnformatted(label);
+
+            const ImVec2 previewSize(160.0f, 160.0f);
+            const ImVec2 previewMin = ImGui::GetCursorScreenPos();
+            const ImVec2 previewMax = ImVec2(previewMin.x + previewSize.x, previewMin.y + previewSize.y);
+
+            ImGui::InvisibleButton("##texture_preview", previewSize);
+
+            ImDrawList *drawList = ImGui::GetWindowDrawList();
+            const ImU32 dark = IM_COL32(70, 70, 70, 255);
+            const ImU32 light = IM_COL32(100, 100, 100, 255);
+            constexpr float tileSize = 16.0f;
+            for (float y = previewMin.y; y < previewMax.y; y += tileSize)
+            {
+                for (float x = previewMin.x; x < previewMax.x; x += tileSize)
+                {
+                    const int ix = static_cast<int>((x - previewMin.x) / tileSize);
+                    const int iy = static_cast<int>((y - previewMin.y) / tileSize);
+                    const ImU32 color = ((ix + iy) % 2 == 0) ? dark : light;
+                    drawList->AddRectFilled(ImVec2(x, y), ImVec2(std::min(x + tileSize, previewMax.x), std::min(y + tileSize, previewMax.y)), color);
+                }
+            }
+
+            Ref<Texture> texture = nullptr;
+            if (textureHandle != AssetHandle(0))
+            {
+                texture = project->GetAsset<Texture>(textureHandle);
+                if (!texture)
+                {
+                    texture = project->GetAssetImmediate<Texture>(textureHandle);
+                }
+            }
+
+            if (texture && texture->GetHandle())
+            {
+                drawList->AddImage(
+                    reinterpret_cast<ImTextureID>(texture->GetHandle().Get()),
+                    previewMin,
+                    previewMax,
+                    ImVec2(0.0f, 1.0f),
+                    ImVec2(1.0f, 0.0f));
+            }
+
+            drawList->AddRect(previewMin, previewMax, IM_COL32(20, 20, 20, 255), 0.0f, 0, 1.5f);
+
+            if (ImGui::BeginDragDropTarget())
+            {
+                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                {
+                    if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                    {
+                        const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                        const AssetMetaData &droppedMetadata = assetManager->GetMetaData(droppedHandle);
+                        if (droppedMetadata.type == AssetType::Texture)
+                        {
+                            textureHandle = droppedHandle;
+                            onChanged();
+                        }
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+
+            if (textureHandle != AssetHandle(0))
+            {
+                if (ImGui::Button("Clear Texture"))
+                {
+                    textureHandle = AssetHandle(0);
+                    onChanged();
+                }
+            }
+
+            ImGui::TextDisabled("Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(textureHandle)));
+            ImGui::PopID();
+        }
+    }
+
+    bool AssetEditorPanel::BeginAssetEditorWindow(AssetEditorData &assetData, bool &isOpen, const ImVec2 &windowSize, const ImVec2 &minWindowSize, ImGuiWindowFlags flags)
+    {
+        if (assetData.requestFocus)
+        {
+            ImGui::SetNextWindowFocus();
+        }
+
+        ImGui::SetNextWindowSize(windowSize, ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSizeConstraints(minWindowSize, ImVec2(FLT_MAX, FLT_MAX));
+
+        if (!ImGui::Begin(assetData.windowTitle.c_str(), &isOpen, flags))
+        {
+            if (!isOpen && assetData.asset && assetData.asset->IsDirty())
+            {
+                isOpen = true;
+                assetData.showUnsavedClosePopup = true;
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    void AssetEditorPanel::RenderAssetEditorClosePopup(AssetEditorData &assetData, bool &isOpen)
+    {
+        const std::string popupId = std::format("Unsaved Changes###asset_unsaved_close_{}", static_cast<uint64_t>(assetData.handle));
+        if (assetData.showUnsavedClosePopup)
+        {
+            ImGui::OpenPopup(popupId.c_str());
+        }
+
+        if (ImGui::BeginPopupModal(popupId.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::Text("This asset has unsaved changes.");
+            ImGui::Separator();
+
+            if (ImGui::Button("Save and Close"))
+            {
+                if (SaveAsset(assetData))
+                {
+                    assetData.showUnsavedClosePopup = false;
+                    isOpen = false;
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Discard"))
+            {
+                assetData.showUnsavedClosePopup = false;
+                isOpen = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel"))
+            {
+                assetData.showUnsavedClosePopup = false;
+                isOpen = true;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+    }
 
     AssetEditorPanel::AssetEditorPanel(const char *windowTitle, EditorLayer *editor)
         : IPanel(windowTitle, editor)
@@ -1100,8 +1252,6 @@ namespace ignite
             return;
         }
 
-        auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-
         const char *materialTypeLabel =
             material2D->data.type == MATERIAL_2D_TYPE_LIT ? "Lit" : "Unlit";
         if (ImGui::BeginCombo("Material Type", materialTypeLabel))
@@ -1137,38 +1287,11 @@ namespace ignite
             material2D->SetDirtyFlag(true);
         }
 
-        std::string textureLabel = material2D->textureHandle == AssetHandle(0) ? "Drop Texture Here" : "Texture Loaded";
-        ImGui::Button(textureLabel.c_str(), ImVec2(220.0f, 0.0f));
-        if (ImGui::BeginDragDropTarget())
+        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Texture Preview", material2D->textureHandle,
+            [&]()
         {
-            if (const ImGuiPayload *payload =
-                ImGui::AcceptDragDropPayload("content_browser_item"))
-            {
-                if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                {
-                    const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-                    const AssetMetaData &droppedMetadata = assetManager->GetMetaData(droppedHandle);
-                    if (droppedMetadata.type == AssetType::Texture)
-                    {
-                        material2D->textureHandle = droppedHandle;
-                        material2D->SetDirtyFlag(true);
-                    }
-                }
-            }
-            ImGui::EndDragDropTarget();
-        }
-
-        if (material2D->textureHandle != AssetHandle(0))
-        {
-            ImGui::SameLine();
-            if (ImGui::Button("Clear Texture"))
-            {
-                material2D->textureHandle = AssetHandle(0);
-                material2D->SetDirtyFlag(true);
-            }
-        }
-
-        ImGui::Text("Texture Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(material2D->textureHandle)));
+            material2D->SetDirtyFlag(true);
+        });
     }
 
     void AssetEditorPanel::RenderMaterialEditor(const Ref<Material> &material)
@@ -1177,9 +1300,6 @@ namespace ignite
         {
             return;
         }
-
-        auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-
 
         if (ImGui::ColorEdit4("Base Color", &material->gpuData.baseColorFactor.x))
         {
@@ -1205,6 +1325,18 @@ namespace ignite
         {
             material->SetDirtyFlag(true);
         }
+
+        ImGui::Separator();
+        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Base Color Texture", material->baseColorTextureHandle,
+            [&]() { material->SetDirtyFlag(true); });
+        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Emissive Texture", material->emissiveTextureHandle,
+            [&]() { material->SetDirtyFlag(true); });
+        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Metallic Roughness Texture", material->metallicRoughnessTextureHandle,
+            [&]() { material->SetDirtyFlag(true); });
+        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Normal Texture", material->normalTextureHandle,
+            [&]() { material->SetDirtyFlag(true); });
+        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Occlusion Texture", material->occlusionTextureHandle,
+            [&]() { material->SetDirtyFlag(true); });
     }
 
     void AssetEditorPanel::RenderTextureEditor(AssetEditorData &assetData, const Ref<Texture> &texture)
@@ -1386,6 +1518,223 @@ namespace ignite
         return true;
     }
 
+    void AssetEditorPanel::RenderSpriteSheetEditor(AssetEditorData &assetData)
+    {
+        bool isOpen = assetData.isOpen;
+        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1500.0f, 1000.0f), ImVec2(900.0f, 700.0f), ImGuiWindowFlags_NoScrollWithMouse))
+        {
+            if (DrawAssetEditorHeader(assetData))
+            {
+                if (assetData.asset && assetData.asset->IsReady())
+                {
+                    if (Ref<SpriteSheet> spriteSheet = assetData.asset->As<SpriteSheet>())
+                    {
+                        RenderSpriteSheetEditor(spriteSheet);
+                    }
+                    else
+                    {
+                        ImGui::Text("Loading asset...");
+                    }
+                }
+                else
+                {
+                    ImGui::Text("Loading asset...");
+                }
+            }
+        }
+
+        RenderAssetEditorClosePopup(assetData, isOpen);
+        ImGui::End();
+        assetData.isOpen = isOpen;
+        assetData.requestFocus = false;
+    }
+
+    void AssetEditorPanel::RenderTextureEditor(AssetEditorData &assetData)
+    {
+        bool isOpen = assetData.isOpen;
+        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1000.0f, 900.0f), ImVec2(420.0f, 640.0f), ImGuiWindowFlags_NoScrollWithMouse))
+        {
+            if (DrawAssetEditorHeader(assetData))
+            {
+                if (assetData.asset && assetData.asset->IsReady())
+                {
+                    if (Ref<Texture> texture = assetData.asset->As<Texture>())
+                    {
+                        RenderTextureEditor(assetData, texture);
+                    }
+                    else
+                    {
+                        ImGui::Text("Loading asset...");
+                    }
+                }
+                else
+                {
+                    ImGui::Text("Loading asset...");
+                }
+            }
+        }
+
+        RenderAssetEditorClosePopup(assetData, isOpen);
+        ImGui::End();
+        assetData.isOpen = isOpen;
+        assetData.requestFocus = false;
+    }
+
+    void AssetEditorPanel::RenderMaterial2DEditor(AssetEditorData &assetData)
+    {
+        bool isOpen = assetData.isOpen;
+        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1100.0f, 900.0f), ImVec2(420.0f, 560.0f), ImGuiWindowFlags_NoScrollWithMouse))
+        {
+            if (DrawAssetEditorHeader(assetData))
+            {
+                if (assetData.asset && assetData.asset->IsReady())
+                {
+                    if (Ref<Material2D> material2D = assetData.asset->As<Material2D>())
+                    {
+                        RenderMaterial2DEditor(material2D);
+                    }
+                    else
+                    {
+                        ImGui::Text("Loading asset...");
+                    }
+                }
+                else
+                {
+                    ImGui::Text("Loading asset...");
+                }
+            }
+        }
+
+        RenderAssetEditorClosePopup(assetData, isOpen);
+        ImGui::End();
+        assetData.isOpen = isOpen;
+        assetData.requestFocus = false;
+    }
+
+    void AssetEditorPanel::RenderMaterialEditor(AssetEditorData &assetData)
+    {
+        bool isOpen = assetData.isOpen;
+        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1100.0f, 900.0f), ImVec2(420.0f, 560.0f), 0))
+        {
+            if (DrawAssetEditorHeader(assetData))
+            {
+                if (assetData.asset && assetData.asset->IsReady())
+                {
+                    if (Ref<Material> material = assetData.asset->As<Material>())
+                    {
+                        RenderMaterialEditor(material);
+                    }
+                    else
+                    {
+                        ImGui::Text("Loading asset...");
+                    }
+                }
+                else
+                {
+                    ImGui::Text("Loading asset...");
+                }
+            }
+        }
+
+        RenderAssetEditorClosePopup(assetData, isOpen);
+        ImGui::End();
+        assetData.isOpen = isOpen;
+        assetData.requestFocus = false;
+    }
+
+    void AssetEditorPanel::RenderSkeletalAnimationEditor(AssetEditorData &assetData)
+    {
+        bool isOpen = assetData.isOpen;
+        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(900.0f, 680.0f), ImVec2(420.0f, 560.0f), 0))
+        {
+            if (DrawAssetEditorHeader(assetData))
+            {
+                if (assetData.asset && assetData.asset->IsReady())
+                {
+                    if (Ref<SkeletalAnimation> animation = assetData.asset->As<SkeletalAnimation>())
+                    {
+                        RenderSkeletalAnimationEditor(animation);
+                    }
+                    else
+                    {
+                        ImGui::Text("Loading asset...");
+                    }
+                }
+                else
+                {
+                    ImGui::Text("Loading asset...");
+                }
+            }
+        }
+
+        RenderAssetEditorClosePopup(assetData, isOpen);
+        ImGui::End();
+        assetData.isOpen = isOpen;
+        assetData.requestFocus = false;
+    }
+
+    void AssetEditorPanel::RenderAnimation2DEditor(AssetEditorData &assetData)
+    {
+        bool isOpen = assetData.isOpen;
+        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1280.0f, 1080.0f), ImVec2(420.0f, 640.0f), ImGuiWindowFlags_NoScrollWithMouse))
+        {
+            if (DrawAssetEditorHeader(assetData))
+            {
+                if (assetData.asset && assetData.asset->IsReady())
+                {
+                    if (Ref<Animation2D> animation = assetData.asset->As<Animation2D>())
+                    {
+                        RenderAnimation2DEditor(animation);
+                    }
+                    else
+                    {
+                        ImGui::Text("Loading asset...");
+                    }
+                }
+                else
+                {
+                    ImGui::Text("Loading asset...");
+                }
+            }
+        }
+
+        RenderAssetEditorClosePopup(assetData, isOpen);
+        ImGui::End();
+        assetData.isOpen = isOpen;
+        assetData.requestFocus = false;
+    }
+
+    void AssetEditorPanel::RenderAnimatorController2DEditor(AssetEditorData &assetData)
+    {
+        bool isOpen = assetData.isOpen;
+        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1600.0f, 1000.0f), ImVec2(520.0f, 700.0f), ImGuiWindowFlags_NoScrollWithMouse))
+        {
+            if (DrawAssetEditorHeader(assetData))
+            {
+                if (assetData.asset && assetData.asset->IsReady())
+                {
+                    if (Ref<AnimatorController2D> controller = assetData.asset->As<AnimatorController2D>())
+                    {
+                        RenderAnimatorController2DEditor(controller);
+                    }
+                    else
+                    {
+                        ImGui::Text("Loading asset...");
+                    }
+                }
+                else
+                {
+                    ImGui::Text("Loading asset...");
+                }
+            }
+        }
+
+        RenderAssetEditorClosePopup(assetData, isOpen);
+        ImGui::End();
+        assetData.isOpen = isOpen;
+        assetData.requestFocus = false;
+    }
+
     void AssetEditorPanel::RenderSkeletalAnimationEditor(const Ref<SkeletalAnimation> &animation)
     {
         ImGui::Text("Name: %s", animation->name.c_str());
@@ -1526,7 +1875,7 @@ namespace ignite
                 }
 
                 std::filesystem::path fullPath = m_EditorLayer->GetActiveProject()->GetAssetDirectory() / assetData.metadata.filepath;
-                mat->SetBindingSetClean();
+                mat->InvalidateBindingSet();
                 return mat->Serialize(fullPath);
             }
             default:
@@ -1642,156 +1991,48 @@ namespace ignite
         {
             if (!assetData.isOpen)
                 continue;
-
-            auto renderUnsavedClosePopup = [&](bool &isOpen)
-            {
-                const std::string popupId = std::format("Unsaved Changes###asset_unsaved_close_{}", static_cast<uint64_t>(assetData.handle));
-                if (assetData.showUnsavedClosePopup)
-                {
-                    ImGui::OpenPopup(popupId.c_str());
-                }
-
-                if (ImGui::BeginPopupModal(popupId.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-                {
-                    ImGui::Text("This asset has unsaved changes.");
-                    ImGui::Separator();
-
-                    if (ImGui::Button("Save and Close"))
-                    {
-                        if (SaveAsset(assetData))
-                        {
-                            assetData.showUnsavedClosePopup = false;
-                            isOpen = false;
-                            ImGui::CloseCurrentPopup();
-                        }
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button("Discard"))
-                    {
-                        assetData.showUnsavedClosePopup = false;
-                        isOpen = false;
-                        ImGui::CloseCurrentPopup();
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button("Cancel"))
-                    {
-                        assetData.showUnsavedClosePopup = false;
-                        isOpen = true;
-                        ImGui::CloseCurrentPopup();
-                    }
-                    ImGui::EndPopup();
-                }
-            };
-
-            if (assetData.requestFocus)
-            {
-                ImGui::SetNextWindowFocus();
-            }
-
-            bool isOpen = assetData.isOpen;
-            ImGui::SetNextWindowSize(ImVec2(1280.0f, 1080.0f), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowSizeConstraints(ImVec2(420.0f, 640.0f), ImVec2(FLT_MAX, FLT_MAX));
-            if (!ImGui::Begin(assetData.windowTitle.c_str(), &isOpen, ImGuiWindowFlags_NoScrollWithMouse))
-            {
-                if (!isOpen && assetData.asset && assetData.asset->IsDirty())
-                {
-                    isOpen = true;
-                    assetData.showUnsavedClosePopup = true;
-                }
-                renderUnsavedClosePopup(isOpen);
-                assetData.isOpen = isOpen;
-                assetData.requestFocus = false;
-                ImGui::End();
-                continue;
-            }
-
-            assetData.requestFocus = false;
-
-            if (!DrawAssetEditorHeader(assetData))
-            {
-                ImGui::End();
-                assetData.isOpen = isOpen;
-                continue;
-            }
-
-            if (!assetData.asset || !assetData.asset->IsReady())
-            {
-                ImGui::Text("Loading asset...");
-                ImGui::End();
-                assetData.isOpen = isOpen;
-                continue;
-            }
-
             switch (assetData.metadata.type)
             {
                 case AssetType::SpriteSheet:
                 {
-                    Ref<SpriteSheet> spriteSheet = assetData.asset->As<SpriteSheet>();
-                    if (spriteSheet)
-                    {
-                        RenderSpriteSheetEditor(spriteSheet);
-                    }
+                    RenderSpriteSheetEditor(assetData);
                     break;
                 }
 
                 case AssetType::Texture:
                 {
-                    Ref<Texture> texture = assetData.asset->As<Texture>();
-                    if (texture)
-                    {
-                        RenderTextureEditor(assetData, texture);
-                    }
+                    RenderTextureEditor(assetData);
 
                     break;
                 }
 
                 case AssetType::Material2D:
                 {
-                    Ref<Material2D> material2D = assetData.asset->As<Material2D>();
-                    if (material2D)
-                    {
-                        RenderMaterial2DEditor(material2D);
-                    }
+                    RenderMaterial2DEditor(assetData);
                     break;
                 }
 
                 case AssetType::SkeletalAnimation:
                 {
-                    Ref<SkeletalAnimation> anim = assetData.asset->As<SkeletalAnimation>();
-                    if (anim)
-                    {
-                        RenderSkeletalAnimationEditor(anim);
-                    }
+                    RenderSkeletalAnimationEditor(assetData);
                     break;
                 }
 
                 case AssetType::Animation2D:
                 {
-                    Ref<Animation2D> anim2d = assetData.asset->As<Animation2D>();
-                    if (anim2d)
-                    {
-                        RenderAnimation2DEditor(anim2d);
-                    }
+                    RenderAnimation2DEditor(assetData);
                     break;
                 }
 
                 case AssetType::AnimatorController2D:
                 {
-                    Ref<AnimatorController2D> ctrl = assetData.asset->As<AnimatorController2D>();
-                    if (ctrl)
-                    {
-                        RenderAnimatorController2DEditor(ctrl);
-                    }
+                    RenderAnimatorController2DEditor(assetData);
                     break;
                 }
 
                 case AssetType::Material:
                 {
-                    Ref<Material> mat = assetData.asset->As<Material>();
-                    if (mat)
-                    {
-                        RenderMaterialEditor(mat);
-                    }
+                    RenderMaterialEditor(assetData);
                     break;
                 }
 
@@ -1801,16 +2042,6 @@ namespace ignite
                     break;
                 }
             }
-
-            if (!isOpen && assetData.asset && assetData.asset->IsDirty())
-            {
-                isOpen = true;
-                assetData.showUnsavedClosePopup = true;
-            }
-            renderUnsavedClosePopup(isOpen);
-
-            ImGui::End();
-            assetData.isOpen = isOpen;
         }
 
         std::erase_if(m_Assets, [](const AssetEditorData &assetData)

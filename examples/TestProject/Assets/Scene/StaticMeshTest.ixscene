@@ -2,26 +2,6 @@ Scene:
   Version: Alpha-0.1
   Title: New Scene
   Entities:
-    - ID: 61534230024644459
-      Name: Camera
-      Type: Camera
-      Parent: 0
-      Transform:
-        WorldTranslation: [6.097116, 5, 5.97622]
-        WorldRotation: [-0.16431786, 0.36137867, 0.06485949, 0.91553175]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [6.097116, 5, 5.97622]
-        LocalRotation: [-0.16431788, 0.36137867, 0.06485949, 0.91553175]
-        LocalScale: [1, 1, 1]
-        Visible: true
-      Camera:
-        ProjectionType: 1
-        AspectRatioPreset: 1
-        OrthoSize: 10
-        NearClip: 0.1
-        FarClip: 1000
-        Fov: 45
-        Primary: true
     - ID: 17790670858123285050
       Name: Capsule
       Type: Node
@@ -58,20 +38,26 @@ Scene:
         StaticFriction: 0
         Restitution: 0
         Density: 1
-    - ID: 12032466883160130762
-      Name: Monkey
-      Type: Node
+    - ID: 61534230024644459
+      Name: Camera
+      Type: Camera
       Parent: 0
       Transform:
-        WorldTranslation: [2.7013628, 2.2933717, 0.6372632]
-        WorldRotation: [-1.6066819e-10, -5.421011e-20, -8.70984e-30, 1]
+        WorldTranslation: [6.097116, 5, 5.97622]
+        WorldRotation: [-0.16431786, 0.36137867, 0.06485949, 0.91553175]
         WorldScale: [1, 1, 1]
-        LocalTranslation: [2.7013628, 2.2933717, 0.6372632]
-        LocalRotation: [-1.6066819e-10, -5.421011e-20, -8.70984e-30, 1]
+        LocalTranslation: [6.097116, 5, 5.97622]
+        LocalRotation: [-0.16431788, 0.36137867, 0.06485949, 0.91553175]
         LocalScale: [1, 1, 1]
         Visible: true
-      StaticMesh:
-        Handle: 8562597306584449002
+      Camera:
+        ProjectionType: 1
+        AspectRatioPreset: 1
+        OrthoSize: 10
+        NearClip: 0.1
+        FarClip: 1000
+        Fov: 45
+        Primary: true
     - ID: 15346274152361991252
       Name: Sphere
       Type: Node
@@ -107,20 +93,34 @@ Scene:
         StaticFriction: 0.6
         Restitution: 0.6
         Density: 1
-    - ID: 15587447324447760219
-      Name: Sphere
+    - ID: 12032466883160130762
+      Name: Monkey
       Type: Node
       Parent: 0
       Transform:
-        WorldTranslation: [-7.479364, 0.65999883, 8.746295]
-        WorldRotation: [-0.47380117, 0.060673665, 0.714932, 0.5105912]
-        WorldScale: [0.25, 0.25000003, 0.25]
-        LocalTranslation: [-7.479364, 0.65999883, 8.746295]
-        LocalRotation: [0.4738012, -0.060673688, -0.714932, -0.51059127]
-        LocalScale: [0.25, 0.25, 0.25]
+        WorldTranslation: [2.7013628, 2.2933717, 0.6372632]
+        WorldRotation: [-1.6066819e-10, -5.421011e-20, -8.70984e-30, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [2.7013628, 2.2933717, 0.6372632]
+        LocalRotation: [-1.6066819e-10, -5.421011e-20, -8.70984e-30, 1]
+        LocalScale: [1, 1, 1]
         Visible: true
       StaticMesh:
-        Handle: 17269684607766100826
+        Handle: 8562597306584449002
+    - ID: 10350773979832925938
+      Name: Cube
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [-5.0202417, 1.0599984, -4.0015316]
+        WorldRotation: [9.183607e-07, -0.2430972, 5.785803e-07, 0.97000194]
+        WorldScale: [0.65, 0.6499999, 0.65]
+        LocalTranslation: [-5.0202417, 1.0599984, -4.0015316]
+        LocalRotation: [9.1836074e-07, -0.24309722, 5.785803e-07, 0.97000194]
+        LocalScale: [0.65, 0.6499999, 0.65]
+        Visible: true
+      StaticMesh:
+        Handle: 17604633582810232567
       Rigidbody:
         MotionQuality: 0
         UseGravity: true
@@ -136,11 +136,11 @@ Scene:
         RetainAcceleration: false
         GravityFactor: 1
         CenterMass: [0, 0, 0]
-      SphereCollider:
-        Radius: 1
+      BoxCollider:
+        Scale: [1, 1, 1]
         Friction: 0.6
         StaticFriction: 0.6
-        Restitution: 0.6
+        Restitution: 0.55
         Density: 1
     - ID: 4162242178425563965
       Name: Floor
@@ -177,20 +177,20 @@ Scene:
         StaticFriction: 0.6
         Restitution: 0.675
         Density: 1
-    - ID: 10350773979832925938
-      Name: Cube
+    - ID: 15587447324447760219
+      Name: Sphere
       Type: Node
       Parent: 0
       Transform:
-        WorldTranslation: [-5.0202417, 1.0599984, -4.0015316]
-        WorldRotation: [9.183607e-07, -0.2430972, 5.785803e-07, 0.97000194]
-        WorldScale: [0.65, 0.6499999, 0.65]
-        LocalTranslation: [-5.0202417, 1.0599984, -4.0015316]
-        LocalRotation: [9.1836074e-07, -0.24309722, 5.785803e-07, 0.97000194]
-        LocalScale: [0.65, 0.6499999, 0.65]
+        WorldTranslation: [-7.479364, 0.65999883, 8.746295]
+        WorldRotation: [-0.47380117, 0.060673665, 0.714932, 0.5105912]
+        WorldScale: [0.25, 0.25000003, 0.25]
+        LocalTranslation: [-7.479364, 0.65999883, 8.746295]
+        LocalRotation: [0.4738012, -0.060673688, -0.714932, -0.51059127]
+        LocalScale: [0.25, 0.25, 0.25]
         Visible: true
       StaticMesh:
-        Handle: 17604633582810232567
+        Handle: 17269684607766100826
       Rigidbody:
         MotionQuality: 0
         UseGravity: true
@@ -206,11 +206,11 @@ Scene:
         RetainAcceleration: false
         GravityFactor: 1
         CenterMass: [0, 0, 0]
-      BoxCollider:
-        Scale: [1, 1, 1]
+      SphereCollider:
+        Radius: 1
         Friction: 0.6
         StaticFriction: 0.6
-        Restitution: 0.55
+        Restitution: 0.6
         Density: 1
     - ID: 3415873918208718138
       Name: Sphere
@@ -282,20 +282,20 @@ Scene:
         StaticFriction: 0.6
         Restitution: 0
         Density: 1
-    - ID: 5909204320544961695
-      Name: Sphere
+    - ID: 17504469340896905564
+      Name: Floor
       Type: Node
       Parent: 0
       Transform:
-        WorldTranslation: [-1.5335163, 0.66, 2.2500575]
-        WorldRotation: [2.5034511e-05, 3.5333958e-12, -1.9339537e-05, 1]
-        WorldScale: [0.25, 0.25, 0.25]
-        LocalTranslation: [-1.5335163, 0.66, 2.2500575]
-        LocalRotation: [2.5034511e-05, 3.5333993e-12, -1.9339537e-05, 1]
-        LocalScale: [0.25, 0.25, 0.25]
+        WorldTranslation: [0.15, 0.99999994, -9.55]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [10, 0.51975, 0.5]
+        LocalTranslation: [0.15, 0.99999994, -9.55]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [10, 0.51975, 0.5]
         Visible: true
       StaticMesh:
-        Handle: 17269684607766100826
+        Handle: 17604633582810232567
       Rigidbody:
         MotionQuality: 0
         UseGravity: true
@@ -305,17 +305,17 @@ Scene:
         MoveX: true
         MoveY: true
         MoveZ: true
-        IsStatic: false
+        IsStatic: true
         Mass: 1
         AllowSleeping: true
         RetainAcceleration: false
         GravityFactor: 1
         CenterMass: [0, 0, 0]
-      SphereCollider:
-        Radius: 1
+      BoxCollider:
+        Scale: [1, 1, 1]
         Friction: 0.6
         StaticFriction: 0.6
-        Restitution: 0.6
+        Restitution: 0.675
         Density: 1
     - ID: 11346438074498002042
       Name: Sphere
@@ -352,20 +352,20 @@ Scene:
         StaticFriction: 0.6
         Restitution: 0.6
         Density: 1
-    - ID: 17504469340896905564
-      Name: Floor
+    - ID: 5909204320544961695
+      Name: Sphere
       Type: Node
       Parent: 0
       Transform:
-        WorldTranslation: [0.15, 0.99999994, -9.55]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [10, 0.51975, 0.5]
-        LocalTranslation: [0.15, 0.99999994, -9.55]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [10, 0.51975, 0.5]
+        WorldTranslation: [-1.5335163, 0.66, 2.2500575]
+        WorldRotation: [2.5034511e-05, 3.5333958e-12, -1.9339537e-05, 1]
+        WorldScale: [0.25, 0.25, 0.25]
+        LocalTranslation: [-1.5335163, 0.66, 2.2500575]
+        LocalRotation: [2.5034511e-05, 3.5333993e-12, -1.9339537e-05, 1]
+        LocalScale: [0.25, 0.25, 0.25]
         Visible: true
       StaticMesh:
-        Handle: 17604633582810232567
+        Handle: 17269684607766100826
       Rigidbody:
         MotionQuality: 0
         UseGravity: true
@@ -375,17 +375,17 @@ Scene:
         MoveX: true
         MoveY: true
         MoveZ: true
-        IsStatic: true
+        IsStatic: false
         Mass: 1
         AllowSleeping: true
         RetainAcceleration: false
         GravityFactor: 1
         CenterMass: [0, 0, 0]
-      BoxCollider:
-        Scale: [1, 1, 1]
+      SphereCollider:
+        Radius: 1
         Friction: 0.6
         StaticFriction: 0.6
-        Restitution: 0.675
+        Restitution: 0.6
         Density: 1
     - ID: 15946449971123365087
       Name: Floor
