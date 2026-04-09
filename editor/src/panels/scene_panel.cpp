@@ -2037,8 +2037,6 @@ namespace ignite
                     glm::vec3 f = glm::vec3(view[0][2], view[1][2], view[2][2]);
                     m_EditorCamera.pitch = glm::clamp(std::asin(glm::clamp(-f.y, -1.0f, 1.0f)), m_EditorCamera.controls.minPitch, m_EditorCamera.controls.maxPitch);
                     m_EditorCamera.yaw = std::atan2(-f.z, -f.x);
-                    m_EditorCamera.UpdateCameraPosition();
-                    m_EditorCamera.UpdateView();
                 }
             }
 
@@ -2792,7 +2790,7 @@ namespace ignite
             }
         }
         m_EditorCamera.ApplyInertia(deltaTime);
-        m_EditorCamera.UpdateCameraPosition();
+        m_EditorCamera.UpdateCameraPosition(deltaTime);
         m_EditorCamera.UpdateView();
     }
 

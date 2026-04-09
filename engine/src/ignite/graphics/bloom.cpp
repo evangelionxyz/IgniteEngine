@@ -69,6 +69,8 @@ namespace ignite
 
     void Bloom::CreateRenderTargets(uint32_t width, uint32_t height)
     {
+        IGN_PROFILE_SCOPE_COLOR("Bloom::CreateRenderTargets", 0xFA0010FF);
+
         m_Width = std::max(width, 1u);
         m_Height = std::max(height, 1u);
 
@@ -146,6 +148,8 @@ namespace ignite
             return;
         }
 
+        IGN_PROFILE_SCOPE_COLOR("Bloom::EnsurePipelines", 0xFA0010FF);
+
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         if (!m_InputLayout)
         {
@@ -181,6 +185,8 @@ namespace ignite
     void Bloom::DrawFullscreen(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, nvrhi::GraphicsPipelineHandle pipeline,
         nvrhi::BindingSetHandle bindingSet, const Ref<VertexBuffer> &fullscreenVertexBuffer) const
     {
+        IGN_PROFILE_SCOPE_COLOR("Bloom::DrawFullscreen", 0xFA0010FF);
+
         nvrhi::GraphicsState state;
         state.pipeline = pipeline;
         state.framebuffer = framebuffer;

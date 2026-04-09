@@ -43,6 +43,7 @@ project "IgniteEditor"
         "%{IncludeDir.FILEWATCHER}",
         "%{IncludeDir.ZLIB}",
         "%{IncludeDir.YAMLCPP}",
+        "%{IncludeDir.ASSIMP}",
         "%{IncludeDir.TINYGLTF}",
         "%{IncludeDir.MSDFATLASGEN}",
         "%{IncludeDir.MSDFGEN}",

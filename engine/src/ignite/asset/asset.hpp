@@ -49,6 +49,7 @@ namespace ignite {
         Font,
         TextureCube,
         SkeletalAnimation,
+        AnimationMontage,
         Environment,
         Anim2D,
         Skeleton,
@@ -67,6 +68,7 @@ namespace ignite {
         switch (type)
         {
             case ignite::AssetType::Texture: return "Texture";
+            case ignite::AssetType::AnimationMontage: return "AnimationMontage";
             case ignite::AssetType::Material: return "Material";
             case ignite::AssetType::Audio: return "Audio";
             case ignite::AssetType::Model: return "Model";
@@ -93,6 +95,7 @@ namespace ignite {
     {
         { ".meta", AssetType::Metadata },
 
+        { ".ixmont", AssetType::AnimationMontage },
         { ".ixproj", AssetType::Project },
         { ".ixscene", AssetType::Scene },
         { ".jpg", AssetType::Texture },
@@ -124,6 +127,7 @@ namespace ignite {
     {
         if (typeStr == "Metadata") return AssetType::Metadata;
 
+        if (typeStr == "AnimationMontage") return AssetType::AnimationMontage;
         if (typeStr == "Scene") return AssetType::Scene;
         if (typeStr == "Texture") return AssetType::Texture;
         if (typeStr == "TextureCube") return AssetType::TextureCube;
@@ -152,6 +156,7 @@ namespace ignite {
         {
         case AssetType::Metadata: return ".meta";
 
+        case AssetType::AnimationMontage: return ".ixmont";
         case AssetType::StaticMesh: return ".ixsm";
         case AssetType::SkeletalMesh: return ".ixskm";
         case AssetType::Skeleton: return ".ixskel";

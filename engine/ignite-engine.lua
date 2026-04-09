@@ -38,6 +38,7 @@ project "IgniteEngine"
         "%{IncludeDir.JSON}",
         "%{IncludeDir.MochiSharpNative}",
         "%{IncludeDir.Hostfxr}",
+        "%{IncludeDir.ASSIMP}",
         "%{IncludeDir.MSDFATLASGEN}",
         "%{IncludeDir.MSDFGEN}",
         "%{IncludeDir.FREETYPE}",
@@ -116,6 +117,7 @@ project "IgniteEngine"
             "%{Library.bcrypt}",
             "%{Library.vulkan}",
             "%{Library.mono}",
+            "%{Library.ASSIMP}",
             "%{Library.FMOD}",
             "%{Library.SDL3}"
         }
@@ -132,6 +134,7 @@ project "IgniteEngine"
 
         postbuildcommands {
             '{COPYDIR} "%{wks.location}/resources" "%{cfg.targetdir}/resources"',
+            '{COPYFILE} "%{THIRDPARTY_DIR}/ASSIMP/lib/win32/assimp-vc143-mt.dll" "%{cfg.targetdir}"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll" "%{cfg.targetdir}"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/SDL3/lib/windows/x64/SDL3.dll" "%{cfg.targetdir}"',
             '{COPYFILE} "%{LibraryDir.VULKAN_SDK_BIN}/dxcompiler.dll" "%{cfg.targetdir}"',

@@ -156,8 +156,16 @@ namespace ignite
                 Entity entity = m_ScenePanel->GetSelectedEntity();
                 if (entity.IsValid())
                 {
-                    m_ScenePanel->GetViewportCamera().SetDistance(20.0f);
-                    m_ScenePanel->GetViewportCamera().SetTarget(entity.GetComponent<TransformComponent>().translation);
+                    auto &cam = m_ScenePanel->GetViewportCamera();
+                    auto &tr = entity.GetComponent<TransformComponent>();
+
+                    const glm::vec3 halfExtents = glm::abs(tr.scale) * 0.5f;
+                    const float radius = glm::max(halfExtents.x, glm::max(halfExtents.y, halfExtents.z));
+                    const float fov = glm::radians(cam.fov);
+                    float distance = radius / std::tan(fov * 0.5f);
+                    distance *= 3.5f;
+
+                    cam.FocusTarget(tr.translation, distance);
                 }
                 break;
             }
@@ -1299,111 +1307,111 @@ namespace ignite
     {
         ImGui::Begin("Settings", &m_Data.settingsWindow);
 
-        constexpr ImGuiTreeNodeFlags treeFlags = 0;
-
-        if (ImGui::TreeNodeEx("Pipeline", treeFlags))
-        {
-            // Raster settings
-            static std::array<const char *, 2>rasterFillStr = { "Solid", "Wireframe" };
-            const char *currentFillMode = rasterFillStr[static_cast<i32>(m_Data.rasterFillMode)];
-            if (ImGui::BeginCombo("Fill", currentFillMode))
-            {
-                for (size_t i = 0; i < std::size(rasterFillStr); ++i)
-                {
-                    bool isSelected = strcmp(currentFillMode, rasterFillStr[i]) == 0;
-                    if (ImGui::Selectable(rasterFillStr[i], isSelected))
-                    {
-                        m_Data.rasterFillMode = static_cast<nvrhi::RasterFillMode>(i);
-                        m_SceneRenderer->SetFillMode(m_Data.rasterFillMode);
-                    }
-
-                    if (isSelected)
-                    {
-                        ImGui::SetItemDefaultFocus();
-                    }
-                }
-                ImGui::EndCombo();
-            }
-
-            ImGui::TreePop();
-        }
-
         if (m_ActiveScene)
         {
-            // Scene
-            if (ImGui::TreeNodeEx("Scene", treeFlags))
+            if (ImGui::BeginTabBar("##settings_tabs", ImGuiTabBarFlags_Reorderable))
             {
-                auto &sceneData = m_ActiveScene->gpuData;
-
-                ImGui::SeparatorText("Post Processing");
-
-                auto &cam = m_ScenePanel->GetViewportCamera();
-                UI::DrawCheckbox("Bloom", &cam.postProcessing.enableBloom);
-                UI::DrawCheckbox("Vignette", &cam.postProcessing.enableVignette);
-                UI::DrawCheckbox("Chromatic Aberration", &cam.postProcessing.enableChromAb);
-                UI::DrawCheckbox("SSAO", &cam.postProcessing.enableSSAO);
-                UI::DrawCheckbox("Debug SSAO", &cam.postProcessing.debugSSAO);
-
-                if (cam.postProcessing.enableBloom)
+                if (ImGui::BeginTabItem("Scene"))
                 {
-                    ImGui::SeparatorText("Bloom");
+                    auto &sceneData = m_ActiveScene->gpuData;
 
-                    UI::DrawFloatControl("Bloom Intensity", &cam.postProcessing.bloomIntensity, 0.01f, 0.0f, 10.0f, 1.0f);
-                    UI::DrawFloatControl("Bloom Radius", &cam.postProcessing.bloomRadius, 0.01f, 0.0f, 10.0f, 0.0f);
-                    UI::DrawFloatControl("Bloom Knee", &cam.postProcessing.bloomKnee, 0.01f, 0.0f, 10.0f, 0.0f);
-                    UI::DrawFloatControl("Bloom Threshold", &cam.postProcessing.bloomThreshold, 0.01f, 0.005f, 10.0f, 0.005f);
-                    UI::DrawIntControl("Bloom Iterations", &cam.postProcessing.bloomIterations, 1, 1, 8, 1);
-                }
+                    ImGui::SeparatorText("Post Processing");
 
-                if (cam.postProcessing.enableVignette)
-                {
-                    ImGui::SeparatorText("Vignette");
+                    auto &cam = m_ScenePanel->GetViewportCamera();
+                    UI::DrawCheckbox("Bloom", &cam.postProcessing.enableBloom);
+                    UI::DrawCheckbox("Vignette", &cam.postProcessing.enableVignette);
+                    UI::DrawCheckbox("Chromatic Aberration", &cam.postProcessing.enableChromAb);
+                    UI::DrawCheckbox("SSAO", &cam.postProcessing.enableSSAO);
+                    UI::DrawCheckbox("Debug SSAO", &cam.postProcessing.debugSSAO);
 
-                    UI::DrawFloatControl("Vignette Radius", &cam.postProcessing.vignetteRadius, 0.01f, 0.0f, 3.0f, 1.1f);
-                    UI::DrawFloatControl("Vignette Softness", &cam.postProcessing.vignetteSoftness, 0.01f, 0.0f, 2.0f, 0.7f);
-                    UI::DrawFloatControl("Vignette Intensity", &cam.postProcessing.vignetteIntensity, 0.01f, 0.0f, 2.0f, 0.8f);
-                    UI::DrawColorVec3("Vignette Color", cam.postProcessing.vignetteColor);
-                }
+                    if (cam.postProcessing.enableBloom)
+                    {
+                        ImGui::SeparatorText("Bloom");
 
-                if (cam.postProcessing.enableChromAb)
-                {
-                    ImGui::SeparatorText("Chromatic Aberration");
+                        UI::DrawFloatControl("Bloom Intensity", &cam.postProcessing.bloomIntensity, 0.01f, 0.0f, 10.0f, 1.0f);
+                        UI::DrawFloatControl("Bloom Radius", &cam.postProcessing.bloomRadius, 0.01f, 0.0f, 10.0f, 0.0f);
+                        UI::DrawFloatControl("Bloom Knee", &cam.postProcessing.bloomKnee, 0.01f, 0.0f, 10.0f, 0.0f);
+                        UI::DrawFloatControl("Bloom Threshold", &cam.postProcessing.bloomThreshold, 0.01f, 0.005f, 10.0f, 0.005f);
+                        UI::DrawIntControl("Bloom Iterations", &cam.postProcessing.bloomIterations, 1, 1, 8, 1);
+                    }
 
-                    UI::DrawFloatControl("ChromAb Amount", &cam.postProcessing.chromAbAmount, 0.0001f, 0.0f, 0.02f, 0.001f);
-                    UI::DrawFloatControl("ChromAb Radial", &cam.postProcessing.chromAbRadial, 0.01f, 0.0f, 2.0f, 0.1f);
-                }
+                    if (cam.postProcessing.enableVignette)
+                    {
+                        ImGui::SeparatorText("Vignette");
 
-                if (cam.postProcessing.enableSSAO)
-                {
-                    ImGui::SeparatorText("SSAO");
+                        UI::DrawFloatControl("Vignette Radius", &cam.postProcessing.vignetteRadius, 0.01f, 0.0f, 3.0f, 1.1f);
+                        UI::DrawFloatControl("Vignette Softness", &cam.postProcessing.vignetteSoftness, 0.01f, 0.0f, 2.0f, 0.7f);
+                        UI::DrawFloatControl("Vignette Intensity", &cam.postProcessing.vignetteIntensity, 0.01f, 0.0f, 2.0f, 0.8f);
+                        UI::DrawColorVec3("Vignette Color", cam.postProcessing.vignetteColor);
+                    }
 
-                    UI::DrawFloatControl("SSAO Radius", &cam.postProcessing.aoRadius, 0.01f, 0.0f, 5.0f, 0.5f);
-                    UI::DrawFloatControl("SSAO Bias", &cam.postProcessing.aoBias, 0.001f, 0.0f, 0.2f, 0.025f);
-                    UI::DrawFloatControl("SSAO Intensity", &cam.postProcessing.aoIntensity, 0.01f, 0.0f, 4.0f, 1.0f);
-                    UI::DrawFloatControl("SSAO Power", &cam.postProcessing.aoPower, 0.01f, 0.0f, 4.0f, 1.0f);
-                }
+                    if (cam.postProcessing.enableChromAb)
+                    {
+                        ImGui::SeparatorText("Chromatic Aberration");
 
-                ImGui::SeparatorText("Shadow Debug");
-                ImGui::RadioButton("Off##ShadowDbg", &sceneData.debugShadow, 0); ImGui::SameLine();
-                ImGui::SameLine();
-                ImGui::RadioButton("Cascades", &sceneData.debugShadow, 1); ImGui::SameLine();
-                ImGui::SameLine();
-                ImGui::RadioButton("Visibility", &sceneData.debugShadow, 2);
+                        UI::DrawFloatControl("ChromAb Amount", &cam.postProcessing.chromAbAmount, 0.0001f, 0.0f, 0.02f, 0.001f);
+                        UI::DrawFloatControl("ChromAb Radial", &cam.postProcessing.chromAbRadial, 0.01f, 0.0f, 2.0f, 0.1f);
+                    }
 
-                if (ImGui::CollapsingHeader("Render Mode", ImGuiTreeNodeFlags_DefaultOpen))
-                {
-                    if (ImGui::RadioButton("Color", sceneData.renderMode == RENDER_MODE_COLOR)) sceneData.renderMode = RENDER_MODE_COLOR;
+                    if (cam.postProcessing.enableSSAO)
+                    {
+                        ImGui::SeparatorText("SSAO");
+
+                        UI::DrawFloatControl("SSAO Radius", &cam.postProcessing.aoRadius, 0.01f, 0.0f, 5.0f, 0.5f);
+                        UI::DrawFloatControl("SSAO Bias", &cam.postProcessing.aoBias, 0.001f, 0.0f, 0.2f, 0.025f);
+                        UI::DrawFloatControl("SSAO Intensity", &cam.postProcessing.aoIntensity, 0.01f, 0.0f, 4.0f, 1.0f);
+                        UI::DrawFloatControl("SSAO Power", &cam.postProcessing.aoPower, 0.01f, 0.0f, 4.0f, 1.0f);
+                    }
+
+                    ImGui::SeparatorText("Shadow Debug");
+                    ImGui::RadioButton("Off##ShadowDbg", &sceneData.debugShadow, 0); ImGui::SameLine();
                     ImGui::SameLine();
-                    if (ImGui::RadioButton("Diffuse", sceneData.renderMode == RENDER_MODE_DIFFUSE)) sceneData.renderMode = RENDER_MODE_DIFFUSE;
+                    ImGui::RadioButton("Cascades", &sceneData.debugShadow, 1); ImGui::SameLine();
                     ImGui::SameLine();
-                    if (ImGui::RadioButton("Normals", sceneData.renderMode == RENDER_MODE_NORMALS)) sceneData.renderMode = RENDER_MODE_NORMALS;
-                    ImGui::SameLine();
-                    if (ImGui::RadioButton("Metallic", sceneData.renderMode == RENDER_MODE_METALLIC)) sceneData.renderMode = RENDER_MODE_METALLIC;
-                    ImGui::SameLine();
-                    if (ImGui::RadioButton("Roughness", sceneData.renderMode == RENDER_MODE_ROUGHNESS)) sceneData.renderMode = RENDER_MODE_ROUGHNESS;
+                    ImGui::RadioButton("Visibility", &sceneData.debugShadow, 2);
+
+                    if (ImGui::CollapsingHeader("Render Mode", ImGuiTreeNodeFlags_DefaultOpen))
+                    {
+                        if (ImGui::RadioButton("Color", sceneData.renderMode == RENDER_MODE_COLOR)) sceneData.renderMode = RENDER_MODE_COLOR;
+                        ImGui::SameLine();
+                        if (ImGui::RadioButton("Diffuse", sceneData.renderMode == RENDER_MODE_DIFFUSE)) sceneData.renderMode = RENDER_MODE_DIFFUSE;
+                        ImGui::SameLine();
+                        if (ImGui::RadioButton("Normals", sceneData.renderMode == RENDER_MODE_NORMALS)) sceneData.renderMode = RENDER_MODE_NORMALS;
+                        ImGui::SameLine();
+                        if (ImGui::RadioButton("Metallic", sceneData.renderMode == RENDER_MODE_METALLIC)) sceneData.renderMode = RENDER_MODE_METALLIC;
+                        ImGui::SameLine();
+                        if (ImGui::RadioButton("Roughness", sceneData.renderMode == RENDER_MODE_ROUGHNESS)) sceneData.renderMode = RENDER_MODE_ROUGHNESS;
+                    }
+
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem("Pipeline"))
+                {
+                    // Raster settings
+                    static std::array<const char *, 2>rasterFillStr = { "Solid", "Wireframe" };
+                    const char *currentFillMode = rasterFillStr[static_cast<i32>(m_Data.rasterFillMode)];
+                    if (ImGui::BeginCombo("Fill", currentFillMode))
+                    {
+                        for (size_t i = 0; i < std::size(rasterFillStr); ++i)
+                        {
+                            bool isSelected = strcmp(currentFillMode, rasterFillStr[i]) == 0;
+                            if (ImGui::Selectable(rasterFillStr[i], isSelected))
+                            {
+                                m_Data.rasterFillMode = static_cast<nvrhi::RasterFillMode>(i);
+                                m_SceneRenderer->SetFillMode(m_Data.rasterFillMode);
+                            }
+
+                            if (isSelected)
+                            {
+                                ImGui::SetItemDefaultFocus();
+                            }
+                        }
+                        ImGui::EndCombo();
+                    }
+                    ImGui::EndTabItem();
                 }
 
-                ImGui::TreePop();
+                ImGui::EndTabBar();
             }
         }
 

@@ -14,6 +14,7 @@ print("FBX_SDK_PATH: " ..  tostring(FBX_SDK_PATH))
 
 --includedirs
 IncludeDir = {}
+IncludeDir["ASSIM"]             = "%{THIRDPARTY_DIR}/ASSIMP/include"
 IncludeDir["GLFW"]             = "%{THIRDPARTY_DIR}/GLFW/include"
 IncludeDir["BOX2D"]            = "%{THIRDPARTY_DIR}/BOX2D/include"
 IncludeDir["ENTT"]             = "%{THIRDPARTY_DIR}/entt/"
@@ -59,6 +60,7 @@ Library["vulkan"]                      = "%{LibraryDir.VULKAN_SDK}/vulkan-1.lib"
 Library["mono"]                        = "%{THIRDPARTY_DIR}/Mono/lib/windows/libmono-static-sgen.lib"
 Library["Hostfxr"]                     = "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.lib"
 
+Library["ASSIMP"]                        = "%{THIRDPARTY_DIR}/ASSIMP/lib/win32/assimp-vc143-mt.lib"
 Library["FMOD"]                        = "%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod_vc.lib"
 Library["SDL3"]                        = "%{THIRDPARTY_DIR}/SDL3/lib/windows/x64/SDL3.lib"
 

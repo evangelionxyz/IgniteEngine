@@ -60,10 +60,10 @@ namespace ignite
 	struct PostProcessing
 	{
 		// Toggles
-		bool enableVignette = true;
-		bool enableChromAb = true;
-		bool enableBloom = true;
-		bool enableSSAO = true; // Screen space ambient occlusion
+        bool enableVignette = false;
+		bool enableChromAb = false;
+		bool enableBloom = false;
+		bool enableSSAO = false; // Screen space ambient occlusion
 		bool debugSSAO = false; // Visualize raw AO buffer
 
 		// Bloom
