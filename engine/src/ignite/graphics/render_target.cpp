@@ -42,9 +42,11 @@ namespace ignite {
 
         for (auto &attachment : m_CreateInfo.attachments)
         {
-            const bool isDepthAttachment = attachment.format == nvrhi::Format::D32S8 || attachment.format == nvrhi::Format::D16 || attachment.format == nvrhi::Format::D24S8 || attachment.format == nvrhi::Format::D32;
+            // Depth attachment flag
+            const bool isDepthAttachment = attachment.format >= nvrhi::Format::D16 && attachment.format <= nvrhi::Format::X32G8_UINT;
 
-            const bool isColorAttachment = attachment.format == nvrhi::Format::RGBA8_UNORM || attachment.format == nvrhi::Format::SRGBA8_UNORM || attachment.format == nvrhi::Format::R32_UINT || attachment.format == nvrhi::Format::BGRA8_UNORM || attachment.format == nvrhi::Format::SBGRA8_UNORM;
+            // Color attachment flag
+            const bool isColorAttachment = attachment.format >= nvrhi::Format::R8_UINT && attachment.format <= nvrhi::Format::RGBA32_FLOAT;
 
             constexpr bool isRenderTarget = true;
 

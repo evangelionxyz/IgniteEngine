@@ -273,6 +273,7 @@ namespace ignite
         layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)); // ui
         layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(2)); // edge
         layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(3)); // bloom
+        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)); // ssao
         layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // post-process params
         layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0)); // sampler
         nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(layoutDesc);
@@ -311,11 +312,12 @@ namespace ignite
         nvrhi::ITexture *uiTex = nullptr;
         nvrhi::ITexture *edgeTex = nullptr;
         nvrhi::ITexture *bloomTex = nullptr;
+        nvrhi::ITexture *ssaoTex = nullptr;
         nvrhi::IBuffer *postProcessBuffer = nullptr;
         bool operator==(const CompositeBindingKey &other) const noexcept
         {
             return layout == other.layout && sceneTex == other.sceneTex && uiTex == other.uiTex
-                && edgeTex == other.edgeTex && bloomTex == other.bloomTex && postProcessBuffer == other.postProcessBuffer;
+                && edgeTex == other.edgeTex && bloomTex == other.bloomTex && ssaoTex == other.ssaoTex && postProcessBuffer == other.postProcessBuffer;
         }
     };
 
@@ -328,6 +330,7 @@ namespace ignite
             h ^= (std::hash<const void *>{}(k.uiTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
             h ^= (std::hash<const void *>{}(k.edgeTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
             h ^= (std::hash<const void *>{}(k.bloomTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
+            h ^= (std::hash<const void *>{}(k.ssaoTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
             h ^= (std::hash<const void *>{}(k.postProcessBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
             return h;
         }
@@ -336,12 +339,13 @@ namespace ignite
     static std::unordered_map<CompositeBindingKey, nvrhi::BindingSetHandle, CompositeBindingKeyHash> s_CompositeBindingSetCache;
 
     static nvrhi::BindingSetHandle GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout,
-        Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture,
+        Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture,
         Ref<ConstantBuffer> postProcessBuffer, nvrhi::SamplerHandle sampler)
     {
         Ref<Texture> edge = edgeTexture ? edgeTexture : Renderer::GetBlackTexture();
         Ref<Texture> bloom = bloomTexture ? bloomTexture : Renderer::GetBlackTexture();
-        CompositeBindingKey key { bindingLayout, sceneTexture->GetHandle(), uiTexture->GetHandle(), edge->GetHandle(), bloom->GetHandle(), postProcessBuffer ? postProcessBuffer->GetHandle() : nullptr };
+        Ref<Texture> ssao = ssaoTexture ? ssaoTexture : Renderer::GetWhiteTexture();
+        CompositeBindingKey key { bindingLayout, sceneTexture->GetHandle(), uiTexture->GetHandle(), edge->GetHandle(), bloom->GetHandle(), ssao->GetHandle(), postProcessBuffer ? postProcessBuffer->GetHandle() : nullptr };
         auto it = s_CompositeBindingSetCache.find(key);
         if (it != s_CompositeBindingSetCache.end())
         {
@@ -357,6 +361,7 @@ namespace ignite
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, uiTexture->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, edge->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, bloom->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, ssao->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, postProcessBuffer->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
 
@@ -462,6 +467,7 @@ namespace ignite
         m_DebugGridBuffer = ConstantBuffer::Create(sizeof(DebugGrid_GPUData), true, 16, "Debug Grid Buffer");
         m_CompositePostProcessBuffer = ConstantBuffer::Create(sizeof(CompositePostProcess_GPUData), true, 16, "Composite PostProcess Buffer");
         m_Bloom = CreateRef<Bloom>(1280, 720);
+        m_SSAO = CreateRef<SSAO>(1280, 720);
 
         m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
     }
@@ -853,9 +859,18 @@ namespace ignite
                 bloomTexture = m_Bloom->GetBloomTexture();
             }
 
+            Ref<Texture> ssaoTexture = nullptr;
+            if (m_SSAO && camera && camera->postProcessing.enableSSAO)
+            {
+                IGN_PROFILE_SCOPE_COLOR("SceneRenderer::SSAOPass", 0x404040FF);
+                m_SSAO->Resize(sceneRT->GetWidth(), sceneRT->GetHeight());
+                m_SSAO->Build(cmd, sceneRT->GetDepthAttachment(), camera, camera->postProcessing, m_CompositeVertexBuffer);
+                ssaoTexture = m_SSAO->GetAOTexture();
+            }
+
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::CompositePass");
-                CompositePass(cmd, camera, compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0), edgeTexture, bloomTexture);
+                CompositePass(cmd, camera, compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0), edgeTexture, bloomTexture, ssaoTexture);
             }
 
             cmd->close();
@@ -1024,7 +1039,6 @@ namespace ignite
                 compositeRT->ClearDepthAttachment(cmd, 1.0f, 0);
             }
 
-
             nvrhi::IFramebuffer *framebuffer = sceneRT->GetFramebuffer();
 
             {
@@ -1057,9 +1071,18 @@ namespace ignite
                 bloomTexture = m_Bloom->GetBloomTexture();
             }
 
+            Ref<Texture> ssaoTexture = nullptr;
+            if (m_SSAO && camera && camera->postProcessing.enableSSAO)
+            {
+                IGN_PROFILE_SCOPE_COLOR("SceneRenderer::SSAOPass", 0x404040FF);
+                m_SSAO->Resize(sceneRT->GetWidth(), sceneRT->GetHeight());
+                m_SSAO->Build(cmd, sceneRT->GetDepthAttachment(), camera, camera->postProcessing, m_CompositeVertexBuffer);
+                ssaoTexture = m_SSAO->GetAOTexture();
+            }
+
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::CompositePass");
-                CompositePass(cmd, camera, compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0), nullptr, bloomTexture);
+                CompositePass(cmd, camera, compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0), nullptr, bloomTexture, ssaoTexture);
             }
 
             cmd->close();
@@ -1924,7 +1947,7 @@ namespace ignite
     }
 
     void SceneRenderer::CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer,
-        Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture)
+        Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture)
     {
         IGN_PROFILE_FUNCTION();
         CompositePostProcess_GPUData postProcessData;
@@ -1942,13 +1965,17 @@ namespace ignite
                 camera->postProcessing.chromAbAmount
             );
             postProcessData.chromAbParams.x = camera->postProcessing.chromAbRadial;
+            postProcessData.chromAbParams.y = (camera->postProcessing.enableSSAO && ssaoTexture) ? 1.0f : 0.0f;
+            postProcessData.chromAbParams.z = camera->postProcessing.aoIntensity;
+            
             postProcessData.vignetteColor = glm::vec4(camera->postProcessing.vignetteColor, 1.0f);
         }
 
         m_CompositePostProcessBuffer->SetData(cmd, Buffer(&postProcessData, sizeof(postProcessData)));
 
         Ref<GraphicsPipeline> compositePipeline = GetCompositePipelineForFB(framebuffer, nvrhi::RasterFillMode::Solid);
-        nvrhi::BindingSetHandle bindingSet = GetOrCreateCompositeBindingSet(compositePipeline->GetBindingLayout(0), sceneTexture, uiTexture, edgeTexture, bloomTexture, m_CompositePostProcessBuffer, m_CompositeSampler);
+        nvrhi::BindingSetHandle bindingSet = GetOrCreateCompositeBindingSet(compositePipeline->GetBindingLayout(0), sceneTexture, uiTexture,
+            edgeTexture, bloomTexture, ssaoTexture, m_CompositePostProcessBuffer, m_CompositeSampler);
 
         auto graphicsState = nvrhi::GraphicsState();
         graphicsState.pipeline = compositePipeline->GetHandle();

@@ -62,8 +62,8 @@ namespace ignite
 		// Toggles
         bool enableVignette = false;
 		bool enableChromAb = false;
-		bool enableBloom = false;
-		bool enableSSAO = false; // Screen space ambient occlusion
+		bool enableBloom = true;
+		bool enableSSAO = true; // Screen space ambient occlusion
 		bool debugSSAO = false; // Visualize raw AO buffer
 
 		// Bloom
@@ -84,9 +84,9 @@ namespace ignite
 		float chromAbRadial = 0.1f;
 
 		// SSAO params
-		float aoRadius = 0.5f;
-		float aoBias = 0.025f;
-		float aoIntensity = 1.0f; // blend strength when applied in post
+		float aoRadius = 0.09f;
+		float aoBias = 0.1f;
+		float aoIntensity = 1.5f; // blend strength when applied in post
 		float aoPower = 1.0f;     // curve/power for contrast
 	};
 

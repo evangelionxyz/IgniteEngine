@@ -23,8 +23,9 @@
 
 #pragma once
 
-#include "ignite/graphics/buffers/constant_buffer.hpp"
+#include "buffers/constant_buffer.hpp"
 #include "bloom.hpp"
+#include "ssao.hpp"
 #include "edge_detection.hpp"
 #include "graphics_pipeline.hpp"
 #include "render_target.hpp"
@@ -141,7 +142,7 @@ namespace ignite
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer);
         void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer,
-            Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr);
+            Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr);
 
         void DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const DebugGridStyle &style, bool is2D);
         void DrawDebug2DPhysics(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
@@ -158,6 +159,7 @@ namespace ignite
         Ref<UIRenderer> m_UIRenderer;
         Ref<EdgeDetection> m_EdgeDetection;
         Ref<Bloom> m_Bloom;
+        Ref<SSAO> m_SSAO;
         Ref<ConstantBuffer> m_CompositePostProcessBuffer;
 
         std::vector<uint32_t> m_SelectedEntities;

@@ -8,6 +8,7 @@ Texture2D sceneTexture : register(t0);
 Texture2D uiTexture : register(t1);
 Texture2D edgeDetection : register(t2);
 Texture2D bloomTexture : register(t3);
+Texture2D ssaoTexture : register(t4);
 
 SamplerState linearSampler: register(s0);
 
@@ -15,7 +16,7 @@ cbuffer CompositePostProcess : register(b0)
 {
     float4 flags; // x=enableBloom y=bloomIntensity z=enableVignette w=enableChromAb
     float4 vignetteParams; // x=radius y=softness z=intensity w=chromAbAmount
-    float4 chromAbParams; // x=chromAbRadial
+    float4 chromAbParams; // x=chromAbRadial, y=enableSSAO, z=ssaoIntensity
     float4 vignetteColor;
 }
 
@@ -40,6 +41,12 @@ float3 SampleSceneWithChromAb(float2 uv)
 float4 main(VSOutput input) : SV_Target
 {
     float3 sceneColor = SampleSceneWithChromAb(input.uv);
+
+    if (chromAbParams.y > 0.5f)
+    {
+        float ao = ssaoTexture.SampleLevel(linearSampler, input.uv, 0.0f).r;
+        sceneColor *= lerp(1.0f, ao, chromAbParams.z);
+    }
 
     if (flags.x > 0.5f)
     {

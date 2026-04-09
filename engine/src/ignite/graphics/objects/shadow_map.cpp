@@ -193,19 +193,6 @@ namespace ignite
 			float extent = glm::max(cascadeMax.x - cascadeMin.x, cascadeMax.y - cascadeMin.y) * 0.5f;
 			extent = glm::max(extent, radius);
 
-			// float texelSize = (extent * 2.0f) / static_cast<float>(m_Resolution);
-			// if (texelSize <= 0.0f)
-			// 	texelSize = 1.0f / static_cast<float>(m_Resolution);
-
-			// glm::vec3 centerLS = glm::vec3(lightView * glm::vec4(cascadeCenter, 1.0f));
-			// centerLS.x = std::floor(centerLS.x / texelSize) * texelSize;
-			// centerLS.y = std::floor(centerLS.y / texelSize) * texelSize;
-
-			// glm::mat4 invLightView = glm::inverse(lightView);
-			// cascadeCenter = glm::vec3(invLightView * glm::vec4(centerLS, 1.0f));
-			// lightPos = cascadeCenter - lightDir * radius * 2.0f;
-			// lightView = glm::lookAt(lightPos, cascadeCenter, upDir);
-
 			computeCascadeBounds(lightView, cascadeMin, cascadeMax);
 			extent = glm::max(cascadeMax.x - cascadeMin.x, cascadeMax.y - cascadeMin.y) * 0.5f;
 			extent = glm::max(extent, radius);

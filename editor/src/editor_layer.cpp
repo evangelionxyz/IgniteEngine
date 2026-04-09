@@ -1322,7 +1322,6 @@ namespace ignite
                     UI::DrawCheckbox("Vignette", &cam.postProcessing.enableVignette);
                     UI::DrawCheckbox("Chromatic Aberration", &cam.postProcessing.enableChromAb);
                     UI::DrawCheckbox("SSAO", &cam.postProcessing.enableSSAO);
-                    UI::DrawCheckbox("Debug SSAO", &cam.postProcessing.debugSSAO);
 
                     if (cam.postProcessing.enableBloom)
                     {
