@@ -509,11 +509,21 @@ namespace ignite {
                     continue;
                 }
 
-                const std::string textureFilename = filename.stem().string() + std::format("_{0}_{1}", idx, ".png");
-                const std::filesystem::path texturePNGFullPath = textureDirectory / textureFilename;
-                BinarySerializer::SerializeTextureToPNG(texture, texturePNGFullPath);
+                const bool writeEXR = texture->GetFormat() == nvrhi::Format::RGBA32_FLOAT;
+                const std::string textureExtension = writeEXR ? ".exr" : ".png";
+                const std::string textureFilename = filename.stem().string() + std::format("_{0}_{1}", idx, textureExtension);
+                const std::filesystem::path textureOutputFullPath = textureDirectory / textureFilename;
 
-                const auto relativeTexturePath = assetManager->GetProject()->GetAssetRelativeFilepath(texturePNGFullPath);
+                if (writeEXR)
+                {
+                    BinarySerializer::SerializeTextureToEXR(texture, textureOutputFullPath);
+                }
+                else
+                {
+                    BinarySerializer::SerializeTextureToPNG(texture, textureOutputFullPath);
+                }
+
+                const auto relativeTexturePath = assetManager->GetProject()->GetAssetRelativeFilepath(textureOutputFullPath);
 
                 AssetHandle textureHandle = assetManager->GetAssetHandle(relativeTexturePath);
                 if (textureHandle == AssetHandle(0))
@@ -723,7 +733,7 @@ namespace ignite {
     {
         TextureCreateInfo createInfo;
         const std::string extension = metadata.filepath.extension().string();
-        const bool isHDR = extension == ".hdr";
+        const bool isHDR = extension == ".hdr" || extension == ".exr";
 
         createInfo.format = isHDR ? nvrhi::Format::RGBA32_FLOAT : nvrhi::Format::RGBA8_UNORM;
         createInfo.mipLevels = isHDR ? 1 : 4;

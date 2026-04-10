@@ -1,4 +1,4 @@
--- Copyright (c) 2022-present Evangelion Manuhutu | ORigin Engine
+-- Copyright (c) 2026 Evangelion Manuhutu
 
 project "freetype"
     location (THIRDPARTY_DIR)

@@ -98,10 +98,13 @@ namespace ignite {
         { ".ixmont", AssetType::AnimationMontage },
         { ".ixproj", AssetType::Project },
         { ".ixscene", AssetType::Scene },
+        
         { ".jpg", AssetType::Texture },
         { ".png", AssetType::Texture },
         { ".jpeg", AssetType::Texture },
+        { ".exr", AssetType::Texture },
         { ".hdr", AssetType::Texture },
+
         { ".ixsp", AssetType::SpriteSheet },
         { ".otf", AssetType::Font },
         { ".ttf", AssetType::Font },

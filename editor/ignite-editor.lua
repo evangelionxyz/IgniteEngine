@@ -46,6 +46,8 @@ project "IgniteEditor"
         "%{IncludeDir.ASSIMP}",
         "%{IncludeDir.TINYGLTF}",
         "%{IncludeDir.MSDFATLASGEN}",
+        "%{IncludeDir.OPENEXR}",
+        "%{IncludeDir.IMATH}",
         "%{IncludeDir.MSDFGEN}",
         "%{IncludeDir.FREETYPE}",
         "%{IncludeDir.TRACY}",

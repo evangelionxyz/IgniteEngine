@@ -1506,10 +1506,7 @@ namespace ignite
             return false;
 
         std::string ext = filepath.extension().string();
-        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-
-        return ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||
-            ext == ".bmp" || ext == ".tga" || ext == ".hdr";
+        return GetAssetTypeFromExtension(ext) == AssetType::Texture;
     }
 
     ImVec2 ContentBrowserPanel::CalculateThumbnailDisplaySize(Ref<Texture> texture, float maxSize) const

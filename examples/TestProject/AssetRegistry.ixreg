@@ -3,6 +3,9 @@ AssetRegistry:
     - Handle: 23797601587078018
       Type: SkeletalAnimation
       Filepath: Great Sword Jump Attack/Animation/Great Sword Jump Attack_0.ixanim
+    - Handle: 611378331697239683
+      Type: Texture
+      Filepath: cannon_01_1k/Textures/cannon_01_nor_gl_1k.exr
     - Handle: 995434377171723589
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/rock_1.png
@@ -63,6 +66,9 @@ AssetRegistry:
     - Handle: 6536254144797540605
       Type: Material2D
       Filepath: oak_woods_v1.0/decorations/Grass_01.ixmat2d
+    - Handle: 6574078181313987055
+      Type: Material
+      Filepath: cannon_01_1k/Material/cannon_01.ixmat
     - Handle: 6895963861277518904
       Type: Texture
       Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_0_.png
@@ -84,15 +90,15 @@ AssetRegistry:
     - Handle: 7950879191016284909
       Type: SpriteSheet
       Filepath: NewSpriteSheet.ixsp
+    - Handle: 8272507681768723231
+      Type: Texture
+      Filepath: cannon_01_1k/Textures/cannon_01_1k_0_.png
     - Handle: 8406749831429556630
       Type: Texture
       Filepath: ferndale_studio_12_2k.hdr
     - Handle: 8487866291550668718
       Type: Texture
       Filepath: klippad_sunrise_2_2k.hdr
-    - Handle: 8501598493492893558
-      Type: Invalid
-      Filepath: desktop.ini
     - Handle: 8562597306584449002
       Type: StaticMesh
       Filepath: monkey/StaticMesh/monkey.ixsm
@@ -114,6 +120,9 @@ AssetRegistry:
     - Handle: 9554496557541511132
       Type: Material
       Filepath: sphere/Material/DefaultMaterial.ixmat
+    - Handle: 9651878986870317539
+      Type: Texture
+      Filepath: cannon_01_1k/Textures/cannon_01_diff_1k.jpg
     - Handle: 10259601621661226170
       Type: Material
       Filepath: MyMaterial.ixmat
@@ -135,6 +144,9 @@ AssetRegistry:
     - Handle: 11776459511892231412
       Type: SkeletalAnimation
       Filepath: Tut Hip Hop Dance/Animation/Tut Hip Hop Dance_0.ixanim
+    - Handle: 12115787133282757308
+      Type: Texture
+      Filepath: cannon_01_1k/Textures/cannon_01_rough_1k.exr
     - Handle: 12217278547325118582
       Type: Texture
       Filepath: oak_woods_v1.0/background/background_layer_3.png
@@ -168,9 +180,15 @@ AssetRegistry:
     - Handle: 13956626230384988686
       Type: Material2D
       Filepath: oak_woods_v1.0/decorations/Sign_01.ixmat2d
+    - Handle: 14032627032885720990
+      Type: Skeleton
+      Filepath: cannon_01_1k/SkeletalMesh/cannon_01_1k.ixskel
     - Handle: 14048962819861439313
       Type: Texture
       Filepath: segoeui_msdf.png
+    - Handle: 14233850565787575222
+      Type: SkeletalMesh
+      Filepath: cannon_01_1k/SkeletalMesh/cannon_01_1k.ixskm
     - Handle: 14245791886231730899
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/fence_2.png
@@ -234,6 +252,9 @@ AssetRegistry:
     - Handle: 17604633582810232567
       Type: StaticMesh
       Filepath: cube/StaticMesh/cube.ixsm
+    - Handle: 17657063921299951160
+      Type: Texture
+      Filepath: cannon_01_1k/Textures/cannon_01_metal_1k.exr
     - Handle: 17980563881130575912
       Type: Texture
       Filepath: oak_woods_v1.0/decorations/grass_2.png
