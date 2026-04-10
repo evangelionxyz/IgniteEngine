@@ -4,7 +4,7 @@ Material:
   Type: 0
   BaseColorTextureHandle: 0
   EmissiveTextureHandle: 0
-  MetallicRoughnessTextureHandle: 0
+  RoughnessTextureHandle: 0
   NormalTextureHandle: 0
   OcclusionTextureHandle: 0
   GPUData:

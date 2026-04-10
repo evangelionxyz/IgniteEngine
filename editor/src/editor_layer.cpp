@@ -788,7 +788,8 @@ namespace ignite
 									// Check if this material uses the loaded texture
 									if (material->baseColorTextureHandle == handle ||
 										material->emissiveTextureHandle == handle ||
-										material->metallicRoughnessTextureHandle == handle ||
+                                        material->metallicTextureHandle == handle ||
+                                        material->roughnessTextureHandle == handle ||
 										material->normalTextureHandle == handle ||
 										material->occlusionTextureHandle == handle)
 									{

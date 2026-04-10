@@ -259,7 +259,8 @@ namespace ignite {
                 // First store the texture handles
                 mat->baseColorTextureHandle = materialTextureHandles[i][0];
                 mat->emissiveTextureHandle = materialTextureHandles[i][1];
-                mat->metallicRoughnessTextureHandle = materialTextureHandles[i][2];
+                mat->metallicTextureHandle = materialTextureHandles[i][2];
+                mat->roughnessTextureHandle = materialTextureHandles[i][2];
                 mat->normalTextureHandle = materialTextureHandles[i][3];
                 mat->occlusionTextureHandle = materialTextureHandles[i][4];
 
@@ -547,7 +548,8 @@ namespace ignite {
             Ref<Material> &mat = meshScene.materials[i];
             mat->baseColorTextureHandle = materialTextureHandles[i][0];
             mat->emissiveTextureHandle = materialTextureHandles[i][1];
-            mat->metallicRoughnessTextureHandle = materialTextureHandles[i][2];
+            mat->metallicTextureHandle = materialTextureHandles[i][2];
+            mat->roughnessTextureHandle = materialTextureHandles[i][2];
             mat->normalTextureHandle = materialTextureHandles[i][3];
             mat->occlusionTextureHandle = materialTextureHandles[i][4];
 

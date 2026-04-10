@@ -98,6 +98,18 @@ namespace ignite
             }
         }
 
+        static const char *TextureChannelToString(int channel)
+        {
+            switch (channel)
+            {
+                case 0: return "R";
+                case 1: return "G";
+                case 2: return "B";
+                case 3: return "A";
+                default: return "R";
+            }
+        }
+
         template<typename TOnChanged>
         static void DrawTexturePreviewDropTarget(Project *project, const char *label, AssetHandle &textureHandle, TOnChanged &&onChanged)
         {
@@ -1329,8 +1341,50 @@ namespace ignite
             [&]() { material->SetDirtyFlag(true); });
         DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Emissive Texture", material->emissiveTextureHandle,
             [&]() { material->SetDirtyFlag(true); });
-        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Metallic Roughness Texture", material->metallicRoughnessTextureHandle,
+        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Metallic Texture", material->metallicTextureHandle,
             [&]() { material->SetDirtyFlag(true); });
+        if (ImGui::BeginCombo("Metallic Channel", TextureChannelToString(material->gpuData.metallicChannel)))
+        {
+            for (int channel = 0; channel < 4; ++channel)
+            {
+                const bool selected = material->gpuData.metallicChannel == channel;
+                if (ImGui::Selectable(TextureChannelToString(channel), selected))
+                {
+                    material->gpuData.metallicChannel = channel;
+                    material->SetDirtyFlag(true);
+                }
+
+                if (selected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+
+            ImGui::EndCombo();
+        }
+
+        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Roughness Texture", material->roughnessTextureHandle,
+            [&]() { material->SetDirtyFlag(true); });
+        if (ImGui::BeginCombo("Roughness Channel", TextureChannelToString(material->gpuData.roughnessChannel)))
+        {
+            for (int channel = 0; channel < 4; ++channel)
+            {
+                const bool selected = material->gpuData.roughnessChannel == channel;
+                if (ImGui::Selectable(TextureChannelToString(channel), selected))
+                {
+                    material->gpuData.roughnessChannel = channel;
+                    material->SetDirtyFlag(true);
+                }
+
+                if (selected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+
+            ImGui::EndCombo();
+        }
+
         DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Normal Texture", material->normalTextureHandle,
             [&]() { material->SetDirtyFlag(true); });
         DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Occlusion Texture", material->occlusionTextureHandle,

@@ -95,6 +95,9 @@ namespace ignite
 		float metallicFactor = 1.0f;
 		float roughnessFactor = 1.0f;
 		float occlusionStrength = 0.0f;
+		int metallicChannel = 2;
+		int roughnessChannel = 1;
+		float _padding[3] = { 0.0f, 0.0f, 0.0f };
 	};
 }
 

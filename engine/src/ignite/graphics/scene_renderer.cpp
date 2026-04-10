@@ -699,7 +699,9 @@ namespace ignite
                             allTexturesReady = false;
                         if (!isTextureReady(material->emissiveTextureHandle))
                             allTexturesReady = false;
-                        if (!isTextureReady(material->metallicRoughnessTextureHandle))
+                        if (!isTextureReady(material->metallicTextureHandle))
+                            allTexturesReady = false;
+                        if (!isTextureReady(material->roughnessTextureHandle))
                             allTexturesReady = false;
                         if (!isTextureReady(material->normalTextureHandle))
                             allTexturesReady = false;
@@ -966,7 +968,9 @@ namespace ignite
                             allTexturesReady = false;
                         if (!isTextureReady(material->emissiveTextureHandle))
                             allTexturesReady = false;
-                        if (!isTextureReady(material->metallicRoughnessTextureHandle))
+                        if (!isTextureReady(material->metallicTextureHandle))
+                            allTexturesReady = false;
+                        if (!isTextureReady(material->roughnessTextureHandle))
                             allTexturesReady = false;
                         if (!isTextureReady(material->normalTextureHandle))
                             allTexturesReady = false;

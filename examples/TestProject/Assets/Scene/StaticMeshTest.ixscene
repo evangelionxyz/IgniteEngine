@@ -2,16 +2,30 @@ Scene:
   Version: Alpha-0.1
   Title: New Scene
   Entities:
+    - ID: 9806448813217611986
+      Name: Empty
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [-1.3951917, 1.5595534, -1.4155378]
+        WorldRotation: [0.31335348, -0.5364343, 0.7488259, 0.23088434]
+        WorldScale: [2.1, 2.1, 2.1]
+        LocalTranslation: [-1.3951917, 1.5595534, -1.4155378]
+        LocalRotation: [0.3133535, -0.5364343, 0.7488259, 0.23088433]
+        LocalScale: [2.1, 2.1, 2.1]
+        Visible: true
+      SkeletalMesh:
+        Handle: 14233850565787575222
     - ID: 10024928053884534303
       Name: SkeletalMesh
       Type: Node
       Parent: 0
       Transform:
         WorldTranslation: [2.75, 0.3, 2.750001]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.032300003, 0.032300003, 0.032300003]
+        WorldRotation: [3.2125747e-08, 0.88709855, -3.2125747e-08, -0.46158013]
+        WorldScale: [0.0323, 0.032300003, 0.0323]
         LocalTranslation: [2.75, 0.3, 2.750001]
-        LocalRotation: [0, 0, 0, 1]
+        LocalRotation: [-3.2125744e-08, -0.8870985, 3.2125744e-08, 0.46158013]
         LocalScale: [0.032300003, 0.032300003, 0.032300003]
         Visible: true
       SkeletalMesh:

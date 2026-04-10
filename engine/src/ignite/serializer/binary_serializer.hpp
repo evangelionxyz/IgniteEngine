@@ -376,7 +376,8 @@ namespace ignite
 
             AppendRaw(buffer, mat->baseColorTextureHandle);
             AppendRaw(buffer, mat->emissiveTextureHandle);
-            AppendRaw(buffer, mat->metallicRoughnessTextureHandle);
+            AppendRaw(buffer, mat->metallicTextureHandle);
+            AppendRaw(buffer, mat->roughnessTextureHandle);
             AppendRaw(buffer, mat->normalTextureHandle);
             AppendRaw(buffer, mat->occlusionTextureHandle);
 
@@ -414,7 +415,8 @@ namespace ignite
 
 			ReadRaw(inFile, &mat->baseColorTextureHandle);
 			ReadRaw(inFile, &mat->emissiveTextureHandle);
-			ReadRaw(inFile, &mat->metallicRoughnessTextureHandle);
+          ReadRaw(inFile, &mat->metallicTextureHandle);
+            ReadRaw(inFile, &mat->roughnessTextureHandle);
 			ReadRaw(inFile, &mat->normalTextureHandle);
             ReadRaw(inFile, &mat->occlusionTextureHandle);
 
