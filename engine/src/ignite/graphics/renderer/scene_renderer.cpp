@@ -7,6 +7,7 @@
 #include "ignite/scene/icamera.hpp"
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/component.hpp"
+#include "ignite/math/frustum.hpp"
 #include "ignite/physics/2d/physics_2d_component.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/graphics/font.hpp"
@@ -559,6 +560,26 @@ namespace ignite
         {
             m_Scene->SetSceneRenderer(this);
         }
+
+        {
+            nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+            nvrhi::CommandListHandle cmd = device->createCommandList();
+            cmd->open();
+
+            // Load icons
+            TextureCreateInfo createInfo;
+            createInfo.mipLevels = 1;
+            createInfo.samplerLinearFiltering = false;
+            createInfo.format = nvrhi::Format::RGBA8_UNORM;
+            createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+            createInfo.keepInitialState = true;
+
+            m_Icons["camera"] = Texture::Create("resources/ui/world/ic_world_camera.png", createInfo, cmd);
+            m_Icons["lighting"] = Texture::Create("resources/ui/world/ic_world_lighting.png", createInfo, cmd);
+
+            cmd->close();
+            device->executeCommandList(cmd);
+        }
     }
 
     void SceneRenderer::BeginFrame()
@@ -755,6 +776,11 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::ColorPass");
                 ColorPass(cmd, camera, framebuffer);
+            }
+
+            {
+                IGN_PROFILE_SCOPE("SceneRenderer::DrawIcons");
+                DrawIcons(cmd, framebuffer, camera);
             }
 
             if (camera->projectionType == ProjectionType::Orthographic)
@@ -1147,9 +1173,6 @@ namespace ignite
                 }
             };
 
-            // ===========================
-            // Static Meshes
-            // ===========================
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshes");
                 auto staticMeshView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
@@ -1958,6 +1981,64 @@ namespace ignite
         args.instanceCount = 1;
         args.vertexCount = 6;
         cmd->draw(args);
+    }
+
+    void SceneRenderer::DrawIcons(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, ICamera *camera)
+    {
+        IGN_PROFILE_FUNCTION();
+        m_Renderer2D->Begin(cmd);
+
+        glm::mat4 cameraView = camera ? camera->GetView() : glm::mat4(1.0f);
+        glm::mat4 billboardRotation = glm::inverse(glm::mat4(glm::mat3(cameraView)));
+
+        auto cameraViewReg = m_Scene->registry->view<TransformComponent, CameraComponent>();
+        for (entt::entity e : cameraViewReg)
+        {
+            auto &tr = m_Scene->registry->get<TransformComponent>(e);
+            if (!tr.visible)
+                continue;
+
+            const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+            const glm::mat4 world = tr.GetWorldMatrix();
+            const glm::vec3 worldPos = glm::vec3(world[3]);
+
+            Ref<Texture> texture = m_Icons["camera"];
+            glm::mat4 iconTransform = glm::translate(glm::mat4(1.0f), worldPos) * billboardRotation * glm::scale(glm::mat4(1.0f), glm::vec3(2.2f));
+            m_Renderer2D->DrawQuad(iconTransform, glm::vec4(1.0f), texture, {0.0f, 1.0f }, { 1.0f, 0.0f }, glm::vec2(1.0f), objectID);
+
+            if (camera)
+            {
+                auto &cc = m_Scene->registry->get<CameraComponent>(e);
+                glm::mat4 viewProj = cc.camera.GetProjection() * glm::inverse(world);
+                Frustum frustum(viewProj);
+                auto edges = frustum.GetEdges();
+                for (const auto &edge : edges)
+                {
+                    m_Renderer2D->DrawLine(edge.first, edge.second, glm::vec4(1.0f));
+                }
+            }
+        }
+
+        auto dirLight = m_Scene->registry->view<TransformComponent, DirectionalLight>();
+        for (entt::entity e : dirLight)
+        {
+            TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+            if (!tr.visible)
+                continue;
+
+            auto &lc = m_Scene->registry->get<DirectionalLight>(e);
+
+            const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+            const glm::mat4 world = tr.GetWorldMatrix();
+            const glm::vec3 worldPos = glm::vec3(world[3]);
+
+            Ref<Texture> texture = m_Icons["lighting"];
+            glm::mat4 iconTransform = glm::translate(glm::mat4(1.0f), worldPos) * billboardRotation * glm::scale(glm::mat4(1.0f), glm::vec3(2.2f));
+            m_Renderer2D->DrawQuad(iconTransform, lc.color, texture, { 0.0f, 0.0f }, { 1.0f, 1.0f }, glm::vec2(1.0f), objectID);
+        }
+
+        m_Renderer2D->Flush(framebuffer);
+        m_Renderer2D->End();
     }
 
     void SceneRenderer::UpdateUIInput(const glm::vec2 &viewportMousePos, const glm::vec2 &viewportPos, const glm::vec2 &viewportSize, bool mousePressed)
