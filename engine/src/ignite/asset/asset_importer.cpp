@@ -7,13 +7,14 @@
 #include "ignite/project/project.hpp"
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/serializer/binary_serializer.hpp"
-#include "ignite/graphics/scene_renderer.hpp"
+#include "ignite/graphics/renderer/scene_renderer.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
+#include "ignite/animation/animation_montage.hpp"
 #include "ignite/animation/animation_2d.hpp"
 #include "ignite/animation/animator_controller_2d.hpp"
 #include "ignite/scene/scene.hpp"
@@ -39,6 +40,9 @@ namespace ignite {
         { AssetType::Font, AssetImporter::ImportFont },
         { AssetType::Skeleton, AssetImporter::ImportSkeleton },
         { AssetType::SkeletalAnimation, AssetImporter::ImportSkeletalAnimation },
+        { AssetType::AnimationMontage, AssetImporter::ImportAnimationMontage },
+        { AssetType::BlendSpace, AssetImporter::ImportBlendSpace },
+        { AssetType::LocomotionController, AssetImporter::ImportLocomotionController },
         { AssetType::Animation2D, AssetImporter::ImportAnimation2D },
         { AssetType::AnimatorController2D, AssetImporter::ImportAnimatorController2D },
     };
@@ -115,42 +119,42 @@ namespace ignite {
         });
     }
 
-	Ref<StaticMesh> AssetImporter::ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
-	{
+    Ref<StaticMesh> AssetImporter::ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
+    {
         if (!std::filesystem::exists(metadata.filepath))
         {
             LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
             return nullptr;
         }
 
-		static auto staticMeshBinExt = GetAssetExtensionFromType(AssetType::StaticMesh);
-		static auto materialExt = GetAssetExtensionFromType(AssetType::Material);
+        static auto staticMeshBinExt = GetAssetExtensionFromType(AssetType::StaticMesh);
+        static auto materialExt = GetAssetExtensionFromType(AssetType::Material);
 
-		Ref<StaticMesh> asset;
+        Ref<StaticMesh> asset;
 
-		// Load the mesh from .ixsm
+        // Load the mesh from .ixsm
         if (metadata.filepath.extension() == staticMeshBinExt)
         {
-		    asset = BinarySerializer::DeserializeStaticMesh(metadata.filepath);
+            asset = BinarySerializer::DeserializeStaticMesh(metadata.filepath);
         }
 
         if (asset)
         {
-			for (auto &mesh : asset->GetMeshInstances())
-			{
-			    // Load materials
-				AssetHandle materialHandle = mesh->GetMaterialHandle();
-				AssetMetaData metadata = assetManager->GetMetaData(materialHandle);
-				if (metadata.type == AssetType::Material)
-				{
-					const auto &materialFilepath = assetManager->GetProject()->GetAssetFilepath(metadata.filepath);
-					Ref<Material> material = Material::Deserialize(materialFilepath);
+            for (auto &mesh : asset->GetMeshInstances())
+            {
+                // Load materials
+                AssetHandle materialHandle = mesh->GetMaterialHandle();
+                AssetMetaData metadata = assetManager->GetMetaData(materialHandle);
+                if (metadata.type == AssetType::Material)
+                {
+                    const auto &materialFilepath = assetManager->GetProject()->GetAssetFilepath(metadata.filepath);
+                    Ref<Material> material = Material::Deserialize(materialFilepath);
                     assetManager->AssignAsset(materialHandle, material);
-                    
+
                     // Submit GPU upload command list to render thread (thread-safe)
                     Application::SubmitToRenderThread([m = mesh]()
                     {
-                        nvrhi::IDevice* device = DeviceManager::GetInstance()->GetDevice();
+                        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
                         nvrhi::CommandListHandle cmd = device->createCommandList();
                         cmd->open();
                         m->GetPrimitive()->CreateBuffer(cmd);
@@ -259,7 +263,8 @@ namespace ignite {
                 // First store the texture handles
                 mat->baseColorTextureHandle = materialTextureHandles[i][0];
                 mat->emissiveTextureHandle = materialTextureHandles[i][1];
-                mat->metallicRoughnessTextureHandle = materialTextureHandles[i][2];
+                mat->metallicTextureHandle = materialTextureHandles[i][2];
+                mat->roughnessTextureHandle = materialTextureHandles[i][2];
                 mat->normalTextureHandle = materialTextureHandles[i][3];
                 mat->occlusionTextureHandle = materialTextureHandles[i][4];
 
@@ -334,6 +339,39 @@ namespace ignite {
             auto relativePath = assetManager->GetProject()->GetAssetRelativeFilepath(meshBinaryFullpath);
         }
 
+        return asset;
+    }
+
+    Ref<AnimationMontage> AssetImporter::ImportAnimationMontage(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
+    {
+        Ref<AnimationMontage> asset = AnimationMontage::Deserialize(metadata.filepath);
+        if (asset)
+        {
+            asset->handle = handle;
+            asset->SetReadyFlag(true);
+        }
+        return asset;
+    }
+
+    Ref<BlendSpace> AssetImporter::ImportBlendSpace(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
+    {
+        Ref<BlendSpace> asset = BlendSpace::Deserialize(metadata.filepath);
+        if (asset)
+        {
+            asset->handle = handle;
+            asset->SetReadyFlag(true);
+        }
+        return asset;
+    }
+
+    Ref<LocomotionController> AssetImporter::ImportLocomotionController(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
+    {
+        Ref<LocomotionController> asset = LocomotionController::Deserialize(metadata.filepath);
+        if (asset)
+        {
+            asset->handle = handle;
+            asset->SetReadyFlag(true);
+        }
         return asset;
     }
 
@@ -509,11 +547,21 @@ namespace ignite {
                     continue;
                 }
 
-                const std::string textureFilename = filename.stem().string() + std::format("_{0}_{1}", idx, ".png");
-                const std::filesystem::path texturePNGFullPath = textureDirectory / textureFilename;
-                BinarySerializer::SerializeTextureToPNG(texture, texturePNGFullPath);
+                const bool writeEXR = texture->GetFormat() == nvrhi::Format::RGBA32_FLOAT;
+                const std::string textureExtension = writeEXR ? ".exr" : ".png";
+                const std::string textureFilename = filename.stem().string() + std::format("_{0}_{1}", idx, textureExtension);
+                const std::filesystem::path textureOutputFullPath = textureDirectory / textureFilename;
 
-                const auto relativeTexturePath = assetManager->GetProject()->GetAssetRelativeFilepath(texturePNGFullPath);
+                if (writeEXR)
+                {
+                    BinarySerializer::SerializeTextureToEXR(texture, textureOutputFullPath);
+                }
+                else
+                {
+                    BinarySerializer::SerializeTextureToPNG(texture, textureOutputFullPath);
+                }
+
+                const auto relativeTexturePath = assetManager->GetProject()->GetAssetRelativeFilepath(textureOutputFullPath);
 
                 AssetHandle textureHandle = assetManager->GetAssetHandle(relativeTexturePath);
                 if (textureHandle == AssetHandle(0))
@@ -537,7 +585,8 @@ namespace ignite {
             Ref<Material> &mat = meshScene.materials[i];
             mat->baseColorTextureHandle = materialTextureHandles[i][0];
             mat->emissiveTextureHandle = materialTextureHandles[i][1];
-            mat->metallicRoughnessTextureHandle = materialTextureHandles[i][2];
+            mat->metallicTextureHandle = materialTextureHandles[i][2];
+            mat->roughnessTextureHandle = materialTextureHandles[i][2];
             mat->normalTextureHandle = materialTextureHandles[i][3];
             mat->occlusionTextureHandle = materialTextureHandles[i][4];
 
@@ -723,7 +772,7 @@ namespace ignite {
     {
         TextureCreateInfo createInfo;
         const std::string extension = metadata.filepath.extension().string();
-        const bool isHDR = extension == ".hdr";
+        const bool isHDR = extension == ".hdr" || extension == ".exr";
 
         createInfo.format = isHDR ? nvrhi::Format::RGBA32_FLOAT : nvrhi::Format::RGBA8_UNORM;
         createInfo.mipLevels = isHDR ? 1 : 4;

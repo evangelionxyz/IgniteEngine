@@ -18,6 +18,13 @@ namespace ignite
 		m_View = view;
 	}
 
+	void EditorCamera::FocusTarget(const glm::vec3 &target, float distance)
+	{
+		m_FocusTarget = target;
+		m_FocusDistance = glm::clamp(distance, controls.minDistance, controls.maxDistance);
+		m_FocusActive = true;
+	}
+
 	void EditorCamera::SetNavigationMode(NavigationMode mode)
 	{
 		if (m_NavigationMode == mode)
@@ -427,8 +434,22 @@ namespace ignite
 		}
 	}
 
-	void EditorCamera::UpdateCameraPosition()
+	void EditorCamera::UpdateCameraPosition(float deltaTime)
 	{
+	   if (m_FocusActive)
+	   {
+		   const float blend = 1.0f - std::exp(-m_FocusSpeed * glm::max(deltaTime, 0.0f));
+		   m_Target = glm::mix(m_Target, m_FocusTarget, blend);
+		   m_Distance = glm::mix(m_Distance, m_FocusDistance, blend);
+
+		   if (glm::length(m_Target - m_FocusTarget) < 0.001f && std::abs(m_Distance - m_FocusDistance) < 0.001f)
+		   {
+			   m_Target = m_FocusTarget;
+			   m_Distance = m_FocusDistance;
+			   m_FocusActive = false;
+		   }
+	   }
+
 		if (m_NavigationMode == NavigationMode::Mode2D)
 		{
 			position = { m_Target.x, m_Target.y, m_Distance };

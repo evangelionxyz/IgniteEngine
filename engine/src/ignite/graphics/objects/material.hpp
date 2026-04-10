@@ -36,7 +36,7 @@
 
 namespace ignite
 {
-    class SceneRenderer;
+    class ISceneRenderer;
     class AssetManager;
     class Project;
 
@@ -51,7 +51,8 @@ namespace ignite
     {
 		Ref<Texture> baseColor;
 	    Ref<Texture> emissive;
-	    Ref<Texture> metallicRoughness;
+        Ref<Texture> metallic;
+        Ref<Texture> roughness;
 	    Ref<Texture> normal;
         Ref<Texture> occlusion;
     };
@@ -66,14 +67,15 @@ namespace ignite
 
         AssetHandle baseColorTextureHandle = AssetHandle(0);
         AssetHandle emissiveTextureHandle = AssetHandle(0);
-        AssetHandle metallicRoughnessTextureHandle = AssetHandle(0);
+        AssetHandle metallicTextureHandle = AssetHandle(0);
+        AssetHandle roughnessTextureHandle = AssetHandle(0);
         AssetHandle normalTextureHandle = AssetHandle(0);
 		AssetHandle occlusionTextureHandle = AssetHandle(0);
 
         nvrhi::SamplerHandle sampler;
         void SetSamplerDesc(const nvrhi::SamplerDesc &desc);
 
-        void UpdateBindingSet(SceneRenderer *sceneRenderer, MaterialTextures *textures, AssetManager *assetManager);
+        void UpdateBindingSet(ISceneRenderer *sceneRenderer, MaterialTextures *textures, AssetManager *assetManager);
         void UploadToGpu(nvrhi::ICommandList *cmd);
         void SetType(MaterialType type) { m_Type = type; }
 		void RetrieveTextures(AssetManager *assetManager, MaterialTextures *textures) const;

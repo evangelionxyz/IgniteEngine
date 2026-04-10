@@ -4,12 +4,15 @@ Material:
   Type: 0
   BaseColorTextureHandle: 6895963861277518904
   EmissiveTextureHandle: 0
-  MetallicRoughnessTextureHandle: 15807500425735898075
+  MetallicTextureHandle: 15807500425735898075
+  RoughnessTextureHandle: 15807500425735898075
   NormalTextureHandle: 5784425294381670522
   OcclusionTextureHandle: 0
   GPUData:
     BaseColorFactor: [1, 1, 1, 1]
     EmissiveFactor: [0, 0, 0, 1]
     MetallicFactor: 0
-    RoughnessFactor: 0.8
+    RoughnessFactor: 1
     OcclusionStrength: 0
+    MetallicChannel: 0
+    RoughnessChannel: 1

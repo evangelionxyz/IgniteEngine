@@ -41,6 +41,7 @@
 #include <format>
 #include <algorithm>
 #include <ranges>
+#include <cmath>
 
 #ifdef _WIN32
     #include <dwmapi.h>
@@ -153,7 +154,6 @@ namespace ignite
     void ScenePanel::OnGuiRender()
     {
         IGN_PROFILE_FUNCTION();
-        ImGui::ShowDemoWindow();
 
         if (m_Scene)
         {
@@ -181,7 +181,7 @@ namespace ignite
 
     void ScenePanel::OnUpdate(float deltaTime)
     {
-        if (m_Scene && m_EditorLayer->GetData().sceneState != State::ScenePlay)
+        if (m_Scene && m_EditorLayer->GetState().sceneState != State::ScenePlay)
         {
             UpdateCameraInput(deltaTime);
         }
@@ -313,6 +313,15 @@ namespace ignite
 
         if (ImGui::BeginMenu("3D"))
         {
+            if (ImGui::MenuItem("Directional Light"))
+            {
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Directional Light"));
+                if (entity.IsValid() && !entity.HasComponent<DirectionalLight>())
+                {
+                    entity.AddComponent<DirectionalLight>();
+                }
+            }
+
             if (ImGui::MenuItem("World Environment"))
             {
                 entity = SetSelectedEntity(SceneManager::CreateWorldEnvironment(m_Scene.get(), "World Environment"));
@@ -585,21 +594,40 @@ namespace ignite
 							}
 						}
                     });
-                
+            });
 
-                ImGui::Separator();
-                ImGui::ColorEdit4("Sun Color", &c.sceneGPUData.sunColor.x);
-                UI::DrawVec2Control("Sun Angles", c.sceneGPUData.sungAngles, 0.01f);
-                UI::DrawFloatControl("Sun Angular Radius", &c.sceneGPUData.sunAngularRadius, 0.01f, 0.0f, 10.0f);
-                UI::DrawIntControl("Render Mode", &c.sceneGPUData.renderMode, 1.0f, 0, 16);
-                bool debugShadow = c.sceneGPUData.debugShadow != 0;
-                if (UI::DrawCheckbox("Debug Shadow", &debugShadow).isItemEdited)
+            RenderComponent<DirectionalLight>("Directional Light", selectedEntity, [&]()
+            {
+                DirectionalLight &c = selectedEntity.GetComponent<DirectionalLight>();
+                TransformComponent &tr = selectedEntity.GetComponent<TransformComponent>();
+
+                ImGui::ColorEdit4("Color", &c.color.x);
+                UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
+                UI::DrawFloatControl("Angular Radius", &c.angularRadius, 0.01f, 0.0f, 45.0f);
+                UI::DrawFloatControl("Exposure", &c.exposure, 0.01f, 0.0f, 32.0f);
+                UI::DrawFloatControl("Gamma", &c.gamma, 0.01f, 0.1f, 8.0f);
+                UI::DrawFloatControl("Ambient", &c.ambient, 0.01f, 0.0f, 4.0f);
+
+                const glm::vec3 sunDirection = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+                const float azimuth = std::atan2(sunDirection.x, sunDirection.z);
+                const float elevation = std::asin(glm::clamp(sunDirection.y, -1.0f, 1.0f));
+
+                ImGui::TextDisabled("Azimuth: %.3f rad", azimuth);
+                ImGui::TextDisabled("Elevation: %.3f rad", elevation);
+
+                ImGui::SeparatorText("Shadow");
+                UI::DrawCheckbox("Cascade Shadow", &c.cascadeShadow);
+                UI::DrawFloatControl("Strength", &c.shadowStrength, 0.01f, 0.0f, 1.0f);
+                UI::DrawFloatControl("Min Bias", &c.shadowMinBias, 0.0001f, 0.0f, 0.1f);
+                UI::DrawFloatControl("Max Bias", &c.shadowMaxBias, 0.0001f, 0.0f, 0.1f);
+                UI::DrawFloatControl("PCF Radius", &c.pcfRadius, 0.01f, 0.0f, 8.0f);
+
+                static const char *resolutionLabels[] = { "Low - 512px", "Medium - 1024px", "High - 2048px", "Ultra - 4096px" };
+                int resolution = std::clamp(c.shadowResolution, 0, 3);
+                if (ImGui::Combo("Resolution", &resolution, resolutionLabels, IM_ARRAYSIZE(resolutionLabels)))
                 {
-                    c.sceneGPUData.debugShadow = debugShadow ? 1 : 0;
+                    c.shadowResolution = resolution;
                 }
-                UI::DrawFloatControl("Exposure", &c.sceneGPUData.exposure, 0.01f, 0.0f, 32.0f);
-                UI::DrawFloatControl("Gamma", &c.sceneGPUData.gamma, 0.01f, 0.1f, 8.0f);
-                UI::DrawFloatControl("Ambient", &c.sceneGPUData.ambient, 0.01f, 0.0f, 4.0f);
             });
 
             RenderComponent<Sprite2DComponent>("Sprite 2D", selectedEntity, [&]()
@@ -779,7 +807,7 @@ namespace ignite
 
             RenderComponent<PointLight2DComponent>("Point Light 2D", selectedEntity, [&]()
             {
-                PointLight2DComponent &c = selectedEntity.GetComponent<PointLight2DComponent>();
+                auto &c = selectedEntity.GetComponent<PointLight2DComponent>();
                 UI::DrawCheckbox("Enabled", &c.enabled);
                 UI::DrawVec4Control("Color", c.color, 0.025f, 1.0f);
                 UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.0f, 10000.0f);
@@ -788,7 +816,7 @@ namespace ignite
 
 			RenderComponent<Circle2DComponent>("Circle 2D", selectedEntity, [&]()
 				{
-					Circle2DComponent &c = selectedEntity.GetComponent<Circle2DComponent>();
+					auto &c = selectedEntity.GetComponent<Circle2DComponent>();
 
 					static Circle2DComponent compBefore;
 
@@ -802,7 +830,7 @@ namespace ignite
 
 			RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [&]()
 			{
-				StaticMeshComponent &c = selectedEntity.GetComponent<StaticMeshComponent>();
+				auto &c = selectedEntity.GetComponent<StaticMeshComponent>();
 
 				bool isMeshLoaded = c.handle != AssetHandle(0);
 
@@ -875,7 +903,7 @@ namespace ignite
 
             RenderComponent<SkeletalMeshComponent>("Skeletal Mesh", selectedEntity, [&]()
             {
-                SkeletalMeshComponent &c = selectedEntity.GetComponent<SkeletalMeshComponent>();
+                auto &c = selectedEntity.GetComponent<SkeletalMeshComponent>();
 
                 bool isMeshLoaded = c.handle != AssetHandle(0);
 
@@ -967,9 +995,10 @@ namespace ignite
                     UI::DrawCheckbox("Fast Rotation", &c.allowFastRotation);
                 }
             });
+
             RenderComponent<CameraComponent>("Camera", selectedEntity, [&]()
             {
-                CameraComponent &c = selectedEntity.GetComponent<CameraComponent>();
+                auto &c = selectedEntity.GetComponent<CameraComponent>();
                 static CameraComponent s_CameraBefore;
 
                 static const char *projectionTypeStr[] = { "Orthographic", "Perspective" };
@@ -1068,6 +1097,53 @@ namespace ignite
                     }
                 }
 
+                {
+                    auto &pp = c.camera.postProcessing;
+
+                    // Bloom
+                    ImGui::SeparatorText("BLOOM");
+                    c.dirty |= UI::DrawCheckbox("Enable Bloom", &pp.enableBloom).isItemEdited;
+                    if (pp.enableBloom)
+                    {
+                        c.dirty |= UI::DrawFloatControl("Bloom Intensity", &pp.bloomIntensity, 0.01f, 0.0f, 100.0f).isItemEdited;
+                        c.dirty |= UI::DrawFloatControl("Bloom Threshold", &pp.bloomThreshold, 0.01f, 0.0f, 10.0f).isItemEdited;
+                        c.dirty |= UI::DrawFloatControl("Bloom Knee", &pp.bloomKnee, 0.01f, 0.0f, 10.0f).isItemEdited;
+                        c.dirty |= UI::DrawFloatControl("Bloom Radius", &pp.bloomRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
+                        c.dirty |= UI::DrawIntControl("Bloom Iterations", &pp.bloomIterations, 1.0f, 1, 16).isItemEdited;
+                    }
+
+                    // Vignette
+                    ImGui::SeparatorText("VIGNETTE");
+                    c.dirty |= UI::DrawCheckbox("Enable Vignette", &pp.enableVignette).isItemEdited;
+                    if (pp.enableVignette)
+                    {
+                        c.dirty |= UI::DrawColorVec3("Vignette Color", pp.vignetteColor).isItemEdited;
+                        c.dirty |= UI::DrawFloatControl("Vignette Radius", &pp.vignetteRadius, 0.01f, 0.0f, 10.0f).isItemEdited;
+                        c.dirty |= UI::DrawFloatControl("Vignette Softness", &pp.vignetteSoftness, 0.01f, 0.0f, 10.0f).isItemEdited;
+                        c.dirty |= UI::DrawFloatControl("Vignette Intensity", &pp.vignetteIntensity, 0.01f, 0.0f, 10.0f).isItemEdited;
+                    }
+
+                    // Chromatic Aberration
+                    ImGui::SeparatorText("CHROMATIC AB");
+                    c.dirty |= UI::DrawCheckbox("Enable Chromatic Aberration", &pp.enableChromAb).isItemEdited;
+                    if (pp.enableChromAb)
+                    {
+                        c.dirty |= UI::DrawFloatControl("Chromatic Aberration Amount", &pp.chromAbAmount, 0.0001f, 0.0f, 0.1f).isItemEdited;
+                        c.dirty |= UI::DrawFloatControl("Chromatic Aberration Radial", &pp.chromAbRadial, 0.01f, 0.0f, 10.0f).isItemEdited;
+                    }
+
+                    // SSAO
+                    ImGui::SeparatorText("SSAO");
+                    c.dirty |= UI::DrawCheckbox("Enable SSAO", &pp.enableSSAO).isItemEdited;
+                    if (pp.enableSSAO)
+                    {
+                        c.dirty |= UI::DrawFloatControl("AO Radius", &pp.aoRadius, 0.001f, 0.0f, 10.0f).isItemEdited;
+                        c.dirty |= UI::DrawFloatControl("AO Bias", &pp.aoBias, 0.001f, 0.0f, 10.0f).isItemEdited;
+                        c.dirty |= UI::DrawFloatControl("AO Intensity", &pp.aoIntensity, 0.01f, 0.0f, 10.0f).isItemEdited;
+                        c.dirty |= UI::DrawFloatControl("AO Power", &pp.aoPower, 0.01f, 0.0f, 10.0f).isItemEdited;
+                    }
+                }
+
                 if (c.dirty)
                 {
                     c.camera.UpdateView();
@@ -1078,7 +1154,7 @@ namespace ignite
 
             RenderComponent<BoxCollider2DComponent>("Box Collider 2D", selectedEntity, [&]()
             {
-                BoxCollider2DComponent &c = selectedEntity.GetComponent<BoxCollider2DComponent>();
+                auto &c = selectedEntity.GetComponent<BoxCollider2DComponent>();
                 c.dirty = UI::DrawVec2Control("Size", c.size, 0.025f, 1.0f);
                 c.dirty |= UI::DrawVec2Control("Offset", c.offset, 0.025f);
                 c.dirty |= UI::DrawFloatControl("Restitution", &c.restitution, 0.025f, 0.0f, FLT_MAX);
@@ -1089,8 +1165,8 @@ namespace ignite
 
 			RenderComponent<CircleCollider2DComponent>("Circle Collider 2D", selectedEntity, [&]()
 				{
-					CircleCollider2DComponent &cc = selectedEntity.GetComponent<CircleCollider2DComponent>();
-                   cc.dirty = UI::DrawFloatControl("Radius", &cc.radius, 0.025f, 0.0f, FLT_MAX);
+					auto &cc = selectedEntity.GetComponent<CircleCollider2DComponent>();
+                    cc.dirty = UI::DrawFloatControl("Radius", &cc.radius, 0.025f, 0.0f, FLT_MAX);
                     cc.dirty |= UI::DrawVec2Control("Center", cc.center, 0.025f);
                     cc.dirty |= UI::DrawFloatControl("Restitution", &cc.restitution, 0.025f, 0.0f, FLT_MAX);
                     cc.dirty |= UI::DrawFloatControl("Friction", &cc.friction, 0.025f, 0.0f, FLT_MAX);
@@ -1100,13 +1176,13 @@ namespace ignite
 
             RenderComponent<RigibodyComponent>("Rigid Body", selectedEntity, [&]()
             {
-                RigibodyComponent &c = selectedEntity.GetComponent<RigibodyComponent>();
+                auto &c = selectedEntity.GetComponent<RigibodyComponent>();
                 UI::DrawCheckbox("Static", &c.isStatic);
             });
 
             RenderComponent<BoxColliderComponent>("Box Collider", selectedEntity, [&]()
             {
-                BoxColliderComponent &c = selectedEntity.GetComponent<BoxColliderComponent>();
+                auto &c = selectedEntity.GetComponent<BoxColliderComponent>();
                 c.dirty = UI::DrawVec3Control("Scale", c.scale, 0.025f, 1.0f);
                 c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
                 c.dirty |= UI::DrawFloatControl("Static Friction", &c.staticFriction, 0.025f);
@@ -1116,7 +1192,7 @@ namespace ignite
 
             RenderComponent<SphereColliderComponent>("Sphere Collider", selectedEntity, [&]()
             {
-                SphereColliderComponent &c = selectedEntity.GetComponent<SphereColliderComponent>();
+                auto &c = selectedEntity.GetComponent<SphereColliderComponent>();
                 c.dirty = UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.01f, 10000.0f, 1.0f);
                 c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
                 c.dirty |= UI::DrawFloatControl("Static Friction", &c.staticFriction, 0.025f);
@@ -1126,7 +1202,7 @@ namespace ignite
 
             RenderComponent<CapsuleColliderComponent>("Capsule Collider", selectedEntity, [&]()
             {
-                CapsuleColliderComponent &c = selectedEntity.GetComponent<CapsuleColliderComponent>();
+                auto &c = selectedEntity.GetComponent<CapsuleColliderComponent>();
                 c.dirty = UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.01f, 10000.0f, 1.0f);
                 c.dirty |= UI::DrawFloatControl("Height", &c.height, 0.025f, 0.01f, 10000.0f, 1.0f);
                 c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
@@ -1137,7 +1213,7 @@ namespace ignite
 
             RenderComponent<MeshColliderComponent>("Mesh Collider", selectedEntity, [&]()
             {
-                MeshColliderComponent &c = selectedEntity.GetComponent<MeshColliderComponent>();
+                auto &c = selectedEntity.GetComponent<MeshColliderComponent>();
                 c.dirty = UI::DrawCheckbox("Convex", &c.convex);
                 ImGui::Text("Vertices: %zu", c.vertices.size());
                 ImGui::Text("Indices: %zu", c.indices.size());
@@ -1155,7 +1231,7 @@ namespace ignite
 
             RenderComponent<TextComponent>("Text", selectedEntity, [&]()
                 {
-                    TextComponent &c = selectedEntity.GetComponent<TextComponent>();
+                    auto &c = selectedEntity.GetComponent<TextComponent>();
 
                     const bool isFontLoaded = c.fontHandle != AssetHandle(0);
                     std::string fontLabel = isFontLoaded ? "Font Loaded" : "Drag Here";
@@ -1228,7 +1304,7 @@ namespace ignite
 
             RenderComponent<AudioSourceComponent>("Audio Source", selectedEntity, [&]()
             {
-                AudioSourceComponent &c = selectedEntity.GetComponent<AudioSourceComponent>();
+                auto &c = selectedEntity.GetComponent<AudioSourceComponent>();
 
                 bool isLoaded = c.handle != AssetHandle(0);
                 std::string label = isLoaded ? std::to_string((uint64_t)c.handle) : "Drag Here";
@@ -1307,7 +1383,7 @@ namespace ignite
             });
             RenderComponent<ScriptComponent>("C# Script", selectedEntity, [&]()
             {
-                ScriptComponent &c = selectedEntity.GetComponent<ScriptComponent>();
+                auto &c = selectedEntity.GetComponent<ScriptComponent>();
 
                 bool scriptClassExist = ScriptEngine::GetInstance()->EntityClassExists(c.className);
                 bool isSelected = false;
@@ -1604,6 +1680,9 @@ namespace ignite
                     case CompType_PointLight2D:
                         entity.AddComponent<PointLight2DComponent>();
                         break;
+                    case CompType_DirectionalLight:
+                        entity.AddComponent<DirectionalLight>();
+                        break;
                     case CompType_Font:
                         entity.AddComponent<TextComponent>();
                         break;
@@ -1793,7 +1872,7 @@ namespace ignite
             // TOOLBAR: 
             constexpr ImVec2 buttonSize = { 24.0f, 24.0f };
 
-            State sceneState = m_EditorLayer->GetData().sceneState;
+            State sceneState = m_EditorLayer->GetState().sceneState;
             const bool isScenePlaying = sceneState == ignite::State::ScenePlay;
             Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
             ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
@@ -1953,7 +2032,7 @@ namespace ignite
 
                                     SetSelectedEntity(targetSelection);
                                 }
-                                else if (!m_EditorLayer->GetData().multiSelect)
+                                else if (!m_EditorLayer->GetState().multiSelect)
                                 {
                                     SetSelectedEntity(Entity {});
                                     SetGizmoOperation(GizmoOperation::NONE);
@@ -2005,8 +2084,6 @@ namespace ignite
                     glm::vec3 f = glm::vec3(view[0][2], view[1][2], view[2][2]);
                     m_EditorCamera.pitch = glm::clamp(std::asin(glm::clamp(-f.y, -1.0f, 1.0f)), m_EditorCamera.controls.minPitch, m_EditorCamera.controls.maxPitch);
                     m_EditorCamera.yaw = std::atan2(-f.z, -f.x);
-                    m_EditorCamera.UpdateCameraPosition();
-                    m_EditorCamera.UpdateView();
                 }
             }
 
@@ -2205,170 +2282,174 @@ namespace ignite
     void ScenePanel::RenderSceneGameViewport()
     {
         IGN_PROFILE_FUNCTION();
-        m_Data.sceneViewportGameplayVisible = ImGui::Begin("Game");
-        if (m_Data.sceneViewportGameplayVisible)
+        if (m_EditorLayer->GetState().gameplayViewportWindow)
         {
-            // Preview camera
-            if (m_Scene)
+            m_Data.sceneViewportGameplayVisible = ImGui::Begin("Game", &m_EditorLayer->GetState().gameplayViewportWindow);
+            if (m_Data.sceneViewportGameplayVisible)
             {
-                // TOOLBAR: 
-                constexpr ImVec2 buttonSize = { 24.0f, 24.0f };
-
-                State sceneState = m_EditorLayer->GetData().sceneState;
-                const bool isScenePlaying = sceneState == ignite::State::ScenePlay;
-                Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
-                ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
-
-                ImGui::SameLine();
-                ImGui::Image(scenePlayStopID, buttonSize);
-                if (ImGui::IsItemClicked())
+                // Preview camera
+                if (m_Scene)
                 {
-                    if (isScenePlaying)
+                    // TOOLBAR: 
+                    constexpr ImVec2 buttonSize = { 24.0f, 24.0f };
+
+                    State sceneState = m_EditorLayer->GetState().sceneState;
+                    const bool isScenePlaying = sceneState == ignite::State::ScenePlay;
+                    Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
+                    ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
+
+                    ImGui::SameLine();
+                    ImGui::Image(scenePlayStopID, buttonSize);
+                    if (ImGui::IsItemClicked())
                     {
-                        m_EditorLayer->OnSceneStop();
+                        if (isScenePlaying)
+                        {
+                            m_EditorLayer->OnSceneStop();
 #if _WIN32
-                        HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
-                        COLORREF rgbRed = 0x00E86071;
-                        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
+                            HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
+                            COLORREF rgbRed = 0x00E86071;
+                            DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
 #endif
+                        }
+                        else
+                        {
+                            m_EditorLayer->OnScenePlay();
+#if _WIN32
+                            HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
+                            COLORREF rgbRed = 0x000000AB;
+                            DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
+#endif
+                        }
+                    }
+
+                    const bool isSceneSimulate = sceneState == ignite::State::SceneSimulate;
+                    Ref<Texture> sceneSimulateTex = isSceneSimulate ? m_Icons["stop"] : m_Icons["simulate"];
+                    ImTextureID sceneSimulateID = (ImTextureID)sceneSimulateTex->GetHandle().Get();
+
+                    ImGui::SameLine();
+                    ImGui::Image(sceneSimulateID, buttonSize);
+                    if (ImGui::IsItemClicked())
+                    {
+                        if (isSceneSimulate)
+                        {
+                            m_EditorLayer->OnSceneStop();
+#if _WIN32
+                            HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
+                            COLORREF rgbRed = 0x00E86071;
+                            DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
+#endif
+                        }
+                        else
+                        {
+                            m_EditorLayer->OnSceneSimulate();
+#if _WIN32
+                            HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
+                            COLORREF rgbRed = 0x000000AB;
+                            DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
+#endif
+                        }
+                    }
+
+                    ImGui::SameLine();
+                    ImGui::TextUnformatted("Zoom");
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(120.0f);
+                    ImGui::SliderFloat("##GamePreviewZoom", &m_Data.gamePreviewZoom, 0.25f, 4.0f, "%.2fx");
+
+                    ImGui::SameLine();
+                    if (ImGui::Button("Reset##GamePreviewZoomPan"))
+                    {
+                        m_Data.gamePreviewZoom = 1.0f;
+                        m_Data.gamePreviewPan = glm::vec2(0.0f);
+                    }
+
+                    // Calculating Scene Viewport location
+                    const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
+                    const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
+
+                    if (Entity cameraEntity = m_Scene->GetPrimaryCamera())
+                    {
+                        auto &cameraComp = cameraEntity.GetComponent<CameraComponent>();
+
+                        ImVec2 baseImagePos = canvasPos;
+                        ImVec2 baseImageSize = canvasSize;
+
+                        const float safeCanvasW = glm::max(canvasSize.x, 1.0f);
+                        const float safeCanvasH = glm::max(canvasSize.y, 1.0f);
+                        const float canvasAspect = safeCanvasW / safeCanvasH;
+
+                        float targetAspect = canvasAspect;
+                        if (!cameraComp.camera.IsFreeAspect())
+                        {
+                            targetAspect = glm::max(cameraComp.camera.GetAspectRatioValue(), 0.0001f);
+                        }
+
+                        if (canvasAspect > targetAspect)
+                        {
+                            baseImageSize.x = safeCanvasH * targetAspect;
+                            baseImagePos.x += (safeCanvasW - baseImageSize.x) * 0.5f;
+                        }
+                        else
+                        {
+                            baseImageSize.y = safeCanvasW / targetAspect;
+                            baseImagePos.y += (safeCanvasH - baseImageSize.y) * 0.5f;
+                        }
+
+                        m_Data.gamePreviewZoom = glm::clamp(m_Data.gamePreviewZoom, 0.25f, 4.0f);
+
+                        ImVec2 imageSize =
+                        {
+                            baseImageSize.x * m_Data.gamePreviewZoom,
+                            baseImageSize.y * m_Data.gamePreviewZoom
+                        };
+
+                        const float maxPanX = glm::max((imageSize.x - baseImageSize.x) * 0.5f, 0.0f);
+                        const float maxPanY = glm::max((imageSize.y - baseImageSize.y) * 0.5f, 0.0f);
+                        m_Data.gamePreviewPan.x = glm::clamp(m_Data.gamePreviewPan.x, -maxPanX, maxPanX);
+                        m_Data.gamePreviewPan.y = glm::clamp(m_Data.gamePreviewPan.y, -maxPanY, maxPanY);
+
+                        ImVec2 imagePos =
+                        {
+                            baseImagePos.x + (baseImageSize.x - imageSize.x) * 0.5f + m_Data.gamePreviewPan.x,
+                            baseImagePos.y + (baseImageSize.y - imageSize.y) * 0.5f + m_Data.gamePreviewPan.y
+                        };
+
+                        const bool imageHovered = ImGui::GetMousePos().x >= imagePos.x && ImGui::GetMousePos().x <= imagePos.x + imageSize.x &&
+                            ImGui::GetMousePos().y >= imagePos.y && ImGui::GetMousePos().y <= imagePos.y + imageSize.y;
+
+                        if (ImGui::IsWindowFocused() && ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
+                        {
+                            const ImVec2 delta = ImGui::GetIO().MouseDelta;
+                            m_Data.gamePreviewPan += glm::vec2(delta.x, delta.y);
+                        }
+
+                        m_ViewportGameRT.rect.min = { baseImagePos.x, baseImagePos.y };
+                        m_ViewportGameRT.rect.max = { baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y };
+
+                        ImTextureID previewImage = (ImTextureID)m_ViewportGameRT.composite->GetColorAttachment(0)->GetHandle().Get();
+                        ImDrawList *drawList = ImGui::GetWindowDrawList();
+                        drawList->PushClipRect(baseImagePos, ImVec2(baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y), true);
+                        drawList->AddImage(previewImage, imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
+                        drawList->PopClipRect();
+
+                        ImGui::SetCursorScreenPos(baseImagePos);
+                        ImGui::InvisibleButton("##GamePreviewCanvas", baseImageSize);
                     }
                     else
                     {
-                        m_EditorLayer->OnScenePlay();
-#if _WIN32
-                        HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
-                        COLORREF rgbRed = 0x000000AB;
-                        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
-#endif
+                        m_ViewportGameRT.rect.min = { canvasPos.x, canvasPos.y };
+                        m_ViewportGameRT.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
+                        ImGui::Text("No Camera");
                     }
-                }
-
-                const bool isSceneSimulate = sceneState == ignite::State::SceneSimulate;
-                Ref<Texture> sceneSimulateTex = isSceneSimulate ? m_Icons["stop"] : m_Icons["simulate"];
-                ImTextureID sceneSimulateID = (ImTextureID)sceneSimulateTex->GetHandle().Get();
-
-                ImGui::SameLine();
-                ImGui::Image(sceneSimulateID, buttonSize);
-                if (ImGui::IsItemClicked())
-                {
-                    if (isSceneSimulate)
-                    {
-                        m_EditorLayer->OnSceneStop();
-#if _WIN32
-                        HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
-                        COLORREF rgbRed = 0x00E86071;
-                        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
-#endif
-                    }
-                    else
-                    {
-                        m_EditorLayer->OnSceneSimulate();
-#if _WIN32
-                        HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
-                        COLORREF rgbRed = 0x000000AB;
-                        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
-#endif
-                    }
-                }
-
-                ImGui::SameLine();
-                ImGui::TextUnformatted("Zoom");
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(120.0f);
-                ImGui::SliderFloat("##GamePreviewZoom", &m_Data.gamePreviewZoom, 0.25f, 4.0f, "%.2fx");
-
-                ImGui::SameLine();
-                if (ImGui::Button("Reset##GamePreviewZoomPan"))
-                {
-                    m_Data.gamePreviewZoom = 1.0f;
-                    m_Data.gamePreviewPan = glm::vec2(0.0f);
-                }
-
-                // Calculating Scene Viewport location
-                const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
-                const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
-
-                if (Entity cameraEntity = m_Scene->GetPrimaryCamera())
-                {
-                    CameraComponent &cameraComp = cameraEntity.GetComponent<CameraComponent>();
-
-                    ImVec2 baseImagePos = canvasPos;
-                    ImVec2 baseImageSize = canvasSize;
-
-                    const float safeCanvasW = glm::max(canvasSize.x, 1.0f);
-                    const float safeCanvasH = glm::max(canvasSize.y, 1.0f);
-                    const float canvasAspect = safeCanvasW / safeCanvasH;
-
-                    float targetAspect = canvasAspect;
-                    if (!cameraComp.camera.IsFreeAspect())
-                    {
-                        targetAspect = glm::max(cameraComp.camera.GetAspectRatioValue(), 0.0001f);
-                    }
-
-                    if (canvasAspect > targetAspect)
-                    {
-                        baseImageSize.x = safeCanvasH * targetAspect;
-                        baseImagePos.x += (safeCanvasW - baseImageSize.x) * 0.5f;
-                    }
-                    else
-                    {
-                        baseImageSize.y = safeCanvasW / targetAspect;
-                        baseImagePos.y += (safeCanvasH - baseImageSize.y) * 0.5f;
-                    }
-
-                    m_Data.gamePreviewZoom = glm::clamp(m_Data.gamePreviewZoom, 0.25f, 4.0f);
-
-                    ImVec2 imageSize =
-                    {
-                        baseImageSize.x * m_Data.gamePreviewZoom,
-                        baseImageSize.y * m_Data.gamePreviewZoom
-                    };
-
-                    const float maxPanX = glm::max((imageSize.x - baseImageSize.x) * 0.5f, 0.0f);
-                    const float maxPanY = glm::max((imageSize.y - baseImageSize.y) * 0.5f, 0.0f);
-                    m_Data.gamePreviewPan.x = glm::clamp(m_Data.gamePreviewPan.x, -maxPanX, maxPanX);
-                    m_Data.gamePreviewPan.y = glm::clamp(m_Data.gamePreviewPan.y, -maxPanY, maxPanY);
-
-                    ImVec2 imagePos =
-                    {
-                        baseImagePos.x + (baseImageSize.x - imageSize.x) * 0.5f + m_Data.gamePreviewPan.x,
-                        baseImagePos.y + (baseImageSize.y - imageSize.y) * 0.5f + m_Data.gamePreviewPan.y
-                    };
-
-                    const bool imageHovered = ImGui::GetMousePos().x >= imagePos.x && ImGui::GetMousePos().x <= imagePos.x + imageSize.x &&
-                        ImGui::GetMousePos().y >= imagePos.y && ImGui::GetMousePos().y <= imagePos.y + imageSize.y;
-
-                    if (ImGui::IsWindowFocused() && ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
-                    {
-                        const ImVec2 delta = ImGui::GetIO().MouseDelta;
-                        m_Data.gamePreviewPan += glm::vec2(delta.x, delta.y);
-                    }
-
-                    m_ViewportGameRT.rect.min = { baseImagePos.x, baseImagePos.y };
-                    m_ViewportGameRT.rect.max = { baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y };
-
-                    ImTextureID previewImage = (ImTextureID)m_ViewportGameRT.composite->GetColorAttachment(0)->GetHandle().Get();
-                    ImDrawList *drawList = ImGui::GetWindowDrawList();
-                    drawList->PushClipRect(baseImagePos, ImVec2(baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y), true);
-                    drawList->AddImage(previewImage, imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
-                    drawList->PopClipRect();
-
-                    ImGui::SetCursorScreenPos(baseImagePos);
-                    ImGui::InvisibleButton("##GamePreviewCanvas", baseImageSize);
                 }
                 else
                 {
-                    m_ViewportGameRT.rect.min = { canvasPos.x, canvasPos.y };
-                    m_ViewportGameRT.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
-                    ImGui::Text("No Camera");
+                    ImGui::Text("No Scene");
                 }
             }
-            else
-            {
-                ImGui::Text("No Scene");
-            }
+            ImGui::End();
         }
-        ImGui::End();
+        
     }
 
     bool ScenePanel::Is2DResizableEntity(Entity entity) const
@@ -2600,7 +2681,7 @@ namespace ignite
         {
             if (Entity cameraEntity = m_Scene->GetPrimaryCamera())
             {
-                CameraComponent &cameraComp = cameraEntity.GetComponent<CameraComponent>();
+                auto &cameraComp = cameraEntity.GetComponent<CameraComponent>();
                 cameraComp.camera.UpdateProjection(static_cast<float>(width), static_cast<float>(height));
             }
         }
@@ -2678,8 +2759,6 @@ namespace ignite
 
     bool ScenePanel::OnMouseMovedEvent(MouseMovedEvent &event)
     {
-        // glm::vec2 mouse = { event.GetX(), event.GetY() };
-		// LOG_INFO("Mouse Moved: {0}, {1}", mouse.x, mouse.y);
         return false;
     }
 
@@ -2762,13 +2841,12 @@ namespace ignite
             }
         }
         m_EditorCamera.ApplyInertia(deltaTime);
-        m_EditorCamera.UpdateCameraPosition();
+        m_EditorCamera.UpdateCameraPosition(deltaTime);
         m_EditorCamera.UpdateView();
     }
 
     void ScenePanel::DestroyEntity(Entity entity)
     {
-        // Snapshot the entire subtree BEFORE destroying, so undo can recreate it
         CommandManager::ExecuteCommand(CreateScope<EntityDestroyCommand>(m_Scene.get(), entity));
     }
 
@@ -2791,7 +2869,7 @@ namespace ignite
         }
 
         // multi select
-        if (m_EditorLayer->GetData().multiSelect)
+        if (m_EditorLayer->GetState().multiSelect)
         {
             if (auto it = m_SelectedEntities.find(entity.GetUUID()); it != m_SelectedEntities.end())
             {

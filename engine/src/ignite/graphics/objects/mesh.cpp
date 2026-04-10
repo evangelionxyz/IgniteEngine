@@ -26,7 +26,7 @@
 #include "environment.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/graphics/renderer.hpp"
-#include "ignite/graphics/scene_renderer.hpp"
+#include "ignite/graphics/renderer/scene_renderer.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
@@ -253,7 +253,7 @@ namespace ignite
 
 					TextureCreateInfo createInfo;
 					createInfo.flip = true;
-					createInfo.format = nvrhi::Format::RGBA8_UNORM;
+                    createInfo.format = ToLowerCopy(texturePath.extension().string()) == ".exr" ? nvrhi::Format::RGBA32_FLOAT : nvrhi::Format::RGBA8_UNORM;
 					createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
 					createInfo.keepInitialState = true;
 					createInfo.keepCpuData = true;

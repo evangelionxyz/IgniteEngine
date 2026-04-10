@@ -1,0 +1,148 @@
+// Copyright (c) 2026 Evangelion Manuhutu
+
+#include "iscene_renderer.hpp"
+#include "renderer_2d.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/graphics/ui_renderer.hpp"
+#include "ignite/graphics/renderer.hpp"
+#include "ignite/graphics/vertex_data.hpp"
+#include "ignite/graphics/objects/shadow_map.hpp"
+#include "ignite/graphics/ui/ui_manager.hpp"
+#include "ignite/core/application.hpp"
+#include "ignite/scene/scene.hpp"
+
+#include <array>
+
+namespace ignite
+{
+    struct CompositePostProcess_GPUData
+    {
+        glm::vec4 flags = glm::vec4(0.0f);
+        glm::vec4 vignetteParams = glm::vec4(0.0f);
+        glm::vec4 chromAbParams = glm::vec4(0.0f);
+        glm::vec4 vignetteColor = glm::vec4(0.0f);
+    };
+
+    struct DebugGrid_GPUData
+    {
+        glm::vec4 thinColor = glm::vec4(0.0f);
+        glm::vec4 thickColor = glm::vec4(0.0f);
+        glm::vec4 xAxisColor = glm::vec4(0.0f);
+        glm::vec4 yAxisColor = glm::vec4(0.0f);
+        glm::vec4 zAxisColor = glm::vec4(0.0f);
+        glm::vec4 settings0 = glm::vec4(0.0f);
+        glm::vec4 settings1 = glm::vec4(0.0f);
+    };
+
+    ISceneRenderer::ISceneRenderer()
+    {
+        m_Device = DeviceManager::GetInstance()->GetDevice();
+        auto samplerDesc = nvrhi::SamplerDesc();
+        samplerDesc.setAllFilters(false);
+        samplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp);
+        m_CompositeSampler = m_Device->createSampler(samplerDesc);
+
+        nvrhi::CommandListHandle cmd = m_Device->createCommandList();
+
+        std::array vertices
+        {
+            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+            VertexScreen{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },
+            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
+
+            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
+            VertexScreen{ {  1.0f, -1.0f }, { 1.0f, 1.0f } },
+            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+        };
+
+        m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
+
+        cmd->open();
+        m_CompositeVertexBuffer->SetData(cmd, Buffer(vertices.data(), sizeof(vertices)));
+        cmd->close();
+        Application::SubmitWorkerCommandList(cmd);
+
+        m_Renderer2D = Renderer2D::Create();
+        m_UIRenderer = UIRenderer::Create(1280, 720);
+        m_UIRenderer->SetUIManager(&UIManager::GetInstance());
+        m_EdgeDetection = EdgeDetection::Create();
+        m_EdgeDetection->CreatePipeline();
+        m_DebugGridBuffer = ConstantBuffer::Create(sizeof(DebugGrid_GPUData), true, 16, "Debug Grid Buffer");
+        m_CompositePostProcessBuffer = ConstantBuffer::Create(sizeof(CompositePostProcess_GPUData), true, 16, "Composite PostProcess Buffer");
+        m_Bloom = CreateRef<Bloom>(1280, 720);
+        m_SSAO = CreateRef<SSAO>(1280, 720);
+
+        m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
+    }
+
+    ISceneRenderer::~ISceneRenderer()
+    {
+        GPUUploadSync::DeviceWaitIdle(m_Device);
+
+        if (m_Scene)
+        {
+            m_Scene->SetSceneRenderer(nullptr);
+            m_Scene = nullptr;
+        }
+
+        if (m_Renderer2D)
+        {
+            m_Renderer2D->ClearAssetResolveCache();
+            m_Renderer2D->InvalidatePreRenderCache();
+        }
+
+        m_Has2DPreRenderCache = false;
+        m_SelectedEntities.clear();
+    }
+
+    void ISceneRenderer::Resize(uint32_t width, uint32_t height)
+    {
+        if (width == 0 || height == 0)
+        {
+            return;
+        }
+
+        if (m_UIRenderer)
+        {
+            m_UIRenderer->Resize(width, height);
+        }
+
+        if (m_Bloom)
+        {
+            m_Bloom->Resize(width, height);
+        }
+
+        if (m_SSAO)
+        {
+            m_SSAO->Resize(width, height);
+        }
+
+        if (m_Renderer2D)
+        {
+            m_Renderer2D->InvalidatePreRenderCache();
+        }
+
+        m_Has2DPreRenderCache = false;
+    }
+
+    Ref<Texture> ISceneRenderer::GetEnvironmentMapColorTexture() const
+    {
+        return nullptr;
+    }
+
+    Ref<Texture> ISceneRenderer::GetCascadedShadowMapDepthTexture() const
+    {
+        if (m_CascadedShadowMap)
+        {
+            return m_CascadedShadowMap->GetDepthTexture();
+        }
+
+        return nullptr;
+    }
+
+    Ref<CascadedShadowMap> ISceneRenderer::GetCascadedShadowMap()
+    {
+        return m_CascadedShadowMap;
+    }
+}
+

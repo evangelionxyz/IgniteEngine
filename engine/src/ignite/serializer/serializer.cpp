@@ -131,7 +131,7 @@ namespace ignite
                 // Transform Component
                 if (entity.HasComponent<TransformComponent>())
                 {
-                    const TransformComponent &comp = entity.GetComponent<TransformComponent>();
+                    const auto &comp = entity.GetComponent<TransformComponent>();
                     sr.BeginMap("Transform");
                     {
                         sr.AddKeyValue("WorldTranslation", comp.translation);
@@ -147,10 +147,32 @@ namespace ignite
                     sr.EndMap();
                 }
 
+                // Directional Light
+                if (entity.HasComponent<DirectionalLight>())
+                {
+                    const DirectionalLight &comp = entity.GetComponent<DirectionalLight>();
+                    sr.BeginMap("DirectionalLight");
+                    {
+                        sr.AddKeyValue("Color", comp.color);
+                        sr.AddKeyValue("Intensity", comp.intensity);
+                        sr.AddKeyValue("AngularRadius", comp.angularRadius);
+                        sr.AddKeyValue("Exposure", comp.exposure);
+                        sr.AddKeyValue("Gamma", comp.gamma);
+                        sr.AddKeyValue("Ambient", comp.ambient);
+                        sr.AddKeyValue("ShadowStrength", comp.shadowStrength);
+                        sr.AddKeyValue("ShadowMinBias", comp.shadowMinBias);
+                        sr.AddKeyValue("ShadowMaxBias", comp.shadowMaxBias);
+                        sr.AddKeyValue("PCFRadius", comp.pcfRadius);
+                        sr.AddKeyValue("ShadowResolution", comp.shadowResolution);
+                        sr.AddKeyValue("CascadeShadow", comp.cascadeShadow);
+                    }
+                    sr.EndMap();
+                }
+
                 // Camera
                 if (entity.HasComponent<CameraComponent>())
                 {
-                    const CameraComponent &comp = entity.GetComponent<CameraComponent>();
+                    const auto &comp = entity.GetComponent<CameraComponent>();
                     sr.BeginMap("Camera");
                     {
                         int projectionType = static_cast<int>(comp.camera.projectionType);
@@ -162,6 +184,36 @@ namespace ignite
                         sr.AddKeyValue("FarClip", comp.camera.farPlane);
                         sr.AddKeyValue("Fov", comp.camera.fov);
                         sr.AddKeyValue("Primary", comp.primary);
+
+                        sr.BeginMap("PostProcessing");
+                        {
+                            const PostProcessing &pp = comp.camera.postProcessing;
+                            sr.AddKeyValue("EnableVignette", pp.enableVignette);
+                            sr.AddKeyValue("EnableChromAb", pp.enableChromAb);
+                            sr.AddKeyValue("EnableBloom", pp.enableBloom);
+                            sr.AddKeyValue("EnableSSAO", pp.enableSSAO);
+                            sr.AddKeyValue("DebugSSAO", pp.debugSSAO);
+
+                            sr.AddKeyValue("BloomIntensity", pp.bloomIntensity);
+                            sr.AddKeyValue("BloomThreshold", pp.bloomThreshold);
+                            sr.AddKeyValue("BloomKnee", pp.bloomKnee);
+                            sr.AddKeyValue("BloomRadius", pp.bloomRadius);
+                            sr.AddKeyValue("BloomIterations", pp.bloomIterations);
+
+                            sr.AddKeyValue("VignetteRadius", pp.vignetteRadius);
+                            sr.AddKeyValue("VignetteSoftness", pp.vignetteSoftness);
+                            sr.AddKeyValue("VignetteIntensity", pp.vignetteIntensity);
+                            sr.AddKeyValue("VignetteColor", pp.vignetteColor);
+
+                            sr.AddKeyValue("ChromAbAmount", pp.chromAbAmount);
+                            sr.AddKeyValue("ChromAbRadial", pp.chromAbRadial);
+
+                            sr.AddKeyValue("AoRadius", pp.aoRadius);
+                            sr.AddKeyValue("AoBias", pp.aoBias);
+                            sr.AddKeyValue("AoIntensity", pp.aoIntensity);
+                            sr.AddKeyValue("AoPower", pp.aoPower);
+                        }
+                        sr.EndMap();
                     }
                     sr.EndMap();
                 }
@@ -169,7 +221,7 @@ namespace ignite
                 // Sprite 2D component
                 if (entity.HasComponent<Sprite2DComponent>())
                 {
-                    const Sprite2DComponent &comp = entity.GetComponent<Sprite2DComponent>();
+                    const auto &comp = entity.GetComponent<Sprite2DComponent>();
                     sr.BeginMap("Sprite2D");
                     {
                         sr.AddKeyValue("MaterialHandle", comp.materialHandle);
@@ -186,7 +238,7 @@ namespace ignite
 
                 if (entity.HasComponent<Animator2DComponent>())
                 {
-                    const Animator2DComponent &comp = entity.GetComponent<Animator2DComponent>();
+                    const auto &comp = entity.GetComponent<Animator2DComponent>();
                     sr.BeginMap("Animator2D");
                     {
                         sr.AddKeyValue("ControllerHandle", static_cast<uint64_t>(comp.controllerHandle));
@@ -198,7 +250,7 @@ namespace ignite
 				// Circle 2D component
 				if (entity.HasComponent<Circle2DComponent>())
 				{
-					const Circle2DComponent &comp = entity.GetComponent<Circle2DComponent>();
+					const auto &comp = entity.GetComponent<Circle2DComponent>();
 					sr.BeginMap("Circle2D");
 					{
 						sr.AddKeyValue("Color", comp.color);
@@ -210,7 +262,7 @@ namespace ignite
 
                 if (entity.HasComponent<PointLight2DComponent>())
                 {
-                    const PointLight2DComponent &comp = entity.GetComponent<PointLight2DComponent>();
+                    const auto &comp = entity.GetComponent<PointLight2DComponent>();
                     sr.BeginMap("PointLight2D");
                     {
                         sr.AddKeyValue("Color", comp.color);
@@ -224,7 +276,7 @@ namespace ignite
                 // Rigidbody 2D
                 if (entity.HasComponent<Rigidbody2DComponent>())
                 {
-                    const Rigidbody2DComponent &comp = entity.GetComponent<Rigidbody2DComponent>();
+                    const auto &comp = entity.GetComponent<Rigidbody2DComponent>();
                     sr.BeginMap("Rigidbody2D");
                     {
                         sr.AddKeyValue("Type", BodyTypeToString(comp.type));
@@ -245,7 +297,7 @@ namespace ignite
                 // Box collider 2D
                 if (entity.HasComponent<BoxCollider2DComponent>())
                 {
-                    const BoxCollider2DComponent &comp = entity.GetComponent<BoxCollider2DComponent>();
+                    const auto &comp = entity.GetComponent<BoxCollider2DComponent>();
                     sr.BeginMap("BoxCollider2D");
                     {
                         sr.AddKeyValue("Size", comp.size);
@@ -261,7 +313,7 @@ namespace ignite
 				// Circle collider 2D
 				if (entity.HasComponent<CircleCollider2DComponent>())
 				{
-					const CircleCollider2DComponent &comp = entity.GetComponent<CircleCollider2DComponent>();
+					const auto &comp = entity.GetComponent<CircleCollider2DComponent>();
 					sr.BeginMap("CircleCollider2D");
 					{
 						sr.AddKeyValue("Radius", comp.radius);
@@ -277,7 +329,7 @@ namespace ignite
 				// Static Mesh
 				if (entity.HasComponent<StaticMeshComponent>())
 				{
-					const StaticMeshComponent &comp = entity.GetComponent<StaticMeshComponent>();
+					const auto &comp = entity.GetComponent<StaticMeshComponent>();
 					sr.BeginMap("StaticMesh");
 					{
 						sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
@@ -289,7 +341,7 @@ namespace ignite
                 // skinned mesh
                 if (entity.HasComponent<SkeletalMeshComponent>())
                 {
-                    const SkeletalMeshComponent &comp = entity.GetComponent<SkeletalMeshComponent>();
+                    const auto &comp = entity.GetComponent<SkeletalMeshComponent>();
                     sr.BeginMap("SkeletalMesh");
                     {
                         sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
@@ -300,7 +352,7 @@ namespace ignite
                 // Rigidbody
                 if (entity.HasComponent<RigibodyComponent>())
                 {
-                    const RigibodyComponent &comp = entity.GetComponent<RigibodyComponent>();
+                    const auto &comp = entity.GetComponent<RigibodyComponent>();
                     sr.BeginMap("Rigidbody");
                     {
                         sr.AddKeyValue("MotionQuality", static_cast<int>(comp.MotionQuality));
@@ -323,7 +375,7 @@ namespace ignite
 
                 if (entity.HasComponent<BoxColliderComponent>())
                 {
-                    const BoxColliderComponent &comp = entity.GetComponent<BoxColliderComponent>();
+                    const auto &comp = entity.GetComponent<BoxColliderComponent>();
                     sr.BeginMap("BoxCollider");
                     {
                         sr.AddKeyValue("Scale", comp.scale);
@@ -338,7 +390,7 @@ namespace ignite
                 // SphereCollider
                 if (entity.HasComponent<SphereColliderComponent>())
                 {
-                    const SphereColliderComponent &comp = entity.GetComponent<SphereColliderComponent>();
+                    const auto &comp = entity.GetComponent<SphereColliderComponent>();
                     sr.BeginMap("SphereCollider");
                     {
                         sr.AddKeyValue("Radius", comp.radius);
@@ -353,7 +405,7 @@ namespace ignite
                 // CapsuleCollider
                 if (entity.HasComponent<CapsuleColliderComponent>())
                 {
-                    const CapsuleColliderComponent &comp = entity.GetComponent<CapsuleColliderComponent>();
+                    const auto &comp = entity.GetComponent<CapsuleColliderComponent>();
                     sr.BeginMap("CapsuleCollider");
                     {
                         sr.AddKeyValue("Radius", comp.radius);
@@ -369,7 +421,7 @@ namespace ignite
                 // MeshCollider
                 if (entity.HasComponent<MeshColliderComponent>())
                 {
-                    const MeshColliderComponent &comp = entity.GetComponent<MeshColliderComponent>();
+                    const auto &comp = entity.GetComponent<MeshColliderComponent>();
                     sr.BeginMap("MeshCollider");
                     {
                         sr.AddKeyValue("Convex", comp.convex);
@@ -400,7 +452,7 @@ namespace ignite
                 // Audio Source
                 if (entity.HasComponent<AudioSourceComponent>())
                 {
-                    const AudioSourceComponent &comp = entity.GetComponent<AudioSourceComponent>();
+                    const auto &comp = entity.GetComponent<AudioSourceComponent>();
                     sr.BeginMap("AudioSource");
                     {
                         sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
@@ -432,11 +484,11 @@ namespace ignite
                     }
                     sr.EndMap();
                 }
-
+                
 				// Text Component
 				if (entity.HasComponent<TextComponent>())
 				{
-					const TextComponent &comp = entity.GetComponent<TextComponent>();
+					const auto &comp = entity.GetComponent<TextComponent>();
 					sr.BeginMap("TextComponent");
 					{
 						sr.AddKeyValue("FontHandle", comp.fontHandle);
@@ -453,7 +505,7 @@ namespace ignite
                 // Script
                 if (entity.HasComponent<ScriptComponent>())
                 {
-                    ScriptComponent &comp = entity.GetComponent<ScriptComponent>();
+                    auto &comp = entity.GetComponent<ScriptComponent>();
                     sr.BeginMap("Script");
                     {
                         sr.AddKeyValue("ClassName", comp.className);
@@ -496,7 +548,6 @@ namespace ignite
                                 sr.EndSequence();
                             }
                         }
-
                     }
                     sr.EndMap();
                 }
@@ -615,35 +666,48 @@ namespace ignite
                 auto &comp = desEntity.AddComponent<CameraComponent>();
                 comp.camera.projectionType = static_cast<ProjectionType>(node["ProjectionType"].as<int>());
                 if (node["AspectRatioPreset"])
-                {
                     comp.camera.SetAspectRatioPreset(static_cast<SceneCamera::AspectRatioPreset>(node["AspectRatioPreset"].as<int>()));
-                }
-                if (auto n = node["OrthoSize"])
+                
+                if (auto n = node["OrthoSize"]) comp.camera.orthoSize = n.as<float>();
+                if (auto n = node["NearClip"]) comp.camera.nearPlane = n.as<float>();
+                if (auto n = node["FarClip"]) comp.camera.farPlane = n.as<float>();
+                if (auto n = node["Fov"]) comp.camera.fov = n.as<float>();
+                if (auto n = node["Primary"]) comp.primary = n.as<bool>();
+
+                if (YAML::Node ppNode = node["PostProcessing"])
                 {
-                    comp.camera.orthoSize = n.as<float>();
-                }
-                if (auto n = node["NearClip"])
-                {
-                    comp.camera.nearPlane = n.as<float>();
-                }
-                if (auto n = node["FarClip"])
-                {
-                    comp.camera.farPlane = n.as<float>();
-                }
-                if (auto n = node["Fov"])
-                {
-                    comp.camera.fov = n.as<float>();
-                }
-                if (auto n = node["Primary"])
-                {
-                    comp.primary = n.as<bool>();
+                    auto &pp = comp.camera.postProcessing;
+                    if (auto n = ppNode["EnableVignette"]) pp.enableVignette = n.as<bool>();
+                    if (auto n = ppNode["EnableChromAb"]) pp.enableChromAb = n.as<bool>();
+                    if (auto n = ppNode["EnableBloom"]) pp.enableBloom = n.as<bool>();
+                    if (auto n = ppNode["EnableSSAO"]) pp.enableSSAO = n.as<bool>();
+                    if (auto n = ppNode["DebugSSAO"]) pp.debugSSAO = n.as<bool>();
+
+                    if (auto n = ppNode["BloomIntensity"]) pp.bloomIntensity = n.as<float>();
+                    if (auto n = ppNode["BloomThreshold"]) pp.bloomThreshold = n.as<float>();
+                    if (auto n = ppNode["BloomKnee"]) pp.bloomKnee = n.as<float>();
+                    if (auto n = ppNode["BloomRadius"]) pp.bloomRadius = n.as<float>();
+                    if (auto n = ppNode["BloomIterations"]) pp.bloomIterations = n.as<int>();
+
+                    if (auto n = ppNode["VignetteRadius"]) pp.vignetteRadius = n.as<float>();
+                    if (auto n = ppNode["VignetteSoftness"]) pp.vignetteSoftness = n.as<float>();
+                    if (auto n = ppNode["VignetteIntensity"]) pp.vignetteIntensity = n.as<float>();
+                    if (auto n = ppNode["VignetteColor"]) pp.vignetteColor = n.as<glm::vec3>();
+
+                    if (auto n = ppNode["ChromAbAmount"]) pp.chromAbAmount = n.as<float>();
+                    if (auto n = ppNode["ChromAbRadial"]) pp.chromAbRadial = n.as<float>();
+
+                    if (auto n = ppNode["AoRadius"]) pp.aoRadius = n.as<float>();
+                    if (auto n = ppNode["AoBias"]) pp.aoBias = n.as<float>();
+                    if (auto n = ppNode["AoIntensity"]) pp.aoIntensity = n.as<float>();
+                    if (auto n = ppNode["AoPower"]) pp.aoPower = n.as<float>();
                 }
             }
 
             // Sprite 2D component
             if (YAML::Node node = entityNode["Sprite2D"])
             {
-                Sprite2DComponent &comp = desEntity.AddComponent<Sprite2DComponent>();
+                auto &comp = desEntity.AddComponent<Sprite2DComponent>();
                 if (auto n = node["MaterialHandle"])comp.materialHandle = AssetHandle(n.as<uint64_t>());
                 if (auto n = node["Handle"]) comp.handle = AssetHandle(n.as<uint64_t>());
                 if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
@@ -754,7 +818,7 @@ namespace ignite
             // SphereCollider
             if (YAML::Node node = entityNode["SphereCollider"])
             {
-                SphereColliderComponent &comp = desEntity.AddComponent<SphereColliderComponent>();
+                auto &comp = desEntity.AddComponent<SphereColliderComponent>();
                 comp.radius = node["Radius"].as<float>();
                 comp.friction = node["Friction"].as<float>();
                 comp.staticFriction = node["StaticFriction"].as<float>();
@@ -803,6 +867,24 @@ namespace ignite
                         comp.indices.push_back(indexNode.as<uint32_t>());
                     }
                 }
+            }
+
+            // Directional Light component
+            if (YAML::Node node = entityNode["DirectionalLight"])
+            {
+                auto &comp = desEntity.AddComponent<DirectionalLight>();
+                if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
+                if (auto n = node["Intensity"]) comp.intensity = n.as<float>();
+                if (auto n = node["AngularRadius"]) comp.angularRadius = n.as<float>();
+                if (auto n = node["Exposure"]) comp.exposure = n.as<float>();
+                if (auto n = node["Gamma"]) comp.gamma = n.as<float>();
+                if (auto n = node["Ambient"]) comp.ambient = n.as<float>();
+                if (auto n = node["ShadowStrength"]) comp.shadowStrength = n.as<float>();
+                if (auto n = node["ShadowMinBias"]) comp.shadowMinBias = n.as<float>();
+                if (auto n = node["ShadowMaxBias"]) comp.shadowMaxBias = n.as<float>();
+                if (auto n = node["PCFRadius"]) comp.pcfRadius = n.as<float>();
+                if (auto n = node["ShadowResolution"]) comp.shadowResolution = n.as<int>();
+                if (auto n = node["CascadeShadow"]) comp.cascadeShadow = n.as<bool>();
             }
 
             // Audio Source

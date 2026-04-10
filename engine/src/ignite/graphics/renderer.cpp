@@ -22,7 +22,7 @@
 */
 
 #include "renderer.hpp"
-#include "renderer_2d.hpp"
+#include "renderer/renderer_2d.hpp"
 #include "texture.hpp"
 #include "shader.hpp"
 

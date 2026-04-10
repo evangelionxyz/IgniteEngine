@@ -47,6 +47,9 @@ struct Material
     float metallicFactor;
     float roughnessFactor;
     float occlusionStrength;
+    int metallicChannel;
+    int roughnessChannel;
+    float padding[3];
 };
 
 struct CascadesShadows
@@ -77,11 +80,12 @@ cbuffer MaterialBuffer    : register(b0, space1) { Material material; }
 
 Texture2D baseColorTexture         : register(t0, space1);
 Texture2D emissiveTexture          : register(t1, space1);
-Texture2D metallicRoughnessTexture : register(t2, space1);
-Texture2D normalMapTexture         : register(t3, space1);
-Texture2D occlusionTexture         : register(t4, space1);
-Texture2D environmentMapTexture    : register(t5, space1);
-Texture2DArray shadowMap           : register(t6, space1);
+Texture2D metallicTexture          : register(t2, space1);
+Texture2D roughnessTexture         : register(t3, space1);
+Texture2D normalMapTexture         : register(t4, space1);
+Texture2D occlusionTexture         : register(t5, space1);
+Texture2D environmentMapTexture    : register(t6, space1);
+Texture2DArray shadowMap           : register(t7, space1);
 SamplerState sampler0              : register(s0, space1);
 SamplerState sampler1              : register(s1, space1);
 
@@ -105,6 +109,14 @@ float3 GenNormalFromMap(float3x3 TBN, float2 uv)
 {
     float3 normalMap = normalMapTexture.Sample(sampler0, uv).rgb * 2.0f - 1.0f;
     return normalize(mul(TBN, normalMap));
+}
+
+float SelectChannel(float4 value, int channel)
+{
+    if (channel == 1) return value.g;
+    if (channel == 2) return value.b;
+    if (channel == 3) return value.a;
+    return value.r;
 }
 
 int GetCascadeIndex(float viewDepth)
@@ -186,11 +198,12 @@ PSOutput main(PSInput input)
     float3 lightDirection = normalize(sunDirection);
 
     float3 emissiveColor = emissiveTexture.Sample(sampler0, input.uv).rgb * material.emissiveFactor.rgb;
-    float3 metallicRoughnessColor = metallicRoughnessTexture.Sample(sampler0, input.uv).rgb;
+    float4 metallicColor = metallicTexture.Sample(sampler0, input.uv);
+    float4 roughnessColor = roughnessTexture.Sample(sampler0, input.uv);
     float3 normalMap = normalMapTexture.Sample(sampler0, input.uv).rgb;
 
-    float metallic = clamp(metallicRoughnessColor.b * material.metallicFactor, 0.0f, 1.0f);
-    float roughness = clamp(metallicRoughnessColor.g * material.roughnessFactor, 0.0f, 1.0f);
+    float metallic = clamp(SelectChannel(metallicColor, material.metallicChannel) * material.metallicFactor, 0.0f, 1.0f);
+    float roughness = clamp(SelectChannel(roughnessColor, material.roughnessChannel) * material.roughnessFactor, 0.0f, 1.0f);
 
     if (scene.renderMode == RENDER_MODE_COLOR)
     {
@@ -275,13 +288,11 @@ PSOutput main(PSInput input)
     }
     else if (scene.renderMode == RENDER_MODE_METALLIC)
     {
-        float metallicValue = metallicRoughnessTexture.Sample(sampler0, input.uv).b;
-        result.color = float4(metallicValue, metallicValue, metallicValue, 1.0f);
+        result.color = float4(metallic, metallic, metallic, 1.0f);
     }
     else if (scene.renderMode == RENDER_MODE_ROUGHNESS)
     {
-        float roughnessValue = metallicRoughnessTexture.Sample(sampler0, input.uv).g;
-        result.color = float4(roughnessValue, roughnessValue, roughnessValue, 1.0f);
+        result.color = float4(roughness, roughness, roughness, 1.0f);
     }
 
     return result;

@@ -24,7 +24,7 @@
 #include "ui_renderer.hpp"
 
 #include "render_target.hpp"
-#include "renderer_2d.hpp"
+#include "ignite/graphics/renderer/renderer_2d.hpp"
 
 namespace ignite
 {

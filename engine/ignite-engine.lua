@@ -38,7 +38,10 @@ project "IgniteEngine"
         "%{IncludeDir.JSON}",
         "%{IncludeDir.MochiSharpNative}",
         "%{IncludeDir.Hostfxr}",
+        "%{IncludeDir.ASSIMP}",
         "%{IncludeDir.MSDFATLASGEN}",
+        "%{IncludeDir.OPENEXR}",
+        "%{IncludeDir.IMATH}",
         "%{IncludeDir.MSDFGEN}",
         "%{IncludeDir.FREETYPE}",
         "%{IncludeDir.TRACY}",
@@ -116,7 +119,14 @@ project "IgniteEngine"
             "%{Library.bcrypt}",
             "%{Library.vulkan}",
             "%{Library.mono}",
+            "%{Library.ASSIMP}",
             "%{Library.FMOD}",
+            "%{Library.Iex}",
+            "%{Library.OpenEXR}",
+            "%{Library.OpenEXRCore}",
+            "%{Library.OpenEXRUtil}",
+            "%{Library.IlmThread}",
+            "%{Library.Imath}",
             "%{Library.SDL3}"
         }
         defines {
@@ -132,9 +142,19 @@ project "IgniteEngine"
 
         postbuildcommands {
             '{COPYDIR} "%{wks.location}/resources" "%{cfg.targetdir}/resources"',
+            '{COPYFILE} "%{LibraryDir.VULKAN_SDK_BIN}/dxcompiler.dll" "%{cfg.targetdir}"',
+
+            '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/deflate.dll" "%{cfg.targetdir}"',
+            '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.dll" "%{cfg.targetdir}"',
+            '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll" "%{cfg.targetdir}"',
+            '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll" "%{cfg.targetdir}"',
+            '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll" "%{cfg.targetdir}"',
+            '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll" "%{cfg.targetdir}"',
+            '{COPYFILE} "%{THIRDPARTY_DIR}/OpenJPH/lib/win32/openjph.0.26.dll" "%{cfg.targetdir}"',
+
+            '{COPYFILE} "%{THIRDPARTY_DIR}/ASSIMP/lib/win32/assimp-vc143-mt.dll" "%{cfg.targetdir}"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll" "%{cfg.targetdir}"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/SDL3/lib/windows/x64/SDL3.dll" "%{cfg.targetdir}"',
-            '{COPYFILE} "%{LibraryDir.VULKAN_SDK_BIN}/dxcompiler.dll" "%{cfg.targetdir}"',
             
             -- Copying dotnet libraries
             '{COPYFILE} "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.dll\" "%{cfg.targetdir}\"',
@@ -157,12 +177,23 @@ project "IgniteEngine"
                 "%{Library.SPIRV_Cross_Reflect_Debug}",
                 "%{Library.SPIRV_Cross_Util_Debug}",
                 "%{Library.SPIRV_Tools_Debug}",
+                "%{Library.OpenEXR}",
+                "%{Library.OpenEXRCore}",
+                "%{Library.OpenEXRUtil}",
+                "%{Library.Iex}",
+                "%{Library.IlmThread}",
+                "%{Library.Imath}",
                 "%{Library.FBX_SDK_DEBUG}",
                 "%{Library.FBX_XML_DEBUG}",
                 "%{Library.FBX_ALEMBIC_DEBUG}"
             }
             postbuildcommands {
-                '{COPYFILE} "%{LibraryDir.FBX_SDK}/x64/debug/libfbxsdk.dll" "%{cfg.targetdir}"'
+                '{COPYFILE} "%{LibraryDir.FBX_SDK}/x64/debug/libfbxsdk.dll" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.dll" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll" "%{cfg.targetdir}"'
             }
         filter "configurations:Release"
             runtime "release"
@@ -180,12 +211,23 @@ project "IgniteEngine"
                 "%{Library.SPIRV_Cross_Reflect}",
                 "%{Library.SPIRV_Cross_Util}",
                 "%{Library.SPIRV_Tools}",
+                "%{Library.OpenEXR}",
+                "%{Library.OpenEXRCore}",
+                "%{Library.OpenEXRUtil}",
+                "%{Library.Iex}",
+                "%{Library.IlmThread}",
+                "%{Library.Imath}",
                 "%{Library.FBX_SDK}",
                 "%{Library.FBX_XML}",
                 "%{Library.FBX_ALEMBIC}"
             }
             postbuildcommands {
-                '{COPYFILE} "%{LibraryDir.FBX_SDK}/x64/release/libfbxsdk.dll" "%{cfg.targetdir}"'
+                '{COPYFILE} "%{LibraryDir.FBX_SDK}/x64/release/libfbxsdk.dll" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.dll" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll" "%{cfg.targetdir}"'
             }
 
         filter "configurations:Shipping"
@@ -204,10 +246,21 @@ project "IgniteEngine"
                 "%{Library.SPIRV_Cross_Reflect}",
                 "%{Library.SPIRV_Cross_Util}",
                 "%{Library.SPIRV_Tools}",
+                "%{Library.OpenEXR}",
+                "%{Library.OpenEXRCore}",
+                "%{Library.OpenEXRUtil}",
+                "%{Library.Iex}",
+                "%{Library.IlmThread}",
+                "%{Library.Imath}",
                 "%{Library.FBX_SDK}",
                 "%{Library.FBX_XML}",
                 "%{Library.FBX_ALEMBIC}"
             }
             postbuildcommands {
-                '{COPYFILE} "%{LibraryDir.FBX_SDK}/x64/release/libfbxsdk.dll" "%{cfg.targetdir}"'
+                '{COPYFILE} "%{LibraryDir.FBX_SDK}/x64/release/libfbxsdk.dll" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.dll" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.dll" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll" "%{cfg.targetdir}"'
             }

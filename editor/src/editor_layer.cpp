@@ -4,9 +4,9 @@
 #include "panels/scene_panel.hpp"
 #include "panels/content_browser_panel.hpp"
 #include "panels/asset_importer_panel.hpp"
-
+#include "ext/editor_ui.hpp"
 #include "ignite/core/command.hpp"
-#include "ignite/graphics/renderer_2d.hpp"
+#include "ignite/graphics/renderer/renderer_2d.hpp"
 #include "ignite/asset/asset.hpp"
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/scripting/script_engine.hpp"
@@ -111,9 +111,9 @@ namespace ignite
         if (m_ActiveScene)
         {
             // multi select entity
-            m_Data.multiSelect = Input::IsModifierPressed(KeyMod::LeftShift);
+            m_State.multiSelect = Input::IsModifierPressed(KeyMod::LeftShift);
 
-            switch (m_Data.sceneState)
+            switch (m_State.sceneState)
             {
             case State::SceneSimulate:
             case State::ScenePlay:
@@ -156,8 +156,16 @@ namespace ignite
                 Entity entity = m_ScenePanel->GetSelectedEntity();
                 if (entity.IsValid())
                 {
-                    m_ScenePanel->GetViewportCamera().SetDistance(20.0f);
-                    m_ScenePanel->GetViewportCamera().SetTarget(entity.GetComponent<TransformComponent>().translation);
+                    auto &cam = m_ScenePanel->GetViewportCamera();
+                    auto &tr = entity.GetComponent<TransformComponent>();
+
+                    const glm::vec3 halfExtents = glm::abs(tr.scale) * 0.5f;
+                    const float radius = glm::max(halfExtents.x, glm::max(halfExtents.y, halfExtents.z));
+                    const float fov = glm::radians(cam.fov);
+                    float distance = radius / std::tan(fov * 0.5f);
+                    distance *= 3.5f;
+
+                    cam.FocusTarget(tr.translation, distance);
                 }
                 break;
             }
@@ -206,7 +214,7 @@ namespace ignite
             }
             case Key::F5:
             {
-                (m_Data.sceneState == State::SceneEdit || m_Data.sceneState == State::SceneSimulate)
+                (m_State.sceneState == State::SceneEdit || m_State.sceneState == State::SceneSimulate)
                     ? OnScenePlay()
                     : OnSceneStop();
 
@@ -214,7 +222,7 @@ namespace ignite
             }
             case Key::F6:
             {
-                (m_Data.sceneState == State::SceneEdit || m_Data.sceneState == State::ScenePlay)
+                (m_State.sceneState == State::SceneEdit || m_State.sceneState == State::ScenePlay)
                     ? OnScenePlay()
                     : OnSceneStop();
                 break;
@@ -328,7 +336,7 @@ namespace ignite
         // Render to Edit Viewport
         if (m_ScenePanel->m_Data.sceneViewportEditorVisible)
         {
-            switch (m_Data.sceneState)
+            switch (m_State.sceneState)
             {
                 case State::SceneSimulate:
                 case State::SceneEdit:
@@ -373,9 +381,9 @@ namespace ignite
             }
         }
 
-        if (m_ScenePanel->m_Data.sceneViewportGameplayVisible)
+	    // Render to Game Viewport
+        if (m_State.gameplayViewportWindow && m_ScenePanel->m_Data.sceneViewportGameplayVisible)
         {
-			// Render to Game Viewport
 			if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
 			{
 				ICamera *gameCamera = &primaryCam.GetComponent<CameraComponent>().camera;
@@ -396,7 +404,7 @@ namespace ignite
 
         m_Cmd->open();
 
-        if (m_Data.takeScreenshot)
+        if (m_State.takeScreenshot)
         {
             nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetViewportEditCompRT()->GetColorAttachment(0)->GetHandle()->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
@@ -407,7 +415,7 @@ namespace ignite
         m_Cmd->close();
         Application::SubmitWorkerCommandList(m_Cmd);
 
-        if (m_Data.takeScreenshot)
+        if (m_State.takeScreenshot)
         {
             // Map and read the pixel data
             size_t rowPitch = 0;
@@ -434,7 +442,7 @@ namespace ignite
                     kScreenshotFileFilters, IM_ARRAYSIZE(kScreenshotFileFilters),
                     "Screenshot.png");
             }
-            m_Data.takeScreenshot = false;
+            m_State.takeScreenshot = false;
         }
     }
 
@@ -454,8 +462,10 @@ namespace ignite
         window->DC.LayoutType = ImGuiLayoutType_Horizontal;
         window->DC.NavLayerCurrent = ImGuiNavLayer_Menu;
 
+        // MAIN MENU BAR
         if (ImGui::BeginMenuBar())
         {
+            // FILE MENU
             if (ImGui::BeginMenu("File"))
             {
                 if (ImGui::MenuItem("New Scene", nullptr, false, m_ActiveProject != nullptr))
@@ -479,7 +489,7 @@ namespace ignite
 
                 if (ImGui::MenuItem("New Project"))
                 {
-                    m_Data.popupNewProjectModal = true;
+                    m_State.popupNewProjectModal = true;
                 }
 
                 else if (ImGui::MenuItem("Save Project", nullptr, false, m_ActiveProject != nullptr))
@@ -495,21 +505,32 @@ namespace ignite
                 ImGui::EndMenu();
             }
 
-            if (ImGui::BeginMenu("Edit"))
-            {
-                ImGui::EndMenu();
-            }
-
+            // VIEW MENU
             if (ImGui::BeginMenu("View"))
             {
+                if (ImGui::MenuItem("ImGui Demo", nullptr, false, m_ActiveProject != nullptr))
+                {
+                    m_State.imguiDemoWindow = true;
+                }
+
+                if (ImGui::MenuItem("Game View", nullptr, false, m_ActiveProject != nullptr))
+                {
+                    m_State.gameplayViewportWindow = true;
+                }
+
+                if (ImGui::MenuItem("Settings", nullptr, false, m_ActiveProject != nullptr))
+                {
+                    m_State.settingsWindow = true;
+                }
+
                 if (ImGui::MenuItem("Asset Registry", nullptr, false, m_ActiveProject != nullptr))
                 {
-                    m_Data.assetRegistryWindow = true;
+                    m_State.assetRegistryWindow = true;
                 }
 
                 if (ImGui::MenuItem("Screenshot", nullptr, false, m_ActiveProject != nullptr))
                 {
-                    m_Data.takeScreenshot = true;
+                    m_State.takeScreenshot = true;
                 }
 
                 ImGui::EndMenu();
@@ -518,18 +539,25 @@ namespace ignite
             ImGui::EndMenuBar();
         }
 
-        if (m_Data.popupNewProjectModal)
+        if (m_State.popupNewProjectModal)
         {
             ImGui::OpenPopup("New Project");
-            m_Data.popupNewProjectModal = false;
+            m_State.popupNewProjectModal = false;
         }
+
+        // Draw UI
 		UIProjectCreation();
+        UISettings();
+
+        // ImGui Demo
+        if (m_State.imguiDemoWindow)
+        {
+            ImGui::ShowDemoWindow(&m_State.imguiDemoWindow);
+        }
 
         // dock space
         ImGui::DockSpace(ImGui::GetID("main_dockspace"), ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
         ImGui::End();
-
-		UISettings();
     }
 
     void EditorLayer::SetActiveScene(const Ref<Scene> &scene)
@@ -572,7 +600,7 @@ namespace ignite
             m_EditorScene->OnStop();
         }
 
-        if (m_Data.sceneState == State::ScenePlay)
+        if (m_State.sceneState == State::ScenePlay)
         {
             OnSceneStop();
         }
@@ -652,7 +680,7 @@ namespace ignite
             m_EditorScene->OnStop();
         }
 
-        if (m_Data.sceneState == State::ScenePlay)
+        if (m_State.sceneState == State::ScenePlay)
         {
             OnSceneStop();
         }
@@ -780,7 +808,8 @@ namespace ignite
 									// Check if this material uses the loaded texture
 									if (material->baseColorTextureHandle == handle ||
 										material->emissiveTextureHandle == handle ||
-										material->metallicRoughnessTextureHandle == handle ||
+                                        material->metallicTextureHandle == handle ||
+                                        material->roughnessTextureHandle == handle ||
 										material->normalTextureHandle == handle ||
 										material->occlusionTextureHandle == handle)
 									{
@@ -809,10 +838,10 @@ namespace ignite
 
         m_ScenePanel->SetGizmoOperation(GizmoOperation::NONE);
 
-        if (m_Data.sceneState != State::SceneEdit)
+        if (m_State.sceneState != State::SceneEdit)
             OnSceneStop();
 
-        m_Data.sceneState = State::ScenePlay;
+        m_State.sceneState = State::ScenePlay;
 
         // copy initial components to new scene
         SetActiveScene(SceneManager::Copy(m_EditorScene));
@@ -821,7 +850,7 @@ namespace ignite
 
     void EditorLayer::OnSceneStop()
     {
-        m_Data.sceneState = State::SceneEdit;
+        m_State.sceneState = State::SceneEdit;
         
         m_ActiveScene->OnStop();
         SetActiveScene(m_EditorScene);
@@ -829,10 +858,10 @@ namespace ignite
 
     void  EditorLayer::OnSceneSimulate()
     {
-        if (m_Data.sceneState != State::SceneEdit)
+        if (m_State.sceneState != State::SceneEdit)
             OnSceneStop();
 
-        m_Data.sceneState = State::SceneSimulate;
+        m_State.sceneState = State::SceneSimulate;
 
         // copy initial components to new scene
         SetActiveScene(SceneManager::Copy(m_EditorScene));
@@ -993,63 +1022,7 @@ namespace ignite
         if (!filepath.empty())
         {
             EditorLayer* editor = static_cast<EditorLayer*>(userData);
-            editor->m_Data.projectCreateInfo.filepath = std::filesystem::path(filepath) / editor->m_Data.projectCreateInfo.name; // Append project name
-        }
-    }
-
-    void EditorLayer::OnLoadHDRTextureSelected(void* userData, const char* const* filelist, int filter)
-    {
-        if (filelist == nullptr || *filelist == nullptr) return;
-
-        std::string filepath = filelist[0];
-        if (!filepath.empty())
-        {
-            EditorLayer* editor = static_cast<EditorLayer*>(userData);
-            if (!editor || !editor->m_ActiveScene)
-            {
-                return;
-            }
-
-            WorldEnvironment *world = nullptr;
-            auto view = editor->m_ActiveScene->registry->view<WorldEnvironment>();
-            for (entt::entity e : view)
-            {
-                auto &candidate = view.get<WorldEnvironment>(e);
-                if (candidate.primary)
-                {
-                    world = &candidate;
-                    break;
-                }
-
-                if (!world)
-                {
-                    world = &candidate;
-                }
-            }
-
-            if (!world)
-            {
-                Entity envEntity = SceneManager::CreateWorldEnvironment(editor->m_ActiveScene.get(), "World Environment");
-                if (envEntity && envEntity.HasComponent<WorldEnvironment>())
-                {
-                    world = &envEntity.GetComponent<WorldEnvironment>();
-                }
-            }
-
-            if (!world)
-            {
-                return;
-            }
-
-            if (!world->environment)
-            {
-                world->environment = Environment::Create(editor->m_ActiveScene.get());
-            }
-
-            world->environment->LoadTexture(filepath);
-            world->hdrHandle = AssetHandle(0);
-            world->loadedHDRHandle = AssetHandle(0);
-            world->dirtyEnvironment = true;
+            editor->m_State.projectCreateInfo.filepath = std::filesystem::path(filepath) / editor->m_State.projectCreateInfo.name; // Append project name
         }
     }
 
@@ -1090,7 +1063,7 @@ namespace ignite
                                         m_EditorScene->OnStop();
                                     }
                                     
-                                    if (m_Data.sceneState == State::ScenePlay)
+                                    if (m_State.sceneState == State::ScenePlay)
                                     {
                                         OnSceneStop();
                                     }
@@ -1243,7 +1216,7 @@ namespace ignite
             ImGui::SetNextItemWidth(-1);
             if (ImGui::InputText("##ProjectName", nameBuffer, sizeof(nameBuffer)))
             {
-                m_Data.projectCreateInfo.name = std::string(nameBuffer);
+                m_State.projectCreateInfo.name = std::string(nameBuffer);
             }
 
             ImGui::TableNextRow();
@@ -1253,12 +1226,12 @@ namespace ignite
             ImGui::TableNextColumn();
             // Path input with Browse button
             ImGui::PushItemWidth(-120);
-            std::string pathStr = m_Data.projectCreateInfo.filepath.generic_string();
+            std::string pathStr = m_State.projectCreateInfo.filepath.generic_string();
             char pathBuf[1024] = {};
             if (!pathStr.empty()) strncpy(pathBuf, pathStr.c_str(), sizeof(pathBuf) - 1);
             if (ImGui::InputText("##ProjectLocation", pathBuf, sizeof(pathBuf)))
             {
-                m_Data.projectCreateInfo.filepath = std::filesystem::path(pathBuf);
+                m_State.projectCreateInfo.filepath = std::filesystem::path(pathBuf);
             }
             ImGui::PopItemWidth();
             ImGui::SameLine();
@@ -1267,7 +1240,7 @@ namespace ignite
                 std::string filepath = FileDialogs::SelectFolder();
                 if (!filepath.empty())
                 {
-                    m_Data.projectCreateInfo.filepath = std::filesystem::path(filepath) / m_Data.projectCreateInfo.name;
+                    m_State.projectCreateInfo.filepath = std::filesystem::path(filepath) / m_State.projectCreateInfo.name;
                 }
             }
 
@@ -1280,7 +1253,7 @@ namespace ignite
         ImGui::Spacing();
 
         // Actions
-        const bool isProjectPathValid = !m_Data.projectCreateInfo.filepath.empty() && !m_Data.projectCreateInfo.name.empty();
+        const bool isProjectPathValid = !m_State.projectCreateInfo.filepath.empty() && !m_State.projectCreateInfo.name.empty();
 
         ImGui::Separator();
 
@@ -1291,20 +1264,20 @@ namespace ignite
         if (ImGui::Button("Create", ImVec2(100, 0)))
         {
             // sanitize name
-            while (m_Data.projectCreateInfo.name.find(' ') != std::string::npos)
+            while (m_State.projectCreateInfo.name.find(' ') != std::string::npos)
             {
-                const size_t spacePos = m_Data.projectCreateInfo.name.find(' ');
-                m_Data.projectCreateInfo.name.replace(spacePos, 1, "");
+                const size_t spacePos = m_State.projectCreateInfo.name.find(' ');
+                m_State.projectCreateInfo.name.replace(spacePos, 1, "");
             }
 
-            m_Data.projectCreateInfo.filepath /= (m_Data.projectCreateInfo.name + ".ixproj");
+            m_State.projectCreateInfo.filepath /= (m_State.projectCreateInfo.name + ".ixproj");
 
-            if (Ref<Project> newProject = Project::Create(m_Data.projectCreateInfo))
+            if (Ref<Project> newProject = Project::Create(m_State.projectCreateInfo))
             {
                 m_ActiveProject = newProject;
 
                 // Serialize
-                m_ActiveProject->Serialize(m_Data.projectCreateInfo.filepath);
+                m_ActiveProject->Serialize(m_State.projectCreateInfo.filepath);
 
                 // Reload content browser
                 m_ContentBrowserPanel->LoadProjectFiles(m_ActiveProject->GetAssetManager());
@@ -1330,8 +1303,8 @@ namespace ignite
                 }
 
                 // clear modal inputs
-                m_Data.projectCreateInfo.filepath.clear();
-                m_Data.projectCreateInfo.name.clear();
+                m_State.projectCreateInfo.filepath.clear();
+                m_State.projectCreateInfo.name.clear();
                 memset(nameBuffer, 0, sizeof(nameBuffer));
 
                 ImGui::CloseCurrentPopup();
@@ -1342,8 +1315,8 @@ namespace ignite
         ImGui::SameLine(ImGui::GetWindowWidth() - 110);
         if (ImGui::Button("Cancel", ImVec2(100, 0)))
         {
-            m_Data.projectCreateInfo.filepath.clear();
-            m_Data.projectCreateInfo.name.clear();
+            m_State.projectCreateInfo.filepath.clear();
+            m_State.projectCreateInfo.name.clear();
             memset(nameBuffer, 0, sizeof(nameBuffer));
             ImGui::CloseCurrentPopup();
         }
@@ -1353,112 +1326,71 @@ namespace ignite
 
 	void EditorLayer::UISettings()
     {
-        ImGui::Begin("Settings", &m_Data.settingsWindow);
-
-        constexpr ImGuiTreeNodeFlags treeFlags = 0;
-
-        if (ImGui::TreeNodeEx("Pipeline", treeFlags))
+        if (m_ActiveScene && m_State.settingsWindow)
         {
-            // Raster settings
-            static std::array<const char *, 2>rasterFillStr = { "Solid", "Wireframe" };
-            const char *currentFillMode = rasterFillStr[static_cast<i32>(m_Data.rasterFillMode)];
-            if (ImGui::BeginCombo("Fill", currentFillMode))
+            if (ImGui::Begin("Settings", &m_State.settingsWindow))
             {
-                for (size_t i = 0; i < std::size(rasterFillStr); ++i)
+                if (ImGui::BeginTabBar("##settings_tabs", ImGuiTabBarFlags_Reorderable))
                 {
-                    bool isSelected = strcmp(currentFillMode, rasterFillStr[i]) == 0;
-                    if (ImGui::Selectable(rasterFillStr[i], isSelected))
+                    if (ImGui::BeginTabItem("Scene"))
                     {
-                        m_Data.rasterFillMode = static_cast<nvrhi::RasterFillMode>(i);
-                        m_SceneRenderer->SetFillMode(m_Data.rasterFillMode);
+                        auto &sceneData = m_ActiveScene->gpuData;
+
+                        ImGui::SeparatorText("Shadow Debug");
+                        ImGui::RadioButton("Off##ShadowDbg", &sceneData.debugShadow, 0); ImGui::SameLine();
+                        ImGui::SameLine();
+                        ImGui::RadioButton("Cascades", &sceneData.debugShadow, 1); ImGui::SameLine();
+                        ImGui::SameLine();
+                        ImGui::RadioButton("Visibility", &sceneData.debugShadow, 2);
+
+                        if (ImGui::CollapsingHeader("Render Mode", ImGuiTreeNodeFlags_DefaultOpen))
+                        {
+                            if (ImGui::RadioButton("Color", sceneData.renderMode == RENDER_MODE_COLOR)) sceneData.renderMode = RENDER_MODE_COLOR;
+                            ImGui::SameLine();
+                            if (ImGui::RadioButton("Diffuse", sceneData.renderMode == RENDER_MODE_DIFFUSE)) sceneData.renderMode = RENDER_MODE_DIFFUSE;
+                            ImGui::SameLine();
+                            if (ImGui::RadioButton("Normals", sceneData.renderMode == RENDER_MODE_NORMALS)) sceneData.renderMode = RENDER_MODE_NORMALS;
+                            ImGui::SameLine();
+                            if (ImGui::RadioButton("Metallic", sceneData.renderMode == RENDER_MODE_METALLIC)) sceneData.renderMode = RENDER_MODE_METALLIC;
+                            ImGui::SameLine();
+                            if (ImGui::RadioButton("Roughness", sceneData.renderMode == RENDER_MODE_ROUGHNESS)) sceneData.renderMode = RENDER_MODE_ROUGHNESS;
+                        }
+
+                        ImGui::EndTabItem();
+                    }
+                    if (ImGui::BeginTabItem("Pipeline"))
+                    {
+                        // Raster settings
+                        static std::array<const char *, 2>rasterFillStr = { "Solid", "Wireframe" };
+                        const char *currentFillMode = rasterFillStr[static_cast<i32>(m_State.rasterFillMode)];
+                        if (ImGui::BeginCombo("Fill", currentFillMode))
+                        {
+                            for (size_t i = 0; i < std::size(rasterFillStr); ++i)
+                            {
+                                bool isSelected = strcmp(currentFillMode, rasterFillStr[i]) == 0;
+                                if (ImGui::Selectable(rasterFillStr[i], isSelected))
+                                {
+                                    m_State.rasterFillMode = static_cast<nvrhi::RasterFillMode>(i);
+                                    m_SceneRenderer->SetFillMode(m_State.rasterFillMode);
+                                }
+
+                                if (isSelected)
+                                {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
+                        ImGui::EndTabItem();
                     }
 
-                    if (isSelected)
-                    {
-                        ImGui::SetItemDefaultFocus();
-                    }
                 }
-                ImGui::EndCombo();
             }
-
-            ImGui::TreePop();
+            ImGui::End(); // !settings window
         }
+        
 
-        if (m_ActiveScene)
-        {
-            // Scene
-            if (ImGui::TreeNodeEx("Scene", treeFlags))
-            {
-                if (ImGui::Button("Load HDR Texture"))
-                {
-                    SDL_ShowOpenFileDialog(OnLoadHDRTextureSelected, this,
-                        Application::GetInstance()->GetWindow()->GetWindowHandle(),
-                        kHDRFileFilters, IM_ARRAYSIZE(kHDRFileFilters),
-                        nullptr, false);
-                }
-
-                auto &sceneData = m_ActiveScene->gpuData;
-
-                ImGui::ColorEdit3("Color", &sceneData.sunColor.x);
-                ImGui::DragFloat("Intensity", &sceneData.sunColor.w, 0.025f, 0.0f, 10.0f);
-                ImGui::SliderFloat("Azimuth", &sceneData.sungAngles.x, -glm::radians(90.0f), glm::radians(90.0f));
-                ImGui::SliderFloat("Elevation", &sceneData.sungAngles.y, 0.0f, glm::radians(90.0f));
-                float angularRadius = glm::degrees(sceneData.sunAngularRadius);
-                if (ImGui::SliderFloat("Angular Size", &angularRadius, 0.0f, 45.0f))
-                {
-                    sceneData.sunAngularRadius = glm::radians(angularRadius);
-                }
-                ImGui::DragFloat("Exposure", &sceneData.exposure, 0.005f, 0.1f, 10.0f);
-                ImGui::DragFloat("Gamma", &sceneData.gamma, 0.005f, 0.1f, 10.0f);
-                ImGui::DragFloat("Ambient", &sceneData.ambient, 0.005f, 0.01f, 100.0f);
-
-                ImGui::SeparatorText("Shadows");
-                {
-                    auto csm = m_SceneRenderer->GetCascadedShadowMap();
-                    auto &data = csm->GetGPUData();
-                    ImGui::SliderFloat("Strength", &data.shadowStrength, 0.0f, 1.0f);
-                    ImGui::DragFloat("Min Bias", &data.minBias, 0.0001f, 0.0f, 0.1f, "%.6f");
-                    ImGui::DragFloat("Max Bias", &data.maxBias, 0.0001f, 0.0f, 0.1f, "%.6f");
-                    ImGui::SliderFloat("PCF Radius", &data.pcfRadius, 0.1f, 4.0f);
-
-                    static const char *resolutionLabels[] = { "Low - 512px", "Medium - 1024px", "High - 2048px", "Ultra - 4096px" };
-                    int cascadeQualityIndex = static_cast<int>(csm->GetQuality());
-
-                    if (ImGui::Combo("Resolution", &cascadeQualityIndex, resolutionLabels, IM_ARRAYSIZE(resolutionLabels)))
-                    {
-                        auto quality = static_cast<ShadowMapQuality>(cascadeQualityIndex);
-                        csm->Resize(quality);
-                    }
-
-                    ImGui::Separator();
-                    ImGui::Text("Shadow Debug");
-                    ImGui::RadioButton("Off##ShadowDbg", &sceneData.debugShadow, 0); ImGui::SameLine();
-                    ImGui::SameLine();
-                    ImGui::RadioButton("Cascades", &sceneData.debugShadow, 1); ImGui::SameLine();
-                    ImGui::SameLine();
-                    ImGui::RadioButton("Visibility", &sceneData.debugShadow, 2);
-                }
-
-                if (ImGui::CollapsingHeader("Render Mode", ImGuiTreeNodeFlags_DefaultOpen))
-                {
-                    if (ImGui::RadioButton("Color", sceneData.renderMode == RENDER_MODE_COLOR)) sceneData.renderMode = RENDER_MODE_COLOR;
-                    ImGui::SameLine();
-                    if (ImGui::RadioButton("Diffuse", sceneData.renderMode == RENDER_MODE_DIFFUSE)) sceneData.renderMode = RENDER_MODE_DIFFUSE;
-                    ImGui::SameLine();
-                    if (ImGui::RadioButton("Normals", sceneData.renderMode == RENDER_MODE_NORMALS)) sceneData.renderMode = RENDER_MODE_NORMALS;
-                    ImGui::SameLine();
-                    if (ImGui::RadioButton("Metallic", sceneData.renderMode == RENDER_MODE_METALLIC)) sceneData.renderMode = RENDER_MODE_METALLIC;
-                    ImGui::SameLine();
-                    if (ImGui::RadioButton("Roughness", sceneData.renderMode == RENDER_MODE_ROUGHNESS)) sceneData.renderMode = RENDER_MODE_ROUGHNESS;
-                }
-
-                ImGui::TreePop();
-            }
-        }
-
-        ImGui::End();
-
-        if (m_Data.assetRegistryWindow)
+        if (m_State.assetRegistryWindow)
         {
             AssetRegistry assetRegistry = m_ActiveProject->GetAssetManager()->GetAssetAssetRegistry();
             const auto &loadedAssets = m_ActiveProject->GetAssetManager()->GetLoadedAssets();
@@ -1479,7 +1411,7 @@ namespace ignite
             static bool sortAscending = true;
 
 			ImGui::SetNextWindowSize(ImVec2(1200, 700), ImGuiCond_FirstUseEver);
-			ImGui::Begin("Asset Registry & Memory Monitor", &m_Data.assetRegistryWindow);
+			ImGui::Begin("Asset Registry & Memory Monitor", &m_State.assetRegistryWindow);
 			ImGui::BeginChild("asset_registry_scroll", ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_HorizontalScrollbar);
 
             // === STATISTICS PANEL ===
@@ -1535,9 +1467,7 @@ namespace ignite
 			{
 				if (type != AssetType::Invalid)
 				{
-					float percentage = registeredCounts[type] > 0
-						? (float)count / registeredCounts[type] * 100.0f
-						: 0.0f;
+					float percentage = registeredCounts[type] > 0 ? (float)count / registeredCounts[type] * 100.0f : 0.0f;
 
 					// Color code by type
 					ImVec4 color = ImVec4(0.5f, 0.8f, 0.5f, 1.0f);

@@ -60,11 +60,18 @@ namespace ignite
 	struct PostProcessing
 	{
 		// Toggles
-		bool enableVignette = true;
-		bool enableChromAb = true;
-		bool enableBloom = true;
-		bool enableSSAO = true; // Screen space ambient occlusion
+        bool enableVignette = false;
+		bool enableChromAb = false;
+		bool enableBloom = false;
+		bool enableSSAO = false; // Screen space ambient occlusion
 		bool debugSSAO = false; // Visualize raw AO buffer
+
+		// Bloom
+		float bloomIntensity = 1.5f;
+        float bloomThreshold = 0.85f;    // HDR threshold
+        float bloomKnee = 0.5f;         // Soft knee for smooth transition
+        float bloomRadius = 1.0f;       // Blur radius multiplier
+        int bloomIterations = 6;        // More levels for higher quality
 
 		// Vignette params
 		float vignetteRadius = 1.1f;
@@ -77,9 +84,9 @@ namespace ignite
 		float chromAbRadial = 0.1f;
 
 		// SSAO params
-		float aoRadius = 0.5f;
-		float aoBias = 0.025f;
-		float aoIntensity = 1.0f; // blend strength when applied in post
+		float aoRadius = 0.09f;
+		float aoBias = 0.1f;
+		float aoIntensity = 1.5f; // blend strength when applied in post
 		float aoPower = 1.0f;     // curve/power for contrast
 	};
 

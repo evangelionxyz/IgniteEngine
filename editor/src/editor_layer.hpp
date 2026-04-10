@@ -6,7 +6,7 @@
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/layer.hpp"
 #include "ignite/ignite.hpp"
-#include "ignite/graphics/scene_renderer.hpp"
+#include "ignite/graphics/renderer/scene_renderer.hpp"
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/project/project.hpp"
 #include "states.hpp"
@@ -24,18 +24,19 @@ namespace ignite
     class EditorLayer final : public Layer
     {
     private:
-        struct EditorData
+        struct EditorState
         {
             bool debugMode = false;
             bool developerMode = false;
             bool multiSelect = false;
             bool settingsWindow = false;
+            bool imguiDemoWindow = false;
             bool popupNewProjectModal = false;
             bool assetRegistryWindow = false;
             bool takeScreenshot = false;
+            bool gameplayViewportWindow = false;
 
             uint32_t hoveredEntity = static_cast<uint32_t>(-1);
-
             ProjectInfo projectCreateInfo;
 
             State sceneState = State::SceneEdit;
@@ -80,7 +81,7 @@ namespace ignite
 
         SceneRenderer *GetSceneRenderer() { return m_SceneRenderer.get(); }
 
-        EditorData &GetData() { return m_Data; }
+        EditorState &GetState() { return m_State; }
     private:
         static void OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter);
         static void OnSceneOpenFileSelected(void *userData, const char *const *filelist, int filter);
@@ -90,7 +91,6 @@ namespace ignite
 
         static void OnScreenshotSaveFileSelected(void *userData, const char *const *filelist, int filter);
         static void OnProjectFolderSelected(void *userData, const char *const *filelist, int filter);
-        static void OnLoadHDRTextureSelected(void *userData, const char *const *filelist, int filter);
 
         void ProcessPendingFileLoading();
 
@@ -106,7 +106,7 @@ namespace ignite
         Ref<Scene> m_ActiveScene;
         Ref<Scene> m_EditorScene;
         Ref<Project> m_ActiveProject;
-        EditorData m_Data;
+        EditorState m_State;
 
         std::filesystem::path m_CurrentSceneFilePath;
     	std::filesystem::path m_CurrentProjectFilepath;

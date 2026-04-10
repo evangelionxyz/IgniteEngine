@@ -29,7 +29,7 @@ namespace ignite
 		void HandlePan(float deltaTime);
 		void HandleZoom(float deltaTime);
 		void ApplyInertia(float deltaTime);
-		void UpdateCameraPosition();
+        void UpdateCameraPosition(float deltaTime);
 
 		void SetNavigationMode(NavigationMode mode);
 		NavigationMode GetNavigationMode() const { return m_NavigationMode; }
@@ -44,6 +44,7 @@ namespace ignite
 		float GetDistance() { return m_Distance; }
 
 		void SetTarget(const glm::vec3 &target) { m_Target = target; }
+		void FocusTarget(const glm::vec3 &target, float distance);
 		const glm::vec3 &GetTarget() { return m_Target; }
 
 		virtual glm::vec3 GetUpDirection() const override;
@@ -61,6 +62,10 @@ namespace ignite
 		float m_FlySpeed = 6.0f;
 
 		glm::vec3 m_Target = { 0.0f, 0.0f, -1.0f };
+        glm::vec3 m_FocusTarget = { 0.0f, 0.0f, -1.0f };
+		float m_FocusDistance = 1.0f;
+		float m_FocusSpeed = 8.0f;
+		bool m_FocusActive = false;
 		NavigationMode m_NavigationMode = NavigationMode::Orbit;
 		
 		std::string m_Name;

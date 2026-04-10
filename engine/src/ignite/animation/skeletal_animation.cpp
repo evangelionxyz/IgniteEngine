@@ -4,6 +4,7 @@
 #include "ignite/serializer/binary_serializer.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <ranges>
 
 namespace ignite {
 

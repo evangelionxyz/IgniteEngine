@@ -38,6 +38,7 @@ namespace ignite
     {
         { "Camera", CompType_Camera },
         { "Rigid Body 2D", CompType_Rigidbody2D },
+        { "Directional Light", CompType_DirectionalLight },
         { "Box Collider 2D", CompType_BoxCollider2D },
         { "Circle Collider 2D", CompType_CircleCollider2D },
         { "Sprite 2D", CompType_Sprite2D },
@@ -150,6 +151,7 @@ namespace ignite
             case CompType_Rigidbody2D: return "CompType_Rigidbody2D";
             case CompType_BoxCollider2D: return "CompType_BoxCollider2D";
             case CompType_CircleCollider2D: return "CompType_CircleCollider2D";
+            case CompType_DirectionalLight: return "CompType_CircleCollider2D";
             case CompType_Sprite2D: return "CompType_Sprite2D";
             case CompType_Circle2D: return "CompType_Circle2D";
             case CompType_PointLight2D: return "CompType_PointLight2D";
@@ -307,6 +309,29 @@ namespace ignite
         }
 
         COMPONENT_CLASS_TYPE(CompType_Transform)
+    };
+
+    class DirectionalLight : public IComponent
+    {
+    public:
+        DirectionalLight() = default;
+
+        glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        float intensity = 0.5f;
+        float angularRadius = 45.0f; // degrees
+        float exposure = 1.1f;
+        float gamma = 2.2f;
+        float ambient = 0.1f;
+
+        // Shadow
+        float shadowStrength = 0.5f;
+        float shadowMinBias = 0.05f;
+        float shadowMaxBias = 0.001f;
+        float pcfRadius = 0.3f;
+        int shadowResolution = 2; // 0=Low, 1=Medium, 2=High, 3=Ultra
+        bool cascadeShadow = true;
+
+        COMPONENT_CLASS_TYPE(CompType_DirectionalLight)
     };
 
     class WorldEnvironment : public IComponent

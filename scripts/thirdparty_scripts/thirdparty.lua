@@ -14,6 +14,7 @@ print("FBX_SDK_PATH: " ..  tostring(FBX_SDK_PATH))
 
 --includedirs
 IncludeDir = {}
+IncludeDir["ASSIM"]             = "%{THIRDPARTY_DIR}/ASSIMP/include"
 IncludeDir["GLFW"]             = "%{THIRDPARTY_DIR}/GLFW/include"
 IncludeDir["BOX2D"]            = "%{THIRDPARTY_DIR}/BOX2D/include"
 IncludeDir["ENTT"]             = "%{THIRDPARTY_DIR}/entt/"
@@ -41,6 +42,8 @@ IncludeDir["Hostfxr"]          = "%{THIRDPARTY_DIR}/MochiSharp/NetCore/include"
 IncludeDir["MSDFATLASGEN"]     = "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdf-atlas-gen"
 IncludeDir["MSDFGEN"]          = "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdfgen"
 IncludeDir["FREETYPE"]         = "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdfgen/freetype/include"
+IncludeDir["OPENEXR"]          = "%{THIRDPARTY_DIR}/OpenEXR/include/OpenEXR"
+IncludeDir["IMATH"]            = "%{THIRDPARTY_DIR}/Imath/include/Imath"
 IncludeDir["TRACY"]            = "%{THIRDPARTY_DIR}/tracy/public"
 
 --library dirs
@@ -59,8 +62,16 @@ Library["vulkan"]                      = "%{LibraryDir.VULKAN_SDK}/vulkan-1.lib"
 Library["mono"]                        = "%{THIRDPARTY_DIR}/Mono/lib/windows/libmono-static-sgen.lib"
 Library["Hostfxr"]                     = "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.lib"
 
+Library["ASSIMP"]                      = "%{THIRDPARTY_DIR}/ASSIMP/lib/win32/assimp-vc143-mt.lib"
 Library["FMOD"]                        = "%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod_vc.lib"
 Library["SDL3"]                        = "%{THIRDPARTY_DIR}/SDL3/lib/windows/x64/SDL3.lib"
+
+Library["Iex"]                         = "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.lib"
+Library["OpenEXR"]                     = "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXR-3_4.lib"
+Library["OpenEXRCore"]                 = "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRCore-3_4.lib"
+Library["OpenEXRUtil"]                 = "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.lib"
+Library["IlmThread"]                   = "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.lib"
+Library["Imath"]                       = "%{THIRDPARTY_DIR}/Imath/lib/win32/Imath-3_2.lib"
 
 Library["ShaderC_Debug"]               = "%{LibraryDir.VULKAN_SDK}/shaderc_sharedd.lib"
 Library["SPIRV_Cross_Debug"]           = "%{LibraryDir.VULKAN_SDK}/spirv-cross-cored.lib"

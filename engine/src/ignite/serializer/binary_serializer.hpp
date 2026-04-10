@@ -25,12 +25,17 @@
 
 #include <stb_image.h>
 #include <stb_image_write.h>
+#include <openexr.h>
+#include <openexr_errors.h>
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 
 #include <filesystem>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <vector>
 #include <cinttypes>
 #include <fstream>
@@ -157,6 +162,207 @@ namespace ignite
             return result == 1;
         }
 
+        static bool SerializeTextureToEXR(const Ref<Texture> &texture, const std::filesystem::path &filepath)
+        {
+            if (!texture)
+            {
+                return false;
+            }
+
+            const int width = static_cast<int>(texture->GetWidth());
+            const int height = static_cast<int>(texture->GetHeight());
+            if (width <= 0 || height <= 0)
+            {
+                return false;
+            }
+
+            const Buffer &buffer = texture->GetBuffer();
+            if (!buffer.data || buffer.size == 0)
+            {
+                return false;
+            }
+
+            const size_t pixelCount = static_cast<size_t>(width) * static_cast<size_t>(height);
+            std::vector<float> red(pixelCount, 0.0f);
+            std::vector<float> green(pixelCount, 0.0f);
+            std::vector<float> blue(pixelCount, 0.0f);
+            std::vector<float> alpha(pixelCount, 1.0f);
+
+            const auto fillFromFloatRGBA = [&]() -> bool
+            {
+                if (buffer.size < pixelCount * 4u * sizeof(float))
+                {
+                    return false;
+                }
+
+                const float *src = reinterpret_cast<const float *>(buffer.data);
+                for (size_t i = 0; i < pixelCount; ++i)
+                {
+                    red[i] = src[i * 4u + 0u];
+                    green[i] = src[i * 4u + 1u];
+                    blue[i] = src[i * 4u + 2u];
+                    alpha[i] = src[i * 4u + 3u];
+                }
+                return true;
+            };
+
+            const auto fillFromByteRGBA = [&]() -> bool
+            {
+                if (buffer.size < pixelCount * 4u)
+                {
+                    return false;
+                }
+
+                const uint8_t *src = buffer.data;
+                for (size_t i = 0; i < pixelCount; ++i)
+                {
+                    red[i] = static_cast<float>(src[i * 4u + 0u]) / 255.0f;
+                    green[i] = static_cast<float>(src[i * 4u + 1u]) / 255.0f;
+                    blue[i] = static_cast<float>(src[i * 4u + 2u]) / 255.0f;
+                    alpha[i] = static_cast<float>(src[i * 4u + 3u]) / 255.0f;
+                }
+                return true;
+            };
+
+            bool bufferDecoded = false;
+            if (texture->GetFormat() == nvrhi::Format::RGBA32_FLOAT)
+            {
+                bufferDecoded = fillFromFloatRGBA();
+            }
+            else if (texture->GetFormat() == nvrhi::Format::RGBA8_UNORM)
+            {
+                bufferDecoded = fillFromByteRGBA();
+            }
+            else if (buffer.size >= pixelCount * 4u * sizeof(float))
+            {
+                bufferDecoded = fillFromFloatRGBA();
+            }
+            else if (buffer.size >= pixelCount * 4u)
+            {
+                bufferDecoded = fillFromByteRGBA();
+            }
+
+            if (!bufferDecoded)
+            {
+                return false;
+            }
+
+            exr_context_t ctx = nullptr;
+            exr_context_initializer_t cinit = EXR_DEFAULT_CONTEXT_INITIALIZER;
+            exr_result_t rv = exr_start_write(&ctx, filepath.string().c_str(), EXR_WRITE_FILE_DIRECTLY, &cinit);
+            if (rv != EXR_ERR_SUCCESS)
+            {
+                return false;
+            }
+
+            bool success = false;
+            exr_encode_pipeline_t encode = EXR_ENCODE_PIPELINE_INITIALIZER;
+            bool encodeInitialized = false;
+
+            do
+            {
+                int partIndex = 0;
+                rv = exr_add_part(ctx, "Texture", EXR_STORAGE_SCANLINE, &partIndex);
+                if (rv != EXR_ERR_SUCCESS)
+                {
+                    break;
+                }
+
+                rv = exr_initialize_required_attr_simple(ctx, partIndex, width, height, EXR_COMPRESSION_NONE);
+                if (rv != EXR_ERR_SUCCESS)
+                {
+                    break;
+                }
+
+                rv = exr_add_channel(ctx, partIndex, "R", EXR_PIXEL_FLOAT, EXR_PERCEPTUALLY_LOGARITHMIC, 1, 1);
+                if (rv != EXR_ERR_SUCCESS) break;
+                rv = exr_add_channel(ctx, partIndex, "G", EXR_PIXEL_FLOAT, EXR_PERCEPTUALLY_LOGARITHMIC, 1, 1);
+                if (rv != EXR_ERR_SUCCESS) break;
+                rv = exr_add_channel(ctx, partIndex, "B", EXR_PIXEL_FLOAT, EXR_PERCEPTUALLY_LOGARITHMIC, 1, 1);
+                if (rv != EXR_ERR_SUCCESS) break;
+                rv = exr_add_channel(ctx, partIndex, "A", EXR_PIXEL_FLOAT, EXR_PERCEPTUALLY_LINEAR, 1, 1);
+                if (rv != EXR_ERR_SUCCESS) break;
+
+                rv = exr_write_header(ctx);
+                if (rv != EXR_ERR_SUCCESS)
+                {
+                    break;
+                }
+
+                exr_chunk_info_t chunk{};
+                rv = exr_write_scanline_chunk_info(ctx, partIndex, 0, &chunk);
+                if (rv != EXR_ERR_SUCCESS)
+                {
+                    break;
+                }
+
+                rv = exr_encoding_initialize(ctx, partIndex, &chunk, &encode);
+                if (rv != EXR_ERR_SUCCESS)
+                {
+                    break;
+                }
+
+                encodeInitialized = true;
+
+                const size_t rowStride = static_cast<size_t>(width);
+                exr_coding_channel_info_t *channels = encode.channels;
+                for (int c = 0; c < encode.channel_count; ++c)
+                {
+                    exr_coding_channel_info_t &channel = channels[c];
+                    const char *channelName = channel.channel_name;
+                    const float *channelData = red.data();
+
+                    if (channelName && std::strcmp(channelName, "R") == 0) channelData = red.data();
+                    else if (channelName && std::strcmp(channelName, "G") == 0) channelData = green.data();
+                    else if (channelName && std::strcmp(channelName, "B") == 0) channelData = blue.data();
+                    else if (channelName && std::strcmp(channelName, "A") == 0) channelData = alpha.data();
+
+                    channel.user_data_type = EXR_PIXEL_FLOAT;
+                    channel.user_bytes_per_element = sizeof(float);
+                    channel.user_pixel_stride = sizeof(float);
+                    channel.user_line_stride = static_cast<int32_t>(sizeof(float) * rowStride);
+                    channel.encode_from_ptr = reinterpret_cast<const uint8_t *>(channelData);
+                }
+
+                rv = exr_encoding_choose_default_routines(ctx, partIndex, &encode);
+                if (rv != EXR_ERR_SUCCESS)
+                {
+                    break;
+                }
+
+                for (int y = 0; y < height; ++y)
+                {
+                    rv = exr_write_scanline_chunk_info(ctx, partIndex, y, &chunk);
+                    if (rv != EXR_ERR_SUCCESS)
+                    {
+                        break;
+                    }
+
+                    rv = exr_encoding_update(ctx, partIndex, &chunk, &encode);
+                    if (rv != EXR_ERR_SUCCESS)
+                    {
+                        break;
+                    }
+
+                    rv = exr_encoding_run(ctx, partIndex, &encode);
+                    if (rv != EXR_ERR_SUCCESS)
+                    {
+                        break;
+                    }
+                }
+
+                success = (rv == EXR_ERR_SUCCESS);
+            } while (false);
+
+            if (encodeInitialized)
+            {
+                exr_encoding_destroy(ctx, &encode);
+            }
+
+            exr_finish(&ctx);
+            return success;
+        }
+
         static std::vector<std::byte> SerializeMaterial(const Ref<Material> &mat, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
@@ -170,7 +376,8 @@ namespace ignite
 
             AppendRaw(buffer, mat->baseColorTextureHandle);
             AppendRaw(buffer, mat->emissiveTextureHandle);
-            AppendRaw(buffer, mat->metallicRoughnessTextureHandle);
+            AppendRaw(buffer, mat->metallicTextureHandle);
+            AppendRaw(buffer, mat->roughnessTextureHandle);
             AppendRaw(buffer, mat->normalTextureHandle);
             AppendRaw(buffer, mat->occlusionTextureHandle);
 
@@ -208,7 +415,8 @@ namespace ignite
 
 			ReadRaw(inFile, &mat->baseColorTextureHandle);
 			ReadRaw(inFile, &mat->emissiveTextureHandle);
-			ReadRaw(inFile, &mat->metallicRoughnessTextureHandle);
+          ReadRaw(inFile, &mat->metallicTextureHandle);
+            ReadRaw(inFile, &mat->roughnessTextureHandle);
 			ReadRaw(inFile, &mat->normalTextureHandle);
             ReadRaw(inFile, &mat->occlusionTextureHandle);
 

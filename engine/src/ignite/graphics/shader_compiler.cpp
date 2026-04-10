@@ -378,7 +378,7 @@ namespace ignite
 			}
 
 			context.WriteDataAsBinary(shaderCode.data(), shaderCode.size());
-			LOG_TRACE("[ WRITING TO BINARY] {}: {}", ShaderPlatformToString(options.platformType), outputPath);
+			LOG_WARN("[WRITING TO BINARY] {}: {}", ShaderPlatformToString(options.platformType), outputPath);
 		}
 
 		if (options.header || options.headerBlob)
@@ -395,7 +395,7 @@ namespace ignite
 			context.WriteDataAsText(shaderCode.data(), shaderCode.size());
 			context.WriteTextEpilog();
 
-			LOG_TRACE("[ WRITING TO BINARY] {}: {}", ShaderPlatformToString(options.platformType), headerOutput);
+			LOG_WARN("[WRITING TO BINARY] {}: {}", ShaderPlatformToString(options.platformType), headerOutput);
 		}
 	}
 
