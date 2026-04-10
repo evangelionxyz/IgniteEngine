@@ -27,7 +27,7 @@
 
 #include "material.hpp"
 #include "ignite/graphics/renderer.hpp"
-#include "ignite/graphics/scene_renderer.hpp"
+#include "ignite/graphics/renderer/iscene_renderer.hpp"
 #include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/graphics/texture.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
@@ -57,7 +57,7 @@ namespace ignite
         sampler = nullptr;
     }
 
-    void Material::UpdateBindingSet(SceneRenderer *sceneRenderer, MaterialTextures *textures, AssetManager *assetManager)
+    void Material::UpdateBindingSet(ISceneRenderer *sceneRenderer, MaterialTextures *textures, AssetManager *assetManager)
     {
         if (m_BindingSet && !m_BindingSetDirty)
             return;

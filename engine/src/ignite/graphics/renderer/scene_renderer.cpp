@@ -1,22 +1,23 @@
-// Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "scene_renderer.hpp"
-#include "framebuffer_key.hpp"
-#include "gpu_upload_sync.hpp"
-#include "renderer.hpp"
+
 #include "renderer_2d.hpp"
-#include "ui_renderer.hpp"
-#include "ui/ui_manager.hpp"
-#include "font.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/icamera.hpp"
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/component.hpp"
 #include "ignite/physics/2d/physics_2d_component.hpp"
 #include "ignite/core/application.hpp"
-#include "objects/shadow_map.hpp"
+#include "ignite/graphics/font.hpp"
+#include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/core/profiler/profiler.hpp"
+#include "ignite/graphics/framebuffer_key.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/graphics/renderer.hpp"
+#include "ignite/graphics/ui_renderer.hpp"
+#include "ignite/graphics/ui/ui_manager.hpp"
 
 #include <ranges>
 #include <cstdlib>
@@ -432,44 +433,6 @@ namespace ignite
 
     SceneRenderer::SceneRenderer()
     {
-        auto device = DeviceManager::GetInstance()->GetDevice();
-        auto samplerDesc = nvrhi::SamplerDesc();
-        samplerDesc.setAllFilters(false);
-        samplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp);
-        m_CompositeSampler = device->createSampler(samplerDesc);
-
-        m_Device = DeviceManager::GetInstance()->GetDevice();
-        nvrhi::CommandListHandle cmd = m_Device->createCommandList();
-
-        std::array vertices
-        {
-            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
-            VertexScreen{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },
-            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
-
-            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
-            VertexScreen{ {  1.0f, -1.0f }, { 1.0f, 1.0f } },
-            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
-        };
-
-        m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
-
-        cmd->open();
-        m_CompositeVertexBuffer->SetData(cmd, Buffer(vertices.data(), sizeof(vertices)));
-        cmd->close();
-        Application::SubmitWorkerCommandList(cmd);
-
-        m_Renderer2D = Renderer2D::Create();
-        m_UIRenderer = UIRenderer::Create(1280, 720);
-        m_UIRenderer->SetUIManager(&UIManager::GetInstance());
-        m_EdgeDetection = EdgeDetection::Create();
-        m_EdgeDetection->CreatePipeline();
-        m_DebugGridBuffer = ConstantBuffer::Create(sizeof(DebugGrid_GPUData), true, 16, "Debug Grid Buffer");
-        m_CompositePostProcessBuffer = ConstantBuffer::Create(sizeof(CompositePostProcess_GPUData), true, 16, "Composite PostProcess Buffer");
-        m_Bloom = CreateRef<Bloom>(1280, 720);
-        m_SSAO = CreateRef<SSAO>(1280, 720);
-
-        m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
     }
 
     SceneRenderer::~SceneRenderer()
@@ -482,13 +445,6 @@ namespace ignite
         s_DebugGridBindingSetCache.clear();
         s_CSMBindingSetCache.clear();
         Clear3DAssetResolveCache();
-    
-        if (m_Renderer2D)
-        {
-            m_Renderer2D->ClearAssetResolveCache();
-            m_Renderer2D->InvalidatePreRenderCache();
-        }
-        m_Has2DPreRenderCache = false;
     }
 
     Ref<StaticMesh> SceneRenderer::ResolveStaticMesh(Project *project, AssetHandle handle)
@@ -755,7 +711,16 @@ namespace ignite
                 }
             }
 
-            // setup camera constants
+            // Scene post processing
+
+            PostProcessing &postProcessing = camera->postProcessing;
+            if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
+            {
+                const auto &cc = primaryCamera.GetComponent<CameraComponent>();
+                postProcessing = cc.camera.postProcessing;
+            }
+
+            // Camera constants
             CameraBuffer cameraBuffer = { camera->GetProjection(), camera->GetView(), glm::vec4(camera->position, 1.0f) };
             Renderer::GetCameraConstantBuffer()->SetData(cmd, Buffer(&cameraBuffer, sizeof(CameraBuffer)));
 
@@ -776,7 +741,6 @@ namespace ignite
 
 
             nvrhi::IFramebuffer *framebuffer = sceneRT->GetFramebuffer();
-
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::ShadowPass");
                 ShadowPass(cmd, camera);
@@ -792,6 +756,7 @@ namespace ignite
                 IGN_PROFILE_SCOPE("SceneRenderer::ColorPass");
                 ColorPass(cmd, camera, framebuffer);
             }
+
             if (camera->projectionType == ProjectionType::Orthographic)
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::DebugGrid2D");
@@ -847,13 +812,13 @@ namespace ignite
             }
 
             Ref<Texture> bloomTexture = nullptr;
-            if (m_Bloom && camera && camera->postProcessing.enableBloom)
+            if (m_Bloom && camera && postProcessing.enableBloom)
             {
-                m_Bloom->settings.intensity = camera->postProcessing.bloomIntensity;
-                m_Bloom->settings.knee = camera->postProcessing.bloomKnee;
-                m_Bloom->settings.radius = camera->postProcessing.bloomRadius;
-                m_Bloom->settings.threshold = camera->postProcessing.bloomThreshold;
-                m_Bloom->settings.iterations = camera->postProcessing.bloomIterations;
+                m_Bloom->settings.intensity = postProcessing.bloomIntensity;
+                m_Bloom->settings.knee = postProcessing.bloomKnee;
+                m_Bloom->settings.radius = postProcessing.bloomRadius;
+                m_Bloom->settings.threshold = postProcessing.bloomThreshold;
+                m_Bloom->settings.iterations = postProcessing.bloomIterations;
 
                 IGN_PROFILE_SCOPE("SceneRenderer::BloomPass");
                 m_Bloom->Resize(sceneRT->GetWidth(), sceneRT->GetHeight());
@@ -862,7 +827,7 @@ namespace ignite
             }
 
             Ref<Texture> ssaoTexture = nullptr;
-            if (m_SSAO && camera && camera->postProcessing.enableSSAO)
+            if (m_SSAO && camera && postProcessing.enableSSAO)
             {
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::SSAOPass", 0x404040FF);
                 m_SSAO->Resize(sceneRT->GetWidth(), sceneRT->GetHeight());

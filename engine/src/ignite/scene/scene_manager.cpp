@@ -33,7 +33,7 @@
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/uuid.hpp"
 
-#include "ignite/graphics/scene_renderer.hpp"
+#include "ignite/graphics/renderer/scene_renderer.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/renderer.hpp"

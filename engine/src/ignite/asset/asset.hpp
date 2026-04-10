@@ -50,6 +50,8 @@ namespace ignite {
         TextureCube,
         SkeletalAnimation,
         AnimationMontage,
+        BlendSpace,
+        LocomotionController,
         Environment,
         Anim2D,
         Skeleton,
@@ -83,6 +85,8 @@ namespace ignite {
             case ignite::AssetType::StaticMesh: return "StaticMesh";
             case ignite::AssetType::Skeleton: return "Skeleton";
             case ignite::AssetType::Environment: return "Environment";
+            case ignite::AssetType::BlendSpace: return "BlendSpace";
+            case ignite::AssetType::LocomotionController: return "LocomotionController";
             case ignite::AssetType::Material2D: return "Material2D";
             case ignite::AssetType::Animation2D: return "Animation2D";
             case ignite::AssetType::AnimatorController2D: return "AnimatorController2D";
@@ -96,6 +100,7 @@ namespace ignite {
         { ".meta", AssetType::Metadata },
 
         { ".ixmont", AssetType::AnimationMontage },
+        { ".mtg", AssetType::AnimationMontage },
         { ".ixproj", AssetType::Project },
         { ".ixscene", AssetType::Scene },
         
@@ -117,6 +122,8 @@ namespace ignite {
 
         { ".ixskel", AssetType::Skeleton},
         { ".ixanim", AssetType::SkeletalAnimation},
+        { ".bsp", AssetType::BlendSpace},
+        { ".ixloco", AssetType::LocomotionController},
         
         { ".ixmat", AssetType::Material},
         { ".ixenv", AssetType::Environment},
@@ -145,6 +152,8 @@ namespace ignite {
         if (typeStr == "Skeleton")  return AssetType::Skeleton;
         if (typeStr == "Material")  return AssetType::Material;
         if (typeStr == "Environment")  return AssetType::Environment;
+        if (typeStr == "BlendSpace")  return AssetType::BlendSpace;
+        if (typeStr == "LocomotionController")  return AssetType::LocomotionController;
         if (typeStr == "Font")  return AssetType::Font;
         if (typeStr == "Material2D")  return AssetType::Material2D;
         if (typeStr == "Animation2D")  return AssetType::Animation2D;
@@ -159,11 +168,13 @@ namespace ignite {
         {
         case AssetType::Metadata: return ".meta";
 
-        case AssetType::AnimationMontage: return ".ixmont";
+        case AssetType::AnimationMontage: return ".mtg";
         case AssetType::StaticMesh: return ".ixsm";
         case AssetType::SkeletalMesh: return ".ixskm";
         case AssetType::Skeleton: return ".ixskel";
         case AssetType::SkeletalAnimation: return ".ixanim";
+        case AssetType::BlendSpace: return ".bsp";
+        case AssetType::LocomotionController: return ".ixloco";
         case AssetType::Scene: return ".ixscene";
         case AssetType::Project: return ".ixproj";
         case AssetType::SpriteSheet: return ".ixsp";

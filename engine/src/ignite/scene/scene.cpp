@@ -6,7 +6,7 @@
 #include "ignite/audio/fmod_sound.hpp"
 
 #include "ignite/graphics/renderer.hpp"
-#include "ignite/graphics/renderer_2d.hpp"
+#include "ignite/graphics/renderer/renderer_2d.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/physics/2d/physics_2d.hpp"
 #include "ignite/physics/jolt/jolt_physics.hpp"

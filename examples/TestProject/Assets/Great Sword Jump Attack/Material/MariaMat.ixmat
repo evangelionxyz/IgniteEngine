@@ -11,8 +11,8 @@ Material:
   GPUData:
     BaseColorFactor: [1, 1, 1, 1]
     EmissiveFactor: [0, 0, 0, 1]
-    MetallicFactor: 1
-    RoughnessFactor: 0
+    MetallicFactor: 0
+    RoughnessFactor: 1
     OcclusionStrength: 0
     MetallicChannel: 0
     RoughnessChannel: 1

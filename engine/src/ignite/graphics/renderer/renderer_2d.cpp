@@ -1,24 +1,23 @@
 // Copyright (c) 2025 Evangelion Manuhutu
 
 #include "renderer_2d.hpp"
-#include "render_target.hpp"
-#include "framebuffer_key.hpp"
+#include "ignite/graphics/render_target.hpp"
+#include "ignite/graphics/framebuffer_key.hpp"
 #include "ignite/scene/component.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 
 #include "ignite/core/logger.hpp"
 #include "ignite/core/device/device_manager.hpp"
-#include "graphics_pipeline.hpp"
-#include "gpu_upload_sync.hpp"
+#include "ignite/graphics/graphics_pipeline.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 
-#include "font.hpp"
-#include "texture.hpp"
+#include "ignite/graphics/font.hpp"
+#include "ignite/graphics/texture.hpp"
 #include "ignite/project/project.hpp"
 
 #include <stb_image.h>
 #include <algorithm>
 #include <unordered_map>
-
 
 namespace ignite
 {

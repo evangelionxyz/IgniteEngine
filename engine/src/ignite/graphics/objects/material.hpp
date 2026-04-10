@@ -36,7 +36,7 @@
 
 namespace ignite
 {
-    class SceneRenderer;
+    class ISceneRenderer;
     class AssetManager;
     class Project;
 
@@ -75,7 +75,7 @@ namespace ignite
         nvrhi::SamplerHandle sampler;
         void SetSamplerDesc(const nvrhi::SamplerDesc &desc);
 
-        void UpdateBindingSet(SceneRenderer *sceneRenderer, MaterialTextures *textures, AssetManager *assetManager);
+        void UpdateBindingSet(ISceneRenderer *sceneRenderer, MaterialTextures *textures, AssetManager *assetManager);
         void UploadToGpu(nvrhi::ICommandList *cmd);
         void SetType(MaterialType type) { m_Type = type; }
 		void RetrieveTextures(AssetManager *assetManager, MaterialTextures *textures) const;

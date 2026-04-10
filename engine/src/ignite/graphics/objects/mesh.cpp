@@ -26,7 +26,7 @@
 #include "environment.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/graphics/renderer.hpp"
-#include "ignite/graphics/scene_renderer.hpp"
+#include "ignite/graphics/renderer/scene_renderer.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"

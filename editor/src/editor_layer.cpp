@@ -6,7 +6,7 @@
 #include "panels/asset_importer_panel.hpp"
 #include "ext/editor_ui.hpp"
 #include "ignite/core/command.hpp"
-#include "ignite/graphics/renderer_2d.hpp"
+#include "ignite/graphics/renderer/renderer_2d.hpp"
 #include "ignite/asset/asset.hpp"
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/scripting/script_engine.hpp"
@@ -111,9 +111,9 @@ namespace ignite
         if (m_ActiveScene)
         {
             // multi select entity
-            m_Data.multiSelect = Input::IsModifierPressed(KeyMod::LeftShift);
+            m_State.multiSelect = Input::IsModifierPressed(KeyMod::LeftShift);
 
-            switch (m_Data.sceneState)
+            switch (m_State.sceneState)
             {
             case State::SceneSimulate:
             case State::ScenePlay:
@@ -214,7 +214,7 @@ namespace ignite
             }
             case Key::F5:
             {
-                (m_Data.sceneState == State::SceneEdit || m_Data.sceneState == State::SceneSimulate)
+                (m_State.sceneState == State::SceneEdit || m_State.sceneState == State::SceneSimulate)
                     ? OnScenePlay()
                     : OnSceneStop();
 
@@ -222,7 +222,7 @@ namespace ignite
             }
             case Key::F6:
             {
-                (m_Data.sceneState == State::SceneEdit || m_Data.sceneState == State::ScenePlay)
+                (m_State.sceneState == State::SceneEdit || m_State.sceneState == State::ScenePlay)
                     ? OnScenePlay()
                     : OnSceneStop();
                 break;
@@ -336,7 +336,7 @@ namespace ignite
         // Render to Edit Viewport
         if (m_ScenePanel->m_Data.sceneViewportEditorVisible)
         {
-            switch (m_Data.sceneState)
+            switch (m_State.sceneState)
             {
                 case State::SceneSimulate:
                 case State::SceneEdit:
@@ -381,9 +381,9 @@ namespace ignite
             }
         }
 
-        if (m_ScenePanel->m_Data.sceneViewportGameplayVisible)
+	    // Render to Game Viewport
+        if (m_State.gameplayViewportWindow && m_ScenePanel->m_Data.sceneViewportGameplayVisible)
         {
-			// Render to Game Viewport
 			if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
 			{
 				ICamera *gameCamera = &primaryCam.GetComponent<CameraComponent>().camera;
@@ -404,7 +404,7 @@ namespace ignite
 
         m_Cmd->open();
 
-        if (m_Data.takeScreenshot)
+        if (m_State.takeScreenshot)
         {
             nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetViewportEditCompRT()->GetColorAttachment(0)->GetHandle()->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
@@ -415,7 +415,7 @@ namespace ignite
         m_Cmd->close();
         Application::SubmitWorkerCommandList(m_Cmd);
 
-        if (m_Data.takeScreenshot)
+        if (m_State.takeScreenshot)
         {
             // Map and read the pixel data
             size_t rowPitch = 0;
@@ -442,7 +442,7 @@ namespace ignite
                     kScreenshotFileFilters, IM_ARRAYSIZE(kScreenshotFileFilters),
                     "Screenshot.png");
             }
-            m_Data.takeScreenshot = false;
+            m_State.takeScreenshot = false;
         }
     }
 
@@ -462,8 +462,10 @@ namespace ignite
         window->DC.LayoutType = ImGuiLayoutType_Horizontal;
         window->DC.NavLayerCurrent = ImGuiNavLayer_Menu;
 
+        // MAIN MENU BAR
         if (ImGui::BeginMenuBar())
         {
+            // FILE MENU
             if (ImGui::BeginMenu("File"))
             {
                 if (ImGui::MenuItem("New Scene", nullptr, false, m_ActiveProject != nullptr))
@@ -487,7 +489,7 @@ namespace ignite
 
                 if (ImGui::MenuItem("New Project"))
                 {
-                    m_Data.popupNewProjectModal = true;
+                    m_State.popupNewProjectModal = true;
                 }
 
                 else if (ImGui::MenuItem("Save Project", nullptr, false, m_ActiveProject != nullptr))
@@ -503,21 +505,32 @@ namespace ignite
                 ImGui::EndMenu();
             }
 
-            if (ImGui::BeginMenu("Edit"))
-            {
-                ImGui::EndMenu();
-            }
-
+            // VIEW MENU
             if (ImGui::BeginMenu("View"))
             {
+                if (ImGui::MenuItem("ImGui Demo", nullptr, false, m_ActiveProject != nullptr))
+                {
+                    m_State.imguiDemoWindow = true;
+                }
+
+                if (ImGui::MenuItem("Game View", nullptr, false, m_ActiveProject != nullptr))
+                {
+                    m_State.gameplayViewportWindow = true;
+                }
+
+                if (ImGui::MenuItem("Settings", nullptr, false, m_ActiveProject != nullptr))
+                {
+                    m_State.settingsWindow = true;
+                }
+
                 if (ImGui::MenuItem("Asset Registry", nullptr, false, m_ActiveProject != nullptr))
                 {
-                    m_Data.assetRegistryWindow = true;
+                    m_State.assetRegistryWindow = true;
                 }
 
                 if (ImGui::MenuItem("Screenshot", nullptr, false, m_ActiveProject != nullptr))
                 {
-                    m_Data.takeScreenshot = true;
+                    m_State.takeScreenshot = true;
                 }
 
                 ImGui::EndMenu();
@@ -526,18 +539,25 @@ namespace ignite
             ImGui::EndMenuBar();
         }
 
-        if (m_Data.popupNewProjectModal)
+        if (m_State.popupNewProjectModal)
         {
             ImGui::OpenPopup("New Project");
-            m_Data.popupNewProjectModal = false;
+            m_State.popupNewProjectModal = false;
         }
+
+        // Draw UI
 		UIProjectCreation();
+        UISettings();
+
+        // ImGui Demo
+        if (m_State.imguiDemoWindow)
+        {
+            ImGui::ShowDemoWindow(&m_State.imguiDemoWindow);
+        }
 
         // dock space
         ImGui::DockSpace(ImGui::GetID("main_dockspace"), ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
         ImGui::End();
-
-		UISettings();
     }
 
     void EditorLayer::SetActiveScene(const Ref<Scene> &scene)
@@ -580,7 +600,7 @@ namespace ignite
             m_EditorScene->OnStop();
         }
 
-        if (m_Data.sceneState == State::ScenePlay)
+        if (m_State.sceneState == State::ScenePlay)
         {
             OnSceneStop();
         }
@@ -660,7 +680,7 @@ namespace ignite
             m_EditorScene->OnStop();
         }
 
-        if (m_Data.sceneState == State::ScenePlay)
+        if (m_State.sceneState == State::ScenePlay)
         {
             OnSceneStop();
         }
@@ -818,10 +838,10 @@ namespace ignite
 
         m_ScenePanel->SetGizmoOperation(GizmoOperation::NONE);
 
-        if (m_Data.sceneState != State::SceneEdit)
+        if (m_State.sceneState != State::SceneEdit)
             OnSceneStop();
 
-        m_Data.sceneState = State::ScenePlay;
+        m_State.sceneState = State::ScenePlay;
 
         // copy initial components to new scene
         SetActiveScene(SceneManager::Copy(m_EditorScene));
@@ -830,7 +850,7 @@ namespace ignite
 
     void EditorLayer::OnSceneStop()
     {
-        m_Data.sceneState = State::SceneEdit;
+        m_State.sceneState = State::SceneEdit;
         
         m_ActiveScene->OnStop();
         SetActiveScene(m_EditorScene);
@@ -838,10 +858,10 @@ namespace ignite
 
     void  EditorLayer::OnSceneSimulate()
     {
-        if (m_Data.sceneState != State::SceneEdit)
+        if (m_State.sceneState != State::SceneEdit)
             OnSceneStop();
 
-        m_Data.sceneState = State::SceneSimulate;
+        m_State.sceneState = State::SceneSimulate;
 
         // copy initial components to new scene
         SetActiveScene(SceneManager::Copy(m_EditorScene));
@@ -1002,7 +1022,7 @@ namespace ignite
         if (!filepath.empty())
         {
             EditorLayer* editor = static_cast<EditorLayer*>(userData);
-            editor->m_Data.projectCreateInfo.filepath = std::filesystem::path(filepath) / editor->m_Data.projectCreateInfo.name; // Append project name
+            editor->m_State.projectCreateInfo.filepath = std::filesystem::path(filepath) / editor->m_State.projectCreateInfo.name; // Append project name
         }
     }
 
@@ -1043,7 +1063,7 @@ namespace ignite
                                         m_EditorScene->OnStop();
                                     }
                                     
-                                    if (m_Data.sceneState == State::ScenePlay)
+                                    if (m_State.sceneState == State::ScenePlay)
                                     {
                                         OnSceneStop();
                                     }
@@ -1196,7 +1216,7 @@ namespace ignite
             ImGui::SetNextItemWidth(-1);
             if (ImGui::InputText("##ProjectName", nameBuffer, sizeof(nameBuffer)))
             {
-                m_Data.projectCreateInfo.name = std::string(nameBuffer);
+                m_State.projectCreateInfo.name = std::string(nameBuffer);
             }
 
             ImGui::TableNextRow();
@@ -1206,12 +1226,12 @@ namespace ignite
             ImGui::TableNextColumn();
             // Path input with Browse button
             ImGui::PushItemWidth(-120);
-            std::string pathStr = m_Data.projectCreateInfo.filepath.generic_string();
+            std::string pathStr = m_State.projectCreateInfo.filepath.generic_string();
             char pathBuf[1024] = {};
             if (!pathStr.empty()) strncpy(pathBuf, pathStr.c_str(), sizeof(pathBuf) - 1);
             if (ImGui::InputText("##ProjectLocation", pathBuf, sizeof(pathBuf)))
             {
-                m_Data.projectCreateInfo.filepath = std::filesystem::path(pathBuf);
+                m_State.projectCreateInfo.filepath = std::filesystem::path(pathBuf);
             }
             ImGui::PopItemWidth();
             ImGui::SameLine();
@@ -1220,7 +1240,7 @@ namespace ignite
                 std::string filepath = FileDialogs::SelectFolder();
                 if (!filepath.empty())
                 {
-                    m_Data.projectCreateInfo.filepath = std::filesystem::path(filepath) / m_Data.projectCreateInfo.name;
+                    m_State.projectCreateInfo.filepath = std::filesystem::path(filepath) / m_State.projectCreateInfo.name;
                 }
             }
 
@@ -1233,7 +1253,7 @@ namespace ignite
         ImGui::Spacing();
 
         // Actions
-        const bool isProjectPathValid = !m_Data.projectCreateInfo.filepath.empty() && !m_Data.projectCreateInfo.name.empty();
+        const bool isProjectPathValid = !m_State.projectCreateInfo.filepath.empty() && !m_State.projectCreateInfo.name.empty();
 
         ImGui::Separator();
 
@@ -1244,20 +1264,20 @@ namespace ignite
         if (ImGui::Button("Create", ImVec2(100, 0)))
         {
             // sanitize name
-            while (m_Data.projectCreateInfo.name.find(' ') != std::string::npos)
+            while (m_State.projectCreateInfo.name.find(' ') != std::string::npos)
             {
-                const size_t spacePos = m_Data.projectCreateInfo.name.find(' ');
-                m_Data.projectCreateInfo.name.replace(spacePos, 1, "");
+                const size_t spacePos = m_State.projectCreateInfo.name.find(' ');
+                m_State.projectCreateInfo.name.replace(spacePos, 1, "");
             }
 
-            m_Data.projectCreateInfo.filepath /= (m_Data.projectCreateInfo.name + ".ixproj");
+            m_State.projectCreateInfo.filepath /= (m_State.projectCreateInfo.name + ".ixproj");
 
-            if (Ref<Project> newProject = Project::Create(m_Data.projectCreateInfo))
+            if (Ref<Project> newProject = Project::Create(m_State.projectCreateInfo))
             {
                 m_ActiveProject = newProject;
 
                 // Serialize
-                m_ActiveProject->Serialize(m_Data.projectCreateInfo.filepath);
+                m_ActiveProject->Serialize(m_State.projectCreateInfo.filepath);
 
                 // Reload content browser
                 m_ContentBrowserPanel->LoadProjectFiles(m_ActiveProject->GetAssetManager());
@@ -1283,8 +1303,8 @@ namespace ignite
                 }
 
                 // clear modal inputs
-                m_Data.projectCreateInfo.filepath.clear();
-                m_Data.projectCreateInfo.name.clear();
+                m_State.projectCreateInfo.filepath.clear();
+                m_State.projectCreateInfo.name.clear();
                 memset(nameBuffer, 0, sizeof(nameBuffer));
 
                 ImGui::CloseCurrentPopup();
@@ -1295,8 +1315,8 @@ namespace ignite
         ImGui::SameLine(ImGui::GetWindowWidth() - 110);
         if (ImGui::Button("Cancel", ImVec2(100, 0)))
         {
-            m_Data.projectCreateInfo.filepath.clear();
-            m_Data.projectCreateInfo.name.clear();
+            m_State.projectCreateInfo.filepath.clear();
+            m_State.projectCreateInfo.name.clear();
             memset(nameBuffer, 0, sizeof(nameBuffer));
             ImGui::CloseCurrentPopup();
         }
@@ -1306,118 +1326,71 @@ namespace ignite
 
 	void EditorLayer::UISettings()
     {
-        ImGui::Begin("Settings", &m_Data.settingsWindow);
-
-        if (m_ActiveScene)
+        if (m_ActiveScene && m_State.settingsWindow)
         {
-            if (ImGui::BeginTabBar("##settings_tabs", ImGuiTabBarFlags_Reorderable))
+            if (ImGui::Begin("Settings", &m_State.settingsWindow))
             {
-                if (ImGui::BeginTabItem("Scene"))
+                if (ImGui::BeginTabBar("##settings_tabs", ImGuiTabBarFlags_Reorderable))
                 {
-                    auto &sceneData = m_ActiveScene->gpuData;
-
-                    ImGui::SeparatorText("Post Processing");
-
-                    auto &cam = m_ScenePanel->GetViewportCamera();
-                    UI::DrawCheckbox("Bloom", &cam.postProcessing.enableBloom);
-                    UI::DrawCheckbox("Vignette", &cam.postProcessing.enableVignette);
-                    UI::DrawCheckbox("Chromatic Aberration", &cam.postProcessing.enableChromAb);
-                    UI::DrawCheckbox("SSAO", &cam.postProcessing.enableSSAO);
-
-                    if (cam.postProcessing.enableBloom)
+                    if (ImGui::BeginTabItem("Scene"))
                     {
-                        ImGui::SeparatorText("Bloom");
+                        auto &sceneData = m_ActiveScene->gpuData;
 
-                        UI::DrawFloatControl("Bloom Intensity", &cam.postProcessing.bloomIntensity, 0.01f, 0.0f, 10.0f, 1.0f);
-                        UI::DrawFloatControl("Bloom Radius", &cam.postProcessing.bloomRadius, 0.01f, 0.0f, 10.0f, 0.0f);
-                        UI::DrawFloatControl("Bloom Knee", &cam.postProcessing.bloomKnee, 0.01f, 0.0f, 10.0f, 0.0f);
-                        UI::DrawFloatControl("Bloom Threshold", &cam.postProcessing.bloomThreshold, 0.01f, 0.005f, 10.0f, 0.005f);
-                        UI::DrawIntControl("Bloom Iterations", &cam.postProcessing.bloomIterations, 1, 1, 8, 1);
-                    }
-
-                    if (cam.postProcessing.enableVignette)
-                    {
-                        ImGui::SeparatorText("Vignette");
-
-                        UI::DrawFloatControl("Vignette Radius", &cam.postProcessing.vignetteRadius, 0.01f, 0.0f, 3.0f, 1.1f);
-                        UI::DrawFloatControl("Vignette Softness", &cam.postProcessing.vignetteSoftness, 0.01f, 0.0f, 2.0f, 0.7f);
-                        UI::DrawFloatControl("Vignette Intensity", &cam.postProcessing.vignetteIntensity, 0.01f, 0.0f, 2.0f, 0.8f);
-                        UI::DrawColorVec3("Vignette Color", cam.postProcessing.vignetteColor);
-                    }
-
-                    if (cam.postProcessing.enableChromAb)
-                    {
-                        ImGui::SeparatorText("Chromatic Aberration");
-
-                        UI::DrawFloatControl("ChromAb Amount", &cam.postProcessing.chromAbAmount, 0.0001f, 0.0f, 0.02f, 0.001f);
-                        UI::DrawFloatControl("ChromAb Radial", &cam.postProcessing.chromAbRadial, 0.01f, 0.0f, 2.0f, 0.1f);
-                    }
-
-                    if (cam.postProcessing.enableSSAO)
-                    {
-                        ImGui::SeparatorText("SSAO");
-
-                        UI::DrawFloatControl("SSAO Radius", &cam.postProcessing.aoRadius, 0.01f, 0.0f, 5.0f, 0.5f);
-                        UI::DrawFloatControl("SSAO Bias", &cam.postProcessing.aoBias, 0.001f, 0.0f, 0.2f, 0.025f);
-                        UI::DrawFloatControl("SSAO Intensity", &cam.postProcessing.aoIntensity, 0.01f, 0.0f, 4.0f, 1.0f);
-                        UI::DrawFloatControl("SSAO Power", &cam.postProcessing.aoPower, 0.01f, 0.0f, 4.0f, 1.0f);
-                    }
-
-                    ImGui::SeparatorText("Shadow Debug");
-                    ImGui::RadioButton("Off##ShadowDbg", &sceneData.debugShadow, 0); ImGui::SameLine();
-                    ImGui::SameLine();
-                    ImGui::RadioButton("Cascades", &sceneData.debugShadow, 1); ImGui::SameLine();
-                    ImGui::SameLine();
-                    ImGui::RadioButton("Visibility", &sceneData.debugShadow, 2);
-
-                    if (ImGui::CollapsingHeader("Render Mode", ImGuiTreeNodeFlags_DefaultOpen))
-                    {
-                        if (ImGui::RadioButton("Color", sceneData.renderMode == RENDER_MODE_COLOR)) sceneData.renderMode = RENDER_MODE_COLOR;
+                        ImGui::SeparatorText("Shadow Debug");
+                        ImGui::RadioButton("Off##ShadowDbg", &sceneData.debugShadow, 0); ImGui::SameLine();
                         ImGui::SameLine();
-                        if (ImGui::RadioButton("Diffuse", sceneData.renderMode == RENDER_MODE_DIFFUSE)) sceneData.renderMode = RENDER_MODE_DIFFUSE;
+                        ImGui::RadioButton("Cascades", &sceneData.debugShadow, 1); ImGui::SameLine();
                         ImGui::SameLine();
-                        if (ImGui::RadioButton("Normals", sceneData.renderMode == RENDER_MODE_NORMALS)) sceneData.renderMode = RENDER_MODE_NORMALS;
-                        ImGui::SameLine();
-                        if (ImGui::RadioButton("Metallic", sceneData.renderMode == RENDER_MODE_METALLIC)) sceneData.renderMode = RENDER_MODE_METALLIC;
-                        ImGui::SameLine();
-                        if (ImGui::RadioButton("Roughness", sceneData.renderMode == RENDER_MODE_ROUGHNESS)) sceneData.renderMode = RENDER_MODE_ROUGHNESS;
-                    }
+                        ImGui::RadioButton("Visibility", &sceneData.debugShadow, 2);
 
-                    ImGui::EndTabItem();
-                }
-                if (ImGui::BeginTabItem("Pipeline"))
-                {
-                    // Raster settings
-                    static std::array<const char *, 2>rasterFillStr = { "Solid", "Wireframe" };
-                    const char *currentFillMode = rasterFillStr[static_cast<i32>(m_Data.rasterFillMode)];
-                    if (ImGui::BeginCombo("Fill", currentFillMode))
-                    {
-                        for (size_t i = 0; i < std::size(rasterFillStr); ++i)
+                        if (ImGui::CollapsingHeader("Render Mode", ImGuiTreeNodeFlags_DefaultOpen))
                         {
-                            bool isSelected = strcmp(currentFillMode, rasterFillStr[i]) == 0;
-                            if (ImGui::Selectable(rasterFillStr[i], isSelected))
-                            {
-                                m_Data.rasterFillMode = static_cast<nvrhi::RasterFillMode>(i);
-                                m_SceneRenderer->SetFillMode(m_Data.rasterFillMode);
-                            }
-
-                            if (isSelected)
-                            {
-                                ImGui::SetItemDefaultFocus();
-                            }
+                            if (ImGui::RadioButton("Color", sceneData.renderMode == RENDER_MODE_COLOR)) sceneData.renderMode = RENDER_MODE_COLOR;
+                            ImGui::SameLine();
+                            if (ImGui::RadioButton("Diffuse", sceneData.renderMode == RENDER_MODE_DIFFUSE)) sceneData.renderMode = RENDER_MODE_DIFFUSE;
+                            ImGui::SameLine();
+                            if (ImGui::RadioButton("Normals", sceneData.renderMode == RENDER_MODE_NORMALS)) sceneData.renderMode = RENDER_MODE_NORMALS;
+                            ImGui::SameLine();
+                            if (ImGui::RadioButton("Metallic", sceneData.renderMode == RENDER_MODE_METALLIC)) sceneData.renderMode = RENDER_MODE_METALLIC;
+                            ImGui::SameLine();
+                            if (ImGui::RadioButton("Roughness", sceneData.renderMode == RENDER_MODE_ROUGHNESS)) sceneData.renderMode = RENDER_MODE_ROUGHNESS;
                         }
-                        ImGui::EndCombo();
+
+                        ImGui::EndTabItem();
                     }
-                    ImGui::EndTabItem();
+                    if (ImGui::BeginTabItem("Pipeline"))
+                    {
+                        // Raster settings
+                        static std::array<const char *, 2>rasterFillStr = { "Solid", "Wireframe" };
+                        const char *currentFillMode = rasterFillStr[static_cast<i32>(m_State.rasterFillMode)];
+                        if (ImGui::BeginCombo("Fill", currentFillMode))
+                        {
+                            for (size_t i = 0; i < std::size(rasterFillStr); ++i)
+                            {
+                                bool isSelected = strcmp(currentFillMode, rasterFillStr[i]) == 0;
+                                if (ImGui::Selectable(rasterFillStr[i], isSelected))
+                                {
+                                    m_State.rasterFillMode = static_cast<nvrhi::RasterFillMode>(i);
+                                    m_SceneRenderer->SetFillMode(m_State.rasterFillMode);
+                                }
+
+                                if (isSelected)
+                                {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
+                        ImGui::EndTabItem();
+                    }
+
                 }
-
-                ImGui::EndTabBar();
             }
+            ImGui::End(); // !settings window
         }
+        
 
-        ImGui::End();
-
-        if (m_Data.assetRegistryWindow)
+        if (m_State.assetRegistryWindow)
         {
             AssetRegistry assetRegistry = m_ActiveProject->GetAssetManager()->GetAssetAssetRegistry();
             const auto &loadedAssets = m_ActiveProject->GetAssetManager()->GetLoadedAssets();
@@ -1438,7 +1411,7 @@ namespace ignite
             static bool sortAscending = true;
 
 			ImGui::SetNextWindowSize(ImVec2(1200, 700), ImGuiCond_FirstUseEver);
-			ImGui::Begin("Asset Registry & Memory Monitor", &m_Data.assetRegistryWindow);
+			ImGui::Begin("Asset Registry & Memory Monitor", &m_State.assetRegistryWindow);
 			ImGui::BeginChild("asset_registry_scroll", ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_HorizontalScrollbar);
 
             // === STATISTICS PANEL ===

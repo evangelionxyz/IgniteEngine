@@ -34,6 +34,8 @@ namespace ignite
 			bool importSkeletalMesh = true;
 			bool importSkeleton = true;
 			bool importAnimations = true;
+			bool useExistingSkeletonForAnimations = false;
+			AssetHandle existingSkeletonHandle = AssetHandle(0);
 		};
 
 		struct ImportRequest

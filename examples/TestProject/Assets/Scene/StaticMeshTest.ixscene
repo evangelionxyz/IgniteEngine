@@ -2,120 +2,69 @@ Scene:
   Version: Alpha-0.1
   Title: New Scene
   Entities:
-    - ID: 9806448813217611986
-      Name: Empty
+    - ID: 8388833910029119416
+      Name: Directional Light
       Type: Node
       Parent: 0
       Transform:
-        WorldTranslation: [-1.3951917, 1.5595534, -1.4155378]
-        WorldRotation: [0.31335348, -0.5364343, 0.7488259, 0.23088434]
-        WorldScale: [2.1, 2.1, 2.1]
-        LocalTranslation: [-1.3951917, 1.5595534, -1.4155378]
-        LocalRotation: [0.3133535, -0.5364343, 0.7488259, 0.23088433]
-        LocalScale: [2.1, 2.1, 2.1]
+        WorldTranslation: [-5.55, 7.850001, 0]
+        WorldRotation: [-0.27110243, 0.2694925, -0.07039776, 0.9213694]
+        WorldScale: [0.99999994, 0.99999994, 0.9999999]
+        LocalTranslation: [-5.55, 7.850001, 0]
+        LocalRotation: [-0.27110243, 0.2694925, -0.07039775, 0.92136925]
+        LocalScale: [1, 1, 1]
         Visible: true
-      SkeletalMesh:
-        Handle: 14233850565787575222
-    - ID: 10024928053884534303
-      Name: SkeletalMesh
-      Type: Node
+      DirectionalLight:
+        Color: [1, 1, 1, 1]
+        Intensity: 2
+        AngularRadius: 43.44
+        Exposure: 1.14
+        Gamma: 1.89
+        Ambient: 0.1
+        ShadowStrength: 0.78
+        ShadowMinBias: 0.044
+        ShadowMaxBias: 0.005
+        PCFRadius: 0.64
+        ShadowResolution: 2
+        CascadeShadow: true
+    - ID: 108555296503783245
+      Name: World Environment
+      Type: Audio
       Parent: 0
       Transform:
-        WorldTranslation: [2.75, 0.3, 2.750001]
-        WorldRotation: [3.2125747e-08, 0.88709855, -3.2125747e-08, -0.46158013]
-        WorldScale: [0.0323, 0.032300003, 0.0323]
-        LocalTranslation: [2.75, 0.3, 2.750001]
-        LocalRotation: [-3.2125744e-08, -0.8870985, 3.2125744e-08, 0.46158013]
-        LocalScale: [0.032300003, 0.032300003, 0.032300003]
-        Visible: true
-      SkeletalMesh:
-        Handle: 9297076932640637832
-    - ID: 15758479979559783352
-      Name: Cube
-      Type: Node
-      Parent: 0
-      Transform:
-        WorldTranslation: [6.0297556, 2.8099985, -4.0015287]
-        WorldRotation: [9.1835904e-07, -0.24309708, 5.7857915e-07, 0.97000194]
-        WorldScale: [0.81249994, 0.8124999, 0.81249994]
-        LocalTranslation: [6.0297556, 2.8099985, -4.0015287]
-        LocalRotation: [9.18359e-07, -0.24309708, 5.7857915e-07, 0.97000194]
-        LocalScale: [0.81249994, 0.8124999, 0.81249994]
-        Visible: true
-      StaticMesh:
-        Handle: 17604633582810232567
-        MaterialHandle: 10259601621661226170
-      Rigidbody:
-        MotionQuality: 0
-        UseGravity: true
-        RotateX: true
-        RotateY: true
-        RotateZ: true
-        MoveX: true
-        MoveY: true
-        MoveZ: true
-        IsStatic: false
-        Mass: 1
-        AllowSleeping: true
-        RetainAcceleration: false
-        GravityFactor: 1
-        CenterMass: [0, 0, 0]
-      BoxCollider:
-        Scale: [1, 1, 1]
-        Friction: 0.6
-        StaticFriction: 0.6
-        Restitution: 0.55
-        Density: 1
-    - ID: 17504469340896905564
-      Name: Floor
-      Type: Node
-      Parent: 0
-      Transform:
-        WorldTranslation: [-9.85, 0.99999994, -9.55]
+        WorldTranslation: [0, 0, 0]
         WorldRotation: [0, 0, 0, 1]
-        WorldScale: [20, 0.51975, 0.5]
-        LocalTranslation: [-9.85, 0.99999994, -9.55]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [0, 0, 0]
         LocalRotation: [0, 0, 0, 1]
-        LocalScale: [20, 0.51975, 0.5]
+        LocalScale: [1, 1, 1]
         Visible: true
-      StaticMesh:
-        Handle: 17604633582810232567
-        MaterialHandle: 0
-      Rigidbody:
-        MotionQuality: 0
-        UseGravity: true
-        RotateX: true
-        RotateY: true
-        RotateZ: true
-        MoveX: true
-        MoveY: true
-        MoveZ: true
-        IsStatic: true
-        Mass: 1
-        AllowSleeping: true
-        RetainAcceleration: false
-        GravityFactor: 1
-        CenterMass: [0, 0, 0]
-      BoxCollider:
-        Scale: [1, 1, 1]
-        Friction: 0.6
-        StaticFriction: 0.6
-        Restitution: 0.675
-        Density: 1
-    - ID: 11346438074498002042
-      Name: Sphere
+      WorldEnvironment:
+        Primary: true
+        Enabled: true
+        HDRHandle: 1671497305426399170
+        SunColor: [1, 1, 1, 0.87]
+        SunAngles: [2.456592, -0.04959274]
+        SunAngularRadius: 0.7770206
+        RenderMode: 0
+        DebugShadow: 0
+        Exposure: 1.73
+        Gamma: 2.29
+        Ambient: 0.34
+    - ID: 17790670858123285050
+      Name: Capsule
       Type: Node
       Parent: 0
       Transform:
-        WorldTranslation: [0.5664515, 3.0100002, 1.9000045]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.25, 0.25, 0.25]
-        LocalTranslation: [0.5664515, 3.0100002, 1.9000045]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.25, 0.25, 0.25]
+        WorldTranslation: [-4.2, 2.7440796, 3.793661]
+        WorldRotation: [-0.70859146, 0, 0, 0.705619]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [-4.2, 2.7440796, 3.793661]
+        LocalRotation: [-0.70859146, -0, 0, 0.705619]
+        LocalScale: [1, 1, 1]
         Visible: true
       StaticMesh:
-        Handle: 17269684607766100826
+        Handle: 7078707562477107759
         MaterialHandle: 0
       Rigidbody:
         MotionQuality: 0
@@ -132,293 +81,69 @@ Scene:
         RetainAcceleration: false
         GravityFactor: 1
         CenterMass: [0, 0, 0]
-      SphereCollider:
-        Radius: 1
+      CapsuleCollider:
+        Radius: 1.15
+        Height: 2.225
         Friction: 0.6
-        StaticFriction: 0.6
-        Restitution: 0.6
-        Density: 1
-    - ID: 12449376767739622077
-      Name: SkeletalMesh
-      Type: Node
-      Parent: 0
-      Transform:
-        WorldTranslation: [-18.1, 0.45000002, -6.5]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.032300003, 0.032300003, 0.032300003]
-        LocalTranslation: [-18.1, 0.45000002, -6.5]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.032300003, 0.032300003, 0.032300003]
-        Visible: true
-      SkeletalMesh:
-        Handle: 1146833996653238217
-    - ID: 5909204320544961695
-      Name: Sphere
-      Type: Node
-      Parent: 0
-      Transform:
-        WorldTranslation: [-1.5334525, 2.31, 2.2501402]
-        WorldRotation: [2.5034511e-05, 3.5333958e-12, -1.9339537e-05, 1]
-        WorldScale: [0.25, 0.25, 0.25]
-        LocalTranslation: [-1.5334525, 2.31, 2.2501402]
-        LocalRotation: [2.5034511e-05, 3.5333958e-12, -1.9339537e-05, 1]
-        LocalScale: [0.25, 0.25, 0.25]
-        Visible: true
-      StaticMesh:
-        Handle: 17269684607766100826
-        MaterialHandle: 0
-      Rigidbody:
-        MotionQuality: 0
-        UseGravity: true
-        RotateX: true
-        RotateY: true
-        RotateZ: true
-        MoveX: true
-        MoveY: true
-        MoveZ: true
-        IsStatic: false
-        Mass: 1
-        AllowSleeping: true
-        RetainAcceleration: false
-        GravityFactor: 1
-        CenterMass: [0, 0, 0]
-      SphereCollider:
-        Radius: 1
-        Friction: 0.6
-        StaticFriction: 0.6
-        Restitution: 0.6
-        Density: 1
-    - ID: 8956048629024679045
-      Name: Floor
-      Type: Node
-      Parent: 0
-      Transform:
-        WorldTranslation: [-29.3, 0.99999994, -2.875924e-06]
-        WorldRotation: [1.0718497e-13, -0.7071067, 1.0718496e-13, 0.7071068]
-        WorldScale: [8.9249935, 0.51975, 0.4999998]
-        LocalTranslation: [-29.3, 0.99999994, -2.875924e-06]
-        LocalRotation: [1.0718497e-13, -0.70710677, 1.0718497e-13, 0.70710677]
-        LocalScale: [8.924994, 0.51975, 0.49999982]
-        Visible: true
-      StaticMesh:
-        Handle: 17604633582810232567
-        MaterialHandle: 0
-      Rigidbody:
-        MotionQuality: 0
-        UseGravity: true
-        RotateX: true
-        RotateY: true
-        RotateZ: true
-        MoveX: true
-        MoveY: true
-        MoveZ: true
-        IsStatic: true
-        Mass: 1
-        AllowSleeping: true
-        RetainAcceleration: false
-        GravityFactor: 1
-        CenterMass: [0, 0, 0]
-      BoxCollider:
-        Scale: [1, 1, 1]
-        Friction: 0.6
-        StaticFriction: 0.6
-        Restitution: 0.675
-        Density: 1
-    - ID: 15946449971123365087
-      Name: Floor
-      Type: Node
-      Parent: 0
-      Transform:
-        WorldTranslation: [-9.85, 0.99999994, 9.499999]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [20, 0.51975, 0.5]
-        LocalTranslation: [-9.85, 0.99999994, 9.499999]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [20, 0.51975, 0.5]
-        Visible: true
-      StaticMesh:
-        Handle: 17604633582810232567
-        MaterialHandle: 0
-      Rigidbody:
-        MotionQuality: 0
-        UseGravity: true
-        RotateX: true
-        RotateY: true
-        RotateZ: true
-        MoveX: true
-        MoveY: true
-        MoveZ: true
-        IsStatic: true
-        Mass: 1
-        AllowSleeping: true
-        RetainAcceleration: false
-        GravityFactor: 1
-        CenterMass: [0, 0, 0]
-      BoxCollider:
-        Scale: [1, 1, 1]
-        Friction: 0.6
-        StaticFriction: 0.6
-        Restitution: 0.675
-        Density: 1
-    - ID: 6223084569920228588
-      Name: Floor
-      Type: Node
-      Parent: 0
-      Transform:
-        WorldTranslation: [-19.85, 0.19999999, 0]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [10, 0.21000001, 10]
-        LocalTranslation: [-19.85, 0.19999999, 0]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [10, 0.21000001, 10]
-        Visible: true
-      StaticMesh:
-        Handle: 17604633582810232567
-        MaterialHandle: 10607535596036951705
-      Rigidbody:
-        MotionQuality: 0
-        UseGravity: true
-        RotateX: true
-        RotateY: true
-        RotateZ: true
-        MoveX: true
-        MoveY: true
-        MoveZ: true
-        IsStatic: true
-        Mass: 1
-        AllowSleeping: true
-        RetainAcceleration: false
-        GravityFactor: 1
-        CenterMass: [0, 0, 0]
-      BoxCollider:
-        Scale: [1, 1, 1]
-        Friction: 0.6
-        StaticFriction: 0.6
+        StaticFriction: 0
         Restitution: 0
         Density: 1
-    - ID: 4839603202462609504
-      Name: Cube
-      Type: Node
+    - ID: 61534230024644459
+      Name: Camera
+      Type: Camera
       Parent: 0
       Transform:
-        WorldTranslation: [-5.276864, 4.9599905, -0.75488234]
-        WorldRotation: [0.98356295, -0.014479943, 0.15462951, 0.09210865]
-        WorldScale: [0.81249994, 0.81249994, 0.81250006]
-        LocalTranslation: [-5.276864, 4.9599905, -0.75488234]
-        LocalRotation: [0.98356295, -0.0144799445, 0.15462953, 0.09210866]
-        LocalScale: [0.81249994, 0.8124999, 0.81249994]
+        WorldTranslation: [10.8158865, 7.6767635, 9.654947]
+        WorldRotation: [-0.15548249, 0.4672395, 0.08385919, 0.86630255]
+        WorldScale: [0.99999994, 0.99999994, 1]
+        LocalTranslation: [10.8158865, 7.6767635, 9.654947]
+        LocalRotation: [-0.15548249, 0.46723953, 0.0838592, 0.8663025]
+        LocalScale: [1, 1, 1]
         Visible: true
-      StaticMesh:
-        Handle: 17604633582810232567
-        MaterialHandle: 0
-      Rigidbody:
-        MotionQuality: 0
-        UseGravity: true
-        RotateX: true
-        RotateY: true
-        RotateZ: true
-        MoveX: true
-        MoveY: true
-        MoveZ: true
-        IsStatic: false
-        Mass: 1
-        AllowSleeping: true
-        RetainAcceleration: false
-        GravityFactor: 1
-        CenterMass: [0, 0, 0]
-      BoxCollider:
-        Scale: [1, 1, 1]
-        Friction: 0.6
-        StaticFriction: 0.6
-        Restitution: 0.55
-        Density: 1
-    - ID: 3678719756243416966
-      Name: Floor
-      Type: Node
-      Parent: 0
-      Transform:
-        WorldTranslation: [9.599999, 0.99999994, -2.875924e-06]
-        WorldRotation: [1.0718497e-13, -0.7071067, 1.0718496e-13, 0.7071068]
-        WorldScale: [8.9249935, 0.51975, 0.4999998]
-        LocalTranslation: [9.599999, 0.99999994, -2.875924e-06]
-        LocalRotation: [1.0718497e-13, -0.70710677, 1.0718497e-13, 0.70710677]
-        LocalScale: [8.924994, 0.51975, 0.49999982]
-        Visible: true
-      StaticMesh:
-        Handle: 17604633582810232567
-        MaterialHandle: 0
-      Rigidbody:
-        MotionQuality: 0
-        UseGravity: true
-        RotateX: true
-        RotateY: true
-        RotateZ: true
-        MoveX: true
-        MoveY: true
-        MoveZ: true
-        IsStatic: true
-        Mass: 1
-        AllowSleeping: true
-        RetainAcceleration: false
-        GravityFactor: 1
-        CenterMass: [0, 0, 0]
-      BoxCollider:
-        Scale: [1, 1, 1]
-        Friction: 0.6
-        StaticFriction: 0.6
-        Restitution: 0.675
-        Density: 1
-    - ID: 3415873918208718138
-      Name: Sphere
-      Type: Node
-      Parent: 0
-      Transform:
-        WorldTranslation: [8.8495455, 0.6592179, -7.97933]
-        WorldRotation: [0.8159685, -0.09654113, -0.41713008, -0.38842985]
-        WorldScale: [0.25, 0.24999997, 0.24999999]
-        LocalTranslation: [8.8495455, 0.6592179, -7.97933]
-        LocalRotation: [-0.8159685, 0.096541114, 0.41713002, 0.3884298]
-        LocalScale: [0.25, 0.25, 0.25]
-        Visible: true
-      StaticMesh:
-        Handle: 17269684607766100826
-        MaterialHandle: 0
-      Rigidbody:
-        MotionQuality: 0
-        UseGravity: true
-        RotateX: true
-        RotateY: true
-        RotateZ: true
-        MoveX: true
-        MoveY: true
-        MoveZ: true
-        IsStatic: false
-        Mass: 1
-        AllowSleeping: true
-        RetainAcceleration: false
-        GravityFactor: 1
-        CenterMass: [0, 0, 0]
-      SphereCollider:
-        Radius: 1
-        Friction: 0.6
-        StaticFriction: 0.6
-        Restitution: 0.6
-        Density: 1
+      Camera:
+        ProjectionType: 1
+        AspectRatioPreset: 1
+        OrthoSize: 10
+        NearClip: 0.1
+        FarClip: 1000
+        Fov: 45
+        Primary: true
+        PostProcessing:
+          EnableVignette: true
+          EnableChromAb: true
+          EnableBloom: true
+          EnableSSAO: false
+          DebugSSAO: false
+          BloomIntensity: 1
+          BloomThreshold: 1
+          BloomKnee: 1
+          BloomRadius: 1
+          BloomIterations: 6
+          VignetteRadius: 1.1
+          VignetteSoftness: 0.7
+          VignetteIntensity: 0.8
+          VignetteColor: [0, 0, 0]
+          ChromAbAmount: 0.001
+          ChromAbRadial: 0.1
+          AoRadius: 0.09
+          AoBias: 0.1
+          AoIntensity: 1.5
+          AoPower: 1
     - ID: 2676433762955077444
       Name: Floor
       Type: Node
       Parent: 0
       Transform:
-        WorldTranslation: [0.15, 0.19999999, 0]
+        WorldTranslation: [0, -2.5, 0]
         WorldRotation: [0, 0, 0, 1]
-        WorldScale: [10, 0.21000001, 10]
-        LocalTranslation: [0.15, 0.19999999, 0]
+        WorldScale: [25, 2.5, 25]
+        LocalTranslation: [0, -2.5, 0]
         LocalRotation: [0, 0, 0, 1]
-        LocalScale: [10, 0.21000001, 10]
+        LocalScale: [25, 2.5, 25]
         Visible: true
       StaticMesh:
         Handle: 17604633582810232567
-        MaterialHandle: 10607535596036951705
+        MaterialHandle: 1686088020919170814
       Rigidbody:
         MotionQuality: 0
         UseGravity: true
@@ -445,12 +170,12 @@ Scene:
       Type: Node
       Parent: 0
       Transform:
-        WorldTranslation: [-24.876863, 4.9599905, -5.0548825]
-        WorldRotation: [0.98356295, -0.0144799845, 0.1546296, 0.092108645]
-        WorldScale: [0.528125, 0.52812517, 0.5281252]
-        LocalTranslation: [-24.876863, 4.9599905, -5.0548825]
-        LocalRotation: [0.98356295, -0.014479988, 0.15462962, 0.09210867]
-        LocalScale: [0.52812505, 0.52812505, 0.5281251]
+        WorldTranslation: [-9.630433, 3.6334875, 0.123854995]
+        WorldRotation: [0.98356295, -0.0144799845, 0.1546296, 0.09210865]
+        WorldScale: [0.5281249, 0.5281257, 0.5281256]
+        LocalTranslation: [-9.630433, 3.6334875, 0.123854995]
+        LocalRotation: [0.98356295, -0.014479987, 0.15462962, 0.09210867]
+        LocalScale: [0.5281249, 0.5281256, 0.52812546]
         Visible: true
       StaticMesh:
         Handle: 17604633582810232567
@@ -481,12 +206,12 @@ Scene:
       Type: Node
       Parent: 0
       Transform:
-        WorldTranslation: [-0.6723719, 2.9791002, 2.0629854]
-        WorldRotation: [-0.47380129, 0.060673535, 0.7149329, 0.51058984]
-        WorldScale: [0.25, 0.25, 0.25]
-        LocalTranslation: [-0.6723719, 2.9791002, 2.0629854]
-        LocalRotation: [-0.4738013, 0.060673565, 0.7149329, 0.51058984]
-        LocalScale: [0.25, 0.25, 0.25]
+        WorldTranslation: [-2.7173553, 6.257395, -0.91068554]
+        WorldRotation: [2.213375e-08, 8.881784e-16, -1.965872e-23, 1]
+        WorldScale: [0.975, 0.97499996, 0.97499996]
+        LocalTranslation: [-2.7173553, 6.257395, -0.91068554]
+        LocalRotation: [2.213375e-08, 8.881784e-16, -1.965872e-23, 1]
+        LocalScale: [0.975, 0.97499996, 0.97499996]
         Visible: true
       StaticMesh:
         Handle: 17269684607766100826
@@ -512,89 +237,17 @@ Scene:
         StaticFriction: 0.6
         Restitution: 0.6
         Density: 1
-    - ID: 61534230024644459
-      Name: Camera
-      Type: Camera
-      Parent: 0
-      Transform:
-        WorldTranslation: [10.8158865, 7.6767635, 9.654947]
-        WorldRotation: [-0.15548249, 0.4672395, 0.08385919, 0.86630255]
-        WorldScale: [0.99999994, 0.99999994, 1]
-        LocalTranslation: [10.8158865, 7.6767635, 9.654947]
-        LocalRotation: [-0.15548249, 0.46723953, 0.0838592, 0.8663025]
-        LocalScale: [1, 1, 1]
-        Visible: true
-      Camera:
-        ProjectionType: 1
-        AspectRatioPreset: 1
-        OrthoSize: 10
-        NearClip: 0.1
-        FarClip: 1000
-        Fov: 45
-        Primary: true
-    - ID: 17790670858123285050
-      Name: Capsule
-      Type: Node
-      Parent: 0
-      Transform:
-        WorldTranslation: [-9.1, 2.1302128, 0.49621236]
-        WorldRotation: [0.93857753, 0, 0, 0.34506842]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [-9.1, 2.1302128, 0.49621236]
-        LocalRotation: [0.93857753, 0, 0, 0.34506842]
-        LocalScale: [1, 1, 1]
-        Visible: true
-      StaticMesh:
-        Handle: 7078707562477107759
-        MaterialHandle: 0
-      Rigidbody:
-        MotionQuality: 0
-        UseGravity: true
-        RotateX: true
-        RotateY: true
-        RotateZ: true
-        MoveX: true
-        MoveY: true
-        MoveZ: true
-        IsStatic: false
-        Mass: 1
-        AllowSleeping: true
-        RetainAcceleration: false
-        GravityFactor: 1
-        CenterMass: [0, 0, 0]
-      CapsuleCollider:
-        Radius: 1.15
-        Height: 2.225
-        Friction: 0.6
-        StaticFriction: 0
-        Restitution: 0
-        Density: 1
-    - ID: 12032466883160130762
-      Name: Monkey
-      Type: Node
-      Parent: 0
-      Transform:
-        WorldTranslation: [2.7013628, 2.2933717, 0.6372632]
-        WorldRotation: [-1.6066819e-10, -5.421011e-20, -8.70984e-30, 1]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [2.7013628, 2.2933717, 0.6372632]
-        LocalRotation: [-1.6066819e-10, -5.421011e-20, -8.70984e-30, 1]
-        LocalScale: [1, 1, 1]
-        Visible: true
-      StaticMesh:
-        Handle: 8562597306584449002
-        MaterialHandle: 0
-    - ID: 15346274152361991252
+    - ID: 3415873918208718138
       Name: Sphere
       Type: Node
       Parent: 0
       Transform:
-        WorldTranslation: [-3.3335464, 2.96, 1.9000064]
-        WorldRotation: [0, 0, 0, 1]
-        WorldScale: [0.25, 0.25, 0.25]
-        LocalTranslation: [-3.3335464, 2.96, 1.9000064]
-        LocalRotation: [0, 0, 0, 1]
-        LocalScale: [0.25, 0.25, 0.25]
+        WorldTranslation: [-2.5504549, 5.459218, 2.9706707]
+        WorldRotation: [-5.6884635e-09, -5.551115e-17, -3.1577316e-25, 1]
+        WorldScale: [0.36250004, 0.36249998, 0.36249998]
+        LocalTranslation: [-2.5504549, 5.459218, 2.9706707]
+        LocalRotation: [-5.6884635e-09, -5.551115e-17, -3.1577316e-25, 1]
+        LocalScale: [0.36250004, 0.36249998, 0.36249998]
         Visible: true
       StaticMesh:
         Handle: 17269684607766100826
@@ -620,69 +273,34 @@ Scene:
         StaticFriction: 0.6
         Restitution: 0.6
         Density: 1
-    - ID: 108555296503783245
-      Name: World Environment
-      Type: Audio
+    - ID: 12449376767739622077
+      Name: SkeletalMesh
+      Type: Node
       Parent: 0
       Transform:
-        WorldTranslation: [0, 0, 0]
+        WorldTranslation: [-11.3, 0.45000002, 1.3999999]
         WorldRotation: [0, 0, 0, 1]
-        WorldScale: [1, 1, 1]
-        LocalTranslation: [0, 0, 0]
+        WorldScale: [0.032300003, 0.032300003, 0.032300003]
+        LocalTranslation: [-11.3, 0.45000002, 1.3999999]
         LocalRotation: [0, 0, 0, 1]
-        LocalScale: [1, 1, 1]
+        LocalScale: [0.032300003, 0.032300003, 0.032300003]
         Visible: true
-      WorldEnvironment:
-        Primary: true
-        Enabled: true
-        HDRHandle: 7201159435847965647
-        SunColor: [1, 1, 1, 0.87]
-        SunAngles: [2.456592, -0.04959274]
-        SunAngularRadius: 0.7770206
-        RenderMode: 0
-        DebugShadow: 0
-        Exposure: 1.73
-        Gamma: 2.29
-        Ambient: 0.34
-    - ID: 8388833910029119416
-      Name: Directional Light
+      SkeletalMesh:
+        Handle: 1146833996653238217
+    - ID: 11346438074498002042
+      Name: Sphere
       Type: Node
       Parent: 0
       Transform:
-        WorldTranslation: [-5.55, 7.850001, 0]
-        WorldRotation: [0.13874643, 0.8471476, 0.24269678, -0.4518724]
-        WorldScale: [0.9999998, 1, 0.9999999]
-        LocalTranslation: [-5.55, 7.850001, 0]
-        LocalRotation: [0.13874643, 0.8471475, 0.24269679, -0.45187238]
-        LocalScale: [1, 1, 1]
-        Visible: true
-      DirectionalLight:
-        Color: [1, 1, 1, 1]
-        Intensity: 2
-        AngularRadius: 43.44
-        Exposure: 1.14
-        Gamma: 1.89
-        Ambient: 0.1
-        ShadowStrength: 0.42
-        ShadowMinBias: 0.05
-        ShadowMaxBias: 0.001
-        PCFRadius: 0.18
-        ShadowResolution: 2
-        CascadeShadow: true
-    - ID: 2781788914683447881
-      Name: Cube
-      Type: Node
-      Parent: 0
-      Transform:
-        WorldTranslation: [-8.876864, 4.9599905, -1.7048824]
-        WorldRotation: [0.98356295, -0.014479943, 0.15462951, 0.09210865]
-        WorldScale: [0.81249994, 0.81249994, 0.81250006]
-        LocalTranslation: [-8.876864, 4.9599905, -1.7048824]
-        LocalRotation: [0.98356295, -0.0144799445, 0.15462953, 0.09210866]
-        LocalScale: [0.81249994, 0.8124999, 0.81249994]
+        WorldTranslation: [-6.483549, 3.0100002, 1.450004]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1.3125001, 1.3125001, 1.3125001]
+        LocalTranslation: [-6.483549, 3.0100002, 1.450004]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1.3125001, 1.3125001, 1.3125001]
         Visible: true
       StaticMesh:
-        Handle: 17604633582810232567
+        Handle: 17269684607766100826
         MaterialHandle: 0
       Rigidbody:
         MotionQuality: 0
@@ -699,9 +317,23 @@ Scene:
         RetainAcceleration: false
         GravityFactor: 1
         CenterMass: [0, 0, 0]
-      BoxCollider:
-        Scale: [1, 1, 1]
+      SphereCollider:
+        Radius: 1
         Friction: 0.6
         StaticFriction: 0.6
-        Restitution: 0.55
+        Restitution: 0.6
         Density: 1
+    - ID: 10024928053884534303
+      Name: SkeletalMesh
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [1.6500001, 0.3, 2.050001]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [0.032300003, 0.032300003, 0.032300003]
+        LocalTranslation: [1.6500001, 0.3, 2.050001]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [0.032300003, 0.032300003, 0.032300003]
+        Visible: true
+      SkeletalMesh:
+        Handle: 9297076932640637832

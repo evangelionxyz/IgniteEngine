@@ -30,6 +30,9 @@ AssetRegistry:
     - Handle: 1671497305426399170
       Type: Texture
       Filepath: kiara_1_dawn_4k.hdr
+    - Handle: 1686088020919170814
+      Type: Material
+      Filepath: Floor.ixmat
     - Handle: 1984184665518679683
       Type: Material
       Filepath: new_capsule/Material/DefaultMaterial.ixmat
@@ -69,6 +72,9 @@ AssetRegistry:
     - Handle: 6574078181313987055
       Type: Material
       Filepath: cannon_01_1k/Material/cannon_01.ixmat
+    - Handle: 6742208295140439841
+      Type: AnimationMontage
+      Filepath: Great Sword Jump Attack/Animation/Great Sword Jump Attack_0.mtg
     - Handle: 6895963861277518904
       Type: Texture
       Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_0_.png

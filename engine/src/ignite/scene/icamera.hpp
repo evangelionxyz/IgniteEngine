@@ -62,8 +62,8 @@ namespace ignite
 		// Toggles
         bool enableVignette = false;
 		bool enableChromAb = false;
-		bool enableBloom = true;
-		bool enableSSAO = true; // Screen space ambient occlusion
+		bool enableBloom = false;
+		bool enableSSAO = false; // Screen space ambient occlusion
 		bool debugSSAO = false; // Visualize raw AO buffer
 
 		// Bloom

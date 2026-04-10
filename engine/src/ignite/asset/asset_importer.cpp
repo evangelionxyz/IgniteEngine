@@ -7,13 +7,14 @@
 #include "ignite/project/project.hpp"
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/serializer/binary_serializer.hpp"
-#include "ignite/graphics/scene_renderer.hpp"
+#include "ignite/graphics/renderer/scene_renderer.hpp"
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
+#include "ignite/animation/animation_montage.hpp"
 #include "ignite/animation/animation_2d.hpp"
 #include "ignite/animation/animator_controller_2d.hpp"
 #include "ignite/scene/scene.hpp"
@@ -39,6 +40,9 @@ namespace ignite {
         { AssetType::Font, AssetImporter::ImportFont },
         { AssetType::Skeleton, AssetImporter::ImportSkeleton },
         { AssetType::SkeletalAnimation, AssetImporter::ImportSkeletalAnimation },
+        { AssetType::AnimationMontage, AssetImporter::ImportAnimationMontage },
+        { AssetType::BlendSpace, AssetImporter::ImportBlendSpace },
+        { AssetType::LocomotionController, AssetImporter::ImportLocomotionController },
         { AssetType::Animation2D, AssetImporter::ImportAnimation2D },
         { AssetType::AnimatorController2D, AssetImporter::ImportAnimatorController2D },
     };
@@ -115,42 +119,42 @@ namespace ignite {
         });
     }
 
-	Ref<StaticMesh> AssetImporter::ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
-	{
+    Ref<StaticMesh> AssetImporter::ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
+    {
         if (!std::filesystem::exists(metadata.filepath))
         {
             LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
             return nullptr;
         }
 
-		static auto staticMeshBinExt = GetAssetExtensionFromType(AssetType::StaticMesh);
-		static auto materialExt = GetAssetExtensionFromType(AssetType::Material);
+        static auto staticMeshBinExt = GetAssetExtensionFromType(AssetType::StaticMesh);
+        static auto materialExt = GetAssetExtensionFromType(AssetType::Material);
 
-		Ref<StaticMesh> asset;
+        Ref<StaticMesh> asset;
 
-		// Load the mesh from .ixsm
+        // Load the mesh from .ixsm
         if (metadata.filepath.extension() == staticMeshBinExt)
         {
-		    asset = BinarySerializer::DeserializeStaticMesh(metadata.filepath);
+            asset = BinarySerializer::DeserializeStaticMesh(metadata.filepath);
         }
 
         if (asset)
         {
-			for (auto &mesh : asset->GetMeshInstances())
-			{
-			    // Load materials
-				AssetHandle materialHandle = mesh->GetMaterialHandle();
-				AssetMetaData metadata = assetManager->GetMetaData(materialHandle);
-				if (metadata.type == AssetType::Material)
-				{
-					const auto &materialFilepath = assetManager->GetProject()->GetAssetFilepath(metadata.filepath);
-					Ref<Material> material = Material::Deserialize(materialFilepath);
+            for (auto &mesh : asset->GetMeshInstances())
+            {
+                // Load materials
+                AssetHandle materialHandle = mesh->GetMaterialHandle();
+                AssetMetaData metadata = assetManager->GetMetaData(materialHandle);
+                if (metadata.type == AssetType::Material)
+                {
+                    const auto &materialFilepath = assetManager->GetProject()->GetAssetFilepath(metadata.filepath);
+                    Ref<Material> material = Material::Deserialize(materialFilepath);
                     assetManager->AssignAsset(materialHandle, material);
-                    
+
                     // Submit GPU upload command list to render thread (thread-safe)
                     Application::SubmitToRenderThread([m = mesh]()
                     {
-                        nvrhi::IDevice* device = DeviceManager::GetInstance()->GetDevice();
+                        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
                         nvrhi::CommandListHandle cmd = device->createCommandList();
                         cmd->open();
                         m->GetPrimitive()->CreateBuffer(cmd);
@@ -335,6 +339,39 @@ namespace ignite {
             auto relativePath = assetManager->GetProject()->GetAssetRelativeFilepath(meshBinaryFullpath);
         }
 
+        return asset;
+    }
+
+    Ref<AnimationMontage> AssetImporter::ImportAnimationMontage(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
+    {
+        Ref<AnimationMontage> asset = AnimationMontage::Deserialize(metadata.filepath);
+        if (asset)
+        {
+            asset->handle = handle;
+            asset->SetReadyFlag(true);
+        }
+        return asset;
+    }
+
+    Ref<BlendSpace> AssetImporter::ImportBlendSpace(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
+    {
+        Ref<BlendSpace> asset = BlendSpace::Deserialize(metadata.filepath);
+        if (asset)
+        {
+            asset->handle = handle;
+            asset->SetReadyFlag(true);
+        }
+        return asset;
+    }
+
+    Ref<LocomotionController> AssetImporter::ImportLocomotionController(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
+    {
+        Ref<LocomotionController> asset = LocomotionController::Deserialize(metadata.filepath);
+        if (asset)
+        {
+            asset->handle = handle;
+            asset->SetReadyFlag(true);
+        }
         return asset;
     }
 

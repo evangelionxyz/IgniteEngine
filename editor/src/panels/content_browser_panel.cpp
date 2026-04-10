@@ -6,6 +6,8 @@
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/graphics/objects/material.hpp"
+#include "ignite/animation/skeletal_animation.hpp"
+#include "ignite/animation/animation_montage.hpp"
 #include "ignite/scene/sprite_sheet.hpp"
 
 #include "ignite/core/input/asset_import_event.hpp"
@@ -230,7 +232,8 @@ namespace ignite
     void ContentBrowserPanel::OnGuiRender()
     {
         IGN_PROFILE_FUNCTION();
-        if (ImGui::Begin("Content Browser"))
+        const bool windowOpen = ImGui::Begin("Content Browser");
+        if (windowOpen)
         {
             if (!m_EditorLayer->GetActiveProject())
             {
@@ -268,159 +271,171 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE_COLOR("ContentBrowser::FileList", 0xCD5C5C);
 
-                ImGui::BeginChild("##file_lists", { 0.0f, 0.0f });
-
-                // Insert path nodes
-                FileTreeNode *node = m_TreeNodes.data();
-                if (node)
+                if (ImGui::BeginChild("##file_lists", { 0.0f, 0.0f }))
                 {
-                    auto f = m_EditorLayer->GetActiveProject()->GetAssetDirectory();
-                    const auto &relativePath = std::filesystem::relative(m_CurrentDirectory, f);
-
+                    // Insert path nodes
+                    FileTreeNode *node = m_TreeNodes.data();
+                    if (node)
                     {
-                        IGN_PROFILE_SCOPE_COLOR("ContentBrowser::Submitting paths", 0xCD5C5C);
-                        for (const auto &path : relativePath)
+                        auto f = m_EditorLayer->GetActiveProject()->GetAssetDirectory();
+                        const auto &relativePath = std::filesystem::relative(m_CurrentDirectory, f);
+
                         {
-                            if (node->path == relativePath)
+                            IGN_PROFILE_SCOPE_COLOR("ContentBrowser::Submitting paths", 0xCD5C5C);
+                            for (const auto &path : relativePath)
                             {
-                                break;
-                            }
-
-                            if (node->children.contains(path))
-                            {
-                                node = &m_TreeNodes[node->children[path]];
-                            }
-                        }
-                    }
-
-                    if (node->children.empty())
-                    {
-                        ImGui::Text("This folder is empty");
-                    }
-
-                    static float padding = 12.0f;
-                    const float cellSize = static_cast<float>(m_ThumbnailSize) + padding;
-                    const float &childWindowWidth = ImGui::GetContentRegionAvail().x;
-
-                    int columnCount = static_cast<int>(childWindowWidth / cellSize);
-                    columnCount = std::max(columnCount, 1);
-
-                    ImGui::Columns(columnCount, nullptr, false);
-
-                    for (const auto childNodeIndex : node->sortedChildren)
-                    {
-                        const auto &item = m_TreeNodes[childNodeIndex].path;
-                        ImGui::PushID(item.generic_string().c_str());
-                        UIRenderFileButton(item);
-                        ImGui::NextColumn();
-                        ImGui::PopID();
-                    }
-                }
-
-                ImGui::Columns(1);
-
-                if (ImGui::BeginPopupContextWindow("##content_browser_context_menu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoReopen | ImGuiPopupFlags_NoOpenOverItems))
-                {
-                    if (ImGui::BeginMenu("Create"))
-                    {
-                        if (ImGui::MenuItem("New Folder"))
-                        {
-                            // show create folder modal
-                            m_ShowCreateFolderModal = true;
-                        }
-
-                        if (ImGui::MenuItem("Sprite Sheet"))
-                        {
-							DispatchCreateAssetEditorEvent(AssetType::SpriteSheet, m_CurrentDirectory);
-                        }
-
-                        if (ImGui::BeginMenu("Animation"))
-                        {
-                            if (ImGui::MenuItem("Animation 2D"))
-                            {
-                                DispatchCreateAssetEditorEvent(AssetType::Animation2D, m_CurrentDirectory);
-                            }
-
-                            if (ImGui::MenuItem("Animator Controller 2D"))
-                            {
-                                DispatchCreateAssetEditorEvent(AssetType::AnimatorController2D, m_CurrentDirectory);
-                            }
-
-                            ImGui::EndMenu();
-                        }
-
-                        if (ImGui::BeginMenu("Material"))
-                        {
-                            if (ImGui::MenuItem("Material2D"))
-                            {
-                                DispatchCreateAssetEditorEvent(AssetType::Material2D, m_CurrentDirectory);
-                            }
-
-                            if (ImGui::MenuItem("Material"))
-                            {
-                                Project *project = m_EditorLayer->GetActiveProject().get();
-                                if (project && m_AssetManager)
+                                if (node->path == relativePath)
                                 {
-                                    std::string assetName = "NewMaterial";
-                                    std::filesystem::path targetDirectory = m_CurrentDirectory;
-                                    if (!std::filesystem::exists(targetDirectory))
-                                    {
-                                        std::filesystem::create_directories(targetDirectory);
-                                    }
+                                    break;
+                                }
 
-                                    std::filesystem::path fullAssetPath = targetDirectory / (assetName + GetAssetExtensionFromType(AssetType::Material));
-                                    uint32_t suffix = 1;
-                                    while (std::filesystem::exists(fullAssetPath))
-                                    {
-                                        fullAssetPath = targetDirectory / std::format("{}_{}{}", assetName, suffix, GetAssetExtensionFromType(AssetType::Material));
-                                        ++suffix;
-                                    }
-
-                                    Ref<Material> material = CreateRef<Material>();
-                                    material->name = assetName;
-                                    if (material->Serialize(fullAssetPath))
-                                    {
-                                        AssetHandle handle = AssetHandle();
-                                        AssetMetaData metadata;
-                                        metadata.type = AssetType::Material;
-                                        metadata.filepath = project->GetAssetRelativeFilepath(fullAssetPath);
-
-                                        material->handle = handle;
-                                        material->SetDirtyFlag(false);
-                                        material->SetReadyFlag(true);
-                                        m_AssetManager->AssignMetaData(handle, metadata);
-                                        m_AssetManager->AssignAsset(handle, material);
-                                        m_EditorLayer->SaveProject();
-
-                                        DispatchOpenAssetEditorEvent(handle, metadata);
-                                        m_NeedsRefresh = true;
-                                    }
+                                if (node->children.contains(path))
+                                {
+                                    node = &m_TreeNodes[node->children[path]];
                                 }
                             }
+                        }
+
+                        if (node->children.empty())
+                        {
+                            ImGui::Text("This folder is empty");
+                        }
+
+                        static float padding = 12.0f;
+                        const float cellSize = static_cast<float>(m_ThumbnailSize) + padding;
+                        const float &childWindowWidth = ImGui::GetContentRegionAvail().x;
+
+                        int columnCount = static_cast<int>(childWindowWidth / cellSize);
+                        columnCount = std::max(columnCount, 1);
+
+                        ImGui::Columns(columnCount, nullptr, false);
+
+                        for (const auto childNodeIndex : node->sortedChildren)
+                        {
+                            const auto &item = m_TreeNodes[childNodeIndex].path;
+                            ImGui::PushID(item.generic_string().c_str());
+                            UIRenderFileButton(item);
+                            ImGui::NextColumn();
+                            ImGui::PopID();
+                        }
+                    }
+
+                    ImGui::Columns(1);
+
+                    if (ImGui::BeginPopupContextWindow("##content_browser_context_menu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoReopen | ImGuiPopupFlags_NoOpenOverItems))
+                    {
+                        if (ImGui::BeginMenu("Create"))
+                        {
+                            if (ImGui::MenuItem("New Folder"))
+                            {
+                                // show create folder modal
+                                m_ShowCreateFolderModal = true;
+                            }
+
+                            if (ImGui::MenuItem("Sprite Sheet"))
+                            {
+                                DispatchCreateAssetEditorEvent(AssetType::SpriteSheet, m_CurrentDirectory);
+                            }
+
+                            if (ImGui::BeginMenu("Animation"))
+                            {
+                                if (ImGui::MenuItem("Blend Space"))
+                                {
+                                    DispatchCreateAssetEditorEvent(AssetType::BlendSpace, m_CurrentDirectory);
+                                }
+
+                                if (ImGui::MenuItem("Locomotion Controller"))
+                                {
+                                    DispatchCreateAssetEditorEvent(AssetType::LocomotionController, m_CurrentDirectory);
+                                }
+
+                                if (ImGui::MenuItem("Animation 2D"))
+                                {
+                                    DispatchCreateAssetEditorEvent(AssetType::Animation2D, m_CurrentDirectory);
+                                }
+
+                                if (ImGui::MenuItem("Animator Controller 2D"))
+                                {
+                                    DispatchCreateAssetEditorEvent(AssetType::AnimatorController2D, m_CurrentDirectory);
+                                }
+
+                                ImGui::EndMenu();
+                            }
+
+                            if (ImGui::BeginMenu("Material"))
+                            {
+                                if (ImGui::MenuItem("Material2D"))
+                                {
+                                    DispatchCreateAssetEditorEvent(AssetType::Material2D, m_CurrentDirectory);
+                                }
+
+                                if (ImGui::MenuItem("Material"))
+                                {
+                                    Project *project = m_EditorLayer->GetActiveProject().get();
+                                    if (project && m_AssetManager)
+                                    {
+                                        std::string assetName = "NewMaterial";
+                                        std::filesystem::path targetDirectory = m_CurrentDirectory;
+                                        if (!std::filesystem::exists(targetDirectory))
+                                        {
+                                            std::filesystem::create_directories(targetDirectory);
+                                        }
+
+                                        std::filesystem::path fullAssetPath = targetDirectory / (assetName + GetAssetExtensionFromType(AssetType::Material));
+                                        uint32_t suffix = 1;
+                                        while (std::filesystem::exists(fullAssetPath))
+                                        {
+                                            fullAssetPath = targetDirectory / std::format("{}_{}{}", assetName, suffix, GetAssetExtensionFromType(AssetType::Material));
+                                            ++suffix;
+                                        }
+
+                                        Ref<Material> material = CreateRef<Material>();
+                                        material->name = assetName;
+                                        if (material->Serialize(fullAssetPath))
+                                        {
+                                            AssetHandle handle = AssetHandle();
+                                            AssetMetaData metadata;
+                                            metadata.type = AssetType::Material;
+                                            metadata.filepath = project->GetAssetRelativeFilepath(fullAssetPath);
+
+                                            material->handle = handle;
+                                            material->SetDirtyFlag(false);
+                                            material->SetReadyFlag(true);
+                                            m_AssetManager->AssignMetaData(handle, metadata);
+                                            m_AssetManager->AssignAsset(handle, material);
+                                            m_EditorLayer->SaveProject();
+
+                                            DispatchOpenAssetEditorEvent(handle, metadata);
+                                            m_NeedsRefresh = true;
+                                        }
+                                    }
+                                }
+
+                                ImGui::EndMenu();
+                            }
 
                             ImGui::EndMenu();
                         }
 
-                        ImGui::EndMenu();
+                        if (ImGui::BeginMenu("Thumbnail Size"))
+                        {
+                            if (ImGui::MenuItem("Small")) m_ThumbnailSize = 38;
+                            if (ImGui::MenuItem("Medium")) m_ThumbnailSize = 64;
+                            if (ImGui::MenuItem("Large")) m_ThumbnailSize = 96;
+                            ImGui::EndMenu();
+                        }
+
+                        if (ImGui::MenuItem("Open Folder in File Explorer"))
+                        {
+                            std::string command = std::format("explorer {}", m_CurrentDirectory.string());
+                            std::system(command.c_str());
+                        }
+
+                        ImGui::EndPopup();
                     }
 
-                    if (ImGui::BeginMenu("Thumbnail Size"))
-                    {
-                        if (ImGui::MenuItem("Small")) m_ThumbnailSize = 38;
-                        if (ImGui::MenuItem("Medium")) m_ThumbnailSize = 64;
-                        if (ImGui::MenuItem("Large")) m_ThumbnailSize = 96;
-                        ImGui::EndMenu();
-                    }
-
-                    if (ImGui::MenuItem("Open Folder in File Explorer"))
-                    {
-                        std::string command = std::format("explorer {}", m_CurrentDirectory.string());
-                        std::system(command.c_str());
-                    }
-
-                    ImGui::EndPopup();
                 }
-
+                
                 ImGui::EndChild();
             }
 
@@ -539,9 +554,9 @@ namespace ignite
                 }
                 ImGui::EndPopup();
             }
-
-            ImGui::End();
         }
+
+        ImGui::End();
     }
 
 	void ContentBrowserPanel::OnUpdate(float deltaTime)
@@ -909,6 +924,62 @@ namespace ignite
                         project->SetDefaultScene(handle);
 
                         project->Serialize(project->GetFilepath());
+                    }
+                }
+            }
+
+            if (!isDirectory && item.extension() == ".ixanim" && ImGui::MenuItem("Create Montage"))
+            {
+                Project *project = m_EditorLayer->GetActiveProject().get();
+                if (project && m_AssetManager)
+                {
+                    const std::filesystem::path relativeAnimPath = project->GetAssetRelativeFilepath(path);
+                    const AssetHandle animHandle = m_AssetManager->GetAssetHandle(relativeAnimPath);
+                    const AssetMetaData animationMetadata = m_AssetManager->GetMetaData(animHandle);
+
+                    if (animHandle != AssetHandle(0) && animationMetadata.type == AssetType::SkeletalAnimation)
+                    {
+                        Ref<AnimationMontage> montage = CreateRef<AnimationMontage>();
+                        montage->name = std::format("{}_Montage", path.stem().string());
+                        montage->SetAnimationHandle(animHandle);
+
+                        Ref<SkeletalAnimation> animation = project->GetAsset<SkeletalAnimation>(animHandle);
+                        if (!animation)
+                        {
+                            animation = project->GetAssetImmediate<SkeletalAnimation>(animHandle);
+                        }
+
+                        if (animation)
+                        {
+                            montage->SetSkeletonHandle(animation->GetSkeletonHandle());
+                        }
+
+                        std::filesystem::path montagePath = path.parent_path() / (path.stem().string() + GetAssetExtensionFromType(AssetType::AnimationMontage));
+                        uint32_t suffix = 1;
+                        while (std::filesystem::exists(montagePath))
+                        {
+                            montagePath = path.parent_path() / std::format("{}_{}{}", path.stem().string(), suffix, GetAssetExtensionFromType(AssetType::AnimationMontage));
+                            ++suffix;
+                        }
+
+                        if (montage->Serialize(montagePath))
+                        {
+                            const AssetHandle montageHandle = AssetHandle();
+                            montage->handle = montageHandle;
+                            montage->SetDirtyFlag(false);
+                            montage->SetReadyFlag(true);
+
+                            AssetMetaData montageMetaData;
+                            montageMetaData.type = AssetType::AnimationMontage;
+                            montageMetaData.filepath = project->GetAssetRelativeFilepath(montagePath);
+
+                            m_AssetManager->AssignMetaData(montageHandle, montageMetaData);
+                            m_AssetManager->AssignAsset(montageHandle, montage);
+                            m_EditorLayer->SaveProject();
+
+                            DispatchOpenAssetEditorEvent(montageHandle, montageMetaData);
+                            m_NeedsRefresh = true;
+                        }
                     }
                 }
             }

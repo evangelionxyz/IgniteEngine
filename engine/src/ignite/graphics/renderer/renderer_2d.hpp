@@ -4,10 +4,10 @@
 #define RENDERER_2D_HPP
 
 #include "ignite/core/types.hpp"
-#include "vertex_data.hpp"
-#include "graphics_pipeline.hpp"
-#include "renderer.hpp"
-#include "shader.hpp"
+#include "ignite/graphics/vertex_data.hpp"
+#include "ignite/graphics/graphics_pipeline.hpp"
+#include "ignite/graphics/renderer.hpp"
+#include "ignite/graphics/shader.hpp"
 #include "ignite/math/math.hpp"
 
 #include "ignite/math/aabb.hpp"

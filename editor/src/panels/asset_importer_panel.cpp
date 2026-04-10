@@ -246,6 +246,46 @@ namespace ignite
 			{
 				ImGui::TextDisabled("Skeletal mesh import currently requires skeleton and animations.");
 			}
+			else if (m_SkeletalMeshOptions.importAnimations)
+			{
+				ImGui::SeparatorText("Animation Only");
+				ImGui::Checkbox("Use Existing Skeleton", &m_SkeletalMeshOptions.useExistingSkeletonForAnimations);
+
+				if (m_SkeletalMeshOptions.useExistingSkeletonForAnimations)
+				{
+					const bool hasSkeleton = m_SkeletalMeshOptions.existingSkeletonHandle != AssetHandle(0);
+					ImGui::Button(hasSkeleton ? "Skeleton Selected" : "Drop Skeleton Here", ImVec2(220.0f, 0.0f));
+
+					if (ImGui::BeginDragDropTarget())
+					{
+						if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+						{
+							if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+							{
+								const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+								auto project = m_EditorLayer->GetActiveProject();
+								if (project)
+								{
+									const AssetMetaData &metadata = project->GetAssetManager()->GetMetaData(droppedHandle);
+									if (metadata.type == AssetType::Skeleton)
+									{
+										m_SkeletalMeshOptions.existingSkeletonHandle = droppedHandle;
+									}
+								}
+							}
+						}
+						ImGui::EndDragDropTarget();
+					}
+
+					ImGui::SameLine();
+					if (ImGui::Button("Clear Skeleton"))
+					{
+						m_SkeletalMeshOptions.existingSkeletonHandle = AssetHandle(0);
+					}
+
+					ImGui::TextDisabled("Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(m_SkeletalMeshOptions.existingSkeletonHandle)));
+				}
+			}
 
 			ImGui::TreePop();
 		}
@@ -616,8 +656,21 @@ namespace ignite
 			std::filesystem::create_directory(animationDirectory);
 		}
 
-		Ref<Skeleton> skeleton = CreateRef<Skeleton>();
-		FBXMeshLoader::LoadSkeletonOnlyFromFBX(filepath.generic_string(), skeleton, assetManager);
+     Ref<Skeleton> skeleton = nullptr;
+		if (options.useExistingSkeletonForAnimations && options.existingSkeletonHandle != AssetHandle(0))
+		{
+			skeleton = project->GetAsset<Skeleton>(options.existingSkeletonHandle);
+			if (!skeleton)
+			{
+				skeleton = project->GetAssetImmediate<Skeleton>(options.existingSkeletonHandle);
+			}
+		}
+
+		if (!skeleton)
+		{
+			skeleton = CreateRef<Skeleton>();
+			FBXMeshLoader::LoadSkeletonOnlyFromFBX(filepath.generic_string(), skeleton, assetManager);
+		}
 
 		if (!skeleton)
 		{
@@ -647,6 +700,10 @@ namespace ignite
 			skeleton->SetReadyFlag(true);
 			assetManager->AssignMetaData(skeletonHandle, skeletonMD);
 			assetManager->AssignAsset(skeletonHandle, skeleton);
+		}
+		else if (options.existingSkeletonHandle != AssetHandle(0))
+		{
+			skeleton->handle = options.existingSkeletonHandle;
 		}
 
 		if (options.importAnimations)
@@ -682,6 +739,7 @@ namespace ignite
 				}
 
 				animation->handle = animationHandle;
+              animation->SetSkeletonHandle(skeleton ? skeleton->handle : AssetHandle(0));
 				animation->SetReadyFlag(true);
 				assetManager->AssignMetaData(animationHandle, animationMD);
 				assetManager->AssignAsset(animationHandle, animation);
