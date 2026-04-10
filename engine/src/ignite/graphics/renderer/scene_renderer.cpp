@@ -2035,6 +2035,9 @@ namespace ignite
             Ref<Texture> texture = m_Icons["lighting"];
             glm::mat4 iconTransform = glm::translate(glm::mat4(1.0f), worldPos) * billboardRotation * glm::scale(glm::mat4(1.0f), glm::vec3(2.2f));
             m_Renderer2D->DrawQuad(iconTransform, lc.color, texture, { 0.0f, 0.0f }, { 1.0f, 1.0f }, glm::vec2(1.0f), objectID);
+
+            const glm::vec3 direction = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+            m_Renderer2D->DrawLine(worldPos, worldPos - direction * 5.0f, lc.color);
         }
 
         m_Renderer2D->Flush(framebuffer);
