@@ -140,6 +140,10 @@ namespace ignite
         m_Icons["material_2d"] = Texture::Create("resources/ui/editor/ic_editor_material_2d.png", createInfo, cmd);
         m_Icons["anim"] = Texture::Create("resources/ui/editor/ic_editor_anim.png", createInfo, cmd);
         m_Icons["font"] = Texture::Create("resources/ui/editor/ic_editor_font.png", createInfo, cmd);
+
+        m_Icons["skeleton"] = Texture::Create("resources/ui/editor/ic_editor_skeleton.png", createInfo, cmd);
+        m_Icons["sk_mesh"] = Texture::Create("resources/ui/editor/ic_editor_sk_mesh.png", createInfo, cmd);
+        m_Icons["st_mesh"] = Texture::Create("resources/ui/editor/ic_editor_st_mesh.png", createInfo, cmd);
         
         m_Icons["anim_ctrl"] = Texture::Create("resources/ui/editor/ic_editor_anim_ctrl.png", createInfo, cmd);
         m_Icons["anim_2d"] = Texture::Create("resources/ui/editor/ic_editor_anim_2d.png", createInfo, cmd);
@@ -1801,6 +1805,9 @@ namespace ignite
             case AssetType::Material2D: return m_Icons["material_2d"];
             case AssetType::SkeletalAnimation: return m_Icons["anim"];
             case AssetType::Font: return m_Icons["font"];
+            case AssetType::Skeleton: return m_Icons["skeleton"];
+            case AssetType::SkeletalMesh: return m_Icons["sk_mesh"];
+            case AssetType::StaticMesh: return m_Icons["st_mesh"];
             case AssetType::Animation2D: return m_Icons["anim_2d"];
             case AssetType::AnimatorController: return m_Icons["anim_ctrl"];
             case AssetType::AnimatorController2D: return m_Icons["anim_ctrl_2d"];
