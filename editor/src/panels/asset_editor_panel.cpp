@@ -3918,7 +3918,7 @@ namespace ignite
 
                 s_SkeletonPreviewGizmo.SetInfo(gizmoInfo);
                 s_SkeletonPreviewGizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
-                s_SkeletonPreviewGizmo.SetMode(ImGuizmo::MODE::WORLD);
+                s_SkeletonPreviewGizmo.SetMode(ImGuizmo::MODE::LOCAL);
 
                 const bool hasSelectedJoint = selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(animation->joints.size());
                 const bool hasSelectedSocket = selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(animation->sockets.size());
