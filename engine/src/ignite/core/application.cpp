@@ -338,8 +338,8 @@ namespace ignite
     void Application::PushLayer(Layer *layer)
     {
         IGN_PROFILE_FUNCTION();
-        layer->OnAttach();
         m_LayerStack.PushLayer(layer);
+        layer->OnAttach();
     }
 
     void Application::PopLayer(Layer *layer)
