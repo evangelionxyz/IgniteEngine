@@ -4,6 +4,7 @@
 #include "panels/scene_panel.hpp"
 #include "panels/content_browser_panel.hpp"
 #include "panels/asset_importer_panel.hpp"
+#include "panels/asset_editor_panel.hpp"
 #include "ext/editor_ui.hpp"
 #include "ignite/core/command.hpp"
 #include "ignite/graphics/renderer/renderer_2d.hpp"
@@ -15,7 +16,9 @@
 #include "ignite/core/profiler/profiler.hpp"
 #include "stb_image_write.h"
 
+#include <algorithm>
 #include <cmath>
+#include <format>
 #include <SDL3/SDL_dialog.h>
 
 namespace ignite
@@ -61,12 +64,14 @@ namespace ignite
         auto *app = Application::GetInstance();
 
         m_ScenePanel = new ScenePanel("Scene Panel", this);
-        m_ContentBrowserPanel = new ContentBrowserPanel("Content Browser", this);
         m_AssetImporterPanel = new AssetImporterPanel("AssetImporter Panel", this);
+        m_AssetEditorPanel = new AssetEditorPanel("Animation Panel", this);
 
         app->PushLayer(m_ScenePanel);
-        app->PushLayer(m_ContentBrowserPanel);
         app->PushLayer(m_AssetImporterPanel);
+        app->PushLayer(m_AssetEditorPanel);
+
+        AddContentBrowserPanel();
 
         // create render target framebuffer
         m_SceneRenderer = CreateRef<SceneRenderer>();
@@ -93,18 +98,136 @@ namespace ignite
     {
         Layer::OnDetach();
 
+        m_ContentBrowserPanels.clear();
+        m_ContentBrowserPanelsPendingRemoval.clear();
+        m_ContentBrowserPanel = nullptr;
+        ContentBrowserPanel::ReleaseSharedResources();
+
         m_ActiveProject.reset();
+    }
+
+    void EditorLayer::AddContentBrowserPanel()
+    {
+        if (GetOpenContentBrowserCount() >= 4)
+        {
+            return;
+        }
+
+        const uint32_t panelId = m_NextContentBrowserPanelId++;
+        const uint32_t panelNumber = GetOpenContentBrowserCount() + 1;
+        const std::string panelTitle = panelNumber == 1
+            ? std::format("Content Browser###ContentBrowser_{}", panelId)
+            : std::format("Content Browser {}###ContentBrowser_{}", panelNumber, panelId);
+
+        auto panel = new ContentBrowserPanel(panelTitle.c_str(), this);
+        Application::GetInstance()->PushLayer(panel);
+
+        m_ContentBrowserPanels.push_back(panel);
+        if (!m_ContentBrowserPanel)
+        {
+            m_ContentBrowserPanel = panel;
+        }
+
+        if (m_ActiveProject)
+        {
+            panel->LoadProjectFiles(m_ActiveProject->GetAssetManager());
+        }
+    }
+
+    void EditorLayer::ReloadContentBrowserPanels()
+    {
+        if (!m_ActiveProject)
+        {
+            return;
+        }
+
+        for (ContentBrowserPanel *panel : m_ContentBrowserPanels)
+        {
+            if (panel)
+            {
+                panel->LoadProjectFiles(m_ActiveProject->GetAssetManager());
+            }
+        }
+    }
+
+    uint32_t EditorLayer::GetOpenContentBrowserCount() const
+    {
+        uint32_t openCount = 0;
+        for (ContentBrowserPanel *panel : m_ContentBrowserPanels)
+        {
+            if (panel && panel->IsOpen())
+            {
+                ++openCount;
+            }
+        }
+
+        return openCount;
     }
 
     void EditorLayer::OnUpdate(float deltaTime)
     {
         Layer::OnUpdate(deltaTime);
 
+        for (int i = static_cast<int>(m_ContentBrowserPanels.size()) - 1; i >= 0; --i)
+        {
+            ContentBrowserPanel *panel = m_ContentBrowserPanels[static_cast<size_t>(i)];
+            if (panel == nullptr)
+            {
+                m_ContentBrowserPanels.erase(m_ContentBrowserPanels.begin() + i);
+                continue;
+            }
+
+            if (!panel->IsOpen())
+            {
+                if (m_ContentBrowserPanelsPendingRemoval.insert(panel).second)
+                {
+                    Application::SubmitToMainThread([this, panel]()
+                    {
+                        auto it = std::find(m_ContentBrowserPanels.begin(), m_ContentBrowserPanels.end(), panel);
+                        if (it != m_ContentBrowserPanels.end())
+                        {
+                            Application::GetInstance()->PopLayer(panel);
+                            m_ContentBrowserPanels.erase(it);
+                        }
+
+                        m_ContentBrowserPanelsPendingRemoval.erase(panel);
+                    });
+                }
+            }
+        }
+
+        if (m_ContentBrowserPanels.empty() && m_PendingContentBrowserPanelsToAdd == 0 && m_ContentBrowserPanelsPendingRemoval.empty())
+        {
+            m_PendingContentBrowserPanelsToAdd = 1;
+        }
+
+        m_ContentBrowserPanel = nullptr;
+        for (ContentBrowserPanel *panel : m_ContentBrowserPanels)
+        {
+            if (panel && panel->IsOpen())
+            {
+                m_ContentBrowserPanel = panel;
+                break;
+            }
+        }
+
+        while (m_PendingContentBrowserPanelsToAdd > 0 && GetOpenContentBrowserCount() < 4)
+        {
+            Application::SubmitToMainThread([this]()
+            {
+                AddContentBrowserPanel();
+            });
+            --m_PendingContentBrowserPanelsToAdd;
+        }
+
         ProcessPendingFileLoading();
 
-        if (m_ContentBrowserPanel)
+        for (ContentBrowserPanel *contentBrowserPanel : m_ContentBrowserPanels)
         {
-            m_ContentBrowserPanel->OnUpdate(deltaTime);
+            if (contentBrowserPanel && contentBrowserPanel->IsOpen())
+            {
+                contentBrowserPanel->OnUpdate(deltaTime);
+            }
         }
 
         // update panels
@@ -509,6 +632,12 @@ namespace ignite
             // VIEW MENU
             if (ImGui::BeginMenu("View"))
             {
+                const bool canAddContentBrowser = (GetOpenContentBrowserCount() + m_PendingContentBrowserPanelsToAdd) < 4;
+                if (ImGui::MenuItem("Add Content Browser", nullptr, false, canAddContentBrowser))
+                {
+                    ++m_PendingContentBrowserPanelsToAdd;
+                }
+
                 if (ImGui::MenuItem("ImGui Demo", nullptr, false, m_ActiveProject != nullptr))
                 {
                     m_State.imguiDemoWindow = true;
@@ -559,14 +688,102 @@ namespace ignite
         constexpr float statusBarHeight = 32.0f;
         ImVec2 avail = ImGui::GetContentRegionAvail();
 
-        // Dockspace gets everything except status bar
+        // Dockspace tabs area gets everything except status bar
         ImVec2 dockSize = { avail.x, std::max(0.0f, avail.y - statusBarHeight) };
-        ImGui::BeginChild("##dockspace_child", dockSize, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
-        ImGui::DockSpace(ImGui::GetID("main_dockspace"), ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+        ImGui::BeginChild("##dockspace_tabs_child", dockSize, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
+        {
+            struct DockWorkspace
+            {
+                std::string name;
+                bool open = true;
+                uint32_t dockspaceUid = 0;
+            };
+
+            static uint32_t s_NextDockspaceUid = 1;
+            static std::vector<DockWorkspace> s_DockTabs = { { "Workspace 1", true, s_NextDockspaceUid++ } };
+            static int s_ActiveDockTab = 0;
+            static int s_PendingSelectDockTab = 0;
+
+            if (ImGui::BeginTabBar("##dockspace_tabs", ImGuiTabBarFlags_AutoSelectNewTabs))
+            {
+                for (int i = 0; i < static_cast<int>(s_DockTabs.size()); ++i)
+                {
+                    ImGuiTabItemFlags tabFlags = (s_PendingSelectDockTab == i) ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
+
+                    bool tabOpen = s_DockTabs[i].open;
+                    bool *tabOpenPtr = s_DockTabs.size() > 1 ? &tabOpen : nullptr;
+                    if (ImGui::BeginTabItem(s_DockTabs[i].name.c_str(), tabOpenPtr, tabFlags))
+                    {
+                        s_ActiveDockTab = i;
+                        ImGui::EndTabItem();
+                    }
+
+                    if (tabOpenPtr)
+                    {
+                        s_DockTabs[i].open = tabOpen;
+                    }
+                }
+
+                if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing))
+                {
+                    const int newTabIndex = static_cast<int>(s_DockTabs.size()) + 1;
+                    s_DockTabs.push_back({ "Workspace " + std::to_string(newTabIndex), true, s_NextDockspaceUid++ });
+                    s_ActiveDockTab = static_cast<int>(s_DockTabs.size()) - 1;
+                    s_PendingSelectDockTab = s_ActiveDockTab;
+                }
+                else
+                {
+                    s_PendingSelectDockTab = -1;
+                }
+
+                for (int i = static_cast<int>(s_DockTabs.size()) - 1; i >= 0; --i)
+                {
+                    if (!s_DockTabs[i].open)
+                    {
+                        s_DockTabs.erase(s_DockTabs.begin() + i);
+                        if (s_ActiveDockTab >= i)
+                        {
+                            s_ActiveDockTab = std::max(0, s_ActiveDockTab - 1);
+                        }
+                    }
+                }
+
+                if (s_DockTabs.empty())
+                {
+                    s_DockTabs.push_back({ "Workspace 1", true, s_NextDockspaceUid++ });
+                    s_ActiveDockTab = 0;
+                    s_PendingSelectDockTab = 0;
+                }
+
+                s_ActiveDockTab = std::clamp(s_ActiveDockTab, 0, static_cast<int>(s_DockTabs.size()) - 1);
+
+                for (int i = 0; i < static_cast<int>(s_DockTabs.size()); ++i)
+                {
+                    if (i == s_ActiveDockTab)
+                        continue;
+
+                    const std::string dockspaceId = "main_dockspace_" + std::to_string(s_DockTabs[i].dockspaceUid);
+                    ImGui::DockSpace(ImGui::GetID(dockspaceId.c_str()), ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_KeepAliveOnly);
+                }
+
+                const std::string activeDockspaceId = "main_dockspace_" + std::to_string(s_DockTabs[s_ActiveDockTab].dockspaceUid);
+                m_ActiveEditorDockspaceId = ImGui::GetID(activeDockspaceId.c_str());
+                ImGui::DockSpace(m_ActiveEditorDockspaceId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+
+                ImGui::EndTabBar();
+            }
+        }
         ImGui::EndChild();
 
         // Status bar at bottom
         ImGui::BeginChild("##status_bar", { 0.0f, statusBarHeight }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
+        ImGui::BeginDisabled((GetOpenContentBrowserCount() + m_PendingContentBrowserPanelsToAdd) >= 4);
+        if (ImGui::SmallButton("+ Content Browser"))
+        {
+            ++m_PendingContentBrowserPanelsToAdd;
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
         ImGui::Text("Version: %s", ENGINE_VERSION);
         ImGui::EndChild();
 
@@ -782,7 +999,7 @@ namespace ignite
             m_CurrentProjectFilepath = filepath;
 
             // Reload project files
-            m_ContentBrowserPanel->LoadProjectFiles(m_ActiveProject->GetAssetManager());
+            ReloadContentBrowserPanels();
 
             // Get Project default scene (use immediate load for synchronous path)
             if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
@@ -1157,7 +1374,7 @@ namespace ignite
                                 m_CurrentProjectFilepath = filepath;
 
                                 // Reload content browser
-                                m_ContentBrowserPanel->LoadProjectFiles(m_ActiveProject->GetAssetManager());
+                                ReloadContentBrowserPanels();
 
                                 // Load default scene
                                 if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
@@ -1302,7 +1519,7 @@ namespace ignite
                 m_ActiveProject->Serialize(m_State.projectCreateInfo.filepath);
 
                 // Reload content browser
-                m_ContentBrowserPanel->LoadProjectFiles(m_ActiveProject->GetAssetManager());
+                ReloadContentBrowserPanels();
 
 
                 if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))

@@ -25,6 +25,7 @@
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/graphics/objects/material.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/math/math.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -109,6 +110,7 @@ namespace ignite
 
         // Default static meshes
         static std::unordered_map<MeshType, Ref<StaticMesh>> s_DefaultMeshes;
+        static Ref<Material> s_SkeletonPreviewMaterial;
 
         static const char *TextureFormatToString(nvrhi::Format format)
         {
@@ -252,6 +254,7 @@ namespace ignite
     void AssetEditorPanel::OnDetach()
     {
         s_DefaultMeshes.clear();
+        s_SkeletonPreviewMaterial.reset();
     }
 
     // Render
@@ -264,7 +267,7 @@ namespace ignite
 
         for (auto &assetData : m_Assets)
         {
-            if (!assetData.isOpen || assetData.metadata.type != AssetType::Material)
+            if (!assetData.isOpen || (assetData.metadata.type != AssetType::Material && assetData.metadata.type != AssetType::Skeleton))
             {
                 continue;
             }
@@ -274,7 +277,24 @@ namespace ignite
                 continue;
             }
 
-            Ref<Material> material = assetData.asset->As<Material>();
+            Ref<Material> material = nullptr;
+            if (assetData.metadata.type == AssetType::Material)
+            {
+                material = assetData.asset->As<Material>();
+            }
+            else
+            {
+                if (!s_SkeletonPreviewMaterial)
+                {
+                    s_SkeletonPreviewMaterial = CreateRef<Material>();
+                    s_SkeletonPreviewMaterial->name = "SkeletonPreviewMaterial";
+                    s_SkeletonPreviewMaterial->SetDirtyFlag(false);
+                    s_SkeletonPreviewMaterial->SetReadyFlag(true);
+                }
+
+                material = s_SkeletonPreviewMaterial;
+            }
+
             if (!material)
             {
                 continue;
@@ -2554,7 +2574,8 @@ namespace ignite
                         ImGui::EndChild();
                         ImGui::EndChild();
 
-                        UpdateMaterialPreviewCamera(sceneData, ImGui::GetIO().DeltaTime);
+                        UpdateSceneCamera(sceneData, ImGui::GetIO().DeltaTime);
+
                         if (sceneData.sceneRenderer)
                         {
                             sceneData.sceneRenderer->SetMaterial(material);
@@ -3582,7 +3603,7 @@ namespace ignite
     }
 
 
-    void AssetEditorPanel::RenderSkeletalSkeletonEditor(const Ref<Skeleton> &animation)
+    void AssetEditorPanel::RenderSkeletalSkeletonEditor(const Ref<Skeleton> &animation, EditorSceneData &sceneData)
     {
         if (!animation)
         {
@@ -3605,8 +3626,7 @@ namespace ignite
             selectedSocket = animation->sockets.empty() ? -1 : 0;
         }
 
-        ImGui::Text("Joints: %zu", animation->joints.size());
-        ImGui::Text("Sockets: %zu", animation->sockets.size());
+        ImGui::Text("Joints: %zu | Sockets: %zu", animation->joints.size(), animation->sockets.size());
         ImGui::Separator();
 
         std::vector<std::vector<int32_t>> children(animation->joints.size());
@@ -3618,9 +3638,17 @@ namespace ignite
             }
         }
 
-        // Left Side
-        if (ImGui::BeginChild("##skeleton_joint_tree", ImVec2(0.0f, 280.0f), ImGuiChildFlags_Borders))
+        const float totalWidth = ImGui::GetContentRegionAvail().x;
+        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+        const float listWidth = std::max(260.0f, totalWidth * 0.28f);
+        const float detailsWidth = std::max(320.0f, totalWidth * 0.30f);
+        const float viewportWidth = std::max(220.0f, totalWidth - listWidth - detailsWidth - spacing * 2.0f);
+
+        if (ImGui::BeginChild("##skeleton_left_list", ImVec2(listWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX))
         {
+            ImGui::TextUnformatted("Skeleton Tree");
+            ImGui::Separator();
+
             std::function<void(int32_t)> drawJointNode = [&](int32_t jointId)
             {
                 if (jointId < 0 || jointId >= static_cast<int32_t>(animation->joints.size()))
@@ -3668,105 +3696,171 @@ namespace ignite
         }
         ImGui::EndChild();
 
-
         ImGui::SameLine();
 
-        if (selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(animation->joints.size()))
-        {
-            const Joint &joint = animation->joints[static_cast<size_t>(selectedJoint)];
-            ImGui::TextDisabled("Selected Joint: %s (id: %d)", joint.name.c_str(), joint.id);
-        }
+        UpdateSceneCamera(sceneData, ImGui::GetIO().DeltaTime);
 
-        ImGui::SeparatorText("Joint Sockets");
-        if (ImGui::Button("Add Socket") && selectedJoint >= 0)
+        if (ImGui::BeginChild("##skeleton_preview_view", ImVec2(viewportWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX))
         {
-            JointSocket socket;
-            socket.name = std::format("Socket_{}", animation->sockets.size());
-            socket.parentJointId = selectedJoint;
-            animation->sockets.push_back(std::move(socket));
-            animation->RebuildSocketMap();
-            selectedSocket = static_cast<int32_t>(animation->sockets.size()) - 1;
-            animation->SetDirtyFlag(true);
-        }
+            ImGui::TextUnformatted("Mesh + Skeleton Preview");
+            ImGui::Separator();
 
-        if (ImGui::BeginChild("##skeleton_socket_list", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders))
-        {
-            for (int32_t i = 0; i < static_cast<int32_t>(animation->sockets.size()); ++i)
+            const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+            sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
+            sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
+
+            Ref<Texture> previewTexture = sceneData.compositeRT ? sceneData.compositeRT->GetColorAttachment(0) : nullptr;
+            if (previewTexture && previewTexture->GetHandle())
             {
-                const JointSocket &socket = animation->sockets[static_cast<size_t>(i)];
-                std::string row = socket.name;
-                if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(animation->joints.size()))
+                const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
+                ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+                sceneData.viewportHovered = ImGui::IsItemHovered();
+
+                animation->UpdateGlobalTransforms();
+                const glm::mat4 viewProjection = sceneData.camera.GetProjection() * sceneData.camera.GetView();
+                const Rect viewportRect{ viewportPos.x, viewportPos.y, viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y };
+
+                ImDrawList *drawList = ImGui::GetWindowDrawList();
+                for (const Joint &joint : animation->joints)
                 {
-                    row += std::format(" -> {}", animation->joints[static_cast<size_t>(socket.parentJointId)].name);
+                    if (joint.parentJointId < 0 || joint.parentJointId >= static_cast<int32_t>(animation->joints.size()))
+                    {
+                        continue;
+                    }
+
+                    const Joint &parent = animation->joints[static_cast<size_t>(joint.parentJointId)];
+
+                    ImVec2 childPos, parentPos;
+                    if (Math::ProjectWorldToScreen(glm::vec3(joint.globalTransform[3]), viewProjection, viewportRect, childPos)
+                        && Math::ProjectWorldToScreen(glm::vec3(parent.globalTransform[3]), viewProjection, viewportRect, parentPos))
+                    {
+                        const bool selectedLink = (joint.id == selectedJoint || parent.id == selectedJoint);
+                        drawList->AddLine(parentPos, childPos, selectedLink ? IM_COL32(255, 180, 30, 255) : IM_COL32(50, 220, 255, 190), selectedLink ? 2.5f : 1.5f);
+                    }
                 }
 
-                if (ImGui::Selectable(std::format("{}##socket_row_{}", row, i).c_str(), selectedSocket == i))
+                for (const Joint &joint : animation->joints)
                 {
-                    selectedSocket = i;
+                    ImVec2 jointPos;
+                    if (Math::ProjectWorldToScreen(glm::vec3(joint.globalTransform[3]), viewProjection, viewportRect, jointPos))
+                    {
+                        const bool selected = joint.id == selectedJoint;
+                        drawList->AddCircleFilled(jointPos, selected ? 5.0f : 3.0f, selected ? IM_COL32(255, 120, 20, 255) : IM_COL32(255, 255, 255, 230));
+                    }
                 }
+            }
+            else
+            {
+                ImGui::Dummy(viewportSize);
+                sceneData.viewportHovered = ImGui::IsItemHovered();
             }
         }
         ImGui::EndChild();
 
-        if (selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(animation->sockets.size()))
-        {
-            JointSocket &socket = animation->sockets[static_cast<size_t>(selectedSocket)];
+        ImGui::SameLine();
 
-            char nameBuf[256]{};
-            std::strncpy(nameBuf, socket.name.c_str(), sizeof(nameBuf) - 1);
-            if (ImGui::InputText("Socket Name", nameBuf, sizeof(nameBuf)))
+        if (ImGui::BeginChild("##skeleton_right_details", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders))
+        {
+            ImGui::TextUnformatted("Joint / Socket Details");
+            ImGui::Separator();
+            if (selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(animation->joints.size()))
             {
-                socket.name = nameBuf;
+                const Joint &joint = animation->joints[static_cast<size_t>(selectedJoint)];
+                ImGui::TextDisabled("Selected Joint: %s (id: %d)", joint.name.c_str(), joint.id);
+            }
+
+            ImGui::SeparatorText("Joint Sockets");
+            if (ImGui::Button("Add Socket") && selectedJoint >= 0)
+            {
+                JointSocket socket;
+                socket.name = std::format("Socket_{}", animation->sockets.size());
+                socket.parentJointId = selectedJoint;
+                animation->sockets.push_back(std::move(socket));
                 animation->RebuildSocketMap();
+                selectedSocket = static_cast<int32_t>(animation->sockets.size()) - 1;
                 animation->SetDirtyFlag(true);
             }
 
-            int parentJoint = socket.parentJointId;
-            std::string parentJointLabel = "None";
-            if (parentJoint >= 0 && parentJoint < static_cast<int32_t>(animation->joints.size()))
+            if (ImGui::BeginChild("##skeleton_socket_list", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders))
             {
-                parentJointLabel = animation->joints[static_cast<size_t>(parentJoint)].name;
-            }
-
-            if (ImGui::BeginCombo("Parent Joint", parentJointLabel.c_str()))
-            {
-                for (const Joint &joint : animation->joints)
+                for (int32_t i = 0; i < static_cast<int32_t>(animation->sockets.size()); ++i)
                 {
-                    const bool selected = parentJoint == joint.id;
-                    if (ImGui::Selectable(joint.name.c_str(), selected))
+                    const JointSocket &socket = animation->sockets[static_cast<size_t>(i)];
+                    std::string row = socket.name;
+                    if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(animation->joints.size()))
                     {
-                        socket.parentJointId = joint.id;
-                        animation->SetDirtyFlag(true);
+                        row += std::format(" -> {}", animation->joints[static_cast<size_t>(socket.parentJointId)].name);
+                    }
+
+                    if (ImGui::Selectable(std::format("{}##socket_row_{}", row, i).c_str(), selectedSocket == i))
+                    {
+                        selectedSocket = i;
                     }
                 }
-                ImGui::EndCombo();
             }
+            ImGui::EndChild();
 
-            if (ImGui::DragFloat3("Socket Translation", &socket.localTranslation.x, 0.01f))
+            if (selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(animation->sockets.size()))
             {
-                animation->SetDirtyFlag(true);
-            }
+                JointSocket &socket = animation->sockets[static_cast<size_t>(selectedSocket)];
 
-            glm::vec3 eulerDeg = glm::degrees(glm::eulerAngles(socket.localRotation));
-            if (ImGui::DragFloat3("Socket Rotation", &eulerDeg.x, 0.1f))
-            {
-                socket.localRotation = glm::quat(glm::radians(eulerDeg));
-                animation->SetDirtyFlag(true);
-            }
+                char nameBuf[256]{};
+                std::strncpy(nameBuf, socket.name.c_str(), sizeof(nameBuf) - 1);
+                if (ImGui::InputText("Socket Name", nameBuf, sizeof(nameBuf)))
+                {
+                    socket.name = nameBuf;
+                    animation->RebuildSocketMap();
+                    animation->SetDirtyFlag(true);
+                }
 
-            if (ImGui::DragFloat3("Socket Scale", &socket.localScale.x, 0.01f, 0.001f, 1000.0f))
-            {
-                animation->SetDirtyFlag(true);
-            }
+                int parentJoint = socket.parentJointId;
+                std::string parentJointLabel = "None";
+                if (parentJoint >= 0 && parentJoint < static_cast<int32_t>(animation->joints.size()))
+                {
+                    parentJointLabel = animation->joints[static_cast<size_t>(parentJoint)].name;
+                }
 
-            if (ImGui::Button("Remove Socket"))
-            {
-                animation->sockets.erase(animation->sockets.begin() + selectedSocket);
-                animation->RebuildSocketMap();
-                selectedSocket = animation->sockets.empty() ? -1 : std::min(selectedSocket, static_cast<int32_t>(animation->sockets.size()) - 1);
-                animation->SetDirtyFlag(true);
+                if (ImGui::BeginCombo("Parent Joint", parentJointLabel.c_str()))
+                {
+                    for (const Joint &joint : animation->joints)
+                    {
+                        const bool selected = parentJoint == joint.id;
+                        if (ImGui::Selectable(joint.name.c_str(), selected))
+                        {
+                            socket.parentJointId = joint.id;
+                            animation->SetDirtyFlag(true);
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+
+                if (ImGui::DragFloat3("Socket Translation", &socket.localTranslation.x, 0.01f))
+                {
+                    animation->SetDirtyFlag(true);
+                }
+
+                glm::vec3 eulerDeg = glm::degrees(glm::eulerAngles(socket.localRotation));
+                if (ImGui::DragFloat3("Socket Rotation", &eulerDeg.x, 0.1f))
+                {
+                    socket.localRotation = glm::quat(glm::radians(eulerDeg));
+                    animation->SetDirtyFlag(true);
+                }
+
+                if (ImGui::DragFloat3("Socket Scale", &socket.localScale.x, 0.01f, 0.001f, 1000.0f))
+                {
+                    animation->SetDirtyFlag(true);
+                }
+
+                if (ImGui::Button("Remove Socket"))
+                {
+                    animation->sockets.erase(animation->sockets.begin() + selectedSocket);
+                    animation->RebuildSocketMap();
+                    selectedSocket = animation->sockets.empty() ? -1 : std::min(selectedSocket, static_cast<int32_t>(animation->sockets.size()) - 1);
+                    animation->SetDirtyFlag(true);
+                }
             }
         }
+        ImGui::EndChild();
     }
 
     void AssetEditorPanel::RenderSkeletalSkeletonEditor(AssetEditorData &assetData)
@@ -3780,7 +3874,7 @@ namespace ignite
                 {
                     if (Ref<Skeleton> skeleton = assetData.asset->As<Skeleton>())
                     {
-                        RenderSkeletalSkeletonEditor(skeleton);
+                        RenderSkeletalSkeletonEditor(skeleton, assetData.sceneData);
                     }
                     else
                     {
@@ -4229,7 +4323,7 @@ namespace ignite
     void AssetEditorPanel::InitializeSceneData(AssetEditorData &assetData)
     {
         // Only some asset type can use scene renderer
-        if (assetData.metadata.type != AssetType::Material)
+        if (assetData.metadata.type != AssetType::Material && assetData.metadata.type != AssetType::Skeleton)
             return;
 
         assetData.sceneData.sceneRenderer = CreateRef<AssetSceneRenderer>();
@@ -4273,7 +4367,7 @@ namespace ignite
         }
     }
 
-    void AssetEditorPanel::UpdateMaterialPreviewCamera(EditorSceneData &sceneData, float deltaTime)
+    void AssetEditorPanel::UpdateSceneCamera(EditorSceneData &sceneData, float deltaTime)
     {
         sceneData.camera.UpdateMouseState();
         sceneData.camera.mouse.scroll = { ImGui::GetIO().MouseWheelH, ImGui::GetIO().MouseWheel };

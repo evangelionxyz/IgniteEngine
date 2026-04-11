@@ -21,6 +21,14 @@
 
 namespace ignite
 {
+    uint32_t ContentBrowserPanel::s_InstanceCount = 0;
+    std::unordered_map<std::string, Ref<Texture>> ContentBrowserPanel::s_SharedIcons;
+    std::unordered_map<std::filesystem::path, FileThumbnail> ContentBrowserPanel::s_SharedThumbnails;
+    std::queue<std::filesystem::path> ContentBrowserPanel::s_SharedPendingThumbnailLoads;
+    std::unordered_set<std::filesystem::path> ContentBrowserPanel::s_SharedThumbnailLoadsInFlight;
+    uint64_t ContentBrowserPanel::s_SharedThumbnailLoadGeneration = 0;
+    uint64_t ContentBrowserPanel::s_SharedCurrentFrame = 0;
+
     namespace
     {
         static void DispatchOpenAssetEditorEvent(AssetHandle handle, const AssetMetaData &metadata)
@@ -122,6 +130,13 @@ namespace ignite
     ContentBrowserPanel::ContentBrowserPanel(const char *windowTitle, EditorLayer *editor)
         : IPanel(windowTitle, editor), m_AssetManager(nullptr)
     {
+        ++s_InstanceCount;
+
+        if (!s_SharedIcons.empty())
+        {
+            return;
+        }
+
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         
         auto app = Application::GetInstance();
@@ -133,39 +148,56 @@ namespace ignite
     	createInfo.keepInitialState = true;
     	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
 
-        m_Icons["scene"] = Texture::Create("resources/ui/editor/ic_editor_scene.png", createInfo, cmd);
-        m_Icons["shader"] = Texture::Create("resources/ui/editor/ic_editor_shader.png", createInfo, cmd);
-        m_Icons["sprite_sheet"] = Texture::Create("resources/ui/editor/ic_editor_sprite_sheet.png", createInfo, cmd);
-        m_Icons["material"] = Texture::Create("resources/ui/editor/ic_editor_material.png", createInfo, cmd);
-        m_Icons["material_2d"] = Texture::Create("resources/ui/editor/ic_editor_material_2d.png", createInfo, cmd);
-        m_Icons["anim"] = Texture::Create("resources/ui/editor/ic_editor_anim.png", createInfo, cmd);
-        m_Icons["font"] = Texture::Create("resources/ui/editor/ic_editor_font.png", createInfo, cmd);
-        m_Icons["roll"] = Texture::Create("resources/ui/editor/ic_editor_roll.png", createInfo, cmd);
-        m_Icons["arrow"] = Texture::Create("resources/ui/editor/ic_editor_arrow.png", createInfo, cmd);
-        m_Icons["add"] = Texture::Create("resources/ui/editor/ic_editor_add.png", createInfo, cmd);
+        s_SharedIcons["scene"] = Texture::Create("resources/ui/editor/ic_editor_scene.png", createInfo, cmd);
+        s_SharedIcons["shader"] = Texture::Create("resources/ui/editor/ic_editor_shader.png", createInfo, cmd);
+        s_SharedIcons["sprite_sheet"] = Texture::Create("resources/ui/editor/ic_editor_sprite_sheet.png", createInfo, cmd);
+        s_SharedIcons["material"] = Texture::Create("resources/ui/editor/ic_editor_material.png", createInfo, cmd);
+        s_SharedIcons["material_2d"] = Texture::Create("resources/ui/editor/ic_editor_material_2d.png", createInfo, cmd);
+        s_SharedIcons["anim"] = Texture::Create("resources/ui/editor/ic_editor_anim.png", createInfo, cmd);
+        s_SharedIcons["font"] = Texture::Create("resources/ui/editor/ic_editor_font.png", createInfo, cmd);
+        s_SharedIcons["roll"] = Texture::Create("resources/ui/editor/ic_editor_roll.png", createInfo, cmd);
+        s_SharedIcons["arrow"] = Texture::Create("resources/ui/editor/ic_editor_arrow.png", createInfo, cmd);
+        s_SharedIcons["add"] = Texture::Create("resources/ui/editor/ic_editor_add.png", createInfo, cmd);
 
-        m_Icons["skeleton"] = Texture::Create("resources/ui/editor/ic_editor_skeleton.png", createInfo, cmd);
-        m_Icons["sk_mesh"] = Texture::Create("resources/ui/editor/ic_editor_sk_mesh.png", createInfo, cmd);
-        m_Icons["st_mesh"] = Texture::Create("resources/ui/editor/ic_editor_st_mesh.png", createInfo, cmd);
-        
-        m_Icons["anim_ctrl"] = Texture::Create("resources/ui/editor/ic_editor_anim_ctrl.png", createInfo, cmd);
-        m_Icons["anim_2d"] = Texture::Create("resources/ui/editor/ic_editor_anim_2d.png", createInfo, cmd);
-        m_Icons["anim_ctrl_2d"] = Texture::Create("resources/ui/editor/ic_editor_anim_ctrl_2d.png", createInfo, cmd);
-        
-        m_Icons["folder"] = Texture::Create("resources/ui/editor/ic_editor_folder.png", createInfo, cmd);
-        m_Icons["unknown"] = Texture::Create("resources/ui/editor/ic_editor_unknown.png", createInfo, cmd);
+        s_SharedIcons["skeleton"] = Texture::Create("resources/ui/editor/ic_editor_skeleton.png", createInfo, cmd);
+        s_SharedIcons["sk_mesh"] = Texture::Create("resources/ui/editor/ic_editor_sk_mesh.png", createInfo, cmd);
+        s_SharedIcons["st_mesh"] = Texture::Create("resources/ui/editor/ic_editor_st_mesh.png", createInfo, cmd);
+
+        s_SharedIcons["anim_ctrl"] = Texture::Create("resources/ui/editor/ic_editor_anim_ctrl.png", createInfo, cmd);
+        s_SharedIcons["anim_2d"] = Texture::Create("resources/ui/editor/ic_editor_anim_2d.png", createInfo, cmd);
+        s_SharedIcons["anim_ctrl_2d"] = Texture::Create("resources/ui/editor/ic_editor_anim_ctrl_2d.png", createInfo, cmd);
+
+        s_SharedIcons["folder"] = Texture::Create("resources/ui/editor/ic_editor_folder.png", createInfo, cmd);
+        s_SharedIcons["unknown"] = Texture::Create("resources/ui/editor/ic_editor_unknown.png", createInfo, cmd);
 
         cmd->close();
         app->SubmitWorkerCommandList(cmd);
-
-        m_AssetEditorPanel = new AssetEditorPanel("Animation Panel", editor);
-        app->PushLayer(m_AssetEditorPanel);
     }
 
 	ContentBrowserPanel::~ContentBrowserPanel()
 	{
+        if (s_InstanceCount > 0)
+        {
+            --s_InstanceCount;
+        }
+
         m_AssetManager = nullptr;
 	}
+
+    void ContentBrowserPanel::ReleaseSharedResources()
+    {
+        s_SharedThumbnailLoadGeneration++;
+
+        while (!s_SharedPendingThumbnailLoads.empty())
+        {
+            s_SharedPendingThumbnailLoads.pop();
+        }
+
+        s_SharedThumbnailLoadsInFlight.clear();
+        s_SharedThumbnails.clear();
+        s_SharedIcons.clear();
+        s_SharedCurrentFrame = 0;
+    }
 
     void ContentBrowserPanel::LoadProjectFiles(AssetManager *assetManager)
     {
@@ -260,7 +292,10 @@ namespace ignite
     void ContentBrowserPanel::OnGuiRender()
     {
         IGN_PROFILE_FUNCTION();
-        const bool windowOpen = ImGui::Begin("Content Browser");
+
+        const bool windowOpen = ImGui::Begin(m_WindowTitle.c_str(), &m_IsOpen);
+        m_IsFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+        m_IsHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
         if (windowOpen)
         {
             if (!m_EditorLayer->GetActiveProject())
@@ -680,7 +715,7 @@ namespace ignite
 	void ContentBrowserPanel::OnUpdate(float deltaTime)
 	{
         // Increment frame counter
-        m_CurrentFrame++;
+        s_SharedCurrentFrame++;
 
         while (!m_PendingAssetLoading.empty())
         {
@@ -725,21 +760,21 @@ namespace ignite
         }
 
         // Load only 1 thumbnail per frame
-        if (!m_PendingThumbnailLoads.empty() && m_CurrentFrame % 3 == 0)
+        if (!s_SharedPendingThumbnailLoads.empty() && s_SharedCurrentFrame % 3 == 0)
         {
-            std::filesystem::path filepath = m_PendingThumbnailLoads.front();
-            m_PendingThumbnailLoads.pop();
+            std::filesystem::path filepath = s_SharedPendingThumbnailLoads.front();
+            s_SharedPendingThumbnailLoads.pop();
             
             // Check if still needs loading (not already loaded)
-            auto it = m_Thumbnails.find(filepath);
-            if (it != m_Thumbnails.end() && it->second.thumbnail == nullptr)
+            auto it = s_SharedThumbnails.find(filepath);
+            if (it != s_SharedThumbnails.end() && it->second.thumbnail == nullptr)
             {
                 StartThumbnailLoad(filepath);
             }
         }
 
         // Unload unused thumbnails every 60 frames (once per second at 60fps)
-        if (m_CurrentFrame % 60 == 0)
+        if (s_SharedCurrentFrame % 60 == 0)
         {
             UnloadUnusedThumbnails();
         }
@@ -918,7 +953,7 @@ namespace ignite
         if (!icon)
         {
             // fallback, because it is generated asynchronously
-            icon = m_Icons["unknown"];
+            icon = s_SharedIcons["unknown"];
         }
 
         // Keep a fixed clickable area and draw the image separately with preserved aspect ratio
@@ -1277,7 +1312,7 @@ namespace ignite
 
         if (ImGui::BeginChild("##NAV_BUTTON_BAR", ImVec2(0, navbarHeight), ImGuiChildFlags_Borders))
         {
-            ImTextureID arrow = (ImTextureID)m_Icons["arrow"]->GetHandle().Get();
+            ImTextureID arrow = (ImTextureID)s_SharedIcons["arrow"]->GetHandle().Get();
             if (ImGui::ImageButton("##bw_arrow", arrow, navbarBtSize))
             {
                 if (!m_BackwardPathStack.empty())
@@ -1317,7 +1352,7 @@ namespace ignite
 
             ImGui::SameLine();
 
-            ImTextureID refreshBt = (ImTextureID)m_Icons["roll"]->GetHandle().Get();
+            ImTextureID refreshBt = (ImTextureID)s_SharedIcons["roll"]->GetHandle().Get();
             if (ImGui::ImageButton("##refresh_bt", refreshBt, { navbarBtSize.y, navbarBtSize.y }))
             {
                 m_EditorLayer->GetActiveProject()->ValidateAssetRegistry();
@@ -1799,37 +1834,37 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
 
         if (isDirectory)
-            return m_Icons["folder"];
+            return s_SharedIcons["folder"];
 
         AssetType type = GetAssetTypeFromExtension(filepath.extension().string());
         switch (type)
         {
-            case AssetType::Scene: return m_Icons["scene"];
-            case AssetType::Shader: return m_Icons["shader"];
-            case AssetType::SpriteSheet: return m_Icons["sprite_sheet"];
-            case AssetType::Material: return m_Icons["material"];
-            case AssetType::Material2D: return m_Icons["material_2d"];
-            case AssetType::SkeletalAnimation: return m_Icons["anim"];
-            case AssetType::Font: return m_Icons["font"];
-            case AssetType::Skeleton: return m_Icons["skeleton"];
-            case AssetType::SkeletalMesh: return m_Icons["sk_mesh"];
-            case AssetType::StaticMesh: return m_Icons["st_mesh"];
-            case AssetType::Animation2D: return m_Icons["anim_2d"];
-            case AssetType::AnimatorController: return m_Icons["anim_ctrl"];
-            case AssetType::AnimatorController2D: return m_Icons["anim_ctrl_2d"];
+            case AssetType::Scene: return s_SharedIcons["scene"];
+            case AssetType::Shader: return s_SharedIcons["shader"];
+            case AssetType::SpriteSheet: return s_SharedIcons["sprite_sheet"];
+            case AssetType::Material: return s_SharedIcons["material"];
+            case AssetType::Material2D: return s_SharedIcons["material_2d"];
+            case AssetType::SkeletalAnimation: return s_SharedIcons["anim"];
+            case AssetType::Font: return s_SharedIcons["font"];
+            case AssetType::Skeleton: return s_SharedIcons["skeleton"];
+            case AssetType::SkeletalMesh: return s_SharedIcons["sk_mesh"];
+            case AssetType::StaticMesh: return s_SharedIcons["st_mesh"];
+            case AssetType::Animation2D: return s_SharedIcons["anim_2d"];
+            case AssetType::AnimatorController: return s_SharedIcons["anim_ctrl"];
+            case AssetType::AnimatorController2D: return s_SharedIcons["anim_ctrl_2d"];
             default: break;
         }
 
-        auto it = m_Thumbnails.find(filepath);
-        if (it != m_Thumbnails.end())
+        auto it = s_SharedThumbnails.find(filepath);
+        if (it != s_SharedThumbnails.end())
         {
             // Mark as used this frame
-            it->second.lastFrameUsed = m_CurrentFrame;
+            it->second.lastFrameUsed = s_SharedCurrentFrame;
 
-            if (!it->second.thumbnail && !m_ThumbnailLoadsInFlight.contains(filepath))
+            if (!it->second.thumbnail && !s_SharedThumbnailLoadsInFlight.contains(filepath))
             {
-                m_PendingThumbnailLoads.push(filepath);
-                m_ThumbnailLoadsInFlight.insert(filepath);
+                s_SharedPendingThumbnailLoads.push(filepath);
+                s_SharedThumbnailLoadsInFlight.insert(filepath);
             }
 
             return it->second.thumbnail;
@@ -1842,18 +1877,18 @@ namespace ignite
             FileThumbnail placeholder;
             placeholder.thumbnail = nullptr;
             placeholder.timestamp = 0;
-            placeholder.lastFrameUsed = m_CurrentFrame;
-            m_Thumbnails[filepath] = placeholder;
+            placeholder.lastFrameUsed = s_SharedCurrentFrame;
+            s_SharedThumbnails[filepath] = placeholder;
 
             // Add to loading queue instead of starting immediately
-            if (!m_ThumbnailLoadsInFlight.contains(filepath))
+            if (!s_SharedThumbnailLoadsInFlight.contains(filepath))
             {
-                m_PendingThumbnailLoads.push(filepath);
-                m_ThumbnailLoadsInFlight.insert(filepath);
+                s_SharedPendingThumbnailLoads.push(filepath);
+                s_SharedThumbnailLoadsInFlight.insert(filepath);
             }
         }
 
-        return m_Icons["unknown"];
+        return s_SharedIcons["unknown"];
     }
 
     void ContentBrowserPanel::StartThumbnailLoad(const std::filesystem::path &filepath)
@@ -1863,7 +1898,7 @@ namespace ignite
         // Capture by value to avoid dangling references
         std::filesystem::path capturedPath = filepath;
         int thumbnailSize = m_ThumbnailSize;
-        const uint64_t requestGeneration = m_ThumbnailLoadGeneration;
+        const uint64_t requestGeneration = s_SharedThumbnailLoadGeneration;
 
         m_AssetManager->SubmitJob([this, capturedPath, thumbnailSize, requestGeneration]()
         {
@@ -1884,9 +1919,9 @@ namespace ignite
             // Submit to main thread to create command list and finalize GPU upload
             Application::SubmitToRenderThread([this, capturedPath, loadedTexture, requestGeneration]() mutable
             {
-                if (requestGeneration != m_ThumbnailLoadGeneration)
+                if (requestGeneration != s_SharedThumbnailLoadGeneration)
                 {
-                    m_ThumbnailLoadsInFlight.erase(capturedPath);
+                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
                     return;
                 }
 
@@ -1906,9 +1941,9 @@ namespace ignite
                     
                     Application::SubmitWorkerCommandList(cmd, [this, loadedTexture, capturedPath, requestGeneration]()
                     {
-                        if (requestGeneration != m_ThumbnailLoadGeneration)
+                        if (requestGeneration != s_SharedThumbnailLoadGeneration)
                         {
-                            m_ThumbnailLoadsInFlight.erase(capturedPath);
+                            s_SharedThumbnailLoadsInFlight.erase(capturedPath);
                             return;
                         }
 
@@ -1916,7 +1951,7 @@ namespace ignite
 
 						FileThumbnail ft;
 						ft.thumbnail = loadedTexture;
-						ft.lastFrameUsed = m_CurrentFrame;
+                      ft.lastFrameUsed = s_SharedCurrentFrame;
 
 						if (std::filesystem::exists(capturedPath))
 						{
@@ -1927,15 +1962,15 @@ namespace ignite
 							ft.timestamp = 0;
 						}
 
-						m_Thumbnails[capturedPath] = ft;
-                        m_ThumbnailLoadsInFlight.erase(capturedPath);
+                        s_SharedThumbnails[capturedPath] = ft;
+                        s_SharedThumbnailLoadsInFlight.erase(capturedPath);
                     });
                 }
                 else
                 {
                     // Remove placeholder if loading failed
-                    m_Thumbnails.erase(capturedPath);
-                    m_ThumbnailLoadsInFlight.erase(capturedPath);
+                    s_SharedThumbnails.erase(capturedPath);
+                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
                 }
             });
         });
@@ -1947,13 +1982,13 @@ namespace ignite
 
         std::vector<std::filesystem::path> toUnload;
         
-        for (const auto& [path, thumbnail] : m_Thumbnails)
+        for (const auto& [path, thumbnail] : s_SharedThumbnails)
         {
-            const bool isStale = (m_CurrentFrame - thumbnail.lastFrameUsed) > s_ThumbnailUnloadFrameThreshold;
+            const bool isStale = (s_SharedCurrentFrame - thumbnail.lastFrameUsed) > s_ThumbnailUnloadFrameThreshold;
 
             // Unload stale GPU thumbnails and also stale placeholders to prevent map growth.
             // Keep placeholders that are currently loading to avoid duplicate in-flight reloads.
-            if (isStale && (thumbnail.thumbnail || !m_ThumbnailLoadsInFlight.contains(path)))
+            if (isStale && (thumbnail.thumbnail || !s_SharedThumbnailLoadsInFlight.contains(path)))
             {
                 toUnload.push_back(path);
             }
@@ -1962,20 +1997,20 @@ namespace ignite
         // Unload the thumbnails
         for (const auto& path : toUnload)
         {
-            m_Thumbnails.erase(path);
+            s_SharedThumbnails.erase(path);
         }
     }
 
     void ContentBrowserPanel::ClearThumbnails()
     {
-        m_ThumbnailLoadGeneration++;
-        m_Thumbnails.clear();
-        m_ThumbnailLoadsInFlight.clear();
+        s_SharedThumbnailLoadGeneration++;
+        s_SharedThumbnails.clear();
+        s_SharedThumbnailLoadsInFlight.clear();
         
         // Clear the pending load queue
-        while (!m_PendingThumbnailLoads.empty())
+        while (!s_SharedPendingThumbnailLoads.empty())
         {
-            m_PendingThumbnailLoads.pop();
+            s_SharedPendingThumbnailLoads.pop();
         }
     }
 }

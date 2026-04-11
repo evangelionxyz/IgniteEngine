@@ -94,7 +94,7 @@ namespace ignite
         void RenderAnimatorController2DEditor(AssetEditorData &assetData);
         void RenderAnimatorController2DEditor(const Ref<AnimatorController2D> &controller);
 
-        void RenderSkeletalSkeletonEditor(const Ref<Skeleton> &animation);
+        void RenderSkeletalSkeletonEditor(const Ref<Skeleton> &skeleton, EditorSceneData &sceneData);
         void RenderSkeletalSkeletonEditor(AssetEditorData &assetData);
         
         void RenderSkeletalAnimationEditor(const Ref<SkeletalAnimation> &animation);
@@ -121,7 +121,7 @@ namespace ignite
         bool SaveAsset(AssetEditorData &assetData);
         void RenderCreateAssetPopup();
         void InitializeSceneData(AssetEditorData &assetData);
-        void UpdateMaterialPreviewCamera(EditorSceneData &sceneData, float deltaTime);
+        void UpdateSceneCamera(EditorSceneData &sceneData, float deltaTime);
         std::filesystem::path BuildUniqueAssetPath(const std::filesystem::path &baseDirectory, const std::string &baseName, const std::string &extension) const;
 
         std::vector<AssetEditorData> m_Assets;

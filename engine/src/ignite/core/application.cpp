@@ -262,7 +262,7 @@ namespace ignite
                 IGN_PROFILE_SCOPE("RenderThread::ImGuiRender");
                 m_ImGuiLayer->BeginFrame();
 
-                for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
+                for (auto it = m_LayerStack.begin(); it != m_LayerStack.end(); ++it)
                 {
                     Layer *layer = *it;
                     if (layer == m_ImGuiLayer)
