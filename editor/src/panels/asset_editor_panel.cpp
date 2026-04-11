@@ -3,11 +3,17 @@
 #include "asset_editor_panel.hpp"
 
 #include "../editor_layer.hpp"
+
+#include "ignite/animation/animator/animator.hpp"
+#include "ignite/animation/animator/animator_controller_2d.hpp"
 #include "ignite/animation/animation_2d.hpp"
-#include "ignite/animation/animator_controller_2d.hpp"
 #include "ignite/animation/animation_montage.hpp"
+#include "ignite/animation/locomotion.hpp"
+#include "ignite/animation/blend_space.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
+
 #include "ignite/asset/asset_importer.hpp"
+
 #include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/texture.hpp"
 #include "ignite/project/project.hpp"
@@ -2229,7 +2235,7 @@ namespace ignite
                 ImGui::SetNextItemWidth(70);
                 if (ImGui::Combo("##p_type", &typeIdx, s_ParamTypeNames, 4))
                 {
-                    p.type = static_cast<AnimParam2D::Type>(typeIdx);
+                    p.type = static_cast<AnimParam::Type>(typeIdx);
                     ctrl->SetDirtyFlag(true);
                 }
                 ImGui::SameLine();
@@ -2237,18 +2243,18 @@ namespace ignite
                 // Value
                 switch (p.type)
                 {
-                    case AnimParam2D::Type::Float:
+                    case AnimParam::Type::Float:
                     ImGui::SetNextItemWidth(80);
                     if (ImGui::DragFloat("##p_float", &p.floatVal, 0.01f)) ctrl->SetDirtyFlag(true);
                     break;
-                    case AnimParam2D::Type::Int:
+                    case AnimParam::Type::Int:
                     ImGui::SetNextItemWidth(80);
                     if (ImGui::DragInt("##p_int", &p.intVal)) ctrl->SetDirtyFlag(true);
                     break;
-                    case AnimParam2D::Type::Bool:
+                    case AnimParam::Type::Bool:
                     if (ImGui::Checkbox("##p_bool", &p.boolVal)) ctrl->SetDirtyFlag(true);
                     break;
-                    case AnimParam2D::Type::String:
+                    case AnimParam::Type::String:
                     {
                         char strbuf[256];
                         std::strncpy(strbuf, p.strVal.c_str(), sizeof(strbuf));
@@ -2276,22 +2282,22 @@ namespace ignite
 
             if (ImGui::Button("+ Float##p_addf"))
             {
-                ctrl->params.push_back({ AnimParam2D::Type::Float,  "NewFloat" }); ctrl->SetDirtyFlag(true);
+                ctrl->params.push_back({ .name = "NewFloat", .type = AnimParam::Type::Float }); ctrl->SetDirtyFlag(true);
             }
             ImGui::SameLine();
             if (ImGui::Button("+ Bool##p_addb"))
             {
-                ctrl->params.push_back({ AnimParam2D::Type::Bool,   "NewBool" }); ctrl->SetDirtyFlag(true);
+                ctrl->params.push_back({ .name = "NewBool", .type = AnimParam::Type::Bool }); ctrl->SetDirtyFlag(true);
             }
             ImGui::SameLine();
             if (ImGui::Button("+ Int##p_addi"))
             {
-                ctrl->params.push_back({ AnimParam2D::Type::Int,    "NewInt" }); ctrl->SetDirtyFlag(true);
+                ctrl->params.push_back({ .name = "NewInt", .type = AnimParam::Type::Int }); ctrl->SetDirtyFlag(true);
             }
             ImGui::SameLine();
             if (ImGui::Button("+ String##p_adds"))
             {
-                ctrl->params.push_back({ AnimParam2D::Type::String, "NewString" }); ctrl->SetDirtyFlag(true);
+                ctrl->params.push_back({ .name = "NewString", .type = AnimParam::Type::String }); ctrl->SetDirtyFlag(true);
             }
         }
 
@@ -2362,28 +2368,28 @@ namespace ignite
                     ImGui::SetNextItemWidth(50);
                     if (ImGui::Combo("##cond_op", &opIdx, s_ConditionOpNames, 6))
                     {
-                        cond.op = static_cast<AnimCondition2D::Op>(opIdx);
+                        cond.op = static_cast<AnimCondition::Op>(opIdx);
                         ctrl->SetDirtyFlag(true);
                     }
                     ImGui::SameLine();
 
-                    const AnimParam2D *param = ctrl->GetParam(cond.paramName);
+                    const AnimParam *param = ctrl->GetParam(cond.paramName);
                     if (param)
                     {
                         switch (param->type)
                         {
-                            case AnimParam2D::Type::Float:
+                            case AnimParam::Type::Float:
                             ImGui::SetNextItemWidth(70);
                             if (ImGui::DragFloat("##cond_fval", &cond.floatThreshold, 0.01f)) ctrl->SetDirtyFlag(true);
                             break;
-                            case AnimParam2D::Type::Int:
+                            case AnimParam::Type::Int:
                             ImGui::SetNextItemWidth(70);
                             if (ImGui::DragInt("##cond_ival", &cond.intThreshold)) ctrl->SetDirtyFlag(true);
                             break;
-                            case AnimParam2D::Type::Bool:
+                            case AnimParam::Type::Bool:
                             if (ImGui::Checkbox("##cond_bval", &cond.boolThreshold)) ctrl->SetDirtyFlag(true);
                             break;
-                            case AnimParam2D::Type::String:
+                            case AnimParam::Type::String:
                             {
                                 char sbuf[256];
                                 std::strncpy(sbuf, cond.strThreshold.c_str(), sizeof(sbuf));
@@ -2429,7 +2435,7 @@ namespace ignite
 
             if (ImGui::Button("+ Add Transition##tr_add"))
             {
-                AnimTransition2D tr;
+                AnimTransition tr;
                 if (!ctrl->states.empty())
                 {
                     tr.fromState = ctrl->states[0].name;

@@ -56,14 +56,31 @@ namespace ignite {
 
     };
 
+    struct SkeletalMeshImportOptions
+    {
+        bool importMesh = true;
+        bool importSkeleton = true;
+        bool importAnimations = true;
+        bool importMaterials = true;
+        bool forceRebuild = false;
+        std::filesystem::path targetDirectory;
+        bool useExistingSkeletonForAnimations = false;
+        AssetHandle existingSkeletonHandle = AssetHandle(0);
+    };
+
+    struct StaticMeshImportOptions
+    {
+        std::filesystem::path targetDirectory;
+    };
+
     class AssetImporter
     {
     public:
         static Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static void ImportAsync(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, std::function<void(Ref<Asset>, AssetHandle)> callback);
 
-        static Ref<StaticMesh> ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
-        static Ref<SkeletalMesh> ImportSkeletalMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
+        static Ref<StaticMesh> ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, const StaticMeshImportOptions &options = StaticMeshImportOptions());
+        static Ref<SkeletalMesh> ImportSkeletalMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, const SkeletalMeshImportOptions &options = SkeletalMeshImportOptions());
         static Ref<Material> ImportMaterial(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<Material2D> ImportMaterial2D(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<SpriteSheet> ImportSpriteSheet(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);

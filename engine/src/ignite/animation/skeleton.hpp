@@ -43,11 +43,13 @@ namespace ignite
         //                  Joint name, socket id
         std::unordered_map<std::string, int32_t> jointSockets;
 
+        std::vector<glm::mat4> GetFinalJointTransforms();
+        void UpdateGlobalTransforms();
+
         virtual bool Serialize(const std::filesystem::path &filepath) override;
         static Ref<Skeleton> Deserialize(const std::filesystem::path &filepath);
 
         static AssetType GetStaticType() { return AssetType::Skeleton; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }
     };
-
 }

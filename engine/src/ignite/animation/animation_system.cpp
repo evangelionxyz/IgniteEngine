@@ -39,54 +39,7 @@ namespace ignite
                     skeleton->joints[jointIndex].defaultScale);
             }
         }
-
-        UpdateGlobalTransforms(skeleton);
+        skeleton->UpdateGlobalTransforms();
         return true;
     }
-
-    void AnimationSystem::UpdateGlobalTransforms(const Ref<Skeleton> &skeleton)
-    {
-        // Important optimization: Calculate global transforms in hierarchy order
-        for (size_t i = 0; i < skeleton->joints.size(); ++i)
-        {
-            Joint &joint = skeleton->joints[i];
-
-            if (joint.parentJointId == -1)
-            {
-                // Root joint
-                joint.globalTransform = joint.localTransform;
-            }
-            else
-            {
-                // Child joint
-                joint.globalTransform = skeleton->joints[joint.parentJointId].globalTransform * joint.localTransform;
-            }
-        }
-    }
-
-    std::vector<glm::mat4> AnimationSystem::GetFinalJointTransforms(const Ref<Skeleton> &skeleton)
-    {
-        std::vector<glm::mat4> finalTransforms;
-        GetFinalJointTransforms(skeleton, finalTransforms);
-
-        return finalTransforms;
-    }
-
-    void AnimationSystem::GetFinalJointTransforms(const Ref<Skeleton> &skeleton, std::vector<glm::mat4> &outTransforms)
-    {
-        if (!skeleton)
-        {
-            outTransforms.clear();
-            return;
-        }
-
-        outTransforms.resize(skeleton->joints.size());
-
-        for (size_t i = 0; i < skeleton->joints.size(); ++i)
-        {
-            const Joint &joint = skeleton->joints[i];
-            outTransforms[i] = joint.globalTransform * joint.inverseBindPose;
-        }
-    }
-
 }

@@ -329,9 +329,9 @@ namespace ignite
             if (ImGui::MenuItem("Directional Light"))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Directional Light"));
-                if (entity.IsValid() && !entity.HasComponent<DirectionalLight>())
+                if (entity.IsValid() && !entity.HasComponent<DirectionalLightComponent>())
                 {
-                    entity.AddComponent<DirectionalLight>();
+                    entity.AddComponent<DirectionalLightComponent>();
                 }
             }
 
@@ -609,9 +609,9 @@ namespace ignite
                     });
             });
 
-            RenderComponent<DirectionalLight>("Directional Light", selectedEntity, [&]()
+            RenderComponent<DirectionalLightComponent>("Directional Light", selectedEntity, [&]()
             {
-                DirectionalLight &c = selectedEntity.GetComponent<DirectionalLight>();
+                DirectionalLightComponent &c = selectedEntity.GetComponent<DirectionalLightComponent>();
                 TransformComponent &tr = selectedEntity.GetComponent<TransformComponent>();
 
                 ImGui::ColorEdit4("Color", &c.color.x);
@@ -1694,7 +1694,7 @@ namespace ignite
                         entity.AddComponent<PointLight2DComponent>();
                         break;
                     case CompType_DirectionalLight:
-                        entity.AddComponent<DirectionalLight>();
+                        entity.AddComponent<DirectionalLightComponent>();
                         break;
                     case CompType_Font:
                         entity.AddComponent<TextComponent>();

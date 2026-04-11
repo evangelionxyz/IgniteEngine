@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#pragma once
+#ifndef SKELETAL_ANIMATION_HPP
+#define SKELETAL_ANIMATION_HPP
 
 #include "ignite/asset/asset.hpp"
 #include "keyframes.hpp"
@@ -17,7 +18,8 @@ namespace ignite
         AnimationChannel() = default;
 
         // S * (T/S)
-        glm::mat4 CalculateTransform(float timeInTicks, const glm::vec3& defaultTranslation, const glm::quat& defaultRotation, const glm::vec3& defaultScale);
+        glm::mat4 CalculateTransform(float timeInTicks, const glm::vec3& defaultTranslation, 
+            const glm::quat& defaultRotation, const glm::vec3& defaultScale);
 
         Vec3Key translationKeys;
         QuatKey rotationKeys;
@@ -43,7 +45,7 @@ namespace ignite
         virtual bool Serialize(const std::filesystem::path &filepath) override;
         static Ref<SkeletalAnimation> Deserialize(const std::filesystem::path &filepath);
 
-        void SetSkeletonHandle(UUID skeletonHandle) { m_SkeletonHandle = skeletonHandle; }
+        void SetSkeletonHandle(UUID skeletonHandle);
         UUID GetSkeletonHandle() { return m_SkeletonHandle; }
 
         static AssetType GetStaticType() { return AssetType::SkeletalAnimation; }
@@ -53,3 +55,5 @@ namespace ignite
         UUID m_SkeletonHandle = UUID(0);
     };
 }
+
+#endif

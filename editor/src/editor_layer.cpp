@@ -545,10 +545,7 @@ namespace ignite
             m_State.popupNewProjectModal = false;
         }
 
-        // Draw UI
-		UIProjectCreation();
-        UISettings();
-
+        UIProjectCreation();
         // ImGui Demo
         if (m_State.imguiDemoWindow)
         {
@@ -558,6 +555,9 @@ namespace ignite
         // dock space
         ImGui::DockSpace(ImGui::GetID("main_dockspace"), ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
         ImGui::End();
+
+        // Draw UI
+        UISettings();
     }
 
     void EditorLayer::SetActiveScene(const Ref<Scene> &scene)
@@ -1383,7 +1383,7 @@ namespace ignite
                         }
                         ImGui::EndTabItem();
                     }
-
+                    ImGui::EndTabBar();
                 }
             }
             ImGui::End(); // !settings window

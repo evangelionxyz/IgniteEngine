@@ -13,144 +13,6 @@
 
 namespace ignite
 {
-    // -----------------------------------------------------------------------
-    // String helpers
-    // -----------------------------------------------------------------------
-    namespace
-    {
-        static const char *ParamTypeToStr(AnimParam2D::Type t)
-        {
-            switch (t)
-            {
-            case AnimParam2D::Type::Float:  return "Float";
-            case AnimParam2D::Type::Int:    return "Int";
-            case AnimParam2D::Type::Bool:   return "Bool";
-            case AnimParam2D::Type::String: return "String";
-            default:                        return "Float";
-            }
-        }
-
-        static AnimParam2D::Type StrToParamType(const std::string &s)
-        {
-            if (s == "Int")    return AnimParam2D::Type::Int;
-            if (s == "Bool")   return AnimParam2D::Type::Bool;
-            if (s == "String") return AnimParam2D::Type::String;
-            return AnimParam2D::Type::Float;
-        }
-
-        static const char *OpToStr(AnimCondition2D::Op op)
-        {
-            switch (op)
-            {
-            case AnimCondition2D::Op::Equals:    return "Equals";
-            case AnimCondition2D::Op::NotEquals: return "NotEquals";
-            case AnimCondition2D::Op::Greater:   return "Greater";
-            case AnimCondition2D::Op::Less:      return "Less";
-            case AnimCondition2D::Op::GreaterEq: return "GreaterEq";
-            case AnimCondition2D::Op::LessEq:    return "LessEq";
-            default:                             return "Equals";
-            }
-        }
-
-        static AnimCondition2D::Op StrToOp(const std::string &s)
-        {
-            if (s == "NotEquals") return AnimCondition2D::Op::NotEquals;
-            if (s == "Greater")   return AnimCondition2D::Op::Greater;
-            if (s == "Less")      return AnimCondition2D::Op::Less;
-            if (s == "GreaterEq") return AnimCondition2D::Op::GreaterEq;
-            if (s == "LessEq")   return AnimCondition2D::Op::LessEq;
-            return AnimCondition2D::Op::Equals;
-        }
-
-        static bool EvalCondition(const AnimCondition2D &cond, const AnimParam2D *param)
-        {
-            if (!param)
-                return false;
-
-            const auto op = cond.op;
-
-            switch (param->type)
-            {
-            case AnimParam2D::Type::Float:
-            {
-                const float v = param->floatVal;
-                const float t = cond.floatThreshold;
-                switch (op)
-                {
-                case AnimCondition2D::Op::Equals:    return v == t;
-                case AnimCondition2D::Op::NotEquals: return v != t;
-                case AnimCondition2D::Op::Greater:   return v >  t;
-                case AnimCondition2D::Op::Less:      return v <  t;
-                case AnimCondition2D::Op::GreaterEq: return v >= t;
-                case AnimCondition2D::Op::LessEq:    return v <= t;
-                default: return false;
-                }
-            }
-            case AnimParam2D::Type::Int:
-            {
-                const int v = param->intVal;
-                const int t = cond.intThreshold;
-                switch (op)
-                {
-                case AnimCondition2D::Op::Equals:    return v == t;
-                case AnimCondition2D::Op::NotEquals: return v != t;
-                case AnimCondition2D::Op::Greater:   return v >  t;
-                case AnimCondition2D::Op::Less:      return v <  t;
-                case AnimCondition2D::Op::GreaterEq: return v >= t;
-                case AnimCondition2D::Op::LessEq:    return v <= t;
-                default: return false;
-                }
-            }
-            case AnimParam2D::Type::Bool:
-                return (op == AnimCondition2D::Op::Equals)    ? (param->boolVal == cond.boolThreshold)
-                     : (op == AnimCondition2D::Op::NotEquals) ? (param->boolVal != cond.boolThreshold)
-                     : false;
-
-            case AnimParam2D::Type::String:
-                return (op == AnimCondition2D::Op::Equals)    ? (param->strVal == cond.strThreshold)
-                     : (op == AnimCondition2D::Op::NotEquals) ? (param->strVal != cond.strThreshold)
-                     : false;
-
-            default:
-                return false;
-            }
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // Param setters
-    // -----------------------------------------------------------------------
-    void AnimatorController2D::SetParamFloat(const std::string &name, float v)
-    {
-        if (auto *p = GetParam(name)) p->floatVal = v;
-    }
-
-    void AnimatorController2D::SetParamInt(const std::string &name, int v)
-    {
-        if (auto *p = GetParam(name)) p->intVal = v;
-    }
-
-    void AnimatorController2D::SetParamBool(const std::string &name, bool v)
-    {
-        if (auto *p = GetParam(name)) p->boolVal = v;
-    }
-
-    void AnimatorController2D::SetParamString(const std::string &name, const std::string &v)
-    {
-        if (auto *p = GetParam(name)) p->strVal = v;
-    }
-
-    AnimParam2D *AnimatorController2D::GetParam(const std::string &name)
-    {
-        auto it = std::find_if(params.begin(), params.end(), [&name](const AnimParam2D &p) { return p.name == name; });
-        return it != params.end() ? &(*it) : nullptr;
-    }
-
-    const AnimParam2D *AnimatorController2D::GetParam(const std::string &name) const
-    {
-        auto it = std::find_if(params.begin(), params.end(), [&name](const AnimParam2D &p) { return p.name == name; });
-        return it != params.end() ? &(*it) : nullptr;
-    }
 
     AnimState2D *AnimatorController2D::FindState(const std::string &name)
     {
@@ -184,8 +46,8 @@ namespace ignite
             bool allPass = true;
             for (const auto &cond : tr.conditions)
             {
-                const AnimParam2D *param = GetParam(cond.paramName);
-                if (!EvalCondition(cond, param))
+                const AnimParam *param = GetParam(cond.paramName);
+                if (!anim_utils::EvalCondition(cond, param))
                 {
                     allPass = false;
                     break;
@@ -227,13 +89,13 @@ namespace ignite
         {
             out << YAML::BeginMap;
             out << YAML::Key << "Name" << YAML::Value << p.name;
-            out << YAML::Key << "Type" << YAML::Value << ParamTypeToStr(p.type);
+            out << YAML::Key << "Type" << YAML::Value << anim_utils::ParamTypeToStr(p.type);
             switch (p.type)
             {
-            case AnimParam2D::Type::Float:  out << YAML::Key << "Value" << YAML::Value << p.floatVal; break;
-            case AnimParam2D::Type::Int:    out << YAML::Key << "Value" << YAML::Value << p.intVal;   break;
-            case AnimParam2D::Type::Bool:   out << YAML::Key << "Value" << YAML::Value << p.boolVal;  break;
-            case AnimParam2D::Type::String: out << YAML::Key << "Value" << YAML::Value << p.strVal;   break;
+            case AnimParam::Type::Float:  out << YAML::Key << "Value" << YAML::Value << p.floatVal; break;
+            case AnimParam::Type::Int:    out << YAML::Key << "Value" << YAML::Value << p.intVal;   break;
+            case AnimParam::Type::Bool:   out << YAML::Key << "Value" << YAML::Value << p.boolVal;  break;
+            case AnimParam::Type::String: out << YAML::Key << "Value" << YAML::Value << p.strVal;   break;
             default: break;
             }
             out << YAML::EndMap;
@@ -255,18 +117,18 @@ namespace ignite
             {
                 out << YAML::BeginMap;
                 out << YAML::Key << "Param" << YAML::Value << cond.paramName;
-                out << YAML::Key << "Op"    << YAML::Value << OpToStr(cond.op);
+                out << YAML::Key << "Op"    << YAML::Value << anim_utils::OpToStr(cond.op);
 
                 // Find param type for threshold serialization
-                const AnimParam2D *param = GetParam(cond.paramName);
+                const AnimParam *param = GetParam(cond.paramName);
                 if (param)
                 {
                     switch (param->type)
                     {
-                    case AnimParam2D::Type::Float:  out << YAML::Key << "Threshold" << YAML::Value << cond.floatThreshold; break;
-                    case AnimParam2D::Type::Int:    out << YAML::Key << "Threshold" << YAML::Value << cond.intThreshold;   break;
-                    case AnimParam2D::Type::Bool:   out << YAML::Key << "Threshold" << YAML::Value << cond.boolThreshold;  break;
-                    case AnimParam2D::Type::String: out << YAML::Key << "Threshold" << YAML::Value << cond.strThreshold;   break;
+                    case AnimParam::Type::Float:  out << YAML::Key << "Threshold" << YAML::Value << cond.floatThreshold; break;
+                    case AnimParam::Type::Int:    out << YAML::Key << "Threshold" << YAML::Value << cond.intThreshold;   break;
+                    case AnimParam::Type::Bool:   out << YAML::Key << "Threshold" << YAML::Value << cond.boolThreshold;  break;
+                    case AnimParam::Type::String: out << YAML::Key << "Threshold" << YAML::Value << cond.strThreshold;   break;
                     default: break;
                     }
                 }
@@ -347,17 +209,17 @@ namespace ignite
         {
             for (const auto &pn : paramsNode)
             {
-                AnimParam2D p;
+                AnimParam p;
                 if (auto n = pn["Name"]) p.name = n.as<std::string>();
-                if (auto n = pn["Type"]) p.type = StrToParamType(n.as<std::string>());
+                if (auto n = pn["Type"]) p.type = anim_utils::StrToParamType(n.as<std::string>());
                 if (auto n = pn["Value"])
                 {
                     switch (p.type)
                     {
-                    case AnimParam2D::Type::Float:  p.floatVal = n.as<float>();       break;
-                    case AnimParam2D::Type::Int:    p.intVal   = n.as<int>();         break;
-                    case AnimParam2D::Type::Bool:   p.boolVal  = n.as<bool>();        break;
-                    case AnimParam2D::Type::String: p.strVal   = n.as<std::string>(); break;
+                    case AnimParam::Type::Float:  p.floatVal = n.as<float>();       break;
+                    case AnimParam::Type::Int:    p.intVal   = n.as<int>();         break;
+                    case AnimParam::Type::Bool:   p.boolVal  = n.as<bool>();        break;
+                    case AnimParam::Type::String: p.strVal   = n.as<std::string>(); break;
                     default: break;
                     }
                 }
@@ -370,7 +232,7 @@ namespace ignite
         {
             for (const auto &tn : transNode)
             {
-                AnimTransition2D tr;
+                AnimTransition tr;
                 if (auto n = tn["From"])        tr.fromState    = n.as<std::string>();
                 if (auto n = tn["To"])          tr.toState      = n.as<std::string>();
                 if (auto n = tn["HasExitTime"]) tr.hasExitTime  = n.as<bool>();
@@ -380,22 +242,22 @@ namespace ignite
                 {
                     for (const auto &cn : condsNode)
                     {
-                        AnimCondition2D cond;
+                        AnimCondition cond;
                         if (auto n = cn["Param"]) cond.paramName = n.as<std::string>();
-                        if (auto n = cn["Op"])    cond.op        = StrToOp(n.as<std::string>());
+                        if (auto n = cn["Op"])    cond.op        = anim_utils::StrToOp(n.as<std::string>());
 
                         // determine param type from the controller params list
-                        const AnimParam2D *param = ctrl->GetParam(cond.paramName);
+                        const AnimParam *param = ctrl->GetParam(cond.paramName);
                         if (auto n = cn["Threshold"])
                         {
                             if (param)
                             {
                                 switch (param->type)
                                 {
-                                case AnimParam2D::Type::Float:  cond.floatThreshold = n.as<float>();       break;
-                                case AnimParam2D::Type::Int:    cond.intThreshold   = n.as<int>();         break;
-                                case AnimParam2D::Type::Bool:   cond.boolThreshold  = n.as<bool>();        break;
-                                case AnimParam2D::Type::String: cond.strThreshold   = n.as<std::string>(); break;
+                                case AnimParam::Type::Float:  cond.floatThreshold = n.as<float>();       break;
+                                case AnimParam::Type::Int:    cond.intThreshold   = n.as<int>();         break;
+                                case AnimParam::Type::Bool:   cond.boolThreshold  = n.as<bool>();        break;
+                                case AnimParam::Type::String: cond.strThreshold   = n.as<std::string>(); break;
                                 default: break;
                                 }
                             }

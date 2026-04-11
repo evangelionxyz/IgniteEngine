@@ -181,9 +181,10 @@ namespace ignite
 
 		if (hasFbx
 			&& m_SelectedAssetType != AssetType::StaticMesh
-			&& !m_SkeletalMeshOptions.importSkeletalMesh
+			&& !m_SkeletalMeshOptions.importMesh
 			&& !m_SkeletalMeshOptions.importSkeleton
-			&& !m_SkeletalMeshOptions.importAnimations)
+			&& !m_SkeletalMeshOptions.importAnimations
+			&& !m_SkeletalMeshOptions.importMaterials)
 		{
 			LOG_WARN("[Asset Importer] Nothing selected for FBX import");
 			return;
@@ -191,8 +192,11 @@ namespace ignite
 
 		ImportRequest request;
 		request.filepaths = m_SelectedFilepaths;
+        request.targetDirectory = m_TargetDirectory;
 		request.assetType = m_SelectedAssetType;
 		request.skeletalMeshOptions = m_SkeletalMeshOptions;
+        request.skeletalMeshOptions.targetDirectory = request.targetDirectory;
+		request.skeletalMeshOptions.forceRebuild = true;
 		m_ImportRequests.push(std::move(request));
 		m_FontPreview = {};
 		m_ShowImporterWindow = false;
@@ -229,26 +233,14 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
 		if (ImGui::TreeNodeEx("Skeletal Mesh (FBX) Import", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			ImGui::Checkbox("Import Skeletal Mesh", &m_SkeletalMeshOptions.importSkeletalMesh);
-
-			if (m_SkeletalMeshOptions.importSkeletalMesh)
-			{
-				m_SkeletalMeshOptions.importSkeleton = true;
-				m_SkeletalMeshOptions.importAnimations = true;
-			}
-
-			ImGui::BeginDisabled(m_SkeletalMeshOptions.importSkeletalMesh);
+			ImGui::Checkbox("Import Mesh", &m_SkeletalMeshOptions.importMesh);
+			ImGui::Checkbox("Import Materials & Textures", &m_SkeletalMeshOptions.importMaterials);
 			ImGui::Checkbox("Import Skeleton", &m_SkeletalMeshOptions.importSkeleton);
 			ImGui::Checkbox("Import Animations", &m_SkeletalMeshOptions.importAnimations);
-			ImGui::EndDisabled();
 
-			if (m_SkeletalMeshOptions.importSkeletalMesh)
+			if (m_SkeletalMeshOptions.importAnimations)
 			{
-				ImGui::TextDisabled("Skeletal mesh import currently requires skeleton and animations.");
-			}
-			else if (m_SkeletalMeshOptions.importAnimations)
-			{
-				ImGui::SeparatorText("Animation Only");
+				ImGui::SeparatorText("Animation Options");
 				ImGui::Checkbox("Use Existing Skeleton", &m_SkeletalMeshOptions.useExistingSkeletonForAnimations);
 
 				if (m_SkeletalMeshOptions.useExistingSkeletonForAnimations)
@@ -312,9 +304,10 @@ namespace ignite
 			ImGui::BulletText("Create static mesh binary (.ixsm)");
 			ImGui::BulletText("Queue GPU buffer upload for mesh primitives");
 
-			auto project = m_EditorLayer->GetActiveProject();
+           auto project = m_EditorLayer->GetActiveProject();
 			if (project)
 			{
+               const std::filesystem::path outputRootDirectory = m_TargetDirectory.empty() ? project->GetAssetDirectory() : m_TargetDirectory;
 				ImGui::Spacing();
 				ImGui::SeparatorText("Output Preview");
 
@@ -327,7 +320,7 @@ namespace ignite
 					}
 
 					const std::filesystem::path filename = filepath.stem();
-					const std::filesystem::path rootOutput = project->GetAssetDirectory() / filename;
+					const std::filesystem::path rootOutput = outputRootDirectory / filename;
 					const std::filesystem::path meshOutput = rootOutput / "StaticMesh" / (filename.string() + GetAssetExtensionFromType(AssetType::StaticMesh));
 					const std::filesystem::path materialOutput = rootOutput / "Material";
 					const std::filesystem::path textureOutput = rootOutput / "Textures";
@@ -382,7 +375,7 @@ namespace ignite
 		}
 	}
 
-    void AssetImporterPanel::ProcessImportRequest(const ImportRequest &request)
+	void AssetImporterPanel::ProcessImportRequest(const ImportRequest &request)
 	{
 		IGN_PROFILE_FUNCTION();
 		auto project = m_EditorLayer->GetActiveProject();
@@ -400,7 +393,7 @@ namespace ignite
 			if (request.assetType == AssetType::StaticMesh && IsFbxFile(filepath))
 			{
 				IGN_PROFILE_SCOPE("AssetImporterPanel::ProcessImportRequest::FBXStaticMesh");
-				ImportFbxAsStaticMesh(filepath);
+				ImportFbxAsStaticMesh(filepath, request.targetDirectory);
 				importedAny = true;
 				continue;
 			}
@@ -416,9 +409,9 @@ namespace ignite
 			if (IsFbxFile(filepath))
 			{
 				IGN_PROFILE_SCOPE("AssetImporterPanel::ProcessImportRequest::FBX");
-				if (request.skeletalMeshOptions.importSkeletalMesh)
+				if (request.skeletalMeshOptions.importMesh || request.skeletalMeshOptions.importMaterials)
 				{
-					ImportFbxAsSkeletalMesh(filepath);
+					ImportFbxAsSkeletalMesh(filepath, request.skeletalMeshOptions);
 				}
 				else
 				{
@@ -543,7 +536,7 @@ namespace ignite
 		}
 	}
 
-	void AssetImporterPanel::ImportFbxAsStaticMesh(const std::filesystem::path &filepath)
+	void AssetImporterPanel::ImportFbxAsStaticMesh(const std::filesystem::path &filepath, const std::filesystem::path &targetDirectory)
 	{
 		IGN_PROFILE_FUNCTION();
 		auto project = m_EditorLayer->GetActiveProject();
@@ -554,7 +547,8 @@ namespace ignite
 
 		auto assetManager = project->GetAssetManager();
 		const std::filesystem::path filename = filepath.stem();
-		const std::filesystem::path smBinaryPath = project->GetAssetDirectory() / filename / "StaticMesh" / (filename.string() + GetAssetExtensionFromType(AssetType::StaticMesh));
+		const std::filesystem::path outputRootDirectory = targetDirectory.empty() ? project->GetAssetDirectory() : targetDirectory;
+		const std::filesystem::path smBinaryPath = outputRootDirectory / filename / "StaticMesh" / (filename.string() + GetAssetExtensionFromType(AssetType::StaticMesh));
 		const std::filesystem::path smRelativePath = project->GetAssetRelativeFilepath(smBinaryPath);
 
 		AssetHandle handle = assetManager->GetAssetHandle(smRelativePath);
@@ -567,7 +561,10 @@ namespace ignite
 		sourceMetadata.filepath = filepath;
 		sourceMetadata.type = AssetType::StaticMesh;
 
-		Ref<StaticMesh> importedAsset = AssetImporter::ImportStaticMesh(handle, sourceMetadata, assetManager);
+		StaticMeshImportOptions options;
+		options.targetDirectory = outputRootDirectory;
+
+		Ref<StaticMesh> importedAsset = AssetImporter::ImportStaticMesh(handle, sourceMetadata, assetManager, options);
 		if (!importedAsset)
 		{
 			LOG_ERROR("[Asset Importer] Failed to import static mesh from {}", filepath.generic_string());
@@ -582,7 +579,7 @@ namespace ignite
 		assetManager->AssignAsset(handle, importedAsset);
 	}
 
-	void AssetImporterPanel::ImportFbxAsSkeletalMesh(const std::filesystem::path &filepath)
+	void AssetImporterPanel::ImportFbxAsSkeletalMesh(const std::filesystem::path &filepath, const SkeletalMeshImportOptions &options)
 	{
 		IGN_PROFILE_FUNCTION();
 		auto project = m_EditorLayer->GetActiveProject();
@@ -593,7 +590,8 @@ namespace ignite
 
 		auto assetManager = project->GetAssetManager();
 		const std::filesystem::path filename = filepath.stem();
-		const std::filesystem::path skmBinaryPath = project->GetAssetDirectory() / filename / "SkeletalMesh" / (filename.string() + GetAssetExtensionFromType(AssetType::SkeletalMesh));
+        const std::filesystem::path outputRootDirectory = options.targetDirectory.empty() ? project->GetAssetDirectory() : options.targetDirectory;
+		const std::filesystem::path skmBinaryPath = outputRootDirectory / filename / "SkeletalMesh" / (filename.string() + GetAssetExtensionFromType(AssetType::SkeletalMesh));
 		const std::filesystem::path skmRelativePath = project->GetAssetRelativeFilepath(skmBinaryPath);
 
 		AssetHandle handle = assetManager->GetAssetHandle(skmRelativePath);
@@ -606,19 +604,22 @@ namespace ignite
 		sourceMetadata.filepath = filepath;
 		sourceMetadata.type = AssetType::SkeletalMesh;
 
-		Ref<SkeletalMesh> importedAsset = AssetImporter::ImportSkeletalMesh(handle, sourceMetadata, assetManager);
+		Ref<SkeletalMesh> importedAsset = AssetImporter::ImportSkeletalMesh(handle, sourceMetadata, assetManager, options);
 		if (!importedAsset)
 		{
 			LOG_ERROR("[Asset Importer] Failed to import skeletal mesh from {}", filepath.generic_string());
 			return;
 		}
 
-		AssetMetaData registryMetadata;
-		registryMetadata.filepath = skmRelativePath;
-		registryMetadata.type = AssetType::SkeletalMesh;
+		if (options.importMesh)
+		{
+			AssetMetaData registryMetadata;
+			registryMetadata.filepath = skmRelativePath;
+			registryMetadata.type = AssetType::SkeletalMesh;
 
-		assetManager->AssignMetaData(handle, registryMetadata);
-		assetManager->AssignAsset(handle, importedAsset);
+			assetManager->AssignMetaData(handle, registryMetadata);
+			assetManager->AssignAsset(handle, importedAsset);
+		}
 	}
 
 	void AssetImporterPanel::ImportFbxSkeletonAndAnimations(const std::filesystem::path &filepath, const SkeletalMeshImportOptions &options)
@@ -636,7 +637,7 @@ namespace ignite
 		}
 
 		auto assetManager = project->GetAssetManager();
-		const std::filesystem::path assetDirectory = project->GetAssetDirectory();
+		const std::filesystem::path assetDirectory = options.targetDirectory.empty() ? project->GetAssetDirectory() : options.targetDirectory;
 		const std::filesystem::path filename = filepath.stem();
 
 		const std::filesystem::path outputDirectory = assetDirectory / filename;
@@ -656,7 +657,7 @@ namespace ignite
 			std::filesystem::create_directory(animationDirectory);
 		}
 
-     Ref<Skeleton> skeleton = nullptr;
+		Ref<Skeleton> skeleton = nullptr;
 		if (options.useExistingSkeletonForAnimations && options.existingSkeletonHandle != AssetHandle(0))
 		{
 			skeleton = project->GetAsset<Skeleton>(options.existingSkeletonHandle);
@@ -739,7 +740,7 @@ namespace ignite
 				}
 
 				animation->handle = animationHandle;
-              animation->SetSkeletonHandle(skeleton ? skeleton->handle : AssetHandle(0));
+				animation->SetSkeletonHandle(skeleton ? skeleton->handle : AssetHandle(0));
 				animation->SetReadyFlag(true);
 				assetManager->AssignMetaData(animationHandle, animationMD);
 				assetManager->AssignAsset(animationHandle, animation);

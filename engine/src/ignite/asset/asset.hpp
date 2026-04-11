@@ -59,6 +59,8 @@ namespace ignite {
         StaticMesh,
         Scene,
 
+        AnimatorController, // .ac    - animator state machine
+
         Material2D,
 
         Animation2D,          // .anim2d  - single 2D animation clip
@@ -89,6 +91,7 @@ namespace ignite {
             case ignite::AssetType::LocomotionController: return "LocomotionController";
             case ignite::AssetType::Material2D: return "Material2D";
             case ignite::AssetType::Animation2D: return "Animation2D";
+            case ignite::AssetType::AnimatorController: return "AnimatorController";
             case ignite::AssetType::AnimatorController2D: return "AnimatorController2D";
             case ignite::AssetType::Invalid:
             default: return "Invalid";
@@ -130,6 +133,7 @@ namespace ignite {
 
         { ".ixmat2d", AssetType::Material2D},
         { ".anim2d", AssetType::Animation2D},
+        { ".ac",   AssetType::AnimatorController},
         { ".ac2d",   AssetType::AnimatorController2D},
     };
 
@@ -157,6 +161,7 @@ namespace ignite {
         if (typeStr == "Font")  return AssetType::Font;
         if (typeStr == "Material2D")  return AssetType::Material2D;
         if (typeStr == "Animation2D")  return AssetType::Animation2D;
+        if (typeStr == "AnimatorController")  return AssetType::AnimatorController;
         if (typeStr == "AnimatorController2D")  return AssetType::AnimatorController2D;
         return AssetType::Invalid;
     }
@@ -182,6 +187,7 @@ namespace ignite {
         case AssetType::Material2D: return ".ixmat2d";
         case AssetType::Environment: return ".ixenv";
         case AssetType::Animation2D: return ".anim2d";
+        case AssetType::AnimatorController: return ".ac";
         case AssetType::AnimatorController2D: return ".ac2d";
         default: return ".invalid";
         }

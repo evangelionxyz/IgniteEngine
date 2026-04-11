@@ -30,7 +30,6 @@ namespace ignite
 
         [[nodiscard]] bool IsInRange() const { return m_InRange; }
 
-        // TODO: Is Triggered
     private:
         bool m_InRange = false;
     };
@@ -64,52 +63,6 @@ namespace ignite
         std::unordered_map<std::string, AnimNotif> m_Notifies;
         AssetHandle m_AnimationHandle = AssetHandle(0);
         AssetHandle m_SkeletonHandle = AssetHandle(0);
-    };
-
-    struct BlendSpaceSample
-    {
-        AssetHandle animationHandle = AssetHandle(0);
-        glm::vec2 position = glm::vec2(0.0f);
-    };
-
-    class BlendSpace : public Asset
-    {
-    public:
-        std::string name;
-        AssetHandle skeletonHandle = AssetHandle(0);
-        std::string axisXName = "Speed";
-        std::string axisYName = "Direction";
-        glm::vec2 axisMin = glm::vec2(0.0f);
-        glm::vec2 axisMax = glm::vec2(1.0f);
-        std::vector<BlendSpaceSample> samples;
-
-        virtual bool Serialize(const std::filesystem::path &filepath) override;
-        static Ref<BlendSpace> Deserialize(const std::filesystem::path &filepath);
-
-        static AssetType GetStaticType() { return AssetType::BlendSpace; }
-        virtual AssetType GetAssetType() override { return GetStaticType(); }
-    };
-
-    struct LocomotionState
-    {
-        std::string name;
-        bool useBlendSpace = false;
-        AssetHandle assetHandle = AssetHandle(0); // .ixanim or .bsp
-    };
-
-    class LocomotionController : public Asset
-    {
-    public:
-        std::string name;
-        AssetHandle skeletonHandle = AssetHandle(0);
-        std::string defaultState;
-        std::vector<LocomotionState> states;
-
-        virtual bool Serialize(const std::filesystem::path &filepath) override;
-        static Ref<LocomotionController> Deserialize(const std::filesystem::path &filepath);
-
-        static AssetType GetStaticType() { return AssetType::LocomotionController; }
-        virtual AssetType GetAssetType() override { return GetStaticType(); }
     };
 }
 

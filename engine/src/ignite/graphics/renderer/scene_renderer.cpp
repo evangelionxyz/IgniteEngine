@@ -734,7 +734,7 @@ namespace ignite
 
             // Scene post processing
 
-            PostProcessing &postProcessing = camera->postProcessing;
+            PostProcessing postProcessing = camera->postProcessing;
             if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
             {
                 const auto &cc = primaryCamera.GetComponent<CameraComponent>();
@@ -857,13 +857,15 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::SSAOPass", 0x404040FF);
                 m_SSAO->Resize(sceneRT->GetWidth(), sceneRT->GetHeight());
-                m_SSAO->Build(cmd, sceneRT->GetDepthAttachment(), camera, camera->postProcessing, m_CompositeVertexBuffer);
+                m_SSAO->Build(cmd, sceneRT->GetDepthAttachment(), camera, postProcessing, m_CompositeVertexBuffer);
                 ssaoTexture = m_SSAO->GetAOTexture();
             }
 
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::CompositePass");
-                CompositePass(cmd, camera, compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0), edgeTexture, bloomTexture, ssaoTexture);
+                CompositePass(cmd, camera, postProcessing,
+                    compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0),
+                    edgeTexture, bloomTexture, ssaoTexture);
             }
 
             cmd->close();
@@ -1077,7 +1079,9 @@ namespace ignite
 
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::CompositePass");
-                CompositePass(cmd, camera, compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0), nullptr, bloomTexture, ssaoTexture);
+                CompositePass(cmd, camera, camera->postProcessing,
+                    compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0),
+                    nullptr, bloomTexture, ssaoTexture);
             }
 
             cmd->close();
@@ -1104,11 +1108,11 @@ namespace ignite
             cos(m_Scene->gpuData.sungAngles.y) * cos(m_Scene->gpuData.sungAngles.x)
         };
 
-        auto lightView = m_Scene->registry->view<TransformComponent, DirectionalLight>();
+        auto lightView = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
         for (entt::entity e : lightView)
         {
             const TransformComponent &tr = lightView.get<TransformComponent>(e);
-            const DirectionalLight &light = lightView.get<DirectionalLight>(e);
+            const DirectionalLightComponent &light = lightView.get<DirectionalLightComponent>(e);
 
             sunDirection = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
 
@@ -1938,29 +1942,29 @@ namespace ignite
         m_Renderer2D->End();
     }
 
-    void SceneRenderer::CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer,
+    void SceneRenderer::CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, const PostProcessing &postProcessing, nvrhi::IFramebuffer *framebuffer,
         Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture)
     {
         IGN_PROFILE_FUNCTION();
         CompositePostProcess_GPUData postProcessData;
         if (camera)
         {
-            postProcessData.flags.x = (camera->postProcessing.enableBloom && bloomTexture) ? 1.0f : 0.0f;
-            postProcessData.flags.y = (camera->postProcessing.enableBloom && bloomTexture) ? camera->postProcessing.bloomIntensity : 1.0f;
-            postProcessData.flags.z = camera->postProcessing.enableVignette ? 1.0f : 0.0f;
-            postProcessData.flags.w = camera->postProcessing.enableChromAb ? 1.0f : 0.0f;
+            postProcessData.flags.x = (postProcessing.enableBloom && bloomTexture) ? 1.0f : 0.0f;
+            postProcessData.flags.y = (postProcessing.enableBloom && bloomTexture) ? postProcessing.bloomIntensity : 1.0f;
+            postProcessData.flags.z = postProcessing.enableVignette ? 1.0f : 0.0f;
+            postProcessData.flags.w = postProcessing.enableChromAb ? 1.0f : 0.0f;
 
             postProcessData.vignetteParams = glm::vec4(
-                camera->postProcessing.vignetteRadius,
-                glm::max(camera->postProcessing.vignetteSoftness, 0.001f),
-                camera->postProcessing.vignetteIntensity,
-                camera->postProcessing.chromAbAmount
+                postProcessing.vignetteRadius,
+                glm::max(postProcessing.vignetteSoftness, 0.001f),
+                postProcessing.vignetteIntensity,
+                postProcessing.chromAbAmount
             );
-            postProcessData.chromAbParams.x = camera->postProcessing.chromAbRadial;
-            postProcessData.chromAbParams.y = (camera->postProcessing.enableSSAO && ssaoTexture) ? 1.0f : 0.0f;
-            postProcessData.chromAbParams.z = camera->postProcessing.aoIntensity;
+            postProcessData.chromAbParams.x = postProcessing.chromAbRadial;
+            postProcessData.chromAbParams.y = (postProcessing.enableSSAO && ssaoTexture) ? 1.0f : 0.0f;
+            postProcessData.chromAbParams.z = postProcessing.aoIntensity;
             
-            postProcessData.vignetteColor = glm::vec4(camera->postProcessing.vignetteColor, 1.0f);
+            postProcessData.vignetteColor = glm::vec4(postProcessing.vignetteColor, 1.0f);
         }
 
         m_CompositePostProcessBuffer->SetData(cmd, Buffer(&postProcessData, sizeof(postProcessData)));
@@ -2019,14 +2023,14 @@ namespace ignite
             }
         }
 
-        auto dirLight = m_Scene->registry->view<TransformComponent, DirectionalLight>();
+        auto dirLight = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
         for (entt::entity e : dirLight)
         {
             TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
             if (!tr.visible)
                 continue;
 
-            auto &lc = m_Scene->registry->get<DirectionalLight>(e);
+            auto &lc = m_Scene->registry->get<DirectionalLightComponent>(e);
 
             const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
             const glm::mat4 world = tr.GetWorldMatrix();

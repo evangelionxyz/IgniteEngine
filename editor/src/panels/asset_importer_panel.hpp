@@ -6,6 +6,7 @@
 #include "ipanel.hpp"
 
 #include "ignite/core/input/asset_import_event.hpp"
+#include "ignite/asset/asset_importer.hpp"
 
 #include <queue>
 #include <vector>
@@ -29,18 +30,10 @@ namespace ignite
 		virtual void OnGuiRender() override;
 
 	private:
-		struct SkeletalMeshImportOptions
-		{
-			bool importSkeletalMesh = true;
-			bool importSkeleton = true;
-			bool importAnimations = true;
-			bool useExistingSkeletonForAnimations = false;
-			AssetHandle existingSkeletonHandle = AssetHandle(0);
-		};
-
 		struct ImportRequest
 		{
 			std::vector<std::filesystem::path> filepaths;
+           std::filesystem::path targetDirectory;
 			AssetType assetType = AssetType::Invalid;
 			SkeletalMeshImportOptions skeletalMeshOptions;
 		};
@@ -58,8 +51,8 @@ namespace ignite
 		
 		void DrawSkeletalMeshImportOptions();
 		void DrawStaticMeshImportOptions();
-        void ImportFbxAsStaticMesh(const std::filesystem::path &filepath);
-		void ImportFbxAsSkeletalMesh(const std::filesystem::path &filepath);
+      void ImportFbxAsStaticMesh(const std::filesystem::path &filepath, const std::filesystem::path &targetDirectory);
+		void ImportFbxAsSkeletalMesh(const std::filesystem::path &filepath, const SkeletalMeshImportOptions &options);
 		void ImportFbxSkeletonAndAnimations(const std::filesystem::path &filepath, const SkeletalMeshImportOptions &options);
 		
 		std::filesystem::path BuildUniquePath(const std::filesystem::path &directory, const std::string &baseName, const std::string &extension) const;
