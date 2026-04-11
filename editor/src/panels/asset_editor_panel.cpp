@@ -12,6 +12,7 @@
 #include "ignite/animation/locomotion.hpp"
 #include "ignite/animation/blend_space.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
+#include "ignite/animation/skeleton.hpp"
 
 #include "ignite/asset/asset_importer.hpp"
 
@@ -33,6 +34,8 @@
 #include <ranges>
 #include <unordered_map>
 #include <vector>
+
+#include <glm/gtx/quaternion.hpp>
 
 
 namespace ignite
@@ -336,6 +339,12 @@ namespace ignite
                 case AssetType::SkeletalAnimation:
                 {
                     RenderSkeletalAnimationEditor(assetData);
+                    break;
+                }
+
+                case AssetType::Skeleton:
+                {
+                    RenderSkeletalSkeletonEditor(assetData);
                     break;
                 }
 
@@ -3573,6 +3582,224 @@ namespace ignite
     }
 
 
+    void AssetEditorPanel::RenderSkeletalSkeletonEditor(const Ref<Skeleton> &animation)
+    {
+        if (!animation)
+        {
+            return;
+        }
+
+        const uint64_t key = static_cast<uint64_t>(animation->handle);
+        static std::unordered_map<uint64_t, int32_t> s_SelectedJoint;
+        static std::unordered_map<uint64_t, int32_t> s_SelectedSocket;
+
+        int32_t &selectedJoint = s_SelectedJoint[key];
+        int32_t &selectedSocket = s_SelectedSocket[key];
+
+        if (selectedJoint >= static_cast<int32_t>(animation->joints.size()))
+        {
+            selectedJoint = animation->joints.empty() ? -1 : 0;
+        }
+        if (selectedSocket >= static_cast<int32_t>(animation->sockets.size()))
+        {
+            selectedSocket = animation->sockets.empty() ? -1 : 0;
+        }
+
+        ImGui::Text("Joints: %zu", animation->joints.size());
+        ImGui::Text("Sockets: %zu", animation->sockets.size());
+        ImGui::Separator();
+
+        std::vector<std::vector<int32_t>> children(animation->joints.size());
+        for (const Joint &joint : animation->joints)
+        {
+            if (joint.parentJointId >= 0 && joint.parentJointId < static_cast<int32_t>(animation->joints.size()))
+            {
+                children[static_cast<size_t>(joint.parentJointId)].push_back(joint.id);
+            }
+        }
+
+        // Left Side
+        if (ImGui::BeginChild("##skeleton_joint_tree", ImVec2(0.0f, 280.0f), ImGuiChildFlags_Borders))
+        {
+            std::function<void(int32_t)> drawJointNode = [&](int32_t jointId)
+            {
+                if (jointId < 0 || jointId >= static_cast<int32_t>(animation->joints.size()))
+                {
+                    return;
+                }
+
+                const Joint &joint = animation->joints[static_cast<size_t>(jointId)];
+                const bool isSelected = selectedJoint == jointId;
+                const bool hasChildren = !children[static_cast<size_t>(jointId)].empty();
+
+                ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
+                if (!hasChildren)
+                {
+                    flags |= ImGuiTreeNodeFlags_Leaf;
+                }
+                if (isSelected)
+                {
+                    flags |= ImGuiTreeNodeFlags_Selected;
+                }
+
+                const bool opened = ImGui::TreeNodeEx(reinterpret_cast<void *>(static_cast<intptr_t>(jointId + 1)), flags, "%s", joint.name.c_str());
+                if (ImGui::IsItemClicked())
+                {
+                    selectedJoint = jointId;
+                }
+
+                if (opened)
+                {
+                    for (int32_t childJointId : children[static_cast<size_t>(jointId)])
+                    {
+                        drawJointNode(childJointId);
+                    }
+                    ImGui::TreePop();
+                }
+            };
+
+            for (const Joint &joint : animation->joints)
+            {
+                if (joint.parentJointId == -1)
+                {
+                    drawJointNode(joint.id);
+                }
+            }
+        }
+        ImGui::EndChild();
+
+
+        ImGui::SameLine();
+
+        if (selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(animation->joints.size()))
+        {
+            const Joint &joint = animation->joints[static_cast<size_t>(selectedJoint)];
+            ImGui::TextDisabled("Selected Joint: %s (id: %d)", joint.name.c_str(), joint.id);
+        }
+
+        ImGui::SeparatorText("Joint Sockets");
+        if (ImGui::Button("Add Socket") && selectedJoint >= 0)
+        {
+            JointSocket socket;
+            socket.name = std::format("Socket_{}", animation->sockets.size());
+            socket.parentJointId = selectedJoint;
+            animation->sockets.push_back(std::move(socket));
+            animation->RebuildSocketMap();
+            selectedSocket = static_cast<int32_t>(animation->sockets.size()) - 1;
+            animation->SetDirtyFlag(true);
+        }
+
+        if (ImGui::BeginChild("##skeleton_socket_list", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders))
+        {
+            for (int32_t i = 0; i < static_cast<int32_t>(animation->sockets.size()); ++i)
+            {
+                const JointSocket &socket = animation->sockets[static_cast<size_t>(i)];
+                std::string row = socket.name;
+                if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(animation->joints.size()))
+                {
+                    row += std::format(" -> {}", animation->joints[static_cast<size_t>(socket.parentJointId)].name);
+                }
+
+                if (ImGui::Selectable(std::format("{}##socket_row_{}", row, i).c_str(), selectedSocket == i))
+                {
+                    selectedSocket = i;
+                }
+            }
+        }
+        ImGui::EndChild();
+
+        if (selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(animation->sockets.size()))
+        {
+            JointSocket &socket = animation->sockets[static_cast<size_t>(selectedSocket)];
+
+            char nameBuf[256]{};
+            std::strncpy(nameBuf, socket.name.c_str(), sizeof(nameBuf) - 1);
+            if (ImGui::InputText("Socket Name", nameBuf, sizeof(nameBuf)))
+            {
+                socket.name = nameBuf;
+                animation->RebuildSocketMap();
+                animation->SetDirtyFlag(true);
+            }
+
+            int parentJoint = socket.parentJointId;
+            std::string parentJointLabel = "None";
+            if (parentJoint >= 0 && parentJoint < static_cast<int32_t>(animation->joints.size()))
+            {
+                parentJointLabel = animation->joints[static_cast<size_t>(parentJoint)].name;
+            }
+
+            if (ImGui::BeginCombo("Parent Joint", parentJointLabel.c_str()))
+            {
+                for (const Joint &joint : animation->joints)
+                {
+                    const bool selected = parentJoint == joint.id;
+                    if (ImGui::Selectable(joint.name.c_str(), selected))
+                    {
+                        socket.parentJointId = joint.id;
+                        animation->SetDirtyFlag(true);
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
+            if (ImGui::DragFloat3("Socket Translation", &socket.localTranslation.x, 0.01f))
+            {
+                animation->SetDirtyFlag(true);
+            }
+
+            glm::vec3 eulerDeg = glm::degrees(glm::eulerAngles(socket.localRotation));
+            if (ImGui::DragFloat3("Socket Rotation", &eulerDeg.x, 0.1f))
+            {
+                socket.localRotation = glm::quat(glm::radians(eulerDeg));
+                animation->SetDirtyFlag(true);
+            }
+
+            if (ImGui::DragFloat3("Socket Scale", &socket.localScale.x, 0.01f, 0.001f, 1000.0f))
+            {
+                animation->SetDirtyFlag(true);
+            }
+
+            if (ImGui::Button("Remove Socket"))
+            {
+                animation->sockets.erase(animation->sockets.begin() + selectedSocket);
+                animation->RebuildSocketMap();
+                selectedSocket = animation->sockets.empty() ? -1 : std::min(selectedSocket, static_cast<int32_t>(animation->sockets.size()) - 1);
+                animation->SetDirtyFlag(true);
+            }
+        }
+    }
+
+    void AssetEditorPanel::RenderSkeletalSkeletonEditor(AssetEditorData &assetData)
+    {
+        bool isOpen = assetData.isOpen;
+        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1100.0f, 900.0f), ImVec2(560.0f, 620.0f), 0))
+        {
+            if (DrawAssetEditorHeader(assetData))
+            {
+                if (assetData.asset && assetData.asset->IsReady())
+                {
+                    if (Ref<Skeleton> skeleton = assetData.asset->As<Skeleton>())
+                    {
+                        RenderSkeletalSkeletonEditor(skeleton);
+                    }
+                    else
+                    {
+                        ImGui::Text("Loading asset...");
+                    }
+                }
+                else
+                {
+                    ImGui::Text("Loading asset...");
+                }
+            }
+        }
+
+        RenderAssetEditorClosePopup(assetData, isOpen);
+        ImGui::End();
+        assetData.isOpen = isOpen;
+        assetData.requestFocus = false;
+    }
+
     void AssetEditorPanel::RenderSkeletalAnimationEditor(AssetEditorData &assetData)
     {
         bool isOpen = assetData.isOpen;
@@ -3881,6 +4108,23 @@ namespace ignite
                 }
                 animation->Serialize(savePath);
                 animation->SetDirtyFlag(false);
+                return true;
+            }
+
+            case AssetType::Skeleton:
+            {
+                Ref<Skeleton> skeleton = assetData.asset->As<Skeleton>();
+                if (!skeleton)
+                {
+                    return false;
+                }
+
+                if (!skeleton->Serialize(savePath))
+                {
+                    return false;
+                }
+
+                skeleton->SetDirtyFlag(false);
                 return true;
             }
 

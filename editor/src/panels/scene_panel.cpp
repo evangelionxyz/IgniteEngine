@@ -185,11 +185,6 @@ namespace ignite
             IGN_PROFILE_SCOPE("ScenePanel::RenderSceneEditViewport");
             RenderSceneEditViewport();
         }
-
-        {
-            IGN_PROFILE_SCOPE("ScenePanel::RenderToolbar");
-            RenderToolbar();
-        }
     }
 
     void ScenePanel::OnUpdate(float deltaTime)
@@ -2314,8 +2309,6 @@ namespace ignite
 
     void ScenePanel::RenderToolbar()
     {
-        ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollWithMouse);
-
         // TOOLBAR: 
         static std::array<const char *, 3> kCameraModeLabels = { "Orbit", "Fly", "2D" };
         int cameraModeIndex = 0;
@@ -2483,8 +2476,6 @@ namespace ignite
         }
 
         ImGui::PopStyleVar(2);
-
-        ImGui::End();
     }
 
     bool ScenePanel::Is2DResizableEntity(Entity entity) const

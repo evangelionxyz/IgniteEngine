@@ -34,17 +34,30 @@ namespace ignite
         glm::mat4 globalTransform; // current global transform
     };
 
+    struct JointSocket
+    {
+        std::string name;
+        int32_t parentJointId = -1;
+        glm::vec3 localTranslation = glm::vec3(0.0f);
+        glm::quat localRotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+        glm::vec3 localScale = glm::vec3(1.0f);
+
+        glm::mat4 GetLocalTransform() const;
+    };
+
     class Skeleton : public Asset
     {
     public:
         std::vector<Joint> joints;
         std::unordered_map<std::string, int32_t> nameToJointMap;
 
-        //                  Joint name, socket id
-        std::unordered_map<std::string, int32_t> jointSockets;
+        std::vector<JointSocket> sockets;
+        std::unordered_map<std::string, int32_t> socketNameToIndex;
 
         std::vector<glm::mat4> GetFinalJointTransforms();
         void UpdateGlobalTransforms();
+        void RebuildSocketMap();
+        glm::mat4 GetSocketWorldTransform(const std::string &socketName) const;
 
         virtual bool Serialize(const std::filesystem::path &filepath) override;
         static Ref<Skeleton> Deserialize(const std::filesystem::path &filepath);

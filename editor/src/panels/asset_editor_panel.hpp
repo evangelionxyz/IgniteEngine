@@ -24,6 +24,7 @@ namespace ignite
     class LocomotionController;
     class AnimatorController;
     class AnimatorController2D;
+    class Skeleton;
 
 	class AssetEditorPanel : public IPanel
     {
@@ -92,6 +93,9 @@ namespace ignite
 
         void RenderAnimatorController2DEditor(AssetEditorData &assetData);
         void RenderAnimatorController2DEditor(const Ref<AnimatorController2D> &controller);
+
+        void RenderSkeletalSkeletonEditor(const Ref<Skeleton> &animation);
+        void RenderSkeletalSkeletonEditor(AssetEditorData &assetData);
         
         void RenderSkeletalAnimationEditor(const Ref<SkeletalAnimation> &animation);
         void RenderSkeletalAnimationEditor(AssetEditorData &assetData);

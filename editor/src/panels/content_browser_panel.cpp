@@ -140,6 +140,9 @@ namespace ignite
         m_Icons["material_2d"] = Texture::Create("resources/ui/editor/ic_editor_material_2d.png", createInfo, cmd);
         m_Icons["anim"] = Texture::Create("resources/ui/editor/ic_editor_anim.png", createInfo, cmd);
         m_Icons["font"] = Texture::Create("resources/ui/editor/ic_editor_font.png", createInfo, cmd);
+        m_Icons["roll"] = Texture::Create("resources/ui/editor/ic_editor_roll.png", createInfo, cmd);
+        m_Icons["arrow"] = Texture::Create("resources/ui/editor/ic_editor_arrow.png", createInfo, cmd);
+        m_Icons["add"] = Texture::Create("resources/ui/editor/ic_editor_add.png", createInfo, cmd);
 
         m_Icons["skeleton"] = Texture::Create("resources/ui/editor/ic_editor_skeleton.png", createInfo, cmd);
         m_Icons["sk_mesh"] = Texture::Create("resources/ui/editor/ic_editor_sk_mesh.png", createInfo, cmd);
@@ -1269,12 +1272,13 @@ namespace ignite
 
         const ImGuiStyle &style = ImGui::GetStyle();
 
-        const auto navbarBtSize = ImVec2(40.0f, 24.0f);
+        const auto navbarBtSize = ImVec2(32.0f, 24.0f);
         const float navbarHeight = navbarBtSize.y + style.FramePadding.y * 2.0f + style.WindowPadding.y * 2.0f;
 
         if (ImGui::BeginChild("##NAV_BUTTON_BAR", ImVec2(0, navbarHeight), ImGuiChildFlags_Borders))
         {
-            if (ImGui::Button("<-", navbarBtSize))
+            ImTextureID arrow = (ImTextureID)m_Icons["arrow"]->GetHandle().Get();
+            if (ImGui::ImageButton("##bw_arrow", arrow, navbarBtSize))
             {
                 if (!m_BackwardPathStack.empty())
                 {
@@ -1293,7 +1297,7 @@ namespace ignite
             }
 
             ImGui::SameLine();
-            if (ImGui::Button("->", navbarBtSize))
+            if (ImGui::ImageButton("##fw_arrow", arrow, navbarBtSize, {1.0f, 0.0f}, { 0.0f, 1.0f }))
             {
                 if (!m_ForwardPathStack.empty())
                 {
@@ -1312,7 +1316,9 @@ namespace ignite
             }
 
             ImGui::SameLine();
-            if (ImGui::Button("R", navbarBtSize))
+
+            ImTextureID refreshBt = (ImTextureID)m_Icons["roll"]->GetHandle().Get();
+            if (ImGui::ImageButton("##refresh_bt", refreshBt, { navbarBtSize.y, navbarBtSize.y }))
             {
                 m_EditorLayer->GetActiveProject()->ValidateAssetRegistry();
                 PruneMissingNodes(0, m_EditorLayer->GetActiveProject()->GetAssetDirectory());

@@ -450,7 +450,8 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
         constexpr ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_MenuBar
-            | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+            | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus
+            | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 
         const ImGuiViewport *viewport = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(viewport->Pos);
@@ -544,17 +545,38 @@ namespace ignite
             ImGui::OpenPopup("New Project");
             m_State.popupNewProjectModal = false;
         }
-
+        
+        {
+            // RENDE TOOL BAR
+            ImGui::BeginChild("##toolbar_child", {0.0f, 32.0f }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
+            m_ScenePanel->RenderToolbar();
+            ImGui::EndChild();
+        }
+        
         UIProjectCreation();
+
+        // Reserve space for status bar
+        constexpr float statusBarHeight = 32.0f;
+        ImVec2 avail = ImGui::GetContentRegionAvail();
+
+        // Dockspace gets everything except status bar
+        ImVec2 dockSize = { avail.x, std::max(0.0f, avail.y - statusBarHeight) };
+        ImGui::BeginChild("##dockspace_child", dockSize, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
+        ImGui::DockSpace(ImGui::GetID("main_dockspace"), ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+        ImGui::EndChild();
+
+        // Status bar at bottom
+        ImGui::BeginChild("##status_bar", { 0.0f, statusBarHeight }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
+        ImGui::Text("Version: %s", ENGINE_VERSION);
+        ImGui::EndChild();
+
+        ImGui::End();
+
         // ImGui Demo
         if (m_State.imguiDemoWindow)
         {
             ImGui::ShowDemoWindow(&m_State.imguiDemoWindow);
         }
-
-        // dock space
-        ImGui::DockSpace(ImGui::GetID("main_dockspace"), ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
-        ImGui::End();
 
         // Draw UI
         UISettings();
@@ -1389,7 +1411,6 @@ namespace ignite
             ImGui::End(); // !settings window
         }
         
-
         if (m_State.assetRegistryWindow)
         {
             AssetRegistry assetRegistry = m_ActiveProject->GetAssetManager()->GetAssetAssetRegistry();
