@@ -13,22 +13,6 @@
 
 namespace ignite
 {
-
-    AnimState2D *AnimatorController2D::FindState(const std::string &name)
-    {
-        auto it = std::find_if(states.begin(), states.end(), [&name](const AnimState2D &s) { return s.name == name; });
-        return it != states.end() ? &(*it) : nullptr;
-    }
-
-    const AnimState2D *AnimatorController2D::FindState(const std::string &name) const
-    {
-        auto it = std::find_if(states.begin(), states.end(), [&name](const AnimState2D &s) { return s.name == name; });
-        return it != states.end() ? &(*it) : nullptr;
-    }
-
-    // -----------------------------------------------------------------------
-    // EvaluateTransitions
-    // -----------------------------------------------------------------------
     std::string AnimatorController2D::EvaluateTransitions(const std::string &currentState, float normalizedTime) const
     {
         for (const auto &tr : transitions)
@@ -59,6 +43,18 @@ namespace ignite
         }
 
         return {};
+    }
+
+    AnimState2D *AnimatorController2D::FindState(const std::string &name)
+    {
+        auto it = std::find_if(states.begin(), states.end(), [&name](const AnimState2D &s) { return s.name == name; });
+        return it != states.end() ? &(*it) : nullptr;
+    }
+
+    const AnimState2D *AnimatorController2D::FindState(const std::string &name) const
+    {
+        auto it = std::find_if(states.begin(), states.end(), [&name](const AnimState2D &s) { return s.name == name; });
+        return it != states.end() ? &(*it) : nullptr;
     }
 
     // -----------------------------------------------------------------------

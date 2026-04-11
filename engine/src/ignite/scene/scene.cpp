@@ -18,8 +18,8 @@
 
 #include "ignite/core/application.hpp"
 #include "ignite/animation/skeleton.hpp"
-#include "ignite/animation/animation_system.hpp"
 #include "ignite/animation/animation_2d.hpp"
+#include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/animation/animator/animator_controller_2d.hpp"
 
 #include "ignite/project/project.hpp"
@@ -371,30 +371,33 @@ namespace ignite
         // ---------------------------------------------------------------
         // Animator update: state machine driven skeletal animation
         // ---------------------------------------------------------------
+        auto assetManager = m_Project->GetAssetManager();
+        
         auto skeletalMeshView = registry->view<SkeletalMeshComponent>();
         for (auto ent : skeletalMeshView)
         {
             SkeletalMeshComponent &sm = skeletalMeshView.get<SkeletalMeshComponent>(ent);
-            if (sm.handle == AssetHandle(0))
+            if (sm.handle == AssetHandle(0) || sm.animatorHandle == AssetHandle(0))
                 continue;
 
-            Ref<SkeletalMesh> skeletalMesh = m_Project->GetAsset<SkeletalMesh>(sm.handle, AssetType::SkeletalMesh);
-            if (!skeletalMesh || !skeletalMesh->isPlaying || skeletalMesh->animationHandles.empty())
+            Ref<SkeletalMesh> skeletalMesh = std::dynamic_pointer_cast<SkeletalMesh>(assetManager->GetAsset(sm.handle, AssetType::SkeletalMesh));
+            if (!skeletalMesh)
                 continue;
 
-            const size_t animIndex = std::min(static_cast<size_t>(skeletalMesh->activeAnimationIndex), skeletalMesh->animationHandles.size() - 1);
-            Ref<SkeletalAnimation> anim = m_Project->GetAsset<SkeletalAnimation>(skeletalMesh->animationHandles[animIndex]);
-            if (!anim)
+            Ref<AnimatorController> animController = std::dynamic_pointer_cast<AnimatorController>(assetManager->GetAsset(sm.animatorHandle));
+            if (!animController)
                 continue;
 
-            Ref<Skeleton> skeleton = m_Project->GetAsset<Skeleton>(anim->GetSkeletonHandle());
-            if (!skeleton)
-                continue;
+            AnimatorControllerRuntime runtime;
+            runtime.currentStateName = sm.currentStateName;
+            runtime.stateElapsed = sm.stateElapsed;
+            runtime.stateNormalized = 0.0f;
 
-            // Store bone transforms
-            if (AnimationSystem::UpdateSkeleton(skeleton, anim, timeInSeconds))
+            if (animController->UpdateSkeleton(deltaTime, runtime, assetManager, skeletalMesh->boneTransforms))
             {
-                skeletalMesh->boneTransforms = skeleton->GetFinalJointTransforms();
+                sm.currentStateName = runtime.currentStateName;
+                sm.stateElapsed = runtime.stateElapsed;
+                sm.stateNormalized = runtime.stateNormalized;
             }
         }
 
@@ -612,6 +615,9 @@ namespace ignite
 	template<>
 	void Scene::OnComponentAdded<SkeletalMeshComponent>(Entity entity, SkeletalMeshComponent& comp)
 	{
+       comp.currentStateName.clear();
+        comp.stateElapsed = 0.0f;
+        comp.stateNormalized = 0.0f;
 	}
 
     template<>

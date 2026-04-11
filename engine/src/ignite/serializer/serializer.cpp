@@ -345,6 +345,8 @@ namespace ignite
                     sr.BeginMap("SkeletalMesh");
                     {
                         sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
+                        sr.AddKeyValue("AnimatorHandle", static_cast<uint64_t>(comp.animatorHandle));
+                        sr.AddKeyValue("CurrentState", comp.currentStateName);
                     }
                     sr.EndMap();
                 }
@@ -1006,6 +1008,14 @@ namespace ignite
             {
                 auto &comp = desEntity.AddComponent<SkeletalMeshComponent>();
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
+                if (auto n = node["AnimatorHandle"])
+                {
+                    comp.animatorHandle = AssetHandle(n.as<uint64_t>());
+                }
+                if (auto n = node["CurrentState"])
+                {
+                    comp.currentStateName = n.as<std::string>();
+                }
             }
 
             // Script

@@ -21,6 +21,7 @@
 #include "ignite/animation/animation_2d.hpp"
 #include "ignite/animation/locomotion.hpp"
 #include "ignite/animation/blend_space.hpp"
+#include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/animation/animator/animator_controller_2d.hpp"
 
 #include "ignite/scene/scene.hpp"
@@ -49,6 +50,7 @@ namespace ignite {
         { AssetType::AnimationMontage, AssetImporter::ImportAnimationMontage },
         { AssetType::BlendSpace, AssetImporter::ImportBlendSpace },
         { AssetType::LocomotionController, AssetImporter::ImportLocomotionController },
+        { AssetType::AnimatorController, AssetImporter::ImportAnimatorController },
         { AssetType::Animation2D, AssetImporter::ImportAnimation2D },
         { AssetType::AnimatorController2D, AssetImporter::ImportAnimatorController2D },
     };
@@ -752,6 +754,24 @@ namespace ignite {
         }
 
         Ref<AnimatorController2D> asset = AnimatorController2D::Deserialize(metadata.filepath);
+        if (asset)
+        {
+            asset->handle = handle;
+            asset->SetReadyFlag(true);
+            asset->SetDirtyFlag(false);
+        }
+        return asset;
+    }
+
+    Ref<AnimatorController> AssetImporter::ImportAnimatorController(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
+    {
+        if (!std::filesystem::exists(metadata.filepath))
+        {
+            LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
+            return nullptr;
+        }
+
+        Ref<AnimatorController> asset = AnimatorController::Deserialize(metadata.filepath);
         if (asset)
         {
             asset->handle = handle;

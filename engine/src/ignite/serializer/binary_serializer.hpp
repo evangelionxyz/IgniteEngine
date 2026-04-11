@@ -620,7 +620,6 @@ namespace ignite
             }
 
             AppendRaw(buffer, sm->activeAnimationIndex);
-            AppendRaw(buffer, sm->isPlaying);
 
             std::ofstream of(filepath, std::ios::binary);
             of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
@@ -700,7 +699,9 @@ namespace ignite
             }
 
             ReadRaw(inFile, &skeletalMesh->activeAnimationIndex);
-            ReadRaw(inFile, &skeletalMesh->isPlaying);
+
+            bool willRemove = false;
+            ReadRaw(inFile, &willRemove);
 
             inFile.close();
             return skeletalMesh;

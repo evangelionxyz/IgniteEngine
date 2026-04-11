@@ -132,8 +132,21 @@ namespace ignite
         createInfo.format = nvrhi::Format::RGBA8_UNORM;
     	createInfo.keepInitialState = true;
     	createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
-        m_Icons["folder"] = Texture::Create("resources/ui/ic_folder.png", createInfo, cmd);
-        m_Icons["unknown"] = Texture::Create("resources/ui/ic_file.png", createInfo, cmd);
+
+        m_Icons["scene"] = Texture::Create("resources/ui/editor/ic_editor_scene.png", createInfo, cmd);
+        m_Icons["shader"] = Texture::Create("resources/ui/editor/ic_editor_shader.png", createInfo, cmd);
+        m_Icons["sprite_sheet"] = Texture::Create("resources/ui/editor/ic_editor_sprite_sheet.png", createInfo, cmd);
+        m_Icons["material"] = Texture::Create("resources/ui/editor/ic_editor_material.png", createInfo, cmd);
+        m_Icons["material_2d"] = Texture::Create("resources/ui/editor/ic_editor_material_2d.png", createInfo, cmd);
+        m_Icons["anim"] = Texture::Create("resources/ui/editor/ic_editor_anim.png", createInfo, cmd);
+        m_Icons["font"] = Texture::Create("resources/ui/editor/ic_editor_font.png", createInfo, cmd);
+        
+        m_Icons["anim_ctrl"] = Texture::Create("resources/ui/editor/ic_editor_anim_ctrl.png", createInfo, cmd);
+        m_Icons["anim_2d"] = Texture::Create("resources/ui/editor/ic_editor_anim_2d.png", createInfo, cmd);
+        m_Icons["anim_ctrl_2d"] = Texture::Create("resources/ui/editor/ic_editor_anim_ctrl_2d.png", createInfo, cmd);
+        
+        m_Icons["folder"] = Texture::Create("resources/ui/editor/ic_editor_folder.png", createInfo, cmd);
+        m_Icons["unknown"] = Texture::Create("resources/ui/editor/ic_editor_unknown.png", createInfo, cmd);
 
         cmd->close();
         app->SubmitWorkerCommandList(cmd);
@@ -203,8 +216,16 @@ namespace ignite
         {
             if (isDirectory)
             {
-                m_BackwardPathStack.push(m_CurrentDirectory);
-                m_SelectedFileTree = m_CurrentDirectory = fullPath;
+                if (fullPath != m_CurrentDirectory)
+                {
+                    m_BackwardPathStack.push(m_CurrentDirectory);
+                    while (!m_ForwardPathStack.empty())
+                    {
+                        m_ForwardPathStack.pop();
+                    }
+
+                    m_SelectedFileTree = m_CurrentDirectory = fullPath;
+                }
             }
             else
             {
@@ -310,14 +331,41 @@ namespace ignite
 
                         ImGui::Columns(columnCount, nullptr, false);
 
-                        for (const auto childNodeIndex : node->sortedChildren)
+                        const int itemCount = static_cast<int>(node->sortedChildren.size());
+                        const int rowCount = (itemCount + columnCount - 1) / columnCount;
+                        const float rowHeight = static_cast<float>(m_ThumbnailSize) + ImGui::GetTextLineHeightWithSpacing() * 2.0f + padding;
+                        const float cursorStartY = ImGui::GetCursorPosY();
+
+                        ImGuiListClipper clipper;
+                        clipper.Begin(rowCount, rowHeight);
+                        while (clipper.Step())
                         {
-                            const auto &item = m_TreeNodes[childNodeIndex].path;
-                            ImGui::PushID(item.generic_string().c_str());
-                            UIRenderFileButton(item);
-                            ImGui::NextColumn();
-                            ImGui::PopID();
+                            ImGui::SetCursorPosY(cursorStartY + static_cast<float>(clipper.DisplayStart) * rowHeight);
+
+                            for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row)
+                            {
+                                const int rowStart = row * columnCount;
+                                const int rowEnd = std::min(rowStart + columnCount, itemCount);
+
+                                for (int i = rowStart; i < rowEnd; ++i)
+                                {
+                                    const auto childNodeIndex = node->sortedChildren[static_cast<size_t>(i)];
+                                    const auto &item = m_TreeNodes[childNodeIndex].path;
+                                    ImGui::PushID(item.generic_string().c_str());
+                                    UIRenderFileButton(item);
+                                    ImGui::NextColumn();
+                                    ImGui::PopID();
+                                }
+
+                                for (int col = rowEnd - rowStart; col < columnCount; ++col)
+                                {
+                                    ImGui::NextColumn();
+                                }
+                            }
                         }
+
+                        ImGui::SetCursorPosY(cursorStartY + static_cast<float>(rowCount) * rowHeight);
+                        ImGui::Dummy(ImVec2(1.0f, 0.0f));
                     }
 
                     ImGui::Columns(1);
@@ -339,15 +387,20 @@ namespace ignite
 
                             if (ImGui::BeginMenu("Animation"))
                             {
-                                if (ImGui::MenuItem("Blend Space"))
+                                if (ImGui::MenuItem("Animator Controller"))
                                 {
-                                    DispatchCreateAssetEditorEvent(AssetType::BlendSpace, m_CurrentDirectory);
+                                    DispatchCreateAssetEditorEvent(AssetType::AnimatorController, m_CurrentDirectory);
                                 }
 
-                                if (ImGui::MenuItem("Locomotion Controller"))
-                                {
-                                    DispatchCreateAssetEditorEvent(AssetType::LocomotionController, m_CurrentDirectory);
-                                }
+                                //if (ImGui::MenuItem("Blend Space"))
+                                //{
+                                //    DispatchCreateAssetEditorEvent(AssetType::BlendSpace, m_CurrentDirectory);
+                                //}
+
+                                //if (ImGui::MenuItem("Locomotion Controller"))
+                                //{
+                                //    DispatchCreateAssetEditorEvent(AssetType::LocomotionController, m_CurrentDirectory);
+                                //}
 
                                 if (ImGui::MenuItem("Animation 2D"))
                                 {
@@ -419,9 +472,9 @@ namespace ignite
 
                         if (ImGui::BeginMenu("Thumbnail Size"))
                         {
-                            if (ImGui::MenuItem("Small")) m_ThumbnailSize = 38;
-                            if (ImGui::MenuItem("Medium")) m_ThumbnailSize = 64;
-                            if (ImGui::MenuItem("Large")) m_ThumbnailSize = 96;
+                            if (ImGui::MenuItem("Small")) m_ThumbnailSize = 64;
+                            if (ImGui::MenuItem("Medium")) m_ThumbnailSize = 96;
+                            if (ImGui::MenuItem("Large")) m_ThumbnailSize = 124;
                             ImGui::EndMenu();
                         }
 
@@ -493,20 +546,57 @@ namespace ignite
             {
                 ImGui::Text("Rename: %s", m_PopupTargetPath.filename().generic_string().c_str());
                 ImGui::Spacing();
-                ImGui::InputText("New Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer));
+                const bool submitByEnter = ImGui::InputText("New Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
 
                 ImGui::Separator();
-                if (ImGui::Button("Rename"))
+                const bool submitByButton = ImGui::Button("Rename");
+                if (submitByEnter || submitByButton)
                 {
                     std::string newName = m_PopupInputBuffer;
                     if (!newName.empty())
                     {
                         std::filesystem::path target = m_PopupTargetPath;
+                        const bool isDirectory = std::filesystem::is_directory(target);
+                        if (!isDirectory && !target.extension().empty())
+                        {
+                            std::filesystem::path proposed(newName);
+                            newName = proposed.stem().string();
+                            if (!newName.empty())
+                            {
+                                newName += target.extension().string();
+                            }
+                        }
+
                         std::filesystem::path dest = target.parent_path() / newName;
+
                         std::error_code ec;
                         std::filesystem::rename(target, dest, ec);
                         if (!ec)
                         {
+                            // Keep metadata/settings pair in sync.
+                            const std::filesystem::path targetMeta = target.string() + ".meta";
+                            const std::filesystem::path destMeta = dest.string() + ".meta";
+                            if (std::filesystem::exists(targetMeta))
+                            {
+                                std::error_code ecMetaRename;
+                                std::filesystem::rename(targetMeta, destMeta, ecMetaRename);
+                            }
+
+                            Project *project = m_EditorLayer->GetActiveProject().get();
+                            if (project && m_AssetManager)
+                            {
+                                const std::filesystem::path oldRelativePath = project->GetAssetRelativeFilepath(target);
+                                const std::filesystem::path newRelativePath = project->GetAssetRelativeFilepath(dest);
+
+                                const AssetHandle existingHandle = m_AssetManager->GetAssetHandle(oldRelativePath);
+                                if (existingHandle != AssetHandle(0))
+                                {
+                                    AssetMetaData metadata = m_AssetManager->GetMetaData(existingHandle);
+                                    metadata.filepath = newRelativePath;
+                                    m_AssetManager->AssignMetaData(existingHandle, metadata);
+                                }
+                            }
+
                             m_NeedsRefresh = true;
                         }
                     }
@@ -540,7 +630,28 @@ namespace ignite
                     if (std::filesystem::is_directory(m_PopupTargetPath))
                         std::filesystem::remove_all(m_PopupTargetPath, ec);
                     else
+                    {
                         std::filesystem::remove(m_PopupTargetPath, ec);
+
+                        const std::filesystem::path metaPath = m_PopupTargetPath.string() + ".meta";
+                        if (std::filesystem::exists(metaPath))
+                        {
+                            std::error_code metaEc;
+                            std::filesystem::remove(metaPath, metaEc);
+                        }
+
+                        Project *project = m_EditorLayer->GetActiveProject().get();
+                        if (project && m_AssetManager)
+                        {
+                            const std::filesystem::path relativePath = project->GetAssetRelativeFilepath(m_PopupTargetPath);
+                            const AssetHandle handle = m_AssetManager->GetAssetHandle(relativePath);
+                            if (handle != AssetHandle(0))
+                            {
+                                m_AssetManager->UnloadAsset(handle);
+                                m_AssetManager->RemoveAsset(handle);
+                            }
+                        }
+                    }
 
                     if (!ec)
                         m_NeedsRefresh = true;
@@ -840,8 +951,16 @@ namespace ignite
             {
                 if (isDirectory)
                 {
-                    m_BackwardPathStack.push(m_CurrentDirectory);
-                    m_CurrentDirectory = path;
+                    if (path != m_CurrentDirectory)
+                    {
+                        m_BackwardPathStack.push(m_CurrentDirectory);
+                        while (!m_ForwardPathStack.empty())
+                        {
+                            m_ForwardPathStack.pop();
+                        }
+
+                        m_CurrentDirectory = path;
+                    }
                 }
                 else if (m_EditorLayer && m_EditorLayer->GetActiveProject())
                 {
@@ -875,7 +994,7 @@ namespace ignite
             {
                 m_PopupTargetPath = path;
                 // prefill buffer with filename
-                std::string fname = path.filename().generic_string();
+                std::string fname = std::filesystem::is_directory(path) ? path.filename().generic_string() : path.stem().generic_string();
                 std::strncpy(m_PopupInputBuffer, fname.c_str(), sizeof(m_PopupInputBuffer) - 1);
                 m_ShowRenameModal = true;
             }
@@ -896,8 +1015,16 @@ namespace ignite
             {
                 if (isDirectory)
                 {
-                    m_BackwardPathStack.push(m_CurrentDirectory);
-                    m_CurrentDirectory = path;
+                    if (path != m_CurrentDirectory)
+                    {
+                        m_BackwardPathStack.push(m_CurrentDirectory);
+                        while (!m_ForwardPathStack.empty())
+                        {
+                            m_ForwardPathStack.pop();
+                        }
+
+                        m_CurrentDirectory = path;
+                    }
                 }
                 else
                 {
@@ -1098,12 +1225,34 @@ namespace ignite
             return false;
         }
 
+        // Copy sidecar metadata/settings if present so import settings are preserved.
+        const std::filesystem::path sourceMetaPath = filepath.string() + ".meta";
+        const std::filesystem::path duplicateMetaPath = duplicatePath.string() + ".meta";
+        if (std::filesystem::exists(sourceMetaPath))
+        {
+            std::error_code metaCopyError;
+            std::filesystem::copy_file(sourceMetaPath, duplicateMetaPath, std::filesystem::copy_options::overwrite_existing, metaCopyError);
+        }
+
         Project *project = m_EditorLayer->GetActiveProject().get();
         const std::filesystem::path relativeDuplicatePath = project->GetAssetRelativeFilepath(duplicatePath);
-        AssetHandle duplicateHandle = m_AssetManager->ImportAsset(relativeDuplicatePath);
+        const AssetType duplicateType = GetAssetTypeFromExtension(duplicatePath.extension().generic_string());
+        if (duplicateType == AssetType::Invalid)
+        {
+            LOG_ERROR("[Content Browser] Failed to duplicate unsupported asset type: '{}'", duplicatePath.generic_string());
+            return false;
+        }
+
+        AssetHandle duplicateHandle = AssetHandle();
+        AssetMetaData duplicateMetadata;
+        duplicateMetadata.type = duplicateType;
+        duplicateMetadata.filepath = relativeDuplicatePath;
+
+        m_AssetManager->AssignMetaData(duplicateHandle, duplicateMetadata);
+
         if (duplicateHandle != AssetHandle(0))
         {
-            DispatchOpenAssetEditorEvent(duplicateHandle, m_AssetManager->GetMetaData(duplicateHandle));
+            DispatchOpenAssetEditorEvent(duplicateHandle, duplicateMetadata);
         }
 
         m_NeedsRefresh = true;
@@ -1125,9 +1274,17 @@ namespace ignite
             {
                 if (!m_BackwardPathStack.empty())
                 {
-                    m_ForwardPathStack.push(m_CurrentDirectory);
-                    m_CurrentDirectory = m_BackwardPathStack.top();
+                    const std::filesystem::path previousPath = m_BackwardPathStack.top();
                     m_BackwardPathStack.pop();
+
+                    if (previousPath != m_CurrentDirectory)
+                    {
+                        if (m_ForwardPathStack.empty() || m_ForwardPathStack.top() != m_CurrentDirectory)
+                        {
+                            m_ForwardPathStack.push(m_CurrentDirectory);
+                        }
+                        m_CurrentDirectory = previousPath;
+                    }
                 }
             }
 
@@ -1136,9 +1293,17 @@ namespace ignite
             {
                 if (!m_ForwardPathStack.empty())
                 {
-                    m_BackwardPathStack.push(m_CurrentDirectory);
-                    m_CurrentDirectory = m_ForwardPathStack.top();
+                    const std::filesystem::path nextPath = m_ForwardPathStack.top();
                     m_ForwardPathStack.pop();
+
+                    if (nextPath != m_CurrentDirectory)
+                    {
+                        if (m_BackwardPathStack.empty() || m_BackwardPathStack.top() != m_CurrentDirectory)
+                        {
+                            m_BackwardPathStack.push(m_CurrentDirectory);
+                        }
+                        m_CurrentDirectory = nextPath;
+                    }
                 }
             }
 
@@ -1508,6 +1673,9 @@ namespace ignite
                 if (handle != AssetHandle(0))
                 {
                     ImGui::SetDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM, &handle, sizeof(AssetHandle));
+
+                    ImGui::Text("Asset %zu", (uint64_t)handle);
+                    ImGui::Text("%s", relativeAssetPath.filename().c_str());
                 }
             }
 
@@ -1622,6 +1790,22 @@ namespace ignite
 
         if (isDirectory)
             return m_Icons["folder"];
+
+        AssetType type = GetAssetTypeFromExtension(filepath.extension().string());
+        switch (type)
+        {
+            case AssetType::Scene: return m_Icons["scene"];
+            case AssetType::Shader: return m_Icons["shader"];
+            case AssetType::SpriteSheet: return m_Icons["sprite_sheet"];
+            case AssetType::Material: return m_Icons["material"];
+            case AssetType::Material2D: return m_Icons["material_2d"];
+            case AssetType::SkeletalAnimation: return m_Icons["anim"];
+            case AssetType::Font: return m_Icons["font"];
+            case AssetType::Animation2D: return m_Icons["anim_2d"];
+            case AssetType::AnimatorController: return m_Icons["anim_ctrl"];
+            case AssetType::AnimatorController2D: return m_Icons["anim_ctrl_2d"];
+            default: break;
+        }
 
         auto it = m_Thumbnails.find(filepath);
         if (it != m_Thumbnails.end())

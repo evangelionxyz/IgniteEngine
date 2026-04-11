@@ -1,0 +1,18 @@
+Material:
+  Version: Alpha-0.1
+  Name: NewMaterial
+  Type: 0
+  BaseColorTextureHandle: 13589769746383350053
+  EmissiveTextureHandle: 0
+  MetallicTextureHandle: 0
+  RoughnessTextureHandle: 0
+  NormalTextureHandle: 0
+  OcclusionTextureHandle: 0
+  GPUData:
+    BaseColorFactor: [1, 1, 1, 1]
+    EmissiveFactor: [1, 1, 1, 1]
+    MetallicFactor: 1
+    RoughnessFactor: 1
+    OcclusionStrength: 0
+    MetallicChannel: 2
+    RoughnessChannel: 1

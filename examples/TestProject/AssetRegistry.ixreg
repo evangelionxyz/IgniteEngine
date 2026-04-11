@@ -12,21 +12,27 @@ AssetRegistry:
     - Handle: 1385067185104004383
       Type: Texture
       Filepath: Tut Hip Hop Dance/Textures/Tut Hip Hop Dance_1_.png
-    - Handle: 1576775827256268540
-      Type: Texture
-      Filepath: Meshes/T-Pose/Textures/T-Pose_2_.png
     - Handle: 1671497305426399170
       Type: Texture
       Filepath: kiara_1_dawn_4k.hdr
     - Handle: 1686088020919170814
       Type: Material
-      Filepath: Floor.ixmat
+      Filepath: CheckerFloor.ixmat
+    - Handle: 2666909878259013252
+      Type: SkeletalAnimation
+      Filepath: Meshes/T-Pose/Animation/T-Pose_0.ixanim
     - Handle: 2730403899731088208
       Type: SkeletalAnimation
       Filepath: Great Sword Jump Attack/Animation/Great Sword Jump Attack_0.ixanim
     - Handle: 3041406261178892380
       Type: Animation2D
       Filepath: Animation/Idle.anim2d
+    - Handle: 3087250684467871483
+      Type: AnimatorController
+      Filepath: Anim_B.ac
+    - Handle: 4025623060811530075
+      Type: AnimatorController
+      Filepath: Anim_A.ac
     - Handle: 5784425294381670522
       Type: Texture
       Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_2_.png
@@ -39,54 +45,48 @@ AssetRegistry:
     - Handle: 6382678320413337663
       Type: Texture
       Filepath: Tut Hip Hop Dance/Textures/Tut Hip Hop Dance_0_.png
-    - Handle: 6742208295140439841
-      Type: AnimationMontage
-      Filepath: Great Sword Jump Attack/Animation/Great Sword Jump Attack_0.mtg
     - Handle: 6895963861277518904
       Type: Texture
       Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_0_.png
+    - Handle: 6991248045714503413
+      Type: Texture
+      Filepath: Meshes/T-Pose/Textures/T-Pose_1_.png
     - Handle: 7201159435847965647
       Type: Texture
       Filepath: ferndale_studio_04_2k.hdr
     - Handle: 7504911466409295994
       Type: Texture
       Filepath: snowy_field_2k.hdr
-    - Handle: 7922185500475892787
-      Type: Material
-      Filepath: Meshes/T-Pose/Material/kachujin_MAT.ixmat
-    - Handle: 7950879191016284909
-      Type: SpriteSheet
-      Filepath: NewSpriteSheet.ixsp
+    - Handle: 7852264912995845083
+      Type: SkeletalMesh
+      Filepath: Meshes/T-Pose/SkeletalMesh/T-Pose.ixskm
     - Handle: 8406749831429556630
       Type: Texture
       Filepath: ferndale_studio_12_2k.hdr
     - Handle: 8487866291550668718
       Type: Texture
       Filepath: klippad_sunrise_2_2k.hdr
-    - Handle: 9011932312248341142
-      Type: Texture
-      Filepath: Meshes/T-Pose/Textures/T-Pose_0_.png
     - Handle: 9297076932640637832
       Type: SkeletalMesh
       Filepath: Tut Hip Hop Dance/SkeletalMesh/Tut Hip Hop Dance.ixskm
-    - Handle: 9324854833112030984
-      Type: Texture
-      Filepath: Meshes/T-Pose/Textures/T-Pose_1_.png
     - Handle: 9420462621085832834
       Type: Font
       Filepath: segoeui.ttf
     - Handle: 9554496557541511132
       Type: Material
       Filepath: sphere/Material/DefaultMaterial.ixmat
-    - Handle: 9943506345211895355
-      Type: SkeletalMesh
-      Filepath: Meshes/T-Pose/SkeletalMesh/T-Pose.ixskm
+    - Handle: 10507436644703529331
+      Type: Skeleton
+      Filepath: Meshes/T-Pose/SkeletalMesh/T-Pose.ixskel
     - Handle: 10584338476988751194
       Type: AnimatorController2D
       Filepath: Animation/PlayerAnimController.ac2d
     - Handle: 10607535596036951705
       Type: Material
       Filepath: Great Sword Jump Attack/Material/MariaMat.ixmat
+    - Handle: 10679015075549878438
+      Type: Material
+      Filepath: Meshes/T-Pose/Material/kachujin_MAT.ixmat
     - Handle: 11149722755453565602
       Type: Material
       Filepath: cube/Material/Material.ixmat
@@ -108,6 +108,9 @@ AssetRegistry:
     - Handle: 14048962819861439313
       Type: Texture
       Filepath: segoeui_msdf.png
+    - Handle: 14216026366237509126
+      Type: Texture
+      Filepath: Meshes/T-Pose/Textures/T-Pose_2_.png
     - Handle: 14580958494333747827
       Type: Material
       Filepath: Tut Hip Hop Dance/Material/Arissa_MAT.ixmat
@@ -132,9 +135,15 @@ AssetRegistry:
     - Handle: 17360739226101978199
       Type: Scene
       Filepath: Scene/StaticMeshTest.ixscene
+    - Handle: 17466788850293151826
+      Type: Texture
+      Filepath: Meshes/T-Pose/Textures/T-Pose_0_.png
     - Handle: 17604633582810232567
       Type: StaticMesh
       Filepath: cube/StaticMesh/cube.ixsm
+    - Handle: 17985585918773427507
+      Type: Material
+      Filepath: MyFloor.ixmat
     - Handle: 18148575872844501869
       Type: Animation2D
       Filepath: Animation/Run.anim2d

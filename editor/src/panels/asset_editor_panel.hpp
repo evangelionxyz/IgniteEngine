@@ -22,6 +22,7 @@ namespace ignite
     class AnimationMontage;
     class BlendSpace;
     class LocomotionController;
+    class AnimatorController;
     class AnimatorController2D;
 
 	class AssetEditorPanel : public IPanel
@@ -95,8 +96,12 @@ namespace ignite
         void RenderSkeletalAnimationEditor(const Ref<SkeletalAnimation> &animation);
         void RenderSkeletalAnimationEditor(AssetEditorData &assetData);
         
+        void RenderAnimatorControllerEditor(AssetEditorData &assetData);
+        void RenderAnimatorControllerEditor(const Ref<AnimatorController> &animator);
+
         void RenderAnimationMontageEditor(AssetEditorData &assetData);
         void RenderAnimationMontageEditor(const Ref<AnimationMontage> &montage);
+
         void RenderTextureEditor(AssetEditorData &assetData);
         void RenderTextureEditor(AssetEditorData &assetData, const Ref<Texture> &texture);
         

@@ -215,7 +215,7 @@ namespace ignite
                 Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
 
                 // check if src entity has parent
-                IDComponent &idComp = src.GetComponent<IDComponent>();
+                auto &idComp = src.GetComponent<IDComponent>();
                 if (idComp.parent != 0)
                 {
                     UUID oldParent = idComp.parent;
@@ -255,7 +255,7 @@ namespace ignite
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 2.0f, 0.0f });
 
             std::vector<Entity> rootEntities;
-            m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const IDComponent &id)
+            m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
             {
                 if (id.parent == UUID(0))
                 {
@@ -360,7 +360,7 @@ namespace ignite
             s_LastAutoScrolledTarget = UUID(0);
         }
 
-        IDComponent &idComp = entity.GetComponent<IDComponent>();
+        auto &idComp = entity.GetComponent<IDComponent>();
         bool isDeleting = false;
         const bool isPrefab = idComp.IsInType(EntityType_Prefab);
 
@@ -512,9 +512,27 @@ namespace ignite
         Entity selectedEntity = GetSelectedEntity();
         if (selectedEntity.IsValid())
         {
+            auto *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
+            auto *assetManager = project ? project->GetAssetManager() : nullptr;
+            auto getAssetDisplayName = [assetManager](AssetHandle handle)
+            {
+                if (!assetManager || handle == AssetHandle(0))
+                {
+                    return std::string("Drag Here");
+                }
+
+                const AssetMetaData &metadata = assetManager->GetMetaData(handle);
+                if (!metadata.filepath.empty())
+                {
+                    return metadata.filepath.filename().string();
+                }
+
+                return std::to_string(static_cast<uint64_t>(handle));
+            };
+
             // Main Component
             // ID Component
-            IDComponent &idComp = selectedEntity.GetComponent<IDComponent>();
+            auto &idComp = selectedEntity.GetComponent<IDComponent>();
             char buffer[255] = {};
             strncpy(buffer, idComp.name.c_str(), sizeof(buffer) - 1);
             if (ImGui::InputText("##label", buffer, sizeof(buffer), ImGuiInputTextFlags_EnterReturnsTrue))
@@ -547,11 +565,27 @@ namespace ignite
                 if (translationState.isItemEdited)               comp.dirty = true;
                 if (translationState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp));
 
-                glm::vec3 euler = eulerAngles(comp.localRotation);
-                UI::State rotationState = UI::DrawVec3Control("Rotation", euler, 0.025f);
+                static UUID s_RotationEditEntity = UUID(0);
+                static glm::vec3 s_RotationEditEuler = glm::vec3(0.0f);
+                static bool s_RotationEditing = false;
+
+                if (s_RotationEditEntity != selectedEntity.GetUUID())
+                {
+                    s_RotationEditEntity = selectedEntity.GetUUID();
+                    s_RotationEditEuler = eulerAngles(comp.localRotation);
+                    s_RotationEditing = false;
+                }
+
+                if (!s_RotationEditing)
+                {
+                    s_RotationEditEuler = eulerAngles(comp.localRotation);
+                }
+
+                UI::State rotationState = UI::DrawVec3Control("Rotation", s_RotationEditEuler, 0.025f);
                 if (rotationState.isItemActivated)            s_TransformBefore = comp;
-                if (rotationState.isItemEdited)               { comp.localRotation = glm::quat(euler); comp.dirty = true; }
-                if (rotationState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp));
+                if (rotationState.isItemActivated)            s_RotationEditing = true;
+                if (rotationState.isItemEdited)               { comp.localRotation = glm::quat(s_RotationEditEuler); comp.dirty = true; }
+                if (rotationState.isItemDeactivatedAfterEdit) { CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp)); s_RotationEditing = false; }
 
                 UI::State scaleState = UI::DrawVec3Control("Scale", comp.localScale, 0.025f, 1.0f);
                 if (scaleState.isItemActivated)            s_TransformBefore = comp;
@@ -570,7 +604,7 @@ namespace ignite
 
             RenderComponent<WorldEnvironment>("World Environment", selectedEntity, [&]()
             {
-                WorldEnvironment &c = selectedEntity.GetComponent<WorldEnvironment>();
+                auto &c = selectedEntity.GetComponent<WorldEnvironment>();
 
                 UI::DrawCheckbox("Primary", &c.primary);
                 UI::DrawCheckbox("Enabled", &c.enabled);
@@ -611,8 +645,8 @@ namespace ignite
 
             RenderComponent<DirectionalLightComponent>("Directional Light", selectedEntity, [&]()
             {
-                DirectionalLightComponent &c = selectedEntity.GetComponent<DirectionalLightComponent>();
-                TransformComponent &tr = selectedEntity.GetComponent<TransformComponent>();
+                auto &c = selectedEntity.GetComponent<DirectionalLightComponent>();
+                auto &tr = selectedEntity.GetComponent<TransformComponent>();
 
                 ImGui::ColorEdit4("Color", &c.color.x);
                 UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
@@ -651,7 +685,7 @@ namespace ignite
 
                 // Material 2D
                 bool isMat2dLoaded = c.materialHandle != AssetHandle(0);
-                std::string mat2dLabel = isMat2dLoaded ? std::to_string(c.materialHandle) : "Drag Here";
+                std::string mat2dLabel = isMat2dLoaded ? getAssetDisplayName(c.materialHandle) : "Drag Here";
                 UI::DrawButtonWithColumn("Material", mat2dLabel.c_str(), nullptr, [&c, &selectedEntity, &isMat2dLoaded, this]()
                     {
 						if (ImGui::BeginDragDropTarget())
@@ -694,7 +728,7 @@ namespace ignite
                 {
 					// Texture on sprite 2d
 					const bool isTextureLoaded = c.handle != AssetHandle(0);
-					const std::string textureLabel = isTextureLoaded ? std::to_string(c.handle) : "Drag Here";
+                  const std::string textureLabel = isTextureLoaded ? getAssetDisplayName(c.handle) : "Drag Here";
 					UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&c, &isTextureLoaded, this, &selectedEntity]()
 						{
 							if (ImGui::BeginDragDropTarget())
@@ -770,7 +804,7 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<Animator2DComponent>();
 
                 bool isAnimatorLoaded = c.controllerHandle != AssetHandle(0);
-                std::string animDropLabel = !isAnimatorLoaded ? "Drop Here" : std::to_string(c.controllerHandle);
+                std::string animDropLabel = !isAnimatorLoaded ? "Drop Here" : getAssetDisplayName(c.controllerHandle);
                 UI::DrawButtonWithColumn("Controller", animDropLabel.c_str(), nullptr, [&c]()
                 {
                     if (ImGui::BeginDragDropTarget())
@@ -847,7 +881,7 @@ namespace ignite
 
 				bool isMeshLoaded = c.handle != AssetHandle(0);
 
-				std::string buttonLabel = isMeshLoaded ? std::format("{}", (uint64_t)c.handle) : "Drag Here";
+               std::string buttonLabel = isMeshLoaded ? getAssetDisplayName(c.handle) : "Drag Here";
                 UI::DrawButtonWithColumn("Static Mesh", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
                     {
                         if (ImGui::BeginDragDropTarget())
@@ -883,7 +917,7 @@ namespace ignite
                 if (isMeshLoaded)
                 {
                     const bool isMaterialLoaded = c.materialHandle != AssetHandle(0);
-                    std::string buttonLabel = isMaterialLoaded ? std::format("{}", (uint64_t)c.materialHandle) : "Drag Here";
+                    std::string buttonLabel = isMaterialLoaded ? getAssetDisplayName(c.materialHandle) : "Drag Here";
                     UI::DrawButtonWithColumn("Material", buttonLabel.c_str(), nullptr, [&c, this, &isMaterialLoaded]()
                     {
                         if (ImGui::BeginDragDropTarget())
@@ -920,7 +954,7 @@ namespace ignite
 
                 bool isMeshLoaded = c.handle != AssetHandle(0);
 
-                std::string buttonLabel = isMeshLoaded ? "Loaded" : "Drag Mesh Here";
+                std::string buttonLabel = isMeshLoaded ? getAssetDisplayName(c.handle) : "Drag Here";
                 UI::DrawButtonWithColumn("Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
                 {
                     if (ImGui::BeginDragDropTarget())
@@ -956,14 +990,43 @@ namespace ignite
 
                 if (isMeshLoaded)
                 {
-                    ImGui::Indent(8.0f);
-                    ImGui::TextDisabled("Handle: %llu", static_cast<u64>(c.handle));
-                    ImGui::Unindent(8.0f);
-
                     Ref<SkeletalMesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<SkeletalMesh>(c.handle);
                     if (sm)
                     {
-                        UI::DrawCheckbox("Play Anim", &sm->isPlaying);
+                        bool isAnimatorLoaded = c.animatorHandle != AssetHandle(0);
+                        std::string buttonLabel = isAnimatorLoaded ? getAssetDisplayName(c.animatorHandle) : "Drag Here";
+                        UI::DrawButtonWithColumn("Animator", buttonLabel.c_str(), nullptr, [&c, this, &isAnimatorLoaded]()
+                        {
+                            if (ImGui::BeginDragDropTarget())
+                            {
+                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                {
+                                    LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                                    AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                                    AssetMetaData metadata = assetManager->GetMetaData(handle);
+
+                                    if (metadata.type == AssetType::AnimatorController)
+                                    {
+                                        metadata.type = AssetType::AnimatorController;
+                                        assetManager->AssignMetaData(handle, metadata);
+                                        assetManager->UnloadAsset(handle);
+                                        c.animatorHandle = handle;
+                                    }
+                                }
+
+                                ImGui::EndDragDropTarget();
+                            }
+
+                            if (isAnimatorLoaded)
+                            {
+                                ImGui::SameLine();
+                                if (ImGui::Button("X"))
+                                {
+                                    c.animatorHandle = AssetHandle(0); // reset animator
+                                }
+                            }
+                        });
                     }
                 }
             });
@@ -1320,7 +1383,7 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<AudioSourceComponent>();
 
                 bool isLoaded = c.handle != AssetHandle(0);
-                std::string label = isLoaded ? std::to_string((uint64_t)c.handle) : "Drag Here";
+                std::string label = isLoaded ? getAssetDisplayName(c.handle) : "Drag Here";
 
                 UI::DrawButtonWithColumn("Audio", label.c_str(), nullptr, [&c, this, &isLoaded]()
                     {
@@ -1857,7 +1920,7 @@ namespace ignite
                                 Entity pickedEntity = {};
                                 if (pickedObjectId != 0xFFFFFFFFu)
                                 {
-                                    m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const IDComponent &id)
+                                    m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
                                     {
                                         if (pickedEntity.IsValid())
                                             return;
@@ -2005,10 +2068,10 @@ namespace ignite
                     for (auto &[uuid, entity] : m_SelectedEntities)
                     {
                         // Get the live transform component to apply changes to it
-                        TransformComponent &tr = entity.GetTransform();
+                        auto &tr = entity.GetTransform();
 
                         // Get the ORIGINAL transform we stored at the beginning of the manipulation
-                        const TransformComponent &initialTransform = initialTransforms.at(uuid);
+                        const auto &initialTransform = initialTransforms.at(uuid);
                         glm::mat4 initialWorldMatrix = initialTransform.GetWorldMatrix();
 
                         // Apply Translation and Rotation around the shared pivot
@@ -2025,7 +2088,7 @@ namespace ignite
                         if (entity.GetParentUUID() != UUID(0))
                         {
                             Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
-                            const TransformComponent &parentTr = parent.GetTransform();
+                            const auto &parentTr = parent.GetTransform();
                             glm::mat4 parentWorld = parentTr.GetWorldMatrix();
                             glm::mat4 localMatrix = glm::inverse(parentWorld) * newWorldMatrix;
 
@@ -2071,7 +2134,7 @@ namespace ignite
             {
                 if (allowGizmoManipulation)
                 {
-                    TransformComponent &tr = entity.GetTransform();
+                    auto &tr = entity.GetTransform();
                     glm::mat4 transformMatrix = tr.GetWorldMatrix();
 
                     m_Gizmo.Manipulate(transformMatrix);
@@ -2086,7 +2149,7 @@ namespace ignite
                         if (entity.GetParentUUID() != UUID(0))
                         {
                             Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
-                            const TransformComponent &parentTr = parent.GetTransform();
+                            const auto &parentTr = parent.GetTransform();
                             const glm::mat4 parentWorld = parentTr.GetWorldMatrix();
                             const glm::mat4 localMatrix = glm::inverse(parentWorld) * transformMatrix;
 
@@ -2484,7 +2547,7 @@ namespace ignite
             return;
         }
 
-        TransformComponent &tr = entity.GetTransform();
+        auto &tr = entity.GetTransform();
         const glm::mat4 worldMatrix = tr.GetWorldMatrix();
         const glm::mat4 viewProjection = m_EditorCamera.GetProjection() * m_EditorCamera.GetView();
 

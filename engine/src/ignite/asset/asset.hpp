@@ -45,6 +45,7 @@ namespace ignite {
         Project,
         Texture,
         SpriteSheet,
+        Shader,
         Material,
         Font,
         TextureCube,
@@ -72,6 +73,7 @@ namespace ignite {
         switch (type)
         {
             case ignite::AssetType::Texture: return "Texture";
+            case ignite::AssetType::Shader: return "Shader";
             case ignite::AssetType::AnimationMontage: return "AnimationMontage";
             case ignite::AssetType::Material: return "Material";
             case ignite::AssetType::Audio: return "Audio";
@@ -101,8 +103,7 @@ namespace ignite {
     static std::map<std::string, AssetType> s_AssetExtensionMap =
     {
         { ".meta", AssetType::Metadata },
-
-        { ".ixmont", AssetType::AnimationMontage },
+        { ".hlsl", AssetType::Shader },
         { ".mtg", AssetType::AnimationMontage },
         { ".ixproj", AssetType::Project },
         { ".ixscene", AssetType::Scene },
@@ -140,6 +141,7 @@ namespace ignite {
     static AssetType AssetTypeFromString(const std::string &typeStr)
     {
         if (typeStr == "Metadata") return AssetType::Metadata;
+        if (typeStr == "Shader") return AssetType::Shader;
 
         if (typeStr == "AnimationMontage") return AssetType::AnimationMontage;
         if (typeStr == "Scene") return AssetType::Scene;
@@ -172,6 +174,7 @@ namespace ignite {
         switch (type)
         {
         case AssetType::Metadata: return ".meta";
+        case AssetType::Shader: return ".hlsl";
 
         case AssetType::AnimationMontage: return ".mtg";
         case AssetType::StaticMesh: return ".ixsm";

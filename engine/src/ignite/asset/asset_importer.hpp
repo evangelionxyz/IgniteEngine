@@ -26,6 +26,7 @@ namespace ignite {
     class AnimationMontage;
     class BlendSpace;
     class LocomotionController;
+    class AnimatorController;
     class AnimatorController2D;
     class Scene;
     class Font;
@@ -90,6 +91,7 @@ namespace ignite {
         static Ref<AnimationMontage> ImportAnimationMontage(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<BlendSpace> ImportBlendSpace(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<LocomotionController> ImportLocomotionController(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
+        static Ref<AnimatorController> ImportAnimatorController(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
 
         static Ref<Animation2D> ImportAnimation2D(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<AnimatorController2D> ImportAnimatorController2D(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);

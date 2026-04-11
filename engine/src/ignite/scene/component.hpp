@@ -429,6 +429,10 @@ namespace ignite
         AssetHandle handle = AssetHandle(0);         // class SkeletalMesh in mesh.hpp
         AssetHandle animatorHandle = AssetHandle(0); // AnimatorController in animator_controller.hpp
 
+        std::string currentStateName;
+        float stateElapsed = 0.0f;
+        float stateNormalized = 0.0f;
+
         Ref<ConstantBuffer> perEntityBuffer;
         nvrhi::BindingSetHandle meshBindingSet = nullptr; // Cached binding set - reused across frames
 

@@ -5,6 +5,7 @@
 #include "../editor_layer.hpp"
 
 #include "ignite/animation/animator/animator.hpp"
+#include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/animation/animator/animator_controller_2d.hpp"
 #include "ignite/animation/animation_2d.hpp"
 #include "ignite/animation/animation_montage.hpp"
@@ -356,6 +357,12 @@ namespace ignite
                     break;
                 }
 
+                case AssetType::AnimatorController:
+                {
+                    RenderAnimatorControllerEditor(assetData);
+                    break;
+                }
+
                 case AssetType::BlendSpace:
                 {
                     RenderBlendSpaceEditor(assetData);
@@ -376,7 +383,6 @@ namespace ignite
 
                 default:
                 {
-                    ImGui::Text("Asset type '%s' editor is not implemented yet.", AssetTypeToString(assetData.metadata.type).c_str());
                     break;
                 }
             }
@@ -520,6 +526,11 @@ namespace ignite
             m_CreateRequest.asset = CreateRef<LocomotionController>();
         }
 
+        if (m_CreateRequest.type == AssetType::AnimatorController && !m_CreateRequest.asset)
+        {
+            m_CreateRequest.asset = AnimatorController::Create();
+        }
+
         // Asset creation pop-up
         ImGui::SetNextWindowSize(ImVec2(1200.0f, 760.0f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSizeConstraints(ImVec2(900.0f, 640.0f), ImVec2(FLT_MAX, FLT_MAX));
@@ -553,6 +564,20 @@ namespace ignite
                     if (asset)
                     {
                         asset->name = assetName;
+                        created = asset->Serialize(fullAssetPath);
+                        if (created)
+                        {
+                            asset->SetDirtyFlag(false);
+                            asset->SetReadyFlag(true);
+                            createdAsset = asset;
+                        }
+                    }
+                }
+                else if (m_CreateRequest.type == AssetType::AnimatorController)
+                {
+                    Ref<AnimatorController> asset = createdAsset->As<AnimatorController>();
+                    if (asset)
+                    {
                         created = asset->Serialize(fullAssetPath);
                         if (created)
                         {
@@ -656,6 +681,7 @@ namespace ignite
                     data.isOpen = true;
                     data.requestFocus = true;
                     data.windowTitle = std::format("{} - {}###asset_editor_{}", AssetTypeToString(metadata.type), fullAssetPath.filename().string(), static_cast<uint64_t>(handle));
+
                     InitializeSceneData(data);
                     
                     m_Assets.push_back(std::move(data));
@@ -729,6 +755,20 @@ namespace ignite
 
                 ImGui::Separator();
                 RenderAnimatorController2DEditor(asset);
+            }
+
+            if (m_CreateRequest.type == AssetType::AnimatorController)
+            {
+                Ref<AnimatorController> asset = m_CreateRequest.asset ? m_CreateRequest.asset->As<AnimatorController>() : nullptr;
+                if (!asset)
+                {
+                    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Invalid asset instance for AnimatorController creation.");
+                    ImGui::End();
+                    return;
+                }
+
+                ImGui::Separator();
+                RenderAnimatorControllerEditor(asset);
             }
 
             if (m_CreateRequest.type == AssetType::BlendSpace)
@@ -2466,7 +2506,7 @@ namespace ignite
                         MaterialPreviewEditorState &previewState = s_MaterialPreviewEditorState[stateKey];
                         if (!previewState.initialized)
                         {
-                            previewState.selectedMeshType = static_cast<int>(SPHERE);
+                            previewState.selectedMeshType = static_cast<int>(CUBE);
                             previewState.initialized = true;
                         }
 
@@ -2891,6 +2931,351 @@ namespace ignite
         }
     }
 
+
+    void AssetEditorPanel::RenderAnimatorControllerEditor(const Ref<AnimatorController> &animator)
+    {
+        if (!animator || !m_EditorLayer || !m_EditorLayer->GetActiveProject())
+        {
+            return;
+        }
+
+        auto project = m_EditorLayer->GetActiveProject();
+        auto resetRuntimeForController = [&]()
+        {
+            Ref<Scene> activeScene = m_EditorLayer->GetActiveScene();
+            if (!activeScene || !activeScene->registry)
+            {
+                return;
+            }
+
+            auto view = activeScene->registry->view<SkeletalMeshComponent>();
+            for (auto entity : view)
+            {
+                auto &sm = view.get<SkeletalMeshComponent>(entity);
+                if (sm.animatorHandle != animator->handle)
+                {
+                    continue;
+                }
+
+                sm.currentStateName.clear();
+                sm.stateElapsed = 0.0f;
+                sm.stateNormalized = 0.0f;
+            }
+        };
+
+        ImGui::Text("Animator Controller");
+        ImGui::Separator();
+
+        char defaultBuf[256]{};
+        std::strncpy(defaultBuf, animator->defaultState.c_str(), sizeof(defaultBuf) - 1);
+        if (ImGui::InputText("Default State##ac_default", defaultBuf, sizeof(defaultBuf)))
+        {
+            animator->defaultState = defaultBuf;
+            animator->SetDirtyFlag(true);
+        }
+
+        ImGui::Button("Drop Skeleton##ac_drop_skel", ImVec2(220.0f, 0.0f));
+        if (ImGui::BeginDragDropTarget())
+        {
+            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+            {
+                if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                {
+                    const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
+                    const AssetMetaData &md = project->GetAssetManager()->GetMetaData(handle);
+                    if (md.type == AssetType::Skeleton)
+                    {
+                        animator->skeletonHandle = handle;
+                        animator->SetDirtyFlag(true);
+                    }
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
+
+        ImGui::TextDisabled("Skeleton Handle: %llu", static_cast<uint64_t>(animator->skeletonHandle));
+
+        if (ImGui::CollapsingHeader("States##ac_states", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            for (int i = 0; i < static_cast<int>(animator->states.size()); ++i)
+            {
+                auto &state = animator->states[static_cast<size_t>(i)];
+                ImGui::PushID(i);
+
+                char nameBuf[256]{};
+                std::strncpy(nameBuf, state.name.c_str(), sizeof(nameBuf) - 1);
+                ImGui::SetNextItemWidth(180.0f);
+                if (ImGui::InputText("Name##ac_state_name", nameBuf, sizeof(nameBuf)))
+                {
+                    state.name = nameBuf;
+                    animator->SetDirtyFlag(true);
+                }
+
+                ImGui::SameLine();
+                ImGui::Text("Anim: %llu", static_cast<uint64_t>(state.animHandle));
+                ImGui::SameLine();
+                ImGui::Button("Drop Anim##ac_state_drop", ImVec2(100.0f, 20.0f));
+                if (ImGui::BeginDragDropTarget())
+                {
+                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                    {
+                        if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                        {
+                            const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
+                            const AssetMetaData &md = project->GetAssetManager()->GetMetaData(handle);
+                            if (md.type == AssetType::SkeletalAnimation)
+                            {
+                                Ref<SkeletalAnimation> droppedAnim = project->GetAsset<SkeletalAnimation>(handle);
+                                if (!droppedAnim)
+                                {
+                                    droppedAnim = project->GetAssetImmediate<SkeletalAnimation>(handle);
+                                }
+
+                                if (droppedAnim)
+                                {
+                                    state.animHandle = handle;
+                                    animator->SetDirtyFlag(true);
+                                    resetRuntimeForController();
+                                }
+                            }
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+
+                ImGui::SameLine();
+                if (ImGui::SmallButton("X##ac_state_remove"))
+                {
+                    animator->states.erase(animator->states.begin() + i);
+                    animator->SetDirtyFlag(true);
+                    ImGui::PopID();
+                    break;
+                }
+
+                ImGui::PopID();
+            }
+
+            if (ImGui::Button("+ Add State##ac_state_add"))
+            {
+                animator->states.push_back({ "NewState", AssetHandle(0) });
+                animator->SetDirtyFlag(true);
+            }
+        }
+
+        if (ImGui::CollapsingHeader("Parameters##ac_params", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            for (int i = 0; i < static_cast<int>(animator->params.size()); ++i)
+            {
+                auto &p = animator->params[static_cast<size_t>(i)];
+                ImGui::PushID(i);
+
+                ImGui::SetNextItemWidth(140.0f);
+                char pNameBuf[256]{};
+                std::strncpy(pNameBuf, p.name.c_str(), sizeof(pNameBuf) - 1);
+                if (ImGui::InputText("##ac_param_name", pNameBuf, sizeof(pNameBuf)))
+                {
+                    p.name = pNameBuf;
+                    animator->SetDirtyFlag(true);
+                }
+
+                ImGui::SameLine();
+                int typeIdx = static_cast<int>(p.type);
+                ImGui::SetNextItemWidth(70.0f);
+                if (ImGui::Combo("##ac_param_type", &typeIdx, s_ParamTypeNames, 4))
+                {
+                    p.type = static_cast<AnimParam::Type>(typeIdx);
+                    animator->SetDirtyFlag(true);
+                }
+
+                ImGui::SameLine();
+                switch (p.type)
+                {
+                    case AnimParam::Type::Float: if (ImGui::DragFloat("##ac_param_f", &p.floatVal, 0.01f)) animator->SetDirtyFlag(true); break;
+                    case AnimParam::Type::Int: if (ImGui::DragInt("##ac_param_i", &p.intVal)) animator->SetDirtyFlag(true); break;
+                    case AnimParam::Type::Bool: if (ImGui::Checkbox("##ac_param_b", &p.boolVal)) animator->SetDirtyFlag(true); break;
+                    case AnimParam::Type::String:
+                    {
+                        char sBuf[256]{};
+                        std::strncpy(sBuf, p.strVal.c_str(), sizeof(sBuf) - 1);
+                        if (ImGui::InputText("##ac_param_s", sBuf, sizeof(sBuf)))
+                        {
+                            p.strVal = sBuf;
+                            animator->SetDirtyFlag(true);
+                        }
+                        break;
+                    }
+                    default: break;
+                }
+
+                ImGui::SameLine();
+                if (ImGui::SmallButton("X##ac_param_remove"))
+                {
+                    animator->params.erase(animator->params.begin() + i);
+                    animator->SetDirtyFlag(true);
+                    ImGui::PopID();
+                    break;
+                }
+
+                ImGui::PopID();
+            }
+
+            if (ImGui::Button("+ Float##ac_add_float")) { animator->params.push_back({ .name = "NewFloat", .type = AnimParam::Type::Float }); animator->SetDirtyFlag(true); }
+            ImGui::SameLine();
+            if (ImGui::Button("+ Bool##ac_add_bool")) { animator->params.push_back({ .name = "NewBool", .type = AnimParam::Type::Bool }); animator->SetDirtyFlag(true); }
+            ImGui::SameLine();
+            if (ImGui::Button("+ Int##ac_add_int")) { animator->params.push_back({ .name = "NewInt", .type = AnimParam::Type::Int }); animator->SetDirtyFlag(true); }
+            ImGui::SameLine();
+            if (ImGui::Button("+ String##ac_add_str")) { animator->params.push_back({ .name = "NewString", .type = AnimParam::Type::String }); animator->SetDirtyFlag(true); }
+        }
+
+        if (ImGui::CollapsingHeader("Transitions##ac_trans"))
+        {
+            for (int i = 0; i < static_cast<int>(animator->transitions.size()); ++i)
+            {
+                auto &tr = animator->transitions[static_cast<size_t>(i)];
+                ImGui::PushID(i);
+
+                char fromBuf[256]{};
+                char toBuf[256]{};
+                std::strncpy(fromBuf, tr.fromState.c_str(), sizeof(fromBuf) - 1);
+                std::strncpy(toBuf, tr.toState.c_str(), sizeof(toBuf) - 1);
+                ImGui::SetNextItemWidth(120.0f);
+                if (ImGui::InputText("From##ac_tr_from", fromBuf, sizeof(fromBuf))) { tr.fromState = fromBuf; animator->SetDirtyFlag(true); }
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(120.0f);
+                if (ImGui::InputText("To##ac_tr_to", toBuf, sizeof(toBuf))) { tr.toState = toBuf; animator->SetDirtyFlag(true); }
+                ImGui::SameLine();
+                if (ImGui::Checkbox("Exit Time##ac_tr_exit", &tr.hasExitTime)) animator->SetDirtyFlag(true);
+                if (tr.hasExitTime)
+                {
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(70.0f);
+                    if (ImGui::DragFloat("##ac_tr_exit_v", &tr.exitTime, 0.01f, 0.0f, 1.0f)) animator->SetDirtyFlag(true);
+                }
+
+                ImGui::SameLine();
+                if (ImGui::SmallButton("X##ac_tr_remove"))
+                {
+                    animator->transitions.erase(animator->transitions.begin() + i);
+                    animator->SetDirtyFlag(true);
+                    ImGui::PopID();
+                    break;
+                }
+
+                ImGui::Indent(16.0f);
+                for (int ci = 0; ci < static_cast<int>(tr.conditions.size()); ++ci)
+                {
+                    auto &cond = tr.conditions[static_cast<size_t>(ci)];
+                    ImGui::PushID(ci);
+
+                    char cParamBuf[256]{};
+                    std::strncpy(cParamBuf, cond.paramName.c_str(), sizeof(cParamBuf) - 1);
+                    ImGui::SetNextItemWidth(120.0f);
+                    if (ImGui::InputText("Param##ac_cond_param", cParamBuf, sizeof(cParamBuf))) { cond.paramName = cParamBuf; animator->SetDirtyFlag(true); }
+                    ImGui::SameLine();
+
+                    int opIdx = static_cast<int>(cond.op);
+                    ImGui::SetNextItemWidth(70.0f);
+                    if (ImGui::Combo("##ac_cond_op", &opIdx, s_ConditionOpNames, 6))
+                    {
+                        cond.op = static_cast<AnimCondition::Op>(opIdx);
+                        animator->SetDirtyFlag(true);
+                    }
+
+                    ImGui::SameLine();
+                    const AnimParam *param = animator->GetParam(cond.paramName);
+                    if (param)
+                    {
+                        switch (param->type)
+                        {
+                            case AnimParam::Type::Float: if (ImGui::DragFloat("##ac_cond_f", &cond.floatThreshold, 0.01f)) animator->SetDirtyFlag(true); break;
+                            case AnimParam::Type::Int: if (ImGui::DragInt("##ac_cond_i", &cond.intThreshold)) animator->SetDirtyFlag(true); break;
+                            case AnimParam::Type::Bool: if (ImGui::Checkbox("##ac_cond_b", &cond.boolThreshold)) animator->SetDirtyFlag(true); break;
+                            case AnimParam::Type::String:
+                            {
+                                char tBuf[256]{};
+                                std::strncpy(tBuf, cond.strThreshold.c_str(), sizeof(tBuf) - 1);
+                                if (ImGui::InputText("##ac_cond_s", tBuf, sizeof(tBuf)))
+                                {
+                                    cond.strThreshold = tBuf;
+                                    animator->SetDirtyFlag(true);
+                                }
+                                break;
+                            }
+                            default: break;
+                        }
+                    }
+                    else
+                    {
+                        if (ImGui::DragFloat("##ac_cond_f2", &cond.floatThreshold, 0.01f)) animator->SetDirtyFlag(true);
+                    }
+
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("X##ac_cond_remove"))
+                    {
+                        tr.conditions.erase(tr.conditions.begin() + ci);
+                        animator->SetDirtyFlag(true);
+                        ImGui::PopID();
+                        break;
+                    }
+
+                    ImGui::PopID();
+                }
+
+                if (ImGui::SmallButton("+ Condition##ac_cond_add"))
+                {
+                    tr.conditions.push_back({});
+                    animator->SetDirtyFlag(true);
+                }
+                ImGui::Unindent(16.0f);
+                ImGui::Separator();
+                ImGui::PopID();
+            }
+
+            if (ImGui::Button("+ Add Transition##ac_add_transition"))
+            {
+                AnimTransition tr;
+                if (!animator->states.empty())
+                {
+                    tr.fromState = animator->states[0].name;
+                    tr.toState = animator->states.size() > 1 ? animator->states[1].name : "";
+                }
+                animator->transitions.push_back(tr);
+                animator->SetDirtyFlag(true);
+            }
+        }
+    }
+
+    void AssetEditorPanel::RenderAnimatorControllerEditor(AssetEditorData &assetData)
+    {
+        bool isOpen = assetData.isOpen;
+        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1600.0f, 1000.0f), ImVec2(520.0f, 700.0f), ImGuiWindowFlags_NoScrollWithMouse))
+        {
+            if (DrawAssetEditorHeader(assetData))
+            {
+                if (assetData.asset && assetData.asset->IsReady())
+                {
+                    if (Ref<AnimatorController> controller = assetData.asset->As<AnimatorController>())
+                    {
+                        RenderAnimatorControllerEditor(controller);
+                    }
+                    else
+                    {
+                        ImGui::Text("Loading asset...");
+                    }
+                }
+                else
+                {
+                    ImGui::Text("Loading asset...");
+                }
+            }
+        }
+
+        RenderAssetEditorClosePopup(assetData, isOpen);
+        ImGui::End();
+        assetData.isOpen = isOpen;
+        assetData.requestFocus = false;
+    }
 
     void AssetEditorPanel::RenderAnimationMontageEditor(AssetEditorData &assetData)
     {
@@ -3570,6 +3955,16 @@ namespace ignite
                 std::filesystem::path fullPath = m_EditorLayer->GetActiveProject()->GetAssetDirectory() / assetData.metadata.filepath;
                 return ctrl->Serialize(fullPath);
             }
+            case AssetType::AnimatorController:
+            {
+                Ref<AnimatorController> ctrl = assetData.asset->As<AnimatorController>();
+                if (!ctrl)
+                {
+                    return false;
+                }
+                std::filesystem::path fullPath = m_EditorLayer->GetActiveProject()->GetAssetDirectory() / assetData.metadata.filepath;
+                return ctrl->Serialize(fullPath);
+            }
             case AssetType::Material:
             {
                 Ref<Material> mat = assetData.asset->As<Material>();
@@ -3589,6 +3984,10 @@ namespace ignite
 
     void AssetEditorPanel::InitializeSceneData(AssetEditorData &assetData)
     {
+        // Only some asset type can use scene renderer
+        if (assetData.metadata.type != AssetType::Material)
+            return;
+
         assetData.sceneData.sceneRenderer = CreateRef<AssetSceneRenderer>();
         assetData.sceneData.sceneRenderer->SetProject(m_EditorLayer->GetActiveProject().get());
 
@@ -3716,6 +4115,7 @@ namespace ignite
             data.isOpen = true;
             data.requestFocus = true;
             data.windowTitle = std::format("{} - {}###asset_editor_{}", AssetTypeToString(metadata.type), assetName, static_cast<uint64_t>(handle));
+
             InitializeSceneData(data);
 
             m_Assets.push_back(std::move(data));
@@ -3764,6 +4164,12 @@ namespace ignite
         {
             m_CreateRequest.asset = AnimatorController2D::Create();
             std::memcpy(m_CreateRequest.nameBuffer, "NewAnimatorController", sizeof("NewAnimatorController"));
+        }
+
+        if (m_CreateRequest.type == AssetType::AnimatorController)
+        {
+            m_CreateRequest.asset = AnimatorController::Create();
+            std::memcpy(m_CreateRequest.nameBuffer, "NewAnimatorController3D", sizeof("NewAnimatorController3D"));
         }
 
         if (m_CreateRequest.type == AssetType::BlendSpace)
