@@ -25,7 +25,9 @@
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/graphics/objects/material.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/imgui/gizmo.hpp"
 #include "ignite/math/math.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -106,7 +108,23 @@ namespace ignite
             bool initialized = false;
         };
 
+        struct SkeletonPreviewEditorState
+        {
+            AssetHandle previewMeshHandle = AssetHandle(0);
+            AssetHandle previewAnimationHandle = AssetHandle(0);
+            Ref<StaticMesh> cachedPreviewMesh;
+            std::vector<glm::mat4> previewGlobalTransforms;
+            std::vector<glm::mat4> previewFinalTransforms;
+            float timeSeconds = 0.0f;
+            int gizmoTarget = 0;
+            bool playing = true;
+            bool loop = true;
+        };
+
         static std::unordered_map<uint64_t, MaterialPreviewEditorState> s_MaterialPreviewEditorState;
+        static std::unordered_map<uint64_t, SkeletonPreviewEditorState> s_SkeletonPreviewEditorState;
+        static AssetHandle s_ActiveSkeletonEditorHandle = AssetHandle(0);
+        static Gizmo s_SkeletonPreviewGizmo;
 
         // Default static meshes
         static std::unordered_map<MeshType, Ref<StaticMesh>> s_DefaultMeshes;
@@ -255,6 +273,101 @@ namespace ignite
     {
         s_DefaultMeshes.clear();
         s_SkeletonPreviewMaterial.reset();
+        s_SkeletonPreviewEditorState.clear();
+    }
+
+    void AssetEditorPanel::OnUpdate(float deltaTime)
+    {
+        if (!m_EditorLayer || !m_EditorLayer->GetActiveProject())
+        {
+            return;
+        }
+
+        Project *project = m_EditorLayer->GetActiveProject().get();
+        for (auto &assetData : m_Assets)
+        {
+            if (!assetData.isOpen || assetData.metadata.type != AssetType::Skeleton || !assetData.asset || !assetData.asset->IsReady()
+                || assetData.handle != s_ActiveSkeletonEditorHandle)
+            {
+                continue;
+            }
+
+            Ref<Skeleton> skeleton = assetData.asset->As<Skeleton>();
+            if (!skeleton)
+            {
+                continue;
+            }
+
+            SkeletonPreviewEditorState &previewState = s_SkeletonPreviewEditorState[static_cast<uint64_t>(skeleton->handle)];
+
+            Ref<SkeletalAnimation> previewAnimation = nullptr;
+            if (previewState.previewAnimationHandle != AssetHandle(0))
+            {
+                previewAnimation = project->GetAsset<SkeletalAnimation>(previewState.previewAnimationHandle);
+                if (!previewAnimation)
+                {
+                    previewAnimation = project->GetAssetImmediate<SkeletalAnimation>(previewState.previewAnimationHandle);
+                }
+            }
+
+            if (previewAnimation && previewAnimation->duration > 0.0f)
+            {
+                if (previewState.playing)
+                {
+                    previewState.timeSeconds += deltaTime;
+                    const float animDurationSec = previewAnimation->duration / std::max(previewAnimation->ticksPerSeconds, 0.0001f);
+                    if (previewState.loop)
+                    {
+                        previewState.timeSeconds = std::fmod(previewState.timeSeconds, std::max(animDurationSec, 0.0001f));
+                    }
+                    else
+                    {
+                        previewState.timeSeconds = std::min(previewState.timeSeconds, animDurationSec);
+                    }
+                }
+            }
+
+            const size_t jointCount = skeleton->joints.size();
+            previewState.previewGlobalTransforms.resize(jointCount, glm::mat4(1.0f));
+            previewState.previewFinalTransforms.resize(jointCount, glm::mat4(1.0f));
+
+            const bool hasPreviewAnimation = previewAnimation && previewAnimation->duration > 0.0f;
+            const float timeInTicks = hasPreviewAnimation
+                ? previewState.timeSeconds * std::max(previewAnimation->ticksPerSeconds, 0.0001f)
+                : 0.0f;
+
+            for (size_t i = 0; i < jointCount; ++i)
+            {
+                const Joint &joint = skeleton->joints[i];
+                glm::mat4 local = glm::translate(glm::mat4(1.0f), joint.defaultTranslation)
+                    * glm::toMat4(joint.defaultRotation)
+                    * glm::scale(glm::mat4(1.0f), joint.defaultScale);
+
+                if (hasPreviewAnimation)
+                {
+                    if (auto it = previewAnimation->channels.find(joint.name); it != previewAnimation->channels.end())
+                    {
+                        local = it->second.CalculateTransform(timeInTicks, joint.defaultTranslation, joint.defaultRotation, joint.defaultScale);
+                    }
+                }
+
+                if (joint.parentJointId < 0 || joint.parentJointId >= static_cast<int32_t>(jointCount))
+                {
+                    previewState.previewGlobalTransforms[i] = local;
+                }
+                else
+                {
+                    previewState.previewGlobalTransforms[i] = previewState.previewGlobalTransforms[static_cast<size_t>(joint.parentJointId)] * local;
+                }
+
+                previewState.previewFinalTransforms[i] = previewState.previewGlobalTransforms[i] * joint.inverseBindPose;
+            }
+
+            if (assetData.sceneData.sceneRenderer)
+            {
+                assetData.sceneData.sceneRenderer->SetBoneTransforms(previewState.previewFinalTransforms);
+            }
+        }
     }
 
     // Render
@@ -330,6 +443,7 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
         RenderCreateAssetPopup();
+        s_ActiveSkeletonEditorHandle = AssetHandle(0);
 
         for (auto &assetData : m_Assets)
         {
@@ -3610,16 +3724,71 @@ namespace ignite
             return;
         }
 
+        Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
+        if (!project)
+        {
+            return;
+        }
+
+        auto assetManager = project->GetAssetManager();
+
         const uint64_t key = static_cast<uint64_t>(animation->handle);
         static std::unordered_map<uint64_t, int32_t> s_SelectedJoint;
         static std::unordered_map<uint64_t, int32_t> s_SelectedSocket;
+        static std::unordered_map<uint64_t, int32_t> s_LastAutoScrolledJoint;
+        SkeletonPreviewEditorState &previewState = s_SkeletonPreviewEditorState[key];
 
         int32_t &selectedJoint = s_SelectedJoint[key];
         int32_t &selectedSocket = s_SelectedSocket[key];
+        int32_t &lastAutoScrolledJoint = s_LastAutoScrolledJoint[key];
+
+        if (sceneData.sceneRenderer)
+        {
+            if (previewState.previewMeshHandle != AssetHandle(0))
+            {
+                const AssetType previewMeshType = assetManager->GetAssetType(previewState.previewMeshHandle);
+
+                if (previewMeshType == AssetType::StaticMesh)
+                {
+                    Ref<StaticMesh> mesh = project->GetAsset<StaticMesh>(previewState.previewMeshHandle);
+                    if (!mesh)
+                    {
+                        mesh = project->GetAssetImmediate<StaticMesh>(previewState.previewMeshHandle);
+                    }
+                    sceneData.sceneRenderer->SetPreviewMesh(mesh);
+                }
+                else if (previewMeshType == AssetType::SkeletalMesh)
+                {
+                    Ref<SkeletalMesh> skMesh = project->GetAsset<SkeletalMesh>(previewState.previewMeshHandle);
+                    if (!skMesh)
+                    {
+                        skMesh = project->GetAssetImmediate<SkeletalMesh>(previewState.previewMeshHandle);
+                    }
+
+                    if (skMesh)
+                    {
+                        if (!previewState.cachedPreviewMesh)
+                        {
+                            previewState.cachedPreviewMesh = StaticMesh::Create();
+                        }
+                        previewState.cachedPreviewMesh->SetMeshInstance(skMesh->GetMeshInstances());
+                        sceneData.sceneRenderer->SetPreviewMesh(previewState.cachedPreviewMesh);
+                    }
+                }
+            }
+            else
+            {
+                sceneData.sceneRenderer->SetPreviewMesh(s_DefaultMeshes[CUBE]);
+            }
+        }
 
         if (selectedJoint >= static_cast<int32_t>(animation->joints.size()))
         {
             selectedJoint = animation->joints.empty() ? -1 : 0;
+        }
+        if (selectedJoint < 0)
+        {
+            lastAutoScrolledJoint = -1;
         }
         if (selectedSocket >= static_cast<int32_t>(animation->sockets.size()))
         {
@@ -3676,6 +3845,16 @@ namespace ignite
                     selectedJoint = jointId;
                 }
 
+                if (selectedJoint == jointId && lastAutoScrolledJoint != selectedJoint)
+                {
+                    if (!ImGui::IsItemVisible())
+                    {
+                        ImGui::SetScrollHereY(0.5f);
+                    }
+
+                    lastAutoScrolledJoint = selectedJoint;
+                }
+
                 if (opened)
                 {
                     for (int32_t childJointId : children[static_cast<size_t>(jointId)])
@@ -3716,9 +3895,130 @@ namespace ignite
                 ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
                 sceneData.viewportHovered = ImGui::IsItemHovered();
 
-                animation->UpdateGlobalTransforms();
                 const glm::mat4 viewProjection = sceneData.camera.GetProjection() * sceneData.camera.GetView();
                 const Rect viewportRect{ viewportPos.x, viewportPos.y, viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y };
+                const bool hasPreviewPose = previewState.previewGlobalTransforms.size() == animation->joints.size();
+
+                auto getJointGlobal = [&](int32_t jointId) -> const glm::mat4 &
+                {
+                    if (hasPreviewPose && jointId >= 0 && jointId < static_cast<int32_t>(previewState.previewGlobalTransforms.size()))
+                    {
+                        return previewState.previewGlobalTransforms[static_cast<size_t>(jointId)];
+                    }
+                    return animation->joints[static_cast<size_t>(jointId)].globalTransform;
+                };
+
+                GizmoInfo gizmoInfo;
+                gizmoInfo.cameraView = sceneData.camera.GetView();
+                gizmoInfo.cameraProjection = sceneData.camera.GetProjection();
+                gizmoInfo.cameraType = sceneData.camera.projectionType;
+                gizmoInfo.snapValue = 0.05f;
+                gizmoInfo.isSnapping = false;
+                gizmoInfo.viewRect = viewportRect;
+
+                s_SkeletonPreviewGizmo.SetInfo(gizmoInfo);
+                s_SkeletonPreviewGizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
+                s_SkeletonPreviewGizmo.SetMode(ImGuizmo::MODE::WORLD);
+
+                const bool hasSelectedJoint = selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(animation->joints.size());
+                const bool hasSelectedSocket = selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(animation->sockets.size());
+                const bool useSocketGizmo = previewState.gizmoTarget == 1 && hasSelectedSocket;
+
+                if (useSocketGizmo || hasSelectedJoint)
+                {
+                    glm::mat4 gizmoTransform = glm::mat4(1.0f);
+                    if (useSocketGizmo)
+                    {
+                        const JointSocket &socket = animation->sockets[static_cast<size_t>(selectedSocket)];
+                        const glm::mat4 socketLocal = socket.GetLocalTransform();
+                        if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(animation->joints.size()))
+                        {
+                            gizmoTransform = getJointGlobal(socket.parentJointId) * socketLocal;
+                        }
+                        else
+                        {
+                            gizmoTransform = socketLocal;
+                        }
+                    }
+                    else
+                    {
+                        gizmoTransform = getJointGlobal(selectedJoint);
+                    }
+
+                    s_SkeletonPreviewGizmo.Manipulate(gizmoTransform);
+
+                    if (s_SkeletonPreviewGizmo.IsManipulating())
+                    {
+                        if (useSocketGizmo)
+                        {
+                            JointSocket &socket = animation->sockets[static_cast<size_t>(selectedSocket)];
+                            glm::mat4 parentWorld = glm::mat4(1.0f);
+                            if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(animation->joints.size()))
+                            {
+                                parentWorld = getJointGlobal(socket.parentJointId);
+                            }
+
+                            const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
+                            glm::vec3 localTranslation, localEuler, localScale;
+                            Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                            socket.localTranslation = localTranslation;
+                            socket.localRotation = glm::quat(localEuler);
+                            socket.localScale = localScale;
+                        }
+                        else if (hasSelectedJoint)
+                        {
+                            Joint &joint = animation->joints[static_cast<size_t>(selectedJoint)];
+                            glm::mat4 parentWorld = glm::mat4(1.0f);
+                            if (joint.parentJointId >= 0 && joint.parentJointId < static_cast<int32_t>(animation->joints.size()))
+                            {
+                                parentWorld = getJointGlobal(joint.parentJointId);
+                            }
+
+                            const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
+                            glm::vec3 localTranslation, localEuler, localScale;
+                            Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                            joint.defaultTranslation = localTranslation;
+                            joint.defaultRotation = glm::quat(localEuler);
+                            joint.defaultScale = localScale;
+                            joint.localTransform = glm::translate(glm::mat4(1.0f), joint.defaultTranslation)
+                                * glm::toMat4(joint.defaultRotation)
+                                * glm::scale(glm::mat4(1.0f), joint.defaultScale);
+                        }
+
+                        animation->SetDirtyFlag(true);
+                    }
+                }
+
+                if (sceneData.viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)
+                    && !s_SkeletonPreviewGizmo.IsManipulating() && !s_SkeletonPreviewGizmo.IsHovered())
+                {
+                    const ImVec2 mousePos = ImGui::GetMousePos();
+                    int32_t pickedJoint = -1;
+                    float bestDistanceSq = 64.0f;
+
+                    for (const Joint &joint : animation->joints)
+                    {
+                        ImVec2 jointPos;
+                        if (!Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
+                        {
+                            continue;
+                        }
+
+                        const float dx = jointPos.x - mousePos.x;
+                        const float dy = jointPos.y - mousePos.y;
+                        const float distanceSq = dx * dx + dy * dy;
+                        if (distanceSq < bestDistanceSq)
+                        {
+                            bestDistanceSq = distanceSq;
+                            pickedJoint = joint.id;
+                        }
+                    }
+
+                    if (pickedJoint >= 0)
+                    {
+                        selectedJoint = pickedJoint;
+                    }
+                }
 
                 ImDrawList *drawList = ImGui::GetWindowDrawList();
                 for (const Joint &joint : animation->joints)
@@ -3731,8 +4031,8 @@ namespace ignite
                     const Joint &parent = animation->joints[static_cast<size_t>(joint.parentJointId)];
 
                     ImVec2 childPos, parentPos;
-                    if (Math::ProjectWorldToScreen(glm::vec3(joint.globalTransform[3]), viewProjection, viewportRect, childPos)
-                        && Math::ProjectWorldToScreen(glm::vec3(parent.globalTransform[3]), viewProjection, viewportRect, parentPos))
+                    if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, childPos)
+                        && Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(parent.id)[3]), viewProjection, viewportRect, parentPos))
                     {
                         const bool selectedLink = (joint.id == selectedJoint || parent.id == selectedJoint);
                         drawList->AddLine(parentPos, childPos, selectedLink ? IM_COL32(255, 180, 30, 255) : IM_COL32(50, 220, 255, 190), selectedLink ? 2.5f : 1.5f);
@@ -3742,7 +4042,7 @@ namespace ignite
                 for (const Joint &joint : animation->joints)
                 {
                     ImVec2 jointPos;
-                    if (Math::ProjectWorldToScreen(glm::vec3(joint.globalTransform[3]), viewProjection, viewportRect, jointPos))
+                    if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
                     {
                         const bool selected = joint.id == selectedJoint;
                         drawList->AddCircleFilled(jointPos, selected ? 5.0f : 3.0f, selected ? IM_COL32(255, 120, 20, 255) : IM_COL32(255, 255, 255, 230));
@@ -3763,13 +4063,96 @@ namespace ignite
         {
             ImGui::TextUnformatted("Joint / Socket Details");
             ImGui::Separator();
+
+            const char *gizmoTargets[] = { "Joint", "Socket" };
+            if (ImGui::Combo("Gizmo Target", &previewState.gizmoTarget, gizmoTargets, IM_ARRAYSIZE(gizmoTargets)))
+            {
+                if (previewState.gizmoTarget == 1 && (selectedSocket < 0 || selectedSocket >= static_cast<int32_t>(animation->sockets.size())))
+                {
+                    previewState.gizmoTarget = 0;
+                }
+            }
+
             if (selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(animation->joints.size()))
             {
                 const Joint &joint = animation->joints[static_cast<size_t>(selectedJoint)];
                 ImGui::TextDisabled("Selected Joint: %s (id: %d)", joint.name.c_str(), joint.id);
             }
 
+            if (previewState.gizmoTarget == 1)
+            {
+                if (selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(animation->sockets.size()))
+                {
+                    ImGui::TextDisabled("Selected Socket: %s", animation->sockets[static_cast<size_t>(selectedSocket)].name.c_str());
+                }
+                else
+                {
+                    ImGui::TextDisabled("Selected Socket: <none>");
+                }
+            }
+
             ImGui::SeparatorText("Joint Sockets");
+
+            ImGui::Button("Drop Preview Mesh (.ixsm/.ixskm)", ImVec2(-1.0f, 0.0f));
+            if (ImGui::BeginDragDropTarget())
+            {
+                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                {
+                    if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                    {
+                        const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                        const AssetMetaData &md = assetManager->GetMetaData(droppedHandle);
+                        if (md.type == AssetType::StaticMesh || md.type == AssetType::SkeletalMesh)
+                        {
+                            previewState.previewMeshHandle = droppedHandle;
+                            previewState.cachedPreviewMesh.reset();
+                        }
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+            ImGui::TextDisabled("Preview Mesh Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(previewState.previewMeshHandle)));
+            if (ImGui::SmallButton("Clear Preview Mesh"))
+            {
+                previewState.previewMeshHandle = AssetHandle(0);
+                previewState.cachedPreviewMesh.reset();
+            }
+
+            ImGui::Separator();
+            ImGui::Button("Drop Preview Animation (.ixanim)", ImVec2(-1.0f, 0.0f));
+            if (ImGui::BeginDragDropTarget())
+            {
+                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                {
+                    if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                    {
+                        const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                        const AssetMetaData &md = assetManager->GetMetaData(droppedHandle);
+                        if (md.type == AssetType::SkeletalAnimation)
+                        {
+                            previewState.previewAnimationHandle = droppedHandle;
+                            previewState.timeSeconds = 0.0f;
+                            previewState.playing = true;
+                        }
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+            ImGui::TextDisabled("Preview Animation Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(previewState.previewAnimationHandle)));
+
+            if (ImGui::Button(previewState.playing ? "Pause" : "Play"))
+            {
+                previewState.playing = !previewState.playing;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Stop"))
+            {
+                previewState.playing = false;
+                previewState.timeSeconds = 0.0f;
+            }
+            ImGui::SameLine();
+            ImGui::Checkbox("Loop", &previewState.loop);
+
             if (ImGui::Button("Add Socket") && selectedJoint >= 0)
             {
                 JointSocket socket;
@@ -3795,6 +4178,10 @@ namespace ignite
                     if (ImGui::Selectable(std::format("{}##socket_row_{}", row, i).c_str(), selectedSocket == i))
                     {
                         selectedSocket = i;
+                        if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(animation->joints.size()))
+                        {
+                            selectedJoint = socket.parentJointId;
+                        }
                     }
                 }
             }
@@ -3868,6 +4255,11 @@ namespace ignite
         bool isOpen = assetData.isOpen;
         if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1100.0f, 900.0f), ImVec2(560.0f, 620.0f), 0))
         {
+            if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows))
+            {
+                s_ActiveSkeletonEditorHandle = assetData.handle;
+            }
+
             if (DrawAssetEditorHeader(assetData))
             {
                 if (assetData.asset && assetData.asset->IsReady())

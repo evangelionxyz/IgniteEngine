@@ -35,6 +35,7 @@ namespace ignite
         virtual void OnAttach() override;
         virtual void OnDetach() override;
 
+        virtual void OnUpdate(float deltaTime) override;
         virtual void OnRender(nvrhi::IFramebuffer *framebuffer) override;
 
         virtual void OnGuiRender() override;
