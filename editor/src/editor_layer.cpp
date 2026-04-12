@@ -417,8 +417,8 @@ namespace ignite
             }
 
             const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
-            const bool allowResizeNow = !isMouseDraggingUi || s_EditStableFrames >= 2u;
-            if (framebufferNeedsResize && allowResizeNow && desiredSize.x > 0u && desiredSize.y > 0u)
+            // const bool allowResizeNow = !isMouseDraggingUi || s_EditStableFrames >= 2u;
+            if (framebufferNeedsResize && desiredSize.x > 0u && desiredSize.y > 0u)
             {
                 m_ScenePanel->ViewportEditResize(desiredSize.x, desiredSize.y);
             }
@@ -449,8 +449,8 @@ namespace ignite
             }
 
             const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
-            const bool allowResizeNow = !isMouseDraggingUi || s_GameStableFrames >= 2u;
-            if (framebufferNeedsResize && allowResizeNow && desiredSize.x > 0u && desiredSize.y > 0u)
+            // const bool allowResizeNow = !isMouseDraggingUi || s_GameStableFrames >= 2u;
+            if (framebufferNeedsResize && desiredSize.x > 0u && desiredSize.y > 0u)
             {
                 m_ScenePanel->ViewportGameResize(desiredSize.x, desiredSize.y);
             }

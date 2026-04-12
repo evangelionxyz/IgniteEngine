@@ -2030,7 +2030,7 @@ namespace ignite
                 createInfo.format = nvrhi::Format::RGBA8_UNORM;
                 createInfo.keepInitialState = true;
                 createInfo.keepCpuData = false;
-                createInfo.deferGpuCreate = false;
+                createInfo.deferGpuCreate = true;
                 createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
                 createInfo.width = static_cast<uint32_t>(dstW);
                 createInfo.height = static_cast<uint32_t>(dstH);

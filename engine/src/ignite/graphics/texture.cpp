@@ -29,6 +29,7 @@
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/imgui/imgui_nvrhi.hpp"
 #include <openexr.h>
 #include <openexr_errors.h>
 #include <stb_image.h>
@@ -555,6 +556,17 @@ namespace ignite
 	Texture::~Texture()
     {
         IGN_PROFILE_FUNCTION();
+
+        // Evict this texture's nvrhi handle from the ImGui binding set cache
+        // BEFORE releasing the handle. If we don't do this, the cache keeps
+        // a BindingSetHandle that holds a ref to the old nvrhi texture, preventing
+        // the GPU memory from being freed. On the next resize a new texture may
+        // get the same address, causing an incorrect cache hit with a stale binding.
+        if (m_Handle)
+        {
+            ImGui_NVRHI::InvalidateTextureCache(m_Handle.Get());
+        }
+
         if (m_Handle && m_TracyAllocationTracked)
         {
             IGN_PROFILE_FREE_N(m_Handle.Get(), "GPU Texture");

@@ -34,8 +34,8 @@ namespace ignite
 {
     struct TextureCreateInfo
     {
-        uint32_t width = 1;
-        uint32_t height = 1;
+        uint32_t width = 0;
+        uint32_t height = 0;
         uint32_t depth = 1;
         uint32_t mipLevels = 1;
         uint32_t arraySize = 1;
