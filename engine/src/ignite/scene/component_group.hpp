@@ -53,7 +53,7 @@ namespace ignite
         ScriptComponent,
         TextComponent,
         WorldEnvironment,
-        DirectionalLight,
+        DirectionalLightComponent,
         Animator2DComponent
     >; 
 }

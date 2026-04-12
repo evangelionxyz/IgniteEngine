@@ -1,0 +1,10 @@
+AnimatorController:
+  DefaultState: Idle
+  SkeletonHandle: 5850886667373479827
+  States:
+    - Name: Idle
+      AnimHandle: 472704409128830060
+  Params:
+    []
+  Transitions:
+    []

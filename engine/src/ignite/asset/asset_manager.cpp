@@ -735,6 +735,7 @@ namespace ignite {
         case AssetType::SkeletalMesh:
         case AssetType::SpriteSheet:
         case AssetType::Font:
+        case AssetType::AnimatorController:
         case AssetType::AnimatorController2D:
         case AssetType::Animation2D:
         {

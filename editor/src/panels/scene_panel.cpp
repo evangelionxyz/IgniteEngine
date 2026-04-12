@@ -92,17 +92,25 @@ namespace ignite
 
         // Load icons
         TextureCreateInfo createInfo;
+        createInfo.mipLevels = 1;
         createInfo.format = nvrhi::Format::RGBA8_UNORM;
-    	
         createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
     	createInfo.keepInitialState = true;
 
-        m_Icons["simulate"] = Texture::Create("resources/ui/ic_simulate.png", createInfo, cmd);
-        m_Icons["play"] = Texture::Create("resources/ui/ic_play.png", createInfo, cmd);
-        m_Icons["stop"] = Texture::Create("resources/ui/ic_stop.png", createInfo, cmd);
-        m_Icons["pause"] = Texture::Create("resources/ui/ic_pause.png", createInfo, cmd);
-        m_Icons["stepping"] = Texture::Create("resources/ui/ic_stepping.png", createInfo, cmd);
         m_Icons["checker128"] = Texture::Create("resources/ui/checker-128px.jpg", createInfo, cmd);
+
+        m_Icons["transform_world"] = Texture::Create("resources/ui/editor/ic_editor_world_transform.png", createInfo, cmd);
+        m_Icons["transform_local"] = Texture::Create("resources/ui/editor/ic_editor_local_transform.png", createInfo, cmd);
+        m_Icons["picking"] = Texture::Create("resources/ui/editor/ic_editor_picking.png", createInfo, cmd);
+        m_Icons["translate"] = Texture::Create("resources/ui/editor/ic_editor_translate.png", createInfo, cmd);
+        m_Icons["scale"] = Texture::Create("resources/ui/editor/ic_editor_scale.png", createInfo, cmd);
+        m_Icons["rotate"] = Texture::Create("resources/ui/editor/ic_editor_rotate.png", createInfo, cmd);
+
+        m_Icons["play"] = Texture::Create("resources/ui/editor/ic_editor_play.png", createInfo, cmd);
+        m_Icons["stop"] = Texture::Create("resources/ui/editor/ic_editor_stop.png", createInfo, cmd);
+        m_Icons["pause"] = Texture::Create("resources/ui/editor/ic_editor_pause.png", createInfo, cmd);
+        m_Icons["simulate"] = Texture::Create("resources/ui/editor/ic_editor_simulate.png", createInfo, cmd);
+        m_Icons["stepping"] = Texture::Create("resources/ui/editor/ic_editor_stepping.png", createInfo, cmd);
 
         cmd->close();
         device->executeCommandList(cmd);
@@ -202,7 +210,7 @@ namespace ignite
                 Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
 
                 // check if src entity has parent
-                IDComponent &idComp = src.GetComponent<IDComponent>();
+                auto &idComp = src.GetComponent<IDComponent>();
                 if (idComp.parent != 0)
                 {
                     UUID oldParent = idComp.parent;
@@ -242,7 +250,7 @@ namespace ignite
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 2.0f, 0.0f });
 
             std::vector<Entity> rootEntities;
-            m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const IDComponent &id)
+            m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
             {
                 if (id.parent == UUID(0))
                 {
@@ -316,9 +324,9 @@ namespace ignite
             if (ImGui::MenuItem("Directional Light"))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Directional Light"));
-                if (entity.IsValid() && !entity.HasComponent<DirectionalLight>())
+                if (entity.IsValid() && !entity.HasComponent<DirectionalLightComponent>())
                 {
-                    entity.AddComponent<DirectionalLight>();
+                    entity.AddComponent<DirectionalLightComponent>();
                 }
             }
 
@@ -347,7 +355,7 @@ namespace ignite
             s_LastAutoScrolledTarget = UUID(0);
         }
 
-        IDComponent &idComp = entity.GetComponent<IDComponent>();
+        auto &idComp = entity.GetComponent<IDComponent>();
         bool isDeleting = false;
         const bool isPrefab = idComp.IsInType(EntityType_Prefab);
 
@@ -499,9 +507,27 @@ namespace ignite
         Entity selectedEntity = GetSelectedEntity();
         if (selectedEntity.IsValid())
         {
+            auto *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
+            auto *assetManager = project ? project->GetAssetManager() : nullptr;
+            auto getAssetDisplayName = [assetManager](AssetHandle handle)
+            {
+                if (!assetManager || handle == AssetHandle(0))
+                {
+                    return std::string("Drag Here");
+                }
+
+                const AssetMetaData &metadata = assetManager->GetMetaData(handle);
+                if (!metadata.filepath.empty())
+                {
+                    return metadata.filepath.filename().string();
+                }
+
+                return std::to_string(static_cast<uint64_t>(handle));
+            };
+
             // Main Component
             // ID Component
-            IDComponent &idComp = selectedEntity.GetComponent<IDComponent>();
+            auto &idComp = selectedEntity.GetComponent<IDComponent>();
             char buffer[255] = {};
             strncpy(buffer, idComp.name.c_str(), sizeof(buffer) - 1);
             if (ImGui::InputText("##label", buffer, sizeof(buffer), ImGuiInputTextFlags_EnterReturnsTrue))
@@ -534,11 +560,27 @@ namespace ignite
                 if (translationState.isItemEdited)               comp.dirty = true;
                 if (translationState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp));
 
-                glm::vec3 euler = eulerAngles(comp.localRotation);
-                UI::State rotationState = UI::DrawVec3Control("Rotation", euler, 0.025f);
+                static UUID s_RotationEditEntity = UUID(0);
+                static glm::vec3 s_RotationEditEuler = glm::vec3(0.0f);
+                static bool s_RotationEditing = false;
+
+                if (s_RotationEditEntity != selectedEntity.GetUUID())
+                {
+                    s_RotationEditEntity = selectedEntity.GetUUID();
+                    s_RotationEditEuler = eulerAngles(comp.localRotation);
+                    s_RotationEditing = false;
+                }
+
+                if (!s_RotationEditing)
+                {
+                    s_RotationEditEuler = eulerAngles(comp.localRotation);
+                }
+
+                UI::State rotationState = UI::DrawVec3Control("Rotation", s_RotationEditEuler, 0.025f);
                 if (rotationState.isItemActivated)            s_TransformBefore = comp;
-                if (rotationState.isItemEdited)               { comp.localRotation = glm::quat(euler); comp.dirty = true; }
-                if (rotationState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp));
+                if (rotationState.isItemActivated)            s_RotationEditing = true;
+                if (rotationState.isItemEdited)               { comp.localRotation = glm::quat(s_RotationEditEuler); comp.dirty = true; }
+                if (rotationState.isItemDeactivatedAfterEdit) { CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp)); s_RotationEditing = false; }
 
                 UI::State scaleState = UI::DrawVec3Control("Scale", comp.localScale, 0.025f, 1.0f);
                 if (scaleState.isItemActivated)            s_TransformBefore = comp;
@@ -557,7 +599,7 @@ namespace ignite
 
             RenderComponent<WorldEnvironment>("World Environment", selectedEntity, [&]()
             {
-                WorldEnvironment &c = selectedEntity.GetComponent<WorldEnvironment>();
+                auto &c = selectedEntity.GetComponent<WorldEnvironment>();
 
                 UI::DrawCheckbox("Primary", &c.primary);
                 UI::DrawCheckbox("Enabled", &c.enabled);
@@ -596,10 +638,10 @@ namespace ignite
                     });
             });
 
-            RenderComponent<DirectionalLight>("Directional Light", selectedEntity, [&]()
+            RenderComponent<DirectionalLightComponent>("Directional Light", selectedEntity, [&]()
             {
-                DirectionalLight &c = selectedEntity.GetComponent<DirectionalLight>();
-                TransformComponent &tr = selectedEntity.GetComponent<TransformComponent>();
+                auto &c = selectedEntity.GetComponent<DirectionalLightComponent>();
+                auto &tr = selectedEntity.GetComponent<TransformComponent>();
 
                 ImGui::ColorEdit4("Color", &c.color.x);
                 UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
@@ -638,7 +680,7 @@ namespace ignite
 
                 // Material 2D
                 bool isMat2dLoaded = c.materialHandle != AssetHandle(0);
-                std::string mat2dLabel = isMat2dLoaded ? std::to_string(c.materialHandle) : "Drag Here";
+                std::string mat2dLabel = isMat2dLoaded ? getAssetDisplayName(c.materialHandle) : "Drag Here";
                 UI::DrawButtonWithColumn("Material", mat2dLabel.c_str(), nullptr, [&c, &selectedEntity, &isMat2dLoaded, this]()
                     {
 						if (ImGui::BeginDragDropTarget())
@@ -681,7 +723,7 @@ namespace ignite
                 {
 					// Texture on sprite 2d
 					const bool isTextureLoaded = c.handle != AssetHandle(0);
-					const std::string textureLabel = isTextureLoaded ? std::to_string(c.handle) : "Drag Here";
+                  const std::string textureLabel = isTextureLoaded ? getAssetDisplayName(c.handle) : "Drag Here";
 					UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&c, &isTextureLoaded, this, &selectedEntity]()
 						{
 							if (ImGui::BeginDragDropTarget())
@@ -757,7 +799,7 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<Animator2DComponent>();
 
                 bool isAnimatorLoaded = c.controllerHandle != AssetHandle(0);
-                std::string animDropLabel = !isAnimatorLoaded ? "Drop Here" : std::to_string(c.controllerHandle);
+                std::string animDropLabel = !isAnimatorLoaded ? "Drop Here" : getAssetDisplayName(c.controllerHandle);
                 UI::DrawButtonWithColumn("Controller", animDropLabel.c_str(), nullptr, [&c]()
                 {
                     if (ImGui::BeginDragDropTarget())
@@ -834,7 +876,7 @@ namespace ignite
 
 				bool isMeshLoaded = c.handle != AssetHandle(0);
 
-				std::string buttonLabel = isMeshLoaded ? std::format("{}", (uint64_t)c.handle) : "Drag Here";
+               std::string buttonLabel = isMeshLoaded ? getAssetDisplayName(c.handle) : "Drag Here";
                 UI::DrawButtonWithColumn("Static Mesh", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
                     {
                         if (ImGui::BeginDragDropTarget())
@@ -870,7 +912,7 @@ namespace ignite
                 if (isMeshLoaded)
                 {
                     const bool isMaterialLoaded = c.materialHandle != AssetHandle(0);
-                    std::string buttonLabel = isMaterialLoaded ? std::format("{}", (uint64_t)c.materialHandle) : "Drag Here";
+                    std::string buttonLabel = isMaterialLoaded ? getAssetDisplayName(c.materialHandle) : "Drag Here";
                     UI::DrawButtonWithColumn("Material", buttonLabel.c_str(), nullptr, [&c, this, &isMaterialLoaded]()
                     {
                         if (ImGui::BeginDragDropTarget())
@@ -907,7 +949,7 @@ namespace ignite
 
                 bool isMeshLoaded = c.handle != AssetHandle(0);
 
-                std::string buttonLabel = isMeshLoaded ? "Loaded" : "Drag Mesh Here";
+                std::string buttonLabel = isMeshLoaded ? getAssetDisplayName(c.handle) : "Drag Here";
                 UI::DrawButtonWithColumn("Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
                 {
                     if (ImGui::BeginDragDropTarget())
@@ -943,14 +985,43 @@ namespace ignite
 
                 if (isMeshLoaded)
                 {
-                    ImGui::Indent(8.0f);
-                    ImGui::TextDisabled("Handle: %llu", static_cast<u64>(c.handle));
-                    ImGui::Unindent(8.0f);
-
                     Ref<SkeletalMesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<SkeletalMesh>(c.handle);
                     if (sm)
                     {
-                        UI::DrawCheckbox("Play Anim", &sm->isPlaying);
+                        bool isAnimatorLoaded = c.animatorHandle != AssetHandle(0);
+                        std::string buttonLabel = isAnimatorLoaded ? getAssetDisplayName(c.animatorHandle) : "Drag Here";
+                        UI::DrawButtonWithColumn("Animator", buttonLabel.c_str(), nullptr, [&c, this, &isAnimatorLoaded]()
+                        {
+                            if (ImGui::BeginDragDropTarget())
+                            {
+                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                {
+                                    LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                                    AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                                    AssetMetaData metadata = assetManager->GetMetaData(handle);
+
+                                    if (metadata.type == AssetType::AnimatorController)
+                                    {
+                                        metadata.type = AssetType::AnimatorController;
+                                        assetManager->AssignMetaData(handle, metadata);
+                                        assetManager->UnloadAsset(handle);
+                                        c.animatorHandle = handle;
+                                    }
+                                }
+
+                                ImGui::EndDragDropTarget();
+                            }
+
+                            if (isAnimatorLoaded)
+                            {
+                                ImGui::SameLine();
+                                if (ImGui::Button("X"))
+                                {
+                                    c.animatorHandle = AssetHandle(0); // reset animator
+                                }
+                            }
+                        });
                     }
                 }
             });
@@ -1307,7 +1378,7 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<AudioSourceComponent>();
 
                 bool isLoaded = c.handle != AssetHandle(0);
-                std::string label = isLoaded ? std::to_string((uint64_t)c.handle) : "Drag Here";
+                std::string label = isLoaded ? getAssetDisplayName(c.handle) : "Drag Here";
 
                 UI::DrawButtonWithColumn("Audio", label.c_str(), nullptr, [&c, this, &isLoaded]()
                     {
@@ -1681,7 +1752,7 @@ namespace ignite
                         entity.AddComponent<PointLight2DComponent>();
                         break;
                     case CompType_DirectionalLight:
-                        entity.AddComponent<DirectionalLight>();
+                        entity.AddComponent<DirectionalLightComponent>();
                         break;
                     case CompType_Font:
                         entity.AddComponent<TextComponent>();
@@ -1774,161 +1845,6 @@ namespace ignite
             m_IsFocused = ImGui::IsWindowFocused();
             m_IsHovered = ImGui::IsWindowHovered();
 
-            static std::array<const char *, 3> kCameraModeLabels = { "Orbit", "Fly", "2D" };
-            int cameraModeIndex = 0;
-            switch (m_EditorCamera.GetNavigationMode())
-            {
-                case EditorCamera::NavigationMode::Fly: cameraModeIndex = 1; break;
-                case EditorCamera::NavigationMode::Mode2D: cameraModeIndex = 2; break;
-                default: cameraModeIndex = 0; break;
-            }
-
-            ImGui::SetNextItemWidth(80.0f);
-            if (ImGui::Combo("##CameraMode", &cameraModeIndex, kCameraModeLabels.data(), static_cast<int>(kCameraModeLabels.size())))
-            {
-                const auto mode = cameraModeIndex == 0 ? EditorCamera::NavigationMode::Orbit : (cameraModeIndex == 1 ? EditorCamera::NavigationMode::Fly : EditorCamera::NavigationMode::Mode2D);
-                const auto previousMode = m_EditorCamera.GetNavigationMode();
-
-                if (previousMode == EditorCamera::NavigationMode::Mode2D)
-                {
-                    m_EditorCamera2D = m_EditorCamera;
-                }
-                else
-                {
-                    m_EditorCamera3D = m_EditorCamera;
-                }
-
-                if (mode == EditorCamera::NavigationMode::Mode2D)
-                {
-                    if (m_EditorCamera2D)
-                    {
-                        m_EditorCamera = *m_EditorCamera2D;
-                    }
-                }
-                else
-                {
-                    if (m_EditorCamera3D)
-                    {
-                        m_EditorCamera = *m_EditorCamera3D;
-                    }
-                }
-
-                m_EditorCamera.SetNavigationMode(mode);
-            }
-
-            ImGui::SameLine();
-            if (m_EditorCamera.GetNavigationMode() == EditorCamera::NavigationMode::Mode2D)
-            {
-                ImGui::TextUnformatted("Pan Snap");
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(80.0f);
-                ImGui::DragFloat("##CameraPanSnap", &m_ViewportData.panSnapValue, 0.05f, 0.0f, 100.0f);
-                m_EditorCamera.SetPanSnapValue(m_ViewportData.panSnapValue);
-            }
-            else
-            {
-                m_EditorCamera.SetPanSnapValue(0.0f);
-            }
-
-            ImGui::SameLine();
-
-            static std::array<const char *, 4> kGizmoOperationLabels = { "Translate", "Rotate", "Scale", "Bound Sizing 2D" };
-            int operationIndex = 0;
-            switch (m_Gizmo.GetOperation())
-            {
-                case ImGuizmo::ROTATE: operationIndex = 1; break;
-                case ImGuizmo::SCALE: operationIndex = 2; break;
-                default: operationIndex = 0; break;
-            }
-            ImGui::SetNextItemWidth(90.0f);
-
-            int gizmoOpCount = static_cast<int>(kGizmoOperationLabels.size()) - 1;
-            if (m_EditorCamera.GetNavigationMode() == EditorCamera::NavigationMode::Mode2D)
-                gizmoOpCount = static_cast<int>(kGizmoOperationLabels.size());
-
-            if (ImGui::Combo("##GizmoOperation", &operationIndex, kGizmoOperationLabels.data(), gizmoOpCount))
-            {
-                SetGizmoOperation((GizmoOperation)operationIndex);
-            }
-            ImGui::SameLine();
-
-            static std::array<const char *, 2> kGizmoModeLabels = { "Local", "World" };
-            int modeIndex = m_Gizmo.GetMode() == ImGuizmo::LOCAL ? 0 : 1;
-            ImGui::SetNextItemWidth(90.0f);
-            if (ImGui::Combo("##GizmoMode", &modeIndex, kGizmoModeLabels.data(), static_cast<int>(kGizmoModeLabels.size())))
-            {
-                auto mode = modeIndex == 0 ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
-                m_Gizmo.SetMode(mode);
-            }
-
-            ImGui::SameLine();
-            ImGui::TextUnformatted("Snap");
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(90.0f);
-            ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValue, 0.05f, 0.0f, 100.0f);
-
-            ImGui::SameLine();
-
-            // TOOLBAR: 
-            constexpr ImVec2 buttonSize = { 24.0f, 24.0f };
-
-            State sceneState = m_EditorLayer->GetState().sceneState;
-            const bool isScenePlaying = sceneState == ignite::State::ScenePlay;
-            Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
-            ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
-
-            ImGui::SameLine();
-            ImGui::Image(scenePlayStopID, buttonSize);
-            if (ImGui::IsItemClicked())
-            {
-                if (isScenePlaying)
-                {
-                    m_EditorLayer->OnSceneStop();
-#if _WIN32
-                    HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
-                    COLORREF rgbRed = 0x00E86071;
-                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
-#endif
-                }
-                else
-                {
-                    m_EditorLayer->OnScenePlay();
-#if _WIN32
-                    HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
-                    COLORREF rgbRed = 0x000000AB;
-                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
-#endif
-                }
-            }
-
-            const bool isSceneSimulate = sceneState == ignite::State::SceneSimulate;
-            Ref<Texture> sceneSimulateTex = isSceneSimulate ? m_Icons["stop"] : m_Icons["simulate"];
-            ImTextureID sceneSimulateID = (ImTextureID)sceneSimulateTex->GetHandle().Get();
-
-            ImGui::SameLine();
-            ImGui::Image(sceneSimulateID, buttonSize);
-            if (ImGui::IsItemClicked())
-            {
-                if (isSceneSimulate)
-                {
-                    m_EditorLayer->OnSceneStop();
-#if _WIN32
-                    HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
-                    COLORREF rgbRed = 0x00E86071;
-                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
-#endif
-                }
-                else
-                {
-                    m_EditorLayer->OnSceneSimulate();
-#if _WIN32
-                    HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
-                    COLORREF rgbRed = 0x000000AB;
-                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
-#endif
-                }
-            }
-
             // Calculating Scene Viewport location
             const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
             const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
@@ -1999,7 +1915,7 @@ namespace ignite
                                 Entity pickedEntity = {};
                                 if (pickedObjectId != 0xFFFFFFFFu)
                                 {
-                                    m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const IDComponent &id)
+                                    m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
                                     {
                                         if (pickedEntity.IsValid())
                                             return;
@@ -2147,10 +2063,10 @@ namespace ignite
                     for (auto &[uuid, entity] : m_SelectedEntities)
                     {
                         // Get the live transform component to apply changes to it
-                        TransformComponent &tr = entity.GetTransform();
+                        auto &tr = entity.GetTransform();
 
                         // Get the ORIGINAL transform we stored at the beginning of the manipulation
-                        const TransformComponent &initialTransform = initialTransforms.at(uuid);
+                        const auto &initialTransform = initialTransforms.at(uuid);
                         glm::mat4 initialWorldMatrix = initialTransform.GetWorldMatrix();
 
                         // Apply Translation and Rotation around the shared pivot
@@ -2167,7 +2083,7 @@ namespace ignite
                         if (entity.GetParentUUID() != UUID(0))
                         {
                             Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
-                            const TransformComponent &parentTr = parent.GetTransform();
+                            const auto &parentTr = parent.GetTransform();
                             glm::mat4 parentWorld = parentTr.GetWorldMatrix();
                             glm::mat4 localMatrix = glm::inverse(parentWorld) * newWorldMatrix;
 
@@ -2213,7 +2129,7 @@ namespace ignite
             {
                 if (allowGizmoManipulation)
                 {
-                    TransformComponent &tr = entity.GetTransform();
+                    auto &tr = entity.GetTransform();
                     glm::mat4 transformMatrix = tr.GetWorldMatrix();
 
                     m_Gizmo.Manipulate(transformMatrix);
@@ -2228,7 +2144,7 @@ namespace ignite
                         if (entity.GetParentUUID() != UUID(0))
                         {
                             Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
-                            const TransformComponent &parentTr = parent.GetTransform();
+                            const auto &parentTr = parent.GetTransform();
                             const glm::mat4 parentWorld = parentTr.GetWorldMatrix();
                             const glm::mat4 localMatrix = glm::inverse(parentWorld) * transformMatrix;
 
@@ -2290,67 +2206,6 @@ namespace ignite
                 // Preview camera
                 if (m_Scene)
                 {
-                    // TOOLBAR: 
-                    constexpr ImVec2 buttonSize = { 24.0f, 24.0f };
-
-                    State sceneState = m_EditorLayer->GetState().sceneState;
-                    const bool isScenePlaying = sceneState == ignite::State::ScenePlay;
-                    Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
-                    ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
-
-                    ImGui::SameLine();
-                    ImGui::Image(scenePlayStopID, buttonSize);
-                    if (ImGui::IsItemClicked())
-                    {
-                        if (isScenePlaying)
-                        {
-                            m_EditorLayer->OnSceneStop();
-#if _WIN32
-                            HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
-                            COLORREF rgbRed = 0x00E86071;
-                            DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
-#endif
-                        }
-                        else
-                        {
-                            m_EditorLayer->OnScenePlay();
-#if _WIN32
-                            HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
-                            COLORREF rgbRed = 0x000000AB;
-                            DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
-#endif
-                        }
-                    }
-
-                    const bool isSceneSimulate = sceneState == ignite::State::SceneSimulate;
-                    Ref<Texture> sceneSimulateTex = isSceneSimulate ? m_Icons["stop"] : m_Icons["simulate"];
-                    ImTextureID sceneSimulateID = (ImTextureID)sceneSimulateTex->GetHandle().Get();
-
-                    ImGui::SameLine();
-                    ImGui::Image(sceneSimulateID, buttonSize);
-                    if (ImGui::IsItemClicked())
-                    {
-                        if (isSceneSimulate)
-                        {
-                            m_EditorLayer->OnSceneStop();
-#if _WIN32
-                            HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
-                            COLORREF rgbRed = 0x00E86071;
-                            DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
-#endif
-                        }
-                        else
-                        {
-                            m_EditorLayer->OnSceneSimulate();
-#if _WIN32
-                            HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
-                            COLORREF rgbRed = 0x000000AB;
-                            DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
-#endif
-                        }
-                    }
-
-                    ImGui::SameLine();
                     ImGui::TextUnformatted("Zoom");
                     ImGui::SameLine();
                     ImGui::SetNextItemWidth(120.0f);
@@ -2452,6 +2307,177 @@ namespace ignite
         
     }
 
+    void ScenePanel::RenderToolbar()
+    {
+        // TOOLBAR: 
+        static std::array<const char *, 3> kCameraModeLabels = { "Orbit", "Fly", "2D" };
+        int cameraModeIndex = 0;
+        switch (m_EditorCamera.GetNavigationMode())
+        {
+            case EditorCamera::NavigationMode::Fly: cameraModeIndex = 1; break;
+            case EditorCamera::NavigationMode::Mode2D: cameraModeIndex = 2; break;
+            default: cameraModeIndex = 0; break;
+        }
+
+        ImGui::SetNextItemWidth(80.0f);
+        if (ImGui::Combo("##CameraMode", &cameraModeIndex, kCameraModeLabels.data(), static_cast<int>(kCameraModeLabels.size())))
+        {
+            const auto mode = cameraModeIndex == 0 ? EditorCamera::NavigationMode::Orbit : (cameraModeIndex == 1 ? EditorCamera::NavigationMode::Fly : EditorCamera::NavigationMode::Mode2D);
+            const auto previousMode = m_EditorCamera.GetNavigationMode();
+
+            if (previousMode == EditorCamera::NavigationMode::Mode2D)
+            {
+                m_EditorCamera2D = m_EditorCamera;
+            }
+            else
+            {
+                m_EditorCamera3D = m_EditorCamera;
+            }
+
+            if (mode == EditorCamera::NavigationMode::Mode2D)
+            {
+                if (m_EditorCamera2D)
+                {
+                    m_EditorCamera = *m_EditorCamera2D;
+                }
+            }
+            else
+            {
+                if (m_EditorCamera3D)
+                {
+                    m_EditorCamera = *m_EditorCamera3D;
+                }
+            }
+
+            m_EditorCamera.SetNavigationMode(mode);
+        }
+
+        ImGui::SameLine();
+        if (m_EditorCamera.GetNavigationMode() == EditorCamera::NavigationMode::Mode2D)
+        {
+            ImGui::TextUnformatted("Pan Snap");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(80.0f);
+            ImGui::DragFloat("##CameraPanSnap", &m_ViewportData.panSnapValue, 0.05f, 0.0f, 100.0f);
+            m_EditorCamera.SetPanSnapValue(m_ViewportData.panSnapValue);
+        }
+        else
+        {
+            m_EditorCamera.SetPanSnapValue(0.0f);
+        }
+
+        ImGui::SameLine();
+
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
+
+        constexpr ImVec2 buttonSize = { 28.0f, 28.0f };
+
+        auto drawGizmoBtn = [&](const std::string &iconName, bool active)
+        {
+            ImTextureID texID = (ImTextureID)m_Icons[iconName]->GetHandle().Get();
+            ImVec4 tint = active ? ImVec4(1.0f, 1.0f, 1.0f, 1.0f) : ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
+            ImVec4 bg = active ? ImVec4(1.0f, 0.78f, 0.0f, 1.0f) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+            return ImGui::ImageButton(iconName.c_str(), texID, buttonSize, ImVec2(0, 0), ImVec2(1, 1), bg, tint);
+        };
+
+        if (drawGizmoBtn("picking", m_Data.gizmoOp == GizmoOperation::NONE)) SetGizmoOperation(GizmoOperation::NONE);
+        ImGui::SameLine();
+        if (drawGizmoBtn("translate", m_Data.gizmoOp == GizmoOperation::TRANSLATE)) SetGizmoOperation(GizmoOperation::TRANSLATE);
+        ImGui::SameLine();
+        if (drawGizmoBtn("rotate", m_Data.gizmoOp == GizmoOperation::ROTATE)) SetGizmoOperation(GizmoOperation::ROTATE);
+        ImGui::SameLine();
+        if (drawGizmoBtn("scale", m_Data.gizmoOp == GizmoOperation::SCALE)) SetGizmoOperation(GizmoOperation::SCALE);
+
+        if (m_EditorCamera.GetNavigationMode() == EditorCamera::NavigationMode::Mode2D)
+        {
+            ImGui::SameLine();
+            bool isBoundSizing = m_Data.gizmoOp == GizmoOperation::BOUND_SIZING_2D;
+            if (isBoundSizing) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+            else ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+            if (ImGui::Button("2D Bounds", ImVec2(0, 24))) SetGizmoOperation(GizmoOperation::BOUND_SIZING_2D);
+            ImGui::PopStyleColor();
+        }
+
+        ImGui::SameLine();
+        ImGui::Spacing();
+        ImGui::SameLine();
+
+        bool isLocal = m_Gizmo.GetMode() == ImGuizmo::LOCAL;
+        if (drawGizmoBtn("transform_local", isLocal)) m_Gizmo.SetMode(ImGuizmo::LOCAL);
+        ImGui::SameLine();
+        if (drawGizmoBtn("transform_world", !isLocal)) m_Gizmo.SetMode(ImGuizmo::WORLD);
+
+        ImGui::PopStyleVar(2);
+
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(90.0f);
+        ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValue, 0.05f, 0.0f, 100.0f, "Snap %.2f");
+        ImGui::SameLine();
+
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
+
+        State sceneState = m_EditorLayer->GetState().sceneState;
+        const bool isScenePlaying = sceneState == ignite::State::ScenePlay;
+        Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
+        ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
+
+        ImGui::SameLine();
+        ImVec4 bgColPlay = isScenePlaying ? ImVec4(0.3f, 0.3f, 0.3f, 1.0f) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+        if (ImGui::ImageButton("##PlayButton", scenePlayStopID, buttonSize, ImVec2(0, 0), ImVec2(1, 1), bgColPlay))
+        {
+            if (isScenePlaying)
+            {
+                m_EditorLayer->OnSceneStop();
+#if _WIN32
+                HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
+                COLORREF rgbRed = 0x00E86071;
+                DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
+#endif
+            }
+            else
+            {
+                m_EditorLayer->OnScenePlay();
+#if _WIN32
+                HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
+                COLORREF rgbRed = 0x000000AB;
+                DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
+#endif
+            }
+        }
+
+        const bool isSceneSimulate = sceneState == ignite::State::SceneSimulate;
+        Ref<Texture> sceneSimulateTex = isSceneSimulate ? m_Icons["stop"] : m_Icons["simulate"];
+        ImTextureID sceneSimulateID = (ImTextureID)sceneSimulateTex->GetHandle().Get();
+
+        ImGui::SameLine();
+        ImVec4 bgColSim = isSceneSimulate ? ImVec4(0.3f, 0.3f, 0.3f, 1.0f) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+        if (ImGui::ImageButton("##SimulateButton", sceneSimulateID, buttonSize, ImVec2(0, 0), ImVec2(1, 1), bgColSim))
+        {
+            if (isSceneSimulate)
+            {
+                m_EditorLayer->OnSceneStop();
+#if _WIN32
+                HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
+                COLORREF rgbRed = 0x00E86071;
+                DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
+#endif
+            }
+            else
+            {
+                m_EditorLayer->OnSceneSimulate();
+#if _WIN32
+                HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
+                COLORREF rgbRed = 0x000000AB;
+                DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
+#endif
+            }
+        }
+
+        ImGui::PopStyleVar(2);
+    }
+
     bool ScenePanel::Is2DResizableEntity(Entity entity) const
     {
         return entity.IsValid() && (entity.HasComponent<Sprite2DComponent>() || entity.HasComponent<Circle2DComponent>() || entity.HasComponent<TextComponent>());
@@ -2512,7 +2538,7 @@ namespace ignite
             return;
         }
 
-        TransformComponent &tr = entity.GetTransform();
+        auto &tr = entity.GetTransform();
         const glm::mat4 worldMatrix = tr.GetWorldMatrix();
         const glm::mat4 viewProjection = m_EditorCamera.GetProjection() * m_EditorCamera.GetView();
 

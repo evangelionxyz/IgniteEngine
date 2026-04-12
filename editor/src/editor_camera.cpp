@@ -283,6 +283,8 @@ namespace ignite
 		// check for scroll wheel input
 		if (mouse.scroll.y != 0)
 		{
+			m_FocusActive = false;
+
 			wheelDelta = static_cast<float>(mouse.scroll.y);
 
 			// reset scroll after processing

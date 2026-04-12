@@ -46,10 +46,11 @@ namespace ignite
 
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer);
-        void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer,
+        void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, const PostProcessing &postProcessing, nvrhi::IFramebuffer *framebuffer,
             Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture = nullptr,
             Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr);
 
+        void DrawIcons(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, ICamera *camera);
         void DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const DebugGridStyle &style, bool is2D);
         void DrawDebug2DPhysics(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
         void DrawDebug3DPhysics(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
@@ -79,6 +80,7 @@ namespace ignite
         };
         
     private:
+        std::unordered_map<std::string, Ref<Texture>> m_Icons;
         std::unordered_map<AssetResolveKey, Ref<StaticMesh>, AssetResolveKeyHash> m_StaticMeshResolveCache;
         std::unordered_map<AssetResolveKey, Ref<SkeletalMesh>, AssetResolveKeyHash> m_SkeletalMeshResolveCache;
         std::unordered_map<AssetResolveKey, Ref<Material>, AssetResolveKeyHash> m_MaterialResolveCache;

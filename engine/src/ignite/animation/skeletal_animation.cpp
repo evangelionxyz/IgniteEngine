@@ -37,4 +37,10 @@ namespace ignite {
 	{
         return BinarySerializer::DeserializeSkeletalAnimation(filepath);
 	}
+
+    void SkeletalAnimation::SetSkeletonHandle(UUID skeletonHandle)
+    {
+        m_SkeletonHandle = skeletonHandle;
+    }
+
 }

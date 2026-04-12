@@ -1,0 +1,18 @@
+Material:
+  Version: Alpha-0.1
+  Name: kachujin_MAT
+  Type: 0
+  BaseColorTextureHandle: 17466788850293151826
+  EmissiveTextureHandle: 0
+  MetallicTextureHandle: 6991248045714503413
+  RoughnessTextureHandle: 6991248045714503413
+  NormalTextureHandle: 14216026366237509126
+  OcclusionTextureHandle: 0
+  GPUData:
+    BaseColorFactor: [1, 1, 1, 1]
+    EmissiveFactor: [0, 0, 0, 1]
+    MetallicFactor: 0
+    RoughnessFactor: 0.8
+    OcclusionStrength: 0
+    MetallicChannel: 2
+    RoughnessChannel: 1

@@ -1,8 +1,0 @@
-Material2D:
-  Version: Alpha-0.1
-  Name: Grass_01
-  TextureHandle: 13718421009327739972
-  BaseColor: [1, 1, 1, 1]
-  AdditiveColor: [0.1782946, 0.1782946, 0.1782946, 0]
-  TilingFactor: [1, 1]
-  Type: 1

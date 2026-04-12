@@ -36,6 +36,7 @@ namespace ignite
         // Viewports
         void RenderSceneEditViewport();
         void RenderSceneGameViewport();
+        void RenderToolbar();
 
         void ViewportEditResize(uint32_t width, uint32_t height);
         void ViewportGameResize(uint32_t width, uint32_t height);
