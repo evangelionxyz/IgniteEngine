@@ -480,7 +480,6 @@ namespace ignite {
             }
 
             // animations
-            asset->animationHandles.clear();
             std::vector<std::filesystem::path> animationFiles;
             if (std::filesystem::exists(animationDirectory))
             {
@@ -518,7 +517,6 @@ namespace ignite {
                 animationAsset->handle = animationHandle;
                 assetManager->AssignMetaData(animationHandle, animationMD);
                 assetManager->AssignAsset(animationHandle, animationAsset);
-                asset->animationHandles.push_back(animationHandle);
             }
 
             asset->handle = handle;
@@ -688,7 +686,6 @@ namespace ignite {
 
                 assetManager->AssignAsset(animationHandle, animation);
                 assetManager->AssignMetaData(animationHandle, animationMD);
-                asset->animationHandles.push_back(animationHandle);
             }
         }
 

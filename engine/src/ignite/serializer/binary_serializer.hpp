@@ -424,7 +424,7 @@ namespace ignite
 
 			ReadRaw(inFile, &mat->baseColorTextureHandle);
 			ReadRaw(inFile, &mat->emissiveTextureHandle);
-          ReadRaw(inFile, &mat->metallicTextureHandle);
+            ReadRaw(inFile, &mat->metallicTextureHandle);
             ReadRaw(inFile, &mat->roughnessTextureHandle);
 			ReadRaw(inFile, &mat->normalTextureHandle);
             ReadRaw(inFile, &mat->occlusionTextureHandle);
@@ -621,15 +621,6 @@ namespace ignite
                 AppendRaw(buffer, materialHandle);
             }
 
-            uint32_t animationCount = static_cast<uint32_t>(sm->animationHandles.size());
-            AppendRaw(buffer, animationCount);
-            for (const AssetHandle animationHandle : sm->animationHandles)
-            {
-                AppendRaw(buffer, animationHandle);
-            }
-
-            AppendRaw(buffer, sm->activeAnimationIndex);
-
             std::ofstream of(filepath, std::ios::binary);
             of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
             of.close();
@@ -698,19 +689,6 @@ namespace ignite
 
                 skeletalMesh->AddMeshInstance(meshInstance);
             }
-
-            uint32_t animationCount = 0;
-            ReadRaw(inFile, &animationCount);
-            skeletalMesh->animationHandles.resize(animationCount);
-            for (uint32_t i = 0; i < animationCount; ++i)
-            {
-                ReadRaw(inFile, &skeletalMesh->animationHandles[i]);
-            }
-
-            ReadRaw(inFile, &skeletalMesh->activeAnimationIndex);
-
-            bool willRemove = false;
-            ReadRaw(inFile, &willRemove);
 
             inFile.close();
             return skeletalMesh;

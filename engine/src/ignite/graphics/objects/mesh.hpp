@@ -172,9 +172,7 @@ namespace ignite
         void SetMeshInstance(const std::vector<Ref<MeshInstance>> &meshInstances) { m_MeshInstances = meshInstances; }
         void AddMeshInstance(const Ref<MeshInstance> &meshInstance) { m_MeshInstances.push_back(meshInstance); }
 
-        std::vector<AssetHandle> animationHandles;
         std::vector<glm::mat4> boneTransforms;
-        uint32_t activeAnimationIndex = 0;
 
     private:
         std::vector<Ref<MeshInstance>> m_MeshInstances;

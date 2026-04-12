@@ -17,7 +17,10 @@
 #include <algorithm>
 #include <ranges>
 #include <cstring>
+#include <mutex>
 #include <SDL3/SDL_dialog.h>
+
+#include <stb_image.h>
 
 namespace ignite
 {
@@ -770,6 +773,10 @@ namespace ignite
             if (it != s_SharedThumbnails.end() && it->second.thumbnail == nullptr)
             {
                 StartThumbnailLoad(filepath);
+            }
+            else
+            {
+                s_SharedThumbnailLoadsInFlight.erase(filepath);
             }
         }
 
@@ -1720,7 +1727,7 @@ namespace ignite
                     ImGui::SetDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM, &handle, sizeof(AssetHandle));
 
                     ImGui::Text("Asset %zu", (uint64_t)handle);
-                    ImGui::Text("%s", relativeAssetPath.filename().c_str());
+                    ImGui::Text("%s", relativeAssetPath.filename().string().c_str());
                 }
             }
 
@@ -1902,76 +1909,191 @@ namespace ignite
 
         m_AssetManager->SubmitJob([this, capturedPath, thumbnailSize, requestGeneration]()
         {
-            TextureCreateInfo createInfo;
-            createInfo.format = nvrhi::Format::RGBA8_UNORM;
-            createInfo.keepInitialState = true;
-            createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
-            createInfo.width = thumbnailSize;
-            createInfo.height = thumbnailSize;
-            createInfo.samplerAddressU = nvrhi::SamplerAddressMode::ClampToEdge;
-            createInfo.samplerAddressV = nvrhi::SamplerAddressMode::ClampToEdge;
-            createInfo.samplerAddressW = nvrhi::SamplerAddressMode::ClampToEdge;
-            createInfo.samplerLinearFiltering = false;
-
-            // Load texture data on worker thread (no command list yet)
-            Ref<Texture> loadedTexture = Texture::Create(capturedPath.string().c_str(), createInfo, nullptr);
-
-            // Submit to main thread to create command list and finalize GPU upload
-            Application::SubmitToRenderThread([this, capturedPath, loadedTexture, requestGeneration]() mutable
+            // -----------------------------------------------------------------------
+            // WORKER THREAD: Load raw CPU pixels only — NO GPU objects created here.
+            // -----------------------------------------------------------------------
+            if (requestGeneration != s_SharedThumbnailLoadGeneration)
             {
+                Application::SubmitToRenderThread([this, capturedPath]()
+                {
+                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                    s_SharedThumbnails.erase(capturedPath);
+                });
+                return;
+            }
+
+            constexpr int kChannels = 4;
+            int srcWidth = 0, srcHeight = 0, channelsOut = 0;
+
+            // stbi_load converts HDR/float images to 8-bit, which is fine for a small
+            // thumbnail preview and avoids the float-to-GPU-memory path entirely.
+            uint8_t *rawPixels = stbi_load(capturedPath.string().c_str(), &srcWidth, &srcHeight, &channelsOut, kChannels);
+
+            if (!rawPixels || srcWidth <= 0 || srcHeight <= 0)
+            {
+                if (rawPixels)
+                {
+                    stbi_image_free(rawPixels);
+                }
+
+                Application::SubmitToRenderThread([this, capturedPath]()
+                {
+                    s_SharedThumbnails.erase(capturedPath);
+                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                });
+                return;
+            }
+
+            // -----------------------------------------------------------------------
+            // KEY FIX: Downsample to thumbnail size on the CPU *before* uploading.
+            //
+            // The original code called Texture::Create(filepath, createInfo, nullptr)
+            // which ignores createInfo.width/height and loads the full resolution image
+            // (e.g. an 8K x 4K HDR = 128MB GPU allocation just for a 96px thumbnail).
+            // With many HDR files, this easily causes ~300-600 MB growth per reload cycle
+            // and the unload only freed the Ref but nvrhi deferred deletion kept them
+            // alive long enough for the next reload to stack on top.
+            // -----------------------------------------------------------------------
+            const int dstW = thumbnailSize;
+            const int dstH = thumbnailSize;
+            const uint64_t resizedSize = static_cast<uint64_t>(dstW) * dstH * kChannels;
+            Buffer resizedBuffer(resizedSize);
+
+            // Simple box-filter downsample — good enough for thumbnails and avoids
+            // pulling in stb_image_resize as an additional dependency.
+            {
+                uint8_t *src = rawPixels;
+                uint8_t *dst = resizedBuffer.As<uint8_t>();
+                const float xScale = static_cast<float>(srcWidth) / static_cast<float>(dstW);
+                const float yScale = static_cast<float>(srcHeight) / static_cast<float>(dstH);
+
+                for (int dy = 0; dy < dstH; ++dy)
+                {
+                    const int srcY0 = static_cast<int>(dy * yScale);
+                    const int srcY1 = static_cast<int>((dy + 1) * yScale);
+                    const int clampedSrcY1 = std::min(srcY1, srcHeight - 1);
+
+                    for (int dx = 0; dx < dstW; ++dx)
+                    {
+                        const int srcX0 = static_cast<int>(dx * xScale);
+                        const int srcX1 = static_cast<int>((dx + 1) * xScale);
+                        const int clampedSrcX1 = std::min(srcX1, srcWidth - 1);
+
+                        uint32_t r = 0, g = 0, b = 0, a = 0, count = 0;
+                        for (int sy = srcY0; sy <= clampedSrcY1; ++sy)
+                        {
+                            for (int sx = srcX0; sx <= clampedSrcX1; ++sx)
+                            {
+                                const uint8_t *px = src + (sy * srcWidth + sx) * kChannels;
+                                r += px[0]; g += px[1]; b += px[2]; a += px[3];
+                                ++count;
+                            }
+                        }
+                        if (count == 0) count = 1;
+                        uint8_t *p = dst + (dy * dstW + dx) * kChannels;
+                        p[0] = static_cast<uint8_t>(r / count);
+                        p[1] = static_cast<uint8_t>(g / count);
+                        p[2] = static_cast<uint8_t>(b / count);
+                        p[3] = static_cast<uint8_t>(a / count);
+                    }
+                }
+            }
+
+            stbi_image_free(rawPixels);
+            rawPixels = nullptr;
+
+            // -----------------------------------------------------------------------
+            // RENDER THREAD: Create GPU texture from the tiny downsampled buffer.
+            // GPU object creation happens here — never on a worker thread.
+            // -----------------------------------------------------------------------
+            Application::SubmitToRenderThread([this, capturedPath, resizedBuffer = std::move(resizedBuffer), dstW, dstH, requestGeneration]() mutable
+            {
+                // Drop early if cancelled
                 if (requestGeneration != s_SharedThumbnailLoadGeneration)
                 {
+                    resizedBuffer.Release();
+                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                    s_SharedThumbnails.erase(capturedPath);
+                    return;
+                }
+
+                auto thumbnailIt = s_SharedThumbnails.find(capturedPath);
+                if (thumbnailIt == s_SharedThumbnails.end() || !resizedBuffer)
+                {
+                    resizedBuffer.Release();
+                    s_SharedThumbnails.erase(capturedPath);
                     s_SharedThumbnailLoadsInFlight.erase(capturedPath);
                     return;
                 }
 
-                if (loadedTexture)
+                TextureCreateInfo createInfo;
+                createInfo.format = nvrhi::Format::RGBA8_UNORM;
+                createInfo.keepInitialState = true;
+                createInfo.keepCpuData = false;
+                createInfo.deferGpuCreate = false;
+                createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+                createInfo.width = static_cast<uint32_t>(dstW);
+                createInfo.height = static_cast<uint32_t>(dstH);
+                createInfo.samplerAddressU = nvrhi::SamplerAddressMode::ClampToEdge;
+                createInfo.samplerAddressV = nvrhi::SamplerAddressMode::ClampToEdge;
+                createInfo.samplerAddressW = nvrhi::SamplerAddressMode::ClampToEdge;
+                createInfo.samplerLinearFiltering = true;
+
+                nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+                nvrhi::CommandListHandle cmd = device->createCommandList();
+
+                // Build the texture from the pre-resized buffer (Buffer overload).
+                // createInfo.width/height ARE honoured by this constructor.
+                Ref<Texture> loadedTexture = Texture::Create(resizedBuffer, createInfo, nullptr);
+                resizedBuffer.Release();
+
+                if (!loadedTexture)
                 {
-                    nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-                    nvrhi::CommandListHandle cmd = device->createCommandList();
-
-                    {
-                        std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
-                        cmd->open();
-                        cmd->beginMarker("Content browser thumbnails creation");
-                        loadedTexture->SetData(cmd, 4);
-                        cmd->endMarker();
-                        cmd->close();
-                    }
-                    
-                    Application::SubmitWorkerCommandList(cmd, [this, loadedTexture, capturedPath, requestGeneration]()
-                    {
-                        if (requestGeneration != s_SharedThumbnailLoadGeneration)
-                        {
-                            s_SharedThumbnailLoadsInFlight.erase(capturedPath);
-                            return;
-                        }
-
-                        loadedTexture->SetReadyFlag(true);
-
-						FileThumbnail ft;
-						ft.thumbnail = loadedTexture;
-                      ft.lastFrameUsed = s_SharedCurrentFrame;
-
-						if (std::filesystem::exists(capturedPath))
-						{
-							ft.timestamp = std::filesystem::last_write_time(capturedPath).time_since_epoch().count();
-						}
-						else
-						{
-							ft.timestamp = 0;
-						}
-
-                        s_SharedThumbnails[capturedPath] = ft;
-                        s_SharedThumbnailLoadsInFlight.erase(capturedPath);
-                    });
-                }
-                else
-                {
-                    // Remove placeholder if loading failed
                     s_SharedThumbnails.erase(capturedPath);
                     s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                    return;
                 }
+
+                {
+                    std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
+                    cmd->open();
+                    cmd->beginMarker("Content browser thumbnails creation");
+                    loadedTexture->SetData(cmd, kChannels);
+                    cmd->endMarker();
+                    cmd->close();
+                }
+
+                Application::SubmitWorkerCommandList(cmd,
+                    [this, loadedTexture, capturedPath, requestGeneration]()
+                {
+                    // Drop the texture if the generation changed or the entry was evicted
+                    // while the command list was queued — do NOT re-insert it.
+                    if (requestGeneration != s_SharedThumbnailLoadGeneration)
+                    {
+                        s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                        return;
+                    }
+
+                    auto thumbnailIt = s_SharedThumbnails.find(capturedPath);
+                    if (thumbnailIt == s_SharedThumbnails.end())
+                    {
+                        s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                        return;
+                    }
+
+                    loadedTexture->SetReadyFlag(true);
+
+                    FileThumbnail ft;
+                    ft.thumbnail = loadedTexture;
+                    ft.lastFrameUsed = s_SharedCurrentFrame;
+                    ft.timestamp = std::filesystem::exists(capturedPath)
+                        ? std::filesystem::last_write_time(capturedPath).time_since_epoch().count()
+                        : 0;
+
+                    // Overwrite the placeholder that was inserted before the load started.
+                    thumbnailIt->second = ft;
+                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                });
             });
         });
     }
@@ -1994,9 +2116,16 @@ namespace ignite
             }
         }
         
-        // Unload the thumbnails
+        // Unload the thumbnails — erase from the map FIRST so that any in-flight
+        // SubmitWorkerCommandList callbacks that fire after this point will find no
+        // entry in s_SharedThumbnails and will safely drop their loadedTexture Ref
+        // instead of re-inserting a freshly uploaded texture into an evicted slot.
         for (const auto& path : toUnload)
         {
+            // Cancel in-flight loads for this path so the callback knows to drop the texture.
+            s_SharedThumbnailLoadsInFlight.erase(path);
+            // Erase the map entry. Dropping the Ref<Texture> here releases the CPU buffer
+            // and allows the GPU resource ref-count to fall to zero once the GPU is done.
             s_SharedThumbnails.erase(path);
         }
     }

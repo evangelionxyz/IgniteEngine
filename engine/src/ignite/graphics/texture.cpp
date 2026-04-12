@@ -640,7 +640,8 @@ namespace ignite
 
         if (!m_CreateInfo.keepCpuData)
         {
-            m_PreparedMipChain.clear();
+            // Release mip chain capacity, not just the elements.
+            std::vector<MipLevelData>().swap(m_PreparedMipChain);
             m_UploadDataPrepared = false;
             m_Buffer.Release();
         }
