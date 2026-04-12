@@ -91,6 +91,11 @@ namespace ignite
         m_PreviewMesh = mesh;
     }
 
+    void AssetSceneRenderer::SetBoneTransforms(const std::vector<glm::mat4> &boneTransforms)
+    {
+        m_BoneTransforms = boneTransforms;
+    }
+
     void AssetSceneRenderer::SetEnvironmentTexture(const Ref<Texture> &texture)
     {
         m_EnvironmentTexture = texture ? texture : Renderer::GetBlackTexture();
@@ -279,6 +284,11 @@ namespace ignite
             const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
             gpuData.normal = glm::mat4(normalMat3);
             std::fill(std::begin(gpuData.boneTransforms), std::end(gpuData.boneTransforms), glm::mat4(1.0f));
+            const size_t transformCount = std::min(static_cast<size_t>(MAX_BONES), m_BoneTransforms.size());
+            for (size_t i = 0; i < transformCount; ++i)
+            {
+                gpuData.boneTransforms[i] = m_BoneTransforms[i];
+            }
             m_PerEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(SkinnedMesh_GPUData)));
 
             state.bindings = { m_MeshBindingSet, m_RuntimeMaterial->GetBindingSet() };

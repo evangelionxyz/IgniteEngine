@@ -1,8 +1,0 @@
-Material2D:
-  Version: Alpha-0.1
-  Name: ROCK_01
-  TextureHandle: 8598032598345587515
-  BaseColor: [1, 1, 1, 1]
-  AdditiveColor: [0, 0, 0, 0]
-  TilingFactor: [1, 1]
-  Type: 1

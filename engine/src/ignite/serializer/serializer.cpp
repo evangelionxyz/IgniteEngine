@@ -148,9 +148,9 @@ namespace ignite
                 }
 
                 // Directional Light
-                if (entity.HasComponent<DirectionalLight>())
+                if (entity.HasComponent<DirectionalLightComponent>())
                 {
-                    const DirectionalLight &comp = entity.GetComponent<DirectionalLight>();
+                    const DirectionalLightComponent &comp = entity.GetComponent<DirectionalLightComponent>();
                     sr.BeginMap("DirectionalLight");
                     {
                         sr.AddKeyValue("Color", comp.color);
@@ -345,6 +345,8 @@ namespace ignite
                     sr.BeginMap("SkeletalMesh");
                     {
                         sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
+                        sr.AddKeyValue("AnimatorHandle", static_cast<uint64_t>(comp.animatorHandle));
+                        sr.AddKeyValue("CurrentState", comp.currentStateName);
                     }
                     sr.EndMap();
                 }
@@ -666,7 +668,9 @@ namespace ignite
                 auto &comp = desEntity.AddComponent<CameraComponent>();
                 comp.camera.projectionType = static_cast<ProjectionType>(node["ProjectionType"].as<int>());
                 if (node["AspectRatioPreset"])
+                {
                     comp.camera.SetAspectRatioPreset(static_cast<SceneCamera::AspectRatioPreset>(node["AspectRatioPreset"].as<int>()));
+                }
                 
                 if (auto n = node["OrthoSize"]) comp.camera.orthoSize = n.as<float>();
                 if (auto n = node["NearClip"]) comp.camera.nearPlane = n.as<float>();
@@ -702,6 +706,9 @@ namespace ignite
                     if (auto n = ppNode["AoIntensity"]) pp.aoIntensity = n.as<float>();
                     if (auto n = ppNode["AoPower"]) pp.aoPower = n.as<float>();
                 }
+
+                comp.camera.UpdateView();
+                comp.camera.UpdateProjection(1280.0f, 720.0f);
             }
 
             // Sprite 2D component
@@ -872,7 +879,7 @@ namespace ignite
             // Directional Light component
             if (YAML::Node node = entityNode["DirectionalLight"])
             {
-                auto &comp = desEntity.AddComponent<DirectionalLight>();
+                auto &comp = desEntity.AddComponent<DirectionalLightComponent>();
                 if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
                 if (auto n = node["Intensity"]) comp.intensity = n.as<float>();
                 if (auto n = node["AngularRadius"]) comp.angularRadius = n.as<float>();
@@ -1001,6 +1008,14 @@ namespace ignite
             {
                 auto &comp = desEntity.AddComponent<SkeletalMeshComponent>();
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
+                if (auto n = node["AnimatorHandle"])
+                {
+                    comp.animatorHandle = AssetHandle(n.as<uint64_t>());
+                }
+                if (auto n = node["CurrentState"])
+                {
+                    comp.currentStateName = n.as<std::string>();
+                }
             }
 
             // Script

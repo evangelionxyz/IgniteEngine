@@ -19,6 +19,7 @@ namespace ignite
         void BeginFrame();
         void SetMaterial(const Ref<Material> &material);
         void SetPreviewMesh(const Ref<StaticMesh> &mesh);
+        void SetBoneTransforms(const std::vector<glm::mat4> &boneTransforms);
         void SetEnvironmentTexture(const Ref<Texture> &texture);
         void SetProject(Project *project);
 
@@ -48,6 +49,8 @@ namespace ignite
 
         std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_GeometryPipelineCache;
         std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_CompositePipelineCache;
+
+        std::vector<glm::mat4> m_BoneTransforms;
 
         Scene_GPUData m_SceneGPUData;
         CascadedShadowMap_GPUData m_CSMGPUData;

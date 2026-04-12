@@ -65,6 +65,11 @@ namespace ignite
         std::unordered_map<nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> graphicsPipelines;
         std::unordered_map<nvrhi::ITexture *, nvrhi::BindingSetHandle> bindingsCache;
 
+        // Called from Texture::~Texture() to evict a destroyed GPU texture handle
+        // from the binding cache before its pointer address can be reused.
+        static void InvalidateTextureCache(nvrhi::ITexture *texture);
+        static ImGui_NVRHI *s_Instance;
+
         std::vector<ImGuiVertexData> imguiVertexBuffer;
         std::vector<ImDrawIdx> imguiIndexBuffer;
 

@@ -7,7 +7,7 @@
 #include "icomponent.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/animation/animation_2d.hpp"
-#include "ignite/animation/animator_controller_2d.hpp"
+#include "ignite/animation/animator/animator_controller_2d.hpp"
 #include "ignite/core/uuid.hpp"
 #include "ignite/graphics/objects/material.hpp"
 #include "ignite/graphics/objects/material_2d.hpp"
@@ -311,10 +311,10 @@ namespace ignite
         COMPONENT_CLASS_TYPE(CompType_Transform)
     };
 
-    class DirectionalLight : public IComponent
+    class DirectionalLightComponent : public IComponent
     {
     public:
-        DirectionalLight() = default;
+        DirectionalLightComponent() = default;
 
         glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
         float intensity = 0.5f;
@@ -426,7 +426,12 @@ namespace ignite
 	class SkeletalMeshComponent : public IComponent
 	{
 	public:
-        AssetHandle handle = AssetHandle(0); // class SkeletalMesh in mesh.h
+        AssetHandle handle = AssetHandle(0);         // class SkeletalMesh in mesh.hpp
+        AssetHandle animatorHandle = AssetHandle(0); // AnimatorController in animator_controller.hpp
+
+        std::string currentStateName;
+        float stateElapsed = 0.0f;
+        float stateNormalized = 0.0f;
 
         Ref<ConstantBuffer> perEntityBuffer;
         nvrhi::BindingSetHandle meshBindingSet = nullptr; // Cached binding set - reused across frames

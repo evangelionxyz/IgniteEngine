@@ -13,12 +13,14 @@
 
 #include <future>
 #include <optional>
+#include <unordered_set>
 
 namespace ignite
 {
     class ShaderFactory;
     class ScenePanel;
     class AssetImporterPanel;
+    class AssetEditorPanel;
     class ContentBrowserPanel;
 
     class EditorLayer final : public Layer
@@ -80,6 +82,7 @@ namespace ignite
         Ref<Project> GetActiveProject() const { return m_ActiveProject; }
 
         SceneRenderer *GetSceneRenderer() { return m_SceneRenderer.get(); }
+        uint32_t GetActiveDockspaceID() const { return m_ActiveEditorDockspaceId; }
 
         EditorState &GetState() { return m_State; }
     private:
@@ -93,6 +96,9 @@ namespace ignite
         static void OnProjectFolderSelected(void *userData, const char *const *filelist, int filter);
 
         void ProcessPendingFileLoading();
+        void AddContentBrowserPanel();
+        void ReloadContentBrowserPanels();
+        uint32_t GetOpenContentBrowserCount() const;
 
         void UIProjectCreation();
         void UISettings();
@@ -100,6 +106,8 @@ namespace ignite
         ScenePanel *m_ScenePanel;
         AssetImporterPanel *m_AssetImporterPanel;
         ContentBrowserPanel *m_ContentBrowserPanel;
+        AssetEditorPanel *m_AssetEditorPanel;
+        std::vector<ContentBrowserPanel *> m_ContentBrowserPanels;
 
         Ref<SceneRenderer> m_SceneRenderer;
 
@@ -130,6 +138,10 @@ namespace ignite
         AssetHandle m_CurrentSceneHandle = AssetHandle(0);
 
         std::queue<PendingFileLoading> m_PendingFileLoading;
+        uint32_t m_PendingContentBrowserPanelsToAdd = 0;
+        std::unordered_set<ContentBrowserPanel *> m_ContentBrowserPanelsPendingRemoval;
+        uint32_t m_NextContentBrowserPanelId = 1;
+        uint32_t m_ActiveEditorDockspaceId = 0;
 
         friend class ScenePanel;
         friend class AssetImporterPanel;

@@ -87,6 +87,8 @@ namespace
 
 namespace ignite
 {
+    ImGui_NVRHI *ImGui_NVRHI::s_Instance = nullptr;
+
     struct ImGuiPushConstants
     {
         f32 invDisplaySize[2];
@@ -140,6 +142,7 @@ namespace ignite
     bool ImGui_NVRHI::Init(nvrhi::IDevice *device)
     {
         m_Device = device;
+        s_Instance = this;
         commandList = device->createCommandList(
             nvrhi::CommandListParameters()
                 .setEnableImmediateExecution(false)
@@ -417,6 +420,13 @@ namespace ignite
         return binding;
     }
 
+    void ImGui_NVRHI::InvalidateTextureCache(nvrhi::ITexture *texture)
+    {
+        if (!s_Instance || !texture)
+            return;
+        s_Instance->bindingsCache.erase(texture);
+    }
+
     bool ImGui_NVRHI::UpdateGeometry(nvrhi::ICommandList *commandList, ImDrawData *drawData)
     {
         // Calculate size needed for expanded vertices
@@ -527,6 +537,7 @@ namespace ignite
         indexBuffer = nullptr;
 
         commandList = nullptr;
+        s_Instance = nullptr;
     }
 
 #ifdef IGNITE_WITH_VULKAN

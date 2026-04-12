@@ -46,7 +46,7 @@ namespace ignite
 
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer);
-        void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer,
+        void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, const PostProcessing &postProcessing, nvrhi::IFramebuffer *framebuffer,
             Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture = nullptr,
             Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr);
 

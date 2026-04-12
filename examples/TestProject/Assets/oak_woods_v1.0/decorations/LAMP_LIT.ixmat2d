@@ -1,8 +1,0 @@
-Material2D:
-  Version: Alpha-0.1
-  Name: LAMP_LIT
-  TextureHandle: 14453045701345899493
-  BaseColor: [1, 1, 1, 1]
-  AdditiveColor: [0, 0, 0, 0]
-  TilingFactor: [1, 1]
-  Type: 1

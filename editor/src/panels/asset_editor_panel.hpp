@@ -22,7 +22,9 @@ namespace ignite
     class AnimationMontage;
     class BlendSpace;
     class LocomotionController;
+    class AnimatorController;
     class AnimatorController2D;
+    class Skeleton;
 
 	class AssetEditorPanel : public IPanel
     {
@@ -33,6 +35,7 @@ namespace ignite
         virtual void OnAttach() override;
         virtual void OnDetach() override;
 
+        virtual void OnUpdate(float deltaTime) override;
         virtual void OnRender(nvrhi::IFramebuffer *framebuffer) override;
 
         virtual void OnGuiRender() override;
@@ -91,12 +94,19 @@ namespace ignite
 
         void RenderAnimatorController2DEditor(AssetEditorData &assetData);
         void RenderAnimatorController2DEditor(const Ref<AnimatorController2D> &controller);
+
+        void RenderSkeletalSkeletonEditor(const Ref<Skeleton> &skeleton, EditorSceneData &sceneData);
+        void RenderSkeletalSkeletonEditor(AssetEditorData &assetData);
         
         void RenderSkeletalAnimationEditor(const Ref<SkeletalAnimation> &animation);
         void RenderSkeletalAnimationEditor(AssetEditorData &assetData);
         
+        void RenderAnimatorControllerEditor(AssetEditorData &assetData);
+        void RenderAnimatorControllerEditor(const Ref<AnimatorController> &animator);
+
         void RenderAnimationMontageEditor(AssetEditorData &assetData);
         void RenderAnimationMontageEditor(const Ref<AnimationMontage> &montage);
+
         void RenderTextureEditor(AssetEditorData &assetData);
         void RenderTextureEditor(AssetEditorData &assetData, const Ref<Texture> &texture);
         
@@ -112,7 +122,7 @@ namespace ignite
         bool SaveAsset(AssetEditorData &assetData);
         void RenderCreateAssetPopup();
         void InitializeSceneData(AssetEditorData &assetData);
-        void UpdateMaterialPreviewCamera(EditorSceneData &sceneData, float deltaTime);
+        void UpdateSceneCamera(EditorSceneData &sceneData, float deltaTime);
         std::filesystem::path BuildUniqueAssetPath(const std::filesystem::path &baseDirectory, const std::string &baseName, const std::string &extension) const;
 
         std::vector<AssetEditorData> m_Assets;

@@ -49,6 +49,8 @@ namespace ignite
         explicit ContentBrowserPanel(const char *windowTitle, EditorLayer *editor);
         virtual ~ContentBrowserPanel() override;
 
+        static void ReleaseSharedResources();
+
         virtual void OnGuiRender() override;
         virtual void OnUpdate(float deltaTime) override;
 
@@ -95,8 +97,8 @@ namespace ignite
         AssetEditorPanel *m_AssetEditorPanel;
         AssetManager *m_AssetManager = nullptr;
 
-        int m_ThumbnailSize = 64;
-        int m_LastThumbnailSize = 64;
+        int m_ThumbnailSize = 96;
+        int m_LastThumbnailSize = 96;
 
         std::filesystem::path m_BaseDirectory;
         std::filesystem::path m_CurrentDirectory;
@@ -114,6 +116,14 @@ namespace ignite
         
         uint64_t m_CurrentFrame = 0;
         static constexpr uint64_t s_ThumbnailUnloadFrameThreshold = 300; // Unload after 5 seconds at 60fps
+
+        static uint32_t s_InstanceCount;
+        static std::unordered_map<std::string, Ref<Texture>> s_SharedIcons;
+        static std::unordered_map<std::filesystem::path, FileThumbnail> s_SharedThumbnails;
+        static std::queue<std::filesystem::path> s_SharedPendingThumbnailLoads;
+        static std::unordered_set<std::filesystem::path> s_SharedThumbnailLoadsInFlight;
+        static uint64_t s_SharedThumbnailLoadGeneration;
+        static uint64_t s_SharedCurrentFrame;
         
         bool m_NeedsRefresh = false;
 

@@ -1,8 +1,0 @@
-Material2D:
-  Version: Alpha-0.1
-  Name: SHOP_LIT
-  TextureHandle: 1274032632334616296
-  BaseColor: [1, 1, 1, 1]
-  AdditiveColor: [0, 0, 0, 0]
-  TilingFactor: [1, 1]
-  Type: 1

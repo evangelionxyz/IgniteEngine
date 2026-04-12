@@ -103,6 +103,9 @@ namespace ignite
         virtual AssetType GetAssetType() override { return GetStaticType(); }
 
     private:
+        void UpdateAnimations(float deltaTime);
+
+    private:
         SceneRenderer *m_SceneRenderer;
         Ref<ConstantBuffer> m_SceneGPUDataBuffer;
         Ref<ConstantBuffer> m_CSMGPUDataBuffer;

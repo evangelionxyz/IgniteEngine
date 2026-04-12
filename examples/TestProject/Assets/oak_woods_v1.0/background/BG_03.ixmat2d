@@ -1,8 +1,0 @@
-Material2D:
-  Version: Alpha-0.1
-  Name: BG_03
-  TextureHandle: 16006657743572200641
-  BaseColor: [1, 1, 1, 1]
-  AdditiveColor: [0, 0, 0, 0]
-  TilingFactor: [1, 1]
-  Type: 1

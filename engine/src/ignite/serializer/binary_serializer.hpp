@@ -64,6 +64,15 @@ namespace ignite
         float    localTransform[16]; // column‑major 4×4
     };
 
+    struct DiskSocket
+    {
+        uint32_t nameOffset;
+        int32_t parentId;
+        float translation[3];
+        float rotation[4]; // x, y, z, w
+        float scale[3];
+    };
+
     class BinarySerializer
     {
     public:
@@ -415,7 +424,7 @@ namespace ignite
 
 			ReadRaw(inFile, &mat->baseColorTextureHandle);
 			ReadRaw(inFile, &mat->emissiveTextureHandle);
-          ReadRaw(inFile, &mat->metallicTextureHandle);
+            ReadRaw(inFile, &mat->metallicTextureHandle);
             ReadRaw(inFile, &mat->roughnessTextureHandle);
 			ReadRaw(inFile, &mat->normalTextureHandle);
             ReadRaw(inFile, &mat->occlusionTextureHandle);
@@ -612,16 +621,6 @@ namespace ignite
                 AppendRaw(buffer, materialHandle);
             }
 
-            uint32_t animationCount = static_cast<uint32_t>(sm->animationHandles.size());
-            AppendRaw(buffer, animationCount);
-            for (const AssetHandle animationHandle : sm->animationHandles)
-            {
-                AppendRaw(buffer, animationHandle);
-            }
-
-            AppendRaw(buffer, sm->activeAnimationIndex);
-            AppendRaw(buffer, sm->isPlaying);
-
             std::ofstream of(filepath, std::ios::binary);
             of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
             of.close();
@@ -690,17 +689,6 @@ namespace ignite
 
                 skeletalMesh->AddMeshInstance(meshInstance);
             }
-
-            uint32_t animationCount = 0;
-            ReadRaw(inFile, &animationCount);
-            skeletalMesh->animationHandles.resize(animationCount);
-            for (uint32_t i = 0; i < animationCount; ++i)
-            {
-                ReadRaw(inFile, &skeletalMesh->animationHandles[i]);
-            }
-
-            ReadRaw(inFile, &skeletalMesh->activeAnimationIndex);
-            ReadRaw(inFile, &skeletalMesh->isPlaying);
 
             inFile.close();
             return skeletalMesh;
@@ -910,6 +898,17 @@ namespace ignite
                 }
             }
 
+            for (const JointSocket &socket : skeleton->sockets)
+            {
+                if (!nameOffsets.contains(socket.name))
+                {
+                    uint32_t offset = static_cast<uint32_t>(stringTable.size());
+                    nameOffsets[socket.name] = offset;
+                    stringTable += socket.name;
+                    stringTable += '\0';
+                }
+            }
+
             for (const Joint &joint : skeleton->joints)
             {
                 DiskJoint dj{};
@@ -929,6 +928,31 @@ namespace ignite
             AppendRaw(buffer, stringSize);
 
 			AppendBytes(buffer, stringTable.data(), stringSize);
+
+            // sockets
+            uint32_t socketCount = static_cast<uint32_t>(skeleton->sockets.size());
+            AppendRaw(buffer, socketCount);
+            for (const JointSocket &socket : skeleton->sockets)
+            {
+                DiskSocket ds{};
+                ds.nameOffset = nameOffsets[socket.name];
+                ds.parentId = socket.parentJointId;
+
+                ds.translation[0] = socket.localTranslation.x;
+                ds.translation[1] = socket.localTranslation.y;
+                ds.translation[2] = socket.localTranslation.z;
+
+                ds.rotation[0] = socket.localRotation.x;
+                ds.rotation[1] = socket.localRotation.y;
+                ds.rotation[2] = socket.localRotation.z;
+                ds.rotation[3] = socket.localRotation.w;
+
+                ds.scale[0] = socket.localScale.x;
+                ds.scale[1] = socket.localScale.y;
+                ds.scale[2] = socket.localScale.z;
+
+                AppendRaw(buffer, ds);
+            }
 
             // Write to file
             std::ofstream of(filepath, std::ios::binary);
@@ -988,6 +1012,38 @@ namespace ignite
                 skeleton->joints.push_back(std::move(joint));
 
                 skeleton->nameToJointMap[jointName] = joint.id;
+            }
+
+            if (inFile.peek() != EOF)
+            {
+                uint32_t socketCount = 0;
+                ReadRaw(inFile, &socketCount);
+
+                std::vector<DiskSocket> diskSockets(socketCount);
+                if (socketCount > 0)
+                {
+                    ReadRaw(inFile, diskSockets.data(), sizeof(DiskSocket) * socketCount);
+                }
+
+                skeleton->sockets.reserve(socketCount);
+                for (const DiskSocket &ds : diskSockets)
+                {
+                    if (ds.nameOffset >= stringTableSize)
+                    {
+                        continue;
+                    }
+
+                    const char *socketNamePtr = stringTable.data() + ds.nameOffset;
+                    JointSocket socket{};
+                    socket.name = std::string(socketNamePtr);
+                    socket.parentJointId = ds.parentId;
+                    socket.localTranslation = glm::vec3(ds.translation[0], ds.translation[1], ds.translation[2]);
+                    socket.localRotation = glm::quat(ds.rotation[3], ds.rotation[0], ds.rotation[1], ds.rotation[2]);
+                    socket.localScale = glm::vec3(ds.scale[0], ds.scale[1], ds.scale[2]);
+
+                    skeleton->socketNameToIndex[socket.name] = static_cast<int32_t>(skeleton->sockets.size());
+                    skeleton->sockets.push_back(std::move(socket));
+                }
             }
 
             inFile.close();
