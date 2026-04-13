@@ -64,12 +64,16 @@ namespace ignite
         ISceneRenderer();
         virtual ~ISceneRenderer();
 
+        virtual void OnUpdate(float deltaTime) { };
+
         virtual void Resize(uint32_t width, uint32_t height);
         virtual Ref<Texture> GetEnvironmentMapColorTexture() const;
         virtual Ref<Texture> GetCascadedShadowMapDepthTexture() const;
         virtual Ref<CascadedShadowMap> GetCascadedShadowMap();
 
     protected:
+        void EnsureCompositeVertexBufferUploaded(nvrhi::ICommandList *cmd);
+
         Ref<CascadedShadowMap> m_CascadedShadowMap;
 
         Ref<VertexBuffer> m_CompositeVertexBuffer;
@@ -89,10 +93,9 @@ namespace ignite
 
         nvrhi::IDevice *m_Device = nullptr;
         Ref<Scene> m_Scene;
-
-        
-
+        Project *m_Project = nullptr;
         bool m_Has2DPreRenderCache = false;
+        bool m_CompositeVertexBufferUploadPending = true;
     };
 }
 

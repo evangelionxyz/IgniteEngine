@@ -326,27 +326,13 @@ namespace ignite
 					sr.EndMap();
 				}
 
-				// Static Mesh
-				if (entity.HasComponent<StaticMeshComponent>())
-				{
-					const auto &comp = entity.GetComponent<StaticMeshComponent>();
-					sr.BeginMap("StaticMesh");
-					{
-						sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
-						sr.AddKeyValue("MaterialHandle", static_cast<uint64_t>(comp.materialHandle));
-					}
-					sr.EndMap();
-				}
-
-                // skinned mesh
-                if (entity.HasComponent<SkeletalMeshComponent>())
+                // Mesh
+                if (entity.HasComponent<MeshComponent>())
                 {
-                    const auto &comp = entity.GetComponent<SkeletalMeshComponent>();
-                    sr.BeginMap("SkeletalMesh");
+                    const auto &comp = entity.GetComponent<MeshComponent>();
+                    sr.BeginMap("Mesh");
                     {
                         sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
-                        sr.AddKeyValue("AnimatorHandle", static_cast<uint64_t>(comp.animatorHandle));
-                        sr.AddKeyValue("CurrentState", comp.currentStateName);
                     }
                     sr.EndMap();
                 }
@@ -620,7 +606,12 @@ namespace ignite
 
     Ref<Scene> SceneSerializer::Deserialize(const std::filesystem::path &filepath, Project *project)
     {
-        LOG_ASSERT(std::filesystem::exists(filepath), "[Scene SR] File does not exists!\n{}", filepath.generic_string());
+        if (!std::filesystem::exists(filepath))
+        {
+            LOG_ERROR("[Scene SR] File does not exists!\n{}", filepath.generic_string());
+            return nullptr;
+        }
+
         LOG_ASSERT(project, "[Scene SR] Invalid project");
 
         YAML::Node sceneFileNode = Serializer::Deserialize(filepath);
@@ -990,32 +981,10 @@ namespace ignite
                 }
             }
 
-            // Static Mesh
-            if (YAML::Node node = entityNode["StaticMesh"])
+            if (YAML::Node node = entityNode["Mesh"])
             {
-                auto &comp = desEntity.AddComponent<StaticMeshComponent>();
-                if (auto n = node["Handle"])
-                {
-                    comp.handle = AssetHandle(n.as<uint64_t>());
-                }
-                if (auto n = node["MaterialHandle"])
-                {
-                    comp.materialHandle = AssetHandle(n.as<uint64_t>());
-                }
-            }
-
-            if (YAML::Node node = entityNode["SkeletalMesh"])
-            {
-                auto &comp = desEntity.AddComponent<SkeletalMeshComponent>();
+                auto &comp = desEntity.AddComponent<MeshComponent>();
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
-                if (auto n = node["AnimatorHandle"])
-                {
-                    comp.animatorHandle = AssetHandle(n.as<uint64_t>());
-                }
-                if (auto n = node["CurrentState"])
-                {
-                    comp.currentStateName = n.as<std::string>();
-                }
             }
 
             // Script

@@ -28,25 +28,18 @@
 
 namespace ignite
 {
-    enum CompType : u8
+    enum CompType : uint8_t
     {
         CompType_Invalid = 0,
         CompType_ID,
         CompType_Transform,
-        
         CompType_Camera,
-        
         CompType_Sprite2D,
         CompType_Circle2D,
         CompType_PointLight2D,
-
         CompType_Font,
-
-        CompType_SkeletalMesh,
-        CompType_StaticMesh,
-
+        CompType_Mesh,
         CompType_DirectionalLight,
-        
         CompType_BoxCollider2D,
         CompType_CircleCollider2D,
         CompType_Rigidbody2D,

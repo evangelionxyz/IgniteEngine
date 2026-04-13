@@ -272,7 +272,7 @@ namespace ignite
         return ctrl;
     }
 
-    bool AnimatorController::UpdateSkeleton(float deltaTime, AnimatorControllerRuntime &runtime, AssetManager *assetManager, std::vector<glm::mat4> &outBoneTransforms)
+    bool AnimatorController::UpdateSkeleton(float deltaTime, AnimatorControllerRuntime &runtime, AssetManager *assetManager)
     {
         if (!assetManager || skeletonHandle == AssetHandle(0))
             return false;
@@ -355,8 +355,6 @@ namespace ignite
         }
 
         skeleton->UpdateGlobalTransforms();
-        outBoneTransforms = skeleton->GetFinalJointTransforms();
-
         return true;
     }
 

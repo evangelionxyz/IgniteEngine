@@ -42,8 +42,6 @@ namespace ignite
         samplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp);
         m_CompositeSampler = m_Device->createSampler(samplerDesc);
 
-        nvrhi::CommandListHandle cmd = m_Device->createCommandList();
-
         std::array vertices
         {
             VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
@@ -57,11 +55,6 @@ namespace ignite
 
         m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
 
-        cmd->open();
-        m_CompositeVertexBuffer->SetData(cmd, Buffer(vertices.data(), sizeof(vertices)));
-        cmd->close();
-        Application::SubmitWorkerCommandList(cmd);
-
         m_Renderer2D = Renderer2D::Create();
         m_UIRenderer = UIRenderer::Create(1280, 720);
         m_UIRenderer->SetUIManager(&UIManager::GetInstance());
@@ -73,6 +66,28 @@ namespace ignite
         m_SSAO = CreateRef<SSAO>(1280, 720);
 
         m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
+    }
+
+    void ISceneRenderer::EnsureCompositeVertexBufferUploaded(nvrhi::ICommandList *cmd)
+    {
+        if (!m_CompositeVertexBufferUploadPending || !cmd || !m_CompositeVertexBuffer)
+        {
+            return;
+        }
+
+        const std::array vertices
+        {
+            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+            VertexScreen{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },
+            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
+
+            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
+            VertexScreen{ {  1.0f, -1.0f }, { 1.0f, 1.0f } },
+            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+        };
+
+        m_CompositeVertexBuffer->SetData(cmd, Buffer((void *)vertices.data(), sizeof(vertices)));
+        m_CompositeVertexBufferUploadPending = false;
     }
 
     ISceneRenderer::~ISceneRenderer()

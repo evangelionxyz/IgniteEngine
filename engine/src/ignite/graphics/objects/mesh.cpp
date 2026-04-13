@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "mesh.hpp"
 #include "ignite/core/time.hpp"
@@ -32,9 +11,11 @@
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
+#include "ignite/serializer/binary_serializer.hpp"
 
 #include <algorithm>
 #include <cctype>
+#include <limits>
 #include <mutex>
 #include <set>
 
@@ -50,6 +31,86 @@ namespace ignite
 
     namespace
     {
+        static AABB CalculateAABB(const std::vector<VertexMesh_Anim> &vertices)
+        {
+            AABB bounds;
+            if (vertices.empty())
+            {
+                return bounds;
+            }
+
+            bounds.min = vertices.front().position;
+            bounds.max = vertices.front().position;
+
+            for (const VertexMesh_Anim &vertex : vertices)
+            {
+                bounds.min = glm::min(bounds.min, vertex.position);
+                bounds.max = glm::max(bounds.max, vertex.position);
+            }
+
+            return bounds;
+        }
+
+        static void ExpandAABB(AABB &bounds, const glm::vec3 &point)
+        {
+            bounds.min = glm::min(bounds.min, point);
+            bounds.max = glm::max(bounds.max, point);
+        }
+
+        static AABB TransformAABB(const AABB &bounds, const glm::mat4 &transform)
+        {
+            AABB transformed;
+            const glm::vec3 corners[8] =
+            {
+                { bounds.min.x, bounds.min.y, bounds.min.z },
+                { bounds.max.x, bounds.min.y, bounds.min.z },
+                { bounds.min.x, bounds.max.y, bounds.min.z },
+                { bounds.max.x, bounds.max.y, bounds.min.z },
+                { bounds.min.x, bounds.min.y, bounds.max.z },
+                { bounds.max.x, bounds.min.y, bounds.max.z },
+                { bounds.min.x, bounds.max.y, bounds.max.z },
+                { bounds.max.x, bounds.max.y, bounds.max.z },
+            };
+
+            transformed.min = glm::vec3(std::numeric_limits<float>::max());
+            transformed.max = glm::vec3(std::numeric_limits<float>::lowest());
+
+            for (const glm::vec3 &corner : corners)
+            {
+                const glm::vec4 world = transform * glm::vec4(corner, 1.0f);
+                ExpandAABB(transformed, glm::vec3(world));
+            }
+
+            return transformed;
+        }
+
+        static AABB CalculateSceneAABB(const std::vector<Ref<MeshInstance>> &meshes)
+        {
+            AABB bounds;
+            bool hasBounds = false;
+
+            for (const Ref<MeshInstance> &mesh : meshes)
+            {
+                if (!mesh || !mesh->GetPrimitive() || mesh->GetPrimitive()->vertices.empty())
+                {
+                    continue;
+                }
+
+                const AABB meshBounds = TransformAABB(mesh->GetPrimitive()->aabb, mesh->global);
+                if (!hasBounds)
+                {
+                    bounds = meshBounds;
+                    hasBounds = true;
+                    continue;
+                }
+
+                ExpandAABB(bounds, meshBounds.min);
+                ExpandAABB(bounds, meshBounds.max);
+            }
+
+            return bounds;
+        }
+
         static bool Mat4NearEqual(const glm::mat4 &a, const glm::mat4 &b, const float epsilon = 0.0001f)
         {
             for (int c = 0; c < 4; ++c)
@@ -68,6 +129,18 @@ namespace ignite
         static glm::vec3 ExtractTranslation(const glm::mat4 &m)
         {
             return { m[3][0], m[3][1], m[3][2] };
+        }
+
+        // Scales only the translation column of a matrix by the given factor.
+        // Used to convert FBX-native units (e.g. cm) to engine units (m) without
+        // touching the rotation or scale components.
+        static glm::mat4 ScaleTranslation(const glm::mat4 &m, float s)
+        {
+            glm::mat4 result = m;
+            result[3][0] *= s;
+            result[3][1] *= s;
+            result[3][2] *= s;
+            return result;
         }
 
         static glm::mat4 ToGlmMatrix(const FbxAMatrix &matrix)
@@ -361,7 +434,7 @@ namespace ignite
             return glm::translate(glm::mat4(1.0f), translation) * glm::toMat4(rotation) * glm::scale(glm::mat4(1.0f), scale);
         }
 
-        
+
 
         static void AddBoneInfluence(FBXMeshLoader::FBXBoneInfluence &influence, uint32_t boneId, float weight)
         {
@@ -411,6 +484,7 @@ namespace ignite
     MeshPrimitive::MeshPrimitive(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices)
         : vertices(vertices), indices(indices)
     {
+        RecalculateAABB();
     }
 
     MeshPrimitive::~MeshPrimitive()
@@ -448,6 +522,12 @@ namespace ignite
     {
         vertices.clear();
         indices.clear();
+        aabb = {};
+    }
+
+    void MeshPrimitive::RecalculateAABB()
+    {
+        aabb = CalculateAABB(vertices);
     }
 
     // Mesh Instance class
@@ -495,28 +575,23 @@ namespace ignite
         return CreateRef<MeshInstance>(node, mesh);
 	}
 
-	// ===================================
-    // Static Mesh
-    // ===================================
-    Ref<StaticMesh> StaticMesh::Create()
+    Ref<Mesh> Mesh::Create()
     {
-        return CreateRef<StaticMesh>();
+        return CreateRef<Mesh>();
     }
 
-    StaticMesh::~StaticMesh()
+    bool Mesh::Serialize(const std::filesystem::path &filepath)
     {
-        m_MeshInstances.clear();
+        BinarySerializer::SerializeMesh(this, filepath);
+        return true;
     }
 
-    // ===================================
-    // Skeletal Mesh
-    // ===================================
-    Ref<SkeletalMesh> SkeletalMesh::Create()
+    Ref<Mesh> Mesh::Deserialize(const std::filesystem::path &filepath)
     {
-        return CreateRef<SkeletalMesh>();
+        return BinarySerializer::DeserializeMesh(filepath);
     }
 
-    SkeletalMesh::~SkeletalMesh()
+    Mesh::~Mesh()
     {
         m_MeshInstances.clear();
     }
@@ -866,6 +941,8 @@ namespace ignite
         {
             recurse(root, glm::mat4(1.0f));
         }
+
+        outScene.aabb = CalculateSceneAABB(outScene.flatMeshes);
     }
 
     std::vector<Ref<Texture>> GLTFMeshLoader::LoadTexturesFromGLTF(const tinygltf::Model &model)
@@ -1009,27 +1086,26 @@ namespace ignite
             targetAxisSystem.ConvertScene(fbxScene);
         }
 
-        const FbxSystemUnit targetUnit = FbxSystemUnit::cm;
+        const FbxSystemUnit targetUnit = FbxSystemUnit::m;
         const FbxSystemUnit sceneUnit = fbxScene->GetGlobalSettings().GetSystemUnit();
-        if (sceneUnit.GetScaleFactor() != targetUnit.GetScaleFactor())
-        {
-            targetUnit.ConvertScene(fbxScene);
-        }
+
+        const float scaleFactor = (float)sceneUnit.GetConversionFactorTo(targetUnit);
+        LOG_INFO("[FBX Loader] Unit scale factor: {} (source unit scale: {})", scaleFactor, sceneUnit.GetScaleFactor());
 
         {
             Timer timer;
             LOG_WARN("[FBX Loader] Triangulate geometry...");
             FbxGeometryConverter geometryConverter(sdkManager);
             geometryConverter.Triangulate(fbxScene, true);
-            
+
             LOG_WARN("[FBX Loader] Triangulate geometry completed for {}s", timer.Elapsed());
         }
 
         JointLoader jointLoader;
         if (importSkeletonAndAnimations)
         {
-            outScene.skeleton = LoadSkeletonFBX(fbxScene, jointLoader);
-            LoadAnimationsFBX(fbxScene, outScene.skeleton, jointLoader.jointNodes, outScene.animations);
+            outScene.skeleton = LoadSkeletonFBX(fbxScene, jointLoader, scaleFactor);
+            LoadAnimationsFBX(fbxScene, outScene.skeleton, jointLoader.jointNodes, outScene.animations, scaleFactor);
         }
         else
         {
@@ -1045,9 +1121,11 @@ namespace ignite
         {
             for (int i = 0; i < rootNode->GetChildCount(); ++i)
             {
-                BuildNode(rootNode->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, -1, glm::mat4(1.0f), importSkeletonAndAnimations);
+                BuildNode(rootNode->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, -1, glm::mat4(1.0f), scaleFactor, importSkeletonAndAnimations);
             }
         }
+
+        outScene.aabb = CalculateSceneAABB(outScene.flatMeshes);
 
         fbxScene->Destroy();
     }
@@ -1089,6 +1167,10 @@ namespace ignite
 		}
 		importer->Destroy();
 
+		const FbxSystemUnit targetUnit = FbxSystemUnit::m;
+		const FbxSystemUnit sceneUnit = fbxScene->GetGlobalSettings().GetSystemUnit();
+		const float scaleFactor = (float)sceneUnit.GetConversionFactorTo(targetUnit);
+
 		JointLoader jointLoader;
 
 		FbxNode *rootNode = fbxScene->GetRootNode();
@@ -1096,7 +1178,7 @@ namespace ignite
 		{
 			for (int i = 0; i < rootNode->GetChildCount(); ++i)
 			{
-				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, jointLoader);
+				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, jointLoader, scaleFactor);
 			}
 		}
 
@@ -1145,6 +1227,10 @@ namespace ignite
 		}
 		importer->Destroy();
 
+		const FbxSystemUnit targetUnit = FbxSystemUnit::m;
+		const FbxSystemUnit sceneUnit = fbxScene->GetGlobalSettings().GetSystemUnit();
+		const float scaleFactor = (float)sceneUnit.GetConversionFactorTo(targetUnit);
+
 		JointLoader jointLoader;
 
 		FbxNode *rootNode = fbxScene->GetRootNode();
@@ -1152,7 +1238,7 @@ namespace ignite
 		{
 			for (int i = 0; i < rootNode->GetChildCount(); ++i)
 			{
-				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, jointLoader);
+				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, jointLoader, scaleFactor);
 			}
 		}
 
@@ -1161,12 +1247,12 @@ namespace ignite
 			skeleton.reset();
 		}
 
-		LoadAnimationsFBX(fbxScene, skeleton, jointLoader.jointNodes, outAnimations);
+		LoadAnimationsFBX(fbxScene, skeleton, jointLoader.jointNodes, outAnimations, scaleFactor);
 
         fbxScene->Destroy();
 	}
 
-    void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene &outScene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, bool importSkinningData)
+    void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene &outScene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, float scaleFactor, bool importSkinningData)
     {
         if (!node)
         {
@@ -1179,7 +1265,7 @@ namespace ignite
         MeshNode &meshNode = outScene.nodes[nodeIndex];
         meshNode.parent = parentIdx;
         meshNode.name = node->GetName() ? node->GetName() : "";
-        meshNode.local = ToGlmMatrix(node->EvaluateLocalTransform());
+        meshNode.local = ScaleTranslation(ToGlmMatrix(node->EvaluateLocalTransform()), scaleFactor);
         meshNode.global = parentGlobal * meshNode.local;
 
         if (parentIdx >= 0)
@@ -1209,8 +1295,7 @@ namespace ignite
                 meshNode.name,
                 (parentIdx >= 0 ? outScene.nodes[parentIdx].name : std::string("<root>")),
                 (fbxMesh->GetName() ? std::string(fbxMesh->GetName()) : std::string("<unnamed>")),
-                isSkinned,
-                fbxMesh->GetDeformerCount(FbxDeformer::eSkin),
+                isSkinned, fbxMesh->GetDeformerCount(FbxDeformer::eSkin),
                 fbxMesh->GetControlPointsCount());
 
             if (isSkinned)
@@ -1252,7 +1337,7 @@ namespace ignite
                             continue;
                         }
 
-                        const int32_t jointId = SkeletonFindOrAddJoint(jointNode, outScene.skeleton, jointLoader);
+                        const int32_t jointId = SkeletonFindOrAddJoint(jointNode, outScene.skeleton, jointLoader, scaleFactor);
                         if (jointId < 0)
                         {
                             continue;
@@ -1279,8 +1364,10 @@ namespace ignite
 
                         // Keep a joint-space inverse bind (shared safely across multiple skinned meshes).
                         // Mesh node placement is applied in object transform during rendering.
-                        const FbxAMatrix invBind = jointBind.Inverse();
-                        const glm::mat4 invBindGlm = ToGlmMatrix(invBind);
+                        // Scale the joint's bind-pose translation to engine units before inverting so that
+                        // the inverse bind pose is consistent with the scaled vertex positions.
+                        const glm::mat4 jointBindGlm = ScaleTranslation(ToGlmMatrix(jointBind), scaleFactor);
+                        const glm::mat4 invBindGlm = glm::inverse(jointBindGlm);
                         glm::mat4 &existingInvBind = outScene.skeleton->joints[jointId].inverseBindPose;
                         const bool hasExistingInvBind = !Mat4NearEqual(existingInvBind, glm::mat4(1.0f));
                         if (hasExistingInvBind && !Mat4NearEqual(existingInvBind, invBindGlm, 0.001f))
@@ -1288,11 +1375,8 @@ namespace ignite
                             const glm::vec3 oldT = ExtractTranslation(existingInvBind);
                             const glm::vec3 newT = ExtractTranslation(invBindGlm);
                             LOG_WARN("[FBX SKIN DEBUG] InverseBind mismatch joint='{}' id={} meshNode='{}' oldT=({:.4f},{:.4f},{:.4f}) newT=({:.4f},{:.4f},{:.4f})",
-                                outScene.skeleton->joints[jointId].name,
-                                jointId,
-                                meshNode.name,
-                                oldT.x, oldT.y, oldT.z,
-                                newT.x, newT.y, newT.z);
+                                outScene.skeleton->joints[jointId].name, jointId,
+                                meshNode.name, oldT.x, oldT.y, oldT.z, newT.x, newT.y, newT.z);
                         }
 
                         existingInvBind = invBindGlm;
@@ -1303,12 +1387,9 @@ namespace ignite
                             const glm::vec3 jointBindT = ExtractTranslation(ToGlmMatrix(jointBind));
                             const glm::vec3 invBindT = ExtractTranslation(invBindGlm);
                             LOG_INFO("[FBX SKIN DEBUG] joint='{}' id={} cpInfluences={} meshBindT=({:.3f},{:.3f},{:.3f}) jointBindT=({:.3f},{:.3f},{:.3f}) invBindT=({:.3f},{:.3f},{:.3f})",
-                                outScene.skeleton->joints[jointId].name,
-                                jointId,
-                                cluster->GetControlPointIndicesCount(),
-                                meshBindT.x, meshBindT.y, meshBindT.z,
-                                jointBindT.x, jointBindT.y, jointBindT.z,
-                                invBindT.x, invBindT.y, invBindT.z);
+                                outScene.skeleton->joints[jointId].name, jointId,
+                                cluster->GetControlPointIndicesCount(), meshBindT.x, meshBindT.y, meshBindT.z,
+                                jointBindT.x, jointBindT.y, jointBindT.z, invBindT.x, invBindT.y, invBindT.z);
                         }
 
                         const int *controlPointIndices = cluster->GetControlPointIndices();
@@ -1375,9 +1456,9 @@ namespace ignite
                 VertexMesh_Anim vertex{};
                 vertex.position =
                 {
-                    static_cast<float>(transformedPosition[0]),
-                    static_cast<float>(transformedPosition[1]),
-                    static_cast<float>(transformedPosition[2])
+                    static_cast<float>(transformedPosition[0]) * scaleFactor,
+                    static_cast<float>(transformedPosition[1]) * scaleFactor,
+                    static_cast<float>(transformedPosition[2]) * scaleFactor
                 };
 
                 FbxVector4 normal(0.0, 1.0, 0.0, 0.0);
@@ -1471,11 +1552,11 @@ namespace ignite
 
         for (int i = 0; i < node->GetChildCount(); ++i)
         {
-            BuildNode(node->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, nodeIndex, meshNode.global, importSkinningData);
+            BuildNode(node->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, nodeIndex, meshNode.global, scaleFactor, importSkinningData);
         }
     }
 
-	Ref<Skeleton> FBXMeshLoader::LoadSkeletonFBX(fbxsdk::FbxScene *fbxScene, JointLoader &outJointResult)
+	Ref<Skeleton> FBXMeshLoader::LoadSkeletonFBX(fbxsdk::FbxScene *fbxScene, JointLoader &outJointResult, float scaleFactor)
 	{
 		if (!fbxScene)
 		{
@@ -1489,7 +1570,7 @@ namespace ignite
 		{
 			for (int i = 0; i < rootNode->GetChildCount(); ++i)
 			{
-				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, outJointResult);
+				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, outJointResult, scaleFactor);
 			}
 		}
 
@@ -1501,7 +1582,7 @@ namespace ignite
         return skeleton;
 	}
 
-	void FBXMeshLoader::LoadAnimationsFBX(fbxsdk::FbxScene *fbxScene, const Ref<Skeleton> &skeleton, JointMap &jointNodes, std::vector<Ref<SkeletalAnimation>> &outAnimations)
+	void FBXMeshLoader::LoadAnimationsFBX(fbxsdk::FbxScene *fbxScene, const Ref<Skeleton> &skeleton, JointMap &jointNodes, std::vector<Ref<SkeletalAnimation>> &outAnimations, float scaleFactor)
 	{
 		if (!fbxScene || !skeleton)
 		{
@@ -1600,7 +1681,7 @@ namespace ignite
 						skew,
 						perspective);
 
-					channel.translationKeys.AddFrame({ decomposedTranslation, timestamp });
+					channel.translationKeys.AddFrame({ decomposedTranslation * scaleFactor, timestamp });
 					channel.rotationKeys.AddFrame({ decomposedRotation, timestamp });
 					channel.scaleKeys.AddFrame({ decomposedScale, timestamp });
 				}
@@ -1615,7 +1696,7 @@ namespace ignite
 		}
 	}
 
-	int32_t FBXMeshLoader::SkeletonFindOrAddJoint(fbxsdk::FbxNode *jointNode, const Ref<Skeleton> &skeleton, JointLoader &outJointResult)
+	int32_t FBXMeshLoader::SkeletonFindOrAddJoint(fbxsdk::FbxNode *jointNode, const Ref<Skeleton> &skeleton, JointLoader &outJointResult, float scaleFactor)
 	{
 		if (!jointNode || !skeleton)
 		{
@@ -1637,14 +1718,14 @@ namespace ignite
 		FbxNode *parentNode = jointNode->GetParent();
 		if (parentNode && jointNode->GetScene() && parentNode != jointNode->GetScene()->GetRootNode())
 		{
-			parentJointId = SkeletonFindOrAddJoint(parentNode, skeleton, outJointResult);
+			parentJointId = SkeletonFindOrAddJoint(parentNode, skeleton, outJointResult, scaleFactor);
 		}
 
 		Joint joint{};
 		joint.id = static_cast<int32_t>(skeleton->joints.size());
 		joint.parentJointId = parentJointId;
 		joint.name = jointName;
-		joint.localTransform = ToGlmMatrix(jointNode->EvaluateLocalTransform());
+		joint.localTransform = ScaleTranslation(ToGlmMatrix(jointNode->EvaluateLocalTransform()), scaleFactor);
 
 		glm::vec3 skew;
 		glm::vec4 perspective;
@@ -1662,7 +1743,7 @@ namespace ignite
 		return joint.id;
 	}
 
-	void FBXMeshLoader::SkeletonBuildHierarchy(fbxsdk::FbxNode *node, const Ref<Skeleton> &skeleton, JointLoader &outJointResult)
+	void FBXMeshLoader::SkeletonBuildHierarchy(fbxsdk::FbxNode *node, const Ref<Skeleton> &skeleton, JointLoader &outJointResult, float scaleFactor)
 	{
 		if (!node)
 		{
@@ -1672,12 +1753,12 @@ namespace ignite
 		FbxNodeAttribute *attribute = node->GetNodeAttribute();
 		if (attribute && attribute->GetAttributeType() == FbxNodeAttribute::eSkeleton)
 		{
-            SkeletonFindOrAddJoint(node, skeleton, outJointResult);
+            SkeletonFindOrAddJoint(node, skeleton, outJointResult, scaleFactor);
 		}
 
 		for (int i = 0; i < node->GetChildCount(); ++i)
 		{
-            SkeletonBuildHierarchy(node->GetChild(i), skeleton, outJointResult);
+            SkeletonBuildHierarchy(node->GetChild(i), skeleton, outJointResult, scaleFactor);
 		}
 	}
 

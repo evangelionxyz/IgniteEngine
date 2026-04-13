@@ -33,9 +33,9 @@ namespace ignite
 		struct ImportRequest
 		{
 			std::vector<std::filesystem::path> filepaths;
-           std::filesystem::path targetDirectory;
+			std::filesystem::path targetDirectory;
 			AssetType assetType = AssetType::Invalid;
-			SkeletalMeshImportOptions skeletalMeshOptions;
+			MeshImportOptions meshOptions;
 		};
 
 		struct FontPreviewData
@@ -49,18 +49,17 @@ namespace ignite
 		void ProcessImportRequest(const ImportRequest &request);
 		void ImportFontAsset(const std::filesystem::path &filepath);
 		
-		void DrawSkeletalMeshImportOptions();
+		void DrawMeshImportOptions();
 		void DrawStaticMeshImportOptions();
-      void ImportFbxAsStaticMesh(const std::filesystem::path &filepath, const std::filesystem::path &targetDirectory);
-		void ImportFbxAsSkeletalMesh(const std::filesystem::path &filepath, const SkeletalMeshImportOptions &options);
-		void ImportFbxSkeletonAndAnimations(const std::filesystem::path &filepath, const SkeletalMeshImportOptions &options);
+        void ImportFbxMesh(const std::filesystem::path &filepath, const MeshImportOptions &options);
+		void ImportFbxSkeletonAndAnimations(const std::filesystem::path &filepath, const MeshImportOptions &options);
 		
 		std::filesystem::path BuildUniquePath(const std::filesystem::path &directory, const std::string &baseName, const std::string &extension) const;
 
 		std::vector<std::filesystem::path> m_SelectedFilepaths;
 		std::filesystem::path m_TargetDirectory;
 		AssetType m_SelectedAssetType = AssetType::Invalid;
-		SkeletalMeshImportOptions m_SkeletalMeshOptions;
+		MeshImportOptions m_MeshOptions;
 		FontPreviewData m_FontPreview;
 		std::queue<ImportRequest> m_ImportRequests;
 		bool m_ShowImporterWindow = false;

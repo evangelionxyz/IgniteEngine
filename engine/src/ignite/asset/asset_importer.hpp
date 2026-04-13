@@ -11,11 +11,9 @@
 namespace ignite {
 
     struct TextureCreateInfo;
-
     struct FmodSound;
     class Environment;
-    class StaticMesh;
-    class SkeletalMesh;
+    class Mesh;
     class Skeleton;
     class Material2D;
     class SpriteSheet;
@@ -52,12 +50,7 @@ namespace ignite {
         AssetType assetType = AssetType::Invalid;
     };
 
-    struct AssetImportOptions
-    {
-
-    };
-
-    struct SkeletalMeshImportOptions
+    struct MeshImportOptions
     {
         bool importMesh = true;
         bool importSkeleton = true;
@@ -80,8 +73,7 @@ namespace ignite {
         static Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static void ImportAsync(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, std::function<void(Ref<Asset>, AssetHandle)> callback);
 
-        static Ref<StaticMesh> ImportStaticMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, const StaticMeshImportOptions &options = StaticMeshImportOptions());
-        static Ref<SkeletalMesh> ImportSkeletalMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, const SkeletalMeshImportOptions &options = SkeletalMeshImportOptions());
+        static Ref<Mesh> ImportMesh(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, const MeshImportOptions &options = MeshImportOptions());
         static Ref<Material> ImportMaterial(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<Material2D> ImportMaterial2D(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<SpriteSheet> ImportSpriteSheet(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);

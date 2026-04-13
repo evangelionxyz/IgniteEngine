@@ -180,9 +180,9 @@ namespace ignite
 
         const uint32_t targetByVertices = std::max(batch.minCount,
             static_cast<uint32_t>(std::max<uint32_t>(1, usedVertices) * 2 / std::max<uint32_t>(1, batch.verticesPerObject)));
+        
         const uint32_t targetByIndices = batch.indicesPerObject > 0
-            ? std::max(batch.minCount,
-                static_cast<uint32_t>(std::max<uint32_t>(1, usedIndices) * 2 / std::max<uint32_t>(1, batch.indicesPerObject)))
+            ? std::max(batch.minCount, static_cast<uint32_t>(std::max<uint32_t>(1, usedIndices) * 2 / std::max<uint32_t>(1, batch.indicesPerObject)))
             : batch.minCount;
 
         const uint32_t target = std::max(targetByVertices, targetByIndices);

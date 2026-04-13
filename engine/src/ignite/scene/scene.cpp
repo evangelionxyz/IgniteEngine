@@ -368,126 +368,115 @@ namespace ignite
 
     void Scene::UpdateAnimations(float deltaTime)
     {
-        // ---------------------------------------------------------------
-        // Animator update: state machine driven skeletal animation
-        // ---------------------------------------------------------------
-        auto assetManager = m_Project->GetAssetManager();
-        
-        auto skeletalMeshView = registry->view<SkeletalMeshComponent>();
+        auto skeletalMeshView = registry->view<MeshComponent>();
         for (auto ent : skeletalMeshView)
         {
-            SkeletalMeshComponent &sm = skeletalMeshView.get<SkeletalMeshComponent>(ent);
-            if (sm.handle == AssetHandle(0) || sm.animatorHandle == AssetHandle(0))
+            MeshComponent &sm = skeletalMeshView.get<MeshComponent>(ent);
+            if (sm.handle == AssetHandle(0))
                 continue;
 
-            Ref<SkeletalMesh> skeletalMesh = std::dynamic_pointer_cast<SkeletalMesh>(assetManager->GetAsset(sm.handle, AssetType::SkeletalMesh));
-            if (!skeletalMesh)
+            Ref<Mesh> mesh = m_Project->GetAsset<Mesh>(sm.handle, AssetType::Mesh);
+            if (!mesh)
                 continue;
 
-            Ref<AnimatorController> animController = std::dynamic_pointer_cast<AnimatorController>(assetManager->GetAsset(sm.animatorHandle));
+            Ref<AnimatorController> animController = m_Project->GetAsset<AnimatorController>(mesh->GetAnimatorHandle());
             if (!animController)
                 continue;
 
             AnimatorControllerRuntime runtime;
-            runtime.currentStateName = sm.currentStateName;
-            runtime.stateElapsed = sm.stateElapsed;
+            // runtime.currentStateName = sm.currentStateName;
+            runtime.stateElapsed = 0.0f;
             runtime.stateNormalized = 0.0f;
 
-            if (animController->UpdateSkeleton(deltaTime, runtime, assetManager, skeletalMesh->boneTransforms))
+            if (animController->UpdateSkeleton(deltaTime, runtime, m_Project->GetAssetManager()))
             {
-                sm.currentStateName = runtime.currentStateName;
-                sm.stateElapsed = runtime.stateElapsed;
-                sm.stateNormalized = runtime.stateNormalized;
+                // sm.currentStateName = runtime.currentStateName;
+                // sm.stateElapsed = runtime.stateElapsed;
+                // sm.stateNormalized = runtime.stateNormalized;
             }
         }
 
-        // ---------------------------------------------------------------
-        // Animator2D update: state machine driven 2D animation
-        // ---------------------------------------------------------------
-        if (m_Project)
+        auto animator2dView = registry->view<Sprite2DComponent, Animator2DComponent>();
+        for (entt::entity e : animator2dView)
         {
-            auto animator2dView = registry->view<Sprite2DComponent, Animator2DComponent>();
-            for (entt::entity e : animator2dView)
+            auto &sprite = animator2dView.get<Sprite2DComponent>(e);
+            auto &animComp = animator2dView.get<Animator2DComponent>(e);
+
+            if (animComp.controllerHandle == AssetHandle(0))
+                continue;
+
+            Ref<AnimatorController2D> ctrl = m_Project->GetAsset<AnimatorController2D>(animComp.controllerHandle);
+            if (!ctrl)
             {
-                auto &sprite = animator2dView.get<Sprite2DComponent>(e);
-                auto &animComp = animator2dView.get<Animator2DComponent>(e);
+                continue;
+            }
 
-                if (animComp.controllerHandle == AssetHandle(0))
-                    continue;
+            // Initialize state if empty
+            if (animComp.currentStateName.empty())
+            {
+                animComp.currentStateName = ctrl->defaultState;
+                animComp.currentFrame = 0;
+                animComp.elapsed = 0.0f;
+                animComp.stateElapsed = 0.0f;
+                animComp.stateNormalized = 0.0f;
+            }
 
-                Ref<AnimatorController2D> ctrl = m_Project->GetAsset<AnimatorController2D>(animComp.controllerHandle);
-                if (!ctrl)
+            const AnimState2D *state = ctrl->FindState(animComp.currentStateName);
+            if (!state || state->animHandle == AssetHandle(0))
+                continue;
+
+            Ref<Animation2D> anim = m_Project->GetAsset<Animation2D>(state->animHandle);
+            if (!anim || anim->frames.empty())
+            {
+                continue;
+            }
+
+            // Advance per-entity frame counter
+            const float frameDuration = (anim->fps > 0.0f) ? (1.0f / anim->fps) : 1.0f;
+            animComp.elapsed += deltaTime;
+            animComp.stateElapsed += deltaTime;
+
+            while (animComp.elapsed >= frameDuration)
+            {
+                animComp.elapsed -= frameDuration;
+                animComp.currentFrame++;
+                if (animComp.currentFrame >= static_cast<int>(anim->frames.size()))
                 {
-                    continue;
-                }
-
-                // Initialize state if empty
-                if (animComp.currentStateName.empty())
-                {
-                    animComp.currentStateName = ctrl->defaultState;
-                    animComp.currentFrame = 0;
-                    animComp.elapsed = 0.0f;
-                    animComp.stateElapsed = 0.0f;
-                    animComp.stateNormalized = 0.0f;
-                }
-
-                const AnimState2D *state = ctrl->FindState(animComp.currentStateName);
-                if (!state || state->animHandle == AssetHandle(0))
-                    continue;
-
-                Ref<Animation2D> anim = m_Project->GetAsset<Animation2D>(state->animHandle);
-                if (!anim || anim->frames.empty())
-                {
-                    continue;
-                }
-
-                // Advance per-entity frame counter
-                const float frameDuration = (anim->fps > 0.0f) ? (1.0f / anim->fps) : 1.0f;
-                animComp.elapsed += deltaTime;
-                animComp.stateElapsed += deltaTime;
-
-                while (animComp.elapsed >= frameDuration)
-                {
-                    animComp.elapsed -= frameDuration;
-                    animComp.currentFrame++;
-                    if (animComp.currentFrame >= static_cast<int>(anim->frames.size()))
+                    if (anim->loop)
                     {
-                        if (anim->loop)
-                        {
-                            animComp.currentFrame = 0;
-                        }
-                        else
-                        {
-                            animComp.currentFrame = static_cast<int>(anim->frames.size()) - 1;
-                            animComp.elapsed = 0.0f;
-                            break;
-                        }
+                        animComp.currentFrame = 0;
+                    }
+                    else
+                    {
+                        animComp.currentFrame = static_cast<int>(anim->frames.size()) - 1;
+                        animComp.elapsed = 0.0f;
+                        break;
                     }
                 }
+            }
 
-                // Update normalized time
-                const float totalDur = static_cast<float>(anim->frames.size()) * frameDuration;
-                animComp.stateNormalized = (totalDur > 0.0f) ? std::min(animComp.stateElapsed / totalDur, 1.0f) : 0.0f;
+            // Update normalized time
+            const float totalDur = static_cast<float>(anim->frames.size()) * frameDuration;
+            animComp.stateNormalized = (totalDur > 0.0f) ? std::min(animComp.stateElapsed / totalDur, 1.0f) : 0.0f;
 
-                // Push UV to sprite
-                const int clamped = std::max(0, std::min(animComp.currentFrame, static_cast<int>(anim->frames.size()) - 1));
-                sprite.uv0 = anim->frames[static_cast<size_t>(clamped)].uv0;
-                sprite.uv1 = anim->frames[static_cast<size_t>(clamped)].uv1;
-                if (anim->textureHandle != AssetHandle(0))
-                {
-                    sprite.handle = anim->textureHandle;
-                }
+            // Push UV to sprite
+            const int clamped = std::max(0, std::min(animComp.currentFrame, static_cast<int>(anim->frames.size()) - 1));
+            sprite.uv0 = anim->frames[static_cast<size_t>(clamped)].uv0;
+            sprite.uv1 = anim->frames[static_cast<size_t>(clamped)].uv1;
+            if (anim->textureHandle != AssetHandle(0))
+            {
+                sprite.handle = anim->textureHandle;
+            }
 
-                // Evaluate transitions
-                std::string nextState = ctrl->EvaluateTransitions(animComp.currentStateName, animComp.stateNormalized);
-                if (!nextState.empty() && nextState != animComp.currentStateName)
-                {
-                    animComp.currentStateName = nextState;
-                    animComp.currentFrame = 0;
-                    animComp.elapsed = 0.0f;
-                    animComp.stateElapsed = 0.0f;
-                    animComp.stateNormalized = 0.0f;
-                }
+            // Evaluate transitions
+            std::string nextState = ctrl->EvaluateTransitions(animComp.currentStateName, animComp.stateNormalized);
+            if (!nextState.empty() && nextState != animComp.currentStateName)
+            {
+                animComp.currentStateName = nextState;
+                animComp.currentFrame = 0;
+                animComp.elapsed = 0.0f;
+                animComp.stateElapsed = 0.0f;
+                animComp.stateNormalized = 0.0f;
             }
         }
     }
@@ -578,6 +567,11 @@ namespace ignite
 	}
 
     template<>
+    void Scene::OnComponentAdded<MeshComponent>(Entity entity, MeshComponent &comp)
+    {
+    }
+
+    template<>
     void Scene::OnComponentAdded<ScriptComponent>(Entity entity, ScriptComponent &comp)
     {
     }
@@ -606,19 +600,6 @@ namespace ignite
         comp.gpuInitialized = false;
         comp.loadedHDRHandle = AssetHandle(0);
     }
-
-    template<>
-    void Scene::OnComponentAdded<StaticMeshComponent>(Entity entity, StaticMeshComponent& comp)
-    {
-    }
-
-	template<>
-	void Scene::OnComponentAdded<SkeletalMeshComponent>(Entity entity, SkeletalMeshComponent& comp)
-	{
-       comp.currentStateName.clear();
-        comp.stateElapsed = 0.0f;
-        comp.stateNormalized = 0.0f;
-	}
 
     template<>
     void Scene::OnComponentAdded<CameraComponent>(Entity entity, CameraComponent &comp)

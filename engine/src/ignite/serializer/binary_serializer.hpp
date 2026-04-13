@@ -106,9 +106,14 @@ namespace ignite
         }
 
         template<typename T>
-        static void ReadRaw(std::ifstream &stream, T *outData, size_t sizeInBytes = 0)
+        static bool ReadRaw(std::ifstream &stream, T *outData, size_t sizeInBytes = 0)
         {
-            stream.read(reinterpret_cast<char *>(outData), sizeInBytes ? sizeInBytes : sizeof(T));
+            if (stream.peek() != std::ifstream::traits_type::eof())
+            {
+                stream.read(reinterpret_cast<char *>(outData), sizeInBytes ? sizeInBytes : sizeof(T));
+                return true;
+            }
+            return false;
         }
 
         static std::string ReadString(std::ifstream &stream, uint32_t strSize)
@@ -435,152 +440,11 @@ namespace ignite
             return mat;
         }
 
-        static std::vector<std::byte> SerializeStaticMesh(const Ref<StaticMesh> &sm, const std::filesystem::path &filepath)
-        {
-            std::vector<std::byte> buffer;
-            const std::vector<Ref<MeshInstance>> &meshInstances = sm->GetMeshInstances();
-
-            // write mesh vector
-            uint32_t meshCount = static_cast<uint32_t>(meshInstances.size());
-            AppendRaw(buffer, meshCount);
-
-            for (auto &m : meshInstances)
-            {
-                auto &primitive = m->GetPrimitive();
-                
-                // Write vertices and indices count
-                uint32_t verticesCount = static_cast<uint32_t>(primitive->vertices.size());
-                uint32_t indicesCount = static_cast<uint32_t>(primitive->indices.size());
-                AppendRaw(buffer, verticesCount);
-                AppendRaw(buffer, indicesCount);
-
-				// Write vertices
-				for (VertexMesh_Anim &vertex : primitive->vertices)
-				{
-					AppendRaw(buffer, vertex.position);
-					AppendRaw(buffer, vertex.normal);
-					AppendRaw(buffer, vertex.tangent);
-					AppendRaw(buffer, vertex.bitangent);
-					AppendRaw(buffer, vertex.uv);
-
-					AppendRaw(buffer, vertex.boneIDs);
-					AppendRaw(buffer, vertex.weights);
-				}
-
-				// write indices
-				AppendBytes(buffer, primitive->indices.data(), indicesCount * sizeof(uint32_t));
-
-				// Write name
-                uint32_t nameSize = 0;
-                AppendString(buffer, m->GetName(), nameSize);
-
-				// Write local transform
-				for (int i = 0; i < 4; ++i)
-				{
-					AppendRaw(buffer, m->local[i].x);
-					AppendRaw(buffer, m->local[i].y);
-					AppendRaw(buffer, m->local[i].z);
-					AppendRaw(buffer, m->local[i].w);
-				}
-
-                // Write material reference
-                uint64_t materialHandle = m->GetMaterialHandle();
-                AppendRaw(buffer, materialHandle);
-            }
-
-            // Write to file
-            std::ofstream of(filepath, std::ios::binary);
-            of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
-            of.close();
-
-            return buffer;
-        }
-
-        static Ref<StaticMesh> DeserializeStaticMesh(const std::filesystem::path &filepath)
-        {
-            Ref<StaticMesh> staticMesh = CreateRef<StaticMesh>();
-
-            std::ifstream inFile(filepath, std::ios::binary);
-
-            if (!inFile)
-            {
-                return nullptr;
-            }
-
-            // read mesh vector
-            uint32_t meshCount = 0;
-            ReadRaw(inFile, &meshCount);
-
-            for (uint32_t i = 0; i < meshCount; ++i)
-            {
-                uint32_t verticesCount = 0, indicesCount = 0;
-                ReadRaw(inFile, &verticesCount);
-                ReadRaw(inFile, &indicesCount);
-
-                Ref<MeshInstance> meshInstance = CreateRef<MeshInstance>();
-                auto &name = meshInstance->GetName();
-                auto &primitive = meshInstance->GetPrimitive();
-            
-                // Read vertices
-                primitive->vertices.reserve(verticesCount);
-				for (uint32_t vertexIndex = 0; vertexIndex < verticesCount; ++vertexIndex)
-				{
-					VertexMesh_Anim vertex;
-					ReadRaw(inFile, &vertex.position);
-					ReadRaw(inFile, &vertex.normal);
-					ReadRaw(inFile, &vertex.tangent);
-					ReadRaw(inFile, &vertex.bitangent);
-					ReadRaw(inFile, &vertex.uv);
-
-					ReadRaw(inFile, &vertex.boneIDs);
-					ReadRaw(inFile, &vertex.weights);
-
-                    primitive->vertices.push_back(vertex);
-				}
-
-                // Read indices
-                primitive->indices.resize(indicesCount);
-                ReadRaw(inFile, primitive->indices.data(), indicesCount * sizeof(uint32_t));
-
-                // Read name
-				uint32_t nameSize = 0;
-				ReadRaw(inFile, &nameSize);
-                name = ReadString(inFile, nameSize);
-
-				// Read local transform
-				for (int i = 0; i < 4; ++i)
-				{
-					ReadRaw(inFile, &meshInstance->local[i].x);
-					ReadRaw(inFile, &meshInstance->local[i].y);
-					ReadRaw(inFile, &meshInstance->local[i].z);
-                    ReadRaw(inFile, &meshInstance->local[i].w);
-				}
-
-                // Read material
-                uint64_t materialHandle = 0;
-                ReadRaw(inFile, &materialHandle);
-                if (materialHandle != 0)
-                {
-                    meshInstance->SetMaterial(AssetHandle(materialHandle));
-                }
-
-				// Pushback
-                staticMesh->AddMeshInstance(meshInstance);
-            }
-
-            inFile.close();
-
-            if (meshCount == 0)
-                return nullptr;
-
-            return staticMesh;
-        }
-
-        static std::vector<std::byte> SerializeSkeletalMesh(const Ref<SkeletalMesh> &sm, const std::filesystem::path &filepath)
+        static std::vector<std::byte> SerializeMesh(const Mesh *mesh, const std::filesystem::path &filepath)
         {
             std::vector<std::byte> buffer;
 
-            const std::vector<Ref<MeshInstance>> &meshInstances = sm->GetMeshInstances();
+            const std::vector<Ref<MeshInstance>> &meshInstances = mesh->GetMeshInstances();
             uint32_t meshCount = static_cast<uint32_t>(meshInstances.size());
             AppendRaw(buffer, meshCount);
 
@@ -621,6 +485,12 @@ namespace ignite
                 AppendRaw(buffer, materialHandle);
             }
 
+            const uint64_t skeletonHandle = static_cast<uint64_t>(mesh->GetSkeletonHandle());
+            AppendRaw(buffer, skeletonHandle);
+
+            const uint64_t animatorHandle = static_cast<uint64_t>(mesh->GetAnimatorHandle());
+            AppendRaw(buffer, animatorHandle);
+
             std::ofstream of(filepath, std::ios::binary);
             of.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
             of.close();
@@ -628,9 +498,9 @@ namespace ignite
             return buffer;
         }
 
-        static Ref<SkeletalMesh> DeserializeSkeletalMesh(const std::filesystem::path &filepath)
+        static Ref<Mesh> DeserializeMesh(const std::filesystem::path &filepath)
         {
-            Ref<SkeletalMesh> skeletalMesh = SkeletalMesh::Create();
+            Ref<Mesh> skeletalMesh = Mesh::Create();
 
             std::ifstream inFile(filepath, std::ios::binary);
             if (!inFile)
@@ -667,6 +537,7 @@ namespace ignite
 
                 primitive->indices.resize(indicesCount);
                 ReadRaw(inFile, primitive->indices.data(), indicesCount * sizeof(uint32_t));
+                primitive->RecalculateAABB();
 
                 uint32_t nameSize = 0;
                 ReadRaw(inFile, &nameSize);
@@ -688,6 +559,18 @@ namespace ignite
                 }
 
                 skeletalMesh->AddMeshInstance(meshInstance);
+            }
+
+            uint64_t skeletonHandle = 0;
+            if (ReadRaw(inFile, &skeletonHandle) && skeletonHandle != 0)
+            {
+                skeletalMesh->SetSkeleton(AssetHandle(skeletonHandle));
+            }
+
+            uint64_t animatorHandle = 0;
+            if (ReadRaw(inFile, &animatorHandle) && animatorHandle != 0)
+            {
+                skeletalMesh->SetAnimator(AssetHandle(animatorHandle));
             }
 
             inFile.close();
@@ -863,10 +746,9 @@ namespace ignite
                 anim->channels[channelName] = channel;
             }
 
-            if (inFile.peek() != EOF)
+            uint64_t skeletonHandle = 0;
+            if (ReadRaw(inFile, &skeletonHandle) && skeletonHandle != 0)
             {
-                uint64_t skeletonHandle = 0;
-                ReadRaw(inFile, &skeletonHandle);
                 anim->SetSkeletonHandle(UUID(skeletonHandle));
             }
 
@@ -1014,36 +896,33 @@ namespace ignite
                 skeleton->nameToJointMap[jointName] = joint.id;
             }
 
-            if (inFile.peek() != EOF)
+            uint32_t socketCount = 0;
+            ReadRaw(inFile, &socketCount);
+
+            std::vector<DiskSocket> diskSockets(socketCount);
+            if (socketCount > 0)
             {
-                uint32_t socketCount = 0;
-                ReadRaw(inFile, &socketCount);
+                ReadRaw(inFile, diskSockets.data(), sizeof(DiskSocket) * socketCount);
+            }
 
-                std::vector<DiskSocket> diskSockets(socketCount);
-                if (socketCount > 0)
+            skeleton->sockets.reserve(socketCount);
+            for (const DiskSocket &ds : diskSockets)
+            {
+                if (ds.nameOffset >= stringTableSize)
                 {
-                    ReadRaw(inFile, diskSockets.data(), sizeof(DiskSocket) * socketCount);
+                    continue;
                 }
 
-                skeleton->sockets.reserve(socketCount);
-                for (const DiskSocket &ds : diskSockets)
-                {
-                    if (ds.nameOffset >= stringTableSize)
-                    {
-                        continue;
-                    }
+                const char *socketNamePtr = stringTable.data() + ds.nameOffset;
+                JointSocket socket{};
+                socket.name = std::string(socketNamePtr);
+                socket.parentJointId = ds.parentId;
+                socket.localTranslation = glm::vec3(ds.translation[0], ds.translation[1], ds.translation[2]);
+                socket.localRotation = glm::quat(ds.rotation[3], ds.rotation[0], ds.rotation[1], ds.rotation[2]);
+                socket.localScale = glm::vec3(ds.scale[0], ds.scale[1], ds.scale[2]);
 
-                    const char *socketNamePtr = stringTable.data() + ds.nameOffset;
-                    JointSocket socket{};
-                    socket.name = std::string(socketNamePtr);
-                    socket.parentJointId = ds.parentId;
-                    socket.localTranslation = glm::vec3(ds.translation[0], ds.translation[1], ds.translation[2]);
-                    socket.localRotation = glm::quat(ds.rotation[3], ds.rotation[0], ds.rotation[1], ds.rotation[2]);
-                    socket.localScale = glm::vec3(ds.scale[0], ds.scale[1], ds.scale[2]);
-
-                    skeleton->socketNameToIndex[socket.name] = static_cast<int32_t>(skeleton->sockets.size());
-                    skeleton->sockets.push_back(std::move(socket));
-                }
+                skeleton->socketNameToIndex[socket.name] = static_cast<int32_t>(skeleton->sockets.size());
+                skeleton->sockets.push_back(std::move(socket));
             }
 
             inFile.close();

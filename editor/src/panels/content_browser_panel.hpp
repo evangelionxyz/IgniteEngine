@@ -55,6 +55,7 @@ namespace ignite
         virtual void OnUpdate(float deltaTime) override;
 
         void LoadProjectFiles(AssetManager *assetManager);
+        void RefreshFiles();
 
     private:
         void RefreshEntryPathList();

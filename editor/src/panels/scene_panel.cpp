@@ -509,21 +509,6 @@ namespace ignite
         {
             auto *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
             auto *assetManager = project ? project->GetAssetManager() : nullptr;
-            auto getAssetDisplayName = [assetManager](AssetHandle handle)
-            {
-                if (!assetManager || handle == AssetHandle(0))
-                {
-                    return std::string("Drag Here");
-                }
-
-                const AssetMetaData &metadata = assetManager->GetMetaData(handle);
-                if (!metadata.filepath.empty())
-                {
-                    return metadata.filepath.filename().string();
-                }
-
-                return std::to_string(static_cast<uint64_t>(handle));
-            };
 
             // Main Component
             // ID Component
@@ -680,7 +665,7 @@ namespace ignite
 
                 // Material 2D
                 bool isMat2dLoaded = c.materialHandle != AssetHandle(0);
-                std::string mat2dLabel = isMat2dLoaded ? getAssetDisplayName(c.materialHandle) : "Drag Here";
+                std::string mat2dLabel = isMat2dLoaded ? assetManager->GetAssetDisplayName(c.materialHandle) : "Drag Here";
                 UI::DrawButtonWithColumn("Material", mat2dLabel.c_str(), nullptr, [&c, &selectedEntity, &isMat2dLoaded, this]()
                     {
 						if (ImGui::BeginDragDropTarget())
@@ -723,7 +708,7 @@ namespace ignite
                 {
 					// Texture on sprite 2d
 					const bool isTextureLoaded = c.handle != AssetHandle(0);
-                  const std::string textureLabel = isTextureLoaded ? getAssetDisplayName(c.handle) : "Drag Here";
+                  const std::string textureLabel = isTextureLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
 					UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&c, &isTextureLoaded, this, &selectedEntity]()
 						{
 							if (ImGui::BeginDragDropTarget())
@@ -799,7 +784,7 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<Animator2DComponent>();
 
                 bool isAnimatorLoaded = c.controllerHandle != AssetHandle(0);
-                std::string animDropLabel = !isAnimatorLoaded ? "Drop Here" : getAssetDisplayName(c.controllerHandle);
+                std::string animDropLabel = isAnimatorLoaded ? assetManager->GetAssetDisplayName(c.controllerHandle) : "Drop Here";
                 UI::DrawButtonWithColumn("Controller", animDropLabel.c_str(), nullptr, [&c]()
                 {
                     if (ImGui::BeginDragDropTarget())
@@ -857,99 +842,26 @@ namespace ignite
             });
 
 			RenderComponent<Circle2DComponent>("Circle 2D", selectedEntity, [&]()
-				{
-					auto &c = selectedEntity.GetComponent<Circle2DComponent>();
-
-					static Circle2DComponent compBefore;
-
-                    UI::State colorState = UI::DrawVec4Control("Color", c.color, 0.025f, 1.0f);
-                    if (colorState.isItemActivated)
-						compBefore = c;
-
-                    if (colorState.isItemDeactivatedAfterEdit)
-						CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Circle2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), compBefore, c));
-				});
-
-			RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [&]()
 			{
-				auto &c = selectedEntity.GetComponent<StaticMeshComponent>();
+				auto &c = selectedEntity.GetComponent<Circle2DComponent>();
 
-				bool isMeshLoaded = c.handle != AssetHandle(0);
+				static Circle2DComponent compBefore;
 
-               std::string buttonLabel = isMeshLoaded ? getAssetDisplayName(c.handle) : "Drag Here";
-                UI::DrawButtonWithColumn("Static Mesh", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
-                    {
-                        if (ImGui::BeginDragDropTarget())
-                        {
-                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                            {
-                                LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                                AssetMetaData metadata = assetManager->GetMetaData(handle);
-                                if (metadata.type == AssetType::StaticMesh)
-                                {
-                                    metadata.type = AssetType::StaticMesh;
-                                    assetManager->AssignMetaData(handle, metadata);
-                                    assetManager->UnloadAsset(handle);
-                                    c.handle = handle;
-                                }
-                            }
-                            ImGui::EndDragDropTarget();
-                        }
+                UI::State colorState = UI::DrawVec4Control("Color", c.color, 0.025f, 1.0f);
+                if (colorState.isItemActivated)
+					compBefore = c;
 
-                        if (isMeshLoaded)
-                        {
-                            ImGui::SameLine();
-                            if (ImGui::Button("X"))
-                            {
-                                c.handle = AssetHandle(0); // reset mesh handle
-                            }
-                        }
-                    });
+                if (colorState.isItemDeactivatedAfterEdit)
+					CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Circle2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), compBefore, c));
+			});
 
-
-                if (isMeshLoaded)
-                {
-                    const bool isMaterialLoaded = c.materialHandle != AssetHandle(0);
-                    std::string buttonLabel = isMaterialLoaded ? getAssetDisplayName(c.materialHandle) : "Drag Here";
-                    UI::DrawButtonWithColumn("Material", buttonLabel.c_str(), nullptr, [&c, this, &isMaterialLoaded]()
-                    {
-                        if (ImGui::BeginDragDropTarget())
-                        {
-                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                            {
-                                LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                                AssetMetaData metadata = assetManager->GetMetaData(handle);
-                                if (metadata.type == AssetType::Material)
-                                {
-                                    c.materialHandle = handle;
-                                }
-                            }
-                            ImGui::EndDragDropTarget();
-                        }
-
-                        if (isMaterialLoaded)
-                        {
-                            ImGui::SameLine();
-                            if (ImGui::Button("X"))
-                            {
-                                c.materialHandle = AssetHandle(0); // reset material handle
-                            }
-                        }
-                    });
-                }
-            });
-
-            RenderComponent<SkeletalMeshComponent>("Skeletal Mesh", selectedEntity, [&]()
+            RenderComponent<MeshComponent>("Mesh", selectedEntity, [&]()
             {
-                auto &c = selectedEntity.GetComponent<SkeletalMeshComponent>();
+                auto &c = selectedEntity.GetComponent<MeshComponent>();
 
                 bool isMeshLoaded = c.handle != AssetHandle(0);
 
-                std::string buttonLabel = isMeshLoaded ? getAssetDisplayName(c.handle) : "Drag Here";
+                std::string buttonLabel = isMeshLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
                 UI::DrawButtonWithColumn("Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
                 {
                     if (ImGui::BeginDragDropTarget())
@@ -961,9 +873,9 @@ namespace ignite
                             auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
                             AssetMetaData metadata = assetManager->GetMetaData(handle);
 
-                            if (metadata.type == AssetType::SkeletalMesh)
+                            if (metadata.type == AssetType::Mesh)
                             {
-                                metadata.type = AssetType::SkeletalMesh;
+                                metadata.type = AssetType::Mesh;
                                 assetManager->AssignMetaData(handle, metadata);
                                 assetManager->UnloadAsset(handle);
                                 c.handle = handle;
@@ -985,12 +897,13 @@ namespace ignite
 
                 if (isMeshLoaded)
                 {
-                    Ref<SkeletalMesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<SkeletalMesh>(c.handle);
+                    Ref<Mesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<Mesh>(c.handle);
                     if (sm)
                     {
-                        bool isAnimatorLoaded = c.animatorHandle != AssetHandle(0);
-                        std::string buttonLabel = isAnimatorLoaded ? getAssetDisplayName(c.animatorHandle) : "Drag Here";
-                        UI::DrawButtonWithColumn("Animator", buttonLabel.c_str(), nullptr, [&c, this, &isAnimatorLoaded]()
+                        // Animator
+                        bool isAnimatorLoaded = sm->GetAnimatorHandle() != AssetHandle(0);
+                        std::string buttonLabel = isAnimatorLoaded ? assetManager->GetAssetDisplayName(sm->GetAnimatorHandle()) : "Drag Here";
+                        UI::DrawButtonWithColumn("Animator", buttonLabel.c_str(), nullptr, [&c, this, &sm, &isAnimatorLoaded]()
                         {
                             if (ImGui::BeginDragDropTarget())
                             {
@@ -1006,7 +919,7 @@ namespace ignite
                                         metadata.type = AssetType::AnimatorController;
                                         assetManager->AssignMetaData(handle, metadata);
                                         assetManager->UnloadAsset(handle);
-                                        c.animatorHandle = handle;
+                                        sm->SetAnimator(handle);
                                     }
                                 }
 
@@ -1018,10 +931,12 @@ namespace ignite
                                 ImGui::SameLine();
                                 if (ImGui::Button("X"))
                                 {
-                                    c.animatorHandle = AssetHandle(0); // reset animator
+                                    sm->SetAnimator(AssetHandle(0)); // reset animator
                                 }
                             }
                         });
+
+                        // TODO: Material slots
                     }
                 }
             });
@@ -1029,7 +944,6 @@ namespace ignite
 			RenderComponent<Rigidbody2DComponent>("Rigid Body 2D", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<Rigidbody2DComponent>();
-
                 std::array<const char *, 3> bodyTypeStr = { "Static", "Dynamic", "Kinematic" };
                 const char *currentBodyType = bodyTypeStr[static_cast<i32>(c.type)];
 
@@ -1377,8 +1291,8 @@ namespace ignite
             {
                 auto &c = selectedEntity.GetComponent<AudioSourceComponent>();
 
-                bool isLoaded = c.handle != AssetHandle(0);
-                std::string label = isLoaded ? getAssetDisplayName(c.handle) : "Drag Here";
+                const bool isLoaded = c.handle != AssetHandle(0);
+                std::string label = isLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
 
                 UI::DrawButtonWithColumn("Audio", label.c_str(), nullptr, [&c, this, &isLoaded]()
                     {
@@ -1766,11 +1680,8 @@ namespace ignite
 					case CompType_CircleCollider2D:
 						entity.AddComponent<CircleCollider2DComponent>();
 						break;
-                    case CompType_StaticMesh:
-                        entity.AddComponent<StaticMeshComponent>();
-                        break;
-                    case CompType_SkeletalMesh:
-                        entity.AddComponent<SkeletalMeshComponent>();
+                    case CompType_Mesh:
+                        entity.AddComponent<MeshComponent>();
                         break;
                     case CompType_Rigidbody:
                         entity.AddComponent<RigibodyComponent>();

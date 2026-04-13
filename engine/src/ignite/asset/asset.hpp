@@ -56,8 +56,7 @@ namespace ignite {
         Environment,
         Anim2D,
         Skeleton,
-        SkeletalMesh,
-        StaticMesh,
+        Mesh,
         Scene,
 
         AnimatorController, // .ac    - animator state machine
@@ -85,8 +84,7 @@ namespace ignite {
             case ignite::AssetType::SkeletalAnimation: return "SkeletalAnimation";
             case ignite::AssetType::SpriteSheet: return "SpriteSheet";
             case ignite::AssetType::Anim2D: return "Anim2D";
-			case ignite::AssetType::SkeletalMesh: return "SkeletalMesh";
-            case ignite::AssetType::StaticMesh: return "StaticMesh";
+			case ignite::AssetType::Mesh: return "Mesh";
             case ignite::AssetType::Skeleton: return "Skeleton";
             case ignite::AssetType::Environment: return "Environment";
             case ignite::AssetType::BlendSpace: return "BlendSpace";
@@ -121,8 +119,7 @@ namespace ignite {
         { ".flac", AssetType::Audio },
         { ".wav", AssetType::Audio },
 
-        { ".ixsm", AssetType::StaticMesh },
-        { ".ixskm", AssetType::SkeletalMesh },
+        { ".mesh", AssetType::Mesh },
 
         { ".ixskel", AssetType::Skeleton},
         { ".ixanim", AssetType::SkeletalAnimation},
@@ -153,8 +150,7 @@ namespace ignite {
         if (typeStr == "SkeletalAnimation") return AssetType::SkeletalAnimation;
         if (typeStr == "SpriteSheet") return AssetType::SpriteSheet;
         if (typeStr == "Anim2D")  return AssetType::Anim2D;
-        if (typeStr == "StaticMesh")  return AssetType::StaticMesh;
-        if (typeStr == "SkeletalMesh")  return AssetType::SkeletalMesh;
+        if (typeStr == "Mesh")  return AssetType::Mesh;
         if (typeStr == "Skeleton")  return AssetType::Skeleton;
         if (typeStr == "Material")  return AssetType::Material;
         if (typeStr == "Environment")  return AssetType::Environment;
@@ -177,8 +173,7 @@ namespace ignite {
         case AssetType::Shader: return ".hlsl";
 
         case AssetType::AnimationMontage: return ".mtg";
-        case AssetType::StaticMesh: return ".ixsm";
-        case AssetType::SkeletalMesh: return ".ixskm";
+        case AssetType::Mesh: return ".mesh";
         case AssetType::Skeleton: return ".ixskel";
         case AssetType::SkeletalAnimation: return ".ixanim";
         case AssetType::BlendSpace: return ".bsp";

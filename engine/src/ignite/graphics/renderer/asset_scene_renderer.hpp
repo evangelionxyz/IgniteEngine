@@ -18,7 +18,7 @@ namespace ignite
 
         void BeginFrame();
         void SetMaterial(const Ref<Material> &material);
-        void SetPreviewMesh(const Ref<StaticMesh> &mesh);
+        void SetPreviewMesh(const Ref<Mesh> &mesh);
         void SetBoneTransforms(const std::vector<glm::mat4> &boneTransforms);
         void SetEnvironmentTexture(const Ref<Texture> &texture);
         void SetProject(Project *project);
@@ -33,7 +33,7 @@ namespace ignite
         void CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture);
 
     private:
-        Ref<StaticMesh> m_PreviewMesh;
+        Ref<Mesh> m_PreviewMesh;
         Ref<Material> m_SourceMaterial;
         Ref<Material> m_RuntimeMaterial;
         Ref<Texture> m_EnvironmentTexture;
@@ -51,6 +51,7 @@ namespace ignite
         std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_CompositePipelineCache;
 
         std::vector<glm::mat4> m_BoneTransforms;
+        bool m_EnvironmentTextureLoadAttempted = false;
 
         Scene_GPUData m_SceneGPUData;
         CascadedShadowMap_GPUData m_CSMGPUData;

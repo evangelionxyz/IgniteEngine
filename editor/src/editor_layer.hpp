@@ -85,6 +85,9 @@ namespace ignite
         uint32_t GetActiveDockspaceID() const { return m_ActiveEditorDockspaceId; }
 
         EditorState &GetState() { return m_State; }
+
+        void RefreshContentBrowsers();
+
     private:
         static void OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter);
         static void OnSceneOpenFileSelected(void *userData, const char *const *filelist, int filter);

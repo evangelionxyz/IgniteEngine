@@ -8,6 +8,8 @@
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/component.hpp"
 #include "ignite/math/frustum.hpp"
+#include "ignite/animation/animator/animator_controller.hpp"
+#include "ignite/animation/skeleton.hpp"
 #include "ignite/physics/2d/physics_2d_component.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/graphics/font.hpp"
@@ -448,30 +450,69 @@ namespace ignite
         Clear3DAssetResolveCache();
     }
 
-    Ref<StaticMesh> SceneRenderer::ResolveStaticMesh(Project *project, AssetHandle handle)
+    void SceneRenderer::OnUpdate(float deltaTime)
     {
-        if (!project || handle == AssetHandle(0))
+        // Check if any materials need binding set creation/recreation
         {
-            return nullptr;
-        }
+            IGN_PROFILE_SCOPE("SceneRenderer::UpdateMaterialBindingSets");
+            bool waitedForMaterialUpdate = false;
+            const auto &assets = m_Scene->GetProject()->GetAssetManager()->GetLoadedAssets();
+            for (const auto &[handle, asset] : assets)
+            {
+                if (asset->GetAssetType() == AssetType::Material)
+                {
+                    Ref<Material> material = std::static_pointer_cast<Material>(asset);
+                    if (material && (material->IsBindingSetDirty() || !material->GetBindingSet()))
+                    {
+                        auto assetManager = m_Scene->GetProject()->GetAssetManager();
+                        auto isTextureReady = [&assetManager](AssetHandle textureHandle)
+                        {
+                            if (textureHandle == 0)
+                            {
+                                return true;
+                            }
 
-        AssetResolveKey key{ project, handle };
-        auto it = m_StaticMeshResolveCache.find(key);
-        if (it != m_StaticMeshResolveCache.end())
-        {
-            return it->second;
-        }
+                            Ref<Asset> texAsset = assetManager->GetAsset(textureHandle);
+                            return texAsset && texAsset->IsReady();
+                        };
 
-        Ref<StaticMesh> mesh = project->GetAsset<StaticMesh>(handle, AssetType::StaticMesh);
-        if (mesh)
-        {
-            m_StaticMeshResolveCache.emplace(key, mesh);
-        }
+                        // Only update if all textures are available and ready
+                        bool allTexturesReady = true;
+                        if (!isTextureReady(material->baseColorTextureHandle))
+                            allTexturesReady = false;
+                        if (!isTextureReady(material->emissiveTextureHandle))
+                            allTexturesReady = false;
+                        if (!isTextureReady(material->metallicTextureHandle))
+                            allTexturesReady = false;
+                        if (!isTextureReady(material->roughnessTextureHandle))
+                            allTexturesReady = false;
+                        if (!isTextureReady(material->normalTextureHandle))
+                            allTexturesReady = false;
+                        if (!isTextureReady(material->occlusionTextureHandle))
+                            allTexturesReady = false;
 
-        return mesh;
+                        if (allTexturesReady)
+                        {
+                            MaterialTextures textures;
+                            material->RetrieveTextures(assetManager, &textures);
+
+                            if (!waitedForMaterialUpdate)
+                            {
+                                // Ensure no other GPU operations are in flight before updating material
+                                // This prevents threading errors when materials are being invalidated
+                                GPUUploadSync::DeviceWaitIdle(m_Device);
+                                waitedForMaterialUpdate = true;
+                            }
+
+                            material->UpdateBindingSet(this, &textures, assetManager);
+                        }
+                    }
+                }
+            }
+        }
     }
 
-    Ref<SkeletalMesh> SceneRenderer::ResolveSkeletalMesh(Project *project, AssetHandle handle)
+    Ref<Mesh> SceneRenderer::ResolveMesh(Project *project, AssetHandle handle)
     {
         if (!project || handle == AssetHandle(0))
         {
@@ -479,16 +520,16 @@ namespace ignite
         }
 
         AssetResolveKey key{ project, handle };
-        auto it = m_SkeletalMeshResolveCache.find(key);
-        if (it != m_SkeletalMeshResolveCache.end())
+        auto it = m_MeshResolveCache.find(key);
+        if (it != m_MeshResolveCache.end())
         {
             return it->second;
         }
 
-        Ref<SkeletalMesh> mesh = project->GetAsset<SkeletalMesh>(handle, AssetType::SkeletalMesh);
+        Ref<Mesh> mesh = project->GetAsset<Mesh>(handle, AssetType::Mesh);
         if (mesh)
         {
-            m_SkeletalMeshResolveCache.emplace(key, mesh);
+            m_MeshResolveCache.emplace(key, mesh);
         }
 
         return mesh;
@@ -519,8 +560,7 @@ namespace ignite
 
     void SceneRenderer::Clear3DAssetResolveCache()
     {
-        m_StaticMeshResolveCache.clear();
-        m_SkeletalMeshResolveCache.clear();
+        m_MeshResolveCache.clear();
         m_MaterialResolveCache.clear();
     }
 
@@ -536,11 +576,16 @@ namespace ignite
             m_Scene->SetSceneRenderer(nullptr);
         }
 
+
         m_SelectedEntities.clear();
         m_Has2DPreRenderCache = false;
         Clear3DAssetResolveCache();
 
         m_Scene = scene;
+        if (m_Scene)
+        {
+            m_Project = m_Scene->GetProject();
+        }
 
         s_GeometryPSOCache.clear();
         s_EnvironmentPSOCache.clear();
@@ -646,64 +691,6 @@ namespace ignite
             }
         }
 
-        // Check if any materials need binding set creation/recreation
-        {
-            IGN_PROFILE_SCOPE("SceneRenderer::UpdateMaterialBindingSets");
-            bool waitedForMaterialUpdate = false;
-            const auto &assets = m_Scene->GetProject()->GetAssetManager()->GetLoadedAssets();
-            for (const auto &[handle, asset] : assets)
-            {
-                if (asset->GetAssetType() == AssetType::Material)
-                {
-                    Ref<Material> material = std::static_pointer_cast<Material>(asset);
-                    if (material && (material->IsBindingSetDirty() || !material->GetBindingSet()))
-                    {
-                        auto assetManager = m_Scene->GetProject()->GetAssetManager();
-                        auto isTextureReady = [assetManager](AssetHandle textureHandle)
-                        {
-                            if (textureHandle == 0)
-                            {
-                                return true;
-                            }
-
-                            Ref<Asset> texAsset = assetManager->GetAsset(textureHandle);
-                            return texAsset && texAsset->IsReady();
-                        };
-
-                        // Only update if all textures are available and ready
-                        bool allTexturesReady = true;
-                        if (!isTextureReady(material->baseColorTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->emissiveTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->metallicTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->roughnessTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->normalTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->occlusionTextureHandle))
-                            allTexturesReady = false;
-
-                        if (allTexturesReady)
-                        {
-                            MaterialTextures textures;
-                            material->RetrieveTextures(assetManager, &textures);
-
-                            if (!waitedForMaterialUpdate)
-                            {
-                                // Ensure no other GPU operations are in flight before updating material
-                                // This prevents threading errors when materials are being invalidated
-                                GPUUploadSync::DeviceWaitIdle(m_Device);
-                                waitedForMaterialUpdate = true;
-                            }
-
-                            material->UpdateBindingSet(this, &textures, assetManager);
-                        }
-                    }
-                }
-            }
-        }
 
         // Create fresh command list for this frame
         nvrhi::CommandListHandle cmd = m_Device->createCommandList();
@@ -931,65 +918,6 @@ namespace ignite
             }
         }
 
-        // Check if any materials need binding set creation/recreation
-        {
-            IGN_PROFILE_SCOPE("SceneRenderer::UpdateMaterialBindingSets");
-            bool waitedForMaterialUpdate = false;
-            const auto &assets = m_Scene->GetProject()->GetAssetManager()->GetLoadedAssets();
-            for (const auto &[handle, asset] : assets)
-            {
-                if (asset->GetAssetType() == AssetType::Material)
-                {
-                    Ref<Material> material = std::static_pointer_cast<Material>(asset);
-                    if (material && (material->IsBindingSetDirty() || !material->GetBindingSet()))
-                    {
-                        auto assetManager = m_Scene->GetProject()->GetAssetManager();
-                        auto isTextureReady = [&assetManager](AssetHandle textureHandle)
-                        {
-                            if (textureHandle == 0)
-                            {
-                                return true;
-                            }
-
-                            Ref<Asset> texAsset = assetManager->GetAsset(textureHandle);
-                            return texAsset && texAsset->IsReady();
-                        };
-
-                        // Only update if all textures are available and ready
-                        bool allTexturesReady = true;
-                        if (!isTextureReady(material->baseColorTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->emissiveTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->metallicTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->roughnessTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->normalTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->occlusionTextureHandle))
-                            allTexturesReady = false;
-
-                        if (allTexturesReady)
-                        {
-                            MaterialTextures textures;
-                            material->RetrieveTextures(assetManager, &textures);
-
-                            if (!waitedForMaterialUpdate)
-                            {
-                                // Ensure no other GPU operations are in flight before updating material
-                                // This prevents threading errors when materials are being invalidated
-                                GPUUploadSync::DeviceWaitIdle(m_Device);
-                                waitedForMaterialUpdate = true;
-                            }
-
-                            material->UpdateBindingSet(this, &textures, assetManager);
-                        }
-                    }
-                }
-            }
-        }
-
         // Create fresh command list for this frame
         nvrhi::CommandListHandle cmd = m_Device->createCommandList();
         {
@@ -1178,71 +1106,21 @@ namespace ignite
             };
 
             {
-                IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshes");
-                auto staticMeshView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
-                for (entt::entity e : staticMeshView)
-                {
-                    TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-                    if (!tr.visible)
-                        continue;
-
-                    StaticMeshComponent &smc = m_Scene->registry->get<StaticMeshComponent>(e);
-                    if (smc.handle == AssetHandle(0))
-                        continue;
-
-                    ensurePerEntityResources(smc.perEntityBuffer, smc.meshBindingSet);
-
-                    Ref<StaticMesh> sm = ResolveStaticMesh(project, smc.handle);
-                    if (!sm)
-                        continue;
-
-                    for (auto &m : sm->GetMeshInstances())
-                    {
-                        SkinnedMesh_GPUData gpuData;
-                        gpuData.transformation = tr.GetWorldMatrix() * m->global;
-                        gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-
-                        const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
-                        gpuData.normal = glm::mat4(normalMat3);
-
-                        std::fill(std::begin(gpuData.boneTransforms), std::end(gpuData.boneTransforms), glm::mat4(1.0f));
-                        smc.perEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
-
-                        auto &primitive = m->GetPrimitive();
-                        if (smc.meshBindingSet && primitive->vertexBuffer && primitive->indexBuffer)
-                        {
-                            csmState.bindings = { smc.meshBindingSet };
-                            csmState.vertexBuffers.resize(0);
-                            csmState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
-                            csmState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
-
-                            cmd->setGraphicsState(csmState);
-
-                            nvrhi::DrawArguments args;
-                            args.setVertexCount(primitive->indexBuffer->GetCount());
-                            args.instanceCount = 1;
-                            cmd->drawIndexed(args);
-                        }
-                    }
-                }
-            }
-
-            {
-                IGN_PROFILE_SCOPE("SceneRenderer::SkeletalMeshesShadow");
-                auto skelMeshView = m_Scene->registry->view<TransformComponent, SkeletalMeshComponent>();
+                IGN_PROFILE_SCOPE("SceneRenderer::MeshesShadow");
+                auto skelMeshView = m_Scene->registry->view<TransformComponent, MeshComponent>();
                 for (entt::entity e : skelMeshView)
                 {
                     TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
                     if (!tr.visible)
                         continue;
 
-                    SkeletalMeshComponent &smc = m_Scene->registry->get<SkeletalMeshComponent>(e);
+                    MeshComponent &smc = m_Scene->registry->get<MeshComponent>(e);
                     if (smc.handle == AssetHandle(0))
                         continue;
 
                     ensurePerEntityResources(smc.perEntityBuffer, smc.meshBindingSet);
 
-                    Ref<SkeletalMesh> sm = ResolveSkeletalMesh(project, smc.handle);
+                    Ref<Mesh> sm = ResolveMesh(project, smc.handle);
                     if (!sm)
                         continue;
 
@@ -1257,10 +1135,21 @@ namespace ignite
 
                         std::fill(std::begin(gpuData.boneTransforms), std::end(gpuData.boneTransforms), glm::mat4(1.0f));
 
-                        const size_t transformCount = std::min(static_cast<size_t>(MAX_BONES), sm->boneTransforms.size());
-                        for (size_t j = 0; j < transformCount; ++j)
+                        // Get bone transform from the animator
+                        if (sm->GetAnimatorHandle() != AssetHandle(0))
                         {
-                            gpuData.boneTransforms[j] = sm->boneTransforms[j];
+                            if (Ref<AnimatorController> controller = project->GetAsset<AnimatorController>(sm->GetAnimatorHandle()))
+                            {
+                                if (Ref<Skeleton> skeleton = project->GetAsset<Skeleton>(controller->skeletonHandle))
+                                {
+                                    auto boneTransforms = skeleton->GetFinalJointTransforms();
+                                    const size_t transformCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
+                                    for (size_t i = 0; i < transformCount; ++i)
+                                    {
+                                        gpuData.boneTransforms[i] = boneTransforms[i];
+                                    }
+                                }
+                            }
                         }
 
                         smc.perEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
@@ -1298,7 +1187,6 @@ namespace ignite
         geomGState.framebuffer = framebuffer;
         geomGState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
-
         auto ensurePerEntityResources = [this](Ref<ConstantBuffer> &buffer, nvrhi::BindingSetHandle &bindingSet)
         {
             if (!buffer)
@@ -1320,19 +1208,16 @@ namespace ignite
             }
         };
 
-        // ===========================
-        // Skeletal Meshes
-        // ===========================
         {
-            IGN_PROFILE_SCOPE("SceneRenderer::SkeletalMeshes");
-            auto skelMeshView = m_Scene->registry->view<TransformComponent, SkeletalMeshComponent>();
+            IGN_PROFILE_SCOPE("SceneRenderer::Meshes");
+            auto skelMeshView = m_Scene->registry->view<TransformComponent, MeshComponent>();
             for (entt::entity e : skelMeshView)
             {
                 TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
                 if (!tr.visible)
                     continue;
 
-                SkeletalMeshComponent &smc = m_Scene->registry->get<SkeletalMeshComponent>(e);
+                MeshComponent &smc = m_Scene->registry->get<MeshComponent>(e);
                 if (smc.handle == AssetHandle(0))
                 {
                     continue;
@@ -1340,7 +1225,7 @@ namespace ignite
 
                 ensurePerEntityResources(smc.perEntityBuffer, smc.meshBindingSet);
 
-                Ref<SkeletalMesh> sm = ResolveSkeletalMesh(project, smc.handle);
+                Ref<Mesh> sm = ResolveMesh(project, smc.handle);
                 if (!sm)
                 {
                     continue;
@@ -1357,10 +1242,21 @@ namespace ignite
 
                     std::fill(std::begin(gpuData.boneTransforms), std::end(gpuData.boneTransforms), glm::mat4(1.0f));
 
-                    const size_t transformCount = std::min(static_cast<size_t>(MAX_BONES), sm->boneTransforms.size());
-                    for (size_t i = 0; i < transformCount; ++i)
+                    // Get bone transform from the animator
+                    if (sm->GetAnimatorHandle() != AssetHandle(0))
                     {
-                        gpuData.boneTransforms[i] = sm->boneTransforms[i];
+                        if (Ref<AnimatorController> controller = project->GetAsset<AnimatorController>(sm->GetAnimatorHandle()))
+                        {
+                            if (Ref<Skeleton> skeleton = project->GetAsset<Skeleton>(controller->skeletonHandle))
+                            {
+                                auto boneTransforms = skeleton->GetFinalJointTransforms();
+                                const size_t transformCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
+                                for (size_t i = 0; i < transformCount; ++i)
+                                {
+                                    gpuData.boneTransforms[i] = boneTransforms[i];
+                                }
+                            }
+                        }
                     }
 
                     smc.perEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
@@ -1369,9 +1265,7 @@ namespace ignite
 
                     Ref<Material> material = ResolveMaterial(project, m->GetMaterialHandle());
                     if (!material)
-                    {
                         continue;
-                    }
 
                     if (!material->GetBindingSet())
                     {
@@ -1386,7 +1280,7 @@ namespace ignite
                         }
                     }
 
-                  if (uploadedMaterialsThisPass.insert(material.get()).second)
+                    if (uploadedMaterialsThisPass.insert(material.get()).second)
                     {
                         material->UploadToGpu(cmd);
                     }
@@ -1394,103 +1288,6 @@ namespace ignite
                     if (smc.meshBindingSet && material->GetBindingSet() && primitive->vertexBuffer && primitive->indexBuffer)
                     {
                         geomGState.bindings = { smc.meshBindingSet, material->GetBindingSet() };
-                        geomGState.vertexBuffers.resize(0);
-                        geomGState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
-                        geomGState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
-
-                        cmd->setGraphicsState(geomGState);
-
-                        nvrhi::DrawArguments args;
-                        args.setVertexCount(primitive->indexBuffer->GetCount());
-                        args.instanceCount = 1;
-
-                        cmd->drawIndexed(args);
-                    }
-                }
-            }
-        }
-
-
-        // ===========================
-        // Static Meshes
-        // ===========================
-        {
-            IGN_PROFILE_SCOPE("SceneRenderer::StaticMeshes");
-            auto meshView = m_Scene->registry->view<TransformComponent, StaticMeshComponent>();
-            for (entt::entity e : meshView)
-            {
-                TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-                if (!tr.visible)
-                    continue;
-
-                StaticMeshComponent &smc = m_Scene->registry->get<StaticMeshComponent>(e);
-                if (smc.handle == AssetHandle(0))
-                {
-                    continue;
-                }
-
-                ensurePerEntityResources(smc.perEntityBuffer, smc.meshBindingSet);
-
-                Ref<StaticMesh> sm = ResolveStaticMesh(project, smc.handle);
-                if (!sm)
-                {
-                    continue;
-                }
-
-                for (auto &m : sm->GetMeshInstances())
-                {
-                    SkinnedMesh_GPUData gpuData;
-                    gpuData.transformation = tr.GetWorldMatrix() * m->global;
-                    gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-
-                    const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
-                    gpuData.normal = glm::mat4(normalMat3);
-
-                    std::fill(std::begin(gpuData.boneTransforms), std::end(gpuData.boneTransforms), glm::mat4(1.0f));
-
-                  smc.perEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
-
-                    auto &primitive = m->GetPrimitive();
-
-                    // Get override material first
-                    Ref<Material> material;
-                    if (smc.materialHandle != AssetHandle(0))
-                    {
-                        material = ResolveMaterial(project, smc.materialHandle);
-                    }
-                    else
-                    {
-                        material = ResolveMaterial(project, m->GetMaterialHandle());
-                    }
-
-                    if (!material)
-                    {
-                        continue;
-                    }
-
-                    if (!material->GetBindingSet())
-                    {
-                        MaterialTextures textures;
-                        auto assetManager = m_Scene->GetProject()->GetAssetManager();
-                        material->RetrieveTextures(assetManager, &textures);
-                        material->UpdateBindingSet(this, &textures, assetManager);
-
-                        if (!material->GetBindingSet())
-                        {
-                            continue;
-                        }
-                    }
-
-                  if (uploadedMaterialsThisPass.insert(material.get()).second)
-                    {
-                        material->UploadToGpu(cmd);
-                    }
-
-                    if (smc.meshBindingSet && material->GetBindingSet() && primitive->vertexBuffer && primitive->indexBuffer)
-                    {
-                        geomGState.bindings = { smc.meshBindingSet, material->GetBindingSet() };
-
-                        // Reset vertex buffers for this mesh (don't accumulate across loop iterations)
                         geomGState.vertexBuffers.resize(0);
                         geomGState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
                         geomGState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
@@ -1946,6 +1743,9 @@ namespace ignite
         Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture)
     {
         IGN_PROFILE_FUNCTION();
+        
+        EnsureCompositeVertexBufferUploaded(cmd);
+
         CompositePostProcess_GPUData postProcessData;
         if (camera)
         {
@@ -2007,7 +1807,7 @@ namespace ignite
             const glm::vec3 worldPos = glm::vec3(world[3]);
 
             Ref<Texture> texture = m_Icons["camera"];
-            glm::mat4 iconTransform = glm::translate(glm::mat4(1.0f), worldPos) * billboardRotation * glm::scale(glm::mat4(1.0f), glm::vec3(2.2f));
+            glm::mat4 iconTransform = glm::translate(glm::mat4(1.0f), worldPos) * billboardRotation * glm::scale(glm::mat4(1.0f), glm::vec3(1.0f));
             m_Renderer2D->DrawQuad(iconTransform, glm::vec4(1.0f), texture, {0.0f, 1.0f }, { 1.0f, 0.0f }, glm::vec2(1.0f), objectID);
 
             if (camera)
@@ -2037,7 +1837,7 @@ namespace ignite
             const glm::vec3 worldPos = glm::vec3(world[3]);
 
             Ref<Texture> texture = m_Icons["lighting"];
-            glm::mat4 iconTransform = glm::translate(glm::mat4(1.0f), worldPos) * billboardRotation * glm::scale(glm::mat4(1.0f), glm::vec3(2.2f));
+            glm::mat4 iconTransform = glm::translate(glm::mat4(1.0f), worldPos) * billboardRotation * glm::scale(glm::mat4(1.0f), glm::vec3(1.0f));
             m_Renderer2D->DrawQuad(iconTransform, lc.color, texture, { 0.0f, 0.0f }, { 1.0f, 1.0f }, glm::vec2(1.0f), objectID);
 
             const glm::vec3 direction = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));

@@ -49,7 +49,7 @@ namespace ignite
         static AssetType GetStaticAssetType() { return AssetType::AnimatorController; }
         virtual AssetType GetAssetType() override { return GetStaticAssetType(); }
 
-        bool UpdateSkeleton(float deltaTime, AnimatorControllerRuntime &runtime, AssetManager *assetManager, std::vector<glm::mat4> &outBoneTransforms);
+        bool UpdateSkeleton(float deltaTime, AnimatorControllerRuntime &runtime, AssetManager *assetManager);
     };
 }
 

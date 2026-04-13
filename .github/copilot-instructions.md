@@ -9,3 +9,6 @@
 ## Rendering Optimization
 - For rendering optimization tasks, keep SceneRenderer focused on orchestration and move processing/caching logic (like texture/material handle caching) into Renderer2D; avoid editor/gameplay camera reuse optimizations. Focus only on texture caching in Quad2DView.
 
+## UI Guidelines
+- Use `ImGui::BeginPopupModal` for creating dialogs instead of regular `ImGui::Begin` windows.
+

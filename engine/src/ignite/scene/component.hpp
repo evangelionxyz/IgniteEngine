@@ -45,8 +45,7 @@ namespace ignite
         { "Circle 2D", CompType_Circle2D },
         { "Point Light 2D", CompType_PointLight2D },
         { "Font", CompType_Font },
-        { "Static Mesh", CompType_StaticMesh },
-        { "Skeletal Mesh", CompType_SkeletalMesh },
+        { "Mesh", CompType_Mesh },
         { "Rigid Body", CompType_Rigidbody },
         { "Box Collider", CompType_BoxCollider },
         { "Sphere Collider", CompType_SphereCollider },
@@ -155,8 +154,7 @@ namespace ignite
             case CompType_Sprite2D: return "CompType_Sprite2D";
             case CompType_Circle2D: return "CompType_Circle2D";
             case CompType_PointLight2D: return "CompType_PointLight2D";
-            case CompType_SkeletalMesh: return "CompType_SkeletalMesh";
-            case CompType_StaticMesh: return "CompType_StaticMesh";
+            case CompType_Mesh: return "CompType_Mesh";
             case CompType_Rigidbody: return "CompType_Rigidbody";
             case CompType_BoxCollider: return "CompType_BoxCollider";
             case CompType_SphereCollider: return "CompType_SphereCollider";
@@ -409,35 +407,16 @@ namespace ignite
 		COMPONENT_CLASS_TYPE(CompType_Font)
     };
 
-    class StaticMeshComponent : public IComponent
-    {
-    public:
-        AssetHandle handle = AssetHandle(0); // class StaticMesh in mesh.h
-        AssetHandle materialHandle = AssetHandle(0); // override material
-
-        Ref<ConstantBuffer> perEntityBuffer;
-        nvrhi::BindingSetHandle meshBindingSet = nullptr; // Cached binding set - reused across frames
-
-        StaticMeshComponent() = default;
-
-		COMPONENT_CLASS_TYPE(CompType_StaticMesh)
-    };
-
-	class SkeletalMeshComponent : public IComponent
+	class MeshComponent : public IComponent
 	{
 	public:
         AssetHandle handle = AssetHandle(0);         // class SkeletalMesh in mesh.hpp
-        AssetHandle animatorHandle = AssetHandle(0); // AnimatorController in animator_controller.hpp
-
-        std::string currentStateName;
-        float stateElapsed = 0.0f;
-        float stateNormalized = 0.0f;
 
         Ref<ConstantBuffer> perEntityBuffer;
         nvrhi::BindingSetHandle meshBindingSet = nullptr; // Cached binding set - reused across frames
 
-        SkeletalMeshComponent() = default;
-		COMPONENT_CLASS_TYPE(CompType_SkeletalMesh)
+        MeshComponent() = default;
+		COMPONENT_CLASS_TYPE(CompType_Mesh)
 	};
 
     class RigibodyComponent : public IComponent

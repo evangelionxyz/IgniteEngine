@@ -395,7 +395,21 @@ namespace ignite {
         }
     }
 
-	void AssetManager::RemoveAsset(AssetHandle handle)
+    const std::string AssetManager::GetAssetDisplayName(AssetHandle handle) const
+    {
+        if (handle != AssetHandle(0))
+        {
+            const AssetMetaData &metadata = GetMetaData(handle);
+            if (!metadata.filepath.empty())
+            {
+                return metadata.filepath.filename().string();
+            }
+        }
+
+        return "INVALID";
+    }
+
+    void AssetManager::RemoveAsset(AssetHandle handle)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -616,7 +630,11 @@ namespace ignite {
     const AssetMetaData &AssetManager::GetMetaData(const std::filesystem::path &filepath, AssetHandle &outHandle)
     {
         outHandle = GetAssetHandle(filepath);
-        return m_AssetRegistry.at(outHandle);;
+        if (m_AssetRegistry.contains(outHandle))
+        {
+            return m_AssetRegistry.at(outHandle);
+        }
+        return s_NullMetaData;
     }
 
     const AssetMetaData &AssetManager::GetMetaData(AssetHandle handle) const
@@ -728,16 +746,15 @@ namespace ignite {
             return nullptr;
         }
 
+        case AssetType::Mesh:
+        case AssetType::Font:
         case AssetType::Material:
         case AssetType::Material2D:
-        case AssetType::StaticMesh:
-        case AssetType::SkeletalAnimation:
-        case AssetType::SkeletalMesh:
+        case AssetType::Animation2D:
         case AssetType::SpriteSheet:
-        case AssetType::Font:
+        case AssetType::SkeletalAnimation:
         case AssetType::AnimatorController:
         case AssetType::AnimatorController2D:
-        case AssetType::Animation2D:
         {
             asset = AssetImporter::Import(handle, getterMetadata, this);
             

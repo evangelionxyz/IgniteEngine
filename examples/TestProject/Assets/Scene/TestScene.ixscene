@@ -1,0 +1,18 @@
+Scene:
+  Version: Alpha-0.1
+  Title: New Scene
+  Entities:
+    - ID: 16774349335739855177
+      Name: Empty
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [0, 0, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      Mesh:
+        Handle: 7027867997128787561

@@ -62,6 +62,8 @@ namespace ignite
         TextureCreateInfo GetTextureCreateInfo(AssetHandle handle) const;
         void SetTextureCreateInfo(AssetHandle handle, const TextureCreateInfo &createInfo, bool saveToDisk = true);
 
+        const std::string GetAssetDisplayName(AssetHandle handle) const;
+
         template<typename T>
         void AssignAsset(AssetHandle handle, const Ref<T> &asset)
         {

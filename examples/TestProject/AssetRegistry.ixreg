@@ -1,149 +1,65 @@
 AssetRegistry:
   Assets:
-    - Handle: 23797601587078018
-      Type: SkeletalAnimation
-      Filepath: Great Sword Jump Attack/Animation/Great Sword Jump Attack_0.ixanim
-    - Handle: 472704409128830060
-      Type: SkeletalAnimation
-      Filepath: Standing Idle/Animation/Standing Idle_0.ixanim
-    - Handle: 1146833996653238217
-      Type: SkeletalMesh
-      Filepath: Great Sword Jump Attack/SkeletalMesh/Great Sword Jump Attack.ixskm
-    - Handle: 1385067185104004383
+    - Handle: 369159775785193268
       Type: Texture
-      Filepath: Tut Hip Hop Dance/Textures/Tut Hip Hop Dance_1_.png
+      Filepath: Meshes/Rumba Dancing/Textures/Rumba Dancing_2_.png
     - Handle: 1671497305426399170
       Type: Texture
       Filepath: kiara_1_dawn_4k.hdr
-    - Handle: 1686088020919170814
+    - Handle: 4300881635202775327
       Type: Material
-      Filepath: CheckerFloor.ixmat
-    - Handle: 2666909878259013252
-      Type: SkeletalAnimation
-      Filepath: Meshes/T-Pose/Animation/T-Pose_0.ixanim
-    - Handle: 2730403899731088208
-      Type: SkeletalAnimation
-      Filepath: Great Sword Jump Attack/Animation/Great Sword Jump Attack_0.ixanim
-    - Handle: 3041406261178892380
-      Type: Animation2D
-      Filepath: Animation/Idle.anim2d
-    - Handle: 3087250684467871483
-      Type: AnimatorController
-      Filepath: Anim_B.ac
-    - Handle: 4025623060811530075
-      Type: AnimatorController
-      Filepath: Anim_A.ac
-    - Handle: 5784425294381670522
-      Type: Texture
-      Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_2_.png
-    - Handle: 5850886667373479827
-      Type: Skeleton
-      Filepath: Great Sword Jump Attack/SkeletalMesh/Great Sword Jump Attack.ixskel
-    - Handle: 5883949835432046130
-      Type: SkeletalAnimation
-      Filepath: Great Sword Jump Attack/Animation/Great Sword Jump Attack_0.ixanim
-    - Handle: 6382678320413337663
-      Type: Texture
-      Filepath: Tut Hip Hop Dance/Textures/Tut Hip Hop Dance_0_.png
-    - Handle: 6895963861277518904
-      Type: Texture
-      Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_0_.png
-    - Handle: 6991248045714503413
-      Type: Texture
-      Filepath: Meshes/T-Pose/Textures/T-Pose_1_.png
+      Filepath: Meshes/Rumba Dancing/Material/kachujin_MAT.ixmat
+    - Handle: 7027867997128787561
+      Type: Mesh
+      Filepath: Meshes/Rumba Dancing/Mesh/Rumba Dancing.mesh
     - Handle: 7201159435847965647
       Type: Texture
       Filepath: ferndale_studio_04_2k.hdr
+    - Handle: 7495112486815385040
+      Type: Texture
+      Filepath: Meshes/Rumba Dancing/Textures/Rumba Dancing_1_.png
     - Handle: 7504911466409295994
       Type: Texture
       Filepath: snowy_field_2k.hdr
-    - Handle: 7852264912995845083
-      Type: SkeletalMesh
-      Filepath: Meshes/T-Pose/SkeletalMesh/T-Pose.ixskm
     - Handle: 8406749831429556630
       Type: Texture
       Filepath: ferndale_studio_12_2k.hdr
     - Handle: 8487866291550668718
       Type: Texture
       Filepath: klippad_sunrise_2_2k.hdr
-    - Handle: 9297076932640637832
-      Type: SkeletalMesh
-      Filepath: Tut Hip Hop Dance/SkeletalMesh/Tut Hip Hop Dance.ixskm
+    - Handle: 9308657169604886185
+      Type: SkeletalAnimation
+      Filepath: Meshes/Rumba Dancing/Standing Taunt Battlecry/Animation/Standing Taunt Battlecry_0.ixanim
     - Handle: 9420462621085832834
       Type: Font
       Filepath: segoeui.ttf
-    - Handle: 9554496557541511132
-      Type: Material
-      Filepath: sphere/Material/DefaultMaterial.ixmat
-    - Handle: 10507436644703529331
-      Type: Skeleton
-      Filepath: Meshes/T-Pose/SkeletalMesh/T-Pose.ixskel
-    - Handle: 10584338476988751194
-      Type: AnimatorController2D
-      Filepath: Animation/PlayerAnimController.ac2d
-    - Handle: 10607535596036951705
-      Type: Material
-      Filepath: Great Sword Jump Attack/Material/MariaMat.ixmat
-    - Handle: 10679015075549878438
-      Type: Material
-      Filepath: Meshes/T-Pose/Material/kachujin_MAT.ixmat
-    - Handle: 11149722755453565602
-      Type: Material
-      Filepath: cube/Material/Material.ixmat
-    - Handle: 11315724973964600346
+    - Handle: 9894304757204418348
       Type: Scene
-      Filepath: Scene/test.ixscene
-    - Handle: 11776459511892231412
+      Filepath: Scene/TestScene.ixscene
+    - Handle: 10413000552455109983
+      Type: AnimatorController
+      Filepath: Meshes/Rumba Dancing/Animation/NewAnimatorController3D.ac
+    - Handle: 11430929632188587523
       Type: SkeletalAnimation
-      Filepath: Tut Hip Hop Dance/Animation/Tut Hip Hop Dance_0.ixanim
-    - Handle: 12674773891731727696
+      Filepath: Meshes/Rumba Dancing/Animation/Rumba Dancing_0.ixanim
+    - Handle: 11769717714627322982
       Type: Texture
-      Filepath: Tut Hip Hop Dance/Textures/Tut Hip Hop Dance_2_.png
-    - Handle: 13173322397608345167
-      Type: StaticMesh
-      Filepath: sphere/StaticMesh/sphere.ixsm
+      Filepath: Meshes/Rumba Dancing/Textures/Rumba Dancing_0_.png
     - Handle: 13589769746383350053
       Type: Texture
       Filepath: checker.jpg
+    - Handle: 13685850293853651728
+      Type: Invalid
+      Filepath: ""
     - Handle: 14048962819861439313
       Type: Texture
       Filepath: segoeui_msdf.png
-    - Handle: 14216026366237509126
-      Type: Texture
-      Filepath: Meshes/T-Pose/Textures/T-Pose_2_.png
-    - Handle: 14580958494333747827
-      Type: Material
-      Filepath: Tut Hip Hop Dance/Material/Arissa_MAT.ixmat
     - Handle: 14798869311340847312
       Type: Texture
       Filepath: rogland_clear_night_4k.hdr
     - Handle: 15132198631710456398
       Type: Texture
       Filepath: snowy_cemetery_2k.hdr
-    - Handle: 15234153275258604094
+    - Handle: 16520719249779125409
       Type: Skeleton
-      Filepath: Tut Hip Hop Dance/SkeletalMesh/Tut Hip Hop Dance.ixskel
-    - Handle: 15618750618960578444
-      Type: Skeleton
-      Filepath: Great Sword Jump Attack/SkeletalMesh/Great Sword Jump Attack.ixskel
-    - Handle: 15807500425735898075
-      Type: Texture
-      Filepath: Great Sword Jump Attack/Textures/Great Sword Jump Attack_1_.png
-    - Handle: 16477014767729516534
-      Type: Skeleton
-      Filepath: Great Sword Jump Attack/SkeletalMesh/Great Sword Jump Attack.ixskel
-    - Handle: 17360739226101978199
-      Type: Scene
-      Filepath: Scene/StaticMeshTest.ixscene
-    - Handle: 17466788850293151826
-      Type: Texture
-      Filepath: Meshes/T-Pose/Textures/T-Pose_0_.png
-    - Handle: 17604633582810232567
-      Type: StaticMesh
-      Filepath: cube/StaticMesh/cube.ixsm
-    - Handle: 17985585918773427507
-      Type: Material
-      Filepath: MyFloor.ixmat
-    - Handle: 18148575872844501869
-      Type: Animation2D
-      Filepath: Animation/Run.anim2d
+      Filepath: Meshes/Rumba Dancing/Mesh/Rumba Dancing.ixskel

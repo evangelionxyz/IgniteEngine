@@ -129,7 +129,7 @@ namespace ignite
     void Application::ProcessRenderThreadSubmissions()
     {
         IGN_PROFILE_FUNCTION();
-        std::queue<std::function<void()>> pending;
+        std::queue<std::pair<std::function<void()>, std::string>> pending;
         {
             std::lock_guard lock(m_RenderThreadFuncsMutex);
             pending.swap(m_RenderThreadFuncs);
@@ -140,9 +140,9 @@ namespace ignite
         {
             auto func = std::move(pending.front());
             pending.pop();
-            if (func)
+            if (func.first)
             {
-                func();
+                func.first();
             }
         }
 
@@ -158,7 +158,7 @@ namespace ignite
         // Process all pending submissions
         if (!m_ThreadFuncs.empty())
         {
-            std::function<void()> func;
+            std::pair<std::function<void()>, std::string> func;
 
             {
                 std::lock_guard lock(m_ThreadFuncsMutex);
@@ -166,9 +166,9 @@ namespace ignite
             }
             
             // Execute outside lock
-            if (func)
+            if (func.first)
             {
-                func();
+                func.first();
 
                 std::lock_guard lock(m_ThreadFuncsMutex);
                 m_ThreadFuncs.pop();
@@ -198,7 +198,8 @@ namespace ignite
                     return m_CurrentFrameReady.load() || !m_RenderThreadRunning.load() || m_RenderThreadHasTasks.load();
                 });
 
-                if (!m_RenderThreadRunning) break;
+                if (!m_RenderThreadRunning)
+                    break;
 
                 if (m_RenderThreadHasTasks.load() && !m_CurrentFrameReady.load())
                 {
@@ -578,13 +579,13 @@ namespace ignite
         GetInstance()->m_Window->Restore();
     }
 
-    void Application::SubmitToMainThread(const std::function<void()> func)
+    void Application::SubmitToMainThread(const std::function<void()> func, const std::string &funcName)
     {
         std::lock_guard lock(GetInstance()->m_ThreadFuncsMutex);
-        GetInstance()->m_ThreadFuncs.push(func);
+        GetInstance()->m_ThreadFuncs.push({ func, funcName });
     }
 
-    void Application::SubmitToRenderThread(const std::function<void()> func)
+    void Application::SubmitToRenderThread(const std::function<void()> func, const std::string &funcName)
     {
         if (!GetInstance()->m_RenderThreadRunning.load())
         {
@@ -596,7 +597,7 @@ namespace ignite
         }
         {
             std::lock_guard lock(GetInstance()->m_RenderThreadFuncsMutex);
-            GetInstance()->m_RenderThreadFuncs.push(func);
+            GetInstance()->m_RenderThreadFuncs.push({ func, funcName });
             GetInstance()->m_RenderThreadHasTasks = true;
         }
         GetInstance()->m_FrameCV.notify_all();

@@ -151,7 +151,12 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         return invalidRegistry;
     }
 
-	bool Project::Serialize(const std::filesystem::path &filepath)
+    const std::string &Project::GetAssetDisplayName(AssetHandle handle) const
+    {
+        return m_AssetManager->GetAssetDisplayName(handle);
+    }
+
+    bool Project::Serialize(const std::filesystem::path &filepath)
 	{
 		Serializer projectSr(filepath);
 

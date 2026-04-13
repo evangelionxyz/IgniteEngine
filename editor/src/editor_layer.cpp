@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cmath>
 #include <format>
+#include <limits>
 #include <SDL3/SDL_dialog.h>
 
 namespace ignite
@@ -233,6 +234,8 @@ namespace ignite
         // update panels
         if (m_ActiveScene)
         {
+            m_SceneRenderer->OnUpdate(deltaTime);
+
             // multi select entity
             m_State.multiSelect = Input::IsModifierPressed(KeyMod::LeftShift);
 
@@ -282,13 +285,56 @@ namespace ignite
                     auto &cam = m_ScenePanel->GetViewportCamera();
                     auto &tr = entity.GetComponent<TransformComponent>();
 
-                    const glm::vec3 halfExtents = glm::abs(tr.scale) * 0.5f;
+                    glm::vec3 focusCenter = tr.translation;
+                    glm::vec3 halfExtents = glm::abs(tr.scale) * 0.5f;
+
+                    auto tryFocusFromAABB = [&](const AABB &meshAABB)
+                    {
+                        const glm::vec3 corners[8] =
+                        {
+                            { meshAABB.min.x, meshAABB.min.y, meshAABB.min.z },
+                            { meshAABB.max.x, meshAABB.min.y, meshAABB.min.z },
+                            { meshAABB.min.x, meshAABB.max.y, meshAABB.min.z },
+                            { meshAABB.max.x, meshAABB.max.y, meshAABB.min.z },
+                            { meshAABB.min.x, meshAABB.min.y, meshAABB.max.z },
+                            { meshAABB.max.x, meshAABB.min.y, meshAABB.max.z },
+                            { meshAABB.min.x, meshAABB.max.y, meshAABB.max.z },
+                            { meshAABB.max.x, meshAABB.max.y, meshAABB.max.z },
+                        };
+
+                        const glm::mat4 worldTransform = tr.GetWorldMatrix();
+                        glm::vec3 worldMin(std::numeric_limits<float>::max());
+                        glm::vec3 worldMax(std::numeric_limits<float>::lowest());
+
+                        for (const glm::vec3 &corner : corners)
+                        {
+                            const glm::vec4 worldPos = worldTransform * glm::vec4(corner, 1.0f);
+                            worldMin = glm::min(worldMin, glm::vec3(worldPos));
+                            worldMax = glm::max(worldMax, glm::vec3(worldPos));
+                        }
+
+                        focusCenter = (worldMin + worldMax) * 0.5f;
+                        halfExtents = glm::abs(worldMax - worldMin) * 0.5f;
+                    };
+
+                    if (m_ActiveProject && entity.HasComponent<MeshComponent>())
+                    {
+                        const auto &smc = entity.GetComponent<MeshComponent>();
+                        if (smc.handle != AssetHandle(0))
+                        {
+                            if (Ref<Mesh> mesh = m_ActiveProject->GetAsset<Mesh>(smc.handle))
+                            {
+                                tryFocusFromAABB(mesh->aabb);
+                            }
+                        }
+                    }
+
                     const float radius = glm::max(halfExtents.x, glm::max(halfExtents.y, halfExtents.z));
                     const float fov = glm::radians(cam.fov);
                     float distance = radius / std::tan(fov * 0.5f);
-                    distance *= 3.5f;
+                    distance *= 2.0f;
 
-                    cam.FocusTarget(tr.translation, distance);
+                    cam.FocusTarget(focusCenter, distance);
                 }
                 break;
             }
@@ -311,12 +357,12 @@ namespace ignite
                 }
                 break;
             }
-			case Key::Q:
-			{
-				if (!Input::IsMouseButtonPressed(Mouse::ButtonRight))
-					m_ScenePanel->SetGizmoOperation(GizmoOperation::BOUND_SIZING_2D);
-				break;
-			}
+            case Key::Q:
+            {
+                if (!Input::IsMouseButtonPressed(Mouse::ButtonRight))
+                    m_ScenePanel->SetGizmoOperation(GizmoOperation::BOUND_SIZING_2D);
+                break;
+            }
             case Key::T:
             {
                 if (!Input::IsMouseButtonPressed(Mouse::ButtonRight))
@@ -367,7 +413,7 @@ namespace ignite
                 }
                 break;
             }
-        default: break;
+            default: break;
         }
         return false;
     }
@@ -825,11 +871,29 @@ namespace ignite
 		{
 			m_ScenePanel->SetActiveScene(scene);
 		}
-		m_SceneRenderer->SetActiveScene(scene);
-		if (m_ActiveProject)
+		
+        if (m_ActiveProject)
 		{
 			m_ActiveProject->SetActiveScene(scene);
 		}
+
+		m_SceneRenderer->SetActiveScene(scene);
+    }
+
+    void EditorLayer::RefreshContentBrowsers()
+    {
+        if (!m_ActiveProject)
+        {
+            return;
+        }
+
+        for (ContentBrowserPanel *panel : m_ContentBrowserPanels)
+        {
+            if (panel)
+            {
+                panel->RefreshFiles();
+            }
+        }
     }
 
     void EditorLayer::NewScene()
@@ -1710,7 +1774,7 @@ namespace ignite
 					// Color code by type
 					ImVec4 color = ImVec4(0.5f, 0.8f, 0.5f, 1.0f);
 					if (type == AssetType::Texture) color = ImVec4(0.9f, 0.5f, 0.5f, 1.0f);
-					else if (type == AssetType::StaticMesh) color = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
+					else if (type == AssetType::Mesh) color = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
 					else if (type == AssetType::Material) color = ImVec4(0.9f, 0.9f, 0.5f, 1.0f);
 
 					ImGui::TextColored(color, "%s: %d (%.1f%%)",
@@ -1762,7 +1826,7 @@ namespace ignite
 				const char *typeNames[] = { "All", "Scene", "Texture", "Material", "StaticMesh", "Audio", "Skeleton" };
 				const AssetType typeValues[] = {
 					AssetType::Invalid, AssetType::Scene, AssetType::Texture,
-					AssetType::Material, AssetType::StaticMesh, AssetType::Audio, AssetType::Skeleton
+                    AssetType::Material, AssetType::Mesh, AssetType::Audio, AssetType::Skeleton
 				};
 
 				int currentTypeIndex = 0;
@@ -1872,7 +1936,7 @@ namespace ignite
                         ImGui::TableNextColumn();
                         ImVec4 typeColor = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
                         if (metadata.type == AssetType::Texture) typeColor = ImVec4(0.9f, 0.5f, 0.5f, 1.0f);
-                        else if (metadata.type == AssetType::StaticMesh) typeColor = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
+                        else if (metadata.type == AssetType::Mesh) typeColor = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
                         else if (metadata.type == AssetType::Material) typeColor = ImVec4(0.9f, 0.9f, 0.5f, 1.0f);
                         else if (metadata.type == AssetType::Scene) typeColor = ImVec4(0.5f, 0.9f, 0.9f, 1.0f);
 
@@ -1949,7 +2013,7 @@ namespace ignite
                         ImGui::TableNextColumn();
                         ImVec4 typeColor = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
                         if (metadata.type == AssetType::Texture) typeColor = ImVec4(0.9f, 0.5f, 0.5f, 1.0f);
-                        else if (metadata.type == AssetType::StaticMesh) typeColor = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
+                        else if (metadata.type == AssetType::Mesh) typeColor = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
                         else if (metadata.type == AssetType::Material) typeColor = ImVec4(0.9f, 0.9f, 0.5f, 1.0f);
                         else if (metadata.type == AssetType::Scene) typeColor = ImVec4(0.5f, 0.9f, 0.9f, 1.0f);
 
