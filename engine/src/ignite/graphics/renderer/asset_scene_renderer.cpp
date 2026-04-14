@@ -29,23 +29,10 @@ namespace ignite
         m_SourceMaterial = nullptr;
         m_RuntimeMaterial = CreateRef<Material>();
 
-        m_SceneGPUDataBuffer = ConstantBuffer::Create(sizeof(Scene_GPUData), false, 1, "Asset Preview Scene Buffer");
-        m_CSMGPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMap_GPUData), false, 1, "Asset Preview CSM Buffer");
-        m_PerEntityBuffer = ConstantBuffer::Create(sizeof(SkinnedMesh_GPUData), true, 512, "Asset Preview Per Entity Buffer");
-
         auto samplerDesc = nvrhi::SamplerDesc();
         samplerDesc.setAllFilters(false);
         samplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp);
         m_EnvironmentTexture = Renderer::GetBlackTexture();
-
-        auto desc = nvrhi::BindingSetDesc();
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m_PerEntityBuffer->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, m_SceneGPUDataBuffer->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, m_CSMGPUDataBuffer->GetHandle()));
-
-        m_MeshBindingSet = m_Device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
-        LOG_ASSERT(m_MeshBindingSet, "Failed to create asset preview mesh binding set");
 
         m_SceneGPUData.sunColor = glm::vec4(1.0f, 0.98f, 0.92f, 3.0f);
         m_SceneGPUData.sungAngles = glm::vec2(glm::radians(45.0f), glm::radians(35.0f));
@@ -63,6 +50,8 @@ namespace ignite
     void AssetSceneRenderer::BeginFrame()
     {
         m_Has2DPreRenderCache = false;
+        m_GeometryPipelineCache.clear();
+        m_CompositePipelineCache.clear();
     }
 
     void AssetSceneRenderer::SetMaterial(const Ref<Material> &material)
@@ -141,14 +130,14 @@ namespace ignite
             }
         }
 
-        CameraBuffer cameraBuffer = { camera->GetProjection(), camera->GetView(), glm::vec4(camera->position, 1.0f) };
-        Renderer::GetCameraConstantBuffer()->SetData(cmd, Buffer(&cameraBuffer, sizeof(CameraBuffer)));
+        CameraBufferData cameraBufferData = { camera->GetProjection(), camera->GetView(), glm::vec4(camera->position, 1.0f) };
+        m_CameraBuffer->SetData(cmd, Buffer(&cameraBufferData, sizeof(CameraBufferData)));
 
-        m_SceneGPUDataBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(Scene_GPUData)));
+        m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(SceneBufferData)));
         m_CSMGPUData = {};
         m_CSMGPUData.cascadeIndex = -1;
         m_CSMGPUData.shadowStrength = 0.0f;
-        m_CSMGPUDataBuffer->SetData(cmd, Buffer(&m_CSMGPUData, sizeof(CascadedShadowMap_GPUData)));
+        m_CascadedShadowMapBuffer->SetData(cmd, Buffer(&m_CSMGPUData, sizeof(CascadedShadowMapBufferData)));
 
         uiRT->ClearColorAttachmentFloat(cmd, 0);
         uiRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
@@ -276,8 +265,7 @@ namespace ignite
                 continue;
             }
 
-            if ((!primitive->vertexBuffer || !primitive->indexBuffer)
-                && !primitive->vertices.empty() && !primitive->indices.empty())
+            if ((!primitive->vertexBuffer || !primitive->indexBuffer) && !primitive->vertices.empty() && !primitive->indices.empty())
             {
                 primitive->CreateBuffer(cmd);
             }
@@ -287,7 +275,8 @@ namespace ignite
                 continue;
             }
 
-            SkinnedMesh_GPUData gpuData;
+
+            SkinnedMeshBufferData gpuData;
             gpuData.transformation = meshInstance->global;
             if (glm::abs(glm::determinant(gpuData.transformation)) < 0.000001f)
             {
@@ -302,9 +291,12 @@ namespace ignite
             {
                 gpuData.boneTransforms[i] = m_BoneTransforms[i];
             }
-            
-            m_PerEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(SkinnedMesh_GPUData)));
 
+            meshInstance->SetData(cmd, &gpuData, sizeof(SkinnedMeshBufferData));
+            meshInstance->EnsureBuffer(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer);
+
+            nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
+            
             Ref<Material> material = m_Project->GetAsset<Material>(meshInstance->GetMaterialHandle());
             {
                 bool waitedForMaterialUpdate = false;
@@ -369,15 +361,18 @@ namespace ignite
                 material->UploadToGpu(cmd);
             }
 
-            state.bindings = { m_MeshBindingSet, material ? material->GetBindingSet() : m_RuntimeMaterial->GetBindingSet() };
-            state.vertexBuffers = { nvrhi::VertexBufferBinding { primitive->vertexBuffer->GetHandle(), 0, 0 } };
-            state.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
-            cmd->setGraphicsState(state);
+            if (meshBindingSet)
+            {
+                state.bindings = { meshBindingSet, material ? material->GetBindingSet() : m_RuntimeMaterial->GetBindingSet() };
+                state.vertexBuffers = { nvrhi::VertexBufferBinding { primitive->vertexBuffer->GetHandle(), 0, 0 } };
+                state.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+                cmd->setGraphicsState(state);
 
-            nvrhi::DrawArguments args;
-            args.setVertexCount(primitive->indexBuffer->GetCount());
-            args.instanceCount = 1;
-            cmd->drawIndexed(args);
+                nvrhi::DrawArguments args;
+                args.setVertexCount(primitive->indexBuffer->GetCount());
+                args.instanceCount = 1;
+                cmd->drawIndexed(args);
+            }
         }
     }
 

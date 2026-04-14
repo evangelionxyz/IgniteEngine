@@ -89,18 +89,61 @@ namespace ignite
 
     Ref<Font> AssetImporter::ImportFont(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
     {
-        if (!std::filesystem::exists(metadata.filepath))
+        if (!assetManager || !assetManager->GetProject())
+        {
+            return nullptr;
+        }
+
+        std::filesystem::path fontFilepath = metadata.filepath;
+        if (!std::filesystem::exists(fontFilepath))
+        {
+            fontFilepath = assetManager->GetProject()->GetAssetFilepath(metadata.filepath);
+        }
+
+        if (!std::filesystem::exists(fontFilepath))
         {
             LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
             return nullptr;
         }
 
-        Ref<Font> font = Font::Create(metadata.filepath);
+        Ref<Font> font = Font::Create(fontFilepath);
         if (font)
         {
             font->handle = handle;
             font->SetDirtyFlag(false);
             font->SetReadyFlag(true);
+
+            if (Ref<Texture> atlasTexture = font->GetAtlasTexture())
+            {
+                if (!atlasTexture->IsReady())
+                {
+                    LOG_WARN("[Asset Importer] Font atlas is not ready yet for {}", fontFilepath.generic_string());
+                }
+                else
+                {
+                    const std::filesystem::path atlasPath = fontFilepath.parent_path() / (fontFilepath.stem().string() + "_msdf.png");
+                    if (BinarySerializer::SerializeTextureToPNG(atlasTexture, atlasPath))
+                    {
+                        const std::filesystem::path relativeAtlasPath = assetManager->GetProject()->GetAssetRelativeFilepath(atlasPath);
+
+                        AssetHandle atlasHandle = assetManager->GetAssetHandle(relativeAtlasPath);
+                        if (atlasHandle == AssetHandle(0))
+                        {
+                            atlasHandle = AssetHandle();
+                        }
+
+                        atlasTexture->handle = atlasHandle;
+                        atlasTexture->SetDirtyFlag(false);
+                        atlasTexture->SetReadyFlag(true);
+
+                        AssetMetaData atlasMetadata;
+                        atlasMetadata.filepath = relativeAtlasPath;
+                        atlasMetadata.type = AssetType::Texture;
+                        assetManager->AssignMetaData(atlasHandle, atlasMetadata);
+                        assetManager->AssignAsset(atlasHandle, atlasTexture);
+                    }
+                }
+            }
         }
 
         return font;
@@ -177,10 +220,8 @@ namespace ignite
         const std::filesystem::path outputRootDirectory = options.targetDirectory.empty() ? projectAssetPath : options.targetDirectory;
         const std::filesystem::path filename = metadata.filepath.stem();
         const std::filesystem::path outputDirectory = outputRootDirectory / filename;
-        const std::filesystem::path meshDirectory = outputDirectory / "Mesh";
-        const std::filesystem::path animationDirectory = outputDirectory / "Animation";
-        const std::filesystem::path meshBinaryPath = meshDirectory / (filename.string() + skeletalMeshBinExt);
-        const std::filesystem::path skeletonPath = meshDirectory / (filename.string() + skeletonBinExt);
+        const std::filesystem::path meshBinaryPath = outputDirectory / (filename.string() + skeletalMeshBinExt);
+        const std::filesystem::path skeletonPath = outputDirectory / (filename.string() + skeletonBinExt);
 
         Ref<Mesh> asset;
 
@@ -257,9 +298,9 @@ namespace ignite
 
             // animations
             std::vector<std::filesystem::path> animationFiles;
-            if (std::filesystem::exists(animationDirectory))
+            if (std::filesystem::exists(outputDirectory))
             {
-                for (const auto &entry : std::filesystem::directory_iterator(animationDirectory))
+                for (const auto &entry : std::filesystem::directory_iterator(outputDirectory))
                 {
                     if (entry.is_regular_file() && entry.path().extension() == animationBinExt)
                     {
@@ -305,8 +346,6 @@ namespace ignite
         MeshLoader::LoadSceneGraph(metadata.filepath.generic_string(), meshScene, assetManager);
 
         if (!std::filesystem::exists(outputDirectory)) std::filesystem::create_directory(outputDirectory);
-        if (options.importMesh && !std::filesystem::exists(meshDirectory)) std::filesystem::create_directory(meshDirectory);
-        if (options.importAnimations && !std::filesystem::exists(animationDirectory)) std::filesystem::create_directory(animationDirectory);
 
         const std::filesystem::path materialDirectory = outputDirectory / "Material";
         const std::filesystem::path textureDirectory = outputDirectory / "Textures";
@@ -453,7 +492,7 @@ namespace ignite
 
                 animation->SetSkeletonHandle(meshScene.skeleton ? meshScene.skeleton->handle : AssetHandle(0));
 
-                std::filesystem::path animationPath = animationDirectory / (std::format("{}_{}", filename.string(), i) + animationBinExt);
+                std::filesystem::path animationPath = outputDirectory / (std::format("{}_{}", filename.string(), i) + animationBinExt);
                 animation->Serialize(animationPath);
 
                 AssetHandle animationHandle = AssetHandle();

@@ -39,9 +39,6 @@ namespace ignite
         physics2D = CreateScope<Physics2D>(this);
         physics = CreateScope<JoltScene>(this);
 
-        m_SceneGPUDataBuffer = ConstantBuffer::Create(sizeof(Scene_GPUData), false, 1, "[Scene GPU Data]");
-		m_CSMGPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMap_GPUData), false, 1, "[CSM GPU Data]");
-
 		ScriptEngine::GetInstance()->SetSceneContext(this);
     }
 
@@ -67,10 +64,6 @@ namespace ignite
 
 		// Clear entity map
 		entities.clear();
-
-		// Release GPU buffers explicitly
-		m_SceneGPUDataBuffer.reset();
-		m_CSMGPUDataBuffer.reset();
 
 		// Release physics systems
 		physics2D.reset();
@@ -223,73 +216,6 @@ namespace ignite
     {
         this->m_ViewportWidth = width;
         this->m_ViewportHeight = height;
-    }
-
-    void Scene::WriteBuffer(nvrhi::ICommandList *cmd)
-    {
-        Scene_GPUData mergedGPUData = gpuData;
-
-        bool hasDirectionalLight = false;
-        auto dirLightView = registry->view<TransformComponent, DirectionalLightComponent>();
-        for (entt::entity e : dirLightView)
-        {
-            const TransformComponent &tr = dirLightView.get<TransformComponent>(e);
-            const DirectionalLightComponent &light = dirLightView.get<DirectionalLightComponent>(e);
-
-            const glm::vec3 forward = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
-
-            mergedGPUData.sunColor = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
-            mergedGPUData.sungAngles.x = std::atan2(forward.x, forward.z);
-            mergedGPUData.sungAngles.y = std::asin(glm::clamp(forward.y, -1.0f, 1.0f));
-            mergedGPUData.sunAngularRadius = glm::radians(light.angularRadius);
-            mergedGPUData.exposure = light.exposure;
-            mergedGPUData.gamma = light.gamma;
-            mergedGPUData.ambient = light.ambient;
-
-            hasDirectionalLight = true;
-            break;
-        }
-
-        if (!hasDirectionalLight)
-        {
-            const Scene_GPUData *sceneGPUData = &gpuData;
-
-            auto view = registry->view<WorldEnvironment>();
-            WorldEnvironment *fallback = nullptr;
-            for (entt::entity e : view)
-            {
-                WorldEnvironment &world = view.get<WorldEnvironment>(e);
-                if (!world.enabled)
-                    continue;
-
-                if (world.primary)
-                {
-                    sceneGPUData = &world.sceneGPUData;
-                    fallback = nullptr;
-                    break;
-                }
-
-                if (!fallback)
-                {
-                    fallback = &world;
-                }
-            }
-
-            if (fallback)
-            {
-                sceneGPUData = &fallback->sceneGPUData;
-            }
-
-            mergedGPUData.sunColor = sceneGPUData->sunColor;
-            mergedGPUData.sungAngles = sceneGPUData->sungAngles;
-            mergedGPUData.sunAngularRadius = sceneGPUData->sunAngularRadius;
-            mergedGPUData.exposure = sceneGPUData->exposure;
-            mergedGPUData.gamma = sceneGPUData->gamma;
-            mergedGPUData.ambient = sceneGPUData->ambient;
-        }
-
-        gpuData = mergedGPUData;
-        m_SceneGPUDataBuffer->SetData(cmd, Buffer((void *)&gpuData, sizeof(Scene_GPUData)));
     }
 
     Entity Scene::GetPrimaryCamera()
@@ -595,7 +521,6 @@ namespace ignite
             comp.environment = Environment::Create(this);
         }
 
-        comp.sceneGPUData = gpuData;
         comp.dirtyEnvironment = true;
         comp.gpuInitialized = false;
         comp.loadedHDRHandle = AssetHandle(0);

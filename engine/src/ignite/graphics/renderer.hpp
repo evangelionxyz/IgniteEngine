@@ -68,7 +68,6 @@ namespace ignite
         static nvrhi::BindingLayoutHandle GetBindingLayout(GLayoutMap type);
 
         static Ref<DXCInstance> GetDXCInstance();
-		static Ref<ConstantBuffer> GetCameraConstantBuffer();
 
     private:
         nvrhi::GraphicsAPI m_GraphicsAPI;
@@ -79,8 +78,6 @@ namespace ignite
         Ref<Texture> m_WhiteTexture;
         Ref<Texture> m_BlackTexture;
         Ref<Texture> m_MagentaTexture;
-
-		Ref<ConstantBuffer> m_EditorCameraConstantBuffer;
 
         nvrhi::IDevice *m_Device;
         std::vector<std::function<void(nvrhi::ICommandList *)>> m_SubmitFuncs;

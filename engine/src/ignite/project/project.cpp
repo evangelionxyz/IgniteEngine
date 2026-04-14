@@ -151,7 +151,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         return invalidRegistry;
     }
 
-    const std::string &Project::GetAssetDisplayName(AssetHandle handle) const
+    const std::string Project::GetAssetDisplayName(AssetHandle handle) const
     {
         return m_AssetManager->GetAssetDisplayName(handle);
     }

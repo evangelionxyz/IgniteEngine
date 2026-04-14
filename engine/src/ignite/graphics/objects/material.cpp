@@ -134,7 +134,7 @@ namespace ignite
     void Material::UploadToGpu(nvrhi::ICommandList *cmd)
     {
         EnsureGpuResources();
-        m_GPUDataBuffer->SetData(cmd, Buffer(&gpuData, sizeof(Material_GPUData)));
+        m_GPUDataBuffer->SetData(cmd, Buffer(&gpuData, sizeof(MaterialBufferData)));
     }
 
     void Material::SetSamplerDesc(const nvrhi::SamplerDesc &desc)
@@ -292,7 +292,7 @@ namespace ignite
 
         if (!m_GPUDataBuffer)
         {
-            m_GPUDataBuffer = ConstantBuffer::Create(sizeof(Material_GPUData), false, 1, "Material Constant Buffer");
+            m_GPUDataBuffer = ConstantBuffer::Create(sizeof(MaterialBufferData), false, 1, "Material Constant Buffer");
         }
     }
 }

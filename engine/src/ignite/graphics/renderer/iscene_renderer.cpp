@@ -66,6 +66,10 @@ namespace ignite
         m_SSAO = CreateRef<SSAO>(1280, 720);
 
         m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
+
+        m_SceneBuffer = ConstantBuffer::Create(sizeof(SceneBufferData), false, 1, "[SceneRenderer] Scene Buffer");
+        m_CascadedShadowMapBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMapBufferData), false, 1, "[SceneRenderer] CSM Buffer");
+        m_CameraBuffer = ConstantBuffer::Create(sizeof(CameraBufferData), false, 1, "[SceneRenderer] Camera buffer");
     }
 
     void ISceneRenderer::EnsureCompositeVertexBufferUploaded(nvrhi::ICommandList *cmd)
@@ -108,6 +112,12 @@ namespace ignite
 
         m_Has2DPreRenderCache = false;
         m_SelectedEntities.clear();
+
+        m_MeshBindingSet = nullptr;
+
+        m_SceneBuffer = nullptr;
+        m_CascadedShadowMapBuffer = nullptr;
+        m_CameraBuffer = nullptr;
     }
 
     void ISceneRenderer::Resize(uint32_t width, uint32_t height)

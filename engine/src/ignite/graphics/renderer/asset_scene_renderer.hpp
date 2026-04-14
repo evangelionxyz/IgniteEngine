@@ -38,11 +38,6 @@ namespace ignite
         Ref<Material> m_RuntimeMaterial;
         Ref<Texture> m_EnvironmentTexture;
 
-        Ref<ConstantBuffer> m_SceneGPUDataBuffer;
-        Ref<ConstantBuffer> m_CSMGPUDataBuffer;
-        Ref<ConstantBuffer> m_PerEntityBuffer;
-
-        nvrhi::BindingSetHandle m_MeshBindingSet;
         nvrhi::BindingLayoutHandle m_CompositeBindingLayout;
         nvrhi::ITexture *m_LastBoundEnvironmentTexture = nullptr;
         Project *m_Project = nullptr;
@@ -53,8 +48,8 @@ namespace ignite
         std::vector<glm::mat4> m_BoneTransforms;
         bool m_EnvironmentTextureLoadAttempted = false;
 
-        Scene_GPUData m_SceneGPUData;
-        CascadedShadowMap_GPUData m_CSMGPUData;
+        SceneBufferData m_SceneGPUData;
+        CascadedShadowMapBufferData m_CSMGPUData;
     };
 }
 #endif

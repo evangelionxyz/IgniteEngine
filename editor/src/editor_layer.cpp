@@ -1635,32 +1635,6 @@ namespace ignite
             {
                 if (ImGui::BeginTabBar("##settings_tabs", ImGuiTabBarFlags_Reorderable))
                 {
-                    if (ImGui::BeginTabItem("Scene"))
-                    {
-                        auto &sceneData = m_ActiveScene->gpuData;
-
-                        ImGui::SeparatorText("Shadow Debug");
-                        ImGui::RadioButton("Off##ShadowDbg", &sceneData.debugShadow, 0); ImGui::SameLine();
-                        ImGui::SameLine();
-                        ImGui::RadioButton("Cascades", &sceneData.debugShadow, 1); ImGui::SameLine();
-                        ImGui::SameLine();
-                        ImGui::RadioButton("Visibility", &sceneData.debugShadow, 2);
-
-                        if (ImGui::CollapsingHeader("Render Mode", ImGuiTreeNodeFlags_DefaultOpen))
-                        {
-                            if (ImGui::RadioButton("Color", sceneData.renderMode == RENDER_MODE_COLOR)) sceneData.renderMode = RENDER_MODE_COLOR;
-                            ImGui::SameLine();
-                            if (ImGui::RadioButton("Diffuse", sceneData.renderMode == RENDER_MODE_DIFFUSE)) sceneData.renderMode = RENDER_MODE_DIFFUSE;
-                            ImGui::SameLine();
-                            if (ImGui::RadioButton("Normals", sceneData.renderMode == RENDER_MODE_NORMALS)) sceneData.renderMode = RENDER_MODE_NORMALS;
-                            ImGui::SameLine();
-                            if (ImGui::RadioButton("Metallic", sceneData.renderMode == RENDER_MODE_METALLIC)) sceneData.renderMode = RENDER_MODE_METALLIC;
-                            ImGui::SameLine();
-                            if (ImGui::RadioButton("Roughness", sceneData.renderMode == RENDER_MODE_ROUGHNESS)) sceneData.renderMode = RENDER_MODE_ROUGHNESS;
-                        }
-
-                        ImGui::EndTabItem();
-                    }
                     if (ImGui::BeginTabItem("Pipeline"))
                     {
                         // Raster settings

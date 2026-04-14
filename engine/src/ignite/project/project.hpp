@@ -125,7 +125,7 @@ namespace ignite
             return std::static_pointer_cast<T>(asset);
         }
 
-        const std::string &GetAssetDisplayName(AssetHandle handle) const;
+        const std::string GetAssetDisplayName(AssetHandle handle) const;
 
         virtual bool Serialize(const std::filesystem::path &filepath) override;
         static Ref<Project> Deserialize(const std::filesystem::path &filepath);

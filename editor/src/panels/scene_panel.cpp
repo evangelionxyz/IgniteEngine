@@ -586,11 +586,15 @@ namespace ignite
             {
                 auto &c = selectedEntity.GetComponent<WorldEnvironment>();
 
+                UI::DrawFloatControl("Exposure", &c.exposure, 0.025f, 0.0f, FLT_MAX);
+                UI::DrawFloatControl("Gamma", &c.gamma, 0.025f, 0.0f, FLT_MAX);
+                UI::DrawFloatControl("Ambient", &c.ambient, 0.025f, 0.0f, FLT_MAX);
+
                 UI::DrawCheckbox("Primary", &c.primary);
                 UI::DrawCheckbox("Enabled", &c.enabled);
 
                 const bool hasHDR = c.hdrHandle != AssetHandle(0);
-                std::string buttonLabel = hasHDR ? "HDR Loaded" : "Drag Here";
+                std::string buttonLabel = hasHDR ? assetManager->GetAssetDisplayName(c.hdrHandle) : "Drag Here";
                 UI::DrawButtonWithColumn("HDR", buttonLabel.c_str(), nullptr, [&c, this, &hasHDR]()
                     {
 						if (ImGui::BeginDragDropTarget())
@@ -631,9 +635,6 @@ namespace ignite
                 ImGui::ColorEdit4("Color", &c.color.x);
                 UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
                 UI::DrawFloatControl("Angular Radius", &c.angularRadius, 0.01f, 0.0f, 45.0f);
-                UI::DrawFloatControl("Exposure", &c.exposure, 0.01f, 0.0f, 32.0f);
-                UI::DrawFloatControl("Gamma", &c.gamma, 0.01f, 0.1f, 8.0f);
-                UI::DrawFloatControl("Ambient", &c.ambient, 0.01f, 0.0f, 4.0f);
 
                 const glm::vec3 sunDirection = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
                 const float azimuth = std::atan2(sunDirection.x, sunDirection.z);

@@ -317,9 +317,6 @@ namespace ignite
         glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
         float intensity = 0.5f;
         float angularRadius = 45.0f; // degrees
-        float exposure = 1.1f;
-        float gamma = 2.2f;
-        float ambient = 0.1f;
 
         // Shadow
         float shadowStrength = 0.5f;
@@ -338,7 +335,9 @@ namespace ignite
         Ref<Environment> environment;
         AssetHandle hdrHandle = AssetHandle(0);
 
-        Scene_GPUData sceneGPUData;
+        float exposure = 1.1f;
+        float gamma = 2.2f;
+        float ambient = 0.5f;
 
         bool primary = false;
         bool enabled = true;
@@ -411,9 +410,6 @@ namespace ignite
 	{
 	public:
         AssetHandle handle = AssetHandle(0);         // class SkeletalMesh in mesh.hpp
-
-        Ref<ConstantBuffer> perEntityBuffer;
-        nvrhi::BindingSetHandle meshBindingSet = nullptr; // Cached binding set - reused across frames
 
         MeshComponent() = default;
 		COMPONENT_CLASS_TYPE(CompType_Mesh)

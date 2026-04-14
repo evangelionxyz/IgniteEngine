@@ -158,7 +158,7 @@ namespace ignite
 
     static std::unordered_map<DebugGridBindingKey, nvrhi::BindingSetHandle, DebugGridBindingKeyHash> s_DebugGridBindingSetCache;
 
-    static nvrhi::BindingSetHandle GetOrCreateDebugGridBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<ConstantBuffer> gridBuffer)
+    static nvrhi::BindingSetHandle GetOrCreateDebugGridBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &gridBuffer)
     {
         DebugGridBindingKey key{ bindingLayout, gridBuffer ? gridBuffer->GetHandle() : nullptr };
         auto it = s_DebugGridBindingSetCache.find(key);
@@ -169,7 +169,7 @@ namespace ignite
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         auto bindingSetDesc = nvrhi::BindingSetDesc();
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, gridBuffer->GetHandle()));
 
         nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
@@ -697,7 +697,7 @@ namespace ignite
         {
             IGN_PROFILE_SCOPE("SceneRenderer::RecordEditorCommandList");
             cmd->open();
-            m_Scene->WriteBuffer(cmd);
+            m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
 
             if (worldEnvironment && worldEnvironment->environment)
             {
@@ -712,7 +712,7 @@ namespace ignite
 
                 if (worldEnvironment->dirtyEnvironment)
                 {
-                    if (worldEnvironment->environment->UpdateBindingSet())
+                    if (worldEnvironment->environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer))
                     {
                         worldEnvironment->dirtyEnvironment = false;
                     }
@@ -720,7 +720,6 @@ namespace ignite
             }
 
             // Scene post processing
-
             PostProcessing postProcessing = camera->postProcessing;
             if (Entity primaryCamera = m_Scene->GetPrimaryCamera())
             {
@@ -729,8 +728,8 @@ namespace ignite
             }
 
             // Camera constants
-            CameraBuffer cameraBuffer = { camera->GetProjection(), camera->GetView(), glm::vec4(camera->position, 1.0f) };
-            Renderer::GetCameraConstantBuffer()->SetData(cmd, Buffer(&cameraBuffer, sizeof(CameraBuffer)));
+            CameraBufferData cameraBuffer = { camera->GetProjection(), camera->GetView(), glm::vec4(camera->position, 1.0f) };
+            m_CameraBuffer->SetData(cmd, Buffer(&cameraBuffer, sizeof(CameraBufferData)));
 
             // Clear Render Targets
             // far depth = 1.0f == LessOrEqual
@@ -923,7 +922,7 @@ namespace ignite
         {
             IGN_PROFILE_SCOPE("SceneRenderer::RecordGameplayCommandList");
             cmd->open();
-            m_Scene->WriteBuffer(cmd);
+            m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
 
             if (worldEnvironment && worldEnvironment->environment)
             {
@@ -938,7 +937,7 @@ namespace ignite
 
                 if (worldEnvironment->dirtyEnvironment)
                 {
-                    if (worldEnvironment->environment->UpdateBindingSet())
+                    if (worldEnvironment->environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer))
                     {
                         worldEnvironment->dirtyEnvironment = false;
                     }
@@ -946,8 +945,8 @@ namespace ignite
             }
 
             // setup camera constants
-            CameraBuffer cameraBuffer = { camera->GetProjection(), camera->GetView(), glm::vec4(camera->position, 1.0f) };
-            Renderer::GetCameraConstantBuffer()->SetData(cmd, Buffer(&cameraBuffer, sizeof(CameraBuffer)));
+            CameraBufferData cameraBufferData = { camera->GetProjection(), camera->GetView(), glm::vec4(camera->position, 1.0f) };
+            m_CameraBuffer->SetData(cmd, Buffer(&cameraBufferData, sizeof(CameraBufferData)));
 
             // Clear Render Targets
             // far depth = 1.0f == LessOrEqual
@@ -1024,16 +1023,46 @@ namespace ignite
     void SceneRenderer::ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera)
     {
         IGN_PROFILE_FUNCTION();
-        Project *project = m_Scene ? m_Scene->GetProject() : nullptr;
 
         nvrhi::GraphicsState csmState = nvrhi::GraphicsState();
         Ref<GraphicsPipeline> csmPipeline = m_CascadedShadowMap->GetPipeline();
         csmState.pipeline = csmPipeline->GetHandle();
 
-        glm::vec3 sunDirection = {
-            cos(m_Scene->gpuData.sungAngles.y) * sin(m_Scene->gpuData.sungAngles.x),
-            sin(m_Scene->gpuData.sungAngles.y),
-            cos(m_Scene->gpuData.sungAngles.y) * cos(m_Scene->gpuData.sungAngles.x)
+        auto dirLightView = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
+        for (entt::entity e : dirLightView)
+        {
+            const TransformComponent &tr = dirLightView.get<TransformComponent>(e);
+            const DirectionalLightComponent &light = dirLightView.get<DirectionalLightComponent>(e);
+
+            const glm::vec3 forward = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+
+            m_SceneGPUData.sunColor = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
+            m_SceneGPUData.sungAngles.x = std::atan2(forward.x, forward.z);
+            m_SceneGPUData.sungAngles.y = std::asin(glm::clamp(forward.y, -1.0f, 1.0f));
+            m_SceneGPUData.sunAngularRadius = glm::radians(light.angularRadius);
+
+            break;
+        }
+
+        auto worldEnvView = m_Scene->registry->view<WorldEnvironment>();
+        for (entt::entity e : worldEnvView)
+        {
+            WorldEnvironment &world = worldEnvView.get<WorldEnvironment>(e);
+            if (!world.enabled)
+                continue;
+
+            m_SceneGPUData.exposure = world.exposure;
+            m_SceneGPUData.gamma = world.gamma;
+            m_SceneGPUData.ambient = world.ambient;
+
+            break;
+        }
+
+        glm::vec3 sunDirection =
+        {
+            glm::cos(m_SceneGPUData.sungAngles.y) * glm::sin(m_SceneGPUData.sungAngles.x),
+            glm::sin(m_SceneGPUData.sungAngles.y),
+            glm::cos(m_SceneGPUData.sungAngles.y) * glm::cos(m_SceneGPUData.sungAngles.x)
         };
 
         auto lightView = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
@@ -1065,13 +1094,13 @@ namespace ignite
         m_CascadedShadowMap->ComputeMatrices(camera, sunDirection);
 
         // Share cascade data with the main scene pass (cascadeIndex is unused there)
-        CascadedShadowMap_GPUData sceneCascadeData = m_CascadedShadowMap->GetGPUData();
+        CascadedShadowMapBufferData sceneCascadeData = m_CascadedShadowMap->GetGPUData();
         sceneCascadeData.cascadeIndex = -1;
-        m_Scene->GetCSMGPUDataBuffer()->SetData(cmd, Buffer(&sceneCascadeData, sizeof(sceneCascadeData)));
+        m_CascadedShadowMapBuffer->SetData(cmd, Buffer(&sceneCascadeData, sizeof(sceneCascadeData)));
 
         for (int i = 0; i < NUM_CASCADES; ++i)
         {
-            CascadedShadowMap_GPUData cascadeGpuData = sceneCascadeData;
+            CascadedShadowMapBufferData cascadeGpuData = sceneCascadeData;
             cascadeGpuData.cascadeIndex = i;
             m_CascadedShadowMap->GetGPUDataBuffer()->SetData(cmd, Buffer(&cascadeGpuData, sizeof(cascadeGpuData)));
 
@@ -1083,27 +1112,6 @@ namespace ignite
 
             csmState.framebuffer = csmFramebuffer;
             csmState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
-
-            auto ensurePerEntityResources = [this](Ref<ConstantBuffer> &buffer, nvrhi::BindingSetHandle &bindingSet)
-            {
-                if (!buffer)
-                {
-                    buffer = ConstantBuffer::Create(sizeof(SkinnedMesh_GPUData), true, 512, "Per-Entity Transform Buffer");
-                }
-
-                if (!bindingSet)
-                {
-                    nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-                    auto desc = nvrhi::BindingSetDesc();
-                    desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
-                    desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, buffer->GetHandle()));
-                    desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, m_Scene->GetSceneGPUDataBuffer()->GetHandle()));
-                    desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, m_Scene->GetCSMGPUDataBuffer()->GetHandle()));
-
-                    bindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
-                    LOG_ASSERT(bindingSet, "Failed to create mesh binding set");
-                }
-            };
 
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::MeshesShadow");
@@ -1118,16 +1126,16 @@ namespace ignite
                     if (smc.handle == AssetHandle(0))
                         continue;
 
-                    ensurePerEntityResources(smc.perEntityBuffer, smc.meshBindingSet);
-
-                    Ref<Mesh> sm = ResolveMesh(project, smc.handle);
+                    Ref<Mesh> sm = ResolveMesh(m_Project, smc.handle);
                     if (!sm)
                         continue;
 
-                    for (auto &m : sm->GetMeshInstances())
+                    for (auto &meshInstance : sm->GetMeshInstances())
                     {
-                        SkinnedMesh_GPUData gpuData;
-                        gpuData.transformation = tr.GetWorldMatrix() * m->global;
+                        meshInstance->EnsureBuffer(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer);
+
+                        SkinnedMeshBufferData gpuData;
+                        gpuData.transformation = tr.GetWorldMatrix() * meshInstance->global;
                         gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
 
                         const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
@@ -1138,9 +1146,9 @@ namespace ignite
                         // Get bone transform from the animator
                         if (sm->GetAnimatorHandle() != AssetHandle(0))
                         {
-                            if (Ref<AnimatorController> controller = project->GetAsset<AnimatorController>(sm->GetAnimatorHandle()))
+                            if (Ref<AnimatorController> controller = m_Project->GetAsset<AnimatorController>(sm->GetAnimatorHandle()))
                             {
-                                if (Ref<Skeleton> skeleton = project->GetAsset<Skeleton>(controller->skeletonHandle))
+                                if (Ref<Skeleton> skeleton = m_Project->GetAsset<Skeleton>(controller->skeletonHandle))
                                 {
                                     auto boneTransforms = skeleton->GetFinalJointTransforms();
                                     const size_t transformCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
@@ -1152,12 +1160,14 @@ namespace ignite
                             }
                         }
 
-                        smc.perEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
+                        meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
 
-                        auto &primitive = m->GetPrimitive();
-                        if (smc.meshBindingSet && primitive->vertexBuffer && primitive->indexBuffer)
+                        nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
+
+                        auto &primitive = meshInstance->GetPrimitive();
+                        if (meshBindingSet && primitive->vertexBuffer && primitive->indexBuffer)
                         {
-                            csmState.bindings = { smc.meshBindingSet };
+                            csmState.bindings = { meshBindingSet };
                             csmState.vertexBuffers.resize(0);
                             csmState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
                             csmState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
@@ -1187,27 +1197,6 @@ namespace ignite
         geomGState.framebuffer = framebuffer;
         geomGState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
-        auto ensurePerEntityResources = [this](Ref<ConstantBuffer> &buffer, nvrhi::BindingSetHandle &bindingSet)
-        {
-            if (!buffer)
-            {
-                buffer = ConstantBuffer::Create(sizeof(SkinnedMesh_GPUData), true, 512, "Per-Entity Transform Buffer");
-            }
-
-            if (!bindingSet)
-            {
-                nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-                auto desc = nvrhi::BindingSetDesc();
-                desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
-                desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, buffer->GetHandle()));
-                desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, m_Scene->GetSceneGPUDataBuffer()->GetHandle()));
-                desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, m_Scene->GetCSMGPUDataBuffer()->GetHandle()));
-
-                bindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
-                LOG_ASSERT(bindingSet, "Failed to create mesh binding set");
-            }
-        };
-
         {
             IGN_PROFILE_SCOPE("SceneRenderer::Meshes");
             auto skelMeshView = m_Scene->registry->view<TransformComponent, MeshComponent>();
@@ -1223,18 +1212,18 @@ namespace ignite
                     continue;
                 }
 
-                ensurePerEntityResources(smc.perEntityBuffer, smc.meshBindingSet);
-
                 Ref<Mesh> sm = ResolveMesh(project, smc.handle);
                 if (!sm)
                 {
                     continue;
                 }
 
-                for (auto &m : sm->GetMeshInstances())
+                for (auto &meshInstance : sm->GetMeshInstances())
                 {
-                    SkinnedMesh_GPUData gpuData;
-                    gpuData.transformation = tr.GetWorldMatrix() * m->global;
+                    meshInstance->EnsureBuffer(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer);
+
+                    SkinnedMeshBufferData gpuData;
+                    gpuData.transformation = tr.GetWorldMatrix() * meshInstance->global;
                     gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
 
                     const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
@@ -1259,11 +1248,13 @@ namespace ignite
                         }
                     }
 
-                    smc.perEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
+                    meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
 
-                    auto &primitive = m->GetPrimitive();
+                    nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
 
-                    Ref<Material> material = ResolveMaterial(project, m->GetMaterialHandle());
+                    auto &primitive = meshInstance->GetPrimitive();
+
+                    Ref<Material> material = ResolveMaterial(project, meshInstance->GetMaterialHandle());
                     if (!material)
                         continue;
 
@@ -1285,9 +1276,9 @@ namespace ignite
                         material->UploadToGpu(cmd);
                     }
 
-                    if (smc.meshBindingSet && material->GetBindingSet() && primitive->vertexBuffer && primitive->indexBuffer)
+                    if (meshBindingSet && material->GetBindingSet() && primitive->vertexBuffer && primitive->indexBuffer)
                     {
-                        geomGState.bindings = { smc.meshBindingSet, material->GetBindingSet() };
+                        geomGState.bindings = { meshBindingSet, material->GetBindingSet() };
                         geomGState.vertexBuffers.resize(0);
                         geomGState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
                         geomGState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
@@ -1307,7 +1298,7 @@ namespace ignite
         // 2D Pass
         {
             IGN_PROFILE_SCOPE("SceneRenderer::2DPass");
-            if (m_Has2DPreRenderCache && m_Renderer2D->ReplayPreRenderCache(cmd, framebuffer))
+            if (m_Has2DPreRenderCache && m_Renderer2D->ReplayPreRenderCache(cmd, framebuffer, m_CameraBuffer))
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::2DPass::ReplayCache");
             }
@@ -1438,7 +1429,7 @@ namespace ignite
                     }
                 }
 
-                m_Renderer2D->Flush(framebuffer);
+                m_Renderer2D->Flush(framebuffer, m_CameraBuffer);
                 m_Renderer2D->BuildPreRenderCache();
                 m_Has2DPreRenderCache = true;
                 m_Renderer2D->End();
@@ -1455,7 +1446,7 @@ namespace ignite
         }
 
         Ref<GraphicsPipeline> gridPipeline = GetDebugGridPipelineForFB(framebuffer);
-        nvrhi::BindingSetHandle bindingSet = GetOrCreateDebugGridBindingSet(gridPipeline->GetBindingLayout(0), m_DebugGridBuffer);
+        nvrhi::BindingSetHandle bindingSet = GetOrCreateDebugGridBindingSet(gridPipeline->GetBindingLayout(0), m_CameraBuffer, m_DebugGridBuffer);
 
         DebugGrid_GPUData gpuData;
         gpuData.thinColor = style.thinColor;
@@ -1553,7 +1544,7 @@ namespace ignite
             }
         }
 
-        m_Renderer2D->Flush(framebuffer);
+        m_Renderer2D->Flush(framebuffer, m_CameraBuffer);
         m_Renderer2D->End();
     }
 
@@ -1735,7 +1726,7 @@ namespace ignite
             }
         }
 
-        m_Renderer2D->Flush(framebuffer);
+        m_Renderer2D->Flush(framebuffer, m_CameraBuffer);
         m_Renderer2D->End();
     }
 
@@ -1844,7 +1835,7 @@ namespace ignite
             m_Renderer2D->DrawLine(worldPos, worldPos - direction * 5.0f, lc.color);
         }
 
-        m_Renderer2D->Flush(framebuffer);
+        m_Renderer2D->Flush(framebuffer, m_CameraBuffer);
         m_Renderer2D->End();
     }
 

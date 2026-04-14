@@ -122,6 +122,14 @@ namespace ignite {
         CreateFramebuffer();
     }
 
+    RenderTarget::~RenderTarget()
+    {
+        m_FramebufferHandle = nullptr;
+        m_DepthAttachment = nullptr;
+        m_ColorAttachments.clear();
+        m_UintClearColors.clear();
+    }
+
     void RenderTarget::CreateFramebuffer()
     {
         if (m_FramebufferHandle != nullptr)

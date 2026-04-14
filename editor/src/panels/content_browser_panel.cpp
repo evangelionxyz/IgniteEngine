@@ -80,46 +80,25 @@ namespace ignite
             return candidate;
         }
 
-        static const SDL_DialogFileFilter kMeshFilters[]
+        static const SDL_DialogFileFilter kExtFilters[]
         {
+            {"All Supported Assets", "fbx;gltf;glb;png;jpg;jpeg;hdr;wav;mp3;flac;ttf;otf;ixscene;mesh;ixmat;ixmat2d;ixsp;ixanim;ixmontage;ixskeleton;ixbs;ixloco;ac;ac2d;anim2d"},
             {"FBX File (.fbx)", "fbx"},
             {"GLTF File (.gltf)", "gltf"},
-            {"Ignite Static Mesh (.mesh)", "mesh"}
-        };
-
-        static const SDL_DialogFileFilter kTextureFilters[]
-        {
+            {"GLB File (.glb)", "glb"},
+            
             {"Texture (.png)", "png"},
             {"Texture (.jpg)", "jpg"},
             {"Texture (.jpeg)", "jpeg"},
-            {"Texture (.hdr)", "hdr"}
-        };
-
-        static const SDL_DialogFileFilter kAudioFilters[]
-        {
-            {"Audio (.wav)", "wav"},
+            {"Texture (.hdr)", "hdr"},
+            {"Audio (.wav)", "wav" },
             {"Audio (.mp3)", "mp3"},
-            {"Audio (.flac)", "flac"}
-        };
-
-        static const SDL_DialogFileFilter kFontFilters[]
-        {
-            {"Font (.ttf)", "ttf"},
-            {"Font (.otf)", "otf"}
-        };
-
-        static const SDL_DialogFileFilter kSceneFilters[]
-        {
-            {"Ignite Scene (.ixscene)", "ixscene"}
-        };
-
-        static const SDL_DialogFileFilter kMaterialFilters[]
-        {
-            {"Ignite Material (.ixmat)", "ixmat"}
-        };
-
-        static const SDL_DialogFileFilter kMaterial2DFilters[]
-        {
+            {"Audio (.flac)", "flac"},
+            {"Font (.ttf)", "ttf" },
+            {"Font (.otf)", "otf"},
+            {"Ignite Scene (.ixscene)", "ixscene"},
+            {"Ignite Static Mesh (.mesh)", "mesh"},
+            {"Ignite Material (.ixmat)", "ixmat"},
             {"Ignite Material2D (.ixmat2d)", "ixmat2d"}
         };
     }
@@ -155,6 +134,7 @@ namespace ignite
         s_SharedIcons["roll"] = Texture::Create("resources/ui/editor/ic_editor_roll.png", createInfo, cmd);
         s_SharedIcons["arrow"] = Texture::Create("resources/ui/editor/ic_editor_arrow.png", createInfo, cmd);
         s_SharedIcons["add"] = Texture::Create("resources/ui/editor/ic_editor_add.png", createInfo, cmd);
+        s_SharedIcons["audio"] = Texture::Create("resources/ui/editor/ic_editor_audio.png", createInfo, cmd);
 
         s_SharedIcons["skeleton"] = Texture::Create("resources/ui/editor/ic_editor_skeleton.png", createInfo, cmd);
         s_SharedIcons["mesh"] = Texture::Create("resources/ui/editor/ic_editor_sk_mesh.png", createInfo, cmd);
@@ -1378,112 +1358,33 @@ namespace ignite
             }
 
             ImGui::SameLine();
-            if (ImGui::Button("+Import", ImVec2(80.0f, navbarBtSize.y)))
+            if (ImGui::Button("+Add", ImVec2(80.0f, navbarBtSize.y)))
             {
-                ImGui::OpenPopup("##asset_importer_context");
+                ImGui::OpenPopup("##asset_add_context");
             }
 
-            if (ImGui::BeginPopupContextWindow("##asset_importer_context"))
+            if (ImGui::BeginPopupContextWindow("##asset_add_context"))
             {
-                UIShowAssetImportContext();
+                UIShowAssetAddContext();
                 ImGui::EndPopup();
             }
         }
         ImGui::EndChild();
     }
 
-    void ContentBrowserPanel::UIShowAssetImportContext()
+    void ContentBrowserPanel::UIShowAssetAddContext()
     {
         static AssetImporterPayload importPayload;
 
-        if (ImGui::MenuItem("Mesh"))
+        if (ImGui::MenuItem("Import to this current directory"))
         {
-            importPayload = { .targetDirectory = m_CurrentDirectory, .assetType = AssetType::Mesh };
+            importPayload = { .targetDirectory = m_CurrentDirectory, .assetType = AssetType::Auto };
 
             SDL_ShowOpenFileDialog(OnImportAssetDialog, &importPayload,
                 Application::GetInstance()->GetWindow()->GetWindowHandle(),
-                kMeshFilters, IM_ARRAYSIZE(kMeshFilters),
-                nullptr, true);
-        }
-
-        if (ImGui::BeginMenu("Texture"))
-        {
-            if (ImGui::MenuItem("2D Texture"))
-            {
-                importPayload = { .targetDirectory = m_CurrentDirectory, .assetType = AssetType::Texture };
-
-                SDL_ShowOpenFileDialog(OnImportAssetDialog, &importPayload,
-                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
-                    kTextureFilters, IM_ARRAYSIZE(kTextureFilters),
-                    nullptr, true);
-            }
-            ImGui::EndMenu();
-        }
-
-        if (ImGui::BeginMenu("Font"))
-        {
-            if (ImGui::MenuItem("MSDF Font"))
-            {
-                importPayload = { .targetDirectory = m_CurrentDirectory, .assetType = AssetType::Font };
-
-                SDL_ShowOpenFileDialog(OnImportAssetDialog, &importPayload,
-                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
-                    kFontFilters, IM_ARRAYSIZE(kFontFilters),
-                    nullptr, true);
-            }
-            ImGui::EndMenu();
-        }
-
-        if (ImGui::BeginMenu("Audio"))
-        {
-            if (ImGui::MenuItem("Sound"))
-            {
-                importPayload = { .targetDirectory = m_CurrentDirectory, .assetType = AssetType::Audio };
-
-                SDL_ShowOpenFileDialog(OnImportAssetDialog, &importPayload,
-                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
-                    kAudioFilters, IM_ARRAYSIZE(kAudioFilters),
-                    nullptr, true);
-            }
-            ImGui::EndMenu();
-        }
-
-        if (ImGui::BeginMenu("Scene"))
-        {
-            if (ImGui::MenuItem("Scene"))
-            {
-                importPayload = { .targetDirectory = m_CurrentDirectory, .assetType = AssetType::Scene };
-
-                SDL_ShowOpenFileDialog(OnImportAssetDialog, &importPayload,
-                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
-                    kSceneFilters, IM_ARRAYSIZE(kSceneFilters),
-                    nullptr, true);
-            }
-            ImGui::EndMenu();
-        }
-
-        if (ImGui::BeginMenu("Material"))
-        {
-            if (ImGui::MenuItem("Material"))
-            {
-                importPayload = { .targetDirectory = m_CurrentDirectory, .assetType = AssetType::Material };
-
-                SDL_ShowOpenFileDialog(OnImportAssetDialog, &importPayload,
-                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
-                    kMaterialFilters, IM_ARRAYSIZE(kMaterialFilters),
-                    nullptr, true);
-            }
-
-            if (ImGui::MenuItem("Material2D"))
-            {
-                importPayload = { .targetDirectory = m_CurrentDirectory, .assetType = AssetType::Material2D };
-
-                SDL_ShowOpenFileDialog(OnImportAssetDialog, &importPayload,
-                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
-                    kMaterial2DFilters, IM_ARRAYSIZE(kMaterial2DFilters),
-                    nullptr, true);
-            }
-            ImGui::EndMenu();
+                kExtFilters, IM_ARRAYSIZE(kExtFilters),
+                nullptr, true
+            );
         }
     }
 
@@ -1841,6 +1742,7 @@ namespace ignite
         switch (type)
         {
             case AssetType::Scene: return s_SharedIcons["scene"];
+            case AssetType::Audio: return s_SharedIcons["audio"];
             case AssetType::Shader: return s_SharedIcons["shader"];
             case AssetType::SpriteSheet: return s_SharedIcons["sprite_sheet"];
             case AssetType::Material: return s_SharedIcons["material"];

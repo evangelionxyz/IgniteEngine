@@ -740,78 +740,65 @@ namespace ignite {
 
         switch (getterMetadata.type)
         {
-        case AssetType::Invalid:
-        {
-            LOG_ERROR("[Asset Manager] Invalid asset type!");
-            return nullptr;
-        }
+            case AssetType::Invalid:
+            {
+                LOG_ERROR("[Asset Manager] Invalid asset type!");
+                return nullptr;
+            }
 
-        case AssetType::Mesh:
-        case AssetType::Font:
-        case AssetType::Material:
-        case AssetType::Material2D:
-        case AssetType::Animation2D:
-        case AssetType::SpriteSheet:
-        case AssetType::SkeletalAnimation:
-        case AssetType::AnimatorController:
-        case AssetType::AnimatorController2D:
-        {
-            asset = AssetImporter::Import(handle, getterMetadata, this);
-            
-            // Thread-safe assignment
-            {
-                std::unique_lock lock(s_AssetThreadMutex);
-                // Double-check if another thread loaded it while we were importing
-                if (m_LoadedAssets.contains(handle))
-                {
-                    return m_LoadedAssets[handle];
-                }
-                AssignAsset(handle, asset);
-            }
-            break;
-        }
-        case AssetType::Skeleton:
-        case AssetType::Scene:
-        case AssetType::Texture:
-        {
-            if (getterMetadata.type == AssetType::Texture)
-            {
-                AssetMetaData textureMetadata = getterMetadata;
-                textureMetadata.filepath = m_Project->GetAssetFilepath(getterMetadata.filepath);
-                const TextureCreateInfo createInfo = GetTextureCreateInfo(handle);
-                asset = AssetImporter::ImportTexture(handle, textureMetadata, createInfo, this);
-            }
-            else
+            case AssetType::Audio:
+            case AssetType::Mesh:
+            case AssetType::Font:
+            case AssetType::Material:
+            case AssetType::Material2D:
+            case AssetType::Animation2D:
+            case AssetType::SpriteSheet:
+            case AssetType::SkeletalAnimation:
+            case AssetType::AnimatorController:
+            case AssetType::AnimatorController2D:
             {
                 asset = AssetImporter::Import(handle, getterMetadata, this);
-            }
-            
-            // Thread-safe assignment
-            {
-                std::unique_lock lock(s_AssetThreadMutex);
-                // Double-check if another thread loaded it while we were importing
-                if (m_LoadedAssets.contains(handle))
+
+                // Thread-safe assignment
                 {
-                    return m_LoadedAssets[handle];
+                    std::unique_lock lock(s_AssetThreadMutex);
+                    // Double-check if another thread loaded it while we were importing
+                    if (m_LoadedAssets.contains(handle))
+                    {
+                        return m_LoadedAssets[handle];
+                    }
+                    AssignAsset(handle, asset);
                 }
-                AssignAsset(handle, asset);
+                break;
             }
-            break;
-        }
-        case AssetType::Audio:
-        {
+            case AssetType::Skeleton:
+            case AssetType::Scene:
+            case AssetType::Texture:
             {
-                std::unique_lock lock(s_AssetThreadMutex);
-                AssignAsset(handle, asset);
+                if (getterMetadata.type == AssetType::Texture)
+                {
+                    AssetMetaData textureMetadata = getterMetadata;
+                    textureMetadata.filepath = m_Project->GetAssetFilepath(getterMetadata.filepath);
+                    const TextureCreateInfo createInfo = GetTextureCreateInfo(handle);
+                    asset = AssetImporter::ImportTexture(handle, textureMetadata, createInfo, this);
+                }
+                else
+                {
+                    asset = AssetImporter::Import(handle, getterMetadata, this);
+                }
+
+                // Thread-safe assignment
+                {
+                    std::unique_lock lock(s_AssetThreadMutex);
+                    // Double-check if another thread loaded it while we were importing
+                    if (m_LoadedAssets.contains(handle))
+                    {
+                        return m_LoadedAssets[handle];
+                    }
+                    AssignAsset(handle, asset);
+                }
+                break;
             }
-            AssetImporter::ImportAsync(handle, metadata, this, [&](Ref<Asset> assetResult, AssetHandle assetHandle)
-            {
-                assetResult->SetReadyFlag(true);
-                std::unique_lock lock(s_AssetThreadMutex);
-                AssignAsset(assetHandle, assetResult);
-            });
-            break;
-        }
         }
 
         if (asset && asset->GetAssetType() != AssetType::Texture)

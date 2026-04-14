@@ -47,9 +47,6 @@ namespace ignite
 
         m_DxcInstance = ShaderCompiler::CreateDXCCompiler();
 
-		// non volatile constant buffer
-		m_EditorCameraConstantBuffer = ConstantBuffer::Create(sizeof(CameraBuffer), false, 1, "Camera Constant Buffer");
-
         nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
         cmd->open();
 
@@ -105,11 +102,6 @@ namespace ignite
     {
         return s_instance->m_DxcInstance;
     }
-
-	Ref<ConstantBuffer> Renderer::GetCameraConstantBuffer()
-	{
-		return s_instance->m_EditorCameraConstantBuffer;
-	}
 
 	Ref<Texture> Renderer::GetWhiteTexture()
     {

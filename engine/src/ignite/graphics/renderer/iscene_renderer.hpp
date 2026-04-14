@@ -85,6 +85,12 @@ namespace ignite
         Ref<Bloom> m_Bloom;
         Ref<SSAO> m_SSAO;
         Ref<ConstantBuffer> m_CompositePostProcessBuffer;
+        Ref<ConstantBuffer> m_CascadedShadowMapBuffer;
+        Ref<ConstantBuffer> m_SceneBuffer;
+        Ref<ConstantBuffer> m_CameraBuffer;
+
+        nvrhi::BindingSetHandle m_MeshBindingSet;
+        SceneBufferData m_SceneGPUData;
 
         std::vector<uint32_t> m_SelectedEntities;
         nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;

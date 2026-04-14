@@ -156,9 +156,6 @@ namespace ignite
                         sr.AddKeyValue("Color", comp.color);
                         sr.AddKeyValue("Intensity", comp.intensity);
                         sr.AddKeyValue("AngularRadius", comp.angularRadius);
-                        sr.AddKeyValue("Exposure", comp.exposure);
-                        sr.AddKeyValue("Gamma", comp.gamma);
-                        sr.AddKeyValue("Ambient", comp.ambient);
                         sr.AddKeyValue("ShadowStrength", comp.shadowStrength);
                         sr.AddKeyValue("ShadowMinBias", comp.shadowMinBias);
                         sr.AddKeyValue("ShadowMaxBias", comp.shadowMaxBias);
@@ -461,14 +458,9 @@ namespace ignite
                         sr.AddKeyValue("Primary", comp.primary);
                         sr.AddKeyValue("Enabled", comp.enabled);
                         sr.AddKeyValue("HDRHandle", static_cast<uint64_t>(comp.hdrHandle));
-                        sr.AddKeyValue("SunColor", comp.sceneGPUData.sunColor);
-                        sr.AddKeyValue("SunAngles", comp.sceneGPUData.sungAngles);
-                        sr.AddKeyValue("SunAngularRadius", comp.sceneGPUData.sunAngularRadius);
-                        sr.AddKeyValue("RenderMode", comp.sceneGPUData.renderMode);
-                        sr.AddKeyValue("DebugShadow", comp.sceneGPUData.debugShadow);
-                        sr.AddKeyValue("Exposure", comp.sceneGPUData.exposure);
-                        sr.AddKeyValue("Gamma", comp.sceneGPUData.gamma);
-                        sr.AddKeyValue("Ambient", comp.sceneGPUData.ambient);
+                        sr.AddKeyValue("Exposure", comp.exposure);
+                        sr.AddKeyValue("Gamma", comp.gamma);
+                        sr.AddKeyValue("Ambient", comp.ambient);
                     }
                     sr.EndMap();
                 }
@@ -874,9 +866,6 @@ namespace ignite
                 if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
                 if (auto n = node["Intensity"]) comp.intensity = n.as<float>();
                 if (auto n = node["AngularRadius"]) comp.angularRadius = n.as<float>();
-                if (auto n = node["Exposure"]) comp.exposure = n.as<float>();
-                if (auto n = node["Gamma"]) comp.gamma = n.as<float>();
-                if (auto n = node["Ambient"]) comp.ambient = n.as<float>();
                 if (auto n = node["ShadowStrength"]) comp.shadowStrength = n.as<float>();
                 if (auto n = node["ShadowMinBias"]) comp.shadowMinBias = n.as<float>();
                 if (auto n = node["ShadowMaxBias"]) comp.shadowMaxBias = n.as<float>();
@@ -912,38 +901,17 @@ namespace ignite
                 {
                     world.enabled = node["Enabled"].as<bool>();
                 }
-
-                if (node["SunColor"])
-                {
-                    world.sceneGPUData.sunColor = node["SunColor"].as<glm::vec4>();
-                }
-                if (node["SunAngles"])
-                {
-                    world.sceneGPUData.sungAngles = node["SunAngles"].as<glm::vec2>();
-                }
-                if (node["SunAngularRadius"])
-                {
-                    world.sceneGPUData.sunAngularRadius = node["SunAngularRadius"].as<float>();
-                }
-                if (node["RenderMode"])
-                {
-                    world.sceneGPUData.renderMode = node["RenderMode"].as<int>();
-                }
-                if (node["DebugShadow"])
-                {
-                    world.sceneGPUData.debugShadow = node["DebugShadow"].as<int>();
-                }
                 if (node["Exposure"])
                 {
-                    world.sceneGPUData.exposure = node["Exposure"].as<float>();
+                    world.exposure = node["Exposure"].as<float>();
                 }
                 if (node["Gamma"])
                 {
-                    world.sceneGPUData.gamma = node["Gamma"].as<float>();
+                    world.gamma = node["Gamma"].as<float>();
                 }
                 if (node["Ambient"])
                 {
-                    world.sceneGPUData.ambient = node["Ambient"].as<float>();
+                    world.ambient = node["Ambient"].as<float>();
                 }
             }
 

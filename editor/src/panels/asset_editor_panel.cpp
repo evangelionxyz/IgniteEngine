@@ -122,8 +122,8 @@ namespace ignite
             float timeSeconds = 0.0f;
             float animationTimelineHeight = 180.0f;
             int gizmoTarget = 0;
-            bool playing = true;
-            bool loop = true;
+            bool playing = false;
+            bool loop = false;
         };
 
         struct MeshEditorState
@@ -261,6 +261,41 @@ namespace ignite
 
             ImGui::TextDisabled("Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(textureHandle)));
             ImGui::PopID();
+        }
+
+        static AssetHandle FindFirstMeshHandleForSkeleton(Project *project, AssetHandle skeletonHandle)
+        {
+            if (!project || skeletonHandle == AssetHandle(0))
+            {
+                return AssetHandle(0);
+            }
+
+            auto assetManager = project->GetAssetManager();
+            if (!assetManager)
+            {
+                return AssetHandle(0);
+            }
+
+            for (const auto &[meshHandle, metadata] : assetManager->GetAssetAssetRegistry())
+            {
+                if (metadata.type != AssetType::Mesh)
+                {
+                    continue;
+                }
+
+                Ref<Mesh> mesh = project->GetAsset<Mesh>(meshHandle);
+                if (!mesh)
+                {
+                    mesh = project->GetAssetImmediate<Mesh>(meshHandle);
+                }
+
+                if (mesh && mesh->GetSkeletonHandle() == skeletonHandle)
+                {
+                    return meshHandle;
+                }
+            }
+
+            return AssetHandle(0);
         }
     }
 
@@ -484,9 +519,6 @@ namespace ignite
                 sceneData.compositeRT->Resize(width, height);
             }
 
-            sceneData.camera.UpdateProjection(static_cast<float>(width), static_cast<float>(height));
-            sceneData.camera.UpdateView();
-
             sceneData.sceneRenderer->SetProject(m_EditorLayer->GetActiveProject().get());
             sceneData.sceneRenderer->SetMaterial(material);
             sceneData.sceneRenderer->BeginFrame();
@@ -575,10 +607,15 @@ namespace ignite
                 nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
                 GPUUploadSync::DeviceWaitIdle(device);
                 s_MaterialPreviewEditorState.erase(static_cast<uint64_t>(assetData.handle));
-                assetData.sceneData.sceneRenderer.reset();
-                assetData.sceneData.sceneRT.reset();
-                assetData.sceneData.uiRT.reset();
-                assetData.sceneData.compositeRT.reset();
+
+                auto sceneRenderer = std::move(assetData.sceneData.sceneRenderer);
+                auto sceneRT = std::move(assetData.sceneData.sceneRT);
+                auto uiRT = std::move(assetData.sceneData.uiRT);
+                auto compositeRT = std::move(assetData.sceneData.compositeRT);
+
+                Application::SubmitToRenderThread([sceneRenderer, sceneRT, uiRT, compositeRT]()
+                {
+                });
             }
 
             return true;
@@ -3601,9 +3638,8 @@ namespace ignite
         ImGui::SameLine();
 
         // Mesh preview panel
-        if (ImGui::BeginChild("##mesh_preview", ImVec2(viewportWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar))
+        if (ImGui::BeginChild("##mesh_preview", ImVec2(viewportWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
         {
-            UpdateSceneCamera(sceneData, ImGui::GetIO().DeltaTime);
             ImGui::TextUnformatted("Mesh + Skeleton Preview");
             ImGui::Separator();
 
@@ -3621,6 +3657,7 @@ namespace ignite
                 const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
                 sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
                 sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
+                UpdateSceneCamera(sceneData, ImGui::GetIO().DeltaTime);
 
                 Ref<Texture> previewTexture = sceneData.compositeRT ? sceneData.compositeRT->GetColorAttachment(0) : nullptr;
                 if (previewTexture && previewTexture->GetHandle())
@@ -3628,6 +3665,14 @@ namespace ignite
                     const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
                     ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
                     sceneData.viewportHovered = ImGui::IsItemHovered();
+
+                    ImGui::SetCursorScreenPos(ImVec2(viewportPos.x + 8.0f, viewportPos.y + 8.0f));
+                    ImGui::TextDisabled(
+                        "RTTex=%p | RT=%p | %ux%u",
+                        reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()),
+                        sceneData.compositeRT.get(),
+                        sceneData.viewportWidth,
+                        sceneData.viewportHeight);
 
                     const glm::mat4 viewProjection = sceneData.camera.GetProjection() * sceneData.camera.GetView();
                     const Rect viewportRect { viewportPos.x, viewportPos.y, viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y };
@@ -3790,25 +3835,30 @@ namespace ignite
             }
             ImGui::EndChild(); // !scene viewport child
 
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.20f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.26f, 0.30f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.30f, 0.30f, 0.36f, 1.0f));
-            ImGui::Button("##animation_timeline_splitter", ImVec2(-1.0f, splitterThickness));
-            if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+            // SPLITTER
             {
-                ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.20f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.26f, 0.30f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.30f, 0.30f, 0.36f, 1.0f));
+                ImGui::BeginChild("##animation_timeline_splitter", { 0.0f, splitterThickness });
+                ImGui::Button("##animation_timeline_splitter_btn", ImVec2(-1.0f, -1.0f));
+                if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+                {
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+                }
+                if (ImGui::IsItemActive())
+                {
+                    previewState.animationTimelineHeight -= ImGui::GetIO().MouseDelta.y;
+                    previewState.animationTimelineHeight = std::clamp(previewState.animationTimelineHeight, minTimelineHeight, maxTimelineHeight);
+                }
+                ImGui::PopStyleColor(3);
+                ImGui::EndChild();
             }
-            if (ImGui::IsItemActive())
-            {
-                previewState.animationTimelineHeight -= ImGui::GetIO().MouseDelta.y;
-                previewState.animationTimelineHeight = std::clamp(previewState.animationTimelineHeight, minTimelineHeight, maxTimelineHeight);
-            }
-            ImGui::PopStyleColor(3);
 
             if (ImGui::BeginChild("##animation_preview_timeline", { 0.0f, previewState.animationTimelineHeight }, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar))
             {
                 // Animation playback tools
-                if (ImGui::BeginChild("##animation_timeline_toolbar", { 0.0f, 36.0f }, ImGuiChildFlags_Borders))
+                if (ImGui::BeginChild("##animation_timeline_toolbar", { 0.0f, 36.0f }))
                 {
                     ImGui::BeginDisabled(!isAnimLoaded);
                     if (ImGui::Button(previewState.playing ? "Pause" : "Play"))
@@ -3830,7 +3880,7 @@ namespace ignite
                 ImGui::Spacing();
 
                 // Animation timeline
-                if (ImGui::BeginChild("##animation_timeline", { 0.0f, 0.0f }, ImGuiChildFlags_Borders))
+                if (ImGui::BeginChild("##animation_timeline", { 0.0f, 0.0f }))
                 {
                     const float timelineCurrentTime = previewState.timeSeconds;
                     int previewFrame = (timelineFrameCount > 0)
@@ -4087,6 +4137,16 @@ namespace ignite
         static std::unordered_map<uint64_t, int32_t> s_LastAutoScrolledJoint;
         SkeletonPreviewEditorState &previewState = s_SkeletonPreviewEditorState[key];
 
+        if (previewState.previewMeshHandle == AssetHandle(0))
+        {
+            const AssetHandle matchedMeshHandle = FindFirstMeshHandleForSkeleton(project, skeleton->handle);
+            if (matchedMeshHandle != AssetHandle(0))
+            {
+                previewState.previewMeshHandle = matchedMeshHandle;
+                previewState.cachedPreviewMesh.reset();
+            }
+        }
+
         int32_t &selectedJoint = s_SelectedJoint[key];
         int32_t &selectedSocket = s_SelectedSocket[key];
         int32_t &lastAutoScrolledJoint = s_LastAutoScrolledJoint[key];
@@ -4105,24 +4165,6 @@ namespace ignite
                         mesh = project->GetAssetImmediate<Mesh>(previewState.previewMeshHandle);
                     }
                     sceneData.sceneRenderer->SetPreviewMesh(mesh);
-                }
-                else if (previewMeshType == AssetType::Mesh)
-                {
-                    Ref<Mesh> skMesh = project->GetAsset<Mesh>(previewState.previewMeshHandle);
-                    if (!skMesh)
-                    {
-                        skMesh = project->GetAssetImmediate<Mesh>(previewState.previewMeshHandle);
-                    }
-
-                    if (skMesh)
-                    {
-                        if (!previewState.cachedPreviewMesh)
-                        {
-                            previewState.cachedPreviewMesh = Mesh::Create();
-                        }
-                        previewState.cachedPreviewMesh->SetMeshInstance(skMesh->GetMeshInstances());
-                        sceneData.sceneRenderer->SetPreviewMesh(previewState.cachedPreviewMesh);
-                    }
                 }
             }
             else
@@ -4226,8 +4268,6 @@ namespace ignite
 
         ImGui::SameLine();
 
-        UpdateSceneCamera(sceneData, ImGui::GetIO().DeltaTime);
-
         if (ImGui::BeginChild("##skeleton_preview_view", ImVec2(viewportWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX))
         {
             ImGui::TextUnformatted("Mesh + Skeleton Preview");
@@ -4236,6 +4276,7 @@ namespace ignite
             const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
             sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
             sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
+            UpdateSceneCamera(sceneData, ImGui::GetIO().DeltaTime);
 
             Ref<Texture> previewTexture = sceneData.compositeRT ? sceneData.compositeRT->GetColorAttachment(0) : nullptr;
             if (previewTexture && previewTexture->GetHandle())
@@ -4243,6 +4284,14 @@ namespace ignite
                 const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
                 ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
                 sceneData.viewportHovered = ImGui::IsItemHovered();
+
+                ImGui::SetCursorScreenPos(ImVec2(viewportPos.x + 8.0f, viewportPos.y + 8.0f));
+                ImGui::TextDisabled(
+                    "RTTex=%p | RT=%p | %ux%u",
+                    reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()),
+                    sceneData.compositeRT.get(),
+                    sceneData.viewportWidth,
+                    sceneData.viewportHeight);
 
                 const glm::mat4 viewProjection = sceneData.camera.GetProjection() * sceneData.camera.GetView();
                 const Rect viewportRect{ viewportPos.x, viewportPos.y, viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y };
@@ -4905,46 +4954,92 @@ namespace ignite
     void AssetEditorPanel::InitializeSceneData(AssetEditorData &assetData)
     {
         // Only some asset type can use scene renderer
-        if (assetData.metadata.type != AssetType::Material && assetData.metadata.type != AssetType::Mesh && assetData.metadata.type != AssetType::Skeleton)
+        const AssetType assetType = assetData.metadata.type;
+        if (assetType != AssetType::Material && assetType != AssetType::Mesh && assetType != AssetType::Skeleton)
             return;
 
         assetData.sceneData.camera = EditorCamera(std::format("AssetEditorCamera-{}", static_cast<uint64_t>(assetData.handle)));
-        assetData.sceneData.camera.SetTarget(glm::vec3(0.0f));
+        assetData.sceneData.camera.SetTarget(glm::vec3(0.0f, assetType == AssetType::Mesh ? 1.0f : 0.0f, 0.0f));
         assetData.sceneData.camera.SetDistance(5.5f);
         assetData.sceneData.camera.yaw = glm::radians(90.0f);
         assetData.sceneData.camera.pitch = 0.0f;
         assetData.sceneData.camera.UpdateSphericalPosition();
         assetData.sceneData.camera.UpdateView();
-        assetData.sceneData.camera.UpdateProjection(static_cast<float>(assetData.sceneData.viewportWidth), static_cast<float>(assetData.sceneData.viewportHeight));
+        assetData.sceneData.camera.UpdateProjection(
+            static_cast<float>(assetData.sceneData.viewportWidth > 0 ? assetData.sceneData.viewportWidth : 1280),
+            static_cast<float>(assetData.sceneData.viewportHeight > 0 ? assetData.sceneData.viewportHeight : 720)
+        );
 
-        RenderTargetCreateInfo rtCreateInfo = {};
-        rtCreateInfo.width = assetData.sceneData.viewportWidth;
-        rtCreateInfo.height = assetData.sceneData.viewportHeight;
-        rtCreateInfo.attachments =
+        uint32_t width = assetData.sceneData.viewportWidth > 0 ? assetData.sceneData.viewportWidth : 1280;
+        uint32_t height = assetData.sceneData.viewportHeight > 0 ? assetData.sceneData.viewportHeight : 720;
+        Project *activeProject = m_EditorLayer->GetActiveProject().get();
+        Ref<Mesh> defaultMesh = s_DefaultMeshes[CUBE];
+        AssetHandle handle = assetData.handle;
+
+        if (assetType == AssetType::Skeleton)
         {
-            FramebufferAttachments{ "[Asset Preview DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite},
-            FramebufferAttachments{ "[Asset Preview ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget},
-            FramebufferAttachments{ "[Asset Preview ObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget}
-        };
+            const AssetHandle matchedMeshHandle = FindFirstMeshHandleForSkeleton(activeProject, assetData.handle);
+            if (matchedMeshHandle != AssetHandle(0))
+            {
+                Ref<Mesh> matchedMesh = activeProject->GetAsset<Mesh>(matchedMeshHandle);
+                if (!matchedMesh)
+                {
+                    matchedMesh = activeProject->GetAssetImmediate<Mesh>(matchedMeshHandle);
+                }
 
-        assetData.sceneData.sceneRT = RenderTarget::Create(rtCreateInfo, "[Asset Preview Scene RT]");
-        assetData.sceneData.uiRT = RenderTarget::Create(rtCreateInfo, "[Asset Preview UI RT]");
-
-        RenderTargetCreateInfo compositeInfo = {};
-        compositeInfo.width = assetData.sceneData.viewportWidth;
-        compositeInfo.height = assetData.sceneData.viewportHeight;
-        compositeInfo.attachments =
-        {
-            FramebufferAttachments{ "[Asset Preview Composite ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}
-        };
-        assetData.sceneData.compositeRT = RenderTarget::Create(compositeInfo, "[Asset Preview Composite RT]");
-
-        assetData.sceneData.sceneRenderer = CreateRef<AssetSceneRenderer>();
-        assetData.sceneData.sceneRenderer->SetProject(m_EditorLayer->GetActiveProject().get());
-        if (assetData.sceneData.sceneRenderer)
-        {
-            assetData.sceneData.sceneRenderer->SetPreviewMesh(s_DefaultMeshes[CUBE]);
+                if (matchedMesh)
+                {
+                    defaultMesh = matchedMesh;
+                    SkeletonPreviewEditorState &previewState = s_SkeletonPreviewEditorState[static_cast<uint64_t>(assetData.handle)];
+                    previewState.previewMeshHandle = matchedMeshHandle;
+                    previewState.cachedPreviewMesh.reset();
+                }
+            }
         }
+
+        Application::SubmitToRenderThread([this, handle, width, height, activeProject, defaultMesh]()
+        {
+            RenderTargetCreateInfo rtCreateInfo = {};
+            rtCreateInfo.width = width;
+            rtCreateInfo.height = height;
+            rtCreateInfo.attachments =
+            {
+                FramebufferAttachments{ "[Asset Preview DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite},
+                FramebufferAttachments{ "[Asset Preview ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget},
+                FramebufferAttachments{ "[Asset Preview ObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget}
+            };
+
+            auto sceneRT = RenderTarget::Create(rtCreateInfo, "[Asset Preview Scene RT]");
+            auto uiRT = RenderTarget::Create(rtCreateInfo, "[Asset Preview UI RT]");
+
+            RenderTargetCreateInfo compositeInfo = {};
+            compositeInfo.width = width;
+            compositeInfo.height = height;
+            compositeInfo.attachments =
+            {
+                FramebufferAttachments{ "[Asset Preview Composite ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}
+            };
+            auto compositeRT = RenderTarget::Create(compositeInfo, "[Asset Preview Composite RT]");
+
+            auto renderer = CreateRef<AssetSceneRenderer>();
+            renderer->SetProject(activeProject);
+            if (renderer)
+            {
+                renderer->SetPreviewMesh(defaultMesh);
+            }
+
+            Application::SubmitToMainThread([this, handle, sceneRT, uiRT, compositeRT, renderer]()
+            {
+                auto it = std::ranges::find(m_Assets, handle, &AssetEditorData::handle);
+                if (it != m_Assets.end())
+                {
+                    it->sceneData.sceneRT = sceneRT;
+                    it->sceneData.uiRT = uiRT;
+                    it->sceneData.compositeRT = compositeRT;
+                    it->sceneData.sceneRenderer = renderer;
+                }
+            });
+        });
     }
 
     void AssetEditorPanel::UpdateSceneCamera(EditorSceneData &sceneData, float deltaTime)
@@ -4961,6 +5056,12 @@ namespace ignite
 
         sceneData.camera.ApplyInertia(deltaTime);
         sceneData.camera.UpdateCameraPosition(deltaTime);
+
+        if (sceneData.viewportWidth > 0 && sceneData.viewportHeight > 0)
+        {
+            sceneData.camera.UpdateProjection(static_cast<float>(sceneData.viewportWidth), static_cast<float>(sceneData.viewportHeight));
+        }
+
         sceneData.camera.UpdateView();
     }
 

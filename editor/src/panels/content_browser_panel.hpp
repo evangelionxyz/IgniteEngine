@@ -66,7 +66,7 @@ namespace ignite
         void UIRenderFileTree(FileTreeNode *node);
         void UIRenderFileButton(const std::filesystem::path &item);
         void UIRenderNavigationBar();
-        void UIShowAssetImportContext();
+        void UIShowAssetAddContext();
 
         void PruneMissingNodes(uint32_t nodeIndex, const std::filesystem::path &basePath);
         void PruneMissingNodesAlt(uint32_t nodeIndex, const std::filesystem::path &basePath);

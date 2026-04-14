@@ -351,7 +351,7 @@ namespace ignite
         return gp;
     }
 
-    static nvrhi::BindingSetHandle GetQuadBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &lightingBuffer)
+    static nvrhi::BindingSetHandle GetQuadBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &lightingBuffer)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -383,7 +383,7 @@ namespace ignite
         }
 
         nvrhi::BindingSetDesc bindingSetDesc;
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, lightingBuffer->GetHandle()));
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
         for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
@@ -402,7 +402,7 @@ namespace ignite
         return bindingSet;
     }
 
-	static nvrhi::BindingSetHandle GetTextBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &lightingBuffer)
+	static nvrhi::BindingSetHandle GetTextBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &lightingBuffer)
 	{
         IGN_PROFILE_FUNCTION();
 
@@ -434,7 +434,7 @@ namespace ignite
         }
 
 		nvrhi::BindingSetDesc bindingSetDesc;
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
 		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, lightingBuffer->GetHandle()));
 		bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
 		for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
@@ -453,7 +453,7 @@ namespace ignite
 		return bindingSet;
 	}
 
-    static nvrhi::BindingSetHandle GetLineBindingSet(nvrhi::IBindingLayout *bindingLayout)
+    static nvrhi::BindingSetHandle GetLineBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -466,7 +466,7 @@ namespace ignite
         // create binding set
         nvrhi::BindingSetDesc bindingSetDesc;
         // add constant buffer
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
 
         nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
         LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
@@ -521,7 +521,7 @@ namespace ignite
         return gp;
     }
 
-    static nvrhi::BindingSetHandle GetCircleBindingSet(nvrhi::IBindingLayout *bindingLayout)
+    static nvrhi::BindingSetHandle GetCircleBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -532,7 +532,7 @@ namespace ignite
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
         nvrhi::BindingSetDesc bindingSetDesc;
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
 
         nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
         LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
@@ -650,7 +650,7 @@ namespace ignite
         m_PreRenderCache.textTextureSlots = m_TextBatch.textureSlots;
     }
 
-    bool Renderer2D::ReplayPreRenderCache(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
+    bool Renderer2D::ReplayPreRenderCache(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const Ref<ConstantBuffer> &cameraBuffer)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -673,7 +673,7 @@ namespace ignite
             m_CircleBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache.circleVertices.data(), m_PreRenderCache.circleVertices.size() * sizeof(Vertex2DCircle)));
 
             Ref<GraphicsPipeline> gp = GetCirclePipelineForFB(framebuffer, m_FillMode);
-            nvrhi::BindingSetHandle bindingSet = GetCircleBindingSet(gp->GetBindingLayout(0));
+            nvrhi::BindingSetHandle bindingSet = GetCircleBindingSet(gp->GetBindingLayout(0), cameraBuffer);
 
             const auto graphicsState = nvrhi::GraphicsState()
                 .setPipeline(gp->GetHandle())
@@ -695,7 +695,7 @@ namespace ignite
             m_QuadBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache.quadVertices.data(), m_PreRenderCache.quadVertices.size() * sizeof(Vertex2DQuad)));
 
             Ref<GraphicsPipeline> gp = GetQuadPipelineForFB(framebuffer, m_FillMode);
-            nvrhi::BindingSetHandle bindingSet = GetQuadBindingSet(gp->GetBindingLayout(0), m_PreRenderCache.quadTextureSlots, m_Material2DLightingBuffer);
+            nvrhi::BindingSetHandle bindingSet = GetQuadBindingSet(gp->GetBindingLayout(0), m_PreRenderCache.quadTextureSlots, cameraBuffer, m_Material2DLightingBuffer);
 
             const auto graphicsState = nvrhi::GraphicsState()
                 .setPipeline(gp->GetHandle())
@@ -717,7 +717,7 @@ namespace ignite
             m_TextBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache.textVertices.data(), m_PreRenderCache.textVertices.size() * sizeof(VertexText)));
 
             Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode);
-            nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_PreRenderCache.textTextureSlots, m_Material2DLightingBuffer);
+            nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_PreRenderCache.textTextureSlots, cameraBuffer, m_Material2DLightingBuffer);
 
             const auto graphicsState = nvrhi::GraphicsState()
                 .setPipeline(gp->GetHandle())
@@ -936,7 +936,7 @@ namespace ignite
         m_Cmd = cmd;
     }
 
-    void Renderer2D::Flush(nvrhi::IFramebuffer *framebuffer)
+    void Renderer2D::Flush(nvrhi::IFramebuffer *framebuffer, const Ref<ConstantBuffer> &cameraBuffer)
     {
         IGN_PROFILE_FUNCTION();
 
@@ -948,7 +948,7 @@ namespace ignite
             m_LineBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_LineBatch.vertexBufferBase, bufferSize));
 
             Ref<GraphicsPipeline> gp = GetLinePipelineForFB(framebuffer);
-            nvrhi::BindingSetHandle bindingSet = GetLineBindingSet(gp->GetBindingLayout(0));
+            nvrhi::BindingSetHandle bindingSet = GetLineBindingSet(gp->GetBindingLayout(0), cameraBuffer);
 
             const auto graphicsState = nvrhi::GraphicsState()
                 .setPipeline(gp->GetHandle())
@@ -971,7 +971,7 @@ namespace ignite
             m_CircleBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_CircleBatch.vertexBufferBase, bufferSize));
 
             Ref<GraphicsPipeline> gp = GetCirclePipelineForFB(framebuffer, m_FillMode);
-            nvrhi::BindingSetHandle bindingSet = GetCircleBindingSet(gp->GetBindingLayout(0));
+            nvrhi::BindingSetHandle bindingSet = GetCircleBindingSet(gp->GetBindingLayout(0), cameraBuffer);
 
             const auto graphicsState = nvrhi::GraphicsState()
                 .setPipeline(gp->GetHandle())
@@ -995,7 +995,7 @@ namespace ignite
             m_QuadBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_QuadBatch.vertexBufferBase, bufferSize));
 
             Ref<GraphicsPipeline> gp = GetQuadPipelineForFB(framebuffer, m_FillMode);
-            nvrhi::BindingSetHandle bindingSet = GetQuadBindingSet(gp->GetBindingLayout(0), m_QuadBatch.textureSlots, m_Material2DLightingBuffer);
+            nvrhi::BindingSetHandle bindingSet = GetQuadBindingSet(gp->GetBindingLayout(0), m_QuadBatch.textureSlots, cameraBuffer, m_Material2DLightingBuffer);
 
             const auto graphicsState = nvrhi::GraphicsState()
                 .setPipeline(gp->GetHandle())
@@ -1019,7 +1019,7 @@ namespace ignite
             m_TextBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_TextBatch.vertexBufferBase, bufferSize));
 
             Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode);
-            nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_TextBatch.textureSlots, m_Material2DLightingBuffer);
+            nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_TextBatch.textureSlots, cameraBuffer, m_Material2DLightingBuffer);
 
             const auto graphicsState = nvrhi::GraphicsState()
                 .setPipeline(gp->GetHandle())

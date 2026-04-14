@@ -53,7 +53,7 @@ namespace ignite
         m_Renderer->Begin(cmd);
         RenderWidgets(cmd, framebuffer);
         // RenderLayoutGrid(cmd, framebuffer);
-        m_Renderer->Flush(framebuffer);
+        //m_Renderer->Flush(framebuffer);
         m_Renderer->End();
     }
 

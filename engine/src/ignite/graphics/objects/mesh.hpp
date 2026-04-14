@@ -7,7 +7,9 @@
 #include "ignite/graphics/buffers/index_buffer.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/vertex_data.hpp"
+#include "ignite/graphics/renderer.hpp"
 #include "ignite/math/aabb.hpp"
+#include "ignite/scene/scene.hpp"
 #include "material.hpp"
 
 #include <tinygltf.h>
@@ -112,7 +114,40 @@ namespace ignite
 
         Ref<MeshPrimitive> &GetPrimitive() { return m_Primitive; }
 
+        void SetData(nvrhi::ICommandList *cmd, void *data, size_t size)
+        {
+            if (!m_MeshConstantBuffer)
+            {
+                m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(SkinnedMeshBufferData), true, 16, "Per-Entity Transform Buffer");
+            }
+
+            m_MeshConstantBuffer->SetData(cmd, Buffer(data, size));
+        }
+
+        void EnsureBuffer(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer)
+        {
+            if (!m_MeshConstantBuffer)
+            {
+                m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(SkinnedMeshBufferData), true, 16, "Per-Entity Transform Buffer");
+            }
+
+            nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+            auto desc = nvrhi::BindingSetDesc();
+            desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
+            desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m_MeshConstantBuffer->GetHandle()));
+            desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, sceneBuffer->GetHandle()));
+            desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, csmBuffer->GetHandle()));
+
+            m_MeshBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
+            LOG_ASSERT(m_MeshBindingSet, "Failed to create mesh binding set");
+        }
+
+        nvrhi::BindingSetHandle GetBindingSet() const { return m_MeshBindingSet; }
+        Ref<ConstantBuffer> GetConstantBuffer() { return m_MeshConstantBuffer; }
+
     private:
+        Ref<ConstantBuffer> m_MeshConstantBuffer; // SkinnedMesh_GPUData
+        nvrhi::BindingSetHandle m_MeshBindingSet;
         std::string m_Name;
         Ref<MeshPrimitive> m_Primitive;
         AssetHandle m_MaterialHandle = AssetHandle(0);

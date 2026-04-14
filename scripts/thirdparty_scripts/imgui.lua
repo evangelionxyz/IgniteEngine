@@ -26,6 +26,21 @@ project "IMGUI"
         "%{THIRDPARTY_DIR}/IMGUI/imstb_textedit.h",
         "%{THIRDPARTY_DIR}/IMGUI/imstb_truetype.h",
 
+        -- include imgui node editor src to compile
+        "%{THIRDPARTY_DIR}/imgui_node_editor/crude_json.cpp",
+        "%{THIRDPARTY_DIR}/imgui_node_editor/crude_json.h",
+        "%{THIRDPARTY_DIR}/imgui_node_editor/imgui_bezier_math.h",
+        "%{THIRDPARTY_DIR}/imgui_node_editor/imgui_bezier_math.inl",
+        "%{THIRDPARTY_DIR}/imgui_node_editor/imgui_canvas.cpp",
+        "%{THIRDPARTY_DIR}/imgui_node_editor/imgui_canvas.h",
+        "%{THIRDPARTY_DIR}/imgui_node_editor/imgui_extra_math.h",
+        "%{THIRDPARTY_DIR}/imgui_node_editor/imgui_extra_math.inl",
+        "%{THIRDPARTY_DIR}/imgui_node_editor/imgui_node_editor_api.cpp",
+        "%{THIRDPARTY_DIR}/imgui_node_editor/imgui_node_editor_internal.h",
+        "%{THIRDPARTY_DIR}/imgui_node_editor/imgui_node_editor_internal.inl",
+        "%{THIRDPARTY_DIR}/imgui_node_editor/imgui_node_editor.cpp",
+        "%{THIRDPARTY_DIR}/imgui_node_editor/imgui_node_editor.h",
+
         -- include imguizmo src to compile
         "%{THIRDPARTY_DIR}/IMGUIZMO/ImGuizmo.cpp",
         "%{THIRDPARTY_DIR}/IMGUIZMO/ImGuizmo.h",
