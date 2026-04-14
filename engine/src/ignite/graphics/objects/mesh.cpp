@@ -317,10 +317,11 @@ namespace ignite
 					}
 
 					const std::string key = ToLowerCopy(texturePath.generic_string());
+                    std::string textureName = texturePath.stem().string();
 					if (materialLoader.textureLookup.contains(key))
 					{
 						const int index = materialLoader.textureLookup.at(key);
-						textureMap = { index, materialLoader.loadedTextures[index] };
+						textureMap = { index, textureName, materialLoader.loadedTextures[index] };
 						return true;
 					}
 
@@ -356,7 +357,7 @@ namespace ignite
 					const int index = (int)materialLoader.loadedTextures.size();
 					materialLoader.loadedTextures.push_back(texture);
 					materialLoader.textureLookup[key] = index;
-					textureMap = { index, texture };
+					textureMap = { index, textureName, texture };
 					return true;
 				}
 			}
@@ -599,7 +600,9 @@ namespace ignite
     // ===================================
     // Mesh Loader
     // ===================================
-    Ref<Material> GLTFMeshLoader::LoadMaterial(const tinygltf::Primitive &primitive, const std::vector<tinygltf::Material> &gltfMaterials, const std::vector<Ref<Texture>> &loadedTextures, std::array<MeshScene::MaterialTextureMap, 5> &textureMap, const std::vector<nvrhi::SamplerDesc> &loadedSamplers, int *materialIndex)
+    Ref<Material> GLTFMeshLoader::LoadMaterial(const tinygltf::Primitive &primitive, const std::vector<tinygltf::Material> &gltfMaterials,
+        const std::vector<std::pair<std::string, Ref<Texture>>> &loadedTextures,std::array<MeshScene::MaterialTextureMap, 5> &textureMap,
+        const std::vector<nvrhi::SamplerDesc> &loadedSamplers, int *materialIndex)
     {
         Ref<Material> material;
         *materialIndex = -1;
@@ -631,64 +634,62 @@ namespace ignite
             };
 
             material->gpuData.metallicFactor = static_cast<float>(gltfMaterial.pbrMetallicRoughness.metallicFactor);
-
             material->gpuData.roughnessFactor = static_cast<float>(gltfMaterial.pbrMetallicRoughness.roughnessFactor);
-
             material->gpuData.occlusionStrength = static_cast<float>(gltfMaterial.occlusionTexture.strength);
 
             // base color texture
             const int baseColorIndex = gltfMaterial.pbrMetallicRoughness.baseColorTexture.index;
             if (baseColorIndex >= 0 && baseColorIndex < loadedTextures.size())
             {
-                textureMap[0] = { baseColorIndex, loadedTextures[baseColorIndex] };
+                textureMap[0] = { baseColorIndex, loadedTextures[baseColorIndex].first, loadedTextures[baseColorIndex].second };
             }
             else
             {
-                textureMap[0] = { -1, nullptr };
+                textureMap[0] = { -1, "", nullptr };
             }
 
             // emissive texture
             const int emissiveIndex = gltfMaterial.emissiveTexture.index;
             if (emissiveIndex >= 0 && emissiveIndex < loadedTextures.size())
             {
-                textureMap[1] = { emissiveIndex, loadedTextures[emissiveIndex] };
+                textureMap[1] = { emissiveIndex, loadedTextures[emissiveIndex].first, loadedTextures[emissiveIndex].second };
             }
             else
             {
-                textureMap[1] = { -1, nullptr };
+                textureMap[1] = { -1, "", nullptr };
             }
 
             // metallic roughness texture
             const int metallicRoughnessIndex = gltfMaterial.pbrMetallicRoughness.metallicRoughnessTexture.index;
             if (metallicRoughnessIndex >= 0 && metallicRoughnessIndex < loadedTextures.size())
             {
-                textureMap[2] = { metallicRoughnessIndex, loadedTextures[metallicRoughnessIndex] };
+                textureMap[2] = { metallicRoughnessIndex, loadedTextures[metallicRoughnessIndex].first, loadedTextures[metallicRoughnessIndex].second };
             }
             else
             {
-                textureMap[2] = { -1, nullptr };
+                textureMap[2] = { -1, "", nullptr };
             }
 
             // normal texture
             const int normalIndex = gltfMaterial.normalTexture.index;
             if (normalIndex >= 0 && normalIndex < loadedTextures.size())
             {
-                textureMap[3] = { normalIndex, loadedTextures[normalIndex] };
+                textureMap[3] = { normalIndex, loadedTextures[normalIndex].first, loadedTextures[normalIndex].second };
             }
             else
             {
-                textureMap[3] = { -1, nullptr };
+                textureMap[3] = { -1, "", nullptr };
             }
 
             // occlusion texture
             const int occlusionIndex = gltfMaterial.occlusionTexture.index;
             if (occlusionIndex >= 0 && occlusionIndex < loadedTextures.size())
             {
-                textureMap[4] = { occlusionIndex, loadedTextures[occlusionIndex] };
+                textureMap[4] = { occlusionIndex, loadedTextures[occlusionIndex].first, loadedTextures[occlusionIndex].second };
             }
             else
             {
-                textureMap[4] = { -1, nullptr };
+                textureMap[4] = { -1, "", nullptr };
             }
 
             if (!loadedSamplers.empty())
@@ -945,9 +946,9 @@ namespace ignite
         outScene.aabb = CalculateSceneAABB(outScene.flatMeshes);
     }
 
-    std::vector<Ref<Texture>> GLTFMeshLoader::LoadTexturesFromGLTF(const tinygltf::Model &model)
+    std::vector<std::pair<std::string, Ref<Texture>>> GLTFMeshLoader::LoadTexturesFromGLTF(const tinygltf::Model &model)
     {
-        std::vector<Ref<Texture>> gltfTextures;
+        std::vector<std::pair<std::string, Ref<Texture>>> gltfTextures;
         LOG_TRACE("Loading {} textures from glTF", model.textures.size());
 
         for (size_t i = 0; i < model.textures.size(); ++i)
@@ -994,7 +995,7 @@ namespace ignite
                     LOG_ASSERT(false, "Not implemented yet!");
                 }
 
-                gltfTextures.push_back(texture);
+                gltfTextures.push_back({ image.name, texture });
             }
         }
 

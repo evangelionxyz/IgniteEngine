@@ -324,6 +324,7 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE_COLOR("ContentBrowser::FileList", 0xCD5C5C);
 
+                
                 if (ImGui::BeginChild("##file_lists", { 0.0f, 0.0f }))
                 {
                     // Insert path nodes
@@ -354,18 +355,14 @@ namespace ignite
                             ImGui::Text("This folder is empty");
                         }
 
-                        static float padding = 12.0f;
-                        const float cellSize = static_cast<float>(m_ThumbnailSize) + padding;
-                        const float &childWindowWidth = ImGui::GetContentRegionAvail().x;
+                        const float spacing = 12.0f;
+                        const float contentWidth = ImGui::GetContentRegionAvail().x;
+                        const float itemWidth = static_cast<float>(m_ThumbnailSize);
 
-                        int columnCount = static_cast<int>(childWindowWidth / cellSize);
-                        columnCount = std::max(columnCount, 1);
-
-                        ImGui::Columns(columnCount, nullptr, false);
-
+                        const int itemPerRow = std::max(1, static_cast<int>((contentWidth + spacing) / (itemWidth + spacing)));
                         const int itemCount = static_cast<int>(node->sortedChildren.size());
-                        const int rowCount = (itemCount + columnCount - 1) / columnCount;
-                        const float rowHeight = static_cast<float>(m_ThumbnailSize) + ImGui::GetTextLineHeightWithSpacing() * 2.0f + padding;
+                        const int rowCount = (itemCount + itemPerRow - 1) / itemPerRow;
+                        const float rowHeight = static_cast<float>(m_ThumbnailSize) + ImGui::GetTextLineHeightWithSpacing() * 2.0f + spacing;
                         const float cursorStartY = ImGui::GetCursorPosY();
 
                         ImGuiListClipper clipper;
@@ -376,22 +373,22 @@ namespace ignite
 
                             for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row)
                             {
-                                const int rowStart = row * columnCount;
-                                const int rowEnd = std::min(rowStart + columnCount, itemCount);
+                                const int rowStart = row * itemPerRow;
+                                const int rowEnd = std::min(rowStart + itemPerRow, itemCount);
 
                                 for (int i = rowStart; i < rowEnd; ++i)
                                 {
                                     const auto childNodeIndex = node->sortedChildren[static_cast<size_t>(i)];
                                     const auto &item = m_TreeNodes[childNodeIndex].path;
+
+                                    if (i > rowStart)
+                                    {
+                                        ImGui::SameLine(0.0f, spacing);
+                                    }
+
                                     ImGui::PushID(item.generic_string().c_str());
                                     UIRenderFileButton(item);
-                                    ImGui::NextColumn();
                                     ImGui::PopID();
-                                }
-
-                                for (int col = rowEnd - rowStart; col < columnCount; ++col)
-                                {
-                                    ImGui::NextColumn();
                                 }
                             }
                         }
@@ -399,8 +396,6 @@ namespace ignite
                         ImGui::SetCursorPosY(cursorStartY + static_cast<float>(rowCount) * rowHeight);
                         ImGui::Dummy(ImVec2(1.0f, 0.0f));
                     }
-
-                    ImGui::Columns(1);
 
                     if (ImGui::BeginPopupContextWindow("##content_browser_context_menu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoReopen | ImGuiPopupFlags_NoOpenOverItems))
                     {
@@ -666,7 +661,9 @@ namespace ignite
                 {
                     std::error_code ec;
                     if (std::filesystem::is_directory(m_PopupTargetPath))
+                    {
                         std::filesystem::remove_all(m_PopupTargetPath, ec);
+                    }
                     else
                     {
                         std::filesystem::remove(m_PopupTargetPath, ec);
@@ -692,7 +689,9 @@ namespace ignite
                     }
 
                     if (!ec)
+                    {
                         m_NeedsRefresh = true;
+                    }
 
                     ImGui::CloseCurrentPopup();
                 }
@@ -720,11 +719,10 @@ namespace ignite
 
             if (assetType == PendingFileLoading::ImportAssets)
             {
+                // submit to asset worker
                 m_AssetManager->SubmitJob([this, assetType, assetMetaData]()
                 {
-					Ref<Asset> asset = m_AssetManager->Import(AssetHandle(), assetMetaData);
-
-					if (asset)
+					if (Ref<Asset> asset = m_AssetManager->Import(AssetHandle(), assetMetaData))
 					{
                         Application::SubmitToMainThread([this]() mutable
                         {
@@ -771,7 +769,6 @@ namespace ignite
         {
             UnloadUnusedThumbnails();
         }
-
 	}
 
 	void ContentBrowserPanel::RefreshEntryPathList()
@@ -942,12 +939,16 @@ namespace ignite
             return;
 
         const bool isDirectory = std::filesystem::is_directory(fileStatus);
+        const AssetType itemAssetType = GetAssetTypeFromExtension(item.extension().string());
+
         Ref<Texture> icon = GetOrCreateThumbnail(path, isDirectory);
         if (!icon)
         {
             // fallback, because it is generated asynchronously
             icon = s_SharedIcons["unknown"];
         }
+
+        ImGui::BeginGroup();
 
         // Keep a fixed clickable area and draw the image separately with preserved aspect ratio
         const float maxSize = static_cast<float>(m_ThumbnailSize);
@@ -961,7 +962,7 @@ namespace ignite
 
         const bool isActive = ImGui::IsItemActive();
         const bool isHovered = ImGui::IsItemHovered();
-        
+
         const ImU32 buttonColor = isActive
             ? ImGui::GetColorU32(ImGuiCol_ButtonActive)
             : (isHovered ? ImGui::GetColorU32(ImGuiCol_ButtonHovered) : ImGui::GetColorU32(ImGuiCol_Button));
@@ -1009,6 +1010,7 @@ namespace ignite
             }
         }
 
+        // Item Popup context
         if (ImGui::BeginPopupContextItem())
         {
             if (!isDirectory && ImGui::MenuItem("Open in Asset Editor"))
@@ -1059,6 +1061,7 @@ namespace ignite
             if (ImGui::MenuItem("Rename"))
             {
                 m_PopupTargetPath = path;
+
                 // prefill buffer with filename
                 std::string fname = std::filesystem::is_directory(path) ? path.filename().generic_string() : path.stem().generic_string();
                 std::strncpy(m_PopupInputBuffer, fname.c_str(), sizeof(m_PopupInputBuffer) - 1);
@@ -1077,74 +1080,84 @@ namespace ignite
                 m_ShowDeleteModal = true;
             }
 
-            if (item.extension() == ".ixscene")
+            if (!isDirectory)
             {
-                if (ImGui::MenuItem("Set As Default Scene"))
+                switch (itemAssetType)
                 {
-                    auto project = m_EditorLayer->GetActiveProject();
-                    if (project)
+                    case AssetType::Scene:
                     {
-                        m_AssetManager->ImportAsset(path);
-                        AssetHandle handle = m_AssetManager->GetAssetHandle(path);
-                        project->SetDefaultScene(handle);
+                        if (ImGui::MenuItem("Set As Default Scene"))
+                        {
+                            auto project = m_EditorLayer->GetActiveProject();
+                            if (project)
+                            {
+                                m_AssetManager->ImportAsset(path);
+                                AssetHandle handle = m_AssetManager->GetAssetHandle(path);
+                                project->SetDefaultScene(handle);
 
-                        project->Serialize(project->GetFilepath());
+                                project->Serialize(project->GetFilepath());
+                            }
+                        }
+                        break; // !Scene
                     }
-                }
-            }
-
-            if (!isDirectory && item.extension() == ".ixanim" && ImGui::MenuItem("Create Montage"))
-            {
-                Project *project = m_EditorLayer->GetActiveProject().get();
-                if (project && m_AssetManager)
-                {
-                    const std::filesystem::path relativeAnimPath = project->GetAssetRelativeFilepath(path);
-                    const AssetHandle animHandle = m_AssetManager->GetAssetHandle(relativeAnimPath);
-                    const AssetMetaData animationMetadata = m_AssetManager->GetMetaData(animHandle);
-
-                    if (animHandle != AssetHandle(0) && animationMetadata.type == AssetType::SkeletalAnimation)
+                    case AssetType::SkeletalAnimation:
                     {
-                        Ref<AnimationMontage> montage = CreateRef<AnimationMontage>();
-                        montage->name = std::format("{}_Montage", path.stem().string());
-                        montage->SetAnimationHandle(animHandle);
-
-                        Ref<SkeletalAnimation> animation = project->GetAsset<SkeletalAnimation>(animHandle);
-                        if (!animation)
+                        if (ImGui::MenuItem("Create Animation Montage"))
                         {
-                            animation = project->GetAssetImmediate<SkeletalAnimation>(animHandle);
+                            Project *project = m_EditorLayer->GetActiveProject().get();
+                            if (project && m_AssetManager)
+                            {
+                                const std::filesystem::path relativeAnimPath = project->GetAssetRelativeFilepath(path);
+                                const AssetHandle animHandle = m_AssetManager->GetAssetHandle(relativeAnimPath);
+                                const AssetMetaData animationMetadata = m_AssetManager->GetMetaData(animHandle);
+
+                                if (animHandle != AssetHandle(0) && animationMetadata.type == AssetType::SkeletalAnimation)
+                                {
+                                    Ref<AnimationMontage> montage = CreateRef<AnimationMontage>();
+                                    montage->name = std::format("{}_Montage", path.stem().string());
+                                    montage->SetAnimationHandle(animHandle);
+
+                                    Ref<SkeletalAnimation> animation = project->GetAsset<SkeletalAnimation>(animHandle);
+                                    if (!animation)
+                                    {
+                                        animation = project->GetAssetImmediate<SkeletalAnimation>(animHandle);
+                                    }
+
+                                    if (animation)
+                                    {
+                                        montage->SetSkeletonHandle(animation->GetSkeletonHandle());
+                                    }
+
+                                    std::filesystem::path montagePath = path.parent_path() / (path.stem().string() + GetAssetExtensionFromType(AssetType::AnimationMontage));
+                                    uint32_t suffix = 1;
+                                    while (std::filesystem::exists(montagePath))
+                                    {
+                                        montagePath = path.parent_path() / std::format("{}_{}{}", path.stem().string(), suffix, GetAssetExtensionFromType(AssetType::AnimationMontage));
+                                        ++suffix;
+                                    }
+
+                                    if (montage->Serialize(montagePath))
+                                    {
+                                        const AssetHandle montageHandle = AssetHandle();
+                                        montage->handle = montageHandle;
+                                        montage->SetDirtyFlag(false);
+                                        montage->SetReadyFlag(true);
+
+                                        AssetMetaData montageMetaData;
+                                        montageMetaData.type = AssetType::AnimationMontage;
+                                        montageMetaData.filepath = project->GetAssetRelativeFilepath(montagePath);
+
+                                        m_AssetManager->AssignMetaData(montageHandle, montageMetaData);
+                                        m_AssetManager->AssignAsset(montageHandle, montage);
+                                        m_EditorLayer->SaveProject();
+
+                                        DispatchOpenAssetEditorEvent(montageHandle, montageMetaData);
+                                        m_NeedsRefresh = true;
+                                    }
+                                }
+                            }
                         }
-
-                        if (animation)
-                        {
-                            montage->SetSkeletonHandle(animation->GetSkeletonHandle());
-                        }
-
-                        std::filesystem::path montagePath = path.parent_path() / (path.stem().string() + GetAssetExtensionFromType(AssetType::AnimationMontage));
-                        uint32_t suffix = 1;
-                        while (std::filesystem::exists(montagePath))
-                        {
-                            montagePath = path.parent_path() / std::format("{}_{}{}", path.stem().string(), suffix, GetAssetExtensionFromType(AssetType::AnimationMontage));
-                            ++suffix;
-                        }
-
-                        if (montage->Serialize(montagePath))
-                        {
-                            const AssetHandle montageHandle = AssetHandle();
-                            montage->handle = montageHandle;
-                            montage->SetDirtyFlag(false);
-                            montage->SetReadyFlag(true);
-
-                            AssetMetaData montageMetaData;
-                            montageMetaData.type = AssetType::AnimationMontage;
-                            montageMetaData.filepath = project->GetAssetRelativeFilepath(montagePath);
-
-                            m_AssetManager->AssignMetaData(montageHandle, montageMetaData);
-                            m_AssetManager->AssignAsset(montageHandle, montage);
-                            m_EditorLayer->SaveProject();
-
-                            DispatchOpenAssetEditorEvent(montageHandle, montageMetaData);
-                            m_NeedsRefresh = true;
-                        }
+                        break; // !SkeletalAnimation
                     }
                 }
             }
@@ -1156,13 +1169,17 @@ namespace ignite
         }
 
         DragDropSource(m_CurrentDirectory / item);
-        ImGui::TextWrapped("%s", item.generic_string().c_str());
 
-        if (!isDirectory && item.extension() == ".ixsp")
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + maxSize);
+        ImGui::Text("%s", item.generic_string().c_str());
+        ImGui::PopTextWrapPos();
+
+        // Render sprite sheet contents
+        if (!isDirectory && itemAssetType == AssetType::SpriteSheet)
         {
             Project *project = m_EditorLayer->GetActiveProject().get();
-            const std::filesystem::path relativeAssetPath = project->GetAssetRelativeFilepath(path);
-            AssetHandle handle = m_AssetManager->GetAssetHandle(relativeAssetPath);
+
+            AssetHandle handle = m_AssetManager->GetAssetHandle(path);
             AssetMetaData metadata = m_AssetManager->GetMetaData(handle);
 
             if (metadata.type == AssetType::SpriteSheet && handle != AssetHandle(0))
@@ -1235,11 +1252,11 @@ namespace ignite
                             }
                         }
                     }
-
                     ImGui::EndPopup();
                 }
             }
         }
+        ImGui::EndGroup();
     }
 
     bool ContentBrowserPanel::DuplicateItem(const std::filesystem::path &filepath)

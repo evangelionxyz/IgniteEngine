@@ -106,6 +106,7 @@ namespace ignite {
         { ".ixproj", AssetType::Project },
         { ".ixscene", AssetType::Scene },
         
+        // Textures
         { ".jpg", AssetType::Texture },
         { ".png", AssetType::Texture },
         { ".jpeg", AssetType::Texture },
@@ -113,19 +114,28 @@ namespace ignite {
         { ".hdr", AssetType::Texture },
 
         { ".ixsp", AssetType::SpriteSheet },
+        
+        // Fonts
         { ".otf", AssetType::Font },
         { ".ttf", AssetType::Font },
+        
+        // audio
         { ".mp3", AssetType::Audio },
         { ".flac", AssetType::Audio },
         { ".wav", AssetType::Audio },
 
+        // Meshes
         { ".mesh", AssetType::Mesh },
+        { ".fbx", AssetType::Mesh },
+        { ".gltf", AssetType::Mesh },
+        { ".glb", AssetType::Mesh },
 
-        { ".ixskel", AssetType::Skeleton},
+        // Animations
         { ".ixanim", AssetType::SkeletalAnimation},
-        { ".bsp", AssetType::BlendSpace},
         { ".ixloco", AssetType::LocomotionController},
-        
+        { ".ixskel", AssetType::Skeleton},
+        { ".bsp", AssetType::BlendSpace},
+
         { ".ixmat", AssetType::Material},
         { ".ixenv", AssetType::Environment},
 
@@ -171,7 +181,6 @@ namespace ignite {
         {
         case AssetType::Metadata: return ".meta";
         case AssetType::Shader: return ".hlsl";
-
         case AssetType::AnimationMontage: return ".mtg";
         case AssetType::Mesh: return ".mesh";
         case AssetType::Skeleton: return ".ixskel";

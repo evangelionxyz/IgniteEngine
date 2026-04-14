@@ -347,17 +347,22 @@ namespace ignite
 
         if (!std::filesystem::exists(outputDirectory)) std::filesystem::create_directory(outputDirectory);
 
-        const std::filesystem::path materialDirectory = outputDirectory / "Material";
-        const std::filesystem::path textureDirectory = outputDirectory / "Textures";
-        if (options.importMaterials && !std::filesystem::exists(materialDirectory)) std::filesystem::create_directory(materialDirectory);
-        if (options.importMaterials && !std::filesystem::exists(textureDirectory)) std::filesystem::create_directory(textureDirectory);
-
         // Import textures and materials from the same FBX parse used for skeleton/animation,
         // so bone IDs and skeleton mapping stay consistent.
         std::vector<std::array<AssetHandle, 5>> materialTextureHandles;
         if (options.importMaterials)
         {
             materialTextureHandles.resize(meshScene.materials.size());
+
+            // texture directory
+            std::filesystem::path textureDirectory = outputDirectory;
+            if (!meshScene.materialTextureMap.empty())
+            {
+                // only create when there is non null texture
+                textureDirectory /= "Textures";
+                if (options.importMaterials && !std::filesystem::exists(textureDirectory))
+                    std::filesystem::create_directory(textureDirectory);
+            }
 
             for (size_t i = 0; i < meshScene.materialTextureMap.size(); ++i)
             {
@@ -366,7 +371,7 @@ namespace ignite
 
                 for (size_t j = 0; j < meshScene.materialTextureMap[i].size(); ++j)
                 {
-                    auto &[idx, texture] = meshScene.materialTextureMap[i][j];
+                    auto &[idx, name, texture] = meshScene.materialTextureMap[i][j];
                     if (idx < 0 || !texture)
                     {
                         continue;
@@ -374,7 +379,7 @@ namespace ignite
 
                     const bool writeEXR = texture->GetFormat() == nvrhi::Format::RGBA32_FLOAT;
                     const std::string textureExtension = writeEXR ? ".exr" : ".png";
-                    const std::string textureFilename = filename.stem().string() + std::format("_{0}_{1}", idx, textureExtension);
+                    const std::string textureFilename = std::format("{0}.{1}", name, textureExtension);
                     const std::filesystem::path textureOutputFullPath = textureDirectory / textureFilename;
 
                     if (writeEXR)
@@ -403,6 +408,15 @@ namespace ignite
                     assetManager->AssignMetaData(textureHandle, textureMD);
                     textureHandles[j] = textureHandle;
                 }
+            }
+
+            // Set default material directory
+            std::filesystem::path materialDirectory = outputDirectory;
+            if (!meshScene.materials.empty())
+            {
+                materialDirectory /= "Material";
+                if (options.importMaterials && !std::filesystem::exists(materialDirectory))
+                    std::filesystem::create_directory(materialDirectory);
             }
 
             for (size_t i = 0; i < meshScene.materials.size(); ++i)
@@ -453,10 +467,8 @@ namespace ignite
                     Ref<Material> mat = meshScene.materials[matIdx];
                     m->SetMaterial(mat->handle);
                 }
-
                 asset->AddMeshInstance(m);
             }
-
             asset->aabb = meshScene.aabb;
         }
 

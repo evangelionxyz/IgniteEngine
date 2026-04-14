@@ -3,54 +3,30 @@ AssetRegistry:
     - Handle: 369159775785193268
       Type: Texture
       Filepath: Meshes/Rumba Dancing/Textures/Rumba Dancing_2_.png
-    - Handle: 420614953825427048
-      Type: SkeletalAnimation
-      Filepath: Meshes/Barbarian/Rig_Medium_General/Rig_Medium_General_7.ixanim
-    - Handle: 1074894696989158900
-      Type: Texture
-      Filepath: Screenshot 2026-04-13 002903.png
-    - Handle: 1340169522983320257
-      Type: SkeletalAnimation
-      Filepath: Meshes/Barbarian/Rig_Medium_General/Rig_Medium_General_8.ixanim
     - Handle: 1671497305426399170
       Type: Texture
       Filepath: kiara_1_dawn_4k.hdr
     - Handle: 3096406820083457006
       Type: Invalid
       Filepath: ""
-    - Handle: 3107169065116954660
-      Type: SkeletalAnimation
-      Filepath: Meshes/Barbarian/Rig_Medium_General/Rig_Medium_General_5.ixanim
-    - Handle: 3135798635763883867
-      Type: SkeletalAnimation
-      Filepath: Meshes/Barbarian/Rig_Medium_General/Rig_Medium_General_9.ixanim
     - Handle: 4300881635202775327
       Type: Material
       Filepath: Meshes/Rumba Dancing/Material/kachujin_MAT.ixmat
-    - Handle: 4406928720859537307
-      Type: SkeletalAnimation
-      Filepath: Meshes/Barbarian/Rig_Medium_General/Rig_Medium_General_13.ixanim
+    - Handle: 4505966473450758291
+      Type: Mesh
+      Filepath: Meshes/Rogue/Rogue.mesh
     - Handle: 5575272945652919097
       Type: Texture
       Filepath: Meshes/Rumba Dancing/Kachujin_diffuse.png
     - Handle: 6104206172746864979
       Type: Invalid
       Filepath: ""
-    - Handle: 6240539071371093612
-      Type: SkeletalAnimation
-      Filepath: Meshes/Barbarian/Rig_Medium_General/Rig_Medium_General_14.ixanim
-    - Handle: 6289491321056877941
-      Type: SkeletalAnimation
-      Filepath: Meshes/Barbarian/Rig_Medium_General/Rig_Medium_General_1.ixanim
     - Handle: 7027867997128787561
       Type: Mesh
       Filepath: Meshes/Rumba Dancing/Mesh/Rumba Dancing.mesh
     - Handle: 7201159435847965647
       Type: Texture
       Filepath: ferndale_studio_04_2k.hdr
-    - Handle: 7269952734907546147
-      Type: Skeleton
-      Filepath: Meshes/Barbarian/Rig_Medium_General/Rig_Medium_General.ixskel
     - Handle: 7418336109074341235
       Type: Audio
       Filepath: Audio/24 You Can't Just Shoot a Hole Into The Surface of Mars.mp3
@@ -60,33 +36,15 @@ AssetRegistry:
     - Handle: 7504911466409295994
       Type: Texture
       Filepath: snowy_field_2k.hdr
-    - Handle: 7723005320929185371
-      Type: SkeletalAnimation
-      Filepath: Meshes/Barbarian/Rig_Medium_General/Rig_Medium_General_4.ixanim
-    - Handle: 8108797458520294148
-      Type: SkeletalAnimation
-      Filepath: Meshes/Barbarian/Rig_Medium_General/Rig_Medium_General_12.ixanim
+    - Handle: 8106913103504810955
+      Type: Skeleton
+      Filepath: Meshes/Rogue/Rogue.ixskel
     - Handle: 8406749831429556630
       Type: Texture
       Filepath: ferndale_studio_12_2k.hdr
-    - Handle: 8436733063181127600
-      Type: SkeletalAnimation
-      Filepath: Meshes/Barbarian/Rig_Medium_General/Rig_Medium_General_3.ixanim
     - Handle: 8487866291550668718
       Type: Texture
       Filepath: klippad_sunrise_2_2k.hdr
-    - Handle: 8537608744669083790
-      Type: Mesh
-      Filepath: Meshes/Barbarian/Barbarian.mesh
-    - Handle: 8624810994311185902
-      Type: Material
-      Filepath: Meshes/Barbarian/Material/barbarian.ixmat
-    - Handle: 8994648656831368737
-      Type: SkeletalAnimation
-      Filepath: Meshes/Barbarian/Rig_Medium_General/Rig_Medium_General_11.ixanim
-    - Handle: 9191102871342269715
-      Type: SkeletalAnimation
-      Filepath: Meshes/Barbarian/Rig_Medium_General/Rig_Medium_General_10.ixanim
     - Handle: 9308657169604886185
       Type: SkeletalAnimation
       Filepath: Meshes/Rumba Dancing/Standing Taunt Battlecry/Animation/Standing Taunt Battlecry_0.ixanim
@@ -96,30 +54,15 @@ AssetRegistry:
     - Handle: 9894304757204418348
       Type: Scene
       Filepath: Scene/TestScene.ixscene
-    - Handle: 10389486832236117723
-      Type: SkeletalAnimation
-      Filepath: Meshes/Barbarian/Rig_Medium_General/Rig_Medium_General_0.ixanim
     - Handle: 10413000552455109983
       Type: AnimatorController
       Filepath: Meshes/Rumba Dancing/Animation/NewAnimatorController3D.ac
-    - Handle: 10728626613601194482
-      Type: Skeleton
-      Filepath: Meshes/Barbarian/Barbarian.ixskel
-    - Handle: 10875414697540485082
-      Type: SkeletalAnimation
-      Filepath: Meshes/Barbarian/Rig_Medium_General/Rig_Medium_General_2.ixanim
     - Handle: 11430929632188587523
       Type: SkeletalAnimation
       Filepath: Meshes/Rumba Dancing/Animation/Rumba Dancing_0.ixanim
-    - Handle: 11567291486513053178
-      Type: Texture
-      Filepath: Meshes/Barbarian/Textures/barbarian_texture.png
     - Handle: 11769717714627322982
       Type: Texture
       Filepath: Meshes/Rumba Dancing/Textures/Rumba Dancing_0_.png
-    - Handle: 12438957118505455569
-      Type: Mesh
-      Filepath: Meshes/Barbarian/Rig_Medium_General/Rig_Medium_General.mesh
     - Handle: 13589769746383350053
       Type: Texture
       Filepath: checker.jpg
@@ -135,9 +78,9 @@ AssetRegistry:
     - Handle: 15132198631710456398
       Type: Texture
       Filepath: snowy_cemetery_2k.hdr
-    - Handle: 16036014332494101369
-      Type: SkeletalAnimation
-      Filepath: Meshes/Barbarian/Rig_Medium_General/Rig_Medium_General_6.ixanim
     - Handle: 16520719249779125409
       Type: Skeleton
       Filepath: Meshes/Rumba Dancing/Mesh/Rumba Dancing.ixskel
+    - Handle: 17836948765630900494
+      Type: Material
+      Filepath: Meshes/Rogue/Material/rogue.ixmat

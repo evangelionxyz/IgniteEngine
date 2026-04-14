@@ -33,8 +33,7 @@ namespace ignite
 
 		bool IsMeshImportDialogFile(const std::filesystem::path &filepath)
 		{
-			const std::string extension = ToLower(filepath.extension().string());
-			return extension == ".fbx" || extension == ".gltf" || extension == ".glb";
+			return GetAssetTypeFromExtension(ToLower(filepath.extension().string())) == AssetType::Mesh;
 		}
 
 		bool IsTextureImportDialogFile(const std::filesystem::path &filepath)
@@ -134,17 +133,17 @@ namespace ignite
 			return;
 		}
 
-     if (m_OpenImporterPopup)
+		if (m_OpenImporterPopup)
 		{
-           ImGui::OpenPopup("Asset Importer");
+			ImGui::OpenPopup("Asset Importer");
 			m_OpenImporterPopup = false;
 		}
 
-        if (ImGui::BeginPopupModal("Asset Importer", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		if (ImGui::BeginPopupModal("Asset Importer", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 		{
-          if (!m_CurrentAsset.has_value())
+			if (!m_CurrentAsset.has_value())
 			{
-               ImGui::TextDisabled("No pending assets.");
+				ImGui::TextDisabled("No pending assets.");
 				if (ImGui::Button("Close"))
 				{
 					ResetImportState();
@@ -154,12 +153,12 @@ namespace ignite
 				return;
 			}
 
-          const AssetImportData currentImportData = *m_CurrentAsset;
+			const AssetImportData currentImportData = *m_CurrentAsset;
 			ImGui::Text("File: %s", currentImportData.filepath.generic_string().c_str());
 			ImGui::Text("Type: %s", AssetTypeToString(currentImportData.assetType));
 			ImGui::Separator();
 
-          if (IsMeshImportDialogFile(currentImportData.filepath))
+			if (IsMeshImportDialogFile(currentImportData.filepath))
 			{
 				DrawMeshImportOptions();
 			}
@@ -176,11 +175,11 @@ namespace ignite
 				DrawGenericImportOptions();
 			}
 
-         ImGui::Separator();
+			ImGui::Separator();
 			ImGui::Checkbox("Skip dialog for same asset type as this file", &m_SkipDialogForSameType);
 			ImGui::Separator();
 
-            if (ImGui::Button("Import##import_button"))
+			if (ImGui::Button("Import##import_button"))
 			{
 				ImportCurrentAsset();
 				if (!m_CurrentAsset.has_value())
@@ -199,7 +198,7 @@ namespace ignite
 				}
 			}
 
-           ImGui::SameLine();
+			ImGui::SameLine();
 			if (ImGui::Button("Cancel"))
 			{
 				ResetImportState();

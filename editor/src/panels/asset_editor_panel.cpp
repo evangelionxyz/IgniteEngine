@@ -650,7 +650,7 @@ namespace ignite
         if (assetData.asset->IsDirty())
             flags |= ImGuiWindowFlags_UnsavedDocument;
 
-        ImGui::SetNextWindowSize(windowSize, ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(windowSize, ImGuiCond_Appearing);
         ImGui::SetNextWindowSizeConstraints(minWindowSize, ImVec2(FLT_MAX, FLT_MAX));
         if (!ImGui::Begin(assetData.windowTitle.c_str(), &isOpen, flags))
         {
@@ -2823,7 +2823,7 @@ namespace ignite
     void AssetEditorPanel::UITextureEditor(AssetEditorData &assetData)
     {
         bool isOpen = assetData.isOpen;
-        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1000.0f, 900.0f), ImVec2(420.0f, 640.0f), ImGuiWindowFlags_NoScrollWithMouse))
+        if (BeginAssetEditorWindow(assetData, isOpen, {420.0f, 720.0f}, ImVec2(420.0f, 720.0f), ImGuiWindowFlags_NoScrollbar))
         {
             if (DrawAssetEditorHeader(assetData))
             {
@@ -2874,7 +2874,7 @@ namespace ignite
         ImGui::Text("Channels: %d", texture->GetChannels());
         ImGui::Text("Current Format: %s", TextureFormatToString(texture->GetFormat()));
 
-        const float previewMaxWidth = std::min(320.0f, ImGui::GetContentRegionAvail().x);
+        const float previewMaxWidth = std::min(420.0f, ImGui::GetContentRegionAvail().x);
         if (previewMaxWidth > 0.0f && texture->GetWidth() > 0 && texture->GetHeight() > 0)
         {
             const float aspectRatio = static_cast<float>(texture->GetWidth()) / static_cast<float>(texture->GetHeight());
@@ -2896,25 +2896,25 @@ namespace ignite
         ImGui::Separator();
 
         int mipLevels = static_cast<int>(state.createInfo.mipLevels);
-        if (ImGui::DragInt("Mip Levels", &mipLevels, 1.0f, 1, 16))
+        if (UI::DrawIntControl("Mip Levels", &mipLevels, 1.0f, 0, 16))
         {
             state.createInfo.mipLevels = static_cast<uint32_t>(std::max(mipLevels, 1));
         }
 
         int arraySize = static_cast<int>(state.createInfo.arraySize);
-        if (ImGui::DragInt("Array Size", &arraySize, 1.0f, 1, 64))
+        if (UI::DrawIntControl("Array Size", &arraySize, 1.0f, 1, 64))
         {
             state.createInfo.arraySize = static_cast<uint32_t>(std::max(arraySize, 1));
         }
 
         int sampleCount = static_cast<int>(state.createInfo.sampleCount);
-        if (ImGui::DragInt("Sample Count", &sampleCount, 1.0f, 1, 16))
+        if (UI::DrawIntControl("Sample Count", &sampleCount, 1.0f, 1, 16))
         {
             state.createInfo.sampleCount = static_cast<uint32_t>(std::max(sampleCount, 1));
         }
 
         int sampleQuality = static_cast<int>(state.createInfo.sampleQuality);
-        if (ImGui::DragInt("Sample Quality", &sampleQuality, 1.0f, 0, 16))
+        if (UI::DrawIntControl("Sample Quality", &sampleQuality, 1.0f, 0, 16))
         {
             state.createInfo.sampleQuality = static_cast<uint32_t>(std::max(sampleQuality, 0));
         }
@@ -2931,50 +2931,39 @@ namespace ignite
             }
         }
 
-        if (ImGui::BeginCombo("Import Format", TextureFormatToString(formatOptions[currentFormatIndex])))
+        const char *formatOptionLabels[] =
         {
-            for (int i = 0; i < static_cast<int>(std::size(formatOptions)); ++i)
-            {
-                const bool selected = i == currentFormatIndex;
-                if (ImGui::Selectable(TextureFormatToString(formatOptions[i]),
-                    selected))
-                {
-                    state.createInfo.format = formatOptions[i];
-                }
+            TextureFormatToString(formatOptions[0]),
+            TextureFormatToString(formatOptions[1])
+        };
 
-                if (selected)
-                {
-                    ImGui::SetItemDefaultFocus();
-                }
-            }
-            ImGui::EndCombo();
+        if (UI::DrawComboBox("Import Format", formatOptionLabels, static_cast<int>(std::size(formatOptionLabels)), formatOptionLabels[currentFormatIndex], &currentFormatIndex))
+        {
+            state.createInfo.format = formatOptions[currentFormatIndex];
         }
 
-        const nvrhi::SamplerAddressMode addressModeOptions[] =
+        const std::array<nvrhi::SamplerAddressMode, 3> addressModeOptions =
         {
             nvrhi::SamplerAddressMode::Repeat,
             nvrhi::SamplerAddressMode::ClampToEdge,
             nvrhi::SamplerAddressMode::ClampToBorder
         };
 
-        auto drawAddressModeCombo = [&addressModeOptions](const char *label, nvrhi::SamplerAddressMode &mode)
-        {
-            if (ImGui::BeginCombo(label, SamplerAddressModeToString(mode)))
-            {
-                for (const auto option : addressModeOptions)
-                {
-                    const bool selected = option == mode;
-                    if (ImGui::Selectable(SamplerAddressModeToString(option), selected))
-                    {
-                        mode = option;
-                    }
 
-                    if (selected)
-                    {
-                        ImGui::SetItemDefaultFocus();
-                    }
-                }
-                ImGui::EndCombo();
+        const char *addressModeOptionsStr[3] = { "Repeat", "Clamp To Edge" , "Clamp To Border" };
+        // Wrap U
+        auto drawAddressModeCombo = [&addressModeOptions, &addressModeOptionsStr](const char *label, nvrhi::SamplerAddressMode &mode)
+        {
+            int currentIdx = 0;
+            for (auto &m : addressModeOptions)
+            {
+                if (mode == m) break;
+                currentIdx++;
+            }
+            const char *currentAddressModeOptionStr = addressModeOptionsStr[currentIdx];
+            if (UI::DrawComboBox(label, addressModeOptionsStr, static_cast<int>(addressModeOptions.size()), currentAddressModeOptionStr, &currentIdx))
+            {
+                mode = addressModeOptions[currentIdx];
             }
         };
 
@@ -2982,10 +2971,10 @@ namespace ignite
         drawAddressModeCombo("Wrap V", state.createInfo.samplerAddressV);
         drawAddressModeCombo("Wrap W", state.createInfo.samplerAddressW);
 
-        ImGui::Checkbox("Linear Filtering", &state.createInfo.samplerLinearFiltering);
-        ImGui::Checkbox("Flip Vertically", &state.createInfo.flip);
-        ImGui::Checkbox("Keep CPU Data", &state.createInfo.keepCpuData);
-        ImGui::Checkbox("Keep Initial State", &state.createInfo.keepInitialState);
+        UI::DrawCheckbox("Linear Filtering", &state.createInfo.samplerLinearFiltering);
+        UI::DrawCheckbox("Flip Vertically", &state.createInfo.flip);
+        UI::DrawCheckbox("Keep CPU Data", &state.createInfo.keepCpuData);
+        UI::DrawCheckbox("Keep Initial State", &state.createInfo.keepInitialState);
 
         ImGui::Separator();
         if (ImGui::Button("ReImport"))

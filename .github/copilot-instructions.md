@@ -11,4 +11,5 @@
 
 ## UI Guidelines
 - Use `ImGui::BeginPopupModal` for creating dialogs instead of regular `ImGui::Begin` windows.
+- Always use `ImGuiListClipper` for lists in this codebase to ensure efficient rendering and management of list items.
 

@@ -375,6 +375,72 @@ namespace ignite::UI
 		return state;
 	}
 
+	static bool DrawComboBox(const char *label, const char **labels, int labelsCount, const char *currentLabel, int *selectedIndex, float coloumnWidth = defColWidth)
+	{
+		State state;
+		ImGui::PushID(label);
+
+		if (!labels || labelsCount <= 0 || !selectedIndex)
+		{
+			ImGui::BeginColumns(label, 2, ImGuiOldColumnFlags_GrowParentContentsSize);
+			ImGui::SetColumnWidth(0, coloumnWidth);
+			ImGui::Text("%s", label);
+			ImGui::NextColumn();
+			ImGui::TextDisabled("N/A");
+			ImGui::EndColumns();
+			ImGui::PopID();
+			return state;
+		}
+
+		if (*selectedIndex < 0)
+			*selectedIndex = 0;
+		if (*selectedIndex >= labelsCount)
+			*selectedIndex = labelsCount - 1;
+
+		const char *previewLabel = labels[*selectedIndex] ? labels[*selectedIndex] : "";
+		if ((previewLabel[0] == '\0') && currentLabel)
+		{
+			previewLabel = currentLabel;
+		}
+
+		ImGui::Columns(2);
+		ImGui::SetColumnWidth(0, coloumnWidth);
+		ImGui::Text("%s", label);
+		ImGui::NextColumn();
+
+		ImGui::PushMultiItemsWidths(1, ImGui::GetContentRegionAvail().x);
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2));
+
+		if (ImGui::BeginCombo("##_combo_box", previewLabel))
+		{
+			for (int i = 0; i < labelsCount; ++i)
+			{
+				const bool isSelected = (*selectedIndex == i);
+				if (ImGui::Selectable(labels[i], isSelected))
+				{
+					*selectedIndex = i;
+					state.isItemEdited = true;
+					state.isItemDeactivatedAfterEdit = true;
+				}
+
+				if (isSelected)
+				{
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+
+			ImGui::EndCombo();
+		}
+		State::Check(state);
+
+		ImGui::PopItemWidth();
+		ImGui::PopStyleVar(1);
+		ImGui::Columns(1);
+
+		ImGui::PopID();
+		return state;
+	}
+
 	static State DrawVec4Control(const char *label, glm::vec4 &values, float speed = 0.025f, float resetValue = 0.0f, float coloumnWidth = defColWidth)
 	{
 		State state;
@@ -386,11 +452,11 @@ namespace ignite::UI
 		ImGui::Text("%s", label);
 		ImGui::NextColumn();
 
-		ImGui::PushMultiItemsWidths(4, ImGui::CalcItemWidth());
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 5));
+        float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
+        ImVec2 buttonSize = ImVec2(lineHeight, lineHeight);
 
-		float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
-		ImVec2 buttonSize = ImVec2(lineHeight, lineHeight);
+		ImGui::PushMultiItemsWidths(4, ImGui::GetContentRegionAvail().x - buttonSize.x * 4);
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 5));
 
 		// ================================
 		// X
@@ -514,11 +580,12 @@ namespace ignite::UI
 		ImGui::Text("%s", label);
 		ImGui::NextColumn();
 
-		ImGui::PushMultiItemsWidths(3, ImGui::CalcItemWidth());
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2));
-
 		float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
 		ImVec2 buttonSize = ImVec2(lineHeight, lineHeight);
+
+		ImGui::PushMultiItemsWidths(3, ImGui::GetContentRegionAvail().x - buttonSize.x * 3);
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2));
+
 
 		// ================================
 		// X
@@ -575,11 +642,11 @@ namespace ignite::UI
 		// Z
 		{
 			ScopedColorStyle buttonStyle(
-			{
-				{ EColorStyle::Button,          { 0.1f, 0.1f, 0.8f, 1.0f } },
-				{ EColorStyle::ButtonHovered,   { 0.3f, 0.3f, 0.9f, 1.0f } },
-				{ EColorStyle::ButtonActive,    { 0.1f, 0.1f, 0.8f, 1.0f } }
-			});
+				{
+					{ EColorStyle::Button,          { 0.1f, 0.1f, 0.8f, 1.0f } },
+					{ EColorStyle::ButtonHovered,   { 0.3f, 0.3f, 0.9f, 1.0f } },
+					{ EColorStyle::ButtonActive,    { 0.1f, 0.1f, 0.8f, 1.0f } }
+				});
 
 			if (ImGui::Button("Z", buttonSize))
 			{
@@ -614,11 +681,11 @@ namespace ignite::UI
 		ImGui::Text("%s", label);
 		ImGui::NextColumn();
 
-		ImGui::PushMultiItemsWidths(2, ImGui::CalcItemWidth());
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2));
-
 		float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
 		ImVec2 buttonSize = ImVec2(lineHeight + 3.0f, lineHeight);
+
+		ImGui::PushMultiItemsWidths(2, ImGui::GetContentRegionAvail().x - buttonSize.x * 2);
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2));
 
 		// ================================
 		// X
@@ -687,7 +754,7 @@ namespace ignite::UI
 		ImGui::Text("%s", label);
 		ImGui::NextColumn();
 
-		ImGui::PushMultiItemsWidths(1, ImGui::CalcItemWidth());
+		ImGui::PushMultiItemsWidths(1, ImGui::GetContentRegionAvail().x);
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2));
 
 		float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
@@ -731,7 +798,7 @@ namespace ignite::UI
 		ImGui::Text("%s", label);
 		ImGui::NextColumn();
 
-		ImGui::PushMultiItemsWidths(1, ImGui::CalcItemWidth());
+		ImGui::PushMultiItemsWidths(1, ImGui::GetContentRegionAvail().x);
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2));
 
 		float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
