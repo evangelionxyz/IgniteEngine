@@ -2949,8 +2949,8 @@ namespace ignite
             nvrhi::SamplerAddressMode::ClampToBorder
         };
 
-
         const char *addressModeOptionsStr[3] = { "Repeat", "Clamp To Edge" , "Clamp To Border" };
+        
         // Wrap U
         auto drawAddressModeCombo = [&addressModeOptions, &addressModeOptionsStr](const char *label, nvrhi::SamplerAddressMode &mode)
         {

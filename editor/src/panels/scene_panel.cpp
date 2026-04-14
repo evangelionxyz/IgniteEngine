@@ -652,7 +652,7 @@ namespace ignite
 
                 static const char *resolutionLabels[] = { "Low - 512px", "Medium - 1024px", "High - 2048px", "Ultra - 4096px" };
                 int resolution = std::clamp(c.shadowResolution, 0, 3);
-                if (ImGui::Combo("Resolution", &resolution, resolutionLabels, IM_ARRAYSIZE(resolutionLabels)))
+                if (UI::DrawComboBox("Resolution", resolutionLabels, IM_ARRAYSIZE(resolutionLabels), resolutionLabels[resolution], &resolution))
                 {
                     c.shadowResolution = resolution;
                 }
@@ -808,26 +808,25 @@ namespace ignite
                 if (isAnimatorLoaded)
                 {
                     Ref<AnimatorController2D> animCtrl = m_EditorLayer->GetActiveProject()->GetAsset<AnimatorController2D>(c.controllerHandle);
-                    if (animCtrl)
+                    if (animCtrl && !animCtrl->states.empty())
                     {
-                        if (ImGui::BeginCombo("Current State", c.currentStateName.c_str()))
-                        {
-                            for (size_t i = 0; i < animCtrl->states.size(); ++i)
-                            {
-                                bool isSelected = strcmp(animCtrl->states[i].name.c_str(), c.currentStateName.c_str()) == 0;
-                                if (ImGui::Selectable(animCtrl->states[i].name.c_str(), isSelected))
-                                {
-                                    c.currentStateName = animCtrl->states[i].name;
-                                }
+                        std::vector<const char *> stateLabels;
+                        stateLabels.reserve(animCtrl->states.size());
 
-                                if (isSelected)
-                                {
-                                    ImGui::SetItemDefaultFocus();
-                                }
+                        int currentStateIndex = 0;
+                        for (size_t i = 0; i < animCtrl->states.size(); ++i)
+                        {
+                            stateLabels.push_back(animCtrl->states[i].name.c_str());
+                            if (animCtrl->states[i].name == c.currentStateName)
+                            {
+                                currentStateIndex = static_cast<int>(i);
                             }
-                            ImGui::EndCombo();
                         }
 
+                        if (UI::DrawComboBox("Current State", stateLabels.data(), static_cast<int>(stateLabels.size()), stateLabels[currentStateIndex], &currentStateIndex))
+                        {
+                            c.currentStateName = animCtrl->states[static_cast<size_t>(currentStateIndex)].name;
+                        }
                     }
 
                 }
@@ -946,24 +945,10 @@ namespace ignite
             {
                 auto &c = selectedEntity.GetComponent<Rigidbody2DComponent>();
                 std::array<const char *, 3> bodyTypeStr = { "Static", "Dynamic", "Kinematic" };
-                const char *currentBodyType = bodyTypeStr[static_cast<i32>(c.type)];
-
-                if (ImGui::BeginCombo("Body Type", currentBodyType))
+                int bodyTypeIndex = std::clamp(static_cast<int>(c.type), 0, static_cast<int>(bodyTypeStr.size()) - 1);
+                if (UI::DrawComboBox("Body Type", bodyTypeStr.data(), static_cast<int>(bodyTypeStr.size()), bodyTypeStr[bodyTypeIndex], &bodyTypeIndex))
                 {
-                    for (size_t i = 0; i < bodyTypeStr.size(); ++i)
-                    {
-                        bool isSelected = strcmp(bodyTypeStr[i], currentBodyType) == 0;
-                        if (ImGui::Selectable(bodyTypeStr[i], isSelected))
-                        {
-                            c.type = static_cast<Body2DType>(i);
-                        }
-
-                        if (isSelected)
-                        {
-                            ImGui::SetItemDefaultFocus();
-                        }
-                    }
-                    ImGui::EndCombo();
+                    c.type = static_cast<Body2DType>(bodyTypeIndex);
                 }
 
                 UI::DrawVec2Control("Linear Vel", c.linearVelocity, 0.025f);
@@ -987,56 +972,31 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<CameraComponent>();
                 static CameraComponent s_CameraBefore;
 
-                static const char *projectionTypeStr[] = { "Orthographic", "Perspective" };
-                const char *currentProjectionTypeStr = projectionTypeStr[static_cast<int>(c.camera.projectionType)];
-
-                if (ImGui::BeginCombo("Projection", currentProjectionTypeStr))
+                // Projection
                 {
-                    for (size_t i = 0; i < std::size(projectionTypeStr); ++i)
+                    static const char *projectionTypeStr[] = { "Orthographic", "Perspective" };
+                    int projectionIdx = static_cast<int>(c.camera.projectionType);
+                    if (UI::DrawComboBox("Projection", projectionTypeStr, IM_ARRAYSIZE(projectionTypeStr), projectionTypeStr[projectionIdx], &projectionIdx))
                     {
-                        bool isSelected = false;
-                        CameraComponent before = c;
-                        if (ImGui::Selectable(projectionTypeStr[i], &isSelected))
-                        {
-                            const auto w = static_cast<float>(m_Scene->GetViewportWidth());
-                            const auto h = static_cast<float>(m_Scene->GetViewportHeight());
-                            c.camera.projectionType = static_cast<ProjectionType>(i);
-                            c.camera.UpdateView();
-                            c.camera.UpdateProjection(w, h);
-                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
-                        }
-
-                        if (isSelected)
-                        {
-                            ImGui::SetItemDefaultFocus();
-                        }
+                        c.camera.projectionType = static_cast<ProjectionType>(projectionIdx);
+                        const auto w = static_cast<float>(m_Scene->GetViewportWidth());
+                        const auto h = static_cast<float>(m_Scene->GetViewportHeight());
+                        c.camera.UpdateView();
+                        c.camera.UpdateProjection(w, h);
                     }
-                    ImGui::EndCombo();
                 }
 
-                static const char *aspectRatioLabels[] = { "Free", "16:9", "16:10", "4:3", "21:9", "1:1" };
-                int aspectRatioIndex = static_cast<int>(c.camera.GetAspectRatioPreset());
-                if (ImGui::BeginCombo("Aspect Ratio", aspectRatioLabels[aspectRatioIndex]))
+                // Aspect Ratio
                 {
-                    for (int i = 0; i < IM_ARRAYSIZE(aspectRatioLabels); ++i)
+                    static const char *aspectRatioLabels[] = { "Free", "16:9", "16:10", "4:3", "21:9", "1:1" };
+                    int aspectRatioIndex = static_cast<int>(c.camera.GetAspectRatioPreset());
+                    if (UI::DrawComboBox("Aspect Ratio", aspectRatioLabels, IM_ARRAYSIZE(aspectRatioLabels), aspectRatioLabels[aspectRatioIndex], &aspectRatioIndex))
                     {
-                        const bool isSelected = (aspectRatioIndex == i);
-                        CameraComponent before = c;
-                        if (ImGui::Selectable(aspectRatioLabels[i], isSelected))
-                        {
-                            c.camera.SetAspectRatioPreset(static_cast<SceneCamera::AspectRatioPreset>(i));
-                            c.dirty = true;
-                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
-                        }
-
-                        if (isSelected)
-                        {
-                            ImGui::SetItemDefaultFocus();
-                        }
+                        c.camera.SetAspectRatioPreset(static_cast<SceneCamera::AspectRatioPreset>(aspectRatioIndex));
+                        c.dirty = true;
                     }
-                    ImGui::EndCombo();
                 }
-
+               
                 if (c.camera.projectionType == ProjectionType::Perspective)
                 {
                     UI::State fovState = UI::DrawFloatControl("Fov", &c.camera.fov, 0.025f, 0.0f, FLT_MAX);
@@ -1372,7 +1332,6 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<ScriptComponent>();
 
                 bool scriptClassExist = ScriptEngine::GetInstance()->EntityClassExists(c.className);
-                bool isSelected = false;
 
                 if (!scriptClassExist)
                 {
@@ -1382,29 +1341,31 @@ namespace ignite
                 auto scriptStorage = ScriptEngine::GetInstance()->GetScriptClassStorage();
                 std::string currentScriptClasses = c.className;
 
-                // drop-down
-                if (ImGui::BeginCombo("Script Class", currentScriptClasses.c_str()))
+                if (!scriptStorage.empty())
                 {
-                    for (size_t i = 0; i < scriptStorage.size(); i++)
+                    std::vector<const char *> scriptClassLabels;
+                    scriptClassLabels.reserve(scriptStorage.size());
+
+                    int scriptClassIndex = 0;
+                    for (size_t i = 0; i < scriptStorage.size(); ++i)
                     {
-                        isSelected = currentScriptClasses == scriptStorage[i];
-                        if (ImGui::Selectable(scriptStorage[i].c_str(), isSelected))
+                        scriptClassLabels.push_back(scriptStorage[i].c_str());
+                        if (scriptStorage[i] == currentScriptClasses)
                         {
-                            currentScriptClasses = scriptStorage[i];
-                            c.className = scriptStorage[i];
-                        }
-                        if (isSelected)
-                        {
-                            ImGui::SetItemDefaultFocus();
+                            scriptClassIndex = static_cast<int>(i);
                         }
                     }
-                    ImGui::EndCombo();
+
+                    if (UI::DrawComboBox("Script Class", scriptClassLabels.data(), static_cast<int>(scriptClassLabels.size()), scriptClassLabels[scriptClassIndex], &scriptClassIndex))
+                    {
+                        currentScriptClasses = scriptStorage[static_cast<size_t>(scriptClassIndex)];
+                        c.className = currentScriptClasses;
+                    }
                 }
 
                 if (ImGui::Button("Detach"))
                 {
                     c.className = "Detached";
-                    isSelected = false;
                 }
 
                 const bool detached = c.className == "Detached";
@@ -2222,6 +2183,8 @@ namespace ignite
     void ScenePanel::RenderToolbar()
     {
         // TOOLBAR: 
+        constexpr ImVec2 buttonSize = { 28.0f, 28.0f };
+
         static std::array<const char *, 3> kCameraModeLabels = { "Orbit", "Fly", "2D" };
         int cameraModeIndex = 0;
         switch (m_EditorCamera.GetNavigationMode())
@@ -2282,8 +2245,6 @@ namespace ignite
 
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
-
-        constexpr ImVec2 buttonSize = { 28.0f, 28.0f };
 
         auto drawGizmoBtn = [&](const std::string &iconName, bool active)
         {
