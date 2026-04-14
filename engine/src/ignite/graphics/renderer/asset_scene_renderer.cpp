@@ -277,7 +277,18 @@ namespace ignite
 
 
             SkinnedMeshBufferData gpuData;
-            gpuData.transformation = meshInstance->global;
+
+            // For non-skinned sub-meshes linked to a joint, apply the joint's animated transform
+            glm::mat4 meshTransform = meshInstance->global;
+            if (meshInstance->linkedJointIndex >= 0 && !m_BoneTransforms.empty())
+            {
+                const size_t ji = static_cast<size_t>(meshInstance->linkedJointIndex);
+                if (ji < m_BoneTransforms.size())
+                {
+                    meshTransform = m_BoneTransforms[ji] * meshTransform;
+                }
+            }
+            gpuData.transformation = meshTransform;
             if (glm::abs(glm::determinant(gpuData.transformation)) < 0.000001f)
             {
                 gpuData.transformation = glm::mat4(1.0f);

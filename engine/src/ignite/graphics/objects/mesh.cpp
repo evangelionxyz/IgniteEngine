@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <limits>
 #include <mutex>
 #include <set>
@@ -1291,7 +1292,8 @@ namespace ignite
             std::vector<FBXBoneInfluence> controlPointInfluence;
             controlPointInfluence.resize(static_cast<size_t>(fbxMesh->GetControlPointsCount()));
 
-            bool isSkinned = importSkinningData && fbxMesh->GetDeformerCount(FbxDeformer::eSkin) > 0;
+            const bool hasSkinDeformer = fbxMesh->GetDeformerCount(FbxDeformer::eSkin) > 0;
+            bool isSkinned = importSkinningData && hasSkinDeformer;
             LOG_INFO("[FBX SKIN DEBUG] Node='{}' parent='{}' mesh='{}' skinned={} deformers={} cpCount={}",
                 meshNode.name,
                 (parentIdx >= 0 ? outScene.nodes[parentIdx].name : std::string("<root>")),
@@ -1375,12 +1377,14 @@ namespace ignite
                         {
                             const glm::vec3 oldT = ExtractTranslation(existingInvBind);
                             const glm::vec3 newT = ExtractTranslation(invBindGlm);
-                            LOG_WARN("[FBX SKIN DEBUG] InverseBind mismatch joint='{}' id={} meshNode='{}' oldT=({:.4f},{:.4f},{:.4f}) newT=({:.4f},{:.4f},{:.4f})",
+                            LOG_WARN("[FBX SKIN DEBUG] InverseBind mismatch joint='{}' id={} meshNode='{}' oldT=({:.4f},{:.4f},{:.4f}) newT=({:.4f},{:.4f},{:.4f}) (keeping first bind pose)",
                                 outScene.skeleton->joints[jointId].name, jointId,
                                 meshNode.name, oldT.x, oldT.y, oldT.z, newT.x, newT.y, newT.z);
                         }
-
-                        existingInvBind = invBindGlm;
+                        else
+                        {
+                            existingInvBind = invBindGlm;
+                        }
 
                         if (clusterIndex < 6)
                         {
@@ -1411,7 +1415,7 @@ namespace ignite
                 }
             }
 
-            if (importSkinningData)
+            if (importSkinningData && isSkinned)
             {
                 for (FBXMeshLoader::FBXBoneInfluence &influence : controlPointInfluence)
                 {
@@ -1514,8 +1518,83 @@ namespace ignite
 
             if (!vertices.empty() && !indices.empty())
             {
+                // Pre-bake vertex positions and normals from mesh-node-local space to model space.
+                // Skinning inverse-bind-pose matrices are computed in model space (relative to the
+                // skeleton root). When a mesh node is parented to a skeleton bone in FBX (e.g. the
+                // head mesh is a child of the head bone), its vertices are in bone-local space rather
+                // than model space. Without pre-baking, the skinning formula
+                //   worldPos = objectMatrix * boneTransform[j] * vertex
+                // produces incorrect results: at bind pose boneTransform = I so the position depends
+                // only on objectMatrix (correct at rest), but during animation objectMatrix and
+                // boneTransform compound incorrectly. Pre-baking to model space makes skinning
+                // consistent for all mesh topologies regardless of node hierarchy.
+                // For body meshes already at the root with identity global this is a no-op.
+                {
+                    const glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(meshNode.global)));
+                    for (auto &vertex : vertices)
+                    {
+                        vertex.position  = glm::vec3(meshNode.global * glm::vec4(vertex.position, 1.0f));
+                        vertex.normal    = glm::normalize(normalMatrix * vertex.normal);
+                        vertex.tangent   = glm::normalize(normalMatrix * vertex.tangent);
+                        vertex.bitangent = glm::normalize(normalMatrix * vertex.bitangent);
+                    }
+                    LOG_INFO("[FBX SKIN DEBUG] Node='{}' vertices pre-baked to model space", meshNode.name);
+                }
+
+                MeshNode instanceNode = meshNode;
+                instanceNode.global = glm::mat4(1.0f); // Vertices are now in model space
+
                 Ref<MeshPrimitive> primitive = MeshPrimitive::Create(vertices, indices);
-                Ref<MeshInstance> meshInstance = MeshInstance::Create(meshNode, primitive);
+                Ref<MeshInstance> meshInstance = MeshInstance::Create(instanceNode, primitive);
+
+                // For meshes with no actual bone influences in a skeletal scene, link to the best
+                // matching joint so the mesh can follow the skeleton during animation.
+                // We use influencedControlPoints == 0 (not !isSkinned) because many FBX exporters
+                // attach an empty skin deformer to every mesh in an armature scene, making
+                // hasSkinDeformer true even for completely unweighted meshes (head, accessories).
+                if (influencedControlPoints == 0 && outScene.skeleton && !outScene.skeleton->joints.empty())
+                {
+                    int32_t linkedJointIdx = -1;
+                    auto &nameMap = outScene.skeleton->nameToJointMap;
+
+                    // 1. Direct name match: node name == joint name
+                    if (nameMap.contains(meshNode.name))
+                    {
+                        linkedJointIdx = nameMap.at(meshNode.name);
+                        LOG_INFO("[FBX SKIN DEBUG] Non-skinned '{}' linked to same-name joint index {}", meshNode.name, linkedJointIdx);
+                    }
+                    else
+                    {
+                        // 2. Walk up the FBX node hierarchy looking for a joint-named ancestor
+                        FbxNode *parentWalk = node->GetParent();
+                        FbxNode *fbxRootN = fbxScene->GetRootNode();
+                        while (parentWalk && parentWalk != fbxRootN)
+                        {
+                            const char *pNameC = parentWalk->GetName();
+                            if (pNameC)
+                            {
+                                const std::string pName = pNameC;
+                                if (nameMap.contains(pName))
+                                {
+                                    linkedJointIdx = nameMap.at(pName);
+                                    LOG_INFO("[FBX SKIN DEBUG] Non-skinned '{}' linked to ancestor joint '{}' index {}",
+                                        meshNode.name, pName, linkedJointIdx);
+                                    break;
+                                }
+                            }
+                            parentWalk = parentWalk->GetParent();
+                        }
+
+                        // 3. Root fallback: attach to skeleton root (joint 0)
+                        if (linkedJointIdx < 0)
+                        {
+                            linkedJointIdx = 0;
+                            LOG_WARN("[FBX SKIN DEBUG] Non-skinned '{}' has no matching joint ancestor — falling back to skeleton root (joint 0)", meshNode.name);
+                        }
+                    }
+
+                    meshInstance->linkedJointIndex = linkedJointIdx;
+                }
 
                 outScene.nodes[nodeIndex].meshes.push_back(meshInstance);
                 outScene.flatMeshes.push_back(meshInstance);
@@ -1607,6 +1686,9 @@ namespace ignite
 				continue;
 			}
 
+            // Ensure evaluator reads transforms from the current animation stack.
+            fbxScene->SetCurrentAnimationStack(animStack);
+
 			FbxTimeSpan timeSpan = animStack->GetLocalTimeSpan();
 			const double startSeconds = timeSpan.GetStart().GetSecondDouble();
 			const double endSeconds = timeSpan.GetStop().GetSecondDouble();
@@ -1651,7 +1733,26 @@ namespace ignite
 				collectTicks(node->LclScaling.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Y));
 				collectTicks(node->LclScaling.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Z));
 
-				if (keyTicks.empty())
+                // Some FBX files store animation in evaluator-driven transforms with sparse/no explicit curve keys.
+                // In that case, sample uniformly across the clip range so channels are still populated.
+                if (keyTicks.size() <= 1 && endSeconds > startSeconds)
+                {
+                    const int sampleCount = std::max(2, static_cast<int>(std::ceil((endSeconds - startSeconds) * ticksPerSecond)) + 1);
+                    for (int sampleIndex = 0; sampleIndex < sampleCount; ++sampleIndex)
+                    {
+                        const double alpha = sampleCount > 1 ? static_cast<double>(sampleIndex) / static_cast<double>(sampleCount - 1) : 0.0;
+                        const double sampleSeconds = startSeconds + (endSeconds - startSeconds) * alpha;
+
+                        FbxTime sampleTime;
+                        sampleTime.SetSecondDouble(sampleSeconds);
+                        keyTicks.insert(sampleTime.Get());
+                    }
+
+                    LOG_INFO("[FBX Loader] Fallback-sampled clip '{}' joint '{}' with {} samples (sparse keys)",
+                        animation->name, joint.name, sampleCount);
+                }
+
+                if (keyTicks.empty())
 				{
 					continue;
 				}

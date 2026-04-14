@@ -3,6 +3,7 @@
 #include "scene_panel.hpp"
 #include "editor_layer.hpp"
 #include "ignite/audio/fmod_sound.hpp"
+#include "ignite/audio/fmod_dsp.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/input/event.hpp"
 #include "ignite/core/input/key_event.hpp"
@@ -1291,41 +1292,71 @@ namespace ignite
                 {
                     if (Ref<FmodSound> sound = m_EditorLayer->GetActiveProject()->GetAsset<FmodSound>(c.handle))
                     {
-                        if (ImGui::Button("Play", { 55.0f, 30.0f }))
+                        std::string soundId = std::format("##{}", (uint64_t)c.handle);
+
+                        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+                        ImGui::BeginGroup();
+                        if (ImGui::Button("Play"))
                         {
                             sound->Stop();
-
                             sound->Play();
                             sound->SetVolume(c.volume);
                             sound->SetPitch(c.pitch);
                             sound->SetPan(c.pan);
                         }
+                        
                         ImGui::SameLine();
-                        if (ImGui::Button("Stop", { 55.0f, 30.0f }))
+                        if (ImGui::Button("Stop"))
                         {
                             sound->Stop();
                         }
+
+                        const bool isPlaying = sound->IsPlaying();
+                        const bool isPaused = sound->IsPaused();
+
+                        ImGui::BeginDisabled(!isPlaying && !isPaused);
+                        std::string pauseLabel = !isPaused ? "Pause" : "Resume";
                         ImGui::SameLine();
-                        if (ImGui::Button("Pause", { 55.0f, 30.0f }))
+                        if (ImGui::Button(pauseLabel.c_str()))
                         {
-                            sound->Pause();
-                        }
-                        if (sound->IsPaused())
-                        {
-                            ImGui::SameLine();
-                            if (ImGui::Button("Resume", { 55.0f, 30.0f }))
-                            {
+                            if (sound->IsPaused())
                                 sound->Resume();
-                            }
+                            else if (isPlaying)
+                                sound->Pause();
+                        }
+                        ImGui::EndDisabled();
+
+                        ImGui::EndGroup();
+
+                        if (UI::DrawFloatControl("Volume", &c.volume, 0.001f, 0.0f, 1.0f, 1.0f))
+                        {
+                            sound->SetVolume(c.volume);
                         }
 
-                        UI::DrawFloatControl("Volume", &c.volume, 0.001f, 0.0f, 1.0f);
-                        UI::DrawFloatControl("Pitch", &c.pitch, 0.001f);
-                        UI::DrawFloatControl("Pan", &c.pan, 0.001f);
-                        UI::DrawCheckbox("Play On Start", &c.playOnStart);
+                        if (UI::DrawFloatControl("Pitch", &c.pitch, 0.001f, 0.0f, 5.0f, 1.0f))
+                        {
+                            sound->SetPitch(c.pitch);
+                        }
+                        if (UI::DrawFloatControl("Pan", &c.pan, 0.001f, -1.0f, 1.0f, 0.0f))
+                        {
+                            sound->SetPan(c.pan);
+                        }
+
+                        if (UI::DrawCheckbox("Play On Start", &c.playOnStart))
+                        {
+                        }
+
+                        if (UI::DrawCheckbox("Loop", &c.loop))
+                        {
+                            if (c.loop)
+                                sound->SetMode(FMOD_LOOP_NORMAL);
+                            else
+                                sound->SetMode(FMOD_LOOP_OFF);
+                        }
                     }
                 }
             });
+
             RenderComponent<ScriptComponent>("C# Script", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<ScriptComponent>();

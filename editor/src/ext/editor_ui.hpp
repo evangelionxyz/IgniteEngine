@@ -428,7 +428,6 @@ namespace ignite::UI
 			}
 			ImGui::EndCombo();
 		}
-		State::Check(state);
 
 		ImGui::PopItemWidth();
 

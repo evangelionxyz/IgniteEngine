@@ -1130,34 +1130,46 @@ namespace ignite
                     if (!sm)
                         continue;
 
+                    // Hoist bone transforms — computed once per mesh, shared across all instances
+                    std::vector<glm::mat4> boneTransforms;
+                    if (sm->GetAnimatorHandle() != AssetHandle(0))
+                    {
+                        if (Ref<AnimatorController> controller = m_Project->GetAsset<AnimatorController>(sm->GetAnimatorHandle()))
+                        {
+                            if (Ref<Skeleton> skeleton = m_Project->GetAsset<Skeleton>(controller->skeletonHandle))
+                            {
+                                boneTransforms = skeleton->GetFinalJointTransforms();
+                            }
+                        }
+                    }
+
                     for (auto &meshInstance : sm->GetMeshInstances())
                     {
                         meshInstance->EnsureBuffer(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer);
 
                         SkinnedMeshBufferData gpuData;
-                        gpuData.transformation = tr.GetWorldMatrix() * meshInstance->global;
+
+                        // For non-skinned sub-meshes linked to a joint, apply the joint's animated transform
+                        glm::mat4 meshTransform = meshInstance->global;
+                        if (meshInstance->linkedJointIndex >= 0 && !boneTransforms.empty())
+                        {
+                            const size_t ji = static_cast<size_t>(meshInstance->linkedJointIndex);
+                            if (ji < boneTransforms.size())
+                            {
+                                meshTransform = boneTransforms[ji] * meshTransform;
+                            }
+                        }
+                        gpuData.transformation = tr.GetWorldMatrix() * meshTransform;
                         gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
 
                         const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
                         gpuData.normal = glm::mat4(normalMat3);
 
                         std::fill(std::begin(gpuData.boneTransforms), std::end(gpuData.boneTransforms), glm::mat4(1.0f));
-
-                        // Get bone transform from the animator
-                        if (sm->GetAnimatorHandle() != AssetHandle(0))
+                        const size_t transformCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
+                        for (size_t i = 0; i < transformCount; ++i)
                         {
-                            if (Ref<AnimatorController> controller = m_Project->GetAsset<AnimatorController>(sm->GetAnimatorHandle()))
-                            {
-                                if (Ref<Skeleton> skeleton = m_Project->GetAsset<Skeleton>(controller->skeletonHandle))
-                                {
-                                    auto boneTransforms = skeleton->GetFinalJointTransforms();
-                                    const size_t transformCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
-                                    for (size_t i = 0; i < transformCount; ++i)
-                                    {
-                                        gpuData.boneTransforms[i] = boneTransforms[i];
-                                    }
-                                }
-                            }
+                            gpuData.boneTransforms[i] = boneTransforms[i];
                         }
 
                         meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
@@ -1218,34 +1230,46 @@ namespace ignite
                     continue;
                 }
 
+                // Hoist bone transforms — computed once per mesh, shared across all instances
+                std::vector<glm::mat4> boneTransforms;
+                if (sm->GetAnimatorHandle() != AssetHandle(0))
+                {
+                    if (Ref<AnimatorController> controller = project->GetAsset<AnimatorController>(sm->GetAnimatorHandle()))
+                    {
+                        if (Ref<Skeleton> skeleton = project->GetAsset<Skeleton>(controller->skeletonHandle))
+                        {
+                            boneTransforms = skeleton->GetFinalJointTransforms();
+                        }
+                    }
+                }
+
                 for (auto &meshInstance : sm->GetMeshInstances())
                 {
                     meshInstance->EnsureBuffer(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer);
 
                     SkinnedMeshBufferData gpuData;
-                    gpuData.transformation = tr.GetWorldMatrix() * meshInstance->global;
+
+                    // For non-skinned sub-meshes linked to a joint, apply the joint's animated transform
+                    glm::mat4 meshTransform = meshInstance->global;
+                    if (meshInstance->linkedJointIndex >= 0 && !boneTransforms.empty())
+                    {
+                        const size_t ji = static_cast<size_t>(meshInstance->linkedJointIndex);
+                        if (ji < boneTransforms.size())
+                        {
+                            meshTransform = boneTransforms[ji] * meshTransform;
+                        }
+                    }
+                    gpuData.transformation = tr.GetWorldMatrix() * meshTransform;
                     gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
 
                     const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
                     gpuData.normal = glm::mat4(normalMat3);
 
                     std::fill(std::begin(gpuData.boneTransforms), std::end(gpuData.boneTransforms), glm::mat4(1.0f));
-
-                    // Get bone transform from the animator
-                    if (sm->GetAnimatorHandle() != AssetHandle(0))
+                    const size_t transformCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
+                    for (size_t i = 0; i < transformCount; ++i)
                     {
-                        if (Ref<AnimatorController> controller = project->GetAsset<AnimatorController>(sm->GetAnimatorHandle()))
-                        {
-                            if (Ref<Skeleton> skeleton = project->GetAsset<Skeleton>(controller->skeletonHandle))
-                            {
-                                auto boneTransforms = skeleton->GetFinalJointTransforms();
-                                const size_t transformCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
-                                for (size_t i = 0; i < transformCount; ++i)
-                                {
-                                    gpuData.boneTransforms[i] = boneTransforms[i];
-                                }
-                            }
-                        }
+                        gpuData.boneTransforms[i] = boneTransforms[i];
                     }
 
                     meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));

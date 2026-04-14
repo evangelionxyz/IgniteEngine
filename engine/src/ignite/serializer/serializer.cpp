@@ -445,6 +445,7 @@ namespace ignite
                         sr.AddKeyValue("Pitch", comp.pitch);
                         sr.AddKeyValue("Pan", comp.pan);
                         sr.AddKeyValue("PlayOnStart", comp.playOnStart);
+                        sr.AddKeyValue("Loop", comp.loop);
                     }
                     sr.EndMap();
                 }
@@ -879,10 +880,12 @@ namespace ignite
             {
                 auto &comp = desEntity.AddComponent<AudioSourceComponent>();
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
-                comp.volume = node["Volume"].as<float>();
-                comp.pitch = node["Pitch"].as<float>();
-                comp.pan = node["Pan"].as<float>();
-                comp.playOnStart = node["PlayOnStart"].as<bool>();
+
+                if (auto n = node["Volume"]) comp.volume = node["Volume"].as<float>();
+                if (auto n = node["Pitch"]) comp.pitch = node["Pitch"].as<float>();
+                if (auto n = node["Pan"]) comp.pan = node["Pan"].as<float>();
+                if (auto n = node["PlayOnStart"]) comp.playOnStart = node["PlayOnStart"].as<bool>();
+                if (auto n = node["Loop"]) comp.loop = node["Loop"].as<bool>();
             }
 
             // World Environment

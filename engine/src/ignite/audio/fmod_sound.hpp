@@ -32,10 +32,15 @@ namespace ignite {
     
     struct FmodDsp;
 
+    enum class AudioMode
+    {
+        Loop = 0,
+    };
+
     struct FmodSound : public Asset
     {
         FmodSound() = default;
-        FmodSound(std::string name);
+        FmodSound(const std::string &name, FMOD_MODE mode = FMOD_DEFAULT | FMOD_LOOP_OFF);
     
         void Play();
         void Stop() const;
@@ -45,8 +50,9 @@ namespace ignite {
         void SetName(const std::string &name);
         void SetPan(float pan) const;
         void SetVolume(float volume) const;
+        void SetLoop(bool enable);
         void SetPitch(float pitch) const;
-        void SetMode(FMOD_MODE mode) const;
+        void SetMode(FMOD_MODE mode);
         void SetFadeIn(uint32_t fade_in_start_ms, uint32_t fade_in_end_ms);
         void SetFadeOut(uint32_t fade_out_start_ms, uint32_t fade_out_end_ms);
         void AddToChannelGroup(FMOD::ChannelGroup *channel_group);
@@ -61,9 +67,11 @@ namespace ignite {
 
         FMOD::Sound* GetFmodSound() const;
         FMOD::Channel* GetFmodChannel() const;
+        const FMOD_MODE &GetMode();
         const std::string &GetName() const;
         bool IsPlaying() const;
         bool IsPaused() const;
+        bool IsLooping() const;
         uint32_t GetLengthMs() const;
         uint32_t GetPositionMs() const;
         FMOD::ChannelGroup *GetChannelGroup() const;
@@ -79,6 +87,8 @@ namespace ignite {
     
         FMOD::Sound *m_Sound;
         FMOD::Channel *m_Channel;
+        FMOD_MODE m_Mode;
+
         std::string m_Name;
 
         uint32_t m_FadeInStartMs;

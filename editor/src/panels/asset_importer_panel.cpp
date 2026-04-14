@@ -139,7 +139,7 @@ namespace ignite
 			m_OpenImporterPopup = false;
 		}
 
-		if (ImGui::BeginPopupModal("Asset Importer", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		if (ImGui::BeginPopup("Asset Importer", ImGuiWindowFlags_AlwaysAutoResize))
 		{
 			if (!m_CurrentAsset.has_value())
 			{
@@ -155,7 +155,7 @@ namespace ignite
 
 			const AssetImportData currentImportData = *m_CurrentAsset;
 			ImGui::Text("File: %s", currentImportData.filepath.generic_string().c_str());
-			ImGui::Text("Type: %s", AssetTypeToString(currentImportData.assetType));
+			ImGui::Text("Type: %s", AssetTypeToString(currentImportData.assetType).c_str());
 			ImGui::Separator();
 
 			if (IsMeshImportDialogFile(currentImportData.filepath))
@@ -218,6 +218,7 @@ namespace ignite
 			ImGui::Checkbox("Import Materials & Textures", &m_MeshOptions.importMaterials);
 			ImGui::Checkbox("Import Skeleton", &m_MeshOptions.importSkeleton);
 			ImGui::Checkbox("Import Animations", &m_MeshOptions.importAnimations);
+			ImGui::Checkbox("Force Rebuild ?", &m_MeshOptions.forceRebuild);
 
 			if (m_MeshOptions.importAnimations)
 			{

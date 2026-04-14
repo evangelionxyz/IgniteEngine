@@ -2957,9 +2957,9 @@ namespace ignite
             int currentIdx = 0;
             switch (mode)
             {
-                case nvrhi::SamplerAddressMode::Repeat: currentIdx = 0;
-                case nvrhi::SamplerAddressMode::ClampToEdge: currentIdx = 1;
-                case nvrhi::SamplerAddressMode::ClampToBorder: currentIdx = 2;
+                case nvrhi::SamplerAddressMode::Repeat: currentIdx = 0; break;
+                case nvrhi::SamplerAddressMode::ClampToEdge: currentIdx = 1; break;
+                case nvrhi::SamplerAddressMode::ClampToBorder: currentIdx = 2; break;
             }
             
             const char *currentAddressModeOptionStr = addressModeOptionsStr[currentIdx];
@@ -4690,7 +4690,7 @@ namespace ignite
                     }
                     else
                     {
-                        ImGui::Text("Loading asset...");
+                        ImGui::Text("Failed to load the asset!");
                     }
                 }
                 else

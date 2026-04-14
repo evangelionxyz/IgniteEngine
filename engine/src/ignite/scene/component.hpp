@@ -509,6 +509,7 @@ namespace ignite
         float pitch = 1.0f;
         float pan = 0.0f;
         bool playOnStart = false;
+        bool loop = false;
 
         AudioSourceComponent() = default;
 

@@ -379,8 +379,7 @@ namespace ignite
 
                     const bool writeEXR = texture->GetFormat() == nvrhi::Format::RGBA32_FLOAT;
                     const std::string textureExtension = writeEXR ? ".exr" : ".png";
-                    const std::string textureFilename = std::format("{0}.{1}", name, textureExtension);
-                    const std::filesystem::path textureOutputFullPath = textureDirectory / textureFilename;
+                    const std::filesystem::path textureOutputFullPath = textureDirectory / (name + textureExtension);
 
                     if (writeEXR)
                     {
@@ -504,7 +503,7 @@ namespace ignite
 
                 animation->SetSkeletonHandle(meshScene.skeleton ? meshScene.skeleton->handle : AssetHandle(0));
 
-                std::filesystem::path animationPath = outputDirectory / (std::format("{}_{}", filename.string(), i) + animationBinExt);
+                std::filesystem::path animationPath = outputDirectory / (animation->name + animationBinExt);
                 animation->Serialize(animationPath);
 
                 AssetHandle animationHandle = AssetHandle();

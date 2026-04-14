@@ -481,6 +481,16 @@ namespace ignite
                     AppendRaw(buffer, m->local[i].w);
                 }
 
+                for (int i = 0; i < 4; ++i)
+                {
+                    AppendRaw(buffer, m->global[i].x);
+                    AppendRaw(buffer, m->global[i].y);
+                    AppendRaw(buffer, m->global[i].z);
+                    AppendRaw(buffer, m->global[i].w);
+                }
+
+                AppendRaw(buffer, m->linkedJointIndex);
+
                 uint64_t materialHandle = m->GetMaterialHandle();
                 AppendRaw(buffer, materialHandle);
             }
@@ -550,6 +560,16 @@ namespace ignite
                     ReadRaw(inFile, &meshInstance->local[j].z);
                     ReadRaw(inFile, &meshInstance->local[j].w);
                 }
+
+                for (int j = 0; j < 4; ++j)
+                {
+                    ReadRaw(inFile, &meshInstance->global[j].x);
+                    ReadRaw(inFile, &meshInstance->global[j].y);
+                    ReadRaw(inFile, &meshInstance->global[j].z);
+                    ReadRaw(inFile, &meshInstance->global[j].w);
+                }
+
+                ReadRaw(inFile, &meshInstance->linkedJointIndex);
 
                 uint64_t materialHandle = 0;
                 ReadRaw(inFile, &materialHandle);
