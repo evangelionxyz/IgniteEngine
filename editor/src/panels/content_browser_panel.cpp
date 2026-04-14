@@ -905,11 +905,6 @@ namespace ignite
                             metadata.filepath = relPath;
                             m_AssetManager->AssignMetaData(assetHandle, metadata);
                         }
-
-                        if (assetType == AssetType::Material)
-                        {
-                            // m_EditorLayer->GetActiveProject()->GetAsset<Material>(assetHandle);
-                        }
                     }
 
                     FileTreeNode newNode(path, assetHandle);

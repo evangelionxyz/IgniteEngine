@@ -64,9 +64,9 @@ namespace ignite {
                 return {};
             }
 
-            std::filesystem::path texturePath = project->GetAssetFilepath(metadata.filepath);
-            texturePath += ".meta";
-            return texturePath;
+            std::filesystem::path assetPath = project->GetAssetFilepath(metadata.filepath);
+            assetPath += ".meta";
+            return assetPath;
         }
 
         static std::filesystem::path GetLegacyTextureInfoPath(Project *project, const AssetMetaData &metadata)

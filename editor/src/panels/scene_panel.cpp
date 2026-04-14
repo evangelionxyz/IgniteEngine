@@ -530,6 +530,8 @@ namespace ignite
                 ImGui::OpenPopup("##add_component_context");
             }
 
+            static float componentColumnWidth = 100.0f;
+
             // transform component
             RenderComponent<TransformComponent>("Transform", selectedEntity, [&]()
             {
@@ -540,7 +542,7 @@ namespace ignite
                 // so it must be checked AFTER the widget call, unconditionally.
                 static TransformComponent s_TransformBefore;
 
-                UI::State translationState = UI::DrawVec3Control("Translation", comp.localTranslation, 0.025f);
+                UI::State translationState = UI::DrawVec3Control("Translation", comp.localTranslation, 0.025f, 0.0f, componentColumnWidth);
                 if (translationState.isItemActivated)            s_TransformBefore = comp;
                 if (translationState.isItemEdited)               comp.dirty = true;
                 if (translationState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp));
@@ -561,13 +563,13 @@ namespace ignite
                     s_RotationEditEuler = eulerAngles(comp.localRotation);
                 }
 
-                UI::State rotationState = UI::DrawVec3Control("Rotation", s_RotationEditEuler, 0.025f);
+                UI::State rotationState = UI::DrawVec3Control("Rotation", s_RotationEditEuler, 0.025f, 0.0f, componentColumnWidth);
                 if (rotationState.isItemActivated)            s_TransformBefore = comp;
                 if (rotationState.isItemActivated)            s_RotationEditing = true;
                 if (rotationState.isItemEdited)               { comp.localRotation = glm::quat(s_RotationEditEuler); comp.dirty = true; }
                 if (rotationState.isItemDeactivatedAfterEdit) { CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp)); s_RotationEditing = false; }
 
-                UI::State scaleState = UI::DrawVec3Control("Scale", comp.localScale, 0.025f, 1.0f);
+                UI::State scaleState = UI::DrawVec3Control("Scale", comp.localScale, 0.025f, 1.0f, componentColumnWidth);
                 if (scaleState.isItemActivated)            s_TransformBefore = comp;
                 if (scaleState.isItemEdited)               comp.dirty = true;
                 if (scaleState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp));
@@ -709,7 +711,7 @@ namespace ignite
                 {
 					// Texture on sprite 2d
 					const bool isTextureLoaded = c.handle != AssetHandle(0);
-                  const std::string textureLabel = isTextureLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
+                    const std::string textureLabel = isTextureLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
 					UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&c, &isTextureLoaded, this, &selectedEntity]()
 						{
 							if (ImGui::BeginDragDropTarget())
@@ -1044,10 +1046,10 @@ namespace ignite
                 }
 
                 {
+                    ImGui::SeparatorText("Post Processing");
                     auto &pp = c.camera.postProcessing;
 
                     // Bloom
-                    ImGui::SeparatorText("BLOOM");
                     c.dirty |= UI::DrawCheckbox("Enable Bloom", &pp.enableBloom).isItemEdited;
                     if (pp.enableBloom)
                     {
@@ -1059,7 +1061,6 @@ namespace ignite
                     }
 
                     // Vignette
-                    ImGui::SeparatorText("VIGNETTE");
                     c.dirty |= UI::DrawCheckbox("Enable Vignette", &pp.enableVignette).isItemEdited;
                     if (pp.enableVignette)
                     {
@@ -1070,7 +1071,6 @@ namespace ignite
                     }
 
                     // Chromatic Aberration
-                    ImGui::SeparatorText("CHROMATIC AB");
                     c.dirty |= UI::DrawCheckbox("Enable Chromatic Aberration", &pp.enableChromAb).isItemEdited;
                     if (pp.enableChromAb)
                     {
@@ -1079,7 +1079,6 @@ namespace ignite
                     }
 
                     // SSAO
-                    ImGui::SeparatorText("SSAO");
                     c.dirty |= UI::DrawCheckbox("Enable SSAO", &pp.enableSSAO).isItemEdited;
                     if (pp.enableSSAO)
                     {
@@ -2194,8 +2193,8 @@ namespace ignite
             default: cameraModeIndex = 0; break;
         }
 
-        ImGui::SetNextItemWidth(80.0f);
-        if (ImGui::Combo("##CameraMode", &cameraModeIndex, kCameraModeLabels.data(), static_cast<int>(kCameraModeLabels.size())))
+        ImGui::SetNextItemWidth(96.0f);
+        if (ImGui::Combo("##camera_mode", &cameraModeIndex, kCameraModeLabels.data(), static_cast<int>(kCameraModeLabels.size())))
         {
             const auto mode = cameraModeIndex == 0 ? EditorCamera::NavigationMode::Orbit : (cameraModeIndex == 1 ? EditorCamera::NavigationMode::Fly : EditorCamera::NavigationMode::Mode2D);
             const auto previousMode = m_EditorCamera.GetNavigationMode();

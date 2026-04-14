@@ -2949,19 +2949,21 @@ namespace ignite
             nvrhi::SamplerAddressMode::ClampToBorder
         };
 
-        const char *addressModeOptionsStr[3] = { "Repeat", "Clamp To Edge" , "Clamp To Border" };
+        std::array<const char *, 3> addressModeOptionsStr = { "Repeat", "Clamp To Edge" , "Clamp To Border" };
         
         // Wrap U
         auto drawAddressModeCombo = [&addressModeOptions, &addressModeOptionsStr](const char *label, nvrhi::SamplerAddressMode &mode)
         {
             int currentIdx = 0;
-            for (auto &m : addressModeOptions)
+            switch (mode)
             {
-                if (mode == m) break;
-                currentIdx++;
+                case nvrhi::SamplerAddressMode::Repeat: currentIdx = 0;
+                case nvrhi::SamplerAddressMode::ClampToEdge: currentIdx = 1;
+                case nvrhi::SamplerAddressMode::ClampToBorder: currentIdx = 2;
             }
+            
             const char *currentAddressModeOptionStr = addressModeOptionsStr[currentIdx];
-            if (UI::DrawComboBox(label, addressModeOptionsStr, static_cast<int>(addressModeOptions.size()), currentAddressModeOptionStr, &currentIdx))
+            if (UI::DrawComboBox(label, addressModeOptionsStr.data(), static_cast<int>(addressModeOptions.size()), currentAddressModeOptionStr, &currentIdx))
             {
                 mode = addressModeOptions[currentIdx];
             }

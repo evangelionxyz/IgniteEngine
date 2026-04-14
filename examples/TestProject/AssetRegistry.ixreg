@@ -6,9 +6,6 @@ AssetRegistry:
     - Handle: 1671497305426399170
       Type: Texture
       Filepath: kiara_1_dawn_4k.hdr
-    - Handle: 3096406820083457006
-      Type: Invalid
-      Filepath: ""
     - Handle: 4300881635202775327
       Type: Material
       Filepath: Meshes/Rumba Dancing/Material/kachujin_MAT.ixmat
@@ -18,9 +15,6 @@ AssetRegistry:
     - Handle: 5575272945652919097
       Type: Texture
       Filepath: Meshes/Rumba Dancing/Kachujin_diffuse.png
-    - Handle: 6104206172746864979
-      Type: Invalid
-      Filepath: ""
     - Handle: 7027867997128787561
       Type: Mesh
       Filepath: Meshes/Rumba Dancing/Mesh/Rumba Dancing.mesh
@@ -66,9 +60,6 @@ AssetRegistry:
     - Handle: 13589769746383350053
       Type: Texture
       Filepath: checker.jpg
-    - Handle: 13685850293853651728
-      Type: Invalid
-      Filepath: ""
     - Handle: 14048962819861439313
       Type: Texture
       Filepath: segoeui_msdf.png
