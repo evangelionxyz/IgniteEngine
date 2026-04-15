@@ -2,12 +2,91 @@
 
 #include "animator_editor.hpp"
 #include "states.hpp"
+#include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/asset/asset_manager.hpp"
 
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <format>
 #include <ranges>
 
 namespace ignite
 {
+    namespace
+    {
+        static std::string BuildUniqueStateName(const Ref<AnimatorController> &animator, const std::string &baseName)
+        {
+            std::string cleanBase = baseName.empty() ? "State" : baseName;
+            auto hasStateName = [&](const std::string &name)
+            {
+                return std::ranges::any_of(animator->states, [&](const AnimState &state) { return state.name == name; });
+            };
+
+            if (!hasStateName(cleanBase))
+            {
+                return cleanBase;
+            }
+
+            int suffix = 1;
+            while (hasStateName(std::format("{} {}", cleanBase, suffix)))
+            {
+                ++suffix;
+            }
+
+            return std::format("{} {}", cleanBase, suffix);
+        }
+
+        static void CreateAnimatorStateFromAnimation(const Ref<AnimatorController> &animator, AssetManager *assetManager, AnimatorControllerEditorState &ui,
+            AssetHandle animationHandle, const ImVec2 &worldPos)
+        {
+            if (!animator || !assetManager || animationHandle == AssetHandle(0))
+            {
+                return;
+            }
+
+            const AssetMetaData &metadata = assetManager->GetMetaData(animationHandle);
+            if (metadata.type != AssetType::SkeletalAnimation)
+            {
+                return;
+            }
+
+            AnimState state;
+            state.name = BuildUniqueStateName(animator, metadata.filepath.stem().string());
+            state.animHandle = animationHandle;
+            state.editorPos = glm::vec2(worldPos.x, worldPos.y);
+            animator->states.push_back(state);
+            ui.selectedState = static_cast<int>(animator->states.size()) - 1;
+
+            if (animator->defaultState.empty())
+            {
+                animator->defaultState = state.name;
+            }
+
+            if (animator->skeletonHandle == AssetHandle(0))
+            {
+                Ref<Asset> asset = assetManager->GetAsset(animationHandle);
+
+                if (!asset)
+                {
+                    asset = assetManager->GetAssetImmediate(animationHandle);
+                    if (asset)
+                    {
+                        Ref<SkeletalAnimation> animation = asset->As<SkeletalAnimation>();
+                        animator->skeletonHandle = AssetHandle(animation->GetSkeletonHandle());
+                    }
+                }
+                else
+                {
+                    Ref<SkeletalAnimation> animation = asset->As<SkeletalAnimation>();
+                    animator->skeletonHandle = AssetHandle(animation->GetSkeletonHandle());
+                }
+            }
+
+            animator->SetDirtyFlag(true);
+        }
+    }
+
     bool AnimatorEditor::DrawAnimatorStateCombo(const char *label, const std::vector<AnimState> &states, std::string &value, bool allowAnyState)
     {
         std::string preview = value.empty() && allowAnyState ? "Any State" : value;
@@ -181,7 +260,7 @@ namespace ignite
         if (ImGui::Button("+ Add State##ac_state_add", ImVec2(-1.0f, 0.0f)))
         {
             AnimState state;
-            state.name = std::format("State{}", animator->states.size() + 1);
+            state.name = BuildUniqueStateName(animator, std::format("State{}", animator->states.size() + 1));
             const int row = static_cast<int>(animator->states.size()) / 2;
             const int col = static_cast<int>(animator->states.size()) % 2;
             state.editorPos = glm::vec2(60.0f + 220.0f * static_cast<float>(col), 80.0f + 150.0f * static_cast<float>(row));
@@ -218,37 +297,33 @@ namespace ignite
     void AnimatorEditor::DrawAnimatorControllerGraph(const Ref<AnimatorController> &animator, AssetManager *assetManager, AnimatorControllerEditorState &ui)
     {
         ImGui::Text("State Graph");
-        ImGui::TextDisabled("Drag nodes to arrange the controller.");
+        ImGui::TextDisabled("Middle mouse pans, wheel zooms, and dropped animations create states.");
         ImGui::Separator();
 
-        const ImVec2 canvasPos = ImGui::GetCursorScreenPos();
-        ImVec2 canvasSize = ImGui::GetContentRegionAvail();
-        canvasSize.x = std::max(canvasSize.x, 120.0f);
-        canvasSize.y = std::max(canvasSize.y, 220.0f);
-
-        ImDrawList *drawList = ImGui::GetWindowDrawList();
-        drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(24, 27, 33, 255), 10.0f);
-        drawList->AddRect(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(58, 64, 74, 255), 10.0f, 0, 1.5f);
-
-        constexpr float grid = 32.0f;
-        for (float x = std::fmod(ui.canvasOffset.x, grid); x < canvasSize.x; x += grid)
-        {
-            drawList->AddLine(ImVec2(canvasPos.x + x, canvasPos.y), ImVec2(canvasPos.x + x, canvasPos.y + canvasSize.y), IM_COL32(44, 49, 58, 180));
-        }
-        for (float y = std::fmod(ui.canvasOffset.y, grid); y < canvasSize.y; y += grid)
-        {
-            drawList->AddLine(ImVec2(canvasPos.x, canvasPos.y + y), ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + y), IM_COL32(44, 49, 58, 180));
-        }
-
-        ImGui::InvisibleButton("##ac_canvas", canvasSize, ImGuiButtonFlags_MouseButtonMiddle);
-        if (ImGui::IsItemHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
-        {
-            ui.canvasOffset.x += ImGui::GetIO().MouseDelta.x;
-            ui.canvasOffset.y += ImGui::GetIO().MouseDelta.y;
-        }
-
-        // Transition line
+        UI::NodeGraphCanvas canvas = UI::NodeGraph::BeginCanvas("##ac_canvas", ui.graphState);
         const ImVec2 nodeSize(180.0f, 72.0f);
+
+        if (UI::NodeGraph::BeginDropTarget(canvas))
+        {
+            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM, ImGuiDragDropFlags_AcceptBeforeDelivery))
+            {
+                if (payload->Data && payload->DataSize == sizeof(AssetHandle) && payload->IsDelivery())
+                {
+                    const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
+                    if (assetManager->GetMetaData(handle).type == AssetType::SkeletalAnimation)
+                    {
+                        const ImVec2 dropWorldPos = UI::NodeGraph::ToWorld(canvas, ImGui::GetIO().MousePos);
+                        CreateAnimatorStateFromAnimation(animator, assetManager, ui, handle, ImVec2(dropWorldPos.x - nodeSize.x * 0.5f, dropWorldPos.y - nodeSize.y * 0.5f));
+                    }
+                }
+            }
+
+            UI::NodeGraph::EndDropTarget();
+        }
+
+        const ImVec2 anyStateStart(20.0f, 20.0f);
+        canvas.drawList->PushClipRect(canvas.screenPos, ImVec2(canvas.screenPos.x + canvas.size.x, canvas.screenPos.y + canvas.size.y), true);
+
         for (size_t ti = 0; ti < animator->transitions.size(); ++ti)
         {
             const AnimTransition &transition = animator->transitions[ti];
@@ -258,172 +333,141 @@ namespace ignite
                 continue;
             }
 
-            ImVec2 start(canvasPos.x + ui.canvasOffset.x + 20.0f, canvasPos.y + ui.canvasOffset.y + 20.0f);
+            ImVec2 fromWorldPos = anyStateStart;
             if (const AnimState *fromState = animator->FindState(transition.fromState))
             {
-                start = ImVec2(canvasPos.x + ui.canvasOffset.x + fromState->editorPos.x + nodeSize.x,
-                    canvasPos.y + ui.canvasOffset.y + fromState->editorPos.y + nodeSize.y * 0.5f);
+                fromWorldPos = ImVec2(fromState->editorPos.x + nodeSize.x, fromState->editorPos.y + nodeSize.y * 0.5f);
             }
 
-            const ImVec2 end(canvasPos.x + ui.canvasOffset.x + toState->editorPos.x,
-                canvasPos.y + ui.canvasOffset.y + toState->editorPos.y + nodeSize.y * 0.5f);
+            const ImVec2 toWorldPos(toState->editorPos.x, toState->editorPos.y + nodeSize.y * 0.5f);
             const ImU32 color = ui.selectedTransition == static_cast<int>(ti) ? IM_COL32(255, 196, 92, 255) : IM_COL32(126, 170, 255, 220);
-
-            drawList->AddBezierCubic(start, ImVec2(start.x + 70.0f, start.y),
-                ImVec2(end.x - 70.0f, end.y), end, color,
-                ui.selectedTransition == static_cast<int>(ti) ? 3.0f : 2.0f);
+            UI::NodeGraph::DrawConnection(canvas, fromWorldPos, toWorldPos, color, ui.selectedTransition == static_cast<int>(ti) ? 3.0f : 2.0f);
         }
 
-        ImGui::PushClipRect(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), true);
         for (int i = 0; i < static_cast<int>(animator->states.size()); ++i)
         {
             AnimState &state = animator->states[static_cast<size_t>(i)];
-            const ImVec2 nodePos(canvasPos.x + ui.canvasOffset.x + state.editorPos.x, canvasPos.y + ui.canvasOffset.y + state.editorPos.y);
-            const ImVec2 nodeEnd(nodePos.x + nodeSize.x, nodePos.y + nodeSize.y);
-
+            const UI::NodeGraphNode node = UI::NodeGraph::BuildNode(canvas, ImVec2(state.editorPos.x, state.editorPos.y), nodeSize);
 
             ImGui::PushID(i);
-            ImGui::SetCursorScreenPos(nodePos);
-            ImGui::InvisibleButton("##ac_node", nodeSize);
-
+            const UI::NodeInteraction nodeInteraction = UI::NodeGraph::HandleNode(canvas, "##ac_node", node);
             const bool selected = ui.selectedState == i;
-            const bool itemHovered = ImGui::IsItemHovered();
-            
-            // Selecting item
-            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            const bool itemHovered = nodeInteraction.hovered;
+
+            if (nodeInteraction.clicked)
             {
-                if (ImGui::IsItemHovered())
-                    ui.selectedState = i;
+                ui.selectedState = i;
             }
 
-            // Transition drag
             if (ui.draggingTransitionLine)
             {
-                // The transition entered
-                // and only set the toStateName if the current state name is not fromStateName
-                // otherwise set it back to false
                 if (itemHovered)
                 {
                     ui.draggingTransitionEntered = true;
                     if (ui.fromStateName != state.name)
-                        ui.toStateName = state.name;
-                }
-                else
-                {
-                    if (ui.draggingTransitionEntered && !ui.toStateName.empty())
                     {
-                        // only set to false when it is the target
-                        if (ui.toStateName == state.name)
-                            ui.draggingTransitionEntered = false;
+                        ui.toStateName = state.name;
                     }
-
-                    // clear if no transition entered
-                    if (!ui.draggingTransitionEntered)
-                        ui.toStateName.clear();
+                }
+                else if (ui.toStateName == state.name)
+                {
+                    ui.draggingTransitionEntered = false;
+                    ui.toStateName.clear();
                 }
             }
-            
-            // Select functionality
+
             if (selected)
             {
-                if (!ui.draggingTransitionLine && itemHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+                if (itemHovered && !ui.draggingTransitionLine && nodeInteraction.dragging)
                 {
                     ui.draggingItem = true;
                 }
-
                 if (ui.draggingItem)
                 {
-                    state.editorPos.x += ImGui::GetIO().MouseDelta.x;
-                    state.editorPos.y += ImGui::GetIO().MouseDelta.y;
+                    state.editorPos.x += nodeInteraction.dragDeltaWorld.x;
+                    state.editorPos.y += nodeInteraction.dragDeltaWorld.y;
                     animator->SetDirtyFlag(true);
-
-                    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
-                    {
-                        ui.draggingItem = false;
-                    }
                 }
             }
-
-            // Transition grabber
+            if (ui.draggingItem && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
             {
-                const float grabOffset = 16.0f;
-                const ImVec2 grabPos = { nodePos.x - grabOffset, nodePos.y - grabOffset };
-                const ImVec2 grabEnd = { nodeEnd.x + grabOffset, nodeEnd.y + grabOffset };
-                const ImVec2 grabSize = { grabEnd.x - grabPos.x, grabEnd.y - grabPos.y };
-                ImGui::SetCursorScreenPos(grabPos);
-                ImGui::InvisibleButton("##transition_grab", grabSize);
-                const bool isGrabHovered = ImGui::IsItemHovered();
-                drawList->AddRectFilled(grabPos, grabEnd, isGrabHovered ? IM_COL32(255, 159, 0, 125) : IM_COL32(255, 159, 0, 0), 20.0f);
+                ui.draggingItem = false;
+            }
 
-                // Begin drag if no dragging
-                if (ui.draggingTransitionLine == false)
-                {
-                    if (!ui.draggingItem && !itemHovered && isGrabHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-                    {
-                        ui.fromStateName = state.name;
-                        ui.draggingTransitionLine = true;
-                    }
-                }
+            const float grabOffset = 16.0f;
+            const UI::NodeGraphNode grabNode = UI::NodeGraph::BuildNode(canvas,
+                ImVec2(state.editorPos.x - grabOffset, state.editorPos.y - grabOffset),
+                ImVec2(nodeSize.x + grabOffset * 2.0f, nodeSize.y + grabOffset * 2.0f));
+            const UI::NodeInteraction grabInteraction = UI::NodeGraph::HandleNode(canvas, "##transition_grab", grabNode);
+            canvas.drawList->AddRectFilled(grabNode.screenMin, grabNode.screenMax, grabInteraction.hovered ? IM_COL32(255, 159, 0, 125) : IM_COL32(255, 159, 0, 0),
+                20.0f * ui.graphState.zoom);
+            if (!ui.draggingTransitionLine && !ui.draggingItem && !itemHovered && grabInteraction.clicked)
+            {
+                ui.fromStateName = state.name;
+                ui.draggingTransitionLine = true;
             }
 
             const bool isDefault = state.name == animator->defaultState;
-            drawList->AddRectFilled(nodePos, nodeEnd, (selected || itemHovered) ? IM_COL32(56, 86, 132, 255) : IM_COL32(38, 46, 57, 255), 10.0f);
-            drawList->AddRect(nodePos, nodeEnd, (isDefault || itemHovered) ? IM_COL32(255, 196, 92, 255) : IM_COL32(97, 114, 138, 255), 10.0f, 0, selected ? 2.5f : 1.5f);
+            canvas.drawList->AddRectFilled(node.screenMin, node.screenMax, (selected || itemHovered) ? IM_COL32(56, 86, 132, 255) : IM_COL32(38, 46, 57, 255),
+                10.0f * ui.graphState.zoom);
+            canvas.drawList->AddRect(node.screenMin, node.screenMax, (isDefault || itemHovered) ? IM_COL32(255, 196, 92, 255) : IM_COL32(97, 114, 138, 255),
+                10.0f * ui.graphState.zoom, 0, selected ? 2.5f : 1.5f);
 
             const std::string title = state.name.empty() ? std::format("State {}", i + 1) : state.name;
-            drawList->AddText(ImVec2(nodePos.x + 12.0f, nodePos.y + 12.0f), IM_COL32(235, 239, 245, 255), title.c_str());
-            drawList->AddText(ImVec2(nodePos.x + 12.0f, nodePos.y + 34.0f), IM_COL32(167, 176, 190, 255), assetManager->GetAssetDisplayName(state.animHandle).c_str());
+            canvas.drawList->AddText(ImVec2(node.screenMin.x + 12.0f * ui.graphState.zoom, node.screenMin.y + 12.0f * ui.graphState.zoom), IM_COL32(235, 239, 245, 255), title.c_str());
+            canvas.drawList->AddText(ImVec2(node.screenMin.x + 12.0f * ui.graphState.zoom, node.screenMin.y + 34.0f * ui.graphState.zoom), IM_COL32(167, 176, 190, 255), assetManager->GetAssetDisplayName(state.animHandle).c_str());
             if (isDefault)
             {
-                drawList->AddText(ImVec2(nodePos.x + 12.0f, nodePos.y + 52.0f), IM_COL32(255, 196, 92, 255), "Default");
+                canvas.drawList->AddText(ImVec2(node.screenMin.x + 12.0f * ui.graphState.zoom, node.screenMin.y + 52.0f * ui.graphState.zoom), IM_COL32(255, 196, 92, 255), "Default");
             }
 
             ImGui::PopID();
         }
 
-        // Draw dragging transition line
         if (ui.draggingTransitionLine)
         {
-            ImVec2 start(canvasPos.x + ui.canvasOffset.x + 20.0f, canvasPos.y + ui.canvasOffset.y + 20.0f);
+            ImVec2 fromWorldPos = anyStateStart;
             if (const AnimState *fromState = animator->FindState(ui.fromStateName))
             {
-                start = ImVec2(canvasPos.x + ui.canvasOffset.x + fromState->editorPos.x + nodeSize.x, canvasPos.y + ui.canvasOffset.y + fromState->editorPos.y + nodeSize.y * 0.5f);
+                fromWorldPos = ImVec2(fromState->editorPos.x + nodeSize.x, fromState->editorPos.y + nodeSize.y * 0.5f);
             }
 
+            const ImVec2 start = UI::NodeGraph::ToScreen(canvas, fromWorldPos);
             const ImVec2 end = ImGui::GetMousePos();
-            drawList->AddBezierCubic(start, ImVec2(start.x + 70.0f, start.y), ImVec2(end.x - 70.0f, end.y), end, IM_COL32(255, 196, 92, 255), 2.0f);
+            const float handleOffset = 70.0f * ui.graphState.zoom;
+            canvas.drawList->AddBezierCubic(start, ImVec2(start.x + handleOffset, start.y), ImVec2(end.x - handleOffset, end.y), end, IM_COL32(255, 196, 92, 255), 2.0f);
 
-            // Cancel
             if (ImGui::IsMouseClicked(ImGuiMouseButton_Right))
             {
                 ui.draggingTransitionLine = false;
+                ui.draggingTransitionEntered = false;
                 ui.fromStateName.clear();
                 ui.toStateName.clear();
             }
 
-            // Confirm
             if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
             {
                 ui.draggingTransitionLine = false;
                 if (!ui.toStateName.empty())
                 {
-                    // Only push when there is no same transition yet
-                    auto it = std::ranges::find_if(animator->transitions, [&](AnimTransition &transition)
+                    auto it = std::ranges::find_if(animator->transitions, [&](const AnimTransition &transition)
                     {
                         return transition.fromState == ui.fromStateName && transition.toState == ui.toStateName;
                     });
                     if (it == animator->transitions.end())
                     {
                         animator->transitions.push_back({ ui.fromStateName, ui.toStateName });
+                        animator->SetDirtyFlag(true);
                     }
-
-                    ui.fromStateName.clear();
-                    ui.toStateName.clear();
                 }
+
+                ui.draggingTransitionEntered = false;
+                ui.fromStateName.clear();
+                ui.toStateName.clear();
             }
         }
 
-        ImGui::PopClipRect();
+        canvas.drawList->PopClipRect();
     }
 
     void AnimatorEditor::DrawAnimatorControllerInspectorTab(const Ref<AnimatorController> &animator, AssetManager *assetManager, AnimatorControllerEditorState &ui)

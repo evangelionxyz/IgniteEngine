@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
 #ifndef ANIMATION_MONTAGE_HPP
 #define ANIMATION_MONTAGE_HPP
 

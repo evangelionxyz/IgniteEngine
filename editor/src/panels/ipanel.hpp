@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
 #ifndef IPANEL_HPP
 #define IPANEL_HPP
 

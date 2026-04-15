@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef KEYFRAMES_HPP
+#define KEYFRAMES_HPP
 
 #include "ignite/core/types.hpp"
 #include "ignite/math/math.hpp"
@@ -129,3 +131,5 @@ namespace ignite {
         }
     };
 }
+
+#endif

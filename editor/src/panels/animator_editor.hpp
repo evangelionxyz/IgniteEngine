@@ -4,6 +4,8 @@
 #ifndef ANIMATOR_EDITOR_HPP
 #define ANIMATOR_EDITOR_HPP
 
+#include "../node/node_graph.hpp"
+
 #include "ignite/animation/animator/animator_controller.hpp"
 
 #include <string>
@@ -17,7 +19,7 @@ namespace ignite
 
     struct AnimatorControllerEditorState
     {
-        ImVec2 canvasOffset = ImVec2(36.0f, 36.0f);
+        UI::NodeGraphState graphState;
         int selectedState = -1;
         int selectedTransition = -1;
         bool initialized = false;

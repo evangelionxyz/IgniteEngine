@@ -1,5 +1,6 @@
-// Copyright (c) 2025 Evangelion Manuhutu
+// Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
 #ifndef ANIMATION_TIMELINE_HPP
 #define ANIMATION_TIMELINE_HPP
 

@@ -1,6 +1,8 @@
 //Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 
 #pragma once
+#ifndef CONTENT_BROWSER_PANEL_HPP
+#define CONTENT_BROWSER_PANEL_HPP
 
 #include "ipanel.hpp"
 #include "ignite/asset/asset.hpp"
@@ -136,3 +138,5 @@ namespace ignite
         char m_PopupInputBuffer[1024] = { 0 }; // used for create/rename names
     };
 }
+
+#endif

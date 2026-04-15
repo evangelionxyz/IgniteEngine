@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
 #ifndef ASSET_IMPORTER_PANEL
 #define ASSET_IMPORTER_PANEL
 

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Evangelion Manuhutu
+
+#pragma once
 #ifndef BLEND_SPACE_HPP
 #define BLEND_SPACE_HPP
 

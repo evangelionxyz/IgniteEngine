@@ -1,6 +1,8 @@
-//Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
+//Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef EDITOR_CAMERA_HPP
+#define EDITOR_CAMERA_HPP
 
 #include "ignite/scene/icamera.hpp"
 
@@ -71,3 +73,5 @@ namespace ignite
 		std::string m_Name;
     };
 }
+
+#endif

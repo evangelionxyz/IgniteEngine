@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef SKELETON_HPP
+#define SKELETON_HPP
 
 #include "ignite/core/uuid.hpp"
 #include "ignite/asset/asset.hpp"
@@ -66,3 +68,5 @@ namespace ignite
         virtual AssetType GetAssetType() override { return GetStaticType(); }
     };
 }
+
+#endif

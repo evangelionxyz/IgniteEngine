@@ -1,5 +1,6 @@
 //Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
 #ifndef EDITOR_UI_HPP
 #define EDITOR_UI_HPP
 

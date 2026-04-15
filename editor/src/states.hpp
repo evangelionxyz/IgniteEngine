@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 
+#pragma once
 #ifndef STATES_HPP
 #define STATES_HPP
 

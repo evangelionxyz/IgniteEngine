@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
 #ifndef SKELETAL_ANIMATION_HPP
 #define SKELETAL_ANIMATION_HPP
 

@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
 #ifndef ANIMATOR_HPP
 #define ANIMATOR_HPP
 

@@ -1,6 +1,8 @@
-//Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
+//Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef EDITOR_LAYER_HPP
+#define EDITOR_LAYER_HPP
 
 #include <nvrhi/nvrhi.h>
 #include "ignite/asset/asset_importer.hpp"
@@ -150,3 +152,5 @@ namespace ignite
         friend class AssetImporterPanel;
     };
 }
+
+#endif

@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef ASSET_IMPORTER_HPP
+#define ASSET_IMPORTER_HPP
 
 #include "asset.hpp"
 #include <future>
@@ -8,8 +10,8 @@
 
 #include "ignite/scene/entity.hpp"
 
-namespace ignite {
-
+namespace ignite
+{
     struct TextureCreateInfo;
     struct FmodSound;
     class Environment;
@@ -29,20 +31,20 @@ namespace ignite {
     class Scene;
     class Font;
 
-	struct PendingFileLoading
-	{
-		enum Type : uint8_t
-		{
-			None = 0,
-			Open,
-			Save,
-			ImportAssets,
-		};
+    struct PendingFileLoading
+    {
+        enum Type : uint8_t
+        {
+            None = 0,
+            Open,
+            Save,
+            ImportAssets,
+        };
 
-		Type type = None;
-		AssetMetaData metadata;
-		void *userData = nullptr;
-	};
+        Type type = None;
+        AssetMetaData metadata;
+        void *userData = nullptr;
+    };
 
     struct AssetImporterPayload
     {
@@ -94,3 +96,5 @@ namespace ignite {
         static Ref<FmodSound> ImportAudio(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
     };
 }
+
+#endif
