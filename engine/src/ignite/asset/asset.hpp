@@ -9,9 +9,12 @@
 #include <string>
 #include <filesystem>
 #include <map>
+#include <functional>
 #include <nvrhi/nvrhi.h>
 
 namespace ignite {
+
+    class Serializer;
 
     using AssetHandle = UUID;
 
@@ -208,6 +211,8 @@ namespace ignite {
     class Asset : public std::enable_shared_from_this<Asset>
     {
     public:
+        using MetaSerializer = std::function<void(Serializer &)>;
+
         AssetHandle handle;
 
         virtual ~Asset() { };
@@ -219,6 +224,7 @@ namespace ignite {
         }
 
         virtual bool Serialize(const std::filesystem::path &filepath) { return true; }
+        virtual bool SerializeMetaFile(const std::filesystem::path &filepath, const MetaSerializer &customSerializer = nullptr) const;
 
         virtual AssetType GetAssetType() { return AssetType::Invalid; }
 

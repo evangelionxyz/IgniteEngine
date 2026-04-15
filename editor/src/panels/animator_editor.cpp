@@ -389,13 +389,13 @@ namespace ignite
                 anyGrabInteraction.hovered ? IM_COL32(255, 159, 0, 125) : IM_COL32(255, 159, 0, 0),
                 20.0f * ui.graphState.zoom);
 
-            if (!ui.draggingTransitionLine && !ui.draggingItem && anyGrabInteraction.clicked)
+            if (!ui.draggingTransitionLine && !ui.draggingItem && canvas.hovered && anyGrabInteraction.clicked)
             {
                 ui.fromStateName.clear();
                 ui.draggingTransitionLine = true;
             }
 
-            if (!ui.draggingTransitionLine && !ui.draggingItem && !ui.boxSelectingStates && ui.anyStateSelected && anyStateInteraction.dragging)
+            if (!ui.draggingTransitionLine && !ui.draggingItem && !ui.boxSelectingStates && canvas.hovered && ui.anyStateSelected && anyStateInteraction.dragging)
             {
                 ui.draggingItem = true;
                 ui.draggingStateIndices.assign(ui.selectedStates.begin(), ui.selectedStates.end());
@@ -478,7 +478,7 @@ namespace ignite
                 }
             }
 
-            if (!ui.draggingTransitionLine && !ui.draggingItem && selected && nodeInteraction.dragging)
+            if (!ui.draggingTransitionLine && !ui.draggingItem && selected && canvas.hovered && nodeInteraction.dragging)
             {
                 ui.draggingItem = true;
                 ui.draggingStateIndices.assign(ui.selectedStates.begin(), ui.selectedStates.end());

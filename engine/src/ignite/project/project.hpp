@@ -26,6 +26,7 @@
 #include "ignite/asset/asset.hpp"
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/asset/material_manager.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 
 #include <string>
 #include <filesystem>

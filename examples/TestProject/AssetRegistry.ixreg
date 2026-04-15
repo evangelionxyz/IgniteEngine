@@ -93,6 +93,9 @@ AssetRegistry:
     - Handle: 11769717714627322982
       Type: Texture
       Filepath: Meshes/Rumba Dancing/Textures/Rumba Dancing_0_.png
+    - Handle: 13415710782649648740
+      Type: AnimatorController
+      Filepath: Meshes/Rig_Medium_MovementBasic/EnemyAnimator.ac
     - Handle: 13589769746383350053
       Type: Texture
       Filepath: checker.jpg

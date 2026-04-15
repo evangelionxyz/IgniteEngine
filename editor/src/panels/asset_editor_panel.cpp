@@ -33,6 +33,7 @@
 #include "ignite/imgui/gizmo.hpp"
 #include "ignite/math/math.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
+#include "ignite/asset/asset_manager.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -141,6 +142,79 @@ namespace ignite
         // Default static meshes
         static std::unordered_map<MeshType, Ref<Mesh>> s_DefaultMeshes;
         static Ref<Material> s_SkeletonPreviewMaterial;
+
+        static std::filesystem::path BuildAssetMetaPath(Project *project, const AssetMetaData &metadata)
+        {
+            if (!project)
+            {
+                return {};
+            }
+
+            std::filesystem::path assetPath = project->GetAssetFilepath(metadata.filepath);
+            assetPath += ".meta";
+            return assetPath;
+        }
+
+        static void SaveAnimatorControllerEditorMeta(Project *project, const Ref<AnimatorController> &controller, const AssetMetaData &metadata,
+            const AnimatorControllerEditorState &ui)
+        {
+            if (!project || !controller || controller->handle == AssetHandle(0))
+            {
+                return;
+            }
+
+            const std::filesystem::path metaPath = BuildAssetMetaPath(project, metadata);
+            if (metaPath.empty())
+            {
+                return;
+            }
+
+            controller->SerializeMetaFile(metaPath, [&](Serializer &sr)
+            {
+                sr.BeginMap("AnimatorEditor");
+                sr.BeginMap("Graph");
+                sr.AddKeyValue("PanX", ui.graphState.pan.x);
+                sr.AddKeyValue("PanY", ui.graphState.pan.y);
+                sr.AddKeyValue("Zoom", ui.graphState.zoom);
+                sr.AddKeyValue("AnyStatePosX", ui.anyStateEditorPos.x);
+                sr.AddKeyValue("AnyStatePosY", ui.anyStateEditorPos.y);
+                sr.EndMap();
+                sr.EndMap();
+            });
+        }
+
+        static bool LoadAnimatorControllerEditorMeta(Project *project, const AssetMetaData &metadata, AnimatorControllerEditorState &ui)
+        {
+            if (!project)
+            {
+                return false;
+            }
+
+            const std::filesystem::path metadataPath = BuildAssetMetaPath(project, metadata);
+            if (metadataPath.empty() || !std::filesystem::exists(metadataPath))
+            {
+                return false;
+            }
+
+            const YAML::Node root = Serializer::Deserialize(metadataPath);
+            const YAML::Node editorNode = root["DATA"]["AnimatorEditor"];
+            if (!editorNode)
+            {
+                return false;
+            }
+
+            const YAML::Node graphNode = editorNode["Graph"];
+            if (graphNode)
+            {
+                if (graphNode["PanX"]) ui.graphState.pan.x = graphNode["PanX"].as<float>();
+                if (graphNode["PanY"]) ui.graphState.pan.y = graphNode["PanY"].as<float>();
+                if (graphNode["Zoom"]) ui.graphState.zoom = graphNode["Zoom"].as<float>();
+                if (graphNode["AnyStatePosX"]) ui.anyStateEditorPos.x = graphNode["AnyStatePosX"].as<float>();
+                if (graphNode["AnyStatePosY"]) ui.anyStateEditorPos.y = graphNode["AnyStatePosY"].as<float>();
+            }
+
+            return true;
+        }
 
         static const char *TextureFormatToString(nvrhi::Format format)
         {
@@ -2921,7 +2995,7 @@ namespace ignite
         }
 
         const nvrhi::Format formatOptions[] = { nvrhi::Format::RGBA8_UNORM, nvrhi::Format::RGBA32_FLOAT };
-        
+
         int currentFormatIndex = 0;
         for (int i = 0; i < static_cast<int>(std::size(formatOptions)); ++i)
         {
@@ -2951,7 +3025,7 @@ namespace ignite
         };
 
         std::array<const char *, 3> addressModeOptionsStr = { "Repeat", "Clamp To Edge" , "Clamp To Border" };
-        
+
         // Wrap U
         auto drawAddressModeCombo = [&addressModeOptions, &addressModeOptionsStr](const char *label, nvrhi::SamplerAddressMode &mode)
         {
@@ -2962,7 +3036,7 @@ namespace ignite
                 case nvrhi::SamplerAddressMode::ClampToEdge: currentIdx = 1; break;
                 case nvrhi::SamplerAddressMode::ClampToBorder: currentIdx = 2; break;
             }
-            
+
             const char *currentAddressModeOptionStr = addressModeOptionsStr[currentIdx];
             if (UI::DrawComboBox(label, addressModeOptionsStr.data(), static_cast<int>(addressModeOptions.size()), currentAddressModeOptionStr, &currentIdx))
             {
@@ -2982,7 +3056,7 @@ namespace ignite
         ImGui::Separator();
         if (ImGui::Button("ReImport"))
         {
-            assetManager->SetTextureCreateInfo(assetData.handle, state.createInfo);
+            Texture::SerializeMetaFile(BuildAssetMetaPath(project, assetData.metadata), assetData.handle, state.createInfo);
 
             AssetMetaData importMetadata = assetData.metadata;
             importMetadata.filepath = project->GetAssetFilepath(assetData.metadata.filepath);
@@ -2992,7 +3066,7 @@ namespace ignite
             {
                 reimportedTexture->handle = assetData.handle;
                 assetManager->AssignAsset(assetData.handle, reimportedTexture);
-                assetManager->SetTextureCreateInfo(assetData.handle, reimportedTexture->GetCreateInfo());
+                Texture::SerializeMetaFile(BuildAssetMetaPath(project, assetData.metadata), assetData.handle, reimportedTexture->GetCreateInfo());
                 assetData.asset = reimportedTexture;
                 state.createInfo = reimportedTexture->GetCreateInfo();
                 reimportedTexture->SetDirtyFlag(false);
@@ -3014,6 +3088,7 @@ namespace ignite
         {
             ui.initialized = true;
             ui.selectedState = animator->states.empty() ? -1 : 0;
+            LoadAnimatorControllerEditorMeta(m_EditorLayer->GetActiveProject().get(), assetManager->GetMetaData(animator->handle), ui);
         }
 
         if (ui.selectedState >= static_cast<int>(animator->states.size())) ui.selectedState = animator->states.empty() ? -1 : static_cast<int>(animator->states.size()) - 1;
@@ -3030,7 +3105,7 @@ namespace ignite
         ImGui::EndChild();
 
         ImGui::SameLine();
-        ImGui::BeginChild("##ac_graph", ImVec2(graphWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
+        ImGui::BeginChild("##ac_graph", ImVec2(graphWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
         AnimatorEditor::DrawAnimatorControllerGraph(animator, assetManager, ui);
         ImGui::EndChild();
 
@@ -4533,9 +4608,38 @@ namespace ignite
 
         Project *project = m_EditorLayer->GetActiveProject().get();
         const std::filesystem::path savePath = project->GetAssetFilepath(assetData.metadata.filepath);
+        const std::filesystem::path metaPath = BuildAssetMetaPath(project, assetData.metadata);
+
+        auto saveDefaultMeta = [&]()
+        {
+            return assetData.asset->SerializeMetaFile(metaPath);
+        };
 
         switch (assetData.metadata.type)
         {
+            case AssetType::Texture:
+            {
+                Ref<Texture> texture = assetData.asset->As<Texture>();
+                if (!texture)
+                {
+                    return false;
+                }
+
+                TextureCreateInfo createInfo = texture->GetCreateInfo();
+                const auto stateIt = s_TextureEditorState.find(static_cast<uint64_t>(assetData.handle));
+                if (stateIt != s_TextureEditorState.end() && stateIt->second.initialized)
+                {
+                    createInfo = stateIt->second.createInfo;
+                }
+
+                const bool metaSaved = Texture::SerializeMetaFile(metaPath, assetData.handle, createInfo);
+                if (metaSaved)
+                {
+                    texture->SetDirtyFlag(false);
+                }
+                return metaSaved;
+            }
+
             case AssetType::SpriteSheet:
             {
                 Ref<SpriteSheet> spriteSheet = assetData.asset->As<SpriteSheet>();
@@ -4550,7 +4654,7 @@ namespace ignite
                 }
 
                 spriteSheet->SetDirtyFlag(false);
-                return true;
+                return saveDefaultMeta();
             }
 
             case AssetType::Material2D:
@@ -4567,7 +4671,7 @@ namespace ignite
                 }
 
                 material2D->SetDirtyFlag(false);
-                return true;
+                return saveDefaultMeta();
             }
 
             case AssetType::SkeletalAnimation:
@@ -4579,7 +4683,7 @@ namespace ignite
                 }
                 animation->Serialize(savePath);
                 animation->SetDirtyFlag(false);
-                return true;
+                return saveDefaultMeta();
             }
 
             case AssetType::Skeleton:
@@ -4596,7 +4700,7 @@ namespace ignite
                 }
 
                 skeleton->SetDirtyFlag(false);
-                return true;
+                return saveDefaultMeta();
             }
 
             case AssetType::AnimationMontage:
@@ -4613,7 +4717,7 @@ namespace ignite
                 }
 
                 montage->SetDirtyFlag(false);
-                return true;
+                return saveDefaultMeta();
             }
 
             case AssetType::BlendSpace:
@@ -4630,7 +4734,7 @@ namespace ignite
                 }
 
                 blendSpace->SetDirtyFlag(false);
-                return true;
+                return saveDefaultMeta();
             }
 
             case AssetType::LocomotionController:
@@ -4647,7 +4751,7 @@ namespace ignite
                 }
 
                 controller->SetDirtyFlag(false);
-                return true;
+                return saveDefaultMeta();
             }
 
             case AssetType::Mesh:
@@ -4659,7 +4763,7 @@ namespace ignite
                 }
                 mesh->Serialize(savePath);
                 mesh->SetDirtyFlag(false);
-                return true;
+                return saveDefaultMeta();
             }
 
             case AssetType::Animation2D:
@@ -4669,7 +4773,11 @@ namespace ignite
                 {
                     return false;
                 }
-                return anim->Serialize(savePath);
+                if (!anim->Serialize(savePath))
+                {
+                    return false;
+                }
+                return saveDefaultMeta();
             }
             case AssetType::AnimatorController2D:
             {
@@ -4678,7 +4786,11 @@ namespace ignite
                 {
                     return false;
                 }
-                return ctrl->Serialize(savePath);
+                if (!ctrl->Serialize(savePath))
+                {
+                    return false;
+                }
+                return saveDefaultMeta();
             }
             case AssetType::AnimatorController:
             {
@@ -4687,7 +4799,17 @@ namespace ignite
                 {
                     return false;
                 }
-                return ctrl->Serialize(savePath);
+                const bool saved = ctrl->Serialize(savePath);
+                if (saved)
+                {
+                    const uint64_t key = static_cast<uint64_t>(ctrl->handle);
+                    if (s_AnimatorControllerEditorState.contains(key))
+                    {
+                        SaveAnimatorControllerEditorMeta(project, ctrl, assetData.metadata, s_AnimatorControllerEditorState[key]);
+                    }
+                    return true;
+                }
+                return false;
             }
             case AssetType::Material:
             {
@@ -4698,7 +4820,11 @@ namespace ignite
                 }
 
                 mat->InvalidateBindingSet();
-                return mat->Serialize(savePath);
+                if (!mat->Serialize(savePath))
+                {
+                    return false;
+                }
+                return saveDefaultMeta();
             }
             default:
             return false;

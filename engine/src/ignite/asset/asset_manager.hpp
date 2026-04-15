@@ -5,7 +5,6 @@
 #define ASSET_MANAGER_HPP
 
 #include "asset.hpp"
-#include "ignite/graphics/texture.hpp"
 
 #include <map>
 #include <unordered_set>
@@ -39,8 +38,6 @@ namespace ignite
         AssetHandle ImportAsset(const std::filesystem::path &filepath);
 
         void AssignMetaData(AssetHandle handle, const AssetMetaData &metadata);
-        TextureCreateInfo GetTextureCreateInfo(AssetHandle handle) const;
-        void SetTextureCreateInfo(AssetHandle handle, const TextureCreateInfo &createInfo, bool saveToDisk = true);
 
         const std::string GetAssetDisplayName(AssetHandle handle) const;
 
@@ -101,7 +98,6 @@ namespace ignite
         void WorkerLoop();
 
         AssetRegistry m_AssetRegistry;
-        std::unordered_map<AssetHandle, TextureCreateInfo> m_TextureCreateInfos;
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
         std::unordered_set<AssetHandle> m_LoadingAssets; // Track assets currently being loaded
         std::vector<AssetLoadedCallback> m_LoadedCallbacks;
