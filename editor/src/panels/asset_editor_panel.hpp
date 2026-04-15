@@ -56,6 +56,7 @@ namespace ignite
             Ref<RenderTarget> compositeRT;
             uint32_t viewportWidth = 512;
             uint32_t viewportHeight = 512;
+            bool viewportVisible = false;
             bool viewportHovered = false;
         };
 

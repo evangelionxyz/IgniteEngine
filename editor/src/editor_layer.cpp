@@ -722,7 +722,7 @@ namespace ignite
         }
         
         {
-            // RENDE TOOL BAR
+            // RENDER TOOL BAR
             ImGui::BeginChild("##toolbar_child", {0.0f, 32.0f }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
             m_ScenePanel->RenderToolbar();
             ImGui::EndChild();

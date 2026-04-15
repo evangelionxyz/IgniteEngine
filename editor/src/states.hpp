@@ -27,6 +27,8 @@ namespace ignite
         BOUND_SIZING_2D = 3
     };
 
+    static const char *s_ParamTypeNames[] = { "Float", "Bool", "Int", "String" };
+    static const char *s_ConditionOpNames[] = { "==", "!=", ">", "<", ">=", "<=" };
 }
 
 #endif

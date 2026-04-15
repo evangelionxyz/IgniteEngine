@@ -397,16 +397,18 @@ namespace ignite {
 
     const std::string AssetManager::GetAssetDisplayName(AssetHandle handle) const
     {
-        if (handle != AssetHandle(0))
+        if (handle == AssetHandle(0))
         {
-            const AssetMetaData &metadata = GetMetaData(handle);
-            if (!metadata.filepath.empty())
-            {
-                return metadata.filepath.filename().string();
-            }
+            return "None";
         }
 
-        return "INVALID";
+        const AssetMetaData &metadata = GetMetaData(handle);
+        if (!metadata.filepath.empty())
+        {
+            return metadata.filepath.filename().string();
+        }
+
+        return std::format("Handle {}", static_cast<uint64_t>(handle));
     }
 
     void AssetManager::RemoveAsset(AssetHandle handle)

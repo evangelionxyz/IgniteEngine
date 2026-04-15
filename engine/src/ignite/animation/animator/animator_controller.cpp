@@ -16,6 +16,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include <glm/gtx/quaternion.hpp>
+
 namespace ignite
 {
 
@@ -77,6 +79,7 @@ namespace ignite
             out << YAML::BeginMap;
             out << YAML::Key << "Name" << YAML::Value << s.name;
             out << YAML::Key << "AnimHandle" << YAML::Value << static_cast<uint64_t>(s.animHandle);
+            out << YAML::Key << "EditorPos" << YAML::Value << YAML::Flow << YAML::BeginSeq << s.editorPos.x << s.editorPos.y << YAML::EndSeq;
             out << YAML::EndMap;
         }
         out << YAML::EndSeq;
@@ -188,6 +191,8 @@ namespace ignite
                 AnimState s;
                 if (auto n = sn["Name"]) s.name = n.as<std::string>();
                 if (auto n = sn["AnimHandle"]) s.animHandle = AssetHandle(n.as<uint64_t>());
+                if (auto n = sn["EditorPos"]; n && n.IsSequence() && n.size() == 2)
+                    s.editorPos = { n[0].as<float>(), n[1].as<float>() };
                 ctrl->states.push_back(s);
             }
         }
@@ -286,7 +291,7 @@ namespace ignite
 
         if (runtime.currentStateName.empty())
         {
-            runtime.currentStateName = defaultState;
+            runtime.currentStateName = !defaultState.empty() ? defaultState : (states.empty() ? std::string{} : states.front().name);
             runtime.stateElapsed = 0.0f;
             runtime.stateNormalized = 0.0f;
         }
@@ -324,23 +329,30 @@ namespace ignite
         const std::string nextStateName = EvaluateTransitions(runtime.currentStateName, runtime.stateNormalized);
         if (!nextStateName.empty() && nextStateName != runtime.currentStateName)
         {
-            runtime.currentStateName = nextStateName;
-            runtime.stateElapsed = 0.0f;
-            runtime.stateNormalized = 0.0f;
+            if (const AnimState *nextState = FindState(nextStateName); nextState && nextState->animHandle != AssetHandle(0))
+            {
+                runtime.currentStateName = nextStateName;
+                runtime.stateElapsed = 0.0f;
+                runtime.stateNormalized = 0.0f;
 
-            state = FindState(runtime.currentStateName);
-            if (!state || state->animHandle == AssetHandle(0))
-                return false;
-
-            animationAsset = assetManager->GetAsset(state->animHandle);
-            if (!animationAsset)
-                animationAsset = assetManager->GetAssetImmediate(state->animHandle);
-            animation = animationAsset ? animationAsset->As<SkeletalAnimation>() : nullptr;
-            if (!animation || animation->duration <= 0.0f)
-                return false;
+                state = nextState;
+                animationAsset = assetManager->GetAsset(state->animHandle);
+                if (!animationAsset)
+                    animationAsset = assetManager->GetAssetImmediate(state->animHandle);
+                animation = animationAsset ? animationAsset->As<SkeletalAnimation>() : nullptr;
+                if (!animation || animation->duration <= 0.0f)
+                    return false;
+            }
         }
 
         const float animTime = std::fmod(runtime.stateElapsed * animation->ticksPerSeconds, animation->duration);
+
+        for (auto &joint : skeleton->joints)
+        {
+            joint.localTransform = glm::translate(glm::mat4(1.0f), joint.defaultTranslation)
+                * glm::toMat4(joint.defaultRotation)
+                * glm::scale(glm::mat4(1.0f), joint.defaultScale);
+        }
 
         for (auto &[nodeName, channel] : animation->channels)
         {

@@ -17,7 +17,8 @@ namespace ignite
     struct AnimState
     {
         std::string name;
-        AssetHandle animHandle = AssetHandle(0);; // Skeletal Animation
+        AssetHandle animHandle = AssetHandle(0); // Skeletal Animation
+        glm::vec2 editorPos = glm::vec2(100.0f, 100.0f);
     };
 
     struct AnimatorControllerRuntime

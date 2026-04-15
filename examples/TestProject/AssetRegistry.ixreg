@@ -33,6 +33,9 @@ AssetRegistry:
     - Handle: 5575272945652919097
       Type: Texture
       Filepath: Meshes/Rumba Dancing/Kachujin_diffuse.png
+    - Handle: 5678022833887677606
+      Type: Texture
+      Filepath: Meshes/Rig_Medium_MovementBasic/Material/ranger_texture.png
     - Handle: 6377643318675216211
       Type: SkeletalAnimation
       Filepath: Meshes/Rig_Medium_MovementBasic/Jump_Idle.ixanim
@@ -96,6 +99,9 @@ AssetRegistry:
     - Handle: 14048962819861439313
       Type: Texture
       Filepath: segoeui_msdf.png
+    - Handle: 14664420803145594202
+      Type: AnimatorController
+      Filepath: Meshes/Rig_Medium_MovementBasic/PlayerAnimator.ac
     - Handle: 14798869311340847312
       Type: Texture
       Filepath: rogland_clear_night_4k.hdr
