@@ -558,6 +558,8 @@ namespace ignite
             GPUUploadSync::DeviceWaitIdle(device);
         }
 
+        m_MeshBindingSet = nullptr;
+
         // Clear primitive (vertex/index buffers)
         m_Primitive.reset();
     }
@@ -565,6 +567,34 @@ namespace ignite
     void MeshInstance::SetMaterial(AssetHandle assetHandle)
     {
         m_MaterialHandle = assetHandle;
+    }
+
+    void MeshInstance::SetData(nvrhi::ICommandList *cmd, void *data, size_t size)
+    {
+        if (!m_MeshConstantBuffer)
+        {
+            m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(SkinnedMeshBufferData), true, 256, "Per-Entity Transform Buffer");
+        }
+
+        m_MeshConstantBuffer->SetData(cmd, Buffer(data, size));
+    }
+
+    void MeshInstance::EnsureBuffer(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer)
+    {
+        if (!m_MeshConstantBuffer)
+        {
+            m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(SkinnedMeshBufferData), true, 256, "Per-Entity Transform Buffer");
+        }
+
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        auto desc = nvrhi::BindingSetDesc();
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m_MeshConstantBuffer->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, sceneBuffer->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, csmBuffer->GetHandle()));
+
+        m_MeshBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
+        LOG_ASSERT(m_MeshBindingSet, "Failed to create mesh binding set");
     }
 
     Ref<MeshInstance> MeshInstance::Create(const std::string &name, const Ref<MeshPrimitive> &mesh)

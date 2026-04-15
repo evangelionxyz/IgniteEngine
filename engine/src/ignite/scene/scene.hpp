@@ -33,6 +33,7 @@
 
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/gpu_data.hpp"
+#include "ignite/animation/animator/animator_controller.hpp"
 
 #include <unordered_map>
 
@@ -112,6 +113,9 @@ namespace ignite
         
         bool m_IsPaused = false;
         bool m_IsPlaying = false;
+
+        std::unordered_map<AssetHandle, Ref<AnimatorController>> m_SharedAnimatorCache;
+        std::unordered_map<AssetHandle, AnimatorControllerRuntime> m_SharedAnimatorRuntime;
 
         friend class SceneManager;
     };

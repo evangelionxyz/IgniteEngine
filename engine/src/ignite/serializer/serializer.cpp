@@ -330,6 +330,7 @@ namespace ignite
                     sr.BeginMap("Mesh");
                     {
                         sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
+                        sr.AddKeyValue("AnimatorHandle", static_cast<uint64_t>(comp.runtimeAnimatorHandle));
                     }
                     sr.EndMap();
                 }
@@ -955,7 +956,23 @@ namespace ignite
             if (YAML::Node node = entityNode["Mesh"])
             {
                 auto &comp = desEntity.AddComponent<MeshComponent>();
-                comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
+                if (auto n = node["Handle"])
+                {
+                    comp.handle = AssetHandle(n.as<uint64_t>());
+                    project->GetAsset<Mesh>(comp.handle);
+                }
+                if (auto n = node["AnimatorHandle"])
+                {
+                    comp.runtimeAnimatorHandle = AssetHandle(n.as<uint64_t>());
+                }
+
+                if (comp.handle != AssetHandle(0) && comp.runtimeAnimatorHandle != AssetHandle(0))
+                {
+                    if (Ref<Mesh> mesh = project->GetAsset<Mesh>(comp.handle, AssetType::Mesh))
+                    {
+                        mesh->SetAnimator(comp.runtimeAnimatorHandle);
+                    }
+                }
             }
 
             // Script

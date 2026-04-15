@@ -38,7 +38,23 @@ namespace ignite
             bool allPass = true;
             for (const auto &cond : tr.conditions)
             {
+                if (cond.paramName.empty())
+                {
+                    LOG_WARN("[AnimatorController] Transition '{}' -> '{}' has a condition with an empty param name — transition is permanently blocked. Fix the animator data.",
+                        tr.fromState.empty() ? "AnyState" : tr.fromState, tr.toState);
+                    allPass = false;
+                    break;
+                }
+
                 const AnimParam *param = GetParam(cond.paramName);
+                if (!param)
+                {
+                    LOG_WARN("[AnimatorController] Transition '{}' -> '{}' references unknown param '{}' — transition is permanently blocked. Fix the animator data.",
+                        tr.fromState.empty() ? "AnyState" : tr.fromState, tr.toState, cond.paramName);
+                    allPass = false;
+                    break;
+                }
+
                 if (!anim_utils::EvalCondition(cond, param))
                 {
                     allPass = false;
@@ -346,27 +362,45 @@ namespace ignite
         }
 
         const float animTime = std::fmod(runtime.stateElapsed * animation->ticksPerSeconds, animation->duration);
+        const size_t jointCount = skeleton->joints.size();
 
-        for (auto &joint : skeleton->joints)
+        // Build per-instance local transforms from skeleton defaults (read-only)
+        std::vector<glm::mat4> localTransforms(jointCount);
+        for (size_t i = 0; i < jointCount; ++i)
         {
-            joint.localTransform = glm::translate(glm::mat4(1.0f), joint.defaultTranslation)
-                * glm::toMat4(joint.defaultRotation)
-                * glm::scale(glm::mat4(1.0f), joint.defaultScale);
+            const Joint &j = skeleton->joints[i];
+            localTransforms[i] = glm::translate(glm::mat4(1.0f), j.defaultTranslation)
+                * glm::toMat4(j.defaultRotation)
+                * glm::scale(glm::mat4(1.0f), j.defaultScale);
         }
 
+        // Apply animation channels to per-instance local transforms
         for (auto &[nodeName, channel] : animation->channels)
         {
             if (const auto it = skeleton->nameToJointMap.find(nodeName); it != skeleton->nameToJointMap.end())
             {
                 const i32 jointIndex = it->second;
-                skeleton->joints[jointIndex].localTransform = channel.CalculateTransform(animTime,
-                    skeleton->joints[jointIndex].defaultTranslation,
-                    skeleton->joints[jointIndex].defaultRotation,
-                    skeleton->joints[jointIndex].defaultScale);
+                const Joint &j = skeleton->joints[jointIndex];
+                localTransforms[jointIndex] = channel.CalculateTransform(animTime,
+                    j.defaultTranslation, j.defaultRotation, j.defaultScale);
             }
         }
 
-        skeleton->UpdateGlobalTransforms();
+        // Compute per-instance global transforms using read-only skeleton hierarchy
+        std::vector<glm::mat4> globalTransforms(jointCount);
+        for (size_t i = 0; i < jointCount; ++i)
+        {
+            const Joint &j = skeleton->joints[i];
+            globalTransforms[i] = (j.parentJointId == -1)
+                ? localTransforms[i]
+                : globalTransforms[j.parentJointId] * localTransforms[i];
+        }
+
+        // Compute GPU-ready final transforms: globalTransform * inverseBindPose
+        runtime.finalTransforms.resize(jointCount);
+        for (size_t i = 0; i < jointCount; ++i)
+            runtime.finalTransforms[i] = globalTransforms[i] * skeleton->joints[i].inverseBindPose;
+
         return true;
     }
 

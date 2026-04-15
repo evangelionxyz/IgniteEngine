@@ -1130,18 +1130,8 @@ namespace ignite
                     if (!sm)
                         continue;
 
-                    // Hoist bone transforms — computed once per mesh, shared across all instances
-                    std::vector<glm::mat4> boneTransforms;
-                    if (sm->GetAnimatorHandle() != AssetHandle(0))
-                    {
-                        if (Ref<AnimatorController> controller = m_Project->GetAsset<AnimatorController>(sm->GetAnimatorHandle()))
-                        {
-                            if (Ref<Skeleton> skeleton = m_Project->GetAsset<Skeleton>(controller->skeletonHandle))
-                            {
-                                boneTransforms = skeleton->GetFinalJointTransforms();
-                            }
-                        }
-                    }
+                    // Per-entity GPU-ready bone transforms written by Scene::UpdateAnimations
+                    const std::vector<glm::mat4> &boneTransforms = smc.finalBoneTransforms;
 
                     for (auto &meshInstance : sm->GetMeshInstances())
                     {
@@ -1230,18 +1220,8 @@ namespace ignite
                     continue;
                 }
 
-                // Hoist bone transforms — computed once per mesh, shared across all instances
-                std::vector<glm::mat4> boneTransforms;
-                if (sm->GetAnimatorHandle() != AssetHandle(0))
-                {
-                    if (Ref<AnimatorController> controller = project->GetAsset<AnimatorController>(sm->GetAnimatorHandle()))
-                    {
-                        if (Ref<Skeleton> skeleton = project->GetAsset<Skeleton>(controller->skeletonHandle))
-                        {
-                            boneTransforms = skeleton->GetFinalJointTransforms();
-                        }
-                    }
-                }
+                // Per-entity GPU-ready bone transforms written by Scene::UpdateAnimations
+                const std::vector<glm::mat4> &boneTransforms = smc.finalBoneTransforms;
 
                 for (auto &meshInstance : sm->GetMeshInstances())
                 {

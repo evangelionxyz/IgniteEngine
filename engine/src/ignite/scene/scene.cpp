@@ -27,9 +27,87 @@
 
 #include <ranges>
 #include <cmath>
+#include <algorithm>
+#include <unordered_set>
 
 namespace ignite
 {
+    namespace
+    {
+        Ref<AnimatorController> CloneAnimatorController(const Ref<AnimatorController> &source)
+        {
+            if (!source)
+                return nullptr;
+
+            return CreateRef<AnimatorController>(*source);
+        }
+
+        AnimParam *FindAnimParam(std::vector<AnimParam> &params, const std::string &name)
+        {
+            auto it = std::find_if(params.begin(), params.end(), [&name](const AnimParam &p) { return p.name == name; });
+            return it != params.end() ? &(*it) : nullptr;
+        }
+
+        const AnimParam *FindAnimParam(const std::vector<AnimParam> &params, const std::string &name)
+        {
+            auto it = std::find_if(params.begin(), params.end(), [&name](const AnimParam &p) { return p.name == name; });
+            return it != params.end() ? &(*it) : nullptr;
+        }
+
+        void SyncMeshAnimatorParams(MeshComponent &meshComp, const AnimatorController &controller)
+        {
+            std::erase_if(meshComp.runtimeParams, [&controller](const AnimParam &param)
+            {
+                return controller.GetParam(param.name) == nullptr;
+            });
+
+            for (const AnimParam &controllerParam : controller.params)
+            {
+                AnimParam *runtimeParam = FindAnimParam(meshComp.runtimeParams, controllerParam.name);
+                if (!runtimeParam)
+                {
+                    meshComp.runtimeParams.push_back(controllerParam);
+                    continue;
+                }
+
+                if (runtimeParam->type != controllerParam.type)
+                {
+                    *runtimeParam = controllerParam;
+                }
+            }
+        }
+
+        void ApplyMeshRuntimeParamsToController(const MeshComponent &meshComp, AnimatorController &controller)
+        {
+            for (AnimParam &controllerParam : controller.params)
+            {
+                if (const AnimParam *runtimeParam = FindAnimParam(meshComp.runtimeParams, controllerParam.name))
+                {
+                    controllerParam.type = runtimeParam->type;
+                    controllerParam.floatVal = runtimeParam->floatVal;
+                    controllerParam.intVal = runtimeParam->intVal;
+                    controllerParam.boolVal = runtimeParam->boolVal;
+                    controllerParam.strVal = runtimeParam->strVal;
+                }
+            }
+        }
+
+        void ResetMeshAnimatorRuntime(MeshComponent &meshComp)
+        {
+            meshComp.currentStateName.clear();
+            meshComp.stateElapsed = 0.0f;
+            meshComp.stateNormalized = 0.0f;
+        }
+
+        AssetHandle ResolveMeshAnimatorSourceHandle(const MeshComponent &meshComp, const Ref<Mesh> &mesh)
+        {
+            if (meshComp.runtimeAnimatorHandle != AssetHandle(0))
+                return meshComp.runtimeAnimatorHandle;
+
+            return mesh ? mesh->GetAnimatorHandle() : AssetHandle(0);
+        }
+    }
+
     Scene::Scene(Project *project, const std::string &_name)
 		: m_Project(project), name(_name)
         , m_ViewportWidth(1280), m_ViewportHeight(720)
@@ -112,6 +190,13 @@ namespace ignite
             ScriptEngine::GetInstance()->OnCreateEntity(entity);
         });
 
+        registry->view<MeshComponent>().each([](entt::entity, MeshComponent &meshComp)
+        {
+            ResetMeshAnimatorRuntime(meshComp);
+        });
+
+        m_SharedAnimatorRuntime.clear();
+
         physics2D->SimulationStart();
         physics->SimulationStart();
     }
@@ -137,6 +222,8 @@ namespace ignite
         }
 
         ScriptEngine::GetInstance()->ClearSceneContext();
+
+        m_SharedAnimatorRuntime.clear();
         
         physics2D->SimulationStop();
         physics->SimulationStop();
@@ -294,31 +381,121 @@ namespace ignite
 
     void Scene::UpdateAnimations(float deltaTime)
     {
-        auto skeletalMeshView = registry->view<MeshComponent>();
+        auto skeletalMeshView = registry->view<TransformComponent, MeshComponent>();
+        std::unordered_set<AssetHandle> updatedSharedHandles;
         for (auto ent : skeletalMeshView)
         {
+            TransformComponent &tr = skeletalMeshView.get<TransformComponent>(ent);
             MeshComponent &sm = skeletalMeshView.get<MeshComponent>(ent);
-            if (sm.handle == AssetHandle(0))
+            if (!tr.visible || sm.handle == AssetHandle(0))
                 continue;
 
             Ref<Mesh> mesh = m_Project->GetAsset<Mesh>(sm.handle, AssetType::Mesh);
             if (!mesh)
                 continue;
 
-            Ref<AnimatorController> animController = m_Project->GetAsset<AnimatorController>(mesh->GetAnimatorHandle());
+            AssetHandle sourceAnimatorHandle = ResolveMeshAnimatorSourceHandle(sm, mesh);
+            if (sourceAnimatorHandle == AssetHandle(0))
+            {
+                sm.runtimeAnimatorInstance.reset();
+                sm.runtimeParams.clear();
+                ResetMeshAnimatorRuntime(sm);
+                continue;
+            }
+
+            sm.runtimeAnimatorHandle = sourceAnimatorHandle;
+
+            Ref<AnimatorController> animController = nullptr;
+            AnimatorControllerRuntime *sharedRuntime = nullptr;
+
+            if (sm.uniqueAnimator)
+            {
+                if (!sm.runtimeAnimatorInstance)
+                {
+                    Ref<AnimatorController> sourceController = m_Project->GetAsset<AnimatorController>(sourceAnimatorHandle);
+                    if (!sourceController)
+                    {
+                        sourceController = m_Project->GetAssetImmediate<AnimatorController>(sourceAnimatorHandle);
+                    }
+
+                    sm.runtimeAnimatorInstance = CloneAnimatorController(sourceController);
+                    if (sm.runtimeAnimatorInstance)
+                    {
+                        sm.runtimeParams.clear();
+                        ResetMeshAnimatorRuntime(sm);
+                    }
+                }
+
+                animController = sm.runtimeAnimatorInstance;
+            }
+            else
+            {
+                sm.runtimeAnimatorInstance.reset();
+
+                auto sharedIt = m_SharedAnimatorCache.find(sourceAnimatorHandle);
+                if (sharedIt == m_SharedAnimatorCache.end())
+                {
+                    Ref<AnimatorController> controller = m_Project->GetAsset<AnimatorController>(sourceAnimatorHandle);
+                    if (!controller)
+                    {
+                        controller = m_Project->GetAssetImmediate<AnimatorController>(sourceAnimatorHandle);
+                    }
+
+                    sharedIt = m_SharedAnimatorCache.emplace(sourceAnimatorHandle, controller).first;
+                }
+
+                animController = sharedIt->second;
+                sharedRuntime = &m_SharedAnimatorRuntime[sourceAnimatorHandle];
+
+                if (sharedRuntime->currentStateName.empty() && !sm.currentStateName.empty())
+                {
+                    sharedRuntime->currentStateName = sm.currentStateName;
+                    sharedRuntime->stateElapsed = sm.stateElapsed;
+                    sharedRuntime->stateNormalized = sm.stateNormalized;
+                }
+            }
+
             if (!animController)
                 continue;
 
-            AnimatorControllerRuntime runtime;
-            // runtime.currentStateName = sm.currentStateName;
-            runtime.stateElapsed = 0.0f;
-            runtime.stateNormalized = 0.0f;
+            SyncMeshAnimatorParams(sm, *animController);
+            ApplyMeshRuntimeParamsToController(sm, *animController);
 
-            if (animController->UpdateSkeleton(deltaTime, runtime, m_Project->GetAssetManager()))
+            if (sharedRuntime)
             {
-                // sm.currentStateName = runtime.currentStateName;
-                // sm.stateElapsed = runtime.stateElapsed;
-                // sm.stateNormalized = runtime.stateNormalized;
+                // Only advance time once per shared controller per frame
+                if (updatedSharedHandles.find(sourceAnimatorHandle) == updatedSharedHandles.end())
+                {
+                    AnimatorControllerRuntime tmpRuntime = *sharedRuntime;
+                    if (animController->UpdateSkeleton(deltaTime, tmpRuntime, m_Project->GetAssetManager()))
+                    {
+                        *sharedRuntime = std::move(tmpRuntime);
+                        updatedSharedHandles.insert(sourceAnimatorHandle);
+                    }
+                }
+
+                if (!sharedRuntime->finalTransforms.empty())
+                {
+                    sm.finalBoneTransforms = sharedRuntime->finalTransforms;
+                    sm.currentStateName = sharedRuntime->currentStateName;
+                    sm.stateElapsed = sharedRuntime->stateElapsed;
+                    sm.stateNormalized = sharedRuntime->stateNormalized;
+                }
+            }
+            else
+            {
+                AnimatorControllerRuntime runtime;
+                runtime.currentStateName = sm.currentStateName;
+                runtime.stateElapsed = sm.stateElapsed;
+                runtime.stateNormalized = sm.stateNormalized;
+
+                if (animController->UpdateSkeleton(deltaTime, runtime, m_Project->GetAssetManager()))
+                {
+                    sm.finalBoneTransforms = std::move(runtime.finalTransforms);
+                    sm.currentStateName = runtime.currentStateName;
+                    sm.stateElapsed = runtime.stateElapsed;
+                    sm.stateNormalized = runtime.stateNormalized;
+                }
             }
         }
 

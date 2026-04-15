@@ -27,6 +27,7 @@ namespace ignite
         std::string currentStateName;
         float stateElapsed = 0.0f;
         float stateNormalized = 0.0f;
+        std::vector<glm::mat4> finalTransforms; // per-instance GPU-ready bone transforms
     };
 
     class AnimatorController : public Animator, public Asset

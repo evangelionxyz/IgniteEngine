@@ -7,6 +7,7 @@
 #include "icomponent.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/animation/animation_2d.hpp"
+#include "ignite/animation/animator/animator.hpp"
 #include "ignite/animation/animator/animator_controller_2d.hpp"
 #include "ignite/core/uuid.hpp"
 #include "ignite/graphics/objects/material.hpp"
@@ -32,6 +33,7 @@ namespace ignite
     class MeshInstance;
     class Texture;
     class Skeleton;
+    class AnimatorController;
 
 
     static std::unordered_map<std::string, CompType> s_ComponentsName =
@@ -410,6 +412,17 @@ namespace ignite
 	{
 	public:
         AssetHandle handle = AssetHandle(0);         // class SkeletalMesh in mesh.hpp
+
+        std::string currentStateName;
+        float stateElapsed = 0.0f;
+        float stateNormalized = 0.0f;
+        AssetHandle runtimeAnimatorHandle = AssetHandle(0);
+        std::vector<AnimParam> runtimeParams;
+        Ref<AnimatorController> runtimeAnimatorInstance = nullptr; // runtime-only for unique animator mode
+        std::vector<glm::mat4> finalBoneTransforms; // per-entity GPU-ready bone transforms
+
+        // Enable unique for each entity
+        bool uniqueAnimator = true;
 
         MeshComponent() = default;
 		COMPONENT_CLASS_TYPE(CompType_Mesh)

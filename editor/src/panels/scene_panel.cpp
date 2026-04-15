@@ -20,6 +20,7 @@
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/script_field.hpp"
 #include "ignite/scripting/script_instance.hpp"
+#include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/scene/entity.hpp"
@@ -904,8 +905,8 @@ namespace ignite
                     if (sm)
                     {
                         // Animator
-                        bool isAnimatorLoaded = sm->GetAnimatorHandle() != AssetHandle(0);
-                        std::string buttonLabel = isAnimatorLoaded ? assetManager->GetAssetDisplayName(sm->GetAnimatorHandle()) : "Drag Here";
+                        bool isAnimatorLoaded = c.runtimeAnimatorHandle != AssetHandle(0);
+                        std::string buttonLabel = isAnimatorLoaded ? assetManager->GetAssetDisplayName(c.runtimeAnimatorHandle) : "Drag Here";
                         UI::DrawButtonWithColumn("Animator", buttonLabel.c_str(), nullptr, [&c, this, &sm, &isAnimatorLoaded]()
                         {
                             if (ImGui::BeginDragDropTarget())
@@ -923,6 +924,11 @@ namespace ignite
                                         assetManager->AssignMetaData(handle, metadata);
                                         assetManager->UnloadAsset(handle);
                                         sm->SetAnimator(handle);
+                                        c.runtimeAnimatorHandle = handle;
+                                        c.currentStateName.clear();
+                                        c.stateElapsed = 0.0f;
+                                        c.stateNormalized = 0.0f;
+                                        c.runtimeParams.clear();
                                     }
                                 }
 
@@ -935,11 +941,184 @@ namespace ignite
                                 if (ImGui::Button("X"))
                                 {
                                     sm->SetAnimator(AssetHandle(0)); // reset animator
+                                    c.runtimeAnimatorHandle = AssetHandle(0);
+                                    c.currentStateName.clear();
+                                    c.stateElapsed = 0.0f;
+                                    c.stateNormalized = 0.0f;
+                                    c.runtimeParams.clear();
                                 }
                             }
                         });
 
-                        // TODO: Material slots
+                        if (isAnimatorLoaded)
+                        {
+                            Ref<AnimatorController> animCtrl = m_EditorLayer->GetActiveProject()->GetAsset<AnimatorController>(c.runtimeAnimatorHandle);
+                            if (animCtrl)
+                            {
+                                std::erase_if(c.runtimeParams, [&animCtrl](const AnimParam &param)
+                                {
+                                    return animCtrl->GetParam(param.name) == nullptr;
+                                });
+
+                                for (const AnimParam &param : animCtrl->params)
+                                {
+                                    auto it = std::find_if(c.runtimeParams.begin(), c.runtimeParams.end(), [&param](const AnimParam &runtimeParam)
+                                    {
+                                        return runtimeParam.name == param.name;
+                                    });
+
+                                    if (it == c.runtimeParams.end())
+                                    {
+                                        c.runtimeParams.push_back(param);
+                                    }
+                                    else if (it->type != param.type)
+                                    {
+                                        *it = param;
+                                    }
+                                }
+
+                                if (ImGui::CollapsingHeader("Animator Preview", ImGuiTreeNodeFlags_DefaultOpen))
+                                {
+                                    ImGui::TextDisabled("Default State: %s", animCtrl->defaultState.empty() ? "(None)" : animCtrl->defaultState.c_str());
+
+                                    if (!animCtrl->states.empty())
+                                    {
+                                        std::vector<const char *> stateLabels;
+                                        stateLabels.reserve(animCtrl->states.size());
+
+                                        std::string activeState = c.currentStateName;
+                                        if (activeState.empty())
+                                        {
+                                            activeState = !animCtrl->defaultState.empty() ? animCtrl->defaultState : animCtrl->states.front().name;
+                                        }
+
+                                        int currentStateIndex = 0;
+                                        for (size_t i = 0; i < animCtrl->states.size(); ++i)
+                                        {
+                                            stateLabels.push_back(animCtrl->states[i].name.c_str());
+                                            if (animCtrl->states[i].name == activeState)
+                                            {
+                                                currentStateIndex = static_cast<int>(i);
+                                            }
+                                        }
+
+                                        if (UI::DrawComboBox("Preview State", stateLabels.data(), static_cast<int>(stateLabels.size()), stateLabels[currentStateIndex], &currentStateIndex))
+                                        {
+                                            c.currentStateName = animCtrl->states[static_cast<size_t>(currentStateIndex)].name;
+                                            c.stateElapsed = 0.0f;
+                                            c.stateNormalized = 0.0f;
+                                        }
+
+                                        ImGui::TextDisabled("State Time: %.3fs", c.stateElapsed);
+                                        ImGui::TextDisabled("State Normalized: %.3f", c.stateNormalized);
+                                    }
+
+                                    if (!c.runtimeParams.empty())
+                                    {
+                                        ImGui::SeparatorText("Parameters");
+                                        for (AnimParam &param : c.runtimeParams)
+                                        {
+                                            switch (param.type)
+                                            {
+                                                case AnimParam::Type::Float:
+                                                    UI::DrawFloatControl(param.name.c_str(), &param.floatVal, 0.05f, -FLT_MAX, FLT_MAX);
+                                                    break;
+                                                case AnimParam::Type::Int:
+                                                    UI::DrawIntControl(param.name.c_str(), &param.intVal, 1.0f, INT_MIN, INT_MAX);
+                                                    break;
+                                                case AnimParam::Type::Bool:
+                                                    UI::DrawCheckbox(param.name.c_str(), &param.boolVal);
+                                                    break;
+                                                case AnimParam::Type::String:
+                                                {
+                                                    char buffer[256] = {};
+                                                    strncpy(buffer, param.strVal.c_str(), sizeof(buffer) - 1);
+                                                    if (ImGui::InputText(param.name.c_str(), buffer, sizeof(buffer)))
+                                                    {
+                                                        param.strVal = buffer;
+                                                    }
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if (!animCtrl->transitions.empty())
+                                    {
+                                        ImGui::SeparatorText("Transitions");
+
+                                        std::string activeState = c.currentStateName;
+                                        if (activeState.empty())
+                                        {
+                                            activeState = !animCtrl->defaultState.empty() ? animCtrl->defaultState : (animCtrl->states.empty() ? std::string {} : animCtrl->states.front().name);
+                                        }
+
+                                        auto findRuntimeParam = [&c](const std::string &name) -> const AnimParam *
+                                        {
+                                            auto it = std::find_if(c.runtimeParams.begin(), c.runtimeParams.end(), [&name](const AnimParam &param)
+                                            {
+                                                return param.name == name;
+                                            });
+                                            return it != c.runtimeParams.end() ? &(*it) : nullptr;
+                                        };
+
+                                        for (const AnimTransition &transition : animCtrl->transitions)
+                                        {
+                                            if (!transition.fromState.empty() && transition.fromState != activeState)
+                                            {
+                                                continue;
+                                            }
+
+                                            const std::string fromName = transition.fromState.empty() ? "Any State" : transition.fromState;
+                                            bool allPass = !transition.hasExitTime || c.stateNormalized >= transition.exitTime;
+
+                                            if (ImGui::TreeNode((std::format("{} -> {}", fromName, transition.toState) + "###transition_" + fromName + "_" + transition.toState).c_str()))
+                                            {
+                                                if (transition.hasExitTime)
+                                                {
+                                                    const bool exitPass = c.stateNormalized >= transition.exitTime;
+                                                    ImGui::TextColored(exitPass ? ImVec4(0.25f, 0.9f, 0.35f, 1.0f) : ImVec4(0.95f, 0.35f, 0.35f, 1.0f),
+                                                        "Exit Time %.3f (%s)", transition.exitTime, exitPass ? "PASS" : "WAIT");
+                                                }
+                                                else
+                                                {
+                                                    ImGui::TextDisabled("Exit Time: Disabled");
+                                                }
+
+                                                for (const AnimCondition &condition : transition.conditions)
+                                                {
+                                                    const AnimParam *runtimeParam = findRuntimeParam(condition.paramName);
+                                                    const bool condPass = anim_utils::EvalCondition(condition, runtimeParam);
+                                                    allPass &= condPass;
+
+                                                    std::string threshold = "?";
+                                                    if (runtimeParam)
+                                                    {
+                                                        switch (runtimeParam->type)
+                                                        {
+                                                            case AnimParam::Type::Float: threshold = std::format("{}", condition.floatThreshold); break;
+                                                            case AnimParam::Type::Int: threshold = std::format("{}", condition.intThreshold); break;
+                                                            case AnimParam::Type::Bool: threshold = condition.boolThreshold ? "true" : "false"; break;
+                                                            case AnimParam::Type::String: threshold = condition.strThreshold; break;
+                                                        }
+                                                    }
+
+                                                    ImGui::BulletText("%s %s %s [%s]",
+                                                        condition.paramName.c_str(),
+                                                        anim_utils::OpToStr(condition.op),
+                                                        threshold.c_str(),
+                                                        condPass ? "PASS" : "FAIL");
+                                                }
+
+                                                ImGui::TextColored(allPass ? ImVec4(0.25f, 0.9f, 0.35f, 1.0f) : ImVec4(0.95f, 0.35f, 0.35f, 1.0f),
+                                                    "Transition %s", allPass ? "READY" : "BLOCKED");
+                                                ImGui::TreePop();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             });
