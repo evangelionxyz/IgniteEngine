@@ -331,6 +331,7 @@ namespace ignite
                     {
                         sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
                         sr.AddKeyValue("AnimatorHandle", static_cast<uint64_t>(comp.runtimeAnimatorHandle));
+                        sr.AddKeyValue("UniqueAnimator", comp.uniqueAnimator);
                     }
                     sr.EndMap();
                 }
@@ -959,19 +960,14 @@ namespace ignite
                 if (auto n = node["Handle"])
                 {
                     comp.handle = AssetHandle(n.as<uint64_t>());
-                    project->GetAsset<Mesh>(comp.handle);
                 }
                 if (auto n = node["AnimatorHandle"])
                 {
                     comp.runtimeAnimatorHandle = AssetHandle(n.as<uint64_t>());
                 }
-
-                if (comp.handle != AssetHandle(0) && comp.runtimeAnimatorHandle != AssetHandle(0))
+                if (auto n = node["UniqueAnimator"])
                 {
-                    if (Ref<Mesh> mesh = project->GetAsset<Mesh>(comp.handle, AssetType::Mesh))
-                    {
-                        mesh->SetAnimator(comp.runtimeAnimatorHandle);
-                    }
+                    // comp.uniqueAnimator = n.as<bool>();
                 }
             }
 

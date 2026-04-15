@@ -3516,24 +3516,28 @@ namespace ignite
                         return skeleton->joints[static_cast<size_t>(jointId)].globalTransform;
                     };
 
-                    GizmoInfo gizmoInfo;
-                    gizmoInfo.cameraView = sceneData.camera.GetView();
-                    gizmoInfo.cameraProjection = sceneData.camera.GetProjection();
-                    gizmoInfo.cameraType = sceneData.camera.projectionType;
-                    gizmoInfo.snapValue = 0.05f;
-                    gizmoInfo.isSnapping = false;
-                    gizmoInfo.viewRect = viewportRect;
-
-                    s_SkeletonPreviewGizmo.SetInfo(gizmoInfo);
-                    s_SkeletonPreviewGizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
-                    s_SkeletonPreviewGizmo.SetMode(ImGuizmo::MODE::LOCAL);
-
                     const bool hasSelectedJoint = selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(skeleton->joints.size());
                     const bool hasSelectedSocket = selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size());
                     const bool useSocketGizmo = previewState.gizmoTarget == 1 && hasSelectedSocket;
+                    const bool previewViewportFocused = sceneData.viewportHovered && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
-                    if (useSocketGizmo || hasSelectedJoint)
+                    bool isPreviewGizmoManipulating = false;
+                    bool isPreviewGizmoHovered = false;
+
+                    if (previewViewportFocused && (useSocketGizmo || hasSelectedJoint))
                     {
+                        GizmoInfo gizmoInfo;
+                        gizmoInfo.cameraView = sceneData.camera.GetView();
+                        gizmoInfo.cameraProjection = sceneData.camera.GetProjection();
+                        gizmoInfo.cameraType = sceneData.camera.projectionType;
+                        gizmoInfo.snapValue = 0.05f;
+                        gizmoInfo.isSnapping = false;
+                        gizmoInfo.viewRect = viewportRect;
+
+                        s_SkeletonPreviewGizmo.SetInfo(gizmoInfo);
+                        s_SkeletonPreviewGizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
+                        s_SkeletonPreviewGizmo.SetMode(ImGuizmo::MODE::LOCAL);
+
                         glm::mat4 gizmoTransform = glm::mat4(1.0f);
                         if (useSocketGizmo)
                         {
@@ -3554,8 +3558,10 @@ namespace ignite
                         }
 
                         s_SkeletonPreviewGizmo.Manipulate(gizmoTransform);
+                        isPreviewGizmoManipulating = s_SkeletonPreviewGizmo.IsManipulating();
+                        isPreviewGizmoHovered = s_SkeletonPreviewGizmo.IsHovered();
 
-                        if (s_SkeletonPreviewGizmo.IsManipulating())
+                        if (isPreviewGizmoManipulating)
                         {
                             if (useSocketGizmo)
                             {
@@ -3597,7 +3603,7 @@ namespace ignite
                         }
                     }
 
-                    if (sceneData.viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !s_SkeletonPreviewGizmo.IsManipulating() && !s_SkeletonPreviewGizmo.IsHovered())
+                    if (sceneData.viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !isPreviewGizmoManipulating && !isPreviewGizmoHovered)
                     {
                         const ImVec2 mousePos = ImGui::GetMousePos();
                         int32_t pickedJoint = -1;
@@ -4135,24 +4141,28 @@ namespace ignite
                     return skeleton->joints[static_cast<size_t>(jointId)].globalTransform;
                 };
 
-                GizmoInfo gizmoInfo;
-                gizmoInfo.cameraView = sceneData.camera.GetView();
-                gizmoInfo.cameraProjection = sceneData.camera.GetProjection();
-                gizmoInfo.cameraType = sceneData.camera.projectionType;
-                gizmoInfo.snapValue = 0.05f;
-                gizmoInfo.isSnapping = false;
-                gizmoInfo.viewRect = viewportRect;
-
-                s_SkeletonPreviewGizmo.SetInfo(gizmoInfo);
-                s_SkeletonPreviewGizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
-                s_SkeletonPreviewGizmo.SetMode(ImGuizmo::MODE::LOCAL);
-
                 const bool hasSelectedJoint = selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(skeleton->joints.size());
                 const bool hasSelectedSocket = selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size());
                 const bool useSocketGizmo = previewState.gizmoTarget == 1 && hasSelectedSocket;
+                const bool previewViewportFocused = sceneData.viewportHovered && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
-                if (useSocketGizmo || hasSelectedJoint)
+                bool isPreviewGizmoManipulating = false;
+                bool isPreviewGizmoHovered = false;
+
+                if (previewViewportFocused && (useSocketGizmo || hasSelectedJoint))
                 {
+                    GizmoInfo gizmoInfo;
+                    gizmoInfo.cameraView = sceneData.camera.GetView();
+                    gizmoInfo.cameraProjection = sceneData.camera.GetProjection();
+                    gizmoInfo.cameraType = sceneData.camera.projectionType;
+                    gizmoInfo.snapValue = 0.05f;
+                    gizmoInfo.isSnapping = false;
+                    gizmoInfo.viewRect = viewportRect;
+
+                    s_SkeletonPreviewGizmo.SetInfo(gizmoInfo);
+                    s_SkeletonPreviewGizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
+                    s_SkeletonPreviewGizmo.SetMode(ImGuizmo::MODE::LOCAL);
+
                     glm::mat4 gizmoTransform = glm::mat4(1.0f);
                     if (useSocketGizmo)
                     {
@@ -4173,8 +4183,10 @@ namespace ignite
                     }
 
                     s_SkeletonPreviewGizmo.Manipulate(gizmoTransform);
+                    isPreviewGizmoManipulating = s_SkeletonPreviewGizmo.IsManipulating();
+                    isPreviewGizmoHovered = s_SkeletonPreviewGizmo.IsHovered();
 
-                    if (s_SkeletonPreviewGizmo.IsManipulating())
+                    if (isPreviewGizmoManipulating)
                     {
                         if (useSocketGizmo)
                         {
@@ -4217,7 +4229,7 @@ namespace ignite
                 }
 
                 if (sceneData.viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)
-                    && !s_SkeletonPreviewGizmo.IsManipulating() && !s_SkeletonPreviewGizmo.IsHovered())
+                    && !isPreviewGizmoManipulating && !isPreviewGizmoHovered)
                 {
                     const ImVec2 mousePos = ImGui::GetMousePos();
                     int32_t pickedJoint = -1;

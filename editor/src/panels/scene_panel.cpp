@@ -952,6 +952,14 @@ namespace ignite
 
                         if (isAnimatorLoaded)
                         {
+                            if (UI::DrawCheckbox("Unique", &c.uniqueAnimator))
+                            {
+                                c.currentStateName.clear();
+                                c.stateElapsed = 0.0f;
+                                c.stateNormalized = 0.0f;
+                                c.runtimeParams.clear();
+                            }
+
                             Ref<AnimatorController> animCtrl = m_EditorLayer->GetActiveProject()->GetAsset<AnimatorController>(c.runtimeAnimatorHandle);
                             if (animCtrl)
                             {
