@@ -57,6 +57,9 @@ namespace ignite
             state.editorPos = glm::vec2(worldPos.x, worldPos.y);
             animator->states.push_back(state);
             ui.selectedState = static_cast<int>(animator->states.size()) - 1;
+            ui.selectedStates.clear();
+            ui.selectedStates.insert(ui.selectedState);
+            ui.anyStateSelected = false;
 
             if (animator->defaultState.empty())
             {
@@ -266,6 +269,9 @@ namespace ignite
             state.editorPos = glm::vec2(60.0f + 220.0f * static_cast<float>(col), 80.0f + 150.0f * static_cast<float>(row));
             animator->states.push_back(state);
             ui.selectedState = static_cast<int>(animator->states.size()) - 1;
+            ui.selectedStates.clear();
+            ui.selectedStates.insert(ui.selectedState);
+            ui.anyStateSelected = false;
             if (animator->defaultState.empty())
             {
                 animator->defaultState = state.name;
@@ -286,6 +292,9 @@ namespace ignite
             if (ImGui::Selectable(label.c_str(), ui.selectedState == i))
             {
                 ui.selectedState = i;
+                ui.selectedStates.clear();
+                ui.selectedStates.insert(i);
+                ui.anyStateSelected = false;
             }
 
             ImGui::TextDisabled("%s", assetManager->GetAssetDisplayName(state.animHandle).c_str());
@@ -302,6 +311,10 @@ namespace ignite
 
         UI::NodeGraphCanvas canvas = UI::NodeGraph::BeginCanvas("##ac_canvas", ui.graphState);
         const ImVec2 nodeSize(180.0f, 72.0f);
+        const ImVec2 anyStateNodeSize(180.0f, 72.0f);
+        const ImVec2 anyStatePos(ui.anyStateEditorPos.x, ui.anyStateEditorPos.y);
+        const ImVec2 anyStateConnectionPos(anyStatePos.x + anyStateNodeSize.x, anyStatePos.y + anyStateNodeSize.y * 0.5f);
+        const bool ctrlHeld = ImGui::GetIO().KeyCtrl;
 
         if (UI::NodeGraph::BeginDropTarget(canvas))
         {
@@ -321,7 +334,9 @@ namespace ignite
             UI::NodeGraph::EndDropTarget();
         }
 
-        const ImVec2 anyStateStart(20.0f, 20.0f);
+        bool anyNodeHovered = false;
+        bool anyTransitionGrabHovered = false;
+
         canvas.drawList->PushClipRect(canvas.screenPos, ImVec2(canvas.screenPos.x + canvas.size.x, canvas.screenPos.y + canvas.size.y), true);
 
         for (size_t ti = 0; ti < animator->transitions.size(); ++ti)
@@ -333,7 +348,7 @@ namespace ignite
                 continue;
             }
 
-            ImVec2 fromWorldPos = anyStateStart;
+            ImVec2 fromWorldPos = anyStateConnectionPos;
             if (const AnimState *fromState = animator->FindState(transition.fromState))
             {
                 fromWorldPos = ImVec2(fromState->editorPos.x + nodeSize.x, fromState->editorPos.y + nodeSize.y * 0.5f);
@@ -344,6 +359,62 @@ namespace ignite
             UI::NodeGraph::DrawConnection(canvas, fromWorldPos, toWorldPos, color, ui.selectedTransition == static_cast<int>(ti) ? 3.0f : 2.0f);
         }
 
+        {
+            const UI::NodeGraphNode anyStateNode = UI::NodeGraph::BuildNode(canvas, anyStatePos, anyStateNodeSize);
+            ImGui::PushID("ac_any_state_node");
+            const UI::NodeInteraction anyStateInteraction = UI::NodeGraph::HandleNode(canvas, "##ac_any_state", anyStateNode);
+            anyNodeHovered |= anyStateInteraction.hovered;
+
+            if (anyStateInteraction.clicked)
+            {
+                if (ctrlHeld)
+                {
+                    ui.anyStateSelected = !ui.anyStateSelected;
+                }
+                else
+                {
+                    ui.anyStateSelected = true;
+                    ui.selectedState = -1;
+                    ui.selectedStates.clear();
+                }
+            }
+
+            const float anyGrabOffset = 16.0f;
+            const UI::NodeGraphNode anyGrabNode = UI::NodeGraph::BuildNode(canvas,
+                ImVec2(anyStatePos.x + anyStateNodeSize.x - anyGrabOffset, anyStatePos.y + anyStateNodeSize.y * 0.5f - anyGrabOffset),
+                ImVec2(anyGrabOffset * 2.0f, anyGrabOffset * 2.0f));
+            const UI::NodeInteraction anyGrabInteraction = UI::NodeGraph::HandleNode(canvas, "##ac_any_transition_grab", anyGrabNode);
+            anyTransitionGrabHovered |= anyGrabInteraction.hovered;
+            canvas.drawList->AddRectFilled(anyGrabNode.screenMin, anyGrabNode.screenMax,
+                anyGrabInteraction.hovered ? IM_COL32(255, 159, 0, 125) : IM_COL32(255, 159, 0, 0),
+                20.0f * ui.graphState.zoom);
+
+            if (!ui.draggingTransitionLine && !ui.draggingItem && anyGrabInteraction.clicked)
+            {
+                ui.fromStateName.clear();
+                ui.draggingTransitionLine = true;
+            }
+
+            if (!ui.draggingTransitionLine && !ui.draggingItem && !ui.boxSelectingStates && ui.anyStateSelected && anyStateInteraction.dragging)
+            {
+                ui.draggingItem = true;
+                ui.draggingStateIndices.assign(ui.selectedStates.begin(), ui.selectedStates.end());
+            }
+
+            canvas.drawList->AddRectFilled(anyStateNode.screenMin, anyStateNode.screenMax,
+                (ui.anyStateSelected || anyStateInteraction.hovered) ? IM_COL32(64, 82, 101, 255) : IM_COL32(44, 52, 64, 255),
+                10.0f * ui.graphState.zoom);
+            canvas.drawList->AddRect(anyStateNode.screenMin, anyStateNode.screenMax,
+                (ui.anyStateSelected || anyStateInteraction.hovered) ? IM_COL32(255, 196, 92, 255) : IM_COL32(126, 170, 255, 220),
+                10.0f * ui.graphState.zoom, 0, (ui.anyStateSelected || anyStateInteraction.hovered) ? 2.5f : 1.5f);
+            canvas.drawList->AddText(ImVec2(anyStateNode.screenMin.x + 12.0f * ui.graphState.zoom, anyStateNode.screenMin.y + 12.0f * ui.graphState.zoom),
+                IM_COL32(235, 239, 245, 255), "Any State");
+            canvas.drawList->AddText(ImVec2(anyStateNode.screenMin.x + 12.0f * ui.graphState.zoom, anyStateNode.screenMin.y + 34.0f * ui.graphState.zoom),
+                IM_COL32(167, 176, 190, 255), "Transition Source");
+
+            ImGui::PopID();
+        }
+
         for (int i = 0; i < static_cast<int>(animator->states.size()); ++i)
         {
             AnimState &state = animator->states[static_cast<size_t>(i)];
@@ -351,12 +422,43 @@ namespace ignite
 
             ImGui::PushID(i);
             const UI::NodeInteraction nodeInteraction = UI::NodeGraph::HandleNode(canvas, "##ac_node", node);
-            const bool selected = ui.selectedState == i;
+            const bool selected = ui.selectedStates.contains(i);
             const bool itemHovered = nodeInteraction.hovered;
+            anyNodeHovered |= itemHovered;
 
             if (nodeInteraction.clicked)
             {
-                ui.selectedState = i;
+                if (ctrlHeld)
+                {
+                    if (selected)
+                    {
+                        ui.selectedStates.erase(i);
+                    }
+                    else
+                    {
+                        ui.selectedStates.insert(i);
+                        ui.selectedState = i;
+                    }
+
+                    if (ui.selectedStates.empty())
+                    {
+                        ui.selectedState = -1;
+                    }
+                }
+                else
+                {
+                    if (!selected)
+                    {
+                        ui.selectedState = i;
+                        ui.selectedStates.clear();
+                        ui.selectedStates.insert(i);
+                        ui.anyStateSelected = false;
+                    }
+                    else
+                    {
+                        ui.selectedState = i;
+                    }
+                }
             }
 
             if (ui.draggingTransitionLine)
@@ -376,22 +478,14 @@ namespace ignite
                 }
             }
 
-            if (selected)
+            if (!ui.draggingTransitionLine && !ui.draggingItem && selected && nodeInteraction.dragging)
             {
-                if (itemHovered && !ui.draggingTransitionLine && nodeInteraction.dragging)
+                ui.draggingItem = true;
+                ui.draggingStateIndices.assign(ui.selectedStates.begin(), ui.selectedStates.end());
+                if (ui.draggingStateIndices.empty())
                 {
-                    ui.draggingItem = true;
+                    ui.draggingStateIndices.push_back(i);
                 }
-                if (ui.draggingItem)
-                {
-                    state.editorPos.x += nodeInteraction.dragDeltaWorld.x;
-                    state.editorPos.y += nodeInteraction.dragDeltaWorld.y;
-                    animator->SetDirtyFlag(true);
-                }
-            }
-            if (ui.draggingItem && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
-            {
-                ui.draggingItem = false;
             }
 
             const float grabOffset = 16.0f;
@@ -399,6 +493,7 @@ namespace ignite
                 ImVec2(state.editorPos.x - grabOffset, state.editorPos.y - grabOffset),
                 ImVec2(nodeSize.x + grabOffset * 2.0f, nodeSize.y + grabOffset * 2.0f));
             const UI::NodeInteraction grabInteraction = UI::NodeGraph::HandleNode(canvas, "##transition_grab", grabNode);
+            anyTransitionGrabHovered |= grabInteraction.hovered;
             canvas.drawList->AddRectFilled(grabNode.screenMin, grabNode.screenMax, grabInteraction.hovered ? IM_COL32(255, 159, 0, 125) : IM_COL32(255, 159, 0, 0),
                 20.0f * ui.graphState.zoom);
             if (!ui.draggingTransitionLine && !ui.draggingItem && !itemHovered && grabInteraction.clicked)
@@ -424,9 +519,107 @@ namespace ignite
             ImGui::PopID();
         }
 
+        if (!ui.draggingTransitionLine && !ui.draggingItem && canvas.hovered && !anyNodeHovered && !anyTransitionGrabHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            ui.boxSelectingStates = true;
+            ui.boxSelectStartWorld = UI::NodeGraph::ToWorld(canvas, ImGui::GetIO().MousePos);
+            if (!ctrlHeld)
+            {
+                ui.selectedStates.clear();
+                ui.selectedState = -1;
+                ui.anyStateSelected = false;
+            }
+        }
+
+        // Box selection fro animator states and "Any State"
+        if (ui.boxSelectingStates)
+        {
+            const ImVec2 currentWorld = UI::NodeGraph::ToWorld(canvas, ImGui::GetIO().MousePos);
+            const ImVec2 minWorld(std::min(ui.boxSelectStartWorld.x, currentWorld.x), std::min(ui.boxSelectStartWorld.y, currentWorld.y));
+            const ImVec2 maxWorld(std::max(ui.boxSelectStartWorld.x, currentWorld.x), std::max(ui.boxSelectStartWorld.y, currentWorld.y));
+
+            const ImVec2 selectionMin = UI::NodeGraph::ToScreen(canvas, minWorld);
+            const ImVec2 selectionMax = UI::NodeGraph::ToScreen(canvas, maxWorld);
+            canvas.drawList->AddRectFilled(selectionMin, selectionMax, IM_COL32(80, 130, 255, 30), 4.0f * ui.graphState.zoom);
+            canvas.drawList->AddRect(selectionMin, selectionMax, IM_COL32(126, 170, 255, 220), 4.0f * ui.graphState.zoom, 0, 1.5f);
+
+            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+            {
+                ui.boxSelectingStates = false;
+
+                // Any state
+                {
+                    const ImVec2 anyMin(anyStatePos.x, anyStatePos.y);
+                    const ImVec2 anyMax(anyStatePos.x + anyStateNodeSize.x, anyStatePos.y + anyStateNodeSize.y);
+                    const bool overlap = !(anyMax.x < minWorld.x || anyMin.x > maxWorld.x || anyMax.y < minWorld.y || anyMin.y > maxWorld.y);
+                    if (overlap)
+                    {
+                        ui.anyStateSelected = true;
+                        ui.selectedState = -1;
+                    }
+                }
+
+                // Animator states
+                for (int i = 0; i < static_cast<int>(animator->states.size()); ++i)
+                {
+                    const AnimState &state = animator->states[static_cast<size_t>(i)];
+                    const ImVec2 stateMin(state.editorPos.x, state.editorPos.y);
+                    const ImVec2 stateMax(state.editorPos.x + nodeSize.x, state.editorPos.y + nodeSize.y);
+                    const bool overlap = !(stateMax.x < minWorld.x || stateMin.x > maxWorld.x || stateMax.y < minWorld.y || stateMin.y > maxWorld.y);
+                    if (overlap)
+                    {
+                        ui.selectedStates.insert(i);
+                        ui.selectedState = i;
+                    }
+                }
+
+                if (ui.selectedStates.empty() && !ui.anyStateSelected)
+                {
+                    ui.selectedState = -1;
+                }
+            }
+        }
+
+        if (ui.draggingItem)
+        {
+            const ImVec2 deltaWorld(ImGui::GetIO().MouseDelta.x / ui.graphState.zoom, ImGui::GetIO().MouseDelta.y / ui.graphState.zoom);
+            if (deltaWorld.x != 0.0f || deltaWorld.y != 0.0f)
+            {
+                bool movedAny = false;
+                for (const int index : ui.draggingStateIndices)
+                {
+                    if (index >= 0 && index < static_cast<int>(animator->states.size()))
+                    {
+                        AnimState &state = animator->states[static_cast<size_t>(index)];
+                        state.editorPos.x += deltaWorld.x;
+                        state.editorPos.y += deltaWorld.y;
+                        movedAny = true;
+                    }
+                }
+
+                if (ui.anyStateSelected)
+                {
+                    ui.anyStateEditorPos.x += deltaWorld.x;
+                    ui.anyStateEditorPos.y += deltaWorld.y;
+                    movedAny = true;
+                }
+
+                if (movedAny)
+                {
+                    animator->SetDirtyFlag(true);
+                }
+            }
+
+            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+            {
+                ui.draggingItem = false;
+                ui.draggingStateIndices.clear();
+            }
+        }
+
         if (ui.draggingTransitionLine)
         {
-            ImVec2 fromWorldPos = anyStateStart;
+            ImVec2 fromWorldPos = anyStateConnectionPos;
             if (const AnimState *fromState = animator->FindState(ui.fromStateName))
             {
                 fromWorldPos = ImVec2(fromState->editorPos.x + nodeSize.x, fromState->editorPos.y + nodeSize.y * 0.5f);
@@ -523,6 +716,12 @@ namespace ignite
                 RemoveAnimatorStateReferences(animator, removedState);
                 ui.selectedTransition = -1;
                 ui.selectedState = animator->states.empty() ? -1 : std::min(ui.selectedState, static_cast<int>(animator->states.size()) - 1);
+                ui.selectedStates.clear();
+                if (ui.selectedState >= 0)
+                {
+                    ui.selectedStates.insert(ui.selectedState);
+                    ui.anyStateSelected = false;
+                }
                 animator->SetDirtyFlag(true);
             }
         }

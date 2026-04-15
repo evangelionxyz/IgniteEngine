@@ -925,6 +925,9 @@ namespace ignite
                     
                     m_Assets.push_back(std::move(data));
                     m_CreateRequest = {};
+
+                    // Refresh content browser
+                    m_EditorLayer->RefreshContentBrowsers();
                 }
             };
 

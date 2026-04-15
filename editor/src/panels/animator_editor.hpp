@@ -9,6 +9,7 @@
 #include "ignite/animation/animator/animator_controller.hpp"
 
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include <imgui.h>
@@ -24,6 +25,13 @@ namespace ignite
         int selectedTransition = -1;
         bool initialized = false;
         bool draggingItem = false;
+        bool boxSelectingStates = false;
+        std::unordered_set<int> selectedStates;
+        std::vector<int> draggingStateIndices;
+        ImVec2 boxSelectStartWorld = ImVec2(0.0f, 0.0f);
+        glm::vec2 anyStateEditorPos = glm::vec2(20.0f, 20.0f);
+        bool anyStateSelected = false;
+        bool draggingAnyState = false;
 
         // Transition
         std::string fromStateName;
