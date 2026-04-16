@@ -429,7 +429,7 @@ namespace ignite
 			m_EditorLayer->RefreshContentBrowsers();
 		}
 
-       if (!AdvanceToNextAsset())
+		if (!AdvanceToNextAsset())
 		{
 			ResetImportState();
 		}

@@ -165,7 +165,7 @@ namespace ignite::vfs
 
         return numEntries;
 
-#else // WIN32
+#else // !WIN32
 
         glob64_t glob_matches;
         int globResult = glob64(pattern, 0 /*flags*/, nullptr /*errfunc*/, &glob_matches);
@@ -197,7 +197,7 @@ namespace ignite::vfs
             return 0;
 
         return status::Failed;
-#endif // WIN32
+#endif
     }
 
     int NativeFileSystem::EnumerateFiles(const std::filesystem::path &path, const std::vector<std::string> &extensions, enumerate_callback_t callback, bool allowDuplicates)

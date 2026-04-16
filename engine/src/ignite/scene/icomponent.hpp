@@ -34,6 +34,7 @@ namespace ignite
         CompType_ID,
         CompType_Transform,
         CompType_Camera,
+        CompType_Widget,
         CompType_Sprite2D,
         CompType_Circle2D,
         CompType_PointLight2D,

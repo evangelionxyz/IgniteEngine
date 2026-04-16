@@ -3,11 +3,9 @@
 #include "iscene_renderer.hpp"
 #include "renderer_2d.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
-#include "ignite/graphics/ui_renderer.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/vertex_data.hpp"
 #include "ignite/graphics/objects/shadow_map.hpp"
-#include "ignite/graphics/ui/ui_manager.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/scene/scene.hpp"
 
@@ -56,8 +54,6 @@ namespace ignite
         m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
 
         m_Renderer2D = Renderer2D::Create();
-        m_UIRenderer = UIRenderer::Create(1280, 720);
-        m_UIRenderer->SetUIManager(&UIManager::GetInstance());
         m_EdgeDetection = EdgeDetection::Create();
         m_EdgeDetection->CreatePipeline();
         m_DebugGridBuffer = ConstantBuffer::Create(sizeof(DebugGrid_GPUData), true, 16, "Debug Grid Buffer");
@@ -125,11 +121,6 @@ namespace ignite
         if (width == 0 || height == 0)
         {
             return;
-        }
-
-        if (m_UIRenderer)
-        {
-            m_UIRenderer->Resize(width, height);
         }
 
         if (m_Bloom)

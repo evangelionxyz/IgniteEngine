@@ -24,6 +24,7 @@
 #include "imgui_layer.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 
 #include <backends/imgui_impl_sdl3.h>
 #include <ImGuizmo.h>
@@ -360,6 +361,8 @@ namespace ignite
 
     void ImGuiLayer::BeginFrame()
     {
+        IGN_PROFILE_FUNCTION();
+
         if (!imguiNVRHI || m_BeginFrameCalled)
             return;
 
@@ -411,8 +414,17 @@ namespace ignite
 
     void ImGuiLayer::EndFrame(nvrhi::IFramebuffer* framebuffer)
     {
-        ImGui::Render();
-        imguiNVRHI->Render(framebuffer);
+        IGN_PROFILE_FUNCTION();
+
+        {
+            IGN_PROFILE_SCOPE("ImGuiLayer::ImGuiRender");
+            ImGui::Render();
+        }
+
+        {
+            IGN_PROFILE_SCOPE("ImGuiLayer::NVRHIRender");
+            imguiNVRHI->Render(framebuffer);
+        }
 
         m_BeginFrameCalled = false;
     }

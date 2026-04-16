@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
 #ifndef SCENE_RENDERER_HPP
 #define SCENE_RENDERER_HPP
 
@@ -7,6 +8,8 @@
 
 namespace ignite
 {
+    class WidgetRenderer;
+
     class SceneRenderer : public ISceneRenderer
     {
     public:
@@ -18,8 +21,11 @@ namespace ignite
         void BeginFrame();
         void SetActiveScene(const Ref<Scene> &scene);
         
-        void RenderEditorTo(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT, bool renderEnvironment = true);
-        void RenderGameplayTo(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT, bool renderEnvironment = true);
+        void RenderEditorTo(ICamera *camera);
+        void RenderGameplayTo(ICamera *camera);
+
+        virtual void Resize(uint32_t width, uint32_t height) override;
+        void ResizeGameplay(uint32_t width, uint32_t height);
         
         void SetFillMode(nvrhi::RasterFillMode mode);
 
@@ -27,20 +33,23 @@ namespace ignite
         void UnselectEntity(const Entity& entity);
         void ClearSelectedEntities();
 
-        // UI Input handling
-        void UpdateUIInput(const glm::vec2& viewportMousePos, const glm::vec2& viewportPos, const glm::vec2& viewportSize, bool mousePressed);
-
 		Ref<Texture> GetEnvironmentMapColorTexture() const;
 		Ref<Texture> GetCascadedShadowMapDepthTexture() const;
 
         Ref<CascadedShadowMap> GetCascadedShadowMap();
-        Ref<UIRenderer> &GetUIRenderer() { return m_UIRenderer; }
         Ref<Renderer2D> &GetRenderer2D() { return m_Renderer2D; }
 
         DebugGridSettings &GetDebugGridSettings() { return m_DebugGridSettings; }
         const DebugGridSettings &GetDebugGridSettings() const { return m_DebugGridSettings; }
         void SetDebugGridSettings(const DebugGridSettings &settings) { m_DebugGridSettings = settings; }
 
+        const Ref<RenderTarget> &GetCompositeRT() { return m_CompositeRT; }
+        const Ref<RenderTarget> &GetSceneRT() { return m_SceneRT; }
+        const Ref<RenderTarget> &GetWidgetRT() { return m_WidgetRT; }
+
+        const Ref<RenderTarget> &GetGameplayCompositeRT() { return m_GameplayCompositeRT; }
+        const Ref<RenderTarget> &GetGameplaySceneRT() { return m_GameplaySceneRT; }
+        const Ref<RenderTarget> &GetGameplayWidgetRT() { return m_GameplayWidgetRT; }
     private:
         Ref<Mesh> ResolveMesh(Project *project, AssetHandle handle);
         Ref<Material> ResolveMaterial(Project *project, AssetHandle handle);
@@ -81,6 +90,17 @@ namespace ignite
         };
         
     private:
+
+        Ref<WidgetRenderer> m_WidgetRenderer;
+
+        Ref<RenderTarget> m_SceneRT;
+        Ref<RenderTarget> m_WidgetRT;
+        Ref<RenderTarget> m_CompositeRT;
+
+        Ref<RenderTarget> m_GameplaySceneRT;
+        Ref<RenderTarget> m_GameplayWidgetRT;
+        Ref<RenderTarget> m_GameplayCompositeRT;
+
         std::unordered_map<std::string, Ref<Texture>> m_Icons;
         std::unordered_map<AssetResolveKey, Ref<Mesh>, AssetResolveKeyHash> m_MeshResolveCache;
         std::unordered_map<AssetResolveKey, Ref<Material>, AssetResolveKeyHash> m_MaterialResolveCache;

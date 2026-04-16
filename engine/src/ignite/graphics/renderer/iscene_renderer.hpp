@@ -19,7 +19,6 @@ namespace ignite
     class ICamera;
     class Project;
     class RenderTarget;
-    class UIRenderer;
     class Renderer2D;
     class CascadedShadowMap;
     class MeshPrimitive;
@@ -80,7 +79,6 @@ namespace ignite
         nvrhi::SamplerHandle m_CompositeSampler;
 
         Ref<Renderer2D> m_Renderer2D;
-        Ref<UIRenderer> m_UIRenderer;
         Ref<EdgeDetection> m_EdgeDetection;
         Ref<Bloom> m_Bloom;
         Ref<SSAO> m_SSAO;

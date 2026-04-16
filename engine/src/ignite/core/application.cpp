@@ -57,7 +57,6 @@ namespace ignite
         m_Input = CreateScope<Input>(m_Window.get());
 
         m_Renderer = CreateRef<Renderer>(m_Window->GetDeviceManager(), m_CreateInfo.graphicsApi);
-        m_UIManager = CreateScope<UIManager>();
 
         if (createInfo.useGui)
         {
@@ -245,18 +244,28 @@ namespace ignite
                 IGN_PROFILE_SCOPE("RenderThread::ImGuiRender");
                 m_ImGuiLayer->BeginFrame();
 
-                for (auto it = m_LayerStack.begin(); it != m_LayerStack.end(); ++it)
                 {
-                    Layer *layer = *it;
-                    if (layer == m_ImGuiLayer)
+                    IGN_PROFILE_SCOPE("RenderThread::ImGuiOnGuiRender");
+                    for (auto it = m_LayerStack.begin(); it != m_LayerStack.end(); ++it)
                     {
-                        continue;
+                        Layer *layer = *it;
+                        if (layer == m_ImGuiLayer)
+                        {
+                            continue;
+                        }
+                        layer->OnGuiRender();
                     }
-
-                    layer->OnGuiRender();
                 }
 
-                m_ImGuiLayer->EndFrame(framebuffer);
+                {
+                    IGN_PROFILE_SCOPE("RenderThread::ImGuiEndFrame");
+                    m_ImGuiLayer->EndFrame(framebuffer);
+                }
+
+                {
+                    IGN_PROFILE_SCOPE("RenderThread::ImGuiRenderPlatformWindows");
+                    m_ImGuiLayer->RenderPlatformWindows();
+                }
             }
 
             // Collect worker command lists with minimal lock hold.
@@ -457,6 +466,7 @@ namespace ignite
 
                         if (m_CreateInfo.useGui && m_ImGuiLayer)
                         {
+                            IGN_PROFILE_SCOPE("MainThread::ImGuiRenderPlatformWindows");
                             m_ImGuiLayer->RenderPlatformWindows();
                         }
                         
@@ -507,7 +517,6 @@ namespace ignite
         }
         
         // destroy
-        m_UIManager.reset();
         m_Renderer.reset();
 
         // destroy device

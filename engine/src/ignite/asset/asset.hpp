@@ -44,7 +44,7 @@ namespace ignite {
         Skeleton,
         Mesh,
         Scene,
-
+        Widget,
         AnimatorController, // .ac    - animator state machine
 
         Material2D,
@@ -58,6 +58,7 @@ namespace ignite {
         switch (type)
         {
             case ignite::AssetType::Texture: return "Texture";
+            case ignite::AssetType::Widget: return "Widget";
             case ignite::AssetType::Shader: return "Shader";
             case ignite::AssetType::AnimationMontage: return "AnimationMontage";
             case ignite::AssetType::Material: return "Material";
@@ -84,11 +85,41 @@ namespace ignite {
         }
     }
 
+    static AssetType AssetTypeFromString(const std::string &typeStr)
+    {
+        if (typeStr == "Metadata") return AssetType::Metadata;
+        if (typeStr == "Shader") return AssetType::Shader;
+        if (typeStr == "Widget") return AssetType::Widget;
+        if (typeStr == "AnimationMontage") return AssetType::AnimationMontage;
+        if (typeStr == "Scene") return AssetType::Scene;
+        if (typeStr == "Texture") return AssetType::Texture;
+        if (typeStr == "TextureCube") return AssetType::TextureCube;
+        if (typeStr == "Audio") return AssetType::Audio;
+        if (typeStr == "Project") return AssetType::Project;
+        if (typeStr == "Model") return AssetType::Model;
+        if (typeStr == "SkeletalAnimation") return AssetType::SkeletalAnimation;
+        if (typeStr == "SpriteSheet") return AssetType::SpriteSheet;
+        if (typeStr == "Anim2D")  return AssetType::Anim2D;
+        if (typeStr == "Mesh")  return AssetType::Mesh;
+        if (typeStr == "Skeleton")  return AssetType::Skeleton;
+        if (typeStr == "Material")  return AssetType::Material;
+        if (typeStr == "Environment")  return AssetType::Environment;
+        if (typeStr == "BlendSpace")  return AssetType::BlendSpace;
+        if (typeStr == "LocomotionController")  return AssetType::LocomotionController;
+        if (typeStr == "Font")  return AssetType::Font;
+        if (typeStr == "Material2D")  return AssetType::Material2D;
+        if (typeStr == "Animation2D")  return AssetType::Animation2D;
+        if (typeStr == "AnimatorController")  return AssetType::AnimatorController;
+        if (typeStr == "AnimatorController2D")  return AssetType::AnimatorController2D;
+        return AssetType::Invalid;
+    }
+
     static std::map<std::string, AssetType> s_AssetExtensionMap =
     {
         { ".meta", AssetType::Metadata },
         { ".hlsl", AssetType::Shader },
         { ".mtg", AssetType::AnimationMontage },
+        { ".wdgt", AssetType::Widget },
         { ".ixproj", AssetType::Project },
         { ".ixscene", AssetType::Scene },
         
@@ -130,35 +161,6 @@ namespace ignite {
         { ".ac",   AssetType::AnimatorController},
         { ".ac2d",   AssetType::AnimatorController2D},
     };
-
-    static AssetType AssetTypeFromString(const std::string &typeStr)
-    {
-        if (typeStr == "Metadata") return AssetType::Metadata;
-        if (typeStr == "Shader") return AssetType::Shader;
-
-        if (typeStr == "AnimationMontage") return AssetType::AnimationMontage;
-        if (typeStr == "Scene") return AssetType::Scene;
-        if (typeStr == "Texture") return AssetType::Texture;
-        if (typeStr == "TextureCube") return AssetType::TextureCube;
-        if (typeStr == "Audio") return AssetType::Audio;
-        if (typeStr == "Project") return AssetType::Project;
-        if (typeStr == "Model") return AssetType::Model;
-        if (typeStr == "SkeletalAnimation") return AssetType::SkeletalAnimation;
-        if (typeStr == "SpriteSheet") return AssetType::SpriteSheet;
-        if (typeStr == "Anim2D")  return AssetType::Anim2D;
-        if (typeStr == "Mesh")  return AssetType::Mesh;
-        if (typeStr == "Skeleton")  return AssetType::Skeleton;
-        if (typeStr == "Material")  return AssetType::Material;
-        if (typeStr == "Environment")  return AssetType::Environment;
-        if (typeStr == "BlendSpace")  return AssetType::BlendSpace;
-        if (typeStr == "LocomotionController")  return AssetType::LocomotionController;
-        if (typeStr == "Font")  return AssetType::Font;
-        if (typeStr == "Material2D")  return AssetType::Material2D;
-        if (typeStr == "Animation2D")  return AssetType::Animation2D;
-        if (typeStr == "AnimatorController")  return AssetType::AnimatorController;
-        if (typeStr == "AnimatorController2D")  return AssetType::AnimatorController2D;
-        return AssetType::Invalid;
-    }
 
     // Binary Extensions
     static std::string GetAssetExtensionFromType(const AssetType type)

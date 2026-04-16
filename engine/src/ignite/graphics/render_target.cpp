@@ -147,7 +147,7 @@ namespace ignite {
             }
 
             // add color attachments
-            for (auto &colorAttachment : m_ColorAttachments)
+            for (auto colorAttachment : m_ColorAttachments)
             {
                 m_FramebufferDesc.addColorAttachment(colorAttachment->GetHandle());
             }
@@ -171,7 +171,6 @@ namespace ignite {
         }
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
         device->waitForIdle();
 
         if (m_FramebufferHandle != nullptr)
@@ -190,7 +189,7 @@ namespace ignite {
             createInfo.width = width;
             createInfo.height = height;
             
-            m_DepthAttachment.reset();
+            m_DepthAttachment = nullptr;
 
             m_DepthAttachment = Texture::Create(createInfo);
             LOG_ASSERT(m_DepthAttachment, "Failed to create render target depth attachment");
@@ -212,8 +211,7 @@ namespace ignite {
         m_ColorAttachments.clear();
         for (auto &colorDesc : colorCIs)
         {
-            Ref<Texture> colorAttachment = Texture::Create(colorDesc);
-            m_ColorAttachments.push_back(colorAttachment);
+            m_ColorAttachments.push_back(Texture::Create(colorDesc));
         }
 
         CreateFramebuffer();

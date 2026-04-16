@@ -1,39 +1,22 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef WIDGET_HPP
+#define WIDGET_HPP
 
 #include "ignite/core/types.hpp"
 #include "ignite/math/math.hpp"
+#include "ignite/asset/asset.hpp"
 #include "ignite/core/logger.hpp"
 
 #include <string>
 #include <functional>
+#include <unordered_map>
 #include <memory>
 #include <glm/glm.hpp>
 
-// In Game Widget
-namespace ignite {
+namespace ignite
+{
 
 #define UI_COLOR_RED glm::vec4{ 1.0f, 0.0f, 0.0f, 1.0f }
 #define UI_COLOR_BLUE glm::vec4{ 0.0f, 0.0f, 1.0f, 1.0f }
@@ -42,9 +25,11 @@ namespace ignite {
 #define UI_COLOR_YELLOW glm::vec4{ 1.0f, 1.0f, 0.0f, 1.0f }
 #define UI_COLOR_GRAY glm::vec4{ 0.5f, 0.5f, 0.5f, 1.0f }
 
+    class Widget;
+    class Scene;
     class Texture;
 
-    enum class UIAlignment
+    enum class WidgetAlignment
     {
         TOP_LEFT,
         TOP_CENTER,
@@ -58,113 +43,46 @@ namespace ignite {
         COUNT
     };
 
-    class UIWidget : public std::enable_shared_from_this<UIWidget>
+    // Base widget item
+    class IWidgetItem : public std::enable_shared_from_this<IWidgetItem>
     {
     public:
-        UIWidget() = default;
-        virtual ~UIWidget() = default;
+        IWidgetItem(Widget *widget);
+        virtual ~IWidgetItem() = default;
 
-        virtual void Update(float deltaTime, const glm::vec2& mousePos)
-        {
-        }
-
-        virtual void SetPosition(const glm::vec2 &position) 
-        {
-            m_Rect.min = position;
-        }
-
-        virtual void SetSize(const glm::vec2 &size)
-        {
-            m_Rect.max = size;
-        }
-
-        virtual void SetAlignment(UIAlignment alignment)
-        {
-            m_Alignment = alignment;
-        }
+        virtual void Update(float deltaTime, const glm::uvec2& mousePos) {}
+        virtual void SetPosition(const glm::vec2 &position) { m_Rect.min = position; }
+        virtual void SetSize(const glm::vec2 &size) { m_Rect.max = size; }
+        virtual void SetAlignment(WidgetAlignment alignment) { m_Alignment = alignment; }
 
         virtual const glm::vec2 GetSize() const { return m_Rect.GetSize(); }
         virtual const Rect &GetRect() const { return m_Rect; }
-        virtual const UIAlignment GetAlignment() const { return m_Alignment; }
+        virtual const WidgetAlignment GetAlignment() const { return m_Alignment; }
 
-        // Check if point is within widget bounds
-        virtual bool Contains(const glm::vec2& point) const
-        {
-            return GetAlignedRect().Contains(point);
-        }
-
-        // Get position adjusted for alignment relative to canvas (viewport)
+        virtual bool Contains(const glm::vec2& point) const { return GetAlignedRect().Contains(point); }
         virtual Rect GetAlignedRect() const;
 
+        Widget *GetWidget() { return m_Widget; }
+
         template<typename T>
-        Ref<T> As()
-        {
-            return std::dynamic_pointer_cast<T>(shared_from_this());
-        }
+        Ref<T> As() { return std::dynamic_pointer_cast<T>(shared_from_this()); }
 
     protected:
+        Widget *m_Widget = nullptr;
         Rect m_Rect = Rect({0.0f, 0.0f}, {100.0f, 50.0f});
-        UIAlignment m_Alignment = UIAlignment::TOP_LEFT;
+        WidgetAlignment m_Alignment = WidgetAlignment::TOP_LEFT;
     };
 
-    class UIButton : public UIWidget
+    class WidgetButton : public IWidgetItem
     {
     public:
-        UIButton(const std::string& text = "Button")
-            : m_Text(text)
-        {
-            m_NormalColor = glm::vec4(0.3f, 0.3f, 0.3f, 1.0f);
-            m_HoverColor = glm::vec4(0.5f, 0.5f, 0.5f, 1.0f);
-            m_PressedColor = glm::vec4(0.2f, 0.2f, 0.2f, 1.0f);
-            m_TextColor = UI_COLOR_WHITE;
-            m_BorderColor = glm::vec4(0.6f, 0.6f, 0.6f, 1.0f);
-        }
+        WidgetButton(Widget *widget, const std::string &text = "Button");
+        virtual ~WidgetButton() override;
 
-        ~UIButton()
-        {
-        }
-
-        void Update(float deltaTime, const glm::vec2& mousePos) override
-        {
-            bool wasHovered = m_IsHovered;
-            m_IsHovered = Contains(mousePos);
-            
-            // Trigger hover events
-            if (m_IsHovered && !wasHovered && m_OnHoverEnter)
-            {
-                m_OnHoverEnter();
-            }
-            else if (!m_IsHovered && wasHovered && m_OnHoverExit)
-            {
-                m_OnHoverExit();
-            }
-        }
+        void Update(float deltaTime, const glm::uvec2 &mousePos) override;
 
         // Handle mouse click (call this from input system)
-        void OnMouseClick(const glm::vec2& mousePos, bool isPressed)
-        {
-            if (Contains(mousePos))
-            {
-                if (isPressed)
-                {
-                    m_IsPressed = true;
-                    if (m_OnPressed)
-                        m_OnPressed();
-                }
-                else if (m_IsPressed)
-                {
-                    m_IsPressed = false;
-                    if (m_OnClick)
-                        m_OnClick();
-                    if (m_OnReleased)
-                        m_OnReleased();
-                }
-            }
-            else if (!isPressed)
-            {
-                m_IsPressed = false;
-            }
-        }
+        void OnMouseClick(const glm::uvec2 &mousePos, bool isPressed);
 
         // Getters
         const std::string& GetText() const { return m_Text; }
@@ -222,11 +140,11 @@ namespace ignite {
         std::function<void()> m_OnHoverExit;
     };
 
-    class UIText : public UIWidget
+    class WidgetText : public IWidgetItem
     {
     public:
-        UIText(const std::string& text = "Text")
-            : m_Text(text), m_Color(UI_COLOR_WHITE)
+        WidgetText(Widget *widget, const std::string& text = "Text")
+            : IWidgetItem(widget), m_Text(text), m_Color(UI_COLOR_WHITE)
         {
         }
 
@@ -237,97 +155,41 @@ namespace ignite {
         void SetColor(const glm::vec4& color) { m_Color = color; }
 
     private:
+
         std::string m_Text;
         glm::vec4 m_Color;
     };
 
-    // Layout Grid for visualizing UI layout
-    class UILayoutGrid
+    // Widget for widget items container
+    class Widget : public Asset
     {
     public:
-        UILayoutGrid(uint32_t viewportWidth, uint32_t viewportHeight, uint32_t gridSize = 20)
-            : m_ViewportWidth(viewportWidth), m_ViewportHeight(viewportHeight), m_GridSize(gridSize), m_Visible(true)
-        {
-            m_GridColor = glm::vec4(0.5f, 0.5f, 0.5f, 0.3f);
-            m_MajorGridColor = glm::vec4(0.7f, 0.7f, 0.7f, 0.5f);
-            m_MajorGridInterval = 5; // Every 5th line is major
-        }
+        Widget(Scene *scene);
+        ~Widget();
 
-        void SetViewportSize(uint32_t width, uint32_t height)
-        {
-            m_ViewportWidth = width;
-            m_ViewportHeight = height;
-        }
+        void Update(float deltaTime, const glm::uvec2 &mousePos);
 
-        void SetGridSize(uint32_t size) { m_GridSize = size; }
-        void SetVisible(bool visible) { m_Visible = visible; }
-        void SetGridColor(const glm::vec4& color) { m_GridColor = color; }
-        void SetMajorGridColor(const glm::vec4& color) { m_MajorGridColor = color; }
-        void SetMajorGridInterval(uint32_t interval) { m_MajorGridInterval = interval; }
+        virtual bool Serialize(const std::filesystem::path &filepath) override;
+        static Ref<Widget> Deserialize(const std::filesystem::path &filepath);
 
-        bool IsVisible() const { return m_Visible; }
-        uint32_t GetGridSize() const { return m_GridSize; }
-        const glm::vec4& GetGridColor() const { return m_GridColor; }
-        const glm::vec4& GetMajorGridColor() const { return m_MajorGridColor; }
-        uint32_t GetMajorGridInterval() const { return m_MajorGridInterval; }
-        uint32_t GetViewportWidth() const { return m_ViewportWidth; }
-        uint32_t GetViewportHeight() const { return m_ViewportHeight; }
+        void SetViewportSize(const uint32_t width, const uint32_t height) { m_ViewportSize = { width, height }; }
+        const glm::uvec2 &GetViewportSize() const { return m_ViewportSize; }
 
-        // Get grid lines for rendering
-        struct GridLine
-        {
-            glm::vec2 start;
-            glm::vec2 end;
-            bool isMajor;
-        };
+        static AssetType GetStaticAssetType() { return AssetType::Widget; }
+        virtual AssetType GetAssetType() override { return GetStaticAssetType(); }
 
-        std::vector<GridLine> GetGridLines() const
-        {
-            std::vector<GridLine> lines;
-            if (!m_Visible)
-                   return lines;
-
-            // Vertical lines
-            for (uint32_t x = 0; x <= m_ViewportWidth; x += m_GridSize)
-            {
-                bool isMajor = (x / m_GridSize) % m_MajorGridInterval == 0;
-                lines.push_back({
-                    {static_cast<float>(x), 0.0f},
-                    {static_cast<float>(x), static_cast<float>(m_ViewportHeight)},
-                    isMajor
-                });
-            }
-
-            // Horizontal lines
-            for (uint32_t y = 0; y <= m_ViewportHeight; y += m_GridSize)
-            {
-                bool isMajor = (y / m_GridSize) % m_MajorGridInterval == 0;
-                lines.push_back({
-                    {0.0f, static_cast<float>(y)},
-                    {static_cast<float>(m_ViewportWidth), static_cast<float>(y)},
-                    isMajor
-                });
-            }
-
-            return lines;
-        }
-
-        // Snap position to grid
-        glm::vec2 SnapToGrid(const glm::vec2& position) const
-        {
-            return glm::vec2(
-                std::round(position.x / m_GridSize) * m_GridSize,
-                std::round(position.y / m_GridSize) * m_GridSize
-            );
-        }
+        // ID, Widget
+        std::unordered_map<int, Ref<IWidgetItem>> GetItems() { return m_WidgetItems; }
 
     private:
-        uint32_t m_ViewportWidth;
-        uint32_t m_ViewportHeight;
-        uint32_t m_GridSize;
-        uint32_t m_MajorGridInterval;
-        bool m_Visible;
-        glm::vec4 m_GridColor;
-        glm::vec4 m_MajorGridColor;
+        std::string name;
+
+        // ID, Widget
+        std::unordered_map<int, Ref<IWidgetItem>> m_WidgetItems;
+
+        Scene *m_Scene;
+        glm::uvec2 m_ViewportSize;
     };
 }
+
+#endif

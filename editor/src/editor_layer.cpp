@@ -14,6 +14,7 @@
 #include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/core/platform_utils.hpp"
 #include "ignite/core/profiler/profiler.hpp"
+#include "ignite/imgui/imgui_nvrhi.hpp"
 #include "stb_image_write.h"
 
 #include <algorithm>
@@ -168,6 +169,43 @@ namespace ignite
     void EditorLayer::OnUpdate(float deltaTime)
     {
         Layer::OnUpdate(deltaTime);
+
+        // Resize Edit Viewport Framebuffer
+        if (m_ScenePanel->m_Data.sceneViewportEditorVisible)
+        {
+            const glm::uvec2 framebufferSize = m_SceneRenderer->GetCompositeRT()->GetSize();
+            const glm::vec2 currentViewportSize = m_ScenePanel->GetEditorViewportSize();
+            const glm::uvec2 desiredSize
+            {
+                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.x)),
+                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.y))
+            };
+
+            const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
+            if (framebufferNeedsResize && desiredSize.x > 0u && desiredSize.y > 0u)
+            {
+                m_SceneRenderer->Resize(desiredSize.x, desiredSize.y);
+                m_ScenePanel->GetViewportCamera().UpdateProjection(desiredSize.x, desiredSize.y);
+            }
+        }
+
+        // Resize Game Viewport Framebuffer
+        if (m_ScenePanel->m_Data.sceneViewportGameplayVisible)
+        {
+            const glm::uvec2 framebufferSize = m_SceneRenderer->GetGameplayCompositeRT()->GetSize();
+            const glm::vec2 currentViewportSize = m_ScenePanel->GetGameplayViewportSize();
+            const glm::uvec2 desiredSize
+            {
+                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.x)),
+                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.y))
+            };
+
+            const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
+            if (framebufferNeedsResize && desiredSize.x > 0u && desiredSize.y > 0u)
+            {
+                m_SceneRenderer->ResizeGameplay(desiredSize.x, desiredSize.y);
+            }
+        }
 
         for (int i = static_cast<int>(m_ContentBrowserPanels.size()) - 1; i >= 0; --i)
         {
@@ -436,72 +474,6 @@ namespace ignite
             m_SceneRenderer->BeginFrame();
         }
 
-        const bool isMouseDraggingUi = ImGui::IsMouseDown(ImGuiMouseButton_Left);
-
-        // Resize Edit Viewport Framebuffer
-        if (m_ScenePanel->m_Data.sceneViewportEditorVisible)
-        {
-            static glm::uvec2 s_LastEditDesiredSize{ 0u, 0u };
-            static uint32_t s_EditStableFrames = 0u;
-
-            const glm::uvec2 framebufferSize = m_ScenePanel->GetViewportEditCompRT()->GetSize();
-            const glm::vec2 currentViewportSize = m_ScenePanel->GetViewportEditSize();
-            const glm::uvec2 desiredSize
-            {
-                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.x)),
-                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.y))
-            };
-
-            if (desiredSize == s_LastEditDesiredSize)
-            {
-                ++s_EditStableFrames;
-            }
-            else
-            {
-                s_LastEditDesiredSize = desiredSize;
-                s_EditStableFrames = 0u;
-            }
-
-            const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
-            // const bool allowResizeNow = !isMouseDraggingUi || s_EditStableFrames >= 2u;
-            if (framebufferNeedsResize && desiredSize.x > 0u && desiredSize.y > 0u)
-            {
-                m_ScenePanel->ViewportEditResize(desiredSize.x, desiredSize.y);
-            }
-        }
-
-        // Resize Game Viewport Framebuffer
-        if (m_ScenePanel->m_Data.sceneViewportGameplayVisible)
-        {
-            static glm::uvec2 s_LastGameDesiredSize{ 0u, 0u };
-            static uint32_t s_GameStableFrames = 0u;
-
-            const glm::uvec2 framebufferSize = m_ScenePanel->GetViewportGameCompRT()->GetSize();
-            const glm::vec2 currentViewportSize = m_ScenePanel->GetViewportGameSize();
-            const glm::uvec2 desiredSize
-            {
-                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.x)),
-                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.y))
-            };
-
-            if (desiredSize == s_LastGameDesiredSize)
-            {
-                ++s_GameStableFrames;
-            }
-            else
-            {
-                s_LastGameDesiredSize = desiredSize;
-                s_GameStableFrames = 0u;
-            }
-
-            const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
-            // const bool allowResizeNow = !isMouseDraggingUi || s_GameStableFrames >= 2u;
-            if (framebufferNeedsResize && desiredSize.x > 0u && desiredSize.y > 0u)
-            {
-                m_ScenePanel->ViewportGameResize(desiredSize.x, desiredSize.y);
-            }
-        }
-
         // Render to Edit Viewport
         if (m_ScenePanel->m_Data.sceneViewportEditorVisible)
         {
@@ -511,17 +483,9 @@ namespace ignite
                 case State::SceneEdit:
                 {
                     ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
-                    if (const glm::uvec2 editSize = m_ScenePanel->GetViewportEditCompRT()->GetSize(); editSize.x > 0u && editSize.y > 0u)
-                    {
-                        editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
-                    }
-
                     {
                         IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
-                        m_SceneRenderer->RenderEditorTo(editCamera,
-                            m_ScenePanel->GetViewportEditSceneRT(),
-                            m_ScenePanel->GetViewportEditUIRT(),
-                            m_ScenePanel->GetViewportEditCompRT());
+                        m_SceneRenderer->RenderEditorTo(editCamera);
                     }
                     break;
                 }
@@ -532,18 +496,9 @@ namespace ignite
                     {
                         editCamera = &primaryCam.GetComponent<CameraComponent>().camera;
                     }
-
-                    if (const glm::uvec2 editSize = m_ScenePanel->GetViewportEditCompRT()->GetSize(); editSize.x > 0u && editSize.y > 0u)
-                    {
-                        editCamera->UpdateProjection(static_cast<float>(editSize.x), static_cast<float>(editSize.y));
-                    }
-
                     {
                         IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
-                        m_SceneRenderer->RenderEditorTo(editCamera,
-                            m_ScenePanel->GetViewportEditSceneRT(),
-                            m_ScenePanel->GetViewportEditUIRT(),
-                            m_ScenePanel->GetViewportEditCompRT());
+                        m_SceneRenderer->RenderEditorTo(editCamera);
                     }
                     break;
                 }
@@ -556,17 +511,9 @@ namespace ignite
 			if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
 			{
 				ICamera *gameCamera = &primaryCam.GetComponent<CameraComponent>().camera;
-				if (const glm::uvec2 gameSize = m_ScenePanel->GetViewportGameCompRT()->GetSize(); gameSize.x > 0u && gameSize.y > 0u)
-				{
-					gameCamera->UpdateProjection(static_cast<float>(gameSize.x), static_cast<float>(gameSize.y));
-				}
-
                 {
                     IGN_PROFILE_SCOPE("SceneRenderer::RenderGameplayTo");
-                    m_SceneRenderer->RenderGameplayTo(gameCamera,
-                        m_ScenePanel->GetViewportGameSceneRT(),
-                        m_ScenePanel->GetViewportGameUIRT(),
-                        m_ScenePanel->GetViewportGameCompRT());
+                    m_SceneRenderer->RenderGameplayTo(gameCamera);
                 }
 			}
         }
@@ -575,10 +522,11 @@ namespace ignite
 
         if (m_State.takeScreenshot)
         {
-            nvrhi::TextureDesc stagingDesc = m_ScenePanel->GetViewportEditCompRT()->GetColorAttachment(0)->GetHandle()->getDesc();
+            auto sceneTexture = m_SceneRenderer->GetCompositeRT()->GetColorAttachment(0)->GetHandle();
+            nvrhi::TextureDesc stagingDesc = sceneTexture->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
             m_ScreenshotStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            m_Cmd->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), m_ScenePanel->GetViewportEditCompRT()->GetColorAttachment(0)->GetHandle(), nvrhi::TextureSlice());
+            m_Cmd->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), sceneTexture, nvrhi::TextureSlice());
         }
 
         m_Cmd->close();
@@ -1379,11 +1327,11 @@ namespace ignite
                                     {
                                         m_Device->waitForIdle();
                                     }
-                                    
+                        
                                     // Reset old scene
                                     m_EditorScene.reset();
                                     m_ActiveScene.reset();
-                                    
+                        
                                     // Unload unused assets
                                     if (m_ActiveProject)
                                     {
@@ -1771,7 +1719,7 @@ namespace ignite
 
 			// Memory usage bar
 			ImGui::Spacing();
-			float loadRatio = totalRegistered > 0 ? (float)totalLoaded / totalRegistered : 0.0f;
+		 float loadRatio = totalRegistered > 0 ? (float)totalLoaded / totalRegistered : 0.0f;
 			ImGui::ProgressBar(loadRatio, ImVec2(-1, 0),
 				std::string("Memory Load: " + std::to_string((int)(loadRatio * 100)) + "%").c_str());
 
@@ -1794,7 +1742,7 @@ namespace ignite
 
 				ImGui::SameLine();
 				ImGui::Text("Type Filter:");
-				ImGui::SameLine();
+			    ImGui::SameLine();
 
 				// Type filter dropdown
 				const char *typeNames[] = { "All", "Scene", "Texture", "Material", "StaticMesh", "Audio", "Skeleton" };
@@ -1826,7 +1774,7 @@ namespace ignite
 				ImGui::BeginGroup();
 				if (ImGui::SmallButton("Refresh Registry"))
 				{
-					m_ActiveProject->ValidateAssetRegistry();
+				 m_ActiveProject->ValidateAssetRegistry();
 				}
 				if (ImGui::SmallButton("Unload Unused Assets"))
 				{

@@ -21,6 +21,7 @@
 
 #include "ignite/asset/asset_importer.hpp"
 
+#include "ignite/graphics/ui/widget.hpp"
 #include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/texture.hpp"
 #include "ignite/project/project.hpp"
@@ -135,7 +136,7 @@ namespace ignite
         static std::unordered_map<uint64_t, TextureEditorState> s_TextureEditorState;
         static std::unordered_map<uint64_t, SpriteSheetEditorState> s_SpriteSheetEditorState;
         static std::unordered_map<uint64_t, Animation2DEditorState> s_Anim2DEditorState;
-        
+
         static AssetHandle s_ActiveSkeletonEditorHandle = AssetHandle(0);
         static Gizmo s_SkeletonPreviewGizmo;
 
@@ -500,9 +501,9 @@ namespace ignite
                 glm::mat4 local = joint.defaultLocalTransform;
                 if (hasPreviewAnimation)
                 {
-                    if (previewAnimation->channels.contains(jointIndex))
+                    if (previewAnimation->channels.contains((int)jointIndex))
                     {
-                        local = previewAnimation->channels[jointIndex].CalculateTransform(timeInTicks, joint.defaultTranslation, joint.defaultRotation, joint.defaultScale);
+                        local = previewAnimation->channels[(int)jointIndex].CalculateTransform(timeInTicks, joint.defaultTranslation, joint.defaultRotation, joint.defaultScale);
                     }
                 }
 
@@ -693,7 +694,7 @@ namespace ignite
             return true;
         });
     }
-    
+
 #pragma region ImGui_Helper
     // :IMGUI Helper
     bool AssetEditorPanel::DrawAssetEditorHeader(AssetEditorData &assetData)
@@ -973,33 +974,36 @@ namespace ignite
 
                 if (created && createdAsset)
                 {
-                    AssetHandle handle = AssetHandle();
-                    AssetMetaData metadata;
-                    metadata.type = m_CreateRequest.type;
-                    metadata.filepath = project->GetAssetRelativeFilepath(fullAssetPath);
+                    Application::SubmitToMainThread([createdAsset, fullAssetPath, project, assetManager, this]()
+                    {
+                        AssetHandle handle = AssetHandle();
+                        AssetMetaData metadata;
+                        metadata.type = m_CreateRequest.type;
+                        metadata.filepath = project->GetAssetRelativeFilepath(fullAssetPath);
 
-                    createdAsset->handle = handle;
-                    assetManager->AssignMetaData(handle, metadata);
-                    assetManager->AssignAsset(handle, createdAsset);
+                        createdAsset->handle = handle;
+                        assetManager->AssignMetaData(handle, metadata);
+                        assetManager->AssignAsset(handle, createdAsset);
 
-                    // TODO: Fix save project assets
-                    m_EditorLayer->SaveProject();
+                        // TODO: Fix save project assets
+                        m_EditorLayer->SaveProject();
 
-                    AssetEditorData data;
-                    data.asset = createdAsset;
-                    data.metadata = metadata;
-                    data.handle = handle;
-                    data.isOpen = true;
-                    data.requestFocus = true;
-                    data.windowTitle = std::format("{} - {}###asset_editor_{}", AssetTypeToString(metadata.type), fullAssetPath.filename().string(), static_cast<uint64_t>(handle));
+                        AssetEditorData data;
+                        data.asset = createdAsset;
+                        data.metadata = metadata;
+                        data.handle = handle;
+                        data.isOpen = true;
+                        data.requestFocus = true;
+                        data.windowTitle = std::format("{} - {}###asset_editor_{}", AssetTypeToString(metadata.type), fullAssetPath.filename().string(), static_cast<uint64_t>(handle));
 
-                    InitializeSceneData(data);
-                    
-                    m_Assets.push_back(std::move(data));
-                    m_CreateRequest = {};
+                        InitializeSceneData(data);
 
-                    // Refresh content browser
-                    m_EditorLayer->RefreshContentBrowsers();
+                        m_Assets.push_back(std::move(data));
+                        m_CreateRequest = {};
+
+                        // Refresh content browser
+                        m_EditorLayer->RefreshContentBrowsers();
+                    });
                 }
             };
 
@@ -1166,7 +1170,7 @@ namespace ignite
                 ImVec2 imagePos =
                 {
                     viewportPos.x + (viewportSize.x - imageSize.x) * 0.5f + state.pan.x,
-                    viewportPos.y + (viewportSize.y - imageSize.y) * 0.5f + state.pan.y 
+                    viewportPos.y + (viewportSize.y - imageSize.y) * 0.5f + state.pan.y
                 };
 
                 if (hovered)
@@ -1178,18 +1182,18 @@ namespace ignite
                         if (newZoom != state.zoom)
                         {
                             const ImVec2 mousePos = ImGui::GetMousePos();
-                            const ImVec2 uvAtMouse = 
+                            const ImVec2 uvAtMouse =
                             {
                                 (mousePos.x - imagePos.x) / std::max(imageSize.x, 1.0f),
                                 (mousePos.y - imagePos.y) / std::max(imageSize.y, 1.0f)
                             };
 
                             state.zoom = newZoom;
-                            
-                            imageSize = 
-                            { 
+
+                            imageSize =
+                            {
                                 texW * fitScale * state.zoom,
-                                texH * fitScale * state.zoom 
+                                texH * fitScale * state.zoom
                             };
 
                             const ImVec2 centeredPos =
@@ -1203,7 +1207,7 @@ namespace ignite
 
                             imagePos =
                             {
-                                viewportPos.x + (viewportSize.x - imageSize.x) * 0.5f + state.pan.x, 
+                                viewportPos.x + (viewportSize.x - imageSize.x) * 0.5f + state.pan.x,
                                 viewportPos.y + (viewportSize.y - imageSize.y) * 0.5f + state.pan.y
                             };
                         }
@@ -1244,13 +1248,13 @@ namespace ignite
 
                 const glm::vec2 currentUVMin = glm::min(state.selectionStartUV, state.selectionEndUV);
                 const glm::vec2 currentUVMax = glm::max(state.selectionStartUV, state.selectionEndUV);
-                const ImVec2 currentSelMin = 
-                { 
+                const ImVec2 currentSelMin =
+                {
                     imagePos.x + currentUVMin.x * imageSize.x,
                     imagePos.y + currentUVMin.y * imageSize.y
                 };
                 const ImVec2 currentSelMax =
-                { 
+                {
                     imagePos.x + currentUVMax.x * imageSize.x,
                     imagePos.y + currentUVMax.y * imageSize.y
                 };
@@ -1480,7 +1484,7 @@ namespace ignite
                     const ImVec2 blockMax = { imagePos.x + sprite.uv1.x * imageSize.x,
                                              imagePos.y + sprite.uv1.y * imageSize.y };
                     const bool isSelectedSprite = state.selectedSpriteIndex == static_cast<int>(i);
-                    drawList->AddRect(blockMin, blockMax, isSelectedSprite 
+                    drawList->AddRect(blockMin, blockMax, isSelectedSprite
                         ? IM_COL32(255, 128, 0, 255)
                         : IM_COL32(0, 220, 255, 200), 0.0f, 0, isSelectedSprite
                         ? 2.0f : 1.5f);
@@ -1498,7 +1502,7 @@ namespace ignite
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.28f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.32f, 0.32f, 0.32f, 1.0f));
         ImGui::Button("##sprite_sheet_vertical_splitter", ImVec2(-1.0f, splitterThickness));
-        
+
         if (ImGui::IsItemHovered() || ImGui::IsItemActive())
         {
             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
@@ -1520,7 +1524,7 @@ namespace ignite
             const float spacing = ImGui::GetStyle().ItemSpacing.x;
             const float contentWidth = ImGui::GetContentRegionAvail().x;
             const int spritesPerRow = std::max(1, static_cast<int>((contentWidth + spacing) / (previewSize + spacing + horizontalSplitterWidth)));
-            
+
             for (size_t i = 0; i < sprites.size(); ++i)
             {
                 const auto &sprite = sprites[i];
@@ -1825,6 +1829,41 @@ namespace ignite
         ImGui::EndChild();
     }
 
+    void AssetEditorPanel::UIWidgetEditor(AssetEditorData &assetData)
+    {
+        bool isOpen = assetData.isOpen;
+        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1100.0f, 900.0f), ImVec2(420.0f, 560.0f), ImGuiWindowFlags_NoScrollWithMouse))
+        {
+            if (DrawAssetEditorHeader(assetData))
+            {
+                if (assetData.asset && assetData.asset->IsReady())
+                {
+                    if (Ref<Widget> widget = assetData.asset->As<Widget>())
+                    {
+                        UIWidgetEditor(widget);
+                    }
+                    else
+                    {
+                        ImGui::Text("Loading asset...");
+                    }
+                }
+                else
+                {
+                    ImGui::Text("Loading asset...");
+                }
+            }
+        }
+
+        UIAssetEditorClosePopup(assetData, isOpen);
+        ImGui::End();
+        assetData.isOpen = isOpen;
+        assetData.requestFocus = false;
+    }
+
+    void AssetEditorPanel::UIWidgetEditor(const Ref<Widget> &widget)
+    {
+
+    }
 
     void AssetEditorPanel::UIMaterial2DEditor(AssetEditorData &assetData)
     {
@@ -2828,11 +2867,11 @@ namespace ignite
         // Normal texture
         DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Normal Texture", material->normalTextureHandle,
             [&]() { material->SetDirtyFlag(true); });
-        
+
         // Emissive texture
         DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Emissive Texture", material->emissiveTextureHandle,
             [&]() { material->SetDirtyFlag(true); });
-        
+
         // Metallic Texture
         DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Metallic Texture", material->metallicTextureHandle,
             [&]() { material->SetDirtyFlag(true); });
@@ -2891,7 +2930,7 @@ namespace ignite
         DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Occlusion Texture", material->occlusionTextureHandle,
             [&]() { material->SetDirtyFlag(true); });
     }
-    
+
 
     void AssetEditorPanel::UITextureEditor(AssetEditorData &assetData)
     {
@@ -4606,7 +4645,7 @@ namespace ignite
             ImGui::EndDragDropTarget();
         }
     }
-    
+
 #pragma endregion !3D_STUFF
 
     bool AssetEditorPanel::SaveAsset(AssetEditorData &assetData)
@@ -5017,17 +5056,21 @@ namespace ignite
                 assetName = metadata.filepath.generic_string();
             }
 
-            AssetEditorData data;
-            data.asset = asset;
-            data.metadata = metadata;
-            data.handle = handle;
-            data.isOpen = true;
-            data.requestFocus = true;
-            data.windowTitle = std::format("{} - {}###asset_editor_{}", AssetTypeToString(metadata.type), assetName, static_cast<uint64_t>(handle));
+            Application::SubmitToMainThread([asset, metadata, handle, assetName, this]()
+            {
+                AssetEditorData data;
+                data.asset = asset;
+                data.metadata = metadata;
+                data.handle = handle;
+                data.isOpen = true;
+                data.requestFocus = true;
+                data.windowTitle = std::format("{} - {}###asset_editor_{}", AssetTypeToString(metadata.type), assetName, static_cast<uint64_t>(handle));
 
-            InitializeSceneData(data);
+                InitializeSceneData(data);
 
-            m_Assets.push_back(std::move(data));
+                m_Assets.push_back(std::move(data));
+            });
+
             return true;
         }
 
