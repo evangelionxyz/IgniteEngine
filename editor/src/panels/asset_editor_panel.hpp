@@ -14,6 +14,7 @@
 
 namespace ignite
 {
+    class Widget;
     class Material;
     class Texture;
     class SpriteSheet;
@@ -86,6 +87,9 @@ namespace ignite
         bool BeginAssetEditorWindow(AssetEditorData &assetData, bool &isOpen, const ImVec2 &windowSize, const ImVec2 &minWindowSize, ImGuiWindowFlags flags);
         void UIAssetEditorClosePopup(AssetEditorData &assetData, bool &isOpen);
 
+        void UIWidgetEditor(AssetEditorData &assetData);
+        void UIWidgetEditor(const Ref<Widget> &widget);
+
         void UIMaterial2DEditor(AssetEditorData &assetData);
         void UIMaterial2DEditor(const Ref<Material2D> &material2D);
 
@@ -103,19 +107,19 @@ namespace ignite
 
         void UISkeletonEditor(const Ref<Skeleton> &skeleton, EditorSceneData &sceneData);
         void UISkeletonEditor(AssetEditorData &assetData);
-        
+
         void UISkeletalAnimationEditor(const Ref<SkeletalAnimation> &animation);
         void UISkeletalAnimationEditor(AssetEditorData &assetData);
-        
+
         void UIAnimatorControllerEditor(AssetEditorData &assetData);
         void UIAnimatorControllerEditor(const Ref<AnimatorController> &animator);
 
         void UITextureEditor(AssetEditorData &assetData);
         void UITextureEditor(AssetEditorData &assetData, const Ref<Texture> &texture);
-        
+
         void UIMaterialEditor(const Ref<Material> &material);
         void UIMaterialEditor(AssetEditorData &assetData);
-        
+
         bool SaveAsset(AssetEditorData &assetData);
         void UICreateAssetPopup();
         void InitializeSceneData(AssetEditorData &assetData);

@@ -1,86 +1,159 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "widget.hpp"
-#include "ui_manager.hpp"
+#include "ignite/serializer/serializer.hpp"
 
-namespace ignite {
+namespace ignite
+{
+    IWidgetItem::IWidgetItem(Widget *widget)
+        : m_Widget(widget)
+    {
 
-    Rect UIWidget::GetAlignedRect() const
+    }
+
+    Rect IWidgetItem::GetAlignedRect() const
     {
         Rect alignedRect = m_Rect;
         glm::vec2 &position = alignedRect.min;
         glm::vec2 &size = alignedRect.max;
         
-        UIManager &uiManager = UIManager::GetInstance();
-        const glm::vec2 viewportSize = { static_cast<float>(uiManager.GetViewportWidth()), static_cast<float>(uiManager.GetViewportHeight()) };
+        const auto &vpSizeI = m_Widget->GetViewportSize();
+        const glm::vec2 viewportSize = { static_cast<float>(vpSizeI.x), static_cast<float>(vpSizeI.y) };
         
         switch (m_Alignment)
         {
-            case UIAlignment::TOP_CENTER:
+            case WidgetAlignment::TOP_CENTER:
                 position.x = viewportSize.x / 2.0f + m_Rect.min.x - m_Rect.GetSize().x / 2.0f;
                 size.x = viewportSize.x / 2.0f + m_Rect.min.x + m_Rect.GetSize().x / 2.0f;
             break;
-            case UIAlignment::TOP_RIGHT:
+            case WidgetAlignment::TOP_RIGHT:
                 position.x = viewportSize.x - m_Rect.min.x - m_Rect.GetSize().x;
                 size.x = viewportSize.x - m_Rect.min.x;
                 break;
-            case UIAlignment::CENTER_LEFT:
+            case WidgetAlignment::CENTER_LEFT:
                 position.y = viewportSize.y / 2.0f + m_Rect.min.y - m_Rect.GetSize().y / 2.0f;
                 size.y = viewportSize.y / 2.0f + m_Rect.min.y + m_Rect.GetSize().y / 2.0f;
                 break;
-            case UIAlignment::CENTER:
+            case WidgetAlignment::CENTER:
                 position.x = viewportSize.x / 2.0f + m_Rect.min.x - m_Rect.GetSize().x / 2.0f;
                 size.x = viewportSize.x / 2.0f + m_Rect.min.x + m_Rect.GetSize().x / 2.0f;
                 position.y = viewportSize.y / 2.0f + m_Rect.min.y - m_Rect.GetSize().y / 2.0f;
                 size.y = viewportSize.y / 2.0f + m_Rect.min.y + m_Rect.GetSize().y / 2.0f;
                 break;
-            case UIAlignment::CENTER_RIGHT:
+            case WidgetAlignment::CENTER_RIGHT:
                 position.x = viewportSize.x - m_Rect.min.x - m_Rect.GetSize().x;
                 size.x = viewportSize.x - m_Rect.min.x;
                 position.y = viewportSize.y / 2.0f + m_Rect.min.y - m_Rect.GetSize().y / 2.0f;
                 size.y = viewportSize.y / 2.0f + m_Rect.min.y + m_Rect.GetSize().y / 2.0f;
                 break;
-            case UIAlignment::BOTTOM_LEFT:
+            case WidgetAlignment::BOTTOM_LEFT:
                 position.y = viewportSize.y - m_Rect.max.y;
                 size.y = viewportSize.y - m_Rect.min.y;
                 break;
-            case UIAlignment::BOTTOM_CENTER:
+            case WidgetAlignment::BOTTOM_CENTER:
                 position.x = viewportSize.x / 2.0f + m_Rect.min.x - m_Rect.GetSize().x / 2.0f;
                 size.x = viewportSize.x / 2.0f + m_Rect.min.x + m_Rect.GetSize().x / 2.0f;
                 position.y = viewportSize.y - m_Rect.max.y;
                 size.y = viewportSize.y - m_Rect.min.y;
                 break;
-            case UIAlignment::BOTTOM_RIGHT:
+            case WidgetAlignment::BOTTOM_RIGHT:
                 position.x = viewportSize.x - m_Rect.min.x - m_Rect.GetSize().x;
                 size.x = viewportSize.x - m_Rect.min.x; 
                 position.y = viewportSize.y - m_Rect.max.y;
                 size.y = viewportSize.y - m_Rect.min.y;
                 break;
-            case UIAlignment::TOP_LEFT:
+            case WidgetAlignment::TOP_LEFT:
             default: break;
         }
 
         return alignedRect;
     }
+
+    WidgetButton::WidgetButton(Widget *widget, const std::string &text)
+        : IWidgetItem(widget), m_Text(text)
+    {
+        m_NormalColor = glm::vec4(0.3f, 0.3f, 0.3f, 1.0f);
+        m_HoverColor = glm::vec4(0.5f, 0.5f, 0.5f, 1.0f);
+        m_PressedColor = glm::vec4(0.2f, 0.2f, 0.2f, 1.0f);
+        m_TextColor = UI_COLOR_WHITE;
+        m_BorderColor = glm::vec4(0.6f, 0.6f, 0.6f, 1.0f);
+    }
+
+    WidgetButton::~WidgetButton()
+    {
+    }
+
+    void WidgetButton::Update(float deltaTime, const glm::uvec2 &mousePos)
+    {
+        bool wasHovered = m_IsHovered;
+        m_IsHovered = Contains(mousePos);
+
+        if (m_IsHovered && !wasHovered && m_OnHoverEnter)
+        {
+            m_OnHoverEnter();
+        }
+        else if (!m_IsHovered && wasHovered && m_OnHoverExit)
+        {
+            m_OnHoverExit();
+        }
+    }
+
+    void WidgetButton::OnMouseClick(const glm::uvec2 &mousePos, bool isPressed)
+    {
+        if (Contains(mousePos))
+        {
+            if (isPressed)
+            {
+                m_IsPressed = true;
+                if (m_OnPressed)
+                {
+                    m_OnPressed();
+                }
+            }
+            else if (m_IsPressed)
+            {
+                m_IsPressed = false;
+                if (m_OnClick)
+                {
+                    m_OnClick();
+                }
+                if (m_OnReleased)
+                {
+                    m_OnReleased();
+                }
+            }
+        }
+        else if (!isPressed)
+        {
+            m_IsPressed = false;
+        }
+    }
+
+    Widget::Widget(Scene *scene)
+        : m_Scene(scene), m_ViewportSize({ 1280, 720 })
+    {
+    }
+
+    Widget::~Widget()
+    {
+    }
+
+    void Widget::Update(float deltaTime, const glm::uvec2 &mousePos)
+    {
+        for (auto &[id, item] : m_WidgetItems)
+        {
+            item->Update(deltaTime, mousePos);
+        }
+    }
+
+    bool Widget::Serialize(const std::filesystem::path &filepath)
+    {
+        return true;
+    }
+
+    Ref<Widget> Widget::Deserialize(const std::filesystem::path &filepath)
+    {
+        return nullptr;
+    }
+
 }

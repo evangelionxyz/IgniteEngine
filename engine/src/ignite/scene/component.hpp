@@ -408,6 +408,15 @@ namespace ignite
 		COMPONENT_CLASS_TYPE(CompType_Font)
     };
 
+    class WidgetComponent : public IComponent
+    {
+    public:
+        AssetHandle widgetHandle = AssetHandle(0);
+
+        WidgetComponent() = default;
+        COMPONENT_CLASS_TYPE(CompType_Widget)
+    };
+
 	class MeshComponent : public IComponent
 	{
 	public:

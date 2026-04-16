@@ -57,7 +57,6 @@ namespace ignite
         m_Input = CreateScope<Input>(m_Window.get());
 
         m_Renderer = CreateRef<Renderer>(m_Window->GetDeviceManager(), m_CreateInfo.graphicsApi);
-        m_UIManager = CreateScope<UIManager>();
 
         if (createInfo.useGui)
         {
@@ -507,7 +506,6 @@ namespace ignite
         }
         
         // destroy
-        m_UIManager.reset();
         m_Renderer.reset();
 
         // destroy device

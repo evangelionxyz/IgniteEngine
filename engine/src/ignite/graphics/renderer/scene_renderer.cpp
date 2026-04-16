@@ -19,8 +19,8 @@
 #include "ignite/graphics/framebuffer_key.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/renderer.hpp"
-#include "ignite/graphics/ui_renderer.hpp"
-#include "ignite/graphics/ui/ui_manager.hpp"
+#include "ignite/graphics/ui/widget.hpp"
+#include "widget_renderer.hpp"
 
 #include <ranges>
 #include <cstdlib>
@@ -414,6 +414,29 @@ namespace ignite
 
     SceneRenderer::SceneRenderer()
     {
+        RenderTargetCreateInfo sceneRTCreateInfo = {};
+        sceneRTCreateInfo.attachments =
+        {
+            FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
+            FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}, // Main Color
+            FramebufferAttachments{ "[Scene ObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget} // Object ID
+        };
+
+        m_SceneRT = RenderTarget::Create(sceneRTCreateInfo, "[SceneRenderer] Scene RT");
+        m_WidgetRT = RenderTarget::Create(sceneRTCreateInfo, "[SceneRenderer] Widget RT");
+        m_GameplaySceneRT = RenderTarget::Create(sceneRTCreateInfo, "[SceneRenderer] Gameplay Scene RT");
+        m_GameplayWidgetRT = RenderTarget::Create(sceneRTCreateInfo, "[SceneRenderer] Gameplay Widget RT");
+
+        RenderTargetCreateInfo compositeRTCreateInfo = {};
+        compositeRTCreateInfo.attachments =
+        {
+            FramebufferAttachments{ "[Composite Color Attachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget} // Main Color
+        };
+
+        m_CompositeRT = RenderTarget::Create(compositeRTCreateInfo, "[SceneRenderer] Composite RT");
+        m_GameplayCompositeRT = RenderTarget::Create(compositeRTCreateInfo, "[SceneRenderer] Gameplay Composite RT");
+
+        m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
     }
 
     SceneRenderer::~SceneRenderer()
@@ -614,12 +637,12 @@ namespace ignite
         }
     }
 
-    void SceneRenderer::RenderEditorTo(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT, bool renderEnvironment)
+    void SceneRenderer::RenderEditorTo(ICamera *camera)
     {
         IGN_PROFILE_FUNCTION();
         IGN_PROFILE_FRAME_NAMED("Editor Frame");
 
-        WorldEnvironment *worldEnvironment = renderEnvironment ? GetActiveWorldEnvironment(m_Scene.get()) : nullptr;
+        WorldEnvironment *worldEnvironment =  GetActiveWorldEnvironment(m_Scene.get());
 
         if (worldEnvironment)
         {
@@ -712,26 +735,26 @@ namespace ignite
             // Clear Render Targets
             // far depth = 1.0f == LessOrEqual
             {
-                uiRT->ClearColorAttachmentFloat(cmd, 0);
-                uiRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
-                uiRT->ClearDepthAttachment(cmd, 1.0f, 0);
+                m_WidgetRT->ClearColorAttachmentFloat(cmd, 0);
+                m_WidgetRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
+                m_WidgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
-                sceneRT->ClearColorAttachmentFloat(cmd, 0);
-                sceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
-                sceneRT->ClearDepthAttachment(cmd, 1.0f, 0);
+                m_SceneRT->ClearColorAttachmentFloat(cmd, 0);
+                m_SceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
+                m_SceneRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
-                compositeRT->ClearColorAttachmentFloat(cmd, 0);
-                compositeRT->ClearDepthAttachment(cmd, 1.0f, 0);
+                m_CompositeRT->ClearColorAttachmentFloat(cmd, 0);
+                m_CompositeRT->ClearDepthAttachment(cmd, 1.0f, 0);
             }
 
 
-            nvrhi::IFramebuffer *framebuffer = sceneRT->GetFramebuffer();
+            nvrhi::IFramebuffer *framebuffer = m_SceneRT->GetFramebuffer();
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::ShadowPass");
                 ShadowPass(cmd, camera);
             }
 
-            if (renderEnvironment && worldEnvironment && worldEnvironment->environment && !worldEnvironment->dirtyEnvironment)
+            if (worldEnvironment && worldEnvironment->environment && !worldEnvironment->dirtyEnvironment)
             {
                 const Ref<GraphicsPipeline> envPSO = GetEnvPipelineForFB(framebuffer, m_FillMode);
                 worldEnvironment->environment->Draw(cmd, camera, framebuffer, envPSO);
@@ -771,15 +794,15 @@ namespace ignite
             Ref<Texture> edgeTexture = nullptr;
             if (m_EdgeDetection && !m_SelectedEntities.empty())
             {
-                const uint32_t width = sceneRT->GetWidth();
-                const uint32_t height = sceneRT->GetHeight();
+                const uint32_t width = m_SceneRT->GetWidth();
+                const uint32_t height = m_SceneRT->GetHeight();
 
                 if (!m_EdgeDetection->GetOutputTexture() || m_EdgeDetection->GetOutputTexture()->GetWidth() != static_cast<int>(width) || m_EdgeDetection->GetOutputTexture()->GetHeight() != static_cast<int>(height))
                 {
                     m_EdgeDetection->CreateOutputTexture(width, height);
                 }
 
-                m_EdgeDetection->UpdateBindingSet(sceneRT->GetColorAttachment(0), sceneRT->GetColorAttachment(1), sceneRT->GetDepthAttachment());
+                m_EdgeDetection->UpdateBindingSet(m_SceneRT->GetColorAttachment(0), m_SceneRT->GetColorAttachment(1), m_SceneRT->GetDepthAttachment());
 
                 constexpr uint32_t kMaxSelectedIDs = 100;
                 const uint32_t selectedCount = static_cast<uint32_t>(std::min(m_SelectedEntities.size(), static_cast<size_t>(kMaxSelectedIDs)));
@@ -811,8 +834,8 @@ namespace ignite
                 m_Bloom->settings.iterations = postProcessing.bloomIterations;
 
                 IGN_PROFILE_SCOPE("SceneRenderer::BloomPass");
-                m_Bloom->Resize(sceneRT->GetWidth(), sceneRT->GetHeight());
-                m_Bloom->Build(cmd, sceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
+                m_Bloom->Resize(m_SceneRT->GetWidth(), m_SceneRT->GetHeight());
+                m_Bloom->Build(cmd, m_SceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
                 bloomTexture = m_Bloom->GetBloomTexture();
             }
 
@@ -820,15 +843,15 @@ namespace ignite
             if (m_SSAO && camera && postProcessing.enableSSAO)
             {
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::SSAOPass", 0x404040FF);
-                m_SSAO->Resize(sceneRT->GetWidth(), sceneRT->GetHeight());
-                m_SSAO->Build(cmd, sceneRT->GetDepthAttachment(), camera, postProcessing, m_CompositeVertexBuffer);
+                m_SSAO->Resize(m_SceneRT->GetWidth(), m_SceneRT->GetHeight());
+                m_SSAO->Build(cmd, m_SceneRT->GetDepthAttachment(), camera, postProcessing, m_CompositeVertexBuffer);
                 ssaoTexture = m_SSAO->GetAOTexture();
             }
 
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::CompositePass");
                 CompositePass(cmd, camera, postProcessing,
-                    compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0),
+                    m_CompositeRT->GetFramebuffer(), m_SceneRT->GetColorAttachment(0), m_WidgetRT->GetColorAttachment(0),
                     edgeTexture, bloomTexture, ssaoTexture);
             }
 
@@ -841,11 +864,11 @@ namespace ignite
         }
     }
 
-    void SceneRenderer::RenderGameplayTo(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT, bool renderEnvironment /*= true*/)
+    void SceneRenderer::RenderGameplayTo(ICamera *camera)
     {
         IGN_PROFILE_FUNCTION();
         IGN_PROFILE_FRAME_NAMED("Gameplay Frame");
-        WorldEnvironment *worldEnvironment = renderEnvironment ? GetActiveWorldEnvironment(m_Scene.get()) : nullptr;
+        WorldEnvironment *worldEnvironment = GetActiveWorldEnvironment(m_Scene.get());
 
         if (worldEnvironment)
         {
@@ -929,26 +952,26 @@ namespace ignite
             // Clear Render Targets
             // far depth = 1.0f == LessOrEqual
             {
-                uiRT->ClearColorAttachmentFloat(cmd, 0);
-                uiRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
-                uiRT->ClearDepthAttachment(cmd, 1.0f, 0);
+                m_GameplayWidgetRT->ClearColorAttachmentFloat(cmd, 0);
+                m_GameplayWidgetRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
+                m_GameplayWidgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
-                sceneRT->ClearColorAttachmentFloat(cmd, 0);
-                sceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
-                sceneRT->ClearDepthAttachment(cmd, 1.0f, 0);
+                m_GameplaySceneRT->ClearColorAttachmentFloat(cmd, 0);
+                m_GameplaySceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
+                m_GameplaySceneRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
-                compositeRT->ClearColorAttachmentFloat(cmd, 0);
-                compositeRT->ClearDepthAttachment(cmd, 1.0f, 0);
+                m_GameplayCompositeRT->ClearColorAttachmentFloat(cmd, 0);
+                m_GameplayCompositeRT->ClearDepthAttachment(cmd, 1.0f, 0);
             }
 
-            nvrhi::IFramebuffer *framebuffer = sceneRT->GetFramebuffer();
+            nvrhi::IFramebuffer *framebuffer = m_GameplaySceneRT->GetFramebuffer();
 
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::ShadowPass");
                 ShadowPass(cmd, camera);
             }
 
-            if (renderEnvironment && worldEnvironment && worldEnvironment->environment && !worldEnvironment->dirtyEnvironment)
+            if (worldEnvironment && worldEnvironment->environment && !worldEnvironment->dirtyEnvironment)
             {
                 const Ref<GraphicsPipeline> envPSO = GetEnvPipelineForFB(framebuffer, m_FillMode);
                 worldEnvironment->environment->Draw(cmd, camera, framebuffer, envPSO);
@@ -968,8 +991,8 @@ namespace ignite
                 m_Bloom->settings.iterations = camera->postProcessing.bloomIterations;
 
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::BloomPass", 0xFA0010FF);
-                m_Bloom->Resize(sceneRT->GetWidth(), sceneRT->GetHeight());
-                m_Bloom->Build(cmd, sceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
+                m_Bloom->Resize(m_GameplaySceneRT->GetWidth(), m_GameplaySceneRT->GetHeight());
+                m_Bloom->Build(cmd, m_GameplaySceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
                 bloomTexture = m_Bloom->GetBloomTexture();
             }
 
@@ -977,15 +1000,15 @@ namespace ignite
             if (m_SSAO && camera && camera->postProcessing.enableSSAO)
             {
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::SSAOPass", 0x404040FF);
-                m_SSAO->Resize(sceneRT->GetWidth(), sceneRT->GetHeight());
-                m_SSAO->Build(cmd, sceneRT->GetDepthAttachment(), camera, camera->postProcessing, m_CompositeVertexBuffer);
+                m_SSAO->Resize(m_GameplaySceneRT->GetWidth(), m_GameplaySceneRT->GetHeight());
+                m_SSAO->Build(cmd, m_GameplaySceneRT->GetDepthAttachment(), camera, camera->postProcessing, m_CompositeVertexBuffer);
                 ssaoTexture = m_SSAO->GetAOTexture();
             }
 
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::CompositePass");
                 CompositePass(cmd, camera, camera->postProcessing,
-                    compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0),
+                    m_GameplayCompositeRT->GetFramebuffer(), m_GameplaySceneRT->GetColorAttachment(0), m_GameplayWidgetRT->GetColorAttachment(0),
                     nullptr, bloomTexture, ssaoTexture);
             }
 
@@ -995,6 +1018,39 @@ namespace ignite
         {
             std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
             m_Device->executeCommandList(cmd);
+        }
+    }
+
+    void SceneRenderer::Resize(uint32_t width, uint32_t height)
+    {
+        m_SceneRT->Resize(width, height);
+        m_WidgetRT->Resize(width, height);
+        m_CompositeRT->Resize(width, height);
+
+        s_CompositeBindingSetCache.clear();
+        s_DebugGridBindingSetCache.clear();
+        s_CSMBindingSetCache.clear();
+    }
+
+    void SceneRenderer::ResizeGameplay(uint32_t width, uint32_t height)
+    {
+        m_GameplaySceneRT->Resize(width, height);
+        m_GameplayWidgetRT->Resize(width, height);
+        m_GameplayCompositeRT->Resize(width, height);
+
+        s_CompositeBindingSetCache.clear();
+        s_DebugGridBindingSetCache.clear();
+        s_CSMBindingSetCache.clear();
+
+        // Update camera view
+        if (m_Scene)
+        {
+            m_Scene->Resize(width, height);
+            if (Entity cameraEntity = m_Scene->GetPrimaryCamera())
+            {
+                auto &cameraComp = cameraEntity.GetComponent<CameraComponent>();
+                cameraComp.camera.UpdateProjection(static_cast<float>(width), static_cast<float>(height));
+            }
         }
     }
 
@@ -1841,13 +1897,6 @@ namespace ignite
 
         m_Renderer2D->Flush(framebuffer, m_CameraBuffer);
         m_Renderer2D->End();
-    }
-
-    void SceneRenderer::UpdateUIInput(const glm::vec2 &viewportMousePos, const glm::vec2 &viewportPos, const glm::vec2 &viewportSize, bool mousePressed)
-    {
-        UIManager &uiManager = UIManager::GetInstance();
-        uiManager.SetMousePosition(viewportMousePos, viewportPos, viewportSize);
-        uiManager.HandleMouseClick(mousePressed);
     }
 
     Ref<Texture> SceneRenderer::GetEnvironmentMapColorTexture() const

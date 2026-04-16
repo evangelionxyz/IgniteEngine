@@ -681,6 +681,11 @@ namespace ignite
 	}
 
     template<>
+    void Scene::OnComponentAdded<WidgetComponent>(Entity entity, WidgetComponent&comp)
+    {
+    }
+
+    template<>
     void Scene::OnComponentAdded<MeshComponent>(Entity entity, MeshComponent &comp)
     {
     }

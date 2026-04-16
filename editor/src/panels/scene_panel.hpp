@@ -39,10 +39,7 @@ namespace ignite
         void RenderSceneGameViewport();
         void RenderToolbar();
 
-        void ViewportEditResize(uint32_t width, uint32_t height);
-        void ViewportGameResize(uint32_t width, uint32_t height);
-
-        void OnEvent(Event &event);
+        virtual void OnEvent(Event &event) override;
         bool OnMouseScrolledEvent(MouseScrolledEvent &event);
         bool OnMouseMovedEvent(MouseMovedEvent &event);
         bool OnJoystickConnectionEvent(JoystickConnectionEvent &event);
@@ -55,6 +52,9 @@ namespace ignite
         EditorCamera &GetViewportCamera() { return m_EditorCamera; }
 
         const glm::vec2 &GetViewportMousePos() const { return m_ViewportData.mousePos; }
+
+        const glm::vec2 &GetEditorViewportSize() const { return m_Data.sceneEditorViewportRect.GetSize(); }
+        const glm::vec2 &GetGameplayViewportSize() const { return m_Data.sceneGameplayViewportRect.GetSize(); }
 
         void RenderHierarchy();
         Entity ShowEntityContextMenu();
@@ -69,18 +69,7 @@ namespace ignite
         Entity SetSelectedEntity(Entity entity);
         Entity GetSelectedEntity();
 
-        glm::vec2 GetViewportEditSize() const { return m_ViewportEditRT.rect.GetSize(); }
-        glm::vec2 GetViewportGameSize() const { return m_ViewportGameRT.rect.GetSize(); }
-
         const std::unordered_map<UUID, Entity> &GetSelectedEntities() { return m_SelectedEntities; }
-
-        const Ref<RenderTarget> &GetViewportEditSceneRT() { return m_ViewportEditRT.scene; }
-        const Ref<RenderTarget> &GetViewportEditUIRT() { return m_ViewportEditRT.ui; }
-        const Ref<RenderTarget> &GetViewportEditCompRT() { return m_ViewportEditRT.composite; }
-
-		const Ref<RenderTarget> &GetViewportGameSceneRT() { return m_ViewportGameRT.scene; }
-		const Ref<RenderTarget> &GetViewportGameUIRT() { return m_ViewportGameRT.ui; }
-		const Ref<RenderTarget> &GetViewportGameCompRT() { return m_ViewportGameRT.composite; }
         
         template<typename T, typename UIFunction>
         void RenderComponent(const std::string &name, Entity entity, UIFunction uiFunction, bool allowedToRemove = true);
@@ -101,18 +90,6 @@ namespace ignite
 
         static UUID m_TrackingSelectedEntity;
 
-        struct ViewportRenderTarget
-        {
-            Ref<RenderTarget> scene;
-            Ref<RenderTarget> ui;
-            Ref<RenderTarget> composite;
-
-            Rect rect;
-        };
-
-        ViewportRenderTarget m_ViewportEditRT;
-        ViewportRenderTarget m_ViewportGameRT;
-
 		struct ViewportData
 		{
 			glm::vec2 mousePos = glm::vec2(0.0f);
@@ -131,6 +108,9 @@ namespace ignite
 
             bool sceneViewportGameplayVisible = false;
             bool sceneViewportEditorVisible = false;
+
+            Rect sceneGameplayViewportRect;
+            Rect sceneEditorViewportRect;
 
             float gamePreviewZoom = 1.0f;
             glm::vec2 gamePreviewPan = glm::vec2(0.0f);

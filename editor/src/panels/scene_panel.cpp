@@ -12,7 +12,6 @@
 #include "ignite/graphics/texture.hpp"
 #include "ignite/scene/icomponent.hpp"
 #include "ignite/core/platform_utils.hpp"
-#include "ignite/graphics/ui_renderer.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/font.hpp"
@@ -116,39 +115,6 @@ namespace ignite
 
         cmd->close();
         device->executeCommandList(cmd);
-
-        // Create scene render target
-        RenderTargetCreateInfo rtCreateInfo = {};
-        rtCreateInfo.attachments =
-        {
-            FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
-            FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}, // Main Color
-            FramebufferAttachments{ "[Scene ObjectIDAttachment]", nvrhi::Format::R32_UINT, nvrhi::ResourceStates::RenderTarget} // Object ID
-        };
-
-        // Edit RT
-        m_ViewportEditRT.scene = RenderTarget::Create(rtCreateInfo, "[Edit Viewport Scene RT]");
-        m_ViewportEditRT.ui = RenderTarget::Create(rtCreateInfo, "[Edit Viewport UI RT]");
-        
-        // Game RT
-        m_ViewportGameRT.scene = RenderTarget::Create(rtCreateInfo, "[Game Viewport Scene RT]");
-        m_ViewportGameRT.ui = RenderTarget::Create(rtCreateInfo, "[Game Viewport UI RT]");
-
-        // Composite render target
-        {
-            RenderTargetCreateInfo rtCreateInfo = {};
-            rtCreateInfo.attachments =
-            {
-                //FramebufferAttachments{ "[Composite Depth Attachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite }, // Depth
-                FramebufferAttachments{ "[Composite Color Attachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget} // Main Color
-            };
-
-            // Edit RT
-            m_ViewportEditRT.composite = RenderTarget::Create(rtCreateInfo, "[Edit Viewport Composite RT]");
-            
-            // Game RT
-            m_ViewportGameRT.composite = RenderTarget::Create(rtCreateInfo, "[Game Viewport Composite RT]");
-        }
     }
 
     ScenePanel::~ScenePanel()
@@ -1941,16 +1907,16 @@ namespace ignite
             const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
             const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
 
-            m_ViewportEditRT.rect.min = { canvasPos.x, canvasPos.y };
-            m_ViewportEditRT.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
+            m_Data.sceneEditorViewportRect.min = { canvasPos.x, canvasPos.y };
+            m_Data.sceneEditorViewportRect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
 
             // Mouse position in screen space
             const ImVec2 &mousePos = ImGui::GetMousePos();
             m_ViewportData.mousePos = { mousePos.x - canvasPos.x, mousePos.y - canvasPos.y };
 
             // Render scene texture to imgui
-            ImTextureID editorSceneImage = (ImTextureID)m_ViewportEditRT.composite->GetColorAttachment(0)->GetHandle().Get(); // Current composite RT
-            ImGui::Image(editorSceneImage, canvasSize);
+            ImTextureID editorViewImage = (ImTextureID)m_EditorLayer->GetSceneRenderer()->GetCompositeRT()->GetColorAttachment(0)->GetHandle().Get(); // Current composite RT
+            ImGui::Image(editorViewImage, canvasSize);
 
             ImDrawList *drawList = ImGui::GetWindowDrawList();
 
@@ -1960,7 +1926,7 @@ namespace ignite
                 const float fps = ImGui::GetIO().Framerate;
                 std::string statusStr = std::format("FPS {:.3}", fps);
                 drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
-                
+
                 yPosition += padding;
                 statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
                 drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
@@ -1974,10 +1940,10 @@ namespace ignite
 
                 if (m_Scene && imageHovered && (mouseDown || mouseDoubleDown) && !m_Gizmo.IsManipulating() && !m_Gizmo.IsHovered() && !m_Data.is2DBoundsHovered)
                 {
-                    Ref<Texture> objectIdTexture = m_ViewportEditRT.scene->GetColorAttachment(1);
+                    Ref<Texture> objectIdTexture = m_EditorLayer->GetSceneRenderer()->GetSceneRT()->GetColorAttachment(1);
                     if (objectIdTexture && objectIdTexture->GetHandle())
                     {
-                        const glm::vec2 viewSize = m_ViewportEditRT.rect.GetSize();
+                        const glm::vec2 viewSize = m_Data.sceneEditorViewportRect.GetSize();
                         const int texWidth = objectIdTexture->GetWidth();
                         const int texHeight = objectIdTexture->GetHeight();
 
@@ -2083,8 +2049,8 @@ namespace ignite
                 ImGuiOrientation::config.axisLengthScale = 0.25f;
                 ImGuiOrientation::SetRect
                 (
-                    m_ViewportEditRT.rect.max.x - orientationSize - orientationPadding,
-                    m_ViewportEditRT.rect.min.y + orientationPadding
+                    m_Data.sceneEditorViewportRect.max.x - orientationSize - orientationPadding,
+                    m_Data.sceneEditorViewportRect.min.y + orientationPadding
                 );
 
                 if (ImGuiOrientation::DrawGizmo(ImGui::GetWindowDrawList(), (float *const)glm::value_ptr(view), glm::value_ptr(projection), 100.0f))
@@ -2100,7 +2066,7 @@ namespace ignite
             gizmoInfo.cameraProjection = projection;
             gizmoInfo.cameraType = m_EditorCamera.projectionType;
             gizmoInfo.snapValue = m_ViewportData.snapValue;
-            gizmoInfo.viewRect = m_ViewportEditRT.rect;
+            gizmoInfo.viewRect = m_Data.sceneEditorViewportRect;
 
             m_Gizmo.SetInfo(gizmoInfo);
 
@@ -2370,13 +2336,13 @@ namespace ignite
                             m_Data.gamePreviewPan += glm::vec2(delta.x, delta.y);
                         }
 
-                        m_ViewportGameRT.rect.min = { baseImagePos.x, baseImagePos.y };
-                        m_ViewportGameRT.rect.max = { baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y };
-
-                        ImTextureID previewImage = (ImTextureID)m_ViewportGameRT.composite->GetColorAttachment(0)->GetHandle().Get();
+                        m_Data.sceneGameplayViewportRect.min = { baseImagePos.x, baseImagePos.y };
+                        m_Data.sceneGameplayViewportRect.max = { baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y };
+                        
+                        ImTextureID gameplayViewImaage = (ImTextureID)m_EditorLayer->GetSceneRenderer()->GetGameplayCompositeRT()->GetColorAttachment(0)->GetHandle().Get();
                         ImDrawList *drawList = ImGui::GetWindowDrawList();
                         drawList->PushClipRect(baseImagePos, ImVec2(baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y), true);
-                        drawList->AddImage(previewImage, imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
+                        drawList->AddImage(gameplayViewImaage, imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
                         drawList->PopClipRect();
 
                         ImGui::SetCursorScreenPos(baseImagePos);
@@ -2384,8 +2350,8 @@ namespace ignite
                     }
                     else
                     {
-                        m_ViewportGameRT.rect.min = { canvasPos.x, canvasPos.y };
-                        m_ViewportGameRT.rect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
+                        m_Data.sceneGameplayViewportRect.min = { canvasPos.x, canvasPos.y };
+                        m_Data.sceneGameplayViewportRect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
                         ImGui::Text("No Camera");
                     }
                 }
@@ -2396,7 +2362,7 @@ namespace ignite
             }
             ImGui::End();
         }
-        
+
     }
 
     void ScenePanel::RenderToolbar()
@@ -2577,7 +2543,7 @@ namespace ignite
 
     glm::vec3 ScenePanel::ScreenToWorldOnPlane(const glm::vec2 &screenPos, float planeZ, bool *isValid)
     {
-        return Math::ScreenToWorldOnPlane(screenPos, planeZ, m_EditorCamera.GetProjection() * m_EditorCamera.GetView(), m_ViewportEditRT.rect, isValid);
+        return Math::ScreenToWorldOnPlane(screenPos, planeZ, m_EditorCamera.GetProjection() * m_EditorCamera.GetView(), m_Data.sceneEditorViewportRect, isValid);
     }
 
     void ScenePanel::Render2DBoundsSizing()
@@ -2640,7 +2606,7 @@ namespace ignite
         {
             const glm::vec4 world = worldMatrix * glm::vec4(kBoundsCorners[i].x, kBoundsCorners[i].y, 0.0f, 1.0f);
             worldCorners[i] = glm::vec3(world);
-            if (!Math::ProjectWorldToScreen(worldCorners[i], viewProjection, m_ViewportEditRT.rect, screenCorners[i]))
+            if (!Math::ProjectWorldToScreen(worldCorners[i], viewProjection, m_Data.sceneEditorViewportRect, screenCorners[i]))
             {
                 if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
                 {
@@ -2655,9 +2621,9 @@ namespace ignite
         drawList->AddPolyline(screenCorners.data(), static_cast<int>(screenCorners.size()), boundsColor, ImDrawFlags_Closed, 2.0f);
 
         const ImVec2 mousePos = ImGui::GetMousePos();
-        const bool mouseInViewport =
-            mousePos.x >= m_ViewportEditRT.rect.min.x && mousePos.x <= m_ViewportEditRT.rect.max.x &&
-            mousePos.y >= m_ViewportEditRT.rect.min.y && mousePos.y <= m_ViewportEditRT.rect.max.y;
+        const bool mouseInViewport = 
+            mousePos.x >= m_Data.sceneEditorViewportRect.min.x && mousePos.x <= m_Data.sceneEditorViewportRect.max.x &&
+            mousePos.y >= m_Data.sceneEditorViewportRect.min.y && mousePos.y <= m_Data.sceneEditorViewportRect.max.y;
 
         constexpr float handleRadius = 6.0f;
         const float handleRadiusSq = handleRadius * handleRadius;
@@ -2775,35 +2741,6 @@ namespace ignite
             }
         }
     }
-
-	void ScenePanel::ViewportEditResize(uint32_t width, uint32_t height)
-    {
-        // Resize framebuffers
-        m_ViewportEditRT.scene->Resize(width, height);
-        m_ViewportEditRT.ui->Resize(width, height);
-        m_ViewportEditRT.composite->Resize(width, height);
-
-        // Update camera view
-        m_EditorCamera.UpdateProjection(static_cast<float>(width), static_cast<float>(height));
-    }
-
-	void ScenePanel::ViewportGameResize(uint32_t width, uint32_t height)
-	{
-        // Resize framebuffers
-		m_ViewportGameRT.scene->Resize(width, height);
-		m_ViewportGameRT.ui->Resize(width, height);
-		m_ViewportGameRT.composite->Resize(width, height);
-        
-        // Update camera view
-        if (m_Scene)
-        {
-            if (Entity cameraEntity = m_Scene->GetPrimaryCamera())
-            {
-                auto &cameraComp = cameraEntity.GetComponent<CameraComponent>();
-                cameraComp.camera.UpdateProjection(static_cast<float>(width), static_cast<float>(height));
-            }
-        }
-	}
 
     template<typename T, typename UIFunction>
     void ScenePanel::RenderComponent(const std::string &name, Entity entity, UIFunction uiFunction, bool allowedToRemove)
