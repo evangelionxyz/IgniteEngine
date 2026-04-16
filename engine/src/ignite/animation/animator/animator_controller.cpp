@@ -17,9 +17,17 @@
 #include <cmath>
 
 #include <glm/gtx/quaternion.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 namespace ignite
 {
+
+    glm::mat4 TRSToMat4(const TRS& trs)
+    {
+        return glm::translate(glm::mat4(1.0f), trs.translation) *
+               glm::toMat4(trs.rotation) *
+               glm::scale(glm::mat4(1.0f), trs.scale);
+    }
 
     std::string AnimatorController::EvaluateTransitions(const std::string &currentState, float normalizedTime) const
     {
@@ -301,6 +309,7 @@ namespace ignite
         Ref<Asset> skeletonAsset = assetManager->GetAsset(skeletonHandle);
         if (!skeletonAsset)
             skeletonAsset = assetManager->GetAssetImmediate(skeletonHandle);
+
         Ref<Skeleton> skeleton = skeletonAsset ? skeletonAsset->As<Skeleton>() : nullptr;
         if (!skeleton)
             return false;
@@ -327,6 +336,7 @@ namespace ignite
         Ref<Asset> animationAsset = assetManager->GetAsset(state->animHandle);
         if (!animationAsset)
             animationAsset = assetManager->GetAssetImmediate(state->animHandle);
+
         Ref<SkeletalAnimation> animation = animationAsset ? animationAsset->As<SkeletalAnimation>() : nullptr;
         if (!animation || animation->duration <= 0.0f)
             return false;
@@ -354,8 +364,12 @@ namespace ignite
                 state = nextState;
                 animationAsset = assetManager->GetAsset(state->animHandle);
                 if (!animationAsset)
+                {
                     animationAsset = assetManager->GetAssetImmediate(state->animHandle);
+                }
+                
                 animation = animationAsset ? animationAsset->As<SkeletalAnimation>() : nullptr;
+                
                 if (!animation || animation->duration <= 0.0f)
                     return false;
             }
@@ -364,42 +378,52 @@ namespace ignite
         const float animTime = std::fmod(runtime.stateElapsed * animation->ticksPerSeconds, animation->duration);
         const size_t jointCount = skeleton->joints.size();
 
-        // Build per-instance local transforms from skeleton defaults (read-only)
-        std::vector<glm::mat4> localTransforms(jointCount);
-        for (size_t i = 0; i < jointCount; ++i)
+        // Allocate transforms
+        if (runtime.localPoses.size() != jointCount)
         {
-            const Joint &j = skeleton->joints[i];
-            localTransforms[i] = glm::translate(glm::mat4(1.0f), j.defaultTranslation)
-                * glm::toMat4(j.defaultRotation)
-                * glm::scale(glm::mat4(1.0f), j.defaultScale);
+            runtime.localPoses.resize(jointCount);
+            runtime.globalPoses.resize(jointCount);
+            runtime.finalTransforms.resize(jointCount);
         }
 
-        // Apply animation channels to per-instance local transforms
-        for (auto &[nodeName, channel] : animation->channels)
+        // Set default local poses
+        for (size_t i = 0; i < jointCount; ++i)
         {
-            if (const auto it = skeleton->nameToJointMap.find(nodeName); it != skeleton->nameToJointMap.end())
+            const Joint &joint = skeleton->joints[i];
+            runtime.localPoses[i] = {joint.defaultTranslation, joint.defaultRotation, joint.defaultScale};
+        }
+
+        // Apply animation channels to per-instance local poses
+        for (auto &[jointIndex, channel] : animation->channels)
+        {
+            const Joint &joint = skeleton->joints[jointIndex];
+            runtime.localPoses[jointIndex] = channel.CalculateTRS(animTime, joint.defaultTranslation, joint.defaultRotation, joint.defaultScale);
+        }
+
+        // Compute per-instance global poses using read-only skeleton hierarchy
+        for (size_t i = 0; i < jointCount; ++i)
+        {
+            const Joint &joint = skeleton->joints[i];
+            if (joint.parentJointId == -1)
             {
-                const i32 jointIndex = it->second;
-                const Joint &j = skeleton->joints[jointIndex];
-                localTransforms[jointIndex] = channel.CalculateTransform(animTime,
-                    j.defaultTranslation, j.defaultRotation, j.defaultScale);
+                runtime.globalPoses[i] = runtime.localPoses[i];
+            }
+            else
+            {
+                const TRS& parent = runtime.globalPoses[joint.parentJointId];
+                TRS& global = runtime.globalPoses[i];
+                global.translation = parent.translation + parent.rotation * (parent.scale * runtime.localPoses[i].translation);
+                global.rotation = parent.rotation * runtime.localPoses[i].rotation;
+                global.scale = parent.scale * runtime.localPoses[i].scale;
             }
         }
 
-        // Compute per-instance global transforms using read-only skeleton hierarchy
-        std::vector<glm::mat4> globalTransforms(jointCount);
+        // Compute GPU-ready final transforms: globalPose -> mat4 * inverseBindPose
         for (size_t i = 0; i < jointCount; ++i)
         {
-            const Joint &j = skeleton->joints[i];
-            globalTransforms[i] = (j.parentJointId == -1)
-                ? localTransforms[i]
-                : globalTransforms[j.parentJointId] * localTransforms[i];
+            glm::mat4 globalMat = TRSToMat4(runtime.globalPoses[i]);
+            runtime.finalTransforms[i] = globalMat * skeleton->joints[i].inverseBindPose;
         }
-
-        // Compute GPU-ready final transforms: globalTransform * inverseBindPose
-        runtime.finalTransforms.resize(jointCount);
-        for (size_t i = 0; i < jointCount; ++i)
-            runtime.finalTransforms[i] = globalTransforms[i] * skeleton->joints[i].inverseBindPose;
 
         return true;
     }

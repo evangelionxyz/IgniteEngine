@@ -5,6 +5,7 @@
 #define SKELETAL_ANIMATION_HPP
 
 #include "ignite/asset/asset.hpp"
+#include "animator/animator.hpp"
 #include "keyframes.hpp"
 
 #include <string>
@@ -19,8 +20,9 @@ namespace ignite
         AnimationChannel() = default;
 
         // S * (T/S)
-        glm::mat4 CalculateTransform(float timeInTicks, const glm::vec3& defaultTranslation, 
-            const glm::quat& defaultRotation, const glm::vec3& defaultScale);
+        TRS CalculateTRS(float timeInTicks, const glm::vec3& defaultTranslation, const glm::quat& defaultRotation, const glm::vec3& defaultScale);
+
+        glm::mat4 CalculateTransform(float timeInTicks, const glm::vec3 &defaultTranslation, const glm::quat &defaultRotation, const glm::vec3 &defaultScale);
 
         Vec3Key translationKeys;
         QuatKey rotationKeys;
@@ -41,7 +43,7 @@ namespace ignite
         float ticksPerSeconds = 1.0f;
         float timeInSeconds = 0.0f;
         bool isPlaying = false;
-        std::unordered_map<std::string, AnimationChannel> channels;
+        std::unordered_map<int, AnimationChannel> channels;
 
         virtual bool Serialize(const std::filesystem::path &filepath) override;
         static Ref<SkeletalAnimation> Deserialize(const std::filesystem::path &filepath);

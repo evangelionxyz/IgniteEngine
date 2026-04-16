@@ -257,6 +257,28 @@ namespace ignite
         state.framebuffer = framebuffer;
         state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
+            if (!m_BoneTransforms.empty())
+            {
+                if (!m_SkeletonGpuBuffer)
+                {
+                    m_SkeletonGpuBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Preview Skeleton Buffer");
+                }
+
+                GPUSkeletonBuffer skeletonGPUData{};
+                const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), m_BoneTransforms.size());
+                for (size_t i = 0; i < boneCount; ++i)
+                {
+                    skeletonGPUData.bones[i] = m_BoneTransforms[i];
+                }
+
+                for (size_t i = boneCount; i < MAX_BONES; ++i)
+                {
+                    skeletonGPUData.bones[i] = glm::mat4(1.0f);
+                }
+
+                m_SkeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
+            }
+
         for (auto &meshInstance : m_PreviewMesh->GetMeshInstances())
         {
             auto &primitive = meshInstance->GetPrimitive();
@@ -274,7 +296,6 @@ namespace ignite
             {
                 continue;
             }
-
 
             SkinnedMeshBufferData gpuData;
 
@@ -295,16 +316,8 @@ namespace ignite
             }
             const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
             gpuData.normal = glm::mat4(normalMat3);
-            std::fill(std::begin(gpuData.boneTransforms), std::end(gpuData.boneTransforms), glm::mat4(1.0f));
-            
-            const size_t transformCount = std::min(static_cast<size_t>(MAX_BONES), m_BoneTransforms.size());
-            for (size_t i = 0; i < transformCount; ++i)
-            {
-                gpuData.boneTransforms[i] = m_BoneTransforms[i];
-            }
-
             meshInstance->SetData(cmd, &gpuData, sizeof(SkinnedMeshBufferData));
-            meshInstance->EnsureBuffer(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer);
+              meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, m_SkeletonGpuBuffer);
 
             nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
             

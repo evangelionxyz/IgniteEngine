@@ -605,18 +605,17 @@ namespace ignite
             AppendRaw(buffer, anim->duration);
             AppendRaw(buffer, anim->ticksPerSeconds);
 
-            // write name size and name
-
-            uint32_t nameSize = 0;
-            AppendString(buffer, anim->name, nameSize);
+            // write animation name size and name
+            uint32_t animationNameSize = 0;
+            AppendString(buffer, anim->name, animationNameSize);
 
             // write channels
             uint32_t channelCount = static_cast<uint32_t>(anim->channels.size());
             AppendRaw(buffer, channelCount);
 
-            for (const auto &[channelName, channel] : anim->channels)
+            for (const auto &[jointIndex, channel] : anim->channels)
             {
-                AppendString(buffer, channelName, nameSize);
+                AppendRaw(buffer, jointIndex);
 
                 uint32_t translationFrameCount = static_cast<uint32_t>(channel.translationKeys.frames.size());
                 uint32_t rotationFrameCount = static_cast<uint32_t>(channel.rotationKeys.frames.size());
@@ -683,10 +682,10 @@ namespace ignite
             ReadRaw(inFile, &anim->duration);
             ReadRaw(inFile, &anim->ticksPerSeconds);
 
-            // read name size and name
-            uint32_t nameSize = 0;
-            ReadRaw(inFile, &nameSize);
-            anim->name = ReadString(inFile, nameSize);
+            // read animation name size and the name
+            uint32_t animationNameSize = 0;
+            ReadRaw(inFile, &animationNameSize);
+            anim->name = ReadString(inFile, animationNameSize);
 
             // read channel count
             uint32_t channelCount = 0;
@@ -696,9 +695,9 @@ namespace ignite
 
             for (uint32_t channelIdx = 0; channelIdx < channelCount; ++channelIdx)
             {
-                // read channel name
-				ReadRaw(inFile, &nameSize);
-                std::string channelName = ReadString(inFile, nameSize);
+                // read joint index
+                int jointIndex = -1;
+				ReadRaw(inFile, &jointIndex);
 
                 AnimationChannel channel{};
 
@@ -763,7 +762,7 @@ namespace ignite
                     "Corrupt animation data expected channel size {}, got {}",
                     expectedTotalSize, totalChannelByteSize);
 
-                anim->channels[channelName] = channel;
+                anim->channels[jointIndex] = channel;
             }
 
             uint64_t skeletonHandle = 0;

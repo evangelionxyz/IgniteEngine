@@ -46,6 +46,7 @@ namespace ignite
         std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_CompositePipelineCache;
 
         std::vector<glm::mat4> m_BoneTransforms;
+        Ref<ConstantBuffer> m_SkeletonGpuBuffer;
         bool m_EnvironmentTextureLoadAttempted = false;
 
         SceneBufferData m_SceneGPUData;

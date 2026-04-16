@@ -29,6 +29,7 @@
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/objects/material.hpp"
 #include "ignite/graphics/objects/environment.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/core/device/device_manager.hpp"
 
 #include <ranges>
@@ -81,8 +82,11 @@ namespace ignite
 
     Renderer::~Renderer()
     {
+        MeshInstance::ReleaseGlobalResources();
         m_DxcInstance.reset();
         m_WhiteTexture.reset();
+        m_MagentaTexture.reset();
+        m_BlackTexture.reset();
     }
 
     nvrhi::GraphicsAPI Renderer::GetGraphicsAPI()

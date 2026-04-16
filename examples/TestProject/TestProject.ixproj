@@ -4,4 +4,4 @@ Project:
   AssetPath: Assets
   AssetRegistry: AssetRegistry.ixreg
   ScriptModule: Bin/TestProject.dll
-  DefaultSceneHandle: 9894304757204418348
+  DefaultSceneHandle: 0

@@ -35,9 +35,13 @@ struct Object
 {
     float4x4 transformMatrix;
     float4x4 normalMatrix;
-    float4x4 boneTransforms[MAX_BONES];
     uint objectID;
     float3 _padding;
+};
+
+struct Skeleton
+{
+    float4x4 boneTransforms[MAX_BONES];
 };
 
 struct Material
@@ -72,8 +76,9 @@ struct CascadesShadows
 // set 0
 cbuffer CameraBuffer      : register(b0, space0) { Camera camera; }
 cbuffer ObjectBuffer      : register(b1, space0) { Object object; }
-cbuffer SceneBuffer       : register(b2, space0) { Scene scene; }
-cbuffer CascadesBuffer    : register(b3, space0) { CascadesShadows csm; }
+cbuffer SkeletonBuffer    : register(b2, space0) { Skeleton skeleton; }
+cbuffer SceneBuffer       : register(b3, space0) { Scene scene; }
+cbuffer CascadesBuffer    : register(b4, space0) { CascadesShadows csm; }
 
 // set 1
 cbuffer MaterialBuffer    : register(b0, space1) { Material material; }

@@ -32,6 +32,9 @@ namespace ignite
 
     namespace
     {
+        static Ref<ConstantBuffer> s_DefaultSkeletonBuffer;
+        static bool s_DefaultSkeletonBufferInitialized = false;
+
         static AABB CalculateAABB(const std::vector<VertexMesh_Anim> &vertices)
         {
             AABB bounds;
@@ -559,6 +562,7 @@ namespace ignite
         }
 
         m_MeshBindingSet = nullptr;
+        m_MeshBindingSetCache.clear();
 
         // Clear primitive (vertex/index buffers)
         m_Primitive.reset();
@@ -569,32 +573,111 @@ namespace ignite
         m_MaterialHandle = assetHandle;
     }
 
+    void MeshInstance::ReleaseGlobalResources()
+    {
+        if (s_DefaultSkeletonBuffer)
+        {
+            LOG_INFO("[MeshInstance] Releasing global default skeleton buffer before device teardown");
+            s_DefaultSkeletonBuffer.reset();
+        }
+
+        s_DefaultSkeletonBufferInitialized = false;
+    }
+
     void MeshInstance::SetData(nvrhi::ICommandList *cmd, void *data, size_t size)
     {
         if (!m_MeshConstantBuffer)
         {
-            m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(SkinnedMeshBufferData), true, 256, "Per-Entity Transform Buffer");
+           m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(SkinnedMeshBufferData), false, 1, "Per-Entity Transform Buffer");
+             LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as non-volatile", m_Name.empty() ? "<unnamed>" : m_Name);
         }
 
         m_MeshConstantBuffer->SetData(cmd, Buffer(data, size));
     }
 
-    void MeshInstance::EnsureBuffer(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer)
+    void MeshInstance::EnsureBuffer(nvrhi::ICommandList *cmd, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer, const Ref<ConstantBuffer> &skeletonBuffer)
     {
         if (!m_MeshConstantBuffer)
         {
-            m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(SkinnedMeshBufferData), true, 256, "Per-Entity Transform Buffer");
+            m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(SkinnedMeshBufferData), false, 1, "Per-Entity Transform Buffer");
+            LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as non-volatile", m_Name.empty() ? "<unnamed>" : m_Name);
+        }
+
+        Ref<ConstantBuffer> resolvedSkeletonBuffer = skeletonBuffer;
+        if (!resolvedSkeletonBuffer)
+        {
+            if (!s_DefaultSkeletonBuffer)
+            {
+                GPUSkeletonBuffer identityBones {};
+                for (int i = 0; i < MAX_BONES; ++i)
+                {
+                    identityBones.bones[i] = glm::mat4(1.0f);
+                }
+
+                s_DefaultSkeletonBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Default Skeleton Buffer");
+                s_DefaultSkeletonBufferInitialized = false;
+
+                if (cmd)
+                {
+                    s_DefaultSkeletonBuffer->SetData(cmd, Buffer(&identityBones, sizeof(identityBones)));
+                    s_DefaultSkeletonBufferInitialized = true;
+                }
+            }
+            else if (!s_DefaultSkeletonBufferInitialized)
+            {
+                GPUSkeletonBuffer identityBones {};
+                for (int i = 0; i < MAX_BONES; ++i)
+                {
+                    identityBones.bones[i] = glm::mat4(1.0f);
+                }
+
+                if (cmd)
+                {
+                    s_DefaultSkeletonBuffer->SetData(cmd, Buffer(&identityBones, sizeof(identityBones)));
+                    s_DefaultSkeletonBufferInitialized = true;
+                }
+            }
+            resolvedSkeletonBuffer = s_DefaultSkeletonBuffer;
+        }
+
+        LOG_ASSERT(resolvedSkeletonBuffer && resolvedSkeletonBuffer->GetHandle(), "[MeshInstance] Missing skeleton constant buffer handle");
+        if (!resolvedSkeletonBuffer || !resolvedSkeletonBuffer->GetHandle())
+        {
+            return;
+        }
+
+        BindingSetCacheKey cacheKey {};
+        cacheKey.cameraBuffer = cameraBuffer ? cameraBuffer->GetHandle() : nullptr;
+        cacheKey.objectBuffer = m_MeshConstantBuffer ? m_MeshConstantBuffer->GetHandle() : nullptr;
+        cacheKey.skeletonBuffer = resolvedSkeletonBuffer->GetHandle();
+        cacheKey.sceneBuffer = sceneBuffer ? sceneBuffer->GetHandle() : nullptr;
+        cacheKey.csmBuffer = csmBuffer ? csmBuffer->GetHandle() : nullptr;
+
+        if (auto it = m_MeshBindingSetCache.find(cacheKey); it != m_MeshBindingSetCache.end())
+        {
+            m_MeshBindingSet = it->second;
+            return;
         }
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         auto desc = nvrhi::BindingSetDesc();
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m_MeshConstantBuffer->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, sceneBuffer->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, csmBuffer->GetHandle()));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cacheKey.cameraBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, cacheKey.objectBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, cacheKey.skeletonBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, cacheKey.sceneBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, cacheKey.csmBuffer));
 
         m_MeshBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
         LOG_ASSERT(m_MeshBindingSet, "Failed to create mesh binding set");
+
+        if (m_MeshBindingSet)
+        {
+            m_MeshBindingSetCache.emplace(cacheKey, m_MeshBindingSet);
+            if (m_MeshBindingSetCache.size() > 512)
+            {
+                LOG_WARN("[MeshInstance] Binding cache for '{}' grew to {} entries. Verify instance buffer sharing strategy.", m_Name, m_MeshBindingSetCache.size());
+            }
+        }
     }
 
     Ref<MeshInstance> MeshInstance::Create(const std::string &name, const Ref<MeshPrimitive> &mesh)
@@ -1728,8 +1811,9 @@ namespace ignite
 			animation->ticksPerSeconds = ticksPerSecond;
 			animation->duration = std::max(0.0f, static_cast<float>((endSeconds - startSeconds) * ticksPerSecond));
 
-			for (const Joint &joint : skeleton->joints)
+			for (size_t jointIndex = 0; jointIndex < skeleton->joints.size(); ++jointIndex)
 			{
+                const Joint &joint = skeleton->joints[jointIndex];
 				if (!jointNodes.contains(joint.name))
 				{
 					continue;
@@ -1818,7 +1902,7 @@ namespace ignite
 					channel.scaleKeys.AddFrame({ decomposedScale, timestamp });
 				}
 
-				animation->channels.emplace(joint.name, std::move(channel));
+				animation->channels[jointIndex] = std::move(channel);
 			}
 
 			if (!animation->channels.empty())
@@ -1862,6 +1946,7 @@ namespace ignite
 		glm::vec3 skew;
 		glm::vec4 perspective;
 		glm::decompose(joint.localTransform, joint.defaultScale, joint.defaultRotation, joint.defaultTranslation, skew, perspective);
+        joint.defaultLocalTransform = joint.localTransform;
 
 		joint.globalTransform = glm::mat4(1.0f);
 		joint.inverseBindPose = glm::mat4(1.0f);

@@ -96,8 +96,6 @@ namespace ignite
             return it->second;
         }
 
-        s_DebugGridPSOCache.clear();
-
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
         bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
@@ -192,8 +190,6 @@ namespace ignite
             return it->second;
         }
 
-        s_GeometryPSOCache.clear();
-
         const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
         bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
 
@@ -229,8 +225,6 @@ namespace ignite
             return it->second;
         }
 
-        s_EnvironmentPSOCache.clear();
-
         const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
         bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
 
@@ -265,8 +259,6 @@ namespace ignite
         {
             return it->second;
         }
-
-        s_CompositePSOCache.clear();
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
@@ -356,8 +348,6 @@ namespace ignite
             return it->second;
         }
 
-        s_CompositeBindingSetCache.clear();
-
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         // Composite Binding set
         auto bindingSetDesc = nvrhi::BindingSetDesc();
@@ -402,18 +392,6 @@ namespace ignite
         auto it = s_CSMBindingSetCache.find(key);
         if (it != s_CSMBindingSetCache.end())
         {
-            for (auto itErase = s_CSMBindingSetCache.begin(); itErase != s_CSMBindingSetCache.end();)
-            {
-                if (itErase != it)
-                {
-                    itErase = s_CSMBindingSetCache.erase(itErase);
-                }
-                else
-                {
-                    ++itErase;
-                }
-            }
-
             return it->second;
         }
 
@@ -1132,10 +1110,29 @@ namespace ignite
 
                     // Per-entity GPU-ready bone transforms written by Scene::UpdateAnimations
                     const std::vector<glm::mat4> &boneTransforms = smc.finalBoneTransforms;
+                    if (!smc.skeletonGpuBuffer && !boneTransforms.empty())
+                    {
+                        smc.skeletonGpuBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Per-Entity Skeleton Buffer");
+                        LOG_INFO("[SceneRenderer] Created non-volatile skeleton GPU buffer for entity {}", static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                    }
+                    if (smc.skeletonGpuBuffer && !boneTransforms.empty())
+                    {
+                        GPUSkeletonBuffer skeletonGPUData{};
+                        const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
+                        for (size_t i = 0; i < boneCount; ++i)
+                        {
+                            skeletonGPUData.bones[i] = boneTransforms[i];
+                        }
+                        for (size_t i = boneCount; i < MAX_BONES; ++i)
+                        {
+                            skeletonGPUData.bones[i] = glm::mat4(1.0f);
+                        }
+                        smc.skeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
+                    }
 
                     for (auto &meshInstance : sm->GetMeshInstances())
                     {
-                        meshInstance->EnsureBuffer(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer);
+                        meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, smc.skeletonGpuBuffer);
 
                         SkinnedMeshBufferData gpuData;
 
@@ -1149,18 +1146,10 @@ namespace ignite
                                 meshTransform = boneTransforms[ji] * meshTransform;
                             }
                         }
-                        gpuData.transformation = tr.GetWorldMatrix() * meshTransform;
+
+                        gpuData.transformation = smc.worldMatrix * meshTransform;
                         gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-
-                        const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
-                        gpuData.normal = glm::mat4(normalMat3);
-
-                        std::fill(std::begin(gpuData.boneTransforms), std::end(gpuData.boneTransforms), glm::mat4(1.0f));
-                        const size_t transformCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
-                        for (size_t i = 0; i < transformCount; ++i)
-                        {
-                            gpuData.boneTransforms[i] = boneTransforms[i];
-                        }
+                        gpuData.normal = smc.normalMatrix;
 
                         meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
 
@@ -1222,10 +1211,30 @@ namespace ignite
 
                 // Per-entity GPU-ready bone transforms written by Scene::UpdateAnimations
                 const std::vector<glm::mat4> &boneTransforms = smc.finalBoneTransforms;
+                if (!smc.skeletonGpuBuffer && !boneTransforms.empty())
+                {
+                    smc.skeletonGpuBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Per-Entity Skeleton Buffer");
+                    LOG_INFO("[SceneRenderer] Created non-volatile skeleton GPU buffer for entity {}", static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                }
+                if (smc.skeletonGpuBuffer && !boneTransforms.empty())
+                {
+                    GPUSkeletonBuffer skeletonGPUData {};
+                    const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
+                    for (size_t i = 0; i < boneCount; ++i)
+                    {
+                        skeletonGPUData.bones[i] = boneTransforms[i];
+                    }
+                    for (size_t i = boneCount; i < MAX_BONES; ++i)
+                    {
+                        skeletonGPUData.bones[i] = glm::mat4(1.0f);
+                    }
+
+                    smc.skeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
+                }
 
                 for (auto &meshInstance : sm->GetMeshInstances())
                 {
-                    meshInstance->EnsureBuffer(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer);
+                    meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, smc.skeletonGpuBuffer);
 
                     SkinnedMeshBufferData gpuData;
 
@@ -1239,18 +1248,9 @@ namespace ignite
                             meshTransform = boneTransforms[ji] * meshTransform;
                         }
                     }
-                    gpuData.transformation = tr.GetWorldMatrix() * meshTransform;
+                    gpuData.transformation = smc.worldMatrix * meshTransform;
                     gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-
-                    const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
-                    gpuData.normal = glm::mat4(normalMat3);
-
-                    std::fill(std::begin(gpuData.boneTransforms), std::end(gpuData.boneTransforms), glm::mat4(1.0f));
-                    const size_t transformCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
-                    for (size_t i = 0; i < transformCount; ++i)
-                    {
-                        gpuData.boneTransforms[i] = boneTransforms[i];
-                    }
+                    gpuData.normal = smc.normalMatrix;
 
                     meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
 

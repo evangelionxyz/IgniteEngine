@@ -34,7 +34,7 @@ namespace ignite
     class Texture;
     class Skeleton;
     class AnimatorController;
-
+    class ConstantBuffer;
 
     static std::unordered_map<std::string, CompType> s_ComponentsName =
     {
@@ -413,12 +413,16 @@ namespace ignite
 	public:
         AssetHandle handle = AssetHandle(0);         // class SkeletalMesh in mesh.hpp
 
+        glm::mat4 worldMatrix = glm::mat4(1.0f);
+        glm::mat4 normalMatrix = glm::mat4(1.0f);
+
         std::string currentStateName;
         float stateElapsed = 0.0f;
         float stateNormalized = 0.0f;
         AssetHandle runtimeAnimatorHandle = AssetHandle(0);
         std::vector<AnimParam> runtimeParams;
         Ref<AnimatorController> runtimeAnimatorInstance = nullptr; // runtime-only for unique animator mode
+        Ref<ConstantBuffer> skeletonGpuBuffer = nullptr;
         std::vector<glm::mat4> finalBoneTransforms; // per-entity GPU-ready bone transforms
 
         // Enable unique for each entity

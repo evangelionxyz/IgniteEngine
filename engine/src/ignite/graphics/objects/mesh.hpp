@@ -15,6 +15,7 @@
 #include <tinygltf.h>
 #include <nvrhi/nvrhi.h>
 #include <filesystem>
+#include <unordered_map>
 
 namespace fbxsdk
 {
@@ -104,8 +105,6 @@ namespace ignite
         glm::mat4 local = glm::mat4(1.0f);
         glm::mat4 global = glm::mat4(1.0f);
 
-        // Skeleton joint index for non-skinned sub-meshes (head, accessories, etc.)
-        // When >= 0, render-time transform is computed as: boneTransform[linkedJointIndex] * global
         int32_t linkedJointIndex = -1;
 
         void SetName(const std::string &name) { m_Name = name; }
@@ -116,18 +115,51 @@ namespace ignite
 
         static Ref<MeshInstance> Create(const MeshNode &node, const Ref<MeshPrimitive> &mesh);
         static Ref<MeshInstance> Create(const std::string &name, const Ref<MeshPrimitive> &mesh);
+        static void ReleaseGlobalResources();
 
         Ref<MeshPrimitive> &GetPrimitive() { return m_Primitive; }
 
         void SetData(nvrhi::ICommandList *cmd, void *data, size_t size);
-        void EnsureBuffer(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer);
+        void EnsureBuffer(nvrhi::ICommandList *cmd, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer, const Ref<ConstantBuffer> &skeletonBuffer);
 
         nvrhi::BindingSetHandle GetBindingSet() const { return m_MeshBindingSet; }
         Ref<ConstantBuffer> GetConstantBuffer() { return m_MeshConstantBuffer; }
 
     private:
+        struct BindingSetCacheKey
+        {
+            nvrhi::IBuffer *cameraBuffer = nullptr;
+            nvrhi::IBuffer *objectBuffer = nullptr;
+            nvrhi::IBuffer *skeletonBuffer = nullptr;
+            nvrhi::IBuffer *sceneBuffer = nullptr;
+            nvrhi::IBuffer *csmBuffer = nullptr;
+
+            bool operator==(const BindingSetCacheKey &other) const noexcept
+            {
+                return cameraBuffer == other.cameraBuffer
+                    && objectBuffer == other.objectBuffer
+                    && skeletonBuffer == other.skeletonBuffer
+                    && sceneBuffer == other.sceneBuffer
+                    && csmBuffer == other.csmBuffer;
+            }
+        };
+
+        struct BindingSetCacheKeyHash
+        {
+            size_t operator()(const BindingSetCacheKey &k) const noexcept
+            {
+                size_t h = std::hash<const void *>{}(k.cameraBuffer);
+                h ^= (std::hash<const void *>{}(k.objectBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+                h ^= (std::hash<const void *>{}(k.skeletonBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+                h ^= (std::hash<const void *>{}(k.sceneBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+                h ^= (std::hash<const void *>{}(k.csmBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+                return h;
+            }
+        };
+
         Ref<ConstantBuffer> m_MeshConstantBuffer; // SkinnedMesh_GPUData
         nvrhi::BindingSetHandle m_MeshBindingSet;
+        std::unordered_map<BindingSetCacheKey, nvrhi::BindingSetHandle, BindingSetCacheKeyHash> m_MeshBindingSetCache;
         std::string m_Name;
         Ref<MeshPrimitive> m_Primitive;
         AssetHandle m_MaterialHandle = AssetHandle(0);

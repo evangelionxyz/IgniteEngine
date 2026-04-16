@@ -493,37 +493,35 @@ namespace ignite
                 ? previewState.timeSeconds * std::max(previewAnimation->ticksPerSeconds, 0.0001f)
                 : 0.0f;
 
-            for (size_t i = 0; i < jointCount; ++i)
+            for (size_t jointIndex = 0; jointIndex < jointCount; ++jointIndex)
             {
-                const Joint &joint = skeleton->joints[i];
-                glm::mat4 local = glm::translate(glm::mat4(1.0f), joint.defaultTranslation)
-                    * glm::toMat4(joint.defaultRotation)
-                    * glm::scale(glm::mat4(1.0f), joint.defaultScale);
+                const Joint &joint = skeleton->joints[jointIndex];
 
+                glm::mat4 local = joint.defaultLocalTransform;
                 if (hasPreviewAnimation)
                 {
-                    if (auto it = previewAnimation->channels.find(joint.name); it != previewAnimation->channels.end())
+                    if (previewAnimation->channels.contains(jointIndex))
                     {
-                        local = it->second.CalculateTransform(timeInTicks, joint.defaultTranslation, joint.defaultRotation, joint.defaultScale);
+                        local = previewAnimation->channels[jointIndex].CalculateTransform(timeInTicks, joint.defaultTranslation, joint.defaultRotation, joint.defaultScale);
                     }
                 }
 
                 if (joint.parentJointId < 0 || joint.parentJointId >= static_cast<int32_t>(jointCount))
                 {
-                    previewState.previewGlobalTransforms[i] = local;
+                    previewState.previewGlobalTransforms[jointIndex] = local;
                 }
                 else
                 {
-                    previewState.previewGlobalTransforms[i] = previewState.previewGlobalTransforms[static_cast<size_t>(joint.parentJointId)] * local;
+                    previewState.previewGlobalTransforms[jointIndex] = previewState.previewGlobalTransforms[static_cast<size_t>(joint.parentJointId)] * local;
                 }
 
                 if (hasPreviewAnimation)
                 {
-                    previewState.previewFinalTransforms[i] = previewState.previewGlobalTransforms[i] * joint.inverseBindPose;
+                    previewState.previewFinalTransforms[jointIndex] = previewState.previewGlobalTransforms[jointIndex] * joint.inverseBindPose;
                 }
                 else
                 {
-                    previewState.previewFinalTransforms[i] = glm::mat4(1.0f);
+                    previewState.previewFinalTransforms[jointIndex] = glm::mat4(1.0f);
                 }
             }
 

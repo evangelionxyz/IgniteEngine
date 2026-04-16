@@ -1010,12 +1010,14 @@ namespace ignite
                                             }
                                         }
 
+                                        ImGui::BeginDisabled(true);
                                         if (UI::DrawComboBox("Preview State", stateLabels.data(), static_cast<int>(stateLabels.size()), stateLabels[currentStateIndex], &currentStateIndex))
                                         {
                                             c.currentStateName = animCtrl->states[static_cast<size_t>(currentStateIndex)].name;
                                             c.stateElapsed = 0.0f;
                                             c.stateNormalized = 0.0f;
                                         }
+                                        ImGui::EndDisabled();
 
                                         ImGui::TextDisabled("State Time: %.3fs", c.stateElapsed);
                                         ImGui::TextDisabled("State Normalized: %.3f", c.stateNormalized);

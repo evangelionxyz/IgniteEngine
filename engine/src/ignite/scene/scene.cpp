@@ -262,6 +262,15 @@ namespace ignite
             auto &cc = cameraView.get<CameraComponent>(entity);
             cc.camera.SetTransform(tr.GetWorldMatrix());
         }
+
+        auto meshView = registry->view<TransformComponent, MeshComponent>();
+        for (entt::entity entity : meshView)
+        {
+            auto &tr = meshView.get<TransformComponent>(entity);
+            auto &mesh = meshView.get<MeshComponent>(entity);
+            mesh.worldMatrix = tr.GetWorldMatrix();
+            mesh.normalMatrix = glm::transpose(glm::inverse(glm::mat3(mesh.worldMatrix)));
+        }
     }
 
     void Scene::UpdateTransformRecursive(Entity entity, const glm::mat4 &parentWorldTransform)
@@ -399,6 +408,8 @@ namespace ignite
             {
                 sm.runtimeAnimatorInstance.reset();
                 sm.runtimeParams.clear();
+                sm.skeletonGpuBuffer.reset();
+                sm.finalBoneTransforms.clear();
                 ResetMeshAnimatorRuntime(sm);
                 continue;
             }
