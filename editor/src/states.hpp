@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 
+#pragma once
 #ifndef STATES_HPP
 #define STATES_HPP
 
@@ -27,6 +28,8 @@ namespace ignite
         BOUND_SIZING_2D = 3
     };
 
+    static const char *s_ParamTypeNames[] = { "Float", "Bool", "Int", "String" };
+    static const char *s_ConditionOpNames[] = { "==", "!=", ">", "<", ">=", "<=" };
 }
 
 #endif

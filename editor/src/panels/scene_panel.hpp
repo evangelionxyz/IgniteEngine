@@ -1,15 +1,16 @@
 //Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 
 #pragma once
+#ifndef SCENE_PANEL_HPP
+#define SCENE_PANEL_HPP
 
 #include "ipanel.hpp"
-
 #include "ignite/graphics/render_target.hpp"
 #include "ignite/scene/entity.hpp"
 #include "ignite/core/uuid.hpp"
 #include "ignite/core/types.hpp"
 #include "ignite/imgui/gizmo.hpp"
-#include "../editor_camera.hpp"
+#include "editor_camera.hpp"
 #include <string>
 #include <glm/fwd.hpp>
 
@@ -149,3 +150,5 @@ namespace ignite
         friend class EditorLayer;
     };
 }
+
+#endif

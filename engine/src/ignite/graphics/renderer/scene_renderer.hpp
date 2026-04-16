@@ -13,6 +13,8 @@ namespace ignite
         SceneRenderer();
         ~SceneRenderer();
 
+        virtual void OnUpdate(float deltaTime) override;
+
         void BeginFrame();
         void SetActiveScene(const Ref<Scene> &scene);
         
@@ -40,14 +42,13 @@ namespace ignite
         void SetDebugGridSettings(const DebugGridSettings &settings) { m_DebugGridSettings = settings; }
 
     private:
-        Ref<StaticMesh> ResolveStaticMesh(Project *project, AssetHandle handle);
-        Ref<SkeletalMesh> ResolveSkeletalMesh(Project *project, AssetHandle handle);
+        Ref<Mesh> ResolveMesh(Project *project, AssetHandle handle);
         Ref<Material> ResolveMaterial(Project *project, AssetHandle handle);
 
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer);
-        void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, const PostProcessing &postProcessing, nvrhi::IFramebuffer *framebuffer,
-            Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture = nullptr,
+        void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, const PostProcessing &postProcessing, 
+            nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture = nullptr,
             Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr);
 
         void DrawIcons(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, ICamera *camera);
@@ -81,8 +82,7 @@ namespace ignite
         
     private:
         std::unordered_map<std::string, Ref<Texture>> m_Icons;
-        std::unordered_map<AssetResolveKey, Ref<StaticMesh>, AssetResolveKeyHash> m_StaticMeshResolveCache;
-        std::unordered_map<AssetResolveKey, Ref<SkeletalMesh>, AssetResolveKeyHash> m_SkeletalMeshResolveCache;
+        std::unordered_map<AssetResolveKey, Ref<Mesh>, AssetResolveKeyHash> m_MeshResolveCache;
         std::unordered_map<AssetResolveKey, Ref<Material>, AssetResolveKeyHash> m_MaterialResolveCache;
     };
 }

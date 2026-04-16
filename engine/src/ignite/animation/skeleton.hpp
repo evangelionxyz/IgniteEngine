@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef SKELETON_HPP
+#define SKELETON_HPP
 
 #include "ignite/core/uuid.hpp"
 #include "ignite/asset/asset.hpp"
@@ -26,11 +28,12 @@ namespace ignite
         std::string name;
         int32_t id; // index in joints array
         int32_t parentJointId; // parent in skeleton hierarchy (-1 for root)
-        glm::mat4 inverseBindPose; // inverse bind pose matrix
-        glm::mat4 localTransform; // current local transform
         glm::vec3 defaultTranslation;
         glm::quat defaultRotation;
         glm::vec3 defaultScale;
+        glm::mat4 inverseBindPose; // inverse bind pose matrix
+        glm::mat4 localTransform; // current local transform
+        glm::mat4 defaultLocalTransform;
         glm::mat4 globalTransform; // current global transform
     };
 
@@ -66,3 +69,5 @@ namespace ignite
         virtual AssetType GetAssetType() override { return GetStaticType(); }
     };
 }
+
+#endif

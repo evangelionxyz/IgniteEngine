@@ -58,7 +58,7 @@ namespace ignite
 		Ref<Texture> GetDepthTexture() const;
 
 		Ref<GraphicsPipeline> GetPipeline() const { return m_Pipeline; }
-		CascadedShadowMap_GPUData& GetGPUData() { return m_GPUData; }
+		CascadedShadowMapBufferData& GetGPUData() { return m_GPUData; }
 		nvrhi::SamplerHandle GetDepthSampler() { return m_DepthSampler; }
 
 	    const ShadowMapQuality &GetQuality() const { return m_Quality; }
@@ -88,7 +88,7 @@ namespace ignite
 		uint32_t m_DepthArray = 0;
 		int m_Resolution = 0;
 		ShadowMapQuality m_Quality;
-		CascadedShadowMap_GPUData m_GPUData{};
+		CascadedShadowMapBufferData m_GPUData{};
 		nvrhi::SamplerHandle m_DepthSampler;
 	};
 }

@@ -1,5 +1,6 @@
 //Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
 #ifndef EDITOR_UI_HPP
 #define EDITOR_UI_HPP
 
@@ -181,10 +182,9 @@ namespace ignite::UI
 		ScopedColorStyle(std::initializer_list<std::pair<EColorStyle, glm::vec4>> styles)
 			: m_Styles(styles)
 		{
-			for (auto s : m_Styles)
+			for (const auto &s : m_Styles)
 			{
-				ImGui::PushStyleColor(static_cast<ImGuiCol>(s.first),
-					ImVec4(s.second.x, s.second.y, s.second.z, s.second.w));
+				ImGui::PushStyleColor(static_cast<ImGuiCol>(s.first), { s.second.x, s.second.y, s.second.z, s.second.w });
 			}
 		}
 		~ScopedColorStyle()
@@ -223,7 +223,7 @@ namespace ignite::UI
 		return state;
 	}
 
-	static State DrawButtonWithColumn(const char *label, const char *text, bool *value = nullptr, std::function<void()> func = std::function<void()>(), float coloumnWidth = defColWidth)
+	static State DrawButtonWithColumn(const char *label, const char *text, bool *value = nullptr, std::function<void()> func = std::function<void()>(), float &coloumnWidth = defColWidth)
 	{
 		State state;
 
@@ -259,7 +259,7 @@ namespace ignite::UI
 		return state;
 	}
 
-	static State DrawCheckbox(const char *label, bool *value, float coloumnWidth = defColWidth)
+	static State DrawCheckbox(const char *label, bool *value, float &coloumnWidth = defColWidth)
 	{
 		State state;
 
@@ -278,7 +278,7 @@ namespace ignite::UI
 		return state;
 	}
 
-	static State DrawCheckbox2(const char *label, bool *x, bool *y, float coloumnWidth = defColWidth)
+	static State DrawCheckbox2(const char *label, bool *x, bool *y, float &coloumnWidth = defColWidth)
 	{
 		State state;
 
@@ -307,7 +307,7 @@ namespace ignite::UI
 		return state;
 	}
 
-    static State DrawColorVec3(const char *label, glm::vec3 &v, float coloumnWidth = defColWidth)
+    static State DrawColorVec3(const char *label, glm::vec3 &v, float &coloumnWidth = defColWidth)
     {
         State state;
 
@@ -323,7 +323,7 @@ namespace ignite::UI
         return state;
     }
 
-	static State DrawColorVec4(const char *label, glm::vec4 &v, float coloumnWidth = defColWidth)
+	static State DrawColorVec4(const char *label, glm::vec4 &v, float &coloumnWidth = defColWidth)
 	{
 		State state;
 
@@ -339,7 +339,7 @@ namespace ignite::UI
 		return state;
 	}
 
-	static State DrawCheckbox3(const char *label, bool *x, bool *y, bool *z, float coloumnWidth = defColWidth)
+	static State DrawCheckbox3(const char *label, bool *x, bool *y, bool *z, float &coloumnWidth = defColWidth)
 	{
 		State state;
 
@@ -375,7 +375,70 @@ namespace ignite::UI
 		return state;
 	}
 
-	static State DrawVec4Control(const char *label, glm::vec4 &values, float speed = 0.025f, float resetValue = 0.0f, float coloumnWidth = defColWidth)
+	static bool DrawComboBox(const char *label, const char **labels, int labelsCount, const char *currentLabel, int *selectedIndex, float &coloumnWidth = defColWidth)
+	{
+		State state;
+		ImGui::PushID(label);
+
+		if (!labels || labelsCount <= 0 || !selectedIndex)
+		{
+			ImGui::BeginColumns(label, 2, ImGuiOldColumnFlags_GrowParentContentsSize);
+			ImGui::SetColumnWidth(0, coloumnWidth);
+			ImGui::Text("%s", label);
+			ImGui::NextColumn();
+			ImGui::TextDisabled("N/A");
+			ImGui::EndColumns();
+			ImGui::PopID();
+			return state;
+		}
+
+		if (*selectedIndex < 0)
+			*selectedIndex = 0;
+		if (*selectedIndex >= labelsCount)
+			*selectedIndex = labelsCount - 1;
+
+		const char *previewLabel = labels[*selectedIndex] ? labels[*selectedIndex] : "";
+		if ((previewLabel[0] == '\0') && currentLabel)
+		{
+			previewLabel = currentLabel;
+		}
+
+		ImGui::BeginColumns(label, 2);
+		ImGui::SetColumnWidth(0, coloumnWidth);
+		ImGui::Text("%s", label);
+		ImGui::NextColumn();
+
+		ImGui::PushMultiItemsWidths(1, ImGui::GetContentRegionAvail().x);
+
+		if (ImGui::BeginCombo("##_combo_box", previewLabel, ImGuiComboFlags_PopupAlignLeft))
+		{
+			for (int i = 0; i < labelsCount; ++i)
+			{
+				const bool isSelected = (*selectedIndex == i);
+				if (ImGui::Selectable(labels[i], isSelected))
+				{
+					*selectedIndex = i;
+					state.isItemEdited = true;
+					state.isItemDeactivatedAfterEdit = true;
+				}
+
+				if (isSelected)
+				{
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+
+		ImGui::PopItemWidth();
+
+		ImGui::EndColumns();
+
+		ImGui::PopID();
+		return state;
+	}
+
+	static State DrawVec4Control(const char *label, glm::vec4 &values, float speed = 0.025f, float resetValue = 0.0f, float &coloumnWidth = defColWidth)
 	{
 		State state;
 
@@ -386,11 +449,10 @@ namespace ignite::UI
 		ImGui::Text("%s", label);
 		ImGui::NextColumn();
 
-		ImGui::PushMultiItemsWidths(4, ImGui::CalcItemWidth());
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 5));
+        float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
+        ImVec2 buttonSize = ImVec2(lineHeight, lineHeight);
 
-		float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
-		ImVec2 buttonSize = ImVec2(lineHeight, lineHeight);
+		ImGui::PushMultiItemsWidths(4, ImGui::GetContentRegionAvail().x - (buttonSize.x + GImGui->Style.ItemSpacing.x) * 4);
 
 		// ================================
 		// X
@@ -496,29 +558,27 @@ namespace ignite::UI
 			ImGui::PopItemWidth();
 		}
 
-		ImGui::PopStyleVar(1);
 		ImGui::Columns(1);
 		ImGui::PopID();
 
 		return state;
 	}
 
-	static State DrawVec3Control(const char *label, glm::vec3 &values, float speed = 0.025f, float resetValue = 0.0f, float coloumnWidth = defColWidth)
+	static State DrawVec3Control(const char *label, glm::vec3 &values, float speed = 0.025f, float resetValue = 0.0f, float &coloumnWidth = defColWidth)
 	{
 		State state;
 
 		ImGui::PushID(label);
 
-		ImGui::Columns(2);
+		ImGui::BeginColumns(label, 2);
 		ImGui::SetColumnWidth(0, coloumnWidth);
 		ImGui::Text("%s", label);
 		ImGui::NextColumn();
 
-		ImGui::PushMultiItemsWidths(3, ImGui::CalcItemWidth());
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2));
-
 		float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
 		ImVec2 buttonSize = ImVec2(lineHeight, lineHeight);
+
+		ImGui::PushMultiItemsWidths(3, ImGui::GetContentRegionAvail().x - (buttonSize.x + GImGui->Style.ItemSpacing.x) * 3);
 
 		// ================================
 		// X
@@ -575,11 +635,11 @@ namespace ignite::UI
 		// Z
 		{
 			ScopedColorStyle buttonStyle(
-			{
-				{ EColorStyle::Button,          { 0.1f, 0.1f, 0.8f, 1.0f } },
-				{ EColorStyle::ButtonHovered,   { 0.3f, 0.3f, 0.9f, 1.0f } },
-				{ EColorStyle::ButtonActive,    { 0.1f, 0.1f, 0.8f, 1.0f } }
-			});
+				{
+					{ EColorStyle::Button,          { 0.1f, 0.1f, 0.8f, 1.0f } },
+					{ EColorStyle::ButtonHovered,   { 0.3f, 0.3f, 0.9f, 1.0f } },
+					{ EColorStyle::ButtonActive,    { 0.1f, 0.1f, 0.8f, 1.0f } }
+				});
 
 			if (ImGui::Button("Z", buttonSize))
 			{
@@ -595,15 +655,14 @@ namespace ignite::UI
 			ImGui::PopItemWidth();
 		}
 
-		ImGui::PopStyleVar(1);
-		ImGui::Columns(1);
+		ImGui::EndColumns();
 
 		ImGui::PopID();
 
 		return state;
 	}
 
-	static State DrawVec2Control(const char *label, glm::vec2 &values, float speed = 0.025f, float resetValue = 0.0f, float coloumnWidth = defColWidth)
+	static State DrawVec2Control(const char *label, glm::vec2 &values, float speed = 0.025f, float resetValue = 0.0f, float &coloumnWidth = defColWidth)
 	{
 		State state;
 
@@ -614,11 +673,10 @@ namespace ignite::UI
 		ImGui::Text("%s", label);
 		ImGui::NextColumn();
 
-		ImGui::PushMultiItemsWidths(2, ImGui::CalcItemWidth());
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2));
-
 		float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
-		ImVec2 buttonSize = ImVec2(lineHeight + 3.0f, lineHeight);
+        ImVec2 buttonSize = ImVec2(lineHeight + 3.0f, lineHeight);
+
+		ImGui::PushMultiItemsWidths(2, ImGui::GetContentRegionAvail().x - (buttonSize.x + GImGui->Style.ItemSpacing.x) * 2);
 
 		// ================================
 		// X
@@ -668,7 +726,6 @@ namespace ignite::UI
 			ImGui::PopItemWidth();
 		}
 
-		ImGui::PopStyleVar(1);
 		ImGui::Columns(1);
 
 		ImGui::PopID();
@@ -676,7 +733,7 @@ namespace ignite::UI
 		return state;
 	}
 
-	static State DrawFloatControl(const char *label, float *value, float speed = 0.025f, float minValue = 0.0f, float maxValue = 1.0f, float resetValue = 0.0f, float coloumnWidth = defColWidth)
+	static State DrawFloatControl(const char *label, float *value, float speed = 0.025f, float minValue = 0.0f, float maxValue = 1.0f, float resetValue = 0.0f, float &coloumnWidth = defColWidth)
 	{
 		State state;
 
@@ -687,12 +744,11 @@ namespace ignite::UI
 		ImGui::Text("%s", label);
 		ImGui::NextColumn();
 
-		ImGui::PushMultiItemsWidths(1, ImGui::CalcItemWidth());
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2));
+        float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
+        ImVec2 buttonSize = ImVec2(lineHeight + 3.0f, lineHeight);
 
-		float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
-		ImVec2 buttonSize = ImVec2(lineHeight + 3.0f, lineHeight);
-
+		ImGui::PushMultiItemsWidths(1, ImGui::GetContentRegionAvail().x - (buttonSize.x- GImGui->Style.ItemSpacing.x) );
+		
 		{
 			ScopedColorStyle buttonStyle({
 				{ EColorStyle::Button,          { 0.5f, 0.5f, 0.5f, 1.0f } },
@@ -712,7 +768,6 @@ namespace ignite::UI
 			ImGui::PopItemWidth();
 		}
 
-		ImGui::PopStyleVar(1);
 		ImGui::Columns(1);
 
 		ImGui::PopID();
@@ -720,7 +775,7 @@ namespace ignite::UI
 		return state;
 	}
 
-	static State DrawIntControl(const char *label, int *value, float speed = 1.0f, int minValue = 0, int maxValue = INT_MAX, int resetValue = 0, float coloumnWidth = defColWidth)
+	static State DrawIntControl(const char *label, int *value, float speed = 1.0f, int minValue = 0, int maxValue = INT_MAX, int resetValue = 0, float &coloumnWidth = defColWidth)
 	{
 		State state;
 
@@ -731,11 +786,10 @@ namespace ignite::UI
 		ImGui::Text("%s", label);
 		ImGui::NextColumn();
 
-		ImGui::PushMultiItemsWidths(1, ImGui::CalcItemWidth());
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2));
+        float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
+        ImVec2 buttonSize = ImVec2(lineHeight + 3.0f, lineHeight);
 
-		float lineHeight = GImGui->FontSize + GImGui->Style.FramePadding.y * 2.0f;
-		ImVec2 buttonSize = ImVec2(lineHeight + 3.0f, lineHeight);
+		ImGui::PushMultiItemsWidths(1, ImGui::GetContentRegionAvail().x - (buttonSize.x- GImGui->Style.ItemSpacing.x) );
 
 		{
 			ScopedColorStyle buttonStyle(
@@ -759,7 +813,6 @@ namespace ignite::UI
 			ImGui::PopItemWidth();
 		}
 
-		ImGui::PopStyleVar(1);
 		ImGui::Columns(1);
 
 		ImGui::PopID();

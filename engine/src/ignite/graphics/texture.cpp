@@ -30,6 +30,9 @@
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/imgui/imgui_nvrhi.hpp"
+#include "ignite/project/project.hpp"
+#include "ignite/serializer/serializer.hpp"
+#include "ignite/core/base.hpp"
 #include <openexr.h>
 #include <openexr_errors.h>
 #include <stb_image.h>
@@ -65,8 +68,19 @@ namespace ignite
                     return i;
                 }
             }
-
             return -1;
+        }
+
+        static std::filesystem::path BuildMetaPath(Project *project, const AssetMetaData &metadata, const char *extension)
+        {
+            if (!project)
+            {
+                return {};
+            }
+
+            std::filesystem::path assetPath = project->GetAssetFilepath(metadata.filepath);
+            assetPath += extension;
+            return assetPath;
         }
 
         static bool ConfigureExrChannel(exr_decode_pipeline_t &decode, int channelIndex, std::vector<float> &plane, uint32_t width, uint32_t height)
@@ -122,7 +136,7 @@ namespace ignite
                     break;
                 }
 
-                exr_attr_box2i_t dataWindow{};
+                exr_attr_box2i_t dataWindow {};
                 rv = exr_get_data_window(ctx, 0, &dataWindow);
                 if (rv != EXR_ERR_SUCCESS)
                 {
@@ -146,7 +160,7 @@ namespace ignite
                     break;
                 }
 
-                exr_chunk_info_t chunk{};
+                exr_chunk_info_t chunk {};
                 if (storage == EXR_STORAGE_SCANLINE)
                 {
                     rv = exr_read_scanline_chunk_info(ctx, 0, dataWindow.min.y, &chunk);
@@ -369,7 +383,8 @@ namespace ignite
                 }
 
                 success = static_cast<bool>(buffer);
-            } while (false);
+            }
+            while (false);
 
             if (decodeInitialized)
             {
@@ -401,6 +416,123 @@ namespace ignite
 
         // Copy the flipped data back to the original buffer
         memcpy(buffer.data, flipped.data(), flipped.size());
+    }
+
+    TextureCreateInfo Texture::GetDefaultCreateInfo(const AssetMetaData &metadata)
+    {
+        TextureCreateInfo createInfo;
+        const std::string extension = metadata.filepath.extension().string();
+        const bool isHDR = extension == ".hdr";
+
+        createInfo.format = isHDR ? nvrhi::Format::RGBA32_FLOAT : nvrhi::Format::RGBA8_UNORM;
+        createInfo.mipLevels = isHDR ? 1 : 4;
+        createInfo.flip = isHDR;
+        createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
+        createInfo.keepInitialState = true;
+        createInfo.deferGpuCreate = true;
+
+        return createInfo;
+    }
+
+    std::filesystem::path Texture::GetMetaPath(Project *project, const AssetMetaData &metadata)
+    {
+        return BuildMetaPath(project, metadata, ".meta");
+    }
+
+    std::filesystem::path Texture::GetLegacyMetaPath(Project *project, const AssetMetaData &metadata)
+    {
+        return BuildMetaPath(project, metadata, ".ixtex");
+    }
+
+    bool Texture::LoadCreateInfoFile(const std::filesystem::path &filepath, TextureCreateInfo &outCreateInfo)
+    {
+        if (filepath.empty() || !std::filesystem::exists(filepath))
+        {
+            return false;
+        }
+
+        YAML::Node root = Serializer::Deserialize(filepath);
+        YAML::Node node = root["DATA"];
+        if (!node)
+        {
+            node = root["TextureImportSettings"];
+        }
+        if (!node)
+        {
+            return false;
+        }
+
+        if (node["Width"]) outCreateInfo.width = node["Width"].as<uint32_t>();
+        if (node["Height"]) outCreateInfo.height = node["Height"].as<uint32_t>();
+        if (node["Depth"]) outCreateInfo.depth = node["Depth"].as<uint32_t>();
+        if (node["MipLevels"]) outCreateInfo.mipLevels = node["MipLevels"].as<uint32_t>();
+        if (node["ArraySize"]) outCreateInfo.arraySize = node["ArraySize"].as<uint32_t>();
+        if (node["SampleCount"]) outCreateInfo.sampleCount = node["SampleCount"].as<uint32_t>();
+        if (node["SampleQuality"]) outCreateInfo.sampleQuality = node["SampleQuality"].as<uint32_t>();
+
+        if (node["Flip"]) outCreateInfo.flip = node["Flip"].as<bool>();
+        if (node["IsRenderTarget"]) outCreateInfo.isRenderTarget = node["IsRenderTarget"].as<bool>();
+        if (node["IsTypeless"]) outCreateInfo.isTypeless = node["IsTypeless"].as<bool>();
+        if (node["IsUAV"]) outCreateInfo.isUAV = node["IsUAV"].as<bool>();
+        if (node["IsShadingRateSurface"]) outCreateInfo.isShadingRateSurface = node["IsShadingRateSurface"].as<bool>();
+        if (node["KeepCpuData"]) outCreateInfo.keepCpuData = node["KeepCpuData"].as<bool>();
+        if (node["DeferGpuCreate"]) outCreateInfo.deferGpuCreate = node["DeferGpuCreate"].as<bool>();
+        if (node["KeepInitialState"]) outCreateInfo.keepInitialState = node["KeepInitialState"].as<bool>();
+        if (node["SamplerLinearFiltering"]) outCreateInfo.samplerLinearFiltering = node["SamplerLinearFiltering"].as<bool>();
+
+        if (node["Format"]) outCreateInfo.format = static_cast<nvrhi::Format>(node["Format"].as<uint32_t>());
+        if (node["InitialState"]) outCreateInfo.initialState = static_cast<nvrhi::ResourceStates>(node["InitialState"].as<uint32_t>());
+        if (node["Dimension"]) outCreateInfo.dimension = static_cast<nvrhi::TextureDimension>(node["Dimension"].as<uint32_t>());
+        if (node["SamplerAddressU"]) outCreateInfo.samplerAddressU = static_cast<nvrhi::SamplerAddressMode>(node["SamplerAddressU"].as<uint32_t>());
+        if (node["SamplerAddressV"]) outCreateInfo.samplerAddressV = static_cast<nvrhi::SamplerAddressMode>(node["SamplerAddressV"].as<uint32_t>());
+        if (node["SamplerAddressW"]) outCreateInfo.samplerAddressW = static_cast<nvrhi::SamplerAddressMode>(node["SamplerAddressW"].as<uint32_t>());
+
+        return true;
+    }
+
+    bool Texture::SerializeMetaFile(const std::filesystem::path &filepath, AssetHandle handle, const TextureCreateInfo &createInfo)
+    {
+        if (filepath.empty())
+        {
+            return false;
+        }
+
+        Serializer sr(filepath);
+        sr.BeginMap();
+        sr.AddKeyValue("ENGINE_VERSION", ENGINE_VERSION);
+        sr.AddKeyValue("ASSET_HANDLE", static_cast<uint64_t>(handle));
+        sr.AddKeyValue("ASSET_TYPE", AssetTypeToString(AssetType::Texture));
+
+        sr.BeginMap("DATA");
+        sr.AddKeyValue("Width", createInfo.width);
+        sr.AddKeyValue("Height", createInfo.height);
+        sr.AddKeyValue("Depth", createInfo.depth);
+        sr.AddKeyValue("MipLevels", createInfo.mipLevels);
+        sr.AddKeyValue("ArraySize", createInfo.arraySize);
+        sr.AddKeyValue("SampleCount", createInfo.sampleCount);
+        sr.AddKeyValue("SampleQuality", createInfo.sampleQuality);
+
+        sr.AddKeyValue("Flip", createInfo.flip);
+        sr.AddKeyValue("IsRenderTarget", createInfo.isRenderTarget);
+        sr.AddKeyValue("IsTypeless", createInfo.isTypeless);
+        sr.AddKeyValue("IsUAV", createInfo.isUAV);
+        sr.AddKeyValue("IsShadingRateSurface", createInfo.isShadingRateSurface);
+        sr.AddKeyValue("KeepCpuData", createInfo.keepCpuData);
+        sr.AddKeyValue("DeferGpuCreate", createInfo.deferGpuCreate);
+        sr.AddKeyValue("KeepInitialState", createInfo.keepInitialState);
+        sr.AddKeyValue("SamplerLinearFiltering", createInfo.samplerLinearFiltering);
+
+        sr.AddKeyValue("Format", static_cast<uint32_t>(createInfo.format));
+        sr.AddKeyValue("InitialState", static_cast<uint32_t>(createInfo.initialState));
+        sr.AddKeyValue("Dimension", static_cast<uint32_t>(createInfo.dimension));
+        sr.AddKeyValue("SamplerAddressU", static_cast<uint32_t>(createInfo.samplerAddressU));
+        sr.AddKeyValue("SamplerAddressV", static_cast<uint32_t>(createInfo.samplerAddressV));
+        sr.AddKeyValue("SamplerAddressW", static_cast<uint32_t>(createInfo.samplerAddressW));
+        sr.EndMap();
+
+        sr.EndMap();
+        sr.Serialize();
+        return true;
     }
 
     size_t Texture::GetApproxSizeBytes() const

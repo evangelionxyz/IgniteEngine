@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "application.hpp"
 #include "ignite/graphics/shader_factory.hpp"
@@ -44,6 +23,7 @@ namespace ignite
         s_AppInstance = this;
         m_MainThreadId = std::this_thread::get_id();
 
+        // Input user arguments
         if (m_CreateInfo.cmdLineArgs.count > 1)
         {
             for (i32 i = 0; i < m_CreateInfo.cmdLineArgs.count; ++i)
@@ -56,7 +36,6 @@ namespace ignite
         }
 
         m_CommandManager = CreateScope<CommandManager>();
-
         DeviceParameters deviceParams;
         deviceParams.backBufferWidth = m_CreateInfo.width;
         deviceParams.backBufferHeight = m_CreateInfo.height;
@@ -129,7 +108,7 @@ namespace ignite
     void Application::ProcessRenderThreadSubmissions()
     {
         IGN_PROFILE_FUNCTION();
-        std::queue<std::function<void()>> pending;
+        std::queue<std::pair<std::function<void()>, std::string>> pending;
         {
             std::lock_guard lock(m_RenderThreadFuncsMutex);
             pending.swap(m_RenderThreadFuncs);
@@ -140,9 +119,9 @@ namespace ignite
         {
             auto func = std::move(pending.front());
             pending.pop();
-            if (func)
+            if (func.first)
             {
-                func();
+                func.first();
             }
         }
 
@@ -158,7 +137,7 @@ namespace ignite
         // Process all pending submissions
         if (!m_ThreadFuncs.empty())
         {
-            std::function<void()> func;
+            std::pair<std::function<void()>, std::string> func;
 
             {
                 std::lock_guard lock(m_ThreadFuncsMutex);
@@ -166,9 +145,9 @@ namespace ignite
             }
             
             // Execute outside lock
-            if (func)
+            if (func.first)
             {
-                func();
+                func.first();
 
                 std::lock_guard lock(m_ThreadFuncsMutex);
                 m_ThreadFuncs.pop();
@@ -176,6 +155,9 @@ namespace ignite
         }
     }
 
+    // ------------------------------
+    // Running/process render thread
+    // ------------------------------
     void Application::RenderThreadFunc()
     {
         IGN_PROFILE_THREAD_NAME("Render Thread");
@@ -198,7 +180,8 @@ namespace ignite
                     return m_CurrentFrameReady.load() || !m_RenderThreadRunning.load() || m_RenderThreadHasTasks.load();
                 });
 
-                if (!m_RenderThreadRunning) break;
+                if (!m_RenderThreadRunning)
+                    break;
 
                 if (m_RenderThreadHasTasks.load() && !m_CurrentFrameReady.load())
                 {
@@ -578,13 +561,13 @@ namespace ignite
         GetInstance()->m_Window->Restore();
     }
 
-    void Application::SubmitToMainThread(const std::function<void()> func)
+    void Application::SubmitToMainThread(const std::function<void()> func, const std::string &funcName)
     {
         std::lock_guard lock(GetInstance()->m_ThreadFuncsMutex);
-        GetInstance()->m_ThreadFuncs.push(func);
+        GetInstance()->m_ThreadFuncs.push({ func, funcName });
     }
 
-    void Application::SubmitToRenderThread(const std::function<void()> func)
+    void Application::SubmitToRenderThread(const std::function<void()> func, const std::string &funcName)
     {
         if (!GetInstance()->m_RenderThreadRunning.load())
         {
@@ -596,7 +579,7 @@ namespace ignite
         }
         {
             std::lock_guard lock(GetInstance()->m_RenderThreadFuncsMutex);
-            GetInstance()->m_RenderThreadFuncs.push(func);
+            GetInstance()->m_RenderThreadFuncs.push({ func, funcName });
             GetInstance()->m_RenderThreadHasTasks = true;
         }
         GetInstance()->m_FrameCV.notify_all();

@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
 #ifndef ANIMATOR_CONTROLLER_HPP
 #define ANIMATOR_CONTROLLER_HPP
 
@@ -17,7 +18,8 @@ namespace ignite
     struct AnimState
     {
         std::string name;
-        AssetHandle animHandle = AssetHandle(0);; // Skeletal Animation
+        AssetHandle animHandle = AssetHandle(0); // Skeletal Animation
+        glm::vec2 editorPos = glm::vec2(100.0f, 100.0f);
     };
 
     struct AnimatorControllerRuntime
@@ -25,6 +27,10 @@ namespace ignite
         std::string currentStateName;
         float stateElapsed = 0.0f;
         float stateNormalized = 0.0f;
+
+        std::vector<TRS> localPoses;
+        std::vector<TRS> globalPoses;
+        std::vector<glm::mat4> finalTransforms; // per-instance GPU-ready bone transforms
     };
 
     class AnimatorController : public Animator, public Asset
@@ -49,7 +55,7 @@ namespace ignite
         static AssetType GetStaticAssetType() { return AssetType::AnimatorController; }
         virtual AssetType GetAssetType() override { return GetStaticAssetType(); }
 
-        bool UpdateSkeleton(float deltaTime, AnimatorControllerRuntime &runtime, AssetManager *assetManager, std::vector<glm::mat4> &outBoneTransforms);
+        bool UpdateSkeleton(float deltaTime, AnimatorControllerRuntime &runtime, AssetManager *assetManager);
     };
 }
 

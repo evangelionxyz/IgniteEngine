@@ -3,6 +3,7 @@
 #include "scene_panel.hpp"
 #include "editor_layer.hpp"
 #include "ignite/audio/fmod_sound.hpp"
+#include "ignite/audio/fmod_dsp.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/input/event.hpp"
 #include "ignite/core/input/key_event.hpp"
@@ -19,6 +20,7 @@
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/script_field.hpp"
 #include "ignite/scripting/script_instance.hpp"
+#include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/scene/entity.hpp"
@@ -509,21 +511,6 @@ namespace ignite
         {
             auto *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
             auto *assetManager = project ? project->GetAssetManager() : nullptr;
-            auto getAssetDisplayName = [assetManager](AssetHandle handle)
-            {
-                if (!assetManager || handle == AssetHandle(0))
-                {
-                    return std::string("Drag Here");
-                }
-
-                const AssetMetaData &metadata = assetManager->GetMetaData(handle);
-                if (!metadata.filepath.empty())
-                {
-                    return metadata.filepath.filename().string();
-                }
-
-                return std::to_string(static_cast<uint64_t>(handle));
-            };
 
             // Main Component
             // ID Component
@@ -545,6 +532,8 @@ namespace ignite
                 ImGui::OpenPopup("##add_component_context");
             }
 
+            static float componentColumnWidth = 100.0f;
+
             // transform component
             RenderComponent<TransformComponent>("Transform", selectedEntity, [&]()
             {
@@ -555,7 +544,7 @@ namespace ignite
                 // so it must be checked AFTER the widget call, unconditionally.
                 static TransformComponent s_TransformBefore;
 
-                UI::State translationState = UI::DrawVec3Control("Translation", comp.localTranslation, 0.025f);
+                UI::State translationState = UI::DrawVec3Control("Translation", comp.localTranslation, 0.025f, 0.0f, componentColumnWidth);
                 if (translationState.isItemActivated)            s_TransformBefore = comp;
                 if (translationState.isItemEdited)               comp.dirty = true;
                 if (translationState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp));
@@ -576,13 +565,13 @@ namespace ignite
                     s_RotationEditEuler = eulerAngles(comp.localRotation);
                 }
 
-                UI::State rotationState = UI::DrawVec3Control("Rotation", s_RotationEditEuler, 0.025f);
+                UI::State rotationState = UI::DrawVec3Control("Rotation", s_RotationEditEuler, 0.025f, 0.0f, componentColumnWidth);
                 if (rotationState.isItemActivated)            s_TransformBefore = comp;
                 if (rotationState.isItemActivated)            s_RotationEditing = true;
                 if (rotationState.isItemEdited)               { comp.localRotation = glm::quat(s_RotationEditEuler); comp.dirty = true; }
                 if (rotationState.isItemDeactivatedAfterEdit) { CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp)); s_RotationEditing = false; }
 
-                UI::State scaleState = UI::DrawVec3Control("Scale", comp.localScale, 0.025f, 1.0f);
+                UI::State scaleState = UI::DrawVec3Control("Scale", comp.localScale, 0.025f, 1.0f, componentColumnWidth);
                 if (scaleState.isItemActivated)            s_TransformBefore = comp;
                 if (scaleState.isItemEdited)               comp.dirty = true;
                 if (scaleState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp));
@@ -601,11 +590,15 @@ namespace ignite
             {
                 auto &c = selectedEntity.GetComponent<WorldEnvironment>();
 
+                UI::DrawFloatControl("Exposure", &c.exposure, 0.025f, 0.0f, FLT_MAX);
+                UI::DrawFloatControl("Gamma", &c.gamma, 0.025f, 0.0f, FLT_MAX);
+                UI::DrawFloatControl("Ambient", &c.ambient, 0.025f, 0.0f, FLT_MAX);
+
                 UI::DrawCheckbox("Primary", &c.primary);
                 UI::DrawCheckbox("Enabled", &c.enabled);
 
                 const bool hasHDR = c.hdrHandle != AssetHandle(0);
-                std::string buttonLabel = hasHDR ? "HDR Loaded" : "Drag Here";
+                std::string buttonLabel = hasHDR ? assetManager->GetAssetDisplayName(c.hdrHandle) : "Drag Here";
                 UI::DrawButtonWithColumn("HDR", buttonLabel.c_str(), nullptr, [&c, this, &hasHDR]()
                     {
 						if (ImGui::BeginDragDropTarget())
@@ -646,9 +639,6 @@ namespace ignite
                 ImGui::ColorEdit4("Color", &c.color.x);
                 UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
                 UI::DrawFloatControl("Angular Radius", &c.angularRadius, 0.01f, 0.0f, 45.0f);
-                UI::DrawFloatControl("Exposure", &c.exposure, 0.01f, 0.0f, 32.0f);
-                UI::DrawFloatControl("Gamma", &c.gamma, 0.01f, 0.1f, 8.0f);
-                UI::DrawFloatControl("Ambient", &c.ambient, 0.01f, 0.0f, 4.0f);
 
                 const glm::vec3 sunDirection = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
                 const float azimuth = std::atan2(sunDirection.x, sunDirection.z);
@@ -666,7 +656,7 @@ namespace ignite
 
                 static const char *resolutionLabels[] = { "Low - 512px", "Medium - 1024px", "High - 2048px", "Ultra - 4096px" };
                 int resolution = std::clamp(c.shadowResolution, 0, 3);
-                if (ImGui::Combo("Resolution", &resolution, resolutionLabels, IM_ARRAYSIZE(resolutionLabels)))
+                if (UI::DrawComboBox("Resolution", resolutionLabels, IM_ARRAYSIZE(resolutionLabels), resolutionLabels[resolution], &resolution))
                 {
                     c.shadowResolution = resolution;
                 }
@@ -680,7 +670,7 @@ namespace ignite
 
                 // Material 2D
                 bool isMat2dLoaded = c.materialHandle != AssetHandle(0);
-                std::string mat2dLabel = isMat2dLoaded ? getAssetDisplayName(c.materialHandle) : "Drag Here";
+                std::string mat2dLabel = isMat2dLoaded ? assetManager->GetAssetDisplayName(c.materialHandle) : "Drag Here";
                 UI::DrawButtonWithColumn("Material", mat2dLabel.c_str(), nullptr, [&c, &selectedEntity, &isMat2dLoaded, this]()
                     {
 						if (ImGui::BeginDragDropTarget())
@@ -723,7 +713,7 @@ namespace ignite
                 {
 					// Texture on sprite 2d
 					const bool isTextureLoaded = c.handle != AssetHandle(0);
-                  const std::string textureLabel = isTextureLoaded ? getAssetDisplayName(c.handle) : "Drag Here";
+                    const std::string textureLabel = isTextureLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
 					UI::DrawButtonWithColumn("Texture", textureLabel.c_str(), nullptr, [&c, &isTextureLoaded, this, &selectedEntity]()
 						{
 							if (ImGui::BeginDragDropTarget())
@@ -799,7 +789,7 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<Animator2DComponent>();
 
                 bool isAnimatorLoaded = c.controllerHandle != AssetHandle(0);
-                std::string animDropLabel = !isAnimatorLoaded ? "Drop Here" : getAssetDisplayName(c.controllerHandle);
+                std::string animDropLabel = isAnimatorLoaded ? assetManager->GetAssetDisplayName(c.controllerHandle) : "Drop Here";
                 UI::DrawButtonWithColumn("Controller", animDropLabel.c_str(), nullptr, [&c]()
                 {
                     if (ImGui::BeginDragDropTarget())
@@ -822,26 +812,25 @@ namespace ignite
                 if (isAnimatorLoaded)
                 {
                     Ref<AnimatorController2D> animCtrl = m_EditorLayer->GetActiveProject()->GetAsset<AnimatorController2D>(c.controllerHandle);
-                    if (animCtrl)
+                    if (animCtrl && !animCtrl->states.empty())
                     {
-                        if (ImGui::BeginCombo("Current State", c.currentStateName.c_str()))
-                        {
-                            for (size_t i = 0; i < animCtrl->states.size(); ++i)
-                            {
-                                bool isSelected = strcmp(animCtrl->states[i].name.c_str(), c.currentStateName.c_str()) == 0;
-                                if (ImGui::Selectable(animCtrl->states[i].name.c_str(), isSelected))
-                                {
-                                    c.currentStateName = animCtrl->states[i].name;
-                                }
+                        std::vector<const char *> stateLabels;
+                        stateLabels.reserve(animCtrl->states.size());
 
-                                if (isSelected)
-                                {
-                                    ImGui::SetItemDefaultFocus();
-                                }
+                        int currentStateIndex = 0;
+                        for (size_t i = 0; i < animCtrl->states.size(); ++i)
+                        {
+                            stateLabels.push_back(animCtrl->states[i].name.c_str());
+                            if (animCtrl->states[i].name == c.currentStateName)
+                            {
+                                currentStateIndex = static_cast<int>(i);
                             }
-                            ImGui::EndCombo();
                         }
 
+                        if (UI::DrawComboBox("Current State", stateLabels.data(), static_cast<int>(stateLabels.size()), stateLabels[currentStateIndex], &currentStateIndex))
+                        {
+                            c.currentStateName = animCtrl->states[static_cast<size_t>(currentStateIndex)].name;
+                        }
                     }
 
                 }
@@ -857,99 +846,26 @@ namespace ignite
             });
 
 			RenderComponent<Circle2DComponent>("Circle 2D", selectedEntity, [&]()
-				{
-					auto &c = selectedEntity.GetComponent<Circle2DComponent>();
-
-					static Circle2DComponent compBefore;
-
-                    UI::State colorState = UI::DrawVec4Control("Color", c.color, 0.025f, 1.0f);
-                    if (colorState.isItemActivated)
-						compBefore = c;
-
-                    if (colorState.isItemDeactivatedAfterEdit)
-						CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Circle2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), compBefore, c));
-				});
-
-			RenderComponent<StaticMeshComponent>("Static Mesh", selectedEntity, [&]()
 			{
-				auto &c = selectedEntity.GetComponent<StaticMeshComponent>();
+				auto &c = selectedEntity.GetComponent<Circle2DComponent>();
 
-				bool isMeshLoaded = c.handle != AssetHandle(0);
+				static Circle2DComponent compBefore;
 
-               std::string buttonLabel = isMeshLoaded ? getAssetDisplayName(c.handle) : "Drag Here";
-                UI::DrawButtonWithColumn("Static Mesh", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
-                    {
-                        if (ImGui::BeginDragDropTarget())
-                        {
-                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                            {
-                                LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                                AssetMetaData metadata = assetManager->GetMetaData(handle);
-                                if (metadata.type == AssetType::StaticMesh)
-                                {
-                                    metadata.type = AssetType::StaticMesh;
-                                    assetManager->AssignMetaData(handle, metadata);
-                                    assetManager->UnloadAsset(handle);
-                                    c.handle = handle;
-                                }
-                            }
-                            ImGui::EndDragDropTarget();
-                        }
+                UI::State colorState = UI::DrawVec4Control("Color", c.color, 0.025f, 1.0f);
+                if (colorState.isItemActivated)
+					compBefore = c;
 
-                        if (isMeshLoaded)
-                        {
-                            ImGui::SameLine();
-                            if (ImGui::Button("X"))
-                            {
-                                c.handle = AssetHandle(0); // reset mesh handle
-                            }
-                        }
-                    });
+                if (colorState.isItemDeactivatedAfterEdit)
+					CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Circle2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), compBefore, c));
+			});
 
-
-                if (isMeshLoaded)
-                {
-                    const bool isMaterialLoaded = c.materialHandle != AssetHandle(0);
-                    std::string buttonLabel = isMaterialLoaded ? getAssetDisplayName(c.materialHandle) : "Drag Here";
-                    UI::DrawButtonWithColumn("Material", buttonLabel.c_str(), nullptr, [&c, this, &isMaterialLoaded]()
-                    {
-                        if (ImGui::BeginDragDropTarget())
-                        {
-                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                            {
-                                LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
-                                AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                                auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                                AssetMetaData metadata = assetManager->GetMetaData(handle);
-                                if (metadata.type == AssetType::Material)
-                                {
-                                    c.materialHandle = handle;
-                                }
-                            }
-                            ImGui::EndDragDropTarget();
-                        }
-
-                        if (isMaterialLoaded)
-                        {
-                            ImGui::SameLine();
-                            if (ImGui::Button("X"))
-                            {
-                                c.materialHandle = AssetHandle(0); // reset material handle
-                            }
-                        }
-                    });
-                }
-            });
-
-            RenderComponent<SkeletalMeshComponent>("Skeletal Mesh", selectedEntity, [&]()
+            RenderComponent<MeshComponent>("Mesh", selectedEntity, [&]()
             {
-                auto &c = selectedEntity.GetComponent<SkeletalMeshComponent>();
+                auto &c = selectedEntity.GetComponent<MeshComponent>();
 
                 bool isMeshLoaded = c.handle != AssetHandle(0);
 
-                std::string buttonLabel = isMeshLoaded ? getAssetDisplayName(c.handle) : "Drag Here";
+                std::string buttonLabel = isMeshLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
                 UI::DrawButtonWithColumn("Mesh Asset", buttonLabel.c_str(), nullptr, [&c, this, &isMeshLoaded]()
                 {
                     if (ImGui::BeginDragDropTarget())
@@ -961,9 +877,9 @@ namespace ignite
                             auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
                             AssetMetaData metadata = assetManager->GetMetaData(handle);
 
-                            if (metadata.type == AssetType::SkeletalMesh)
+                            if (metadata.type == AssetType::Mesh)
                             {
-                                metadata.type = AssetType::SkeletalMesh;
+                                metadata.type = AssetType::Mesh;
                                 assetManager->AssignMetaData(handle, metadata);
                                 assetManager->UnloadAsset(handle);
                                 c.handle = handle;
@@ -985,12 +901,13 @@ namespace ignite
 
                 if (isMeshLoaded)
                 {
-                    Ref<SkeletalMesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<SkeletalMesh>(c.handle);
+                    Ref<Mesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<Mesh>(c.handle);
                     if (sm)
                     {
-                        bool isAnimatorLoaded = c.animatorHandle != AssetHandle(0);
-                        std::string buttonLabel = isAnimatorLoaded ? getAssetDisplayName(c.animatorHandle) : "Drag Here";
-                        UI::DrawButtonWithColumn("Animator", buttonLabel.c_str(), nullptr, [&c, this, &isAnimatorLoaded]()
+                        // Animator
+                        bool isAnimatorLoaded = c.runtimeAnimatorHandle != AssetHandle(0);
+                        std::string buttonLabel = isAnimatorLoaded ? assetManager->GetAssetDisplayName(c.runtimeAnimatorHandle) : "Drag Here";
+                        UI::DrawButtonWithColumn("Animator", buttonLabel.c_str(), nullptr, [&c, this, &sm, &isAnimatorLoaded]()
                         {
                             if (ImGui::BeginDragDropTarget())
                             {
@@ -1006,7 +923,12 @@ namespace ignite
                                         metadata.type = AssetType::AnimatorController;
                                         assetManager->AssignMetaData(handle, metadata);
                                         assetManager->UnloadAsset(handle);
-                                        c.animatorHandle = handle;
+                                        sm->SetAnimator(handle);
+                                        c.runtimeAnimatorHandle = handle;
+                                        c.currentStateName.clear();
+                                        c.stateElapsed = 0.0f;
+                                        c.stateNormalized = 0.0f;
+                                        c.runtimeParams.clear();
                                     }
                                 }
 
@@ -1018,10 +940,195 @@ namespace ignite
                                 ImGui::SameLine();
                                 if (ImGui::Button("X"))
                                 {
-                                    c.animatorHandle = AssetHandle(0); // reset animator
+                                    sm->SetAnimator(AssetHandle(0)); // reset animator
+                                    c.runtimeAnimatorHandle = AssetHandle(0);
+                                    c.currentStateName.clear();
+                                    c.stateElapsed = 0.0f;
+                                    c.stateNormalized = 0.0f;
+                                    c.runtimeParams.clear();
                                 }
                             }
                         });
+
+                        if (isAnimatorLoaded)
+                        {
+                            if (UI::DrawCheckbox("Unique", &c.uniqueAnimator))
+                            {
+                                c.currentStateName.clear();
+                                c.stateElapsed = 0.0f;
+                                c.stateNormalized = 0.0f;
+                                c.runtimeParams.clear();
+                            }
+
+                            Ref<AnimatorController> animCtrl = m_EditorLayer->GetActiveProject()->GetAsset<AnimatorController>(c.runtimeAnimatorHandle);
+                            if (animCtrl)
+                            {
+                                std::erase_if(c.runtimeParams, [&animCtrl](const AnimParam &param)
+                                {
+                                    return animCtrl->GetParam(param.name) == nullptr;
+                                });
+
+                                for (const AnimParam &param : animCtrl->params)
+                                {
+                                    auto it = std::find_if(c.runtimeParams.begin(), c.runtimeParams.end(), [&param](const AnimParam &runtimeParam)
+                                    {
+                                        return runtimeParam.name == param.name;
+                                    });
+
+                                    if (it == c.runtimeParams.end())
+                                    {
+                                        c.runtimeParams.push_back(param);
+                                    }
+                                    else if (it->type != param.type)
+                                    {
+                                        *it = param;
+                                    }
+                                }
+
+                                if (ImGui::CollapsingHeader("Animator Preview", ImGuiTreeNodeFlags_DefaultOpen))
+                                {
+                                    ImGui::TextDisabled("Default State: %s", animCtrl->defaultState.empty() ? "(None)" : animCtrl->defaultState.c_str());
+
+                                    if (!animCtrl->states.empty())
+                                    {
+                                        std::vector<const char *> stateLabels;
+                                        stateLabels.reserve(animCtrl->states.size());
+
+                                        std::string activeState = c.currentStateName;
+                                        if (activeState.empty())
+                                        {
+                                            activeState = !animCtrl->defaultState.empty() ? animCtrl->defaultState : animCtrl->states.front().name;
+                                        }
+
+                                        int currentStateIndex = 0;
+                                        for (size_t i = 0; i < animCtrl->states.size(); ++i)
+                                        {
+                                            stateLabels.push_back(animCtrl->states[i].name.c_str());
+                                            if (animCtrl->states[i].name == activeState)
+                                            {
+                                                currentStateIndex = static_cast<int>(i);
+                                            }
+                                        }
+
+                                        ImGui::BeginDisabled(true);
+                                        if (UI::DrawComboBox("Preview State", stateLabels.data(), static_cast<int>(stateLabels.size()), stateLabels[currentStateIndex], &currentStateIndex))
+                                        {
+                                            c.currentStateName = animCtrl->states[static_cast<size_t>(currentStateIndex)].name;
+                                            c.stateElapsed = 0.0f;
+                                            c.stateNormalized = 0.0f;
+                                        }
+                                        ImGui::EndDisabled();
+
+                                        ImGui::TextDisabled("State Time: %.3fs", c.stateElapsed);
+                                        ImGui::TextDisabled("State Normalized: %.3f", c.stateNormalized);
+                                    }
+
+                                    if (!c.runtimeParams.empty())
+                                    {
+                                        ImGui::SeparatorText("Parameters");
+                                        for (AnimParam &param : c.runtimeParams)
+                                        {
+                                            switch (param.type)
+                                            {
+                                                case AnimParam::Type::Float:
+                                                    UI::DrawFloatControl(param.name.c_str(), &param.floatVal, 0.05f, -FLT_MAX, FLT_MAX);
+                                                    break;
+                                                case AnimParam::Type::Int:
+                                                    UI::DrawIntControl(param.name.c_str(), &param.intVal, 1.0f, INT_MIN, INT_MAX);
+                                                    break;
+                                                case AnimParam::Type::Bool:
+                                                    UI::DrawCheckbox(param.name.c_str(), &param.boolVal);
+                                                    break;
+                                                case AnimParam::Type::String:
+                                                {
+                                                    char buffer[256] = {};
+                                                    strncpy(buffer, param.strVal.c_str(), sizeof(buffer) - 1);
+                                                    if (ImGui::InputText(param.name.c_str(), buffer, sizeof(buffer)))
+                                                    {
+                                                        param.strVal = buffer;
+                                                    }
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if (!animCtrl->transitions.empty())
+                                    {
+                                        ImGui::SeparatorText("Transitions");
+
+                                        std::string activeState = c.currentStateName;
+                                        if (activeState.empty())
+                                        {
+                                            activeState = !animCtrl->defaultState.empty() ? animCtrl->defaultState : (animCtrl->states.empty() ? std::string {} : animCtrl->states.front().name);
+                                        }
+
+                                        auto findRuntimeParam = [&c](const std::string &name) -> const AnimParam *
+                                        {
+                                            auto it = std::find_if(c.runtimeParams.begin(), c.runtimeParams.end(), [&name](const AnimParam &param)
+                                            {
+                                                return param.name == name;
+                                            });
+                                            return it != c.runtimeParams.end() ? &(*it) : nullptr;
+                                        };
+
+                                        for (const AnimTransition &transition : animCtrl->transitions)
+                                        {
+                                            if (!transition.fromState.empty() && transition.fromState != activeState)
+                                            {
+                                                continue;
+                                            }
+
+                                            const std::string fromName = transition.fromState.empty() ? "Any State" : transition.fromState;
+                                            bool allPass = !transition.hasExitTime || c.stateNormalized >= transition.exitTime;
+
+                                            if (ImGui::TreeNode((std::format("{} -> {}", fromName, transition.toState) + "###transition_" + fromName + "_" + transition.toState).c_str()))
+                                            {
+                                                if (transition.hasExitTime)
+                                                {
+                                                    const bool exitPass = c.stateNormalized >= transition.exitTime;
+                                                    ImGui::TextColored(exitPass ? ImVec4(0.25f, 0.9f, 0.35f, 1.0f) : ImVec4(0.95f, 0.35f, 0.35f, 1.0f),
+                                                        "Exit Time %.3f (%s)", transition.exitTime, exitPass ? "PASS" : "WAIT");
+                                                }
+                                                else
+                                                {
+                                                    ImGui::TextDisabled("Exit Time: Disabled");
+                                                }
+
+                                                for (const AnimCondition &condition : transition.conditions)
+                                                {
+                                                    const AnimParam *runtimeParam = findRuntimeParam(condition.paramName);
+                                                    const bool condPass = anim_utils::EvalCondition(condition, runtimeParam);
+                                                    allPass &= condPass;
+
+                                                    std::string threshold = "?";
+                                                    if (runtimeParam)
+                                                    {
+                                                        switch (runtimeParam->type)
+                                                        {
+                                                            case AnimParam::Type::Float: threshold = std::format("{}", condition.floatThreshold); break;
+                                                            case AnimParam::Type::Int: threshold = std::format("{}", condition.intThreshold); break;
+                                                            case AnimParam::Type::Bool: threshold = condition.boolThreshold ? "true" : "false"; break;
+                                                            case AnimParam::Type::String: threshold = condition.strThreshold; break;
+                                                        }
+                                                    }
+
+                                                    ImGui::BulletText("%s %s %s [%s]",
+                                                        condition.paramName.c_str(),
+                                                        anim_utils::OpToStr(condition.op),
+                                                        threshold.c_str(),
+                                                        condPass ? "PASS" : "FAIL");
+                                                }
+
+                                                ImGui::TextColored(allPass ? ImVec4(0.25f, 0.9f, 0.35f, 1.0f) : ImVec4(0.95f, 0.35f, 0.35f, 1.0f),
+                                                    "Transition %s", allPass ? "READY" : "BLOCKED");
+                                                ImGui::TreePop();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             });
@@ -1029,26 +1136,11 @@ namespace ignite
 			RenderComponent<Rigidbody2DComponent>("Rigid Body 2D", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<Rigidbody2DComponent>();
-
                 std::array<const char *, 3> bodyTypeStr = { "Static", "Dynamic", "Kinematic" };
-                const char *currentBodyType = bodyTypeStr[static_cast<i32>(c.type)];
-
-                if (ImGui::BeginCombo("Body Type", currentBodyType))
+                int bodyTypeIndex = std::clamp(static_cast<int>(c.type), 0, static_cast<int>(bodyTypeStr.size()) - 1);
+                if (UI::DrawComboBox("Body Type", bodyTypeStr.data(), static_cast<int>(bodyTypeStr.size()), bodyTypeStr[bodyTypeIndex], &bodyTypeIndex))
                 {
-                    for (size_t i = 0; i < bodyTypeStr.size(); ++i)
-                    {
-                        bool isSelected = strcmp(bodyTypeStr[i], currentBodyType) == 0;
-                        if (ImGui::Selectable(bodyTypeStr[i], isSelected))
-                        {
-                            c.type = static_cast<Body2DType>(i);
-                        }
-
-                        if (isSelected)
-                        {
-                            ImGui::SetItemDefaultFocus();
-                        }
-                    }
-                    ImGui::EndCombo();
+                    c.type = static_cast<Body2DType>(bodyTypeIndex);
                 }
 
                 UI::DrawVec2Control("Linear Vel", c.linearVelocity, 0.025f);
@@ -1072,56 +1164,31 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<CameraComponent>();
                 static CameraComponent s_CameraBefore;
 
-                static const char *projectionTypeStr[] = { "Orthographic", "Perspective" };
-                const char *currentProjectionTypeStr = projectionTypeStr[static_cast<int>(c.camera.projectionType)];
-
-                if (ImGui::BeginCombo("Projection", currentProjectionTypeStr))
+                // Projection
                 {
-                    for (size_t i = 0; i < std::size(projectionTypeStr); ++i)
+                    static const char *projectionTypeStr[] = { "Orthographic", "Perspective" };
+                    int projectionIdx = static_cast<int>(c.camera.projectionType);
+                    if (UI::DrawComboBox("Projection", projectionTypeStr, IM_ARRAYSIZE(projectionTypeStr), projectionTypeStr[projectionIdx], &projectionIdx))
                     {
-                        bool isSelected = false;
-                        CameraComponent before = c;
-                        if (ImGui::Selectable(projectionTypeStr[i], &isSelected))
-                        {
-                            const auto w = static_cast<float>(m_Scene->GetViewportWidth());
-                            const auto h = static_cast<float>(m_Scene->GetViewportHeight());
-                            c.camera.projectionType = static_cast<ProjectionType>(i);
-                            c.camera.UpdateView();
-                            c.camera.UpdateProjection(w, h);
-                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
-                        }
-
-                        if (isSelected)
-                        {
-                            ImGui::SetItemDefaultFocus();
-                        }
+                        c.camera.projectionType = static_cast<ProjectionType>(projectionIdx);
+                        const auto w = static_cast<float>(m_Scene->GetViewportWidth());
+                        const auto h = static_cast<float>(m_Scene->GetViewportHeight());
+                        c.camera.UpdateView();
+                        c.camera.UpdateProjection(w, h);
                     }
-                    ImGui::EndCombo();
                 }
 
-                static const char *aspectRatioLabels[] = { "Free", "16:9", "16:10", "4:3", "21:9", "1:1" };
-                int aspectRatioIndex = static_cast<int>(c.camera.GetAspectRatioPreset());
-                if (ImGui::BeginCombo("Aspect Ratio", aspectRatioLabels[aspectRatioIndex]))
+                // Aspect Ratio
                 {
-                    for (int i = 0; i < IM_ARRAYSIZE(aspectRatioLabels); ++i)
+                    static const char *aspectRatioLabels[] = { "Free", "16:9", "16:10", "4:3", "21:9", "1:1" };
+                    int aspectRatioIndex = static_cast<int>(c.camera.GetAspectRatioPreset());
+                    if (UI::DrawComboBox("Aspect Ratio", aspectRatioLabels, IM_ARRAYSIZE(aspectRatioLabels), aspectRatioLabels[aspectRatioIndex], &aspectRatioIndex))
                     {
-                        const bool isSelected = (aspectRatioIndex == i);
-                        CameraComponent before = c;
-                        if (ImGui::Selectable(aspectRatioLabels[i], isSelected))
-                        {
-                            c.camera.SetAspectRatioPreset(static_cast<SceneCamera::AspectRatioPreset>(i));
-                            c.dirty = true;
-                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
-                        }
-
-                        if (isSelected)
-                        {
-                            ImGui::SetItemDefaultFocus();
-                        }
+                        c.camera.SetAspectRatioPreset(static_cast<SceneCamera::AspectRatioPreset>(aspectRatioIndex));
+                        c.dirty = true;
                     }
-                    ImGui::EndCombo();
                 }
-
+               
                 if (c.camera.projectionType == ProjectionType::Perspective)
                 {
                     UI::State fovState = UI::DrawFloatControl("Fov", &c.camera.fov, 0.025f, 0.0f, FLT_MAX);
@@ -1169,10 +1236,10 @@ namespace ignite
                 }
 
                 {
+                    ImGui::SeparatorText("Post Processing");
                     auto &pp = c.camera.postProcessing;
 
                     // Bloom
-                    ImGui::SeparatorText("BLOOM");
                     c.dirty |= UI::DrawCheckbox("Enable Bloom", &pp.enableBloom).isItemEdited;
                     if (pp.enableBloom)
                     {
@@ -1184,7 +1251,6 @@ namespace ignite
                     }
 
                     // Vignette
-                    ImGui::SeparatorText("VIGNETTE");
                     c.dirty |= UI::DrawCheckbox("Enable Vignette", &pp.enableVignette).isItemEdited;
                     if (pp.enableVignette)
                     {
@@ -1195,7 +1261,6 @@ namespace ignite
                     }
 
                     // Chromatic Aberration
-                    ImGui::SeparatorText("CHROMATIC AB");
                     c.dirty |= UI::DrawCheckbox("Enable Chromatic Aberration", &pp.enableChromAb).isItemEdited;
                     if (pp.enableChromAb)
                     {
@@ -1204,7 +1269,6 @@ namespace ignite
                     }
 
                     // SSAO
-                    ImGui::SeparatorText("SSAO");
                     c.dirty |= UI::DrawCheckbox("Enable SSAO", &pp.enableSSAO).isItemEdited;
                     if (pp.enableSSAO)
                     {
@@ -1377,8 +1441,8 @@ namespace ignite
             {
                 auto &c = selectedEntity.GetComponent<AudioSourceComponent>();
 
-                bool isLoaded = c.handle != AssetHandle(0);
-                std::string label = isLoaded ? getAssetDisplayName(c.handle) : "Drag Here";
+                const bool isLoaded = c.handle != AssetHandle(0);
+                std::string label = isLoaded ? assetManager->GetAssetDisplayName(c.handle) : "Drag Here";
 
                 UI::DrawButtonWithColumn("Audio", label.c_str(), nullptr, [&c, this, &isLoaded]()
                     {
@@ -1417,47 +1481,76 @@ namespace ignite
                 {
                     if (Ref<FmodSound> sound = m_EditorLayer->GetActiveProject()->GetAsset<FmodSound>(c.handle))
                     {
-                        if (ImGui::Button("Play", { 55.0f, 30.0f }))
+                        std::string soundId = std::format("##{}", (uint64_t)c.handle);
+
+                        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+                        ImGui::BeginGroup();
+                        if (ImGui::Button("Play"))
                         {
                             sound->Stop();
-
                             sound->Play();
                             sound->SetVolume(c.volume);
                             sound->SetPitch(c.pitch);
                             sound->SetPan(c.pan);
                         }
+                        
                         ImGui::SameLine();
-                        if (ImGui::Button("Stop", { 55.0f, 30.0f }))
+                        if (ImGui::Button("Stop"))
                         {
                             sound->Stop();
                         }
+
+                        const bool isPlaying = sound->IsPlaying();
+                        const bool isPaused = sound->IsPaused();
+
+                        ImGui::BeginDisabled(!isPlaying && !isPaused);
+                        std::string pauseLabel = !isPaused ? "Pause" : "Resume";
                         ImGui::SameLine();
-                        if (ImGui::Button("Pause", { 55.0f, 30.0f }))
+                        if (ImGui::Button(pauseLabel.c_str()))
                         {
-                            sound->Pause();
-                        }
-                        if (sound->IsPaused())
-                        {
-                            ImGui::SameLine();
-                            if (ImGui::Button("Resume", { 55.0f, 30.0f }))
-                            {
+                            if (sound->IsPaused())
                                 sound->Resume();
-                            }
+                            else if (isPlaying)
+                                sound->Pause();
+                        }
+                        ImGui::EndDisabled();
+
+                        ImGui::EndGroup();
+
+                        if (UI::DrawFloatControl("Volume", &c.volume, 0.001f, 0.0f, 1.0f, 1.0f))
+                        {
+                            sound->SetVolume(c.volume);
                         }
 
-                        UI::DrawFloatControl("Volume", &c.volume, 0.001f, 0.0f, 1.0f);
-                        UI::DrawFloatControl("Pitch", &c.pitch, 0.001f);
-                        UI::DrawFloatControl("Pan", &c.pan, 0.001f);
-                        UI::DrawCheckbox("Play On Start", &c.playOnStart);
+                        if (UI::DrawFloatControl("Pitch", &c.pitch, 0.001f, 0.0f, 5.0f, 1.0f))
+                        {
+                            sound->SetPitch(c.pitch);
+                        }
+                        if (UI::DrawFloatControl("Pan", &c.pan, 0.001f, -1.0f, 1.0f, 0.0f))
+                        {
+                            sound->SetPan(c.pan);
+                        }
+
+                        if (UI::DrawCheckbox("Play On Start", &c.playOnStart))
+                        {
+                        }
+
+                        if (UI::DrawCheckbox("Loop", &c.loop))
+                        {
+                            if (c.loop)
+                                sound->SetMode(FMOD_LOOP_NORMAL);
+                            else
+                                sound->SetMode(FMOD_LOOP_OFF);
+                        }
                     }
                 }
             });
+
             RenderComponent<ScriptComponent>("C# Script", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<ScriptComponent>();
 
                 bool scriptClassExist = ScriptEngine::GetInstance()->EntityClassExists(c.className);
-                bool isSelected = false;
 
                 if (!scriptClassExist)
                 {
@@ -1467,29 +1560,31 @@ namespace ignite
                 auto scriptStorage = ScriptEngine::GetInstance()->GetScriptClassStorage();
                 std::string currentScriptClasses = c.className;
 
-                // drop-down
-                if (ImGui::BeginCombo("Script Class", currentScriptClasses.c_str()))
+                if (!scriptStorage.empty())
                 {
-                    for (size_t i = 0; i < scriptStorage.size(); i++)
+                    std::vector<const char *> scriptClassLabels;
+                    scriptClassLabels.reserve(scriptStorage.size());
+
+                    int scriptClassIndex = 0;
+                    for (size_t i = 0; i < scriptStorage.size(); ++i)
                     {
-                        isSelected = currentScriptClasses == scriptStorage[i];
-                        if (ImGui::Selectable(scriptStorage[i].c_str(), isSelected))
+                        scriptClassLabels.push_back(scriptStorage[i].c_str());
+                        if (scriptStorage[i] == currentScriptClasses)
                         {
-                            currentScriptClasses = scriptStorage[i];
-                            c.className = scriptStorage[i];
-                        }
-                        if (isSelected)
-                        {
-                            ImGui::SetItemDefaultFocus();
+                            scriptClassIndex = static_cast<int>(i);
                         }
                     }
-                    ImGui::EndCombo();
+
+                    if (UI::DrawComboBox("Script Class", scriptClassLabels.data(), static_cast<int>(scriptClassLabels.size()), scriptClassLabels[scriptClassIndex], &scriptClassIndex))
+                    {
+                        currentScriptClasses = scriptStorage[static_cast<size_t>(scriptClassIndex)];
+                        c.className = currentScriptClasses;
+                    }
                 }
 
                 if (ImGui::Button("Detach"))
                 {
                     c.className = "Detached";
-                    isSelected = false;
                 }
 
                 const bool detached = c.className == "Detached";
@@ -1766,11 +1861,8 @@ namespace ignite
 					case CompType_CircleCollider2D:
 						entity.AddComponent<CircleCollider2DComponent>();
 						break;
-                    case CompType_StaticMesh:
-                        entity.AddComponent<StaticMeshComponent>();
-                        break;
-                    case CompType_SkeletalMesh:
-                        entity.AddComponent<SkeletalMeshComponent>();
+                    case CompType_Mesh:
+                        entity.AddComponent<MeshComponent>();
                         break;
                     case CompType_Rigidbody:
                         entity.AddComponent<RigibodyComponent>();
@@ -2310,6 +2402,8 @@ namespace ignite
     void ScenePanel::RenderToolbar()
     {
         // TOOLBAR: 
+        constexpr ImVec2 buttonSize = { 28.0f, 28.0f };
+
         static std::array<const char *, 3> kCameraModeLabels = { "Orbit", "Fly", "2D" };
         int cameraModeIndex = 0;
         switch (m_EditorCamera.GetNavigationMode())
@@ -2319,8 +2413,8 @@ namespace ignite
             default: cameraModeIndex = 0; break;
         }
 
-        ImGui::SetNextItemWidth(80.0f);
-        if (ImGui::Combo("##CameraMode", &cameraModeIndex, kCameraModeLabels.data(), static_cast<int>(kCameraModeLabels.size())))
+        ImGui::SetNextItemWidth(96.0f);
+        if (ImGui::Combo("##camera_mode", &cameraModeIndex, kCameraModeLabels.data(), static_cast<int>(kCameraModeLabels.size())))
         {
             const auto mode = cameraModeIndex == 0 ? EditorCamera::NavigationMode::Orbit : (cameraModeIndex == 1 ? EditorCamera::NavigationMode::Fly : EditorCamera::NavigationMode::Mode2D);
             const auto previousMode = m_EditorCamera.GetNavigationMode();
@@ -2370,8 +2464,6 @@ namespace ignite
 
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
-
-        constexpr ImVec2 buttonSize = { 28.0f, 28.0f };
 
         auto drawGizmoBtn = [&](const std::string &iconName, bool active)
         {

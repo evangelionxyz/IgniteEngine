@@ -16,8 +16,18 @@
 #include <algorithm>
 #include <cmath>
 
+#include <glm/gtx/quaternion.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 namespace ignite
 {
+
+    glm::mat4 TRSToMat4(const TRS& trs)
+    {
+        return glm::translate(glm::mat4(1.0f), trs.translation) *
+               glm::toMat4(trs.rotation) *
+               glm::scale(glm::mat4(1.0f), trs.scale);
+    }
 
     std::string AnimatorController::EvaluateTransitions(const std::string &currentState, float normalizedTime) const
     {
@@ -36,7 +46,23 @@ namespace ignite
             bool allPass = true;
             for (const auto &cond : tr.conditions)
             {
+                if (cond.paramName.empty())
+                {
+                    LOG_WARN("[AnimatorController] Transition '{}' -> '{}' has a condition with an empty param name — transition is permanently blocked. Fix the animator data.",
+                        tr.fromState.empty() ? "AnyState" : tr.fromState, tr.toState);
+                    allPass = false;
+                    break;
+                }
+
                 const AnimParam *param = GetParam(cond.paramName);
+                if (!param)
+                {
+                    LOG_WARN("[AnimatorController] Transition '{}' -> '{}' references unknown param '{}' — transition is permanently blocked. Fix the animator data.",
+                        tr.fromState.empty() ? "AnyState" : tr.fromState, tr.toState, cond.paramName);
+                    allPass = false;
+                    break;
+                }
+
                 if (!anim_utils::EvalCondition(cond, param))
                 {
                     allPass = false;
@@ -77,6 +103,7 @@ namespace ignite
             out << YAML::BeginMap;
             out << YAML::Key << "Name" << YAML::Value << s.name;
             out << YAML::Key << "AnimHandle" << YAML::Value << static_cast<uint64_t>(s.animHandle);
+            out << YAML::Key << "EditorPos" << YAML::Value << YAML::Flow << YAML::BeginSeq << s.editorPos.x << s.editorPos.y << YAML::EndSeq;
             out << YAML::EndMap;
         }
         out << YAML::EndSeq;
@@ -188,6 +215,8 @@ namespace ignite
                 AnimState s;
                 if (auto n = sn["Name"]) s.name = n.as<std::string>();
                 if (auto n = sn["AnimHandle"]) s.animHandle = AssetHandle(n.as<uint64_t>());
+                if (auto n = sn["EditorPos"]; n && n.IsSequence() && n.size() == 2)
+                    s.editorPos = { n[0].as<float>(), n[1].as<float>() };
                 ctrl->states.push_back(s);
             }
         }
@@ -272,7 +301,7 @@ namespace ignite
         return ctrl;
     }
 
-    bool AnimatorController::UpdateSkeleton(float deltaTime, AnimatorControllerRuntime &runtime, AssetManager *assetManager, std::vector<glm::mat4> &outBoneTransforms)
+    bool AnimatorController::UpdateSkeleton(float deltaTime, AnimatorControllerRuntime &runtime, AssetManager *assetManager)
     {
         if (!assetManager || skeletonHandle == AssetHandle(0))
             return false;
@@ -280,13 +309,14 @@ namespace ignite
         Ref<Asset> skeletonAsset = assetManager->GetAsset(skeletonHandle);
         if (!skeletonAsset)
             skeletonAsset = assetManager->GetAssetImmediate(skeletonHandle);
+
         Ref<Skeleton> skeleton = skeletonAsset ? skeletonAsset->As<Skeleton>() : nullptr;
         if (!skeleton)
             return false;
 
         if (runtime.currentStateName.empty())
         {
-            runtime.currentStateName = defaultState;
+            runtime.currentStateName = !defaultState.empty() ? defaultState : (states.empty() ? std::string{} : states.front().name);
             runtime.stateElapsed = 0.0f;
             runtime.stateNormalized = 0.0f;
         }
@@ -306,6 +336,7 @@ namespace ignite
         Ref<Asset> animationAsset = assetManager->GetAsset(state->animHandle);
         if (!animationAsset)
             animationAsset = assetManager->GetAssetImmediate(state->animHandle);
+
         Ref<SkeletalAnimation> animation = animationAsset ? animationAsset->As<SkeletalAnimation>() : nullptr;
         if (!animation || animation->duration <= 0.0f)
             return false;
@@ -324,38 +355,75 @@ namespace ignite
         const std::string nextStateName = EvaluateTransitions(runtime.currentStateName, runtime.stateNormalized);
         if (!nextStateName.empty() && nextStateName != runtime.currentStateName)
         {
-            runtime.currentStateName = nextStateName;
-            runtime.stateElapsed = 0.0f;
-            runtime.stateNormalized = 0.0f;
-
-            state = FindState(runtime.currentStateName);
-            if (!state || state->animHandle == AssetHandle(0))
-                return false;
-
-            animationAsset = assetManager->GetAsset(state->animHandle);
-            if (!animationAsset)
-                animationAsset = assetManager->GetAssetImmediate(state->animHandle);
-            animation = animationAsset ? animationAsset->As<SkeletalAnimation>() : nullptr;
-            if (!animation || animation->duration <= 0.0f)
-                return false;
-        }
-
-        const float animTime = std::fmod(runtime.stateElapsed * animation->ticksPerSeconds, animation->duration);
-
-        for (auto &[nodeName, channel] : animation->channels)
-        {
-            if (const auto it = skeleton->nameToJointMap.find(nodeName); it != skeleton->nameToJointMap.end())
+            if (const AnimState *nextState = FindState(nextStateName); nextState && nextState->animHandle != AssetHandle(0))
             {
-                const i32 jointIndex = it->second;
-                skeleton->joints[jointIndex].localTransform = channel.CalculateTransform(animTime,
-                    skeleton->joints[jointIndex].defaultTranslation,
-                    skeleton->joints[jointIndex].defaultRotation,
-                    skeleton->joints[jointIndex].defaultScale);
+                runtime.currentStateName = nextStateName;
+                runtime.stateElapsed = 0.0f;
+                runtime.stateNormalized = 0.0f;
+
+                state = nextState;
+                animationAsset = assetManager->GetAsset(state->animHandle);
+                if (!animationAsset)
+                {
+                    animationAsset = assetManager->GetAssetImmediate(state->animHandle);
+                }
+                
+                animation = animationAsset ? animationAsset->As<SkeletalAnimation>() : nullptr;
+                
+                if (!animation || animation->duration <= 0.0f)
+                    return false;
             }
         }
 
-        skeleton->UpdateGlobalTransforms();
-        outBoneTransforms = skeleton->GetFinalJointTransforms();
+        const float animTime = std::fmod(runtime.stateElapsed * animation->ticksPerSeconds, animation->duration);
+        const size_t jointCount = skeleton->joints.size();
+
+        // Allocate transforms
+        if (runtime.localPoses.size() != jointCount)
+        {
+            runtime.localPoses.resize(jointCount);
+            runtime.globalPoses.resize(jointCount);
+            runtime.finalTransforms.resize(jointCount);
+        }
+
+        // Set default local poses
+        for (size_t i = 0; i < jointCount; ++i)
+        {
+            const Joint &joint = skeleton->joints[i];
+            runtime.localPoses[i] = {joint.defaultTranslation, joint.defaultRotation, joint.defaultScale};
+        }
+
+        // Apply animation channels to per-instance local poses
+        for (auto &[jointIndex, channel] : animation->channels)
+        {
+            const Joint &joint = skeleton->joints[jointIndex];
+            runtime.localPoses[jointIndex] = channel.CalculateTRS(animTime, joint.defaultTranslation, joint.defaultRotation, joint.defaultScale);
+        }
+
+        // Compute per-instance global poses using read-only skeleton hierarchy
+        for (size_t i = 0; i < jointCount; ++i)
+        {
+            const Joint &joint = skeleton->joints[i];
+            if (joint.parentJointId == -1)
+            {
+                runtime.globalPoses[i] = runtime.localPoses[i];
+            }
+            else
+            {
+                const TRS& parent = runtime.globalPoses[joint.parentJointId];
+                TRS& global = runtime.globalPoses[i];
+                global.translation = parent.translation + parent.rotation * (parent.scale * runtime.localPoses[i].translation);
+                global.rotation = parent.rotation * runtime.localPoses[i].rotation;
+                global.scale = parent.scale * runtime.localPoses[i].scale;
+            }
+        }
+
+        // Compute GPU-ready final transforms: globalPose -> mat4 * inverseBindPose
+        for (size_t i = 0; i < jointCount; ++i)
+        {
+            glm::mat4 globalMat = TRSToMat4(runtime.globalPoses[i]);
+            runtime.finalTransforms[i] = globalMat * skeleton->joints[i].inverseBindPose;
+        }
 
         return true;
     }

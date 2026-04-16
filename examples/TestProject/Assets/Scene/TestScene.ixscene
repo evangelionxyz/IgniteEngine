@@ -1,0 +1,68 @@
+Scene:
+  Version: Alpha-0.1
+  Title: New Scene
+  Entities:
+    - ID: 1031743537197504771
+      Name: Ranger
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [0, 0, 0.95]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [0, 0, 0.95]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      Mesh:
+        Handle: 5283976215023432810
+        AnimatorHandle: 14664420803145594202
+    - ID: 4734012982462814035
+      Name: Barbarian
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [1.95, 0, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [1.95, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      Mesh:
+        Handle: 11614949986042808900
+        AnimatorHandle: 14664420803145594202
+    - ID: 10744229565299836041
+      Name: Ranger
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [-1.6999999, 0, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [-1.6999999, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      Mesh:
+        Handle: 6850863348557498224
+        AnimatorHandle: 14664420803145594202
+    - ID: 6835293636403887950
+      Name: WorldEnv
+      Type: Node
+      Parent: 0
+      Transform:
+        WorldTranslation: [0, 0, 0]
+        WorldRotation: [0, 0, 0, 1]
+        WorldScale: [1, 1, 1]
+        LocalTranslation: [0, 0, 0]
+        LocalRotation: [0, 0, 0, 1]
+        LocalScale: [1, 1, 1]
+        Visible: true
+      WorldEnvironment:
+        Primary: false
+        Enabled: true
+        HDRHandle: 0
+        Exposure: 2.2
+        Gamma: 2.2
+        Ambient: 0.5

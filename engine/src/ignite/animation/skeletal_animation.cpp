@@ -6,28 +6,31 @@
 #include <glm/gtx/quaternion.hpp>
 #include <ranges>
 
-namespace ignite {
-
-    glm::mat4 AnimationChannel::CalculateTransform(float timeInTicks, const glm::vec3& defaultTranslation, const glm::quat& defaultRotation, const glm::vec3& defaultScale)
+namespace ignite
+{
+    TRS AnimationChannel::CalculateTRS(float timeInTicks, const glm::vec3& defaultTranslation, const glm::quat& defaultRotation, const glm::vec3& defaultScale)
     {
-        translation = translationKeys.frames.empty()
-            ? defaultTranslation
-            : translationKeys.InterpolateTranslation(timeInTicks);
+        TRS trs;
+        trs.translation = translationKeys.frames.empty()
+            ? defaultTranslation : translationKeys.InterpolateTranslation(timeInTicks);
 
-        rotation = rotationKeys.frames.empty()
-            ? defaultRotation
-            : rotationKeys.InterpolateRotation(timeInTicks);
+        trs.rotation = rotationKeys.frames.empty()
+            ? defaultRotation : rotationKeys.InterpolateRotation(timeInTicks);
 
-        scale = scaleKeys.frames.empty()
-            ? defaultScale
-            : scaleKeys.InterpolateScaling(timeInTicks);
+        trs.scale = scaleKeys.frames.empty()
+            ? defaultScale : scaleKeys.InterpolateScaling(timeInTicks);
 
-        return glm::translate(glm::mat4(1.0f), translation)
-            * glm::toMat4(rotation)
-            * glm::scale(glm::mat4(1.0f), scale);
+        return trs;
     }
 
-	bool SkeletalAnimation::Serialize(const std::filesystem::path &filepath)
+    glm::mat4 AnimationChannel::CalculateTransform(float timeInTicks, const glm::vec3 &defaultTranslation, const glm::quat &defaultRotation, const glm::vec3 &defaultScale)
+    {
+        TRS trs = CalculateTRS(timeInTicks, defaultTranslation, defaultRotation, defaultScale);
+        return glm::translate(glm::mat4(1.0f), trs.translation) *
+            glm::toMat4(trs.rotation) * glm::scale(glm::mat4(1.0f), trs.scale);
+    }
+
+    bool SkeletalAnimation::Serialize(const std::filesystem::path &filepath)
 	{
 		BinarySerializer::SerializeSkeletalAnimation(this, filepath);
 		return true;

@@ -4,7 +4,9 @@
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/shader.hpp"
 #include "ignite/graphics/gpu_data.hpp"
+#include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/project/project.hpp"
+#include "ignite/animation/skeleton.hpp"
 
 #include <algorithm>
 
@@ -27,40 +29,10 @@ namespace ignite
         m_SourceMaterial = nullptr;
         m_RuntimeMaterial = CreateRef<Material>();
 
-        m_SceneGPUDataBuffer = ConstantBuffer::Create(sizeof(Scene_GPUData), false, 1, "Asset Preview Scene Buffer");
-        m_CSMGPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMap_GPUData), false, 1, "Asset Preview CSM Buffer");
-        m_PerEntityBuffer = ConstantBuffer::Create(sizeof(SkinnedMesh_GPUData), true, 512, "Asset Preview Per Entity Buffer");
-
         auto samplerDesc = nvrhi::SamplerDesc();
         samplerDesc.setAllFilters(false);
         samplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp);
-
-        TextureCreateInfo textureCI;
-        textureCI.dimension = nvrhi::TextureDimension::Texture2D;
-        textureCI.format = nvrhi::Format::RGBA32_FLOAT;
-        textureCI.flip = true;
-        textureCI.keepInitialState = true;
-        textureCI.initialState = nvrhi::ResourceStates::ShaderResource;
-
-        nvrhi::CommandListHandle cmd = m_Device->createCommandList();
-        cmd->open();
-        m_EnvironmentTexture = Texture::Create("resources/hdr/rogland_clear_night_4k.hdr", textureCI, cmd, "Asset Preview HDR");
-        cmd->close();
-        m_Device->executeCommandList(cmd);
-
-        if (!m_EnvironmentTexture || !m_EnvironmentTexture->GetHandle())
-        {
-            m_EnvironmentTexture = Renderer::GetBlackTexture();
-        }
-
-        auto desc = nvrhi::BindingSetDesc();
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, Renderer::GetCameraConstantBuffer()->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, m_PerEntityBuffer->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, m_SceneGPUDataBuffer->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, m_CSMGPUDataBuffer->GetHandle()));
-
-        m_MeshBindingSet = m_Device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
-        LOG_ASSERT(m_MeshBindingSet, "Failed to create asset preview mesh binding set");
+        m_EnvironmentTexture = Renderer::GetBlackTexture();
 
         m_SceneGPUData.sunColor = glm::vec4(1.0f, 0.98f, 0.92f, 3.0f);
         m_SceneGPUData.sungAngles = glm::vec2(glm::radians(45.0f), glm::radians(35.0f));
@@ -78,6 +50,8 @@ namespace ignite
     void AssetSceneRenderer::BeginFrame()
     {
         m_Has2DPreRenderCache = false;
+        m_GeometryPipelineCache.clear();
+        m_CompositePipelineCache.clear();
     }
 
     void AssetSceneRenderer::SetMaterial(const Ref<Material> &material)
@@ -86,7 +60,7 @@ namespace ignite
         SyncRuntimeMaterialFromSource();
     }
 
-    void AssetSceneRenderer::SetPreviewMesh(const Ref<StaticMesh> &mesh)
+    void AssetSceneRenderer::SetPreviewMesh(const Ref<Mesh> &mesh)
     {
         m_PreviewMesh = mesh;
     }
@@ -98,6 +72,7 @@ namespace ignite
 
     void AssetSceneRenderer::SetEnvironmentTexture(const Ref<Texture> &texture)
     {
+        m_EnvironmentTextureLoadAttempted = true;
         m_EnvironmentTexture = texture ? texture : Renderer::GetBlackTexture();
         if (!m_EnvironmentTexture || !m_EnvironmentTexture->GetHandle())
         {
@@ -133,14 +108,36 @@ namespace ignite
         nvrhi::CommandListHandle cmd = m_Device->createCommandList();
         cmd->open();
 
-        CameraBuffer cameraBuffer = { camera->GetProjection(), camera->GetView(), glm::vec4(camera->position, 1.0f) };
-        Renderer::GetCameraConstantBuffer()->SetData(cmd, Buffer(&cameraBuffer, sizeof(CameraBuffer)));
+        if (!m_EnvironmentTextureLoadAttempted)
+        {
+            m_EnvironmentTextureLoadAttempted = true;
 
-        m_SceneGPUDataBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(Scene_GPUData)));
+            TextureCreateInfo textureCI;
+            textureCI.dimension = nvrhi::TextureDimension::Texture2D;
+            textureCI.format = nvrhi::Format::RGBA32_FLOAT;
+            textureCI.flip = true;
+            textureCI.keepInitialState = true;
+            textureCI.initialState = nvrhi::ResourceStates::ShaderResource;
+
+            Ref<Texture> defaultEnvironment = Texture::Create("resources/hdr/rogland_clear_night_4k.hdr", textureCI, cmd, "Asset Preview HDR");
+            if (defaultEnvironment && defaultEnvironment->GetHandle())
+            {
+                m_EnvironmentTexture = defaultEnvironment;
+            }
+            else
+            {
+                m_EnvironmentTexture = Renderer::GetBlackTexture();
+            }
+        }
+
+        CameraBufferData cameraBufferData = { camera->GetProjection(), camera->GetView(), glm::vec4(camera->position, 1.0f) };
+        m_CameraBuffer->SetData(cmd, Buffer(&cameraBufferData, sizeof(CameraBufferData)));
+
+        m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(SceneBufferData)));
         m_CSMGPUData = {};
         m_CSMGPUData.cascadeIndex = -1;
         m_CSMGPUData.shadowStrength = 0.0f;
-        m_CSMGPUDataBuffer->SetData(cmd, Buffer(&m_CSMGPUData, sizeof(CascadedShadowMap_GPUData)));
+        m_CascadedShadowMapBuffer->SetData(cmd, Buffer(&m_CSMGPUData, sizeof(CascadedShadowMapBufferData)));
 
         uiRT->ClearColorAttachmentFloat(cmd, 0);
         uiRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
@@ -156,7 +153,11 @@ namespace ignite
         CompositePass(cmd, compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
 
         cmd->close();
-        m_Device->executeCommandList(cmd);
+        
+        {
+            std::lock_guard<std::mutex> lock(GPUUploadSync::GetQueueMutex());
+            m_Device->executeCommandList(cmd);
+        }
     }
 
     Ref<Texture> AssetSceneRenderer::GetEnvironmentMapColorTexture() const
@@ -256,6 +257,28 @@ namespace ignite
         state.framebuffer = framebuffer;
         state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
+            if (!m_BoneTransforms.empty())
+            {
+                if (!m_SkeletonGpuBuffer)
+                {
+                    m_SkeletonGpuBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Preview Skeleton Buffer");
+                }
+
+                GPUSkeletonBuffer skeletonGPUData{};
+                const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), m_BoneTransforms.size());
+                for (size_t i = 0; i < boneCount; ++i)
+                {
+                    skeletonGPUData.bones[i] = m_BoneTransforms[i];
+                }
+
+                for (size_t i = boneCount; i < MAX_BONES; ++i)
+                {
+                    skeletonGPUData.bones[i] = glm::mat4(1.0f);
+                }
+
+                m_SkeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
+            }
+
         for (auto &meshInstance : m_PreviewMesh->GetMeshInstances())
         {
             auto &primitive = meshInstance->GetPrimitive();
@@ -264,8 +287,7 @@ namespace ignite
                 continue;
             }
 
-            if ((!primitive->vertexBuffer || !primitive->indexBuffer)
-                && !primitive->vertices.empty() && !primitive->indices.empty())
+            if ((!primitive->vertexBuffer || !primitive->indexBuffer) && !primitive->vertices.empty() && !primitive->indices.empty())
             {
                 primitive->CreateBuffer(cmd);
             }
@@ -275,36 +297,113 @@ namespace ignite
                 continue;
             }
 
-            SkinnedMesh_GPUData gpuData;
-            gpuData.transformation = meshInstance->global;
+            SkinnedMeshBufferData gpuData;
+
+            // For non-skinned sub-meshes linked to a joint, apply the joint's animated transform
+            glm::mat4 meshTransform = meshInstance->global;
+            if (meshInstance->linkedJointIndex >= 0 && !m_BoneTransforms.empty())
+            {
+                const size_t ji = static_cast<size_t>(meshInstance->linkedJointIndex);
+                if (ji < m_BoneTransforms.size())
+                {
+                    meshTransform = m_BoneTransforms[ji] * meshTransform;
+                }
+            }
+            gpuData.transformation = meshTransform;
             if (glm::abs(glm::determinant(gpuData.transformation)) < 0.000001f)
             {
                 gpuData.transformation = glm::mat4(1.0f);
             }
             const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
             gpuData.normal = glm::mat4(normalMat3);
-            std::fill(std::begin(gpuData.boneTransforms), std::end(gpuData.boneTransforms), glm::mat4(1.0f));
-            const size_t transformCount = std::min(static_cast<size_t>(MAX_BONES), m_BoneTransforms.size());
-            for (size_t i = 0; i < transformCount; ++i)
+            meshInstance->SetData(cmd, &gpuData, sizeof(SkinnedMeshBufferData));
+              meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, m_SkeletonGpuBuffer);
+
+            nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
+            
+            Ref<Material> material = m_Project->GetAsset<Material>(meshInstance->GetMaterialHandle());
             {
-                gpuData.boneTransforms[i] = m_BoneTransforms[i];
+                bool waitedForMaterialUpdate = false;
+                if (material && (material->IsBindingSetDirty() || !material->GetBindingSet()))
+                {
+                    auto assetManager = m_Project->GetAssetManager();
+                    auto isTextureReady = [&assetManager](AssetHandle textureHandle)
+                    {
+                        if (textureHandle == 0)
+                        {
+                            return true;
+                        }
+
+                        Ref<Asset> texAsset = assetManager->GetAsset(textureHandle);
+                        return texAsset && texAsset->IsReady();
+                    };
+
+                    // Only update if all textures are available and ready
+                    bool allTexturesReady = true;
+                    if (!isTextureReady(material->baseColorTextureHandle))
+                        allTexturesReady = false;
+                    if (!isTextureReady(material->emissiveTextureHandle))
+                        allTexturesReady = false;
+                    if (!isTextureReady(material->metallicTextureHandle))
+                        allTexturesReady = false;
+                    if (!isTextureReady(material->roughnessTextureHandle))
+                        allTexturesReady = false;
+                    if (!isTextureReady(material->normalTextureHandle))
+                        allTexturesReady = false;
+                    if (!isTextureReady(material->occlusionTextureHandle))
+                        allTexturesReady = false;
+
+                    if (allTexturesReady)
+                    {
+                        MaterialTextures textures;
+                        material->RetrieveTextures(assetManager, &textures);
+
+                        if (!waitedForMaterialUpdate)
+                        {
+                            // Ensure no other GPU operations are in flight before updating material
+                            // This prevents threading errors when materials are being invalidated
+                            GPUUploadSync::DeviceWaitIdle(m_Device);
+                            waitedForMaterialUpdate = true;
+                        }
+
+                        material->UpdateBindingSet(this, &textures, assetManager);
+                    }
+                }
             }
-            m_PerEntityBuffer->SetData(cmd, Buffer(&gpuData, sizeof(SkinnedMesh_GPUData)));
+            
 
-            state.bindings = { m_MeshBindingSet, m_RuntimeMaterial->GetBindingSet() };
-            state.vertexBuffers = { nvrhi::VertexBufferBinding { primitive->vertexBuffer->GetHandle(), 0, 0 } };
-            state.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
-            cmd->setGraphicsState(state);
+            if (material && !material->GetBindingSet())
+            {
+                MaterialTextures textures;
+                auto assetManager = m_Project->GetAssetManager();
+                material->RetrieveTextures(assetManager, &textures);
+                material->UpdateBindingSet(this, &textures, assetManager);
+            }
 
-            nvrhi::DrawArguments args;
-            args.setVertexCount(primitive->indexBuffer->GetCount());
-            args.instanceCount = 1;
-            cmd->drawIndexed(args);
+            if (material)
+            {
+                material->UploadToGpu(cmd);
+            }
+
+            if (meshBindingSet)
+            {
+                state.bindings = { meshBindingSet, material ? material->GetBindingSet() : m_RuntimeMaterial->GetBindingSet() };
+                state.vertexBuffers = { nvrhi::VertexBufferBinding { primitive->vertexBuffer->GetHandle(), 0, 0 } };
+                state.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+                cmd->setGraphicsState(state);
+
+                nvrhi::DrawArguments args;
+                args.setVertexCount(primitive->indexBuffer->GetCount());
+                args.instanceCount = 1;
+                cmd->drawIndexed(args);
+            }
         }
     }
 
     void AssetSceneRenderer::CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture)
     {
+        EnsureCompositeVertexBufferUploaded(cmd);
+
         CompositePostProcess_GPUData postProcessData;
         m_CompositePostProcessBuffer->SetData(cmd, Buffer(&postProcessData, sizeof(postProcessData)));
 

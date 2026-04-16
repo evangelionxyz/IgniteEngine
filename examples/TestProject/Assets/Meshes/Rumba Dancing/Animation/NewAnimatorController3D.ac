@@ -1,0 +1,10 @@
+AnimatorController:
+  DefaultState: NewState
+  SkeletonHandle: 16520719249779125409
+  States:
+    - Name: NewState
+      AnimHandle: 11430929632188587523
+  Params:
+    []
+  Transitions:
+    []

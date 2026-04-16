@@ -1,36 +1,20 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef ASSET_HPP
+#define ASSET_HPP
 
 #include "ignite/core/uuid.hpp"
 
 #include <string>
 #include <filesystem>
 #include <map>
+#include <functional>
 #include <nvrhi/nvrhi.h>
 
 namespace ignite {
+
+    class Serializer;
 
     using AssetHandle = UUID;
 
@@ -41,6 +25,8 @@ namespace ignite {
 
         Auto,
         Audio,
+        AudioMixer,
+        SoundCue,
         Model,
         Project,
         Texture,
@@ -56,8 +42,7 @@ namespace ignite {
         Environment,
         Anim2D,
         Skeleton,
-        SkeletalMesh,
-        StaticMesh,
+        Mesh,
         Scene,
 
         AnimatorController, // .ac    - animator state machine
@@ -85,8 +70,7 @@ namespace ignite {
             case ignite::AssetType::SkeletalAnimation: return "SkeletalAnimation";
             case ignite::AssetType::SpriteSheet: return "SpriteSheet";
             case ignite::AssetType::Anim2D: return "Anim2D";
-			case ignite::AssetType::SkeletalMesh: return "SkeletalMesh";
-            case ignite::AssetType::StaticMesh: return "StaticMesh";
+			case ignite::AssetType::Mesh: return "Mesh";
             case ignite::AssetType::Skeleton: return "Skeleton";
             case ignite::AssetType::Environment: return "Environment";
             case ignite::AssetType::BlendSpace: return "BlendSpace";
@@ -108,6 +92,7 @@ namespace ignite {
         { ".ixproj", AssetType::Project },
         { ".ixscene", AssetType::Scene },
         
+        // Textures
         { ".jpg", AssetType::Texture },
         { ".png", AssetType::Texture },
         { ".jpeg", AssetType::Texture },
@@ -115,20 +100,28 @@ namespace ignite {
         { ".hdr", AssetType::Texture },
 
         { ".ixsp", AssetType::SpriteSheet },
+        
+        // Fonts
         { ".otf", AssetType::Font },
         { ".ttf", AssetType::Font },
+        
+        // audio
         { ".mp3", AssetType::Audio },
         { ".flac", AssetType::Audio },
         { ".wav", AssetType::Audio },
 
-        { ".ixsm", AssetType::StaticMesh },
-        { ".ixskm", AssetType::SkeletalMesh },
+        // Meshes
+        { ".mesh", AssetType::Mesh },
+        { ".fbx", AssetType::Mesh },
+        { ".gltf", AssetType::Mesh },
+        { ".glb", AssetType::Mesh },
 
-        { ".ixskel", AssetType::Skeleton},
+        // Animations
         { ".ixanim", AssetType::SkeletalAnimation},
-        { ".bsp", AssetType::BlendSpace},
         { ".ixloco", AssetType::LocomotionController},
-        
+        { ".ixskel", AssetType::Skeleton},
+        { ".bsp", AssetType::BlendSpace},
+
         { ".ixmat", AssetType::Material},
         { ".ixenv", AssetType::Environment},
 
@@ -153,8 +146,7 @@ namespace ignite {
         if (typeStr == "SkeletalAnimation") return AssetType::SkeletalAnimation;
         if (typeStr == "SpriteSheet") return AssetType::SpriteSheet;
         if (typeStr == "Anim2D")  return AssetType::Anim2D;
-        if (typeStr == "StaticMesh")  return AssetType::StaticMesh;
-        if (typeStr == "SkeletalMesh")  return AssetType::SkeletalMesh;
+        if (typeStr == "Mesh")  return AssetType::Mesh;
         if (typeStr == "Skeleton")  return AssetType::Skeleton;
         if (typeStr == "Material")  return AssetType::Material;
         if (typeStr == "Environment")  return AssetType::Environment;
@@ -175,10 +167,8 @@ namespace ignite {
         {
         case AssetType::Metadata: return ".meta";
         case AssetType::Shader: return ".hlsl";
-
         case AssetType::AnimationMontage: return ".mtg";
-        case AssetType::StaticMesh: return ".ixsm";
-        case AssetType::SkeletalMesh: return ".ixskm";
+        case AssetType::Mesh: return ".mesh";
         case AssetType::Skeleton: return ".ixskel";
         case AssetType::SkeletalAnimation: return ".ixanim";
         case AssetType::BlendSpace: return ".bsp";
@@ -221,6 +211,8 @@ namespace ignite {
     class Asset : public std::enable_shared_from_this<Asset>
     {
     public:
+        using MetaSerializer = std::function<void(Serializer &)>;
+
         AssetHandle handle;
 
         virtual ~Asset() { };
@@ -232,6 +224,7 @@ namespace ignite {
         }
 
         virtual bool Serialize(const std::filesystem::path &filepath) { return true; }
+        virtual bool SerializeMetaFile(const std::filesystem::path &filepath, const MetaSerializer &customSerializer = nullptr) const;
 
         virtual AssetType GetAssetType() { return AssetType::Invalid; }
 
@@ -248,3 +241,4 @@ namespace ignite {
 }
 
 #include "ignite/core/base.hpp"
+#endif

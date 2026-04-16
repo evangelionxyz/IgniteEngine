@@ -1,6 +1,8 @@
 //Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 
 #pragma once
+#ifndef CONTENT_BROWSER_PANEL_HPP
+#define CONTENT_BROWSER_PANEL_HPP
 
 #include "ipanel.hpp"
 #include "ignite/asset/asset.hpp"
@@ -55,6 +57,7 @@ namespace ignite
         virtual void OnUpdate(float deltaTime) override;
 
         void LoadProjectFiles(AssetManager *assetManager);
+        void RefreshFiles();
 
     private:
         void RefreshEntryPathList();
@@ -65,7 +68,7 @@ namespace ignite
         void UIRenderFileTree(FileTreeNode *node);
         void UIRenderFileButton(const std::filesystem::path &item);
         void UIRenderNavigationBar();
-        void UIShowAssetImportContext();
+        void UIShowAssetAddContext();
 
         void PruneMissingNodes(uint32_t nodeIndex, const std::filesystem::path &basePath);
         void PruneMissingNodesAlt(uint32_t nodeIndex, const std::filesystem::path &basePath);
@@ -135,3 +138,5 @@ namespace ignite
         char m_PopupInputBuffer[1024] = { 0 }; // used for create/rename names
     };
 }
+
+#endif

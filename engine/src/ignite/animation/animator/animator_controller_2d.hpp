@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
 #ifndef ANIMATOR_CONTROLLER_2D_HPP
 #define ANIMATOR_CONTROLLER_2D_HPP
 

@@ -128,7 +128,7 @@ namespace ignite
     }
 
 
-    bool Environment::UpdateBindingSet()
+    bool Environment::UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer)
     {
         if (!m_Scene)
         {
@@ -141,14 +141,7 @@ namespace ignite
             return false;
         }
 
-        Ref<ConstantBuffer> cameraCB = Renderer::GetCameraConstantBuffer();
-        Ref<ConstantBuffer> sceneCB = m_Scene->GetSceneGPUDataBuffer();
-        if (!cameraCB || !sceneCB)
-        {
-            return false;
-        }
-
-        if (!cameraCB->GetHandle() || !sceneCB->GetHandle())
+        if (!cameraBuffer || !sceneBuffer)
         {
             return false;
         }
@@ -165,8 +158,8 @@ namespace ignite
 
         // create binding set after load the texture
         nvrhi::BindingSetDesc bsDesc;
-        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraCB->GetHandle()));
-        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, sceneCB->GetHandle()));
+        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
+        bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, sceneBuffer->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_HDRTexture->GetHandle()));
         bsDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_Sampler));
 

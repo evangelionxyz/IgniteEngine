@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
 #ifndef ASSET_IMPORTER_PANEL
 #define ASSET_IMPORTER_PANEL
 
@@ -11,6 +12,8 @@
 #include <queue>
 #include <vector>
 #include <filesystem>
+#include <unordered_map>
+#include <optional>
 
 namespace ignite
 {
@@ -30,41 +33,41 @@ namespace ignite
 		virtual void OnGuiRender() override;
 
 	private:
-		struct ImportRequest
+		struct AssetImportData
 		{
-			std::vector<std::filesystem::path> filepaths;
-           std::filesystem::path targetDirectory;
+			std::filesystem::path filepath;
 			AssetType assetType = AssetType::Invalid;
-			SkeletalMeshImportOptions skeletalMeshOptions;
+			MeshImportOptions meshOptions;
 		};
 
-		struct FontPreviewData
-		{
-			std::filesystem::path sourceFilepath;
-			Ref<Font> font;
-		};
+		void DrawMeshImportOptions();
+		void DrawTextureImportOptions();
+		void DrawFontImportOptions();
+		void DrawGenericImportOptions();
+		bool ProcessImportRequest(const AssetImportData &asset);
+		bool AdvanceToNextAsset();
+		void ResetImportState();
+		void ImportCurrentAsset();
+		void SkipCurrentAsset();
+		AssetImportData BuildCurrentImportData() const;
+		std::filesystem::path PrepareAssetForImport(const AssetImportData &asset) const;
 
-		void QueueImportRequest();
-		void DrawFontImportPreview();
-		void ProcessImportRequest(const ImportRequest &request);
-		void ImportFontAsset(const std::filesystem::path &filepath);
-		
-		void DrawSkeletalMeshImportOptions();
-		void DrawStaticMeshImportOptions();
-      void ImportFbxAsStaticMesh(const std::filesystem::path &filepath, const std::filesystem::path &targetDirectory);
-		void ImportFbxAsSkeletalMesh(const std::filesystem::path &filepath, const SkeletalMeshImportOptions &options);
-		void ImportFbxSkeletonAndAnimations(const std::filesystem::path &filepath, const SkeletalMeshImportOptions &options);
-		
+		void ImportFbxMesh(const std::filesystem::path &filepath, const MeshImportOptions &options);
+		void ImportFbxSkeletonAndAnimations(const std::filesystem::path &filepath, const MeshImportOptions &options);
+
 		std::filesystem::path BuildUniquePath(const std::filesystem::path &directory, const std::string &baseName, const std::string &extension) const;
 
-		std::vector<std::filesystem::path> m_SelectedFilepaths;
 		std::filesystem::path m_TargetDirectory;
-		AssetType m_SelectedAssetType = AssetType::Invalid;
-		SkeletalMeshImportOptions m_SkeletalMeshOptions;
-		FontPreviewData m_FontPreview;
-		std::queue<ImportRequest> m_ImportRequests;
+		std::unordered_map<AssetType, std::queue<AssetImportData>> m_ImportQueues;
+		std::vector<AssetType> m_ImportTypeOrder;
+		size_t m_CurrentTypeQueueIndex = 0;
+		std::optional<AssetImportData> m_CurrentAsset;
+
+		MeshImportOptions m_MeshOptions;
 		bool m_ShowImporterWindow = false;
-	};
+		bool m_OpenImporterPopup = false;
+		bool m_SkipDialogForSameType = false;
+   };
 }
 
 #endif
