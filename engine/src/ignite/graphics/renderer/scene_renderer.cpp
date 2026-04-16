@@ -129,6 +129,7 @@ namespace ignite
             .AddBindingLayout(bindingLayout)
             .Build(framebuffer, params);
 
+        s_DebugGridPSOCache.clear();
         s_DebugGridPSOCache.emplace(key, gp);
         return gp;
     }
@@ -211,6 +212,7 @@ namespace ignite
             .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
             .Build(framebuffer, params);
 
+        s_GeometryPSOCache.clear();
         s_GeometryPSOCache.emplace(key, gp);
         return gp;
     }
@@ -245,6 +247,7 @@ namespace ignite
             .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT))
             .Build(framebuffer, params);
 
+        s_EnvironmentPSOCache.clear();
         s_EnvironmentPSOCache.emplace(key, gp);
         return gp;
     }
@@ -296,6 +299,7 @@ namespace ignite
 
         LOG_INFO("[Composite] Created new pipeline with forced shader recompilation");
 
+        s_CompositePSOCache.clear();
         s_CompositePSOCache.emplace(key, gp);
 
         return gp;
@@ -1023,24 +1027,24 @@ namespace ignite
 
     void SceneRenderer::Resize(uint32_t width, uint32_t height)
     {
-        m_SceneRT->Resize(width, height);
-        m_WidgetRT->Resize(width, height);
-        m_CompositeRT->Resize(width, height);
-
         s_CompositeBindingSetCache.clear();
         s_DebugGridBindingSetCache.clear();
         s_CSMBindingSetCache.clear();
+
+        m_SceneRT->Resize(width, height);
+        m_WidgetRT->Resize(width, height);
+        m_CompositeRT->Resize(width, height);
     }
 
     void SceneRenderer::ResizeGameplay(uint32_t width, uint32_t height)
     {
-        m_GameplaySceneRT->Resize(width, height);
-        m_GameplayWidgetRT->Resize(width, height);
-        m_GameplayCompositeRT->Resize(width, height);
-
         s_CompositeBindingSetCache.clear();
         s_DebugGridBindingSetCache.clear();
         s_CSMBindingSetCache.clear();
+
+        m_GameplaySceneRT->Resize(width, height);
+        m_GameplayWidgetRT->Resize(width, height);
+        m_GameplayCompositeRT->Resize(width, height);
 
         // Update camera view
         if (m_Scene)

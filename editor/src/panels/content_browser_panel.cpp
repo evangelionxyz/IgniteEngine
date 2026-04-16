@@ -87,15 +87,9 @@ namespace ignite
             {"GLTF File (.gltf)", "gltf"},
             {"GLB File (.glb)", "glb"},
             
-            {"Texture (.png)", "png"},
-            {"Texture (.jpg)", "jpg"},
-            {"Texture (.jpeg)", "jpeg"},
-            {"Texture (.hdr)", "hdr"},
-            {"Audio (.wav)", "wav" },
-            {"Audio (.mp3)", "mp3"},
-            {"Audio (.flac)", "flac"},
-            {"Font (.ttf)", "ttf" },
-            {"Font (.otf)", "otf"},
+            {"Texture", "png;jpg;jpeg;hdr;exr"},
+            {"Audio", "wav;mp3;flac" },
+            {"Font", "ttf;otf" },
             {"Ignite Scene (.ixscene)", "ixscene"},
             {"Ignite Static Mesh (.mesh)", "mesh"},
             {"Ignite Material (.ixmat)", "ixmat"},
@@ -1660,15 +1654,17 @@ namespace ignite
             return;
         }
 
+        std::vector<std::filesystem::path> filepaths;
         for (const char *const *file = filelist; *file != nullptr; file++)
         {
-            std::filesystem::path filepath = std::string(*file);
-            Application::SubmitToMainThread([filepath, payload]()
-            {
-                AssetImportEvent importEvent({ filepath }, payload->assetType, payload->targetDirectory);
-                Application::GetInstance()->OnEvent(importEvent);
-            });
+            filepaths.push_back(std::string(*file));
         }
+
+        Application::SubmitToMainThread([filepaths, payload]()
+        {
+            AssetImportEvent importEvent(std::move(filepaths), payload->assetType, payload->targetDirectory);
+            Application::GetInstance()->OnEvent(importEvent);
+        });
     }
 
     std::filesystem::path ContentBrowserPanel::GetNodeFullpath(uint32_t nodeIndex) const

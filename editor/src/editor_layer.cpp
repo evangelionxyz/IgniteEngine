@@ -1742,7 +1742,7 @@ namespace ignite
 
 				ImGui::SameLine();
 				ImGui::Text("Type Filter:");
-			 ImGui::SameLine();
+			    ImGui::SameLine();
 
 				// Type filter dropdown
 				const char *typeNames[] = { "All", "Scene", "Texture", "Material", "StaticMesh", "Audio", "Skeleton" };

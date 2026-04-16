@@ -50,8 +50,6 @@ namespace ignite
     void AssetSceneRenderer::BeginFrame()
     {
         m_Has2DPreRenderCache = false;
-        m_GeometryPipelineCache.clear();
-        m_CompositePipelineCache.clear();
     }
 
     void AssetSceneRenderer::SetMaterial(const Ref<Material> &material)
@@ -249,6 +247,7 @@ namespace ignite
                 .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
                 .Build(framebuffer, params);
 
+            m_GeometryPipelineCache.clear();
             m_GeometryPipelineCache[framebuffer] = pipeline;
         }
 
@@ -257,27 +256,27 @@ namespace ignite
         state.framebuffer = framebuffer;
         state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
-            if (!m_BoneTransforms.empty())
+        if (!m_BoneTransforms.empty())
+        {
+            if (!m_SkeletonGpuBuffer)
             {
-                if (!m_SkeletonGpuBuffer)
-                {
-                    m_SkeletonGpuBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Preview Skeleton Buffer");
-                }
-
-                GPUSkeletonBuffer skeletonGPUData{};
-                const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), m_BoneTransforms.size());
-                for (size_t i = 0; i < boneCount; ++i)
-                {
-                    skeletonGPUData.bones[i] = m_BoneTransforms[i];
-                }
-
-                for (size_t i = boneCount; i < MAX_BONES; ++i)
-                {
-                    skeletonGPUData.bones[i] = glm::mat4(1.0f);
-                }
-
-                m_SkeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
+                m_SkeletonGpuBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Preview Skeleton Buffer");
             }
+
+            GPUSkeletonBuffer skeletonGPUData {};
+            const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), m_BoneTransforms.size());
+            for (size_t i = 0; i < boneCount; ++i)
+            {
+                skeletonGPUData.bones[i] = m_BoneTransforms[i];
+            }
+
+            for (size_t i = boneCount; i < MAX_BONES; ++i)
+            {
+                skeletonGPUData.bones[i] = glm::mat4(1.0f);
+            }
+
+            m_SkeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
+        }
 
         for (auto &meshInstance : m_PreviewMesh->GetMeshInstances())
         {
@@ -442,6 +441,7 @@ namespace ignite
                 .AddBindingLayout(m_CompositeBindingLayout)
                 .Build(framebuffer, params);
 
+            m_CompositePipelineCache.clear();
             m_CompositePipelineCache[framebuffer] = pipeline;
         }
 

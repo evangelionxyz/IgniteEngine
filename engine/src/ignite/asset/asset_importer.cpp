@@ -219,9 +219,8 @@ namespace ignite
         const std::filesystem::path projectAssetPath = assetManager->GetProject()->GetAssetDirectory();
         const std::filesystem::path outputRootDirectory = options.targetDirectory.empty() ? projectAssetPath : options.targetDirectory;
         const std::filesystem::path filename = metadata.filepath.stem();
-        const std::filesystem::path outputDirectory = outputRootDirectory / filename;
-        const std::filesystem::path meshBinaryPath = outputDirectory / (filename.string() + skeletalMeshBinExt);
-        const std::filesystem::path skeletonPath = outputDirectory / (filename.string() + skeletonBinExt);
+        const std::filesystem::path meshBinaryPath = outputRootDirectory / (filename.string() + skeletalMeshBinExt);
+        const std::filesystem::path skeletonPath = outputRootDirectory / (filename.string() + skeletonBinExt);
 
         Ref<Mesh> asset;
 
@@ -298,9 +297,9 @@ namespace ignite
 
             // animations
             std::vector<std::filesystem::path> animationFiles;
-            if (std::filesystem::exists(outputDirectory))
+            if (std::filesystem::exists(outputRootDirectory))
             {
-                for (const auto &entry : std::filesystem::directory_iterator(outputDirectory))
+                for (const auto &entry : std::filesystem::directory_iterator(outputRootDirectory))
                 {
                     if (entry.is_regular_file() && entry.path().extension() == animationBinExt)
                     {
@@ -345,7 +344,7 @@ namespace ignite
         MeshScene meshScene;
         MeshLoader::LoadSceneGraph(metadata.filepath.generic_string(), meshScene, assetManager);
 
-        if (!std::filesystem::exists(outputDirectory)) std::filesystem::create_directory(outputDirectory);
+        if (!std::filesystem::exists(outputRootDirectory)) std::filesystem::create_directory(outputRootDirectory);
 
         // Import textures and materials from the same FBX parse used for skeleton/animation,
         // so bone IDs and skeleton mapping stay consistent.
@@ -353,16 +352,6 @@ namespace ignite
         if (options.importMaterials)
         {
             materialTextureHandles.resize(meshScene.materials.size());
-
-            // texture directory
-            std::filesystem::path textureDirectory = outputDirectory;
-            if (!meshScene.materialTextureMap.empty())
-            {
-                // only create when there is non null texture
-                textureDirectory /= "Textures";
-                if (options.importMaterials && !std::filesystem::exists(textureDirectory))
-                    std::filesystem::create_directory(textureDirectory);
-            }
 
             for (size_t i = 0; i < meshScene.materialTextureMap.size(); ++i)
             {
@@ -379,7 +368,7 @@ namespace ignite
 
                     const bool writeEXR = texture->GetFormat() == nvrhi::Format::RGBA32_FLOAT;
                     const std::string textureExtension = writeEXR ? ".exr" : ".png";
-                    const std::filesystem::path textureOutputFullPath = textureDirectory / (name + textureExtension);
+                    const std::filesystem::path textureOutputFullPath = outputRootDirectory / (name + textureExtension);
 
                     if (writeEXR)
                     {
@@ -409,15 +398,6 @@ namespace ignite
                 }
             }
 
-            // Set default material directory
-            std::filesystem::path materialDirectory = outputDirectory;
-            if (!meshScene.materials.empty())
-            {
-                materialDirectory /= "Material";
-                if (options.importMaterials && !std::filesystem::exists(materialDirectory))
-                    std::filesystem::create_directory(materialDirectory);
-            }
-
             for (size_t i = 0; i < meshScene.materials.size(); ++i)
             {
                 Ref<Material> &mat = meshScene.materials[i];
@@ -429,7 +409,7 @@ namespace ignite
                 mat->occlusionTextureHandle = materialTextureHandles[i][4];
 
                 const std::string materialFilename = mat->name + materialBinExt;
-                const std::filesystem::path materialBinFullPath = materialDirectory / materialFilename;
+                const std::filesystem::path materialBinFullPath = outputRootDirectory / materialFilename;
 
                 // Serialize Material
                 mat->Serialize(materialBinFullPath);
@@ -503,7 +483,7 @@ namespace ignite
 
                 animation->SetSkeletonHandle(meshScene.skeleton ? meshScene.skeleton->handle : AssetHandle(0));
 
-                std::filesystem::path animationPath = outputDirectory / (animation->name + animationBinExt);
+                std::filesystem::path animationPath = outputRootDirectory / (animation->name + animationBinExt);
                 animation->Serialize(animationPath);
 
                 AssetHandle animationHandle = AssetHandle();

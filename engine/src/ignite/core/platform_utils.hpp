@@ -29,6 +29,20 @@
 
 namespace ignite {
 
+    class CurrentWorkingDirectoryScope
+    {
+    public:
+        CurrentWorkingDirectoryScope();
+        explicit CurrentWorkingDirectoryScope(const std::filesystem::path &path);
+        ~CurrentWorkingDirectoryScope();
+
+        CurrentWorkingDirectoryScope(const CurrentWorkingDirectoryScope &) = delete;
+        CurrentWorkingDirectoryScope &operator=(const CurrentWorkingDirectoryScope &) = delete;
+
+    private:
+        std::filesystem::path m_PreviousPath;
+    };
+
     struct FileDialogs
     {
         static std::vector<std::string> OpenFiles(const char *filter);

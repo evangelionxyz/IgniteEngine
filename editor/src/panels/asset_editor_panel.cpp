@@ -974,33 +974,36 @@ namespace ignite
 
                 if (created && createdAsset)
                 {
-                    AssetHandle handle = AssetHandle();
-                    AssetMetaData metadata;
-                    metadata.type = m_CreateRequest.type;
-                    metadata.filepath = project->GetAssetRelativeFilepath(fullAssetPath);
+                    Application::SubmitToMainThread([createdAsset, fullAssetPath, project, assetManager, this]()
+                    {
+                        AssetHandle handle = AssetHandle();
+                        AssetMetaData metadata;
+                        metadata.type = m_CreateRequest.type;
+                        metadata.filepath = project->GetAssetRelativeFilepath(fullAssetPath);
 
-                    createdAsset->handle = handle;
-                    assetManager->AssignMetaData(handle, metadata);
-                    assetManager->AssignAsset(handle, createdAsset);
+                        createdAsset->handle = handle;
+                        assetManager->AssignMetaData(handle, metadata);
+                        assetManager->AssignAsset(handle, createdAsset);
 
-                    // TODO: Fix save project assets
-                    m_EditorLayer->SaveProject();
+                        // TODO: Fix save project assets
+                        m_EditorLayer->SaveProject();
 
-                    AssetEditorData data;
-                    data.asset = createdAsset;
-                    data.metadata = metadata;
-                    data.handle = handle;
-                    data.isOpen = true;
-                    data.requestFocus = true;
-                    data.windowTitle = std::format("{} - {}###asset_editor_{}", AssetTypeToString(metadata.type), fullAssetPath.filename().string(), static_cast<uint64_t>(handle));
+                        AssetEditorData data;
+                        data.asset = createdAsset;
+                        data.metadata = metadata;
+                        data.handle = handle;
+                        data.isOpen = true;
+                        data.requestFocus = true;
+                        data.windowTitle = std::format("{} - {}###asset_editor_{}", AssetTypeToString(metadata.type), fullAssetPath.filename().string(), static_cast<uint64_t>(handle));
 
-                    InitializeSceneData(data);
+                        InitializeSceneData(data);
 
-                    m_Assets.push_back(std::move(data));
-                    m_CreateRequest = {};
+                        m_Assets.push_back(std::move(data));
+                        m_CreateRequest = {};
 
-                    // Refresh content browser
-                    m_EditorLayer->RefreshContentBrowsers();
+                        // Refresh content browser
+                        m_EditorLayer->RefreshContentBrowsers();
+                    });
                 }
             };
 
@@ -5053,17 +5056,21 @@ namespace ignite
                 assetName = metadata.filepath.generic_string();
             }
 
-            AssetEditorData data;
-            data.asset = asset;
-            data.metadata = metadata;
-            data.handle = handle;
-            data.isOpen = true;
-            data.requestFocus = true;
-            data.windowTitle = std::format("{} - {}###asset_editor_{}", AssetTypeToString(metadata.type), assetName, static_cast<uint64_t>(handle));
+            Application::SubmitToMainThread([asset, metadata, handle, assetName, this]()
+            {
+                AssetEditorData data;
+                data.asset = asset;
+                data.metadata = metadata;
+                data.handle = handle;
+                data.isOpen = true;
+                data.requestFocus = true;
+                data.windowTitle = std::format("{} - {}###asset_editor_{}", AssetTypeToString(metadata.type), assetName, static_cast<uint64_t>(handle));
 
-            InitializeSceneData(data);
+                InitializeSceneData(data);
 
-            m_Assets.push_back(std::move(data));
+                m_Assets.push_back(std::move(data));
+            });
+
             return true;
         }
 

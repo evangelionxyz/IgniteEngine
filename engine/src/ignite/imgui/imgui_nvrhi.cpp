@@ -23,6 +23,7 @@
 
 #include "imgui_nvrhi.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/graphics/renderer.hpp"
@@ -97,6 +98,8 @@ namespace ignite
 
     bool ImGui_NVRHI::UpdateFontTexture()
     {
+        IGN_PROFILE_FUNCTION();
+
         ImGuiIO &io = ImGui::GetIO();
 
         // If the font texture exists and is bound to ImGui, we're done.
@@ -203,6 +206,8 @@ namespace ignite
 
     bool ImGui_NVRHI::Render(ImDrawData *drawData, nvrhi::IFramebuffer *framebuffer)
     {
+        IGN_PROFILE_FUNCTION();
+
         // No top-level queue lock — the main thread contends on this mutex during
         // BeginFrame and Present, so holding it for the full command-list build
         // causes WaitForFrameReady to stall. We scope it to the submit only.
@@ -237,7 +242,11 @@ namespace ignite
         drawState.framebuffer = framebuffer;
         LOG_ASSERT(drawState.framebuffer, "Invalid framebuffer");
 
-        Ref<GraphicsPipeline> pipeline = GetPSO(drawState.framebuffer);
+        Ref<GraphicsPipeline> pipeline = nullptr;
+        {
+            IGN_PROFILE_SCOPE("ImGui_NVRHI::GetPSO");
+            pipeline = GetPSO(drawState.framebuffer);
+        }
         drawState.pipeline = pipeline->GetHandle();
 
         drawState.viewport.viewports.push_back(
@@ -253,11 +262,18 @@ namespace ignite
         drawState.indexBuffer.format = sizeof(ImDrawIdx) == 2 ? nvrhi::Format::R16_UINT : nvrhi::Format::R32_UINT;
         drawState.indexBuffer.offset = 0;
 
+        const nvrhi::BindingLayoutHandle bindingLayout = pipeline->GetBindingLayout(0);
+        drawState.bindings.resize(1);
+
+        nvrhi::ITexture *lastTexture = nullptr;
+        nvrhi::IBindingSet *lastBindingSet = nullptr;
+
         // render command list
         i32 vtxOffset = 0;
         i32 idxOffset = 0;
         for (i32 n = 0; n < drawData->CmdListsCount; ++n)
         {
+            IGN_PROFILE_SCOPE("ImGui_NVRHI::DrawList");
             const ImDrawList *cmdList = drawData->CmdLists[n];
 
             for (i32 i = 0; i < cmdList->CmdBuffer.Size; ++i)
@@ -270,7 +286,14 @@ namespace ignite
                 }
                 else
                 {
-                    drawState.bindings = { GetBindingSet((nvrhi::ITexture *)pCmd->TextureId, pipeline->GetBindingLayout(0)) };
+                    nvrhi::ITexture *texture = (nvrhi::ITexture *)pCmd->TextureId;
+                    if (texture != lastTexture)
+                    {
+                        lastTexture = texture;
+                        lastBindingSet = GetBindingSet(texture, bindingLayout);
+                    }
+
+                    drawState.bindings[0] = lastBindingSet;
                     LOG_ASSERT(drawState.bindings[0], "Invalid draw state binding");
 
                     ImVec2 clipMin((pCmd->ClipRect.x - clipOff.x) * clipScale.x, (pCmd->ClipRect.y - clipOff.y) * clipScale.y);
@@ -299,6 +322,12 @@ namespace ignite
                     commandList->setGraphicsState(drawState);
                     commandList->setPushConstants(&pushConstants, sizeof(pushConstants));
                     commandList->drawIndexed(drawArguments);
+                }
+
+                if (pCmd->UserCallback)
+                {
+                    lastTexture = nullptr;
+                    lastBindingSet = nullptr;
                 }
             }
             idxOffset += cmdList->IdxBuffer.Size;
@@ -349,6 +378,8 @@ namespace ignite
 
     Ref<GraphicsPipeline> ImGui_NVRHI::GetPSO(nvrhi::IFramebuffer *framebuffer)
     {
+        IGN_PROFILE_FUNCTION();
+
         auto pipelineIter = graphicsPipelines.find(framebuffer);
         if (pipelineIter != graphicsPipelines.end())
         {
@@ -400,6 +431,8 @@ namespace ignite
 
     nvrhi::IBindingSet *ImGui_NVRHI::GetBindingSet(nvrhi::ITexture *texture, nvrhi::BindingLayoutHandle bindingLayout)
     {
+        IGN_PROFILE_FUNCTION();
+
         auto iter = bindingsCache.find(texture);
         if (iter != bindingsCache.end())
             return iter->second;
@@ -429,6 +462,8 @@ namespace ignite
 
     bool ImGui_NVRHI::UpdateGeometry(nvrhi::ICommandList *commandList, ImDrawData *drawData)
     {
+        IGN_PROFILE_FUNCTION();
+
         // Calculate size needed for expanded vertices
         size_t expandedVertexSize = drawData->TotalVtxCount * sizeof(ImGuiVertexData);
         
