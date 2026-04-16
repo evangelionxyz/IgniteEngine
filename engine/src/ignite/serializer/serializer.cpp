@@ -156,9 +156,6 @@ namespace ignite
                         sr.AddKeyValue("Color", comp.color);
                         sr.AddKeyValue("Intensity", comp.intensity);
                         sr.AddKeyValue("AngularRadius", comp.angularRadius);
-                        sr.AddKeyValue("Exposure", comp.exposure);
-                        sr.AddKeyValue("Gamma", comp.gamma);
-                        sr.AddKeyValue("Ambient", comp.ambient);
                         sr.AddKeyValue("ShadowStrength", comp.shadowStrength);
                         sr.AddKeyValue("ShadowMinBias", comp.shadowMinBias);
                         sr.AddKeyValue("ShadowMaxBias", comp.shadowMaxBias);
@@ -326,27 +323,15 @@ namespace ignite
 					sr.EndMap();
 				}
 
-				// Static Mesh
-				if (entity.HasComponent<StaticMeshComponent>())
-				{
-					const auto &comp = entity.GetComponent<StaticMeshComponent>();
-					sr.BeginMap("StaticMesh");
-					{
-						sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
-						sr.AddKeyValue("MaterialHandle", static_cast<uint64_t>(comp.materialHandle));
-					}
-					sr.EndMap();
-				}
-
-                // skinned mesh
-                if (entity.HasComponent<SkeletalMeshComponent>())
+                // Mesh
+                if (entity.HasComponent<MeshComponent>())
                 {
-                    const auto &comp = entity.GetComponent<SkeletalMeshComponent>();
-                    sr.BeginMap("SkeletalMesh");
+                    const auto &comp = entity.GetComponent<MeshComponent>();
+                    sr.BeginMap("Mesh");
                     {
                         sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
-                        sr.AddKeyValue("AnimatorHandle", static_cast<uint64_t>(comp.animatorHandle));
-                        sr.AddKeyValue("CurrentState", comp.currentStateName);
+                        sr.AddKeyValue("AnimatorHandle", static_cast<uint64_t>(comp.runtimeAnimatorHandle));
+                        sr.AddKeyValue("UniqueAnimator", comp.uniqueAnimator);
                     }
                     sr.EndMap();
                 }
@@ -462,6 +447,7 @@ namespace ignite
                         sr.AddKeyValue("Pitch", comp.pitch);
                         sr.AddKeyValue("Pan", comp.pan);
                         sr.AddKeyValue("PlayOnStart", comp.playOnStart);
+                        sr.AddKeyValue("Loop", comp.loop);
                     }
                     sr.EndMap();
                 }
@@ -475,14 +461,9 @@ namespace ignite
                         sr.AddKeyValue("Primary", comp.primary);
                         sr.AddKeyValue("Enabled", comp.enabled);
                         sr.AddKeyValue("HDRHandle", static_cast<uint64_t>(comp.hdrHandle));
-                        sr.AddKeyValue("SunColor", comp.sceneGPUData.sunColor);
-                        sr.AddKeyValue("SunAngles", comp.sceneGPUData.sungAngles);
-                        sr.AddKeyValue("SunAngularRadius", comp.sceneGPUData.sunAngularRadius);
-                        sr.AddKeyValue("RenderMode", comp.sceneGPUData.renderMode);
-                        sr.AddKeyValue("DebugShadow", comp.sceneGPUData.debugShadow);
-                        sr.AddKeyValue("Exposure", comp.sceneGPUData.exposure);
-                        sr.AddKeyValue("Gamma", comp.sceneGPUData.gamma);
-                        sr.AddKeyValue("Ambient", comp.sceneGPUData.ambient);
+                        sr.AddKeyValue("Exposure", comp.exposure);
+                        sr.AddKeyValue("Gamma", comp.gamma);
+                        sr.AddKeyValue("Ambient", comp.ambient);
                     }
                     sr.EndMap();
                 }
@@ -620,7 +601,12 @@ namespace ignite
 
     Ref<Scene> SceneSerializer::Deserialize(const std::filesystem::path &filepath, Project *project)
     {
-        LOG_ASSERT(std::filesystem::exists(filepath), "[Scene SR] File does not exists!\n{}", filepath.generic_string());
+        if (!std::filesystem::exists(filepath))
+        {
+            LOG_ERROR("[Scene SR] File does not exists!\n{}", filepath.generic_string());
+            return nullptr;
+        }
+
         LOG_ASSERT(project, "[Scene SR] Invalid project");
 
         YAML::Node sceneFileNode = Serializer::Deserialize(filepath);
@@ -883,9 +869,6 @@ namespace ignite
                 if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
                 if (auto n = node["Intensity"]) comp.intensity = n.as<float>();
                 if (auto n = node["AngularRadius"]) comp.angularRadius = n.as<float>();
-                if (auto n = node["Exposure"]) comp.exposure = n.as<float>();
-                if (auto n = node["Gamma"]) comp.gamma = n.as<float>();
-                if (auto n = node["Ambient"]) comp.ambient = n.as<float>();
                 if (auto n = node["ShadowStrength"]) comp.shadowStrength = n.as<float>();
                 if (auto n = node["ShadowMinBias"]) comp.shadowMinBias = n.as<float>();
                 if (auto n = node["ShadowMaxBias"]) comp.shadowMaxBias = n.as<float>();
@@ -899,10 +882,12 @@ namespace ignite
             {
                 auto &comp = desEntity.AddComponent<AudioSourceComponent>();
                 comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
-                comp.volume = node["Volume"].as<float>();
-                comp.pitch = node["Pitch"].as<float>();
-                comp.pan = node["Pan"].as<float>();
-                comp.playOnStart = node["PlayOnStart"].as<bool>();
+
+                if (auto n = node["Volume"]) comp.volume = node["Volume"].as<float>();
+                if (auto n = node["Pitch"]) comp.pitch = node["Pitch"].as<float>();
+                if (auto n = node["Pan"]) comp.pan = node["Pan"].as<float>();
+                if (auto n = node["PlayOnStart"]) comp.playOnStart = node["PlayOnStart"].as<bool>();
+                if (auto n = node["Loop"]) comp.loop = node["Loop"].as<bool>();
             }
 
             // World Environment
@@ -921,38 +906,17 @@ namespace ignite
                 {
                     world.enabled = node["Enabled"].as<bool>();
                 }
-
-                if (node["SunColor"])
-                {
-                    world.sceneGPUData.sunColor = node["SunColor"].as<glm::vec4>();
-                }
-                if (node["SunAngles"])
-                {
-                    world.sceneGPUData.sungAngles = node["SunAngles"].as<glm::vec2>();
-                }
-                if (node["SunAngularRadius"])
-                {
-                    world.sceneGPUData.sunAngularRadius = node["SunAngularRadius"].as<float>();
-                }
-                if (node["RenderMode"])
-                {
-                    world.sceneGPUData.renderMode = node["RenderMode"].as<int>();
-                }
-                if (node["DebugShadow"])
-                {
-                    world.sceneGPUData.debugShadow = node["DebugShadow"].as<int>();
-                }
                 if (node["Exposure"])
                 {
-                    world.sceneGPUData.exposure = node["Exposure"].as<float>();
+                    world.exposure = node["Exposure"].as<float>();
                 }
                 if (node["Gamma"])
                 {
-                    world.sceneGPUData.gamma = node["Gamma"].as<float>();
+                    world.gamma = node["Gamma"].as<float>();
                 }
                 if (node["Ambient"])
                 {
-                    world.sceneGPUData.ambient = node["Ambient"].as<float>();
+                    world.ambient = node["Ambient"].as<float>();
                 }
             }
 
@@ -990,31 +954,20 @@ namespace ignite
                 }
             }
 
-            // Static Mesh
-            if (YAML::Node node = entityNode["StaticMesh"])
+            if (YAML::Node node = entityNode["Mesh"])
             {
-                auto &comp = desEntity.AddComponent<StaticMeshComponent>();
+                auto &comp = desEntity.AddComponent<MeshComponent>();
                 if (auto n = node["Handle"])
                 {
                     comp.handle = AssetHandle(n.as<uint64_t>());
                 }
-                if (auto n = node["MaterialHandle"])
-                {
-                    comp.materialHandle = AssetHandle(n.as<uint64_t>());
-                }
-            }
-
-            if (YAML::Node node = entityNode["SkeletalMesh"])
-            {
-                auto &comp = desEntity.AddComponent<SkeletalMeshComponent>();
-                comp.handle = AssetHandle(node["Handle"].as<uint64_t>());
                 if (auto n = node["AnimatorHandle"])
                 {
-                    comp.animatorHandle = AssetHandle(n.as<uint64_t>());
+                    comp.runtimeAnimatorHandle = AssetHandle(n.as<uint64_t>());
                 }
-                if (auto n = node["CurrentState"])
+                if (auto n = node["UniqueAnimator"])
                 {
-                    comp.currentStateName = n.as<std::string>();
+                    // comp.uniqueAnimator = n.as<bool>();
                 }
             }
 

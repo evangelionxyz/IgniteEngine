@@ -14,9 +14,13 @@ struct Object
 {
     float4x4 transformMatrix;
     float4x4 normalMatrix;
-    float4x4 boneTransforms[MAX_BONES];
     uint objectID;
     float3 _padding;
+};
+
+struct Skeleton
+{
+    float4x4 boneTransforms[MAX_BONES];
 };
 
 cbuffer CameraBuffer : register(b0, space0)
@@ -27,6 +31,11 @@ cbuffer CameraBuffer : register(b0, space0)
 cbuffer ObjectBuffer : register(b1, space0)
 { 
     Object object;
+}
+
+cbuffer SkeletonBuffer : register(b2, space0)
+{
+    Skeleton skeleton;
 }
 
 struct VSInput
@@ -67,7 +76,7 @@ PSInput main(VSInput input)
         if (weight > 0.0f)
         {
             uint boneId = min(input.boneIDs[i], (uint)(MAX_BONES - 1));
-            float4x4 transform = object.boneTransforms[boneId];
+            float4x4 transform = skeleton.boneTransforms[boneId];
 
             posL += weight * mul(transform, float4(input.position, 1.0));
             normalL += weight * mul((float3x3)transform, input.normal);

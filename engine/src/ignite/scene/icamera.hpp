@@ -40,7 +40,7 @@ namespace ignite
 		Orthographic = 0, Perspective = 1
 	};
 
-	struct CameraBuffer
+	struct CameraBufferData
 	{
 		glm::mat4 viewProjection;
 		glm::mat4 view;

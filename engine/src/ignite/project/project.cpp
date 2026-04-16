@@ -151,7 +151,12 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         return invalidRegistry;
     }
 
-	bool Project::Serialize(const std::filesystem::path &filepath)
+    const std::string Project::GetAssetDisplayName(AssetHandle handle) const
+    {
+        return m_AssetManager->GetAssetDisplayName(handle);
+    }
+
+    bool Project::Serialize(const std::filesystem::path &filepath)
 	{
 		Serializer projectSr(filepath);
 
@@ -190,6 +195,9 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 			assetSr.BeginSequence("Assets"); // Asset sequence
 			for (auto &[handle, metadata] : assetRegistry)
 			{
+                if (metadata.type == AssetType::Invalid)
+                    continue;
+
 				assetSr.BeginMap(); // Begin Metadata
 
 				assetSr.AddKeyValue("Handle", static_cast<uint64_t>(handle));
@@ -262,6 +270,9 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 				AssetMetaData metadata;
 				metadata.type = AssetTypeFromString(assetNode["Type"].as<std::string>());
 				metadata.filepath = assetNode["Filepath"].as<std::string>();
+
+                if (metadata.type == AssetType::Invalid)
+                    continue;
 
 				assetManager->AssignMetaData(handle, metadata);
 			}

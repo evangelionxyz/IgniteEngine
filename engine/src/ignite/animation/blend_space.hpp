@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Evangelion Manuhutu
+
+#pragma once
 #ifndef BLEND_SPACE_HPP
 #define BLEND_SPACE_HPP
 
@@ -20,8 +23,8 @@ namespace ignite
     public:
         std::string name;
         AssetHandle skeletonHandle = AssetHandle(0);
-        std::string axisXName = "Speed";
-        std::string axisYName = "Direction";
+        std::string axisXName = "Horizontal";
+        std::string axisYName = "Vertical";
         glm::vec2 axisMin = glm::vec2(0.0f);
         glm::vec2 axisMax = glm::vec2(1.0f);
         std::vector<BlendSpaceSample> samples;

@@ -56,6 +56,7 @@ namespace ignite
     {
     public:
         RenderTarget(const RenderTargetCreateInfo &createInfo, const std::string& debugName = "[RenderTarget]");
+        ~RenderTarget();
 
         void CreateFramebuffer();
         void Resize(const uint32_t width, const uint32_t height);

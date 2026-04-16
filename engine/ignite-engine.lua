@@ -24,6 +24,7 @@ project "IgniteEngine"
         "%{IncludeDir.JOLT}",
         "%{IncludeDir.IMGUI}",
         "%{IncludeDir.IMGUIZMO}",
+        "%{IncludeDir.IMGUI_NODE}",
         "%{IncludeDir.SPDLOG}",
         "%{IncludeDir.MONO}",
         "%{IncludeDir.NVRHI}",

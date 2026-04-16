@@ -88,7 +88,7 @@ namespace ignite
         nvrhi::BindingSetHandle GetBindingSet() { return m_BindingSet; }
         Ref<ConstantBuffer> GetGPUDataBuffer() { return m_GPUDataBuffer; }
         MaterialType GetType() const { return m_Type; }
-		Material_GPUData gpuData;
+		MaterialBufferData gpuData;
 
         static nvrhi::BindingLayoutDesc GetBindingLayoutDesc();
 

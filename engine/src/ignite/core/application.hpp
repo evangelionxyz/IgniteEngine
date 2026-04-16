@@ -105,8 +105,8 @@ namespace ignite
         static void WindowIconify();
         static void WindowMaximize();
         static void WindowRestore();
-        static void SubmitToMainThread(const std::function<void()> func);
-        static void SubmitToRenderThread(const std::function<void()> func);
+        static void SubmitToMainThread(const std::function<void()> func, const std::string &funcName = "MainThread");
+        static void SubmitToRenderThread(const std::function<void()> func, const std::string &funcName = "RenderThread");
         static void SubmitWorkerCommandList(nvrhi::CommandListHandle commandList, std::function<void()> onExecuted = {});
 
         const std::thread *GetRenderThread() const;
@@ -137,10 +137,10 @@ namespace ignite
         int32_t m_NumberOfAccumulatedFrames = 0;
         int32_t m_FrameIndex = 0;
 
-        std::queue<std::function<void()>> m_ThreadFuncs;
+        std::queue<std::pair<std::function<void()>, std::string>> m_ThreadFuncs;
         std::mutex m_ThreadFuncsMutex;
 
-        std::queue<std::function<void()>> m_RenderThreadFuncs;
+        std::queue<std::pair<std::function<void()>, std::string>> m_RenderThreadFuncs;
         std::mutex m_RenderThreadFuncsMutex;
         std::atomic<bool> m_RenderThreadHasTasks{ false };
 

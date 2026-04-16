@@ -33,6 +33,7 @@
 
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/gpu_data.hpp"
+#include "ignite/animation/animator/animator_controller.hpp"
 
 #include <unordered_map>
 
@@ -66,7 +67,6 @@ namespace ignite
         void OnUpdateRuntimeSimulate(f32 deltaTime);
         void OnUpdateEdit(f32 deltaTime);
         void Resize(uint32_t width, uint32_t height);
-        void WriteBuffer(nvrhi::ICommandList* cmd);
         void SetSceneRenderer(SceneRenderer *sceneRenderer) { m_SceneRenderer = sceneRenderer; }
 
         template<typename T>
@@ -80,7 +80,6 @@ namespace ignite
         Scope<Physics2D> physics2D;
         Scope<JoltScene> physics;
         std::unordered_map<UUID, entt::entity> entities; // uuid to entity
-        Scene_GPUData gpuData;
         
 		bool IsPaused() const { return m_IsPaused; }
         bool IsRunning() const { return m_IsPlaying; }
@@ -93,9 +92,6 @@ namespace ignite
 		uint32_t GetViewportWidth() const { return m_ViewportWidth; }
 		uint32_t GetViewportHeight() const { return m_ViewportHeight; }
 
-        Ref<ConstantBuffer> GetSceneGPUDataBuffer() { return m_SceneGPUDataBuffer; }
-        Ref<ConstantBuffer> GetCSMGPUDataBuffer() { return m_CSMGPUDataBuffer; }
-
         glm::vec3 physicsGravity{ 0.0f, -9.8f, 0.0f };
         float timeInSeconds = 0.0f;
 
@@ -107,8 +103,6 @@ namespace ignite
 
     private:
         SceneRenderer *m_SceneRenderer;
-        Ref<ConstantBuffer> m_SceneGPUDataBuffer;
-        Ref<ConstantBuffer> m_CSMGPUDataBuffer;
 
         Project *m_Project;
         
@@ -119,6 +113,9 @@ namespace ignite
         
         bool m_IsPaused = false;
         bool m_IsPlaying = false;
+
+        std::unordered_map<AssetHandle, Ref<AnimatorController>> m_SharedAnimatorCache;
+        std::unordered_map<AssetHandle, AnimatorControllerRuntime> m_SharedAnimatorRuntime;
 
         friend class SceneManager;
     };

@@ -1,5 +1,6 @@
 //Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
 #ifndef ANIMATION_PANEL_HPP
 #define ANIMATION_PANEL_HPP
 
@@ -25,6 +26,7 @@ namespace ignite
     class AnimatorController;
     class AnimatorController2D;
     class Skeleton;
+    class Mesh;
 
 	class AssetEditorPanel : public IPanel
     {
@@ -55,6 +57,7 @@ namespace ignite
             Ref<RenderTarget> compositeRT;
             uint32_t viewportWidth = 512;
             uint32_t viewportHeight = 512;
+            bool viewportVisible = false;
             bool viewportHovered = false;
         };
 
@@ -81,46 +84,40 @@ namespace ignite
 
         bool DrawAssetEditorHeader(AssetEditorData &assetData);
         bool BeginAssetEditorWindow(AssetEditorData &assetData, bool &isOpen, const ImVec2 &windowSize, const ImVec2 &minWindowSize, ImGuiWindowFlags flags);
-        void RenderAssetEditorClosePopup(AssetEditorData &assetData, bool &isOpen);
+        void UIAssetEditorClosePopup(AssetEditorData &assetData, bool &isOpen);
 
-        void RenderMaterial2DEditor(AssetEditorData &assetData);
-        void RenderMaterial2DEditor(const Ref<Material2D> &material2D);
+        void UIMaterial2DEditor(AssetEditorData &assetData);
+        void UIMaterial2DEditor(const Ref<Material2D> &material2D);
 
-        void RenderSpriteSheet2DEditor(AssetEditorData &assetData);
-        void RenderSpriteSheet2DEditor(const Ref<SpriteSheet> &spriteSheet);
+        void UISpriteSheet2DEditor(AssetEditorData &assetData);
+        void UISpriteSheet2DEditor(const Ref<SpriteSheet> &spriteSheet);
 
-        void RenderAnimation2DEditor(AssetEditorData &assetData);
-        void RenderAnimation2DEditor(const Ref<Animation2D> &animation);
+        void UIAnimation2DEditor(AssetEditorData &assetData);
+        void UIAnimation2DEditor(const Ref<Animation2D> &animation);
 
-        void RenderAnimatorController2DEditor(AssetEditorData &assetData);
-        void RenderAnimatorController2DEditor(const Ref<AnimatorController2D> &controller);
+        void UIAnimatorController2DEditor(AssetEditorData &assetData);
+        void UIAnimatorController2DEditor(const Ref<AnimatorController2D> &controller);
 
-        void RenderSkeletalSkeletonEditor(const Ref<Skeleton> &skeleton, EditorSceneData &sceneData);
-        void RenderSkeletalSkeletonEditor(AssetEditorData &assetData);
+        void UIMeshEditor(const Ref<Mesh> &mesh, EditorSceneData &sceneData);
+        void UIMeshEditor(AssetEditorData &assetData);
+
+        void UISkeletonEditor(const Ref<Skeleton> &skeleton, EditorSceneData &sceneData);
+        void UISkeletonEditor(AssetEditorData &assetData);
         
-        void RenderSkeletalAnimationEditor(const Ref<SkeletalAnimation> &animation);
-        void RenderSkeletalAnimationEditor(AssetEditorData &assetData);
+        void UISkeletalAnimationEditor(const Ref<SkeletalAnimation> &animation);
+        void UISkeletalAnimationEditor(AssetEditorData &assetData);
         
-        void RenderAnimatorControllerEditor(AssetEditorData &assetData);
-        void RenderAnimatorControllerEditor(const Ref<AnimatorController> &animator);
+        void UIAnimatorControllerEditor(AssetEditorData &assetData);
+        void UIAnimatorControllerEditor(const Ref<AnimatorController> &animator);
 
-        void RenderAnimationMontageEditor(AssetEditorData &assetData);
-        void RenderAnimationMontageEditor(const Ref<AnimationMontage> &montage);
-
-        void RenderTextureEditor(AssetEditorData &assetData);
-        void RenderTextureEditor(AssetEditorData &assetData, const Ref<Texture> &texture);
+        void UITextureEditor(AssetEditorData &assetData);
+        void UITextureEditor(AssetEditorData &assetData, const Ref<Texture> &texture);
         
-        void RenderMaterialEditor(const Ref<Material> &material);
-        void RenderMaterialEditor(AssetEditorData &assetData);
+        void UIMaterialEditor(const Ref<Material> &material);
+        void UIMaterialEditor(AssetEditorData &assetData);
         
-        void RenderBlendSpaceEditor(AssetEditorData &assetData);
-        void RenderBlendSpaceEditor(const Ref<BlendSpace> &blendSpace);
-        
-        void RenderLocomotionControllerEditor(AssetEditorData &assetData);
-        void RenderLocomotionControllerEditor(const Ref<LocomotionController> &controller);
-
         bool SaveAsset(AssetEditorData &assetData);
-        void RenderCreateAssetPopup();
+        void UICreateAssetPopup();
         void InitializeSceneData(AssetEditorData &assetData);
         void UpdateSceneCamera(EditorSceneData &sceneData, float deltaTime);
         std::filesystem::path BuildUniqueAssetPath(const std::filesystem::path &baseDirectory, const std::string &baseName, const std::string &extension) const;

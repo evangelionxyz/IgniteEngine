@@ -34,6 +34,7 @@
 namespace ignite {
 
     class GraphicsPipeline;
+    class ConstantBuffer;
     class Scene;
     class ICamera;
 
@@ -46,7 +47,7 @@ namespace ignite {
         void Draw(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *fb, const Ref<GraphicsPipeline> &gp);
         void SetScene(Scene *scene) { m_Scene = scene; }
 
-        bool UpdateBindingSet();
+        bool UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer);
 
         void LoadTexture(const std::string &filepath);
         void SetTexture(const Ref<Texture> &texture);

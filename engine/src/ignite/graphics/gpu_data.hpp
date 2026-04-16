@@ -32,31 +32,20 @@ namespace ignite
 	static constexpr int MAX_BONES = 100;
 	static constexpr int VERTEX_MAX_BONES = 4;
 
-	struct SkinnedMesh_GPUData
+	struct SkinnedMeshBufferData
 	{
 		glm::mat4 transformation;
 		glm::mat4 normal;
-		glm::mat4 boneTransforms[MAX_BONES];
-	    uint32_t objectID = 0xFFFFFFFFu;
+        uint32_t objectID = 0xFFFFFFFFu;
 		glm::vec3 _padding = glm::vec3(0.0f);
 	};
 
-	struct Frame_GPUData
+	struct GPUSkeletonBuffer
 	{
-		glm::mat4 view;
-		glm::mat4 proj;
-		glm::mat4 viewProj;
-		glm::mat4 invView;
-		glm::mat4 invProj;
-		glm::mat4 invViewProj;
-		glm::vec3 cameraPosition;
-		float padding1;
-	
-		glm::vec2 screenSize;
-		glm::vec2 padding2;
+		glm::mat4 bones[MAX_BONES];
 	};
 
-	struct Scene_GPUData
+	struct SceneBufferData
 	{
 		glm::vec4 sunColor = glm::vec4(0.87f, 0.87f, 0.87f, 1.1f); // w = light intensity
 		glm::vec2 sungAngles = glm::vec2(0.0f, 1.0f);
@@ -69,7 +58,7 @@ namespace ignite
 		float ambient = 0.5f;
 	};
 
-	struct CascadedShadowMap_GPUData
+	struct CascadedShadowMapBufferData
 	{
 		glm::mat4 lightViewProj[NUM_CASCADES];
 		float cascadeSplits[NUM_CASCADES]; // view-space distances to end of each cascade
@@ -82,13 +71,13 @@ namespace ignite
 		float padding[3];
 	};
 
-	struct CascadedShadowMapModel_GPUData
+	struct CascadedShadowMapModelBufferData
 	{
 		glm::mat4 transformation;
 		glm::mat4 boneTransforms[MAX_BONES];
 	};
 
-	struct Material_GPUData
+	struct MaterialBufferData
 	{
 		glm::vec4 baseColorFactor = glm::vec4(1.0f);
 		glm::vec4 emissiveFactor = glm::vec4(1.0f);

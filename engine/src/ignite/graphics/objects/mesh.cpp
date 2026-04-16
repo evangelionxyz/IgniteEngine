@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "mesh.hpp"
 #include "ignite/core/time.hpp"
@@ -32,9 +11,12 @@
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
+#include "ignite/serializer/binary_serializer.hpp"
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <limits>
 #include <mutex>
 #include <set>
 
@@ -50,6 +32,89 @@ namespace ignite
 
     namespace
     {
+        static Ref<ConstantBuffer> s_DefaultSkeletonBuffer;
+        static bool s_DefaultSkeletonBufferInitialized = false;
+
+        static AABB CalculateAABB(const std::vector<VertexMesh_Anim> &vertices)
+        {
+            AABB bounds;
+            if (vertices.empty())
+            {
+                return bounds;
+            }
+
+            bounds.min = vertices.front().position;
+            bounds.max = vertices.front().position;
+
+            for (const VertexMesh_Anim &vertex : vertices)
+            {
+                bounds.min = glm::min(bounds.min, vertex.position);
+                bounds.max = glm::max(bounds.max, vertex.position);
+            }
+
+            return bounds;
+        }
+
+        static void ExpandAABB(AABB &bounds, const glm::vec3 &point)
+        {
+            bounds.min = glm::min(bounds.min, point);
+            bounds.max = glm::max(bounds.max, point);
+        }
+
+        static AABB TransformAABB(const AABB &bounds, const glm::mat4 &transform)
+        {
+            AABB transformed;
+            const glm::vec3 corners[8] =
+            {
+                { bounds.min.x, bounds.min.y, bounds.min.z },
+                { bounds.max.x, bounds.min.y, bounds.min.z },
+                { bounds.min.x, bounds.max.y, bounds.min.z },
+                { bounds.max.x, bounds.max.y, bounds.min.z },
+                { bounds.min.x, bounds.min.y, bounds.max.z },
+                { bounds.max.x, bounds.min.y, bounds.max.z },
+                { bounds.min.x, bounds.max.y, bounds.max.z },
+                { bounds.max.x, bounds.max.y, bounds.max.z },
+            };
+
+            transformed.min = glm::vec3(std::numeric_limits<float>::max());
+            transformed.max = glm::vec3(std::numeric_limits<float>::lowest());
+
+            for (const glm::vec3 &corner : corners)
+            {
+                const glm::vec4 world = transform * glm::vec4(corner, 1.0f);
+                ExpandAABB(transformed, glm::vec3(world));
+            }
+
+            return transformed;
+        }
+
+        static AABB CalculateSceneAABB(const std::vector<Ref<MeshInstance>> &meshes)
+        {
+            AABB bounds;
+            bool hasBounds = false;
+
+            for (const Ref<MeshInstance> &mesh : meshes)
+            {
+                if (!mesh || !mesh->GetPrimitive() || mesh->GetPrimitive()->vertices.empty())
+                {
+                    continue;
+                }
+
+                const AABB meshBounds = TransformAABB(mesh->GetPrimitive()->aabb, mesh->global);
+                if (!hasBounds)
+                {
+                    bounds = meshBounds;
+                    hasBounds = true;
+                    continue;
+                }
+
+                ExpandAABB(bounds, meshBounds.min);
+                ExpandAABB(bounds, meshBounds.max);
+            }
+
+            return bounds;
+        }
+
         static bool Mat4NearEqual(const glm::mat4 &a, const glm::mat4 &b, const float epsilon = 0.0001f)
         {
             for (int c = 0; c < 4; ++c)
@@ -68,6 +133,18 @@ namespace ignite
         static glm::vec3 ExtractTranslation(const glm::mat4 &m)
         {
             return { m[3][0], m[3][1], m[3][2] };
+        }
+
+        // Scales only the translation column of a matrix by the given factor.
+        // Used to convert FBX-native units (e.g. cm) to engine units (m) without
+        // touching the rotation or scale components.
+        static glm::mat4 ScaleTranslation(const glm::mat4 &m, float s)
+        {
+            glm::mat4 result = m;
+            result[3][0] *= s;
+            result[3][1] *= s;
+            result[3][2] *= s;
+            return result;
         }
 
         static glm::mat4 ToGlmMatrix(const FbxAMatrix &matrix)
@@ -244,10 +321,11 @@ namespace ignite
 					}
 
 					const std::string key = ToLowerCopy(texturePath.generic_string());
+                    std::string textureName = texturePath.stem().string();
 					if (materialLoader.textureLookup.contains(key))
 					{
 						const int index = materialLoader.textureLookup.at(key);
-						textureMap = { index, materialLoader.loadedTextures[index] };
+						textureMap = { index, textureName, materialLoader.loadedTextures[index] };
 						return true;
 					}
 
@@ -283,7 +361,7 @@ namespace ignite
 					const int index = (int)materialLoader.loadedTextures.size();
 					materialLoader.loadedTextures.push_back(texture);
 					materialLoader.textureLookup[key] = index;
-					textureMap = { index, texture };
+					textureMap = { index, textureName, texture };
 					return true;
 				}
 			}
@@ -361,7 +439,7 @@ namespace ignite
             return glm::translate(glm::mat4(1.0f), translation) * glm::toMat4(rotation) * glm::scale(glm::mat4(1.0f), scale);
         }
 
-        
+
 
         static void AddBoneInfluence(FBXMeshLoader::FBXBoneInfluence &influence, uint32_t boneId, float weight)
         {
@@ -411,6 +489,7 @@ namespace ignite
     MeshPrimitive::MeshPrimitive(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices)
         : vertices(vertices), indices(indices)
     {
+        RecalculateAABB();
     }
 
     MeshPrimitive::~MeshPrimitive()
@@ -448,6 +527,12 @@ namespace ignite
     {
         vertices.clear();
         indices.clear();
+        aabb = {};
+    }
+
+    void MeshPrimitive::RecalculateAABB()
+    {
+        aabb = CalculateAABB(vertices);
     }
 
     // Mesh Instance class
@@ -476,6 +561,9 @@ namespace ignite
             GPUUploadSync::DeviceWaitIdle(device);
         }
 
+        m_MeshBindingSet = nullptr;
+        m_MeshBindingSetCache.clear();
+
         // Clear primitive (vertex/index buffers)
         m_Primitive.reset();
     }
@@ -483,6 +571,113 @@ namespace ignite
     void MeshInstance::SetMaterial(AssetHandle assetHandle)
     {
         m_MaterialHandle = assetHandle;
+    }
+
+    void MeshInstance::ReleaseGlobalResources()
+    {
+        if (s_DefaultSkeletonBuffer)
+        {
+            LOG_INFO("[MeshInstance] Releasing global default skeleton buffer before device teardown");
+            s_DefaultSkeletonBuffer.reset();
+        }
+
+        s_DefaultSkeletonBufferInitialized = false;
+    }
+
+    void MeshInstance::SetData(nvrhi::ICommandList *cmd, void *data, size_t size)
+    {
+        if (!m_MeshConstantBuffer)
+        {
+           m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(SkinnedMeshBufferData), false, 1, "Per-Entity Transform Buffer");
+             LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as non-volatile", m_Name.empty() ? "<unnamed>" : m_Name);
+        }
+
+        m_MeshConstantBuffer->SetData(cmd, Buffer(data, size));
+    }
+
+    void MeshInstance::EnsureBuffer(nvrhi::ICommandList *cmd, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer, const Ref<ConstantBuffer> &skeletonBuffer)
+    {
+        if (!m_MeshConstantBuffer)
+        {
+            m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(SkinnedMeshBufferData), false, 1, "Per-Entity Transform Buffer");
+            LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as non-volatile", m_Name.empty() ? "<unnamed>" : m_Name);
+        }
+
+        Ref<ConstantBuffer> resolvedSkeletonBuffer = skeletonBuffer;
+        if (!resolvedSkeletonBuffer)
+        {
+            if (!s_DefaultSkeletonBuffer)
+            {
+                GPUSkeletonBuffer identityBones {};
+                for (int i = 0; i < MAX_BONES; ++i)
+                {
+                    identityBones.bones[i] = glm::mat4(1.0f);
+                }
+
+                s_DefaultSkeletonBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Default Skeleton Buffer");
+                s_DefaultSkeletonBufferInitialized = false;
+
+                if (cmd)
+                {
+                    s_DefaultSkeletonBuffer->SetData(cmd, Buffer(&identityBones, sizeof(identityBones)));
+                    s_DefaultSkeletonBufferInitialized = true;
+                }
+            }
+            else if (!s_DefaultSkeletonBufferInitialized)
+            {
+                GPUSkeletonBuffer identityBones {};
+                for (int i = 0; i < MAX_BONES; ++i)
+                {
+                    identityBones.bones[i] = glm::mat4(1.0f);
+                }
+
+                if (cmd)
+                {
+                    s_DefaultSkeletonBuffer->SetData(cmd, Buffer(&identityBones, sizeof(identityBones)));
+                    s_DefaultSkeletonBufferInitialized = true;
+                }
+            }
+            resolvedSkeletonBuffer = s_DefaultSkeletonBuffer;
+        }
+
+        LOG_ASSERT(resolvedSkeletonBuffer && resolvedSkeletonBuffer->GetHandle(), "[MeshInstance] Missing skeleton constant buffer handle");
+        if (!resolvedSkeletonBuffer || !resolvedSkeletonBuffer->GetHandle())
+        {
+            return;
+        }
+
+        BindingSetCacheKey cacheKey {};
+        cacheKey.cameraBuffer = cameraBuffer ? cameraBuffer->GetHandle() : nullptr;
+        cacheKey.objectBuffer = m_MeshConstantBuffer ? m_MeshConstantBuffer->GetHandle() : nullptr;
+        cacheKey.skeletonBuffer = resolvedSkeletonBuffer->GetHandle();
+        cacheKey.sceneBuffer = sceneBuffer ? sceneBuffer->GetHandle() : nullptr;
+        cacheKey.csmBuffer = csmBuffer ? csmBuffer->GetHandle() : nullptr;
+
+        if (auto it = m_MeshBindingSetCache.find(cacheKey); it != m_MeshBindingSetCache.end())
+        {
+            m_MeshBindingSet = it->second;
+            return;
+        }
+
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+        auto desc = nvrhi::BindingSetDesc();
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cacheKey.cameraBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, cacheKey.objectBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, cacheKey.skeletonBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, cacheKey.sceneBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, cacheKey.csmBuffer));
+
+        m_MeshBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
+        LOG_ASSERT(m_MeshBindingSet, "Failed to create mesh binding set");
+
+        if (m_MeshBindingSet)
+        {
+            m_MeshBindingSetCache.emplace(cacheKey, m_MeshBindingSet);
+            if (m_MeshBindingSetCache.size() > 512)
+            {
+                LOG_WARN("[MeshInstance] Binding cache for '{}' grew to {} entries. Verify instance buffer sharing strategy.", m_Name, m_MeshBindingSetCache.size());
+            }
+        }
     }
 
     Ref<MeshInstance> MeshInstance::Create(const std::string &name, const Ref<MeshPrimitive> &mesh)
@@ -495,28 +690,23 @@ namespace ignite
         return CreateRef<MeshInstance>(node, mesh);
 	}
 
-	// ===================================
-    // Static Mesh
-    // ===================================
-    Ref<StaticMesh> StaticMesh::Create()
+    Ref<Mesh> Mesh::Create()
     {
-        return CreateRef<StaticMesh>();
+        return CreateRef<Mesh>();
     }
 
-    StaticMesh::~StaticMesh()
+    bool Mesh::Serialize(const std::filesystem::path &filepath)
     {
-        m_MeshInstances.clear();
+        BinarySerializer::SerializeMesh(this, filepath);
+        return true;
     }
 
-    // ===================================
-    // Skeletal Mesh
-    // ===================================
-    Ref<SkeletalMesh> SkeletalMesh::Create()
+    Ref<Mesh> Mesh::Deserialize(const std::filesystem::path &filepath)
     {
-        return CreateRef<SkeletalMesh>();
+        return BinarySerializer::DeserializeMesh(filepath);
     }
 
-    SkeletalMesh::~SkeletalMesh()
+    Mesh::~Mesh()
     {
         m_MeshInstances.clear();
     }
@@ -524,7 +714,9 @@ namespace ignite
     // ===================================
     // Mesh Loader
     // ===================================
-    Ref<Material> GLTFMeshLoader::LoadMaterial(const tinygltf::Primitive &primitive, const std::vector<tinygltf::Material> &gltfMaterials, const std::vector<Ref<Texture>> &loadedTextures, std::array<MeshScene::MaterialTextureMap, 5> &textureMap, const std::vector<nvrhi::SamplerDesc> &loadedSamplers, int *materialIndex)
+    Ref<Material> GLTFMeshLoader::LoadMaterial(const tinygltf::Primitive &primitive, const std::vector<tinygltf::Material> &gltfMaterials,
+        const std::vector<std::pair<std::string, Ref<Texture>>> &loadedTextures,std::array<MeshScene::MaterialTextureMap, 5> &textureMap,
+        const std::vector<nvrhi::SamplerDesc> &loadedSamplers, int *materialIndex)
     {
         Ref<Material> material;
         *materialIndex = -1;
@@ -556,64 +748,62 @@ namespace ignite
             };
 
             material->gpuData.metallicFactor = static_cast<float>(gltfMaterial.pbrMetallicRoughness.metallicFactor);
-
             material->gpuData.roughnessFactor = static_cast<float>(gltfMaterial.pbrMetallicRoughness.roughnessFactor);
-
             material->gpuData.occlusionStrength = static_cast<float>(gltfMaterial.occlusionTexture.strength);
 
             // base color texture
             const int baseColorIndex = gltfMaterial.pbrMetallicRoughness.baseColorTexture.index;
             if (baseColorIndex >= 0 && baseColorIndex < loadedTextures.size())
             {
-                textureMap[0] = { baseColorIndex, loadedTextures[baseColorIndex] };
+                textureMap[0] = { baseColorIndex, loadedTextures[baseColorIndex].first, loadedTextures[baseColorIndex].second };
             }
             else
             {
-                textureMap[0] = { -1, nullptr };
+                textureMap[0] = { -1, "", nullptr };
             }
 
             // emissive texture
             const int emissiveIndex = gltfMaterial.emissiveTexture.index;
             if (emissiveIndex >= 0 && emissiveIndex < loadedTextures.size())
             {
-                textureMap[1] = { emissiveIndex, loadedTextures[emissiveIndex] };
+                textureMap[1] = { emissiveIndex, loadedTextures[emissiveIndex].first, loadedTextures[emissiveIndex].second };
             }
             else
             {
-                textureMap[1] = { -1, nullptr };
+                textureMap[1] = { -1, "", nullptr };
             }
 
             // metallic roughness texture
             const int metallicRoughnessIndex = gltfMaterial.pbrMetallicRoughness.metallicRoughnessTexture.index;
             if (metallicRoughnessIndex >= 0 && metallicRoughnessIndex < loadedTextures.size())
             {
-                textureMap[2] = { metallicRoughnessIndex, loadedTextures[metallicRoughnessIndex] };
+                textureMap[2] = { metallicRoughnessIndex, loadedTextures[metallicRoughnessIndex].first, loadedTextures[metallicRoughnessIndex].second };
             }
             else
             {
-                textureMap[2] = { -1, nullptr };
+                textureMap[2] = { -1, "", nullptr };
             }
 
             // normal texture
             const int normalIndex = gltfMaterial.normalTexture.index;
             if (normalIndex >= 0 && normalIndex < loadedTextures.size())
             {
-                textureMap[3] = { normalIndex, loadedTextures[normalIndex] };
+                textureMap[3] = { normalIndex, loadedTextures[normalIndex].first, loadedTextures[normalIndex].second };
             }
             else
             {
-                textureMap[3] = { -1, nullptr };
+                textureMap[3] = { -1, "", nullptr };
             }
 
             // occlusion texture
             const int occlusionIndex = gltfMaterial.occlusionTexture.index;
             if (occlusionIndex >= 0 && occlusionIndex < loadedTextures.size())
             {
-                textureMap[4] = { occlusionIndex, loadedTextures[occlusionIndex] };
+                textureMap[4] = { occlusionIndex, loadedTextures[occlusionIndex].first, loadedTextures[occlusionIndex].second };
             }
             else
             {
-                textureMap[4] = { -1, nullptr };
+                textureMap[4] = { -1, "", nullptr };
             }
 
             if (!loadedSamplers.empty())
@@ -866,11 +1056,13 @@ namespace ignite
         {
             recurse(root, glm::mat4(1.0f));
         }
+
+        outScene.aabb = CalculateSceneAABB(outScene.flatMeshes);
     }
 
-    std::vector<Ref<Texture>> GLTFMeshLoader::LoadTexturesFromGLTF(const tinygltf::Model &model)
+    std::vector<std::pair<std::string, Ref<Texture>>> GLTFMeshLoader::LoadTexturesFromGLTF(const tinygltf::Model &model)
     {
-        std::vector<Ref<Texture>> gltfTextures;
+        std::vector<std::pair<std::string, Ref<Texture>>> gltfTextures;
         LOG_TRACE("Loading {} textures from glTF", model.textures.size());
 
         for (size_t i = 0; i < model.textures.size(); ++i)
@@ -917,7 +1109,7 @@ namespace ignite
                     LOG_ASSERT(false, "Not implemented yet!");
                 }
 
-                gltfTextures.push_back(texture);
+                gltfTextures.push_back({ image.name, texture });
             }
         }
 
@@ -1009,27 +1201,26 @@ namespace ignite
             targetAxisSystem.ConvertScene(fbxScene);
         }
 
-        const FbxSystemUnit targetUnit = FbxSystemUnit::cm;
+        const FbxSystemUnit targetUnit = FbxSystemUnit::m;
         const FbxSystemUnit sceneUnit = fbxScene->GetGlobalSettings().GetSystemUnit();
-        if (sceneUnit.GetScaleFactor() != targetUnit.GetScaleFactor())
-        {
-            targetUnit.ConvertScene(fbxScene);
-        }
+
+        const float scaleFactor = (float)sceneUnit.GetConversionFactorTo(targetUnit);
+        LOG_INFO("[FBX Loader] Unit scale factor: {} (source unit scale: {})", scaleFactor, sceneUnit.GetScaleFactor());
 
         {
             Timer timer;
             LOG_WARN("[FBX Loader] Triangulate geometry...");
             FbxGeometryConverter geometryConverter(sdkManager);
             geometryConverter.Triangulate(fbxScene, true);
-            
+
             LOG_WARN("[FBX Loader] Triangulate geometry completed for {}s", timer.Elapsed());
         }
 
         JointLoader jointLoader;
         if (importSkeletonAndAnimations)
         {
-            outScene.skeleton = LoadSkeletonFBX(fbxScene, jointLoader);
-            LoadAnimationsFBX(fbxScene, outScene.skeleton, jointLoader.jointNodes, outScene.animations);
+            outScene.skeleton = LoadSkeletonFBX(fbxScene, jointLoader, scaleFactor);
+            LoadAnimationsFBX(fbxScene, outScene.skeleton, jointLoader.jointNodes, outScene.animations, scaleFactor);
         }
         else
         {
@@ -1045,9 +1236,11 @@ namespace ignite
         {
             for (int i = 0; i < rootNode->GetChildCount(); ++i)
             {
-                BuildNode(rootNode->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, -1, glm::mat4(1.0f), importSkeletonAndAnimations);
+                BuildNode(rootNode->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, -1, glm::mat4(1.0f), scaleFactor, importSkeletonAndAnimations);
             }
         }
+
+        outScene.aabb = CalculateSceneAABB(outScene.flatMeshes);
 
         fbxScene->Destroy();
     }
@@ -1089,6 +1282,10 @@ namespace ignite
 		}
 		importer->Destroy();
 
+		const FbxSystemUnit targetUnit = FbxSystemUnit::m;
+		const FbxSystemUnit sceneUnit = fbxScene->GetGlobalSettings().GetSystemUnit();
+		const float scaleFactor = (float)sceneUnit.GetConversionFactorTo(targetUnit);
+
 		JointLoader jointLoader;
 
 		FbxNode *rootNode = fbxScene->GetRootNode();
@@ -1096,7 +1293,7 @@ namespace ignite
 		{
 			for (int i = 0; i < rootNode->GetChildCount(); ++i)
 			{
-				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, jointLoader);
+				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, jointLoader, scaleFactor);
 			}
 		}
 
@@ -1145,6 +1342,10 @@ namespace ignite
 		}
 		importer->Destroy();
 
+		const FbxSystemUnit targetUnit = FbxSystemUnit::m;
+		const FbxSystemUnit sceneUnit = fbxScene->GetGlobalSettings().GetSystemUnit();
+		const float scaleFactor = (float)sceneUnit.GetConversionFactorTo(targetUnit);
+
 		JointLoader jointLoader;
 
 		FbxNode *rootNode = fbxScene->GetRootNode();
@@ -1152,7 +1353,7 @@ namespace ignite
 		{
 			for (int i = 0; i < rootNode->GetChildCount(); ++i)
 			{
-				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, jointLoader);
+				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, jointLoader, scaleFactor);
 			}
 		}
 
@@ -1161,12 +1362,12 @@ namespace ignite
 			skeleton.reset();
 		}
 
-		LoadAnimationsFBX(fbxScene, skeleton, jointLoader.jointNodes, outAnimations);
+		LoadAnimationsFBX(fbxScene, skeleton, jointLoader.jointNodes, outAnimations, scaleFactor);
 
         fbxScene->Destroy();
 	}
 
-    void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene &outScene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, bool importSkinningData)
+    void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene &outScene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, float scaleFactor, bool importSkinningData)
     {
         if (!node)
         {
@@ -1179,7 +1380,7 @@ namespace ignite
         MeshNode &meshNode = outScene.nodes[nodeIndex];
         meshNode.parent = parentIdx;
         meshNode.name = node->GetName() ? node->GetName() : "";
-        meshNode.local = ToGlmMatrix(node->EvaluateLocalTransform());
+        meshNode.local = ScaleTranslation(ToGlmMatrix(node->EvaluateLocalTransform()), scaleFactor);
         meshNode.global = parentGlobal * meshNode.local;
 
         if (parentIdx >= 0)
@@ -1204,13 +1405,13 @@ namespace ignite
             std::vector<FBXBoneInfluence> controlPointInfluence;
             controlPointInfluence.resize(static_cast<size_t>(fbxMesh->GetControlPointsCount()));
 
-            bool isSkinned = importSkinningData && fbxMesh->GetDeformerCount(FbxDeformer::eSkin) > 0;
+            const bool hasSkinDeformer = fbxMesh->GetDeformerCount(FbxDeformer::eSkin) > 0;
+            bool isSkinned = importSkinningData && hasSkinDeformer;
             LOG_INFO("[FBX SKIN DEBUG] Node='{}' parent='{}' mesh='{}' skinned={} deformers={} cpCount={}",
                 meshNode.name,
                 (parentIdx >= 0 ? outScene.nodes[parentIdx].name : std::string("<root>")),
                 (fbxMesh->GetName() ? std::string(fbxMesh->GetName()) : std::string("<unnamed>")),
-                isSkinned,
-                fbxMesh->GetDeformerCount(FbxDeformer::eSkin),
+                isSkinned, fbxMesh->GetDeformerCount(FbxDeformer::eSkin),
                 fbxMesh->GetControlPointsCount());
 
             if (isSkinned)
@@ -1252,7 +1453,7 @@ namespace ignite
                             continue;
                         }
 
-                        const int32_t jointId = SkeletonFindOrAddJoint(jointNode, outScene.skeleton, jointLoader);
+                        const int32_t jointId = SkeletonFindOrAddJoint(jointNode, outScene.skeleton, jointLoader, scaleFactor);
                         if (jointId < 0)
                         {
                             continue;
@@ -1279,23 +1480,24 @@ namespace ignite
 
                         // Keep a joint-space inverse bind (shared safely across multiple skinned meshes).
                         // Mesh node placement is applied in object transform during rendering.
-                        const FbxAMatrix invBind = jointBind.Inverse();
-                        const glm::mat4 invBindGlm = ToGlmMatrix(invBind);
+                        // Scale the joint's bind-pose translation to engine units before inverting so that
+                        // the inverse bind pose is consistent with the scaled vertex positions.
+                        const glm::mat4 jointBindGlm = ScaleTranslation(ToGlmMatrix(jointBind), scaleFactor);
+                        const glm::mat4 invBindGlm = glm::inverse(jointBindGlm);
                         glm::mat4 &existingInvBind = outScene.skeleton->joints[jointId].inverseBindPose;
                         const bool hasExistingInvBind = !Mat4NearEqual(existingInvBind, glm::mat4(1.0f));
                         if (hasExistingInvBind && !Mat4NearEqual(existingInvBind, invBindGlm, 0.001f))
                         {
                             const glm::vec3 oldT = ExtractTranslation(existingInvBind);
                             const glm::vec3 newT = ExtractTranslation(invBindGlm);
-                            LOG_WARN("[FBX SKIN DEBUG] InverseBind mismatch joint='{}' id={} meshNode='{}' oldT=({:.4f},{:.4f},{:.4f}) newT=({:.4f},{:.4f},{:.4f})",
-                                outScene.skeleton->joints[jointId].name,
-                                jointId,
-                                meshNode.name,
-                                oldT.x, oldT.y, oldT.z,
-                                newT.x, newT.y, newT.z);
+                            LOG_WARN("[FBX SKIN DEBUG] InverseBind mismatch joint='{}' id={} meshNode='{}' oldT=({:.4f},{:.4f},{:.4f}) newT=({:.4f},{:.4f},{:.4f}) (keeping first bind pose)",
+                                outScene.skeleton->joints[jointId].name, jointId,
+                                meshNode.name, oldT.x, oldT.y, oldT.z, newT.x, newT.y, newT.z);
                         }
-
-                        existingInvBind = invBindGlm;
+                        else
+                        {
+                            existingInvBind = invBindGlm;
+                        }
 
                         if (clusterIndex < 6)
                         {
@@ -1303,12 +1505,9 @@ namespace ignite
                             const glm::vec3 jointBindT = ExtractTranslation(ToGlmMatrix(jointBind));
                             const glm::vec3 invBindT = ExtractTranslation(invBindGlm);
                             LOG_INFO("[FBX SKIN DEBUG] joint='{}' id={} cpInfluences={} meshBindT=({:.3f},{:.3f},{:.3f}) jointBindT=({:.3f},{:.3f},{:.3f}) invBindT=({:.3f},{:.3f},{:.3f})",
-                                outScene.skeleton->joints[jointId].name,
-                                jointId,
-                                cluster->GetControlPointIndicesCount(),
-                                meshBindT.x, meshBindT.y, meshBindT.z,
-                                jointBindT.x, jointBindT.y, jointBindT.z,
-                                invBindT.x, invBindT.y, invBindT.z);
+                                outScene.skeleton->joints[jointId].name, jointId,
+                                cluster->GetControlPointIndicesCount(), meshBindT.x, meshBindT.y, meshBindT.z,
+                                jointBindT.x, jointBindT.y, jointBindT.z, invBindT.x, invBindT.y, invBindT.z);
                         }
 
                         const int *controlPointIndices = cluster->GetControlPointIndices();
@@ -1329,7 +1528,7 @@ namespace ignite
                 }
             }
 
-            if (importSkinningData)
+            if (importSkinningData && isSkinned)
             {
                 for (FBXMeshLoader::FBXBoneInfluence &influence : controlPointInfluence)
                 {
@@ -1375,9 +1574,9 @@ namespace ignite
                 VertexMesh_Anim vertex{};
                 vertex.position =
                 {
-                    static_cast<float>(transformedPosition[0]),
-                    static_cast<float>(transformedPosition[1]),
-                    static_cast<float>(transformedPosition[2])
+                    static_cast<float>(transformedPosition[0]) * scaleFactor,
+                    static_cast<float>(transformedPosition[1]) * scaleFactor,
+                    static_cast<float>(transformedPosition[2]) * scaleFactor
                 };
 
                 FbxVector4 normal(0.0, 1.0, 0.0, 0.0);
@@ -1432,8 +1631,83 @@ namespace ignite
 
             if (!vertices.empty() && !indices.empty())
             {
+                // Pre-bake vertex positions and normals from mesh-node-local space to model space.
+                // Skinning inverse-bind-pose matrices are computed in model space (relative to the
+                // skeleton root). When a mesh node is parented to a skeleton bone in FBX (e.g. the
+                // head mesh is a child of the head bone), its vertices are in bone-local space rather
+                // than model space. Without pre-baking, the skinning formula
+                //   worldPos = objectMatrix * boneTransform[j] * vertex
+                // produces incorrect results: at bind pose boneTransform = I so the position depends
+                // only on objectMatrix (correct at rest), but during animation objectMatrix and
+                // boneTransform compound incorrectly. Pre-baking to model space makes skinning
+                // consistent for all mesh topologies regardless of node hierarchy.
+                // For body meshes already at the root with identity global this is a no-op.
+                {
+                    const glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(meshNode.global)));
+                    for (auto &vertex : vertices)
+                    {
+                        vertex.position  = glm::vec3(meshNode.global * glm::vec4(vertex.position, 1.0f));
+                        vertex.normal    = glm::normalize(normalMatrix * vertex.normal);
+                        vertex.tangent   = glm::normalize(normalMatrix * vertex.tangent);
+                        vertex.bitangent = glm::normalize(normalMatrix * vertex.bitangent);
+                    }
+                    LOG_INFO("[FBX SKIN DEBUG] Node='{}' vertices pre-baked to model space", meshNode.name);
+                }
+
+                MeshNode instanceNode = meshNode;
+                instanceNode.global = glm::mat4(1.0f); // Vertices are now in model space
+
                 Ref<MeshPrimitive> primitive = MeshPrimitive::Create(vertices, indices);
-                Ref<MeshInstance> meshInstance = MeshInstance::Create(meshNode, primitive);
+                Ref<MeshInstance> meshInstance = MeshInstance::Create(instanceNode, primitive);
+
+                // For meshes with no actual bone influences in a skeletal scene, link to the best
+                // matching joint so the mesh can follow the skeleton during animation.
+                // We use influencedControlPoints == 0 (not !isSkinned) because many FBX exporters
+                // attach an empty skin deformer to every mesh in an armature scene, making
+                // hasSkinDeformer true even for completely unweighted meshes (head, accessories).
+                if (influencedControlPoints == 0 && outScene.skeleton && !outScene.skeleton->joints.empty())
+                {
+                    int32_t linkedJointIdx = -1;
+                    auto &nameMap = outScene.skeleton->nameToJointMap;
+
+                    // 1. Direct name match: node name == joint name
+                    if (nameMap.contains(meshNode.name))
+                    {
+                        linkedJointIdx = nameMap.at(meshNode.name);
+                        LOG_INFO("[FBX SKIN DEBUG] Non-skinned '{}' linked to same-name joint index {}", meshNode.name, linkedJointIdx);
+                    }
+                    else
+                    {
+                        // 2. Walk up the FBX node hierarchy looking for a joint-named ancestor
+                        FbxNode *parentWalk = node->GetParent();
+                        FbxNode *fbxRootN = fbxScene->GetRootNode();
+                        while (parentWalk && parentWalk != fbxRootN)
+                        {
+                            const char *pNameC = parentWalk->GetName();
+                            if (pNameC)
+                            {
+                                const std::string pName = pNameC;
+                                if (nameMap.contains(pName))
+                                {
+                                    linkedJointIdx = nameMap.at(pName);
+                                    LOG_INFO("[FBX SKIN DEBUG] Non-skinned '{}' linked to ancestor joint '{}' index {}",
+                                        meshNode.name, pName, linkedJointIdx);
+                                    break;
+                                }
+                            }
+                            parentWalk = parentWalk->GetParent();
+                        }
+
+                        // 3. Root fallback: attach to skeleton root (joint 0)
+                        if (linkedJointIdx < 0)
+                        {
+                            linkedJointIdx = 0;
+                            LOG_WARN("[FBX SKIN DEBUG] Non-skinned '{}' has no matching joint ancestor — falling back to skeleton root (joint 0)", meshNode.name);
+                        }
+                    }
+
+                    meshInstance->linkedJointIndex = linkedJointIdx;
+                }
 
                 outScene.nodes[nodeIndex].meshes.push_back(meshInstance);
                 outScene.flatMeshes.push_back(meshInstance);
@@ -1471,11 +1745,11 @@ namespace ignite
 
         for (int i = 0; i < node->GetChildCount(); ++i)
         {
-            BuildNode(node->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, nodeIndex, meshNode.global, importSkinningData);
+            BuildNode(node->GetChild(i), fbxScene, outScene, materialLoader, jointLoader, sourceDir, nodeIndex, meshNode.global, scaleFactor, importSkinningData);
         }
     }
 
-	Ref<Skeleton> FBXMeshLoader::LoadSkeletonFBX(fbxsdk::FbxScene *fbxScene, JointLoader &outJointResult)
+	Ref<Skeleton> FBXMeshLoader::LoadSkeletonFBX(fbxsdk::FbxScene *fbxScene, JointLoader &outJointResult, float scaleFactor)
 	{
 		if (!fbxScene)
 		{
@@ -1489,7 +1763,7 @@ namespace ignite
 		{
 			for (int i = 0; i < rootNode->GetChildCount(); ++i)
 			{
-				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, outJointResult);
+				SkeletonBuildHierarchy(rootNode->GetChild(i), skeleton, outJointResult, scaleFactor);
 			}
 		}
 
@@ -1501,7 +1775,7 @@ namespace ignite
         return skeleton;
 	}
 
-	void FBXMeshLoader::LoadAnimationsFBX(fbxsdk::FbxScene *fbxScene, const Ref<Skeleton> &skeleton, JointMap &jointNodes, std::vector<Ref<SkeletalAnimation>> &outAnimations)
+	void FBXMeshLoader::LoadAnimationsFBX(fbxsdk::FbxScene *fbxScene, const Ref<Skeleton> &skeleton, JointMap &jointNodes, std::vector<Ref<SkeletalAnimation>> &outAnimations, float scaleFactor)
 	{
 		if (!fbxScene || !skeleton)
 		{
@@ -1525,6 +1799,9 @@ namespace ignite
 				continue;
 			}
 
+            // Ensure evaluator reads transforms from the current animation stack.
+            fbxScene->SetCurrentAnimationStack(animStack);
+
 			FbxTimeSpan timeSpan = animStack->GetLocalTimeSpan();
 			const double startSeconds = timeSpan.GetStart().GetSecondDouble();
 			const double endSeconds = timeSpan.GetStop().GetSecondDouble();
@@ -1534,8 +1811,9 @@ namespace ignite
 			animation->ticksPerSeconds = ticksPerSecond;
 			animation->duration = std::max(0.0f, static_cast<float>((endSeconds - startSeconds) * ticksPerSecond));
 
-			for (const Joint &joint : skeleton->joints)
+			for (size_t jointIndex = 0; jointIndex < skeleton->joints.size(); ++jointIndex)
 			{
+                const Joint &joint = skeleton->joints[jointIndex];
 				if (!jointNodes.contains(joint.name))
 				{
 					continue;
@@ -1569,7 +1847,26 @@ namespace ignite
 				collectTicks(node->LclScaling.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Y));
 				collectTicks(node->LclScaling.GetCurve(layer, FBXSDK_CURVENODE_COMPONENT_Z));
 
-				if (keyTicks.empty())
+                // Some FBX files store animation in evaluator-driven transforms with sparse/no explicit curve keys.
+                // In that case, sample uniformly across the clip range so channels are still populated.
+                if (keyTicks.size() <= 1 && endSeconds > startSeconds)
+                {
+                    const int sampleCount = std::max(2, static_cast<int>(std::ceil((endSeconds - startSeconds) * ticksPerSecond)) + 1);
+                    for (int sampleIndex = 0; sampleIndex < sampleCount; ++sampleIndex)
+                    {
+                        const double alpha = sampleCount > 1 ? static_cast<double>(sampleIndex) / static_cast<double>(sampleCount - 1) : 0.0;
+                        const double sampleSeconds = startSeconds + (endSeconds - startSeconds) * alpha;
+
+                        FbxTime sampleTime;
+                        sampleTime.SetSecondDouble(sampleSeconds);
+                        keyTicks.insert(sampleTime.Get());
+                    }
+
+                    LOG_INFO("[FBX Loader] Fallback-sampled clip '{}' joint '{}' with {} samples (sparse keys)",
+                        animation->name, joint.name, sampleCount);
+                }
+
+                if (keyTicks.empty())
 				{
 					continue;
 				}
@@ -1600,12 +1897,12 @@ namespace ignite
 						skew,
 						perspective);
 
-					channel.translationKeys.AddFrame({ decomposedTranslation, timestamp });
+					channel.translationKeys.AddFrame({ decomposedTranslation * scaleFactor, timestamp });
 					channel.rotationKeys.AddFrame({ decomposedRotation, timestamp });
 					channel.scaleKeys.AddFrame({ decomposedScale, timestamp });
 				}
 
-				animation->channels.emplace(joint.name, std::move(channel));
+				animation->channels[jointIndex] = std::move(channel);
 			}
 
 			if (!animation->channels.empty())
@@ -1615,7 +1912,7 @@ namespace ignite
 		}
 	}
 
-	int32_t FBXMeshLoader::SkeletonFindOrAddJoint(fbxsdk::FbxNode *jointNode, const Ref<Skeleton> &skeleton, JointLoader &outJointResult)
+	int32_t FBXMeshLoader::SkeletonFindOrAddJoint(fbxsdk::FbxNode *jointNode, const Ref<Skeleton> &skeleton, JointLoader &outJointResult, float scaleFactor)
 	{
 		if (!jointNode || !skeleton)
 		{
@@ -1637,18 +1934,19 @@ namespace ignite
 		FbxNode *parentNode = jointNode->GetParent();
 		if (parentNode && jointNode->GetScene() && parentNode != jointNode->GetScene()->GetRootNode())
 		{
-			parentJointId = SkeletonFindOrAddJoint(parentNode, skeleton, outJointResult);
+			parentJointId = SkeletonFindOrAddJoint(parentNode, skeleton, outJointResult, scaleFactor);
 		}
 
 		Joint joint{};
 		joint.id = static_cast<int32_t>(skeleton->joints.size());
 		joint.parentJointId = parentJointId;
 		joint.name = jointName;
-		joint.localTransform = ToGlmMatrix(jointNode->EvaluateLocalTransform());
+		joint.localTransform = ScaleTranslation(ToGlmMatrix(jointNode->EvaluateLocalTransform()), scaleFactor);
 
 		glm::vec3 skew;
 		glm::vec4 perspective;
 		glm::decompose(joint.localTransform, joint.defaultScale, joint.defaultRotation, joint.defaultTranslation, skew, perspective);
+        joint.defaultLocalTransform = joint.localTransform;
 
 		joint.globalTransform = glm::mat4(1.0f);
 		joint.inverseBindPose = glm::mat4(1.0f);
@@ -1662,7 +1960,7 @@ namespace ignite
 		return joint.id;
 	}
 
-	void FBXMeshLoader::SkeletonBuildHierarchy(fbxsdk::FbxNode *node, const Ref<Skeleton> &skeleton, JointLoader &outJointResult)
+	void FBXMeshLoader::SkeletonBuildHierarchy(fbxsdk::FbxNode *node, const Ref<Skeleton> &skeleton, JointLoader &outJointResult, float scaleFactor)
 	{
 		if (!node)
 		{
@@ -1672,12 +1970,12 @@ namespace ignite
 		FbxNodeAttribute *attribute = node->GetNodeAttribute();
 		if (attribute && attribute->GetAttributeType() == FbxNodeAttribute::eSkeleton)
 		{
-            SkeletonFindOrAddJoint(node, skeleton, outJointResult);
+            SkeletonFindOrAddJoint(node, skeleton, outJointResult, scaleFactor);
 		}
 
 		for (int i = 0; i < node->GetChildCount(); ++i)
 		{
-            SkeletonBuildHierarchy(node->GetChild(i), skeleton, outJointResult);
+            SkeletonBuildHierarchy(node->GetChild(i), skeleton, outJointResult, scaleFactor);
 		}
 	}
 

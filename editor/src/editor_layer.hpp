@@ -1,6 +1,8 @@
-//Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
+//Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef EDITOR_LAYER_HPP
+#define EDITOR_LAYER_HPP
 
 #include <nvrhi/nvrhi.h>
 #include "ignite/asset/asset_importer.hpp"
@@ -85,6 +87,9 @@ namespace ignite
         uint32_t GetActiveDockspaceID() const { return m_ActiveEditorDockspaceId; }
 
         EditorState &GetState() { return m_State; }
+
+        void RefreshContentBrowsers();
+
     private:
         static void OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter);
         static void OnSceneOpenFileSelected(void *userData, const char *const *filelist, int filter);
@@ -147,3 +152,5 @@ namespace ignite
         friend class AssetImporterPanel;
     };
 }
+
+#endif

@@ -83,7 +83,7 @@ namespace ignite
         ~Renderer2D();
 
         void Begin(nvrhi::ICommandList *cmd);
-        void Flush(nvrhi::IFramebuffer *framebuffer);
+        void Flush(nvrhi::IFramebuffer *framebuffer, const Ref<ConstantBuffer> &cameraBuffer);
         void End();
 
         void SetFillMode(nvrhi::RasterFillMode mode) { m_FillMode = mode; ClearPipelineCache(); }
@@ -114,7 +114,7 @@ namespace ignite
         void ClearAssetResolveCache();
 
         void BuildPreRenderCache();
-        bool ReplayPreRenderCache(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
+        bool ReplayPreRenderCache(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const Ref<ConstantBuffer> &cameraBuffer);
         void InvalidatePreRenderCache();
 
         void InitQuadData();

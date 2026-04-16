@@ -32,6 +32,8 @@
 
 namespace ignite
 {
+    class Project;
+
     struct TextureCreateInfo
     {
         uint32_t width = 0;
@@ -80,6 +82,12 @@ namespace ignite
         static Ref<Texture> Create(TextureCreateInfo createInfo, const std::string &debugName = "Texture Class");
         static Ref<Texture> Create(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
         static Ref<Texture> Create(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
+
+        static TextureCreateInfo GetDefaultCreateInfo(const AssetMetaData &metadata);
+        static std::filesystem::path GetMetaPath(Project *project, const AssetMetaData &metadata);
+        static std::filesystem::path GetLegacyMetaPath(Project *project, const AssetMetaData &metadata);
+        static bool LoadCreateInfoFile(const std::filesystem::path &filepath, TextureCreateInfo &outCreateInfo);
+        static bool SerializeMetaFile(const std::filesystem::path &filepath, AssetHandle handle, const TextureCreateInfo &createInfo);
 
         void SetData(nvrhi::ICommandList *cmd, uint32_t channelCount);
         void SetData(nvrhi::ICommandList *cmd, uint32_t rowPitch, uint32_t depthPitch);

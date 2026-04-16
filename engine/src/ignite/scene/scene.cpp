@@ -27,9 +27,87 @@
 
 #include <ranges>
 #include <cmath>
+#include <algorithm>
+#include <unordered_set>
 
 namespace ignite
 {
+    namespace
+    {
+        Ref<AnimatorController> CloneAnimatorController(const Ref<AnimatorController> &source)
+        {
+            if (!source)
+                return nullptr;
+
+            return CreateRef<AnimatorController>(*source);
+        }
+
+        AnimParam *FindAnimParam(std::vector<AnimParam> &params, const std::string &name)
+        {
+            auto it = std::find_if(params.begin(), params.end(), [&name](const AnimParam &p) { return p.name == name; });
+            return it != params.end() ? &(*it) : nullptr;
+        }
+
+        const AnimParam *FindAnimParam(const std::vector<AnimParam> &params, const std::string &name)
+        {
+            auto it = std::find_if(params.begin(), params.end(), [&name](const AnimParam &p) { return p.name == name; });
+            return it != params.end() ? &(*it) : nullptr;
+        }
+
+        void SyncMeshAnimatorParams(MeshComponent &meshComp, const AnimatorController &controller)
+        {
+            std::erase_if(meshComp.runtimeParams, [&controller](const AnimParam &param)
+            {
+                return controller.GetParam(param.name) == nullptr;
+            });
+
+            for (const AnimParam &controllerParam : controller.params)
+            {
+                AnimParam *runtimeParam = FindAnimParam(meshComp.runtimeParams, controllerParam.name);
+                if (!runtimeParam)
+                {
+                    meshComp.runtimeParams.push_back(controllerParam);
+                    continue;
+                }
+
+                if (runtimeParam->type != controllerParam.type)
+                {
+                    *runtimeParam = controllerParam;
+                }
+            }
+        }
+
+        void ApplyMeshRuntimeParamsToController(const MeshComponent &meshComp, AnimatorController &controller)
+        {
+            for (AnimParam &controllerParam : controller.params)
+            {
+                if (const AnimParam *runtimeParam = FindAnimParam(meshComp.runtimeParams, controllerParam.name))
+                {
+                    controllerParam.type = runtimeParam->type;
+                    controllerParam.floatVal = runtimeParam->floatVal;
+                    controllerParam.intVal = runtimeParam->intVal;
+                    controllerParam.boolVal = runtimeParam->boolVal;
+                    controllerParam.strVal = runtimeParam->strVal;
+                }
+            }
+        }
+
+        void ResetMeshAnimatorRuntime(MeshComponent &meshComp)
+        {
+            meshComp.currentStateName.clear();
+            meshComp.stateElapsed = 0.0f;
+            meshComp.stateNormalized = 0.0f;
+        }
+
+        AssetHandle ResolveMeshAnimatorSourceHandle(const MeshComponent &meshComp, const Ref<Mesh> &mesh)
+        {
+            if (meshComp.runtimeAnimatorHandle != AssetHandle(0))
+                return meshComp.runtimeAnimatorHandle;
+
+            return mesh ? mesh->GetAnimatorHandle() : AssetHandle(0);
+        }
+    }
+
     Scene::Scene(Project *project, const std::string &_name)
 		: m_Project(project), name(_name)
         , m_ViewportWidth(1280), m_ViewportHeight(720)
@@ -38,9 +116,6 @@ namespace ignite
         registry = new entt::registry();
         physics2D = CreateScope<Physics2D>(this);
         physics = CreateScope<JoltScene>(this);
-
-        m_SceneGPUDataBuffer = ConstantBuffer::Create(sizeof(Scene_GPUData), false, 1, "[Scene GPU Data]");
-		m_CSMGPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMap_GPUData), false, 1, "[CSM GPU Data]");
 
 		ScriptEngine::GetInstance()->SetSceneContext(this);
     }
@@ -67,10 +142,6 @@ namespace ignite
 
 		// Clear entity map
 		entities.clear();
-
-		// Release GPU buffers explicitly
-		m_SceneGPUDataBuffer.reset();
-		m_CSMGPUDataBuffer.reset();
 
 		// Release physics systems
 		physics2D.reset();
@@ -119,6 +190,13 @@ namespace ignite
             ScriptEngine::GetInstance()->OnCreateEntity(entity);
         });
 
+        registry->view<MeshComponent>().each([](entt::entity, MeshComponent &meshComp)
+        {
+            ResetMeshAnimatorRuntime(meshComp);
+        });
+
+        m_SharedAnimatorRuntime.clear();
+
         physics2D->SimulationStart();
         physics->SimulationStart();
     }
@@ -144,6 +222,8 @@ namespace ignite
         }
 
         ScriptEngine::GetInstance()->ClearSceneContext();
+
+        m_SharedAnimatorRuntime.clear();
         
         physics2D->SimulationStop();
         physics->SimulationStop();
@@ -181,6 +261,15 @@ namespace ignite
             auto &tr = cameraView.get<TransformComponent>(entity);
             auto &cc = cameraView.get<CameraComponent>(entity);
             cc.camera.SetTransform(tr.GetWorldMatrix());
+        }
+
+        auto meshView = registry->view<TransformComponent, MeshComponent>();
+        for (entt::entity entity : meshView)
+        {
+            auto &tr = meshView.get<TransformComponent>(entity);
+            auto &mesh = meshView.get<MeshComponent>(entity);
+            mesh.worldMatrix = tr.GetWorldMatrix();
+            mesh.normalMatrix = glm::transpose(glm::inverse(glm::mat3(mesh.worldMatrix)));
         }
     }
 
@@ -223,73 +312,6 @@ namespace ignite
     {
         this->m_ViewportWidth = width;
         this->m_ViewportHeight = height;
-    }
-
-    void Scene::WriteBuffer(nvrhi::ICommandList *cmd)
-    {
-        Scene_GPUData mergedGPUData = gpuData;
-
-        bool hasDirectionalLight = false;
-        auto dirLightView = registry->view<TransformComponent, DirectionalLightComponent>();
-        for (entt::entity e : dirLightView)
-        {
-            const TransformComponent &tr = dirLightView.get<TransformComponent>(e);
-            const DirectionalLightComponent &light = dirLightView.get<DirectionalLightComponent>(e);
-
-            const glm::vec3 forward = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
-
-            mergedGPUData.sunColor = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
-            mergedGPUData.sungAngles.x = std::atan2(forward.x, forward.z);
-            mergedGPUData.sungAngles.y = std::asin(glm::clamp(forward.y, -1.0f, 1.0f));
-            mergedGPUData.sunAngularRadius = glm::radians(light.angularRadius);
-            mergedGPUData.exposure = light.exposure;
-            mergedGPUData.gamma = light.gamma;
-            mergedGPUData.ambient = light.ambient;
-
-            hasDirectionalLight = true;
-            break;
-        }
-
-        if (!hasDirectionalLight)
-        {
-            const Scene_GPUData *sceneGPUData = &gpuData;
-
-            auto view = registry->view<WorldEnvironment>();
-            WorldEnvironment *fallback = nullptr;
-            for (entt::entity e : view)
-            {
-                WorldEnvironment &world = view.get<WorldEnvironment>(e);
-                if (!world.enabled)
-                    continue;
-
-                if (world.primary)
-                {
-                    sceneGPUData = &world.sceneGPUData;
-                    fallback = nullptr;
-                    break;
-                }
-
-                if (!fallback)
-                {
-                    fallback = &world;
-                }
-            }
-
-            if (fallback)
-            {
-                sceneGPUData = &fallback->sceneGPUData;
-            }
-
-            mergedGPUData.sunColor = sceneGPUData->sunColor;
-            mergedGPUData.sungAngles = sceneGPUData->sungAngles;
-            mergedGPUData.sunAngularRadius = sceneGPUData->sunAngularRadius;
-            mergedGPUData.exposure = sceneGPUData->exposure;
-            mergedGPUData.gamma = sceneGPUData->gamma;
-            mergedGPUData.ambient = sceneGPUData->ambient;
-        }
-
-        gpuData = mergedGPUData;
-        m_SceneGPUDataBuffer->SetData(cmd, Buffer((void *)&gpuData, sizeof(Scene_GPUData)));
     }
 
     Entity Scene::GetPrimaryCamera()
@@ -368,126 +390,207 @@ namespace ignite
 
     void Scene::UpdateAnimations(float deltaTime)
     {
-        // ---------------------------------------------------------------
-        // Animator update: state machine driven skeletal animation
-        // ---------------------------------------------------------------
-        auto assetManager = m_Project->GetAssetManager();
-        
-        auto skeletalMeshView = registry->view<SkeletalMeshComponent>();
+        auto skeletalMeshView = registry->view<TransformComponent, MeshComponent>();
+        std::unordered_set<AssetHandle> updatedSharedHandles;
         for (auto ent : skeletalMeshView)
         {
-            SkeletalMeshComponent &sm = skeletalMeshView.get<SkeletalMeshComponent>(ent);
-            if (sm.handle == AssetHandle(0) || sm.animatorHandle == AssetHandle(0))
+            TransformComponent &tr = skeletalMeshView.get<TransformComponent>(ent);
+            MeshComponent &sm = skeletalMeshView.get<MeshComponent>(ent);
+            if (!tr.visible || sm.handle == AssetHandle(0))
                 continue;
 
-            Ref<SkeletalMesh> skeletalMesh = std::dynamic_pointer_cast<SkeletalMesh>(assetManager->GetAsset(sm.handle, AssetType::SkeletalMesh));
-            if (!skeletalMesh)
+            Ref<Mesh> mesh = m_Project->GetAsset<Mesh>(sm.handle, AssetType::Mesh);
+            if (!mesh)
                 continue;
 
-            Ref<AnimatorController> animController = std::dynamic_pointer_cast<AnimatorController>(assetManager->GetAsset(sm.animatorHandle));
-            if (!animController)
-                continue;
-
-            AnimatorControllerRuntime runtime;
-            runtime.currentStateName = sm.currentStateName;
-            runtime.stateElapsed = sm.stateElapsed;
-            runtime.stateNormalized = 0.0f;
-
-            if (animController->UpdateSkeleton(deltaTime, runtime, assetManager, skeletalMesh->boneTransforms))
+            AssetHandle sourceAnimatorHandle = ResolveMeshAnimatorSourceHandle(sm, mesh);
+            if (sourceAnimatorHandle == AssetHandle(0))
             {
-                sm.currentStateName = runtime.currentStateName;
-                sm.stateElapsed = runtime.stateElapsed;
-                sm.stateNormalized = runtime.stateNormalized;
+                sm.runtimeAnimatorInstance.reset();
+                sm.runtimeParams.clear();
+                sm.skeletonGpuBuffer.reset();
+                sm.finalBoneTransforms.clear();
+                ResetMeshAnimatorRuntime(sm);
+                continue;
             }
-        }
 
-        // ---------------------------------------------------------------
-        // Animator2D update: state machine driven 2D animation
-        // ---------------------------------------------------------------
-        if (m_Project)
-        {
-            auto animator2dView = registry->view<Sprite2DComponent, Animator2DComponent>();
-            for (entt::entity e : animator2dView)
+            sm.runtimeAnimatorHandle = sourceAnimatorHandle;
+
+            Ref<AnimatorController> animController = nullptr;
+            AnimatorControllerRuntime *sharedRuntime = nullptr;
+
+            if (sm.uniqueAnimator)
             {
-                auto &sprite = animator2dView.get<Sprite2DComponent>(e);
-                auto &animComp = animator2dView.get<Animator2DComponent>(e);
-
-                if (animComp.controllerHandle == AssetHandle(0))
-                    continue;
-
-                Ref<AnimatorController2D> ctrl = m_Project->GetAsset<AnimatorController2D>(animComp.controllerHandle);
-                if (!ctrl)
+                if (!sm.runtimeAnimatorInstance)
                 {
-                    continue;
-                }
-
-                // Initialize state if empty
-                if (animComp.currentStateName.empty())
-                {
-                    animComp.currentStateName = ctrl->defaultState;
-                    animComp.currentFrame = 0;
-                    animComp.elapsed = 0.0f;
-                    animComp.stateElapsed = 0.0f;
-                    animComp.stateNormalized = 0.0f;
-                }
-
-                const AnimState2D *state = ctrl->FindState(animComp.currentStateName);
-                if (!state || state->animHandle == AssetHandle(0))
-                    continue;
-
-                Ref<Animation2D> anim = m_Project->GetAsset<Animation2D>(state->animHandle);
-                if (!anim || anim->frames.empty())
-                {
-                    continue;
-                }
-
-                // Advance per-entity frame counter
-                const float frameDuration = (anim->fps > 0.0f) ? (1.0f / anim->fps) : 1.0f;
-                animComp.elapsed += deltaTime;
-                animComp.stateElapsed += deltaTime;
-
-                while (animComp.elapsed >= frameDuration)
-                {
-                    animComp.elapsed -= frameDuration;
-                    animComp.currentFrame++;
-                    if (animComp.currentFrame >= static_cast<int>(anim->frames.size()))
+                    Ref<AnimatorController> sourceController = m_Project->GetAsset<AnimatorController>(sourceAnimatorHandle);
+                    if (!sourceController)
                     {
-                        if (anim->loop)
-                        {
-                            animComp.currentFrame = 0;
-                        }
-                        else
-                        {
-                            animComp.currentFrame = static_cast<int>(anim->frames.size()) - 1;
-                            animComp.elapsed = 0.0f;
-                            break;
-                        }
+                        sourceController = m_Project->GetAssetImmediate<AnimatorController>(sourceAnimatorHandle);
+                    }
+
+                    sm.runtimeAnimatorInstance = CloneAnimatorController(sourceController);
+                    if (sm.runtimeAnimatorInstance)
+                    {
+                        sm.runtimeParams.clear();
+                        ResetMeshAnimatorRuntime(sm);
                     }
                 }
 
-                // Update normalized time
-                const float totalDur = static_cast<float>(anim->frames.size()) * frameDuration;
-                animComp.stateNormalized = (totalDur > 0.0f) ? std::min(animComp.stateElapsed / totalDur, 1.0f) : 0.0f;
+                animController = sm.runtimeAnimatorInstance;
+            }
+            else
+            {
+                sm.runtimeAnimatorInstance.reset();
 
-                // Push UV to sprite
-                const int clamped = std::max(0, std::min(animComp.currentFrame, static_cast<int>(anim->frames.size()) - 1));
-                sprite.uv0 = anim->frames[static_cast<size_t>(clamped)].uv0;
-                sprite.uv1 = anim->frames[static_cast<size_t>(clamped)].uv1;
-                if (anim->textureHandle != AssetHandle(0))
+                auto sharedIt = m_SharedAnimatorCache.find(sourceAnimatorHandle);
+                if (sharedIt == m_SharedAnimatorCache.end())
                 {
-                    sprite.handle = anim->textureHandle;
+                    Ref<AnimatorController> controller = m_Project->GetAsset<AnimatorController>(sourceAnimatorHandle);
+                    if (!controller)
+                    {
+                        controller = m_Project->GetAssetImmediate<AnimatorController>(sourceAnimatorHandle);
+                    }
+
+                    sharedIt = m_SharedAnimatorCache.emplace(sourceAnimatorHandle, controller).first;
                 }
 
-                // Evaluate transitions
-                std::string nextState = ctrl->EvaluateTransitions(animComp.currentStateName, animComp.stateNormalized);
-                if (!nextState.empty() && nextState != animComp.currentStateName)
+                animController = sharedIt->second;
+                sharedRuntime = &m_SharedAnimatorRuntime[sourceAnimatorHandle];
+
+                if (sharedRuntime->currentStateName.empty() && !sm.currentStateName.empty())
                 {
-                    animComp.currentStateName = nextState;
-                    animComp.currentFrame = 0;
-                    animComp.elapsed = 0.0f;
-                    animComp.stateElapsed = 0.0f;
-                    animComp.stateNormalized = 0.0f;
+                    sharedRuntime->currentStateName = sm.currentStateName;
+                    sharedRuntime->stateElapsed = sm.stateElapsed;
+                    sharedRuntime->stateNormalized = sm.stateNormalized;
                 }
+            }
+
+            if (!animController)
+                continue;
+
+            SyncMeshAnimatorParams(sm, *animController);
+            ApplyMeshRuntimeParamsToController(sm, *animController);
+
+            if (sharedRuntime)
+            {
+                // Only advance time once per shared controller per frame
+                if (updatedSharedHandles.find(sourceAnimatorHandle) == updatedSharedHandles.end())
+                {
+                    AnimatorControllerRuntime tmpRuntime = *sharedRuntime;
+                    if (animController->UpdateSkeleton(deltaTime, tmpRuntime, m_Project->GetAssetManager()))
+                    {
+                        *sharedRuntime = std::move(tmpRuntime);
+                        updatedSharedHandles.insert(sourceAnimatorHandle);
+                    }
+                }
+
+                if (!sharedRuntime->finalTransforms.empty())
+                {
+                    sm.finalBoneTransforms = sharedRuntime->finalTransforms;
+                    sm.currentStateName = sharedRuntime->currentStateName;
+                    sm.stateElapsed = sharedRuntime->stateElapsed;
+                    sm.stateNormalized = sharedRuntime->stateNormalized;
+                }
+            }
+            else
+            {
+                AnimatorControllerRuntime runtime;
+                runtime.currentStateName = sm.currentStateName;
+                runtime.stateElapsed = sm.stateElapsed;
+                runtime.stateNormalized = sm.stateNormalized;
+
+                if (animController->UpdateSkeleton(deltaTime, runtime, m_Project->GetAssetManager()))
+                {
+                    sm.finalBoneTransforms = std::move(runtime.finalTransforms);
+                    sm.currentStateName = runtime.currentStateName;
+                    sm.stateElapsed = runtime.stateElapsed;
+                    sm.stateNormalized = runtime.stateNormalized;
+                }
+            }
+        }
+
+        auto animator2dView = registry->view<Sprite2DComponent, Animator2DComponent>();
+        for (entt::entity e : animator2dView)
+        {
+            auto &sprite = animator2dView.get<Sprite2DComponent>(e);
+            auto &animComp = animator2dView.get<Animator2DComponent>(e);
+
+            if (animComp.controllerHandle == AssetHandle(0))
+                continue;
+
+            Ref<AnimatorController2D> ctrl = m_Project->GetAsset<AnimatorController2D>(animComp.controllerHandle);
+            if (!ctrl)
+            {
+                continue;
+            }
+
+            // Initialize state if empty
+            if (animComp.currentStateName.empty())
+            {
+                animComp.currentStateName = ctrl->defaultState;
+                animComp.currentFrame = 0;
+                animComp.elapsed = 0.0f;
+                animComp.stateElapsed = 0.0f;
+                animComp.stateNormalized = 0.0f;
+            }
+
+            const AnimState2D *state = ctrl->FindState(animComp.currentStateName);
+            if (!state || state->animHandle == AssetHandle(0))
+                continue;
+
+            Ref<Animation2D> anim = m_Project->GetAsset<Animation2D>(state->animHandle);
+            if (!anim || anim->frames.empty())
+            {
+                continue;
+            }
+
+            // Advance per-entity frame counter
+            const float frameDuration = (anim->fps > 0.0f) ? (1.0f / anim->fps) : 1.0f;
+            animComp.elapsed += deltaTime;
+            animComp.stateElapsed += deltaTime;
+
+            while (animComp.elapsed >= frameDuration)
+            {
+                animComp.elapsed -= frameDuration;
+                animComp.currentFrame++;
+                if (animComp.currentFrame >= static_cast<int>(anim->frames.size()))
+                {
+                    if (anim->loop)
+                    {
+                        animComp.currentFrame = 0;
+                    }
+                    else
+                    {
+                        animComp.currentFrame = static_cast<int>(anim->frames.size()) - 1;
+                        animComp.elapsed = 0.0f;
+                        break;
+                    }
+                }
+            }
+
+            // Update normalized time
+            const float totalDur = static_cast<float>(anim->frames.size()) * frameDuration;
+            animComp.stateNormalized = (totalDur > 0.0f) ? std::min(animComp.stateElapsed / totalDur, 1.0f) : 0.0f;
+
+            // Push UV to sprite
+            const int clamped = std::max(0, std::min(animComp.currentFrame, static_cast<int>(anim->frames.size()) - 1));
+            sprite.uv0 = anim->frames[static_cast<size_t>(clamped)].uv0;
+            sprite.uv1 = anim->frames[static_cast<size_t>(clamped)].uv1;
+            if (anim->textureHandle != AssetHandle(0))
+            {
+                sprite.handle = anim->textureHandle;
+            }
+
+            // Evaluate transitions
+            std::string nextState = ctrl->EvaluateTransitions(animComp.currentStateName, animComp.stateNormalized);
+            if (!nextState.empty() && nextState != animComp.currentStateName)
+            {
+                animComp.currentStateName = nextState;
+                animComp.currentFrame = 0;
+                animComp.elapsed = 0.0f;
+                animComp.stateElapsed = 0.0f;
+                animComp.stateNormalized = 0.0f;
             }
         }
     }
@@ -578,6 +681,11 @@ namespace ignite
 	}
 
     template<>
+    void Scene::OnComponentAdded<MeshComponent>(Entity entity, MeshComponent &comp)
+    {
+    }
+
+    template<>
     void Scene::OnComponentAdded<ScriptComponent>(Entity entity, ScriptComponent &comp)
     {
     }
@@ -601,24 +709,10 @@ namespace ignite
             comp.environment = Environment::Create(this);
         }
 
-        comp.sceneGPUData = gpuData;
         comp.dirtyEnvironment = true;
         comp.gpuInitialized = false;
         comp.loadedHDRHandle = AssetHandle(0);
     }
-
-    template<>
-    void Scene::OnComponentAdded<StaticMeshComponent>(Entity entity, StaticMeshComponent& comp)
-    {
-    }
-
-	template<>
-	void Scene::OnComponentAdded<SkeletalMeshComponent>(Entity entity, SkeletalMeshComponent& comp)
-	{
-       comp.currentStateName.clear();
-        comp.stateElapsed = 0.0f;
-        comp.stateNormalized = 0.0f;
-	}
 
     template<>
     void Scene::OnComponentAdded<CameraComponent>(Entity entity, CameraComponent &comp)

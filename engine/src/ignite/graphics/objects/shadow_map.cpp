@@ -22,8 +22,8 @@ namespace ignite
 {
 	CascadedShadowMap::CascadedShadowMap(ShadowMapQuality quality)
 	{
-        m_GPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMap_GPUData), true, 256, "Cascadded ShadowMap");
-        m_ModelGPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMapModel_GPUData), true, 256, "Cascadded Model ShadowMap");
+        m_GPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMapBufferData), true, 256, "Cascadded ShadowMap");
+        m_ModelGPUDataBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMapModelBufferData), true, 256, "Cascadded Model ShadowMap");
 
 		// Initialize shadow parameters with reasonable defaults
 		m_GPUData.shadowStrength = 0.8f;  // 80% shadow visibility

@@ -52,7 +52,6 @@ namespace ignite
         std::optional<Circle2DComponent>       circle2D;
         std::optional<CameraComponent>         camera;
         std::optional<WorldEnvironment>        worldEnv;
-        std::optional<StaticMeshComponent>     staticMesh;
         std::optional<AudioSourceComponent>    audioSource;
         std::optional<ScriptComponent>         script;
 
@@ -148,14 +147,6 @@ namespace ignite
 
         if (entity.HasComponent<WorldEnvironment>())
             snap.worldEnv = entity.GetComponent<WorldEnvironment>();
-
-        if (entity.HasComponent<StaticMeshComponent>())
-        {
-            // Only copy the asset handle; GPU resources will be re-created on demand
-            StaticMeshComponent copy;
-            copy.handle = entity.GetComponent<StaticMeshComponent>().handle;
-            snap.staticMesh = copy;
-        }
 
         if (entity.HasComponent<AudioSourceComponent>())
             snap.audioSource = entity.GetComponent<AudioSourceComponent>();
@@ -270,9 +261,6 @@ namespace ignite
 
         if (snap.worldEnv)
             e.AddOrReplaceComponent<WorldEnvironment>(*snap.worldEnv);
-
-        if (snap.staticMesh)
-            e.AddOrReplaceComponent<StaticMeshComponent>(*snap.staticMesh);
 
         if (snap.audioSource)
             e.AddOrReplaceComponent<AudioSourceComponent>(*snap.audioSource);
