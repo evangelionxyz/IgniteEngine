@@ -1,7 +1,0 @@
-Project:
-  Version: Alpha-0.1
-  Name: TestProject
-  AssetPath: Assets
-  AssetRegistry: AssetRegistry.ixreg
-  ScriptModule: Bin/TestProject.dll
-  DefaultSceneHandle: 0
