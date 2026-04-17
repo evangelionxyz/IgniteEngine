@@ -8,12 +8,13 @@
 - Add logger/assertion instrumentation when investigating runtime issues like leaks to enhance debugging and ensure stability.
 
 ## Asset Handler
-- For loading assets contains CPU data must be using Asset Worker thread in AssetManager
-- If there is a GPU creation must be submit to render thread
+- For loading assets that contain CPU data, use the Asset Worker thread in AssetManager.
+- If there is a GPU creation, it must be submitted to the render thread.
 
 ## Rendering Optimization
 - For rendering optimization tasks, keep SceneRenderer focused on orchestration and move processing/caching logic (like texture/material handle caching) into Renderer2D; avoid editor/gameplay camera reuse optimizations. Focus only on texture caching in Quad2DView.
 
 ## UI Guidelines
 - Always use `ImGuiListClipper` for lists in this codebase to ensure efficient rendering and management of list items.
+- For mesh scene previews, use the full height and hide the animation timeline only when the skeleton is null; keep the timeline visible when the skeleton exists.
 

@@ -413,6 +413,8 @@ namespace ignite
 
     void ScriptEngine::ClearSceneContext()
     {
+        if (!scriptEngineData)
+            return;
 
         for (auto &instance : scriptEngineData->entityInstances)
         {
@@ -420,7 +422,6 @@ namespace ignite
         }
 
         scriptEngineData->entityInstances.clear();
-
         if (scriptEngineData->assemblyReloadDeferred)
         {
             scriptEngineData->assemblyReloadDeferred = false;
