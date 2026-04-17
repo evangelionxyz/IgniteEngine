@@ -533,6 +533,7 @@ namespace ignite {
             case AssetType::Font:
             case AssetType::Material:
             case AssetType::Material2D:
+            case AssetType::Widget:
             case AssetType::Animation2D:
             case AssetType::SpriteSheet:
             case AssetType::SkeletalAnimation:

@@ -39,6 +39,7 @@ namespace ignite
         Sprite2DComponent,
         Circle2DComponent,
         PointLight2DComponent,
+        WidgetComponent,
         Rigidbody2DComponent,
         BoxCollider2DComponent,
         CircleCollider2DComponent,

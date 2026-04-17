@@ -28,6 +28,8 @@ namespace ignite
         void ResizeGameplay(uint32_t width, uint32_t height);
         
         void SetFillMode(nvrhi::RasterFillMode mode);
+        void SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered);
+        void SetGameplayWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered);
 
         void SetSelectedEntity(const Entity& entity);
         void UnselectEntity(const Entity& entity);
@@ -91,7 +93,8 @@ namespace ignite
         
     private:
 
-        Ref<WidgetRenderer> m_WidgetRenderer;
+        Ref<WidgetRenderer> m_EditorWidgetRenderer;
+        Ref<WidgetRenderer> m_GameplayWidgetRenderer;
 
         Ref<RenderTarget> m_SceneRT;
         Ref<RenderTarget> m_WidgetRT;
@@ -104,6 +107,16 @@ namespace ignite
         std::unordered_map<std::string, Ref<Texture>> m_Icons;
         std::unordered_map<AssetResolveKey, Ref<Mesh>, AssetResolveKeyHash> m_MeshResolveCache;
         std::unordered_map<AssetResolveKey, Ref<Material>, AssetResolveKeyHash> m_MaterialResolveCache;
+
+        uint32_t m_EditorWidgetMouseX = 0;
+        uint32_t m_EditorWidgetMouseY = 0;
+        bool m_EditorWidgetMouseHovered = false;
+        bool m_UseEditorWidgetMouseOverride = false;
+
+        uint32_t m_GameplayWidgetMouseX = 0;
+        uint32_t m_GameplayWidgetMouseY = 0;
+        bool m_GameplayWidgetMouseHovered = false;
+        bool m_UseGameplayWidgetMouseOverride = false;
     };
 }
 

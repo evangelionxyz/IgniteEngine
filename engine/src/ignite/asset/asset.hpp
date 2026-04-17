@@ -170,6 +170,7 @@ namespace ignite {
         case AssetType::Metadata: return ".meta";
         case AssetType::Shader: return ".hlsl";
         case AssetType::AnimationMontage: return ".mtg";
+        case AssetType::Widget: return ".wdgt";
         case AssetType::Mesh: return ".mesh";
         case AssetType::Skeleton: return ".ixskel";
         case AssetType::SkeletalAnimation: return ".ixanim";

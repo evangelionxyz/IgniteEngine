@@ -124,7 +124,6 @@ namespace ignite
 
     std::vector<uint8_t> Shader::CompileOrGetShader(const std::filesystem::path &filepath, ShaderType type, bool recompile)
     {
-        LOG_WARN("{}", std::filesystem::current_path().string());
         LOG_ASSERT(std::filesystem::exists(filepath), "[Shader] File does not exists! '{}'", filepath.generic_string().c_str());
         
         const nvrhi::GraphicsAPI api = DeviceManager::GetInstance()->GetGraphicsAPI();

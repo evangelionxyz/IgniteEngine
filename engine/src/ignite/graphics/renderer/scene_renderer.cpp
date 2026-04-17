@@ -20,6 +20,7 @@
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/ui/widget.hpp"
+#include "ignite/core/input/input.hpp"
 #include "widget_renderer.hpp"
 
 #include <ranges>
@@ -27,6 +28,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <unordered_set>
 
 namespace ignite
@@ -440,7 +442,8 @@ namespace ignite
         m_CompositeRT = RenderTarget::Create(compositeRTCreateInfo, "[SceneRenderer] Composite RT");
         m_GameplayCompositeRT = RenderTarget::Create(compositeRTCreateInfo, "[SceneRenderer] Gameplay Composite RT");
 
-        m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
+        m_EditorWidgetRenderer = WidgetRenderer::Create(1280, 720);
+        m_GameplayWidgetRenderer = WidgetRenderer::Create(1280, 720);
     }
 
     SceneRenderer::~SceneRenderer()
@@ -457,6 +460,11 @@ namespace ignite
 
     void SceneRenderer::OnUpdate(float deltaTime)
     {
+        if (!m_Scene)
+        {
+            return;
+        }
+
         // Check if any materials need binding set creation/recreation
         {
             IGN_PROFILE_SCOPE("SceneRenderer::UpdateMaterialBindingSets");
@@ -512,9 +520,59 @@ namespace ignite
                             material->UpdateBindingSet(this, &textures, assetManager);
                         }
                     }
+
                 }
             }
         }
+
+        const bool editorHovered = m_UseEditorWidgetMouseOverride && m_EditorWidgetMouseHovered;
+        const bool gameplayHovered = m_UseGameplayWidgetMouseOverride && m_GameplayWidgetMouseHovered;
+
+        if (m_EditorWidgetRenderer)
+        {
+            m_EditorWidgetRenderer->SetProject(m_Project);
+            m_EditorWidgetRenderer->SetScene(m_Scene.get());
+        }
+
+        if (m_GameplayWidgetRenderer)
+        {
+            m_GameplayWidgetRenderer->SetProject(m_Project);
+            m_GameplayWidgetRenderer->SetScene(m_Scene.get());
+        }
+
+        // Only update one widget renderer per frame to avoid shared widget hover state being overwritten.
+        if (editorHovered && m_EditorWidgetRenderer)
+        {
+            m_EditorWidgetRenderer->SetMousePosition(m_EditorWidgetMouseX, m_EditorWidgetMouseY);
+            m_EditorWidgetRenderer->Update(deltaTime);
+        }
+        else if (gameplayHovered && m_GameplayWidgetRenderer)
+        {
+            m_GameplayWidgetRenderer->SetMousePosition(m_GameplayWidgetMouseX, m_GameplayWidgetMouseY);
+            m_GameplayWidgetRenderer->Update(deltaTime);
+        }
+        else if (m_EditorWidgetRenderer)
+        {
+            const uint32_t offscreenMouse = std::numeric_limits<uint32_t>::max() / 2u;
+            m_EditorWidgetRenderer->SetMousePosition(offscreenMouse, offscreenMouse);
+            m_EditorWidgetRenderer->Update(deltaTime);
+        }
+    }
+
+    void SceneRenderer::SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered)
+    {
+        m_EditorWidgetMouseX = mouseX;
+        m_EditorWidgetMouseY = mouseY;
+        m_EditorWidgetMouseHovered = hovered;
+        m_UseEditorWidgetMouseOverride = true;
+    }
+
+    void SceneRenderer::SetGameplayWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered)
+    {
+        m_GameplayWidgetMouseX = mouseX;
+        m_GameplayWidgetMouseY = mouseY;
+        m_GameplayWidgetMouseHovered = hovered;
+        m_UseGameplayWidgetMouseOverride = true;
     }
 
     Ref<Mesh> SceneRenderer::ResolveMesh(Project *project, AssetHandle handle)
@@ -769,6 +827,13 @@ namespace ignite
                 ColorPass(cmd, camera, framebuffer);
             }
 
+            if (m_EditorWidgetRenderer)
+            {
+                IGN_PROFILE_SCOPE("SceneRenderer::WidgetPass");
+                m_EditorWidgetRenderer->Resize(m_WidgetRT->GetWidth(), m_WidgetRT->GetHeight());
+                m_EditorWidgetRenderer->Render(cmd, m_WidgetRT->GetFramebuffer());
+            }
+
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::DrawIcons");
                 DrawIcons(cmd, framebuffer, camera);
@@ -983,6 +1048,13 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::ColorPass");
                 ColorPass(cmd, camera, framebuffer);
+            }
+
+            if (m_GameplayWidgetRenderer)
+            {
+                IGN_PROFILE_SCOPE("SceneRenderer::WidgetPass");
+                m_GameplayWidgetRenderer->Resize(m_GameplayWidgetRT->GetWidth(), m_GameplayWidgetRT->GetHeight());
+                m_GameplayWidgetRenderer->Render(cmd, m_GameplayWidgetRT->GetFramebuffer());
             }
 
             Ref<Texture> bloomTexture = nullptr;

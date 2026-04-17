@@ -406,6 +406,11 @@ namespace ignite
                                 DispatchCreateAssetEditorEvent(AssetType::SpriteSheet, m_CurrentDirectory);
                             }
 
+                            if (ImGui::MenuItem("Widget"))
+                            {
+                                DispatchCreateAssetEditorEvent(AssetType::Widget, m_CurrentDirectory);
+                            }
+
                             if (ImGui::BeginMenu("Animation"))
                             {
                                 if (ImGui::MenuItem("Animator Controller"))
@@ -452,12 +457,13 @@ namespace ignite
                             ImGui::EndMenu();
                         }
 
-                        if (ImGui::MenuItem("Open Folder in File Explorer"))
+#ifdef PLATFORM_WINDOWS
+                        if (ImGui::MenuItem("Open in File Explorer"))
                         {
                             std::string command = std::format("explorer {}", m_CurrentDirectory.string());
                             std::system(command.c_str());
                         }
-
+#endif
                         ImGui::EndPopup();
                     }
 
