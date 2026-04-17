@@ -196,21 +196,13 @@ namespace ignite
             ImGui::EndDragDropTarget();
         }
 
-        ImGuiTableFlags tableFlags = 
-            ImGuiTableFlags_RowBg 
-            | ImGuiTableFlags_NoClip 
-            | ImGuiTableFlags_PadOuterX | ImGuiTableFlags_NoPadInnerX | ImGuiTableFlags_NoPadOuterX 
-            | ImGuiTableFlags_NoBordersInBodyUntilResize 
-            | ImGuiTableFlags_Resizable;
+        ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_NoClip | ImGuiTableFlags_PadOuterX
+            | ImGuiTableFlags_NoPadInnerX | ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoBordersInBodyUntilResize | ImGuiTableFlags_Resizable;
 
         if (ImGui::BeginTable("entity_hierarchy_table", 1, tableFlags))
         {
-            // setup table 3 columns
-            // Name, Type, Active (check box)
             ImGui::TableSetupScrollFreeze(0, 1);
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-            // ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_NoResize);
-            // ImGui::TableSetupColumn("Active", ImGuiTableColumnFlags_WidthFixed, 24.0f);
             ImGui::TableHeadersRow();
 
             ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, { 0.000f, 0.245f, 0.409f, 1.000f });
@@ -225,15 +217,6 @@ namespace ignite
                 {
                     rootEntities.emplace_back(e, m_Scene.get());
                 }
-            });
-
-            std::ranges::sort(rootEntities, [](const Entity &a, const Entity &b)
-            {
-                if (a.GetName() == b.GetName())
-                {
-                    return static_cast<u64>(a) < static_cast<u64>(b);
-                }
-                return a.GetName() < b.GetName();
             });
 
             for (const Entity &entity : rootEntities)
@@ -264,10 +247,17 @@ namespace ignite
         {
             entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Empty"));
         }
-
         if (ImGui::MenuItem("Camera"))
         {
             entity = SetSelectedEntity(SceneManager::CreateCamera(m_Scene.get(), "Camera"));
+        }
+        if (ImGui::MenuItem("Widget"))
+        {
+            entity = SetSelectedEntity(SceneManager::CreateCamera(m_Scene.get(), "Widget"));
+            if (entity.IsValid() && !entity.HasComponent<WidgetComponent>())
+            {
+                entity.AddComponent<WidgetComponent>();
+            }
         }
 
         if (ImGui::BeginMenu("2D"))
@@ -286,10 +276,17 @@ namespace ignite
 			}
             ImGui::EndMenu();
         }
-       
 
         if (ImGui::BeginMenu("3D"))
         {
+            if (ImGui::MenuItem("Mesh"))
+            {
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Mesh"));
+                if (entity.IsValid() && !entity.HasComponent<MeshComponent>())
+                {
+                    entity.AddComponent<MeshComponent>();
+                }
+            }
             if (ImGui::MenuItem("Directional Light"))
             {
                 entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Directional Light"));
@@ -298,12 +295,10 @@ namespace ignite
                     entity.AddComponent<DirectionalLightComponent>();
                 }
             }
-
             if (ImGui::MenuItem("World Environment"))
             {
                 entity = SetSelectedEntity(SceneManager::CreateWorldEnvironment(m_Scene.get(), "World Environment"));
             }
-
             ImGui::EndMenu();
         }
 
