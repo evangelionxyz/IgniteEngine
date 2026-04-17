@@ -90,11 +90,9 @@ namespace ignite
         if (newMaxCount == 0 || newMaxCount == batch.maxCount)
             return;
 
-        const uint32_t usedVertices = batch.vertexBufferPtr
-            ? static_cast<uint32_t>(batch.vertexBufferPtr - batch.vertexBufferBase)
-            : 0;
+        const uint32_t usedVertices = batch.vertexBufferPtr ? static_cast<uint32_t>(batch.vertexBufferPtr - batch.vertexBufferBase) : 0;
 
-        VertexType *newBase = new VertexType[newMaxCount * batch.verticesPerObject];
+        auto newBase = new VertexType[newMaxCount * batch.verticesPerObject];
         if (batch.vertexBufferBase && usedVertices > 0)
         {
             std::copy_n(batch.vertexBufferBase, usedVertices, newBase);
@@ -184,8 +182,7 @@ namespace ignite
             const uint32_t newMaxIndices = newMaxCount * batch.indicesPerObject;
 
             const bool fitVertices = requiredVertices < (newMaxVertices * s_BatchGrowThresholdPercent) / 100;
-            const bool fitIndices = batch.indicesPerObject == 0
-                || requiredIndices < (newMaxIndices * s_BatchGrowThresholdPercent) / 100;
+            const bool fitIndices = batch.indicesPerObject == 0 || requiredIndices < (newMaxIndices * s_BatchGrowThresholdPercent) / 100;
 
             if (fitVertices && fitIndices)
                 break;
@@ -206,8 +203,7 @@ namespace ignite
             return;
 
         const bool lowVertexUsage = usedVertices < (batch.maxVertices * s_BatchShrinkThresholdPercent) / 100;
-        const bool lowIndexUsage = batch.indicesPerObject == 0
-            || usedIndices < (batch.maxIndices * s_BatchShrinkThresholdPercent) / 100;
+        const bool lowIndexUsage = batch.indicesPerObject == 0 || usedIndices < (batch.maxIndices * s_BatchShrinkThresholdPercent) / 100;
 
         if (lowVertexUsage && lowIndexUsage)
         {
@@ -810,8 +806,12 @@ namespace ignite
         size_t vertAllocSize = m_QuadBatch.maxVertices * sizeof(Vertex2DQuad);
         m_QuadBatch.vertexBufferBase = new Vertex2DQuad[m_QuadBatch.maxVertices];
 
+        size_t indicesAllocSize = m_QuadBatch.maxIndices * sizeof(uint32_t);
         m_QuadBatch.vertexBuffer = VertexBuffer::Create(vertAllocSize);
-        m_QuadBatch.indexBuffer = IndexBuffer::Create(m_QuadBatch.maxIndices * sizeof(uint32_t));
+        m_QuadBatch.indexBuffer = IndexBuffer::Create(indicesAllocSize);
+
+        Renderer::Stats.quadVerticesSize += vertAllocSize;
+        Renderer::Stats.quadIndicesSize += indicesAllocSize;
 
         // create texture
         m_QuadBatch.textureSlots.resize(MAX_TEXTURE_BATCH_COUNT);
@@ -859,6 +859,8 @@ namespace ignite
         size_t vertAllocSize = m_LineBatch.maxVertices * sizeof(Vertex2DLine);
         m_LineBatch.vertexBufferBase = new Vertex2DLine[m_LineBatch.maxVertices];
         m_LineBatch.vertexBuffer = VertexBuffer::Create(vertAllocSize);
+
+        Renderer::Stats.lineVerticesSize += vertAllocSize;
     }
 
     void Renderer2D::InitCircleData()
@@ -873,7 +875,12 @@ namespace ignite
         size_t vertAllocSize = m_CircleBatch.maxVertices * sizeof(Vertex2DCircle);
         m_CircleBatch.vertexBufferBase = new Vertex2DCircle[m_CircleBatch.maxVertices];
         m_CircleBatch.vertexBuffer = VertexBuffer::Create(vertAllocSize);
-        m_CircleBatch.indexBuffer = IndexBuffer::Create(m_CircleBatch.maxIndices * sizeof(uint32_t));
+
+        size_t indicesAllocSize = m_CircleBatch.maxIndices * sizeof(uint32_t);
+        m_CircleBatch.indexBuffer = IndexBuffer::Create(indicesAllocSize);
+
+        Renderer::Stats.circleVerticesSize += vertAllocSize;
+        Renderer::Stats.circleIndicesSize += indicesAllocSize;
 
         std::vector<uint32_t> indices(m_CircleBatch.maxIndices);
 
@@ -911,9 +918,14 @@ namespace ignite
         size_t vertAllocSize = m_TextBatch.maxVertices * sizeof(VertexText);
         m_TextBatch.vertexBufferBase = new VertexText[m_TextBatch.maxVertices];
         m_TextBatch.vertexBuffer = VertexBuffer::Create(vertAllocSize);
-        m_TextBatch.indexBuffer = IndexBuffer::Create(m_TextBatch.maxIndices * sizeof(uint32_t));
+
+        size_t indicesAllocSize = m_TextBatch.maxIndices * sizeof(uint32_t);
+        m_TextBatch.indexBuffer = IndexBuffer::Create(indicesAllocSize);
         m_TextBatch.textureSlots.resize(MAX_TEXTURE_BATCH_COUNT);
         m_TextBatch.textureSlots[0] = Renderer::GetWhiteTexture();
+
+        Renderer::Stats.textVerticesSize += vertAllocSize;
+        Renderer::Stats.textIndicesSize += indicesAllocSize;
 
 		std::vector<uint32_t> indices(m_TextBatch.maxIndices);
 
@@ -995,6 +1007,8 @@ namespace ignite
             const size_t bufferSize = reinterpret_cast<uint8_t *>(m_LineBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_LineBatch.vertexBufferBase);
             m_LineBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_LineBatch.vertexBufferBase, bufferSize));
 
+            Renderer::Stats.lineVerticesSize += bufferSize;
+
             Ref<GraphicsPipeline> gp = GetLinePipelineForFB(framebuffer);
             nvrhi::BindingSetHandle bindingSet = GetLineBindingSet(gp->GetBindingLayout(0), cameraBuffer);
 
@@ -1017,6 +1031,8 @@ namespace ignite
         {
             const size_t bufferSize = reinterpret_cast<uint8_t *>(m_CircleBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_CircleBatch.vertexBufferBase);
             m_CircleBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_CircleBatch.vertexBufferBase, bufferSize));
+
+            Renderer::Stats.circleVerticesSize += bufferSize;
 
             Ref<GraphicsPipeline> gp = GetCirclePipelineForFB(framebuffer, m_FillMode);
             nvrhi::BindingSetHandle bindingSet = GetCircleBindingSet(gp->GetBindingLayout(0), cameraBuffer);
@@ -1042,6 +1058,8 @@ namespace ignite
             const size_t bufferSize = reinterpret_cast<uint8_t *>(m_QuadBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_QuadBatch.vertexBufferBase);
             m_QuadBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_QuadBatch.vertexBufferBase, bufferSize));
 
+            Renderer::Stats.quadVerticesSize += bufferSize;
+
             Ref<GraphicsPipeline> gp = GetQuadPipelineForFB(framebuffer, m_FillMode);
             nvrhi::BindingSetHandle bindingSet = GetQuadBindingSet(gp->GetBindingLayout(0), m_QuadBatch.textureSlots, cameraBuffer, m_Material2DLightingBuffer);
 
@@ -1065,6 +1083,8 @@ namespace ignite
         {
             const size_t bufferSize = reinterpret_cast<uint8_t *>(m_TextBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_TextBatch.vertexBufferBase);
             m_TextBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_TextBatch.vertexBufferBase, bufferSize));
+
+            Renderer::Stats.textVerticesSize += bufferSize;
 
             Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode);
             nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_TextBatch.textureSlots, cameraBuffer, m_Material2DLightingBuffer);
@@ -1161,6 +1181,7 @@ namespace ignite
         }
 
         m_LineBatch.count++;
+        Renderer::Stats.lineCount++;
     }
 
     void Renderer2D::DrawRect(const glm::mat4 &transform, const glm::vec4 &color)
@@ -1190,6 +1211,7 @@ namespace ignite
         }
 
         m_LineBatch.count++;
+        Renderer::Stats.lineCount++;
     }
 
     void Renderer2D::DrawLine(const std::vector<glm::vec3> &positions, const glm::vec4 &color)
@@ -1208,6 +1230,7 @@ namespace ignite
         }
 
         m_LineBatch.count++;
+        Renderer::Stats.lineCount++;
     }
 
     void Renderer2D::DrawLine(const glm::vec3 &pos0, const glm::vec3 &pos1, const glm::vec4 &color)
@@ -1226,6 +1249,7 @@ namespace ignite
 
         m_LineBatch.indexCount += 2;
         m_LineBatch.count++;
+        Renderer::Stats.lineCount++;
     }
 
     void Renderer2D::DrawAABB(const AABB &aabb, const glm::vec4 &color)
@@ -1273,6 +1297,7 @@ namespace ignite
 
 		m_CircleBatch.indexCount += 6;
 		m_CircleBatch.count++;
+        Renderer::Stats.quadCount++;
 	}
 
     void Renderer2D::DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor, uint32_t objectID)
@@ -1315,6 +1340,7 @@ namespace ignite
 
         m_QuadBatch.indexCount += 6;
         m_QuadBatch.count++;
+        Renderer::Stats.quadCount++;
     }
 
     void Renderer2D::DrawQuad(const glm::vec3 &position, const glm::vec2 &size, f32 rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1, const glm::vec2 &tilingFactor, uint32_t objectID)
@@ -1368,6 +1394,7 @@ namespace ignite
 
         m_QuadBatch.indexCount += 6;
         m_QuadBatch.count++;
+        Renderer::Stats.quadCount++;
     }
 
 	void Renderer2D::SetPointLights2D(const std::vector<PointLight2D_GPUData> &pointLights)
@@ -1384,6 +1411,8 @@ namespace ignite
         }
 
         m_Material2DLightingDirty = true;
+        Renderer::Stats.pointLight2dCount++;
+
     }
 
 	void Renderer2D::DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing, uint32_t objectID)
@@ -1509,6 +1538,7 @@ namespace ignite
 
                 m_TextBatch.indexCount += 6;
                 m_TextBatch.count++;
+                Renderer::Stats.textCount++;
             }
 
             if (i < str.size() - 1)

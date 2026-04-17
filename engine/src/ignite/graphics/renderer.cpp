@@ -38,6 +38,7 @@
 namespace ignite
 {
     Renderer *s_instance = nullptr;
+    RendererStats Renderer::Stats;
 
     Renderer::Renderer(DeviceManager *deviceManager, nvrhi::GraphicsAPI api)
     {
@@ -89,6 +90,15 @@ namespace ignite
         m_BlackTexture.reset();
     }
 
+    void Renderer::BeginStats()
+    {
+        Stats.quadCount = 0;
+        Stats.lineCount = 0;
+        Stats.circleCount = 0;
+        Stats.textCount = 0;
+        Stats.pointLight2dCount = 0;
+    }
+
     nvrhi::GraphicsAPI Renderer::GetGraphicsAPI()
     {
         return s_instance->m_GraphicsAPI;
@@ -107,7 +117,7 @@ namespace ignite
         return s_instance->m_DxcInstance;
     }
 
-	Ref<Texture> Renderer::GetWhiteTexture()
+    Ref<Texture> Renderer::GetWhiteTexture()
     {
         return s_instance->m_WhiteTexture;
     }

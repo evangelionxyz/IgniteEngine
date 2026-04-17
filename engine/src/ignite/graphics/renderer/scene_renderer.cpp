@@ -301,7 +301,6 @@ namespace ignite
 
         LOG_INFO("[Composite] Created new pipeline with forced shader recompilation");
 
-        s_CompositePSOCache.clear();
         s_CompositePSOCache.emplace(key, gp);
 
         return gp;
@@ -316,10 +315,14 @@ namespace ignite
         nvrhi::ITexture *bloomTex = nullptr;
         nvrhi::ITexture *ssaoTex = nullptr;
         nvrhi::IBuffer *postProcessBuffer = nullptr;
+        nvrhi::ISampler *sampler = nullptr;
+
         bool operator==(const CompositeBindingKey &other) const noexcept
         {
-            return layout == other.layout && sceneTex == other.sceneTex && uiTex == other.uiTex
-                && edgeTex == other.edgeTex && bloomTex == other.bloomTex && ssaoTex == other.ssaoTex && postProcessBuffer == other.postProcessBuffer;
+            return layout == other.layout && sceneTex == other.sceneTex
+                && uiTex == other.uiTex && edgeTex == other.edgeTex && bloomTex == other.bloomTex
+                && ssaoTex == other.ssaoTex && postProcessBuffer == other.postProcessBuffer
+                && sampler == other.sampler;
         }
     };
 
@@ -333,7 +336,6 @@ namespace ignite
             h ^= (std::hash<const void *>{}(k.edgeTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
             h ^= (std::hash<const void *>{}(k.bloomTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
             h ^= (std::hash<const void *>{}(k.ssaoTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
-            h ^= (std::hash<const void *>{}(k.postProcessBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
             return h;
         }
     };
@@ -342,12 +344,23 @@ namespace ignite
 
     static nvrhi::BindingSetHandle GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout,
         Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture,
-        Ref<ConstantBuffer> postProcessBuffer, nvrhi::SamplerHandle sampler)
+        Ref<ConstantBuffer> postProcessBuffer, nvrhi::ISampler *sampler)
     {
         Ref<Texture> edge = edgeTexture ? edgeTexture : Renderer::GetBlackTexture();
         Ref<Texture> bloom = bloomTexture ? bloomTexture : Renderer::GetBlackTexture();
         Ref<Texture> ssao = ssaoTexture ? ssaoTexture : Renderer::GetWhiteTexture();
-        CompositeBindingKey key { bindingLayout, sceneTexture->GetHandle(), uiTexture->GetHandle(), edge->GetHandle(), bloom->GetHandle(), ssao->GetHandle(), postProcessBuffer ? postProcessBuffer->GetHandle() : nullptr };
+        CompositeBindingKey key
+        { 
+            bindingLayout,
+            sceneTexture->GetHandle(),
+            uiTexture->GetHandle(),
+            edge->GetHandle(),
+            bloom->GetHandle(),
+            ssao->GetHandle(),
+            postProcessBuffer->GetHandle(),
+            sampler
+        };
+        
         auto it = s_CompositeBindingSetCache.find(key);
         if (it != s_CompositeBindingSetCache.end())
         {
@@ -355,6 +368,7 @@ namespace ignite
         }
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
         // Composite Binding set
         auto bindingSetDesc = nvrhi::BindingSetDesc();
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, sceneTexture->GetHandle()));
@@ -367,35 +381,18 @@ namespace ignite
 
         nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
         LOG_ASSERT(bindingSet, "[Composite] Failed to create Composite Binding Set");
-        if (bindingSet)
-        {
-            s_CompositeBindingSetCache.emplace(key, bindingSet);
-        }
+
+        s_CompositeBindingSetCache.emplace(key, bindingSet);
 
         return bindingSet;
     }
 
-    struct CSMBindingKey
-    {
-        nvrhi::IBindingLayout *layout = nullptr;
-        bool operator==(const CSMBindingKey &other) const noexcept { return layout == other.layout; }
-    };
+    static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_CSMBindingSetCache;
 
-    struct CSMBindingKeyHash
+    static nvrhi::BindingSetHandle GetOrCreateCSMBindingSet(nvrhi::IBindingLayout *bindingLayout,
+        Ref<ConstantBuffer> skinnedMeshGPUDataBuffer, Ref<ConstantBuffer> csmGPUDataBuffer)
     {
-        size_t operator()(const CSMBindingKey &k) const noexcept
-        {
-            size_t h = std::hash<const void *>{}(k.layout);
-            return h;
-        }
-    };
-
-    static std::unordered_map<CSMBindingKey, nvrhi::BindingSetHandle, CSMBindingKeyHash> s_CSMBindingSetCache;
-
-    static nvrhi::BindingSetHandle GetOrCreateCSMBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<ConstantBuffer> skinnedMeshGPUDataBuffer, Ref<ConstantBuffer> csmGPUDataBuffer)
-    {
-        CSMBindingKey key{ bindingLayout };
-        auto it = s_CSMBindingSetCache.find(key);
+        auto it = s_CSMBindingSetCache.find(bindingLayout);
         if (it != s_CSMBindingSetCache.end())
         {
             return it->second;
@@ -412,7 +409,7 @@ namespace ignite
         LOG_ASSERT(bindingSet, "[Composite] Failed to create Composite Binding Set");
         if (bindingSet)
         {
-            s_CSMBindingSetCache.emplace(key, bindingSet);
+            s_CSMBindingSetCache.emplace(bindingLayout, bindingSet);
         }
 
         return bindingSet;
@@ -894,27 +891,27 @@ namespace ignite
             }
 
             Ref<Texture> bloomTexture = nullptr;
-            if (m_Bloom && camera && postProcessing.enableBloom)
+            if (m_EditorBloom && camera && postProcessing.enableBloom)
             {
-                m_Bloom->settings.intensity = postProcessing.bloomIntensity;
-                m_Bloom->settings.knee = postProcessing.bloomKnee;
-                m_Bloom->settings.radius = postProcessing.bloomRadius;
-                m_Bloom->settings.threshold = postProcessing.bloomThreshold;
-                m_Bloom->settings.iterations = postProcessing.bloomIterations;
+                m_EditorBloom->settings.intensity = postProcessing.bloomIntensity;
+                m_EditorBloom->settings.knee = postProcessing.bloomKnee;
+                m_EditorBloom->settings.radius = postProcessing.bloomRadius;
+                m_EditorBloom->settings.threshold = postProcessing.bloomThreshold;
+                m_EditorBloom->settings.iterations = postProcessing.bloomIterations;
 
                 IGN_PROFILE_SCOPE("SceneRenderer::BloomPass");
-                m_Bloom->Resize(m_SceneRT->GetWidth(), m_SceneRT->GetHeight());
-                m_Bloom->Build(cmd, m_SceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
-                bloomTexture = m_Bloom->GetBloomTexture();
+                m_EditorBloom->Resize(m_SceneRT->GetWidth(), m_SceneRT->GetHeight());
+                m_EditorBloom->Build(cmd, m_SceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
+                bloomTexture = m_EditorBloom->GetBloomTexture();
             }
 
             Ref<Texture> ssaoTexture = nullptr;
-            if (m_SSAO && camera && postProcessing.enableSSAO)
+            if (m_EditorSSAO && camera && postProcessing.enableSSAO)
             {
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::SSAOPass", 0x404040FF);
-                m_SSAO->Resize(m_SceneRT->GetWidth(), m_SceneRT->GetHeight());
-                m_SSAO->Build(cmd, m_SceneRT->GetDepthAttachment(), camera, postProcessing, m_CompositeVertexBuffer);
-                ssaoTexture = m_SSAO->GetAOTexture();
+                m_EditorSSAO->Resize(m_SceneRT->GetWidth(), m_SceneRT->GetHeight());
+                m_EditorSSAO->Build(cmd, m_SceneRT->GetDepthAttachment(), camera, postProcessing, m_CompositeVertexBuffer);
+                ssaoTexture = m_EditorSSAO->GetAOTexture();
             }
 
             {
@@ -1058,27 +1055,27 @@ namespace ignite
             }
 
             Ref<Texture> bloomTexture = nullptr;
-            if (m_Bloom && camera && camera->postProcessing.enableBloom)
+            if (m_GameplayBloom && camera && camera->postProcessing.enableBloom)
             {
-                m_Bloom->settings.intensity = camera->postProcessing.bloomIntensity;
-                m_Bloom->settings.knee = camera->postProcessing.bloomKnee;
-                m_Bloom->settings.radius = camera->postProcessing.bloomRadius;
-                m_Bloom->settings.threshold = camera->postProcessing.bloomThreshold;
-                m_Bloom->settings.iterations = camera->postProcessing.bloomIterations;
+                m_GameplayBloom->settings.intensity = camera->postProcessing.bloomIntensity;
+                m_GameplayBloom->settings.knee = camera->postProcessing.bloomKnee;
+                m_GameplayBloom->settings.radius = camera->postProcessing.bloomRadius;
+                m_GameplayBloom->settings.threshold = camera->postProcessing.bloomThreshold;
+                m_GameplayBloom->settings.iterations = camera->postProcessing.bloomIterations;
 
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::BloomPass", 0xFA0010FF);
-                m_Bloom->Resize(m_GameplaySceneRT->GetWidth(), m_GameplaySceneRT->GetHeight());
-                m_Bloom->Build(cmd, m_GameplaySceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
-                bloomTexture = m_Bloom->GetBloomTexture();
+                m_GameplayBloom->Resize(m_GameplaySceneRT->GetWidth(), m_GameplaySceneRT->GetHeight());
+                m_GameplayBloom->Build(cmd, m_GameplaySceneRT->GetColorAttachment(0), m_CompositeVertexBuffer);
+                bloomTexture = m_GameplayBloom->GetBloomTexture();
             }
 
             Ref<Texture> ssaoTexture = nullptr;
-            if (m_SSAO && camera && camera->postProcessing.enableSSAO)
+            if (m_GameplaySSAO && camera && camera->postProcessing.enableSSAO)
             {
                 IGN_PROFILE_SCOPE_COLOR("SceneRenderer::SSAOPass", 0x404040FF);
-                m_SSAO->Resize(m_GameplaySceneRT->GetWidth(), m_GameplaySceneRT->GetHeight());
-                m_SSAO->Build(cmd, m_GameplaySceneRT->GetDepthAttachment(), camera, camera->postProcessing, m_CompositeVertexBuffer);
-                ssaoTexture = m_SSAO->GetAOTexture();
+                m_GameplaySSAO->Resize(m_GameplaySceneRT->GetWidth(), m_GameplaySceneRT->GetHeight());
+                m_GameplaySSAO->Build(cmd, m_GameplaySceneRT->GetDepthAttachment(), camera, camera->postProcessing, m_CompositeVertexBuffer);
+                ssaoTexture = m_GameplaySSAO->GetAOTexture();
             }
 
             {
@@ -1897,8 +1894,9 @@ namespace ignite
         m_CompositePostProcessBuffer->SetData(cmd, Buffer(&postProcessData, sizeof(postProcessData)));
 
         Ref<GraphicsPipeline> compositePipeline = GetCompositePipelineForFB(framebuffer, nvrhi::RasterFillMode::Solid);
-        nvrhi::BindingSetHandle bindingSet = GetOrCreateCompositeBindingSet(compositePipeline->GetBindingLayout(0), sceneTexture, uiTexture,
-            edgeTexture, bloomTexture, ssaoTexture, m_CompositePostProcessBuffer, m_CompositeSampler);
+        nvrhi::BindingSetHandle bindingSet = GetOrCreateCompositeBindingSet(compositePipeline->GetBindingLayout(0),
+            sceneTexture, uiTexture, edgeTexture, bloomTexture, ssaoTexture,
+            m_CompositePostProcessBuffer, m_CompositeSampler.Get());
 
         auto graphicsState = nvrhi::GraphicsState();
         graphicsState.pipeline = compositePipeline->GetHandle();

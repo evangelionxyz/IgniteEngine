@@ -80,8 +80,12 @@ namespace ignite
 
         Ref<Renderer2D> m_Renderer2D;
         Ref<EdgeDetection> m_EdgeDetection;
-        Ref<Bloom> m_Bloom;
-        Ref<SSAO> m_SSAO;
+        Ref<Bloom> m_EditorBloom;
+        Ref<SSAO> m_EditorSSAO;
+
+        Ref<Bloom> m_GameplayBloom;
+        Ref<SSAO> m_GameplaySSAO;
+        
         Ref<ConstantBuffer> m_CompositePostProcessBuffer;
         Ref<ConstantBuffer> m_CascadedShadowMapBuffer;
         Ref<ConstantBuffer> m_SceneBuffer;

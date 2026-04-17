@@ -53,8 +53,8 @@ namespace ignite
 
         const glm::vec2 &GetViewportMousePos() const { return m_ViewportData.mousePos; }
 
-        const glm::vec2 &GetEditorViewportSize() const { return m_Data.sceneEditorViewportRect.GetSize(); }
-        const glm::vec2 &GetGameplayViewportSize() const { return m_Data.sceneGameplayViewportRect.GetSize(); }
+        const glm::vec2 GetEditorViewportSize() const { return m_Data.sceneEditorViewportRect.GetSize(); }
+        const glm::vec2 GetGameplayViewportSize() const { return m_Data.sceneGameplayViewportRect.GetSize(); }
 
         void RenderHierarchy();
         Entity ShowEntityContextMenu();

@@ -228,6 +228,10 @@ namespace ignite
                 }
             }
 
+            // Record statistics
+            Renderer::BeginStats();
+
+
             // Render layers
             {
                 IGN_PROFILE_SCOPE("RenderThread::LayerRender");
