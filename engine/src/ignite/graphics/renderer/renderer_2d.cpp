@@ -29,10 +29,54 @@ namespace ignite
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_CirclePSOCache;
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_TextPSOCache;
 
-    static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_QuadBindingSetCache;
-    static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_LineBindingSetCache;
-    static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_CircleBindingSetCache;
-    static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_TextBindingSetCache;
+    struct CameraBindingKey
+    {
+        nvrhi::IBindingLayout *layout = nullptr;
+        nvrhi::IBuffer *cameraBuffer = nullptr;
+
+        bool operator==(const CameraBindingKey &other) const noexcept
+        {
+            return layout == other.layout && cameraBuffer == other.cameraBuffer;
+        }
+    };
+
+    struct CameraBindingKeyHash
+    {
+        size_t operator()(const CameraBindingKey &k) const noexcept
+        {
+            size_t h = std::hash<const void *>{}(k.layout);
+            h ^= (std::hash<const void *>{}(k.cameraBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+            return h;
+        }
+    };
+
+    struct CameraLightingBindingKey
+    {
+        nvrhi::IBindingLayout *layout = nullptr;
+        nvrhi::IBuffer *cameraBuffer = nullptr;
+        nvrhi::IBuffer *lightingBuffer = nullptr;
+
+        bool operator==(const CameraLightingBindingKey &other) const noexcept
+        {
+            return layout == other.layout && cameraBuffer == other.cameraBuffer && lightingBuffer == other.lightingBuffer;
+        }
+    };
+
+    struct CameraLightingBindingKeyHash
+    {
+        size_t operator()(const CameraLightingBindingKey &k) const noexcept
+        {
+            size_t h = std::hash<const void *>{}(k.layout);
+            h ^= (std::hash<const void *>{}(k.cameraBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+            h ^= (std::hash<const void *>{}(k.lightingBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+            return h;
+        }
+    };
+
+    static std::unordered_map<CameraLightingBindingKey, nvrhi::BindingSetHandle, CameraLightingBindingKeyHash> s_QuadBindingSetCache;
+    static std::unordered_map<CameraBindingKey, nvrhi::BindingSetHandle, CameraBindingKeyHash> s_LineBindingSetCache;
+    static std::unordered_map<CameraBindingKey, nvrhi::BindingSetHandle, CameraBindingKeyHash> s_CircleBindingSetCache;
+    static std::unordered_map<CameraLightingBindingKey, nvrhi::BindingSetHandle, CameraLightingBindingKeyHash> s_TextBindingSetCache;
 
     static constexpr uint32_t s_BatchGrowThresholdPercent = 90;
     static constexpr uint32_t s_BatchShrinkThresholdPercent = 30;
@@ -351,131 +395,6 @@ namespace ignite
         return gp;
     }
 
-    static nvrhi::BindingSetHandle GetQuadBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &lightingBuffer)
-    {
-        IGN_PROFILE_FUNCTION();
-
-        auto it = s_QuadBindingSetCache.find(bindingLayout);
-        if (it != s_QuadBindingSetCache.end())
-            return it->second;
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-        nvrhi::SamplerHandle sampler;
-        Ref<Texture> whiteTexture = Renderer::GetWhiteTexture();
-        for (uint8_t i = 1; i < MAX_TEXTURE_BATCH_COUNT; ++i)
-        {
-            if (i >= textures.size())
-                break;
-
-            Ref<Texture> tex = textures[i];
-            if (tex && tex.get() != whiteTexture.get() && tex->GetSampler())
-            {
-                sampler = tex->GetSampler();
-                break;
-            }
-        }
-
-        if (!sampler)
-        {
-            Ref<Texture> fallback = Renderer::GetWhiteTexture();
-            sampler = fallback ? fallback->GetSampler() : nullptr;
-        }
-
-        nvrhi::BindingSetDesc bindingSetDesc;
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, lightingBuffer->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
-        for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
-        {
-            Ref<Texture> tex = textures[i];
-            if (!tex)
-                tex = Renderer::GetWhiteTexture();
-            bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(i, tex->GetHandle()));
-        }
-
-        nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
-        LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
-
-        s_QuadBindingSetCache.emplace(bindingLayout, bindingSet);
-
-        return bindingSet;
-    }
-
-	static nvrhi::BindingSetHandle GetTextBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &lightingBuffer)
-	{
-        IGN_PROFILE_FUNCTION();
-
-        auto it = s_TextBindingSetCache.find(bindingLayout);
-        if (it != s_TextBindingSetCache.end())
-			return it->second;
-
-		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-       nvrhi::SamplerHandle sampler;
-        Ref<Texture> whiteTexture = Renderer::GetWhiteTexture();
-        for (uint8_t i = 1; i < MAX_TEXTURE_BATCH_COUNT; ++i)
-        {
-            if (i >= textures.size())
-                break;
-
-            Ref<Texture> tex = textures[i];
-           if (tex && tex.get() != whiteTexture.get() && tex->GetSampler())
-            {
-                sampler = tex->GetSampler();
-                break;
-            }
-        }
-
-        if (!sampler)
-        {
-            Ref<Texture> fallback = Renderer::GetWhiteTexture();
-            sampler = fallback ? fallback->GetSampler() : nullptr;
-        }
-
-		nvrhi::BindingSetDesc bindingSetDesc;
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, lightingBuffer->GetHandle()));
-		bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
-		for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
-		{
-			Ref<Texture> tex = textures[i];
-			if (!tex)
-				tex = Renderer::GetWhiteTexture();
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(i, tex->GetHandle()));
-		}
-
-		nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
-		LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
-
-       s_TextBindingSetCache.emplace(bindingLayout, bindingSet);
-
-		return bindingSet;
-	}
-
-    static nvrhi::BindingSetHandle GetLineBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer)
-    {
-        IGN_PROFILE_FUNCTION();
-
-        auto it = s_LineBindingSetCache.find(bindingLayout);
-        if (it != s_LineBindingSetCache.end())
-            return it->second;
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-        // create binding set
-        nvrhi::BindingSetDesc bindingSetDesc;
-        // add constant buffer
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
-
-        nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
-        LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
-
-        s_LineBindingSetCache.emplace(bindingLayout, bindingSet);
-
-        return bindingSet;
-    }
-
     static Ref<GraphicsPipeline> GetCirclePipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
     {
         IGN_PROFILE_FUNCTION();
@@ -521,11 +440,140 @@ namespace ignite
         return gp;
     }
 
+    static nvrhi::BindingSetHandle GetQuadBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &lightingBuffer)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        CameraLightingBindingKey key{ bindingLayout, cameraBuffer ? cameraBuffer->GetHandle() : nullptr, lightingBuffer ? lightingBuffer->GetHandle() : nullptr };
+        auto it = s_QuadBindingSetCache.find(key);
+        if (it != s_QuadBindingSetCache.end())
+            return it->second;
+
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+        nvrhi::SamplerHandle sampler;
+        Ref<Texture> whiteTexture = Renderer::GetWhiteTexture();
+        for (uint8_t i = 1; i < MAX_TEXTURE_BATCH_COUNT; ++i)
+        {
+            if (i >= textures.size())
+                break;
+
+            Ref<Texture> tex = textures[i];
+            if (tex && tex.get() != whiteTexture.get() && tex->GetSampler())
+            {
+                sampler = tex->GetSampler();
+                break;
+            }
+        }
+
+        if (!sampler)
+        {
+            Ref<Texture> fallback = Renderer::GetWhiteTexture();
+            sampler = fallback ? fallback->GetSampler() : nullptr;
+        }
+
+        nvrhi::BindingSetDesc bindingSetDesc;
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, lightingBuffer->GetHandle()));
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
+        for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
+        {
+            Ref<Texture> tex = textures[i];
+            if (!tex)
+                tex = Renderer::GetWhiteTexture();
+            bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(i, tex->GetHandle()));
+        }
+
+        nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
+        LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
+
+        s_QuadBindingSetCache.emplace(key, bindingSet);
+
+        return bindingSet;
+    }
+
+	static nvrhi::BindingSetHandle GetTextBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &lightingBuffer)
+	{
+        IGN_PROFILE_FUNCTION();
+
+        CameraLightingBindingKey key{ bindingLayout, cameraBuffer ? cameraBuffer->GetHandle() : nullptr, lightingBuffer ? lightingBuffer->GetHandle() : nullptr };
+        auto it = s_TextBindingSetCache.find(key);
+        if (it != s_TextBindingSetCache.end())
+			return it->second;
+
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+       nvrhi::SamplerHandle sampler;
+        Ref<Texture> whiteTexture = Renderer::GetWhiteTexture();
+        for (uint8_t i = 1; i < MAX_TEXTURE_BATCH_COUNT; ++i)
+        {
+            if (i >= textures.size())
+                break;
+
+            Ref<Texture> tex = textures[i];
+           if (tex && tex.get() != whiteTexture.get() && tex->GetSampler())
+            {
+                sampler = tex->GetSampler();
+                break;
+            }
+        }
+
+        if (!sampler)
+        {
+            Ref<Texture> fallback = Renderer::GetWhiteTexture();
+            sampler = fallback ? fallback->GetSampler() : nullptr;
+        }
+
+		nvrhi::BindingSetDesc bindingSetDesc;
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, lightingBuffer->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
+		for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
+		{
+			Ref<Texture> tex = textures[i];
+			if (!tex)
+				tex = Renderer::GetWhiteTexture();
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(i, tex->GetHandle()));
+		}
+
+		nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
+		LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
+
+        s_TextBindingSetCache.emplace(key, bindingSet);
+
+		return bindingSet;
+	}
+
+    static nvrhi::BindingSetHandle GetLineBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        CameraBindingKey key{ bindingLayout, cameraBuffer ? cameraBuffer->GetHandle() : nullptr };
+        auto it = s_LineBindingSetCache.find(key);
+        if (it != s_LineBindingSetCache.end())
+            return it->second;
+
+        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+        // create binding set
+        nvrhi::BindingSetDesc bindingSetDesc;
+        // add constant buffer
+        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
+
+        nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
+        LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
+
+        s_LineBindingSetCache.emplace(key, bindingSet);
+
+        return bindingSet;
+    }
+
     static nvrhi::BindingSetHandle GetCircleBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer)
     {
         IGN_PROFILE_FUNCTION();
 
-        auto it = s_CircleBindingSetCache.find(bindingLayout);
+        CameraBindingKey key{ bindingLayout, cameraBuffer ? cameraBuffer->GetHandle() : nullptr };
+        auto it = s_CircleBindingSetCache.find(key);
         if (it != s_CircleBindingSetCache.end())
             return it->second;
 
@@ -537,7 +585,7 @@ namespace ignite
         nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
         LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
 
-        s_CircleBindingSetCache.emplace(bindingLayout, bindingSet);
+        s_CircleBindingSetCache.emplace(key, bindingSet);
 
         return bindingSet;
     }
@@ -1477,7 +1525,6 @@ namespace ignite
 
             maxX = glm::max(maxX, x);
             minY = glm::min(minY, y);
-        
         }
 	}
 

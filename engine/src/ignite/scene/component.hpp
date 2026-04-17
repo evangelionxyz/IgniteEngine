@@ -50,6 +50,7 @@ namespace ignite
         { "Mesh", CompType_Mesh },
         { "Rigid Body", CompType_Rigidbody },
         { "Box Collider", CompType_BoxCollider },
+        { "Widget", CompType_Widget },
         { "Sphere Collider", CompType_SphereCollider },
         { "Capsule Collider", CompType_CapsuleCollider },
         { "Mesh Collider", CompType_MeshCollider },
@@ -166,6 +167,7 @@ namespace ignite
             case CompType_Script: return "CompType_Script";
             case CompType_ID: return "CompType_ID";
             case CompType_Transform: return "CompType_Transform";
+            case CompType_Widget: return "CompType_Widget";
             case CompType_Invalid:
             default: return "Invalid Component";
         }

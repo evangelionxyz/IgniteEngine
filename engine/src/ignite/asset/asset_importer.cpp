@@ -26,6 +26,7 @@
 
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/sprite_sheet.hpp"
+#include "ignite/graphics/ui/widget.hpp"
 #include "ignite/graphics/font.hpp"
 
 #include <mutex>
@@ -45,6 +46,7 @@ namespace ignite
         { AssetType::Material2D, AssetImporter::ImportMaterial2D },
         { AssetType::SpriteSheet, AssetImporter::ImportSpriteSheet },
         { AssetType::Font, AssetImporter::ImportFont },
+        { AssetType::Widget, AssetImporter::ImportWidget },
         { AssetType::Skeleton, AssetImporter::ImportSkeleton },
         { AssetType::SkeletalAnimation, AssetImporter::ImportSkeletalAnimation },
         { AssetType::AnimationMontage, AssetImporter::ImportAnimationMontage },
@@ -147,6 +149,25 @@ namespace ignite
         }
 
         return font;
+    }
+
+    Ref<Widget> AssetImporter::ImportWidget(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
+    {
+        if (!std::filesystem::exists(metadata.filepath))
+        {
+            LOG_ERROR("File does not exists {0}", metadata.filepath.generic_string());
+            return nullptr;
+        }
+
+        Ref<Widget> widget = Widget::Deserialize(metadata.filepath);
+        if (widget)
+        {
+            widget->handle = handle;
+            widget->SetDirtyFlag(false);
+            widget->SetReadyFlag(true);
+        }
+
+        return widget;
     }
 
     void AssetImporter::ImportAsync(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, std::function<void(Ref<Asset>, AssetHandle)> callback)

@@ -30,6 +30,7 @@ namespace ignite
     class AnimatorController2D;
     class Scene;
     class Font;
+    class Widget;
 
     struct PendingFileLoading
     {
@@ -80,6 +81,7 @@ namespace ignite
         static Ref<Material2D> ImportMaterial2D(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<SpriteSheet> ImportSpriteSheet(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<Font> ImportFont(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
+        static Ref<Widget> ImportWidget(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<Skeleton> ImportSkeleton(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<SkeletalAnimation> ImportSkeletalAnimation(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<AnimationMontage> ImportAnimationMontage(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);

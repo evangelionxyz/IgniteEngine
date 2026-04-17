@@ -485,6 +485,16 @@ namespace ignite
 					sr.EndMap();
 				}
 
+                if (entity.HasComponent<WidgetComponent>())
+                {
+                    const auto &comp = entity.GetComponent<WidgetComponent>();
+                    sr.BeginMap("WidgetComponent");
+                    {
+                        sr.AddKeyValue("WidgetHandle", static_cast<uint64_t>(comp.widgetHandle));
+                    }
+                    sr.EndMap();
+                }
+
                 // Script
                 if (entity.HasComponent<ScriptComponent>())
                 {
@@ -951,6 +961,15 @@ namespace ignite
                 if (node["ScreenSpace"])
                 {
                     comp.screenSpace = node["ScreenSpace"].as<bool>();
+                }
+            }
+
+            if (YAML::Node node = entityNode["WidgetComponent"])
+            {
+                auto &comp = desEntity.AddComponent<WidgetComponent>();
+                if (node["WidgetHandle"])
+                {
+                    comp.widgetHandle = AssetHandle(node["WidgetHandle"].as<uint64_t>());
                 }
             }
 

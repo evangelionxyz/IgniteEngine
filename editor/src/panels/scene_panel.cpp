@@ -15,6 +15,7 @@
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/font.hpp"
+#include "ignite/graphics/ui/widget.hpp"
 #include "ignite/math/math.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/script_field.hpp"
@@ -551,6 +552,39 @@ namespace ignite
                 }
 
             }, false); // false: not allowed to remove the component
+
+            RenderComponent<WidgetComponent>("Widget", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<WidgetComponent>();
+
+                const bool isWidgetLoaded = c.widgetHandle != AssetHandle(0);
+                std::string label = isWidgetLoaded ? assetManager->GetAssetDisplayName(c.widgetHandle) : "Drag Here";
+                UI::DrawButtonWithColumn("Widget", label.c_str(), nullptr, [&, this]()
+                {
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                        {
+                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                            if (m_EditorLayer->GetActiveProject()->GetAssetManager()->GetAssetType(handle) == AssetType::Widget)
+                            {
+                                c.widgetHandle = handle;
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+
+                    if (isWidgetLoaded)
+                    {
+                        ImGui::SameLine();
+                        if (ImGui::Button("X##ClearWidget"))
+                        {
+                            c.widgetHandle = AssetHandle(0);
+                        }
+                    }
+                });
+            });
 
             RenderComponent<WorldEnvironment>("World Environment", selectedEntity, [&]()
             {
@@ -1818,6 +1852,9 @@ namespace ignite
                     case CompType_Font:
                         entity.AddComponent<TextComponent>();
                         break;
+                    case CompType_Widget:
+                        entity.AddComponent<WidgetComponent>();
+                        break;
                     case CompType_Rigidbody2D:
                         entity.AddComponent<Rigidbody2DComponent>();
                         break;
@@ -1935,6 +1972,14 @@ namespace ignite
             // Mouse picking from viewport object-id attachment (on mouse down only)
             {
                 const bool imageHovered = ImGui::IsItemHovered();
+
+                if (auto sceneRenderer = m_EditorLayer->GetSceneRenderer(); sceneRenderer)
+                {
+                    const uint32_t localMouseX = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.x, 0.0f));
+                    const uint32_t localMouseY = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.y, 0.0f));
+                    sceneRenderer->SetEditorWidgetMousePosition(localMouseX, localMouseY, imageHovered);
+                }
+
                 const bool mouseDown = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
                 const bool mouseDoubleDown = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
 
@@ -2330,6 +2375,22 @@ namespace ignite
                         const bool imageHovered = ImGui::GetMousePos().x >= imagePos.x && ImGui::GetMousePos().x <= imagePos.x + imageSize.x &&
                             ImGui::GetMousePos().y >= imagePos.y && ImGui::GetMousePos().y <= imagePos.y + imageSize.y;
 
+                        if (auto sceneRenderer = m_EditorLayer->GetSceneRenderer(); sceneRenderer)
+                        {
+                            uint32_t localMouseX = 0;
+                            uint32_t localMouseY = 0;
+                            if (imageHovered)
+                            {
+                                const ImVec2 cursor = ImGui::GetMousePos();
+                                const float u = std::clamp((cursor.x - imagePos.x) / std::max(imageSize.x, 1.0f), 0.0f, 1.0f);
+                                const float v = std::clamp((cursor.y - imagePos.y) / std::max(imageSize.y, 1.0f), 0.0f, 1.0f);
+                                localMouseX = static_cast<uint32_t>(u * static_cast<float>(std::max(sceneRenderer->GetGameplayWidgetRT()->GetWidth(), 1u)));
+                                localMouseY = static_cast<uint32_t>(v * static_cast<float>(std::max(sceneRenderer->GetGameplayWidgetRT()->GetHeight(), 1u)));
+                            }
+
+                            sceneRenderer->SetGameplayWidgetMousePosition(localMouseX, localMouseY, imageHovered);
+                        }
+
                         if (ImGui::IsWindowFocused() && ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
                         {
                             const ImVec2 delta = ImGui::GetIO().MouseDelta;
@@ -2410,6 +2471,11 @@ namespace ignite
             }
 
             m_EditorCamera.SetNavigationMode(mode);
+
+            const auto w = static_cast<float>(m_Scene->GetViewportWidth());
+            const auto h = static_cast<float>(m_Scene->GetViewportHeight());
+            m_EditorCamera.UpdateView();
+            m_EditorCamera.UpdateProjection(w, h);
         }
 
         ImGui::SameLine();

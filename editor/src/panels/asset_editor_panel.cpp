@@ -543,35 +543,14 @@ namespace ignite
 
         for (auto &assetData : m_Assets)
         {
-            if (!assetData.sceneData.viewportVisible || !assetData.isOpen || (assetData.metadata.type != AssetType::Material && assetData.metadata.type != AssetType::Mesh && assetData.metadata.type != AssetType::Skeleton))
+            if (!assetData.sceneData.viewportVisible || !assetData.isOpen
+                || (assetData.metadata.type != AssetType::Material && assetData.metadata.type != AssetType::Mesh
+                    && assetData.metadata.type != AssetType::Skeleton && assetData.metadata.type != AssetType::Widget))
             {
                 continue;
             }
 
             if (!assetData.asset || !assetData.asset->IsReady())
-            {
-                continue;
-            }
-
-            Ref<Material> material = nullptr;
-            if (assetData.metadata.type == AssetType::Material)
-            {
-                material = assetData.asset->As<Material>();
-            }
-            else
-            {
-                if (!s_SkeletonPreviewMaterial)
-                {
-                    s_SkeletonPreviewMaterial = CreateRef<Material>();
-                    s_SkeletonPreviewMaterial->name = "SkeletonPreviewMaterial";
-                    s_SkeletonPreviewMaterial->SetDirtyFlag(false);
-                    s_SkeletonPreviewMaterial->SetReadyFlag(true);
-                }
-
-                material = s_SkeletonPreviewMaterial;
-            }
-
-            if (!material)
             {
                 continue;
             }
@@ -593,7 +572,43 @@ namespace ignite
             }
 
             sceneData.sceneRenderer->SetProject(m_EditorLayer->GetActiveProject().get());
-            sceneData.sceneRenderer->SetMaterial(material);
+
+            if (assetData.metadata.type == AssetType::Widget)
+            {
+                if (Ref<Widget> widget = assetData.asset->As<Widget>())
+                {
+                    sceneData.sceneRenderer->SetPreviewWidget(widget);
+                }
+            }
+            else
+            {
+                Ref<Material> material = nullptr;
+                if (assetData.metadata.type == AssetType::Material)
+                {
+                    material = assetData.asset->As<Material>();
+                }
+                else
+                {
+                    if (!s_SkeletonPreviewMaterial)
+                    {
+                        s_SkeletonPreviewMaterial = CreateRef<Material>();
+                        s_SkeletonPreviewMaterial->name = "SkeletonPreviewMaterial";
+                        s_SkeletonPreviewMaterial->SetDirtyFlag(false);
+                        s_SkeletonPreviewMaterial->SetReadyFlag(true);
+                    }
+
+                    material = s_SkeletonPreviewMaterial;
+                }
+
+                if (!material)
+                {
+                    continue;
+                }
+
+                sceneData.sceneRenderer->SetMaterial(material);
+                sceneData.sceneRenderer->SetPreviewWidget(nullptr);
+            }
+
             sceneData.sceneRenderer->BeginFrame();
             sceneData.sceneRenderer->Render(&sceneData.camera, sceneData.sceneRT, sceneData.uiRT, sceneData.compositeRT);
         }
@@ -659,6 +674,11 @@ namespace ignite
                 case AssetType::Material:
                 {
                     UIMaterialEditor(assetData);
+                    break;
+                }
+                case AssetType::Widget:
+                {
+                    UIWidgetEditor(assetData);
                     break;
                 }
                 default:
@@ -812,6 +832,11 @@ namespace ignite
             m_CreateRequest.asset = AnimatorController::Create();
         }
 
+        if (m_CreateRequest.type == AssetType::Widget && !m_CreateRequest.asset)
+        {
+            m_CreateRequest.asset = CreateRef<Widget>(nullptr);
+        }
+
         // Asset creation pop-up
         ImGui::OpenPopup("Create Asset");
         if (ImGui::BeginPopupModal("Create Asset", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
@@ -876,6 +901,21 @@ namespace ignite
                     if (asset)
                     {
                         asset->name = finalAssetName;
+                        created = asset->Serialize(fullAssetPath);
+                        if (created)
+                        {
+                            asset->SetDirtyFlag(false);
+                            asset->SetReadyFlag(true);
+                            createdAsset = asset;
+                        }
+                    }
+                }
+                else if (m_CreateRequest.type == AssetType::Widget)
+                {
+                    Ref<Widget> asset = createdAsset->As<Widget>();
+                    if (asset)
+                    {
+                        asset->SetName(finalAssetName);
                         created = asset->Serialize(fullAssetPath);
                         if (created)
                         {
@@ -1840,7 +1880,77 @@ namespace ignite
                 {
                     if (Ref<Widget> widget = assetData.asset->As<Widget>())
                     {
+                        EditorSceneData &sceneData = assetData.sceneData;
+
+                        const ImVec2 contentSize = ImGui::GetContentRegionAvail();
+                        const float splitterWidth = 6.0f;
+                        const float minPreviewColumnWidth = 260.0f;
+                        const float minToolsColumnWidth = 320.0f;
+                        const float maxPreviewColumnWidth = std::max(minPreviewColumnWidth, contentSize.x - minToolsColumnWidth - splitterWidth);
+
+                        static std::unordered_map<uint64_t, float> s_WidgetPreviewColumnWidth;
+                        float &previewColumnWidth = s_WidgetPreviewColumnWidth[static_cast<uint64_t>(assetData.handle)];
+                        if (previewColumnWidth <= 0.0f)
+                        {
+                            const float defaultToolsWidth = std::clamp(contentSize.x * 0.38f, 340.0f, 520.0f);
+                            previewColumnWidth = std::max(minPreviewColumnWidth, contentSize.x - defaultToolsWidth - splitterWidth);
+                        }
+                        previewColumnWidth = std::clamp(previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
+
+                        ImGui::BeginChild("##widget_preview_column", ImVec2(previewColumnWidth, 0.0f), ImGuiChildFlags_None);
+                        ImGui::BeginChild("##widget_preview_viewport", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
+                        {
+                            const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+                            sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
+                            sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
+
+                            Ref<Texture> previewTexture = sceneData.compositeRT ? sceneData.compositeRT->GetColorAttachment(0) : nullptr;
+                            if (previewTexture && previewTexture->GetHandle())
+                            {
+                                const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
+                                ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+                                sceneData.viewportHovered = ImGui::IsItemHovered();
+
+                                if (sceneData.sceneRenderer)
+                                {
+                                    const ImVec2 mousePos = ImGui::GetMousePos();
+                                    const uint32_t localMouseX = static_cast<uint32_t>(std::max(mousePos.x - viewportPos.x, 0.0f));
+                                    const uint32_t localMouseY = static_cast<uint32_t>(std::max(mousePos.y - viewportPos.y, 0.0f));
+                                    sceneData.sceneRenderer->SetWidgetPreviewMousePosition(localMouseX, localMouseY, sceneData.viewportHovered);
+                                    sceneData.sceneRenderer->SetPreviewWidget(widget);
+                                }
+                            }
+                            else
+                            {
+                                ImGui::Dummy(viewportSize);
+                                sceneData.viewportHovered = ImGui::IsItemHovered();
+                            }
+                        }
+                        ImGui::EndChild();
+                        ImGui::EndChild();
+
+                        ImGui::SameLine(0.0f, 0.0f);
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.28f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.32f, 0.32f, 0.32f, 1.0f));
+                        ImGui::BeginChild("##widget_horizontal_splitter", ImVec2(splitterWidth, 0.0f), ImGuiChildFlags_None);
+                        ImGui::Button("##widget_horizontal_splitter_btn", ImVec2(-1.0f, -1.0f));
+                        if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+                        {
+                            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+                        }
+                        if (ImGui::IsItemActive())
+                        {
+                            previewColumnWidth += ImGui::GetIO().MouseDelta.x;
+                            previewColumnWidth = std::clamp(previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
+                        }
+                        ImGui::EndChild();
+                        ImGui::PopStyleColor(3);
+
+                        ImGui::SameLine(0.0f, 0.0f);
+                        ImGui::BeginChild("##widget_controls_column", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
                         UIWidgetEditor(widget);
+                        ImGui::EndChild();
                     }
                     else
                     {
@@ -1862,7 +1972,298 @@ namespace ignite
 
     void AssetEditorPanel::UIWidgetEditor(const Ref<Widget> &widget)
     {
+        if (!widget || !m_EditorLayer || !m_EditorLayer->GetActiveProject())
+        {
+            return;
+        }
 
+        Project *project = m_EditorLayer->GetActiveProject().get();
+        auto assetManager = project->GetAssetManager();
+
+        static std::unordered_map<uint64_t, int> s_SelectedWidgetItem;
+        static std::unordered_map<uint64_t, int> s_SelectedChildWidgetIndex;
+
+        const uint64_t widgetKey = static_cast<uint64_t>(widget->handle);
+        int &selectedItemId = s_SelectedWidgetItem[widgetKey];
+        int &selectedChildIndex = s_SelectedChildWidgetIndex[widgetKey];
+
+        char nameBuffer[256]{};
+        std::strncpy(nameBuffer, widget->GetName().c_str(), sizeof(nameBuffer) - 1);
+        if (ImGui::InputText("Widget Name", nameBuffer, sizeof(nameBuffer)))
+        {
+            widget->SetName(nameBuffer);
+            widget->SetDirtyFlag(true);
+        }
+
+        bool enabled = widget->IsEnabled();
+        if (ImGui::Checkbox("Enabled", &enabled))
+        {
+            widget->SetEnabled(enabled);
+            widget->SetDirtyFlag(true);
+        }
+
+        bool blocksBelow = widget->BlocksWidgetsBelow();
+        if (ImGui::Checkbox("Block Widgets Below", &blocksBelow))
+        {
+            widget->SetBlocksWidgetsBelow(blocksBelow);
+            widget->SetDirtyFlag(true);
+        }
+
+        ImGui::SeparatorText("Items");
+        if (ImGui::Button("+ Button"))
+        {
+            selectedItemId = widget->AddButton("Button");
+            widget->SetDirtyFlag(true);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("+ Text"))
+        {
+            selectedItemId = widget->AddText("Text");
+            widget->SetDirtyFlag(true);
+        }
+
+        std::vector<int> itemIds;
+        itemIds.reserve(widget->GetItems().size());
+        for (const auto &[id, item] : widget->GetItems())
+        {
+            itemIds.push_back(id);
+        }
+        std::sort(itemIds.begin(), itemIds.end());
+
+        ImGui::BeginChild("##widget_items_list", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders);
+        ImGuiListClipper itemClipper;
+        itemClipper.Begin(static_cast<int>(itemIds.size()));
+        while (itemClipper.Step())
+        {
+            for (int i = itemClipper.DisplayStart; i < itemClipper.DisplayEnd; ++i)
+            {
+                const int itemId = itemIds[static_cast<size_t>(i)];
+                const auto itemIt = widget->GetItems().find(itemId);
+                if (itemIt == widget->GetItems().end() || !itemIt->second)
+                {
+                    continue;
+                }
+
+                const Ref<IWidgetItem> &item = itemIt->second;
+                const bool selected = selectedItemId == itemId;
+                const char *typeLabel = item->GetItemType() == WidgetItemType::Button ? "Button" : "Text";
+                if (ImGui::Selectable(std::format("{} [{}]##wid_item_{}", typeLabel, itemId, itemId).c_str(), selected))
+                {
+                    selectedItemId = itemId;
+                }
+            }
+        }
+        ImGui::EndChild();
+
+        if (selectedItemId != 0 && widget->GetItems().contains(selectedItemId))
+        {
+            Ref<IWidgetItem> selectedItem = widget->GetItems()[selectedItemId];
+            ImGui::SeparatorText("Selected Item");
+
+            bool visible = selectedItem->IsVisible();
+            if (ImGui::Checkbox("Visible", &visible))
+            {
+                selectedItem->SetVisible(visible);
+                widget->SetDirtyFlag(true);
+            }
+
+            int alignment = static_cast<int>(selectedItem->GetAlignment());
+            const char *alignmentNames[] =
+            {
+                "Top Left", "Top Center", "Top Right",
+                "Center Left", "Center", "Center Right",
+                "Bottom Left", "Bottom Center", "Bottom Right"
+            };
+            if (ImGui::Combo("Alignment", &alignment, alignmentNames, IM_ARRAYSIZE(alignmentNames)))
+            {
+                selectedItem->SetAlignment(static_cast<WidgetAlignment>(alignment));
+                widget->SetDirtyFlag(true);
+            }
+
+            glm::vec2 pos = selectedItem->GetRect().min;
+            glm::vec2 size = selectedItem->GetSize();
+            if (ImGui::DragFloat2("Position", &pos.x, 1.0f)
+                || ImGui::DragFloat2("Size", &size.x, 1.0f, 1.0f, 4096.0f))
+            {
+                selectedItem->SetPosition(pos);
+                selectedItem->SetSize(size);
+                widget->SetDirtyFlag(true);
+            }
+
+            if (Ref<WidgetButton> button = selectedItem->As<WidgetButton>())
+            {
+                char textBuffer[256]{};
+                std::strncpy(textBuffer, button->GetText().c_str(), sizeof(textBuffer) - 1);
+                if (ImGui::InputText("Button Text", textBuffer, sizeof(textBuffer)))
+                {
+                    button->SetText(textBuffer);
+                    widget->SetDirtyFlag(true);
+                }
+
+                glm::vec4 normal = button->GetNormalColor();
+                glm::vec4 hover = button->GetHoverColor();
+                glm::vec4 pressed = button->GetPressedColor();
+                glm::vec4 textColor = button->GetTextColor();
+                glm::vec4 borderColor = button->GetBorderColor();
+                if (ImGui::ColorEdit4("Normal Color", &normal.x)
+                    || ImGui::ColorEdit4("Hover Color", &hover.x)
+                    || ImGui::ColorEdit4("Pressed Color", &pressed.x)
+                    || ImGui::ColorEdit4("Text Color", &textColor.x)
+                    || ImGui::ColorEdit4("Border Color", &borderColor.x))
+                {
+                    button->SetColors(normal, hover, pressed);
+                    button->SetTextColor(textColor);
+                    button->SetBorderColor(borderColor);
+                    widget->SetDirtyFlag(true);
+                }
+
+                AssetHandle imageHandle = button->GetImageHandle();
+                std::string imageName = imageHandle == AssetHandle(0) ? "Drop Texture Here" : assetManager->GetAssetDisplayName(imageHandle);
+                ImGui::Button(std::format("Image: {}", imageName).c_str(), ImVec2(-1.0f, 0.0f));
+                if (ImGui::BeginDragDropTarget())
+                {
+                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                    {
+                        if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                        {
+                            const AssetHandle dropped = *static_cast<const AssetHandle *>(payload->Data);
+                            if (assetManager->GetMetaData(dropped).type == AssetType::Texture)
+                            {
+                                button->SetImageHandle(dropped);
+                                widget->SetDirtyFlag(true);
+                            }
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+            }
+            else if (Ref<WidgetText> text = selectedItem->As<WidgetText>())
+            {
+                char textBuffer[256]{};
+                std::strncpy(textBuffer, text->GetText().c_str(), sizeof(textBuffer) - 1);
+                if (ImGui::InputText("Text", textBuffer, sizeof(textBuffer)))
+                {
+                    text->SetText(textBuffer);
+                    widget->SetDirtyFlag(true);
+                }
+
+                glm::vec4 textColor = text->GetColor();
+                if (ImGui::ColorEdit4("Color", &textColor.x))
+                {
+                    text->SetColor(textColor);
+                    widget->SetDirtyFlag(true);
+                }
+
+                float kerning = text->GetKerning();
+                float lineSpacing = text->GetLineSpacing();
+                if (ImGui::DragFloat("Kerning", &kerning, 0.01f)
+                    || ImGui::DragFloat("Line Spacing", &lineSpacing, 0.01f))
+                {
+                    text->SetKerning(kerning);
+                    text->SetLineSpacing(lineSpacing);
+                    widget->SetDirtyFlag(true);
+                }
+
+                AssetHandle fontHandle = text->GetFontHandle();
+                const std::string fontName = fontHandle == AssetHandle(0) ? "Drop Font Here" : assetManager->GetAssetDisplayName(fontHandle);
+                ImGui::Button(std::format("Font: {}", fontName).c_str(), ImVec2(-1.0f, 0.0f));
+                if (ImGui::BeginDragDropTarget())
+                {
+                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                    {
+                        if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                        {
+                            const AssetHandle dropped = *static_cast<const AssetHandle *>(payload->Data);
+                            if (assetManager->GetMetaData(dropped).type == AssetType::Font)
+                            {
+                                text->SetFontHandle(dropped);
+                                widget->SetDirtyFlag(true);
+                            }
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+            }
+
+            if (ImGui::Button("Remove Selected Item"))
+            {
+                if (widget->RemoveItem(selectedItemId))
+                {
+                    selectedItemId = 0;
+                    widget->SetDirtyFlag(true);
+                }
+            }
+        }
+
+        ImGui::SeparatorText("Child Widgets");
+        if (ImGui::Button("+ Add Child Widget"))
+        {
+            widget->GetChildWidgets().push_back({});
+            selectedChildIndex = static_cast<int>(widget->GetChildWidgets().size()) - 1;
+            widget->SetDirtyFlag(true);
+        }
+
+        ImGui::BeginChild("##widget_children_list", ImVec2(0.0f, 140.0f), ImGuiChildFlags_Borders);
+        ImGuiListClipper childClipper;
+        childClipper.Begin(static_cast<int>(widget->GetChildWidgets().size()));
+        while (childClipper.Step())
+        {
+            for (int i = childClipper.DisplayStart; i < childClipper.DisplayEnd; ++i)
+            {
+                const WidgetChildEntry &child = widget->GetChildWidgets()[static_cast<size_t>(i)];
+                const std::string childLabel = child.handle == AssetHandle(0) ? "<empty>" : assetManager->GetAssetDisplayName(child.handle);
+                if (ImGui::Selectable(std::format("{}##child_widget_{}", childLabel, i).c_str(), selectedChildIndex == i))
+                {
+                    selectedChildIndex = i;
+                }
+            }
+        }
+        ImGui::EndChild();
+
+        if (selectedChildIndex >= 0 && selectedChildIndex < static_cast<int>(widget->GetChildWidgets().size()))
+        {
+            WidgetChildEntry &child = widget->GetChildWidgets()[static_cast<size_t>(selectedChildIndex)];
+
+            std::string childLabel = child.handle == AssetHandle(0) ? "Drop Widget Here" : assetManager->GetAssetDisplayName(child.handle);
+            ImGui::Button(childLabel.c_str(), ImVec2(-1.0f, 0.0f));
+            if (ImGui::BeginDragDropTarget())
+            {
+                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                {
+                    if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                    {
+                        const AssetHandle dropped = *static_cast<const AssetHandle *>(payload->Data);
+                        if (assetManager->GetMetaData(dropped).type == AssetType::Widget && dropped != widget->handle)
+                        {
+                            child.handle = dropped;
+                            widget->SetDirtyFlag(true);
+                        }
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+
+            bool childEnabled = child.enabled;
+            if (ImGui::Checkbox("Child Enabled", &childEnabled))
+            {
+                child.enabled = childEnabled;
+                widget->SetDirtyFlag(true);
+            }
+
+            bool childBlocks = child.blockWidgetsBelow;
+            if (ImGui::Checkbox("Child Blocks Widgets Below", &childBlocks))
+            {
+                child.blockWidgetsBelow = childBlocks;
+                widget->SetDirtyFlag(true);
+            }
+
+            if (ImGui::Button("Remove Child Widget"))
+            {
+                widget->GetChildWidgets().erase(widget->GetChildWidgets().begin() + selectedChildIndex);
+                selectedChildIndex = -1;
+                widget->SetDirtyFlag(true);
+            }
+        }
     }
 
     void AssetEditorPanel::UIMaterial2DEditor(AssetEditorData &assetData)
@@ -3247,25 +3648,35 @@ namespace ignite
         }
 
         Ref<Skeleton> skeleton = meshEditorState.cachedSkeleton;
-        if (selectedJoint >= static_cast<int32_t>(skeleton->joints.size()))
+        size_t jointCount = 0;
+        if (skeleton)
         {
-            selectedJoint = skeleton->joints.empty() ? -1 : 0;
-        }
-        if (selectedJoint < 0)
-        {
-            lastAutoScrolledJoint = -1;
-        }
-        if (selectedSocket >= static_cast<int32_t>(skeleton->sockets.size()))
-        {
-            selectedSocket = skeleton->sockets.empty() ? -1 : 0;
+            jointCount = skeleton->joints.size();
+            if (selectedJoint >= static_cast<int32_t>(skeleton->joints.size()))
+            {
+                selectedJoint = skeleton->joints.empty() ? -1 : 0;
+            }
+            if (selectedJoint < 0)
+            {
+                lastAutoScrolledJoint = -1;
+            }
+            if (selectedSocket >= static_cast<int32_t>(skeleton->sockets.size()))
+            {
+                selectedSocket = skeleton->sockets.empty() ? -1 : 0;
+            }
+
+            
         }
 
-        std::vector<std::vector<int32_t>> children(skeleton->joints.size());
-        for (const Joint &joint : skeleton->joints)
+        std::vector<std::vector<int32_t>> children(jointCount);
+        if (skeleton)
         {
-            if (joint.parentJointId >= 0 && joint.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+            for (const Joint &joint : skeleton->joints)
             {
-                children[static_cast<size_t>(joint.parentJointId)].push_back(joint.id);
+                if (joint.parentJointId >= 0 && joint.parentJointId < static_cast<int32_t>(jointCount))
+                {
+                    children[static_cast<size_t>(joint.parentJointId)].push_back(joint.id);
+                }
             }
         }
 
@@ -3433,61 +3844,65 @@ namespace ignite
 
                 ImGui::BeginChild("##skeleton_preview", { 0.0f, 0.0f }, ImGuiChildFlags_None);
                 {
-                    ImGui::TextUnformatted("Skeleton Tree");
-                    std::function<void(int32_t)> drawJointNode = [&](int32_t jointId)
+                    if (skeleton)
                     {
-                        if (jointId < 0 || jointId >= static_cast<int32_t>(skeleton->joints.size()))
+                        ImGui::TextUnformatted("Skeleton Tree");
+                        std::function<void(int32_t)> drawJointNode = [&](int32_t jointId)
                         {
-                            return;
-                        }
-
-                        const Joint &joint = skeleton->joints[static_cast<size_t>(jointId)];
-                        const bool isSelected = selectedJoint == jointId;
-                        const bool hasChildren = !children[static_cast<size_t>(jointId)].empty();
-
-                        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
-                        if (!hasChildren)
-                        {
-                            flags |= ImGuiTreeNodeFlags_Leaf;
-                        }
-                        if (isSelected)
-                        {
-                            flags |= ImGuiTreeNodeFlags_Selected;
-                        }
-
-                        const bool opened = ImGui::TreeNodeEx(reinterpret_cast<void *>(static_cast<intptr_t>(jointId + 1)), flags, "%s", joint.name.c_str());
-                        if (ImGui::IsItemClicked())
-                        {
-                            selectedJoint = jointId;
-                        }
-
-                        if (selectedJoint == jointId && lastAutoScrolledJoint != selectedJoint)
-                        {
-                            if (!ImGui::IsItemVisible())
+                            if (jointId < 0 || jointId >= static_cast<int32_t>(jointCount))
                             {
-                                ImGui::SetScrollHereY(0.5f);
+                                return;
                             }
 
-                            lastAutoScrolledJoint = selectedJoint;
-                        }
+                            const Joint &joint = skeleton->joints[static_cast<size_t>(jointId)];
+                            const bool isSelected = selectedJoint == jointId;
+                            const bool hasChildren = !children[static_cast<size_t>(jointId)].empty();
 
-                        if (opened)
-                        {
-                            for (int32_t childJointId : children[static_cast<size_t>(jointId)])
+                            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
+                            if (!hasChildren)
                             {
-                                drawJointNode(childJointId);
+                                flags |= ImGuiTreeNodeFlags_Leaf;
                             }
-                            ImGui::TreePop();
-                        }
-                    };
+                            if (isSelected)
+                            {
+                                flags |= ImGuiTreeNodeFlags_Selected;
+                            }
 
-                    for (const Joint &joint : skeleton->joints)
-                    {
-                        if (joint.parentJointId == -1)
+                            const bool opened = ImGui::TreeNodeEx(reinterpret_cast<void *>(static_cast<intptr_t>(jointId + 1)), flags, "%s", joint.name.c_str());
+                            if (ImGui::IsItemClicked())
+                            {
+                                selectedJoint = jointId;
+                            }
+
+                            if (selectedJoint == jointId && lastAutoScrolledJoint != selectedJoint)
+                            {
+                                if (!ImGui::IsItemVisible())
+                                {
+                                    ImGui::SetScrollHereY(0.5f);
+                                }
+
+                                lastAutoScrolledJoint = selectedJoint;
+                            }
+
+                            if (opened)
+                            {
+                                for (int32_t childJointId : children[static_cast<size_t>(jointId)])
+                                {
+                                    drawJointNode(childJointId);
+                                }
+                                ImGui::TreePop();
+                            }
+                        };
+
+                        for (const Joint &joint : skeleton->joints)
                         {
-                            drawJointNode(joint.id);
+                            if (joint.parentJointId == -1)
+                            {
+                                drawJointNode(joint.id);
+                            }
                         }
                     }
+                   
                     ImGui::EndChild();
                 }
 
@@ -4875,6 +5290,22 @@ namespace ignite
                 }
                 return saveDefaultMeta();
             }
+            case AssetType::Widget:
+            {
+                Ref<Widget> widget = assetData.asset->As<Widget>();
+                if (!widget)
+                {
+                    return false;
+                }
+
+                if (!widget->Serialize(savePath))
+                {
+                    return false;
+                }
+
+                widget->SetDirtyFlag(false);
+                return saveDefaultMeta();
+            }
             default:
             return false;
         }
@@ -4884,7 +5315,7 @@ namespace ignite
     {
         // Only some asset type can use scene renderer
         const AssetType assetType = assetData.metadata.type;
-        if (assetType != AssetType::Material && assetType != AssetType::Mesh && assetType != AssetType::Skeleton)
+        if (assetType != AssetType::Material && assetType != AssetType::Mesh && assetType != AssetType::Skeleton && assetType != AssetType::Widget)
             return;
 
         assetData.sceneData.camera = EditorCamera(std::format("AssetEditorCamera-{}", static_cast<uint64_t>(assetData.handle)));
@@ -4926,7 +5357,7 @@ namespace ignite
             }
         }
 
-        Application::SubmitToRenderThread([this, handle, width, height, activeProject, defaultMesh]()
+        Application::SubmitToRenderThread([this, handle, width, height, activeProject, defaultMesh, assetType]()
         {
             RenderTargetCreateInfo rtCreateInfo = {};
             rtCreateInfo.width = width;
@@ -4952,7 +5383,7 @@ namespace ignite
 
             auto renderer = CreateRef<AssetSceneRenderer>();
             renderer->SetProject(activeProject);
-            if (renderer)
+            if (renderer && assetType != AssetType::Widget)
             {
                 renderer->SetPreviewMesh(defaultMesh);
             }
@@ -5134,6 +5565,12 @@ namespace ignite
         {
             m_CreateRequest.asset = CreateRef<LocomotionController>();
             std::memcpy(m_CreateRequest.nameBuffer, "NewLocomotion", sizeof("NewLocomotion"));
+        }
+
+        if (m_CreateRequest.type == AssetType::Widget)
+        {
+            m_CreateRequest.asset = CreateRef<Widget>(nullptr);
+            std::memcpy(m_CreateRequest.nameBuffer, "NewWidget", sizeof("NewWidget"));
         }
 
         return true;

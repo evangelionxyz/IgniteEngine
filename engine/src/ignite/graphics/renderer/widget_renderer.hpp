@@ -9,10 +9,13 @@
 
 #include <nvrhi/nvrhi.h>
 #include <glm/glm.hpp>
+#include <vector>
 
 namespace ignite
 {
     class IWidgetItem;
+    class Scene;
+    class Project;
     class RenderTarget;
     class Renderer2D;
     class ConstantBuffer;
@@ -23,6 +26,9 @@ namespace ignite
         WidgetRenderer(uint32_t width, uint32_t height);
         ~WidgetRenderer();
 
+        void SetScene(Scene *scene) { m_Scene = scene; }
+        void SetProject(Project *project) { m_Project = project; }
+        void SetPreviewWidget(const Ref<Widget> &widget) { m_PreviewWidget = widget; }
         void SetMousePosition(uint32_t mouseX, uint32_t mouseY);
 
         void Update(float deltaTime);
@@ -37,7 +43,14 @@ namespace ignite
         const uint32_t &GetHeight() { return m_Height; }
 
     private:
-        void RenderWidgetItems(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *fb);
+        struct WidgetRenderLayer
+        {
+            Ref<Widget> widget;
+            bool blocksWidgetsBelow = false;
+        };
+
+        void BuildRenderLayers();
+        void RenderWidgetItems();
 
         uint32_t m_Width;
         uint32_t m_Height;
@@ -47,7 +60,11 @@ namespace ignite
 
         Ref<Renderer2D> m_Renderer2D;
         Ref<ConstantBuffer> m_CameraBuffer;
-        Widget *m_Widget = nullptr;
+        Scene *m_Scene = nullptr;
+        Project *m_Project = nullptr;
+        Ref<Widget> m_PreviewWidget = nullptr;
+        std::vector<WidgetRenderLayer> m_RenderLayers;
+        bool m_LastMousePressed = false;
 
         glm::mat4 m_Projection;
     };
