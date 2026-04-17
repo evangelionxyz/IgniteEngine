@@ -2465,12 +2465,11 @@ namespace ignite
                 }
             }
 
-            m_EditorCamera.SetNavigationMode(mode);
-
-            const auto w = static_cast<float>(m_Scene->GetViewportWidth());
-            const auto h = static_cast<float>(m_Scene->GetViewportHeight());
-            m_EditorCamera.UpdateView();
+            const auto w = static_cast<float>(m_Data.sceneEditorViewportRect.max.x - m_Data.sceneEditorViewportRect.min.x);
+            const auto h = static_cast<float>(m_Data.sceneEditorViewportRect.max.y - m_Data.sceneEditorViewportRect.min.y);
             m_EditorCamera.UpdateProjection(w, h);
+            m_EditorCamera.UpdateView();
+            m_EditorCamera.SetNavigationMode(mode);
         }
 
         ImGui::SameLine();

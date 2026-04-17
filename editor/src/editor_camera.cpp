@@ -78,13 +78,6 @@ namespace ignite
 				m_Distance = glm::clamp(glm::distance(position, m_Target), controls.minDistance, controls.maxDistance);
 			}
 		}
-
-		if (width > 0.0f && height > 0.0f)
-		{
-			UpdateProjection(width, height);
-		}
-
-		UpdateView();
 	}
 
 	void EditorCamera::UpdateMouseState()
