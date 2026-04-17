@@ -235,7 +235,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 	Ref<Project> Project::Deserialize(const std::filesystem::path &filepath)
 	{
 		bool exists = std::filesystem::exists(filepath);
-		LOG_ASSERT(exists, "[Project Serializer] File does not exists");
+		LOG_ASSERT(exists, "[Project Serializer] File does not exists {}", filepath.string());
 		if (!exists)
 		{
 			return nullptr;

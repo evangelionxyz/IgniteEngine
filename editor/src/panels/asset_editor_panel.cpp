@@ -1,14 +1,10 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #include "asset_editor_panel.hpp"
-
-#include "../editor_layer.hpp"
-
+#include "editor_layer.hpp"
 #include "ext/editor_ui.hpp"
-
 #include "animation_timeline.hpp"
 #include "animator_editor.hpp"
-
 #include "ignite/animation/animator/animator.hpp"
 #include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/animation/animator/animator_controller_2d.hpp"
@@ -18,9 +14,7 @@
 #include "ignite/animation/blend_space.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/animation/skeleton.hpp"
-
 #include "ignite/asset/asset_importer.hpp"
-
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/texture.hpp"
@@ -3838,7 +3832,7 @@ namespace ignite
             }
 
             // SKELETON PREVIEW
-            if (ImGui::BeginTabItem("Skeleton Preview"))
+            if (skeleton && ImGui::BeginTabItem("Skeleton Preview"))
             {
                 isViewSkeletonTree = true;
 
@@ -3928,9 +3922,14 @@ namespace ignite
             const float minViewportHeight = 120.0f;
             const float minTimelineHeight = 120.0f;
             const ImVec2 previewRegion = ImGui::GetContentRegionAvail();
-            const float maxTimelineHeight = std::max(minTimelineHeight, previewRegion.y - minViewportHeight - splitterThickness);
-            previewState.animationTimelineHeight = std::clamp(previewState.animationTimelineHeight, minTimelineHeight, maxTimelineHeight);
-            const float meshScenePreviewHeight = std::max(minViewportHeight, previewRegion.y - previewState.animationTimelineHeight - splitterThickness);
+            float maxTimelineHeight = minTimelineHeight;
+            float meshScenePreviewHeight = previewRegion.y;
+            if (skeleton)
+            {
+                maxTimelineHeight = std::max(minTimelineHeight, previewRegion.y - minViewportHeight - splitterThickness);
+                previewState.animationTimelineHeight = std::clamp(previewState.animationTimelineHeight, minTimelineHeight, maxTimelineHeight);
+                meshScenePreviewHeight = std::max(minViewportHeight, previewRegion.y - previewState.animationTimelineHeight - splitterThickness);
+            }
 
             // scene viewport child
             if (ImGui::BeginChild("##mesh_scene_preview", { 0.0f, meshScenePreviewHeight }, ImGuiChildFlags_None))
@@ -3957,160 +3956,164 @@ namespace ignite
 
                     const glm::mat4 viewProjection = sceneData.camera.GetProjection() * sceneData.camera.GetView();
                     const Rect viewportRect { viewportPos.x, viewportPos.y, viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y };
-                    const bool hasPreviewPose = previewState.previewGlobalTransforms.size() == skeleton->joints.size();
 
-                    auto getJointGlobal = [&](int32_t jointId) -> const glm::mat4 &
+                    if (skeleton)
                     {
-                        if (hasPreviewPose && jointId >= 0 && jointId < static_cast<int32_t>(previewState.previewGlobalTransforms.size()))
+                        const bool hasSelectedJoint = selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(skeleton->joints.size());
+                        const bool hasSelectedSocket = selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size());
+                        const bool useSocketGizmo = previewState.gizmoTarget == 1 && hasSelectedSocket;
+                        const bool previewViewportFocused = sceneData.viewportHovered && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+
+                        const bool hasPreviewPose = previewState.previewGlobalTransforms.size() == skeleton->joints.size();
+
+                        auto getJointGlobal = [&](int32_t jointId) -> const glm::mat4 &
                         {
-                            return previewState.previewGlobalTransforms[static_cast<size_t>(jointId)];
-                        }
-                        return skeleton->joints[static_cast<size_t>(jointId)].globalTransform;
-                    };
-
-                    const bool hasSelectedJoint = selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(skeleton->joints.size());
-                    const bool hasSelectedSocket = selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size());
-                    const bool useSocketGizmo = previewState.gizmoTarget == 1 && hasSelectedSocket;
-                    const bool previewViewportFocused = sceneData.viewportHovered && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
-
-                    bool isPreviewGizmoManipulating = false;
-                    bool isPreviewGizmoHovered = false;
-
-                    if (previewViewportFocused && (useSocketGizmo || hasSelectedJoint))
-                    {
-                        GizmoInfo gizmoInfo;
-                        gizmoInfo.cameraView = sceneData.camera.GetView();
-                        gizmoInfo.cameraProjection = sceneData.camera.GetProjection();
-                        gizmoInfo.cameraType = sceneData.camera.projectionType;
-                        gizmoInfo.snapValue = 0.05f;
-                        gizmoInfo.isSnapping = false;
-                        gizmoInfo.viewRect = viewportRect;
-
-                        s_SkeletonPreviewGizmo.SetInfo(gizmoInfo);
-                        s_SkeletonPreviewGizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
-                        s_SkeletonPreviewGizmo.SetMode(ImGuizmo::MODE::LOCAL);
-
-                        glm::mat4 gizmoTransform = glm::mat4(1.0f);
-                        if (useSocketGizmo)
-                        {
-                            const JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
-                            const glm::mat4 socketLocal = socket.GetLocalTransform();
-                            if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+                            if (hasPreviewPose && jointId >= 0 && jointId < static_cast<int32_t>(previewState.previewGlobalTransforms.size()))
                             {
-                                gizmoTransform = getJointGlobal(socket.parentJointId) * socketLocal;
+                                return previewState.previewGlobalTransforms[static_cast<size_t>(jointId)];
+                            }
+                            return skeleton->joints[static_cast<size_t>(jointId)].globalTransform;
+                        };
+
+                        bool isPreviewGizmoManipulating = false;
+                        bool isPreviewGizmoHovered = false;
+
+                        if (previewViewportFocused && (useSocketGizmo || hasSelectedJoint))
+                        {
+                            GizmoInfo gizmoInfo;
+                            gizmoInfo.cameraView = sceneData.camera.GetView();
+                            gizmoInfo.cameraProjection = sceneData.camera.GetProjection();
+                            gizmoInfo.cameraType = sceneData.camera.projectionType;
+                            gizmoInfo.snapValue = 0.05f;
+                            gizmoInfo.isSnapping = false;
+                            gizmoInfo.viewRect = viewportRect;
+
+                            s_SkeletonPreviewGizmo.SetInfo(gizmoInfo);
+                            s_SkeletonPreviewGizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
+                            s_SkeletonPreviewGizmo.SetMode(ImGuizmo::MODE::LOCAL);
+
+                            glm::mat4 gizmoTransform = glm::mat4(1.0f);
+                            if (useSocketGizmo)
+                            {
+                                const JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
+                                const glm::mat4 socketLocal = socket.GetLocalTransform();
+                                if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+                                {
+                                    gizmoTransform = getJointGlobal(socket.parentJointId) * socketLocal;
+                                }
+                                else
+                                {
+                                    gizmoTransform = socketLocal;
+                                }
                             }
                             else
                             {
-                                gizmoTransform = socketLocal;
+                                gizmoTransform = getJointGlobal(selectedJoint);
                             }
-                        }
-                        else
-                        {
-                            gizmoTransform = getJointGlobal(selectedJoint);
-                        }
 
-                        s_SkeletonPreviewGizmo.Manipulate(gizmoTransform);
-                        isPreviewGizmoManipulating = s_SkeletonPreviewGizmo.IsManipulating();
-                        isPreviewGizmoHovered = s_SkeletonPreviewGizmo.IsHovered();
+                            s_SkeletonPreviewGizmo.Manipulate(gizmoTransform);
+                            isPreviewGizmoManipulating = s_SkeletonPreviewGizmo.IsManipulating();
+                            isPreviewGizmoHovered = s_SkeletonPreviewGizmo.IsHovered();
 
-                        if (isPreviewGizmoManipulating)
-                        {
-                            if (useSocketGizmo)
+                            if (isPreviewGizmoManipulating)
                             {
-                                JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
-                                glm::mat4 parentWorld = glm::mat4(1.0f);
-                                if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+                                if (useSocketGizmo)
                                 {
-                                    parentWorld = getJointGlobal(socket.parentJointId);
+                                    JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
+                                    glm::mat4 parentWorld = glm::mat4(1.0f);
+                                    if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+                                    {
+                                        parentWorld = getJointGlobal(socket.parentJointId);
+                                    }
+
+                                    const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
+                                    glm::vec3 localTranslation, localEuler, localScale;
+                                    Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                                    socket.localTranslation = localTranslation;
+                                    socket.localRotation = glm::quat(localEuler);
+                                    socket.localScale = localScale;
+                                }
+                                else if (hasSelectedJoint)
+                                {
+                                    Joint &joint = skeleton->joints[static_cast<size_t>(selectedJoint)];
+                                    glm::mat4 parentWorld = glm::mat4(1.0f);
+                                    if (joint.parentJointId >= 0 && joint.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+                                    {
+                                        parentWorld = getJointGlobal(joint.parentJointId);
+                                    }
+
+                                    const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
+                                    glm::vec3 localTranslation, localEuler, localScale;
+                                    Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                                    joint.defaultTranslation = localTranslation;
+                                    joint.defaultRotation = glm::quat(localEuler);
+                                    joint.defaultScale = localScale;
+                                    joint.localTransform = glm::translate(glm::mat4(1.0f), joint.defaultTranslation)
+                                        * glm::toMat4(joint.defaultRotation)
+                                        * glm::scale(glm::mat4(1.0f), joint.defaultScale);
                                 }
 
-                                const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
-                                glm::vec3 localTranslation, localEuler, localScale;
-                                Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                                socket.localTranslation = localTranslation;
-                                socket.localRotation = glm::quat(localEuler);
-                                socket.localScale = localScale;
+                                skeleton->SetDirtyFlag(true);
                             }
-                            else if (hasSelectedJoint)
+                        }
+
+                        if (sceneData.viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !isPreviewGizmoManipulating && !isPreviewGizmoHovered)
+                        {
+                            const ImVec2 mousePos = ImGui::GetMousePos();
+                            int32_t pickedJoint = -1;
+                            float bestDistanceSq = 64.0f;
+
+                            for (const Joint &joint : skeleton->joints)
                             {
-                                Joint &joint = skeleton->joints[static_cast<size_t>(selectedJoint)];
-                                glm::mat4 parentWorld = glm::mat4(1.0f);
-                                if (joint.parentJointId >= 0 && joint.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+                                ImVec2 jointPos;
+                                if (!Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
                                 {
-                                    parentWorld = getJointGlobal(joint.parentJointId);
+                                    continue;
                                 }
 
-                                const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
-                                glm::vec3 localTranslation, localEuler, localScale;
-                                Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                                joint.defaultTranslation = localTranslation;
-                                joint.defaultRotation = glm::quat(localEuler);
-                                joint.defaultScale = localScale;
-                                joint.localTransform = glm::translate(glm::mat4(1.0f), joint.defaultTranslation)
-                                    * glm::toMat4(joint.defaultRotation)
-                                    * glm::scale(glm::mat4(1.0f), joint.defaultScale);
+                                const float dx = jointPos.x - mousePos.x;
+                                const float dy = jointPos.y - mousePos.y;
+                                const float distanceSq = dx * dx + dy * dy;
+                                if (distanceSq < bestDistanceSq)
+                                {
+                                    bestDistanceSq = distanceSq;
+                                    pickedJoint = joint.id;
+                                }
                             }
 
-                            skeleton->SetDirtyFlag(true);
+                            if (pickedJoint >= 0)
+                            {
+                                selectedJoint = pickedJoint;
+                            }
                         }
-                    }
 
-                    if (sceneData.viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !isPreviewGizmoManipulating && !isPreviewGizmoHovered)
-                    {
-                        const ImVec2 mousePos = ImGui::GetMousePos();
-                        int32_t pickedJoint = -1;
-                        float bestDistanceSq = 64.0f;
-
+                        ImDrawList *drawList = ImGui::GetWindowDrawList();
                         for (const Joint &joint : skeleton->joints)
                         {
-                            ImVec2 jointPos;
-                            if (!Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
+                            if (joint.parentJointId < 0 || joint.parentJointId >= static_cast<int32_t>(skeleton->joints.size()))
                             {
                                 continue;
                             }
 
-                            const float dx = jointPos.x - mousePos.x;
-                            const float dy = jointPos.y - mousePos.y;
-                            const float distanceSq = dx * dx + dy * dy;
-                            if (distanceSq < bestDistanceSq)
+                            const Joint &parent = skeleton->joints[static_cast<size_t>(joint.parentJointId)];
+
+                            ImVec2 childPos, parentPos;
+                            if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, childPos)
+                                && Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(parent.id)[3]), viewProjection, viewportRect, parentPos))
                             {
-                                bestDistanceSq = distanceSq;
-                                pickedJoint = joint.id;
+                                const bool selectedLink = (joint.id == selectedJoint || parent.id == selectedJoint);
+                                drawList->AddLine(parentPos, childPos, selectedLink ? IM_COL32(255, 180, 30, 255) : IM_COL32(50, 220, 255, 190), selectedLink ? 2.5f : 1.5f);
                             }
                         }
 
-                        if (pickedJoint >= 0)
+                        for (const Joint &joint : skeleton->joints)
                         {
-                            selectedJoint = pickedJoint;
-                        }
-                    }
-
-                    ImDrawList *drawList = ImGui::GetWindowDrawList();
-                    for (const Joint &joint : skeleton->joints)
-                    {
-                        if (joint.parentJointId < 0 || joint.parentJointId >= static_cast<int32_t>(skeleton->joints.size()))
-                        {
-                            continue;
-                        }
-
-                        const Joint &parent = skeleton->joints[static_cast<size_t>(joint.parentJointId)];
-
-                        ImVec2 childPos, parentPos;
-                        if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, childPos)
-                            && Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(parent.id)[3]), viewProjection, viewportRect, parentPos))
-                        {
-                            const bool selectedLink = (joint.id == selectedJoint || parent.id == selectedJoint);
-                            drawList->AddLine(parentPos, childPos, selectedLink ? IM_COL32(255, 180, 30, 255) : IM_COL32(50, 220, 255, 190), selectedLink ? 2.5f : 1.5f);
-                        }
-                    }
-
-                    for (const Joint &joint : skeleton->joints)
-                    {
-                        ImVec2 jointPos;
-                        if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
-                        {
-                            const bool selected = joint.id == selectedJoint;
-                            drawList->AddCircleFilled(jointPos, selected ? 5.0f : 3.0f, selected ? IM_COL32(255, 120, 20, 255) : IM_COL32(255, 255, 255, 230));
+                            ImVec2 jointPos;
+                            if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
+                            {
+                                const bool selected = joint.id == selectedJoint;
+                                drawList->AddCircleFilled(jointPos, selected ? 5.0f : 3.0f, selected ? IM_COL32(255, 120, 20, 255) : IM_COL32(255, 255, 255, 230));
+                            }
                         }
                     }
                 }
@@ -4122,65 +4125,68 @@ namespace ignite
             }
             ImGui::EndChild(); // !scene viewport child
 
-            // SPLITTER
+            if (skeleton)
             {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.20f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.26f, 0.30f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.30f, 0.30f, 0.36f, 1.0f));
-                ImGui::BeginChild("##animation_timeline_splitter", { 0.0f, splitterThickness });
-                ImGui::Button("##animation_timeline_splitter_btn", ImVec2(-1.0f, -1.0f));
-                if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+                // SPLITTER
                 {
-                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-                }
-                if (ImGui::IsItemActive())
-                {
-                    previewState.animationTimelineHeight -= ImGui::GetIO().MouseDelta.y;
-                    previewState.animationTimelineHeight = std::clamp(previewState.animationTimelineHeight, minTimelineHeight, maxTimelineHeight);
-                }
-                ImGui::PopStyleColor(3);
-                ImGui::EndChild();
-            }
-
-            if (ImGui::BeginChild("##animation_preview_timeline", { 0.0f, previewState.animationTimelineHeight }, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar))
-            {
-                // Animation playback tools
-                if (ImGui::BeginChild("##animation_timeline_toolbar", { 0.0f, 36.0f }))
-                {
-                    ImGui::BeginDisabled(!isAnimLoaded);
-                    if (ImGui::Button(previewState.playing ? "Pause" : "Play"))
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.20f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.26f, 0.30f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.30f, 0.30f, 0.36f, 1.0f));
+                    ImGui::BeginChild("##animation_timeline_splitter", { 0.0f, splitterThickness });
+                    ImGui::Button("##animation_timeline_splitter_btn", ImVec2(-1.0f, -1.0f));
+                    if (ImGui::IsItemHovered() || ImGui::IsItemActive())
                     {
-                        previewState.playing = !previewState.playing;
+                        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
                     }
-                    ImGui::SameLine();
-                    if (ImGui::Button("Stop"))
+                    if (ImGui::IsItemActive())
                     {
-                        previewState.playing = false;
-                        previewState.timeSeconds = 0.0f;
+                        previewState.animationTimelineHeight -= ImGui::GetIO().MouseDelta.y;
+                        previewState.animationTimelineHeight = std::clamp(previewState.animationTimelineHeight, minTimelineHeight, maxTimelineHeight);
                     }
-                    ImGui::SameLine();
-                    ImGui::Checkbox("Loop", &previewState.loop);
-                    ImGui::EndDisabled();
+                    ImGui::PopStyleColor(3);
+                    ImGui::EndChild();
                 }
-                ImGui::EndChild(); // !Animation playback tools
 
-                ImGui::Spacing();
-
-                // Animation timeline
-                if (ImGui::BeginChild("##animation_timeline", { 0.0f, 0.0f }))
+                if (ImGui::BeginChild("##animation_preview_timeline", { 0.0f, previewState.animationTimelineHeight }, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar))
                 {
-                    const float timelineCurrentTime = previewState.timeSeconds;
-                    int previewFrame = (timelineFrameCount > 0)
-                        ? std::clamp(static_cast<int>(timelineCurrentTime * timelineFps), 0, timelineFrameCount - 1)
-                        : 0;
-                    bool playing = previewState.playing;
-                    UI::TimelineState timelineState { timelineFrameCount, timelineFps, timelineTotalDuration, timelineCurrentTime };
-                    UI::Timeline::Draw(ImGui::GetWindowDrawList(), 54.0f, timelineState, &previewState.timeSeconds, &previewFrame, &playing, isAnimLoaded ? "No frames – drop sprites here" : "Select animation");
-                    previewState.playing = playing;
+                    // Animation playback tools
+                    if (ImGui::BeginChild("##animation_timeline_toolbar", { 0.0f, 36.0f }))
+                    {
+                        ImGui::BeginDisabled(!isAnimLoaded);
+                        if (ImGui::Button(previewState.playing ? "Pause" : "Play"))
+                        {
+                            previewState.playing = !previewState.playing;
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Stop"))
+                        {
+                            previewState.playing = false;
+                            previewState.timeSeconds = 0.0f;
+                        }
+                        ImGui::SameLine();
+                        ImGui::Checkbox("Loop", &previewState.loop);
+                        ImGui::EndDisabled();
+                    }
+                    ImGui::EndChild(); // !Animation playback tools
+
+                    ImGui::Spacing();
+
+                    // Animation timeline
+                    if (ImGui::BeginChild("##animation_timeline", { 0.0f, 0.0f }))
+                    {
+                        const float timelineCurrentTime = previewState.timeSeconds;
+                        int previewFrame = (timelineFrameCount > 0)
+                            ? std::clamp(static_cast<int>(timelineCurrentTime * timelineFps), 0, timelineFrameCount - 1)
+                            : 0;
+                        bool playing = previewState.playing;
+                        UI::TimelineState timelineState { timelineFrameCount, timelineFps, timelineTotalDuration, timelineCurrentTime };
+                        UI::Timeline::Draw(ImGui::GetWindowDrawList(), 54.0f, timelineState, &previewState.timeSeconds, &previewFrame, &playing, isAnimLoaded ? "No frames – drop sprites here" : "Select animation");
+                        previewState.playing = playing;
+                    }
+                    ImGui::EndChild(); // !Animation timeline
                 }
-                ImGui::EndChild(); // !Animation timeline
+                ImGui::EndChild(); // !animation timeline
             }
-            ImGui::EndChild(); // !animation timeline
         }
         ImGui::EndChild(); // !Mesh preview panel
         ImGui::SameLine();
@@ -4197,29 +4203,32 @@ namespace ignite
                     // Scene details preview child
                     if (ImGui::BeginChild("##scene_details_preview", { 0.0f, 0.0f }, ImGuiChildFlags_None))
                     {
-                        // Preview animation
-                        std::string animLabel = isAnimLoaded ? assetManager->GetAssetDisplayName(previewState.previewAnimationHandle) : "Drag Here";
-                        UI::DrawButtonWithColumn("Preview Anim", animLabel.c_str(), nullptr, [&previewState, &assetManager]()
+                        if (skeleton)
                         {
-                            if (ImGui::BeginDragDropTarget())
+                            // Preview animation
+                            std::string animLabel = isAnimLoaded ? assetManager->GetAssetDisplayName(previewState.previewAnimationHandle) : "Drag Here";
+                            UI::DrawButtonWithColumn("Preview Anim", animLabel.c_str(), nullptr, [&previewState, &assetManager]()
                             {
-                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                if (ImGui::BeginDragDropTarget())
                                 {
-                                    if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
                                     {
-                                        const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-                                        const AssetMetaData &md = assetManager->GetMetaData(droppedHandle);
-                                        if (md.type == AssetType::SkeletalAnimation)
+                                        if (payload->Data && payload->DataSize == sizeof(AssetHandle))
                                         {
-                                            previewState.previewAnimationHandle = droppedHandle;
-                                            previewState.timeSeconds = 0.0f;
-                                            previewState.playing = true;
+                                            const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                                            const AssetMetaData &md = assetManager->GetMetaData(droppedHandle);
+                                            if (md.type == AssetType::SkeletalAnimation)
+                                            {
+                                                previewState.previewAnimationHandle = droppedHandle;
+                                                previewState.timeSeconds = 0.0f;
+                                                previewState.playing = true;
+                                            }
                                         }
                                     }
+                                    ImGui::EndDragDropTarget();
                                 }
-                                ImGui::EndDragDropTarget();
-                            }
-                        });
+                            });
+                        }
                     }
                     ImGui::EndChild(); // !scene details preview child
 
