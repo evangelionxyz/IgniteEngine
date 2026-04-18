@@ -1487,6 +1487,7 @@ namespace ignite
                             sound->SetVolume(c.volume);
                             sound->SetPitch(c.pitch);
                             sound->SetPan(c.pan);
+                            sound->SetMode(c.loop ? FMOD_LOOP_NORMAL : FMOD_LOOP_OFF);
                         }
                         
                         ImGui::SameLine();
@@ -1536,6 +1537,204 @@ namespace ignite
                                 sound->SetMode(FMOD_LOOP_NORMAL);
                             else
                                 sound->SetMode(FMOD_LOOP_OFF);
+                        }
+
+                        bool dspChainChanged = false;
+
+                        if (ImGui::Button("Add DSP"))
+                        {
+                            ImGui::OpenPopup("##add_audio_dsp_popup");
+                        }
+
+                        if (ImGui::BeginPopup("##add_audio_dsp_popup"))
+                        {
+                            if (ImGui::MenuItem("Reverb"))
+                            {
+                                AudioSourceComponent::DspSettings dsp;
+                                dsp.type = AudioSourceComponent::DspType::Reverb;
+                                c.dsps.push_back(dsp);
+                                dspChainChanged = true;
+                            }
+                            if (ImGui::MenuItem("Distortion"))
+                            {
+                                AudioSourceComponent::DspSettings dsp;
+                                dsp.type = AudioSourceComponent::DspType::Distortion;
+                                c.dsps.push_back(dsp);
+                                dspChainChanged = true;
+                            }
+                            if (ImGui::MenuItem("Chorus"))
+                            {
+                                AudioSourceComponent::DspSettings dsp;
+                                dsp.type = AudioSourceComponent::DspType::Chorus;
+                                c.dsps.push_back(dsp);
+                                dspChainChanged = true;
+                            }
+                            if (ImGui::MenuItem("Compressor"))
+                            {
+                                AudioSourceComponent::DspSettings dsp;
+                                dsp.type = AudioSourceComponent::DspType::Compressor;
+                                c.dsps.push_back(dsp);
+                                dspChainChanged = true;
+                            }
+                            if (ImGui::MenuItem("Delay"))
+                            {
+                                AudioSourceComponent::DspSettings dsp;
+                                dsp.type = AudioSourceComponent::DspType::Delay;
+                                c.dsps.push_back(dsp);
+                                dspChainChanged = true;
+                            }
+
+                            ImGui::EndPopup();
+                        }
+
+                        if (!c.dsps.empty())
+                        {
+                            ImGui::SeparatorText("DSP Chain");
+
+                            int removeIndex = -1;
+                            ImGuiListClipper clipper;
+                            clipper.Begin(static_cast<int>(c.dsps.size()));
+                            while (clipper.Step())
+                            {
+                                for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i)
+                                {
+                                    auto &dsp = c.dsps[static_cast<size_t>(i)];
+                                    ImGui::PushID(i);
+
+                                    const char *dspTypeName = "DSP";
+                                    switch (dsp.type)
+                                    {
+                                        case AudioSourceComponent::DspType::Reverb: dspTypeName = "Reverb"; break;
+                                        case AudioSourceComponent::DspType::Distortion: dspTypeName = "Distortion"; break;
+                                        case AudioSourceComponent::DspType::Chorus: dspTypeName = "Chorus"; break;
+                                        case AudioSourceComponent::DspType::Compressor: dspTypeName = "Compressor"; break;
+                                        case AudioSourceComponent::DspType::Delay: dspTypeName = "Delay"; break;
+                                    }
+
+                                    const std::string header = std::format("{} ##{}", dspTypeName, i);
+                                    if (ImGui::CollapsingHeader(header.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+                                    {
+                                        dspChainChanged |= UI::DrawCheckbox("Enabled", &dsp.enabled);
+                                        ImGui::SameLine();
+                                        if (ImGui::Button("Remove"))
+                                        {
+                                            removeIndex = i;
+                                        }
+
+                                        switch (dsp.type)
+                                        {
+                                            case AudioSourceComponent::DspType::Reverb:
+                                                dspChainChanged |= UI::DrawFloatControl("Decay Time", &dsp.reverbDecayTime, 1.0f, 100.0f, 2000.0f);
+                                                dspChainChanged |= UI::DrawFloatControl("Early Delay", &dsp.reverbEarlyDelay, 0.1f, 0.0f, 300.0f);
+                                                dspChainChanged |= UI::DrawFloatControl("Late Delay", &dsp.reverbLateDelay, 0.1f, 0.0f, 300.0f);
+                                                dspChainChanged |= UI::DrawFloatControl("HF Reference", &dsp.reverbHighFrequencyReference, 1.0f, 20.0f, 20000.0f);
+                                                dspChainChanged |= UI::DrawFloatControl("Diffusion", &dsp.reverbDiffusion, 0.1f, 10.0f, 100.0f);
+                                                dspChainChanged |= UI::DrawFloatControl("Density", &dsp.reverbDensity, 0.1f, 10.0f, 100.0f);
+                                                dspChainChanged |= UI::DrawFloatControl("Low Shelf Gain", &dsp.reverbLowShelfGain, 1.0f, 20.0f, 1000.0f);
+                                                dspChainChanged |= UI::DrawFloatControl("High Cut", &dsp.reverbHighCut, 1.0f, 20.0f, 20000.0f);
+                                                dspChainChanged |= UI::DrawFloatControl("Dry Level", &dsp.reverbDryLevel, 0.1f, -80.0f, 20.0f);
+                                                dspChainChanged |= UI::DrawFloatControl("Wet Level", &dsp.reverbWetLevel, 0.1f, -80.0f, 20.0f);
+                                                break;
+                                            case AudioSourceComponent::DspType::Distortion:
+                                                dspChainChanged |= UI::DrawFloatControl("Distortion", &dsp.distortionLevel, 0.01f, 0.0f, 1.0f);
+                                                break;
+                                            case AudioSourceComponent::DspType::Chorus:
+                                                dspChainChanged |= UI::DrawFloatControl("Mix", &dsp.chorusMix, 0.1f, 0.0f, 100.0f);
+                                                dspChainChanged |= UI::DrawFloatControl("Rate", &dsp.chorusRate, 0.01f, 0.0f, 20.0f);
+                                                dspChainChanged |= UI::DrawFloatControl("Depth", &dsp.chorusDepth, 0.1f, 0.0f, 100.0f);
+                                                break;
+                                            case AudioSourceComponent::DspType::Compressor:
+                                                dspChainChanged |= UI::DrawFloatControl("Threshold", &dsp.compressorThreshold, 0.1f, -60.0f, 0.0f);
+                                                dspChainChanged |= UI::DrawFloatControl("Ratio", &dsp.compressorRatio, 0.01f, 0.0f, 5.0f);
+                                                dspChainChanged |= UI::DrawFloatControl("Release", &dsp.compressorRelease, 1.0f, 10.0f, 5000.0f);
+                                                dspChainChanged |= UI::DrawFloatControl("Gain Makeup", &dsp.compressorGainMakeup, 0.1f, -30.0f, 30.0f);
+                                                dspChainChanged |= UI::DrawCheckbox("Use Sidechain", &dsp.compressorUseSidechain);
+                                                break;
+                                            case AudioSourceComponent::DspType::Delay:
+                                                dspChainChanged |= UI::DrawFloatControl("Delay (ms)", &dsp.delayMs, 1.0f, 0.0f, 10000.0f);
+                                                dspChainChanged |= UI::DrawFloatControl("Feedback", &dsp.delayFeedback, 0.1f, 0.0f, 100.0f);
+                                                break;
+                                        }
+                                    }
+
+                                    ImGui::PopID();
+                                }
+                            }
+
+                            if (removeIndex >= 0 && removeIndex < static_cast<int>(c.dsps.size()))
+                            {
+                                c.dsps.erase(c.dsps.begin() + removeIndex);
+                                dspChainChanged = true;
+                            }
+                        }
+
+                        if (dspChainChanged)
+                        {
+                            sound->ClearDsps(true);
+
+                            for (const auto &dspSettings : c.dsps)
+                            {
+                                FMOD::DSP *dsp = nullptr;
+                                FMOD_DSP_TYPE dspType = FMOD_DSP_TYPE_UNKNOWN;
+
+                                switch (dspSettings.type)
+                                {
+                                    case AudioSourceComponent::DspType::Reverb: dspType = FMOD_DSP_TYPE_SFXREVERB; break;
+                                    case AudioSourceComponent::DspType::Distortion: dspType = FMOD_DSP_TYPE_DISTORTION; break;
+                                    case AudioSourceComponent::DspType::Chorus: dspType = FMOD_DSP_TYPE_CHORUS; break;
+                                    case AudioSourceComponent::DspType::Compressor: dspType = FMOD_DSP_TYPE_COMPRESSOR; break;
+                                    case AudioSourceComponent::DspType::Delay: dspType = FMOD_DSP_TYPE_ECHO; break;
+                                }
+
+                                if (dspType == FMOD_DSP_TYPE_UNKNOWN)
+                                {
+                                    continue;
+                                }
+
+                                if (FmodAudio::GetFmodSystem()->createDSPByType(dspType, &dsp) != FMOD_OK || !dsp)
+                                {
+                                    continue;
+                                }
+
+                                switch (dspSettings.type)
+                                {
+                                    case AudioSourceComponent::DspType::Reverb:
+                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DECAYTIME, dspSettings.reverbDecayTime);
+                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_EARLYDELAY, dspSettings.reverbEarlyDelay);
+                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_LATEDELAY, dspSettings.reverbLateDelay);
+                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_HFREFERENCE, dspSettings.reverbHighFrequencyReference);
+                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DIFFUSION, dspSettings.reverbDiffusion);
+                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DENSITY, dspSettings.reverbDensity);
+                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_LOWSHELFFREQUENCY, dspSettings.reverbLowShelfGain);
+                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_HIGHCUT, dspSettings.reverbHighCut);
+                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DRYLEVEL, dspSettings.reverbDryLevel);
+                                        dsp->setParameterFloat(FMOD_DSP_SFXREVERB_WETLEVEL, dspSettings.reverbWetLevel);
+                                        break;
+                                    case AudioSourceComponent::DspType::Distortion:
+                                        dsp->setParameterFloat(FMOD_DSP_DISTORTION_LEVEL, dspSettings.distortionLevel);
+                                        break;
+                                    case AudioSourceComponent::DspType::Chorus:
+                                        dsp->setParameterFloat(FMOD_DSP_CHORUS_MIX, dspSettings.chorusMix);
+                                        dsp->setParameterFloat(FMOD_DSP_CHORUS_RATE, dspSettings.chorusRate);
+                                        dsp->setParameterFloat(FMOD_DSP_CHORUS_DEPTH, dspSettings.chorusDepth);
+                                        break;
+                                    case AudioSourceComponent::DspType::Compressor:
+                                        dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_THRESHOLD, dspSettings.compressorThreshold);
+                                        dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_RATIO, dspSettings.compressorRatio);
+                                        dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_RELEASE, dspSettings.compressorRelease);
+                                        dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_GAINMAKEUP, dspSettings.compressorGainMakeup);
+                                        dsp->setParameterBool(FMOD_DSP_COMPRESSOR_USESIDECHAIN, dspSettings.compressorUseSidechain);
+                                        break;
+                                    case AudioSourceComponent::DspType::Delay:
+                                        dsp->setParameterFloat(FMOD_DSP_ECHO_DELAY, dspSettings.delayMs);
+                                        dsp->setParameterFloat(FMOD_DSP_ECHO_FEEDBACK, dspSettings.delayFeedback);
+                                        break;
+                                }
+
+                                dsp->setActive(dspSettings.enabled);
+                                sound->AddDsp(dsp);
+                            }
+
                         }
                     }
                 }

@@ -173,7 +173,7 @@ namespace ignite
 
 	void ScriptInstance::InvokeOnDestroy()
 	{
-    IGN_PROFILE_FUNCTION();
+        IGN_PROFILE_FUNCTION();
         if (m_OnDestroyMethodId)
         {
             m_ScriptHost->Invoke(m_OnDestroyMethodId, nullptr, 0, nullptr);

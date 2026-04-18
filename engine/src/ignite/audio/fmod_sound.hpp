@@ -31,7 +31,6 @@ namespace ignite {
         void SetName(const std::string &name);
         void SetPan(float pan) const;
         void SetVolume(float volume) const;
-        void SetLoop(bool enable);
         void SetPitch(float pitch) const;
         void SetMode(FMOD_MODE mode);
         void SetFadeIn(uint32_t fade_in_start_ms, uint32_t fade_in_end_ms);
@@ -45,6 +44,7 @@ namespace ignite {
 
         void Update(float delta_time) const;
         void AddDsp(FMOD::DSP* dsp);
+        void ClearDsps(bool release = true);
 
         FMOD::Sound* GetFmodSound() const;
         FMOD::Channel* GetFmodChannel() const;
