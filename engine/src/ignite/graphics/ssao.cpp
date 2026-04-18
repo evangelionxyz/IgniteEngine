@@ -52,8 +52,8 @@ namespace ignite
         m_SSAOParamsBuffer = ConstantBuffer::Create(sizeof(SSAOParams), true, kSSAOCBVersions, "SSAO Params");
         m_BlurParamsBuffer = ConstantBuffer::Create(sizeof(BlurParams), true, kSSAOCBVersions, "SSAO Blur Params");
 
-        m_AOComputeShader = Shader::Create("resources/shaders/ssao.compute.hlsl", ShaderType::Compute, true);
-        m_BlurComputeShader = Shader::Create("resources/shaders/ssao_blur.compute.hlsl", ShaderType::Compute, true);
+        m_AOComputeShader = Shader::Create("resources/shaders/ssao.compute.hlsl", ShaderType::Compute, false);
+        m_BlurComputeShader = Shader::Create("resources/shaders/ssao_blur.compute.hlsl", ShaderType::Compute, false);
 
         BuildKernel();
         BuildNoise();

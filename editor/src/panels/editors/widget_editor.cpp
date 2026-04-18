@@ -1,5 +1,8 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+// Created by: Evangelion Manuhutu
+// Date      : 19 April 2026
+
 #include "widget_editor.hpp"
 #include "states.hpp"
 #include "ext/editor_ui.hpp"
@@ -23,17 +26,13 @@ namespace ignite
         static std::string GetWidgetTreeLabel(const Ref<IWidgetItem> &item, const WidgetCanvas *canvas)
         {
             if (!item)
-            {
                 return "<null>";
-            }
 
             if (canvas && canvas->GetRoot() == item.get())
-            {
-                return std::format("Canvas Root [{}]##widget_node_{}", item->id, item->id);
-            }
+                return std::format("Canvas Root [{}]", item->id);
 
             const std::string displayName = item->name.empty() ? GetWidgetTypeLabel(*item) : item->name;
-            return std::format("{} [{}]##widget_node_{}", displayName, item->id, item->id);
+            return std::format("{} [{}]", displayName, item->id);
         }
     }
 
@@ -47,7 +46,7 @@ namespace ignite
         const bool selected = selectedItemId == item->id;
         const bool hasChildren = !item->children.empty();
 
-        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_OpenOnArrow;
+        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen;
         if (!hasChildren)
         {
             flags |= ImGuiTreeNodeFlags_Leaf;
@@ -127,8 +126,6 @@ namespace ignite
         ImGui::PushID(selectedItem.get());
 
         bool dirty = false;
-
-        ImGui::SeparatorText("Selected Item");
 
         char nameBuffer[256] {};
         std::strncpy(nameBuffer, selectedItem->name.c_str(), sizeof(nameBuffer) - 1);

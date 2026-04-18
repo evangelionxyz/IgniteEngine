@@ -1894,6 +1894,16 @@ namespace ignite
                             selectedItemId = widget->GetRoot() ? widget->GetRoot()->id : 0;
                         }
 
+                        static std::unordered_map<uint64_t, float> s_WidgetPreviewZoom;
+                        static std::unordered_map<uint64_t, glm::vec2> s_WidgetPreviewPan;
+                        const uint64_t widgetPreviewKey = static_cast<uint64_t>(assetData.handle);
+                        float &widgetPreviewZoom = s_WidgetPreviewZoom[widgetPreviewKey];
+                        if (widgetPreviewZoom <= 0.0f)
+                        {
+                            widgetPreviewZoom = 1.0f;
+                        }
+                        glm::vec2 &widgetPreviewPan = s_WidgetPreviewPan[widgetPreviewKey];
+
                         if (sceneData.sceneRenderer)
                         {
                             sceneData.sceneRenderer->SetPreviewWidget(widget);
@@ -1934,13 +1944,61 @@ namespace ignite
                             {
                                 Ref<Texture> previewTexture = sceneData.compositeRT->GetColorAttachment(0);
                                 const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
-                                ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+                                ImGui::InvisibleButton("##widget_preview_view", viewportSize);
                                 sceneData.viewportHovered = ImGui::IsItemHovered();
-                                
+
                                 const ImVec2 mousePos = ImGui::GetMousePos();
-                                const uint32_t localMouseX = static_cast<uint32_t>(std::max(mousePos.x - viewportPos.x, 0.0f));
-                                const uint32_t localMouseY = static_cast<uint32_t>(std::max(mousePos.y - viewportPos.y, 0.0f));
-                                sceneData.sceneRenderer->SetWidgetPreviewMousePosition(localMouseX, localMouseY, sceneData.viewportHovered);
+                                const float previousZoom = widgetPreviewZoom;
+                                if (sceneData.viewportHovered && ImGui::GetIO().MouseWheel != 0.0f)
+                                {
+                                    widgetPreviewZoom = std::clamp(widgetPreviewZoom + ImGui::GetIO().MouseWheel * 0.1f, 0.25f, 5.0f);
+                                    if (widgetPreviewZoom != previousZoom)
+                                    {
+                                        const ImVec2 previousImagePos = { viewportPos.x + widgetPreviewPan.x, viewportPos.y + widgetPreviewPan.y };
+                                        const ImVec2 previousImageSize = { viewportSize.x * previousZoom, viewportSize.y * previousZoom };
+                                        const ImVec2 uvAtMouse =
+                                        {
+                                            (mousePos.x - previousImagePos.x) / std::max(previousImageSize.x, 1.0f),
+                                            (mousePos.y - previousImagePos.y) / std::max(previousImageSize.y, 1.0f)
+                                        };
+
+                                        const ImVec2 newImageSize = { viewportSize.x * widgetPreviewZoom, viewportSize.y * widgetPreviewZoom };
+                                        widgetPreviewPan.x = mousePos.x - viewportPos.x - uvAtMouse.x * newImageSize.x;
+                                        widgetPreviewPan.y = mousePos.y - viewportPos.y - uvAtMouse.y * newImageSize.y;
+                                    }
+                                }
+
+                                if (sceneData.viewportHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
+                                {
+                                    widgetPreviewPan.x += ImGui::GetIO().MouseDelta.x;
+                                    widgetPreviewPan.y += ImGui::GetIO().MouseDelta.y;
+                                }
+
+                                const ImVec2 imagePos = { viewportPos.x + widgetPreviewPan.x, viewportPos.y + widgetPreviewPan.y };
+                                const ImVec2 imageSize = { viewportSize.x * widgetPreviewZoom, viewportSize.y * widgetPreviewZoom };
+
+                                ImDrawList *drawList = ImGui::GetWindowDrawList();
+                                drawList->PushClipRect(viewportPos, { viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y }, true);
+                                drawList->AddImage(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), imagePos,
+                                    { imagePos.x + imageSize.x, imagePos.y + imageSize.y }, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+                                drawList->PopClipRect();
+
+                                const bool insideImage = sceneData.viewportHovered
+                                    && mousePos.x >= imagePos.x && mousePos.x <= imagePos.x + imageSize.x
+                                    && mousePos.y >= imagePos.y && mousePos.y <= imagePos.y + imageSize.y;
+
+                                uint32_t localMouseX = 0;
+                                uint32_t localMouseY = 0;
+                                if (insideImage)
+                                {
+                                    const float u = std::clamp((mousePos.x - imagePos.x) / std::max(imageSize.x, 1.0f), 0.0f, 1.0f);
+                                    const float v = std::clamp((mousePos.y - imagePos.y) / std::max(imageSize.y, 1.0f), 0.0f, 1.0f);
+
+                                    localMouseX = static_cast<uint32_t>(u * static_cast<float>(std::max(1u, sceneData.viewportWidth) - 1u));
+                                    localMouseY = static_cast<uint32_t>(v * static_cast<float>(std::max(1u, sceneData.viewportHeight) - 1u));
+                                }
+
+                                sceneData.sceneRenderer->SetWidgetPreviewMousePosition(localMouseX, localMouseY, insideImage);
                             }
                             else
                             {

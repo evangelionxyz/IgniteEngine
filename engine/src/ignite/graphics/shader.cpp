@@ -46,13 +46,8 @@ using Microsoft::WRL::ComPtr;
     #endif
 #endif
 
-#ifndef SHADER_REFLECT_VERBOSE
-// #define SHADER_REFLECT_VERBOSE
-#endif
-
 namespace ignite
 {
-    
     std::string GetShaderCacheDirectory()
     {
         return "resources/shaders/bin/";
@@ -175,7 +170,6 @@ namespace ignite
         spirv_cross::Compiler compiler(dataBlob);
         spirv_cross::ShaderResources resources = compiler.get_shader_resources();
 
-#if defined(SHADER_REFLECT_VERBOSE)
         LOG_WARN("[Shader Reflect] {} Shader", GetShaderTypeString(type));
 
         // --- Uniform Buffers ---
@@ -231,7 +225,6 @@ namespace ignite
             LOG_TRACE("  [PushConstant] Name: {}, Size: {}", pcb.name, size);
         }
 
-#endif
 		// Vertex inputs (only for vertex shaders)
         if (type == ShaderType::Vertex)
         {

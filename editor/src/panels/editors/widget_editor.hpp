@@ -1,5 +1,8 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+// Created by: Evangelion Manuhutu
+// Date      : 19 April 2026
+
 #pragma once
 #ifndef WIDGET_EDITOR_HPP
 #define WIDGET_EDITOR_HPP

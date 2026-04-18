@@ -278,8 +278,8 @@ namespace ignite
         params.cullMode = nvrhi::RasterCullMode::None;
         params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
 
-        Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_quad.vertex.hlsl", ShaderType::Vertex, true);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_quad.pixel.hlsl", ShaderType::Pixel, true);
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_quad.vertex.hlsl", ShaderType::Vertex, false);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_quad.pixel.hlsl", ShaderType::Pixel, false);
 
         Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
         gp->SetShaders({ vertexShader, pixelShader })
@@ -332,8 +332,8 @@ namespace ignite
 		params.cullMode = nvrhi::RasterCullMode::None;
 		params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
 
-		Ref<Shader> vertexShader = Shader::Create("resources/shaders/msdf_font.vertex.hlsl", ShaderType::Vertex, true);
-		Ref<Shader> pixelShader = Shader::Create("resources/shaders/msdf_font.pixel.hlsl", ShaderType::Pixel, true);
+		Ref<Shader> vertexShader = Shader::Create("resources/shaders/msdf_font.vertex.hlsl", ShaderType::Vertex, false);
+		Ref<Shader> pixelShader = Shader::Create("resources/shaders/msdf_font.pixel.hlsl", ShaderType::Pixel, false);
 
 		Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
 		gp->SetShaders({ vertexShader, pixelShader })
@@ -379,8 +379,8 @@ namespace ignite
         bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
         nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
 
-        Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_line.vertex.hlsl", ShaderType::Vertex, true);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_line.pixel.hlsl", ShaderType::Pixel, true);
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_line.vertex.hlsl", ShaderType::Vertex, false);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_line.pixel.hlsl", ShaderType::Pixel, false);
 
         gp->SetShaders({ vertexShader, pixelShader })
             .AddBindingLayout(bindingLayout)
@@ -423,8 +423,8 @@ namespace ignite
 
         nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
 
-        Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_circle.vertex.hlsl", ShaderType::Vertex, true);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_circle.pixel.hlsl", ShaderType::Pixel, true);
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_circle.vertex.hlsl", ShaderType::Vertex, false);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_circle.pixel.hlsl", ShaderType::Pixel, false);
 
         Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
         gp->SetShaders({ vertexShader, pixelShader })

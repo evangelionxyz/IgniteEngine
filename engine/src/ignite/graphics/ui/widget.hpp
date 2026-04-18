@@ -208,7 +208,7 @@ namespace ignite
             }
 
             alignedMin += position;
-            return Rect(alignedMin, alignedMin + resolvedSize);
+            return { alignedMin, alignedMin + resolvedSize };
         }
 
         // Event callbacks

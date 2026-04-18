@@ -60,6 +60,7 @@ namespace ignite
             }
 
             sr.BeginMap();
+            sr.AddKeyValue("Name", item->name);
             sr.AddKeyValue("ID", item->id);
             sr.AddKeyValue("ParentID", item->parent ? item->parent->id : 0);
             sr.AddKeyValue("Type", static_cast<int>(item->GetWidgetType()));
@@ -195,6 +196,7 @@ namespace ignite
                     continue;
 
                 item->id = id;
+                if (auto n = itemNode["Name"]) item->name = n.as<std::string>();
                 if (auto n = itemNode["Position"]) item->position = n.as<glm::vec2>();
                 if (auto n = itemNode["Size"]) item->size = n.as<glm::vec2>();
                 if (auto n = itemNode["Alignment"]) item->alignment = static_cast<WidgetAlignment>(n.as<int>());
@@ -361,18 +363,11 @@ namespace ignite
             m_Root = CreateRef<WidgetContainer>();
             m_Root->id = id;
             m_Root->sizingMode = SizingMode::ExpandToParent;
+            m_Root->position = glm::vec2(0.0f);
+            m_Root->size = glm::vec2(static_cast<float>(width), static_cast<float>(height));
             m_WidgetItems[id] = m_Root;
         }
 
-        m_Root->position = glm::vec2(0.0f);
-        if (m_Root->sizingMode == SizingMode::ExpandToParent)
-        {
-            m_Root->size = glm::vec2(0.0f);
-        }
-        else
-        {
-            m_Root->size = glm::vec2(static_cast<float>(width), static_cast<float>(height));
-        }
         return m_Root.get();
     }
 

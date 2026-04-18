@@ -4,6 +4,7 @@
 // Date      : 18 April 2026
 
 #include "widget_container.hpp"
+#include "ignite/graphics/renderer/renderer_2d.hpp"
 
 #include <algorithm>
 
@@ -28,6 +29,20 @@ namespace ignite
     {
         if (!visible)
             return;
+
+        if (renderer)
+        {
+            const Rect &bounds = GetAlignedRect();
+            const glm::vec3 topLeft = glm::vec3(bounds.min.x, bounds.min.y, 0.0f);
+            const glm::vec3 topRight = glm::vec3(bounds.max.x, bounds.min.y, 0.0f);
+            const glm::vec3 bottomRight = glm::vec3(bounds.max.x, bounds.max.y, 0.0f);
+            const glm::vec3 bottomLeft = glm::vec3(bounds.min.x, bounds.max.y, 0.0f);
+
+            renderer->DrawLine(topLeft, topRight, glm::vec4(0.2f, 0.85f, 1.0f, 1.0f));
+            renderer->DrawLine(topRight, bottomRight, glm::vec4(0.2f, 0.85f, 1.0f, 1.0f));
+            renderer->DrawLine(bottomRight, bottomLeft, glm::vec4(0.2f, 0.85f, 1.0f, 1.0f));
+            renderer->DrawLine(bottomLeft, topLeft, glm::vec4(0.2f, 0.85f, 1.0f, 1.0f));
+        }
 
         for (const Ref<IWidgetItem> &child : children)
         {
