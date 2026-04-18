@@ -4,7 +4,8 @@
 #include "editor_layer.hpp"
 #include "ext/editor_ui.hpp"
 #include "animation_timeline.hpp"
-#include "animator_editor.hpp"
+#include "editors/animator_editor.hpp"
+#include "editors/widget_editor.hpp"
 #include "ignite/animation/animator/animator.hpp"
 #include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/animation/animator/animator_controller_2d.hpp"
@@ -16,6 +17,7 @@
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/graphics/ui/widget.hpp"
+#include "ignite/graphics/ui/widget_container.hpp"
 #include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/texture.hpp"
 #include "ignite/project/project.hpp"
@@ -569,7 +571,7 @@ namespace ignite
 
             if (assetData.metadata.type == AssetType::Widget)
             {
-                if (Ref<Widget> widget = assetData.asset->As<Widget>())
+                if (Ref<WidgetCanvas> widget = assetData.asset->As<WidgetCanvas>())
                 {
                     sceneData.sceneRenderer->SetPreviewWidget(widget);
                 }
@@ -828,7 +830,7 @@ namespace ignite
 
         if (m_CreateRequest.type == AssetType::Widget && !m_CreateRequest.asset)
         {
-            m_CreateRequest.asset = CreateRef<Widget>(nullptr);
+            m_CreateRequest.asset = CreateRef<WidgetCanvas>(nullptr);
         }
 
         // Asset creation pop-up
@@ -906,7 +908,7 @@ namespace ignite
                 }
                 else if (m_CreateRequest.type == AssetType::Widget)
                 {
-                    Ref<Widget> asset = createdAsset->As<Widget>();
+                    Ref<WidgetCanvas> asset = createdAsset->As<WidgetCanvas>();
                     if (asset)
                     {
                         asset->SetName(finalAssetName);
@@ -1090,7 +1092,755 @@ namespace ignite
                 {
                     if (Ref<SpriteSheet> spriteSheet = assetData.asset->As<SpriteSheet>())
                     {
-                        UISpriteSheet2DEditor(spriteSheet);
+                        if (!spriteSheet)
+                        {
+                            return;
+                        }
+
+                        Project *project = m_EditorLayer->GetActiveProject().get();
+                        auto assetManager = project->GetAssetManager();
+
+                        const auto stateKey = static_cast<uint64_t>(spriteSheet->handle);
+                        SpriteSheetEditorState &state = s_SpriteSheetEditorState[stateKey];
+                        auto &sprites = spriteSheet->GetSprites();
+
+                        if (state.spriteNames.size() < sprites.size())
+                        {
+                            for (size_t i = state.spriteNames.size(); i < sprites.size(); ++i)
+                            {
+                                state.spriteNames.push_back(std::format("Sprite {}", i));
+                            }
+                        }
+                        else if (state.spriteNames.size() > sprites.size())
+                        {
+                            state.spriteNames.resize(sprites.size());
+                        }
+
+                        if (state.selectedSpriteIndex >= static_cast<int>(sprites.size()))
+                        {
+                            state.selectedSpriteIndex = -1;
+                        }
+
+                        Ref<Texture> texture = nullptr;
+                        if (spriteSheet->GetTextureHandle() != AssetHandle(0))
+                        {
+                            texture = project->GetAsset<Texture>(spriteSheet->GetTextureHandle());
+                            if (!texture)
+                            {
+                                texture = project->GetAssetImmediate<Texture>(spriteSheet->GetTextureHandle());
+                            }
+                        }
+
+                        const ImVec2 contentSize = ImGui::GetContentRegionAvail();
+                        const float horizontalSplitterWidth = 6.0f;
+                        const float minPreviewColumnWidth = 260.0f;
+                        const float minToolsColumnWidth = 320.0f;
+                        const float maxPreviewColumnWidth = std::max(minPreviewColumnWidth, contentSize.x - minToolsColumnWidth - horizontalSplitterWidth);
+
+                        if (state.previewColumnWidth <= 0.0f)
+                        {
+                            const float defaultToolsWidth = std::clamp(contentSize.x * 0.36f, 320.0f, 460.0f);
+                            state.previewColumnWidth = std::max(minPreviewColumnWidth, contentSize.x - defaultToolsWidth - horizontalSplitterWidth);
+                        }
+                        state.previewColumnWidth = std::clamp(state.previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
+
+                        // Sprite sheet - Preview
+                        ImGui::BeginChild("##sprite_sheet_preview_column", ImVec2(state.previewColumnWidth, 0.0f), ImGuiChildFlags_None);
+                        const float splitterThickness = 6.0f;
+                        const float minViewportHeight = 120.0f;
+                        const float minExtractedHeight = 90.0f;
+                        const float totalLeftHeight = ImGui::GetContentRegionAvail().y;
+                        state.extractedPanelHeight = std::clamp(state.extractedPanelHeight, minExtractedHeight, std::max(minExtractedHeight, totalLeftHeight - minViewportHeight - splitterThickness));
+                        const float viewportHeight = std::max(minViewportHeight, totalLeftHeight - state.extractedPanelHeight - splitterThickness);
+
+                        ImGui::BeginChild("##sprite_sheet_viewport", ImVec2(0.0f, viewportHeight), ImGuiChildFlags_Borders);
+                        {
+                            const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
+                            const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+
+                            bool hovered = false;
+                            if (viewportSize.x > 0.0f && viewportSize.y > 0.0f)
+                            {
+                                ImGui::InvisibleButton("##sprite_sheet_view_btn", viewportSize);
+                                hovered = ImGui::IsItemHovered();
+                                if (hovered)
+                                {
+                                    ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
+                                    ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelX);
+                                }
+                            }
+
+                            if (hovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
+                            {
+                                state.pan += glm::vec2(ImGui::GetIO().MouseDelta.x, ImGui::GetIO().MouseDelta.y);
+                            }
+
+                            if (texture && texture->GetHandle())
+                            {
+                                const float texW = static_cast<float>(texture->GetWidth());
+                                const float texH = static_cast<float>(texture->GetHeight());
+                                const float fitScale = glm::min(viewportSize.x / std::max(texW, 1.0f), viewportSize.y / std::max(texH, 1.0f));
+                                ImVec2 imageSize = { texW * fitScale * state.zoom, texH * fitScale * state.zoom };
+                                ImVec2 imagePos =
+                                {
+                                    viewportPos.x + (viewportSize.x - imageSize.x) * 0.5f + state.pan.x,
+                                    viewportPos.y + (viewportSize.y - imageSize.y) * 0.5f + state.pan.y
+                                };
+
+                                if (hovered)
+                                {
+                                    const float wheel = ImGui::GetIO().MouseWheel;
+                                    if (wheel != 0.0f)
+                                    {
+                                        const float newZoom = std::clamp(state.zoom + wheel * 0.1f, 0.2f, 8.0f);
+                                        if (newZoom != state.zoom)
+                                        {
+                                            const ImVec2 mousePos = ImGui::GetMousePos();
+                                            const ImVec2 uvAtMouse =
+                                            {
+                                                (mousePos.x - imagePos.x) / std::max(imageSize.x, 1.0f),
+                                                (mousePos.y - imagePos.y) / std::max(imageSize.y, 1.0f)
+                                            };
+
+                                            state.zoom = newZoom;
+
+                                            imageSize =
+                                            {
+                                                texW * fitScale * state.zoom,
+                                                texH * fitScale * state.zoom
+                                            };
+
+                                            const ImVec2 centeredPos =
+                                            {
+                                                viewportPos.x + (viewportSize.x - imageSize.x) * 0.5f,
+                                                viewportPos.y + (viewportSize.y - imageSize.y) * 0.5f
+                                            };
+
+                                            state.pan.x = mousePos.x - uvAtMouse.x * imageSize.x - centeredPos.x;
+                                            state.pan.y = mousePos.y - uvAtMouse.y * imageSize.y - centeredPos.y;
+
+                                            imagePos =
+                                            {
+                                                viewportPos.x + (viewportSize.x - imageSize.x) * 0.5f + state.pan.x,
+                                                viewportPos.y + (viewportSize.y - imageSize.y) * 0.5f + state.pan.y
+                                            };
+                                        }
+                                    }
+                                }
+
+                                ImDrawList *drawList = ImGui::GetWindowDrawList();
+                                drawList->AddImage(reinterpret_cast<ImTextureID>(texture->GetHandle().Get()), imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
+
+                                auto toUV = [&](const ImVec2 &mouse)
+                                {
+                                    glm::vec2 uv;
+                                    uv.x = (mouse.x - imagePos.x) / std::max(imageSize.x, 1.0f);
+                                    uv.y = (mouse.y - imagePos.y) / std::max(imageSize.y, 1.0f);
+                                    uv = glm::clamp(uv, glm::vec2(0.0f), glm::vec2(1.0f));
+                                    return uv;
+                                };
+
+                                auto applySnap = [&](glm::vec2 uv)
+                                {
+                                    if (!state.snappingEnabled)
+                                    {
+                                        return uv;
+                                    }
+
+                                    const float gridStepU = 1.0f / static_cast<float>(std::max(state.gridColumns, 1));
+                                    const float gridStepV = 1.0f / static_cast<float>(std::max(state.gridRows, 1));
+                                    const float stepU = state.snapToGrid ? gridStepU : std::max(state.snapStepU, 0.0001f);
+                                    const float stepV = state.snapToGrid ? gridStepV : std::max(state.snapStepV, 0.0001f);
+
+                                    uv.x = std::round(uv.x / stepU) * stepU;
+                                    uv.y = std::round(uv.y / stepV) * stepV;
+                                    return glm::clamp(uv, glm::vec2(0.0f), glm::vec2(1.0f));
+                                };
+
+                                const bool mouseInsideImage = hovered && ImGui::GetMousePos().x >= imagePos.x && ImGui::GetMousePos().x <= imagePos.x + imageSize.x &&
+                                    ImGui::GetMousePos().y >= imagePos.y && ImGui::GetMousePos().y <= imagePos.y + imageSize.y;
+
+                                const glm::vec2 currentUVMin = glm::min(state.selectionStartUV, state.selectionEndUV);
+                                const glm::vec2 currentUVMax = glm::max(state.selectionStartUV, state.selectionEndUV);
+                                const ImVec2 currentSelMin =
+                                {
+                                    imagePos.x + currentUVMin.x * imageSize.x,
+                                    imagePos.y + currentUVMin.y * imageSize.y
+                                };
+                                const ImVec2 currentSelMax =
+                                {
+                                    imagePos.x + currentUVMax.x * imageSize.x,
+                                    imagePos.y + currentUVMax.y * imageSize.y
+                                };
+
+                                const bool hasSelection = (currentUVMax.x - currentUVMin.x) > 0.0001f && (currentUVMax.y - currentUVMin.y) > 0.0001f;
+
+                                ImVec2 handles[8] {};
+                                if (hasSelection)
+                                {
+                                    handles[0] = currentSelMin;
+                                    handles[1] = ImVec2(currentSelMax.x, currentSelMin.y);
+                                    handles[2] = currentSelMax;
+                                    handles[3] = ImVec2(currentSelMin.x, currentSelMax.y);
+                                    handles[4] = ImVec2((currentSelMin.x + currentSelMax.x) * 0.5f, currentSelMin.y);
+                                    handles[5] = ImVec2(currentSelMax.x, (currentSelMin.y + currentSelMax.y) * 0.5f);
+                                    handles[6] = ImVec2((currentSelMin.x + currentSelMax.x) * 0.5f, currentSelMax.y);
+                                    handles[7] = ImVec2(currentSelMin.x, (currentSelMin.y + currentSelMax.y) * 0.5f);
+                                }
+
+                                int hoveredHandle = -1;
+                                const float handleHalfSize = 6.0f;
+                                if (mouseInsideImage && hasSelection)
+                                {
+                                    const ImVec2 mousePos = ImGui::GetMousePos();
+                                    for (int i = 0; i < 8; ++i)
+                                    {
+                                        const ImRect handleRect(ImVec2(handles[i].x - handleHalfSize, handles[i].y - handleHalfSize), ImVec2(handles[i].x + handleHalfSize, handles[i].y + handleHalfSize));
+                                        if (handleRect.Contains(mousePos))
+                                        {
+                                            hoveredHandle = i;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if (hoveredHandle == 0 || hoveredHandle == 2)
+                                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
+                                else if (hoveredHandle == 1 || hoveredHandle == 3)
+                                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNESW);
+                                else if (hoveredHandle == 4 || hoveredHandle == 6)
+                                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+                                else if (hoveredHandle == 5 || hoveredHandle == 7)
+                                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+                                else if (mouseInsideImage && hasSelection && hoveredHandle == -1 && ImRect(currentSelMin, currentSelMax).Contains(ImGui::GetMousePos()))
+                                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+
+                                int clickedSpriteIndex = -1;
+                                if (mouseInsideImage && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                                {
+                                    const ImVec2 mousePos = ImGui::GetMousePos();
+                                    for (int i = static_cast<int>(sprites.size()) - 1; i >= 0; --i)
+                                    {
+                                        const auto &sprite = sprites[static_cast<size_t>(i)];
+                                        const ImRect spriteRect(
+                                            ImVec2(imagePos.x + sprite.uv0.x * imageSize.x, imagePos.y + sprite.uv0.y * imageSize.y),
+                                            ImVec2(imagePos.x + sprite.uv1.x * imageSize.x, imagePos.y + sprite.uv1.y * imageSize.y)
+                                        );
+
+                                        if (spriteRect.Contains(mousePos))
+                                        {
+                                            clickedSpriteIndex = i;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if (mouseInsideImage && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                                {
+                                    const glm::vec2 mouseUV = applySnap(toUV(ImGui::GetMousePos()));
+                                    if (hoveredHandle != -1)
+                                    {
+                                        state.activeHandle = hoveredHandle;
+                                        state.dragStartMinUV = currentUVMin;
+                                        state.dragStartMaxUV = currentUVMax;
+                                        state.selecting = false;
+                                    }
+                                    else if (hasSelection && ImRect(currentSelMin, currentSelMax).Contains(ImGui::GetMousePos()))
+                                    {
+                                        state.activeHandle = 8;
+                                        state.dragStartMinUV = currentUVMin;
+                                        state.dragStartMaxUV = currentUVMax;
+                                        state.dragOffsetUV = mouseUV - currentUVMin;
+                                        state.selecting = false;
+                                    }
+                                    else if (clickedSpriteIndex != -1)
+                                    {
+                                        state.selectedSpriteIndex = clickedSpriteIndex;
+                                        const auto &selectedSprite = sprites[static_cast<size_t>(clickedSpriteIndex)];
+                                        state.selectionStartUV = selectedSprite.uv0;
+                                        state.selectionEndUV = selectedSprite.uv1;
+                                        state.activeHandle = -1;
+                                        state.selecting = false;
+                                    }
+                                    else
+                                    {
+                                        state.activeHandle = -1;
+                                        state.selectedSpriteIndex = -1;
+                                        state.selecting = true;
+                                        state.selectionStartUV = state.selectionEndUV = mouseUV;
+                                    }
+                                }
+
+                                if (state.activeHandle != -1)
+                                {
+                                    if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                                    {
+                                        const glm::vec2 mouseUV = applySnap(toUV(ImGui::GetMousePos()));
+                                        glm::vec2 minUV = state.dragStartMinUV;
+                                        glm::vec2 maxUV = state.dragStartMaxUV;
+
+                                        if (state.activeHandle == 8)
+                                        {
+                                            const glm::vec2 sizeUV = state.dragStartMaxUV - state.dragStartMinUV;
+                                            minUV = mouseUV - state.dragOffsetUV;
+                                            minUV.x = std::clamp(minUV.x, 0.0f, 1.0f - sizeUV.x);
+                                            minUV.y = std::clamp(minUV.y, 0.0f, 1.0f - sizeUV.y);
+                                            maxUV = minUV + sizeUV;
+                                        }
+                                        else
+                                        {
+                                            constexpr float epsilon = 0.0001f;
+                                            switch (state.activeHandle)
+                                            {
+                                                case 0: // top-left
+                                                minUV.x = std::clamp(mouseUV.x, 0.0f, state.dragStartMaxUV.x - epsilon);
+                                                minUV.y = std::clamp(mouseUV.y, 0.0f, state.dragStartMaxUV.y - epsilon);
+                                                break;
+                                                case 1: // top-right
+                                                maxUV.x = std::clamp(mouseUV.x, state.dragStartMinUV.x + epsilon, 1.0f);
+                                                minUV.y = std::clamp(mouseUV.y, 0.0f, state.dragStartMaxUV.y - epsilon);
+                                                break;
+                                                case 2: // bottom-right
+                                                maxUV.x = std::clamp(mouseUV.x, state.dragStartMinUV.x + epsilon, 1.0f);
+                                                maxUV.y = std::clamp(mouseUV.y, state.dragStartMinUV.y + epsilon, 1.0f);
+                                                break;
+                                                case 3: // bottom-left
+                                                minUV.x = std::clamp(mouseUV.x, 0.0f, state.dragStartMaxUV.x - epsilon);
+                                                maxUV.y = std::clamp(mouseUV.y, state.dragStartMinUV.y + epsilon, 1.0f);
+                                                break;
+                                                case 4: // top
+                                                minUV.y = std::clamp(mouseUV.y, 0.0f, state.dragStartMaxUV.y - epsilon);
+                                                break;
+                                                case 5: // right
+                                                maxUV.x = std::clamp(mouseUV.x, state.dragStartMinUV.x + epsilon, 1.0f);
+                                                break;
+                                                case 6: // bottom
+                                                maxUV.y = std::clamp(mouseUV.y, state.dragStartMinUV.y + epsilon, 1.0f);
+                                                break;
+                                                case 7: // left
+                                                minUV.x = std::clamp(mouseUV.x, 0.0f, state.dragStartMaxUV.x - epsilon);
+                                                break;
+                                                default:
+                                                break;
+                                            }
+                                        }
+
+                                        state.selectionStartUV = minUV;
+                                        state.selectionEndUV = maxUV;
+                                    }
+                                    else
+                                    {
+                                        state.activeHandle = -1;
+                                    }
+                                }
+
+                                bool selectionFinishedThisFrame = false;
+                                if (state.selecting)
+                                {
+                                    state.selectionEndUV = applySnap(toUV(ImGui::GetMousePos()));
+                                    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                                    {
+                                        state.selecting = false;
+                                        selectionFinishedThisFrame = true;
+                                    }
+                                }
+
+                                const glm::vec2 uvMin = glm::min(state.selectionStartUV, state.selectionEndUV);
+                                const glm::vec2 uvMax = glm::max(state.selectionStartUV, state.selectionEndUV);
+
+                                if (selectionFinishedThisFrame && state.selectedSpriteIndex == -1)
+                                {
+                                    if ((uvMax.x - uvMin.x) > 0.0001f && (uvMax.y - uvMin.y) > 0.0001f)
+                                    {
+                                        sprites.push_back({ uvMin, uvMax });
+                                        state.spriteNames.push_back(std::format("Sprite {}", sprites.size() - 1));
+                                        state.selectedSpriteIndex = static_cast<int>(sprites.size()) - 1;
+                                        spriteSheet->SetDirtyFlag(true);
+                                    }
+                                }
+
+                                if (state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size()) && state.activeHandle != -1)
+                                {
+                                    auto &selectedSprite = sprites[static_cast<size_t>(state.selectedSpriteIndex)];
+                                    selectedSprite.uv0 = uvMin;
+                                    selectedSprite.uv1 = uvMax;
+                                    spriteSheet->SetDirtyFlag(true);
+                                }
+
+                                const ImVec2 selMin = { imagePos.x + uvMin.x * imageSize.x, imagePos.y + uvMin.y * imageSize.y };
+                                const ImVec2 selMax = { imagePos.x + uvMax.x * imageSize.x, imagePos.y + uvMax.y * imageSize.y };
+                                drawList->AddRectFilled(selMin, selMax, IM_COL32(255, 220, 50, 30));
+                                drawList->AddRect(selMin, selMax, IM_COL32(255, 220, 50, 255), 0.0f, 0, 2.0f);
+
+                                if ((uvMax.x - uvMin.x) > 0.0001f && (uvMax.y - uvMin.y) > 0.0001f)
+                                {
+                                    const ImVec2 midTop = ImVec2((selMin.x + selMax.x) * 0.5f, selMin.y);
+                                    const ImVec2 midRight = ImVec2(selMax.x, (selMin.y + selMax.y) * 0.5f);
+                                    const ImVec2 midBottom = ImVec2((selMin.x + selMax.x) * 0.5f, selMax.y);
+                                    const ImVec2 midLeft = ImVec2(selMin.x, (selMin.y + selMax.y) * 0.5f);
+
+                                    const ImVec2 handlesDraw[8] = { selMin, ImVec2(selMax.x, selMin.y), selMax, ImVec2(selMin.x, selMax.y), midTop, midRight, midBottom, midLeft };
+
+                                    for (const ImVec2 &handlePos : handlesDraw)
+                                    {
+                                        const ImVec2 hMin = ImVec2(handlePos.x - 4.0f, handlePos.y - 4.0f);
+                                        const ImVec2 hMax = ImVec2(handlePos.x + 4.0f, handlePos.y + 4.0f);
+                                        drawList->AddRectFilled(hMin, hMax, IM_COL32(255, 255, 255, 230));
+                                        drawList->AddRect(hMin, hMax, IM_COL32(20, 20, 20, 255), 0.0f, 0, 1.0f);
+                                    }
+                                }
+
+                                for (size_t i = 0; i < sprites.size(); ++i)
+                                {
+                                    const auto &sprite = sprites[i];
+                                    const ImVec2 blockMin = { imagePos.x + sprite.uv0.x * imageSize.x,
+                                                             imagePos.y + sprite.uv0.y * imageSize.y };
+                                    const ImVec2 blockMax = { imagePos.x + sprite.uv1.x * imageSize.x,
+                                                             imagePos.y + sprite.uv1.y * imageSize.y };
+                                    const bool isSelectedSprite = state.selectedSpriteIndex == static_cast<int>(i);
+                                    drawList->AddRect(blockMin, blockMax, isSelectedSprite
+                                        ? IM_COL32(255, 128, 0, 255)
+                                        : IM_COL32(0, 220, 255, 200), 0.0f, 0, isSelectedSprite
+                                        ? 2.0f : 1.5f);
+                                }
+                            }
+                            else
+                            {
+                                ImGui::SetCursorScreenPos(ImVec2(viewportPos.x + 12.0f, viewportPos.y + 12.0f));
+                                ImGui::Text("Drop a texture to preview SpriteSheet");
+                            }
+                        }
+                        ImGui::EndChild();
+
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.28f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.32f, 0.32f, 0.32f, 1.0f));
+                        ImGui::Button("##sprite_sheet_vertical_splitter", ImVec2(-1.0f, splitterThickness));
+
+                        if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+                        {
+                            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+                        }
+
+                        if (ImGui::IsItemActive())
+                        {
+                            state.extractedPanelHeight -= ImGui::GetIO().MouseDelta.y;
+                            state.extractedPanelHeight = std::clamp(state.extractedPanelHeight, minExtractedHeight,
+                                std::max(minExtractedHeight, totalLeftHeight - minViewportHeight - splitterThickness));
+                        }
+                        ImGui::PopStyleColor(3);
+
+                        ImGui::Text("Extracted Sprites");
+                        ImGui::BeginChild("##sprite_sheet_extracted_preview", ImVec2(0.0f, state.extractedPanelHeight), ImGuiChildFlags_Borders);
+                        if (texture && texture->GetHandle())
+                        {
+                            const float previewSize = 56.0f;
+                            const float spacing = ImGui::GetStyle().ItemSpacing.x;
+                            const float contentWidth = ImGui::GetContentRegionAvail().x;
+                            const int spritesPerRow = std::max(1, static_cast<int>((contentWidth + spacing) / (previewSize + spacing + horizontalSplitterWidth)));
+
+                            for (size_t i = 0; i < sprites.size(); ++i)
+                            {
+                                const auto &sprite = sprites[i];
+                                ImGui::PushID(static_cast<int>(i));
+
+                                ImTextureID texId = reinterpret_cast<ImTextureID>(texture->GetHandle().Get());
+                                ImGui::ImageButton("##sprite_preview", texId, ImVec2(previewSize, previewSize), ImVec2(sprite.uv0.x, sprite.uv0.y), ImVec2(sprite.uv1.x, sprite.uv1.y));
+
+                                if (ImGui::BeginDragDropSource())
+                                {
+                                    SpriteSheetSpritePayload payload;
+                                    payload.spriteSheetHandle = spriteSheet->handle;
+                                    payload.textureHandle = spriteSheet->GetTextureHandle();
+                                    payload.spriteIndex = static_cast<uint32_t>(i);
+                                    payload.uv0 = sprite.uv0;
+                                    payload.uv1 = sprite.uv1;
+
+                                    ImGui::SetDragDropPayload("sprite_sheet_item", &payload, sizeof(payload));
+                                    ImGui::Text("Sprite %zu", i);
+                                    ImGui::EndDragDropSource();
+                                }
+
+                                if (state.selectedSpriteIndex == static_cast<int>(i))
+                                {
+                                    ImDrawList *selectionDrawList = ImGui::GetWindowDrawList();
+                                    selectionDrawList->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), IM_COL32(255, 180, 0, 255), 2.0f, 0, 2.0f);
+                                }
+
+                                if ((i + 1) % spritesPerRow != 0)
+                                {
+                                    ImGui::SameLine();
+                                }
+
+                                ImGui::PopID();
+                            }
+                        }
+                        else
+                        {
+                            ImGui::TextDisabled("Assign a texture to preview extracted sprites.");
+                        }
+                        ImGui::EndChild();
+                        ImGui::EndChild();
+
+                        ImGui::SameLine(0.0f, 0.0f);
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.28f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.32f, 0.32f, 0.32f, 1.0f));
+                        ImGui::BeginChild("##sprite_sheet_horizontal_splitter", ImVec2(horizontalSplitterWidth, 0.0f), ImGuiChildFlags_None);
+                        ImGui::Button("##sprite_sheet_horizontal_splitter_btn", ImVec2(-1.0f, -1.0f));
+
+                        if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+                        {
+                            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+                        }
+
+                        if (ImGui::IsItemActive())
+                        {
+                            state.previewColumnWidth += ImGui::GetIO().MouseDelta.x;
+                            state.previewColumnWidth = std::clamp(state.previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
+                        }
+
+                        ImGui::EndChild();
+                        ImGui::PopStyleColor(3);
+
+                        ImGui::SameLine(0.0f, 0.0f);
+                        ImGui::BeginChild("##sprite_sheet_tools_column", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
+
+                        ImGui::Spacing();
+                        std::string textureLabel = spriteSheet->GetTextureHandle() == AssetHandle(0)
+                            ? "Drop Texture Here"
+                            : "Texture Loaded";
+
+                        ImGui::Button(textureLabel.c_str(), ImVec2(220.0f, 0.0f));
+                        if (ImGui::BeginDragDropTarget())
+                        {
+                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+                            {
+                                if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                                {
+                                    const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                                    const AssetMetaData &droppedMetadata = assetManager->GetMetaData(droppedHandle);
+                                    if (droppedMetadata.type == AssetType::Texture)
+                                    {
+                                        spriteSheet->SetTextureHandle(droppedHandle);
+                                        spriteSheet->SetDirtyFlag(true);
+                                    }
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+
+                        ImGui::SameLine();
+                        if (ImGui::Button("Clear Texture"))
+                        {
+                            spriteSheet->SetTextureHandle(AssetHandle(0));
+                            spriteSheet->SetDirtyFlag(true);
+                        }
+
+                        ImGui::Text("Texture Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(spriteSheet->GetTextureHandle())));
+
+                        glm::vec2 atlasSize = spriteSheet->GetAtlasSize();
+                        if (ImGui::DragFloat2("Atlas Cell Size", &atlasSize.x, 1.0f, 1.0f, 8192.0f, "%.0f"))
+                        {
+                            spriteSheet->SetAtlasSize(atlasSize);
+                            spriteSheet->SetDirtyFlag(true);
+                        }
+
+                        const glm::vec2 uvMin = glm::min(state.selectionStartUV, state.selectionEndUV);
+                        const glm::vec2 uvMax = glm::max(state.selectionStartUV, state.selectionEndUV);
+
+                        ImGui::Text("Selected UV0: %.3f, %.3f", uvMin.x, uvMin.y);
+                        ImGui::Text("Selected UV1: %.3f, %.3f", uvMax.x, uvMax.y);
+
+                        const bool hasValidSelectionArea = uvMax.x > uvMin.x && uvMax.y > uvMin.y;
+                        const bool editingSelectedSprite = state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size());
+                        if (editingSelectedSprite && ImGui::Button("Apply To Selected"))
+                        {
+                            if (hasValidSelectionArea)
+                            {
+                                auto &selectedSprite = sprites[static_cast<size_t>(state.selectedSpriteIndex)];
+                                selectedSprite.uv0 = uvMin;
+                                selectedSprite.uv1 = uvMax;
+                                spriteSheet->SetDirtyFlag(true);
+                            }
+                        }
+                        else if (!editingSelectedSprite)
+                        {
+                            ImGui::TextDisabled("Selection auto-adds on mouse release");
+                        }
+
+                        ImGui::SameLine();
+                        if (ImGui::Button("Remove Selected") && state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size()))
+                        {
+                            sprites.erase(sprites.begin() + state.selectedSpriteIndex);
+                            state.spriteNames.erase(state.spriteNames.begin() + state.selectedSpriteIndex);
+                            state.selectedSpriteIndex = -1;
+                            state.renamingSpriteIndex = -1;
+                            spriteSheet->SetDirtyFlag(true);
+                        }
+
+                        ImGui::BeginChild("##sprite_sheet_sprite_list", ImVec2(0.0f, 130.0f), ImGuiChildFlags_Borders);
+                        for (size_t i = 0; i < sprites.size(); ++i)
+                        {
+                            const auto &sprite = sprites[i];
+                            const bool selected = state.selectedSpriteIndex == static_cast<int>(i);
+                            const std::string rowLabel = std::format("{}##sprite_row_{}", state.spriteNames[i], i);
+                            if (ImGui::Selectable(rowLabel.c_str(), selected))
+                            {
+                                state.selectedSpriteIndex = static_cast<int>(i);
+                                state.selectionStartUV = sprite.uv0;
+                                state.selectionEndUV = sprite.uv1;
+                                state.renamingSpriteIndex = state.selectedSpriteIndex;
+                                std::strncpy(state.renameBuffer, state.spriteNames[i].c_str(), sizeof(state.renameBuffer) - 1);
+                                state.renameBuffer[sizeof(state.renameBuffer) - 1] = '\0';
+                            }
+
+                            if (ImGui::BeginDragDropSource())
+                            {
+                                SpriteSheetSpritePayload payload;
+                                payload.spriteSheetHandle = spriteSheet->handle;
+                                payload.textureHandle = spriteSheet->GetTextureHandle();
+                                payload.spriteIndex = static_cast<uint32_t>(i);
+                                payload.uv0 = sprite.uv0;
+                                payload.uv1 = sprite.uv1;
+
+                                ImGui::SetDragDropPayload("sprite_sheet_item", &payload, sizeof(payload));
+                                ImGui::Text("Sprite %zu", i);
+                                ImGui::EndDragDropSource();
+                            }
+
+                            ImGui::SameLine();
+                            ImGui::TextDisabled("(%.3f, %.3f) -> (%.3f, %.3f)", sprite.uv0.x, sprite.uv0.y, sprite.uv1.x, sprite.uv1.y);
+                        }
+                        ImGui::EndChild();
+
+                        const bool canMoveUp = state.selectedSpriteIndex > 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size());
+                        if (!canMoveUp)
+                        {
+                            ImGui::BeginDisabled();
+                        }
+
+                        if (ImGui::Button("Move Up"))
+                        {
+                            const int i = state.selectedSpriteIndex;
+                            std::swap(sprites[static_cast<size_t>(i)], sprites[static_cast<size_t>(i - 1)]);
+                            std::swap(state.spriteNames[static_cast<size_t>(i)], state.spriteNames[static_cast<size_t>(i - 1)]);
+                            state.selectedSpriteIndex = i - 1;
+                            spriteSheet->SetDirtyFlag(true);
+                        }
+
+                        if (!canMoveUp)
+                        {
+                            ImGui::EndDisabled();
+                        }
+
+                        ImGui::SameLine();
+                        const bool canMoveDown = state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size()) - 1;
+                        if (!canMoveDown)
+                        {
+                            ImGui::BeginDisabled();
+                        }
+
+                        if (ImGui::Button("Move Down"))
+                        {
+                            const int i = state.selectedSpriteIndex;
+                            std::swap(sprites[static_cast<size_t>(i)], sprites[static_cast<size_t>(i + 1)]);
+                            std::swap(state.spriteNames[static_cast<size_t>(i)], state.spriteNames[static_cast<size_t>(i + 1)]);
+                            state.selectedSpriteIndex = i + 1;
+                            spriteSheet->SetDirtyFlag(true);
+                        }
+                        if (!canMoveDown)
+                        {
+                            ImGui::EndDisabled();
+                        }
+
+                        if (state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size()))
+                        {
+                            if (state.renamingSpriteIndex != state.selectedSpriteIndex)
+                            {
+                                state.renamingSpriteIndex = state.selectedSpriteIndex;
+                                std::strncpy(state.renameBuffer, state.spriteNames[static_cast<size_t>(state.selectedSpriteIndex)].c_str(),
+                                    sizeof(state.renameBuffer) - 1);
+
+                                state.renameBuffer[sizeof(state.renameBuffer) - 1] = '\0';
+                            }
+
+                            if (ImGui::InputText("Sprite Name", state.renameBuffer, sizeof(state.renameBuffer)))
+                            {
+                                state.spriteNames[static_cast<size_t>(state.selectedSpriteIndex)] = state.renameBuffer;
+                            }
+
+                            auto &sprite = sprites[static_cast<size_t>(state.selectedSpriteIndex)];
+                            glm::vec2 selectedUv0 = sprite.uv0;
+                            glm::vec2 selectedUv1 = sprite.uv1;
+                            if (ImGui::DragFloat2("Sprite UV0", &selectedUv0.x, 0.001f, 0.0f, 1.0f, "%.3f")
+                                || ImGui::DragFloat2("Sprite UV1", &selectedUv1.x, 0.001f, 0.0f, 1.0f, "%.3f"))
+                            {
+                                sprite.uv0 = glm::clamp(glm::min(selectedUv0, selectedUv1), glm::vec2(0.0f), glm::vec2(1.0f));
+                                sprite.uv1 = glm::clamp(glm::max(selectedUv0, selectedUv1), glm::vec2(0.0f), glm::vec2(1.0f));
+                                state.selectionStartUV = sprite.uv0;
+                                state.selectionEndUV = sprite.uv1;
+                                spriteSheet->SetDirtyFlag(true);
+                            }
+                        }
+
+                        ImGui::Separator();
+                        ImGui::DragInt("Grid Columns", &state.gridColumns, 1.0f, 1, 512);
+                        ImGui::DragInt("Grid Rows", &state.gridRows, 1.0f, 1, 512);
+                        ImGui::Checkbox("Enable Snapping", &state.snappingEnabled);
+
+                        if (state.snappingEnabled)
+                        {
+                            ImGui::Checkbox("Snap To Grid", &state.snapToGrid);
+                            if (!state.snapToGrid)
+                            {
+                                ImGui::DragFloat("Snap Step U", &state.snapStepU, 0.001f, 0.001f, 1.0f, "%.3f");
+                                ImGui::DragFloat("Snap Step V", &state.snapStepV, 0.001f, 0.001f, 1.0f, "%.3f");
+                            }
+                        }
+
+                        if (ImGui::Button("Auto Slice Grid"))
+                        {
+                            sprites.clear();
+                            state.spriteNames.clear();
+                            state.selectedSpriteIndex = -1;
+
+                            const int cols = std::max(state.gridColumns, 1);
+                            const int rows = std::max(state.gridRows, 1);
+                            const float cellU = 1.0f / static_cast<float>(cols);
+                            const float cellV = 1.0f / static_cast<float>(rows);
+
+                            for (int y = 0; y < rows; ++y)
+                            {
+                                for (int x = 0; x < cols; ++x)
+                                {
+                                    const glm::vec2 blockUV0 = { x * cellU, y * cellV };
+                                    const glm::vec2 blockUV1 = { (x + 1) * cellU, (y + 1) * cellV };
+                                    sprites.push_back({ blockUV0, blockUV1 });
+                                    state.spriteNames.push_back(std::format("Sprite {}", sprites.size() - 1));
+                                }
+                            }
+
+                            if (texture && texture->GetWidth() > 0 && texture->GetHeight() > 0)
+                            {
+                                spriteSheet->SetAtlasSize({ static_cast<float>(texture->GetWidth()) / static_cast<float>(cols),
+                                     static_cast<float>(texture->GetHeight()) / static_cast<float>(rows) });
+                            }
+
+                            spriteSheet->SetDirtyFlag(true);
+                        }
+
+                        ImGui::SameLine();
+                        if (ImGui::Button("Clear Sprites"))
+                        {
+                            sprites.clear();
+                            state.spriteNames.clear();
+                            state.selectedSpriteIndex = -1;
+                            spriteSheet->SetDirtyFlag(true);
+                        }
+
+                        ImGui::Text("Total Sprites: %zu", sprites.size());
+                        ImGui::EndChild();
                     }
                     else
                     {
@@ -1108,759 +1858,6 @@ namespace ignite
         ImGui::End();
         assetData.isOpen = isOpen;
         assetData.requestFocus = false;
-    }
-
-    void AssetEditorPanel::UISpriteSheet2DEditor(const Ref<SpriteSheet> &spriteSheet)
-    {
-        if (!spriteSheet)
-        {
-            return;
-        }
-
-        Project *project = m_EditorLayer->GetActiveProject().get();
-        auto assetManager = project->GetAssetManager();
-
-        const auto stateKey = static_cast<uint64_t>(spriteSheet->handle);
-        SpriteSheetEditorState &state = s_SpriteSheetEditorState[stateKey];
-        auto &sprites = spriteSheet->GetSprites();
-
-        if (state.spriteNames.size() < sprites.size())
-        {
-            for (size_t i = state.spriteNames.size(); i < sprites.size(); ++i)
-            {
-                state.spriteNames.push_back(std::format("Sprite {}", i));
-            }
-        }
-        else if (state.spriteNames.size() > sprites.size())
-        {
-            state.spriteNames.resize(sprites.size());
-        }
-
-        if (state.selectedSpriteIndex >= static_cast<int>(sprites.size()))
-        {
-            state.selectedSpriteIndex = -1;
-        }
-
-        Ref<Texture> texture = nullptr;
-        if (spriteSheet->GetTextureHandle() != AssetHandle(0))
-        {
-            texture = project->GetAsset<Texture>(spriteSheet->GetTextureHandle());
-            if (!texture)
-            {
-                texture = project->GetAssetImmediate<Texture>(spriteSheet->GetTextureHandle());
-            }
-        }
-
-        const ImVec2 contentSize = ImGui::GetContentRegionAvail();
-        const float horizontalSplitterWidth = 6.0f;
-        const float minPreviewColumnWidth = 260.0f;
-        const float minToolsColumnWidth = 320.0f;
-        const float maxPreviewColumnWidth = std::max(minPreviewColumnWidth, contentSize.x - minToolsColumnWidth - horizontalSplitterWidth);
-
-        if (state.previewColumnWidth <= 0.0f)
-        {
-            const float defaultToolsWidth = std::clamp(contentSize.x * 0.36f, 320.0f, 460.0f);
-            state.previewColumnWidth = std::max(minPreviewColumnWidth, contentSize.x - defaultToolsWidth - horizontalSplitterWidth);
-        }
-        state.previewColumnWidth = std::clamp(state.previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
-
-        // Sprite sheet - Preview
-        ImGui::BeginChild("##sprite_sheet_preview_column", ImVec2(state.previewColumnWidth, 0.0f), ImGuiChildFlags_None);
-        const float splitterThickness = 6.0f;
-        const float minViewportHeight = 120.0f;
-        const float minExtractedHeight = 90.0f;
-        const float totalLeftHeight = ImGui::GetContentRegionAvail().y;
-        state.extractedPanelHeight = std::clamp(state.extractedPanelHeight, minExtractedHeight, std::max(minExtractedHeight, totalLeftHeight - minViewportHeight - splitterThickness));
-        const float viewportHeight = std::max(minViewportHeight, totalLeftHeight - state.extractedPanelHeight - splitterThickness);
-
-        ImGui::BeginChild("##sprite_sheet_viewport", ImVec2(0.0f, viewportHeight), ImGuiChildFlags_Borders);
-        {
-            const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
-            const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
-
-            bool hovered = false;
-            if (viewportSize.x > 0.0f && viewportSize.y > 0.0f)
-            {
-                ImGui::InvisibleButton("##sprite_sheet_view_btn", viewportSize);
-                hovered = ImGui::IsItemHovered();
-                if (hovered)
-                {
-                    ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
-                    ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelX);
-                }
-            }
-
-            if (hovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
-            {
-                state.pan += glm::vec2(ImGui::GetIO().MouseDelta.x, ImGui::GetIO().MouseDelta.y);
-            }
-
-            if (texture && texture->GetHandle())
-            {
-                const float texW = static_cast<float>(texture->GetWidth());
-                const float texH = static_cast<float>(texture->GetHeight());
-                const float fitScale = glm::min(viewportSize.x / std::max(texW, 1.0f), viewportSize.y / std::max(texH, 1.0f));
-                ImVec2 imageSize = { texW * fitScale * state.zoom, texH * fitScale * state.zoom };
-                ImVec2 imagePos =
-                {
-                    viewportPos.x + (viewportSize.x - imageSize.x) * 0.5f + state.pan.x,
-                    viewportPos.y + (viewportSize.y - imageSize.y) * 0.5f + state.pan.y
-                };
-
-                if (hovered)
-                {
-                    const float wheel = ImGui::GetIO().MouseWheel;
-                    if (wheel != 0.0f)
-                    {
-                        const float newZoom = std::clamp(state.zoom + wheel * 0.1f, 0.2f, 8.0f);
-                        if (newZoom != state.zoom)
-                        {
-                            const ImVec2 mousePos = ImGui::GetMousePos();
-                            const ImVec2 uvAtMouse =
-                            {
-                                (mousePos.x - imagePos.x) / std::max(imageSize.x, 1.0f),
-                                (mousePos.y - imagePos.y) / std::max(imageSize.y, 1.0f)
-                            };
-
-                            state.zoom = newZoom;
-
-                            imageSize =
-                            {
-                                texW * fitScale * state.zoom,
-                                texH * fitScale * state.zoom
-                            };
-
-                            const ImVec2 centeredPos =
-                            {
-                                viewportPos.x + (viewportSize.x - imageSize.x) * 0.5f,
-                                viewportPos.y + (viewportSize.y - imageSize.y) * 0.5f
-                            };
-
-                            state.pan.x = mousePos.x - uvAtMouse.x * imageSize.x - centeredPos.x;
-                            state.pan.y = mousePos.y - uvAtMouse.y * imageSize.y - centeredPos.y;
-
-                            imagePos =
-                            {
-                                viewportPos.x + (viewportSize.x - imageSize.x) * 0.5f + state.pan.x,
-                                viewportPos.y + (viewportSize.y - imageSize.y) * 0.5f + state.pan.y
-                            };
-                        }
-                    }
-                }
-
-                ImDrawList *drawList = ImGui::GetWindowDrawList();
-                drawList->AddImage(reinterpret_cast<ImTextureID>(texture->GetHandle().Get()), imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
-
-                auto toUV = [&](const ImVec2 &mouse)
-                {
-                    glm::vec2 uv;
-                    uv.x = (mouse.x - imagePos.x) / std::max(imageSize.x, 1.0f);
-                    uv.y = (mouse.y - imagePos.y) / std::max(imageSize.y, 1.0f);
-                    uv = glm::clamp(uv, glm::vec2(0.0f), glm::vec2(1.0f));
-                    return uv;
-                };
-
-                auto applySnap = [&](glm::vec2 uv)
-                {
-                    if (!state.snappingEnabled)
-                    {
-                        return uv;
-                    }
-
-                    const float gridStepU = 1.0f / static_cast<float>(std::max(state.gridColumns, 1));
-                    const float gridStepV = 1.0f / static_cast<float>(std::max(state.gridRows, 1));
-                    const float stepU = state.snapToGrid ? gridStepU : std::max(state.snapStepU, 0.0001f);
-                    const float stepV = state.snapToGrid ? gridStepV : std::max(state.snapStepV, 0.0001f);
-
-                    uv.x = std::round(uv.x / stepU) * stepU;
-                    uv.y = std::round(uv.y / stepV) * stepV;
-                    return glm::clamp(uv, glm::vec2(0.0f), glm::vec2(1.0f));
-                };
-
-                const bool mouseInsideImage = hovered && ImGui::GetMousePos().x >= imagePos.x && ImGui::GetMousePos().x <= imagePos.x + imageSize.x &&
-                    ImGui::GetMousePos().y >= imagePos.y && ImGui::GetMousePos().y <= imagePos.y + imageSize.y;
-
-                const glm::vec2 currentUVMin = glm::min(state.selectionStartUV, state.selectionEndUV);
-                const glm::vec2 currentUVMax = glm::max(state.selectionStartUV, state.selectionEndUV);
-                const ImVec2 currentSelMin =
-                {
-                    imagePos.x + currentUVMin.x * imageSize.x,
-                    imagePos.y + currentUVMin.y * imageSize.y
-                };
-                const ImVec2 currentSelMax =
-                {
-                    imagePos.x + currentUVMax.x * imageSize.x,
-                    imagePos.y + currentUVMax.y * imageSize.y
-                };
-
-                const bool hasSelection = (currentUVMax.x - currentUVMin.x) > 0.0001f && (currentUVMax.y - currentUVMin.y) > 0.0001f;
-
-                ImVec2 handles[8] {};
-                if (hasSelection)
-                {
-                    handles[0] = currentSelMin;
-                    handles[1] = ImVec2(currentSelMax.x, currentSelMin.y);
-                    handles[2] = currentSelMax;
-                    handles[3] = ImVec2(currentSelMin.x, currentSelMax.y);
-                    handles[4] = ImVec2((currentSelMin.x + currentSelMax.x) * 0.5f, currentSelMin.y);
-                    handles[5] = ImVec2(currentSelMax.x, (currentSelMin.y + currentSelMax.y) * 0.5f);
-                    handles[6] = ImVec2((currentSelMin.x + currentSelMax.x) * 0.5f, currentSelMax.y);
-                    handles[7] = ImVec2(currentSelMin.x, (currentSelMin.y + currentSelMax.y) * 0.5f);
-                }
-
-                int hoveredHandle = -1;
-                const float handleHalfSize = 6.0f;
-                if (mouseInsideImage && hasSelection)
-                {
-                    const ImVec2 mousePos = ImGui::GetMousePos();
-                    for (int i = 0; i < 8; ++i)
-                    {
-                        const ImRect handleRect(ImVec2(handles[i].x - handleHalfSize, handles[i].y - handleHalfSize), ImVec2(handles[i].x + handleHalfSize, handles[i].y + handleHalfSize));
-                        if (handleRect.Contains(mousePos))
-                        {
-                            hoveredHandle = i;
-                            break;
-                        }
-                    }
-                }
-
-                if (hoveredHandle == 0 || hoveredHandle == 2)
-                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
-                else if (hoveredHandle == 1 || hoveredHandle == 3)
-                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNESW);
-                else if (hoveredHandle == 4 || hoveredHandle == 6)
-                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-                else if (hoveredHandle == 5 || hoveredHandle == 7)
-                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-                else if (mouseInsideImage && hasSelection && hoveredHandle == -1 && ImRect(currentSelMin, currentSelMax).Contains(ImGui::GetMousePos()))
-                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
-
-                int clickedSpriteIndex = -1;
-                if (mouseInsideImage && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-                {
-                    const ImVec2 mousePos = ImGui::GetMousePos();
-                    for (int i = static_cast<int>(sprites.size()) - 1; i >= 0; --i)
-                    {
-                        const auto &sprite = sprites[static_cast<size_t>(i)];
-                        const ImRect spriteRect(
-                            ImVec2(imagePos.x + sprite.uv0.x * imageSize.x, imagePos.y + sprite.uv0.y * imageSize.y),
-                            ImVec2(imagePos.x + sprite.uv1.x * imageSize.x, imagePos.y + sprite.uv1.y * imageSize.y)
-                        );
-
-                        if (spriteRect.Contains(mousePos))
-                        {
-                            clickedSpriteIndex = i;
-                            break;
-                        }
-                    }
-                }
-
-                if (mouseInsideImage && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-                {
-                    const glm::vec2 mouseUV = applySnap(toUV(ImGui::GetMousePos()));
-                    if (hoveredHandle != -1)
-                    {
-                        state.activeHandle = hoveredHandle;
-                        state.dragStartMinUV = currentUVMin;
-                        state.dragStartMaxUV = currentUVMax;
-                        state.selecting = false;
-                    }
-                    else if (hasSelection && ImRect(currentSelMin, currentSelMax).Contains(ImGui::GetMousePos()))
-                    {
-                        state.activeHandle = 8;
-                        state.dragStartMinUV = currentUVMin;
-                        state.dragStartMaxUV = currentUVMax;
-                        state.dragOffsetUV = mouseUV - currentUVMin;
-                        state.selecting = false;
-                    }
-                    else if (clickedSpriteIndex != -1)
-                    {
-                        state.selectedSpriteIndex = clickedSpriteIndex;
-                        const auto &selectedSprite = sprites[static_cast<size_t>(clickedSpriteIndex)];
-                        state.selectionStartUV = selectedSprite.uv0;
-                        state.selectionEndUV = selectedSprite.uv1;
-                        state.activeHandle = -1;
-                        state.selecting = false;
-                    }
-                    else
-                    {
-                        state.activeHandle = -1;
-                        state.selectedSpriteIndex = -1;
-                        state.selecting = true;
-                        state.selectionStartUV = state.selectionEndUV = mouseUV;
-                    }
-                }
-
-                if (state.activeHandle != -1)
-                {
-                    if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
-                    {
-                        const glm::vec2 mouseUV = applySnap(toUV(ImGui::GetMousePos()));
-                        glm::vec2 minUV = state.dragStartMinUV;
-                        glm::vec2 maxUV = state.dragStartMaxUV;
-
-                        if (state.activeHandle == 8)
-                        {
-                            const glm::vec2 sizeUV = state.dragStartMaxUV - state.dragStartMinUV;
-                            minUV = mouseUV - state.dragOffsetUV;
-                            minUV.x = std::clamp(minUV.x, 0.0f, 1.0f - sizeUV.x);
-                            minUV.y = std::clamp(minUV.y, 0.0f, 1.0f - sizeUV.y);
-                            maxUV = minUV + sizeUV;
-                        }
-                        else
-                        {
-                            constexpr float epsilon = 0.0001f;
-                            switch (state.activeHandle)
-                            {
-                                case 0: // top-left
-                                    minUV.x = std::clamp(mouseUV.x, 0.0f, state.dragStartMaxUV.x - epsilon);
-                                    minUV.y = std::clamp(mouseUV.y, 0.0f, state.dragStartMaxUV.y - epsilon);
-                                    break;
-                                case 1: // top-right
-                                    maxUV.x = std::clamp(mouseUV.x, state.dragStartMinUV.x + epsilon, 1.0f);
-                                    minUV.y = std::clamp(mouseUV.y, 0.0f, state.dragStartMaxUV.y - epsilon);
-                                    break;
-                                case 2: // bottom-right
-                                    maxUV.x = std::clamp(mouseUV.x, state.dragStartMinUV.x + epsilon, 1.0f);
-                                    maxUV.y = std::clamp(mouseUV.y, state.dragStartMinUV.y + epsilon, 1.0f);
-                                    break;
-                                case 3: // bottom-left
-                                    minUV.x = std::clamp(mouseUV.x, 0.0f, state.dragStartMaxUV.x - epsilon);
-                                    maxUV.y = std::clamp(mouseUV.y, state.dragStartMinUV.y + epsilon, 1.0f);
-                                    break;
-                                case 4: // top
-                                    minUV.y = std::clamp(mouseUV.y, 0.0f, state.dragStartMaxUV.y - epsilon);
-                                    break;
-                                case 5: // right
-                                    maxUV.x = std::clamp(mouseUV.x, state.dragStartMinUV.x + epsilon, 1.0f);
-                                    break;
-                                case 6: // bottom
-                                    maxUV.y = std::clamp(mouseUV.y, state.dragStartMinUV.y + epsilon, 1.0f);
-                                    break;
-                                case 7: // left
-                                    minUV.x = std::clamp(mouseUV.x, 0.0f, state.dragStartMaxUV.x - epsilon);
-                                    break;
-                                default:
-                                    break;
-                            }
-                        }
-
-                        state.selectionStartUV = minUV;
-                        state.selectionEndUV = maxUV;
-                    }
-                    else
-                    {
-                        state.activeHandle = -1;
-                    }
-                }
-
-                bool selectionFinishedThisFrame = false;
-                if (state.selecting)
-                {
-                    state.selectionEndUV = applySnap(toUV(ImGui::GetMousePos()));
-                    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
-                    {
-                        state.selecting = false;
-                        selectionFinishedThisFrame = true;
-                    }
-                }
-
-                const glm::vec2 uvMin = glm::min(state.selectionStartUV, state.selectionEndUV);
-                const glm::vec2 uvMax = glm::max(state.selectionStartUV, state.selectionEndUV);
-
-                if (selectionFinishedThisFrame && state.selectedSpriteIndex == -1)
-                {
-                    if ((uvMax.x - uvMin.x) > 0.0001f && (uvMax.y - uvMin.y) > 0.0001f)
-                    {
-                        sprites.push_back({ uvMin, uvMax });
-                        state.spriteNames.push_back(std::format("Sprite {}", sprites.size() - 1));
-                        state.selectedSpriteIndex = static_cast<int>(sprites.size()) - 1;
-                        spriteSheet->SetDirtyFlag(true);
-                    }
-                }
-
-                if (state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size()) && state.activeHandle != -1)
-                {
-                    auto &selectedSprite = sprites[static_cast<size_t>(state.selectedSpriteIndex)];
-                    selectedSprite.uv0 = uvMin;
-                    selectedSprite.uv1 = uvMax;
-                    spriteSheet->SetDirtyFlag(true);
-                }
-
-                const ImVec2 selMin = { imagePos.x + uvMin.x * imageSize.x, imagePos.y + uvMin.y * imageSize.y };
-                const ImVec2 selMax = { imagePos.x + uvMax.x * imageSize.x, imagePos.y + uvMax.y * imageSize.y };
-                drawList->AddRectFilled(selMin, selMax, IM_COL32(255, 220, 50, 30));
-                drawList->AddRect(selMin, selMax, IM_COL32(255, 220, 50, 255), 0.0f, 0, 2.0f);
-
-                if ((uvMax.x - uvMin.x) > 0.0001f && (uvMax.y - uvMin.y) > 0.0001f)
-                {
-                    const ImVec2 midTop = ImVec2((selMin.x + selMax.x) * 0.5f, selMin.y);
-                    const ImVec2 midRight = ImVec2(selMax.x, (selMin.y + selMax.y) * 0.5f);
-                    const ImVec2 midBottom = ImVec2((selMin.x + selMax.x) * 0.5f, selMax.y);
-                    const ImVec2 midLeft = ImVec2(selMin.x, (selMin.y + selMax.y) * 0.5f);
-
-                    const ImVec2 handlesDraw[8] = { selMin, ImVec2(selMax.x, selMin.y), selMax, ImVec2(selMin.x, selMax.y), midTop, midRight, midBottom, midLeft };
-
-                    for (const ImVec2 &handlePos : handlesDraw)
-                    {
-                        const ImVec2 hMin = ImVec2(handlePos.x - 4.0f, handlePos.y - 4.0f);
-                        const ImVec2 hMax = ImVec2(handlePos.x + 4.0f, handlePos.y + 4.0f);
-                        drawList->AddRectFilled(hMin, hMax, IM_COL32(255, 255, 255, 230));
-                        drawList->AddRect(hMin, hMax, IM_COL32(20, 20, 20, 255), 0.0f, 0, 1.0f);
-                    }
-                }
-
-                for (size_t i = 0; i < sprites.size(); ++i)
-                {
-                    const auto &sprite = sprites[i];
-                    const ImVec2 blockMin = { imagePos.x + sprite.uv0.x * imageSize.x,
-                                             imagePos.y + sprite.uv0.y * imageSize.y };
-                    const ImVec2 blockMax = { imagePos.x + sprite.uv1.x * imageSize.x,
-                                             imagePos.y + sprite.uv1.y * imageSize.y };
-                    const bool isSelectedSprite = state.selectedSpriteIndex == static_cast<int>(i);
-                    drawList->AddRect(blockMin, blockMax, isSelectedSprite
-                        ? IM_COL32(255, 128, 0, 255)
-                        : IM_COL32(0, 220, 255, 200), 0.0f, 0, isSelectedSprite
-                        ? 2.0f : 1.5f);
-                }
-            }
-            else
-            {
-                ImGui::SetCursorScreenPos(ImVec2(viewportPos.x + 12.0f, viewportPos.y + 12.0f));
-                ImGui::Text("Drop a texture to preview SpriteSheet");
-            }
-        }
-        ImGui::EndChild();
-
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.28f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.32f, 0.32f, 0.32f, 1.0f));
-        ImGui::Button("##sprite_sheet_vertical_splitter", ImVec2(-1.0f, splitterThickness));
-
-        if (ImGui::IsItemHovered() || ImGui::IsItemActive())
-        {
-            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-        }
-
-        if (ImGui::IsItemActive())
-        {
-            state.extractedPanelHeight -= ImGui::GetIO().MouseDelta.y;
-            state.extractedPanelHeight = std::clamp(state.extractedPanelHeight, minExtractedHeight,
-                std::max(minExtractedHeight, totalLeftHeight - minViewportHeight - splitterThickness));
-        }
-        ImGui::PopStyleColor(3);
-
-        ImGui::Text("Extracted Sprites");
-        ImGui::BeginChild("##sprite_sheet_extracted_preview", ImVec2(0.0f, state.extractedPanelHeight), ImGuiChildFlags_Borders);
-        if (texture && texture->GetHandle())
-        {
-            const float previewSize = 56.0f;
-            const float spacing = ImGui::GetStyle().ItemSpacing.x;
-            const float contentWidth = ImGui::GetContentRegionAvail().x;
-            const int spritesPerRow = std::max(1, static_cast<int>((contentWidth + spacing) / (previewSize + spacing + horizontalSplitterWidth)));
-
-            for (size_t i = 0; i < sprites.size(); ++i)
-            {
-                const auto &sprite = sprites[i];
-                ImGui::PushID(static_cast<int>(i));
-
-                ImTextureID texId = reinterpret_cast<ImTextureID>(texture->GetHandle().Get());
-                ImGui::ImageButton("##sprite_preview", texId, ImVec2(previewSize, previewSize), ImVec2(sprite.uv0.x, sprite.uv0.y), ImVec2(sprite.uv1.x, sprite.uv1.y));
-
-                if (ImGui::BeginDragDropSource())
-                {
-                    SpriteSheetSpritePayload payload;
-                    payload.spriteSheetHandle = spriteSheet->handle;
-                    payload.textureHandle = spriteSheet->GetTextureHandle();
-                    payload.spriteIndex = static_cast<uint32_t>(i);
-                    payload.uv0 = sprite.uv0;
-                    payload.uv1 = sprite.uv1;
-
-                    ImGui::SetDragDropPayload("sprite_sheet_item", &payload, sizeof(payload));
-                    ImGui::Text("Sprite %zu", i);
-                    ImGui::EndDragDropSource();
-                }
-
-                if (state.selectedSpriteIndex == static_cast<int>(i))
-                {
-                    ImDrawList *selectionDrawList = ImGui::GetWindowDrawList();
-                    selectionDrawList->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), IM_COL32(255, 180, 0, 255), 2.0f, 0, 2.0f);
-                }
-
-                if ((i + 1) % spritesPerRow != 0)
-                {
-                    ImGui::SameLine();
-                }
-
-                ImGui::PopID();
-            }
-        }
-        else
-        {
-            ImGui::TextDisabled("Assign a texture to preview extracted sprites.");
-        }
-        ImGui::EndChild();
-        ImGui::EndChild();
-
-        ImGui::SameLine(0.0f, 0.0f);
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.28f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.32f, 0.32f, 0.32f, 1.0f));
-        ImGui::BeginChild("##sprite_sheet_horizontal_splitter", ImVec2(horizontalSplitterWidth, 0.0f), ImGuiChildFlags_None);
-        ImGui::Button("##sprite_sheet_horizontal_splitter_btn", ImVec2(-1.0f, -1.0f));
-
-        if (ImGui::IsItemHovered() || ImGui::IsItemActive())
-        {
-            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-        }
-
-        if (ImGui::IsItemActive())
-        {
-            state.previewColumnWidth += ImGui::GetIO().MouseDelta.x;
-            state.previewColumnWidth = std::clamp(state.previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
-        }
-
-        ImGui::EndChild();
-        ImGui::PopStyleColor(3);
-
-        ImGui::SameLine(0.0f, 0.0f);
-        ImGui::BeginChild("##sprite_sheet_tools_column", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
-
-        ImGui::Spacing();
-        std::string textureLabel = spriteSheet->GetTextureHandle() == AssetHandle(0)
-            ? "Drop Texture Here"
-            : "Texture Loaded";
-
-        ImGui::Button(textureLabel.c_str(), ImVec2(220.0f, 0.0f));
-        if (ImGui::BeginDragDropTarget())
-        {
-            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
-            {
-                if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                {
-                    const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-                    const AssetMetaData &droppedMetadata = assetManager->GetMetaData(droppedHandle);
-                    if (droppedMetadata.type == AssetType::Texture)
-                    {
-                        spriteSheet->SetTextureHandle(droppedHandle);
-                        spriteSheet->SetDirtyFlag(true);
-                    }
-                }
-            }
-            ImGui::EndDragDropTarget();
-        }
-
-        ImGui::SameLine();
-        if (ImGui::Button("Clear Texture"))
-        {
-            spriteSheet->SetTextureHandle(AssetHandle(0));
-            spriteSheet->SetDirtyFlag(true);
-        }
-
-        ImGui::Text("Texture Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(spriteSheet->GetTextureHandle())));
-
-        glm::vec2 atlasSize = spriteSheet->GetAtlasSize();
-        if (ImGui::DragFloat2("Atlas Cell Size", &atlasSize.x, 1.0f, 1.0f, 8192.0f, "%.0f"))
-        {
-            spriteSheet->SetAtlasSize(atlasSize);
-            spriteSheet->SetDirtyFlag(true);
-        }
-
-        const glm::vec2 uvMin = glm::min(state.selectionStartUV, state.selectionEndUV);
-        const glm::vec2 uvMax = glm::max(state.selectionStartUV, state.selectionEndUV);
-
-        ImGui::Text("Selected UV0: %.3f, %.3f", uvMin.x, uvMin.y);
-        ImGui::Text("Selected UV1: %.3f, %.3f", uvMax.x, uvMax.y);
-
-        const bool hasValidSelectionArea = uvMax.x > uvMin.x && uvMax.y > uvMin.y;
-        const bool editingSelectedSprite = state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size());
-        if (editingSelectedSprite && ImGui::Button("Apply To Selected"))
-        {
-            if (hasValidSelectionArea)
-            {
-                auto &selectedSprite = sprites[static_cast<size_t>(state.selectedSpriteIndex)];
-                selectedSprite.uv0 = uvMin;
-                selectedSprite.uv1 = uvMax;
-                spriteSheet->SetDirtyFlag(true);
-            }
-        }
-        else if (!editingSelectedSprite)
-        {
-            ImGui::TextDisabled("Selection auto-adds on mouse release");
-        }
-
-        ImGui::SameLine();
-        if (ImGui::Button("Remove Selected") && state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size()))
-        {
-            sprites.erase(sprites.begin() + state.selectedSpriteIndex);
-            state.spriteNames.erase(state.spriteNames.begin() + state.selectedSpriteIndex);
-            state.selectedSpriteIndex = -1;
-            state.renamingSpriteIndex = -1;
-            spriteSheet->SetDirtyFlag(true);
-        }
-
-        ImGui::BeginChild("##sprite_sheet_sprite_list", ImVec2(0.0f, 130.0f), ImGuiChildFlags_Borders);
-        for (size_t i = 0; i < sprites.size(); ++i)
-        {
-            const auto &sprite = sprites[i];
-            const bool selected = state.selectedSpriteIndex == static_cast<int>(i);
-            const std::string rowLabel = std::format("{}##sprite_row_{}", state.spriteNames[i], i);
-            if (ImGui::Selectable(rowLabel.c_str(), selected))
-            {
-                state.selectedSpriteIndex = static_cast<int>(i);
-                state.selectionStartUV = sprite.uv0;
-                state.selectionEndUV = sprite.uv1;
-                state.renamingSpriteIndex = state.selectedSpriteIndex;
-                std::strncpy(state.renameBuffer, state.spriteNames[i].c_str(), sizeof(state.renameBuffer) - 1);
-                state.renameBuffer[sizeof(state.renameBuffer) - 1] = '\0';
-            }
-
-            if (ImGui::BeginDragDropSource())
-            {
-                SpriteSheetSpritePayload payload;
-                payload.spriteSheetHandle = spriteSheet->handle;
-                payload.textureHandle = spriteSheet->GetTextureHandle();
-                payload.spriteIndex = static_cast<uint32_t>(i);
-                payload.uv0 = sprite.uv0;
-                payload.uv1 = sprite.uv1;
-
-                ImGui::SetDragDropPayload("sprite_sheet_item", &payload, sizeof(payload));
-                ImGui::Text("Sprite %zu", i);
-                ImGui::EndDragDropSource();
-            }
-
-            ImGui::SameLine();
-            ImGui::TextDisabled("(%.3f, %.3f) -> (%.3f, %.3f)", sprite.uv0.x, sprite.uv0.y, sprite.uv1.x, sprite.uv1.y);
-        }
-        ImGui::EndChild();
-
-        const bool canMoveUp = state.selectedSpriteIndex > 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size());
-        if (!canMoveUp)
-        {
-            ImGui::BeginDisabled();
-        }
-
-        if (ImGui::Button("Move Up"))
-        {
-            const int i = state.selectedSpriteIndex;
-            std::swap(sprites[static_cast<size_t>(i)], sprites[static_cast<size_t>(i - 1)]);
-            std::swap(state.spriteNames[static_cast<size_t>(i)], state.spriteNames[static_cast<size_t>(i - 1)]);
-            state.selectedSpriteIndex = i - 1;
-            spriteSheet->SetDirtyFlag(true);
-        }
-
-        if (!canMoveUp)
-        {
-            ImGui::EndDisabled();
-        }
-
-        ImGui::SameLine();
-        const bool canMoveDown = state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size()) - 1;
-        if (!canMoveDown)
-        {
-            ImGui::BeginDisabled();
-        }
-
-        if (ImGui::Button("Move Down"))
-        {
-            const int i = state.selectedSpriteIndex;
-            std::swap(sprites[static_cast<size_t>(i)], sprites[static_cast<size_t>(i + 1)]);
-            std::swap(state.spriteNames[static_cast<size_t>(i)], state.spriteNames[static_cast<size_t>(i + 1)]);
-            state.selectedSpriteIndex = i + 1;
-            spriteSheet->SetDirtyFlag(true);
-        }
-        if (!canMoveDown)
-        {
-            ImGui::EndDisabled();
-        }
-
-        if (state.selectedSpriteIndex >= 0 && state.selectedSpriteIndex < static_cast<int>(sprites.size()))
-        {
-            if (state.renamingSpriteIndex != state.selectedSpriteIndex)
-            {
-                state.renamingSpriteIndex = state.selectedSpriteIndex;
-                std::strncpy(state.renameBuffer, state.spriteNames[static_cast<size_t>(state.selectedSpriteIndex)].c_str(),
-                    sizeof(state.renameBuffer) - 1);
-
-                state.renameBuffer[sizeof(state.renameBuffer) - 1] = '\0';
-            }
-
-            if (ImGui::InputText("Sprite Name", state.renameBuffer, sizeof(state.renameBuffer)))
-            {
-                state.spriteNames[static_cast<size_t>(state.selectedSpriteIndex)] = state.renameBuffer;
-            }
-
-            auto &sprite = sprites[static_cast<size_t>(state.selectedSpriteIndex)];
-            glm::vec2 selectedUv0 = sprite.uv0;
-            glm::vec2 selectedUv1 = sprite.uv1;
-            if (ImGui::DragFloat2("Sprite UV0", &selectedUv0.x, 0.001f, 0.0f, 1.0f, "%.3f")
-                || ImGui::DragFloat2("Sprite UV1", &selectedUv1.x, 0.001f, 0.0f, 1.0f, "%.3f"))
-            {
-                sprite.uv0 = glm::clamp(glm::min(selectedUv0, selectedUv1), glm::vec2(0.0f), glm::vec2(1.0f));
-                sprite.uv1 = glm::clamp(glm::max(selectedUv0, selectedUv1), glm::vec2(0.0f), glm::vec2(1.0f));
-                state.selectionStartUV = sprite.uv0;
-                state.selectionEndUV = sprite.uv1;
-                spriteSheet->SetDirtyFlag(true);
-            }
-        }
-
-        ImGui::Separator();
-        ImGui::DragInt("Grid Columns", &state.gridColumns, 1.0f, 1, 512);
-        ImGui::DragInt("Grid Rows", &state.gridRows, 1.0f, 1, 512);
-        ImGui::Checkbox("Enable Snapping", &state.snappingEnabled);
-
-        if (state.snappingEnabled)
-        {
-            ImGui::Checkbox("Snap To Grid", &state.snapToGrid);
-            if (!state.snapToGrid)
-            {
-                ImGui::DragFloat("Snap Step U", &state.snapStepU, 0.001f, 0.001f, 1.0f, "%.3f");
-                ImGui::DragFloat("Snap Step V", &state.snapStepV, 0.001f, 0.001f, 1.0f, "%.3f");
-            }
-        }
-
-        if (ImGui::Button("Auto Slice Grid"))
-        {
-            sprites.clear();
-            state.spriteNames.clear();
-            state.selectedSpriteIndex = -1;
-
-            const int cols = std::max(state.gridColumns, 1);
-            const int rows = std::max(state.gridRows, 1);
-            const float cellU = 1.0f / static_cast<float>(cols);
-            const float cellV = 1.0f / static_cast<float>(rows);
-
-            for (int y = 0; y < rows; ++y)
-            {
-                for (int x = 0; x < cols; ++x)
-                {
-                    const glm::vec2 blockUV0 = { x * cellU, y * cellV };
-                    const glm::vec2 blockUV1 = { (x + 1) * cellU, (y + 1) * cellV };
-                    sprites.push_back({ blockUV0, blockUV1 });
-                    state.spriteNames.push_back(std::format("Sprite {}", sprites.size() - 1));
-                }
-            }
-
-            if (texture && texture->GetWidth() > 0 && texture->GetHeight() > 0)
-            {
-                spriteSheet->SetAtlasSize({ static_cast<float>(texture->GetWidth()) / static_cast<float>(cols),
-                     static_cast<float>(texture->GetHeight()) / static_cast<float>(rows) });
-            }
-
-            spriteSheet->SetDirtyFlag(true);
-        }
-
-        ImGui::SameLine();
-        if (ImGui::Button("Clear Sprites"))
-        {
-            sprites.clear();
-            state.spriteNames.clear();
-            state.selectedSpriteIndex = -1;
-            spriteSheet->SetDirtyFlag(true);
-        }
-
-        ImGui::Text("Total Sprites: %zu", sprites.size());
-        ImGui::EndChild();
     }
 
     void AssetEditorPanel::UIWidgetEditor(AssetEditorData &assetData)
@@ -1872,47 +1869,78 @@ namespace ignite
             {
                 if (assetData.asset && assetData.asset->IsReady())
                 {
-                    if (Ref<Widget> widget = assetData.asset->As<Widget>())
+                    if (Ref<WidgetCanvas> widget = assetData.asset->As<WidgetCanvas>())
                     {
-                        EditorSceneData &sceneData = assetData.sceneData;
+                        Project *project = m_EditorLayer->GetActiveProject().get();
+                        AssetManager *assetManager = project ? project->GetAssetManager() : nullptr;
 
                         const ImVec2 contentSize = ImGui::GetContentRegionAvail();
                         const float splitterWidth = 6.0f;
-                        const float minPreviewColumnWidth = 260.0f;
-                        const float minToolsColumnWidth = 320.0f;
-                        const float maxPreviewColumnWidth = std::max(minPreviewColumnWidth, contentSize.x - minToolsColumnWidth - splitterWidth);
+                        const float minTreeWidth = 250.0f;
+                        const float minDetailsWidth = 320.0f;
+                        const float minPreviewWidth = 240.0f;
 
-                        static std::unordered_map<uint64_t, float> s_WidgetPreviewColumnWidth;
-                        float &previewColumnWidth = s_WidgetPreviewColumnWidth[static_cast<uint64_t>(assetData.handle)];
-                        if (previewColumnWidth <= 0.0f)
+                        EditorSceneData &sceneData = assetData.sceneData;
+                        widget->CreateRoot(sceneData.viewportWidth > 0 ? sceneData.viewportWidth : 1280, sceneData.viewportHeight > 0 ? sceneData.viewportHeight : 720);
+                        if (widget->GetRoot() && widget->GetRoot()->name.empty())
                         {
-                            const float defaultToolsWidth = std::clamp(contentSize.x * 0.38f, 340.0f, 520.0f);
-                            previewColumnWidth = std::max(minPreviewColumnWidth, contentSize.x - defaultToolsWidth - splitterWidth);
+                            widget->GetRoot()->name = "Canvas Root";
                         }
-                        previewColumnWidth = std::clamp(previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
 
-                        ImGui::BeginChild("##widget_preview_column", ImVec2(previewColumnWidth, 0.0f), ImGuiChildFlags_None);
-                        ImGui::BeginChild("##widget_preview_viewport", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
+                        static std::unordered_map<uint64_t, int> s_SelectedWidgetItem;
+                        int &selectedItemId = s_SelectedWidgetItem[static_cast<uint64_t>(assetData.handle)];
+                        if (selectedItemId == 0 || !widget->GetItems().contains(selectedItemId))
                         {
+                            selectedItemId = widget->GetRoot() ? widget->GetRoot()->id : 0;
+                        }
+
+                        if (sceneData.sceneRenderer)
+                        {
+                            sceneData.sceneRenderer->SetPreviewWidget(widget);
+                        }
+
+                        ImGui::BeginChild("##widget_layout_tree", { 0.0f, 0.0f }, ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
+                        {
+                            if (ImGui::BeginTabBar("##layout_tree_tab_bar"))
+                            {
+                                if (ImGui::BeginTabItem("Layout Tree"))
+                                {
+                                    if (widget->GetRoot())
+                                    {
+                                        WidgetEditor::DrawWidgetTreeRecursive(widget->GetRoot()->As<IWidgetItem>(), selectedItemId, widget.get());
+                                    }
+                                    else
+                                    {
+                                        ImGui::TextDisabled("No root container.");
+                                    }
+                                    ImGui::EndTabItem();
+                                }
+                                
+                                ImGui::EndTabBar();
+                            }
+                        }
+                        ImGui::EndChild();
+
+                        ImGui::SameLine(0.0f, 0.0f);
+                        ImGui::BeginChild("##widget_scene_preview", { 0.0f, 0.0f }, ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
+                        {
+                            ImGui::SeparatorText("Scene Preview");
+
                             const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
                             sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
                             sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
-
-                            Ref<Texture> previewTexture = sceneData.compositeRT ? sceneData.compositeRT->GetColorAttachment(0) : nullptr;
-                            if (previewTexture && previewTexture->GetHandle())
+                            
+                            if (sceneData.compositeRT)
                             {
+                                Ref<Texture> previewTexture = sceneData.compositeRT->GetColorAttachment(0);
                                 const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
                                 ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
                                 sceneData.viewportHovered = ImGui::IsItemHovered();
-
-                                if (sceneData.sceneRenderer)
-                                {
-                                    const ImVec2 mousePos = ImGui::GetMousePos();
-                                    const uint32_t localMouseX = static_cast<uint32_t>(std::max(mousePos.x - viewportPos.x, 0.0f));
-                                    const uint32_t localMouseY = static_cast<uint32_t>(std::max(mousePos.y - viewportPos.y, 0.0f));
-                                    sceneData.sceneRenderer->SetWidgetPreviewMousePosition(localMouseX, localMouseY, sceneData.viewportHovered);
-                                    sceneData.sceneRenderer->SetPreviewWidget(widget);
-                                }
+                                
+                                const ImVec2 mousePos = ImGui::GetMousePos();
+                                const uint32_t localMouseX = static_cast<uint32_t>(std::max(mousePos.x - viewportPos.x, 0.0f));
+                                const uint32_t localMouseY = static_cast<uint32_t>(std::max(mousePos.y - viewportPos.y, 0.0f));
+                                sceneData.sceneRenderer->SetWidgetPreviewMousePosition(localMouseX, localMouseY, sceneData.viewportHovered);
                             }
                             else
                             {
@@ -1921,29 +1949,20 @@ namespace ignite
                             }
                         }
                         ImGui::EndChild();
-                        ImGui::EndChild();
 
                         ImGui::SameLine(0.0f, 0.0f);
-                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));
-                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.28f, 1.0f));
-                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.32f, 0.32f, 0.32f, 1.0f));
-                        ImGui::BeginChild("##widget_horizontal_splitter", ImVec2(splitterWidth, 0.0f), ImGuiChildFlags_None);
-                        ImGui::Button("##widget_horizontal_splitter_btn", ImVec2(-1.0f, -1.0f));
-                        if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+                        ImGui::BeginChild("##widget_details", { 0.0f, 0.0f }, ImGuiChildFlags_Borders);
                         {
-                            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+                            if (ImGui::BeginTabBar("##widget_details_tab_bar"))
+                            {
+                                if (ImGui::BeginTabItem("Details"))
+                                {
+                                    WidgetEditor::DrawWidgetDetails(widget, selectedItemId, assetManager);
+                                    ImGui::EndTabItem();
+                                }
+                                ImGui::EndTabBar();
+                            }
                         }
-                        if (ImGui::IsItemActive())
-                        {
-                            previewColumnWidth += ImGui::GetIO().MouseDelta.x;
-                            previewColumnWidth = std::clamp(previewColumnWidth, minPreviewColumnWidth, maxPreviewColumnWidth);
-                        }
-                        ImGui::EndChild();
-                        ImGui::PopStyleColor(3);
-
-                        ImGui::SameLine(0.0f, 0.0f);
-                        ImGui::BeginChild("##widget_controls_column", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
-                        UIWidgetEditor(widget);
                         ImGui::EndChild();
                     }
                     else
@@ -1962,302 +1981,6 @@ namespace ignite
         ImGui::End();
         assetData.isOpen = isOpen;
         assetData.requestFocus = false;
-    }
-
-    void AssetEditorPanel::UIWidgetEditor(const Ref<Widget> &widget)
-    {
-        if (!widget || !m_EditorLayer || !m_EditorLayer->GetActiveProject())
-        {
-            return;
-        }
-
-        Project *project = m_EditorLayer->GetActiveProject().get();
-        auto assetManager = project->GetAssetManager();
-
-        static std::unordered_map<uint64_t, int> s_SelectedWidgetItem;
-        static std::unordered_map<uint64_t, int> s_SelectedChildWidgetIndex;
-
-        const uint64_t widgetKey = static_cast<uint64_t>(widget->handle);
-        int &selectedItemId = s_SelectedWidgetItem[widgetKey];
-        int &selectedChildIndex = s_SelectedChildWidgetIndex[widgetKey];
-
-        char nameBuffer[256]{};
-        std::strncpy(nameBuffer, widget->GetName().c_str(), sizeof(nameBuffer) - 1);
-        if (ImGui::InputText("Widget Name", nameBuffer, sizeof(nameBuffer)))
-        {
-            widget->SetName(nameBuffer);
-            widget->SetDirtyFlag(true);
-        }
-
-        bool enabled = widget->IsEnabled();
-        if (ImGui::Checkbox("Enabled", &enabled))
-        {
-            widget->SetEnabled(enabled);
-            widget->SetDirtyFlag(true);
-        }
-
-        bool blocksBelow = widget->BlocksWidgetsBelow();
-        if (ImGui::Checkbox("Block Widgets Below", &blocksBelow))
-        {
-            widget->SetBlocksWidgetsBelow(blocksBelow);
-            widget->SetDirtyFlag(true);
-        }
-
-        ImGui::SeparatorText("Items");
-        if (ImGui::Button("+ Button"))
-        {
-            selectedItemId = widget->AddButton("Button");
-            widget->SetDirtyFlag(true);
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("+ Text"))
-        {
-            selectedItemId = widget->AddText("Text");
-            widget->SetDirtyFlag(true);
-        }
-
-        std::vector<int> itemIds;
-        itemIds.reserve(widget->GetItems().size());
-        for (const auto &[id, item] : widget->GetItems())
-        {
-            itemIds.push_back(id);
-        }
-        std::sort(itemIds.begin(), itemIds.end());
-
-        ImGui::BeginChild("##widget_items_list", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders);
-        ImGuiListClipper itemClipper;
-        itemClipper.Begin(static_cast<int>(itemIds.size()));
-        while (itemClipper.Step())
-        {
-            for (int i = itemClipper.DisplayStart; i < itemClipper.DisplayEnd; ++i)
-            {
-                const int itemId = itemIds[static_cast<size_t>(i)];
-                const auto itemIt = widget->GetItems().find(itemId);
-                if (itemIt == widget->GetItems().end() || !itemIt->second)
-                {
-                    continue;
-                }
-
-                const Ref<IWidgetItem> &item = itemIt->second;
-                const bool selected = selectedItemId == itemId;
-                const char *typeLabel = item->GetItemType() == WidgetItemType::Button ? "Button" : "Text";
-                if (ImGui::Selectable(std::format("{} [{}]##wid_item_{}", typeLabel, itemId, itemId).c_str(), selected))
-                {
-                    selectedItemId = itemId;
-                }
-            }
-        }
-        ImGui::EndChild();
-
-        if (selectedItemId != 0 && widget->GetItems().contains(selectedItemId))
-        {
-            Ref<IWidgetItem> selectedItem = widget->GetItems()[selectedItemId];
-            ImGui::SeparatorText("Selected Item");
-
-            bool visible = selectedItem->IsVisible();
-            if (ImGui::Checkbox("Visible", &visible))
-            {
-                selectedItem->SetVisible(visible);
-                widget->SetDirtyFlag(true);
-            }
-
-            int alignment = static_cast<int>(selectedItem->GetAlignment());
-            const char *alignmentNames[] =
-            {
-                "Top Left", "Top Center", "Top Right",
-                "Center Left", "Center", "Center Right",
-                "Bottom Left", "Bottom Center", "Bottom Right"
-            };
-            if (ImGui::Combo("Alignment", &alignment, alignmentNames, IM_ARRAYSIZE(alignmentNames)))
-            {
-                selectedItem->SetAlignment(static_cast<WidgetAlignment>(alignment));
-                widget->SetDirtyFlag(true);
-            }
-
-            glm::vec2 pos = selectedItem->GetRect().min;
-            glm::vec2 size = selectedItem->GetSize();
-            if (ImGui::DragFloat2("Position", &pos.x, 1.0f)
-                || ImGui::DragFloat2("Size", &size.x, 1.0f, 1.0f, 4096.0f))
-            {
-                selectedItem->SetPosition(pos);
-                selectedItem->SetSize(size);
-                widget->SetDirtyFlag(true);
-            }
-
-            if (Ref<WidgetButton> button = selectedItem->As<WidgetButton>())
-            {
-                char textBuffer[256]{};
-                std::strncpy(textBuffer, button->GetText().c_str(), sizeof(textBuffer) - 1);
-                if (ImGui::InputText("Button Text", textBuffer, sizeof(textBuffer)))
-                {
-                    button->SetText(textBuffer);
-                    widget->SetDirtyFlag(true);
-                }
-
-                glm::vec4 normal = button->GetNormalColor();
-                glm::vec4 hover = button->GetHoverColor();
-                glm::vec4 pressed = button->GetPressedColor();
-                glm::vec4 textColor = button->GetTextColor();
-                glm::vec4 borderColor = button->GetBorderColor();
-                if (ImGui::ColorEdit4("Normal Color", &normal.x)
-                    || ImGui::ColorEdit4("Hover Color", &hover.x)
-                    || ImGui::ColorEdit4("Pressed Color", &pressed.x)
-                    || ImGui::ColorEdit4("Text Color", &textColor.x)
-                    || ImGui::ColorEdit4("Border Color", &borderColor.x))
-                {
-                    button->SetColors(normal, hover, pressed);
-                    button->SetTextColor(textColor);
-                    button->SetBorderColor(borderColor);
-                    widget->SetDirtyFlag(true);
-                }
-
-                AssetHandle imageHandle = button->GetImageHandle();
-                std::string imageName = imageHandle == AssetHandle(0) ? "Drop Texture Here" : assetManager->GetAssetDisplayName(imageHandle);
-                ImGui::Button(std::format("Image: {}", imageName).c_str(), ImVec2(-1.0f, 0.0f));
-                if (ImGui::BeginDragDropTarget())
-                {
-                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                    {
-                        if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                        {
-                            const AssetHandle dropped = *static_cast<const AssetHandle *>(payload->Data);
-                            if (assetManager->GetMetaData(dropped).type == AssetType::Texture)
-                            {
-                                button->SetImageHandle(dropped);
-                                widget->SetDirtyFlag(true);
-                            }
-                        }
-                    }
-                    ImGui::EndDragDropTarget();
-                }
-            }
-            else if (Ref<WidgetText> text = selectedItem->As<WidgetText>())
-            {
-                char textBuffer[256]{};
-                std::strncpy(textBuffer, text->GetText().c_str(), sizeof(textBuffer) - 1);
-                if (ImGui::InputText("Text", textBuffer, sizeof(textBuffer)))
-                {
-                    text->SetText(textBuffer);
-                    widget->SetDirtyFlag(true);
-                }
-
-                glm::vec4 textColor = text->GetColor();
-                if (ImGui::ColorEdit4("Color", &textColor.x))
-                {
-                    text->SetColor(textColor);
-                    widget->SetDirtyFlag(true);
-                }
-
-                float kerning = text->GetKerning();
-                float lineSpacing = text->GetLineSpacing();
-                if (ImGui::DragFloat("Kerning", &kerning, 0.01f)
-                    || ImGui::DragFloat("Line Spacing", &lineSpacing, 0.01f))
-                {
-                    text->SetKerning(kerning);
-                    text->SetLineSpacing(lineSpacing);
-                    widget->SetDirtyFlag(true);
-                }
-
-                AssetHandle fontHandle = text->GetFontHandle();
-                const std::string fontName = fontHandle == AssetHandle(0) ? "Drop Font Here" : assetManager->GetAssetDisplayName(fontHandle);
-                ImGui::Button(std::format("Font: {}", fontName).c_str(), ImVec2(-1.0f, 0.0f));
-                if (ImGui::BeginDragDropTarget())
-                {
-                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                    {
-                        if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                        {
-                            const AssetHandle dropped = *static_cast<const AssetHandle *>(payload->Data);
-                            if (assetManager->GetMetaData(dropped).type == AssetType::Font)
-                            {
-                                text->SetFontHandle(dropped);
-                                widget->SetDirtyFlag(true);
-                            }
-                        }
-                    }
-                    ImGui::EndDragDropTarget();
-                }
-            }
-
-            if (ImGui::Button("Remove Selected Item"))
-            {
-                if (widget->RemoveItem(selectedItemId))
-                {
-                    selectedItemId = 0;
-                    widget->SetDirtyFlag(true);
-                }
-            }
-        }
-
-        ImGui::SeparatorText("Child Widgets");
-        if (ImGui::Button("+ Add Child Widget"))
-        {
-            widget->GetChildWidgets().push_back({});
-            selectedChildIndex = static_cast<int>(widget->GetChildWidgets().size()) - 1;
-            widget->SetDirtyFlag(true);
-        }
-
-        ImGui::BeginChild("##widget_children_list", ImVec2(0.0f, 140.0f), ImGuiChildFlags_Borders);
-        ImGuiListClipper childClipper;
-        childClipper.Begin(static_cast<int>(widget->GetChildWidgets().size()));
-        while (childClipper.Step())
-        {
-            for (int i = childClipper.DisplayStart; i < childClipper.DisplayEnd; ++i)
-            {
-                const WidgetChildEntry &child = widget->GetChildWidgets()[static_cast<size_t>(i)];
-                const std::string childLabel = child.handle == AssetHandle(0) ? "<empty>" : assetManager->GetAssetDisplayName(child.handle);
-                if (ImGui::Selectable(std::format("{}##child_widget_{}", childLabel, i).c_str(), selectedChildIndex == i))
-                {
-                    selectedChildIndex = i;
-                }
-            }
-        }
-        ImGui::EndChild();
-
-        if (selectedChildIndex >= 0 && selectedChildIndex < static_cast<int>(widget->GetChildWidgets().size()))
-        {
-            WidgetChildEntry &child = widget->GetChildWidgets()[static_cast<size_t>(selectedChildIndex)];
-
-            std::string childLabel = child.handle == AssetHandle(0) ? "Drop Widget Here" : assetManager->GetAssetDisplayName(child.handle);
-            ImGui::Button(childLabel.c_str(), ImVec2(-1.0f, 0.0f));
-            if (ImGui::BeginDragDropTarget())
-            {
-                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                {
-                    if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                    {
-                        const AssetHandle dropped = *static_cast<const AssetHandle *>(payload->Data);
-                        if (assetManager->GetMetaData(dropped).type == AssetType::Widget && dropped != widget->handle)
-                        {
-                            child.handle = dropped;
-                            widget->SetDirtyFlag(true);
-                        }
-                    }
-                }
-                ImGui::EndDragDropTarget();
-            }
-
-            bool childEnabled = child.enabled;
-            if (ImGui::Checkbox("Child Enabled", &childEnabled))
-            {
-                child.enabled = childEnabled;
-                widget->SetDirtyFlag(true);
-            }
-
-            bool childBlocks = child.blockWidgetsBelow;
-            if (ImGui::Checkbox("Child Blocks Widgets Below", &childBlocks))
-            {
-                child.blockWidgetsBelow = childBlocks;
-                widget->SetDirtyFlag(true);
-            }
-
-            if (ImGui::Button("Remove Child Widget"))
-            {
-                widget->GetChildWidgets().erase(widget->GetChildWidgets().begin() + selectedChildIndex);
-                selectedChildIndex = -1;
-                widget->SetDirtyFlag(true);
-            }
-        }
     }
 
     void AssetEditorPanel::UIMaterial2DEditor(AssetEditorData &assetData)
@@ -2271,7 +1994,50 @@ namespace ignite
                 {
                     if (Ref<Material2D> material2D = assetData.asset->As<Material2D>())
                     {
-                        UIMaterial2DEditor(material2D);
+                        if (!material2D || !m_EditorLayer || !m_EditorLayer->GetActiveProject())
+                        {
+                            return;
+                        }
+
+                        const char *materialTypeLabel = material2D->data.type == MATERIAL_2D_TYPE_LIT ? "Lit" : "Unlit";
+                        if (ImGui::BeginCombo("Material Type", materialTypeLabel))
+                        {
+                            if (ImGui::Selectable("Unlit", material2D->data.type == MATERIAL_2D_TYPE_UNLIT))
+                            {
+                                material2D->data.type = MATERIAL_2D_TYPE_UNLIT;
+                                material2D->SetDirtyFlag(true);
+                            }
+
+                            if (ImGui::Selectable("Lit",
+                                material2D->data.type == MATERIAL_2D_TYPE_LIT))
+                            {
+                                material2D->data.type = MATERIAL_2D_TYPE_LIT;
+                                material2D->SetDirtyFlag(true);
+                            }
+
+                            ImGui::EndCombo();
+                        }
+
+                        if (ImGui::ColorEdit4("Base Color", &material2D->data.baseColor.x))
+                        {
+                            material2D->SetDirtyFlag(true);
+                        }
+
+                        if (ImGui::ColorEdit4("Additive Color", &material2D->data.additiveColor.x))
+                        {
+                            material2D->SetDirtyFlag(true);
+                        }
+
+                        if (ImGui::DragFloat2("Tiling", &material2D->data.tilingFactor.x, 0.025f))
+                        {
+                            material2D->SetDirtyFlag(true);
+                        }
+
+                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Texture Preview", material2D->textureHandle,
+                            [&]()
+                        {
+                            material2D->SetDirtyFlag(true);
+                        });
                     }
                     else
                     {
@@ -2289,54 +2055,6 @@ namespace ignite
         ImGui::End();
         assetData.isOpen = isOpen;
         assetData.requestFocus = false;
-    }
-
-    void AssetEditorPanel::UIMaterial2DEditor(const Ref<Material2D> &material2D)
-    {
-        if (!material2D || !m_EditorLayer || !m_EditorLayer->GetActiveProject())
-        {
-            return;
-        }
-
-        const char *materialTypeLabel = material2D->data.type == MATERIAL_2D_TYPE_LIT ? "Lit" : "Unlit";
-        if (ImGui::BeginCombo("Material Type", materialTypeLabel))
-        {
-            if (ImGui::Selectable("Unlit", material2D->data.type == MATERIAL_2D_TYPE_UNLIT))
-            {
-                material2D->data.type = MATERIAL_2D_TYPE_UNLIT;
-                material2D->SetDirtyFlag(true);
-            }
-
-            if (ImGui::Selectable("Lit",
-                material2D->data.type == MATERIAL_2D_TYPE_LIT))
-            {
-                material2D->data.type = MATERIAL_2D_TYPE_LIT;
-                material2D->SetDirtyFlag(true);
-            }
-
-            ImGui::EndCombo();
-        }
-
-        if (ImGui::ColorEdit4("Base Color", &material2D->data.baseColor.x))
-        {
-            material2D->SetDirtyFlag(true);
-        }
-
-        if (ImGui::ColorEdit4("Additive Color", &material2D->data.additiveColor.x))
-        {
-            material2D->SetDirtyFlag(true);
-        }
-
-        if (ImGui::DragFloat2("Tiling", &material2D->data.tilingFactor.x, 0.025f))
-        {
-            material2D->SetDirtyFlag(true);
-        }
-
-        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Texture Preview", material2D->textureHandle,
-            [&]()
-        {
-            material2D->SetDirtyFlag(true);
-        });
     }
 
 
@@ -2349,9 +2067,358 @@ namespace ignite
             {
                 if (assetData.asset && assetData.asset->IsReady())
                 {
-                    if (Ref<Animation2D> animation = assetData.asset->As<Animation2D>())
+                    if (Ref<Animation2D> anim = assetData.asset->As<Animation2D>())
                     {
-                        UIAnimation2DEditor(animation);
+                        auto project = m_EditorLayer->GetActiveProject();
+
+                        const uint64_t stateKey = static_cast<uint64_t>(anim->handle);
+                        Animation2DEditorState &st = s_Anim2DEditorState[stateKey];
+
+                        // Resolve texture
+                        Ref<Texture> texture;
+                        if (anim->textureHandle != AssetHandle(0))
+                        {
+                            texture = project->GetAsset<Texture>(anim->textureHandle);
+                            if (!texture) texture = project->GetAssetImmediate<Texture>(anim->textureHandle);
+                        }
+
+                        const int frameCount = static_cast<int>(anim->frames.size());
+                        const float fps = glm::max(anim->fps, 0.001f);
+                        const float totalDur = (frameCount > 0) ? (static_cast<float>(frameCount) / fps) : 0.0f;
+
+                        // ---- Advance internal preview clock ----
+                        const float now = static_cast<float>(ImGui::GetTime());
+                        if (st.playing && frameCount > 0)
+                        {
+                            const float dt = now - st.lastRealTime;
+                            st.playbackTime += dt;
+                            if (st.playbackTime >= totalDur)
+                            {
+                                if (anim->loop)
+                                {
+                                    st.playbackTime = std::fmod(st.playbackTime, totalDur);
+                                }
+                                else
+                                {
+                                    st.playbackTime = totalDur;
+                                    st.playing = false;
+                                }
+                            }
+                            st.previewFrame = std::min(static_cast<int>(st.playbackTime * fps), frameCount - 1);
+                        }
+                        st.lastRealTime = now;
+
+                        // ================================================================
+                        // Layout: LEFT = preview viewport | RIGHT = tools
+                        // ================================================================
+                        const ImVec2 available = ImGui::GetContentRegionAvail();
+                        const float  splitter = 6.0f;
+                        const float  minLeft = 120.0f;
+                        const float  minRight = 240.0f;
+                        st.toolsWidth = std::clamp(st.toolsWidth, minRight, available.x - minLeft - splitter);
+                        const float leftW = available.x - st.toolsWidth - splitter;
+
+                        // ----- LEFT: preview -----
+                        ImGui::BeginChild("##anim2d_preview_col", ImVec2(leftW, 0.0f), ImGuiChildFlags_None);
+                        {
+                            // Timeline height reservation
+                            const float timelineH = 80.0f;
+                            const float controlsH = 28.0f;
+                            const float previewH = ImGui::GetContentRegionAvail().y - timelineH - controlsH - 12.0f;
+
+                            // -- Preview viewport --
+                            ImGui::BeginChild("##anim2d_tex_view", ImVec2(0.0f, previewH), ImGuiChildFlags_Borders);
+                            {
+                                const ImVec2 vpPos = ImGui::GetCursorScreenPos();
+                                const ImVec2 vpSize = ImGui::GetContentRegionAvail();
+
+                                if (vpSize.x > 0 && vpSize.y > 0)
+                                {
+                                    ImGui::InvisibleButton("##anim2d_view_ibt", vpSize);
+                                }
+
+                                // Mouse-wheel zoom
+                                if (ImGui::IsItemHovered())
+                                {
+                                    const float w = ImGui::GetIO().MouseWheel;
+                                    if (w != 0.0f) st.previewZoom = std::clamp(st.previewZoom + w * 0.1f, 0.1f, 8.0f);
+                                }
+
+                                ImDrawList *dl = ImGui::GetWindowDrawList();
+
+                                // Checkerboard background
+                                {
+                                    constexpr float cs = 12.0f;
+                                    const ImU32 cA = IM_COL32(60, 60, 60, 255);
+                                    const ImU32 cB = IM_COL32(80, 80, 80, 255);
+                                    const int cols = static_cast<int>(vpSize.x / cs) + 2;
+                                    const int rows = static_cast<int>(vpSize.y / cs) + 2;
+                                    for (int ry = 0; ry < rows; ++ry)
+                                    {
+                                        for (int cx = 0; cx < cols; ++cx)
+                                        {
+                                            const ImVec2 tMin = { vpPos.x + cx * cs, vpPos.y + ry * cs };
+                                            const ImVec2 tMax = { tMin.x + cs, tMin.y + cs };
+                                            dl->AddRectFilled(tMin, tMax, ((cx + ry) % 2 == 0) ? cA : cB);
+                                        }
+                                    }
+                                }
+
+                                if (texture && texture->GetHandle() && frameCount > 0)
+                                {
+                                    const int fi = std::clamp(st.previewFrame, 0, frameCount - 1);
+                                    const auto &fr = anim->frames[static_cast<size_t>(fi)];
+
+                                    const float texW = static_cast<float>(texture->GetWidth());
+                                    const float texH = static_cast<float>(texture->GetHeight());
+                                    // Aspect of the sprite region
+                                    const float uvW = std::max(std::abs(fr.uv1.x - fr.uv0.x), 0.001f);
+                                    const float uvH = std::max(std::abs(fr.uv1.y - fr.uv0.y), 0.001f);
+                                    const float sprW = texW * uvW;
+                                    const float sprH = texH * uvH;
+                                    const float fit = std::min(vpSize.x / sprW, vpSize.y / sprH);
+                                    const float imgW = sprW * fit * st.previewZoom;
+                                    const float imgH = sprH * fit * st.previewZoom;
+                                    const ImVec2 imgPos =
+                                    {
+                                        vpPos.x + (vpSize.x - imgW) * 0.5f,
+                                        vpPos.y + (vpSize.y - imgH) * 0.5f
+                                    };
+
+                                    dl->AddImage(reinterpret_cast<ImTextureID>(texture->GetHandle().Get()),
+                                        imgPos, ImVec2(imgPos.x + imgW, imgPos.y + imgH), ImVec2(fr.uv0.x, fr.uv1.y), ImVec2(fr.uv1.x, fr.uv0.y));
+
+                                    // Frame label
+                                    const std::string lbl = std::format("Frame {} / {}", fi, frameCount - 1);
+                                    dl->AddText(ImVec2(vpPos.x + 6, vpPos.y + 6), IM_COL32(255, 255, 255, 220), lbl.c_str());
+                                }
+                                else
+                                {
+                                    const char *msg = texture ? "No frames" : "No texture";
+                                    const ImVec2 ts = ImGui::CalcTextSize(msg);
+                                    dl->AddText(ImVec2(vpPos.x + (vpSize.x - ts.x) * 0.5f, vpPos.y + (vpSize.y - ts.y) * 0.5f),
+                                        IM_COL32(160, 160, 160, 200), msg);
+                                }
+                            }
+                            ImGui::EndChild();
+
+                            // -- Playback controls --
+                            ImGui::Spacing();
+                            const float btnW = 60.0f;
+
+                            // Play
+                            bool playDisabled = (frameCount == 0);
+                            if (playDisabled) ImGui::BeginDisabled();
+                            if (ImGui::Button(st.playing ? "Pause##anim2d_pause" : "Play##anim2d_play", ImVec2(btnW, 0)))
+                            {
+                                if (st.playing)
+                                {
+                                    st.playing = false;
+                                }
+                                else
+                                {
+                                    // If at end and not looping, restart
+                                    if (!anim->loop && st.playbackTime >= totalDur)
+                                    {
+                                        st.playbackTime = 0.0f;
+                                    }
+                                    st.playing = true;
+                                }
+                            }
+
+                            if (playDisabled)
+                            {
+                                ImGui::EndDisabled();
+                            }
+
+                            ImGui::SameLine();
+                            if (ImGui::Button("Stop##anim2d_stop", ImVec2(btnW, 0)))
+                            {
+                                st.playing = false;
+                                st.playbackTime = 0.0f;
+                                st.previewFrame = 0;
+                            }
+
+                            ImGui::SameLine();
+                            ImGui::SetNextItemWidth(-1.0f);
+                            // Zoom slider
+                            ImGui::SliderFloat("##anim2d_zoom", &st.previewZoom, 0.1f, 4.0f, "Zoom %.2fx");
+
+                            // -- Timeline --
+                            ImGui::Spacing();
+                            {
+                                UI::TimelineState timelineState { frameCount, fps, totalDur, st.playbackTime };
+                                UI::Timeline::Draw(ImGui::GetWindowDrawList(), 54.0f, timelineState, &st.playbackTime, &st.previewFrame, &st.playing, "No frames – drop sprites here");
+                            }
+                        }
+                        ImGui::EndChild();
+
+                        // ---- Splitter handle ----
+                        ImGui::SameLine(0.0f, 0.0f);
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.20f, 1));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.26f, 0.30f, 1));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.30f, 0.30f, 0.36f, 1));
+                        ImGui::BeginChild("##anim2d_splitter", ImVec2(splitter, 0.0f), ImGuiChildFlags_None);
+                        ImGui::Button("##anim2d_splitter_btn", ImVec2(-1.0f, -1.0f));
+                        if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+                        {
+                            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+                        }
+                        if (ImGui::IsItemActive())
+                        {
+                            st.toolsWidth = std::clamp(st.toolsWidth - ImGui::GetIO().MouseDelta.x, minRight, available.x - minLeft - splitter);
+                        }
+
+                        ImGui::EndChild();
+                        ImGui::PopStyleColor(3);
+
+                        // ================================================================
+                        // RIGHT: tools
+                        // ================================================================
+                        ImGui::SameLine(0.0f, 0.0f);
+                        ImGui::BeginChild("##anim2d_tools_col", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
+                        {
+                            // Name
+                            {
+                                char nameBuf[256];
+                                std::strncpy(nameBuf, anim->name.c_str(), sizeof(nameBuf));
+                                ImGui::SetNextItemWidth(-1.0f);
+                                if (ImGui::InputText("##anim2d_name", nameBuf, sizeof(nameBuf)))
+                                {
+                                    anim->name = nameBuf;
+                                    anim->SetDirtyFlag(true);
+                                }
+                                ImGui::SameLine(0.0f, 4.0f);
+                                ImGui::TextDisabled("Name");
+                            }
+
+                            // FPS + Loop
+                            ImGui::Spacing();
+                            float fps2 = anim->fps;
+                            ImGui::SetNextItemWidth(-60.0f);
+                            if (ImGui::DragFloat("##anim2d_fps", &fps2, 0.5f, 0.1f, 240.0f, "FPS: %.1f"))
+                            {
+                                anim->fps = fps2;
+                                anim->SetDirtyFlag(true);
+                            }
+                            ImGui::SameLine();
+                            bool loop2 = anim->loop;
+                            if (ImGui::Checkbox("Loop##anim2d_loop", &loop2))
+                            {
+                                anim->loop = loop2;
+                                anim->SetDirtyFlag(true);
+                            }
+
+                            ImGui::Separator();
+
+                            // Texture drop zone
+                            ImGui::TextDisabled("Texture");
+                            const std::string texLabel = (anim->textureHandle != AssetHandle(0)) ? "Texture Loaded" : "Drop Texture Here";
+                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.24f, 1.0f));
+                            ImGui::Button(texLabel.c_str(), ImVec2(-1.0f, 28.0f));
+                            ImGui::PopStyleColor();
+                            if (ImGui::BeginDragDropTarget())
+                            {
+                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                {
+                                    const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
+                                    const AssetMetaData &md = project->GetAssetManager()->GetMetaData(handle);
+                                    if (md.type == AssetType::Texture)
+                                    {
+                                        anim->textureHandle = handle;
+                                        anim->SetDirtyFlag(true);
+                                    }
+                                }
+                                ImGui::EndDragDropTarget();
+                            }
+                            ImGui::TextDisabled("Handle: %llu", static_cast<uint64_t>(anim->textureHandle));
+
+                            ImGui::Separator();
+
+                            // Frame drop zone
+                            ImGui::TextDisabled("Frames (%d)", frameCount);
+                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.14f, 0.28f, 1.0f));
+                            ImGui::Button("Drop Sprites / SpriteSheet##anim2d_drop", ImVec2(-1.0f, 32.0f));
+                            ImGui::PopStyleColor();
+                            if (ImGui::BeginDragDropTarget())
+                            {
+                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_SPRITE_SHEET_ITEM))
+                                {
+                                    if (payload->Data && payload->DataSize == sizeof(SpriteSheetSpritePayload))
+                                    {
+                                        const auto sp = *static_cast<const SpriteSheetSpritePayload *>(payload->Data);
+                                        Animation2D::Frame f; f.uv0 = sp.uv0; f.uv1 = sp.uv1;
+                                        std::swap(f.uv0.y, f.uv1.y);
+                                        anim->frames.push_back(f);
+                                        if (anim->textureHandle == AssetHandle(0)) anim->textureHandle = sp.textureHandle;
+                                        anim->SetDirtyFlag(true);
+                                    }
+                                }
+                                else if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                {
+                                    if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                                    {
+                                        const AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                        const auto &md = project->GetAssetManager()->GetMetaData(handle);
+                                        if (md.type == AssetType::SpriteSheet)
+                                        {
+                                            Ref<SpriteSheet> ss = project->GetAsset<SpriteSheet>(handle);
+                                            if (!ss) ss = project->GetAssetImmediate<SpriteSheet>(handle);
+                                            if (ss)
+                                            {
+                                                for (const auto &sp : ss->GetSprites())
+                                                {
+                                                    Animation2D::Frame f; f.uv0 = sp.uv0; f.uv1 = sp.uv1;
+                                                    std::swap(f.uv0.y, f.uv1.y);
+                                                    anim->frames.push_back(f);
+                                                }
+                                                if (anim->textureHandle == AssetHandle(0)) anim->textureHandle = ss->GetTextureHandle();
+                                                anim->SetDirtyFlag(true);
+                                            }
+                                        }
+                                    }
+                                }
+                                ImGui::EndDragDropTarget();
+                            }
+
+                            // Frame list
+                            if (ImGui::BeginChild("##anim2d_frame_list", ImVec2(0.0f, -36.0f), ImGuiChildFlags_Borders))
+                            {
+                                for (int i = 0; i < frameCount; ++i)
+                                {
+                                    auto &f = anim->frames[static_cast<size_t>(i)];
+                                    ImGui::PushID(i);
+                                    const bool sel = (i == st.previewFrame);
+                                    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.2f, 0.5f, 0.3f, 0.7f));
+                                    if (ImGui::Selectable(std::format("Frame {}##anim2d_fsel", i).c_str(), sel))
+                                    {
+                                        st.previewFrame = i;
+                                        st.playbackTime = i / fps;
+                                        st.playing = false;
+                                    }
+                                    ImGui::PopStyleColor();
+                                    ImGui::SameLine();
+                                    ImGui::TextDisabled("(%.2f,%.2f)→(%.2f,%.2f)", f.uv0.x, f.uv0.y, f.uv1.x, f.uv1.y);
+                                    ImGui::SameLine();
+                                    if (ImGui::SmallButton("X##anim2d_del"))
+                                    {
+                                        anim->frames.erase(anim->frames.begin() + i);
+                                        anim->SetDirtyFlag(true);
+                                        if (st.previewFrame >= static_cast<int>(anim->frames.size()))
+                                            st.previewFrame = std::max(0, static_cast<int>(anim->frames.size()) - 1);
+                                        ImGui::PopID();
+                                        break;
+                                    }
+                                    ImGui::PopID();
+                                }
+                            }
+                            ImGui::EndChild();
+
+                            if (ImGui::Button("+ Empty##anim2d_add")) { anim->frames.push_back({}); anim->SetDirtyFlag(true); }
+                            ImGui::SameLine();
+                            if (ImGui::Button("Clear##anim2d_clear")) { anim->frames.clear(); anim->SetDirtyFlag(true); st.previewFrame = 0; st.playbackTime = 0.0f; st.playing = false; }
+                        }
+                        ImGui::EndChild();
                     }
                     else
                     {
@@ -2370,361 +2437,6 @@ namespace ignite
         assetData.isOpen = isOpen;
         assetData.requestFocus = false;
     }
-
-    void AssetEditorPanel::UIAnimation2DEditor(const Ref<Animation2D> &anim)
-    {
-        auto project = m_EditorLayer->GetActiveProject();
-
-        const uint64_t stateKey = static_cast<uint64_t>(anim->handle);
-        Animation2DEditorState &st = s_Anim2DEditorState[stateKey];
-
-        // Resolve texture
-        Ref<Texture> texture;
-        if (anim->textureHandle != AssetHandle(0))
-        {
-            texture = project->GetAsset<Texture>(anim->textureHandle);
-            if (!texture) texture = project->GetAssetImmediate<Texture>(anim->textureHandle);
-        }
-
-        const int frameCount = static_cast<int>(anim->frames.size());
-        const float fps = glm::max(anim->fps, 0.001f);
-        const float totalDur = (frameCount > 0) ? (static_cast<float>(frameCount) / fps) : 0.0f;
-
-        // ---- Advance internal preview clock ----
-        const float now = static_cast<float>(ImGui::GetTime());
-        if (st.playing && frameCount > 0)
-        {
-            const float dt = now - st.lastRealTime;
-            st.playbackTime += dt;
-            if (st.playbackTime >= totalDur)
-            {
-                if (anim->loop)
-                {
-                    st.playbackTime = std::fmod(st.playbackTime, totalDur);
-                }
-                else
-                {
-                    st.playbackTime = totalDur;
-                    st.playing = false;
-                }
-            }
-            st.previewFrame = std::min(static_cast<int>(st.playbackTime * fps), frameCount - 1);
-        }
-        st.lastRealTime = now;
-
-        // ================================================================
-        // Layout: LEFT = preview viewport | RIGHT = tools
-        // ================================================================
-        const ImVec2 available = ImGui::GetContentRegionAvail();
-        const float  splitter = 6.0f;
-        const float  minLeft = 120.0f;
-        const float  minRight = 240.0f;
-        st.toolsWidth = std::clamp(st.toolsWidth, minRight, available.x - minLeft - splitter);
-        const float leftW = available.x - st.toolsWidth - splitter;
-
-        // ----- LEFT: preview -----
-        ImGui::BeginChild("##anim2d_preview_col", ImVec2(leftW, 0.0f), ImGuiChildFlags_None);
-        {
-            // Timeline height reservation
-            const float timelineH = 80.0f;
-            const float controlsH = 28.0f;
-            const float previewH = ImGui::GetContentRegionAvail().y - timelineH - controlsH - 12.0f;
-
-            // -- Preview viewport --
-            ImGui::BeginChild("##anim2d_tex_view", ImVec2(0.0f, previewH), ImGuiChildFlags_Borders);
-            {
-                const ImVec2 vpPos = ImGui::GetCursorScreenPos();
-                const ImVec2 vpSize = ImGui::GetContentRegionAvail();
-
-                if (vpSize.x > 0 && vpSize.y > 0)
-                {
-                    ImGui::InvisibleButton("##anim2d_view_ibt", vpSize);
-                }
-
-                // Mouse-wheel zoom
-                if (ImGui::IsItemHovered())
-                {
-                    const float w = ImGui::GetIO().MouseWheel;
-                    if (w != 0.0f) st.previewZoom = std::clamp(st.previewZoom + w * 0.1f, 0.1f, 8.0f);
-                }
-
-                ImDrawList *dl = ImGui::GetWindowDrawList();
-
-                // Checkerboard background
-                {
-                    constexpr float cs = 12.0f;
-                    const ImU32 cA = IM_COL32(60, 60, 60, 255);
-                    const ImU32 cB = IM_COL32(80, 80, 80, 255);
-                    const int cols = static_cast<int>(vpSize.x / cs) + 2;
-                    const int rows = static_cast<int>(vpSize.y / cs) + 2;
-                    for (int ry = 0; ry < rows; ++ry)
-                    {
-                        for (int cx = 0; cx < cols; ++cx)
-                        {
-                            const ImVec2 tMin = { vpPos.x + cx * cs, vpPos.y + ry * cs };
-                            const ImVec2 tMax = { tMin.x + cs, tMin.y + cs };
-                            dl->AddRectFilled(tMin, tMax, ((cx + ry) % 2 == 0) ? cA : cB);
-                        }
-                    }
-                }
-
-                if (texture && texture->GetHandle() && frameCount > 0)
-                {
-                    const int fi = std::clamp(st.previewFrame, 0, frameCount - 1);
-                    const auto &fr = anim->frames[static_cast<size_t>(fi)];
-
-                    const float texW = static_cast<float>(texture->GetWidth());
-                    const float texH = static_cast<float>(texture->GetHeight());
-                    // Aspect of the sprite region
-                    const float uvW = std::max(std::abs(fr.uv1.x - fr.uv0.x), 0.001f);
-                    const float uvH = std::max(std::abs(fr.uv1.y - fr.uv0.y), 0.001f);
-                    const float sprW = texW * uvW;
-                    const float sprH = texH * uvH;
-                    const float fit = std::min(vpSize.x / sprW, vpSize.y / sprH);
-                    const float imgW = sprW * fit * st.previewZoom;
-                    const float imgH = sprH * fit * st.previewZoom;
-                    const ImVec2 imgPos =
-                    {
-                        vpPos.x + (vpSize.x - imgW) * 0.5f,
-                        vpPos.y + (vpSize.y - imgH) * 0.5f
-                    };
-
-                    dl->AddImage(reinterpret_cast<ImTextureID>(texture->GetHandle().Get()),
-                        imgPos, ImVec2(imgPos.x + imgW, imgPos.y + imgH), ImVec2(fr.uv0.x, fr.uv1.y), ImVec2(fr.uv1.x, fr.uv0.y));
-
-                    // Frame label
-                    const std::string lbl = std::format("Frame {} / {}", fi, frameCount - 1);
-                    dl->AddText(ImVec2(vpPos.x + 6, vpPos.y + 6), IM_COL32(255, 255, 255, 220), lbl.c_str());
-                }
-                else
-                {
-                    const char *msg = texture ? "No frames" : "No texture";
-                    const ImVec2 ts = ImGui::CalcTextSize(msg);
-                    dl->AddText(ImVec2(vpPos.x + (vpSize.x - ts.x) * 0.5f, vpPos.y + (vpSize.y - ts.y) * 0.5f),
-                        IM_COL32(160, 160, 160, 200), msg);
-                }
-            }
-            ImGui::EndChild();
-
-            // -- Playback controls --
-            ImGui::Spacing();
-            const float btnW = 60.0f;
-
-            // Play
-            bool playDisabled = (frameCount == 0);
-            if (playDisabled) ImGui::BeginDisabled();
-            if (ImGui::Button(st.playing ? "Pause##anim2d_pause" : "Play##anim2d_play", ImVec2(btnW, 0)))
-            {
-                if (st.playing)
-                {
-                    st.playing = false;
-                }
-                else
-                {
-                    // If at end and not looping, restart
-                    if (!anim->loop && st.playbackTime >= totalDur)
-                    {
-                        st.playbackTime = 0.0f;
-                    }
-                    st.playing = true;
-                }
-            }
-
-            if (playDisabled)
-            {
-                ImGui::EndDisabled();
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button("Stop##anim2d_stop", ImVec2(btnW, 0)))
-            {
-                st.playing = false;
-                st.playbackTime = 0.0f;
-                st.previewFrame = 0;
-            }
-
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(-1.0f);
-            // Zoom slider
-            ImGui::SliderFloat("##anim2d_zoom", &st.previewZoom, 0.1f, 4.0f, "Zoom %.2fx");
-
-            // -- Timeline --
-            ImGui::Spacing();
-            {
-                UI::TimelineState timelineState{ frameCount, fps, totalDur, st.playbackTime };
-                UI::Timeline::Draw(ImGui::GetWindowDrawList(), 54.0f, timelineState, &st.playbackTime, &st.previewFrame, &st.playing, "No frames – drop sprites here");
-            }
-        }
-        ImGui::EndChild();
-
-        // ---- Splitter handle ----
-        ImGui::SameLine(0.0f, 0.0f);
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.20f, 1));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.26f, 0.30f, 1));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.30f, 0.30f, 0.36f, 1));
-        ImGui::BeginChild("##anim2d_splitter", ImVec2(splitter, 0.0f), ImGuiChildFlags_None);
-        ImGui::Button("##anim2d_splitter_btn", ImVec2(-1.0f, -1.0f));
-        if (ImGui::IsItemHovered() || ImGui::IsItemActive())
-        {
-            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-        }
-        if (ImGui::IsItemActive())
-        {
-            st.toolsWidth = std::clamp(st.toolsWidth - ImGui::GetIO().MouseDelta.x, minRight, available.x - minLeft - splitter);
-        }
-
-        ImGui::EndChild();
-        ImGui::PopStyleColor(3);
-
-        // ================================================================
-        // RIGHT: tools
-        // ================================================================
-        ImGui::SameLine(0.0f, 0.0f);
-        ImGui::BeginChild("##anim2d_tools_col", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
-        {
-            // Name
-            {
-                char nameBuf[256];
-                std::strncpy(nameBuf, anim->name.c_str(), sizeof(nameBuf));
-                ImGui::SetNextItemWidth(-1.0f);
-                if (ImGui::InputText("##anim2d_name", nameBuf, sizeof(nameBuf)))
-                {
-                    anim->name = nameBuf;
-                    anim->SetDirtyFlag(true);
-                }
-                ImGui::SameLine(0.0f, 4.0f);
-                ImGui::TextDisabled("Name");
-            }
-
-            // FPS + Loop
-            ImGui::Spacing();
-            float fps2 = anim->fps;
-            ImGui::SetNextItemWidth(-60.0f);
-            if (ImGui::DragFloat("##anim2d_fps", &fps2, 0.5f, 0.1f, 240.0f, "FPS: %.1f"))
-            {
-                anim->fps = fps2;
-                anim->SetDirtyFlag(true);
-            }
-            ImGui::SameLine();
-            bool loop2 = anim->loop;
-            if (ImGui::Checkbox("Loop##anim2d_loop", &loop2))
-            {
-                anim->loop = loop2;
-                anim->SetDirtyFlag(true);
-            }
-
-            ImGui::Separator();
-
-            // Texture drop zone
-            ImGui::TextDisabled("Texture");
-            const std::string texLabel = (anim->textureHandle != AssetHandle(0)) ? "Texture Loaded" : "Drop Texture Here";
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.24f, 1.0f));
-            ImGui::Button(texLabel.c_str(), ImVec2(-1.0f, 28.0f));
-            ImGui::PopStyleColor();
-            if (ImGui::BeginDragDropTarget())
-            {
-                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                {
-                    const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
-                    const AssetMetaData &md = project->GetAssetManager()->GetMetaData(handle);
-                    if (md.type == AssetType::Texture)
-                    {
-                        anim->textureHandle = handle;
-                        anim->SetDirtyFlag(true);
-                    }
-                }
-                ImGui::EndDragDropTarget();
-            }
-            ImGui::TextDisabled("Handle: %llu", static_cast<uint64_t>(anim->textureHandle));
-
-            ImGui::Separator();
-
-            // Frame drop zone
-            ImGui::TextDisabled("Frames (%d)", frameCount);
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.14f, 0.28f, 1.0f));
-            ImGui::Button("Drop Sprites / SpriteSheet##anim2d_drop", ImVec2(-1.0f, 32.0f));
-            ImGui::PopStyleColor();
-            if (ImGui::BeginDragDropTarget())
-            {
-                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_SPRITE_SHEET_ITEM))
-                {
-                    if (payload->Data && payload->DataSize == sizeof(SpriteSheetSpritePayload))
-                    {
-                        const auto sp = *static_cast<const SpriteSheetSpritePayload *>(payload->Data);
-                        Animation2D::Frame f; f.uv0 = sp.uv0; f.uv1 = sp.uv1;
-                        std::swap(f.uv0.y, f.uv1.y);
-                        anim->frames.push_back(f);
-                        if (anim->textureHandle == AssetHandle(0)) anim->textureHandle = sp.textureHandle;
-                        anim->SetDirtyFlag(true);
-                    }
-                }
-                else if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                {
-                    if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                    {
-                        const AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                        const auto &md = project->GetAssetManager()->GetMetaData(handle);
-                        if (md.type == AssetType::SpriteSheet)
-                        {
-                            Ref<SpriteSheet> ss = project->GetAsset<SpriteSheet>(handle);
-                            if (!ss) ss = project->GetAssetImmediate<SpriteSheet>(handle);
-                            if (ss)
-                            {
-                                for (const auto &sp : ss->GetSprites())
-                                {
-                                    Animation2D::Frame f; f.uv0 = sp.uv0; f.uv1 = sp.uv1;
-                                    std::swap(f.uv0.y, f.uv1.y);
-                                    anim->frames.push_back(f);
-                                }
-                                if (anim->textureHandle == AssetHandle(0)) anim->textureHandle = ss->GetTextureHandle();
-                                anim->SetDirtyFlag(true);
-                            }
-                        }
-                    }
-                }
-                ImGui::EndDragDropTarget();
-            }
-
-            // Frame list
-            if (ImGui::BeginChild("##anim2d_frame_list", ImVec2(0.0f, -36.0f), ImGuiChildFlags_Borders))
-            {
-                for (int i = 0; i < frameCount; ++i)
-                {
-                    auto &f = anim->frames[static_cast<size_t>(i)];
-                    ImGui::PushID(i);
-                    const bool sel = (i == st.previewFrame);
-                    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.2f, 0.5f, 0.3f, 0.7f));
-                    if (ImGui::Selectable(std::format("Frame {}##anim2d_fsel", i).c_str(), sel))
-                    {
-                        st.previewFrame = i;
-                        st.playbackTime = i / fps;
-                        st.playing = false;
-                    }
-                    ImGui::PopStyleColor();
-                    ImGui::SameLine();
-                    ImGui::TextDisabled("(%.2f,%.2f)→(%.2f,%.2f)", f.uv0.x, f.uv0.y, f.uv1.x, f.uv1.y);
-                    ImGui::SameLine();
-                    if (ImGui::SmallButton("X##anim2d_del"))
-                    {
-                        anim->frames.erase(anim->frames.begin() + i);
-                        anim->SetDirtyFlag(true);
-                        if (st.previewFrame >= static_cast<int>(anim->frames.size()))
-                            st.previewFrame = std::max(0, static_cast<int>(anim->frames.size()) - 1);
-                        ImGui::PopID();
-                        break;
-                    }
-                    ImGui::PopID();
-                }
-            }
-            ImGui::EndChild();
-
-            if (ImGui::Button("+ Empty##anim2d_add")) { anim->frames.push_back({}); anim->SetDirtyFlag(true); }
-            ImGui::SameLine();
-            if (ImGui::Button("Clear##anim2d_clear")) { anim->frames.clear(); anim->SetDirtyFlag(true); st.previewFrame = 0; st.playbackTime = 0.0f; st.playing = false; }
-        }
-        ImGui::EndChild();
-    }
-
 
     void AssetEditorPanel::UIAnimatorController2DEditor(AssetEditorData &assetData)
     {
@@ -2735,9 +2447,317 @@ namespace ignite
             {
                 if (assetData.asset && assetData.asset->IsReady())
                 {
-                    if (Ref<AnimatorController2D> controller = assetData.asset->As<AnimatorController2D>())
+                    if (Ref<AnimatorController2D> ctrl = assetData.asset->As<AnimatorController2D>())
                     {
-                        UIAnimatorController2DEditor(controller);
+                        auto project = m_EditorLayer->GetActiveProject();
+
+                        ImGui::Text("Animator Controller 2D");
+                        ImGui::Separator();
+
+                        // Default State
+                        {
+                            char defBuf[256];
+                            std::strncpy(defBuf, ctrl->defaultState.c_str(), sizeof(defBuf));
+                            if (ImGui::InputText("Default State##ac2d_default", defBuf, sizeof(defBuf)))
+                            {
+                                ctrl->defaultState = defBuf;
+                                ctrl->SetDirtyFlag(true);
+                            }
+                        }
+
+                        // ==== States ====
+                        if (ImGui::CollapsingHeader("States##ac2d_states", ImGuiTreeNodeFlags_DefaultOpen))
+                        {
+                            for (int i = 0; i < static_cast<int>(ctrl->states.size()); ++i)
+                            {
+                                auto &state = ctrl->states[static_cast<size_t>(i)];
+                                ImGui::PushID(i);
+
+                                ImGui::SetNextItemWidth(150);
+                                char nameBuf[256];
+                                std::strncpy(nameBuf, state.name.c_str(), sizeof(nameBuf));
+                                if (ImGui::InputText("Name##s_name", nameBuf, sizeof(nameBuf)))
+                                {
+                                    state.name = nameBuf;
+                                    ctrl->SetDirtyFlag(true);
+                                }
+                                ImGui::SameLine();
+
+                                // Animation2D drag-drop
+                                ImGui::Text("Anim: %llu", static_cast<uint64_t>(state.animHandle));
+                                ImGui::SameLine();
+                                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.2f, 0.35f, 1.0f));
+                                ImGui::Button("Drop Anim2D##s_drop", ImVec2(90, 20));
+                                ImGui::PopStyleColor();
+                                if (ImGui::BeginDragDropTarget())
+                                {
+                                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                    {
+                                        const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
+                                        const AssetMetaData &md = project->GetAssetManager()->GetMetaData(handle);
+                                        if (md.type == AssetType::Animation2D)
+                                        {
+                                            state.animHandle = handle;
+                                            ctrl->SetDirtyFlag(true);
+                                        }
+                                    }
+                                    ImGui::EndDragDropTarget();
+                                }
+                                ImGui::SameLine();
+                                if (ImGui::SmallButton("Remove##s_rem"))
+                                {
+                                    ctrl->states.erase(ctrl->states.begin() + i);
+                                    ctrl->SetDirtyFlag(true);
+                                    ImGui::PopID();
+                                    break;
+                                }
+
+                                ImGui::PopID();
+                            }
+
+                            if (ImGui::Button("+ Add State##ac2d_add_state"))
+                            {
+                                AnimState2D s;
+                                s.name = "NewState";
+                                s.editorPos = { 100.0f + 120.0f * static_cast<float>(ctrl->states.size()), 100.0f };
+                                ctrl->states.push_back(s);
+                                ctrl->SetDirtyFlag(true);
+                            }
+                        }
+
+                        // ==== Parameters ====
+                        if (ImGui::CollapsingHeader("Parameters##ac2d_params", ImGuiTreeNodeFlags_DefaultOpen))
+                        {
+                            for (int i = 0; i < static_cast<int>(ctrl->params.size()); ++i)
+                            {
+                                auto &p = ctrl->params[static_cast<size_t>(i)];
+                                ImGui::PushID(i);
+
+                                ImGui::SetNextItemWidth(120);
+                                char pNameBuf[256];
+                                std::strncpy(pNameBuf, p.name.c_str(), sizeof(pNameBuf));
+                                if (ImGui::InputText("##p_name", pNameBuf, sizeof(pNameBuf)))
+                                {
+                                    p.name = pNameBuf;
+                                    ctrl->SetDirtyFlag(true);
+                                }
+                                ImGui::SameLine();
+
+                                // Type selector
+                                int typeIdx = static_cast<int>(p.type);
+                                ImGui::SetNextItemWidth(70);
+                                if (ImGui::Combo("##p_type", &typeIdx, s_ParamTypeNames, 4))
+                                {
+                                    p.type = static_cast<AnimParam::Type>(typeIdx);
+                                    ctrl->SetDirtyFlag(true);
+                                }
+                                ImGui::SameLine();
+
+                                // Value
+                                switch (p.type)
+                                {
+                                    case AnimParam::Type::Float:
+                                    ImGui::SetNextItemWidth(80);
+                                    if (ImGui::DragFloat("##p_float", &p.floatVal, 0.01f)) ctrl->SetDirtyFlag(true);
+                                    break;
+                                    case AnimParam::Type::Int:
+                                    ImGui::SetNextItemWidth(80);
+                                    if (ImGui::DragInt("##p_int", &p.intVal)) ctrl->SetDirtyFlag(true);
+                                    break;
+                                    case AnimParam::Type::Bool:
+                                    if (ImGui::Checkbox("##p_bool", &p.boolVal)) ctrl->SetDirtyFlag(true);
+                                    break;
+                                    case AnimParam::Type::String:
+                                    {
+                                        char strbuf[256];
+                                        std::strncpy(strbuf, p.strVal.c_str(), sizeof(strbuf));
+                                        ImGui::SetNextItemWidth(100);
+                                        if (ImGui::InputText("##p_str", strbuf, sizeof(strbuf)))
+                                        {
+                                            p.strVal = strbuf;
+                                            ctrl->SetDirtyFlag(true);
+                                        }
+                                    }
+                                    break;
+                                    default: break;
+                                }
+                                ImGui::SameLine();
+                                if (ImGui::SmallButton("X##p_del"))
+                                {
+                                    ctrl->params.erase(ctrl->params.begin() + i);
+                                    ctrl->SetDirtyFlag(true);
+                                    ImGui::PopID();
+                                    break;
+                                }
+
+                                ImGui::PopID();
+                            }
+
+                            if (ImGui::Button("+ Float##p_addf"))
+                            {
+                                ctrl->params.push_back({ .name = "NewFloat", .type = AnimParam::Type::Float }); ctrl->SetDirtyFlag(true);
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::Button("+ Bool##p_addb"))
+                            {
+                                ctrl->params.push_back({ .name = "NewBool", .type = AnimParam::Type::Bool }); ctrl->SetDirtyFlag(true);
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::Button("+ Int##p_addi"))
+                            {
+                                ctrl->params.push_back({ .name = "NewInt", .type = AnimParam::Type::Int }); ctrl->SetDirtyFlag(true);
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::Button("+ String##p_adds"))
+                            {
+                                ctrl->params.push_back({ .name = "NewString", .type = AnimParam::Type::String }); ctrl->SetDirtyFlag(true);
+                            }
+                        }
+
+                        // ==== Transitions ====
+                        if (ImGui::CollapsingHeader("Transitions##ac2d_trans"))
+                        {
+                            for (int i = 0; i < static_cast<int>(ctrl->transitions.size()); ++i)
+                            {
+                                auto &tr = ctrl->transitions[static_cast<size_t>(i)];
+                                ImGui::PushID(i);
+
+                                char fromBuf[256], toBuf[256];
+                                std::strncpy(fromBuf, tr.fromState.c_str(), sizeof(fromBuf));
+                                std::strncpy(toBuf, tr.toState.c_str(), sizeof(toBuf));
+                                ImGui::SetNextItemWidth(110);
+                                if (ImGui::InputText("From##tr_from", fromBuf, sizeof(fromBuf)))
+                                {
+                                    tr.fromState = fromBuf; ctrl->SetDirtyFlag(true);
+                                }
+
+                                ImGui::SameLine();
+                                ImGui::TextUnformatted("->");
+                                ImGui::SameLine();
+                                ImGui::SetNextItemWidth(110);
+
+                                if (ImGui::InputText("To##tr_to", toBuf, sizeof(toBuf)))
+                                {
+                                    tr.toState = toBuf; ctrl->SetDirtyFlag(true);
+                                }
+
+                                ImGui::SameLine();
+                                if (ImGui::Checkbox("Exit Time##tr_et", &tr.hasExitTime)) ctrl->SetDirtyFlag(true);
+                                if (tr.hasExitTime)
+                                {
+                                    ImGui::SameLine();
+                                    ImGui::SetNextItemWidth(60);
+                                    if (ImGui::DragFloat("##tr_etv", &tr.exitTime, 0.01f, 0.0f, 1.0f))
+                                    {
+                                        ctrl->SetDirtyFlag(true);
+                                    }
+                                }
+
+                                ImGui::SameLine();
+                                if (ImGui::SmallButton("X##tr_del"))
+                                {
+                                    ctrl->transitions.erase(ctrl->transitions.begin() + i);
+                                    ctrl->SetDirtyFlag(true);
+                                    ImGui::PopID();
+                                    break;
+                                }
+
+                                // Conditions
+                                ImGui::Indent(16.0f);
+                                for (int ci = 0; ci < static_cast<int>(tr.conditions.size()); ++ci)
+                                {
+                                    auto &cond = tr.conditions[static_cast<size_t>(ci)];
+                                    ImGui::PushID(ci);
+
+                                    char cParamBuf[256];
+                                    std::strncpy(cParamBuf, cond.paramName.c_str(), sizeof(cParamBuf));
+                                    ImGui::SetNextItemWidth(110);
+                                    if (ImGui::InputText("Param##cond_p", cParamBuf, sizeof(cParamBuf)))
+                                    {
+                                        cond.paramName = cParamBuf; ctrl->SetDirtyFlag(true);
+                                    }
+                                    ImGui::SameLine();
+                                    int  opIdx = static_cast<int>(cond.op);
+                                    ImGui::SetNextItemWidth(50);
+                                    if (ImGui::Combo("##cond_op", &opIdx, s_ConditionOpNames, 6))
+                                    {
+                                        cond.op = static_cast<AnimCondition::Op>(opIdx);
+                                        ctrl->SetDirtyFlag(true);
+                                    }
+                                    ImGui::SameLine();
+
+                                    const AnimParam *param = ctrl->GetParam(cond.paramName);
+                                    if (param)
+                                    {
+                                        switch (param->type)
+                                        {
+                                            case AnimParam::Type::Float:
+                                            ImGui::SetNextItemWidth(70);
+                                            if (ImGui::DragFloat("##cond_fval", &cond.floatThreshold, 0.01f)) ctrl->SetDirtyFlag(true);
+                                            break;
+                                            case AnimParam::Type::Int:
+                                            ImGui::SetNextItemWidth(70);
+                                            if (ImGui::DragInt("##cond_ival", &cond.intThreshold)) ctrl->SetDirtyFlag(true);
+                                            break;
+                                            case AnimParam::Type::Bool:
+                                            if (ImGui::Checkbox("##cond_bval", &cond.boolThreshold)) ctrl->SetDirtyFlag(true);
+                                            break;
+                                            case AnimParam::Type::String:
+                                            {
+                                                char sbuf[256];
+                                                std::strncpy(sbuf, cond.strThreshold.c_str(), sizeof(sbuf));
+                                                ImGui::SetNextItemWidth(90);
+                                                if (ImGui::InputText("##cond_sval", sbuf, sizeof(sbuf)))
+                                                {
+                                                    cond.strThreshold = sbuf; ctrl->SetDirtyFlag(true);
+                                                }
+                                            }
+                                            break;
+                                            default: break;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        ImGui::SetNextItemWidth(70);
+                                        if (ImGui::DragFloat("##cond_fval2", &cond.floatThreshold, 0.01f))
+                                        {
+                                            ctrl->SetDirtyFlag(true);
+                                        }
+                                    }
+
+                                    ImGui::SameLine();
+                                    if (ImGui::SmallButton("X##cond_del"))
+                                    {
+                                        tr.conditions.erase(tr.conditions.begin() + ci);
+                                        ctrl->SetDirtyFlag(true);
+                                        ImGui::PopID();
+                                        break;
+                                    }
+                                    ImGui::PopID();
+                                }
+                                if (ImGui::SmallButton("+ Condition##cond_add"))
+                                {
+                                    tr.conditions.push_back({});
+                                    ctrl->SetDirtyFlag(true);
+                                }
+                                ImGui::Unindent(16.0f);
+
+                                ImGui::PopID();
+                                ImGui::Separator();
+                            }
+
+                            if (ImGui::Button("+ Add Transition##tr_add"))
+                            {
+                                AnimTransition tr;
+                                if (!ctrl->states.empty())
+                                {
+                                    tr.fromState = ctrl->states[0].name;
+                                    tr.toState = ctrl->states.size() > 1 ? ctrl->states[1].name : "";
+                                }
+                                ctrl->transitions.push_back(tr);
+                                ctrl->SetDirtyFlag(true);
+                            }
+                        }
                     }
                     else
                     {
@@ -2757,318 +2777,6 @@ namespace ignite
         assetData.requestFocus = false;
     }
 
-    void AssetEditorPanel::UIAnimatorController2DEditor(const Ref<AnimatorController2D> &ctrl)
-    {
-        auto project = m_EditorLayer->GetActiveProject();
-
-        ImGui::Text("Animator Controller 2D");
-        ImGui::Separator();
-
-        // Default State
-        {
-            char defBuf[256];
-            std::strncpy(defBuf, ctrl->defaultState.c_str(), sizeof(defBuf));
-            if (ImGui::InputText("Default State##ac2d_default", defBuf, sizeof(defBuf)))
-            {
-                ctrl->defaultState = defBuf;
-                ctrl->SetDirtyFlag(true);
-            }
-        }
-
-        // ==== States ====
-        if (ImGui::CollapsingHeader("States##ac2d_states", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            for (int i = 0; i < static_cast<int>(ctrl->states.size()); ++i)
-            {
-                auto &state = ctrl->states[static_cast<size_t>(i)];
-                ImGui::PushID(i);
-
-                ImGui::SetNextItemWidth(150);
-                char nameBuf[256];
-                std::strncpy(nameBuf, state.name.c_str(), sizeof(nameBuf));
-                if (ImGui::InputText("Name##s_name", nameBuf, sizeof(nameBuf)))
-                {
-                    state.name = nameBuf;
-                    ctrl->SetDirtyFlag(true);
-                }
-                ImGui::SameLine();
-
-                // Animation2D drag-drop
-                ImGui::Text("Anim: %llu", static_cast<uint64_t>(state.animHandle));
-                ImGui::SameLine();
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.2f, 0.35f, 1.0f));
-                ImGui::Button("Drop Anim2D##s_drop", ImVec2(90, 20));
-                ImGui::PopStyleColor();
-                if (ImGui::BeginDragDropTarget())
-                {
-                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                    {
-                        const AssetHandle handle = *static_cast<const AssetHandle *>(payload->Data);
-                        const AssetMetaData &md = project->GetAssetManager()->GetMetaData(handle);
-                        if (md.type == AssetType::Animation2D)
-                        {
-                            state.animHandle = handle;
-                            ctrl->SetDirtyFlag(true);
-                        }
-                    }
-                    ImGui::EndDragDropTarget();
-                }
-                ImGui::SameLine();
-                if (ImGui::SmallButton("Remove##s_rem"))
-                {
-                    ctrl->states.erase(ctrl->states.begin() + i);
-                    ctrl->SetDirtyFlag(true);
-                    ImGui::PopID();
-                    break;
-                }
-
-                ImGui::PopID();
-            }
-
-            if (ImGui::Button("+ Add State##ac2d_add_state"))
-            {
-                AnimState2D s;
-                s.name = "NewState";
-                s.editorPos = { 100.0f + 120.0f * static_cast<float>(ctrl->states.size()), 100.0f };
-                ctrl->states.push_back(s);
-                ctrl->SetDirtyFlag(true);
-            }
-        }
-
-        // ==== Parameters ====
-        if (ImGui::CollapsingHeader("Parameters##ac2d_params", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            for (int i = 0; i < static_cast<int>(ctrl->params.size()); ++i)
-            {
-                auto &p = ctrl->params[static_cast<size_t>(i)];
-                ImGui::PushID(i);
-
-                ImGui::SetNextItemWidth(120);
-                char pNameBuf[256];
-                std::strncpy(pNameBuf, p.name.c_str(), sizeof(pNameBuf));
-                if (ImGui::InputText("##p_name", pNameBuf, sizeof(pNameBuf)))
-                {
-                    p.name = pNameBuf;
-                    ctrl->SetDirtyFlag(true);
-                }
-                ImGui::SameLine();
-
-                // Type selector
-                int typeIdx = static_cast<int>(p.type);
-                ImGui::SetNextItemWidth(70);
-                if (ImGui::Combo("##p_type", &typeIdx, s_ParamTypeNames, 4))
-                {
-                    p.type = static_cast<AnimParam::Type>(typeIdx);
-                    ctrl->SetDirtyFlag(true);
-                }
-                ImGui::SameLine();
-
-                // Value
-                switch (p.type)
-                {
-                    case AnimParam::Type::Float:
-                    ImGui::SetNextItemWidth(80);
-                    if (ImGui::DragFloat("##p_float", &p.floatVal, 0.01f)) ctrl->SetDirtyFlag(true);
-                    break;
-                    case AnimParam::Type::Int:
-                    ImGui::SetNextItemWidth(80);
-                    if (ImGui::DragInt("##p_int", &p.intVal)) ctrl->SetDirtyFlag(true);
-                    break;
-                    case AnimParam::Type::Bool:
-                    if (ImGui::Checkbox("##p_bool", &p.boolVal)) ctrl->SetDirtyFlag(true);
-                    break;
-                    case AnimParam::Type::String:
-                    {
-                        char strbuf[256];
-                        std::strncpy(strbuf, p.strVal.c_str(), sizeof(strbuf));
-                        ImGui::SetNextItemWidth(100);
-                        if (ImGui::InputText("##p_str", strbuf, sizeof(strbuf)))
-                        {
-                            p.strVal = strbuf;
-                            ctrl->SetDirtyFlag(true);
-                        }
-                    }
-                    break;
-                    default: break;
-                }
-                ImGui::SameLine();
-                if (ImGui::SmallButton("X##p_del"))
-                {
-                    ctrl->params.erase(ctrl->params.begin() + i);
-                    ctrl->SetDirtyFlag(true);
-                    ImGui::PopID();
-                    break;
-                }
-
-                ImGui::PopID();
-            }
-
-            if (ImGui::Button("+ Float##p_addf"))
-            {
-                ctrl->params.push_back({ .name = "NewFloat", .type = AnimParam::Type::Float }); ctrl->SetDirtyFlag(true);
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("+ Bool##p_addb"))
-            {
-                ctrl->params.push_back({ .name = "NewBool", .type = AnimParam::Type::Bool }); ctrl->SetDirtyFlag(true);
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("+ Int##p_addi"))
-            {
-                ctrl->params.push_back({ .name = "NewInt", .type = AnimParam::Type::Int }); ctrl->SetDirtyFlag(true);
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("+ String##p_adds"))
-            {
-                ctrl->params.push_back({ .name = "NewString", .type = AnimParam::Type::String }); ctrl->SetDirtyFlag(true);
-            }
-        }
-
-        // ==== Transitions ====
-        if (ImGui::CollapsingHeader("Transitions##ac2d_trans"))
-        {
-            for (int i = 0; i < static_cast<int>(ctrl->transitions.size()); ++i)
-            {
-                auto &tr = ctrl->transitions[static_cast<size_t>(i)];
-                ImGui::PushID(i);
-
-                char fromBuf[256], toBuf[256];
-                std::strncpy(fromBuf, tr.fromState.c_str(), sizeof(fromBuf));
-                std::strncpy(toBuf, tr.toState.c_str(), sizeof(toBuf));
-                ImGui::SetNextItemWidth(110);
-                if (ImGui::InputText("From##tr_from", fromBuf, sizeof(fromBuf)))
-                {
-                    tr.fromState = fromBuf; ctrl->SetDirtyFlag(true);
-                }
-
-                ImGui::SameLine();
-                ImGui::TextUnformatted("->");
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(110);
-
-                if (ImGui::InputText("To##tr_to", toBuf, sizeof(toBuf)))
-                {
-                    tr.toState = toBuf; ctrl->SetDirtyFlag(true);
-                }
-
-                ImGui::SameLine();
-                if (ImGui::Checkbox("Exit Time##tr_et", &tr.hasExitTime)) ctrl->SetDirtyFlag(true);
-                if (tr.hasExitTime)
-                {
-                    ImGui::SameLine();
-                    ImGui::SetNextItemWidth(60);
-                    if (ImGui::DragFloat("##tr_etv", &tr.exitTime, 0.01f, 0.0f, 1.0f))
-                    {
-                        ctrl->SetDirtyFlag(true);
-                    }
-                }
-
-                ImGui::SameLine();
-                if (ImGui::SmallButton("X##tr_del"))
-                {
-                    ctrl->transitions.erase(ctrl->transitions.begin() + i);
-                    ctrl->SetDirtyFlag(true);
-                    ImGui::PopID();
-                    break;
-                }
-
-                // Conditions
-                ImGui::Indent(16.0f);
-                for (int ci = 0; ci < static_cast<int>(tr.conditions.size()); ++ci)
-                {
-                    auto &cond = tr.conditions[static_cast<size_t>(ci)];
-                    ImGui::PushID(ci);
-
-                    char cParamBuf[256];
-                    std::strncpy(cParamBuf, cond.paramName.c_str(), sizeof(cParamBuf));
-                    ImGui::SetNextItemWidth(110);
-                    if (ImGui::InputText("Param##cond_p", cParamBuf, sizeof(cParamBuf)))
-                    {
-                        cond.paramName = cParamBuf; ctrl->SetDirtyFlag(true);
-                    }
-                    ImGui::SameLine();
-                    int  opIdx = static_cast<int>(cond.op);
-                    ImGui::SetNextItemWidth(50);
-                    if (ImGui::Combo("##cond_op", &opIdx, s_ConditionOpNames, 6))
-                    {
-                        cond.op = static_cast<AnimCondition::Op>(opIdx);
-                        ctrl->SetDirtyFlag(true);
-                    }
-                    ImGui::SameLine();
-
-                    const AnimParam *param = ctrl->GetParam(cond.paramName);
-                    if (param)
-                    {
-                        switch (param->type)
-                        {
-                            case AnimParam::Type::Float:
-                            ImGui::SetNextItemWidth(70);
-                            if (ImGui::DragFloat("##cond_fval", &cond.floatThreshold, 0.01f)) ctrl->SetDirtyFlag(true);
-                            break;
-                            case AnimParam::Type::Int:
-                            ImGui::SetNextItemWidth(70);
-                            if (ImGui::DragInt("##cond_ival", &cond.intThreshold)) ctrl->SetDirtyFlag(true);
-                            break;
-                            case AnimParam::Type::Bool:
-                            if (ImGui::Checkbox("##cond_bval", &cond.boolThreshold)) ctrl->SetDirtyFlag(true);
-                            break;
-                            case AnimParam::Type::String:
-                            {
-                                char sbuf[256];
-                                std::strncpy(sbuf, cond.strThreshold.c_str(), sizeof(sbuf));
-                                ImGui::SetNextItemWidth(90);
-                                if (ImGui::InputText("##cond_sval", sbuf, sizeof(sbuf)))
-                                {
-                                    cond.strThreshold = sbuf; ctrl->SetDirtyFlag(true);
-                                }
-                            }
-                            break;
-                            default: break;
-                        }
-                    }
-                    else
-                    {
-                        ImGui::SetNextItemWidth(70);
-                        if (ImGui::DragFloat("##cond_fval2", &cond.floatThreshold, 0.01f))
-                        {
-                            ctrl->SetDirtyFlag(true);
-                        }
-                    }
-
-                    ImGui::SameLine();
-                    if (ImGui::SmallButton("X##cond_del"))
-                    {
-                        tr.conditions.erase(tr.conditions.begin() + ci);
-                        ctrl->SetDirtyFlag(true);
-                        ImGui::PopID();
-                        break;
-                    }
-                    ImGui::PopID();
-                }
-                if (ImGui::SmallButton("+ Condition##cond_add"))
-                {
-                    tr.conditions.push_back({});
-                    ctrl->SetDirtyFlag(true);
-                }
-                ImGui::Unindent(16.0f);
-
-                ImGui::PopID();
-                ImGui::Separator();
-            }
-
-            if (ImGui::Button("+ Add Transition##tr_add"))
-            {
-                AnimTransition tr;
-                if (!ctrl->states.empty())
-                {
-                    tr.fromState = ctrl->states[0].name;
-                    tr.toState = ctrl->states.size() > 1 ? ctrl->states[1].name : "";
-                }
-                ctrl->transitions.push_back(tr);
-                ctrl->SetDirtyFlag(true);
-            }
-        }
-    }
 #pragma endregion !2D_STUFF
 
 
@@ -3202,7 +2910,104 @@ namespace ignite
                         });
 
                         ImGui::Separator();
-                        UIMaterialEditor(material);
+
+                        if (ImGui::ColorEdit4("Base Color", &material->gpuData.baseColorFactor.x))
+                        {
+                            material->SetDirtyFlag(true);
+                        }
+
+                        if (ImGui::ColorEdit4("Emissive Color", &material->gpuData.emissiveFactor.x))
+                        {
+                            material->SetDirtyFlag(true);
+                        }
+
+                        if (ImGui::DragFloat("Metallic Factor", &material->gpuData.metallicFactor, 0.025f, 0.0f, 1.0f))
+                        {
+                            material->SetDirtyFlag(true);
+                        }
+
+                        if (ImGui::DragFloat("Roughness Factor", &material->gpuData.roughnessFactor, 0.025f, 0.0f, 1.0f))
+                        {
+                            material->SetDirtyFlag(true);
+                        }
+
+                        if (ImGui::DragFloat("Occlusion Strength", &material->gpuData.occlusionStrength, 0.025f, 0.0f, 1.0f))
+                        {
+                            material->SetDirtyFlag(true);
+                        }
+
+                        ImGui::Separator();
+
+                        // Base texture
+                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Base Color Texture", material->baseColorTextureHandle,
+                            [&]() { material->SetDirtyFlag(true); });
+
+                        // Normal texture
+                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Normal Texture", material->normalTextureHandle,
+                            [&]() { material->SetDirtyFlag(true); });
+
+                        // Emissive texture
+                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Emissive Texture", material->emissiveTextureHandle,
+                            [&]() { material->SetDirtyFlag(true); });
+
+                        // Metallic Texture
+                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Metallic Texture", material->metallicTextureHandle,
+                            [&]() { material->SetDirtyFlag(true); });
+
+                        // Metallic texture channel
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(70);
+                        if (ImGui::BeginCombo("Metallic Channel", TextureChannelToString(material->gpuData.metallicChannel)))
+                        {
+                            for (int channel = 0; channel < 4; ++channel)
+                            {
+                                const bool selected = material->gpuData.metallicChannel == channel;
+                                if (ImGui::Selectable(TextureChannelToString(channel), selected))
+                                {
+                                    material->gpuData.metallicChannel = channel;
+                                    material->SetDirtyFlag(true);
+                                }
+
+                                if (selected)
+                                {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                            }
+
+                            ImGui::EndCombo();
+                        }
+
+                        // Roughness texture
+                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Roughness Texture", material->roughnessTextureHandle,
+                            [&]() { material->SetDirtyFlag(true); });
+
+                        // Rougness texture channel
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(70);
+                        if (ImGui::BeginCombo("Roughness Channel", TextureChannelToString(material->gpuData.roughnessChannel)))
+                        {
+                            for (int channel = 0; channel < 4; ++channel)
+                            {
+                                const bool selected = material->gpuData.roughnessChannel == channel;
+                                if (ImGui::Selectable(TextureChannelToString(channel), selected))
+                                {
+                                    material->gpuData.roughnessChannel = channel;
+                                    material->SetDirtyFlag(true);
+                                }
+
+                                if (selected)
+                                {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                            }
+
+                            ImGui::EndCombo();
+                        }
+
+                        // Occlussion texture
+                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Occlusion Texture", material->occlusionTextureHandle,
+                            [&]() { material->SetDirtyFlag(true); });
+
                         ImGui::EndChild();
                     }
                     else
@@ -3223,110 +3028,6 @@ namespace ignite
         assetData.requestFocus = false;
     }
 
-    void AssetEditorPanel::UIMaterialEditor(const Ref<Material> &material)
-    {
-        if (!material || !m_EditorLayer || !m_EditorLayer->GetActiveProject())
-            return;
-
-        if (ImGui::ColorEdit4("Base Color", &material->gpuData.baseColorFactor.x))
-        {
-            material->SetDirtyFlag(true);
-        }
-
-        if (ImGui::ColorEdit4("Emissive Color", &material->gpuData.emissiveFactor.x))
-        {
-            material->SetDirtyFlag(true);
-        }
-
-        if (ImGui::DragFloat("Metallic Factor", &material->gpuData.metallicFactor, 0.025f, 0.0f, 1.0f))
-        {
-            material->SetDirtyFlag(true);
-        }
-
-        if (ImGui::DragFloat("Roughness Factor", &material->gpuData.roughnessFactor, 0.025f, 0.0f, 1.0f))
-        {
-            material->SetDirtyFlag(true);
-        }
-
-        if (ImGui::DragFloat("Occlusion Strength", &material->gpuData.occlusionStrength, 0.025f, 0.0f, 1.0f))
-        {
-            material->SetDirtyFlag(true);
-        }
-
-        ImGui::Separator();
-
-        // Base texture
-        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Base Color Texture", material->baseColorTextureHandle,
-            [&]() { material->SetDirtyFlag(true); });
-
-        // Normal texture
-        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Normal Texture", material->normalTextureHandle,
-            [&]() { material->SetDirtyFlag(true); });
-
-        // Emissive texture
-        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Emissive Texture", material->emissiveTextureHandle,
-            [&]() { material->SetDirtyFlag(true); });
-
-        // Metallic Texture
-        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Metallic Texture", material->metallicTextureHandle,
-            [&]() { material->SetDirtyFlag(true); });
-
-        // Metallic texture channel
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(70);
-        if (ImGui::BeginCombo("Metallic Channel", TextureChannelToString(material->gpuData.metallicChannel)))
-        {
-            for (int channel = 0; channel < 4; ++channel)
-            {
-                const bool selected = material->gpuData.metallicChannel == channel;
-                if (ImGui::Selectable(TextureChannelToString(channel), selected))
-                {
-                    material->gpuData.metallicChannel = channel;
-                    material->SetDirtyFlag(true);
-                }
-
-                if (selected)
-                {
-                    ImGui::SetItemDefaultFocus();
-                }
-            }
-
-            ImGui::EndCombo();
-        }
-
-        // Roughness texture
-        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Roughness Texture", material->roughnessTextureHandle,
-            [&]() { material->SetDirtyFlag(true); });
-
-        // Rougness texture channel
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(70);
-        if (ImGui::BeginCombo("Roughness Channel", TextureChannelToString(material->gpuData.roughnessChannel)))
-        {
-            for (int channel = 0; channel < 4; ++channel)
-            {
-                const bool selected = material->gpuData.roughnessChannel == channel;
-                if (ImGui::Selectable(TextureChannelToString(channel), selected))
-                {
-                    material->gpuData.roughnessChannel = channel;
-                    material->SetDirtyFlag(true);
-                }
-
-                if (selected)
-                {
-                    ImGui::SetItemDefaultFocus();
-                }
-            }
-
-            ImGui::EndCombo();
-        }
-
-        // Occlussion texture
-        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Occlusion Texture", material->occlusionTextureHandle,
-            [&]() { material->SetDirtyFlag(true); });
-    }
-
-
     void AssetEditorPanel::UITextureEditor(AssetEditorData &assetData)
     {
         bool isOpen = assetData.isOpen;
@@ -3338,7 +3039,145 @@ namespace ignite
                 {
                     if (Ref<Texture> texture = assetData.asset->As<Texture>())
                     {
-                        UITextureEditor(assetData, texture);
+                        auto project = m_EditorLayer->GetActiveProject().get();
+                        auto assetManager = project->GetAssetManager();
+
+                        const auto stateKey = static_cast<uint64_t>(assetData.handle);
+                        TextureEditorState &state = s_TextureEditorState[stateKey];
+                        if (!state.initialized)
+                        {
+                            state.createInfo = texture->GetCreateInfo();
+                            state.initialized = true;
+                        }
+
+                        ImGui::Text("Path: %s", assetData.metadata.filepath.generic_string().c_str());
+                        ImGui::Text("Resolution: %d x %d", texture->GetWidth(), texture->GetHeight());
+                        ImGui::Text("Channels: %d", texture->GetChannels());
+                        ImGui::Text("Current Format: %s", TextureFormatToString(texture->GetFormat()));
+
+                        const float previewMaxWidth = std::min(420.0f, ImGui::GetContentRegionAvail().x);
+                        if (previewMaxWidth > 0.0f && texture->GetWidth() > 0 && texture->GetHeight() > 0)
+                        {
+                            const float aspectRatio = static_cast<float>(texture->GetWidth()) / static_cast<float>(texture->GetHeight());
+                            ImVec2 previewSize(previewMaxWidth, previewMaxWidth);
+                            if (aspectRatio > 1.0f)
+                            {
+                                previewSize.y = previewMaxWidth / aspectRatio;
+                            }
+                            else
+                            {
+                                previewSize.x = previewMaxWidth * aspectRatio;
+                            }
+
+                            ImGui::Text("Preview");
+                            ImTextureID textureId = reinterpret_cast<ImTextureID>(texture->GetHandle().Get());
+                            ImGui::Image(textureId, previewSize);
+                        }
+
+                        ImGui::Separator();
+
+                        int mipLevels = static_cast<int>(state.createInfo.mipLevels);
+                        if (UI::DrawIntControl("Mip Levels", &mipLevels, 1.0f, 0, 16))
+                        {
+                            state.createInfo.mipLevels = static_cast<uint32_t>(std::max(mipLevels, 1));
+                        }
+
+                        int arraySize = static_cast<int>(state.createInfo.arraySize);
+                        if (UI::DrawIntControl("Array Size", &arraySize, 1.0f, 1, 64))
+                        {
+                            state.createInfo.arraySize = static_cast<uint32_t>(std::max(arraySize, 1));
+                        }
+
+                        int sampleCount = static_cast<int>(state.createInfo.sampleCount);
+                        if (UI::DrawIntControl("Sample Count", &sampleCount, 1.0f, 1, 16))
+                        {
+                            state.createInfo.sampleCount = static_cast<uint32_t>(std::max(sampleCount, 1));
+                        }
+
+                        int sampleQuality = static_cast<int>(state.createInfo.sampleQuality);
+                        if (UI::DrawIntControl("Sample Quality", &sampleQuality, 1.0f, 0, 16))
+                        {
+                            state.createInfo.sampleQuality = static_cast<uint32_t>(std::max(sampleQuality, 0));
+                        }
+
+                        const nvrhi::Format formatOptions[] = { nvrhi::Format::RGBA8_UNORM, nvrhi::Format::RGBA32_FLOAT };
+
+                        int currentFormatIndex = 0;
+                        for (int i = 0; i < static_cast<int>(std::size(formatOptions)); ++i)
+                        {
+                            if (state.createInfo.format == formatOptions[i])
+                            {
+                                currentFormatIndex = i;
+                                break;
+                            }
+                        }
+
+                        const char *formatOptionLabels[] =
+                        {
+                            TextureFormatToString(formatOptions[0]),
+                            TextureFormatToString(formatOptions[1])
+                        };
+
+                        if (UI::DrawComboBox("Import Format", formatOptionLabels, static_cast<int>(std::size(formatOptionLabels)), formatOptionLabels[currentFormatIndex], &currentFormatIndex))
+                        {
+                            state.createInfo.format = formatOptions[currentFormatIndex];
+                        }
+
+                        const std::array<nvrhi::SamplerAddressMode, 3> addressModeOptions =
+                        {
+                            nvrhi::SamplerAddressMode::Repeat,
+                            nvrhi::SamplerAddressMode::ClampToEdge,
+                            nvrhi::SamplerAddressMode::ClampToBorder
+                        };
+
+                        std::array<const char *, 3> addressModeOptionsStr = { "Repeat", "Clamp To Edge" , "Clamp To Border" };
+
+                        // Wrap U
+                        auto drawAddressModeCombo = [&addressModeOptions, &addressModeOptionsStr](const char *label, nvrhi::SamplerAddressMode &mode)
+                        {
+                            int currentIdx = 0;
+                            switch (mode)
+                            {
+                                case nvrhi::SamplerAddressMode::Repeat: currentIdx = 0; break;
+                                case nvrhi::SamplerAddressMode::ClampToEdge: currentIdx = 1; break;
+                                case nvrhi::SamplerAddressMode::ClampToBorder: currentIdx = 2; break;
+                            }
+
+                            const char *currentAddressModeOptionStr = addressModeOptionsStr[currentIdx];
+                            if (UI::DrawComboBox(label, addressModeOptionsStr.data(), static_cast<int>(addressModeOptions.size()), currentAddressModeOptionStr, &currentIdx))
+                            {
+                                mode = addressModeOptions[currentIdx];
+                            }
+                        };
+
+                        drawAddressModeCombo("Wrap U", state.createInfo.samplerAddressU);
+                        drawAddressModeCombo("Wrap V", state.createInfo.samplerAddressV);
+                        drawAddressModeCombo("Wrap W", state.createInfo.samplerAddressW);
+
+                        UI::DrawCheckbox("Linear Filtering", &state.createInfo.samplerLinearFiltering);
+                        UI::DrawCheckbox("Flip Vertically", &state.createInfo.flip);
+                        UI::DrawCheckbox("Keep CPU Data", &state.createInfo.keepCpuData);
+                        UI::DrawCheckbox("Keep Initial State", &state.createInfo.keepInitialState);
+
+                        ImGui::Separator();
+                        if (ImGui::Button("ReImport"))
+                        {
+                            Texture::SerializeMetaFile(BuildAssetMetaPath(project, assetData.metadata), assetData.handle, state.createInfo);
+
+                            AssetMetaData importMetadata = assetData.metadata;
+                            importMetadata.filepath = project->GetAssetFilepath(assetData.metadata.filepath);
+
+                            Ref<Texture> reimportedTexture = AssetImporter::ImportTexture(assetData.handle, importMetadata, state.createInfo, assetManager);
+                            if (reimportedTexture)
+                            {
+                                reimportedTexture->handle = assetData.handle;
+                                assetManager->AssignAsset(assetData.handle, reimportedTexture);
+                                Texture::SerializeMetaFile(BuildAssetMetaPath(project, assetData.metadata), assetData.handle, reimportedTexture->GetCreateInfo());
+                                assetData.asset = reimportedTexture;
+                                state.createInfo = reimportedTexture->GetCreateInfo();
+                                reimportedTexture->SetDirtyFlag(false);
+                            }
+                        }
                     }
                     else
                     {
@@ -3356,209 +3195,6 @@ namespace ignite
         ImGui::End();
         assetData.isOpen = isOpen;
         assetData.requestFocus = false;
-    }
-
-    void AssetEditorPanel::UITextureEditor(AssetEditorData &assetData, const Ref<Texture> &texture)
-    {
-        if (!texture || !m_EditorLayer || !m_EditorLayer->GetActiveProject())
-        {
-            return;
-        }
-
-        Project *project = m_EditorLayer->GetActiveProject().get();
-        auto assetManager = project->GetAssetManager();
-
-        const auto stateKey = static_cast<uint64_t>(assetData.handle);
-        TextureEditorState &state = s_TextureEditorState[stateKey];
-        if (!state.initialized)
-        {
-            state.createInfo = texture->GetCreateInfo();
-            state.initialized = true;
-        }
-
-        ImGui::Text("Path: %s", assetData.metadata.filepath.generic_string().c_str());
-        ImGui::Text("Resolution: %d x %d", texture->GetWidth(), texture->GetHeight());
-        ImGui::Text("Channels: %d", texture->GetChannels());
-        ImGui::Text("Current Format: %s", TextureFormatToString(texture->GetFormat()));
-
-        const float previewMaxWidth = std::min(420.0f, ImGui::GetContentRegionAvail().x);
-        if (previewMaxWidth > 0.0f && texture->GetWidth() > 0 && texture->GetHeight() > 0)
-        {
-            const float aspectRatio = static_cast<float>(texture->GetWidth()) / static_cast<float>(texture->GetHeight());
-            ImVec2 previewSize(previewMaxWidth, previewMaxWidth);
-            if (aspectRatio > 1.0f)
-            {
-                previewSize.y = previewMaxWidth / aspectRatio;
-            }
-            else
-            {
-                previewSize.x = previewMaxWidth * aspectRatio;
-            }
-
-            ImGui::Text("Preview");
-            ImTextureID textureId = reinterpret_cast<ImTextureID>(texture->GetHandle().Get());
-            ImGui::Image(textureId, previewSize);
-        }
-
-        ImGui::Separator();
-
-        int mipLevels = static_cast<int>(state.createInfo.mipLevels);
-        if (UI::DrawIntControl("Mip Levels", &mipLevels, 1.0f, 0, 16))
-        {
-            state.createInfo.mipLevels = static_cast<uint32_t>(std::max(mipLevels, 1));
-        }
-
-        int arraySize = static_cast<int>(state.createInfo.arraySize);
-        if (UI::DrawIntControl("Array Size", &arraySize, 1.0f, 1, 64))
-        {
-            state.createInfo.arraySize = static_cast<uint32_t>(std::max(arraySize, 1));
-        }
-
-        int sampleCount = static_cast<int>(state.createInfo.sampleCount);
-        if (UI::DrawIntControl("Sample Count", &sampleCount, 1.0f, 1, 16))
-        {
-            state.createInfo.sampleCount = static_cast<uint32_t>(std::max(sampleCount, 1));
-        }
-
-        int sampleQuality = static_cast<int>(state.createInfo.sampleQuality);
-        if (UI::DrawIntControl("Sample Quality", &sampleQuality, 1.0f, 0, 16))
-        {
-            state.createInfo.sampleQuality = static_cast<uint32_t>(std::max(sampleQuality, 0));
-        }
-
-        const nvrhi::Format formatOptions[] = { nvrhi::Format::RGBA8_UNORM, nvrhi::Format::RGBA32_FLOAT };
-
-        int currentFormatIndex = 0;
-        for (int i = 0; i < static_cast<int>(std::size(formatOptions)); ++i)
-        {
-            if (state.createInfo.format == formatOptions[i])
-            {
-                currentFormatIndex = i;
-                break;
-            }
-        }
-
-        const char *formatOptionLabels[] =
-        {
-            TextureFormatToString(formatOptions[0]),
-            TextureFormatToString(formatOptions[1])
-        };
-
-        if (UI::DrawComboBox("Import Format", formatOptionLabels, static_cast<int>(std::size(formatOptionLabels)), formatOptionLabels[currentFormatIndex], &currentFormatIndex))
-        {
-            state.createInfo.format = formatOptions[currentFormatIndex];
-        }
-
-        const std::array<nvrhi::SamplerAddressMode, 3> addressModeOptions =
-        {
-            nvrhi::SamplerAddressMode::Repeat,
-            nvrhi::SamplerAddressMode::ClampToEdge,
-            nvrhi::SamplerAddressMode::ClampToBorder
-        };
-
-        std::array<const char *, 3> addressModeOptionsStr = { "Repeat", "Clamp To Edge" , "Clamp To Border" };
-
-        // Wrap U
-        auto drawAddressModeCombo = [&addressModeOptions, &addressModeOptionsStr](const char *label, nvrhi::SamplerAddressMode &mode)
-        {
-            int currentIdx = 0;
-            switch (mode)
-            {
-                case nvrhi::SamplerAddressMode::Repeat: currentIdx = 0; break;
-                case nvrhi::SamplerAddressMode::ClampToEdge: currentIdx = 1; break;
-                case nvrhi::SamplerAddressMode::ClampToBorder: currentIdx = 2; break;
-            }
-
-            const char *currentAddressModeOptionStr = addressModeOptionsStr[currentIdx];
-            if (UI::DrawComboBox(label, addressModeOptionsStr.data(), static_cast<int>(addressModeOptions.size()), currentAddressModeOptionStr, &currentIdx))
-            {
-                mode = addressModeOptions[currentIdx];
-            }
-        };
-
-        drawAddressModeCombo("Wrap U", state.createInfo.samplerAddressU);
-        drawAddressModeCombo("Wrap V", state.createInfo.samplerAddressV);
-        drawAddressModeCombo("Wrap W", state.createInfo.samplerAddressW);
-
-        UI::DrawCheckbox("Linear Filtering", &state.createInfo.samplerLinearFiltering);
-        UI::DrawCheckbox("Flip Vertically", &state.createInfo.flip);
-        UI::DrawCheckbox("Keep CPU Data", &state.createInfo.keepCpuData);
-        UI::DrawCheckbox("Keep Initial State", &state.createInfo.keepInitialState);
-
-        ImGui::Separator();
-        if (ImGui::Button("ReImport"))
-        {
-            Texture::SerializeMetaFile(BuildAssetMetaPath(project, assetData.metadata), assetData.handle, state.createInfo);
-
-            AssetMetaData importMetadata = assetData.metadata;
-            importMetadata.filepath = project->GetAssetFilepath(assetData.metadata.filepath);
-
-            Ref<Texture> reimportedTexture = AssetImporter::ImportTexture(assetData.handle, importMetadata, state.createInfo, assetManager);
-            if (reimportedTexture)
-            {
-                reimportedTexture->handle = assetData.handle;
-                assetManager->AssignAsset(assetData.handle, reimportedTexture);
-                Texture::SerializeMetaFile(BuildAssetMetaPath(project, assetData.metadata), assetData.handle, reimportedTexture->GetCreateInfo());
-                assetData.asset = reimportedTexture;
-                state.createInfo = reimportedTexture->GetCreateInfo();
-                reimportedTexture->SetDirtyFlag(false);
-            }
-        }
-    }
-
-
-    void AssetEditorPanel::UIAnimatorControllerEditor(const Ref<AnimatorController> &animator)
-    {
-        if (!animator || !m_EditorLayer || !m_EditorLayer->GetActiveProject())
-        {
-            return;
-        }
-
-        AssetManager *assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-        AnimatorControllerEditorState &ui = s_AnimatorControllerEditorState[static_cast<uint64_t>(animator->handle)];
-        if (!ui.initialized)
-        {
-            ui.initialized = true;
-            ui.selectedState = animator->states.empty() ? -1 : 0;
-            LoadAnimatorControllerEditorMeta(m_EditorLayer->GetActiveProject().get(), assetManager->GetMetaData(animator->handle), ui);
-        }
-
-        if (ui.selectedState >= static_cast<int>(animator->states.size())) ui.selectedState = animator->states.empty() ? -1 : static_cast<int>(animator->states.size()) - 1;
-        if (ui.selectedTransition >= static_cast<int>(animator->transitions.size())) ui.selectedTransition = animator->transitions.empty() ? -1 : static_cast<int>(animator->transitions.size()) - 1;
-
-        const float totalWidth = ImGui::GetContentRegionAvail().x;
-        const float spacing = ImGui::GetStyle().ItemSpacing.x;
-        const float leftWidth = std::max(220.0f, totalWidth * 0.22f);
-        const float rightWidth = std::max(360.0f, totalWidth * 0.30f);
-        const float graphWidth = std::max(320.0f, totalWidth - leftWidth - rightWidth - spacing * 2.0f);
-
-        ImGui::BeginChild("##ac_left", ImVec2(leftWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
-        AnimatorEditor::DrawAnimatorControllerLeftPanel(animator, assetManager, ui);
-        ImGui::EndChild();
-
-        ImGui::SameLine();
-        ImGui::BeginChild("##ac_graph", ImVec2(graphWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
-        AnimatorEditor::DrawAnimatorControllerGraph(animator, assetManager, ui);
-        ImGui::EndChild();
-
-        ImGui::SameLine();
-        ImGui::BeginChild("##ac_right", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
-        if (ImGui::BeginTabBar("##ac_tabs"))
-        {
-            if (ImGui::BeginTabItem("Inspector"))
-            {
-                AnimatorEditor::DrawAnimatorControllerInspectorTab(animator, assetManager, ui);
-                AnimatorEditor::DrawAnimatorControllerConditions(animator, ui);
-                ImGui::EndTabItem();
-            }
-            if (ImGui::BeginTabItem("Parameters"))
-            {
-                AnimatorEditor::DrawAnimatorControllerParamsTab(animator);
-                ImGui::EndTabItem();
-            }
-            ImGui::EndTabBar();
-        }
-        ImGui::EndChild();
     }
 
     void AssetEditorPanel::UIAnimatorControllerEditor(AssetEditorData &assetData)
@@ -3570,9 +3206,54 @@ namespace ignite
             {
                 if (assetData.asset && assetData.asset->IsReady())
                 {
-                    if (Ref<AnimatorController> controller = assetData.asset->As<AnimatorController>())
+                    if (Ref<AnimatorController> animator = assetData.asset->As<AnimatorController>())
                     {
-                        UIAnimatorControllerEditor(controller);
+                        auto project = m_EditorLayer->GetActiveProject().get();
+                        auto assetManager = project->GetAssetManager();
+                        AnimatorControllerEditorState &ui = s_AnimatorControllerEditorState[static_cast<uint64_t>(animator->handle)];
+                        if (!ui.initialized)
+                        {
+                            ui.initialized = true;
+                            ui.selectedState = animator->states.empty() ? -1 : 0;
+                            LoadAnimatorControllerEditorMeta(project, assetManager->GetMetaData(animator->handle), ui);
+                        }
+
+                        if (ui.selectedState >= static_cast<int>(animator->states.size())) ui.selectedState = animator->states.empty() ? -1 : static_cast<int>(animator->states.size()) - 1;
+                        if (ui.selectedTransition >= static_cast<int>(animator->transitions.size())) ui.selectedTransition = animator->transitions.empty() ? -1 : static_cast<int>(animator->transitions.size()) - 1;
+
+                        const float totalWidth = ImGui::GetContentRegionAvail().x;
+                        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+                        const float leftWidth = std::max(220.0f, totalWidth * 0.22f);
+                        const float rightWidth = std::max(360.0f, totalWidth * 0.30f);
+                        const float graphWidth = std::max(320.0f, totalWidth - leftWidth - rightWidth - spacing * 2.0f);
+
+                        ImGui::BeginChild("##ac_left", ImVec2(leftWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
+                        AnimatorEditor::DrawAnimatorControllerLeftPanel(animator, assetManager, ui);
+                        ImGui::EndChild();
+
+                        ImGui::SameLine();
+                        ImGui::BeginChild("##ac_graph", ImVec2(graphWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar);
+                        AnimatorEditor::DrawAnimatorControllerGraph(animator, assetManager, ui);
+                        ImGui::EndChild();
+
+                        ImGui::SameLine();
+                        ImGui::BeginChild("##ac_right", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
+                        if (ImGui::BeginTabBar("##ac_tabs"))
+                        {
+                            if (ImGui::BeginTabItem("Inspector"))
+                            {
+                                AnimatorEditor::DrawAnimatorControllerInspectorTab(animator, assetManager, ui);
+                                AnimatorEditor::DrawAnimatorControllerConditions(animator, ui);
+                                ImGui::EndTabItem();
+                            }
+                            if (ImGui::BeginTabItem("Parameters"))
+                            {
+                                AnimatorEditor::DrawAnimatorControllerParamsTab(animator);
+                                ImGui::EndTabItem();
+                            }
+                            ImGui::EndTabBar();
+                        }
+                        ImGui::EndChild();
                     }
                     else
                     {
@@ -3592,794 +3273,6 @@ namespace ignite
         assetData.requestFocus = false;
     }
 
-    void AssetEditorPanel::UIMeshEditor(const Ref<Mesh> &mesh, EditorSceneData &sceneData)
-    {
-        if (!mesh)
-        {
-            return;
-        }
-
-        Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
-        if (!project)
-        {
-            return;
-        }
-
-        auto assetManager = project->GetAssetManager();
-
-        const uint64_t meshKey = static_cast<uint64_t>(mesh->handle);
-        MeshEditorState &meshEditorState = s_MeshEditorState[meshKey];
-        AssetHandle skeletonHandle = mesh->GetSkeletonHandle();
-        if (meshEditorState.skeletonHandle != skeletonHandle)
-        {
-            meshEditorState.skeletonHandle = skeletonHandle;
-            meshEditorState.cachedSkeleton.reset();
-        }
-
-        static std::unordered_map<uint64_t, int32_t> s_SelectedJoint;
-        static std::unordered_map<uint64_t, int32_t> s_SelectedSocket;
-        static std::unordered_map<uint64_t, int32_t> s_LastAutoScrolledJoint;
-
-        const auto key = static_cast<uint64_t>(skeletonHandle);
-        SkeletonPreviewEditorState &previewState = s_SkeletonPreviewEditorState[key];
-
-        int32_t &selectedJoint = s_SelectedJoint[key];
-        int32_t &selectedSocket = s_SelectedSocket[key];
-        int32_t &lastAutoScrolledJoint = s_LastAutoScrolledJoint[key];
-
-        if (skeletonHandle != AssetHandle(0) && !meshEditorState.cachedSkeleton)
-        {
-            meshEditorState.cachedSkeleton = project->GetAsset<Skeleton>(skeletonHandle);
-            if (!meshEditorState.cachedSkeleton)
-            {
-                meshEditorState.cachedSkeleton = project->GetAssetImmediate<Skeleton>(skeletonHandle);
-            }
-        }
-
-        if (sceneData.sceneRenderer)
-        {
-            sceneData.sceneRenderer->SetPreviewMesh(mesh);
-        }
-
-        Ref<Skeleton> skeleton = meshEditorState.cachedSkeleton;
-        size_t jointCount = 0;
-        if (skeleton)
-        {
-            jointCount = skeleton->joints.size();
-            if (selectedJoint >= static_cast<int32_t>(skeleton->joints.size()))
-            {
-                selectedJoint = skeleton->joints.empty() ? -1 : 0;
-            }
-            if (selectedJoint < 0)
-            {
-                lastAutoScrolledJoint = -1;
-            }
-            if (selectedSocket >= static_cast<int32_t>(skeleton->sockets.size()))
-            {
-                selectedSocket = skeleton->sockets.empty() ? -1 : 0;
-            }
-
-            
-        }
-
-        std::vector<std::vector<int32_t>> children(jointCount);
-        if (skeleton)
-        {
-            for (const Joint &joint : skeleton->joints)
-            {
-                if (joint.parentJointId >= 0 && joint.parentJointId < static_cast<int32_t>(jointCount))
-                {
-                    children[static_cast<size_t>(joint.parentJointId)].push_back(joint.id);
-                }
-            }
-        }
-
-        bool isViewSkeletonTree = false;
-        const bool isAnimLoaded = previewState.previewAnimationHandle != AssetHandle(0);
-        Ref<SkeletalAnimation> previewAnimation = nullptr;
-        if (previewState.previewAnimationHandle != AssetHandle(0))
-        {
-            previewAnimation = project->GetAsset<SkeletalAnimation>(previewState.previewAnimationHandle);
-            if (!previewAnimation)
-            {
-                previewAnimation = project->GetAssetImmediate<SkeletalAnimation>(previewState.previewAnimationHandle);
-            }
-        }
-        const float timelineFps = previewAnimation ? std::max(previewAnimation->ticksPerSeconds, 0.001f) : 0.001f;
-        const float timelineTotalDuration = (previewAnimation && previewAnimation->duration > 0.0f)
-            ? (previewAnimation->duration / timelineFps)
-            : 0.0f;
-        const int timelineFrameCount = (previewAnimation && previewAnimation->duration > 0.0f)
-            ? std::max(1, static_cast<int>(std::ceil(previewAnimation->duration)))
-            : 0;
-
-        const float totalWidth = ImGui::GetContentRegionAvail().x;
-        const float spacing = ImGui::GetStyle().ItemSpacing.x;
-        const float listWidth = std::max(260.0f, totalWidth * 0.28f);
-        const float detailsWidth = std::max(320.0f, totalWidth * 0.30f);
-        const float viewportWidth = std::max(220.0f, totalWidth - listWidth - detailsWidth - spacing * 2.0f);
-
-        if (ImGui::BeginChild("##left_details_panel", ImVec2(listWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar))
-        {
-            ImGui::BeginTabBar("##tab_bar_left_details");
-
-            // Asset details
-            if (ImGui::BeginTabItem("Asset Details"))
-            {
-                ImGui::BeginChild("##asset_details", { 0.0f, 0.0f }, ImGuiChildFlags_None);
-                {
-                    std::string skeletonLabel = "Drop Skeleton Here";
-                    if (skeletonHandle != AssetHandle(0))
-                    {
-                        const AssetMetaData &metadata = assetManager->GetMetaData(skeletonHandle);
-                        if (metadata.type == AssetType::Skeleton)
-                        {
-                            skeletonLabel = metadata.filepath.filename().string();
-                        }
-                        else
-                        {
-                            skeletonLabel = "Skeleton Assigned";
-                        }
-                    }
-
-                    ImGui::Button(skeletonLabel.c_str(), ImVec2(-1.0f, 0.0f));
-                    if (ImGui::BeginDragDropTarget())
-                    {
-                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                        {
-                            if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                            {
-                                const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-                                const AssetMetaData &metadata = assetManager->GetMetaData(droppedHandle);
-                                if (metadata.type == AssetType::Skeleton)
-                                {
-                                    mesh->SetSkeleton(droppedHandle);
-                                    mesh->SetDirtyFlag(true);
-                                    skeletonHandle = droppedHandle;
-                                    meshEditorState.skeletonHandle = droppedHandle;
-                                    meshEditorState.cachedSkeleton = project->GetAsset<Skeleton>(droppedHandle);
-                                    if (!meshEditorState.cachedSkeleton)
-                                    {
-                                        meshEditorState.cachedSkeleton = project->GetAssetImmediate<Skeleton>(droppedHandle);
-                                    }
-                                    skeleton = meshEditorState.cachedSkeleton;
-                                }
-                            }
-                        }
-                        ImGui::EndDragDropTarget();
-                    }
-
-                    ImGui::SameLine();
-                    if (ImGui::Button("Clear Skeleton"))
-                    {
-                        mesh->SetSkeleton(AssetHandle(0));
-                        mesh->SetDirtyFlag(true);
-                        skeletonHandle = AssetHandle(0);
-                        meshEditorState.skeletonHandle = AssetHandle(0);
-                        meshEditorState.cachedSkeleton.reset();
-                        skeleton.reset();
-                    }
-
-                    ImGui::TextDisabled("Skeleton Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(skeletonHandle)));
-
-                    ImGui::SeparatorText("Material Slots");
-                    const auto &meshInstances = mesh->GetMeshInstances();
-                    if (meshInstances.empty())
-                    {
-                        ImGui::TextDisabled("No mesh instances available.");
-                        return;
-                    }
-
-                    for (size_t i = 0; i < meshInstances.size(); ++i)
-                    {
-                        Ref<MeshInstance> instance = meshInstances[i];
-                        if (!instance)
-                        {
-                            continue;
-                        }
-
-                        ImGui::PushID(static_cast<int>(i));
-                        std::string slotLabel = std::format("Slot {}", i);
-                        std::string materialButtonLabel = "Drop Material Here";
-
-                        const AssetHandle materialHandle = instance->GetMaterialHandle();
-                        if (materialHandle != AssetHandle(0))
-                        {
-                            const AssetMetaData &metadata = assetManager->GetMetaData(materialHandle);
-                            if (metadata.type == AssetType::Material)
-                            {
-                                materialButtonLabel = metadata.filepath.filename().string();
-                            }
-                            else
-                            {
-                                materialButtonLabel = "Material Assigned";
-                            }
-                        }
-
-                        ImGui::TextUnformatted(slotLabel.c_str());
-                        ImGui::Button(materialButtonLabel.c_str(), ImVec2(-1.0f, 0.0f));
-                        if (ImGui::BeginDragDropTarget())
-                        {
-                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                            {
-                                if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                                {
-                                    const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-                                    const AssetMetaData &metadata = assetManager->GetMetaData(droppedHandle);
-                                    if (metadata.type == AssetType::Material)
-                                    {
-                                        instance->SetMaterial(droppedHandle);
-                                        mesh->SetDirtyFlag(true);
-                                    }
-                                }
-                            }
-                            ImGui::EndDragDropTarget();
-                        }
-
-                        if (materialHandle != AssetHandle(0) && ImGui::SmallButton("Clear Material"))
-                        {
-                            instance->SetMaterial(AssetHandle(0));
-                            mesh->SetDirtyFlag(true);
-                        }
-
-                        ImGui::Separator();
-                        ImGui::PopID();
-                    }
-                }
-                ImGui::EndChild();
-
-                ImGui::EndTabItem();
-            }
-
-            // SKELETON PREVIEW
-            if (skeleton && ImGui::BeginTabItem("Skeleton Preview"))
-            {
-                isViewSkeletonTree = true;
-
-                ImGui::BeginChild("##skeleton_preview", { 0.0f, 0.0f }, ImGuiChildFlags_None);
-                {
-                    if (skeleton)
-                    {
-                        ImGui::TextUnformatted("Skeleton Tree");
-                        std::function<void(int32_t)> drawJointNode = [&](int32_t jointId)
-                        {
-                            if (jointId < 0 || jointId >= static_cast<int32_t>(jointCount))
-                            {
-                                return;
-                            }
-
-                            const Joint &joint = skeleton->joints[static_cast<size_t>(jointId)];
-                            const bool isSelected = selectedJoint == jointId;
-                            const bool hasChildren = !children[static_cast<size_t>(jointId)].empty();
-
-                            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
-                            if (!hasChildren)
-                            {
-                                flags |= ImGuiTreeNodeFlags_Leaf;
-                            }
-                            if (isSelected)
-                            {
-                                flags |= ImGuiTreeNodeFlags_Selected;
-                            }
-
-                            const bool opened = ImGui::TreeNodeEx(reinterpret_cast<void *>(static_cast<intptr_t>(jointId + 1)), flags, "%s", joint.name.c_str());
-                            if (ImGui::IsItemClicked())
-                            {
-                                selectedJoint = jointId;
-                            }
-
-                            if (selectedJoint == jointId && lastAutoScrolledJoint != selectedJoint)
-                            {
-                                if (!ImGui::IsItemVisible())
-                                {
-                                    ImGui::SetScrollHereY(0.5f);
-                                }
-
-                                lastAutoScrolledJoint = selectedJoint;
-                            }
-
-                            if (opened)
-                            {
-                                for (int32_t childJointId : children[static_cast<size_t>(jointId)])
-                                {
-                                    drawJointNode(childJointId);
-                                }
-                                ImGui::TreePop();
-                            }
-                        };
-
-                        for (const Joint &joint : skeleton->joints)
-                        {
-                            if (joint.parentJointId == -1)
-                            {
-                                drawJointNode(joint.id);
-                            }
-                        }
-                    }
-                   
-                    ImGui::EndChild();
-                }
-
-                ImGui::EndTabItem();
-            }
-
-            ImGui::EndTabBar();
-
-            ImGui::Separator();
-
-
-        }
-        ImGui::EndChild(); // !left details panel
-        ImGui::SameLine();
-
-        // Mesh preview panel
-        if (ImGui::BeginChild("##mesh_preview", ImVec2(viewportWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
-        {
-            ImGui::TextUnformatted("Mesh + Skeleton Preview");
-            ImGui::Separator();
-
-            const float splitterThickness = 6.0f;
-            const float minViewportHeight = 120.0f;
-            const float minTimelineHeight = 120.0f;
-            const ImVec2 previewRegion = ImGui::GetContentRegionAvail();
-            float maxTimelineHeight = minTimelineHeight;
-            float meshScenePreviewHeight = previewRegion.y;
-            if (skeleton)
-            {
-                maxTimelineHeight = std::max(minTimelineHeight, previewRegion.y - minViewportHeight - splitterThickness);
-                previewState.animationTimelineHeight = std::clamp(previewState.animationTimelineHeight, minTimelineHeight, maxTimelineHeight);
-                meshScenePreviewHeight = std::max(minViewportHeight, previewRegion.y - previewState.animationTimelineHeight - splitterThickness);
-            }
-
-            // scene viewport child
-            if (ImGui::BeginChild("##mesh_scene_preview", { 0.0f, meshScenePreviewHeight }, ImGuiChildFlags_None))
-            {
-                const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
-                sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
-                sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
-                UpdateSceneCamera(sceneData, ImGui::GetIO().DeltaTime);
-
-                Ref<Texture> previewTexture = sceneData.compositeRT ? sceneData.compositeRT->GetColorAttachment(0) : nullptr;
-                if (previewTexture && previewTexture->GetHandle())
-                {
-                    const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
-                    ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
-                    sceneData.viewportHovered = ImGui::IsItemHovered();
-
-                    ImGui::SetCursorScreenPos(ImVec2(viewportPos.x + 8.0f, viewportPos.y + 8.0f));
-                    ImGui::TextDisabled(
-                        "RTTex=%p | RT=%p | %ux%u",
-                        reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()),
-                        sceneData.compositeRT.get(),
-                        sceneData.viewportWidth,
-                        sceneData.viewportHeight);
-
-                    const glm::mat4 viewProjection = sceneData.camera.GetProjection() * sceneData.camera.GetView();
-                    const Rect viewportRect { viewportPos.x, viewportPos.y, viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y };
-
-                    if (skeleton)
-                    {
-                        const bool hasSelectedJoint = selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(skeleton->joints.size());
-                        const bool hasSelectedSocket = selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size());
-                        const bool useSocketGizmo = previewState.gizmoTarget == 1 && hasSelectedSocket;
-                        const bool previewViewportFocused = sceneData.viewportHovered && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
-
-                        const bool hasPreviewPose = previewState.previewGlobalTransforms.size() == skeleton->joints.size();
-
-                        auto getJointGlobal = [&](int32_t jointId) -> const glm::mat4 &
-                        {
-                            if (hasPreviewPose && jointId >= 0 && jointId < static_cast<int32_t>(previewState.previewGlobalTransforms.size()))
-                            {
-                                return previewState.previewGlobalTransforms[static_cast<size_t>(jointId)];
-                            }
-                            return skeleton->joints[static_cast<size_t>(jointId)].globalTransform;
-                        };
-
-                        bool isPreviewGizmoManipulating = false;
-                        bool isPreviewGizmoHovered = false;
-
-                        if (previewViewportFocused && (useSocketGizmo || hasSelectedJoint))
-                        {
-                            GizmoInfo gizmoInfo;
-                            gizmoInfo.cameraView = sceneData.camera.GetView();
-                            gizmoInfo.cameraProjection = sceneData.camera.GetProjection();
-                            gizmoInfo.cameraType = sceneData.camera.projectionType;
-                            gizmoInfo.snapValue = 0.05f;
-                            gizmoInfo.isSnapping = false;
-                            gizmoInfo.viewRect = viewportRect;
-
-                            s_SkeletonPreviewGizmo.SetInfo(gizmoInfo);
-                            s_SkeletonPreviewGizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
-                            s_SkeletonPreviewGizmo.SetMode(ImGuizmo::MODE::LOCAL);
-
-                            glm::mat4 gizmoTransform = glm::mat4(1.0f);
-                            if (useSocketGizmo)
-                            {
-                                const JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
-                                const glm::mat4 socketLocal = socket.GetLocalTransform();
-                                if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
-                                {
-                                    gizmoTransform = getJointGlobal(socket.parentJointId) * socketLocal;
-                                }
-                                else
-                                {
-                                    gizmoTransform = socketLocal;
-                                }
-                            }
-                            else
-                            {
-                                gizmoTransform = getJointGlobal(selectedJoint);
-                            }
-
-                            s_SkeletonPreviewGizmo.Manipulate(gizmoTransform);
-                            isPreviewGizmoManipulating = s_SkeletonPreviewGizmo.IsManipulating();
-                            isPreviewGizmoHovered = s_SkeletonPreviewGizmo.IsHovered();
-
-                            if (isPreviewGizmoManipulating)
-                            {
-                                if (useSocketGizmo)
-                                {
-                                    JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
-                                    glm::mat4 parentWorld = glm::mat4(1.0f);
-                                    if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
-                                    {
-                                        parentWorld = getJointGlobal(socket.parentJointId);
-                                    }
-
-                                    const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
-                                    glm::vec3 localTranslation, localEuler, localScale;
-                                    Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                                    socket.localTranslation = localTranslation;
-                                    socket.localRotation = glm::quat(localEuler);
-                                    socket.localScale = localScale;
-                                }
-                                else if (hasSelectedJoint)
-                                {
-                                    Joint &joint = skeleton->joints[static_cast<size_t>(selectedJoint)];
-                                    glm::mat4 parentWorld = glm::mat4(1.0f);
-                                    if (joint.parentJointId >= 0 && joint.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
-                                    {
-                                        parentWorld = getJointGlobal(joint.parentJointId);
-                                    }
-
-                                    const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
-                                    glm::vec3 localTranslation, localEuler, localScale;
-                                    Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                                    joint.defaultTranslation = localTranslation;
-                                    joint.defaultRotation = glm::quat(localEuler);
-                                    joint.defaultScale = localScale;
-                                    joint.localTransform = glm::translate(glm::mat4(1.0f), joint.defaultTranslation)
-                                        * glm::toMat4(joint.defaultRotation)
-                                        * glm::scale(glm::mat4(1.0f), joint.defaultScale);
-                                }
-
-                                skeleton->SetDirtyFlag(true);
-                            }
-                        }
-
-                        if (sceneData.viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !isPreviewGizmoManipulating && !isPreviewGizmoHovered)
-                        {
-                            const ImVec2 mousePos = ImGui::GetMousePos();
-                            int32_t pickedJoint = -1;
-                            float bestDistanceSq = 64.0f;
-
-                            for (const Joint &joint : skeleton->joints)
-                            {
-                                ImVec2 jointPos;
-                                if (!Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
-                                {
-                                    continue;
-                                }
-
-                                const float dx = jointPos.x - mousePos.x;
-                                const float dy = jointPos.y - mousePos.y;
-                                const float distanceSq = dx * dx + dy * dy;
-                                if (distanceSq < bestDistanceSq)
-                                {
-                                    bestDistanceSq = distanceSq;
-                                    pickedJoint = joint.id;
-                                }
-                            }
-
-                            if (pickedJoint >= 0)
-                            {
-                                selectedJoint = pickedJoint;
-                            }
-                        }
-
-                        ImDrawList *drawList = ImGui::GetWindowDrawList();
-                        for (const Joint &joint : skeleton->joints)
-                        {
-                            if (joint.parentJointId < 0 || joint.parentJointId >= static_cast<int32_t>(skeleton->joints.size()))
-                            {
-                                continue;
-                            }
-
-                            const Joint &parent = skeleton->joints[static_cast<size_t>(joint.parentJointId)];
-
-                            ImVec2 childPos, parentPos;
-                            if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, childPos)
-                                && Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(parent.id)[3]), viewProjection, viewportRect, parentPos))
-                            {
-                                const bool selectedLink = (joint.id == selectedJoint || parent.id == selectedJoint);
-                                drawList->AddLine(parentPos, childPos, selectedLink ? IM_COL32(255, 180, 30, 255) : IM_COL32(50, 220, 255, 190), selectedLink ? 2.5f : 1.5f);
-                            }
-                        }
-
-                        for (const Joint &joint : skeleton->joints)
-                        {
-                            ImVec2 jointPos;
-                            if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
-                            {
-                                const bool selected = joint.id == selectedJoint;
-                                drawList->AddCircleFilled(jointPos, selected ? 5.0f : 3.0f, selected ? IM_COL32(255, 120, 20, 255) : IM_COL32(255, 255, 255, 230));
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    ImGui::Dummy(viewportSize);
-                    sceneData.viewportHovered = ImGui::IsItemHovered();
-                }
-            }
-            ImGui::EndChild(); // !scene viewport child
-
-            if (skeleton)
-            {
-                // SPLITTER
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.20f, 1.0f));
-                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.26f, 0.30f, 1.0f));
-                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.30f, 0.30f, 0.36f, 1.0f));
-                    ImGui::BeginChild("##animation_timeline_splitter", { 0.0f, splitterThickness });
-                    ImGui::Button("##animation_timeline_splitter_btn", ImVec2(-1.0f, -1.0f));
-                    if (ImGui::IsItemHovered() || ImGui::IsItemActive())
-                    {
-                        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-                    }
-                    if (ImGui::IsItemActive())
-                    {
-                        previewState.animationTimelineHeight -= ImGui::GetIO().MouseDelta.y;
-                        previewState.animationTimelineHeight = std::clamp(previewState.animationTimelineHeight, minTimelineHeight, maxTimelineHeight);
-                    }
-                    ImGui::PopStyleColor(3);
-                    ImGui::EndChild();
-                }
-
-                if (ImGui::BeginChild("##animation_preview_timeline", { 0.0f, previewState.animationTimelineHeight }, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar))
-                {
-                    // Animation playback tools
-                    if (ImGui::BeginChild("##animation_timeline_toolbar", { 0.0f, 36.0f }))
-                    {
-                        ImGui::BeginDisabled(!isAnimLoaded);
-                        if (ImGui::Button(previewState.playing ? "Pause" : "Play"))
-                        {
-                            previewState.playing = !previewState.playing;
-                        }
-                        ImGui::SameLine();
-                        if (ImGui::Button("Stop"))
-                        {
-                            previewState.playing = false;
-                            previewState.timeSeconds = 0.0f;
-                        }
-                        ImGui::SameLine();
-                        ImGui::Checkbox("Loop", &previewState.loop);
-                        ImGui::EndDisabled();
-                    }
-                    ImGui::EndChild(); // !Animation playback tools
-
-                    ImGui::Spacing();
-
-                    // Animation timeline
-                    if (ImGui::BeginChild("##animation_timeline", { 0.0f, 0.0f }))
-                    {
-                        const float timelineCurrentTime = previewState.timeSeconds;
-                        int previewFrame = (timelineFrameCount > 0)
-                            ? std::clamp(static_cast<int>(timelineCurrentTime * timelineFps), 0, timelineFrameCount - 1)
-                            : 0;
-                        bool playing = previewState.playing;
-                        UI::TimelineState timelineState { timelineFrameCount, timelineFps, timelineTotalDuration, timelineCurrentTime };
-                        UI::Timeline::Draw(ImGui::GetWindowDrawList(), 54.0f, timelineState, &previewState.timeSeconds, &previewFrame, &playing, isAnimLoaded ? "No frames – drop sprites here" : "Select animation");
-                        previewState.playing = playing;
-                    }
-                    ImGui::EndChild(); // !Animation timeline
-                }
-                ImGui::EndChild(); // !animation timeline
-            }
-        }
-        ImGui::EndChild(); // !Mesh preview panel
-        ImGui::SameLine();
-
-        // right details panel
-        if (ImGui::BeginChild("##right_details_panel", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar))
-        {
-            ImGui::BeginTabBar("##tab_bar_right_details");
-
-            if (!isViewSkeletonTree)
-            {
-                if (ImGui::BeginTabItem("Scene Preview"))
-                {
-                    // Scene details preview child
-                    if (ImGui::BeginChild("##scene_details_preview", { 0.0f, 0.0f }, ImGuiChildFlags_None))
-                    {
-                        if (skeleton)
-                        {
-                            // Preview animation
-                            std::string animLabel = isAnimLoaded ? assetManager->GetAssetDisplayName(previewState.previewAnimationHandle) : "Drag Here";
-                            UI::DrawButtonWithColumn("Preview Anim", animLabel.c_str(), nullptr, [&previewState, &assetManager]()
-                            {
-                                if (ImGui::BeginDragDropTarget())
-                                {
-                                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                                    {
-                                        if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                                        {
-                                            const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-                                            const AssetMetaData &md = assetManager->GetMetaData(droppedHandle);
-                                            if (md.type == AssetType::SkeletalAnimation)
-                                            {
-                                                previewState.previewAnimationHandle = droppedHandle;
-                                                previewState.timeSeconds = 0.0f;
-                                                previewState.playing = true;
-                                            }
-                                        }
-                                    }
-                                    ImGui::EndDragDropTarget();
-                                }
-                            });
-                        }
-                    }
-                    ImGui::EndChild(); // !scene details preview child
-
-                    ImGui::EndTabItem();
-                }
-            }
-            else if (isViewSkeletonTree)
-            {
-                // Skeleton Details
-                if (ImGui::BeginTabItem("Skeleton Details"))
-                {
-                    // skeleton details preview child
-                    if (ImGui::BeginChild("##details_preview", { 0.0f, 0.0f }, ImGuiChildFlags_None))
-                    {
-                        ImGui::TextUnformatted("Joint / Socket Details");
-                        ImGui::Separator();
-
-                        const char *gizmoTargets[] = { "Joint", "Socket" };
-                        if (ImGui::Combo("Gizmo Target", &previewState.gizmoTarget, gizmoTargets, IM_ARRAYSIZE(gizmoTargets)))
-                        {
-                            if (previewState.gizmoTarget == 1 && (selectedSocket < 0 || selectedSocket >= static_cast<int32_t>(skeleton->sockets.size())))
-                            {
-                                previewState.gizmoTarget = 0;
-                            }
-                        }
-
-                        if (selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(skeleton->joints.size()))
-                        {
-                            const Joint &joint = skeleton->joints[static_cast<size_t>(selectedJoint)];
-                            ImGui::TextDisabled("Selected Joint: %s (id: %d)", joint.name.c_str(), joint.id);
-                        }
-
-                        if (previewState.gizmoTarget == 1)
-                        {
-                            if (selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size()))
-                            {
-                                ImGui::TextDisabled("Selected Socket: %s", skeleton->sockets[static_cast<size_t>(selectedSocket)].name.c_str());
-                            }
-                            else
-                            {
-                                ImGui::TextDisabled("Selected Socket: <none>");
-                            }
-                        }
-
-                        ImGui::SeparatorText("Joint Sockets");
-
-                        if (ImGui::Button("Add Socket") && selectedJoint >= 0)
-                        {
-                            JointSocket socket;
-                            socket.name = std::format("Socket_{}", skeleton->sockets.size());
-                            socket.parentJointId = selectedJoint;
-                            skeleton->sockets.push_back(std::move(socket));
-                            skeleton->RebuildSocketMap();
-                            selectedSocket = static_cast<int32_t>(skeleton->sockets.size()) - 1;
-                            skeleton->SetDirtyFlag(true);
-                        }
-
-                        // Skeleton list
-                        if (ImGui::BeginChild("##skeleton_socket_list", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders))
-                        {
-                            for (int32_t i = 0; i < static_cast<int32_t>(skeleton->sockets.size()); ++i)
-                            {
-                                const JointSocket &socket = skeleton->sockets[static_cast<size_t>(i)];
-                                std::string row = socket.name;
-                                if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
-                                {
-                                    row += std::format(" -> {}", skeleton->joints[static_cast<size_t>(socket.parentJointId)].name);
-                                }
-
-                                if (ImGui::Selectable(std::format("{}##socket_row_{}", row, i).c_str(), selectedSocket == i))
-                                {
-                                    selectedSocket = i;
-                                    if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
-                                    {
-                                        selectedJoint = socket.parentJointId;
-                                    }
-                                }
-                            }
-                        }
-                        ImGui::EndChild(); //!Skeleton list
-
-                        if (selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size()))
-                        {
-                            JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
-
-                            char nameBuf[256] {};
-                            std::strncpy(nameBuf, socket.name.c_str(), sizeof(nameBuf) - 1);
-                            if (ImGui::InputText("Socket Name", nameBuf, sizeof(nameBuf)))
-                            {
-                                socket.name = nameBuf;
-                                skeleton->RebuildSocketMap();
-                                skeleton->SetDirtyFlag(true);
-                            }
-
-                            int parentJoint = socket.parentJointId;
-                            std::string parentJointLabel = "None";
-                            if (parentJoint >= 0 && parentJoint < static_cast<int32_t>(skeleton->joints.size()))
-                            {
-                                parentJointLabel = skeleton->joints[static_cast<size_t>(parentJoint)].name;
-                            }
-
-                            if (ImGui::BeginCombo("Parent Joint", parentJointLabel.c_str()))
-                            {
-                                for (const Joint &joint : skeleton->joints)
-                                {
-                                    const bool selected = parentJoint == joint.id;
-                                    if (ImGui::Selectable(joint.name.c_str(), selected))
-                                    {
-                                        socket.parentJointId = joint.id;
-                                        skeleton->SetDirtyFlag(true);
-                                    }
-                                }
-                                ImGui::EndCombo();
-                            }
-
-                            if (ImGui::DragFloat3("Socket Translation", &socket.localTranslation.x, 0.01f))
-                            {
-                                skeleton->SetDirtyFlag(true);
-                            }
-
-                            glm::vec3 eulerDeg = glm::degrees(glm::eulerAngles(socket.localRotation));
-                            if (ImGui::DragFloat3("Socket Rotation", &eulerDeg.x, 0.1f))
-                            {
-                                socket.localRotation = glm::quat(glm::radians(eulerDeg));
-                                skeleton->SetDirtyFlag(true);
-                            }
-
-                            if (ImGui::DragFloat3("Socket Scale", &socket.localScale.x, 0.01f, 0.001f, 1000.0f))
-                            {
-                                skeleton->SetDirtyFlag(true);
-                            }
-
-                            if (ImGui::Button("Remove Socket"))
-                            {
-                                skeleton->sockets.erase(skeleton->sockets.begin() + selectedSocket);
-                                skeleton->RebuildSocketMap();
-                                selectedSocket = skeleton->sockets.empty() ? -1 : std::min(selectedSocket, static_cast<int32_t>(skeleton->sockets.size()) - 1);
-                                skeleton->SetDirtyFlag(true);
-                            }
-                        }
-                    }
-                    ImGui::EndChild(); // !skeleton details preview child
-
-                    ImGui::EndTabItem();
-                }
-            }
-
-            ImGui::EndTabBar();
-        }
-        ImGui::EndChild(); // !right details panel
-    }
 
     void AssetEditorPanel::UIMeshEditor(AssetEditorData &assetData)
     {
@@ -4390,9 +3283,783 @@ namespace ignite
             {
                 if (assetData.asset && assetData.asset->IsReady())
                 {
-                    if (Ref<Mesh> skm = assetData.asset->As<Mesh>())
+                    if (Ref<Mesh> mesh = assetData.asset->As<Mesh>())
                     {
-                        UIMeshEditor(skm, assetData.sceneData);
+                        auto project = m_EditorLayer->GetActiveProject().get();
+                        auto assetManager = project->GetAssetManager();
+
+                        const uint64_t meshKey = static_cast<uint64_t>(mesh->handle);
+                        MeshEditorState &meshEditorState = s_MeshEditorState[meshKey];
+                        AssetHandle skeletonHandle = mesh->GetSkeletonHandle();
+                        if (meshEditorState.skeletonHandle != skeletonHandle)
+                        {
+                            meshEditorState.skeletonHandle = skeletonHandle;
+                            meshEditorState.cachedSkeleton.reset();
+                        }
+
+                        static std::unordered_map<uint64_t, int32_t> s_SelectedJoint;
+                        static std::unordered_map<uint64_t, int32_t> s_SelectedSocket;
+                        static std::unordered_map<uint64_t, int32_t> s_LastAutoScrolledJoint;
+
+                        const auto key = static_cast<uint64_t>(skeletonHandle);
+                        SkeletonPreviewEditorState &previewState = s_SkeletonPreviewEditorState[key];
+
+                        int32_t &selectedJoint = s_SelectedJoint[key];
+                        int32_t &selectedSocket = s_SelectedSocket[key];
+                        int32_t &lastAutoScrolledJoint = s_LastAutoScrolledJoint[key];
+
+                        if (skeletonHandle != AssetHandle(0) && !meshEditorState.cachedSkeleton)
+                        {
+                            meshEditorState.cachedSkeleton = project->GetAsset<Skeleton>(skeletonHandle);
+                            if (!meshEditorState.cachedSkeleton)
+                            {
+                                meshEditorState.cachedSkeleton = project->GetAssetImmediate<Skeleton>(skeletonHandle);
+                            }
+                        }
+
+                        if (assetData.sceneData.sceneRenderer)
+                        {
+                            assetData.sceneData.sceneRenderer->SetPreviewMesh(mesh);
+                        }
+
+                        Ref<Skeleton> skeleton = meshEditorState.cachedSkeleton;
+                        size_t jointCount = 0;
+                        if (skeleton)
+                        {
+                            jointCount = skeleton->joints.size();
+                            if (selectedJoint >= static_cast<int32_t>(skeleton->joints.size()))
+                            {
+                                selectedJoint = skeleton->joints.empty() ? -1 : 0;
+                            }
+                            if (selectedJoint < 0)
+                            {
+                                lastAutoScrolledJoint = -1;
+                            }
+                            if (selectedSocket >= static_cast<int32_t>(skeleton->sockets.size()))
+                            {
+                                selectedSocket = skeleton->sockets.empty() ? -1 : 0;
+                            }
+
+
+                        }
+
+                        std::vector<std::vector<int32_t>> children(jointCount);
+                        if (skeleton)
+                        {
+                            for (const Joint &joint : skeleton->joints)
+                            {
+                                if (joint.parentJointId >= 0 && joint.parentJointId < static_cast<int32_t>(jointCount))
+                                {
+                                    children[static_cast<size_t>(joint.parentJointId)].push_back(joint.id);
+                                }
+                            }
+                        }
+
+                        bool isViewSkeletonTree = false;
+                        const bool isAnimLoaded = previewState.previewAnimationHandle != AssetHandle(0);
+                        Ref<SkeletalAnimation> previewAnimation = nullptr;
+                        if (previewState.previewAnimationHandle != AssetHandle(0))
+                        {
+                            previewAnimation = project->GetAsset<SkeletalAnimation>(previewState.previewAnimationHandle);
+                            if (!previewAnimation)
+                            {
+                                previewAnimation = project->GetAssetImmediate<SkeletalAnimation>(previewState.previewAnimationHandle);
+                            }
+                        }
+                        const float timelineFps = previewAnimation ? std::max(previewAnimation->ticksPerSeconds, 0.001f) : 0.001f;
+                        const float timelineTotalDuration = (previewAnimation && previewAnimation->duration > 0.0f)
+                            ? (previewAnimation->duration / timelineFps)
+                            : 0.0f;
+                        const int timelineFrameCount = (previewAnimation && previewAnimation->duration > 0.0f)
+                            ? std::max(1, static_cast<int>(std::ceil(previewAnimation->duration)))
+                            : 0;
+
+                        const float totalWidth = ImGui::GetContentRegionAvail().x;
+                        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+                        const float listWidth = std::max(260.0f, totalWidth * 0.28f);
+                        const float detailsWidth = std::max(320.0f, totalWidth * 0.30f);
+                        const float viewportWidth = std::max(220.0f, totalWidth - listWidth - detailsWidth - spacing * 2.0f);
+
+                        if (ImGui::BeginChild("##left_details_panel", ImVec2(listWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar))
+                        {
+                            ImGui::BeginTabBar("##tab_bar_left_details");
+
+                            // Asset details
+                            if (ImGui::BeginTabItem("Asset Details"))
+                            {
+                                ImGui::BeginChild("##asset_details", { 0.0f, 0.0f }, ImGuiChildFlags_None);
+                                {
+                                    std::string skeletonLabel = "Drop Skeleton Here";
+                                    if (skeletonHandle != AssetHandle(0))
+                                    {
+                                        const AssetMetaData &metadata = assetManager->GetMetaData(skeletonHandle);
+                                        if (metadata.type == AssetType::Skeleton)
+                                        {
+                                            skeletonLabel = metadata.filepath.filename().string();
+                                        }
+                                        else
+                                        {
+                                            skeletonLabel = "Skeleton Assigned";
+                                        }
+                                    }
+
+                                    ImGui::Button(skeletonLabel.c_str(), ImVec2(-1.0f, 0.0f));
+                                    if (ImGui::BeginDragDropTarget())
+                                    {
+                                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                        {
+                                            if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                                            {
+                                                const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                                                const AssetMetaData &metadata = assetManager->GetMetaData(droppedHandle);
+                                                if (metadata.type == AssetType::Skeleton)
+                                                {
+                                                    mesh->SetSkeleton(droppedHandle);
+                                                    mesh->SetDirtyFlag(true);
+                                                    skeletonHandle = droppedHandle;
+                                                    meshEditorState.skeletonHandle = droppedHandle;
+                                                    meshEditorState.cachedSkeleton = project->GetAsset<Skeleton>(droppedHandle);
+                                                    if (!meshEditorState.cachedSkeleton)
+                                                    {
+                                                        meshEditorState.cachedSkeleton = project->GetAssetImmediate<Skeleton>(droppedHandle);
+                                                    }
+                                                    skeleton = meshEditorState.cachedSkeleton;
+                                                }
+                                            }
+                                        }
+                                        ImGui::EndDragDropTarget();
+                                    }
+
+                                    ImGui::SameLine();
+                                    if (ImGui::Button("Clear Skeleton"))
+                                    {
+                                        mesh->SetSkeleton(AssetHandle(0));
+                                        mesh->SetDirtyFlag(true);
+                                        skeletonHandle = AssetHandle(0);
+                                        meshEditorState.skeletonHandle = AssetHandle(0);
+                                        meshEditorState.cachedSkeleton.reset();
+                                        skeleton.reset();
+                                    }
+
+                                    ImGui::TextDisabled("Skeleton Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(skeletonHandle)));
+
+                                    ImGui::SeparatorText("Material Slots");
+                                    const auto &meshInstances = mesh->GetMeshInstances();
+                                    if (meshInstances.empty())
+                                    {
+                                        ImGui::TextDisabled("No mesh instances available.");
+                                        return;
+                                    }
+
+                                    for (size_t i = 0; i < meshInstances.size(); ++i)
+                                    {
+                                        Ref<MeshInstance> instance = meshInstances[i];
+                                        if (!instance)
+                                        {
+                                            continue;
+                                        }
+
+                                        ImGui::PushID(static_cast<int>(i));
+                                        std::string slotLabel = std::format("Slot {}", i);
+                                        std::string materialButtonLabel = "Drop Material Here";
+
+                                        const AssetHandle materialHandle = instance->GetMaterialHandle();
+                                        if (materialHandle != AssetHandle(0))
+                                        {
+                                            const AssetMetaData &metadata = assetManager->GetMetaData(materialHandle);
+                                            if (metadata.type == AssetType::Material)
+                                            {
+                                                materialButtonLabel = metadata.filepath.filename().string();
+                                            }
+                                            else
+                                            {
+                                                materialButtonLabel = "Material Assigned";
+                                            }
+                                        }
+
+                                        ImGui::TextUnformatted(slotLabel.c_str());
+                                        ImGui::Button(materialButtonLabel.c_str(), ImVec2(-1.0f, 0.0f));
+                                        if (ImGui::BeginDragDropTarget())
+                                        {
+                                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                            {
+                                                if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                                                {
+                                                    const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                                                    const AssetMetaData &metadata = assetManager->GetMetaData(droppedHandle);
+                                                    if (metadata.type == AssetType::Material)
+                                                    {
+                                                        instance->SetMaterial(droppedHandle);
+                                                        mesh->SetDirtyFlag(true);
+                                                    }
+                                                }
+                                            }
+                                            ImGui::EndDragDropTarget();
+                                        }
+
+                                        if (materialHandle != AssetHandle(0) && ImGui::SmallButton("Clear Material"))
+                                        {
+                                            instance->SetMaterial(AssetHandle(0));
+                                            mesh->SetDirtyFlag(true);
+                                        }
+
+                                        ImGui::Separator();
+                                        ImGui::PopID();
+                                    }
+                                }
+                                ImGui::EndChild();
+
+                                ImGui::EndTabItem();
+                            }
+
+                            // SKELETON PREVIEW
+                            if (skeleton && ImGui::BeginTabItem("Skeleton Preview"))
+                            {
+                                isViewSkeletonTree = true;
+
+                                ImGui::BeginChild("##skeleton_preview", { 0.0f, 0.0f }, ImGuiChildFlags_None);
+                                {
+                                    if (skeleton)
+                                    {
+                                        ImGui::TextUnformatted("Skeleton Tree");
+                                        std::function<void(int32_t)> drawJointNode = [&](int32_t jointId)
+                                        {
+                                            if (jointId < 0 || jointId >= static_cast<int32_t>(jointCount))
+                                            {
+                                                return;
+                                            }
+
+                                            const Joint &joint = skeleton->joints[static_cast<size_t>(jointId)];
+                                            const bool isSelected = selectedJoint == jointId;
+                                            const bool hasChildren = !children[static_cast<size_t>(jointId)].empty();
+
+                                            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
+                                            if (!hasChildren)
+                                            {
+                                                flags |= ImGuiTreeNodeFlags_Leaf;
+                                            }
+                                            if (isSelected)
+                                            {
+                                                flags |= ImGuiTreeNodeFlags_Selected;
+                                            }
+
+                                            const bool opened = ImGui::TreeNodeEx(reinterpret_cast<void *>(static_cast<intptr_t>(jointId + 1)), flags, "%s", joint.name.c_str());
+                                            if (ImGui::IsItemClicked())
+                                            {
+                                                selectedJoint = jointId;
+                                            }
+
+                                            if (selectedJoint == jointId && lastAutoScrolledJoint != selectedJoint)
+                                            {
+                                                if (!ImGui::IsItemVisible())
+                                                {
+                                                    ImGui::SetScrollHereY(0.5f);
+                                                }
+
+                                                lastAutoScrolledJoint = selectedJoint;
+                                            }
+
+                                            if (opened)
+                                            {
+                                                for (int32_t childJointId : children[static_cast<size_t>(jointId)])
+                                                {
+                                                    drawJointNode(childJointId);
+                                                }
+                                                ImGui::TreePop();
+                                            }
+                                        };
+
+                                        for (const Joint &joint : skeleton->joints)
+                                        {
+                                            if (joint.parentJointId == -1)
+                                            {
+                                                drawJointNode(joint.id);
+                                            }
+                                        }
+                                    }
+
+                                    ImGui::EndChild();
+                                }
+
+                                ImGui::EndTabItem();
+                            }
+
+                            ImGui::EndTabBar();
+
+                            ImGui::Separator();
+
+
+                        }
+                        ImGui::EndChild(); // !left details panel
+                        ImGui::SameLine();
+
+                        // Mesh preview panel
+                        if (ImGui::BeginChild("##mesh_preview", ImVec2(viewportWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+                        {
+                            ImGui::TextUnformatted("Mesh + Skeleton Preview");
+                            ImGui::Separator();
+
+                            const float splitterThickness = 6.0f;
+                            const float minViewportHeight = 120.0f;
+                            const float minTimelineHeight = 120.0f;
+                            const ImVec2 previewRegion = ImGui::GetContentRegionAvail();
+                            float maxTimelineHeight = minTimelineHeight;
+                            float meshScenePreviewHeight = previewRegion.y;
+                            if (skeleton)
+                            {
+                                maxTimelineHeight = std::max(minTimelineHeight, previewRegion.y - minViewportHeight - splitterThickness);
+                                previewState.animationTimelineHeight = std::clamp(previewState.animationTimelineHeight, minTimelineHeight, maxTimelineHeight);
+                                meshScenePreviewHeight = std::max(minViewportHeight, previewRegion.y - previewState.animationTimelineHeight - splitterThickness);
+                            }
+
+                            // scene viewport child
+                            if (ImGui::BeginChild("##mesh_scene_preview", { 0.0f, meshScenePreviewHeight }, ImGuiChildFlags_None))
+                            {
+                                const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+                                assetData.sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
+                                assetData.sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
+                                UpdateSceneCamera(assetData.sceneData, ImGui::GetIO().DeltaTime);
+
+                                Ref<Texture> previewTexture = assetData.sceneData.compositeRT ? assetData.sceneData.compositeRT->GetColorAttachment(0) : nullptr;
+                                if (previewTexture && previewTexture->GetHandle())
+                                {
+                                    const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
+                                    ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+                                    assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
+
+                                    ImGui::SetCursorScreenPos(ImVec2(viewportPos.x + 8.0f, viewportPos.y + 8.0f));
+                                    ImGui::TextDisabled(
+                                        "RTTex=%p | RT=%p | %ux%u",
+                                        reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()),
+                                        assetData.sceneData.compositeRT.get(),
+                                        assetData.sceneData.viewportWidth,
+                                        assetData.sceneData.viewportHeight);
+
+                                    const glm::mat4 viewProjection = assetData.sceneData.camera.GetProjection() * assetData.sceneData.camera.GetView();
+                                    const Rect viewportRect { viewportPos.x, viewportPos.y, viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y };
+
+                                    if (skeleton)
+                                    {
+                                        const bool hasSelectedJoint = selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(skeleton->joints.size());
+                                        const bool hasSelectedSocket = selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size());
+                                        const bool useSocketGizmo = previewState.gizmoTarget == 1 && hasSelectedSocket;
+                                        const bool previewViewportFocused = assetData.sceneData.viewportHovered && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+
+                                        const bool hasPreviewPose = previewState.previewGlobalTransforms.size() == skeleton->joints.size();
+
+                                        auto getJointGlobal = [&](int32_t jointId) -> const glm::mat4 &
+                                        {
+                                            if (hasPreviewPose && jointId >= 0 && jointId < static_cast<int32_t>(previewState.previewGlobalTransforms.size()))
+                                            {
+                                                return previewState.previewGlobalTransforms[static_cast<size_t>(jointId)];
+                                            }
+                                            return skeleton->joints[static_cast<size_t>(jointId)].globalTransform;
+                                        };
+
+                                        bool isPreviewGizmoManipulating = false;
+                                        bool isPreviewGizmoHovered = false;
+
+                                        if (previewViewportFocused && (useSocketGizmo || hasSelectedJoint))
+                                        {
+                                            GizmoInfo gizmoInfo;
+                                            gizmoInfo.cameraView = assetData.sceneData.camera.GetView();
+                                            gizmoInfo.cameraProjection = assetData.sceneData.camera.GetProjection();
+                                            gizmoInfo.cameraType = assetData.sceneData.camera.projectionType;
+                                            gizmoInfo.snapValue = 0.05f;
+                                            gizmoInfo.isSnapping = false;
+                                            gizmoInfo.viewRect = viewportRect;
+
+                                            s_SkeletonPreviewGizmo.SetInfo(gizmoInfo);
+                                            s_SkeletonPreviewGizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
+                                            s_SkeletonPreviewGizmo.SetMode(ImGuizmo::MODE::LOCAL);
+
+                                            glm::mat4 gizmoTransform = glm::mat4(1.0f);
+                                            if (useSocketGizmo)
+                                            {
+                                                const JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
+                                                const glm::mat4 socketLocal = socket.GetLocalTransform();
+                                                if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+                                                {
+                                                    gizmoTransform = getJointGlobal(socket.parentJointId) * socketLocal;
+                                                }
+                                                else
+                                                {
+                                                    gizmoTransform = socketLocal;
+                                                }
+                                            }
+                                            else
+                                            {
+                                                gizmoTransform = getJointGlobal(selectedJoint);
+                                            }
+
+                                            s_SkeletonPreviewGizmo.Manipulate(gizmoTransform);
+                                            isPreviewGizmoManipulating = s_SkeletonPreviewGizmo.IsManipulating();
+                                            isPreviewGizmoHovered = s_SkeletonPreviewGizmo.IsHovered();
+
+                                            if (isPreviewGizmoManipulating)
+                                            {
+                                                if (useSocketGizmo)
+                                                {
+                                                    JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
+                                                    glm::mat4 parentWorld = glm::mat4(1.0f);
+                                                    if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+                                                    {
+                                                        parentWorld = getJointGlobal(socket.parentJointId);
+                                                    }
+
+                                                    const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
+                                                    glm::vec3 localTranslation, localEuler, localScale;
+                                                    Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                                                    socket.localTranslation = localTranslation;
+                                                    socket.localRotation = glm::quat(localEuler);
+                                                    socket.localScale = localScale;
+                                                }
+                                                else if (hasSelectedJoint)
+                                                {
+                                                    Joint &joint = skeleton->joints[static_cast<size_t>(selectedJoint)];
+                                                    glm::mat4 parentWorld = glm::mat4(1.0f);
+                                                    if (joint.parentJointId >= 0 && joint.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+                                                    {
+                                                        parentWorld = getJointGlobal(joint.parentJointId);
+                                                    }
+
+                                                    const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
+                                                    glm::vec3 localTranslation, localEuler, localScale;
+                                                    Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                                                    joint.defaultTranslation = localTranslation;
+                                                    joint.defaultRotation = glm::quat(localEuler);
+                                                    joint.defaultScale = localScale;
+                                                    joint.localTransform = glm::translate(glm::mat4(1.0f), joint.defaultTranslation)
+                                                        * glm::toMat4(joint.defaultRotation)
+                                                        * glm::scale(glm::mat4(1.0f), joint.defaultScale);
+                                                }
+
+                                                skeleton->SetDirtyFlag(true);
+                                            }
+                                        }
+
+                                        if (assetData.sceneData.viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !isPreviewGizmoManipulating && !isPreviewGizmoHovered)
+                                        {
+                                            const ImVec2 mousePos = ImGui::GetMousePos();
+                                            int32_t pickedJoint = -1;
+                                            float bestDistanceSq = 64.0f;
+
+                                            for (const Joint &joint : skeleton->joints)
+                                            {
+                                                ImVec2 jointPos;
+                                                if (!Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
+                                                {
+                                                    continue;
+                                                }
+
+                                                const float dx = jointPos.x - mousePos.x;
+                                                const float dy = jointPos.y - mousePos.y;
+                                                const float distanceSq = dx * dx + dy * dy;
+                                                if (distanceSq < bestDistanceSq)
+                                                {
+                                                    bestDistanceSq = distanceSq;
+                                                    pickedJoint = joint.id;
+                                                }
+                                            }
+
+                                            if (pickedJoint >= 0)
+                                            {
+                                                selectedJoint = pickedJoint;
+                                            }
+                                        }
+
+                                        ImDrawList *drawList = ImGui::GetWindowDrawList();
+                                        for (const Joint &joint : skeleton->joints)
+                                        {
+                                            if (joint.parentJointId < 0 || joint.parentJointId >= static_cast<int32_t>(skeleton->joints.size()))
+                                            {
+                                                continue;
+                                            }
+
+                                            const Joint &parent = skeleton->joints[static_cast<size_t>(joint.parentJointId)];
+
+                                            ImVec2 childPos, parentPos;
+                                            if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, childPos)
+                                                && Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(parent.id)[3]), viewProjection, viewportRect, parentPos))
+                                            {
+                                                const bool selectedLink = (joint.id == selectedJoint || parent.id == selectedJoint);
+                                                drawList->AddLine(parentPos, childPos, selectedLink ? IM_COL32(255, 180, 30, 255) : IM_COL32(50, 220, 255, 190), selectedLink ? 2.5f : 1.5f);
+                                            }
+                                        }
+
+                                        for (const Joint &joint : skeleton->joints)
+                                        {
+                                            ImVec2 jointPos;
+                                            if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
+                                            {
+                                                const bool selected = joint.id == selectedJoint;
+                                                drawList->AddCircleFilled(jointPos, selected ? 5.0f : 3.0f, selected ? IM_COL32(255, 120, 20, 255) : IM_COL32(255, 255, 255, 230));
+                                            }
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    ImGui::Dummy(viewportSize);
+                                    assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
+                                }
+                            }
+                            ImGui::EndChild(); // !scene viewport child
+
+                            if (skeleton)
+                            {
+                                // SPLITTER
+                                {
+                                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.20f, 1.0f));
+                                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.26f, 0.30f, 1.0f));
+                                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.30f, 0.30f, 0.36f, 1.0f));
+                                    ImGui::BeginChild("##animation_timeline_splitter", { 0.0f, splitterThickness });
+                                    ImGui::Button("##animation_timeline_splitter_btn", ImVec2(-1.0f, -1.0f));
+                                    if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+                                    {
+                                        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+                                    }
+                                    if (ImGui::IsItemActive())
+                                    {
+                                        previewState.animationTimelineHeight -= ImGui::GetIO().MouseDelta.y;
+                                        previewState.animationTimelineHeight = std::clamp(previewState.animationTimelineHeight, minTimelineHeight, maxTimelineHeight);
+                                    }
+                                    ImGui::PopStyleColor(3);
+                                    ImGui::EndChild();
+                                }
+
+                                if (ImGui::BeginChild("##animation_preview_timeline", { 0.0f, previewState.animationTimelineHeight }, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar))
+                                {
+                                    // Animation playback tools
+                                    if (ImGui::BeginChild("##animation_timeline_toolbar", { 0.0f, 36.0f }))
+                                    {
+                                        ImGui::BeginDisabled(!isAnimLoaded);
+                                        if (ImGui::Button(previewState.playing ? "Pause" : "Play"))
+                                        {
+                                            previewState.playing = !previewState.playing;
+                                        }
+                                        ImGui::SameLine();
+                                        if (ImGui::Button("Stop"))
+                                        {
+                                            previewState.playing = false;
+                                            previewState.timeSeconds = 0.0f;
+                                        }
+                                        ImGui::SameLine();
+                                        ImGui::Checkbox("Loop", &previewState.loop);
+                                        ImGui::EndDisabled();
+                                    }
+                                    ImGui::EndChild(); // !Animation playback tools
+
+                                    ImGui::Spacing();
+
+                                    // Animation timeline
+                                    if (ImGui::BeginChild("##animation_timeline", { 0.0f, 0.0f }))
+                                    {
+                                        const float timelineCurrentTime = previewState.timeSeconds;
+                                        int previewFrame = (timelineFrameCount > 0)
+                                            ? std::clamp(static_cast<int>(timelineCurrentTime * timelineFps), 0, timelineFrameCount - 1)
+                                            : 0;
+                                        bool playing = previewState.playing;
+                                        UI::TimelineState timelineState { timelineFrameCount, timelineFps, timelineTotalDuration, timelineCurrentTime };
+                                        UI::Timeline::Draw(ImGui::GetWindowDrawList(), 54.0f, timelineState, &previewState.timeSeconds, &previewFrame, &playing, isAnimLoaded ? "No frames – drop sprites here" : "Select animation");
+                                        previewState.playing = playing;
+                                    }
+                                    ImGui::EndChild(); // !Animation timeline
+                                }
+                                ImGui::EndChild(); // !animation timeline
+                            }
+                        }
+                        ImGui::EndChild(); // !Mesh preview panel
+                        ImGui::SameLine();
+
+                        // right details panel
+                        if (ImGui::BeginChild("##right_details_panel", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar))
+                        {
+                            ImGui::BeginTabBar("##tab_bar_right_details");
+
+                            if (!isViewSkeletonTree)
+                            {
+                                if (ImGui::BeginTabItem("Scene Preview"))
+                                {
+                                    // Scene details preview child
+                                    if (ImGui::BeginChild("##scene_details_preview", { 0.0f, 0.0f }, ImGuiChildFlags_None))
+                                    {
+                                        if (skeleton)
+                                        {
+                                            // Preview animation
+                                            std::string animLabel = isAnimLoaded ? assetManager->GetAssetDisplayName(previewState.previewAnimationHandle) : "Drag Here";
+                                            UI::DrawButtonWithColumn("Preview Anim", animLabel.c_str(), nullptr, [&previewState, &assetManager]()
+                                            {
+                                                if (ImGui::BeginDragDropTarget())
+                                                {
+                                                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                                    {
+                                                        if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                                                        {
+                                                            const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                                                            const AssetMetaData &md = assetManager->GetMetaData(droppedHandle);
+                                                            if (md.type == AssetType::SkeletalAnimation)
+                                                            {
+                                                                previewState.previewAnimationHandle = droppedHandle;
+                                                                previewState.timeSeconds = 0.0f;
+                                                                previewState.playing = true;
+                                                            }
+                                                        }
+                                                    }
+                                                    ImGui::EndDragDropTarget();
+                                                }
+                                            });
+                                        }
+                                    }
+                                    ImGui::EndChild(); // !scene details preview child
+
+                                    ImGui::EndTabItem();
+                                }
+                            }
+                            else if (isViewSkeletonTree)
+                            {
+                                // Skeleton Details
+                                if (ImGui::BeginTabItem("Skeleton Details"))
+                                {
+                                    // skeleton details preview child
+                                    if (ImGui::BeginChild("##details_preview", { 0.0f, 0.0f }, ImGuiChildFlags_None))
+                                    {
+                                        ImGui::TextUnformatted("Joint / Socket Details");
+                                        ImGui::Separator();
+
+                                        const char *gizmoTargets[] = { "Joint", "Socket" };
+                                        if (ImGui::Combo("Gizmo Target", &previewState.gizmoTarget, gizmoTargets, IM_ARRAYSIZE(gizmoTargets)))
+                                        {
+                                            if (previewState.gizmoTarget == 1 && (selectedSocket < 0 || selectedSocket >= static_cast<int32_t>(skeleton->sockets.size())))
+                                            {
+                                                previewState.gizmoTarget = 0;
+                                            }
+                                        }
+
+                                        if (selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(skeleton->joints.size()))
+                                        {
+                                            const Joint &joint = skeleton->joints[static_cast<size_t>(selectedJoint)];
+                                            ImGui::TextDisabled("Selected Joint: %s (id: %d)", joint.name.c_str(), joint.id);
+                                        }
+
+                                        if (previewState.gizmoTarget == 1)
+                                        {
+                                            if (selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size()))
+                                            {
+                                                ImGui::TextDisabled("Selected Socket: %s", skeleton->sockets[static_cast<size_t>(selectedSocket)].name.c_str());
+                                            }
+                                            else
+                                            {
+                                                ImGui::TextDisabled("Selected Socket: <none>");
+                                            }
+                                        }
+
+                                        ImGui::SeparatorText("Joint Sockets");
+
+                                        if (ImGui::Button("Add Socket") && selectedJoint >= 0)
+                                        {
+                                            JointSocket socket;
+                                            socket.name = std::format("Socket_{}", skeleton->sockets.size());
+                                            socket.parentJointId = selectedJoint;
+                                            skeleton->sockets.push_back(std::move(socket));
+                                            skeleton->RebuildSocketMap();
+                                            selectedSocket = static_cast<int32_t>(skeleton->sockets.size()) - 1;
+                                            skeleton->SetDirtyFlag(true);
+                                        }
+
+                                        // Skeleton list
+                                        if (ImGui::BeginChild("##skeleton_socket_list", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders))
+                                        {
+                                            for (int32_t i = 0; i < static_cast<int32_t>(skeleton->sockets.size()); ++i)
+                                            {
+                                                const JointSocket &socket = skeleton->sockets[static_cast<size_t>(i)];
+                                                std::string row = socket.name;
+                                                if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+                                                {
+                                                    row += std::format(" -> {}", skeleton->joints[static_cast<size_t>(socket.parentJointId)].name);
+                                                }
+
+                                                if (ImGui::Selectable(std::format("{}##socket_row_{}", row, i).c_str(), selectedSocket == i))
+                                                {
+                                                    selectedSocket = i;
+                                                    if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+                                                    {
+                                                        selectedJoint = socket.parentJointId;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        ImGui::EndChild(); //!Skeleton list
+
+                                        if (selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size()))
+                                        {
+                                            JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
+
+                                            char nameBuf[256] {};
+                                            std::strncpy(nameBuf, socket.name.c_str(), sizeof(nameBuf) - 1);
+                                            if (ImGui::InputText("Socket Name", nameBuf, sizeof(nameBuf)))
+                                            {
+                                                socket.name = nameBuf;
+                                                skeleton->RebuildSocketMap();
+                                                skeleton->SetDirtyFlag(true);
+                                            }
+
+                                            int parentJoint = socket.parentJointId;
+                                            std::string parentJointLabel = "None";
+                                            if (parentJoint >= 0 && parentJoint < static_cast<int32_t>(skeleton->joints.size()))
+                                            {
+                                                parentJointLabel = skeleton->joints[static_cast<size_t>(parentJoint)].name;
+                                            }
+
+                                            if (ImGui::BeginCombo("Parent Joint", parentJointLabel.c_str()))
+                                            {
+                                                for (const Joint &joint : skeleton->joints)
+                                                {
+                                                    const bool selected = parentJoint == joint.id;
+                                                    if (ImGui::Selectable(joint.name.c_str(), selected))
+                                                    {
+                                                        socket.parentJointId = joint.id;
+                                                        skeleton->SetDirtyFlag(true);
+                                                    }
+                                                }
+                                                ImGui::EndCombo();
+                                            }
+
+                                            if (ImGui::DragFloat3("Socket Translation", &socket.localTranslation.x, 0.01f))
+                                            {
+                                                skeleton->SetDirtyFlag(true);
+                                            }
+
+                                            glm::vec3 eulerDeg = glm::degrees(glm::eulerAngles(socket.localRotation));
+                                            if (ImGui::DragFloat3("Socket Rotation", &eulerDeg.x, 0.1f))
+                                            {
+                                                socket.localRotation = glm::quat(glm::radians(eulerDeg));
+                                                skeleton->SetDirtyFlag(true);
+                                            }
+
+                                            if (ImGui::DragFloat3("Socket Scale", &socket.localScale.x, 0.01f, 0.001f, 1000.0f))
+                                            {
+                                                skeleton->SetDirtyFlag(true);
+                                            }
+
+                                            if (ImGui::Button("Remove Socket"))
+                                            {
+                                                skeleton->sockets.erase(skeleton->sockets.begin() + selectedSocket);
+                                                skeleton->RebuildSocketMap();
+                                                selectedSocket = skeleton->sockets.empty() ? -1 : std::min(selectedSocket, static_cast<int32_t>(skeleton->sockets.size()) - 1);
+                                                skeleton->SetDirtyFlag(true);
+                                            }
+                                        }
+                                    }
+                                    ImGui::EndChild(); // !skeleton details preview child
+
+                                    ImGui::EndTabItem();
+                                }
+                            }
+
+                            ImGui::EndTabBar();
+                        }
+                        ImGui::EndChild(); // !right details panel
                     }
                     else
                     {
@@ -4410,544 +4077,6 @@ namespace ignite
         ImGui::End();
         assetData.isOpen = isOpen;
         assetData.requestFocus = false;
-    }
-
-    void AssetEditorPanel::UISkeletonEditor(const Ref<Skeleton> &skeleton, EditorSceneData &sceneData)
-    {
-        if (!skeleton)
-        {
-            return;
-        }
-
-        Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
-        if (!project)
-        {
-            return;
-        }
-
-        auto assetManager = project->GetAssetManager();
-
-        const uint64_t key = static_cast<uint64_t>(skeleton->handle);
-        static std::unordered_map<uint64_t, int32_t> s_SelectedJoint;
-        static std::unordered_map<uint64_t, int32_t> s_SelectedSocket;
-        static std::unordered_map<uint64_t, int32_t> s_LastAutoScrolledJoint;
-        SkeletonPreviewEditorState &previewState = s_SkeletonPreviewEditorState[key];
-
-        if (previewState.previewMeshHandle == AssetHandle(0))
-        {
-            const AssetHandle matchedMeshHandle = FindFirstMeshHandleForSkeleton(project, skeleton->handle);
-            if (matchedMeshHandle != AssetHandle(0))
-            {
-                previewState.previewMeshHandle = matchedMeshHandle;
-                previewState.cachedPreviewMesh.reset();
-            }
-        }
-
-        int32_t &selectedJoint = s_SelectedJoint[key];
-        int32_t &selectedSocket = s_SelectedSocket[key];
-        int32_t &lastAutoScrolledJoint = s_LastAutoScrolledJoint[key];
-
-        if (sceneData.sceneRenderer)
-        {
-            if (previewState.previewMeshHandle != AssetHandle(0))
-            {
-                const AssetType previewMeshType = assetManager->GetAssetType(previewState.previewMeshHandle);
-
-                if (previewMeshType == AssetType::Mesh)
-                {
-                    Ref<Mesh> mesh = project->GetAsset<Mesh>(previewState.previewMeshHandle);
-                    if (!mesh)
-                    {
-                        mesh = project->GetAssetImmediate<Mesh>(previewState.previewMeshHandle);
-                    }
-                    sceneData.sceneRenderer->SetPreviewMesh(mesh);
-                }
-            }
-            else
-            {
-                sceneData.sceneRenderer->SetPreviewMesh(s_DefaultMeshes[CUBE]);
-            }
-        }
-
-        if (selectedJoint >= static_cast<int32_t>(skeleton->joints.size()))
-        {
-            selectedJoint = skeleton->joints.empty() ? -1 : 0;
-        }
-        if (selectedJoint < 0)
-        {
-            lastAutoScrolledJoint = -1;
-        }
-        if (selectedSocket >= static_cast<int32_t>(skeleton->sockets.size()))
-        {
-            selectedSocket = skeleton->sockets.empty() ? -1 : 0;
-        }
-
-        ImGui::Text("Joints: %zu | Sockets: %zu", skeleton->joints.size(), skeleton->sockets.size());
-        ImGui::Separator();
-
-        std::vector<std::vector<int32_t>> children(skeleton->joints.size());
-        for (const Joint &joint : skeleton->joints)
-        {
-            if (joint.parentJointId >= 0 && joint.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
-            {
-                children[static_cast<size_t>(joint.parentJointId)].push_back(joint.id);
-            }
-        }
-
-        const float totalWidth = ImGui::GetContentRegionAvail().x;
-        const float spacing = ImGui::GetStyle().ItemSpacing.x;
-        const float listWidth = std::max(260.0f, totalWidth * 0.28f);
-        const float detailsWidth = std::max(320.0f, totalWidth * 0.30f);
-        const float viewportWidth = std::max(220.0f, totalWidth - listWidth - detailsWidth - spacing * 2.0f);
-
-        if (ImGui::BeginChild("##skeleton_left_list", ImVec2(listWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX))
-        {
-            ImGui::TextUnformatted("Skeleton Tree");
-            ImGui::Separator();
-
-            std::function<void(int32_t)> drawJointNode = [&](int32_t jointId)
-            {
-                if (jointId < 0 || jointId >= static_cast<int32_t>(skeleton->joints.size()))
-                {
-                    return;
-                }
-
-                const Joint &joint = skeleton->joints[static_cast<size_t>(jointId)];
-                const bool isSelected = selectedJoint == jointId;
-                const bool hasChildren = !children[static_cast<size_t>(jointId)].empty();
-
-                ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
-                if (!hasChildren)
-                {
-                    flags |= ImGuiTreeNodeFlags_Leaf;
-                }
-                if (isSelected)
-                {
-                    flags |= ImGuiTreeNodeFlags_Selected;
-                }
-
-                const bool opened = ImGui::TreeNodeEx(reinterpret_cast<void *>(static_cast<intptr_t>(jointId + 1)), flags, "%s", joint.name.c_str());
-                if (ImGui::IsItemClicked())
-                {
-                    selectedJoint = jointId;
-                }
-
-                if (selectedJoint == jointId && lastAutoScrolledJoint != selectedJoint)
-                {
-                    if (!ImGui::IsItemVisible())
-                    {
-                        ImGui::SetScrollHereY(0.5f);
-                    }
-
-                    lastAutoScrolledJoint = selectedJoint;
-                }
-
-                if (opened)
-                {
-                    for (int32_t childJointId : children[static_cast<size_t>(jointId)])
-                    {
-                        drawJointNode(childJointId);
-                    }
-                    ImGui::TreePop();
-                }
-            };
-
-            for (const Joint &joint : skeleton->joints)
-            {
-                if (joint.parentJointId == -1)
-                {
-                    drawJointNode(joint.id);
-                }
-            }
-        }
-        ImGui::EndChild();
-
-        ImGui::SameLine();
-
-        if (ImGui::BeginChild("##skeleton_preview_view", ImVec2(viewportWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX))
-        {
-            ImGui::TextUnformatted("Mesh + Skeleton Preview");
-            ImGui::Separator();
-
-            const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
-            sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
-            sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
-            UpdateSceneCamera(sceneData, ImGui::GetIO().DeltaTime);
-
-            Ref<Texture> previewTexture = sceneData.compositeRT ? sceneData.compositeRT->GetColorAttachment(0) : nullptr;
-            if (previewTexture && previewTexture->GetHandle())
-            {
-                const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
-                ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
-                sceneData.viewportHovered = ImGui::IsItemHovered();
-
-                ImGui::SetCursorScreenPos(ImVec2(viewportPos.x + 8.0f, viewportPos.y + 8.0f));
-                ImGui::TextDisabled(
-                    "RTTex=%p | RT=%p | %ux%u",
-                    reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()),
-                    sceneData.compositeRT.get(),
-                    sceneData.viewportWidth,
-                    sceneData.viewportHeight);
-
-                const glm::mat4 viewProjection = sceneData.camera.GetProjection() * sceneData.camera.GetView();
-                const Rect viewportRect{ viewportPos.x, viewportPos.y, viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y };
-                const bool hasPreviewPose = previewState.previewGlobalTransforms.size() == skeleton->joints.size();
-
-                auto getJointGlobal = [&](int32_t jointId) -> const glm::mat4 &
-                {
-                    if (hasPreviewPose && jointId >= 0 && jointId < static_cast<int32_t>(previewState.previewGlobalTransforms.size()))
-                    {
-                        return previewState.previewGlobalTransforms[static_cast<size_t>(jointId)];
-                    }
-                    return skeleton->joints[static_cast<size_t>(jointId)].globalTransform;
-                };
-
-                const bool hasSelectedJoint = selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(skeleton->joints.size());
-                const bool hasSelectedSocket = selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size());
-                const bool useSocketGizmo = previewState.gizmoTarget == 1 && hasSelectedSocket;
-                const bool previewViewportFocused = sceneData.viewportHovered && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
-
-                bool isPreviewGizmoManipulating = false;
-                bool isPreviewGizmoHovered = false;
-
-                if (previewViewportFocused && (useSocketGizmo || hasSelectedJoint))
-                {
-                    GizmoInfo gizmoInfo;
-                    gizmoInfo.cameraView = sceneData.camera.GetView();
-                    gizmoInfo.cameraProjection = sceneData.camera.GetProjection();
-                    gizmoInfo.cameraType = sceneData.camera.projectionType;
-                    gizmoInfo.snapValue = 0.05f;
-                    gizmoInfo.isSnapping = false;
-                    gizmoInfo.viewRect = viewportRect;
-
-                    s_SkeletonPreviewGizmo.SetInfo(gizmoInfo);
-                    s_SkeletonPreviewGizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
-                    s_SkeletonPreviewGizmo.SetMode(ImGuizmo::MODE::LOCAL);
-
-                    glm::mat4 gizmoTransform = glm::mat4(1.0f);
-                    if (useSocketGizmo)
-                    {
-                        const JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
-                        const glm::mat4 socketLocal = socket.GetLocalTransform();
-                        if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
-                        {
-                            gizmoTransform = getJointGlobal(socket.parentJointId) * socketLocal;
-                        }
-                        else
-                        {
-                            gizmoTransform = socketLocal;
-                        }
-                    }
-                    else
-                    {
-                        gizmoTransform = getJointGlobal(selectedJoint);
-                    }
-
-                    s_SkeletonPreviewGizmo.Manipulate(gizmoTransform);
-                    isPreviewGizmoManipulating = s_SkeletonPreviewGizmo.IsManipulating();
-                    isPreviewGizmoHovered = s_SkeletonPreviewGizmo.IsHovered();
-
-                    if (isPreviewGizmoManipulating)
-                    {
-                        if (useSocketGizmo)
-                        {
-                            JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
-                            glm::mat4 parentWorld = glm::mat4(1.0f);
-                            if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
-                            {
-                                parentWorld = getJointGlobal(socket.parentJointId);
-                            }
-
-                            const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
-                            glm::vec3 localTranslation, localEuler, localScale;
-                            Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                            socket.localTranslation = localTranslation;
-                            socket.localRotation = glm::quat(localEuler);
-                            socket.localScale = localScale;
-                        }
-                        else if (hasSelectedJoint)
-                        {
-                            Joint &joint = skeleton->joints[static_cast<size_t>(selectedJoint)];
-                            glm::mat4 parentWorld = glm::mat4(1.0f);
-                            if (joint.parentJointId >= 0 && joint.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
-                            {
-                                parentWorld = getJointGlobal(joint.parentJointId);
-                            }
-
-                            const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
-                            glm::vec3 localTranslation, localEuler, localScale;
-                            Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                            joint.defaultTranslation = localTranslation;
-                            joint.defaultRotation = glm::quat(localEuler);
-                            joint.defaultScale = localScale;
-                            joint.localTransform = glm::translate(glm::mat4(1.0f), joint.defaultTranslation)
-                                * glm::toMat4(joint.defaultRotation)
-                                * glm::scale(glm::mat4(1.0f), joint.defaultScale);
-                        }
-
-                        skeleton->SetDirtyFlag(true);
-                    }
-                }
-
-                if (sceneData.viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)
-                    && !isPreviewGizmoManipulating && !isPreviewGizmoHovered)
-                {
-                    const ImVec2 mousePos = ImGui::GetMousePos();
-                    int32_t pickedJoint = -1;
-                    float bestDistanceSq = 64.0f;
-
-                    for (const Joint &joint : skeleton->joints)
-                    {
-                        ImVec2 jointPos;
-                        if (!Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
-                        {
-                            continue;
-                        }
-
-                        const float dx = jointPos.x - mousePos.x;
-                        const float dy = jointPos.y - mousePos.y;
-                        const float distanceSq = dx * dx + dy * dy;
-                        if (distanceSq < bestDistanceSq)
-                        {
-                            bestDistanceSq = distanceSq;
-                            pickedJoint = joint.id;
-                        }
-                    }
-
-                    if (pickedJoint >= 0)
-                    {
-                        selectedJoint = pickedJoint;
-                    }
-                }
-
-                ImDrawList *drawList = ImGui::GetWindowDrawList();
-                for (const Joint &joint : skeleton->joints)
-                {
-                    if (joint.parentJointId < 0 || joint.parentJointId >= static_cast<int32_t>(skeleton->joints.size()))
-                    {
-                        continue;
-                    }
-
-                    const Joint &parent = skeleton->joints[static_cast<size_t>(joint.parentJointId)];
-
-                    ImVec2 childPos, parentPos;
-                    if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, childPos)
-                        && Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(parent.id)[3]), viewProjection, viewportRect, parentPos))
-                    {
-                        const bool selectedLink = (joint.id == selectedJoint || parent.id == selectedJoint);
-                        drawList->AddLine(parentPos, childPos, selectedLink ? IM_COL32(255, 180, 30, 255) : IM_COL32(50, 220, 255, 190), selectedLink ? 2.5f : 1.5f);
-                    }
-                }
-
-                for (const Joint &joint : skeleton->joints)
-                {
-                    ImVec2 jointPos;
-                    if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
-                    {
-                        const bool selected = joint.id == selectedJoint;
-                        drawList->AddCircleFilled(jointPos, selected ? 5.0f : 3.0f, selected ? IM_COL32(255, 120, 20, 255) : IM_COL32(255, 255, 255, 230));
-                    }
-                }
-            }
-            else
-            {
-                ImGui::Dummy(viewportSize);
-                sceneData.viewportHovered = ImGui::IsItemHovered();
-            }
-        }
-        ImGui::EndChild();
-
-        ImGui::SameLine();
-
-        if (ImGui::BeginChild("##skeleton_right_details", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders))
-        {
-            ImGui::TextUnformatted("Joint / Socket Details");
-            ImGui::Separator();
-
-            const char *gizmoTargets[] = { "Joint", "Socket" };
-            if (ImGui::Combo("Gizmo Target", &previewState.gizmoTarget, gizmoTargets, IM_ARRAYSIZE(gizmoTargets)))
-            {
-                if (previewState.gizmoTarget == 1 && (selectedSocket < 0 || selectedSocket >= static_cast<int32_t>(skeleton->sockets.size())))
-                {
-                    previewState.gizmoTarget = 0;
-                }
-            }
-
-            if (selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(skeleton->joints.size()))
-            {
-                const Joint &joint = skeleton->joints[static_cast<size_t>(selectedJoint)];
-                ImGui::TextDisabled("Selected Joint: %s (id: %d)", joint.name.c_str(), joint.id);
-            }
-
-            if (previewState.gizmoTarget == 1)
-            {
-                if (selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size()))
-                {
-                    ImGui::TextDisabled("Selected Socket: %s", skeleton->sockets[static_cast<size_t>(selectedSocket)].name.c_str());
-                }
-                else
-                {
-                    ImGui::TextDisabled("Selected Socket: <none>");
-                }
-            }
-
-            ImGui::SeparatorText("Joint Sockets");
-
-            ImGui::Button("Drop Preview Mesh (.mesh)", ImVec2(-1.0f, 0.0f));
-            if (ImGui::BeginDragDropTarget())
-            {
-                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                {
-                    if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                    {
-                        const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-                        const AssetMetaData &md = assetManager->GetMetaData(droppedHandle);
-                        if (md.type == AssetType::Mesh)
-                        {
-                            previewState.previewMeshHandle = droppedHandle;
-                            previewState.cachedPreviewMesh.reset();
-                        }
-                    }
-                }
-                ImGui::EndDragDropTarget();
-            }
-            ImGui::TextDisabled("Preview Mesh Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(previewState.previewMeshHandle)));
-            if (ImGui::SmallButton("Clear Preview Mesh"))
-            {
-                previewState.previewMeshHandle = AssetHandle(0);
-                previewState.cachedPreviewMesh.reset();
-            }
-
-            ImGui::Separator();
-            ImGui::Button("Drop Preview Animation (.ixanim)", ImVec2(-1.0f, 0.0f));
-            if (ImGui::BeginDragDropTarget())
-            {
-                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
-                {
-                    if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                    {
-                        const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-                        const AssetMetaData &md = assetManager->GetMetaData(droppedHandle);
-                        if (md.type == AssetType::SkeletalAnimation)
-                        {
-                            previewState.previewAnimationHandle = droppedHandle;
-                            previewState.timeSeconds = 0.0f;
-                            previewState.playing = true;
-                        }
-                    }
-                }
-                ImGui::EndDragDropTarget();
-            }
-            ImGui::TextDisabled("Preview Animation Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(previewState.previewAnimationHandle)));
-
-            if (ImGui::Button(previewState.playing ? "Pause" : "Play"))
-            {
-                previewState.playing = !previewState.playing;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Stop"))
-            {
-                previewState.playing = false;
-                previewState.timeSeconds = 0.0f;
-            }
-            ImGui::SameLine();
-            ImGui::Checkbox("Loop", &previewState.loop);
-
-            if (ImGui::Button("Add Socket") && selectedJoint >= 0)
-            {
-                JointSocket socket;
-                socket.name = std::format("Socket_{}", skeleton->sockets.size());
-                socket.parentJointId = selectedJoint;
-                skeleton->sockets.push_back(std::move(socket));
-                skeleton->RebuildSocketMap();
-                selectedSocket = static_cast<int32_t>(skeleton->sockets.size()) - 1;
-                skeleton->SetDirtyFlag(true);
-            }
-
-            if (ImGui::BeginChild("##skeleton_socket_list", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders))
-            {
-                for (int32_t i = 0; i < static_cast<int32_t>(skeleton->sockets.size()); ++i)
-                {
-                    const JointSocket &socket = skeleton->sockets[static_cast<size_t>(i)];
-                    std::string row = socket.name;
-                    if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
-                    {
-                        row += std::format(" -> {}", skeleton->joints[static_cast<size_t>(socket.parentJointId)].name);
-                    }
-
-                    if (ImGui::Selectable(std::format("{}##socket_row_{}", row, i).c_str(), selectedSocket == i))
-                    {
-                        selectedSocket = i;
-                        if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
-                        {
-                            selectedJoint = socket.parentJointId;
-                        }
-                    }
-                }
-            }
-            ImGui::EndChild();
-
-            if (selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size()))
-            {
-                JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
-
-                char nameBuf[256]{};
-                std::strncpy(nameBuf, socket.name.c_str(), sizeof(nameBuf) - 1);
-                if (ImGui::InputText("Socket Name", nameBuf, sizeof(nameBuf)))
-                {
-                    socket.name = nameBuf;
-                    skeleton->RebuildSocketMap();
-                    skeleton->SetDirtyFlag(true);
-                }
-
-                int parentJoint = socket.parentJointId;
-                std::string parentJointLabel = "None";
-                if (parentJoint >= 0 && parentJoint < static_cast<int32_t>(skeleton->joints.size()))
-                {
-                    parentJointLabel = skeleton->joints[static_cast<size_t>(parentJoint)].name;
-                }
-
-                if (ImGui::BeginCombo("Parent Joint", parentJointLabel.c_str()))
-                {
-                    for (const Joint &joint : skeleton->joints)
-                    {
-                        const bool selected = parentJoint == joint.id;
-                        if (ImGui::Selectable(joint.name.c_str(), selected))
-                        {
-                            socket.parentJointId = joint.id;
-                            skeleton->SetDirtyFlag(true);
-                        }
-                    }
-                    ImGui::EndCombo();
-                }
-
-                if (ImGui::DragFloat3("Socket Translation", &socket.localTranslation.x, 0.01f))
-                {
-                    skeleton->SetDirtyFlag(true);
-                }
-
-                glm::vec3 eulerDeg = glm::degrees(glm::eulerAngles(socket.localRotation));
-                if (ImGui::DragFloat3("Socket Rotation", &eulerDeg.x, 0.1f))
-                {
-                    socket.localRotation = glm::quat(glm::radians(eulerDeg));
-                    skeleton->SetDirtyFlag(true);
-                }
-
-                if (ImGui::DragFloat3("Socket Scale", &socket.localScale.x, 0.01f, 0.001f, 1000.0f))
-                {
-                    skeleton->SetDirtyFlag(true);
-                }
-
-                if (ImGui::Button("Remove Socket"))
-                {
-                    skeleton->sockets.erase(skeleton->sockets.begin() + selectedSocket);
-                    skeleton->RebuildSocketMap();
-                    selectedSocket = skeleton->sockets.empty() ? -1 : std::min(selectedSocket, static_cast<int32_t>(skeleton->sockets.size()) - 1);
-                    skeleton->SetDirtyFlag(true);
-                }
-            }
-        }
-        ImGui::EndChild();
     }
 
     void AssetEditorPanel::UISkeletonEditor(AssetEditorData &assetData)
@@ -4966,7 +4095,530 @@ namespace ignite
                 {
                     if (Ref<Skeleton> skeleton = assetData.asset->As<Skeleton>())
                     {
-                        UISkeletonEditor(skeleton, assetData.sceneData);
+                        auto project = m_EditorLayer->GetActiveProject().get();
+                        auto assetManager = project->GetAssetManager();
+
+                        const uint64_t key = static_cast<uint64_t>(skeleton->handle);
+                        static std::unordered_map<uint64_t, int32_t> s_SelectedJoint;
+                        static std::unordered_map<uint64_t, int32_t> s_SelectedSocket;
+                        static std::unordered_map<uint64_t, int32_t> s_LastAutoScrolledJoint;
+                        SkeletonPreviewEditorState &previewState = s_SkeletonPreviewEditorState[key];
+
+                        if (previewState.previewMeshHandle == AssetHandle(0))
+                        {
+                            const AssetHandle matchedMeshHandle = FindFirstMeshHandleForSkeleton(project, skeleton->handle);
+                            if (matchedMeshHandle != AssetHandle(0))
+                            {
+                                previewState.previewMeshHandle = matchedMeshHandle;
+                                previewState.cachedPreviewMesh.reset();
+                            }
+                        }
+
+                        int32_t &selectedJoint = s_SelectedJoint[key];
+                        int32_t &selectedSocket = s_SelectedSocket[key];
+                        int32_t &lastAutoScrolledJoint = s_LastAutoScrolledJoint[key];
+
+                        if (assetData.sceneData.sceneRenderer)
+                        {
+                            if (previewState.previewMeshHandle != AssetHandle(0))
+                            {
+                                const AssetType previewMeshType = assetManager->GetAssetType(previewState.previewMeshHandle);
+
+                                if (previewMeshType == AssetType::Mesh)
+                                {
+                                    Ref<Mesh> mesh = project->GetAsset<Mesh>(previewState.previewMeshHandle);
+                                    if (!mesh)
+                                    {
+                                        mesh = project->GetAssetImmediate<Mesh>(previewState.previewMeshHandle);
+                                    }
+                                    assetData.sceneData.sceneRenderer->SetPreviewMesh(mesh);
+                                }
+                            }
+                            else
+                            {
+                                assetData.sceneData.sceneRenderer->SetPreviewMesh(s_DefaultMeshes[CUBE]);
+                            }
+                        }
+
+                        if (selectedJoint >= static_cast<int32_t>(skeleton->joints.size()))
+                        {
+                            selectedJoint = skeleton->joints.empty() ? -1 : 0;
+                        }
+                        if (selectedJoint < 0)
+                        {
+                            lastAutoScrolledJoint = -1;
+                        }
+                        if (selectedSocket >= static_cast<int32_t>(skeleton->sockets.size()))
+                        {
+                            selectedSocket = skeleton->sockets.empty() ? -1 : 0;
+                        }
+
+                        ImGui::Text("Joints: %zu | Sockets: %zu", skeleton->joints.size(), skeleton->sockets.size());
+                        ImGui::Separator();
+
+                        std::vector<std::vector<int32_t>> children(skeleton->joints.size());
+                        for (const Joint &joint : skeleton->joints)
+                        {
+                            if (joint.parentJointId >= 0 && joint.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+                            {
+                                children[static_cast<size_t>(joint.parentJointId)].push_back(joint.id);
+                            }
+                        }
+
+                        const float totalWidth = ImGui::GetContentRegionAvail().x;
+                        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+                        const float listWidth = std::max(260.0f, totalWidth * 0.28f);
+                        const float detailsWidth = std::max(320.0f, totalWidth * 0.30f);
+                        const float viewportWidth = std::max(220.0f, totalWidth - listWidth - detailsWidth - spacing * 2.0f);
+
+                        if (ImGui::BeginChild("##skeleton_left_list", ImVec2(listWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX))
+                        {
+                            ImGui::TextUnformatted("Skeleton Tree");
+                            ImGui::Separator();
+
+                            std::function<void(int32_t)> drawJointNode = [&](int32_t jointId)
+                            {
+                                if (jointId < 0 || jointId >= static_cast<int32_t>(skeleton->joints.size()))
+                                {
+                                    return;
+                                }
+
+                                const Joint &joint = skeleton->joints[static_cast<size_t>(jointId)];
+                                const bool isSelected = selectedJoint == jointId;
+                                const bool hasChildren = !children[static_cast<size_t>(jointId)].empty();
+
+                                ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
+                                if (!hasChildren)
+                                {
+                                    flags |= ImGuiTreeNodeFlags_Leaf;
+                                }
+                                if (isSelected)
+                                {
+                                    flags |= ImGuiTreeNodeFlags_Selected;
+                                }
+
+                                const bool opened = ImGui::TreeNodeEx(reinterpret_cast<void *>(static_cast<intptr_t>(jointId + 1)), flags, "%s", joint.name.c_str());
+                                if (ImGui::IsItemClicked())
+                                {
+                                    selectedJoint = jointId;
+                                }
+
+                                if (selectedJoint == jointId && lastAutoScrolledJoint != selectedJoint)
+                                {
+                                    if (!ImGui::IsItemVisible())
+                                    {
+                                        ImGui::SetScrollHereY(0.5f);
+                                    }
+
+                                    lastAutoScrolledJoint = selectedJoint;
+                                }
+
+                                if (opened)
+                                {
+                                    for (int32_t childJointId : children[static_cast<size_t>(jointId)])
+                                    {
+                                        drawJointNode(childJointId);
+                                    }
+                                    ImGui::TreePop();
+                                }
+                            };
+
+                            for (const Joint &joint : skeleton->joints)
+                            {
+                                if (joint.parentJointId == -1)
+                                {
+                                    drawJointNode(joint.id);
+                                }
+                            }
+                        }
+                        ImGui::EndChild();
+
+                        ImGui::SameLine();
+
+                        if (ImGui::BeginChild("##skeleton_preview_view", ImVec2(viewportWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX))
+                        {
+                            ImGui::TextUnformatted("Mesh + Skeleton Preview");
+                            ImGui::Separator();
+
+                            const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+                            assetData.sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
+                            assetData.sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
+                            UpdateSceneCamera(assetData.sceneData, ImGui::GetIO().DeltaTime);
+
+                            Ref<Texture> previewTexture = assetData.sceneData.compositeRT ? assetData.sceneData.compositeRT->GetColorAttachment(0) : nullptr;
+                            if (previewTexture && previewTexture->GetHandle())
+                            {
+                                const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
+                                ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+                                assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
+
+                                ImGui::SetCursorScreenPos(ImVec2(viewportPos.x + 8.0f, viewportPos.y + 8.0f));
+                                ImGui::TextDisabled(
+                                    "RTTex=%p | RT=%p | %ux%u",
+                                    reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()),
+                                    assetData.sceneData.compositeRT.get(),
+                                    assetData.sceneData.viewportWidth,
+                                    assetData.sceneData.viewportHeight);
+
+                                const glm::mat4 viewProjection = assetData.sceneData.camera.GetProjection() * assetData.sceneData.camera.GetView();
+                                const Rect viewportRect { viewportPos.x, viewportPos.y, viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y };
+                                const bool hasPreviewPose = previewState.previewGlobalTransforms.size() == skeleton->joints.size();
+
+                                auto getJointGlobal = [&](int32_t jointId) -> const glm::mat4 &
+                                {
+                                    if (hasPreviewPose && jointId >= 0 && jointId < static_cast<int32_t>(previewState.previewGlobalTransforms.size()))
+                                    {
+                                        return previewState.previewGlobalTransforms[static_cast<size_t>(jointId)];
+                                    }
+                                    return skeleton->joints[static_cast<size_t>(jointId)].globalTransform;
+                                };
+
+                                const bool hasSelectedJoint = selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(skeleton->joints.size());
+                                const bool hasSelectedSocket = selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size());
+                                const bool useSocketGizmo = previewState.gizmoTarget == 1 && hasSelectedSocket;
+                                const bool previewViewportFocused = assetData.sceneData.viewportHovered && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+
+                                bool isPreviewGizmoManipulating = false;
+                                bool isPreviewGizmoHovered = false;
+
+                                if (previewViewportFocused && (useSocketGizmo || hasSelectedJoint))
+                                {
+                                    GizmoInfo gizmoInfo;
+                                    gizmoInfo.cameraView = assetData.sceneData.camera.GetView();
+                                    gizmoInfo.cameraProjection = assetData.sceneData.camera.GetProjection();
+                                    gizmoInfo.cameraType = assetData.sceneData.camera.projectionType;
+                                    gizmoInfo.snapValue = 0.05f;
+                                    gizmoInfo.isSnapping = false;
+                                    gizmoInfo.viewRect = viewportRect;
+
+                                    s_SkeletonPreviewGizmo.SetInfo(gizmoInfo);
+                                    s_SkeletonPreviewGizmo.SetOperation(ImGuizmo::OPERATION::TRANSLATE);
+                                    s_SkeletonPreviewGizmo.SetMode(ImGuizmo::MODE::LOCAL);
+
+                                    glm::mat4 gizmoTransform = glm::mat4(1.0f);
+                                    if (useSocketGizmo)
+                                    {
+                                        const JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
+                                        const glm::mat4 socketLocal = socket.GetLocalTransform();
+                                        if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+                                        {
+                                            gizmoTransform = getJointGlobal(socket.parentJointId) * socketLocal;
+                                        }
+                                        else
+                                        {
+                                            gizmoTransform = socketLocal;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        gizmoTransform = getJointGlobal(selectedJoint);
+                                    }
+
+                                    s_SkeletonPreviewGizmo.Manipulate(gizmoTransform);
+                                    isPreviewGizmoManipulating = s_SkeletonPreviewGizmo.IsManipulating();
+                                    isPreviewGizmoHovered = s_SkeletonPreviewGizmo.IsHovered();
+
+                                    if (isPreviewGizmoManipulating)
+                                    {
+                                        if (useSocketGizmo)
+                                        {
+                                            JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
+                                            glm::mat4 parentWorld = glm::mat4(1.0f);
+                                            if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+                                            {
+                                                parentWorld = getJointGlobal(socket.parentJointId);
+                                            }
+
+                                            const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
+                                            glm::vec3 localTranslation, localEuler, localScale;
+                                            Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                                            socket.localTranslation = localTranslation;
+                                            socket.localRotation = glm::quat(localEuler);
+                                            socket.localScale = localScale;
+                                        }
+                                        else if (hasSelectedJoint)
+                                        {
+                                            Joint &joint = skeleton->joints[static_cast<size_t>(selectedJoint)];
+                                            glm::mat4 parentWorld = glm::mat4(1.0f);
+                                            if (joint.parentJointId >= 0 && joint.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+                                            {
+                                                parentWorld = getJointGlobal(joint.parentJointId);
+                                            }
+
+                                            const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
+                                            glm::vec3 localTranslation, localEuler, localScale;
+                                            Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
+                                            joint.defaultTranslation = localTranslation;
+                                            joint.defaultRotation = glm::quat(localEuler);
+                                            joint.defaultScale = localScale;
+                                            joint.localTransform = glm::translate(glm::mat4(1.0f), joint.defaultTranslation)
+                                                * glm::toMat4(joint.defaultRotation)
+                                                * glm::scale(glm::mat4(1.0f), joint.defaultScale);
+                                        }
+
+                                        skeleton->SetDirtyFlag(true);
+                                    }
+                                }
+
+                                if (assetData.sceneData.viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)
+                                    && !isPreviewGizmoManipulating && !isPreviewGizmoHovered)
+                                {
+                                    const ImVec2 mousePos = ImGui::GetMousePos();
+                                    int32_t pickedJoint = -1;
+                                    float bestDistanceSq = 64.0f;
+
+                                    for (const Joint &joint : skeleton->joints)
+                                    {
+                                        ImVec2 jointPos;
+                                        if (!Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
+                                        {
+                                            continue;
+                                        }
+
+                                        const float dx = jointPos.x - mousePos.x;
+                                        const float dy = jointPos.y - mousePos.y;
+                                        const float distanceSq = dx * dx + dy * dy;
+                                        if (distanceSq < bestDistanceSq)
+                                        {
+                                            bestDistanceSq = distanceSq;
+                                            pickedJoint = joint.id;
+                                        }
+                                    }
+
+                                    if (pickedJoint >= 0)
+                                    {
+                                        selectedJoint = pickedJoint;
+                                    }
+                                }
+
+                                ImDrawList *drawList = ImGui::GetWindowDrawList();
+                                for (const Joint &joint : skeleton->joints)
+                                {
+                                    if (joint.parentJointId < 0 || joint.parentJointId >= static_cast<int32_t>(skeleton->joints.size()))
+                                    {
+                                        continue;
+                                    }
+
+                                    const Joint &parent = skeleton->joints[static_cast<size_t>(joint.parentJointId)];
+
+                                    ImVec2 childPos, parentPos;
+                                    if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, childPos)
+                                        && Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(parent.id)[3]), viewProjection, viewportRect, parentPos))
+                                    {
+                                        const bool selectedLink = (joint.id == selectedJoint || parent.id == selectedJoint);
+                                        drawList->AddLine(parentPos, childPos, selectedLink ? IM_COL32(255, 180, 30, 255) : IM_COL32(50, 220, 255, 190), selectedLink ? 2.5f : 1.5f);
+                                    }
+                                }
+
+                                for (const Joint &joint : skeleton->joints)
+                                {
+                                    ImVec2 jointPos;
+                                    if (Math::ProjectWorldToScreen(glm::vec3(getJointGlobal(joint.id)[3]), viewProjection, viewportRect, jointPos))
+                                    {
+                                        const bool selected = joint.id == selectedJoint;
+                                        drawList->AddCircleFilled(jointPos, selected ? 5.0f : 3.0f, selected ? IM_COL32(255, 120, 20, 255) : IM_COL32(255, 255, 255, 230));
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                ImGui::Dummy(viewportSize);
+                                assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
+                            }
+                        }
+                        ImGui::EndChild();
+
+                        ImGui::SameLine();
+
+                        if (ImGui::BeginChild("##skeleton_right_details", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders))
+                        {
+                            ImGui::TextUnformatted("Joint / Socket Details");
+                            ImGui::Separator();
+
+                            const char *gizmoTargets[] = { "Joint", "Socket" };
+                            if (ImGui::Combo("Gizmo Target", &previewState.gizmoTarget, gizmoTargets, IM_ARRAYSIZE(gizmoTargets)))
+                            {
+                                if (previewState.gizmoTarget == 1 && (selectedSocket < 0 || selectedSocket >= static_cast<int32_t>(skeleton->sockets.size())))
+                                {
+                                    previewState.gizmoTarget = 0;
+                                }
+                            }
+
+                            if (selectedJoint >= 0 && selectedJoint < static_cast<int32_t>(skeleton->joints.size()))
+                            {
+                                const Joint &joint = skeleton->joints[static_cast<size_t>(selectedJoint)];
+                                ImGui::TextDisabled("Selected Joint: %s (id: %d)", joint.name.c_str(), joint.id);
+                            }
+
+                            if (previewState.gizmoTarget == 1)
+                            {
+                                if (selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size()))
+                                {
+                                    ImGui::TextDisabled("Selected Socket: %s", skeleton->sockets[static_cast<size_t>(selectedSocket)].name.c_str());
+                                }
+                                else
+                                {
+                                    ImGui::TextDisabled("Selected Socket: <none>");
+                                }
+                            }
+
+                            ImGui::SeparatorText("Joint Sockets");
+
+                            ImGui::Button("Drop Preview Mesh (.mesh)", ImVec2(-1.0f, 0.0f));
+                            if (ImGui::BeginDragDropTarget())
+                            {
+                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                {
+                                    if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                                    {
+                                        const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                                        const AssetMetaData &md = assetManager->GetMetaData(droppedHandle);
+                                        if (md.type == AssetType::Mesh)
+                                        {
+                                            previewState.previewMeshHandle = droppedHandle;
+                                            previewState.cachedPreviewMesh.reset();
+                                        }
+                                    }
+                                }
+                                ImGui::EndDragDropTarget();
+                            }
+                            ImGui::TextDisabled("Preview Mesh Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(previewState.previewMeshHandle)));
+                            if (ImGui::SmallButton("Clear Preview Mesh"))
+                            {
+                                previewState.previewMeshHandle = AssetHandle(0);
+                                previewState.cachedPreviewMesh.reset();
+                            }
+
+                            ImGui::Separator();
+                            ImGui::Button("Drop Preview Animation (.ixanim)", ImVec2(-1.0f, 0.0f));
+                            if (ImGui::BeginDragDropTarget())
+                            {
+                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                {
+                                    if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                                    {
+                                        const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                                        const AssetMetaData &md = assetManager->GetMetaData(droppedHandle);
+                                        if (md.type == AssetType::SkeletalAnimation)
+                                        {
+                                            previewState.previewAnimationHandle = droppedHandle;
+                                            previewState.timeSeconds = 0.0f;
+                                            previewState.playing = true;
+                                        }
+                                    }
+                                }
+                                ImGui::EndDragDropTarget();
+                            }
+                            ImGui::TextDisabled("Preview Animation Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(previewState.previewAnimationHandle)));
+
+                            if (ImGui::Button(previewState.playing ? "Pause" : "Play"))
+                            {
+                                previewState.playing = !previewState.playing;
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::Button("Stop"))
+                            {
+                                previewState.playing = false;
+                                previewState.timeSeconds = 0.0f;
+                            }
+                            ImGui::SameLine();
+                            ImGui::Checkbox("Loop", &previewState.loop);
+
+                            if (ImGui::Button("Add Socket") && selectedJoint >= 0)
+                            {
+                                JointSocket socket;
+                                socket.name = std::format("Socket_{}", skeleton->sockets.size());
+                                socket.parentJointId = selectedJoint;
+                                skeleton->sockets.push_back(std::move(socket));
+                                skeleton->RebuildSocketMap();
+                                selectedSocket = static_cast<int32_t>(skeleton->sockets.size()) - 1;
+                                skeleton->SetDirtyFlag(true);
+                            }
+
+                            if (ImGui::BeginChild("##skeleton_socket_list", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders))
+                            {
+                                for (int32_t i = 0; i < static_cast<int32_t>(skeleton->sockets.size()); ++i)
+                                {
+                                    const JointSocket &socket = skeleton->sockets[static_cast<size_t>(i)];
+                                    std::string row = socket.name;
+                                    if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+                                    {
+                                        row += std::format(" -> {}", skeleton->joints[static_cast<size_t>(socket.parentJointId)].name);
+                                    }
+
+                                    if (ImGui::Selectable(std::format("{}##socket_row_{}", row, i).c_str(), selectedSocket == i))
+                                    {
+                                        selectedSocket = i;
+                                        if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
+                                        {
+                                            selectedJoint = socket.parentJointId;
+                                        }
+                                    }
+                                }
+                            }
+                            ImGui::EndChild();
+
+                            if (selectedSocket >= 0 && selectedSocket < static_cast<int32_t>(skeleton->sockets.size()))
+                            {
+                                JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
+
+                                char nameBuf[256] {};
+                                std::strncpy(nameBuf, socket.name.c_str(), sizeof(nameBuf) - 1);
+                                if (ImGui::InputText("Socket Name", nameBuf, sizeof(nameBuf)))
+                                {
+                                    socket.name = nameBuf;
+                                    skeleton->RebuildSocketMap();
+                                    skeleton->SetDirtyFlag(true);
+                                }
+
+                                int parentJoint = socket.parentJointId;
+                                std::string parentJointLabel = "None";
+                                if (parentJoint >= 0 && parentJoint < static_cast<int32_t>(skeleton->joints.size()))
+                                {
+                                    parentJointLabel = skeleton->joints[static_cast<size_t>(parentJoint)].name;
+                                }
+
+                                if (ImGui::BeginCombo("Parent Joint", parentJointLabel.c_str()))
+                                {
+                                    for (const Joint &joint : skeleton->joints)
+                                    {
+                                        const bool selected = parentJoint == joint.id;
+                                        if (ImGui::Selectable(joint.name.c_str(), selected))
+                                        {
+                                            socket.parentJointId = joint.id;
+                                            skeleton->SetDirtyFlag(true);
+                                        }
+                                    }
+                                    ImGui::EndCombo();
+                                }
+
+                                if (ImGui::DragFloat3("Socket Translation", &socket.localTranslation.x, 0.01f))
+                                {
+                                    skeleton->SetDirtyFlag(true);
+                                }
+
+                                glm::vec3 eulerDeg = glm::degrees(glm::eulerAngles(socket.localRotation));
+                                if (ImGui::DragFloat3("Socket Rotation", &eulerDeg.x, 0.1f))
+                                {
+                                    socket.localRotation = glm::quat(glm::radians(eulerDeg));
+                                    skeleton->SetDirtyFlag(true);
+                                }
+
+                                if (ImGui::DragFloat3("Socket Scale", &socket.localScale.x, 0.01f, 0.001f, 1000.0f))
+                                {
+                                    skeleton->SetDirtyFlag(true);
+                                }
+
+                                if (ImGui::Button("Remove Socket"))
+                                {
+                                    skeleton->sockets.erase(skeleton->sockets.begin() + selectedSocket);
+                                    skeleton->RebuildSocketMap();
+                                    selectedSocket = skeleton->sockets.empty() ? -1 : std::min(selectedSocket, static_cast<int32_t>(skeleton->sockets.size()) - 1);
+                                    skeleton->SetDirtyFlag(true);
+                                }
+                            }
+                        }
+                        ImGui::EndChild();
                     }
                     else
                     {
@@ -4997,7 +4649,50 @@ namespace ignite
                 {
                     if (Ref<SkeletalAnimation> animation = assetData.asset->As<SkeletalAnimation>())
                     {
-                        UISkeletalAnimationEditor(animation);
+                        auto project = m_EditorLayer->GetActiveProject().get();
+                        auto assetManager = project->GetAssetManager();
+
+                        ImGui::Text("Name: %s", animation->name.c_str());
+                        ImGui::Text("Duration: %.3f", animation->duration);
+                        ImGui::Text("Ticks Per Second: %.3f", animation->ticksPerSeconds);
+                        ImGui::Text("Channels: %zu", animation->channels.size());
+
+                        const AssetHandle skeletonHandle = AssetHandle(animation->GetSkeletonHandle());
+                        if (skeletonHandle != AssetHandle(0))
+                        {
+                            const AssetMetaData &skeletonMetadata = assetManager->GetMetaData(skeletonHandle);
+                            if (skeletonMetadata.type == AssetType::Skeleton)
+                            {
+                                ImGui::Text("Skeleton: %s", skeletonMetadata.filepath.generic_string().c_str());
+                            }
+                            else
+                            {
+                                ImGui::Text("Skeleton Handle: %llu", static_cast<uint64_t>(skeletonHandle));
+                            }
+                        }
+                        else
+                        {
+                            ImGui::Text("Skeleton: <none>");
+                        }
+
+                        ImGui::Button("Drop Skeleton Here", ImVec2(220.0f, 0.0f));
+                        if (ImGui::BeginDragDropTarget())
+                        {
+                            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
+                            {
+                                if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                                {
+                                    const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                                    const AssetMetaData &droppedMetadata = assetManager->GetMetaData(droppedHandle);
+                                    if (droppedMetadata.type == AssetType::Skeleton)
+                                    {
+                                        animation->SetSkeletonHandle(UUID(static_cast<uint64_t>(droppedHandle)));
+                                        animation->SetDirtyFlag(true);
+                                    }
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
                     }
                     else
                     {
@@ -5015,59 +4710,6 @@ namespace ignite
         ImGui::End();
         assetData.isOpen = isOpen;
         assetData.requestFocus = false;
-    }
-
-    void AssetEditorPanel::UISkeletalAnimationEditor(const Ref<SkeletalAnimation> &animation)
-    {
-        ImGui::Text("Name: %s", animation->name.c_str());
-        ImGui::Text("Duration: %.3f", animation->duration);
-        ImGui::Text("Ticks Per Second: %.3f", animation->ticksPerSeconds);
-        ImGui::Text("Channels: %zu", animation->channels.size());
-
-        Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
-        if (!project)
-        {
-            return;
-        }
-
-        auto assetManager = project->GetAssetManager();
-
-        const AssetHandle skeletonHandle = AssetHandle(animation->GetSkeletonHandle());
-        if (skeletonHandle != AssetHandle(0))
-        {
-            const AssetMetaData &skeletonMetadata = assetManager->GetMetaData(skeletonHandle);
-            if (skeletonMetadata.type == AssetType::Skeleton)
-            {
-                ImGui::Text("Skeleton: %s", skeletonMetadata.filepath.generic_string().c_str());
-            }
-            else
-            {
-                ImGui::Text("Skeleton Handle: %llu", static_cast<uint64_t>(skeletonHandle));
-            }
-        }
-        else
-        {
-            ImGui::Text("Skeleton: <none>");
-        }
-
-        ImGui::Button("Drop Skeleton Here", ImVec2(220.0f, 0.0f));
-        if (ImGui::BeginDragDropTarget())
-        {
-            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("content_browser_item"))
-            {
-                if (payload->Data && payload->DataSize == sizeof(AssetHandle))
-                {
-                    const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
-                    const AssetMetaData &droppedMetadata = assetManager->GetMetaData(droppedHandle);
-                    if (droppedMetadata.type == AssetType::Skeleton)
-                    {
-                        animation->SetSkeletonHandle(UUID(static_cast<uint64_t>(droppedHandle)));
-                        animation->SetDirtyFlag(true);
-                    }
-                }
-            }
-            ImGui::EndDragDropTarget();
-        }
     }
 
 #pragma endregion !3D_STUFF
@@ -5301,7 +4943,7 @@ namespace ignite
             }
             case AssetType::Widget:
             {
-                Ref<Widget> widget = assetData.asset->As<Widget>();
+                Ref<WidgetCanvas> widget = assetData.asset->As<WidgetCanvas>();
                 if (!widget)
                 {
                     return false;
@@ -5578,7 +5220,7 @@ namespace ignite
 
         if (m_CreateRequest.type == AssetType::Widget)
         {
-            m_CreateRequest.asset = CreateRef<Widget>(nullptr);
+            m_CreateRequest.asset = CreateRef<WidgetCanvas>(nullptr);
             std::memcpy(m_CreateRequest.nameBuffer, "NewWidget", sizeof("NewWidget"));
         }
 

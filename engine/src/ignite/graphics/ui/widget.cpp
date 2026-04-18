@@ -1,166 +1,45 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #include "widget.hpp"
+#include "widget_container.hpp"
 #include "ignite/serializer/serializer.hpp"
+#include "ignite/asset/asset_manager.hpp"
+#include "ignite/core/input/input.hpp"
+#include "ignite/graphics/renderer/renderer_2d.hpp"
+#include "ignite/graphics/font.hpp"
+#include "ignite/graphics/texture.hpp"
+
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
+#include <unordered_map>
 
 namespace ignite
 {
-    IWidgetItem::IWidgetItem(Widget *widget)
-        : m_Widget(widget)
-    {
-
-    }
-
-    Rect IWidgetItem::GetAlignedRect() const
-    {
-        Rect alignedRect = m_Rect;
-        glm::vec2 &position = alignedRect.min;
-        glm::vec2 &size = alignedRect.max;
-        
-        const auto &vpSizeI = m_Widget->GetViewportSize();
-        const glm::vec2 viewportSize = { static_cast<float>(vpSizeI.x), static_cast<float>(vpSizeI.y) };
-        
-        switch (m_Alignment)
-        {
-            case WidgetAlignment::TOP_CENTER:
-                position.x = viewportSize.x / 2.0f + m_Rect.min.x - m_Rect.GetSize().x / 2.0f;
-                size.x = viewportSize.x / 2.0f + m_Rect.min.x + m_Rect.GetSize().x / 2.0f;
-            break;
-            case WidgetAlignment::TOP_RIGHT:
-                position.x = viewportSize.x - m_Rect.min.x - m_Rect.GetSize().x;
-                size.x = viewportSize.x - m_Rect.min.x;
-                break;
-            case WidgetAlignment::CENTER_LEFT:
-                position.y = viewportSize.y / 2.0f + m_Rect.min.y - m_Rect.GetSize().y / 2.0f;
-                size.y = viewportSize.y / 2.0f + m_Rect.min.y + m_Rect.GetSize().y / 2.0f;
-                break;
-            case WidgetAlignment::CENTER:
-                position.x = viewportSize.x / 2.0f + m_Rect.min.x - m_Rect.GetSize().x / 2.0f;
-                size.x = viewportSize.x / 2.0f + m_Rect.min.x + m_Rect.GetSize().x / 2.0f;
-                position.y = viewportSize.y / 2.0f + m_Rect.min.y - m_Rect.GetSize().y / 2.0f;
-                size.y = viewportSize.y / 2.0f + m_Rect.min.y + m_Rect.GetSize().y / 2.0f;
-                break;
-            case WidgetAlignment::CENTER_RIGHT:
-                position.x = viewportSize.x - m_Rect.min.x - m_Rect.GetSize().x;
-                size.x = viewportSize.x - m_Rect.min.x;
-                position.y = viewportSize.y / 2.0f + m_Rect.min.y - m_Rect.GetSize().y / 2.0f;
-                size.y = viewportSize.y / 2.0f + m_Rect.min.y + m_Rect.GetSize().y / 2.0f;
-                break;
-            case WidgetAlignment::BOTTOM_LEFT:
-                position.y = viewportSize.y - m_Rect.max.y;
-                size.y = viewportSize.y - m_Rect.min.y;
-                break;
-            case WidgetAlignment::BOTTOM_CENTER:
-                position.x = viewportSize.x / 2.0f + m_Rect.min.x - m_Rect.GetSize().x / 2.0f;
-                size.x = viewportSize.x / 2.0f + m_Rect.min.x + m_Rect.GetSize().x / 2.0f;
-                position.y = viewportSize.y - m_Rect.max.y;
-                size.y = viewportSize.y - m_Rect.min.y;
-                break;
-            case WidgetAlignment::BOTTOM_RIGHT:
-                position.x = viewportSize.x - m_Rect.min.x - m_Rect.GetSize().x;
-                size.x = viewportSize.x - m_Rect.min.x; 
-                position.y = viewportSize.y - m_Rect.max.y;
-                size.y = viewportSize.y - m_Rect.min.y;
-                break;
-            case WidgetAlignment::TOP_LEFT:
-            default: break;
-        }
-
-        return alignedRect;
-    }
-
-    WidgetButton::WidgetButton(Widget *widget, const std::string &text)
-        : IWidgetItem(widget), m_Text(text)
-    {
-        m_NormalColor = glm::vec4(0.3f, 0.3f, 0.3f, 1.0f);
-        m_HoverColor = glm::vec4(0.5f, 0.5f, 0.5f, 1.0f);
-        m_PressedColor = glm::vec4(0.2f, 0.2f, 0.2f, 1.0f);
-        m_TextColor = UI_COLOR_WHITE;
-        m_BorderColor = glm::vec4(0.6f, 0.6f, 0.6f, 1.0f);
-    }
-
-    WidgetButton::~WidgetButton()
-    {
-    }
-
-    void WidgetButton::Update(float deltaTime, const glm::uvec2 &mousePos)
-    {
-        bool wasHovered = m_IsHovered;
-        m_IsHovered = Contains(mousePos);
-
-        if (m_IsHovered && !wasHovered && m_OnHoverEnter)
-        {
-            m_OnHoverEnter();
-        }
-        else if (!m_IsHovered && wasHovered && m_OnHoverExit)
-        {
-            m_OnHoverExit();
-        }
-    }
-
-    void WidgetButton::OnMouseClick(const glm::uvec2 &mousePos, bool isPressed)
-    {
-        if (Contains(mousePos))
-        {
-            if (isPressed)
-            {
-                m_IsPressed = true;
-                if (m_OnPressed)
-                {
-                    m_OnPressed();
-                }
-            }
-            else if (m_IsPressed)
-            {
-                m_IsPressed = false;
-                if (m_OnClick)
-                {
-                    m_OnClick();
-                }
-                if (m_OnReleased)
-                {
-                    m_OnReleased();
-                }
-            }
-        }
-        else if (!isPressed)
-        {
-            m_IsPressed = false;
-        }
-    }
-
-    const glm::vec4 &WidgetButton::GetCurrentColor() const
-    {
-        if (m_IsPressed)
-            return m_PressedColor;
-        if (m_IsHovered)
-            return m_HoverColor;
-        return m_NormalColor;
-    }
-
-    Widget::Widget(Scene *scene)
+    // =====================================
+    // CANVAS IMPLEMENTATION
+    WidgetCanvas::WidgetCanvas(Scene *scene)
         : m_Scene(scene), m_ViewportSize({ 1280, 720 })
     {
     }
 
-    Widget::~Widget()
+    WidgetCanvas::~WidgetCanvas()
     {
     }
 
-    void Widget::Update(float deltaTime, const glm::uvec2 &mousePos)
+    void WidgetCanvas::Update(float deltaTime, const glm::uvec2 &mousePos)
     {
-        for (auto &[id, item] : m_WidgetItems)
+        if (!m_Root)
         {
-            if (item && item->IsVisible())
-            {
-                item->Update(deltaTime, mousePos);
-            }
+            return;
         }
+
+        m_Root->Measure();
+        m_Root->Arrange(Rect(0.0f, 0.0f, static_cast<float>(m_ViewportSize.x), static_cast<float>(m_ViewportSize.y)));
+        m_Root->Update(deltaTime, glm::vec2(mousePos));
     }
 
-    bool Widget::Serialize(const std::filesystem::path &filepath)
+    bool WidgetCanvas::Serialize(const std::filesystem::path &filepath)
     {
         Serializer sr(filepath);
         sr.BeginMap();
@@ -173,7 +52,7 @@ namespace ignite
         sr.AddKeyValue("NextItemId", m_NextWidgetItemId);
 
         sr.BeginSequence("Items");
-        for (const auto &[id, item] : m_WidgetItems)
+        for (const auto &[_, item] : m_WidgetItems)
         {
             if (!item)
             {
@@ -181,34 +60,58 @@ namespace ignite
             }
 
             sr.BeginMap();
-            sr.AddKeyValue("ID", id);
-            sr.AddKeyValue("Type", static_cast<int>(item->GetItemType()));
-            sr.AddKeyValue("Rect", item->GetRect());
-            sr.AddKeyValue("Alignment", static_cast<int>(item->GetAlignment()));
-            sr.AddKeyValue("Visible", item->IsVisible());
+            sr.AddKeyValue("ID", item->id);
+            sr.AddKeyValue("ParentID", item->parent ? item->parent->id : 0);
+            sr.AddKeyValue("Type", static_cast<int>(item->GetWidgetType()));
+            sr.AddKeyValue("Position", item->position);
+            sr.AddKeyValue("Size", item->size);
+            sr.AddKeyValue("Alignment", static_cast<int>(item->alignment));
+            sr.AddKeyValue("SizingMode", static_cast<int>(item->sizingMode));
+            sr.AddKeyValue("Visible", item->visible);
 
-            if (item->GetItemType() == WidgetItemType::Button)
+            if (item->GetWidgetType() == WidgetType::Container)
+            {
+                if (const Ref<WidgetContainer> container = item->As<WidgetContainer>())
+                {
+                    sr.AddKeyValue("Layout", static_cast<int>(container->layout));
+                    sr.AddKeyValue("Padding", container->padding);
+                    sr.AddKeyValue("Gap", container->gap);
+                }
+            }
+
+            if (item->GetWidgetType() == WidgetType::Button)
             {
                 if (const Ref<WidgetButton> button = item->As<WidgetButton>())
                 {
-                    sr.AddKeyValue("Text", button->GetText());
-                    sr.AddKeyValue("ImageHandle", static_cast<uint64_t>(button->GetImageHandle()));
-                    sr.AddKeyValue("NormalColor", button->GetNormalColor());
-                    sr.AddKeyValue("HoverColor", button->GetHoverColor());
-                    sr.AddKeyValue("PressedColor", button->GetPressedColor());
-                    sr.AddKeyValue("TextColor", button->GetTextColor());
-                    sr.AddKeyValue("BorderColor", button->GetBorderColor());
+                    sr.AddKeyValue("ImageHandle", static_cast<uint64_t>(button->imageHandle));
+                    sr.AddKeyValue("NormalColor", button->normalColor);
+                    sr.AddKeyValue("HoverColor", button->hoverColor);
+                    sr.AddKeyValue("PressedColor", button->pressedColor);
+                    sr.AddKeyValue("BorderColor", button->borderColor);
+                    
+                    if (button->label)
+                    {
+                        sr.AddKeyValue("Text", button->label->text);
+                        sr.AddKeyValue("FontHandle", static_cast<uint64_t>(button->label->fontHandle));
+                        sr.AddKeyValue("Color", button->label->color);
+                        sr.AddKeyValue("FontSize", button->label->fontSize);
+                        sr.AddKeyValue("Kerning", button->label->kerning);
+                        sr.AddKeyValue("LineSpacing", button->label->lineSpacing);
+                    }
+                    
                 }
             }
-            else if (item->GetItemType() == WidgetItemType::Text)
+
+            if (item->GetWidgetType() == WidgetType::Label)
             {
-                if (const Ref<WidgetText> text = item->As<WidgetText>())
+                if (const Ref<WidgetLabel> label = item->As<WidgetLabel>())
                 {
-                    sr.AddKeyValue("Text", text->GetText());
-                    sr.AddKeyValue("Color", text->GetColor());
-                    sr.AddKeyValue("FontHandle", static_cast<uint64_t>(text->GetFontHandle()));
-                    sr.AddKeyValue("Kerning", text->GetKerning());
-                    sr.AddKeyValue("LineSpacing", text->GetLineSpacing());
+                    sr.AddKeyValue("Text", label->text);
+                    sr.AddKeyValue("Color", label->color);
+                    sr.AddKeyValue("FontHandle", static_cast<uint64_t>(label->fontHandle));
+                    sr.AddKeyValue("FontSize", label->fontSize);
+                    sr.AddKeyValue("Kerning", label->kerning);
+                    sr.AddKeyValue("LineSpacing", label->lineSpacing);
                 }
             }
 
@@ -235,7 +138,7 @@ namespace ignite
         return true;
     }
 
-    Ref<Widget> Widget::Deserialize(const std::filesystem::path &filepath)
+    Ref<WidgetCanvas> WidgetCanvas::Deserialize(const std::filesystem::path &filepath)
     {
         if (!std::filesystem::exists(filepath))
         {
@@ -249,13 +152,14 @@ namespace ignite
             return nullptr;
         }
 
-        Ref<Widget> widget = CreateRef<Widget>(nullptr);
+        Ref<WidgetCanvas> widget = CreateRef<WidgetCanvas>(nullptr);
         if (widgetNode["Name"]) widget->name = widgetNode["Name"].as<std::string>();
         if (widgetNode["Enabled"]) widget->m_Enabled = widgetNode["Enabled"].as<bool>();
         if (widgetNode["BlocksWidgetsBelow"]) widget->m_BlocksWidgetsBelow = widgetNode["BlocksWidgetsBelow"].as<bool>();
         if (widgetNode["NextItemId"]) widget->m_NextWidgetItemId = widgetNode["NextItemId"].as<int>();
 
         widget->m_WidgetItems.clear();
+        std::unordered_map<int, int> parentMap;
         if (YAML::Node itemsNode = widgetNode["Items"]; itemsNode && itemsNode.IsSequence())
         {
             for (const YAML::Node &itemNode : itemsNode)
@@ -266,37 +170,48 @@ namespace ignite
                 }
 
                 const int id = itemNode["ID"].as<int>();
-                const WidgetItemType type = static_cast<WidgetItemType>(itemNode["Type"].as<int>());
+                const int parentId = itemNode["ParentID"] ? itemNode["ParentID"].as<int>() : 0;
+                const WidgetType type = static_cast<WidgetType>(itemNode["Type"].as<int>());
+                
+
                 Ref<IWidgetItem> item = nullptr;
 
                 switch (type)
                 {
-                    case WidgetItemType::Button: item = CreateRef<WidgetButton>(widget.get()); break;
-                    case WidgetItemType::Text: item = CreateRef<WidgetText>(widget.get()); break;
-                    default: break;
+                    case WidgetType::Container:
+                        item = CreateRef<WidgetContainer>();
+                        break;
+                    case WidgetType::Button:
+                        item = CreateRef<WidgetButton>("");
+                        break;
+                    case WidgetType::Label:
+                        item = CreateRef<WidgetLabel>("");
+                        break;
+                    default:
+                        break;
                 }
 
                 if (!item)
-                {
                     continue;
+
+                item->id = id;
+                if (auto n = itemNode["Position"]) item->position = n.as<glm::vec2>();
+                if (auto n = itemNode["Size"]) item->size = n.as<glm::vec2>();
+                if (auto n = itemNode["Alignment"]) item->alignment = static_cast<WidgetAlignment>(n.as<int>());
+                if (auto n = itemNode["SizingMode"]) item->sizingMode = static_cast<SizingMode>(n.as<int>());
+                if (auto n = itemNode["Visible"]) item->visible = n.as<bool>();
+
+                if (type == WidgetType::Container)
+                {
+                    if (Ref<WidgetContainer> container = item->As<WidgetContainer>())
+                    {
+                        if (itemNode["Layout"]) container->layout = static_cast<LayoutMode>(itemNode["Layout"].as<int>());
+                        if (itemNode["Padding"]) container->padding = itemNode["Padding"].as<float>();
+                        if (itemNode["Gap"]) container->gap = itemNode["Gap"].as<float>();
+                    }
                 }
 
-                if (itemNode["Rect"])
-                {
-                    const Rect rect = itemNode["Rect"].as<Rect>();
-                    item->SetPosition(rect.min);
-                    item->SetSize(rect.GetSize());
-                }
-                if (itemNode["Alignment"])
-                {
-                    item->SetAlignment(static_cast<WidgetAlignment>(itemNode["Alignment"].as<int>()));
-                }
-                if (itemNode["Visible"])
-                {
-                    item->SetVisible(itemNode["Visible"].as<bool>());
-                }
-
-                if (type == WidgetItemType::Button)
+                if (type == WidgetType::Button)
                 {
                     if (Ref<WidgetButton> button = item->As<WidgetButton>())
                     {
@@ -312,11 +227,15 @@ namespace ignite
                         button->SetColors(normal, hover, pressed);
                         if (itemNode["TextColor"]) button->SetTextColor(itemNode["TextColor"].as<glm::vec4>());
                         if (itemNode["BorderColor"]) button->SetBorderColor(itemNode["BorderColor"].as<glm::vec4>());
+                        if (itemNode["FontHandle"]) button->SetFontHandle(AssetHandle(itemNode["FontHandle"].as<uint64_t>()));
+                        if (itemNode["FontSize"]) button->SetFontSize(itemNode["FontSize"].as<float>());
+                        if (itemNode["Kerning"]) button->SetKerning(itemNode["Kerning"].as<float>());
+                        if (itemNode["LineSpacing"]) button->SetLineSpacing(itemNode["LineSpacing"].as<float>());
                     }
                 }
-                else if (type == WidgetItemType::Text)
+                else if (type == WidgetType::Label)
                 {
-                    if (Ref<WidgetText> text = item->As<WidgetText>())
+                    if (Ref<WidgetLabel> text = item->As<WidgetLabel>())
                     {
                         if (itemNode["Text"]) text->SetText(itemNode["Text"].as<std::string>());
                         if (itemNode["Color"]) text->SetColor(itemNode["Color"].as<glm::vec4>());
@@ -327,8 +246,36 @@ namespace ignite
                 }
 
                 widget->m_WidgetItems[id] = item;
+                parentMap[id] = parentId;
                 widget->m_NextWidgetItemId = std::max(widget->m_NextWidgetItemId, id + 1);
             }
+        }
+
+        for (auto &[id, item] : widget->m_WidgetItems)
+        {
+            if (!item)
+            {
+                continue;
+            }
+
+            const auto parentIt = parentMap.find(id);
+            if (parentIt == parentMap.end() || parentIt->second == 0)
+            {
+                if (item->GetWidgetType() == WidgetType::Container && !widget->m_Root)
+                {
+                    widget->m_Root = item->As<WidgetContainer>();
+                }
+                continue;
+            }
+
+            const auto ownerIt = widget->m_WidgetItems.find(parentIt->second);
+            if (ownerIt == widget->m_WidgetItems.end() || !ownerIt->second)
+            {
+                continue;
+            }
+
+            item->parent = ownerIt->second.get();
+            ownerIt->second->children.push_back(item);
         }
 
         widget->m_ChildWidgets.clear();
@@ -349,7 +296,7 @@ namespace ignite
         return widget;
     }
 
-    int Widget::GetNextItemId()
+    int WidgetCanvas::GetNextItemId()
     {
         while (m_WidgetItems.contains(m_NextWidgetItemId))
         {
@@ -358,23 +305,399 @@ namespace ignite
         return m_NextWidgetItemId++;
     }
 
-    int Widget::AddButton(const std::string &text)
+    int WidgetCanvas::AddButton(WidgetContainer *container, const std::string &text)
     {
         const int id = GetNextItemId();
-        m_WidgetItems[id] = CreateRef<WidgetButton>(this, text);
+        Ref<WidgetButton> button = CreateRef<WidgetButton>(text);
+        button->id = id;
+
+        if (container)
+        {
+            button->parent = container;
+            container->children.push_back(button);
+        }
+
+        m_WidgetItems[id] = button;
         return id;
     }
 
-    int Widget::AddText(const std::string &text)
+    int WidgetCanvas::AddLabel(WidgetContainer *container, const std::string &text)
     {
         const int id = GetNextItemId();
-        m_WidgetItems[id] = CreateRef<WidgetText>(this, text);
+        Ref<WidgetLabel> label = CreateRef<WidgetLabel>(text);
+        label->id = id;
+
+        if (container)
+        {
+            label->parent = container;
+            container->children.push_back(label);
+        }
+
+        m_WidgetItems[id] = label;
         return id;
     }
 
-    bool Widget::RemoveItem(int id)
+    int WidgetCanvas::AddContainer(WidgetContainer *container)
     {
+        const int id = GetNextItemId();
+        Ref<WidgetContainer> child = CreateRef<WidgetContainer>();
+        child->id = id;
+
+        if (container)
+        {
+            child->parent = container;
+            container->children.push_back(child);
+        }
+
+        m_WidgetItems[id] = child;
+        return id;
+    }
+
+    WidgetContainer *WidgetCanvas::CreateRoot(uint32_t width, uint32_t height)
+    {
+        if (!m_Root)
+        {
+            const int id = GetNextItemId();
+            m_Root = CreateRef<WidgetContainer>();
+            m_Root->id = id;
+            m_Root->sizingMode = SizingMode::ExpandToParent;
+            m_WidgetItems[id] = m_Root;
+        }
+
+        m_Root->position = glm::vec2(0.0f);
+        if (m_Root->sizingMode == SizingMode::ExpandToParent)
+        {
+            m_Root->size = glm::vec2(0.0f);
+        }
+        else
+        {
+            m_Root->size = glm::vec2(static_cast<float>(width), static_cast<float>(height));
+        }
+        return m_Root.get();
+    }
+
+    bool WidgetCanvas::RemoveItem(int id)
+    {
+        const auto it = m_WidgetItems.find(id);
+        if (it == m_WidgetItems.end())
+        {
+            return false;
+        }
+
+        const Ref<IWidgetItem> item = it->second;
+        if (item && item->parent)
+        {
+            auto &siblings = item->parent->children;
+            siblings.erase(std::remove_if(siblings.begin(), siblings.end(), [&](const Ref<IWidgetItem> &child)
+            {
+                return child.get() == item.get();
+            }), siblings.end());
+        }
+
+        if (item && m_Root && m_Root.get() == item.get())
+        {
+            m_Root = nullptr;
+        }
+
         return m_WidgetItems.erase(id) > 0;
+    }
+
+    // ===================================
+    // LABEL IMPLEMENTATION
+    WidgetLabel::WidgetLabel(const std::string &text)
+        : text(text)
+    {
+        color = UI_COLOR_WHITE;
+    }
+
+    void WidgetLabel::Draw(Renderer2D *renderer, AssetManager *assetManager)
+    {
+        if (!visible || !renderer || !assetManager)
+            return;
+
+        if (fontHandle == AssetHandle(0) || text.empty())
+        {
+            IWidgetItem::Draw(renderer, assetManager);
+            return;
+        }
+
+        Ref<Asset> fontAsset = assetManager->GetAsset(fontHandle, AssetType::Font);
+        if (!fontAsset)
+            return;
+
+        Ref<Font> font = fontAsset ? fontAsset->As<Font>() : nullptr;
+        if (!font)
+        {
+            IWidgetItem::Draw(renderer, assetManager);
+            return;
+        }
+
+        const Rect rect = GetAlignedRect();
+        const glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(rect.min, 0.0f));
+        renderer->DrawString(text, font, color, transform, kerning, lineSpacing);
+
+        IWidgetItem::Draw(renderer, assetManager);
+    }
+
+    void WidgetLabel::Measure()
+    {
+        if (size.x < 0.0f)
+            size.x = 0.0f;
+
+        if (size.y < 0.0f)
+            size.y = 0.0f;
+    }
+
+    void WidgetLabel::Arrange(const Rect &parentRect)
+    {
+        worldRect = CalculateAlignedRect(parentRect);
+    }
+
+    bool WidgetLabel::HitTest(int px, int py)
+    {
+        return worldRect.Contains(glm::vec2(static_cast<float>(px), static_cast<float>(py)));
+    }
+
+    void WidgetLabel::Update(float deltaTime, const glm::vec2 &mousePosition)
+    {
+        (void)deltaTime;
+        (void)mousePosition;
+    }
+
+    // ==================================
+    // BUTTON IMPLEMENTATION
+    WidgetButton::WidgetButton(const std::string &text)
+        : label(CreateScope<WidgetLabel>(text))
+    {
+        normalColor = UI_COLOR_DARK_GRAY;
+        hoverColor = UI_COLOR_GRAY;
+        pressedColor = UI_COLOR_DARK_GRAY;
+        borderColor = UI_COLOR_GRAY;
+    }
+
+    WidgetButton::~WidgetButton()
+    {
+    }
+
+    const glm::vec4 &WidgetButton::GetCurrentColor() const
+    {
+        if (pressed)
+            return pressedColor;
+        if (hovered)
+            return hoverColor;
+        return normalColor;
+    }
+
+    void WidgetButton::SetText(const std::string &text)
+    {
+        if (label)
+        {
+            label->SetText(text);
+        }
+    }
+
+    const std::string &WidgetButton::GetText() const
+    {
+        static const std::string empty;
+        return label ? label->GetText() : empty;
+    }
+
+    void WidgetButton::SetColors(const glm::vec4 &normal, const glm::vec4 &hover, const glm::vec4 &pressedColor_)
+    {
+        normalColor = normal;
+        hoverColor = hover;
+        pressedColor = pressedColor_;
+    }
+
+    void WidgetButton::SetTextColor(const glm::vec4 &textColor)
+    {
+        if (label)
+        {
+            label->SetColor(textColor);
+        }
+    }
+
+    const glm::vec4 &WidgetButton::GetTextColor() const
+    {
+        static const glm::vec4 fallbackTextColor = glm::vec4(UI_COLOR_WHITE);
+        return label ? label->GetColor() : fallbackTextColor;
+    }
+
+    void WidgetButton::SetFontHandle(AssetHandle handle)
+    {
+        if (label)
+        {
+            label->SetFontHandle(handle);
+        }
+    }
+
+    AssetHandle WidgetButton::GetFontHandle() const
+    {
+        return label ? label->GetFontHandle() : AssetHandle(0);
+    }
+
+    void WidgetButton::SetFontSize(float newFontSize)
+    {
+        if (label)
+        {
+            label->SetFontSize(newFontSize);
+        }
+    }
+
+    float WidgetButton::GetFontSize() const
+    {
+        return label ? label->GetFontSize() : 16.0f;
+    }
+
+    void WidgetButton::SetKerning(float newKerning)
+    {
+        if (label)
+        {
+            label->SetKerning(newKerning);
+        }
+    }
+
+    float WidgetButton::GetKerning() const
+    {
+        return label ? label->GetKerning() : 0.0f;
+    }
+
+    void WidgetButton::SetLineSpacing(float newLineSpacing)
+    {
+        if (label)
+        {
+            label->SetLineSpacing(newLineSpacing);
+        }
+    }
+
+    float WidgetButton::GetLineSpacing() const
+    {
+        return label ? label->GetLineSpacing() : -0.025f;
+    }
+
+    void WidgetButton::OnMouseClick(const glm::uvec2 &mousePos, bool isPressed)
+    {
+        const bool contains = HitTest(static_cast<int>(mousePos.x), static_cast<int>(mousePos.y));
+
+        if (contains != hovered)
+        {
+            if (contains)
+            {
+                if (IWidgetItem::m_OnHoverEnter)
+                {
+                    IWidgetItem::m_OnHoverEnter();
+                }
+            }
+            else if (IWidgetItem::m_OnHoverExit)
+            {
+                IWidgetItem::m_OnHoverExit();
+            }
+        }
+
+        hovered = contains;
+
+        if (contains && isPressed && !pressed)
+        {
+            pressed = true;
+            if (IWidgetItem::m_OnPressed)
+            {
+                IWidgetItem::m_OnPressed();
+            }
+            return;
+        }
+
+        if (pressed && !isPressed)
+        {
+            pressed = false;
+            if (contains && IWidgetItem::m_OnClick)
+            {
+                IWidgetItem::m_OnClick();
+            }
+
+            if (IWidgetItem::m_OnReleased)
+            {
+                IWidgetItem::m_OnReleased();
+            }
+        }
+    }
+
+    void WidgetButton::Draw(Renderer2D *renderer, AssetManager *assetManager)
+    {
+        if (!visible || !renderer)
+        {
+            return;
+        }
+
+        Ref<Texture> resolvedImage = image;
+        if (!resolvedImage && assetManager && imageHandle != AssetHandle(0))
+        {
+            Ref<Asset> imageAsset = assetManager->GetAsset(imageHandle, AssetType::Texture);
+            if (!imageAsset)
+                return;
+
+            if (imageAsset)
+            {
+                resolvedImage = imageAsset->As<Texture>();
+            }
+        }
+
+        const Rect &rect = GetAlignedRect();
+        renderer->DrawQuad(rect, 0.0f, GetCurrentColor(), resolvedImage, { 0.0f, 1.0f }, { 1.0f, 0.0f });
+
+        if (assetManager && GetFontHandle() != AssetHandle(0) && !GetText().empty())
+        {
+            Ref<Asset> fontAsset = assetManager->GetAsset(GetFontHandle(), AssetType::Font);
+            if (!fontAsset)
+                return;
+
+            Ref<Font> font = fontAsset ? fontAsset->As<Font>() : nullptr;
+            if (font)
+            {
+                const std::string &buttonText = GetText();
+                const float textKerning = GetKerning();
+                const float textLineSpacing = GetLineSpacing();
+                const float textFontSize = GetFontSize();
+
+                const glm::vec2 textSize = font->MeasureString(buttonText, textKerning, textLineSpacing);
+                const glm::vec2 scaledTextSize = textSize * textFontSize;
+                const glm::vec2 textPos =
+                {
+                    rect.min.x + (rect.GetSize().x - scaledTextSize.x) * 0.5f,
+                    rect.min.y + (rect.GetSize().y + scaledTextSize.y) * 0.25f
+                };
+
+                const glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(textPos, 0.0f))
+                    * glm::scale(glm::mat4(1.0f), glm::vec3(textFontSize, -textFontSize, 1.0f));
+                renderer->DrawString(buttonText, font, GetTextColor(), transform, textKerning, textLineSpacing);
+            }
+        }
+
+        IWidgetItem::Draw(renderer, assetManager);
+    }
+
+    void WidgetButton::Measure()
+    {
+        if (label)
+        {
+            label->Measure();
+        }
+    }
+
+    void WidgetButton::Arrange(const Rect &parentRect)
+    {
+        worldRect = CalculateAlignedRect(parentRect);
+    }
+
+    bool WidgetButton::HitTest(int px, int py)
+    {
+        return worldRect.Contains(glm::vec2(static_cast<float>(px), static_cast<float>(py)));
+    }
+
+    void WidgetButton::Update(float deltaTime, const glm::vec2 &mousePosition)
+    {
+        (void)deltaTime;
+        const bool mousePressed = Input::IsMouseButtonPressed(Mouse::ButtonLeft);
+        OnMouseClick(glm::uvec2(static_cast<uint32_t>(mousePosition.x), static_cast<uint32_t>(mousePosition.y)), mousePressed);
     }
 
 }

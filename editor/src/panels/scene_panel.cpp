@@ -253,7 +253,7 @@ namespace ignite
         }
         if (ImGui::MenuItem("Widget"))
         {
-            entity = SetSelectedEntity(SceneManager::CreateCamera(m_Scene.get(), "Widget"));
+            entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Widget"));
             if (entity.IsValid() && !entity.HasComponent<WidgetComponent>())
             {
                 entity.AddComponent<WidgetComponent>();
@@ -1426,7 +1426,7 @@ namespace ignite
 						c.text = textBuffer;
 					}
 
-                    UI::DrawVec4Control("Color", c.color, 0.001f, 1.0f);
+                    UI::DrawColorVec4("Color", c.color);
                     UI::DrawFloatControl("Kerning", &c.kerning, 0.001f, -10.0f, 10.0f);
                     UI::DrawFloatControl("Line Spacing", &c.lineSpacing, 0.001f, -10.0f, 10.0f);
                     UI::DrawCheckbox("Screen Space", &c.screenSpace);
@@ -1801,19 +1801,6 @@ namespace ignite
                     std::string search = stringutils::ToLower(compNameFilterResultStr);
                     for (const auto &[strName, type] : s_ComponentsName)
                     {
-                        /*bool found = false;
-                        for (int i = 0; i < CompType_LAST; ++i)
-                        {
-                            m_Scene->registry->
-                            if (entity->GetType() == type)
-                            {
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (found)
-                            continue;*/
-
                         std::string nameLower = stringutils::ToLower(strName);
                         if (nameLower.find(search) != std::string::npos)
                         {
@@ -1844,7 +1831,7 @@ namespace ignite
                     case CompType_DirectionalLight:
                         entity.AddComponent<DirectionalLightComponent>();
                         break;
-                    case CompType_Font:
+                    case CompType_Text:
                         entity.AddComponent<TextComponent>();
                         break;
                     case CompType_Widget:

@@ -481,6 +481,7 @@ namespace ignite
             {
                 case State::SceneSimulate:
                 case State::SceneEdit:
+                case State::ScenePlay:
                 {
                     ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
                     {
@@ -489,6 +490,7 @@ namespace ignite
                     }
                     break;
                 }
+#if 0
                 case State::ScenePlay:
                 {
                     ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
@@ -502,6 +504,7 @@ namespace ignite
                     }
                     break;
                 }
+#endif
             }
         }
 
@@ -544,7 +547,7 @@ namespace ignite
                 size_t packedStride = m_ScreenshotWidth * 4;
                 m_ScreenshotPixelData.resize(m_ScreenshotHeight * packedStride);
 
-                const uint8_t *src = static_cast<const uint8_t *>(mappedData);
+                const auto src = static_cast<const uint8_t *>(mappedData);
                 uint8_t *dst = m_ScreenshotPixelData.data();
 
                 for (int y = 0; y < m_ScreenshotHeight; ++y)

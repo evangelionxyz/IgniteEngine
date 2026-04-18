@@ -4,8 +4,7 @@
 #ifndef ANIMATOR_EDITOR_HPP
 #define ANIMATOR_EDITOR_HPP
 
-#include "../node/node_graph.hpp"
-
+#include "node/node_graph.hpp"
 #include "ignite/animation/animator/animator_controller.hpp"
 
 #include <string>

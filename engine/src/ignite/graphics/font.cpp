@@ -129,10 +129,75 @@ namespace ignite
         m_Glyphs.clear();
     }
 
-    Ref<Font> Font::Create(const std::filesystem::path &filepath)
-    {
-        return CreateRef<Font>(filepath);
-    }
+	Ref<Font> Font::Create(const std::filesystem::path &filepath)
+	{
+		return CreateRef<Font>(filepath);
+	}
+
+	glm::vec2 Font::MeasureString(const std::string &str, float kerning, float linespacing) const
+	{
+		double x = 0.0;
+		double y = 0.0;
+		double maxX = 0.0;
+		double minY = 0.0;
+
+		const auto &metrics = m_FontGeometry.getMetrics();
+		double fsScale = 1.0 / (metrics.ascenderY - metrics.descenderY);
+		const double spaceGlypAdvance = m_FontGeometry.getGlyph(' ')->getAdvance();
+
+		for (size_t i = 0; i < str.size(); ++i)
+		{
+			char character = str[i];
+			if (character == '\r') continue;
+
+			if (character == '\n')
+			{
+				maxX = std::max(maxX, x);
+				x = 0.0;
+				y -= fsScale * metrics.lineHeight + linespacing;
+				minY = std::min(minY, y);
+				continue;
+			}
+
+			if (character == ' ')
+			{
+				float advance = static_cast<float>(spaceGlypAdvance);
+				if (i < str.size() - 1)
+				{
+					char nextCharacter = str[i + 1];
+					double dAdvance;
+					m_FontGeometry.getAdvance(dAdvance, character, nextCharacter);
+					advance = static_cast<float>(dAdvance);
+				}
+				x += fsScale * advance + kerning;
+				continue;
+			}
+
+			if (character == '\t')
+			{
+				x += 4.0 * (fsScale * spaceGlypAdvance + kerning);
+				continue;
+			}
+
+			auto glyph = m_FontGeometry.getGlyph(character);
+			if (!glyph) glyph = m_FontGeometry.getGlyph('?');
+			if (!glyph) continue;
+
+			double advance = glyph->getAdvance();
+			if (i < str.size() - 1)
+			{
+				char nextCharacter = str[i + 1];
+				m_FontGeometry.getAdvance(advance, character, nextCharacter);
+			}
+			x += fsScale * advance + kerning;
+		}
+
+		maxX = std::max(maxX, x);
+		y -= fsScale * metrics.lineHeight;
+		minY = std::min(minY, y);
+
+		return glm::vec2(static_cast<float>(maxX), static_cast<float>(-minY));
+	}
 
 	void Font::LoadGlyphs(const std::filesystem::path &filepath)
 	{
@@ -204,8 +269,7 @@ namespace ignite
             }
         }
 
-
-      m_AtlasTexture = CreateAndCacheAtlas<float, float, 3, msdf_atlas::msdfGenerator>(m_Glyphs, width, height);
+        m_AtlasTexture = CreateAndCacheAtlas<float, float, 3, msdf_atlas::msdfGenerator>(m_Glyphs, width, height);
         SetReadyFlag(m_AtlasTexture && m_AtlasTexture->IsReady());
 
         msdfgen::destroyFont(font);

@@ -42,22 +42,6 @@
 
 namespace ignite
 {
-    CurrentWorkingDirectoryScope::CurrentWorkingDirectoryScope()
-        : CurrentWorkingDirectoryScope(std::filesystem::current_path())
-    {
-    }
-
-    CurrentWorkingDirectoryScope::CurrentWorkingDirectoryScope(const std::filesystem::path &path)
-        : m_PreviousPath(path)
-    {
-    }
-
-    CurrentWorkingDirectoryScope::~CurrentWorkingDirectoryScope()
-    {
-        std::error_code ec;
-        std::filesystem::current_path(m_PreviousPath, ec);
-    }
-
     // --- Executable helpers ---
 #ifdef PLATFORM_WINDOWS
     std::filesystem::path GetExecutablePath()
@@ -97,8 +81,6 @@ namespace ignite
 
     std::vector<std::string> FileDialogs::OpenFiles(const char *filter)
     {
-        CurrentWorkingDirectoryScope restore;
-
         OPENFILENAMEA ofn;
         CHAR szFile[8192] = { 0 };
         CHAR currentDir[256] = { 0 };
@@ -148,8 +130,6 @@ namespace ignite
 
     std::string FileDialogs::OpenFile(const char *filter)
     {
-        CurrentWorkingDirectoryScope restore;
-
         OPENFILENAMEA ofn;
         CHAR szFile[260] = { 0 };
         CHAR currentDir[256] = { 0 };
@@ -175,8 +155,6 @@ namespace ignite
 
     std::string FileDialogs::SelectFolder()
     {
-        CurrentWorkingDirectoryScope restore;
-
         std::string folderPath;
 
         IFileDialog *pFileDialog = nullptr;
@@ -221,8 +199,6 @@ namespace ignite
 
     std::string FileDialogs::SaveFile(const char *filter)
     {
-        CurrentWorkingDirectoryScope restore;
-
         OPENFILENAMEA ofn;
         CHAR szFile[260] = { 0 };
         CHAR currentDir[256] = { 0 };

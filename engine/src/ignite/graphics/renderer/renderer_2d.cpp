@@ -1422,13 +1422,13 @@ namespace ignite
         if (!font)
             return;
 
-        if (!font->GetAtlasTexture() || !font->GetAtlasTexture()->IsReady())
+        Ref<Texture> fontAtlasTexture = font->GetAtlasTexture();
+        if (!font || !font->IsReady())
             return;
 
         const auto &fontGeometry = font->GetGeometry();
         const auto &metrics = fontGeometry.getMetrics();
 
-        Ref<Texture> fontAtlasTexture = font->GetAtlasTexture();
 		uint32_t texIndex = GetOrInsertFontTexture(fontAtlasTexture);
 
         double x = 0.0;

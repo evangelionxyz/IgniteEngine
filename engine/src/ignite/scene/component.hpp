@@ -46,7 +46,7 @@ namespace ignite
         { "Sprite 2D", CompType_Sprite2D },
         { "Circle 2D", CompType_Circle2D },
         { "Point Light 2D", CompType_PointLight2D },
-        { "Font", CompType_Font },
+        { "Text", CompType_Text },
         { "Mesh", CompType_Mesh },
         { "Rigid Body", CompType_Rigidbody },
         { "Box Collider", CompType_BoxCollider },
@@ -164,6 +164,7 @@ namespace ignite
             case CompType_CapsuleCollider: return "CompType_CapsuleCollider";
             case CompType_MeshCollider: return "CompType_MeshCollider";
             case CompType_AudioSource: return "CompType_AudioSource";
+            case CompType_Text: return "CompType_Text";
             case CompType_Script: return "CompType_Script";
             case CompType_ID: return "CompType_ID";
             case CompType_Transform: return "CompType_Transform";
@@ -407,7 +408,7 @@ namespace ignite
 
         TextComponent() = default;
 
-		COMPONENT_CLASS_TYPE(CompType_Font)
+		COMPONENT_CLASS_TYPE(CompType_Text)
     };
 
     class WidgetComponent : public IComponent

@@ -99,7 +99,7 @@ namespace ignite
         }
     }
 
-    void AssetSceneRenderer::SetPreviewWidget(const Ref<Widget> &widget)
+    void AssetSceneRenderer::SetPreviewWidget(const Ref<WidgetCanvas> &widget)
     {
         m_PreviewWidget = widget;
         if (m_WidgetRenderer)

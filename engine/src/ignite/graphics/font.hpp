@@ -13,6 +13,7 @@
 #include <filesystem>
 
 #include <msdf-atlas-gen.h>
+#include <glm/glm.hpp>
 
 namespace ignite
 {
@@ -29,6 +30,8 @@ namespace ignite
         
         const std::vector<msdf_atlas::GlyphGeometry> &GetGlyphs() { return m_Glyphs; }
         const msdf_atlas::FontGeometry &GetGeometry() { return m_FontGeometry; }
+
+        glm::vec2 MeasureString(const std::string &str, float kerning = 0.0f, float linespacing = 0.0f) const;
 
         static AssetType GetStaticType() { return AssetType::Font; }
         AssetType GetAssetType() override { return GetStaticType(); }

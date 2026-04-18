@@ -9,7 +9,7 @@
 namespace ignite
 {
     class Project;
-    class Widget;
+    class WidgetCanvas;
     class WidgetRenderer;
 
     class AssetSceneRenderer : public ISceneRenderer
@@ -24,7 +24,7 @@ namespace ignite
         void SetBoneTransforms(const std::vector<glm::mat4> &boneTransforms);
         void SetEnvironmentTexture(const Ref<Texture> &texture);
         void SetProject(Project *project);
-        void SetPreviewWidget(const Ref<Widget> &widget);
+        void SetPreviewWidget(const Ref<WidgetCanvas> &widget);
         void SetWidgetPreviewMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered);
 
         void Render(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT);
@@ -38,7 +38,7 @@ namespace ignite
 
     private:
         Ref<Mesh> m_PreviewMesh;
-        Ref<Widget> m_PreviewWidget;
+        Ref<WidgetCanvas> m_PreviewWidget;
         Ref<WidgetRenderer> m_WidgetRenderer;
         Ref<Material> m_SourceMaterial;
         Ref<Material> m_RuntimeMaterial;
