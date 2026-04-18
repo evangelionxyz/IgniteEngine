@@ -21,6 +21,7 @@
 
 #include <fstream>
 #include <ranges>
+#include <algorithm>
 
 namespace ignite
 {    
@@ -448,6 +449,52 @@ namespace ignite
                         sr.AddKeyValue("Pan", comp.pan);
                         sr.AddKeyValue("PlayOnStart", comp.playOnStart);
                         sr.AddKeyValue("Loop", comp.loop);
+
+                        sr.BeginSequence("DSPs");
+                        for (const auto &dsp : comp.dsps)
+                        {
+                            sr.BeginMap();
+                            sr.AddKeyValue("Type", static_cast<int>(dsp.type));
+                            sr.AddKeyValue("Enabled", dsp.enabled);
+
+                            switch (dsp.type)
+                            {
+                                case AudioSourceComponent::DspType::Reverb:
+                                    sr.AddKeyValue("DecayTime", dsp.reverbDecayTime);
+                                    sr.AddKeyValue("EarlyDelay", dsp.reverbEarlyDelay);
+                                    sr.AddKeyValue("LateDelay", dsp.reverbLateDelay);
+                                    sr.AddKeyValue("HighFrequencyReference", dsp.reverbHighFrequencyReference);
+                                    sr.AddKeyValue("Diffusion", dsp.reverbDiffusion);
+                                    sr.AddKeyValue("Density", dsp.reverbDensity);
+                                    sr.AddKeyValue("LowShelfGain", dsp.reverbLowShelfGain);
+                                    sr.AddKeyValue("HighCut", dsp.reverbHighCut);
+                                    sr.AddKeyValue("DryLevel", dsp.reverbDryLevel);
+                                    sr.AddKeyValue("WetLevel", dsp.reverbWetLevel);
+                                    break;
+                                case AudioSourceComponent::DspType::Distortion:
+                                    sr.AddKeyValue("DistortionLevel", dsp.distortionLevel);
+                                    break;
+                                case AudioSourceComponent::DspType::Chorus:
+                                    sr.AddKeyValue("Mix", dsp.chorusMix);
+                                    sr.AddKeyValue("Rate", dsp.chorusRate);
+                                    sr.AddKeyValue("Depth", dsp.chorusDepth);
+                                    break;
+                                case AudioSourceComponent::DspType::Compressor:
+                                    sr.AddKeyValue("Threshold", dsp.compressorThreshold);
+                                    sr.AddKeyValue("Ratio", dsp.compressorRatio);
+                                    sr.AddKeyValue("Release", dsp.compressorRelease);
+                                    sr.AddKeyValue("GainMakeup", dsp.compressorGainMakeup);
+                                    sr.AddKeyValue("UseSidechain", dsp.compressorUseSidechain);
+                                    break;
+                                case AudioSourceComponent::DspType::Delay:
+                                    sr.AddKeyValue("DelayMs", dsp.delayMs);
+                                    sr.AddKeyValue("Feedback", dsp.delayFeedback);
+                                    break;
+                            }
+
+                            sr.EndMap();
+                        }
+                        sr.EndSequence();
                     }
                     sr.EndMap();
                 }
@@ -898,6 +945,55 @@ namespace ignite
                 if (auto n = node["Pan"]) comp.pan = node["Pan"].as<float>();
                 if (auto n = node["PlayOnStart"]) comp.playOnStart = node["PlayOnStart"].as<bool>();
                 if (auto n = node["Loop"]) comp.loop = node["Loop"].as<bool>();
+
+                comp.dsps.clear();
+                if (YAML::Node dspsNode = node["DSPs"]; dspsNode && dspsNode.IsSequence())
+                {
+                    for (const YAML::Node &dspNode : dspsNode)
+                    {
+                        AudioSourceComponent::DspSettings dsp;
+                        const int dspType = dspNode["Type"] ? dspNode["Type"].as<int>() : 0;
+                        dsp.type = static_cast<AudioSourceComponent::DspType>(std::clamp(dspType, 0, 4));
+                        if (dspNode["Enabled"]) dsp.enabled = dspNode["Enabled"].as<bool>();
+
+                        switch (dsp.type)
+                        {
+                            case AudioSourceComponent::DspType::Reverb:
+                                if (dspNode["DecayTime"]) dsp.reverbDecayTime = dspNode["DecayTime"].as<float>();
+                                if (dspNode["EarlyDelay"]) dsp.reverbEarlyDelay = dspNode["EarlyDelay"].as<float>();
+                                if (dspNode["LateDelay"]) dsp.reverbLateDelay = dspNode["LateDelay"].as<float>();
+                                if (dspNode["HighFrequencyReference"]) dsp.reverbHighFrequencyReference = dspNode["HighFrequencyReference"].as<float>();
+                                if (dspNode["Diffusion"]) dsp.reverbDiffusion = dspNode["Diffusion"].as<float>();
+                                if (dspNode["Density"]) dsp.reverbDensity = dspNode["Density"].as<float>();
+                                if (dspNode["LowShelfGain"]) dsp.reverbLowShelfGain = dspNode["LowShelfGain"].as<float>();
+                                if (dspNode["HighCut"]) dsp.reverbHighCut = dspNode["HighCut"].as<float>();
+                                if (dspNode["DryLevel"]) dsp.reverbDryLevel = dspNode["DryLevel"].as<float>();
+                                if (dspNode["WetLevel"]) dsp.reverbWetLevel = dspNode["WetLevel"].as<float>();
+                                break;
+                            case AudioSourceComponent::DspType::Distortion:
+                                if (dspNode["DistortionLevel"]) dsp.distortionLevel = dspNode["DistortionLevel"].as<float>();
+                                break;
+                            case AudioSourceComponent::DspType::Chorus:
+                                if (dspNode["Mix"]) dsp.chorusMix = dspNode["Mix"].as<float>();
+                                if (dspNode["Rate"]) dsp.chorusRate = dspNode["Rate"].as<float>();
+                                if (dspNode["Depth"]) dsp.chorusDepth = dspNode["Depth"].as<float>();
+                                break;
+                            case AudioSourceComponent::DspType::Compressor:
+                                if (dspNode["Threshold"]) dsp.compressorThreshold = dspNode["Threshold"].as<float>();
+                                if (dspNode["Ratio"]) dsp.compressorRatio = dspNode["Ratio"].as<float>();
+                                if (dspNode["Release"]) dsp.compressorRelease = dspNode["Release"].as<float>();
+                                if (dspNode["GainMakeup"]) dsp.compressorGainMakeup = dspNode["GainMakeup"].as<float>();
+                                if (dspNode["UseSidechain"]) dsp.compressorUseSidechain = dspNode["UseSidechain"].as<bool>();
+                                break;
+                            case AudioSourceComponent::DspType::Delay:
+                                if (dspNode["DelayMs"]) dsp.delayMs = dspNode["DelayMs"].as<float>();
+                                if (dspNode["Feedback"]) dsp.delayFeedback = dspNode["Feedback"].as<float>();
+                                break;
+                        }
+
+                        comp.dsps.push_back(dsp);
+                    }
+                }
             }
 
             // World Environment

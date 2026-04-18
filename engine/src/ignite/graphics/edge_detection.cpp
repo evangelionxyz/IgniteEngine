@@ -71,7 +71,7 @@ namespace ignite
 
         m_BindingLayout = device->createBindingLayout(layoutDesc);
 
-        m_Shader = Shader::Create("resources/shaders/sobel_edge_detection.compute.hlsl", ShaderType::Compute, true);
+        m_Shader = Shader::Create("resources/shaders/sobel_edge_detection.compute.hlsl", ShaderType::Compute, false);
     }
 
     EdgeDetection::~EdgeDetection()

@@ -94,12 +94,6 @@ namespace ignite
         m_Channel->setVolume(volume);
     }
 
-    void FmodSound::SetLoop(bool enable)
-    {
-        if ((m_Mode & FMOD_LOOP_NORMAL) != 0)
-            SetMode(m_Mode);
-    }
-
     void FmodSound::SetPitch(const float pitch) const
     {
         m_Channel->setPitch(pitch);
@@ -136,14 +130,7 @@ namespace ignite
             m_Channel = nullptr;
         }
 
-        for (auto &dsp : m_DSPs)
-        {
-            if (dsp)
-            {
-                dsp->release();
-            }
-        }
-        m_DSPs.clear();
+        ClearDsps(true);
 
         if (m_Sound)
         {
@@ -173,7 +160,28 @@ namespace ignite
 
     void FmodSound::AddDsp(FMOD::DSP *dsp)
     {
+        if (!dsp)
+        {
+            return;
+        }
+
         m_DSPs.push_back(dsp);
+    }
+
+    void FmodSound::ClearDsps(const bool release)
+    {
+        if (release)
+        {
+            for (auto &dsp : m_DSPs)
+            {
+                if (dsp)
+                {
+                    dsp->release();
+                }
+            }
+        }
+
+        m_DSPs.clear();
     }
 
     FMOD::Sound *FmodSound::GetFmodSound() const
@@ -240,15 +248,6 @@ namespace ignite
         Ref<FmodSound> fmod_sound = CreateRef<FmodSound>(name, mode);
         FmodAudio::GetFmodSystem()->createSound(filepath.c_str(), mode, nullptr, &fmod_sound->m_Sound);
 
-        // const FMOD_RESULT result = FmodAudio::GetFmodSystem()->playSound(
-        //     fmod_sound->m_Sound,
-        //     fmod_sound->m_ChannelGroup ? fmod_sound->m_ChannelGroup : FmodAudio::GetMasterChannel(),
-        //     true, // start paused
-        //     &fmod_sound->m_Channel
-        // );
-
-        // FMOD_CHECK(result);
-
         LOG_WARN("[FMOD Sound] Load sound '{}'", filepath);
 
         FmodAudio::InsertFmodSound(name, fmod_sound);
@@ -259,15 +258,6 @@ namespace ignite
     {
         Ref<FmodSound> fmod_sound = CreateRef<FmodSound>(name, mode);
         FmodAudio::GetFmodSystem()->createStream(filepath.c_str(), mode, nullptr, &fmod_sound->m_Sound);
-
-        // const FMOD_RESULT result = FmodAudio::GetFmodSystem()->playSound(
-        //     fmod_sound->m_Sound,
-        //     fmod_sound->m_ChannelGroup ? fmod_sound->m_ChannelGroup : FmodAudio::GetMasterChannel(),
-        //     true, // start paused
-        //     &fmod_sound->m_Channel
-        // );
-
-        // FMOD_CHECK(result);
 
         FmodAudio::InsertFmodSound(name, fmod_sound);
         return fmod_sound;

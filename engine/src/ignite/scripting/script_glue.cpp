@@ -7,6 +7,10 @@
 #include "ignite/scene/component_group.hpp"
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/scripting/script_engine.hpp"
+#include "ignite/project/project.hpp"
+#include "ignite/graphics/ui/widget.hpp"
+#include "ignite/audio/fmod_sound.hpp"
+#include "ignite/audio/fmod_audio.hpp"
 
 #include "ignite/physics/jolt/jolt_physics.hpp"
 #include "ignite/physics/2d/physics_2d.hpp"
@@ -19,6 +23,7 @@
 #include <string_view>
 #include <typeinfo>
 #include <unordered_map>
+#include <vector>
 
 namespace ignite
 {
@@ -61,8 +66,157 @@ namespace ignite
             return {};
         }
 
+        static Ref<FmodSound> GetAudioSourceSound(Entity entity)
+        {
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return nullptr;
+            }
+
+            Scene *scene = GetSceneContext();
+            if (!scene)
+            {
+                return nullptr;
+            }
+
+            Project *project = scene->GetProject();
+            if (!project)
+            {
+                return nullptr;
+            }
+
+            const auto &audioSource = entity.GetComponent<AudioSourceComponent>();
+            if (audioSource.handle == AssetHandle(0))
+            {
+                return nullptr;
+            }
+
+            return project->GetAsset<FmodSound>(audioSource.handle, AssetType::Audio);
+        }
+
+        static FMOD::DSP *CreateAudioSourceDsp(const AudioSourceComponent::DspSettings &settings)
+        {
+            FMOD::DSP *dsp = nullptr;
+            FMOD_DSP_TYPE dspType = FMOD_DSP_TYPE_UNKNOWN;
+
+            switch (settings.type)
+            {
+                case AudioSourceComponent::DspType::Reverb: dspType = FMOD_DSP_TYPE_SFXREVERB; break;
+                case AudioSourceComponent::DspType::Distortion: dspType = FMOD_DSP_TYPE_DISTORTION; break;
+                case AudioSourceComponent::DspType::Chorus: dspType = FMOD_DSP_TYPE_CHORUS; break;
+                case AudioSourceComponent::DspType::Compressor: dspType = FMOD_DSP_TYPE_COMPRESSOR; break;
+                case AudioSourceComponent::DspType::Delay: dspType = FMOD_DSP_TYPE_ECHO; break;
+            }
+
+            if (dspType == FMOD_DSP_TYPE_UNKNOWN)
+            {
+                return nullptr;
+            }
+
+            if (FmodAudio::GetFmodSystem()->createDSPByType(dspType, &dsp) != FMOD_OK || !dsp)
+            {
+                return nullptr;
+            }
+
+            switch (settings.type)
+            {
+                case AudioSourceComponent::DspType::Reverb:
+                dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DECAYTIME, settings.reverbDecayTime);
+                dsp->setParameterFloat(FMOD_DSP_SFXREVERB_EARLYDELAY, settings.reverbEarlyDelay);
+                dsp->setParameterFloat(FMOD_DSP_SFXREVERB_LATEDELAY, settings.reverbLateDelay);
+                dsp->setParameterFloat(FMOD_DSP_SFXREVERB_HFREFERENCE, settings.reverbHighFrequencyReference);
+                dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DIFFUSION, settings.reverbDiffusion);
+                dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DENSITY, settings.reverbDensity);
+                dsp->setParameterFloat(FMOD_DSP_SFXREVERB_LOWSHELFFREQUENCY, settings.reverbLowShelfGain);
+                dsp->setParameterFloat(FMOD_DSP_SFXREVERB_HIGHCUT, settings.reverbHighCut);
+                dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DRYLEVEL, settings.reverbDryLevel);
+                dsp->setParameterFloat(FMOD_DSP_SFXREVERB_WETLEVEL, settings.reverbWetLevel);
+                break;
+                case AudioSourceComponent::DspType::Distortion:
+                dsp->setParameterFloat(FMOD_DSP_DISTORTION_LEVEL, settings.distortionLevel);
+                break;
+                case AudioSourceComponent::DspType::Chorus:
+                dsp->setParameterFloat(FMOD_DSP_CHORUS_MIX, settings.chorusMix);
+                dsp->setParameterFloat(FMOD_DSP_CHORUS_RATE, settings.chorusRate);
+                dsp->setParameterFloat(FMOD_DSP_CHORUS_DEPTH, settings.chorusDepth);
+                break;
+                case AudioSourceComponent::DspType::Compressor:
+                dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_THRESHOLD, settings.compressorThreshold);
+                dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_RATIO, settings.compressorRatio);
+                dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_RELEASE, settings.compressorRelease);
+                dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_GAINMAKEUP, settings.compressorGainMakeup);
+                dsp->setParameterBool(FMOD_DSP_COMPRESSOR_USESIDECHAIN, settings.compressorUseSidechain);
+                break;
+                case AudioSourceComponent::DspType::Delay:
+                    dsp->setParameterFloat(FMOD_DSP_ECHO_DELAY, settings.delayMs);
+                    dsp->setParameterFloat(FMOD_DSP_ECHO_FEEDBACK, settings.delayFeedback);
+                break;
+            }
+
+            dsp->setActive(settings.enabled);
+            return dsp;
+        }
+
+        static void RebuildAudioSourceDspChain(Entity entity, const Ref<FmodSound> &sound)
+        {
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>() || !sound)
+            {
+                return;
+            }
+
+            const auto &audioSource = entity.GetComponent<AudioSourceComponent>();
+            sound->ClearDsps(true);
+            for (const auto &dspSettings : audioSource.dsps)
+            {
+                if (FMOD::DSP *dsp = CreateAudioSourceDsp(dspSettings))
+                {
+                    sound->AddDsp(dsp);
+                }
+            }
+        }
+
         static std::unordered_map<std::string, std::function<bool(Entity)>> s_EntityHasComponentFuncs;
         static std::unordered_map<std::string, std::function<void(Entity)>> s_EntityAddComponentFuncs;
+
+        enum class WidgetButtonEventType : int32_t
+        {
+            Click = 0,
+            Pressed = 1,
+            Released = 2,
+            HoverEnter = 3,
+            HoverExit = 4,
+        };
+
+        struct WidgetButtonEventKey
+        {
+            uint64_t entityID = 0;
+            std::string buttonName;
+            WidgetButtonEventType eventType = WidgetButtonEventType::Click;
+
+            bool operator==(const WidgetButtonEventKey &other) const
+            {
+                return entityID == other.entityID && buttonName == other.buttonName && eventType == other.eventType;
+            }
+        };
+
+        struct WidgetButtonEventKeyHash
+        {
+            size_t operator()(const WidgetButtonEventKey &key) const
+            {
+                size_t hash = std::hash<uint64_t> {}(key.entityID);
+                hash ^= std::hash<std::string> {}(key.buttonName) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+                hash ^= std::hash<int32_t> {}(static_cast<int32_t>(key.eventType)) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+                return hash;
+            }
+        };
+
+        struct ScriptWidgetCallbackBinding
+        {
+            std::string methodName;
+            int methodId = 0;
+        };
+
+        static std::unordered_map<WidgetButtonEventKey, std::vector<ScriptWidgetCallbackBinding>, WidgetButtonEventKeyHash> s_WidgetButtonEventBindings;
 
         static std::string TrimString(std::string value)
         {
@@ -166,6 +320,146 @@ namespace ignite
         static void RegisterComponent(ComponentGroup<Component...>)
         {
             RegisterComponent<Component...>();
+        }
+
+        static bool TryParseWidgetButtonEventType(int32_t eventType, WidgetButtonEventType &outEventType)
+        {
+            switch (eventType)
+            {
+                case static_cast<int32_t>(WidgetButtonEventType::Click):
+                case static_cast<int32_t>(WidgetButtonEventType::Pressed):
+                case static_cast<int32_t>(WidgetButtonEventType::Released):
+                case static_cast<int32_t>(WidgetButtonEventType::HoverEnter):
+                case static_cast<int32_t>(WidgetButtonEventType::HoverExit):
+                    outEventType = static_cast<WidgetButtonEventType>(eventType);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        static Ref<WidgetCanvas> GetEntityWidgetCanvas(Entity entity)
+        {
+            if (!entity.IsValid() || !entity.HasComponent<WidgetComponent>())
+            {
+                return nullptr;
+            }
+
+            Scene *scene = GetSceneContext();
+            if (!scene)
+            {
+                return nullptr;
+            }
+
+            Project *project = scene->GetProject();
+            if (!project)
+            {
+                return nullptr;
+            }
+
+            const auto &widgetComponent = entity.GetComponent<WidgetComponent>();
+            if (widgetComponent.widgetHandle == AssetHandle(0))
+            {
+                return nullptr;
+            }
+
+            return project->GetAsset<WidgetCanvas>(widgetComponent.widgetHandle, AssetType::Widget);
+        }
+
+        static Ref<WidgetButton> FindWidgetButton(Entity entity, const std::string &buttonName)
+        {
+            if (buttonName.empty())
+            {
+                return nullptr;
+            }
+
+            Ref<WidgetCanvas> widgetCanvas = GetEntityWidgetCanvas(entity);
+            if (!widgetCanvas)
+            {
+                return nullptr;
+            }
+
+            for (const auto &[_, item] : widgetCanvas->GetItems())
+            {
+                if (!item || item->GetWidgetType() != WidgetType::Button)
+                {
+                    continue;
+                }
+
+                if (item->name != buttonName)
+                {
+                    continue;
+                }
+
+                return item->As<WidgetButton>();
+            }
+
+            return nullptr;
+        }
+
+        static void InvokeWidgetButtonCallbacks(const WidgetButtonEventKey &key)
+        {
+            const auto bindingsIt = s_WidgetButtonEventBindings.find(key);
+            if (bindingsIt == s_WidgetButtonEventBindings.end() || bindingsIt->second.empty())
+            {
+                return;
+            }
+
+            ScriptEngine *scriptEngine = ScriptEngine::GetInstance();
+            if (!scriptEngine)
+            {
+                return;
+            }
+
+            ScriptHost *scriptHost = scriptEngine->GetScriptHost();
+            if (!scriptHost)
+            {
+                return;
+            }
+
+            for (const ScriptWidgetCallbackBinding &binding : bindingsIt->second)
+            {
+                if (binding.methodId == 0)
+                {
+                    continue;
+                }
+
+                scriptHost->Invoke(binding.methodId, nullptr, 0, nullptr);
+            }
+        }
+
+        static void ApplyWidgetButtonCallback(Ref<WidgetButton> button, const WidgetButtonEventKey &key)
+        {
+            if (!button)
+            {
+                return;
+            }
+
+            const auto bindingsIt = s_WidgetButtonEventBindings.find(key);
+            const bool hasBindings = bindingsIt != s_WidgetButtonEventBindings.end() && !bindingsIt->second.empty();
+
+            const auto callback = hasBindings
+                ? std::function<void()>([key]() { InvokeWidgetButtonCallbacks(key); })
+                : std::function<void()> {};
+
+            switch (key.eventType)
+            {
+                case WidgetButtonEventType::Click:
+                    button->SetOnClick(callback);
+                    break;
+                case WidgetButtonEventType::Pressed:
+                    button->SetOnPressed(callback);
+                    break;
+                case WidgetButtonEventType::Released:
+                    button->SetOnReleased(callback);
+                    break;
+                case WidgetButtonEventType::HoverEnter:
+                    button->SetOnHoverEnter(callback);
+                    break;
+                case WidgetButtonEventType::HoverExit:
+                    button->SetOnHoverExit(callback);
+                    break;
+            }
         }
 
         static void Debug_Log(const char *message)
@@ -286,6 +580,11 @@ namespace ignite
 				}
             }
 
+            std::erase_if(s_WidgetButtonEventBindings, [entityID](const auto &entry)
+            {
+                return entry.first.entityID == entityID;
+            });
+
             SceneManager::DestroyEntity(scene, entity);
         }
 
@@ -315,6 +614,516 @@ namespace ignite
             }
 
             *result = entity.GetComponent<TransformComponent>().visible;
+        }
+
+        static bool WidgetComponent_HasButton(uint64_t entityID, const char *buttonName)
+        {
+            if (!buttonName)
+            {
+                return false;
+            }
+
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid())
+            {
+                return false;
+            }
+
+            return static_cast<bool>(FindWidgetButton(entity, std::string(buttonName)));
+        }
+
+        static bool WidgetComponent_AddButtonEventCallback(uint64_t entityID, const char *buttonName, int32_t eventType, const char *methodName)
+        {
+            if (!buttonName || !methodName)
+            {
+                return false;
+            }
+
+            const std::string resolvedButtonName = TrimString(buttonName);
+            const std::string resolvedMethodName = TrimString(methodName);
+            if (resolvedButtonName.empty() || resolvedMethodName.empty())
+            {
+                return false;
+            }
+
+            WidgetButtonEventType resolvedEventType;
+            if (!TryParseWidgetButtonEventType(eventType, resolvedEventType))
+            {
+                return false;
+            }
+
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid())
+            {
+                return false;
+            }
+
+            Ref<WidgetButton> button = FindWidgetButton(entity, resolvedButtonName);
+            if (!button)
+            {
+                return false;
+            }
+
+            ScriptEngine *scriptEngine = ScriptEngine::GetInstance();
+            if (!scriptEngine)
+            {
+                return false;
+            }
+
+            Ref<ScriptInstance> scriptInstance = scriptEngine->GetEntityScriptInstance(entity.GetUUID());
+            if (!scriptInstance || !scriptInstance->GetScriptClass())
+            {
+                return false;
+            }
+
+            const int methodId = scriptInstance->GetScriptClass()->BindInstanceMethod(scriptInstance->GetInstanceID(), resolvedMethodName, ScriptMethodSig::Void);
+            if (methodId == 0)
+            {
+                LOG_WARN("[ScriptGlue] Failed to bind widget callback '{}.{}'", entityID, resolvedMethodName);
+                return false;
+            }
+
+            const WidgetButtonEventKey key { entityID, resolvedButtonName, resolvedEventType };
+            s_WidgetButtonEventBindings[key].push_back({ resolvedMethodName, methodId });
+            ApplyWidgetButtonCallback(button, key);
+            return true;
+        }
+
+        static bool WidgetComponent_RemoveButtonEventCallback(uint64_t entityID, const char *buttonName, int32_t eventType, const char *methodName)
+        {
+            if (!buttonName || !methodName)
+            {
+                return false;
+            }
+
+            const std::string resolvedButtonName = TrimString(buttonName);
+            const std::string resolvedMethodName = TrimString(methodName);
+            if (resolvedButtonName.empty() || resolvedMethodName.empty())
+            {
+                return false;
+            }
+
+            WidgetButtonEventType resolvedEventType;
+            if (!TryParseWidgetButtonEventType(eventType, resolvedEventType))
+            {
+                return false;
+            }
+
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid())
+            {
+                return false;
+            }
+
+            Ref<WidgetButton> button = FindWidgetButton(entity, resolvedButtonName);
+            if (!button)
+            {
+                return false;
+            }
+
+            const WidgetButtonEventKey key { entityID, resolvedButtonName, resolvedEventType };
+            const auto bindingsIt = s_WidgetButtonEventBindings.find(key);
+            if (bindingsIt == s_WidgetButtonEventBindings.end())
+            {
+                return false;
+            }
+
+            auto &bindings = bindingsIt->second;
+            const auto removeIt = std::find_if(bindings.begin(), bindings.end(), [&](const ScriptWidgetCallbackBinding &binding)
+            {
+                return binding.methodName == resolvedMethodName;
+            });
+
+            if (removeIt == bindings.end())
+            {
+                return false;
+            }
+
+            bindings.erase(removeIt);
+            if (bindings.empty())
+            {
+                s_WidgetButtonEventBindings.erase(bindingsIt);
+            }
+
+            ApplyWidgetButtonCallback(button, key);
+            return true;
+        }
+
+        static bool AudioSourceComponent_HasAudio(uint64_t entityID)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return false;
+            }
+
+            return entity.GetComponent<AudioSourceComponent>().handle != AssetHandle(0);
+        }
+
+        static void AudioSourceComponent_Play(uint64_t entityID)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return;
+            }
+
+            auto &audioSource = entity.GetComponent<AudioSourceComponent>();
+            Ref<FmodSound> sound = GetAudioSourceSound(entity);
+            if (!sound)
+            {
+                return;
+            }
+
+            RebuildAudioSourceDspChain(entity, sound);
+            sound->Play();
+            sound->SetVolume(audioSource.volume);
+            sound->SetPitch(audioSource.pitch);
+            sound->SetPan(audioSource.pan);
+            sound->SetMode(audioSource.loop ? FMOD_LOOP_NORMAL : FMOD_LOOP_OFF);
+        }
+
+        static void AudioSourceComponent_Stop(uint64_t entityID)
+        {
+            Entity entity = GetEntityByID(entityID);
+            Ref<FmodSound> sound = GetAudioSourceSound(entity);
+            if (!sound)
+            {
+                return;
+            }
+
+            sound->Stop();
+        }
+
+        static void AudioSourceComponent_Pause(uint64_t entityID)
+        {
+            Entity entity = GetEntityByID(entityID);
+            Ref<FmodSound> sound = GetAudioSourceSound(entity);
+            if (!sound)
+            {
+                return;
+            }
+
+            sound->Pause();
+        }
+
+        static void AudioSourceComponent_Resume(uint64_t entityID)
+        {
+            Entity entity = GetEntityByID(entityID);
+            Ref<FmodSound> sound = GetAudioSourceSound(entity);
+            if (!sound)
+            {
+                return;
+            }
+
+            sound->Resume();
+        }
+
+        static void AudioSourceComponent_GetVolume(uint64_t entityID, float *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = 1.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<AudioSourceComponent>().volume;
+        }
+
+        static void AudioSourceComponent_SetVolume(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return;
+            }
+
+            auto &audioSource = entity.GetComponent<AudioSourceComponent>();
+            audioSource.volume = value;
+
+            if (Ref<FmodSound> sound = GetAudioSourceSound(entity))
+            {
+                sound->SetVolume(audioSource.volume);
+            }
+        }
+
+        static void AudioSourceComponent_GetPitch(uint64_t entityID, float *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = 1.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<AudioSourceComponent>().pitch;
+        }
+
+        static void AudioSourceComponent_SetPitch(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return;
+            }
+
+            auto &audioSource = entity.GetComponent<AudioSourceComponent>();
+            audioSource.pitch = value;
+
+            if (Ref<FmodSound> sound = GetAudioSourceSound(entity))
+            {
+                sound->SetPitch(audioSource.pitch);
+            }
+        }
+
+        static void AudioSourceComponent_GetPan(uint64_t entityID, float *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<AudioSourceComponent>().pan;
+        }
+
+        static void AudioSourceComponent_SetPan(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return;
+            }
+
+            auto &audioSource = entity.GetComponent<AudioSourceComponent>();
+            audioSource.pan = value;
+
+            if (Ref<FmodSound> sound = GetAudioSourceSound(entity))
+            {
+                sound->SetPan(audioSource.pan);
+            }
+        }
+
+        static void AudioSourceComponent_GetPlayOnStart(uint64_t entityID, bool *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = false;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<AudioSourceComponent>().playOnStart;
+        }
+
+        static void AudioSourceComponent_SetPlayOnStart(uint64_t entityID, bool value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return;
+            }
+
+            entity.GetComponent<AudioSourceComponent>().playOnStart = value;
+        }
+
+        static void AudioSourceComponent_GetLoop(uint64_t entityID, bool *result)
+        {
+            if (!result)
+            {
+                return;
+            }
+
+            *result = false;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return;
+            }
+
+            *result = entity.GetComponent<AudioSourceComponent>().loop;
+        }
+
+        static void AudioSourceComponent_SetLoop(uint64_t entityID, bool value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return;
+            }
+
+            auto &audioSource = entity.GetComponent<AudioSourceComponent>();
+            audioSource.loop = value;
+
+            if (Ref<FmodSound> sound = GetAudioSourceSound(entity))
+            {
+                sound->SetMode(audioSource.loop ? FMOD_LOOP_NORMAL : FMOD_LOOP_OFF);
+            }
+        }
+
+        static bool AudioSourceComponent_AddReverbDSP(uint64_t entityID, float decayTime, float earlyDelay, float lateDelay, float highFrequencyReference, float diffusion, float density, float lowShelfGain, float highCut, float dryLevel, float wetLevel)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return false;
+            }
+
+            auto &audioSource = entity.GetComponent<AudioSourceComponent>();
+            AudioSourceComponent::DspSettings dsp;
+            dsp.type = AudioSourceComponent::DspType::Reverb;
+            dsp.reverbDecayTime = decayTime;
+            dsp.reverbEarlyDelay = earlyDelay;
+            dsp.reverbLateDelay = lateDelay;
+            dsp.reverbHighFrequencyReference = highFrequencyReference;
+            dsp.reverbDiffusion = diffusion;
+            dsp.reverbDensity = density;
+            dsp.reverbLowShelfGain = lowShelfGain;
+            dsp.reverbHighCut = highCut;
+            dsp.reverbDryLevel = dryLevel;
+            dsp.reverbWetLevel = wetLevel;
+            audioSource.dsps.push_back(dsp);
+
+            if (Ref<FmodSound> sound = GetAudioSourceSound(entity))
+            {
+                RebuildAudioSourceDspChain(entity, sound);
+            }
+
+            return true;
+        }
+
+        static bool AudioSourceComponent_AddDistortionDSP(uint64_t entityID, float distortionLevel)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return false;
+            }
+
+            auto &audioSource = entity.GetComponent<AudioSourceComponent>();
+            AudioSourceComponent::DspSettings dsp;
+            dsp.type = AudioSourceComponent::DspType::Distortion;
+            dsp.distortionLevel = distortionLevel;
+            audioSource.dsps.push_back(dsp);
+
+            if (Ref<FmodSound> sound = GetAudioSourceSound(entity))
+            {
+                RebuildAudioSourceDspChain(entity, sound);
+            }
+
+            return true;
+        }
+
+        static bool AudioSourceComponent_AddChorusDSP(uint64_t entityID, float mix, float rate, float depth)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return false;
+            }
+
+            auto &audioSource = entity.GetComponent<AudioSourceComponent>();
+            AudioSourceComponent::DspSettings dsp;
+            dsp.type = AudioSourceComponent::DspType::Chorus;
+            dsp.chorusMix = mix;
+            dsp.chorusRate = rate;
+            dsp.chorusDepth = depth;
+            audioSource.dsps.push_back(dsp);
+
+            if (Ref<FmodSound> sound = GetAudioSourceSound(entity))
+            {
+                RebuildAudioSourceDspChain(entity, sound);
+            }
+
+            return true;
+        }
+
+        static bool AudioSourceComponent_AddCompressorDSP(uint64_t entityID, float threshold, float ratio, float release, float gainMakeup, bool useSidechain)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return false;
+            }
+
+            auto &audioSource = entity.GetComponent<AudioSourceComponent>();
+            AudioSourceComponent::DspSettings dsp;
+            dsp.type = AudioSourceComponent::DspType::Compressor;
+            dsp.compressorThreshold = threshold;
+            dsp.compressorRatio = ratio;
+            dsp.compressorRelease = release;
+            dsp.compressorGainMakeup = gainMakeup;
+            dsp.compressorUseSidechain = useSidechain;
+            audioSource.dsps.push_back(dsp);
+
+            if (Ref<FmodSound> sound = GetAudioSourceSound(entity))
+            {
+                RebuildAudioSourceDspChain(entity, sound);
+            }
+
+            return true;
+        }
+
+        static bool AudioSourceComponent_AddDelayDSP(uint64_t entityID, float delayMs, float feedback)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return false;
+            }
+
+            auto &audioSource = entity.GetComponent<AudioSourceComponent>();
+            AudioSourceComponent::DspSettings dsp;
+            dsp.type = AudioSourceComponent::DspType::Delay;
+            dsp.delayMs = delayMs;
+            dsp.delayFeedback = feedback;
+            audioSource.dsps.push_back(dsp);
+
+            if (Ref<FmodSound> sound = GetAudioSourceSound(entity))
+            {
+                RebuildAudioSourceDspChain(entity, sound);
+            }
+
+            return true;
+        }
+
+        static void AudioSourceComponent_ClearDSPs(uint64_t entityID)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
+            {
+                return;
+            }
+
+            auto &audioSource = entity.GetComponent<AudioSourceComponent>();
+            audioSource.dsps.clear();
+
+            if (Ref<FmodSound> sound = GetAudioSourceSound(entity))
+            {
+                sound->ClearDsps(true);
+            }
         }
 
         static bool Input_IsKeyPressed(uint32_t keyCode)
@@ -1491,6 +2300,30 @@ namespace ignite
             &Entity_Destroy,
             &Entity_SetVisibility,
             &Entity_GetVisibility,
+            &WidgetComponent_HasButton,
+            &WidgetComponent_AddButtonEventCallback,
+            &WidgetComponent_RemoveButtonEventCallback,
+            &AudioSourceComponent_HasAudio,
+            &AudioSourceComponent_Play,
+            &AudioSourceComponent_Stop,
+            &AudioSourceComponent_Pause,
+            &AudioSourceComponent_Resume,
+            &AudioSourceComponent_GetVolume,
+            &AudioSourceComponent_SetVolume,
+            &AudioSourceComponent_GetPitch,
+            &AudioSourceComponent_SetPitch,
+            &AudioSourceComponent_GetPan,
+            &AudioSourceComponent_SetPan,
+            &AudioSourceComponent_GetPlayOnStart,
+            &AudioSourceComponent_SetPlayOnStart,
+            &AudioSourceComponent_GetLoop,
+            &AudioSourceComponent_SetLoop,
+            &AudioSourceComponent_AddReverbDSP,
+            &AudioSourceComponent_AddDistortionDSP,
+            &AudioSourceComponent_AddChorusDSP,
+            &AudioSourceComponent_AddCompressorDSP,
+            &AudioSourceComponent_AddDelayDSP,
+            &AudioSourceComponent_ClearDSPs,
 
             &Input_IsKeyPressed,
             &Input_IsModifierPressed,
@@ -1587,6 +2420,7 @@ namespace ignite
     {
         s_EntityHasComponentFuncs.clear();
         s_EntityAddComponentFuncs.clear();
+        s_WidgetButtonEventBindings.clear();
         RegisterComponent(AllComponents {});
 
         LOG_INFO("[ScriptGlue] Component bridge initialized (HostFXR)");
@@ -1594,6 +2428,7 @@ namespace ignite
 
     void ScriptGlue::RegisterFunctions()
     {
+        s_WidgetButtonEventBindings.clear();
         LOG_INFO("[ScriptGlue] Function bridge initialized (HostFXR)");
     }
 }

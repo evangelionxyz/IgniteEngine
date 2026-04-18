@@ -58,8 +58,11 @@ namespace ignite
         m_EdgeDetection->CreatePipeline();
         m_DebugGridBuffer = ConstantBuffer::Create(sizeof(DebugGrid_GPUData), true, 16, "Debug Grid Buffer");
         m_CompositePostProcessBuffer = ConstantBuffer::Create(sizeof(CompositePostProcess_GPUData), true, 16, "Composite PostProcess Buffer");
-        m_Bloom = CreateRef<Bloom>(1280, 720);
-        m_SSAO = CreateRef<SSAO>(1280, 720);
+        m_EditorBloom = CreateRef<Bloom>(1280, 720);
+        m_EditorSSAO = CreateRef<SSAO>(1280, 720);
+        
+        m_GameplayBloom = CreateRef<Bloom>(1280, 720);
+        m_GameplaySSAO = CreateRef<SSAO>(1280, 720);
 
         m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
 
@@ -123,14 +126,24 @@ namespace ignite
             return;
         }
 
-        if (m_Bloom)
+        if (m_EditorBloom)
         {
-            m_Bloom->Resize(width, height);
+            m_EditorBloom->Resize(width, height);
         }
 
-        if (m_SSAO)
+        if (m_EditorSSAO)
         {
-            m_SSAO->Resize(width, height);
+            m_EditorSSAO->Resize(width, height);
+        }
+
+        if (m_GameplayBloom)
+        {
+            m_GameplayBloom->Resize(width, height);
+        }
+
+        if (m_GameplaySSAO)
+        {
+            m_GameplaySSAO->Resize(width, height);
         }
 
         if (m_Renderer2D)

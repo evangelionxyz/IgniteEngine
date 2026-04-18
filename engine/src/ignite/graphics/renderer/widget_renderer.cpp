@@ -4,7 +4,6 @@
 #include "renderer_2d.hpp"
 #include "ignite/graphics/render_target.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
-#include "ignite/core/input/input.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/component.hpp"
 #include "ignite/project/project.hpp"
@@ -46,7 +45,6 @@ namespace ignite
 
         const glm::uvec2 mousePos = { m_MouseX, m_MouseY };
         const glm::uvec2 offscreenMousePos = { std::numeric_limits<uint32_t>::max() / 2u, std::numeric_limits<uint32_t>::max() / 2u };
-        const bool mousePressed = Input::IsMouseButtonPressed(Mouse::ButtonLeft);
 
         bool blockedByTopWidget = false;
         for (auto it = m_RenderLayers.rbegin(); it != m_RenderLayers.rend(); ++it)
@@ -62,29 +60,11 @@ namespace ignite
             const bool acceptsInput = !blockedByTopWidget;
             it->widget->Update(deltaTime, acceptsInput ? mousePos : offscreenMousePos);
 
-            if (acceptsInput && mousePressed != m_LastMousePressed)
-            {
-                for (auto &[id, item] : it->widget->GetItems())
-                {
-                    if (!item || !item->IsVisible())
-                    {
-                        continue;
-                    }
-
-                    if (Ref<WidgetButton> button = item->As<WidgetButton>())
-                    {
-                        button->OnMouseClick(mousePos, mousePressed);
-                    }
-                }
-            }
-
             if (it->blocksWidgetsBelow)
             {
                 blockedByTopWidget = true;
             }
         }
-
-        m_LastMousePressed = mousePressed;
     }
 
     void WidgetRenderer::Render(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *fb)
@@ -123,7 +103,7 @@ namespace ignite
         }
 
         std::unordered_set<uint64_t> visited;
-        std::function<void(const Ref<Widget> &, bool)> collectWidget = [&](const Ref<Widget> &widget, bool blocksLower)
+        std::function<void(const Ref<WidgetCanvas> &, bool)> collectWidget = [&](const Ref<WidgetCanvas> &widget, bool blocksLower)
         {
             if (!widget)
             {
@@ -149,10 +129,10 @@ namespace ignite
                     continue;
                 }
 
-                Ref<Widget> childWidget = m_Project->GetAsset<Widget>(child.handle, AssetType::Widget);
+                Ref<WidgetCanvas> childWidget = m_Project->GetAsset<WidgetCanvas>(child.handle, AssetType::Widget);
                 if (!childWidget)
                 {
-                    childWidget = m_Project->GetAssetImmediate<Widget>(child.handle, AssetType::Widget);
+                    childWidget = m_Project->GetAssetImmediate<WidgetCanvas>(child.handle, AssetType::Widget);
                 }
 
                 collectWidget(childWidget, child.blockWidgetsBelow);
@@ -179,10 +159,10 @@ namespace ignite
                 continue;
             }
 
-            Ref<Widget> widget = m_Project->GetAsset<Widget>(widgetComp.widgetHandle, AssetType::Widget);
+            Ref<WidgetCanvas> widget = m_Project->GetAsset<WidgetCanvas>(widgetComp.widgetHandle, AssetType::Widget);
             if (!widget)
             {
-                widget = m_Project->GetAssetImmediate<Widget>(widgetComp.widgetHandle, AssetType::Widget);
+                widget = m_Project->GetAssetImmediate<WidgetCanvas>(widgetComp.widgetHandle, AssetType::Widget);
             }
 
             collectWidget(widget, widget ? widget->BlocksWidgetsBelow() : false);
@@ -192,63 +172,20 @@ namespace ignite
     void WidgetRenderer::RenderWidgetItems()
     {
         if (!m_Project)
-        {
             return;
-        }
 
+        AssetManager *assetManager = m_Project->GetAssetManager();
         for (const WidgetRenderLayer &layer : m_RenderLayers)
         {
             if (!layer.widget || !layer.widget->IsEnabled())
-            {
                 continue;
-            }
 
             for (const auto &[id, widgetItem] : layer.widget->GetItems())
             {
-                if (!widgetItem || !widgetItem->IsVisible())
-                {
+                if (!widgetItem || !widgetItem->IsVisible() || widgetItem->parent)
                     continue;
-                }
 
-                // Render different widget types
-                if (Ref<WidgetButton> button = widgetItem->As<WidgetButton>())
-                {
-                    const Rect &rect = button->GetAlignedRect();
-                    const glm::vec4 &buttonColor = button->GetCurrentColor();
-
-                    Ref<Texture> image = button->GetImage();
-                    if (!image && button->GetImageHandle() != AssetHandle(0))
-                    {
-                        image = m_Project->GetAsset<Texture>(button->GetImageHandle(), AssetType::Texture);
-                        if (!image)
-                        {
-                            image = m_Project->GetAssetImmediate<Texture>(button->GetImageHandle(), AssetType::Texture);
-                        }
-                    }
-
-                    m_Renderer2D->DrawQuad(rect, 0.0f, buttonColor, image, { 0.0f, 1.0f }, { 1.0f, 0.0f });
-                }
-                else if (Ref<WidgetText> text = widgetItem->As<WidgetText>())
-                {
-                    if (text->GetFontHandle() == AssetHandle(0))
-                    {
-                        continue;
-                    }
-
-                    Ref<Font> font = m_Project->GetAsset<Font>(text->GetFontHandle(), AssetType::Font);
-                    if (!font)
-                    {
-                        font = m_Project->GetAssetImmediate<Font>(text->GetFontHandle(), AssetType::Font);
-                    }
-                    if (!font)
-                    {
-                        continue;
-                    }
-
-                    const Rect rect = text->GetAlignedRect();
-                    glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(rect.min, 0.0f));
-                    m_Renderer2D->DrawString(text->GetText(), font, text->GetColor(), transform, text->GetKerning(), text->GetLineSpacing());
-                }
+                widgetItem->Draw(m_Renderer2D.get(), assetManager);
             }
         }
     }

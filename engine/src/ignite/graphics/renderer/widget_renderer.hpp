@@ -28,7 +28,7 @@ namespace ignite
 
         void SetScene(Scene *scene) { m_Scene = scene; }
         void SetProject(Project *project) { m_Project = project; }
-        void SetPreviewWidget(const Ref<Widget> &widget) { m_PreviewWidget = widget; }
+        void SetPreviewWidget(const Ref<WidgetCanvas> &widget) { m_PreviewWidget = widget; }
         void SetMousePosition(uint32_t mouseX, uint32_t mouseY);
 
         void Update(float deltaTime);
@@ -45,7 +45,7 @@ namespace ignite
     private:
         struct WidgetRenderLayer
         {
-            Ref<Widget> widget;
+            Ref<WidgetCanvas> widget;
             bool blocksWidgetsBelow = false;
         };
 
@@ -62,9 +62,8 @@ namespace ignite
         Ref<ConstantBuffer> m_CameraBuffer;
         Scene *m_Scene = nullptr;
         Project *m_Project = nullptr;
-        Ref<Widget> m_PreviewWidget = nullptr;
+        Ref<WidgetCanvas> m_PreviewWidget = nullptr;
         std::vector<WidgetRenderLayer> m_RenderLayers;
-        bool m_LastMousePressed = false;
 
         glm::mat4 m_Projection;
     };

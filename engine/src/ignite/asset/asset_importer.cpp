@@ -114,44 +114,12 @@ namespace ignite
             font->handle = handle;
             font->SetDirtyFlag(false);
             font->SetReadyFlag(true);
-
-            if (Ref<Texture> atlasTexture = font->GetAtlasTexture())
-            {
-                if (!atlasTexture->IsReady())
-                {
-                    LOG_WARN("[Asset Importer] Font atlas is not ready yet for {}", fontFilepath.generic_string());
-                }
-                else
-                {
-                    const std::filesystem::path atlasPath = fontFilepath.parent_path() / (fontFilepath.stem().string() + "_msdf.png");
-                    if (BinarySerializer::SerializeTextureToPNG(atlasTexture, atlasPath))
-                    {
-                        const std::filesystem::path relativeAtlasPath = assetManager->GetProject()->GetAssetRelativeFilepath(atlasPath);
-
-                        AssetHandle atlasHandle = assetManager->GetAssetHandle(relativeAtlasPath);
-                        if (atlasHandle == AssetHandle(0))
-                        {
-                            atlasHandle = AssetHandle();
-                        }
-
-                        atlasTexture->handle = atlasHandle;
-                        atlasTexture->SetDirtyFlag(false);
-                        atlasTexture->SetReadyFlag(true);
-
-                        AssetMetaData atlasMetadata;
-                        atlasMetadata.filepath = relativeAtlasPath;
-                        atlasMetadata.type = AssetType::Texture;
-                        assetManager->AssignMetaData(atlasHandle, atlasMetadata);
-                        assetManager->AssignAsset(atlasHandle, atlasTexture);
-                    }
-                }
-            }
         }
 
         return font;
     }
 
-    Ref<Widget> AssetImporter::ImportWidget(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
+    Ref<WidgetCanvas> AssetImporter::ImportWidget(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
     {
         if (!std::filesystem::exists(metadata.filepath))
         {
@@ -159,7 +127,7 @@ namespace ignite
             return nullptr;
         }
 
-        Ref<Widget> widget = Widget::Deserialize(metadata.filepath);
+        Ref<WidgetCanvas> widget = WidgetCanvas::Deserialize(metadata.filepath);
         if (widget)
         {
             widget->handle = handle;

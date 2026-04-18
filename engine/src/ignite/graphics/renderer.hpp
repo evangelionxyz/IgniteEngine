@@ -52,6 +52,24 @@ namespace ignite
         ENVIRONMENT,
     };
 
+    struct RendererStats
+    {
+        // 2D Statistics
+        size_t quadCount = 0;
+        size_t lineCount = 0;
+        size_t circleCount = 0;
+        size_t textCount = 0;
+        size_t pointLight2dCount = 0;
+
+        size_t quadVerticesSize = 0;
+        size_t quadIndicesSize = 0;
+        size_t lineVerticesSize = 0;
+        size_t circleVerticesSize = 0;
+        size_t circleIndicesSize = 0;
+        size_t textVerticesSize = 0;
+        size_t textIndicesSize = 0;
+    };
+
     class Renderer
     {
     public:
@@ -59,6 +77,8 @@ namespace ignite
         Renderer(DeviceManager *deviceManager, nvrhi::GraphicsAPI api);
 
         ~Renderer();
+
+        static void BeginStats();
         
         static Ref<Texture> GetWhiteTexture();
         static Ref<Texture> GetBlackTexture();
@@ -69,7 +89,10 @@ namespace ignite
 
         static Ref<DXCInstance> GetDXCInstance();
 
+        static RendererStats Stats;
+
     private:
+
         nvrhi::GraphicsAPI m_GraphicsAPI;
         Ref<DXCInstance> m_DxcInstance;
 
