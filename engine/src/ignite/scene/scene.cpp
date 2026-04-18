@@ -221,6 +221,11 @@ namespace ignite
             }
         }
 
+        registry->view<ScriptComponent>().each([this](entt::entity e, ScriptComponent &script)
+        {
+            Entity entity { e, this };
+            ScriptEngine::GetInstance()->OnDestroyEntity(entity);
+        });
         ScriptEngine::GetInstance()->ClearSceneContext();
 
         m_SharedAnimatorRuntime.clear();

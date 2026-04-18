@@ -7,6 +7,8 @@
 #include "ignite/scene/component_group.hpp"
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/scripting/script_engine.hpp"
+#include "ignite/project/project.hpp"
+#include "ignite/graphics/ui/widget.hpp"
 
 #include "ignite/physics/jolt/jolt_physics.hpp"
 #include "ignite/physics/2d/physics_2d.hpp"
@@ -19,6 +21,7 @@
 #include <string_view>
 #include <typeinfo>
 #include <unordered_map>
+#include <vector>
 
 namespace ignite
 {
@@ -63,6 +66,46 @@ namespace ignite
 
         static std::unordered_map<std::string, std::function<bool(Entity)>> s_EntityHasComponentFuncs;
         static std::unordered_map<std::string, std::function<void(Entity)>> s_EntityAddComponentFuncs;
+
+        enum class WidgetButtonEventType : int32_t
+        {
+            Click = 0,
+            Pressed = 1,
+            Released = 2,
+            HoverEnter = 3,
+            HoverExit = 4,
+        };
+
+        struct WidgetButtonEventKey
+        {
+            uint64_t entityID = 0;
+            std::string buttonName;
+            WidgetButtonEventType eventType = WidgetButtonEventType::Click;
+
+            bool operator==(const WidgetButtonEventKey &other) const
+            {
+                return entityID == other.entityID && buttonName == other.buttonName && eventType == other.eventType;
+            }
+        };
+
+        struct WidgetButtonEventKeyHash
+        {
+            size_t operator()(const WidgetButtonEventKey &key) const
+            {
+                size_t hash = std::hash<uint64_t> {}(key.entityID);
+                hash ^= std::hash<std::string> {}(key.buttonName) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+                hash ^= std::hash<int32_t> {}(static_cast<int32_t>(key.eventType)) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+                return hash;
+            }
+        };
+
+        struct ScriptWidgetCallbackBinding
+        {
+            std::string methodName;
+            int methodId = 0;
+        };
+
+        static std::unordered_map<WidgetButtonEventKey, std::vector<ScriptWidgetCallbackBinding>, WidgetButtonEventKeyHash> s_WidgetButtonEventBindings;
 
         static std::string TrimString(std::string value)
         {
@@ -166,6 +209,146 @@ namespace ignite
         static void RegisterComponent(ComponentGroup<Component...>)
         {
             RegisterComponent<Component...>();
+        }
+
+        static bool TryParseWidgetButtonEventType(int32_t eventType, WidgetButtonEventType &outEventType)
+        {
+            switch (eventType)
+            {
+                case static_cast<int32_t>(WidgetButtonEventType::Click):
+                case static_cast<int32_t>(WidgetButtonEventType::Pressed):
+                case static_cast<int32_t>(WidgetButtonEventType::Released):
+                case static_cast<int32_t>(WidgetButtonEventType::HoverEnter):
+                case static_cast<int32_t>(WidgetButtonEventType::HoverExit):
+                    outEventType = static_cast<WidgetButtonEventType>(eventType);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        static Ref<WidgetCanvas> GetEntityWidgetCanvas(Entity entity)
+        {
+            if (!entity.IsValid() || !entity.HasComponent<WidgetComponent>())
+            {
+                return nullptr;
+            }
+
+            Scene *scene = GetSceneContext();
+            if (!scene)
+            {
+                return nullptr;
+            }
+
+            Project *project = scene->GetProject();
+            if (!project)
+            {
+                return nullptr;
+            }
+
+            const auto &widgetComponent = entity.GetComponent<WidgetComponent>();
+            if (widgetComponent.widgetHandle == AssetHandle(0))
+            {
+                return nullptr;
+            }
+
+            return project->GetAsset<WidgetCanvas>(widgetComponent.widgetHandle, AssetType::Widget);
+        }
+
+        static Ref<WidgetButton> FindWidgetButton(Entity entity, const std::string &buttonName)
+        {
+            if (buttonName.empty())
+            {
+                return nullptr;
+            }
+
+            Ref<WidgetCanvas> widgetCanvas = GetEntityWidgetCanvas(entity);
+            if (!widgetCanvas)
+            {
+                return nullptr;
+            }
+
+            for (const auto &[_, item] : widgetCanvas->GetItems())
+            {
+                if (!item || item->GetWidgetType() != WidgetType::Button)
+                {
+                    continue;
+                }
+
+                if (item->name != buttonName)
+                {
+                    continue;
+                }
+
+                return item->As<WidgetButton>();
+            }
+
+            return nullptr;
+        }
+
+        static void InvokeWidgetButtonCallbacks(const WidgetButtonEventKey &key)
+        {
+            const auto bindingsIt = s_WidgetButtonEventBindings.find(key);
+            if (bindingsIt == s_WidgetButtonEventBindings.end() || bindingsIt->second.empty())
+            {
+                return;
+            }
+
+            ScriptEngine *scriptEngine = ScriptEngine::GetInstance();
+            if (!scriptEngine)
+            {
+                return;
+            }
+
+            ScriptHost *scriptHost = scriptEngine->GetScriptHost();
+            if (!scriptHost)
+            {
+                return;
+            }
+
+            for (const ScriptWidgetCallbackBinding &binding : bindingsIt->second)
+            {
+                if (binding.methodId == 0)
+                {
+                    continue;
+                }
+
+                scriptHost->Invoke(binding.methodId, nullptr, 0, nullptr);
+            }
+        }
+
+        static void ApplyWidgetButtonCallback(Ref<WidgetButton> button, const WidgetButtonEventKey &key)
+        {
+            if (!button)
+            {
+                return;
+            }
+
+            const auto bindingsIt = s_WidgetButtonEventBindings.find(key);
+            const bool hasBindings = bindingsIt != s_WidgetButtonEventBindings.end() && !bindingsIt->second.empty();
+
+            const auto callback = hasBindings
+                ? std::function<void()>([key]() { InvokeWidgetButtonCallbacks(key); })
+                : std::function<void()> {};
+
+            switch (key.eventType)
+            {
+                case WidgetButtonEventType::Click:
+                    button->SetOnClick(callback);
+                    break;
+                case WidgetButtonEventType::Pressed:
+                    button->SetOnPressed(callback);
+                    break;
+                case WidgetButtonEventType::Released:
+                    button->SetOnReleased(callback);
+                    break;
+                case WidgetButtonEventType::HoverEnter:
+                    button->SetOnHoverEnter(callback);
+                    break;
+                case WidgetButtonEventType::HoverExit:
+                    button->SetOnHoverExit(callback);
+                    break;
+            }
         }
 
         static void Debug_Log(const char *message)
@@ -286,6 +469,11 @@ namespace ignite
 				}
             }
 
+            std::erase_if(s_WidgetButtonEventBindings, [entityID](const auto &entry)
+            {
+                return entry.first.entityID == entityID;
+            });
+
             SceneManager::DestroyEntity(scene, entity);
         }
 
@@ -315,6 +503,139 @@ namespace ignite
             }
 
             *result = entity.GetComponent<TransformComponent>().visible;
+        }
+
+        static bool WidgetComponent_HasButton(uint64_t entityID, const char *buttonName)
+        {
+            if (!buttonName)
+            {
+                return false;
+            }
+
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid())
+            {
+                return false;
+            }
+
+            return static_cast<bool>(FindWidgetButton(entity, std::string(buttonName)));
+        }
+
+        static bool WidgetComponent_AddButtonEventCallback(uint64_t entityID, const char *buttonName, int32_t eventType, const char *methodName)
+        {
+            if (!buttonName || !methodName)
+            {
+                return false;
+            }
+
+            const std::string resolvedButtonName = TrimString(buttonName);
+            const std::string resolvedMethodName = TrimString(methodName);
+            if (resolvedButtonName.empty() || resolvedMethodName.empty())
+            {
+                return false;
+            }
+
+            WidgetButtonEventType resolvedEventType;
+            if (!TryParseWidgetButtonEventType(eventType, resolvedEventType))
+            {
+                return false;
+            }
+
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid())
+            {
+                return false;
+            }
+
+            Ref<WidgetButton> button = FindWidgetButton(entity, resolvedButtonName);
+            if (!button)
+            {
+                return false;
+            }
+
+            ScriptEngine *scriptEngine = ScriptEngine::GetInstance();
+            if (!scriptEngine)
+            {
+                return false;
+            }
+
+            Ref<ScriptInstance> scriptInstance = scriptEngine->GetEntityScriptInstance(entity.GetUUID());
+            if (!scriptInstance || !scriptInstance->GetScriptClass())
+            {
+                return false;
+            }
+
+            const int methodId = scriptInstance->GetScriptClass()->BindInstanceMethod(scriptInstance->GetInstanceID(), resolvedMethodName, ScriptMethodSig::Void);
+            if (methodId == 0)
+            {
+                LOG_WARN("[ScriptGlue] Failed to bind widget callback '{}.{}'", entityID, resolvedMethodName);
+                return false;
+            }
+
+            const WidgetButtonEventKey key { entityID, resolvedButtonName, resolvedEventType };
+            s_WidgetButtonEventBindings[key].push_back({ resolvedMethodName, methodId });
+            ApplyWidgetButtonCallback(button, key);
+            return true;
+        }
+
+        static bool WidgetComponent_RemoveButtonEventCallback(uint64_t entityID, const char *buttonName, int32_t eventType, const char *methodName)
+        {
+            if (!buttonName || !methodName)
+            {
+                return false;
+            }
+
+            const std::string resolvedButtonName = TrimString(buttonName);
+            const std::string resolvedMethodName = TrimString(methodName);
+            if (resolvedButtonName.empty() || resolvedMethodName.empty())
+            {
+                return false;
+            }
+
+            WidgetButtonEventType resolvedEventType;
+            if (!TryParseWidgetButtonEventType(eventType, resolvedEventType))
+            {
+                return false;
+            }
+
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid())
+            {
+                return false;
+            }
+
+            Ref<WidgetButton> button = FindWidgetButton(entity, resolvedButtonName);
+            if (!button)
+            {
+                return false;
+            }
+
+            const WidgetButtonEventKey key { entityID, resolvedButtonName, resolvedEventType };
+            const auto bindingsIt = s_WidgetButtonEventBindings.find(key);
+            if (bindingsIt == s_WidgetButtonEventBindings.end())
+            {
+                return false;
+            }
+
+            auto &bindings = bindingsIt->second;
+            const auto removeIt = std::find_if(bindings.begin(), bindings.end(), [&](const ScriptWidgetCallbackBinding &binding)
+            {
+                return binding.methodName == resolvedMethodName;
+            });
+
+            if (removeIt == bindings.end())
+            {
+                return false;
+            }
+
+            bindings.erase(removeIt);
+            if (bindings.empty())
+            {
+                s_WidgetButtonEventBindings.erase(bindingsIt);
+            }
+
+            ApplyWidgetButtonCallback(button, key);
+            return true;
         }
 
         static bool Input_IsKeyPressed(uint32_t keyCode)
@@ -1491,6 +1812,9 @@ namespace ignite
             &Entity_Destroy,
             &Entity_SetVisibility,
             &Entity_GetVisibility,
+            &WidgetComponent_HasButton,
+            &WidgetComponent_AddButtonEventCallback,
+            &WidgetComponent_RemoveButtonEventCallback,
 
             &Input_IsKeyPressed,
             &Input_IsModifierPressed,
@@ -1587,6 +1911,7 @@ namespace ignite
     {
         s_EntityHasComponentFuncs.clear();
         s_EntityAddComponentFuncs.clear();
+        s_WidgetButtonEventBindings.clear();
         RegisterComponent(AllComponents {});
 
         LOG_INFO("[ScriptGlue] Component bridge initialized (HostFXR)");
@@ -1594,6 +1919,7 @@ namespace ignite
 
     void ScriptGlue::RegisterFunctions()
     {
+        s_WidgetButtonEventBindings.clear();
         LOG_INFO("[ScriptGlue] Function bridge initialized (HostFXR)");
     }
 }

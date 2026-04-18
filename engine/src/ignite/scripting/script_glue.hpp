@@ -19,6 +19,9 @@ namespace ignite
         void (*Entity_Destroy)(uint64_t entityID);
         void (*Entity_SetVisibility)(uint64_t entityID, bool value);
         void (*Entity_GetVisibility)(uint64_t entityID, bool *result);
+        bool (*WidgetComponent_HasButton)(uint64_t entityID, const char *buttonName);
+        bool (*WidgetComponent_AddButtonEventCallback)(uint64_t entityID, const char *buttonName, int32_t eventType, const char *methodName);
+        bool (*WidgetComponent_RemoveButtonEventCallback)(uint64_t entityID, const char *buttonName, int32_t eventType, const char *methodName);
 
         bool (*Input_IsKeyPressed)(uint32_t keyCode);
         bool (*Input_IsModifierPressed)(uint16_t modCode);

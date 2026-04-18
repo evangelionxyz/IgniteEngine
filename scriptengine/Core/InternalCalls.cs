@@ -51,6 +51,9 @@ public static class InternalCalls
         public IntPtr Entity_Destroy;
         public IntPtr Entity_SetVisibility;
         public IntPtr Entity_GetVisibility;
+        public IntPtr WidgetComponent_HasButton;
+        public IntPtr WidgetComponent_AddButtonEventCallback;
+        public IntPtr WidgetComponent_RemoveButtonEventCallback;
 
         public IntPtr Input_IsKeyPressed;
         public IntPtr Input_IsModifierPressed;
@@ -154,6 +157,12 @@ public static class InternalCalls
     private delegate void EntitySetVisibilityFn(ulong entityID, [MarshalAs(UnmanagedType.I1)] bool value);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void EntityGetVisibilityFn(ulong entityID, [MarshalAs(UnmanagedType.I1)] out bool result);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private delegate bool WidgetComponentHasButtonFn(ulong entityID, IntPtr buttonName);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private delegate bool WidgetComponentButtonEventFn(ulong entityID, IntPtr buttonName, int eventType, IntPtr methodName);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]
@@ -265,6 +274,9 @@ public static class InternalCalls
     private static EntityDestroyFn s_EntityDestroy;
     private static EntitySetVisibilityFn s_EntitySetVisibility;
     private static EntityGetVisibilityFn s_EntityGetVisibility;
+    private static WidgetComponentHasButtonFn s_WidgetComponentHasButton;
+    private static WidgetComponentButtonEventFn s_WidgetComponentAddButtonEventCallback;
+    private static WidgetComponentButtonEventFn s_WidgetComponentRemoveButtonEventCallback;
     private static InputIsKeyPressedFn s_InputIsKeyPressed;
     private static InputIsModifierPressedFn s_InputIsModifierPressed;
     private static InputIsMouseButtonPressedFn s_InputIsMouseButtonPressed;
@@ -362,6 +374,9 @@ public static class InternalCalls
         s_EntityDestroy = Marshal.GetDelegateForFunctionPointer<EntityDestroyFn>(api.Entity_Destroy);
         s_EntitySetVisibility = Marshal.GetDelegateForFunctionPointer<EntitySetVisibilityFn>(api.Entity_SetVisibility);
         s_EntityGetVisibility = Marshal.GetDelegateForFunctionPointer<EntityGetVisibilityFn>(api.Entity_GetVisibility);
+        s_WidgetComponentHasButton = Marshal.GetDelegateForFunctionPointer<WidgetComponentHasButtonFn>(api.WidgetComponent_HasButton);
+        s_WidgetComponentAddButtonEventCallback = Marshal.GetDelegateForFunctionPointer<WidgetComponentButtonEventFn>(api.WidgetComponent_AddButtonEventCallback);
+        s_WidgetComponentRemoveButtonEventCallback = Marshal.GetDelegateForFunctionPointer<WidgetComponentButtonEventFn>(api.WidgetComponent_RemoveButtonEventCallback);
         s_InputIsKeyPressed = Marshal.GetDelegateForFunctionPointer<InputIsKeyPressedFn>(api.Input_IsKeyPressed);
         s_InputIsModifierPressed = Marshal.GetDelegateForFunctionPointer<InputIsModifierPressedFn>(api.Input_IsModifierPressed);
         s_InputIsMouseButtonPressed = Marshal.GetDelegateForFunctionPointer<InputIsMouseButtonPressedFn>(api.Input_IsMouseButtonPressed);
@@ -552,6 +567,55 @@ public static class InternalCalls
     {
         EnsureInitialized();
         s_EntityGetVisibility(entityID, out result);
+    }
+
+    internal static bool WidgetComponent_HasButton(ulong entityID, string buttonName)
+    {
+        EnsureInitialized();
+
+        IntPtr buttonNamePtr = StringToUtf8(buttonName);
+        try
+        {
+            return s_WidgetComponentHasButton(entityID, buttonNamePtr);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(buttonNamePtr);
+        }
+    }
+
+    internal static bool WidgetComponent_AddButtonEventCallback(ulong entityID, string buttonName, int eventType, string methodName)
+    {
+        EnsureInitialized();
+
+        IntPtr buttonNamePtr = StringToUtf8(buttonName);
+        IntPtr methodNamePtr = StringToUtf8(methodName);
+        try
+        {
+            return s_WidgetComponentAddButtonEventCallback(entityID, buttonNamePtr, eventType, methodNamePtr);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(buttonNamePtr);
+            Marshal.FreeCoTaskMem(methodNamePtr);
+        }
+    }
+
+    internal static bool WidgetComponent_RemoveButtonEventCallback(ulong entityID, string buttonName, int eventType, string methodName)
+    {
+        EnsureInitialized();
+
+        IntPtr buttonNamePtr = StringToUtf8(buttonName);
+        IntPtr methodNamePtr = StringToUtf8(methodName);
+        try
+        {
+            return s_WidgetComponentRemoveButtonEventCallback(entityID, buttonNamePtr, eventType, methodNamePtr);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(buttonNamePtr);
+            Marshal.FreeCoTaskMem(methodNamePtr);
+        }
     }
 
     internal static bool Input_IsKeyPressed(uint keyCode)

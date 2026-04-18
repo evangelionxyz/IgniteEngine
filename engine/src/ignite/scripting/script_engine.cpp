@@ -468,8 +468,10 @@ namespace ignite
             EntityClassExists(sc.className))
         {
             auto &instance = scriptEngineData->entityInstances[entity.GetUUID()];
-            instance->InvokeOnDestroy();
-
+            if (instance)
+            {
+                instance->InvokeOnDestroy();
+            }
             scriptEngineData->entityInstances.erase(entity.GetUUID());
         }
 	}
