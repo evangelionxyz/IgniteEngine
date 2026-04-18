@@ -54,6 +54,27 @@ public static class InternalCalls
         public IntPtr WidgetComponent_HasButton;
         public IntPtr WidgetComponent_AddButtonEventCallback;
         public IntPtr WidgetComponent_RemoveButtonEventCallback;
+        public IntPtr AudioSourceComponent_HasAudio;
+        public IntPtr AudioSourceComponent_Play;
+        public IntPtr AudioSourceComponent_Stop;
+        public IntPtr AudioSourceComponent_Pause;
+        public IntPtr AudioSourceComponent_Resume;
+        public IntPtr AudioSourceComponent_GetVolume;
+        public IntPtr AudioSourceComponent_SetVolume;
+        public IntPtr AudioSourceComponent_GetPitch;
+        public IntPtr AudioSourceComponent_SetPitch;
+        public IntPtr AudioSourceComponent_GetPan;
+        public IntPtr AudioSourceComponent_SetPan;
+        public IntPtr AudioSourceComponent_GetPlayOnStart;
+        public IntPtr AudioSourceComponent_SetPlayOnStart;
+        public IntPtr AudioSourceComponent_GetLoop;
+        public IntPtr AudioSourceComponent_SetLoop;
+        public IntPtr AudioSourceComponent_AddReverbDSP;
+        public IntPtr AudioSourceComponent_AddDistortionDSP;
+        public IntPtr AudioSourceComponent_AddChorusDSP;
+        public IntPtr AudioSourceComponent_AddCompressorDSP;
+        public IntPtr AudioSourceComponent_AddDelayDSP;
+        public IntPtr AudioSourceComponent_ClearDSPs;
 
         public IntPtr Input_IsKeyPressed;
         public IntPtr Input_IsModifierPressed;
@@ -163,6 +184,34 @@ public static class InternalCalls
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]
     private delegate bool WidgetComponentButtonEventFn(ulong entityID, IntPtr buttonName, int eventType, IntPtr methodName);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private delegate bool AudioSourceHasAudioFn(ulong entityID);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void AudioSourceActionFn(ulong entityID);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void AudioSourceGetFloatFn(ulong entityID, out float result);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void AudioSourceSetFloatFn(ulong entityID, float value);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void AudioSourceGetBoolFn(ulong entityID, [MarshalAs(UnmanagedType.I1)] out bool result);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void AudioSourceSetBoolFn(ulong entityID, [MarshalAs(UnmanagedType.I1)] bool value);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private delegate bool AudioSourceAddReverbDspFn(ulong entityID, float decayTime, float earlyDelay, float lateDelay, float highFrequencyReference, float diffusion, float density, float lowShelfGain, float highCut, float dryLevel, float wetLevel);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private delegate bool AudioSourceAddDistortionDspFn(ulong entityID, float distortionLevel);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private delegate bool AudioSourceAddChorusDspFn(ulong entityID, float mix, float rate, float depth);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private delegate bool AudioSourceAddCompressorDspFn(ulong entityID, float threshold, float ratio, float release, float gainMakeup, [MarshalAs(UnmanagedType.I1)] bool useSidechain);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private delegate bool AudioSourceAddDelayDspFn(ulong entityID, float delayMs, float feedback);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]
@@ -277,6 +326,27 @@ public static class InternalCalls
     private static WidgetComponentHasButtonFn s_WidgetComponentHasButton;
     private static WidgetComponentButtonEventFn s_WidgetComponentAddButtonEventCallback;
     private static WidgetComponentButtonEventFn s_WidgetComponentRemoveButtonEventCallback;
+    private static AudioSourceHasAudioFn s_AudioSourceHasAudio;
+    private static AudioSourceActionFn s_AudioSourcePlay;
+    private static AudioSourceActionFn s_AudioSourceStop;
+    private static AudioSourceActionFn s_AudioSourcePause;
+    private static AudioSourceActionFn s_AudioSourceResume;
+    private static AudioSourceGetFloatFn s_AudioSourceGetVolume;
+    private static AudioSourceSetFloatFn s_AudioSourceSetVolume;
+    private static AudioSourceGetFloatFn s_AudioSourceGetPitch;
+    private static AudioSourceSetFloatFn s_AudioSourceSetPitch;
+    private static AudioSourceGetFloatFn s_AudioSourceGetPan;
+    private static AudioSourceSetFloatFn s_AudioSourceSetPan;
+    private static AudioSourceGetBoolFn s_AudioSourceGetPlayOnStart;
+    private static AudioSourceSetBoolFn s_AudioSourceSetPlayOnStart;
+    private static AudioSourceGetBoolFn s_AudioSourceGetLoop;
+    private static AudioSourceSetBoolFn s_AudioSourceSetLoop;
+    private static AudioSourceAddReverbDspFn s_AudioSourceAddReverbDsp;
+    private static AudioSourceAddDistortionDspFn s_AudioSourceAddDistortionDsp;
+    private static AudioSourceAddChorusDspFn s_AudioSourceAddChorusDsp;
+    private static AudioSourceAddCompressorDspFn s_AudioSourceAddCompressorDsp;
+    private static AudioSourceAddDelayDspFn s_AudioSourceAddDelayDsp;
+    private static AudioSourceActionFn s_AudioSourceClearDsps;
     private static InputIsKeyPressedFn s_InputIsKeyPressed;
     private static InputIsModifierPressedFn s_InputIsModifierPressed;
     private static InputIsMouseButtonPressedFn s_InputIsMouseButtonPressed;
@@ -377,6 +447,27 @@ public static class InternalCalls
         s_WidgetComponentHasButton = Marshal.GetDelegateForFunctionPointer<WidgetComponentHasButtonFn>(api.WidgetComponent_HasButton);
         s_WidgetComponentAddButtonEventCallback = Marshal.GetDelegateForFunctionPointer<WidgetComponentButtonEventFn>(api.WidgetComponent_AddButtonEventCallback);
         s_WidgetComponentRemoveButtonEventCallback = Marshal.GetDelegateForFunctionPointer<WidgetComponentButtonEventFn>(api.WidgetComponent_RemoveButtonEventCallback);
+        s_AudioSourceHasAudio = Marshal.GetDelegateForFunctionPointer<AudioSourceHasAudioFn>(api.AudioSourceComponent_HasAudio);
+        s_AudioSourcePlay = Marshal.GetDelegateForFunctionPointer<AudioSourceActionFn>(api.AudioSourceComponent_Play);
+        s_AudioSourceStop = Marshal.GetDelegateForFunctionPointer<AudioSourceActionFn>(api.AudioSourceComponent_Stop);
+        s_AudioSourcePause = Marshal.GetDelegateForFunctionPointer<AudioSourceActionFn>(api.AudioSourceComponent_Pause);
+        s_AudioSourceResume = Marshal.GetDelegateForFunctionPointer<AudioSourceActionFn>(api.AudioSourceComponent_Resume);
+        s_AudioSourceGetVolume = Marshal.GetDelegateForFunctionPointer<AudioSourceGetFloatFn>(api.AudioSourceComponent_GetVolume);
+        s_AudioSourceSetVolume = Marshal.GetDelegateForFunctionPointer<AudioSourceSetFloatFn>(api.AudioSourceComponent_SetVolume);
+        s_AudioSourceGetPitch = Marshal.GetDelegateForFunctionPointer<AudioSourceGetFloatFn>(api.AudioSourceComponent_GetPitch);
+        s_AudioSourceSetPitch = Marshal.GetDelegateForFunctionPointer<AudioSourceSetFloatFn>(api.AudioSourceComponent_SetPitch);
+        s_AudioSourceGetPan = Marshal.GetDelegateForFunctionPointer<AudioSourceGetFloatFn>(api.AudioSourceComponent_GetPan);
+        s_AudioSourceSetPan = Marshal.GetDelegateForFunctionPointer<AudioSourceSetFloatFn>(api.AudioSourceComponent_SetPan);
+        s_AudioSourceGetPlayOnStart = Marshal.GetDelegateForFunctionPointer<AudioSourceGetBoolFn>(api.AudioSourceComponent_GetPlayOnStart);
+        s_AudioSourceSetPlayOnStart = Marshal.GetDelegateForFunctionPointer<AudioSourceSetBoolFn>(api.AudioSourceComponent_SetPlayOnStart);
+        s_AudioSourceGetLoop = Marshal.GetDelegateForFunctionPointer<AudioSourceGetBoolFn>(api.AudioSourceComponent_GetLoop);
+        s_AudioSourceSetLoop = Marshal.GetDelegateForFunctionPointer<AudioSourceSetBoolFn>(api.AudioSourceComponent_SetLoop);
+        s_AudioSourceAddReverbDsp = Marshal.GetDelegateForFunctionPointer<AudioSourceAddReverbDspFn>(api.AudioSourceComponent_AddReverbDSP);
+        s_AudioSourceAddDistortionDsp = Marshal.GetDelegateForFunctionPointer<AudioSourceAddDistortionDspFn>(api.AudioSourceComponent_AddDistortionDSP);
+        s_AudioSourceAddChorusDsp = Marshal.GetDelegateForFunctionPointer<AudioSourceAddChorusDspFn>(api.AudioSourceComponent_AddChorusDSP);
+        s_AudioSourceAddCompressorDsp = Marshal.GetDelegateForFunctionPointer<AudioSourceAddCompressorDspFn>(api.AudioSourceComponent_AddCompressorDSP);
+        s_AudioSourceAddDelayDsp = Marshal.GetDelegateForFunctionPointer<AudioSourceAddDelayDspFn>(api.AudioSourceComponent_AddDelayDSP);
+        s_AudioSourceClearDsps = Marshal.GetDelegateForFunctionPointer<AudioSourceActionFn>(api.AudioSourceComponent_ClearDSPs);
         s_InputIsKeyPressed = Marshal.GetDelegateForFunctionPointer<InputIsKeyPressedFn>(api.Input_IsKeyPressed);
         s_InputIsModifierPressed = Marshal.GetDelegateForFunctionPointer<InputIsModifierPressedFn>(api.Input_IsModifierPressed);
         s_InputIsMouseButtonPressed = Marshal.GetDelegateForFunctionPointer<InputIsMouseButtonPressedFn>(api.Input_IsMouseButtonPressed);
@@ -616,6 +707,132 @@ public static class InternalCalls
             Marshal.FreeCoTaskMem(buttonNamePtr);
             Marshal.FreeCoTaskMem(methodNamePtr);
         }
+    }
+
+    internal static bool AudioSourceComponent_HasAudio(ulong entityID)
+    {
+        EnsureInitialized();
+        return s_AudioSourceHasAudio(entityID);
+    }
+
+    internal static void AudioSourceComponent_Play(ulong entityID)
+    {
+        EnsureInitialized();
+        s_AudioSourcePlay(entityID);
+    }
+
+    internal static void AudioSourceComponent_Stop(ulong entityID)
+    {
+        EnsureInitialized();
+        s_AudioSourceStop(entityID);
+    }
+
+    internal static void AudioSourceComponent_Pause(ulong entityID)
+    {
+        EnsureInitialized();
+        s_AudioSourcePause(entityID);
+    }
+
+    internal static void AudioSourceComponent_Resume(ulong entityID)
+    {
+        EnsureInitialized();
+        s_AudioSourceResume(entityID);
+    }
+
+    internal static void AudioSourceComponent_GetVolume(ulong entityID, out float result)
+    {
+        EnsureInitialized();
+        s_AudioSourceGetVolume(entityID, out result);
+    }
+
+    internal static void AudioSourceComponent_SetVolume(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_AudioSourceSetVolume(entityID, value);
+    }
+
+    internal static void AudioSourceComponent_GetPitch(ulong entityID, out float result)
+    {
+        EnsureInitialized();
+        s_AudioSourceGetPitch(entityID, out result);
+    }
+
+    internal static void AudioSourceComponent_SetPitch(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_AudioSourceSetPitch(entityID, value);
+    }
+
+    internal static void AudioSourceComponent_GetPan(ulong entityID, out float result)
+    {
+        EnsureInitialized();
+        s_AudioSourceGetPan(entityID, out result);
+    }
+
+    internal static void AudioSourceComponent_SetPan(ulong entityID, float value)
+    {
+        EnsureInitialized();
+        s_AudioSourceSetPan(entityID, value);
+    }
+
+    internal static void AudioSourceComponent_GetPlayOnStart(ulong entityID, out bool result)
+    {
+        EnsureInitialized();
+        s_AudioSourceGetPlayOnStart(entityID, out result);
+    }
+
+    internal static void AudioSourceComponent_SetPlayOnStart(ulong entityID, bool value)
+    {
+        EnsureInitialized();
+        s_AudioSourceSetPlayOnStart(entityID, value);
+    }
+
+    internal static void AudioSourceComponent_GetLoop(ulong entityID, out bool result)
+    {
+        EnsureInitialized();
+        s_AudioSourceGetLoop(entityID, out result);
+    }
+
+    internal static void AudioSourceComponent_SetLoop(ulong entityID, bool value)
+    {
+        EnsureInitialized();
+        s_AudioSourceSetLoop(entityID, value);
+    }
+
+    internal static bool AudioSourceComponent_AddReverbDSP(ulong entityID, float decayTime, float earlyDelay, float lateDelay, float highFrequencyReference, float diffusion, float density, float lowShelfGain, float highCut, float dryLevel, float wetLevel)
+    {
+        EnsureInitialized();
+        return s_AudioSourceAddReverbDsp(entityID, decayTime, earlyDelay, lateDelay, highFrequencyReference, diffusion, density, lowShelfGain, highCut, dryLevel, wetLevel);
+    }
+
+    internal static bool AudioSourceComponent_AddDistortionDSP(ulong entityID, float distortionLevel)
+    {
+        EnsureInitialized();
+        return s_AudioSourceAddDistortionDsp(entityID, distortionLevel);
+    }
+
+    internal static bool AudioSourceComponent_AddChorusDSP(ulong entityID, float mix, float rate, float depth)
+    {
+        EnsureInitialized();
+        return s_AudioSourceAddChorusDsp(entityID, mix, rate, depth);
+    }
+
+    internal static bool AudioSourceComponent_AddCompressorDSP(ulong entityID, float threshold, float ratio, float release, float gainMakeup, bool useSidechain)
+    {
+        EnsureInitialized();
+        return s_AudioSourceAddCompressorDsp(entityID, threshold, ratio, release, gainMakeup, useSidechain);
+    }
+
+    internal static bool AudioSourceComponent_AddDelayDSP(ulong entityID, float delayMs, float feedback)
+    {
+        EnsureInitialized();
+        return s_AudioSourceAddDelayDsp(entityID, delayMs, feedback);
+    }
+
+    internal static void AudioSourceComponent_ClearDSPs(ulong entityID)
+    {
+        EnsureInitialized();
+        s_AudioSourceClearDsps(entityID);
     }
 
     internal static bool Input_IsKeyPressed(uint keyCode)

@@ -532,6 +532,47 @@ namespace ignite
     class AudioSourceComponent : public IComponent
     {
     public:
+        enum class DspType : uint8_t
+        {
+            Reverb = 0,
+            Distortion,
+            Chorus,
+            Compressor,
+            Delay,
+        };
+
+        struct DspSettings
+        {
+            DspType type = DspType::Reverb;
+            bool enabled = true;
+
+            float reverbDecayTime = 1500.0f;
+            float reverbEarlyDelay = 20.0f;
+            float reverbLateDelay = 40.0f;
+            float reverbHighFrequencyReference = 5000.0f;
+            float reverbDiffusion = 50.0f;
+            float reverbDensity = 50.0f;
+            float reverbLowShelfGain = 250.0f;
+            float reverbHighCut = 20000.0f;
+            float reverbDryLevel = 0.0f;
+            float reverbWetLevel = -6.0f;
+
+            float distortionLevel = 0.5f;
+
+            float chorusMix = 50.0f;
+            float chorusRate = 0.8f;
+            float chorusDepth = 3.0f;
+
+            float compressorThreshold = 0.0f;
+            float compressorRatio = 2.5f;
+            float compressorRelease = 100.0f;
+            float compressorGainMakeup = 0.0f;
+            bool compressorUseSidechain = false;
+
+            float delayMs = 250.0f;
+            float delayFeedback = 20.0f;
+        };
+
         AssetHandle handle = AssetHandle(0);
 
         float volume = 1.0f;
@@ -539,6 +580,8 @@ namespace ignite
         float pan = 0.0f;
         bool playOnStart = false;
         bool loop = false;
+
+        std::vector<DspSettings> dsps;
 
         AudioSourceComponent() = default;
 

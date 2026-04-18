@@ -23,6 +23,28 @@ namespace ignite
         bool (*WidgetComponent_AddButtonEventCallback)(uint64_t entityID, const char *buttonName, int32_t eventType, const char *methodName);
         bool (*WidgetComponent_RemoveButtonEventCallback)(uint64_t entityID, const char *buttonName, int32_t eventType, const char *methodName);
 
+        bool (*AudioSourceComponent_HasAudio)(uint64_t entityID);
+        void (*AudioSourceComponent_Play)(uint64_t entityID);
+        void (*AudioSourceComponent_Stop)(uint64_t entityID);
+        void (*AudioSourceComponent_Pause)(uint64_t entityID);
+        void (*AudioSourceComponent_Resume)(uint64_t entityID);
+        void (*AudioSourceComponent_GetVolume)(uint64_t entityID, float *result);
+        void (*AudioSourceComponent_SetVolume)(uint64_t entityID, float value);
+        void (*AudioSourceComponent_GetPitch)(uint64_t entityID, float *result);
+        void (*AudioSourceComponent_SetPitch)(uint64_t entityID, float value);
+        void (*AudioSourceComponent_GetPan)(uint64_t entityID, float *result);
+        void (*AudioSourceComponent_SetPan)(uint64_t entityID, float value);
+        void (*AudioSourceComponent_GetPlayOnStart)(uint64_t entityID, bool *result);
+        void (*AudioSourceComponent_SetPlayOnStart)(uint64_t entityID, bool value);
+        void (*AudioSourceComponent_GetLoop)(uint64_t entityID, bool *result);
+        void (*AudioSourceComponent_SetLoop)(uint64_t entityID, bool value);
+        bool (*AudioSourceComponent_AddReverbDSP)(uint64_t entityID, float decayTime, float earlyDelay, float lateDelay, float highFrequencyReference, float diffusion, float density, float lowShelfGain, float highCut, float dryLevel, float wetLevel);
+        bool (*AudioSourceComponent_AddDistortionDSP)(uint64_t entityID, float distortionLevel);
+        bool (*AudioSourceComponent_AddChorusDSP)(uint64_t entityID, float mix, float rate, float depth);
+        bool (*AudioSourceComponent_AddCompressorDSP)(uint64_t entityID, float threshold, float ratio, float release, float gainMakeup, bool useSidechain);
+        bool (*AudioSourceComponent_AddDelayDSP)(uint64_t entityID, float delayMs, float feedback);
+        void (*AudioSourceComponent_ClearDSPs)(uint64_t entityID);
+
         bool (*Input_IsKeyPressed)(uint32_t keyCode);
         bool (*Input_IsModifierPressed)(uint16_t modCode);
         bool (*Input_IsMouseButtonPressed)(uint8_t button);

@@ -125,7 +125,6 @@ namespace ignite {
     {
         FMOD::ChannelGroup* group = nullptr;
         s_fmod_audio->m_System->createChannelGroup(name.c_str(), &group);
-        group->setMode(FMOD_LOOP_NORMAL);
         s_fmod_audio->m_ChannelGroups[name] = group;
         return group;
     }

@@ -4,6 +4,7 @@
 #include <entt/entt.hpp>
 
 #include "ignite/audio/fmod_sound.hpp"
+#include "ignite/audio/fmod_audio.hpp"
 
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/renderer/renderer_2d.hpp"
@@ -106,6 +107,87 @@ namespace ignite
 
             return mesh ? mesh->GetAnimatorHandle() : AssetHandle(0);
         }
+
+        FMOD::DSP *CreateAudioSourceDsp(const AudioSourceComponent::DspSettings &settings)
+        {
+            FMOD::DSP *dsp = nullptr;
+            FMOD_DSP_TYPE dspType = FMOD_DSP_TYPE_UNKNOWN;
+
+            switch (settings.type)
+            {
+                case AudioSourceComponent::DspType::Reverb: dspType = FMOD_DSP_TYPE_SFXREVERB; break;
+                case AudioSourceComponent::DspType::Distortion: dspType = FMOD_DSP_TYPE_DISTORTION; break;
+                case AudioSourceComponent::DspType::Chorus: dspType = FMOD_DSP_TYPE_CHORUS; break;
+                case AudioSourceComponent::DspType::Compressor: dspType = FMOD_DSP_TYPE_COMPRESSOR; break;
+                case AudioSourceComponent::DspType::Delay: dspType = FMOD_DSP_TYPE_ECHO; break;
+            }
+
+            if (dspType == FMOD_DSP_TYPE_UNKNOWN)
+            {
+                return nullptr;
+            }
+
+            const FMOD_RESULT createResult = FmodAudio::GetFmodSystem()->createDSPByType(dspType, &dsp);
+            if (createResult != FMOD_OK || !dsp)
+            {
+                return nullptr;
+            }
+
+            switch (settings.type)
+            {
+                case AudioSourceComponent::DspType::Reverb:
+                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DECAYTIME, settings.reverbDecayTime);
+                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_EARLYDELAY, settings.reverbEarlyDelay);
+                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_LATEDELAY, settings.reverbLateDelay);
+                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_HFREFERENCE, settings.reverbHighFrequencyReference);
+                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DIFFUSION, settings.reverbDiffusion);
+                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DENSITY, settings.reverbDensity);
+                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_LOWSHELFFREQUENCY, settings.reverbLowShelfGain);
+                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_HIGHCUT, settings.reverbHighCut);
+                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_DRYLEVEL, settings.reverbDryLevel);
+                    dsp->setParameterFloat(FMOD_DSP_SFXREVERB_WETLEVEL, settings.reverbWetLevel);
+                    break;
+                case AudioSourceComponent::DspType::Distortion:
+                    dsp->setParameterFloat(FMOD_DSP_DISTORTION_LEVEL, settings.distortionLevel);
+                    break;
+                case AudioSourceComponent::DspType::Chorus:
+                    dsp->setParameterFloat(FMOD_DSP_CHORUS_MIX, settings.chorusMix);
+                    dsp->setParameterFloat(FMOD_DSP_CHORUS_RATE, settings.chorusRate);
+                    dsp->setParameterFloat(FMOD_DSP_CHORUS_DEPTH, settings.chorusDepth);
+                    break;
+                case AudioSourceComponent::DspType::Compressor:
+                    dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_THRESHOLD, settings.compressorThreshold);
+                    dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_RATIO, settings.compressorRatio);
+                    dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_RELEASE, settings.compressorRelease);
+                    dsp->setParameterFloat(FMOD_DSP_COMPRESSOR_GAINMAKEUP, settings.compressorGainMakeup);
+                    dsp->setParameterBool(FMOD_DSP_COMPRESSOR_USESIDECHAIN, settings.compressorUseSidechain);
+                    break;
+                case AudioSourceComponent::DspType::Delay:
+                    dsp->setParameterFloat(FMOD_DSP_ECHO_DELAY, settings.delayMs);
+                    dsp->setParameterFloat(FMOD_DSP_ECHO_FEEDBACK, settings.delayFeedback);
+                    break;
+            }
+
+            dsp->setActive(settings.enabled);
+            return dsp;
+        }
+
+        void RebuildAudioSourceDspChain(const AudioSourceComponent &audioSource, const Ref<FmodSound> &sound)
+        {
+            if (!sound)
+            {
+                return;
+            }
+
+            sound->ClearDsps(true);
+            for (const auto &dspSettings : audioSource.dsps)
+            {
+                if (FMOD::DSP *dsp = CreateAudioSourceDsp(dspSettings))
+                {
+                    sound->AddDsp(dsp);
+                }
+            }
+        }
     }
 
     Scene::Scene(Project *project, const std::string &_name)
@@ -176,10 +258,12 @@ namespace ignite
                 Ref<FmodSound> sound = m_Project->GetAsset<FmodSound>(as.handle);
                 if (sound)
                 {
+                    RebuildAudioSourceDspChain(as, sound);
                     sound->Play();
                     sound->SetVolume(as.volume);
                     sound->SetPitch(as.pitch);
                     sound->SetPan(as.pan);
+                    sound->SetMode(as.loop ? FMOD_LOOP_NORMAL : FMOD_LOOP_OFF);
                 }
             }
         }
