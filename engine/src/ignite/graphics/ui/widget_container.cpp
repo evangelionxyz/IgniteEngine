@@ -30,6 +30,7 @@ namespace ignite
         if (!visible)
             return;
 
+#if 0
         if (renderer)
         {
             const Rect &bounds = GetAlignedRect();
@@ -43,6 +44,7 @@ namespace ignite
             renderer->DrawLine(bottomRight, bottomLeft, glm::vec4(0.2f, 0.85f, 1.0f, 1.0f));
             renderer->DrawLine(bottomLeft, topLeft, glm::vec4(0.2f, 0.85f, 1.0f, 1.0f));
         }
+#endif
 
         for (const Ref<IWidgetItem> &child : children)
         {

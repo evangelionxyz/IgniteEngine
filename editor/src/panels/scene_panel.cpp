@@ -562,7 +562,8 @@ namespace ignite
                         {
                             LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
                             AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                            if (m_EditorLayer->GetActiveProject()->GetAssetManager()->GetAssetType(handle) == AssetType::Widget)
+                            AssetMetaData metadata = assetManager->GetMetaData(handle);
+                            if (metadata.type == AssetType::Widget)
                             {
                                 c.widgetHandle = handle;
                             }
