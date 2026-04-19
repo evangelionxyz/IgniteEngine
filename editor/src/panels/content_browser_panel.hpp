@@ -81,6 +81,11 @@ namespace ignite
 
         void DragDropSource(const std::filesystem::path &filepath);
         bool DuplicateItem(const std::filesystem::path &filepath);
+        bool MoveOrCopyPathToDirectory(const std::filesystem::path &sourcePath, const std::filesystem::path &targetDirectory, bool moveItem);
+        bool MoveOrCopySelectionToDirectory(const std::filesystem::path &targetDirectory, bool moveItem);
+        void UpdateSelection(const std::filesystem::path &filepath);
+        std::vector<std::filesystem::path> GetDragSourcePaths(const std::filesystem::path &draggedPath) const;
+        void QueueMoveCopyPopup(const std::filesystem::path &draggedPath, const std::filesystem::path &targetDirectory);
 
         static void OnImportAssetDialog(void *userData, const char * const *fileList, int filter);
 
@@ -134,6 +139,11 @@ namespace ignite
         bool m_ShowCreateFolderModal = false;
         bool m_ShowRenameModal = false;
         bool m_ShowDeleteModal = false;
+        bool m_ShowMoveCopyPopup = false;
+        std::vector<std::filesystem::path> m_SelectedItems;
+        std::vector<std::filesystem::path> m_ActiveDragItems;
+        std::vector<std::filesystem::path> m_PendingDragDropSources;
+        std::filesystem::path m_PendingDragDropTargetDirectory;
         std::filesystem::path m_PopupTargetPath; // target file/folder for rename/delete
         char m_PopupInputBuffer[1024] = { 0 }; // used for create/rename names
     };

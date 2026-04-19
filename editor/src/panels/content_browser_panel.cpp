@@ -34,6 +34,13 @@ namespace ignite
 
     namespace
     {
+        static constexpr const char *kContentBrowserPathPayload = "content_browser_path";
+
+        struct ContentBrowserPathPayload
+        {
+            char path[1024] = {};
+        };
+
         static void DispatchOpenAssetEditorEvent(AssetHandle handle, const AssetMetaData &metadata)
         {
             if (handle == AssetHandle(0) || metadata.type == AssetType::Invalid)
@@ -74,6 +81,57 @@ namespace ignite
             while (std::filesystem::exists(candidate))
             {
                 candidate = parentPath / std::format("{}_Copy{}{}", baseName, suffix, extension);
+                ++suffix;
+            }
+
+            return candidate;
+        }
+
+        static bool IsPathWithin(const std::filesystem::path &path, const std::filesystem::path &base)
+        {
+            auto baseIt = base.begin();
+            auto pathIt = path.begin();
+
+            for (; baseIt != base.end(); ++baseIt, ++pathIt)
+            {
+                if (pathIt == path.end() || *baseIt != *pathIt)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        static std::filesystem::path RebasePath(const std::filesystem::path &path, const std::filesystem::path &oldBase, const std::filesystem::path &newBase)
+        {
+            std::filesystem::path suffix;
+            auto oldBaseIt = oldBase.begin();
+            auto pathIt = path.begin();
+
+            for (; oldBaseIt != oldBase.end() && pathIt != path.end(); ++oldBaseIt, ++pathIt)
+            {
+            }
+
+            for (; pathIt != path.end(); ++pathIt)
+            {
+                suffix /= *pathIt;
+            }
+
+            return newBase / suffix;
+        }
+
+        static std::filesystem::path BuildUniquePathInDirectory(const std::filesystem::path &sourcePath, const std::filesystem::path &targetDirectory)
+        {
+            const bool isDirectory = std::filesystem::is_directory(sourcePath);
+            const std::string baseName = isDirectory ? sourcePath.filename().string() : sourcePath.stem().string();
+            const std::string extension = isDirectory ? std::string() : sourcePath.extension().string();
+
+            std::filesystem::path candidate = targetDirectory / sourcePath.filename();
+            uint32_t suffix = 1;
+            while (std::filesystem::exists(candidate))
+            {
+                candidate = targetDirectory / std::format("{}_Copy{}{}", baseName, suffix, extension);
                 ++suffix;
             }
 
@@ -234,6 +292,45 @@ namespace ignite
         const bool opened = ImGui::TreeNodeEx(filename.c_str(), flags, "%s", filename.c_str());
 
         DragDropSource(fullPath);
+
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+        {
+            UpdateSelection(fullPath);
+        }
+
+        if (isDirectory && ImGui::BeginDragDropTarget())
+        {
+            bool queuedPopup = false;
+
+            if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+            {
+                if (payload->DataSize == sizeof(AssetHandle))
+                {
+                    const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                    const AssetMetaData droppedMetadata = m_AssetManager->GetMetaData(droppedHandle);
+                    Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
+                    if (project && droppedHandle != AssetHandle(0) && droppedMetadata.type != AssetType::Invalid && !droppedMetadata.filepath.empty())
+                    {
+                        QueueMoveCopyPopup(project->GetAssetFilepath(droppedMetadata.filepath), fullPath);
+                        queuedPopup = true;
+                    }
+                }
+            }
+
+            if (!queuedPopup)
+            {
+                if (const ImGuiPayload *pathPayload = ImGui::AcceptDragDropPayload(kContentBrowserPathPayload))
+                {
+                    if (pathPayload->DataSize == sizeof(ContentBrowserPathPayload))
+                    {
+                        const auto *dropData = static_cast<const ContentBrowserPathPayload *>(pathPayload->Data);
+                        QueueMoveCopyPopup(std::filesystem::path(dropData->path), fullPath);
+                    }
+                }
+            }
+
+            ImGui::EndDragDropTarget();
+        }
 
         if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
         {
@@ -702,6 +799,51 @@ namespace ignite
                 }
                 ImGui::EndPopup();
             }
+
+            if (m_ShowMoveCopyPopup)
+            {
+                ImGui::OpenPopup("Move/Copy Item");
+                m_ShowMoveCopyPopup = false;
+            }
+
+            if (ImGui::BeginPopup("Move/Copy Item"))
+            {
+                const size_t sourceCount = m_PendingDragDropSources.size();
+                if (sourceCount == 1)
+                {
+                    ImGui::Text("%s", m_PendingDragDropSources.front().filename().generic_string().c_str());
+                }
+                else
+                {
+                    ImGui::Text("%zu items", sourceCount);
+                }
+
+                ImGui::TextDisabled("to %s", m_PendingDragDropTargetDirectory.filename().generic_string().c_str());
+                ImGui::Separator();
+
+                if (ImGui::MenuItem("Move"))
+                {
+                    MoveOrCopySelectionToDirectory(m_PendingDragDropTargetDirectory, true);
+                    m_PendingDragDropSources.clear();
+                    m_PendingDragDropTargetDirectory.clear();
+                    ImGui::CloseCurrentPopup();
+                }
+
+                if (ImGui::MenuItem("Copy"))
+                {
+                    MoveOrCopySelectionToDirectory(m_PendingDragDropTargetDirectory, false);
+                    m_PendingDragDropSources.clear();
+                    m_PendingDragDropTargetDirectory.clear();
+                    ImGui::CloseCurrentPopup();
+                }
+
+                ImGui::EndPopup();
+            }
+            else if (!m_PendingDragDropSources.empty())
+            {
+                m_PendingDragDropSources.clear();
+                m_PendingDragDropTargetDirectory.clear();
+            }
         }
 
         ImGui::End();
@@ -957,10 +1099,18 @@ namespace ignite
 
         const bool isActive = ImGui::IsItemActive();
         const bool isHovered = ImGui::IsItemHovered();
+        const bool isSelected = std::ranges::find(m_SelectedItems, path) != m_SelectedItems.end();
 
-        const ImU32 buttonColor = isActive
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+        {
+            UpdateSelection(path);
+        }
+
+        const ImU32 buttonColor = isSelected
+            ? ImGui::GetColorU32(ImGuiCol_Header)
+            : (isActive
             ? ImGui::GetColorU32(ImGuiCol_ButtonActive)
-            : (isHovered ? ImGui::GetColorU32(ImGuiCol_ButtonHovered) : ImGui::GetColorU32(ImGuiCol_Button));
+            : (isHovered ? ImGui::GetColorU32(ImGuiCol_ButtonHovered) : ImGui::GetColorU32(ImGuiCol_Button)));
 
         drawList->AddRectFilled(buttonMin, buttonMax, buttonColor, ImGui::GetStyle().FrameRounding);
 
@@ -1163,6 +1313,44 @@ namespace ignite
             ImGui::EndPopup();
         }
 
+        // Move/Copy to directory
+        if (isDirectory)
+        {
+            if (ImGui::BeginDragDropTarget())
+            {
+                bool queuedPopup = false;
+
+                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                {
+                    if (payload->DataSize == sizeof(AssetHandle))
+                    {
+                        const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                        const AssetMetaData droppedMetadata = m_AssetManager->GetMetaData(droppedHandle);
+                        Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
+                        if (project && droppedHandle != AssetHandle(0) && droppedMetadata.type != AssetType::Invalid && !droppedMetadata.filepath.empty())
+                        {
+                            QueueMoveCopyPopup(project->GetAssetFilepath(droppedMetadata.filepath), path);
+                            queuedPopup = true;
+                        }
+                    }
+                }
+
+                if (!queuedPopup)
+                {
+                    if (const ImGuiPayload *pathPayload = ImGui::AcceptDragDropPayload(kContentBrowserPathPayload))
+                    {
+                        if (pathPayload->DataSize == sizeof(ContentBrowserPathPayload))
+                        {
+                            const auto *dropData = static_cast<const ContentBrowserPathPayload *>(pathPayload->Data);
+                            QueueMoveCopyPopup(std::filesystem::path(dropData->path), path);
+                        }
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+
+        }
+
         DragDropSource(m_CurrentDirectory / item);
 
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + maxSize);
@@ -1307,6 +1495,260 @@ namespace ignite
 
         m_NeedsRefresh = true;
         return true;
+    }
+
+    void ContentBrowserPanel::UpdateSelection(const std::filesystem::path &filepath)
+    {
+        const bool multiSelect = ImGui::GetIO().KeyCtrl;
+        const auto selectedIt = std::ranges::find(m_SelectedItems, filepath);
+
+        if (!multiSelect)
+        {
+            m_SelectedItems.clear();
+            m_SelectedItems.push_back(filepath);
+            return;
+        }
+
+        if (selectedIt != m_SelectedItems.end())
+        {
+            m_SelectedItems.erase(selectedIt);
+        }
+        else
+        {
+            m_SelectedItems.push_back(filepath);
+        }
+    }
+
+    std::vector<std::filesystem::path> ContentBrowserPanel::GetDragSourcePaths(const std::filesystem::path &draggedPath) const
+    {
+        std::vector<std::filesystem::path> result;
+
+        if (!m_SelectedItems.empty() && std::ranges::find(m_SelectedItems, draggedPath) != m_SelectedItems.end())
+        {
+            result = m_SelectedItems;
+        }
+        else
+        {
+            result.push_back(draggedPath);
+        }
+
+        std::vector<std::filesystem::path> filtered;
+        for (const auto &candidate : result)
+        {
+            bool nestedInOtherSelection = false;
+            for (const auto &other : result)
+            {
+                if (candidate == other)
+                {
+                    continue;
+                }
+
+                if (IsPathWithin(candidate, other))
+                {
+                    nestedInOtherSelection = true;
+                    break;
+                }
+            }
+
+            if (!nestedInOtherSelection)
+            {
+                filtered.push_back(candidate);
+            }
+        }
+
+        return filtered;
+    }
+
+    void ContentBrowserPanel::QueueMoveCopyPopup(const std::filesystem::path &draggedPath, const std::filesystem::path &targetDirectory)
+    {
+        if (draggedPath.empty() || targetDirectory.empty())
+        {
+            return;
+        }
+
+        const bool draggedPathInActiveSelection = std::ranges::find(m_ActiveDragItems, draggedPath) != m_ActiveDragItems.end();
+        std::vector<std::filesystem::path> dragSources = draggedPathInActiveSelection ? m_ActiveDragItems : GetDragSourcePaths(draggedPath);
+        std::vector<std::filesystem::path> validSources;
+        validSources.reserve(dragSources.size());
+
+        for (const auto &source : dragSources)
+        {
+            if (!std::filesystem::exists(source))
+            {
+                continue;
+            }
+
+            std::error_code equivalentError;
+            const bool samePath = std::filesystem::equivalent(source, targetDirectory, equivalentError);
+            if (!equivalentError && samePath)
+            {
+                continue;
+            }
+
+            if (std::filesystem::is_directory(source) && IsPathWithin(targetDirectory, source))
+            {
+                continue;
+            }
+
+            validSources.push_back(source);
+        }
+
+        if (validSources.empty())
+        {
+            return;
+        }
+
+        m_PendingDragDropSources = std::move(validSources);
+        m_PendingDragDropTargetDirectory = targetDirectory;
+        m_ShowMoveCopyPopup = true;
+    }
+
+    bool ContentBrowserPanel::MoveOrCopyPathToDirectory(const std::filesystem::path &sourcePath, const std::filesystem::path &targetDirectory, bool moveItem)
+    {
+        if (!m_EditorLayer || !m_EditorLayer->GetActiveProject() || !m_AssetManager)
+        {
+            return false;
+        }
+
+        Project *project = m_EditorLayer->GetActiveProject().get();
+        if (!project || !std::filesystem::exists(sourcePath) || !std::filesystem::exists(targetDirectory) || !std::filesystem::is_directory(targetDirectory))
+        {
+            return false;
+        }
+
+        if (std::filesystem::is_directory(sourcePath) && IsPathWithin(targetDirectory, sourcePath))
+        {
+            LOG_WARN("[Content Browser] Cannot move/copy '{}' into one of its child directories '{}'.", sourcePath.generic_string(), targetDirectory.generic_string());
+            return false;
+        }
+
+        std::error_code equivalentError;
+        const bool sameDirectory = std::filesystem::equivalent(sourcePath.parent_path(), targetDirectory, equivalentError);
+        if (!equivalentError && sameDirectory && moveItem)
+        {
+            return false;
+        }
+
+        std::filesystem::path destinationPath = targetDirectory / sourcePath.filename();
+        if (std::filesystem::exists(destinationPath))
+        {
+            destinationPath = BuildUniquePathInDirectory(sourcePath, targetDirectory);
+        }
+
+        const bool sourceIsDirectory = std::filesystem::is_directory(sourcePath);
+        const std::filesystem::path oldRelativePath = project->GetAssetRelativeFilepath(sourcePath);
+        const std::filesystem::path newRelativePath = project->GetAssetRelativeFilepath(destinationPath);
+
+        std::error_code ec;
+        if (moveItem)
+        {
+            std::filesystem::rename(sourcePath, destinationPath, ec);
+            if (ec)
+            {
+                LOG_ERROR("[Content Browser] Failed to move '{}' to '{}': {}", sourcePath.generic_string(), destinationPath.generic_string(), ec.message());
+                return false;
+            }
+
+            if (sourceIsDirectory)
+            {
+                auto &registry = m_AssetManager->GetAssetAssetRegistry();
+                for (const auto &[assetHandle, metadata] : registry)
+                {
+                    if (assetHandle == AssetHandle(0) || metadata.filepath.empty() || !IsPathWithin(metadata.filepath, oldRelativePath))
+                    {
+                        continue;
+                    }
+
+                    AssetMetaData updatedMetadata = metadata;
+                    updatedMetadata.filepath = RebasePath(metadata.filepath, oldRelativePath, newRelativePath);
+                    m_AssetManager->AssignMetaData(assetHandle, updatedMetadata);
+                }
+            }
+            else
+            {
+                const std::filesystem::path sourceMetaPath = sourcePath.string() + ".meta";
+                const std::filesystem::path destinationMetaPath = destinationPath.string() + ".meta";
+                if (std::filesystem::exists(sourceMetaPath))
+                {
+                    std::error_code metaError;
+                    std::filesystem::rename(sourceMetaPath, destinationMetaPath, metaError);
+                }
+
+                const AssetHandle existingHandle = m_AssetManager->GetAssetHandle(oldRelativePath);
+                if (existingHandle != AssetHandle(0))
+                {
+                    AssetMetaData metadata = m_AssetManager->GetMetaData(existingHandle);
+                    metadata.filepath = newRelativePath;
+                    m_AssetManager->AssignMetaData(existingHandle, metadata);
+                }
+            }
+        }
+        else
+        {
+            if (sourceIsDirectory)
+            {
+                std::filesystem::copy(sourcePath, destinationPath, std::filesystem::copy_options::recursive, ec);
+            }
+            else
+            {
+                std::filesystem::copy_file(sourcePath, destinationPath, std::filesystem::copy_options::overwrite_existing, ec);
+            }
+
+            if (ec)
+            {
+                LOG_ERROR("[Content Browser] Failed to copy '{}' to '{}': {}", sourcePath.generic_string(), destinationPath.generic_string(), ec.message());
+                return false;
+            }
+
+            if (!sourceIsDirectory)
+            {
+                const std::filesystem::path sourceMetaPath = sourcePath.string() + ".meta";
+                const std::filesystem::path destinationMetaPath = destinationPath.string() + ".meta";
+                if (std::filesystem::exists(sourceMetaPath))
+                {
+                    std::error_code metaError;
+                    std::filesystem::copy_file(sourceMetaPath, destinationMetaPath, std::filesystem::copy_options::overwrite_existing, metaError);
+                }
+            }
+
+            auto &registry = m_AssetManager->GetAssetAssetRegistry();
+            for (const auto &[assetHandle, metadata] : registry)
+            {
+                if (assetHandle == AssetHandle(0) || metadata.filepath.empty() || !IsPathWithin(metadata.filepath, oldRelativePath))
+                {
+                    continue;
+                }
+
+                AssetHandle copiedHandle = AssetHandle();
+                AssetMetaData copiedMetadata = metadata;
+                copiedMetadata.filepath = RebasePath(metadata.filepath, oldRelativePath, newRelativePath);
+                m_AssetManager->AssignMetaData(copiedHandle, copiedMetadata);
+            }
+        }
+
+        return true;
+    }
+
+    bool ContentBrowserPanel::MoveOrCopySelectionToDirectory(const std::filesystem::path &targetDirectory, bool moveItem)
+    {
+        if (m_PendingDragDropSources.empty() || targetDirectory.empty())
+        {
+            return false;
+        }
+
+        bool changed = false;
+        for (const auto &sourcePath : m_PendingDragDropSources)
+        {
+            changed |= MoveOrCopyPathToDirectory(sourcePath, targetDirectory, moveItem);
+        }
+
+        if (changed)
+        {
+            m_EditorLayer->SaveProject();
+            m_NeedsRefresh = true;
+        }
+
+        return changed;
     }
 
     void ContentBrowserPanel::UIRenderNavigationBar()
@@ -1624,7 +2066,10 @@ namespace ignite
         {
             IGN_PROFILE_SCOPE("ContentBrowser::DragDropSource");
 
-            if (!std::filesystem::is_directory(filepath))
+            m_ActiveDragItems = GetDragSourcePaths(filepath);
+
+            const bool isDirectory = std::filesystem::is_directory(filepath);
+            if (!isDirectory)
             {
                 auto project = m_EditorLayer->GetActiveProject();
                 const std::filesystem::path relativeAssetPath = project ? project->GetAssetRelativeFilepath(filepath) : filepath;
@@ -1632,10 +2077,35 @@ namespace ignite
                 if (handle != AssetHandle(0))
                 {
                     ImGui::SetDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM, &handle, sizeof(AssetHandle));
-
-                    ImGui::Text("Asset %zu", (uint64_t)handle);
-                    ImGui::Text("%s", relativeAssetPath.filename().string().c_str());
                 }
+            }
+            else
+            {
+                ContentBrowserPathPayload payload;
+                const std::string pathString = filepath.generic_string();
+                std::strncpy(payload.path, pathString.c_str(), sizeof(payload.path) - 1);
+                ImGui::SetDragDropPayload(kContentBrowserPathPayload, &payload, sizeof(payload));
+            }
+
+            Ref<Texture> dragIcon = GetOrCreateThumbnail(filepath, isDirectory);
+            if (!dragIcon)
+            {
+                dragIcon = s_SharedIcons["unknown"];
+            }
+
+            if (dragIcon && dragIcon->GetHandle())
+            {
+                ImTextureID iconId = reinterpret_cast<ImTextureID>(dragIcon->GetHandle().Get());
+                ImGui::Image(iconId, ImVec2(32.0f, 32.0f));
+            }
+
+            if (m_ActiveDragItems.size() > 1)
+            {
+                ImGui::Text("%zu items", m_ActiveDragItems.size());
+            }
+            else
+            {
+                ImGui::Text("%s", filepath.filename().string().c_str());
             }
 
             ImGui::EndDragDropSource();
