@@ -296,6 +296,7 @@ namespace ignite
         if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
         {
             UpdateSelection(fullPath);
+            m_SelectedFileTree = fullPath;
         }
 
         if (isDirectory && ImGui::BeginDragDropTarget())
@@ -398,9 +399,80 @@ namespace ignite
                 ImGui::BeginChild("left_item_browser", { 300.0f, 0.0f }, ImGuiChildFlags_ResizeX);
                 if (!m_TreeNodes.empty())
                 {
-                    for (const uint32_t rootNodeIndex : m_SortedRootNodeIndices)
+                    const std::filesystem::path assetDir = m_EditorLayer->GetActiveProject()->GetAssetDirectory();
+                    const std::string rootLabel = assetDir.filename().string().empty() ? assetDir.generic_string() : assetDir.filename().string();
+
+                    ImGuiTreeNodeFlags rootFlags = (m_SelectedFileTree == assetDir ? ImGuiTreeNodeFlags_Selected : 0)
+                        | ImGuiTreeNodeFlags_OpenOnArrow
+                        | ImGuiTreeNodeFlags_SpanAvailWidth
+                        | ImGuiTreeNodeFlags_SpanFullWidth
+                        | ImGuiTreeNodeFlags_DefaultOpen;
+
+                    const bool rootOpened = ImGui::TreeNodeEx("##content_browser_root", rootFlags, "%s", rootLabel.c_str());
+
+                    DragDropSource(assetDir);
+
+                    if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
                     {
-                        UIRenderFileTree(&m_TreeNodes[rootNodeIndex]);
+                        UpdateSelection(assetDir);
+                        m_SelectedFileTree = assetDir;
+                    }
+
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        bool queuedPopup = false;
+
+                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                        {
+                            if (payload->DataSize == sizeof(AssetHandle))
+                            {
+                                const AssetHandle droppedHandle = *static_cast<const AssetHandle *>(payload->Data);
+                                const AssetMetaData droppedMetadata = m_AssetManager->GetMetaData(droppedHandle);
+                                Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
+                                if (project && droppedHandle != AssetHandle(0) && droppedMetadata.type != AssetType::Invalid && !droppedMetadata.filepath.empty())
+                                {
+                                    QueueMoveCopyPopup(project->GetAssetFilepath(droppedMetadata.filepath), assetDir);
+                                    queuedPopup = true;
+                                }
+                            }
+                        }
+
+                        if (!queuedPopup)
+                        {
+                            if (const ImGuiPayload *pathPayload = ImGui::AcceptDragDropPayload(kContentBrowserPathPayload))
+                            {
+                                if (pathPayload->DataSize == sizeof(ContentBrowserPathPayload))
+                                {
+                                    const auto *dropData = static_cast<const ContentBrowserPathPayload *>(pathPayload->Data);
+                                    QueueMoveCopyPopup(std::filesystem::path(dropData->path), assetDir);
+                                }
+                            }
+                        }
+
+                        ImGui::EndDragDropTarget();
+                    }
+
+                    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+                    {
+                        if (assetDir != m_CurrentDirectory)
+                        {
+                            m_BackwardPathStack.push(m_CurrentDirectory);
+                            while (!m_ForwardPathStack.empty())
+                            {
+                                m_ForwardPathStack.pop();
+                            }
+
+                            m_CurrentDirectory = assetDir;
+                        }
+                    }
+
+                    if (rootOpened)
+                    {
+                        for (const uint32_t rootNodeIndex : m_SortedRootNodeIndices)
+                        {
+                            UIRenderFileTree(&m_TreeNodes[rootNodeIndex]);
+                        }
+                        ImGui::TreePop();
                     }
                 }
                 ImGui::EndChild();
@@ -1104,11 +1176,10 @@ namespace ignite
         if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
         {
             UpdateSelection(path);
+            m_SelectedFileTree = path;
         }
 
-        const ImU32 buttonColor = isSelected
-            ? ImGui::GetColorU32(ImGuiCol_Header)
-            : (isActive
+        const ImU32 buttonColor = (isActive
             ? ImGui::GetColorU32(ImGuiCol_ButtonActive)
             : (isHovered ? ImGui::GetColorU32(ImGuiCol_ButtonHovered) : ImGui::GetColorU32(ImGuiCol_Button)));
 
@@ -1125,6 +1196,14 @@ namespace ignite
 
         ImTextureID iconId = reinterpret_cast<ImTextureID>(icon->GetHandle().Get());
         drawList->AddImage(iconId, imageMin, imageMax);
+
+        if (isSelected)
+        {
+            const ImU32 overlayFill = ImGui::GetColorU32(ImVec4(0.20f, 0.45f, 0.85f, 0.22f));
+            const ImU32 overlayBorder = ImGui::GetColorU32(ImGuiCol_HeaderActive);
+            drawList->AddRectFilled(buttonMin, buttonMax, overlayFill, ImGui::GetStyle().FrameRounding);
+            drawList->AddRect(buttonMin, buttonMax, overlayBorder, ImGui::GetStyle().FrameRounding, 0, 2.0f);
+        }
 
         if (ImGui::IsItemHovered())
         {
