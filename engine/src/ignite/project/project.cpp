@@ -180,7 +180,6 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 		// set dirty flags
 		this->SetDirtyFlag(false);
 
-
 		// Serialize asset manager
 		auto &assetRegistry = m_AssetManager->GetAssetAssetRegistry();
 
@@ -349,50 +348,39 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 
         // Candidate source directories to search for dependencies. Prefer the executable directory.
         std::filesystem::path exeDir = GetExecutableDirectory();
-        std::vector<std::filesystem::path> candidates = {
-            exeDir,
-            exeDir / "bin",
-            exeDir / "bin" / "Debug",
-            exeDir / "bin" / "Release",
-            exeDir / "Bin",
-            exeDir / "Bin" / "Debug",
-            exeDir / "Bin" / "Release"
-        };
 
         bool dependenciesAvailable = false;
         for (auto &dep : dependencies)
         {
             std::filesystem::path targetDepFilename = projectBinDir / dep;
-            // if already copied, skip
-            if (std::filesystem::exists(targetDepFilename))
+            std::filesystem::path depFilename = exeDir / dep;
+            if (!std::filesystem::exists(depFilename))
+                continue;
+
+            auto srcTime = std::filesystem::last_write_time(depFilename);
+            auto dstTime = std::filesystem::exists(targetDepFilename)
+                ? std::filesystem::last_write_time(targetDepFilename)
+                : std::filesystem::file_time_type::min();
+
+            // Skip copy if the target is newer or equal
+            if (srcTime <= dstTime)
             {
+                LOG_INFO("[Project] Dependency \"{}\" is up to date.", dep);
                 dependenciesAvailable = true;
-                LOG_INFO("[Project] Script dependency \"{}\" available.", dep);
                 continue;
             }
 
-            // find dependency in candidate dirs
-            bool copied = false;
-            for (auto &cand : candidates)
+            try
             {
-                std::filesystem::path depFilename = cand / dep;
-                if (std::filesystem::exists(depFilename))
-                {
-                    try
-                    {
-						LOG_INFO("[Project] Copying script dependency \"{}\".", dep);
-
-                        std::filesystem::copy_file(depFilename, targetDepFilename, std::filesystem::copy_options::overwrite_existing);
-                        copied = true;
-                        dependenciesAvailable = true;
-                        break;
-                    }
-                    catch (...) {}
-                }
+                LOG_INFO("[Project] Copying script dependency \"{}\".", dep);
+                std::filesystem::copy_file(
+                    depFilename,
+                    targetDepFilename,
+                    std::filesystem::copy_options::overwrite_existing
+                );
+                dependenciesAvailable = true;
             }
-
-            // if not found, continue to try other deps; final assertion below will fail if none copied
-            (void)copied;
+            catch (...) { }
         }
 
         LOG_ASSERT(dependenciesAvailable, "[Project] Failed to copy script dependencies");

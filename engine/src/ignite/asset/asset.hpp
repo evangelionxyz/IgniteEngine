@@ -43,6 +43,7 @@ namespace ignite {
         Anim2D,
         Skeleton,
         Mesh,
+        MeshInstance,
         Scene,
         Widget,
         AnimatorController, // .ac    - animator state machine
@@ -72,6 +73,7 @@ namespace ignite {
             case ignite::AssetType::SpriteSheet: return "SpriteSheet";
             case ignite::AssetType::Anim2D: return "Anim2D";
 			case ignite::AssetType::Mesh: return "Mesh";
+			case ignite::AssetType::MeshInstance: return "MeshInstance";
             case ignite::AssetType::Skeleton: return "Skeleton";
             case ignite::AssetType::Environment: return "Environment";
             case ignite::AssetType::BlendSpace: return "BlendSpace";
@@ -101,6 +103,7 @@ namespace ignite {
         if (typeStr == "SpriteSheet") return AssetType::SpriteSheet;
         if (typeStr == "Anim2D")  return AssetType::Anim2D;
         if (typeStr == "Mesh")  return AssetType::Mesh;
+        if (typeStr == "MeshInstance")  return AssetType::MeshInstance;
         if (typeStr == "Skeleton")  return AssetType::Skeleton;
         if (typeStr == "Material")  return AssetType::Material;
         if (typeStr == "Environment")  return AssetType::Environment;
@@ -143,6 +146,7 @@ namespace ignite {
 
         // Meshes
         { ".mesh", AssetType::Mesh },
+        { ".meshinstance", AssetType::MeshInstance },
         { ".fbx", AssetType::Mesh },
         { ".gltf", AssetType::Mesh },
         { ".glb", AssetType::Mesh },
@@ -172,6 +176,7 @@ namespace ignite {
         case AssetType::AnimationMontage: return ".mtg";
         case AssetType::Widget: return ".wdgt";
         case AssetType::Mesh: return ".mesh";
+        case AssetType::MeshInstance: return ".meshinstance";
         case AssetType::Skeleton: return ".ixskel";
         case AssetType::SkeletalAnimation: return ".ixanim";
         case AssetType::BlendSpace: return ".bsp";
