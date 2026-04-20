@@ -12,13 +12,14 @@ namespace ignite
     {
         void (*Debug_Log)(const char *message);
 
+        uint64_t(*Scene_PickEntityAt)(float mouseX, float mouseY, glm::vec2 viewportMin, glm::vec2 viewportMax);
+
         bool (*Entity_HasComponent)(uint64_t entityID, const char *componentTypeName);
         void (*Entity_AddComponent)(uint64_t entityID, const char *componentTypeName);
         uint64_t (*Entity_FindEntityByName)(const char *name);
         uint64_t (*Entity_Instantiate)(uint64_t entityID, glm::vec3 value);
         void (*Entity_Destroy)(uint64_t entityID);
         void (*Entity_SetVisibility)(uint64_t entityID, bool value);
-        uint64_t (*Scene_PickEntityAt)(float mouseX, float mouseY, glm::vec2 viewportMin, glm::vec2 viewportMax);
         void (*Entity_GetVisibility)(uint64_t entityID, bool *result);
         bool (*WidgetComponent_HasButton)(uint64_t entityID, const char *buttonName);
         bool (*WidgetComponent_AddButtonEventCallback)(uint64_t entityID, const char *buttonName, int32_t eventType, const char *methodName);

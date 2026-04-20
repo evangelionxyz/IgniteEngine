@@ -2344,13 +2344,13 @@ namespace ignite
         static const ScriptGlueAPI s_API =
         {
             &Debug_Log,
+            &Scene_PickEntityAt,
             &Entity_HasComponent,
             &Entity_AddComponent,
             &Entity_FindEntityByName,
             &Entity_Instantiate,
             &Entity_Destroy,
             &Entity_SetVisibility,
-            &Scene_PickEntityAt,
             &Entity_GetVisibility,
             &WidgetComponent_HasButton,
             &WidgetComponent_AddButtonEventCallback,
