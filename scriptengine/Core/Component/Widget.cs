@@ -2,7 +2,7 @@ namespace Ignite;
 
 public class Widget : IComponent
 {
-    public WidgetButton? GetButton(string buttonName)
+    public WidgetButton GetButton(string buttonName)
     {
         if (string.IsNullOrWhiteSpace(buttonName))
         {

@@ -55,4 +55,26 @@ namespace ignite
 
         return bounds;
     }
+
+    bool AABB::IntersectRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, float &outT) const
+    {
+        // Slab method
+        const glm::vec3 invDir = 1.0f / rayDirection;
+        glm::vec3 t0s = (min - rayOrigin) * invDir;
+        glm::vec3 t1s = (max - rayOrigin) * invDir;
+
+        glm::vec3 tsmaller = glm::min(t0s, t1s);
+        glm::vec3 tbigger = glm::max(t0s, t1s);
+
+        float tmin = glm::max(glm::max(tsmaller.x, tsmaller.y), tsmaller.z);
+        float tmax = glm::min(glm::min(tbigger.x, tbigger.y), tbigger.z);
+
+        if (tmax >= glm::max(tmin, 0.0f))
+        {
+            outT = tmin < 0.0f ? tmax : tmin;
+            return true;
+        }
+
+        return false;
+    }
 }

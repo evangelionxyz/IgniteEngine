@@ -15,11 +15,10 @@ namespace ignite
     {
     public:
         LayoutMode layout = LayoutMode::Vertical;
-
         float gap = 0.0f;
 
         virtual void Update(float deltaTime, const glm::vec2 &mousePosition) override;
-        virtual void Draw(Renderer2D *renderer, AssetManager *assetManager) override;
+        virtual void Draw(WidgetRenderer *renderer, AssetManager *assetManager) override;
         virtual void Measure() override;
         virtual void Arrange(const Rect &parentArea) override;
         virtual bool HitTest(int px, int py) override;

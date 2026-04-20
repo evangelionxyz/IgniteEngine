@@ -80,6 +80,9 @@ namespace ignite
 
     void Physics2D::InstantiateEntity(Entity entity)
     {
+        if (!entity.HasComponent<Rigidbody2DComponent>())
+            return;
+
         auto &id = entity.GetComponent<IDComponent>();
         auto &tr = entity.GetComponent<TransformComponent>();
 

@@ -167,7 +167,11 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
         if (m_OnCreateMethodId)
         {
-            m_ScriptHost->Invoke(m_OnCreateMethodId, nullptr, 0, nullptr);
+            if (!m_ScriptHost->Invoke(m_OnCreateMethodId, nullptr, 0, nullptr))
+            {
+                LOG_ERROR("[Script Instance] OnCreate invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+                m_OnCreateMethodId = 0;
+            }
         }
     }
 
@@ -176,7 +180,11 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
         if (m_OnDestroyMethodId)
         {
-            m_ScriptHost->Invoke(m_OnDestroyMethodId, nullptr, 0, nullptr);
+            if (!m_ScriptHost->Invoke(m_OnDestroyMethodId, nullptr, 0, nullptr))
+            {
+                LOG_ERROR("[Script Instance] OnDestroy invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+                m_OnDestroyMethodId = 0;
+            }
         }
 	}
 
@@ -186,7 +194,11 @@ namespace ignite
         if (m_OnUpdateMethodId)
         {
             void *args[] = { &time };
-            m_ScriptHost->Invoke(m_OnUpdateMethodId, args, 1, nullptr);
+            if (!m_ScriptHost->Invoke(m_OnUpdateMethodId, args, 1, nullptr))
+            {
+                LOG_ERROR("[Script Instance] OnUpdate invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+                m_OnUpdateMethodId = 0;
+            }
         }
     }
 }

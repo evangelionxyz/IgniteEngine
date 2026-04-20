@@ -95,13 +95,29 @@ namespace ignite
         uint32_t objectID;
     };
 
-	struct VertexText
-	{
-		glm::vec3 position;
-		glm::vec4 color;
-		glm::vec2 texCoord;
-		uint32_t texIndex;
-		uint32_t objectID;
-	};
+    struct VertexText
+    {
+        glm::vec3 position;
+        glm::vec4 color;
+        glm::vec2 texCoord;
+        uint32_t texIndex;
+        uint32_t objectID;
+    };
 
+    struct VertexWidgetQuad
+    {
+        glm::vec3 position;
+        glm::vec2 texCoord;
+        glm::vec2 tilingFactor;
+        glm::vec4 color;
+        uint32_t texIndex;
+    };
+
+    struct VertexWidgetText
+    {
+        glm::vec3 position;
+        glm::vec4 color;
+        glm::vec2 texCoord;
+        uint32_t texIndex;
+    };
 }

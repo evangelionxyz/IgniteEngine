@@ -513,8 +513,12 @@ namespace ignite
         {
 			if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
 			{
-				ICamera *gameCamera = &primaryCam.GetComponent<CameraComponent>().camera;
+                auto &cc = primaryCam.GetComponent<CameraComponent>();
+				ICamera *gameCamera = &cc.camera;
                 {
+                    cc.viewportPosition = m_ScenePanel->m_Data.sceneGameplayViewportRect.min;
+                    cc.viewportSize = m_ScenePanel->m_Data.sceneGameplayViewportRect.GetSize();
+
                     IGN_PROFILE_SCOPE("SceneRenderer::RenderGameplayTo");
                     m_SceneRenderer->RenderGameplayTo(gameCamera);
                 }

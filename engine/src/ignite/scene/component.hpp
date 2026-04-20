@@ -222,6 +222,9 @@ namespace ignite
         SceneCamera camera;
         bool primary = true;
 
+        glm::vec2 viewportPosition;
+        glm::vec2 viewportSize;
+
         CameraComponent() = default;
 
         COMPONENT_CLASS_TYPE(CompType_Camera)
@@ -427,6 +430,8 @@ namespace ignite
 
         glm::mat4 worldMatrix = glm::mat4(1.0f);
         glm::mat4 normalMatrix = glm::mat4(1.0f);
+
+        AABB worldAABB;
 
         std::string currentStateName;
         float stateElapsed = 0.0f;

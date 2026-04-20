@@ -7,7 +7,7 @@
 #include "ignite/core/types.hpp"
 #include "ignite/math/math.hpp"
 #include "ignite/asset/asset.hpp"
-#include "ignite/core/logger.hpp"
+#include "ignite/asset/asset_manager.hpp"
 
 #include <string>
 #include <functional>
@@ -32,11 +32,11 @@ namespace ignite
     class WidgetCanvas;
     class Scene;
     class Texture;
-    class Renderer2D;
-    class AssetManager;
+    class Font;
+    class WidgetRenderer;
     class WidgetContainer;
 
-    enum class SizingMode
+    enum class SizingMode : uint8_t
     {
         Default,
         ExpandToParent,
@@ -44,7 +44,7 @@ namespace ignite
         COUNT
     };
 
-    enum class LayoutMode
+    enum class LayoutMode : uint8_t
     {
         Horizontal,
         Vertical,
@@ -54,7 +54,7 @@ namespace ignite
         COUNT
     };
 
-    enum class WidgetAlignment
+    enum class WidgetAlignment : uint8_t
     {
         TopLeft,
         TopCenter,
@@ -73,12 +73,21 @@ namespace ignite
     {
         Container = 0,
         Button,
-        Label
+        Label,
+
+        COUNT
     };
 
     // Base widget item
     class IWidgetItem : public std::enable_shared_from_this<IWidgetItem>
     {
+    protected:
+        std::function<void()> m_OnClick;
+        std::function<void()> m_OnPressed;
+        std::function<void()> m_OnReleased;
+        std::function<void()> m_OnHoverEnter;
+        std::function<void()> m_OnHoverExit;
+
     public:
         IWidgetItem *parent = nullptr;
         std::vector<Ref<IWidgetItem>> children;
@@ -91,11 +100,11 @@ namespace ignite
         glm::vec2 size = glm::vec2(150.0f, 50.0f); // width, height
         float padding = 0.0f;
         float margin = 0.0f;
-        Rect worldRect;
-        bool visible = true;
-
+        int zIndex = 0;
         WidgetAlignment alignment = WidgetAlignment::TopLeft;
         SizingMode sizingMode = SizingMode::Default;
+        Rect worldRect;
+        bool visible = true;
 
     public:
         virtual ~IWidgetItem() = default;
@@ -117,43 +126,11 @@ namespace ignite
             return ptr;
         }
 
-        virtual void Update(float deltaTime, const glm::vec2 &mousePosition) = 0;
-
-        virtual void Draw(Renderer2D *renderer, AssetManager *assetManager)
-        {
-            for (const Ref<IWidgetItem> &child : children)
-            {
-                if (!child || !child->IsVisible())
-                {
-                    continue;
-                }
-
-                child->Draw(renderer, assetManager);
-            }
-        }
-
-        virtual void Measure()
-        {
-            for (const Ref<IWidgetItem> &child : children)
-            {
-                if (!child || !child->IsVisible())
-                {
-                    continue;
-                }
-
-                child->Measure();
-            }
-        }
-
-        virtual void Arrange(const Rect &parentArea)
-        {
-            worldRect = CalculateAlignedRect(parentArea);
-        }
-
-        virtual bool HitTest(int px, int py)
-        {
-            return worldRect.Contains(glm::vec2(static_cast<float>(px), static_cast<float>(py)));
-        }
+        virtual void Update(float deltaTime, const glm::vec2 &mousePosition) { }
+        virtual void Draw(WidgetRenderer *renderer, AssetManager *assetManager) { }
+        virtual void Measure() { }
+        virtual void Arrange(const Rect &parentArea) { }
+        virtual bool HitTest(int px, int py) { return false; }
 
         void SetVisible(bool isVisible) { visible = isVisible; }
         bool IsVisible() const { return visible; }
@@ -222,19 +199,13 @@ namespace ignite
         Ref<T> As() { return std::dynamic_pointer_cast<T>(shared_from_this()); }
 
         virtual WidgetType GetWidgetType() const = 0;
-
-    protected:
-        std::function<void()> m_OnClick;
-        std::function<void()> m_OnPressed;
-        std::function<void()> m_OnReleased;
-        std::function<void()> m_OnHoverEnter;
-        std::function<void()> m_OnHoverExit;
     };
 
     class WidgetLabel : public IWidgetItem
     {
     public:
         AssetHandle fontHandle = AssetHandle(0);
+        Ref<Font> font;
         std::string text;
         glm::vec4 color;
         float fontSize = 16.0f; // In Pixel
@@ -258,7 +229,7 @@ namespace ignite
         float GetLineSpacing() const { return lineSpacing; }
         
         virtual void Update(float deltaTime, const glm::vec2 &mousePosition) override;
-        virtual void Draw(Renderer2D *renderer, AssetManager *assetManager) override;
+        virtual void Draw(WidgetRenderer *renderer, AssetManager *assetManager) override;
         virtual void Measure() override;
         virtual void Arrange(const Rect &) override;
         virtual bool HitTest(int px, int py) override;
@@ -311,7 +282,7 @@ namespace ignite
         void OnMouseClick(const glm::uvec2 &mousePos, bool isPressed);
 
         virtual void Update(float deltaTime, const glm::vec2 &mousePosition) override;
-        virtual void Draw(Renderer2D *renderer, AssetManager *assetManager) override;
+        virtual void Draw(WidgetRenderer *renderer, AssetManager *assetManager) override;
         virtual void Measure() override;
         virtual void Arrange(const Rect &) override;
         virtual bool HitTest(int px, int py) override;

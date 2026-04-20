@@ -35,8 +35,59 @@ namespace ignite
             {
                 return engine->GetSceneContext();
             }
-
             return nullptr;
+        }
+
+        static uint64_t Scene_PickEntityAt(float mouseX, float mouseY, glm::vec2 viewportMin, glm::vec2 viewportMax)
+        {
+            Scene *scene = GetSceneContext();
+            if (!scene)
+                return 0;
+
+            Entity cameraEntity = scene->GetPrimaryCamera();
+            if (!cameraEntity.IsValid())
+                return 0;
+
+            auto &cc = cameraEntity.GetComponent<CameraComponent>();
+            const glm::mat4 view = cc.camera.GetView();
+            const glm::mat4 projection = cc.camera.GetProjection();
+            const bool isPerspective = cc.camera.projectionType != ProjectionType::Orthographic;
+
+            glm::vec2 viewportSize = viewportMax - viewportMin;
+            if (viewportSize.x <= 0.0f || viewportSize.y <= 0.0f)
+                return 0;
+
+            // Convert mouse absolute screen pos to viewport-local coords
+            glm::vec2 coord = glm::vec2(mouseX, mouseY) - viewportMin;
+
+            glm::vec3 rayOrigin;
+            glm::vec3 rayDir = Math::GetRayFromScreenCoords(coord, viewportSize, projection, view, isPerspective, rayOrigin);
+
+            float bestT = FLT_MAX;
+            uint64_t bestUUID = 0;
+
+            auto viewEntities = scene->registry->view<IDComponent, TransformComponent, MeshComponent>();
+            for (entt::entity e : viewEntities)
+            {
+                const IDComponent &id = viewEntities.get<IDComponent>(e);
+                const TransformComponent &tr = viewEntities.get<TransformComponent>(e);
+                const MeshComponent &mc = viewEntities.get<MeshComponent>(e);
+
+                if (mc.handle == AssetHandle(0))
+                    continue;
+
+                float t = 0.0f;
+                if (mc.worldAABB.IntersectRay(rayOrigin, rayDir, t))
+                {
+                    if (t >= 0.0f && t < bestT)
+                    {
+                        bestT = t;
+                        bestUUID = static_cast<uint64_t>(id.uuid);
+                    }
+                }
+            }
+
+            return bestUUID;
         }
 
         static Entity GetEntityByID(uint64_t entityID)
@@ -2299,6 +2350,7 @@ namespace ignite
             &Entity_Instantiate,
             &Entity_Destroy,
             &Entity_SetVisibility,
+            &Scene_PickEntityAt,
             &Entity_GetVisibility,
             &WidgetComponent_HasButton,
             &WidgetComponent_AddButtonEventCallback,

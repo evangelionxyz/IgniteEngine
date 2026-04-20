@@ -4,7 +4,9 @@
 // Date      : 18 April 2026
 
 #include "widget_container.hpp"
-#include "ignite/graphics/renderer/renderer_2d.hpp"
+#include "ignite/graphics/renderer/widget_renderer.hpp"
+#include "ignite/asset/asset_manager.hpp"
+#include "ignite/core/logger.hpp"
 
 #include <algorithm>
 
@@ -25,26 +27,10 @@ namespace ignite
         }
     }
 
-    void WidgetContainer::Draw(Renderer2D *renderer, AssetManager *assetManager)
+    void WidgetContainer::Draw(WidgetRenderer *renderer, AssetManager *assetManager)
     {
         if (!visible)
             return;
-
-#if 0
-        if (renderer)
-        {
-            const Rect &bounds = GetAlignedRect();
-            const glm::vec3 topLeft = glm::vec3(bounds.min.x, bounds.min.y, 0.0f);
-            const glm::vec3 topRight = glm::vec3(bounds.max.x, bounds.min.y, 0.0f);
-            const glm::vec3 bottomRight = glm::vec3(bounds.max.x, bounds.max.y, 0.0f);
-            const glm::vec3 bottomLeft = glm::vec3(bounds.min.x, bounds.max.y, 0.0f);
-
-            renderer->DrawLine(topLeft, topRight, glm::vec4(0.2f, 0.85f, 1.0f, 1.0f));
-            renderer->DrawLine(topRight, bottomRight, glm::vec4(0.2f, 0.85f, 1.0f, 1.0f));
-            renderer->DrawLine(bottomRight, bottomLeft, glm::vec4(0.2f, 0.85f, 1.0f, 1.0f));
-            renderer->DrawLine(bottomLeft, topLeft, glm::vec4(0.2f, 0.85f, 1.0f, 1.0f));
-        }
-#endif
 
         for (const Ref<IWidgetItem> &child : children)
         {
@@ -57,8 +43,6 @@ namespace ignite
 
     void WidgetContainer::Measure()
     {
-        IWidgetItem::Measure();
-
         float measuredWidth = 0.0f;
         float measuredHeight = 0.0f;
         int visibleChildren = 0;
@@ -66,9 +50,7 @@ namespace ignite
         for (const Ref<IWidgetItem> &child : children)
         {
             if (!child || !child->IsVisible())
-            {
                 continue;
-            }
 
             const glm::vec2 childSize = child->size + glm::vec2(child->margin * 2.0f);
             ++visibleChildren;
@@ -116,14 +98,10 @@ namespace ignite
         measuredHeight += padding * 2.0f;
 
         if (size.x <= 0.0f)
-        {
             size.x = measuredWidth;
-        }
 
         if (size.y <= 0.0f)
-        {
             size.y = measuredHeight;
-        }
     }
 
     void WidgetContainer::Arrange(const Rect &parentArea)
@@ -149,14 +127,16 @@ namespace ignite
             {
                 case LayoutMode::Horizontal:
                 {
-                    const glm::vec2 min = { cursorX + child->margin, contentMin.y };
+                    // NOTE: do NOT pre-add child->margin here; CalculateAlignedRect
+                    // already applies it internally. Adding it here caused double-margin.
+                    const glm::vec2 min = { cursorX, contentMin.y };
                     const glm::vec2 max = { contentMax.x, contentMax.y };
                     childRect = Rect(min, max);
                     break;
                 }
                 case LayoutMode::Vertical:
                 {
-                    const glm::vec2 min = { contentMin.x, cursorY + child->margin };
+                    const glm::vec2 min = { contentMin.x, cursorY };
                     const glm::vec2 max = { contentMax.x, contentMax.y };
                     childRect = Rect(min, max);
                     break;
@@ -169,7 +149,7 @@ namespace ignite
                 case LayoutMode::Grid:
                 default:
                 {
-                    const glm::vec2 min = { contentMin.x, cursorY + child->margin };
+                    const glm::vec2 min = { contentMin.x, cursorY };
                     const glm::vec2 max = { contentMax.x, contentMax.y };
                     childRect = Rect(min, max);
                     break;
@@ -179,23 +159,15 @@ namespace ignite
             child->Arrange(childRect);
 
             if (layout == LayoutMode::Horizontal)
-            {
                 cursorX = child->GetAlignedRect().max.x + child->margin + gap;
-            }
             else if (layout == LayoutMode::Vertical || layout == LayoutMode::Grid)
-            {
                 cursorY = child->GetAlignedRect().max.y + child->margin + gap;
-            }
 
             if (cursorX > contentMax.x && layout == LayoutMode::Horizontal)
-            {
                 break;
-            }
 
             if (cursorY > contentMax.y && (layout == LayoutMode::Vertical || layout == LayoutMode::Grid))
-            {
                 break;
-            }
         }
     }
 
@@ -203,17 +175,13 @@ namespace ignite
     {
         const glm::vec2 point = glm::vec2(static_cast<float>(px), static_cast<float>(py));
         if (!worldRect.Contains(point))
-        {
             return false;
-        }
 
         for (auto it = children.rbegin(); it != children.rend(); ++it)
         {
             const Ref<IWidgetItem> &child = *it;
             if (child && child->IsVisible() && child->HitTest(px, py))
-            {
                 return true;
-            }
         }
 
         return true;

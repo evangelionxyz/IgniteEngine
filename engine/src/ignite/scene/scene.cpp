@@ -356,9 +356,39 @@ namespace ignite
         for (entt::entity entity : meshView)
         {
             auto &tr = meshView.get<TransformComponent>(entity);
-            auto &mesh = meshView.get<MeshComponent>(entity);
-            mesh.worldMatrix = tr.GetWorldMatrix();
-            mesh.normalMatrix = glm::transpose(glm::inverse(glm::mat3(mesh.worldMatrix)));
+            auto &mc = meshView.get<MeshComponent>(entity);
+            mc.worldMatrix = tr.GetWorldMatrix();
+            mc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(mc.worldMatrix)));
+
+            const auto &mesh = m_Project->GetAsset<Mesh>(mc.handle);
+            if (mesh)
+            {
+                // Transform the mesh AABB by the entity's world matrix so it reflects runtime transforms
+                const AABB &localAabb = mesh->aabb;
+                const glm::vec3 corners[8] =
+                {
+                    { localAabb.min.x, localAabb.min.y, localAabb.min.z },
+                    { localAabb.max.x, localAabb.min.y, localAabb.min.z },
+                    { localAabb.min.x, localAabb.max.y, localAabb.min.z },
+                    { localAabb.max.x, localAabb.max.y, localAabb.min.z },
+                    { localAabb.min.x, localAabb.min.y, localAabb.max.z },
+                    { localAabb.max.x, localAabb.min.y, localAabb.max.z },
+                    { localAabb.min.x, localAabb.max.y, localAabb.max.z },
+                    { localAabb.max.x, localAabb.max.y, localAabb.max.z },
+                };
+
+                mc.worldAABB.min = glm::vec3(std::numeric_limits<float>::max());
+                mc.worldAABB.max = glm::vec3(std::numeric_limits<float>::lowest());
+
+                const glm::mat4 &worldMat = mc.worldMatrix;
+                for (const glm::vec3 &corner : corners)
+                {
+                    const glm::vec4 wc = worldMat * glm::vec4(corner, 1.0f);
+                    mc.worldAABB.min = glm::min(mc.worldAABB.min, glm::vec3(wc));
+                    mc.worldAABB.max = glm::max(mc.worldAABB.max, glm::vec3(wc));
+                }
+            }
+            
         }
     }
 

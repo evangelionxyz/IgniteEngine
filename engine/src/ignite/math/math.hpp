@@ -51,12 +51,12 @@ namespace ignite
         static glm::mat4 ComposeTransformComponent(const TransformComponent &transform);
         static void DecomposeTransformComponent(const glm::mat4 &matrix, TransformComponent &outTransform);
 
-        static bool DecomposeTransform(const glm::mat4 &transform, glm::vec3 &outTranslation, glm::quat &outRotation, glm::vec3 &out_scale);
-        static bool DecomposeTransformEuler(const glm::mat4 &transform, glm::vec3 &outTranslation, glm::vec3 &outRotation, glm::vec3 &out_scale);
+        static bool DecomposeTransform(const glm::mat4 &transform, glm::vec3 &outTranslation, glm::quat &outRotation, glm::vec3 &outScale);
+        static bool DecomposeTransformEuler(const glm::mat4 &transform, glm::vec3 &outTranslation, glm::vec3 &outRotation, glm::vec3 &outScale);
 
         static glm::vec3 Normalize(const glm::vec3 &v);
-        static glm::vec3 WorldToScreen(const glm::vec3 &world_position, const glm::mat4 &model_transform, const glm::mat4 &view_projection, const glm::vec2 &screen_size);
-        static bool ProjectWorldToScreen(const glm::vec3 &worldPos, const glm::mat4 &viewProjection, const Rect &viewportRect, ImVec2 &outScreen);
+        static glm::vec3 WorldToScreen(const glm::vec3 &worldPosition, const glm::mat4 &modelTransform, const glm::mat4 &viewProjection, const glm::vec2 &screenSize);
+        static bool ProjectWorldToScreen(const glm::vec3 &worldPosition, const glm::mat4 &viewProjection, const Rect &viewportRect, ImVec2 &outScreen);
         static glm::vec2 GetNormalizedDeviceCoord(const glm::vec2 &mouse, const glm::vec2 &screen);
         static glm::vec4 GetEyeCoord(glm::vec4 clipCoords, const glm::mat4 &projectionMatrix);
         static glm::vec3 GetWorldPosition(const glm::vec4 &eyeCoords, const glm::mat4 &viewMatrix);

@@ -426,9 +426,18 @@ namespace ignite
         };
 
         m_SceneRT = RenderTarget::Create(sceneRTCreateInfo, "[SceneRenderer] Scene RT");
-        m_WidgetRT = RenderTarget::Create(sceneRTCreateInfo, "[SceneRenderer] Widget RT");
         m_GameplaySceneRT = RenderTarget::Create(sceneRTCreateInfo, "[SceneRenderer] Gameplay Scene RT");
-        m_GameplayWidgetRT = RenderTarget::Create(sceneRTCreateInfo, "[SceneRenderer] Gameplay Widget RT");
+
+        // Widget RT
+        RenderTargetCreateInfo widgetRTCreateInfo = {};
+        widgetRTCreateInfo.attachments =
+        {
+            FramebufferAttachments{ "[Scene DepthAttachment]", nvrhi::Format::D32S8, nvrhi::ResourceStates::DepthWrite}, // Depth
+            FramebufferAttachments{ "[Scene ColorAttachment]", nvrhi::Format::RGBA8_UNORM, nvrhi::ResourceStates::RenderTarget}, // Main Color
+        };
+
+        m_WidgetRT = RenderTarget::Create(widgetRTCreateInfo, "[SceneRenderer] Widget RT");
+        m_GameplayWidgetRT = RenderTarget::Create(widgetRTCreateInfo, "[SceneRenderer] Gameplay Widget RT");
 
         RenderTargetCreateInfo compositeRTCreateInfo = {};
         compositeRTCreateInfo.attachments =
@@ -452,6 +461,7 @@ namespace ignite
         s_CompositeBindingSetCache.clear();
         s_DebugGridBindingSetCache.clear();
         s_CSMBindingSetCache.clear();
+
         Clear3DAssetResolveCache();
     }
 
@@ -524,18 +534,6 @@ namespace ignite
 
         const bool editorHovered = m_UseEditorWidgetMouseOverride && m_EditorWidgetMouseHovered;
         const bool gameplayHovered = m_UseGameplayWidgetMouseOverride && m_GameplayWidgetMouseHovered;
-
-        if (m_EditorWidgetRenderer)
-        {
-            m_EditorWidgetRenderer->SetProject(m_Project);
-            m_EditorWidgetRenderer->SetScene(m_Scene.get());
-        }
-
-        if (m_GameplayWidgetRenderer)
-        {
-            m_GameplayWidgetRenderer->SetProject(m_Project);
-            m_GameplayWidgetRenderer->SetScene(m_Scene.get());
-        }
 
         // Only update one widget renderer per frame to avoid shared widget hover state being overwritten.
         if (editorHovered && m_EditorWidgetRenderer)
@@ -645,6 +643,18 @@ namespace ignite
         if (m_Scene)
         {
             m_Project = m_Scene->GetProject();
+        }
+
+        if (m_EditorWidgetRenderer)
+        {
+            m_EditorWidgetRenderer->SetProject(m_Project);
+            m_EditorWidgetRenderer->SetScene(m_Scene.get());
+        }
+
+        if (m_GameplayWidgetRenderer)
+        {
+            m_GameplayWidgetRenderer->SetProject(m_Project);
+            m_GameplayWidgetRenderer->SetScene(m_Scene.get());
         }
 
         s_GeometryPSOCache.clear();
@@ -795,7 +805,6 @@ namespace ignite
             // far depth = 1.0f == LessOrEqual
             {
                 m_WidgetRT->ClearColorAttachmentFloat(cmd, 0);
-                m_WidgetRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
                 m_WidgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
                 m_SceneRT->ClearColorAttachmentFloat(cmd, 0);
@@ -849,12 +858,12 @@ namespace ignite
 
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::Physics2DDebug");
-                DrawDebug2DPhysics(cmd, framebuffer);
+                DrawDebug2D(cmd, framebuffer);
             }
 
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::Physics3DDebug");
-                DrawDebug3DPhysics(cmd, framebuffer);
+                DrawDebug3D(cmd, framebuffer);
             }
 
             Ref<Texture> edgeTexture = nullptr;
@@ -1019,7 +1028,6 @@ namespace ignite
             // far depth = 1.0f == LessOrEqual
             {
                 m_GameplayWidgetRT->ClearColorAttachmentFloat(cmd, 0);
-                m_GameplayWidgetRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
                 m_GameplayWidgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
                 m_GameplaySceneRT->ClearColorAttachmentFloat(cmd, 0);
@@ -1430,144 +1438,136 @@ namespace ignite
 
         // 2D Pass
         {
-            IGN_PROFILE_SCOPE("SceneRenderer::2DPass");
-            if (m_Has2DPreRenderCache && m_Renderer2D->ReplayPreRenderCache(cmd, framebuffer, m_CameraBuffer))
+            std::vector<PointLight2D_GPUData> pointLights2D;
             {
-                IGN_PROFILE_SCOPE("SceneRenderer::2DPass::ReplayCache");
+                IGN_PROFILE_SCOPE("SceneRenderer::2DPass::PointLightsView");
+
+                auto pointLight2DView = m_Scene->registry->view<TransformComponent, PointLight2DComponent>();
+                for (entt::entity e : pointLight2DView)
+                {
+                    TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                    if (!tr.visible)
+                        continue;
+
+                    PointLight2DComponent &light = m_Scene->registry->get<PointLight2DComponent>(e);
+                    if (!light.enabled)
+                        continue;
+
+                    PointLight2D_GPUData gpuLight;
+                    gpuLight.position = glm::vec4(tr.translation, 1.0f);
+                    gpuLight.color = light.color;
+                    gpuLight.radius = light.radius;
+                    gpuLight.intensity = light.intensity;
+                    pointLights2D.push_back(gpuLight);
+                }
             }
-            else
+
+            m_Renderer2D->SetPointLights2D(pointLights2D);
+            m_Renderer2D->Begin(cmd);
             {
-                std::vector<PointLight2D_GPUData> pointLights2D;
+                IGN_PROFILE_SCOPE("SceneRenderer::2DPass::Circle2DView");
+                auto circle2DView = m_Scene->registry->view<TransformComponent, Circle2DComponent>();
+                for (entt::entity e : circle2DView)
                 {
-                    IGN_PROFILE_SCOPE("SceneRenderer::2DPass::PointLightsView");
+                    TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                    if (!tr.visible)
+                        continue;
 
-                    auto pointLight2DView = m_Scene->registry->view<TransformComponent, PointLight2DComponent>();
-                    for (entt::entity e : pointLight2DView)
+                    if (m_Scene->registry->all_of<Circle2DComponent>(e))
                     {
-                        TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-                        if (!tr.visible)
-                            continue;
-
-                        PointLight2DComponent &light = m_Scene->registry->get<PointLight2DComponent>(e);
-                        if (!light.enabled)
-                            continue;
-
-                        PointLight2D_GPUData gpuLight;
-                        gpuLight.position = glm::vec4(tr.translation, 1.0f);
-                        gpuLight.color = light.color;
-                        gpuLight.radius = light.radius;
-                        gpuLight.intensity = light.intensity;
-                        pointLights2D.push_back(gpuLight);
-                    }
-                }
-
-                m_Renderer2D->SetPointLights2D(pointLights2D);
-                m_Renderer2D->Begin(cmd);
-                {
-                    IGN_PROFILE_SCOPE("SceneRenderer::2DPass::Circle2DView");
-                    auto circle2DView = m_Scene->registry->view<TransformComponent, Circle2DComponent>();
-                    for (entt::entity e : circle2DView)
-                    {
-                        TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-                        if (!tr.visible)
-                            continue;
-
-                        if (m_Scene->registry->all_of<Circle2DComponent>(e))
-                        {
-                            Circle2DComponent &circle = m_Scene->registry->get<Circle2DComponent>(e);
-                            const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                            m_Renderer2D->DrawCircle(tr.GetWorldMatrix(), circle.color, circle.thickness, circle.fade, objectID);
-                        }
-                    }
-                }
-                {
-                    IGN_PROFILE_SCOPE("SceneRenderer::2DPass::Quad2DView");
-                    Project *project = m_Scene->GetProject();
-                    auto quad2DView = m_Scene->registry->view<TransformComponent, Sprite2DComponent>();
-                    for (entt::entity e : quad2DView)
-                    {
-                        TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-                        if (!tr.visible)
-                            continue;
-
-                        Sprite2DComponent &sprite = m_Scene->registry->get<Sprite2DComponent>(e);
+                        Circle2DComponent &circle = m_Scene->registry->get<Circle2DComponent>(e);
                         const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-
-                        // Copy UV
-                        glm::vec2 uv0 = sprite.uv0;
-                        glm::vec2 uv1 = sprite.uv1;
-
-                        if (sprite.flipY)
-                        {
-                            std::swap(uv0.y, uv1.y);
-                        }
-
-                        if (sprite.flipX)
-                        {
-                            std::swap(uv0.x, uv1.x);
-                        }
-
-                        // Find material if available (use frame cache — avoids repeated AssetManager map lookups)
-                        Ref<Material2D> mat2d = m_Renderer2D->ResolveMaterial2D(project, sprite.materialHandle);
-
-                        // Render with Material2D
-                        if (mat2d)
-                        {
-                            Ref<Texture> texture = m_Renderer2D->ResolveTexture(project, mat2d->textureHandle);
-                            m_Renderer2D->DrawQuad(tr.GetWorldMatrix(), mat2d->data.baseColor, mat2d->data.additiveColor,
-                                mat2d->data.type, texture, uv0, uv1, mat2d->data.tilingFactor, objectID);
-                        }
-                        else // Render with default
-                        {
-                            Ref<Texture> texture = m_Renderer2D->ResolveTexture(project, sprite.handle);
-                            m_Renderer2D->DrawQuad(tr.GetWorldMatrix(), sprite.color, texture, uv0, uv1, sprite.tilingFactor, objectID);
-                        }
-
+                        m_Renderer2D->DrawCircle(tr.GetWorldMatrix(), circle.color, circle.thickness, circle.fade, objectID);
                     }
                 }
-
-                {
-                    IGN_PROFILE_SCOPE("SceneRenderer::2DPass::TextView");
-                    auto textView = m_Scene->registry->view<TransformComponent, TextComponent>();
-                    for (entt::entity e : textView)
-                    {
-                        TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-                        if (!tr.visible)
-                            continue;
-
-                        const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-
-                        TextComponent &text = m_Scene->registry->get<TextComponent>(e);
-                        if (text.fontHandle == AssetHandle(0) || text.text.empty())
-                            continue;
-
-                        Ref<Font> font = m_Scene->GetProject()->GetAsset<Font>(text.fontHandle, AssetType::Font);
-                        if (!font)
-                            continue;
-
-                        Ref<Texture> fontAtlas = font->GetAtlasTexture();
-                        if (!fontAtlas || !fontAtlas->IsReady())
-                            continue;
-
-                        glm::vec4 textColor = text.color;
-                        if (text.material2dHandle != AssetHandle(0))
-                        {
-                            if (Ref<Material2D> material = m_Scene->GetProject()->GetAsset<Material2D>(text.material2dHandle, AssetType::Material2D))
-                            {
-                                textColor = text.color + material->data.baseColor;
-                            }
-                        }
-
-                        m_Renderer2D->DrawString(text.text, font, textColor, tr.GetWorldMatrix(), text.kerning, text.lineSpacing, objectID);
-                    }
-                }
-
-                m_Renderer2D->Flush(framebuffer, m_CameraBuffer);
-                m_Renderer2D->BuildPreRenderCache();
-                m_Has2DPreRenderCache = true;
-                m_Renderer2D->End();
             }
-        } // !2D Pass
+            {
+                IGN_PROFILE_SCOPE("SceneRenderer::2DPass::Quad2DView");
+                Project *project = m_Scene->GetProject();
+                auto quad2DView = m_Scene->registry->view<TransformComponent, Sprite2DComponent>();
+                for (entt::entity e : quad2DView)
+                {
+                    TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                    if (!tr.visible)
+                        continue;
+
+                    Sprite2DComponent &sprite = m_Scene->registry->get<Sprite2DComponent>(e);
+                    const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+
+                    // Copy UV
+                    glm::vec2 uv0 = sprite.uv0;
+                    glm::vec2 uv1 = sprite.uv1;
+
+                    if (sprite.flipY)
+                    {
+                        std::swap(uv0.y, uv1.y);
+                    }
+
+                    if (sprite.flipX)
+                    {
+                        std::swap(uv0.x, uv1.x);
+                    }
+
+                    // Find material if available (use frame cache — avoids repeated AssetManager map lookups)
+                    Ref<Material2D> mat2d = m_Renderer2D->ResolveMaterial2D(project, sprite.materialHandle);
+
+                    // Render with Material2D
+                    if (mat2d)
+                    {
+                        Ref<Texture> texture = m_Renderer2D->ResolveTexture(project, mat2d->textureHandle);
+                        m_Renderer2D->DrawQuad(tr.GetWorldMatrix(), mat2d->data.baseColor, mat2d->data.additiveColor,
+                            mat2d->data.type, texture, uv0, uv1, mat2d->data.tilingFactor, objectID);
+                    }
+                    else // Render with default
+                    {
+                        Ref<Texture> texture = m_Renderer2D->ResolveTexture(project, sprite.handle);
+                        m_Renderer2D->DrawQuad(tr.GetWorldMatrix(), sprite.color, texture, uv0, uv1, sprite.tilingFactor, objectID);
+                    }
+
+                }
+            }
+
+            {
+                IGN_PROFILE_SCOPE("SceneRenderer::2DPass::TextView");
+                auto textView = m_Scene->registry->view<TransformComponent, TextComponent>();
+                for (entt::entity e : textView)
+                {
+                    TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                    if (!tr.visible)
+                        continue;
+
+                    const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+
+                    TextComponent &text = m_Scene->registry->get<TextComponent>(e);
+                    if (text.fontHandle == AssetHandle(0) || text.text.empty())
+                        continue;
+
+                    Ref<Font> font = m_Scene->GetProject()->GetAsset<Font>(text.fontHandle, AssetType::Font);
+                    if (!font)
+                        continue;
+
+                    Ref<Texture> fontAtlas = font->GetAtlasTexture();
+                    if (!fontAtlas || !fontAtlas->IsReady())
+                        continue;
+
+                    glm::vec4 textColor = text.color;
+                    if (text.material2dHandle != AssetHandle(0))
+                    {
+                        if (Ref<Material2D> material = m_Scene->GetProject()->GetAsset<Material2D>(text.material2dHandle, AssetType::Material2D))
+                        {
+                            textColor = text.color + material->data.baseColor;
+                        }
+                    }
+
+                    m_Renderer2D->DrawString(text.text, font, textColor, tr.GetWorldMatrix(), text.kerning, text.lineSpacing, objectID);
+                }
+            }
+
+            m_Renderer2D->Flush(framebuffer, m_CameraBuffer);
+            // m_Renderer2D->BuildPreRenderCache();
+            m_Has2DPreRenderCache = true;
+            m_Renderer2D->End();
+        }
     }
 
     void SceneRenderer::DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const DebugGridStyle &style, bool is2D)
@@ -1616,7 +1616,7 @@ namespace ignite
         cmd->draw(args);
     }
 
-    void SceneRenderer::DrawDebug2DPhysics(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
+    void SceneRenderer::DrawDebug2D(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
     {
         IGN_PROFILE_FUNCTION();
         m_Renderer2D->Begin(cmd);
@@ -1681,7 +1681,7 @@ namespace ignite
         m_Renderer2D->End();
     }
 
-    void SceneRenderer::DrawDebug3DPhysics(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
+    void SceneRenderer::DrawDebug3D(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
     {
         IGN_PROFILE_FUNCTION();
         m_Renderer2D->Begin(cmd);
@@ -1716,6 +1716,17 @@ namespace ignite
                 m_Renderer2D->DrawLine(p0, p1, color);
             }
         };
+
+        auto aabbView = m_Scene->registry->view<TransformComponent, MeshComponent>();
+        for (entt::entity e : aabbView)
+        {
+            TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+            if (!tr.visible)
+                continue;
+
+            auto &mc = m_Scene->registry->get<MeshComponent>(e);
+            m_Renderer2D->DrawAABB(mc.worldAABB);
+        }
 
         auto boxCollider = m_Scene->registry->view<TransformComponent, BoxColliderComponent>();
         for (entt::entity e : boxCollider)
