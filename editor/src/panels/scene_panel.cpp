@@ -2641,6 +2641,8 @@ namespace ignite
             default: cameraModeIndex = 0; break;
         }
 
+        ImGui::BeginDisabled(m_Scene == nullptr);
+
         ImGui::SetNextItemWidth(96.0f);
         if (ImGui::Combo("##camera_mode", &cameraModeIndex, kCameraModeLabels.data(), static_cast<int>(kCameraModeLabels.size())))
         {
@@ -2800,6 +2802,8 @@ namespace ignite
         }
 
         ImGui::PopStyleVar(2);
+
+        ImGui::EndDisabled();
     }
 
     bool ScenePanel::Is2DResizableEntity(Entity entity) const
