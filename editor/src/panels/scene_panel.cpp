@@ -1,4 +1,4 @@
-//Copyright (c) 2026 Evangelion Manuhutu
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "scene_panel.hpp"
 #include "editor_layer.hpp"
@@ -756,28 +756,40 @@ namespace ignite
 
                     UI::State tilingState = UI::DrawVec2Control("Tiling", c.tilingFactor, 0.025f, 1.0f);
                     if (tilingState.isItemActivated)            s_Sprite2DBefore = c;
-                    if (tilingState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
+                    if (tilingState.isItemDeactivatedAfterEdit)
+                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(),
+                            selectedEntity.GetUUID(), s_Sprite2DBefore, c));
 
                     auto colorState = UI::DrawColorVec4("Color", c.color);
                     if (colorState.isItemActivated) s_Sprite2DBefore = c;
-                    if (colorState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
+                    if (colorState.isItemDeactivatedAfterEdit)
+                        CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(),
+                            selectedEntity.GetUUID(), s_Sprite2DBefore, c));
                 }
-
-                UI::State flipXState = UI::DrawCheckbox("Flip X", &c.flipX);
-				if (flipXState.isItemActivated)            s_Sprite2DBefore = c;
-				if (flipXState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
-
-                UI::State flipYState = UI::DrawCheckbox("Flip Y", &c.flipY);
-				if (flipYState.isItemActivated)            s_Sprite2DBefore = c;
-				if (flipYState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
 
                 UI::State uv0State = UI::DrawVec2Control("UV0", c.uv0, 0.001f);
                 if (uv0State.isItemActivated)            s_Sprite2DBefore = c;
-                if (uv0State.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
+                if (uv0State.isItemDeactivatedAfterEdit)
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(),
+                        selectedEntity.GetUUID(), s_Sprite2DBefore, c));
 
                 UI::State uv1State = UI::DrawVec2Control("UV1", c.uv1, 0.001f);
                 if (uv1State.isItemActivated)            s_Sprite2DBefore = c;
-                if (uv1State.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_Sprite2DBefore, c));
+                if (uv1State.isItemDeactivatedAfterEdit)
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(),
+                        selectedEntity.GetUUID(), s_Sprite2DBefore, c));
+
+                UI::State flipXState = UI::DrawCheckbox("Flip X", &c.flipX);
+				if (flipXState.isItemActivated)            s_Sprite2DBefore = c;
+				if (flipXState.isItemDeactivatedAfterEdit)
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(),
+                        selectedEntity.GetUUID(), s_Sprite2DBefore, c));
+
+                UI::State flipYState = UI::DrawCheckbox("Flip Y", &c.flipY);
+				if (flipYState.isItemActivated)            s_Sprite2DBefore = c;
+				if (flipYState.isItemDeactivatedAfterEdit)
+                    CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<Sprite2DComponent>>(m_Scene.get(),
+                        selectedEntity.GetUUID(), s_Sprite2DBefore, c));
             });
 
             RenderComponent<Animator2DComponent>("Animator 2D", selectedEntity, [&]()
@@ -1167,10 +1179,6 @@ namespace ignite
                     if (UI::DrawComboBox("Projection", projectionTypeStr, IM_ARRAYSIZE(projectionTypeStr), projectionTypeStr[projectionIdx], &projectionIdx))
                     {
                         c.camera.projectionType = static_cast<ProjectionType>(projectionIdx);
-                        const auto w = static_cast<float>(m_Scene->GetViewportWidth());
-                        const auto h = static_cast<float>(m_Scene->GetViewportHeight());
-                        c.camera.UpdateView();
-                        c.camera.UpdateProjection(w, h);
                     }
                 }
 
@@ -1278,7 +1286,7 @@ namespace ignite
                 if (c.dirty)
                 {
                     c.camera.UpdateView();
-                    c.camera.UpdateProjection(static_cast<float>(m_Scene->GetViewportWidth()), static_cast<float>(m_Scene->GetViewportHeight()));
+                    c.camera.UpdateProjection(c.camera.viewportSize.x, c.camera.viewportSize.y);
                     c.dirty = false;
                 }
             });
@@ -2126,8 +2134,8 @@ namespace ignite
             const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
             const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
 
-            m_Data.sceneEditorViewportRect.min = { canvasPos.x, canvasPos.y };
-            m_Data.sceneEditorViewportRect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
+            m_EditorCamera.viewportPosition = { canvasPos.x, canvasPos.y };
+            m_EditorCamera.viewportSize = { canvasSize.x, canvasSize.y };
 
             // Mouse position in screen space
             const ImVec2 &mousePos = ImGui::GetMousePos();
@@ -2170,14 +2178,13 @@ namespace ignite
                     Ref<Texture> objectIdTexture = m_EditorLayer->GetSceneRenderer()->GetSceneRT()->GetColorAttachment(1);
                     if (objectIdTexture && objectIdTexture->GetHandle())
                     {
-                        const glm::vec2 viewSize = m_Data.sceneEditorViewportRect.GetSize();
                         const int texWidth = objectIdTexture->GetWidth();
                         const int texHeight = objectIdTexture->GetHeight();
 
-                        if (viewSize.x > 0.0f && viewSize.y > 0.0f && texWidth > 0 && texHeight > 0)
+                        if (canvasSize.x > 0.0f && canvasSize.y > 0.0f && texWidth > 0 && texHeight > 0)
                         {
-                            const int pixelX = std::clamp(static_cast<int>((m_ViewportData.mousePos.x / viewSize.x) * static_cast<float>(texWidth)), 0, texWidth - 1);
-                            const int pixelY = std::clamp(static_cast<int>((m_ViewportData.mousePos.y / viewSize.y) * static_cast<float>(texHeight)), 0, texHeight - 1);
+                            const int pixelX = std::clamp(static_cast<int>((m_ViewportData.mousePos.x / canvasSize.x) * static_cast<float>(texWidth)), 0, texWidth - 1);
+                            const int pixelY = std::clamp(static_cast<int>((m_ViewportData.mousePos.y / canvasSize.y) * static_cast<float>(texHeight)), 0, texHeight - 1);
 
                             nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
                             nvrhi::TextureDesc stagingDesc = objectIdTexture->GetHandle()->getDesc();
@@ -2276,8 +2283,8 @@ namespace ignite
                 ImGuiOrientation::config.axisLengthScale = 0.25f;
                 ImGuiOrientation::SetRect
                 (
-                    m_Data.sceneEditorViewportRect.max.x - orientationSize - orientationPadding,
-                    m_Data.sceneEditorViewportRect.min.y + orientationPadding
+                    m_EditorCamera.viewportPosition.x + m_EditorCamera.viewportSize.x - orientationSize - orientationPadding,
+                    m_EditorCamera.viewportPosition.y + orientationPadding
                 );
 
                 if (ImGuiOrientation::DrawGizmo(ImGui::GetWindowDrawList(), (float *const)glm::value_ptr(view), glm::value_ptr(projection), 100.0f))
@@ -2293,7 +2300,7 @@ namespace ignite
             gizmoInfo.cameraProjection = projection;
             gizmoInfo.cameraType = m_EditorCamera.projectionType;
             gizmoInfo.snapValue = m_ViewportData.snapValue;
-            gizmoInfo.viewRect = m_Data.sceneEditorViewportRect;
+            gizmoInfo.viewRect = Rect(m_EditorCamera.viewportPosition, m_EditorCamera.viewportPosition + m_EditorCamera.viewportSize);
 
             m_Gizmo.SetInfo(gizmoInfo);
 
@@ -2509,7 +2516,8 @@ namespace ignite
 
                     if (Entity cameraEntity = m_Scene->GetPrimaryCamera())
                     {
-                        auto &cameraComp = cameraEntity.GetComponent<CameraComponent>();
+                        auto &cc = cameraEntity.GetComponent<CameraComponent>();
+                        ICamera *camera = &cc.camera;
 
                         ImVec2 baseImagePos = canvasPos;
                         ImVec2 baseImageSize = canvasSize;
@@ -2519,9 +2527,9 @@ namespace ignite
                         const float canvasAspect = safeCanvasW / safeCanvasH;
 
                         float targetAspect = canvasAspect;
-                        if (!cameraComp.camera.IsFreeAspect())
+                        if (!cc.camera.IsFreeAspect())
                         {
-                            targetAspect = glm::max(cameraComp.camera.GetAspectRatioValue(), 0.0001f);
+                            targetAspect = glm::max(cc.camera.GetAspectRatioValue(), 0.0001f);
                         }
 
                         if (canvasAspect > targetAspect)
@@ -2579,8 +2587,8 @@ namespace ignite
                             m_Data.gamePreviewPan += glm::vec2(delta.x, delta.y);
                         }
 
-                        m_Data.sceneGameplayViewportRect.min = { baseImagePos.x, baseImagePos.y };
-                        m_Data.sceneGameplayViewportRect.max = { baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y };
+                        camera->viewportPosition = { baseImagePos.x, baseImagePos.y };
+                        camera->viewportSize = { baseImageSize.x, baseImageSize.y };
                         
                         ImTextureID gameplayViewImaage = (ImTextureID)m_EditorLayer->GetSceneRenderer()->GetGameplayCompositeRT()->GetColorAttachment(0)->GetHandle().Get();
                         ImDrawList *drawList = ImGui::GetWindowDrawList();
@@ -2613,8 +2621,6 @@ namespace ignite
                     }
                     else
                     {
-                        m_Data.sceneGameplayViewportRect.min = { canvasPos.x, canvasPos.y };
-                        m_Data.sceneGameplayViewportRect.max = { canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y };
                         ImGui::Text("No Camera");
                     }
                 }
@@ -2673,9 +2679,6 @@ namespace ignite
                 }
             }
 
-            const auto w = static_cast<float>(m_Data.sceneEditorViewportRect.max.x - m_Data.sceneEditorViewportRect.min.x);
-            const auto h = static_cast<float>(m_Data.sceneEditorViewportRect.max.y - m_Data.sceneEditorViewportRect.min.y);
-            m_EditorCamera.UpdateProjection(w, h);
             m_EditorCamera.UpdateView();
             m_EditorCamera.SetNavigationMode(mode);
         }
@@ -2813,7 +2816,11 @@ namespace ignite
 
     glm::vec3 ScenePanel::ScreenToWorldOnPlane(const glm::vec2 &screenPos, float planeZ, bool *isValid)
     {
-        return Math::ScreenToWorldOnPlane(screenPos, planeZ, m_EditorCamera.GetProjection() * m_EditorCamera.GetView(), m_Data.sceneEditorViewportRect, isValid);
+        return Math::ScreenToWorldOnPlane(screenPos, planeZ,
+            m_EditorCamera.GetProjection() * m_EditorCamera.GetView(),
+            { m_EditorCamera.viewportPosition, m_EditorCamera.viewportPosition + m_EditorCamera.viewportSize },
+            isValid
+        );
     }
 
     void ScenePanel::Render2DBoundsSizing()
@@ -2876,7 +2883,7 @@ namespace ignite
         {
             const glm::vec4 world = worldMatrix * glm::vec4(kBoundsCorners[i].x, kBoundsCorners[i].y, 0.0f, 1.0f);
             worldCorners[i] = glm::vec3(world);
-            if (!Math::ProjectWorldToScreen(worldCorners[i], viewProjection, m_Data.sceneEditorViewportRect, screenCorners[i]))
+            if (!Math::ProjectWorldToScreen(worldCorners[i], viewProjection, {m_EditorCamera.viewportPosition, m_EditorCamera.viewportPosition + m_EditorCamera.viewportSize}, screenCorners[i]))
             {
                 if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
                 {
@@ -2892,8 +2899,8 @@ namespace ignite
 
         const ImVec2 mousePos = ImGui::GetMousePos();
         const bool mouseInViewport = 
-            mousePos.x >= m_Data.sceneEditorViewportRect.min.x && mousePos.x <= m_Data.sceneEditorViewportRect.max.x &&
-            mousePos.y >= m_Data.sceneEditorViewportRect.min.y && mousePos.y <= m_Data.sceneEditorViewportRect.max.y;
+            mousePos.x >= m_EditorCamera.viewportPosition.x && mousePos.x <= (m_EditorCamera.viewportPosition.x + m_EditorCamera.viewportSize.x) &&
+            mousePos.y >= m_EditorCamera.viewportPosition.y && mousePos.y <= (m_EditorCamera.viewportPosition.y + m_EditorCamera.viewportSize.y);
 
         constexpr float handleRadius = 6.0f;
         const float handleRadiusSq = handleRadius * handleRadius;

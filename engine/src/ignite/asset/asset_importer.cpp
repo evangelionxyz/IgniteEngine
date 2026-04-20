@@ -7,6 +7,7 @@
 
 #include "ignite/project/project.hpp"
 #include "ignite/serializer/serializer.hpp"
+#include "ignite/serializer/scene_serializer.hpp"
 #include "ignite/serializer/binary_serializer.hpp"
 
 #include "ignite/graphics/renderer/scene_renderer.hpp"

@@ -10,12 +10,11 @@
 #include <filesystem>
 #include <map>
 #include <functional>
-#include <nvrhi/nvrhi.h>
 
-namespace ignite {
+namespace ignite
+{
 
     class Serializer;
-
     using AssetHandle = UUID;
 
     enum class AssetType

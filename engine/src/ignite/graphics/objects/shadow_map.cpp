@@ -121,7 +121,7 @@ namespace ignite
 
 		glm::mat4 invView = glm::inverse(camera->GetView());
 
-		const float aspect = camera->width / camera->height;
+		const float aspect = camera->viewportSize.x / camera->viewportSize.y;
 		const float fovRadians = glm::radians(camera->fov);
 		const float tanHalfFovY = std::tan(fovRadians * 0.5f);
 		const float tanHalfFovX = tanHalfFovY * aspect;

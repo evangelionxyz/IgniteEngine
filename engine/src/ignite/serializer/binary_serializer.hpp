@@ -22,6 +22,8 @@
 */
 
 #pragma once
+#ifndef BINARY_SERIALIZER_HPP
+#define BINARY_SERIALIZER_HPP
 
 #include <stb_image.h>
 #include <stb_image_write.h>
@@ -950,3 +952,5 @@ namespace ignite
         }
     };
 }
+
+#endif

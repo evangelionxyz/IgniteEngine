@@ -25,6 +25,7 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <vector>
 #include <string.h>
 
 #include "ignite/core/profiler/profiler.hpp"
@@ -37,15 +38,42 @@ namespace ignite
         uint64_t size = 0;
 
         Buffer() = default;
-
         Buffer(uint64_t size)
         {
             Allocate(size);
         }
 
+        Buffer(const std::vector<uint8_t> &inData)
+        {
+            Allocate(inData.size());
+            memcpy(data, inData.data(), size);
+        }
+
         Buffer(void* data, uint64_t size)
             : data(static_cast<uint8_t *>(data)), size(size)
         {
+        }
+
+        static Buffer Copy(uint8_t *inData, uint64_t size)
+        {
+            if (!inData || size == 0)
+            {
+                return {};
+            }
+
+            Buffer result(size);
+            memcpy(result.data, inData, size);
+            return result;
+        }
+
+        static Buffer Copy(const std::vector<uint8_t> &data)
+        {
+            if (data.empty())
+                return {};
+
+            Buffer result(data.size());
+            memcpy(result.data, data.data(), data.size());
+            return result;
         }
 
         static Buffer Copy(const Buffer &other)

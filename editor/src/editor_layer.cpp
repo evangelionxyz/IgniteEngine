@@ -170,43 +170,6 @@ namespace ignite
     {
         Layer::OnUpdate(deltaTime);
 
-        // Resize Edit Viewport Framebuffer
-        if (m_ScenePanel->m_Data.sceneViewportEditorVisible)
-        {
-            const glm::uvec2 framebufferSize = m_SceneRenderer->GetCompositeRT()->GetSize();
-            const glm::vec2 currentViewportSize = m_ScenePanel->GetEditorViewportSize();
-            const glm::uvec2 desiredSize
-            {
-                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.x)),
-                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.y))
-            };
-
-            const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
-            if (framebufferNeedsResize && desiredSize.x > 0u && desiredSize.y > 0u)
-            {
-                m_SceneRenderer->Resize(desiredSize.x, desiredSize.y);
-                m_ScenePanel->GetViewportCamera().UpdateProjection(desiredSize.x, desiredSize.y);
-            }
-        }
-
-        // Resize Game Viewport Framebuffer
-        if (m_ScenePanel->m_Data.sceneViewportGameplayVisible)
-        {
-            const glm::uvec2 framebufferSize = m_SceneRenderer->GetGameplayCompositeRT()->GetSize();
-            const glm::vec2 currentViewportSize = m_ScenePanel->GetGameplayViewportSize();
-            const glm::uvec2 desiredSize
-            {
-                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.x)),
-                static_cast<uint32_t>(std::max(0.0f, currentViewportSize.y))
-            };
-
-            const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
-            if (framebufferNeedsResize && desiredSize.x > 0u && desiredSize.y > 0u)
-            {
-                m_SceneRenderer->ResizeGameplay(desiredSize.x, desiredSize.y);
-            }
-        }
-
         for (int i = static_cast<int>(m_ContentBrowserPanels.size()) - 1; i >= 0; --i)
         {
             ContentBrowserPanel *panel = m_ContentBrowserPanels[static_cast<size_t>(i)];
@@ -474,6 +437,65 @@ namespace ignite
             m_SceneRenderer->BeginFrame();
         }
 
+        // Resizing editor camera
+        ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
+        if (editCamera)
+        {
+            // Resize Edit Viewport Framebuffer
+            const glm::vec2 framebufferSize = m_SceneRenderer->GetCompositeRT()->GetSize();
+            const glm::vec2 currentViewportSize = editCamera->viewportSize;
+            const glm::vec2 desiredSize = glm::max(glm::vec2(0.0f), currentViewportSize);
+            const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
+
+            // Resize camera
+            if (framebufferNeedsResize && desiredSize.x > 0.0f && desiredSize.y > 0.0f)
+            {
+                m_ScenePanel->GetViewportCamera().UpdateProjection(desiredSize.x, desiredSize.y);
+                m_State.editorResizing = true;
+            }
+
+            // Resize framebuffer when in stable frame
+            if (m_State.editorResizing && desiredSize.x > 0.0f && desiredSize.y > 0.0f)
+            {
+                if (m_State.editorResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
+                {
+                    m_SceneRenderer->ResizeFramebuffer(static_cast<uint32_t>(desiredSize.x), static_cast<uint32_t>(desiredSize.y));
+                    m_State.editorResizing = false;
+                    m_State.editorResizingFrame = 0;
+                }
+            }
+        }
+
+        // Resizing gameplay camera
+        if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
+        {
+            auto &cc = primaryCam.GetComponent<CameraComponent>();
+            ICamera *gameCamera = &cc.camera;
+            {
+                // Resize Game Viewport Framebuffer
+                const glm::vec2 framebufferSize = m_SceneRenderer->GetGameplayCompositeRT()->GetSize();
+                const glm::vec2 currentViewportSize = gameCamera->viewportSize;
+                const glm::vec2 desiredSize = glm::max(glm::vec2(0.0f), currentViewportSize);
+                const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
+
+                if (framebufferNeedsResize && desiredSize.x > 0.0f && desiredSize.y > 0.0f)
+                {
+                    gameCamera->UpdateProjection(desiredSize.x, desiredSize.y);
+                    m_State.gameplayResizing = true;
+                }
+
+                if (m_State.gameplayResizing && desiredSize.x > 0.0f && desiredSize.y > 0.0f)
+                {
+                    if (m_State.gameplayResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
+                    {
+                        m_SceneRenderer->ResizeGameplayFramebuffer(static_cast<uint32_t>(desiredSize.x), static_cast<uint32_t>(desiredSize.y));
+                        m_State.gameplayResizing = false;
+                        m_State.gameplayResizingFrame = 0;
+                    }
+                }
+            }
+        }
+
         // Render to Edit Viewport
         if (m_ScenePanel->m_Data.sceneViewportEditorVisible)
         {
@@ -484,27 +506,13 @@ namespace ignite
                 case State::ScenePlay:
                 {
                     ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
+                    if (editCamera)
                     {
                         IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
                         m_SceneRenderer->RenderEditorTo(editCamera);
                     }
                     break;
                 }
-#if 0
-                case State::ScenePlay:
-                {
-                    ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
-                    if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
-                    {
-                        editCamera = &primaryCam.GetComponent<CameraComponent>().camera;
-                    }
-                    {
-                        IGN_PROFILE_SCOPE("SceneRenderer::RenderEditorTo");
-                        m_SceneRenderer->RenderEditorTo(editCamera);
-                    }
-                    break;
-                }
-#endif
             }
         }
 
@@ -516,9 +524,6 @@ namespace ignite
                 auto &cc = primaryCam.GetComponent<CameraComponent>();
 				ICamera *gameCamera = &cc.camera;
                 {
-                    cc.viewportPosition = m_ScenePanel->m_Data.sceneGameplayViewportRect.min;
-                    cc.viewportSize = m_ScenePanel->m_Data.sceneGameplayViewportRect.GetSize();
-
                     IGN_PROFILE_SCOPE("SceneRenderer::RenderGameplayTo");
                     m_SceneRenderer->RenderGameplayTo(gameCamera);
                 }

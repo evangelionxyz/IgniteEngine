@@ -1087,7 +1087,11 @@ namespace ignite
                 Ref<Texture> texture;
                 if (!image.image.empty())
                 {
-                    texture = Texture::Create(Buffer((void *)image.image.data(), image.image.size() * sizeof(uint8_t)), createInfo, nullptr);
+                    std::vector<uint8_t> data;
+                    data.resize(image.image.size() * sizeof(uint8_t));
+                    std::memcpy(data.data(), image.image.data(), data.size());
+
+                    texture = Texture::Create(data, createInfo, nullptr);
                     LOG_TRACE(" Loaded embedded texture");
 
                     Application::SubmitToRenderThread([texture]()

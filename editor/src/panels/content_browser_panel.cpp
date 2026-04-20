@@ -2385,100 +2385,73 @@ namespace ignite
 
             // stbi_load converts HDR/float images to 8-bit, which is fine for a small
             // thumbnail preview and avoids the float-to-GPU-memory path entirely.
-            uint8_t *rawPixels = stbi_load(capturedPath.string().c_str(), &srcWidth, &srcHeight, &channelsOut, kChannels);
-
-            if (!rawPixels || srcWidth <= 0 || srcHeight <= 0)
+            std::vector<uint8_t> srcPixels;
+            std::vector<uint8_t> destPixels;
+            const int destWidth = thumbnailSize;
+            const int destHeight = thumbnailSize;
+            if (texture_utils::IsExrFile(capturedPath))
             {
-                if (rawPixels)
-                {
-                    stbi_image_free(rawPixels);
-                }
+                nvrhi::Format format = nvrhi::Format::RGBA8_UNORM;
+                texture_utils::LoadEXRTexture(capturedPath, srcWidth, srcHeight, format, srcPixels);
 
-                Application::SubmitToRenderThread([this, capturedPath]()
-                {
-                    s_SharedThumbnails.erase(capturedPath);
-                    s_SharedThumbnailLoadsInFlight.erase(capturedPath);
-                }, "ContentBrowserPanel::StartThumbnailLoad - Delete pixels");
-                return;
+                const uint64_t resizedSize = static_cast<uint64_t>(destWidth) * destHeight * kChannels;
+                destPixels.resize(resizedSize);
+                texture_utils::DownSample(srcPixels.data(), destPixels.data(), srcWidth, srcHeight, destWidth, destHeight, kChannels);
             }
-
-            // -----------------------------------------------------------------------
-            // KEY FIX: Downsample to thumbnail size on the CPU *before* uploading.
-            //
-            // The original code called Texture::Create(filepath, createInfo, nullptr)
-            // which ignores createInfo.width/height and loads the full resolution image
-            // (e.g. an 8K x 4K HDR = 128MB GPU allocation just for a 96px thumbnail).
-            // With many HDR files, this easily causes ~300-600 MB growth per reload cycle
-            // and the unload only freed the Ref but nvrhi deferred deletion kept them
-            // alive long enough for the next reload to stack on top.
-            // -----------------------------------------------------------------------
-            const int dstW = thumbnailSize;
-            const int dstH = thumbnailSize;
-            const uint64_t resizedSize = static_cast<uint64_t>(dstW) * dstH * kChannels;
-            Buffer resizedBuffer(resizedSize);
-
-            // Simple box-filter downsample — good enough for thumbnails and avoids
-            // pulling in stb_image_resize as an additional dependency.
+            else
             {
-                uint8_t *src = rawPixels;
-                uint8_t *dst = resizedBuffer.As<uint8_t>();
-                const float xScale = static_cast<float>(srcWidth) / static_cast<float>(dstW);
-                const float yScale = static_cast<float>(srcHeight) / static_cast<float>(dstH);
+                uint8_t *pixelData = stbi_load(capturedPath.string().c_str(), &srcWidth, &srcHeight, &channelsOut, kChannels);
+                size_t pixelSize = srcWidth * srcHeight * kChannels;
 
-                for (int dy = 0; dy < dstH; ++dy)
+                srcPixels.resize(pixelSize);
+                std::memcpy(srcPixels.data(), pixelData, pixelSize);
+
+                if (!pixelData || srcWidth <= 0 || srcHeight <= 0)
                 {
-                    const int srcY0 = static_cast<int>(dy * yScale);
-                    const int srcY1 = static_cast<int>((dy + 1) * yScale);
-                    const int clampedSrcY1 = std::min(srcY1, srcHeight - 1);
-
-                    for (int dx = 0; dx < dstW; ++dx)
+                    Application::SubmitToRenderThread([this, capturedPath]()
                     {
-                        const int srcX0 = static_cast<int>(dx * xScale);
-                        const int srcX1 = static_cast<int>((dx + 1) * xScale);
-                        const int clampedSrcX1 = std::min(srcX1, srcWidth - 1);
-
-                        uint32_t r = 0, g = 0, b = 0, a = 0, count = 0;
-                        for (int sy = srcY0; sy <= clampedSrcY1; ++sy)
-                        {
-                            for (int sx = srcX0; sx <= clampedSrcX1; ++sx)
-                            {
-                                const uint8_t *px = src + (sy * srcWidth + sx) * kChannels;
-                                r += px[0]; g += px[1]; b += px[2]; a += px[3];
-                                ++count;
-                            }
-                        }
-                        if (count == 0) count = 1;
-                        uint8_t *p = dst + (dy * dstW + dx) * kChannels;
-                        p[0] = static_cast<uint8_t>(r / count);
-                        p[1] = static_cast<uint8_t>(g / count);
-                        p[2] = static_cast<uint8_t>(b / count);
-                        p[3] = static_cast<uint8_t>(a / count);
-                    }
+                        s_SharedThumbnails.erase(capturedPath);
+                        s_SharedThumbnailLoadsInFlight.erase(capturedPath);
+                    }, "ContentBrowserPanel::StartThumbnailLoad - Delete pixels");
+                    return;
                 }
-            }
 
-            stbi_image_free(rawPixels);
-            rawPixels = nullptr;
+                // -----------------------------------------------------------------------
+                // KEY FIX: Downsample to thumbnail size on the CPU *before* uploading.
+                //
+                // The original code called Texture::Create(filepath, createInfo, nullptr)
+                // which ignores createInfo.width/height and loads the full resolution image
+                // (e.g. an 8K x 4K HDR = 128MB GPU allocation just for a 96px thumbnail).
+                // With many HDR files, this easily causes ~300-600 MB growth per reload cycle
+                // and the unload only freed the Ref but nvrhi deferred deletion kept them
+                // alive long enough for the next reload to stack on top.
+                // -----------------------------------------------------------------------
+                const uint64_t resizedSize = static_cast<uint64_t>(destWidth) * destHeight * kChannels;
+                destPixels.resize(resizedSize);
+                texture_utils::DownSample(srcPixels.data(), destPixels.data(), srcWidth, srcHeight, destWidth, destHeight, kChannels);
+                stbi_image_free(pixelData);
+                pixelData = nullptr;
+            }
 
             // -----------------------------------------------------------------------
             // RENDER THREAD: Create GPU texture from the tiny downsampled buffer.
             // GPU object creation happens here — never on a worker thread.
             // -----------------------------------------------------------------------
-            Application::SubmitToRenderThread([this, capturedPath, resizedBuffer = std::move(resizedBuffer), dstW, dstH, requestGeneration]() mutable
+            Application::SubmitToRenderThread([this, capturedPath, destPixels = destPixels, destWidth, destHeight, requestGeneration]() mutable
             {
-                // Drop early if cancelled
+                // Drop early if canceled
                 if (requestGeneration != s_SharedThumbnailLoadGeneration)
                 {
-                    resizedBuffer.Release();
+                    destPixels.clear();
                     s_SharedThumbnailLoadsInFlight.erase(capturedPath);
                     s_SharedThumbnails.erase(capturedPath);
                     return;
                 }
 
                 auto thumbnailIt = s_SharedThumbnails.find(capturedPath);
-                if (thumbnailIt == s_SharedThumbnails.end() || !resizedBuffer)
+                if (thumbnailIt == s_SharedThumbnails.end() || !destPixels.data())
                 {
-                    resizedBuffer.Release();
+                    destPixels.clear();
                     s_SharedThumbnails.erase(capturedPath);
                     s_SharedThumbnailLoadsInFlight.erase(capturedPath);
                     return;
@@ -2490,8 +2463,8 @@ namespace ignite
                 createInfo.keepCpuData = false;
                 createInfo.deferGpuCreate = true;
                 createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
-                createInfo.width = static_cast<uint32_t>(dstW);
-                createInfo.height = static_cast<uint32_t>(dstH);
+                createInfo.width = static_cast<uint32_t>(destWidth);
+                createInfo.height = static_cast<uint32_t>(destHeight);
                 createInfo.samplerAddressU = nvrhi::SamplerAddressMode::ClampToEdge;
                 createInfo.samplerAddressV = nvrhi::SamplerAddressMode::ClampToEdge;
                 createInfo.samplerAddressW = nvrhi::SamplerAddressMode::ClampToEdge;
@@ -2502,8 +2475,7 @@ namespace ignite
 
                 // Build the texture from the pre-resized buffer (Buffer overload).
                 // createInfo.width/height ARE honoured by this constructor.
-                Ref<Texture> loadedTexture = Texture::Create(resizedBuffer, createInfo, nullptr);
-                resizedBuffer.Release();
+                Ref<Texture> loadedTexture = Texture::Create(destPixels, createInfo, nullptr);
 
                 if (!loadedTexture)
                 {

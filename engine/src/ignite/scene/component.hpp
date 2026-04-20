@@ -39,6 +39,7 @@ namespace ignite
     static std::unordered_map<std::string, CompType> s_ComponentsName =
     {
         { "Camera", CompType_Camera },
+        { "Arrow", CompType_Arrow },
         { "Rigid Body 2D", CompType_Rigidbody2D },
         { "Directional Light", CompType_DirectionalLight },
         { "Box Collider 2D", CompType_BoxCollider2D },
@@ -150,6 +151,7 @@ namespace ignite
         switch (type)
         {
             case CompType_Camera: return "CompType_Camera";
+            case CompType_Arrow: return "CompType_Arrow";
             case CompType_Rigidbody2D: return "CompType_Rigidbody2D";
             case CompType_BoxCollider2D: return "CompType_BoxCollider2D";
             case CompType_CircleCollider2D: return "CompType_CircleCollider2D";
@@ -222,12 +224,18 @@ namespace ignite
         SceneCamera camera;
         bool primary = true;
 
-        glm::vec2 viewportPosition;
-        glm::vec2 viewportSize;
-
         CameraComponent() = default;
 
         COMPONENT_CLASS_TYPE(CompType_Camera)
+    };
+
+    class ArrowComponent : public IComponent
+    {
+    public:
+        AssetHandle placeHolder = AssetHandle(0);
+
+        ArrowComponent() = default;
+        COMPONENT_CLASS_TYPE(CompType_Arrow)
     };
 
     class TransformComponent : public IComponent

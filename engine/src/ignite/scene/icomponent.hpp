@@ -32,6 +32,7 @@ namespace ignite
     {
         CompType_Invalid = 0,
         CompType_ID,
+        CompType_Arrow,
         CompType_Transform,
         CompType_Camera,
         CompType_Widget,

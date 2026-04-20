@@ -66,7 +66,6 @@ namespace ignite
         
         void OnUpdateRuntimeSimulate(f32 deltaTime);
         void OnUpdateEdit(f32 deltaTime);
-        void Resize(uint32_t width, uint32_t height);
         void SetSceneRenderer(SceneRenderer *sceneRenderer) { m_SceneRenderer = sceneRenderer; }
 
         template<typename T>
@@ -88,9 +87,6 @@ namespace ignite
         
         SceneRenderer *GetSceneRenderer() { return m_SceneRenderer; }
         Environment *GetEnvironment();
-
-		uint32_t GetViewportWidth() const { return m_ViewportWidth; }
-		uint32_t GetViewportHeight() const { return m_ViewportHeight; }
 
         glm::vec3 physicsGravity{ 0.0f, -9.8f, 0.0f };
         float timeInSeconds = 0.0f;

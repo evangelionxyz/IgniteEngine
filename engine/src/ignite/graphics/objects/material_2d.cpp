@@ -11,7 +11,6 @@ namespace ignite
 		Serializer sr(filepath);
 
 		sr.BeginMap();
-
 		{
 			sr.BeginMap("Material2D");
 			sr.AddKeyValue("Version", ENGINE_VERSION);
@@ -23,7 +22,6 @@ namespace ignite
 			sr.AddKeyValue("Type", static_cast<int>(data.type));
 			sr.EndMap();
 		}
-		
 		sr.EndMap();
 
 		sr.Serialize(filepath);
@@ -46,12 +44,12 @@ namespace ignite
 		}
 
 		Ref<Material2D> material = CreateRef<Material2D>();
-		if (materialNode["Name"]) material->name = materialNode["Name"].as<std::string>();
-		if (materialNode["TextureHandle"]) material->textureHandle = AssetHandle(materialNode["TextureHandle"].as<uint64_t>());
-		if (materialNode["BaseColor"]) material->data.baseColor = materialNode["BaseColor"].as<glm::vec4>();
-		if (materialNode["AdditiveColor"]) material->data.additiveColor = materialNode["AdditiveColor"].as<glm::vec4>();
-		if (materialNode["TilingFactor"]) material->data.tilingFactor = materialNode["TilingFactor"].as<glm::vec2>();
-		if (materialNode["Type"]) material->data.type = static_cast<Material2DType>(materialNode["Type"].as<int>());
+		if (auto n = materialNode["Name"]) material->name = n.as<std::string>();
+		if (auto n = materialNode["TextureHandle"]) material->textureHandle = AssetHandle(n.as<uint64_t>());
+		if (auto n = materialNode["BaseColor"]) material->data.baseColor = n.as<glm::vec4>();
+		if (auto n = materialNode["AdditiveColor"]) material->data.additiveColor = n.as<glm::vec4>();
+		if (auto n = materialNode["TilingFactor"]) material->data.tilingFactor = n.as<glm::vec2>();
+		if (auto n = materialNode["Type"]) material->data.type = static_cast<Material2DType>(n.as<int>());
 
 		return material;
 	}

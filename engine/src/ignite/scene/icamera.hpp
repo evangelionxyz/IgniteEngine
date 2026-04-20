@@ -1,37 +1,12 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef ICAMERA_HPP
+#define ICAMERA_HPP
 
 #include "ignite/core/types.hpp"
-#include <nvrhi/nvrhi.h>
+#include "ignite/math/math.hpp"
 #include <string>
-
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <glm/gtx/quaternion.hpp>
 
 namespace ignite
 {
@@ -105,7 +80,6 @@ namespace ignite
     class ICamera
     {
     public:
-
         ICamera();
         ~ICamera() { }
 
@@ -119,8 +93,7 @@ namespace ignite
 		virtual glm::mat4 &GetProjection();
 		virtual glm::mat4 GetView();
 
-        glm::vec3 position;
-		
+		Rect GetRect() { return { viewportPosition, viewportPosition + viewportSize }; }
 
 		float pitch = 0.0f; // rotation around X axis
 		float yaw = 0.0f; // rotation around Y axis
@@ -128,9 +101,11 @@ namespace ignite
 		float fov = 45.0f; // for perspective
 		float nearPlane = 0.1f;
 		float farPlane = 1000.0f;
-		float width = 1920;
-		float height = 1080;
 		float orthoSize = 10.0f;
+
+        glm::vec3 position;
+		glm::vec2 viewportSize;
+		glm::vec2 viewportPosition;
 
 		// Control settings
 		struct Controls
@@ -159,3 +134,5 @@ namespace ignite
 		glm::mat4 m_Projection = glm::mat4(1.0f);
     };
 }
+
+#endif

@@ -595,7 +595,6 @@ namespace ignite
 
         // copy scene extra data
         newScene->handle = other->handle;
-		newScene->Resize(other->m_ViewportWidth, other->m_ViewportHeight);
 
         // Do not copy entities (it is created when creating entity)
         // newScene->entities = other->entities;

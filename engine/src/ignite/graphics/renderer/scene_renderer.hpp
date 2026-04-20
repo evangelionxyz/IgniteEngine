@@ -24,8 +24,8 @@ namespace ignite
         void RenderEditorTo(ICamera *camera);
         void RenderGameplayTo(ICamera *camera);
 
-        virtual void Resize(uint32_t width, uint32_t height) override;
-        void ResizeGameplay(uint32_t width, uint32_t height);
+        virtual void ResizeFramebuffer(uint32_t width, uint32_t height) override;
+        void ResizeGameplayFramebuffer(uint32_t width, uint32_t height);
         
         void SetFillMode(nvrhi::RasterFillMode mode);
         void SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered);

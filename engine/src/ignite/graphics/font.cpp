@@ -92,8 +92,7 @@ namespace ignite
         createInfo.keepInitialState = true;
         createInfo.keepCpuData = true;
 
-        Buffer buffer(rgbaPixels.data(), rgbaPixels.size());
-        Ref<Texture> atlas = Texture::Create(buffer, createInfo, nullptr, "MSDF Font Atlas");
+        Ref<Texture> atlas = Texture::Create(rgbaPixels, createInfo, nullptr, "MSDF Font Atlas");
         atlas->SetReadyFlag(false);
 
         Application::SubmitToRenderThread([atlas]()

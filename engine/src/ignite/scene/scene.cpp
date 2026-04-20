@@ -427,12 +427,6 @@ namespace ignite
         UpdateTransforms(deltaTime);
     }
 
-    void Scene::Resize(uint32_t width, uint32_t height)
-    {
-        this->m_ViewportWidth = width;
-        this->m_ViewportHeight = height;
-    }
-
     Entity Scene::GetPrimaryCamera()
     {
         auto camView = registry->view<CameraComponent>();

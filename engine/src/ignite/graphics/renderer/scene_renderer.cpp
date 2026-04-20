@@ -1039,7 +1039,6 @@ namespace ignite
             }
 
             nvrhi::IFramebuffer *framebuffer = m_GameplaySceneRT->GetFramebuffer();
-
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::ShadowPass");
                 ShadowPass(cmd, camera);
@@ -1102,7 +1101,7 @@ namespace ignite
         }
     }
 
-    void SceneRenderer::Resize(uint32_t width, uint32_t height)
+    void SceneRenderer::ResizeFramebuffer(uint32_t width, uint32_t height)
     {
         s_CompositeBindingSetCache.clear();
         s_DebugGridBindingSetCache.clear();
@@ -1113,7 +1112,7 @@ namespace ignite
         m_CompositeRT->Resize(width, height);
     }
 
-    void SceneRenderer::ResizeGameplay(uint32_t width, uint32_t height)
+    void SceneRenderer::ResizeGameplayFramebuffer(uint32_t width, uint32_t height)
     {
         s_CompositeBindingSetCache.clear();
         s_DebugGridBindingSetCache.clear();
@@ -1122,17 +1121,6 @@ namespace ignite
         m_GameplaySceneRT->Resize(width, height);
         m_GameplayWidgetRT->Resize(width, height);
         m_GameplayCompositeRT->Resize(width, height);
-
-        // Update camera view
-        if (m_Scene)
-        {
-            m_Scene->Resize(width, height);
-            if (Entity cameraEntity = m_Scene->GetPrimaryCamera())
-            {
-                auto &cameraComp = cameraEntity.GetComponent<CameraComponent>();
-                cameraComp.camera.UpdateProjection(static_cast<float>(width), static_cast<float>(height));
-            }
-        }
     }
 
     void SceneRenderer::ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera)

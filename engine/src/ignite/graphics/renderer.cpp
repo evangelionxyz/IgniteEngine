@@ -62,14 +62,21 @@ namespace ignite
         	textureCreateInfo.initialState = nvrhi::ResourceStates::ShaderResource;
         	textureCreateInfo.keepInitialState = true;
 
+            size_t texSize = sizeof(uint32_t);
             uint32_t white = 0xFFFFFFFF;
-            m_WhiteTexture = Texture::Create(Buffer(&white, sizeof(u32)), textureCreateInfo, cmd);
+            std::vector<uint8_t> whiteData(texSize);
+            memcpy(whiteData.data(), &white, texSize);
+            m_WhiteTexture = Texture::Create(whiteData, textureCreateInfo, cmd);
 
             uint32_t black = 0x00000000;
-            m_BlackTexture = Texture::Create(Buffer(&black, sizeof(uint32_t)), textureCreateInfo, cmd);
+            std::vector<uint8_t> blackData(texSize);
+            memcpy(blackData.data(), &black, texSize);
+            m_BlackTexture = Texture::Create(blackData, textureCreateInfo, cmd);
 
             uint32_t magenta = 0xFFFF00FF;
-            m_MagentaTexture = Texture::Create(Buffer(&magenta, sizeof(uint32_t)), textureCreateInfo, cmd);
+            std::vector<uint8_t> magentaData(texSize);
+            memcpy(magentaData.data(), &magenta, texSize);
+            m_MagentaTexture = Texture::Create(magentaData, textureCreateInfo, cmd);
         }
 
         cmd->close();
