@@ -562,7 +562,8 @@ namespace ignite
                         {
                             LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
                             AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
-                            if (m_EditorLayer->GetActiveProject()->GetAssetManager()->GetAssetType(handle) == AssetType::Widget)
+                            AssetMetaData metadata = assetManager->GetMetaData(handle);
+                            if (metadata.type == AssetType::Widget)
                             {
                                 c.widgetHandle = handle;
                             }
@@ -835,7 +836,7 @@ namespace ignite
             {
                 auto &c = selectedEntity.GetComponent<PointLight2DComponent>();
                 UI::DrawCheckbox("Enabled", &c.enabled);
-                UI::DrawVec4Control("Color", c.color, 0.025f, 1.0f);
+                UI::DrawColorVec4("Color", c.color);
                 UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.0f, 10000.0f);
                 UI::DrawFloatControl("Intensity", &c.intensity, 0.025f, 0.0f, 10000.0f);
             });
@@ -846,7 +847,7 @@ namespace ignite
 
 				static Circle2DComponent compBefore;
 
-                UI::State colorState = UI::DrawVec4Control("Color", c.color, 0.025f, 1.0f);
+                UI::State colorState = UI::DrawColorVec4("Color", c.color);
                 if (colorState.isItemActivated)
 					compBefore = c;
 
@@ -2587,6 +2588,26 @@ namespace ignite
                         drawList->AddImage(gameplayViewImaage, imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));
                         drawList->PopClipRect();
 
+                        {
+                            const float padding = 18.0f;
+                            float yPosition = 6.0f;
+                            const float fps = ImGui::GetIO().Framerate;
+                            std::string statusStr = std::format("FPS {:.5}", fps);
+                            drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
+
+                            yPosition += padding;
+                            statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
+                            drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+                            
+                            yPosition += padding;
+                            statusStr = std::format("Viewport pos {} {}", baseImagePos.x, baseImagePos.y);
+                            drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+
+                            yPosition += padding;
+                            statusStr = std::format("Viewport size {} {}", baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y);
+                            drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+                        }
+
                         ImGui::SetCursorScreenPos(baseImagePos);
                         ImGui::InvisibleButton("##GamePreviewCanvas", baseImageSize);
                     }
@@ -2604,7 +2625,6 @@ namespace ignite
             }
             ImGui::End();
         }
-
     }
 
     void ScenePanel::RenderToolbar()
@@ -2620,6 +2640,8 @@ namespace ignite
             case EditorCamera::NavigationMode::Mode2D: cameraModeIndex = 2; break;
             default: cameraModeIndex = 0; break;
         }
+
+        ImGui::BeginDisabled(m_Scene == nullptr);
 
         ImGui::SetNextItemWidth(96.0f);
         if (ImGui::Combo("##camera_mode", &cameraModeIndex, kCameraModeLabels.data(), static_cast<int>(kCameraModeLabels.size())))
@@ -2780,6 +2802,8 @@ namespace ignite
         }
 
         ImGui::PopStyleVar(2);
+
+        ImGui::EndDisabled();
     }
 
     bool ScenePanel::Is2DResizableEntity(Entity entity) const

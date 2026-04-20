@@ -5,8 +5,9 @@
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/core/input/input.hpp"
-#include "ignite/graphics/renderer/renderer_2d.hpp"
+#include "ignite/graphics/renderer/widget_renderer.hpp"
 #include "ignite/graphics/font.hpp"
+#include "ignite/core/logger.hpp"
 #include "ignite/graphics/texture.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -69,6 +70,7 @@ namespace ignite
             sr.AddKeyValue("Alignment", static_cast<int>(item->alignment));
             sr.AddKeyValue("SizingMode", static_cast<int>(item->sizingMode));
             sr.AddKeyValue("Visible", item->visible);
+            sr.AddKeyValue("ZIndex", item->zIndex);
 
             if (item->GetWidgetType() == WidgetType::Container)
             {
@@ -198,6 +200,7 @@ namespace ignite
                 item->id = id;
                 if (auto n = itemNode["Name"]) item->name = n.as<std::string>();
                 if (auto n = itemNode["Position"]) item->position = n.as<glm::vec2>();
+                if (auto n = itemNode["ZIndex"])    item->zIndex   = n.as<int>();
                 if (auto n = itemNode["Size"]) item->size = n.as<glm::vec2>();
                 if (auto n = itemNode["Alignment"]) item->alignment = static_cast<WidgetAlignment>(n.as<int>());
                 if (auto n = itemNode["SizingMode"]) item->sizingMode = static_cast<SizingMode>(n.as<int>());
@@ -405,7 +408,7 @@ namespace ignite
         color = UI_COLOR_WHITE;
     }
 
-    void WidgetLabel::Draw(Renderer2D *renderer, AssetManager *assetManager)
+    void WidgetLabel::Draw(WidgetRenderer *renderer, AssetManager *assetManager)
     {
         if (!visible || !renderer || !assetManager)
             return;
@@ -420,7 +423,7 @@ namespace ignite
         if (!fontAsset)
             return;
 
-        Ref<Font> font = fontAsset ? fontAsset->As<Font>() : nullptr;
+        font = fontAsset ? fontAsset->As<Font>() : nullptr;
         if (!font)
         {
             IWidgetItem::Draw(renderer, assetManager);
@@ -428,7 +431,8 @@ namespace ignite
         }
 
         const Rect rect = GetAlignedRect();
-        const glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(rect.min, 0.0f));
+        glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(rect.min, 0.0f));
+        transform = glm::scale(transform, glm::vec3(fontSize, fontSize, 1.0f));
         renderer->DrawString(text, font, color, transform, kerning, lineSpacing);
 
         IWidgetItem::Draw(renderer, assetManager);
@@ -436,11 +440,47 @@ namespace ignite
 
     void WidgetLabel::Measure()
     {
-        if (size.x < 0.0f)
-            size.x = 0.0f;
+        if (!font || text.empty())
+        {
+            size = glm::vec2(0.0f);
+            return;
+        }
 
-        if (size.y < 0.0f)
-            size.y = 0.0f;
+        const auto &fontGeometry = font->GetGeometry();
+        const auto &metrics = fontGeometry.getMetrics();
+        double fsScale = 1.0 / (metrics.ascenderY - metrics.descenderY);
+
+        double x = 0.0;
+        double maxWidth = 0.0;
+        int lines = 1;
+
+        for (size_t i = 0; i < text.size(); ++i)
+        {
+            char character = text[i];
+            if (character == '\n')
+            {
+                maxWidth = std::max(maxWidth, x);
+                x = 0.0;
+                lines++;
+                continue;
+            }
+
+            auto glyph = fontGeometry.getGlyph(character);
+            if (!glyph) glyph = fontGeometry.getGlyph('?');
+            if (!glyph) continue;
+
+            double advance = glyph->getAdvance();
+            if (i < text.size() - 1)
+            {
+                fontGeometry.getAdvance(advance, character, text[i + 1]);
+            }
+            x += fsScale * advance + kerning;
+        }
+
+        maxWidth = std::max(maxWidth, x);
+        
+        size.x = static_cast<float>(maxWidth) * fontSize;
+        size.y = static_cast<float>(lines) * (static_cast<float>(metrics.lineHeight * fsScale) + lineSpacing) * fontSize;
     }
 
     void WidgetLabel::Arrange(const Rect &parentRect)
@@ -616,12 +656,10 @@ namespace ignite
         }
     }
 
-    void WidgetButton::Draw(Renderer2D *renderer, AssetManager *assetManager)
+    void WidgetButton::Draw(WidgetRenderer *renderer, AssetManager *assetManager)
     {
         if (!visible || !renderer)
-        {
             return;
-        }
 
         Ref<Texture> resolvedImage = image;
         if (!resolvedImage && assetManager && imageHandle != AssetHandle(0))
@@ -631,9 +669,7 @@ namespace ignite
                 return;
 
             if (imageAsset)
-            {
                 resolvedImage = imageAsset->As<Texture>();
-            }
         }
 
         const Rect &rect = GetAlignedRect();
@@ -642,28 +678,28 @@ namespace ignite
         if (assetManager && GetFontHandle() != AssetHandle(0) && !GetText().empty())
         {
             Ref<Asset> fontAsset = assetManager->GetAsset(GetFontHandle(), AssetType::Font);
-            if (!fontAsset)
-                return;
-
-            Ref<Font> font = fontAsset ? fontAsset->As<Font>() : nullptr;
-            if (font)
+            label->font = fontAsset ? fontAsset->As<Font>() : nullptr;
+            if (label->font)
             {
-                const std::string &buttonText = GetText();
-                const float textKerning = GetKerning();
-                const float textLineSpacing = GetLineSpacing();
-                const float textFontSize = GetFontSize();
+                // Ensure label size is measured
+                label->Measure();
 
-                const glm::vec2 textSize = font->MeasureString(buttonText, textKerning, textLineSpacing);
-                const glm::vec2 scaledTextSize = textSize * textFontSize;
+                const std::string &buttonText     = GetText();
+                const float        textKerning    = GetKerning();
+                const float        textLineSpacing = GetLineSpacing();
+                const float        textFontSize   = GetFontSize();
+                const glm::vec2    rectSize       = rect.GetSize();
+
+                // Center horizontally; center vertically (text goes downward from origin)
                 const glm::vec2 textPos =
                 {
-                    rect.min.x + (rect.GetSize().x - scaledTextSize.x) * 0.5f,
-                    rect.min.y + (rect.GetSize().y + scaledTextSize.y) * 0.25f
+                    rect.min.x + (rectSize.x - label->size.x) * 0.5f,
+                    rect.min.y + (rectSize.y - label->size.y) * 0.5f
                 };
 
-                const glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(textPos, 0.0f))
-                    * glm::scale(glm::mat4(1.0f), glm::vec3(textFontSize, -textFontSize, 1.0f));
-                renderer->DrawString(buttonText, font, GetTextColor(), transform, textKerning, textLineSpacing);
+                glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(textPos, 0.0f))
+                    * glm::scale(glm::mat4(1.0f), glm::vec3(textFontSize, textFontSize, 1.0f));
+                renderer->DrawString(buttonText, label->font, GetTextColor(), transform, textKerning, textLineSpacing);
             }
         }
 
@@ -673,9 +709,7 @@ namespace ignite
     void WidgetButton::Measure()
     {
         if (label)
-        {
             label->Measure();
-        }
     }
 
     void WidgetButton::Arrange(const Rect &parentRect)

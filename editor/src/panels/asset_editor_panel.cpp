@@ -1871,44 +1871,42 @@ namespace ignite
                 {
                     if (Ref<WidgetCanvas> widget = assetData.asset->As<WidgetCanvas>())
                     {
-                        Project *project = m_EditorLayer->GetActiveProject().get();
+                        Project *project       = m_EditorLayer->GetActiveProject().get();
                         AssetManager *assetManager = project ? project->GetAssetManager() : nullptr;
 
-                        const ImVec2 contentSize = ImGui::GetContentRegionAvail();
-                        const float splitterWidth = 6.0f;
-                        const float minTreeWidth = 250.0f;
-                        const float minDetailsWidth = 320.0f;
-                        const float minPreviewWidth = 240.0f;
-
                         EditorSceneData &sceneData = assetData.sceneData;
-                        widget->CreateRoot(sceneData.viewportWidth > 0 ? sceneData.viewportWidth : 1280, sceneData.viewportHeight > 0 ? sceneData.viewportHeight : 720);
+                        widget->CreateRoot(
+                            sceneData.viewportWidth  > 0 ? sceneData.viewportWidth  : 1280,
+                            sceneData.viewportHeight > 0 ? sceneData.viewportHeight : 720);
                         if (widget->GetRoot() && widget->GetRoot()->name.empty())
-                        {
                             widget->GetRoot()->name = "Canvas Root";
-                        }
 
-                        static std::unordered_map<uint64_t, int> s_SelectedWidgetItem;
-                        int &selectedItemId = s_SelectedWidgetItem[static_cast<uint64_t>(assetData.handle)];
-                        if (selectedItemId == 0 || !widget->GetItems().contains(selectedItemId))
-                        {
-                            selectedItemId = widget->GetRoot() ? widget->GetRoot()->id : 0;
-                        }
-
-                        static std::unordered_map<uint64_t, float> s_WidgetPreviewZoom;
+                        // ---- Per-asset persistent state ----
+                        static std::unordered_map<uint64_t, int>       s_SelectedWidgetItem;
+                        static std::unordered_map<uint64_t, float>     s_WidgetPreviewZoom;
                         static std::unordered_map<uint64_t, glm::vec2> s_WidgetPreviewPan;
-                        const uint64_t widgetPreviewKey = static_cast<uint64_t>(assetData.handle);
-                        float &widgetPreviewZoom = s_WidgetPreviewZoom[widgetPreviewKey];
-                        if (widgetPreviewZoom <= 0.0f)
-                        {
-                            widgetPreviewZoom = 1.0f;
-                        }
-                        glm::vec2 &widgetPreviewPan = s_WidgetPreviewPan[widgetPreviewKey];
+
+                        const uint64_t stateKey = static_cast<uint64_t>(assetData.handle);
+
+                        int &selectedItemId = s_SelectedWidgetItem[stateKey];
+                        if (selectedItemId == 0 || !widget->GetItems().contains(selectedItemId))
+                            selectedItemId = widget->GetRoot() ? widget->GetRoot()->id : 0;
+
+                        float &widgetPreviewZoom = s_WidgetPreviewZoom[stateKey];
+                        if (widgetPreviewZoom <= 0.0f) widgetPreviewZoom = 1.0f;
+                        glm::vec2 &widgetPreviewPan = s_WidgetPreviewPan[stateKey];
 
                         if (sceneData.sceneRenderer)
-                        {
                             sceneData.sceneRenderer->SetPreviewWidget(widget);
-                        }
 
+                        // Resolve selected item once (used by multiple sections)
+                        Ref<IWidgetItem> selectedItem = nullptr;
+                        if (selectedItemId != 0 && widget->GetItems().contains(selectedItemId))
+                            selectedItem = widget->GetItems().at(selectedItemId);
+
+                        // ============================================================
+                        // LEFT PANEL — Layout Tree + Toolbox
+                        // ============================================================
                         ImGui::BeginChild("##widget_layout_tree", { 0.0f, 0.0f }, ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
                         {
                             if (ImGui::BeginTabBar("##layout_tree_tab_bar"))
@@ -1916,99 +1914,407 @@ namespace ignite
                                 if (ImGui::BeginTabItem("Layout Tree"))
                                 {
                                     if (widget->GetRoot())
-                                    {
                                         WidgetEditor::DrawWidgetTreeRecursive(widget->GetRoot()->As<IWidgetItem>(), selectedItemId, widget.get());
-                                    }
                                     else
-                                    {
                                         ImGui::TextDisabled("No root container.");
-                                    }
                                     ImGui::EndTabItem();
                                 }
-                                
+
+                                if (ImGui::BeginTabItem("Toolbox"))
+                                {
+                                    WidgetEditor::DrawToolbox(widget, selectedItemId);
+                                    ImGui::EndTabItem();
+                                }
+
                                 ImGui::EndTabBar();
                             }
                         }
                         ImGui::EndChild();
 
                         ImGui::SameLine(0.0f, 0.0f);
+
+                        // ============================================================
+                        // MIDDLE PANEL — Scene Preview
+                        // ============================================================
                         ImGui::BeginChild("##widget_scene_preview", { 0.0f, 0.0f }, ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
                         {
-                            ImGui::SeparatorText("Scene Preview");
-
                             const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
-                            sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
+                            sceneData.viewportWidth  = std::max(1u, static_cast<uint32_t>(viewportSize.x));
                             sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
-                            
+
+                            const float canvasW = static_cast<float>(sceneData.viewportWidth);
+                            const float canvasH = static_cast<float>(sceneData.viewportHeight);
+
                             if (sceneData.compositeRT)
                             {
                                 Ref<Texture> previewTexture = sceneData.compositeRT->GetColorAttachment(0);
                                 const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
-                                ImGui::InvisibleButton("##widget_preview_view", viewportSize);
+
+                                // Single InvisibleButton — serves as the base for all interactions:
+                                // hover detection, click-to-select, DND target, context menu.
+                                const std::string previewBtnId = std::format("##widget_preview_{}", stateKey);
+                                ImGui::InvisibleButton(previewBtnId.c_str(), viewportSize);
                                 sceneData.viewportHovered = ImGui::IsItemHovered();
 
                                 const ImVec2 mousePos = ImGui::GetMousePos();
+
+                                // --- Zoom with scroll wheel (towards cursor) ---
                                 const float previousZoom = widgetPreviewZoom;
                                 if (sceneData.viewportHovered && ImGui::GetIO().MouseWheel != 0.0f)
                                 {
                                     widgetPreviewZoom = std::clamp(widgetPreviewZoom + ImGui::GetIO().MouseWheel * 0.1f, 0.25f, 5.0f);
                                     if (widgetPreviewZoom != previousZoom)
                                     {
-                                        const ImVec2 previousImagePos = { viewportPos.x + widgetPreviewPan.x, viewportPos.y + widgetPreviewPan.y };
-                                        const ImVec2 previousImageSize = { viewportSize.x * previousZoom, viewportSize.y * previousZoom };
+                                        const ImVec2 prevImagePos  = { viewportPos.x + widgetPreviewPan.x, viewportPos.y + widgetPreviewPan.y };
+                                        const ImVec2 prevImageSize = { viewportSize.x * previousZoom,      viewportSize.y * previousZoom };
                                         const ImVec2 uvAtMouse =
                                         {
-                                            (mousePos.x - previousImagePos.x) / std::max(previousImageSize.x, 1.0f),
-                                            (mousePos.y - previousImagePos.y) / std::max(previousImageSize.y, 1.0f)
+                                            (mousePos.x - prevImagePos.x) / std::max(prevImageSize.x, 1.0f),
+                                            (mousePos.y - prevImagePos.y) / std::max(prevImageSize.y, 1.0f)
                                         };
-
                                         const ImVec2 newImageSize = { viewportSize.x * widgetPreviewZoom, viewportSize.y * widgetPreviewZoom };
                                         widgetPreviewPan.x = mousePos.x - viewportPos.x - uvAtMouse.x * newImageSize.x;
                                         widgetPreviewPan.y = mousePos.y - viewportPos.y - uvAtMouse.y * newImageSize.y;
                                     }
                                 }
 
+                                // --- Pan with middle-mouse drag ---
                                 if (sceneData.viewportHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
                                 {
                                     widgetPreviewPan.x += ImGui::GetIO().MouseDelta.x;
                                     widgetPreviewPan.y += ImGui::GetIO().MouseDelta.y;
                                 }
 
-                                const ImVec2 imagePos = { viewportPos.x + widgetPreviewPan.x, viewportPos.y + widgetPreviewPan.y };
-                                const ImVec2 imageSize = { viewportSize.x * widgetPreviewZoom, viewportSize.y * widgetPreviewZoom };
+                                const ImVec2 imagePos  = { viewportPos.x + widgetPreviewPan.x, viewportPos.y + widgetPreviewPan.y };
+                                const ImVec2 imageSize = { viewportSize.x * widgetPreviewZoom,  viewportSize.y * widgetPreviewZoom };
 
+                                // --- DrawList rendering ---
                                 ImDrawList *drawList = ImGui::GetWindowDrawList();
-                                drawList->PushClipRect(viewportPos, { viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y }, true);
-                                drawList->AddImage(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), imagePos,
-                                    { imagePos.x + imageSize.x, imagePos.y + imageSize.y }, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
-                                drawList->PopClipRect();
+                                const ImVec2 clipMax = { viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y };
+                                drawList->PushClipRect(viewportPos, clipMax, true);
 
-                                const bool insideImage = sceneData.viewportHovered
-                                    && mousePos.x >= imagePos.x && mousePos.x <= imagePos.x + imageSize.x
-                                    && mousePos.y >= imagePos.y && mousePos.y <= imagePos.y + imageSize.y;
+                                // Rendered canvas image
+                                drawList->AddImage(
+                                    reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()),
+                                    imagePos, { imagePos.x + imageSize.x, imagePos.y + imageSize.y },
+                                    ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
 
-                                uint32_t localMouseX = 0;
-                                uint32_t localMouseY = 0;
-                                if (insideImage)
+                                // Feature 1: Bounds overlay (dim outlines) + selection box + corner handles
+                                WidgetEditor::DrawPreviewOverlay(drawList, widget, selectedItemId,
+                                    imagePos, imageSize, canvasW, canvasH);
+
+                                // Feature 4: Anchor-point diamonds on parent rect (skip root)
+                                if (selectedItem && widget->GetRoot() && selectedItem->id != widget->GetRoot()->id)
                                 {
-                                    const float u = std::clamp((mousePos.x - imagePos.x) / std::max(imageSize.x, 1.0f), 0.0f, 1.0f);
-                                    const float v = std::clamp((mousePos.y - imagePos.y) / std::max(imageSize.y, 1.0f), 0.0f, 1.0f);
-
-                                    localMouseX = static_cast<uint32_t>(u * static_cast<float>(std::max(1u, sceneData.viewportWidth) - 1u));
-                                    localMouseY = static_cast<uint32_t>(v * static_cast<float>(std::max(1u, sceneData.viewportHeight) - 1u));
+                                    WidgetEditor::DrawAnchorPoints(drawList, selectedItem, widget,
+                                        imagePos, imageSize, canvasW, canvasH);
                                 }
 
-                                sceneData.sceneRenderer->SetWidgetPreviewMousePosition(localMouseX, localMouseY, insideImage);
+                                drawList->PopClipRect();
+
+                                // --- Drag-to-move + Handle-resize + Click-to-select ---
+                                // Handle index: 0=none, 1=body(move), 2..9=handles(TL,TR,BL,BR,TC,BC,ML,MR)
+                                static std::unordered_map<uint64_t, int>  s_DragHandle;
+                                static std::unordered_map<uint64_t, bool> s_DragMoved;   // did the drag actually move anything?
+                                int  &dragHandle = s_DragHandle[stateKey];
+                                bool &dragMoved  = s_DragMoved[stateKey];
+
+                                const float scaleX = canvasW / std::max(imageSize.x, 1.0f);
+                                const float scaleY = canvasH / std::max(imageSize.y, 1.0f);
+                                constexpr float kHit    = 7.0f;    // screen-pixel hit radius for handles
+                                constexpr float kMinSz  = 8.0f;    // minimum widget size
+
+                                // Lambda: is mouse within kHit pixels of a screen-space point?
+                                auto nearPt = [&](const ImVec2 &h) -> bool {
+                                    return std::abs(mousePos.x - h.x) <= kHit
+                                        && std::abs(mousePos.y - h.y) <= kHit;
+                                };
+
+                                // Build handle screen positions for the currently selected item
+                                struct HandleSet
+                                {
+                                    ImVec2 tl, tr, bl, br, tc, bc, ml, mr;
+                                    bool valid = false;
+                                };
+
+                                HandleSet hs;
+                                if (selectedItem)
+                                {
+                                    const Rect &wr = selectedItem->GetAlignedRect();
+                                    hs.tl = WidgetEditor::CanvasToScreen(wr.min.x, wr.min.y, imagePos, imageSize, canvasW, canvasH);
+                                    hs.br = WidgetEditor::CanvasToScreen(wr.max.x, wr.max.y, imagePos, imageSize, canvasW, canvasH);
+                                    hs.tr = { hs.br.x, hs.tl.y };
+                                    hs.bl = { hs.tl.x, hs.br.y };
+                                    hs.tc = { (hs.tl.x + hs.br.x) * 0.5f, hs.tl.y };
+                                    hs.bc = { (hs.tl.x + hs.br.x) * 0.5f, hs.br.y };
+                                    hs.ml = { hs.tl.x, (hs.tl.y + hs.br.y) * 0.5f };
+                                    hs.mr = { hs.br.x, (hs.tl.y + hs.br.y) * 0.5f };
+                                    hs.valid = true;
+                                }
+
+                                // --- Cursor feedback ---
+                                if (hs.valid && ImGui::IsItemHovered() && dragHandle == 0)
+                                {
+                                    if      (nearPt(hs.tl) || nearPt(hs.br)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
+                                    else if (nearPt(hs.tr) || nearPt(hs.bl)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNESW);
+                                    else if (nearPt(hs.tc) || nearPt(hs.bc)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+                                    else if (nearPt(hs.ml) || nearPt(hs.mr)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+                                    else
+                                    {
+                                        const float cx = (mousePos.x - imagePos.x) * scaleX;
+                                        const float cy = (mousePos.y - imagePos.y) * scaleY;
+                                        if (selectedItem->GetAlignedRect().Contains(glm::vec2(cx, cy)))
+                                            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+                                    }
+                                }
+
+                                // --- Assign drag handle on click-down ---
+                                if (hs.valid && ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && dragHandle == 0)
+                                {
+                                    dragMoved = false;
+
+                                    if      (nearPt(hs.tl)) dragHandle = 2;
+                                    else if (nearPt(hs.tr)) dragHandle = 3;
+                                    else if (nearPt(hs.bl)) dragHandle = 4;
+                                    else if (nearPt(hs.br)) dragHandle = 5;
+                                    else if (nearPt(hs.tc)) dragHandle = 6;
+                                    else if (nearPt(hs.bc)) dragHandle = 7;
+                                    else if (nearPt(hs.ml)) dragHandle = 8;
+                                    else if (nearPt(hs.mr)) dragHandle = 9;
+                                    else
+                                    {
+                                        const float cx = (mousePos.x - imagePos.x) * scaleX;
+                                        const float cy = (mousePos.y - imagePos.y) * scaleY;
+                                        if (selectedItem->GetAlignedRect().Contains(glm::vec2(cx, cy)))
+                                            dragHandle = 1; // body drag
+                                    }
+                                }
+
+                                // --- Apply drag delta ---
+                                if (dragHandle != 0 && ImGui::IsMouseDragging(ImGuiMouseButton_Left) && selectedItem)
+                                {
+                                    const ImVec2 delta = ImGui::GetIO().MouseDelta;
+                                    const float  dx    = delta.x * scaleX;
+                                    const float  dy    = delta.y * scaleY;
+
+                                    if (std::abs(dx) > 0.001f || std::abs(dy) > 0.001f)
+                                    {
+                                        dragMoved = true;
+
+                                        // For edges that move the top/left side, compute the ACTUAL size
+                                        // change so position only shifts by what size actually shrank.
+                                        // This keeps the opposite edge pinned when hitting the minimum.
+                                        auto resizeLeft = [&](float rawDx)
+                                        {
+                                            const float newW  = std::max(kMinSz, selectedItem->size.x - rawDx);
+                                            const float actDx = selectedItem->size.x - newW; // always <= |rawDx|
+                                            selectedItem->position.x += actDx;
+                                            selectedItem->size.x = newW;
+                                        };
+                                        auto resizeTop = [&](float rawDy)
+                                        {
+                                            const float newH  = std::max(kMinSz, selectedItem->size.y - rawDy);
+                                            const float actDy = selectedItem->size.y - newH;
+                                            selectedItem->position.y += actDy;
+                                            selectedItem->size.y = newH;
+                                        };
+                                        auto resizeRight  = [&](float rawDx) { selectedItem->size.x = std::max(kMinSz, selectedItem->size.x + rawDx); };
+                                        auto resizeBottom = [&](float rawDy) { selectedItem->size.y = std::max(kMinSz, selectedItem->size.y + rawDy); };
+
+                                        switch (dragHandle)
+                                        {
+                                            case 1: // move — body drag
+                                                selectedItem->position.x += dx;
+                                                selectedItem->position.y += dy;
+                                                break;
+                                            case 2: // TL corner
+                                                resizeLeft(dx);
+                                                resizeTop(dy);
+                                                break;
+                                            case 3: // TR corner
+                                                resizeRight(dx);
+                                                resizeTop(dy);
+                                                break;
+                                            case 4: // BL corner
+                                                resizeLeft(dx);
+                                                resizeBottom(dy);
+                                                break;
+                                            case 5: // BR corner
+                                                resizeRight(dx);
+                                                resizeBottom(dy);
+                                                break;
+                                            case 6: // TC edge
+                                                resizeTop(dy);
+                                                break;
+                                            case 7: // BC edge
+                                                resizeBottom(dy);
+                                                break;
+                                            case 8: // ML edge
+                                                resizeLeft(dx);
+                                                break;
+                                            case 9: // MR edge
+                                                resizeRight(dx);
+                                                break;
+                                            default: break;
+                                        }
+                                        widget->SetDirtyFlag(true);
+                                    }
+                                }
+
+                                // Release handle when mouse is up
+                                if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                                    dragHandle = 0;
+
+                                // --- Selection ---
+                                // Rules:
+                                //   • A drag that moved something → DO NOT change selection
+                                //   • Single click that hit a handle of the current selection → keep selection
+                                //   • Single click elsewhere → pick smallest overlapping item
+                                //   • Double click → cycle through ALL overlapping items (skip current, next smallest)
+                                const bool isClick       = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+                                const bool isDblClick    = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered();
+                                const bool wasHandleDrag = dragMoved && (dragHandle == 0); // drag just finished
+
+                                if (isClick && !wasHandleDrag && ImGui::IsItemHovered())
+                                {
+                                    const float canvasX = (mousePos.x - imagePos.x) / std::max(imageSize.x, 1.0f) * canvasW;
+                                    const float canvasY = (mousePos.y - imagePos.y) / std::max(imageSize.y, 1.0f) * canvasH;
+                                    const glm::vec2 canvasPt = { canvasX, canvasY };
+
+                                    // Collect all visible items that contain the click point
+                                    std::vector<std::pair<float, int>> candidates; // {area, id}
+                                    for (const auto &[id, itm] : widget->GetItems())
+                                    {
+                                        if (!itm || !itm->IsVisible()) continue;
+                                        const Rect &wr = itm->GetAlignedRect();
+                                        if (wr.Contains(canvasPt))
+                                        {
+                                            const glm::vec2 sz = wr.GetSize();
+                                            candidates.push_back({ sz.x * sz.y, id });
+                                        }
+                                    }
+                                    // Sort smallest area first (deepest child first)
+                                    std::sort(candidates.begin(), candidates.end(),
+                                        [](const auto &a, const auto &b){ return a.first < b.first; });
+
+                                    if (!candidates.empty())
+                                    {
+                                        if (isDblClick && candidates.size() > 1)
+                                        {
+                                            // Double-click: cycle to the next candidate after current selection
+                                            int next = candidates[0].second; // default: smallest
+                                            for (size_t k = 0; k < candidates.size(); ++k)
+                                            {
+                                                if (candidates[k].second == selectedItemId)
+                                                {
+                                                    // Pick the next one in the list (wraps around)
+                                                    next = candidates[(k + 1) % candidates.size()].second;
+                                                    break;
+                                                }
+                                            }
+                                            selectedItemId = next;
+                                        }
+                                        else if (!isDblClick)
+                                        {
+                                            // Single click:
+                                            // If the click landed on a handle of the current selection, keep it.
+                                            bool onHandle = false;
+                                            if (hs.valid && dragHandle != 0)
+                                                onHandle = true; // we already assigned a handle this frame
+                                            // Also keep current selection if it's among the candidates
+                                            // (i.e. don't switch from child to parent accidentally)
+                                            if (!onHandle)
+                                            {
+                                                bool currentStillHit = false;
+                                                for (const auto &[area, id] : candidates)
+                                                    if (id == selectedItemId) { currentStillHit = true; break; }
+
+                                                if (currentStillHit)
+                                                    ; // keep current selection — don't switch to parent
+                                                else
+                                                    selectedItemId = candidates[0].second; // pick smallest
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // --- Feature 5a: Toolbox drag-and-drop target ---
+                                if (ImGui::BeginDragDropTarget())
+                                {
+                                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_WIDGET_TOOLBOX_ITEM))
+                                    {
+                                        if (payload->Data && payload->DataSize == sizeof(int))
+                                        {
+                                            const WidgetType dropType = static_cast<WidgetType>(*static_cast<const int *>(payload->Data));
+
+                                            const float dropCX = (mousePos.x - imagePos.x) / std::max(imageSize.x, 1.0f) * canvasW;
+                                            const float dropCY = (mousePos.y - imagePos.y) / std::max(imageSize.y, 1.0f) * canvasH;
+
+                                            WidgetContainer *insertParent = WidgetEditor::ResolveInsertionParent(selectedItem, widget);
+
+                                            int newId = 0;
+                                            switch (dropType)
+                                            {
+                                                case WidgetType::Container: newId = widget->AddContainer(insertParent);       break;
+                                                case WidgetType::Button:    newId = widget->AddButton(insertParent, "Button"); break;
+                                                case WidgetType::Label:     newId = widget->AddLabel(insertParent, "Label");   break;
+                                                default: break;
+                                            }
+
+                                            if (newId != 0 && widget->GetItems().contains(newId))
+                                            {
+                                                if (insertParent && insertParent->layout == LayoutMode::Absolute)
+                                                {
+                                                    const Rect &pr = insertParent->GetAlignedRect();
+                                                    widget->GetItems().at(newId)->position = glm::vec2(dropCX - pr.min.x, dropCY - pr.min.y);
+                                                }
+                                                selectedItemId = newId;
+                                                widget->SetDirtyFlag(true);
+                                            }
+                                        }
+                                    }
+                                    ImGui::EndDragDropTarget();
+                                }
+
+                                // --- Feature 5b: Right-click context menu ---
+                                if (ImGui::BeginPopupContextItem())
+                                {
+                                    ImGui::TextDisabled("Add Widget");
+                                    ImGui::Separator();
+
+                                    WidgetContainer *insertParent = WidgetEditor::ResolveInsertionParent(selectedItem, widget);
+
+                                    if (ImGui::MenuItem("  [ ]  Container"))
+                                    {
+                                        selectedItemId = widget->AddContainer(insertParent);
+                                        widget->SetDirtyFlag(true);
+                                    }
+                                    if (ImGui::MenuItem("  [B]  Button"))
+                                    {
+                                        selectedItemId = widget->AddButton(insertParent, "Button");
+                                        widget->SetDirtyFlag(true);
+                                    }
+                                    if (ImGui::MenuItem("  [T]  Label"))
+                                    {
+                                        selectedItemId = widget->AddLabel(insertParent, "Label");
+                                        widget->SetDirtyFlag(true);
+                                    }
+
+                                    ImGui::EndPopup();
+                                }
                             }
                             else
                             {
                                 ImGui::Dummy(viewportSize);
-                                sceneData.viewportHovered = ImGui::IsItemHovered();
                             }
                         }
                         ImGui::EndChild();
 
                         ImGui::SameLine(0.0f, 0.0f);
+
+                        // ============================================================
+                        // RIGHT PANEL — Details
+                        // ============================================================
                         ImGui::BeginChild("##widget_details", { 0.0f, 0.0f }, ImGuiChildFlags_Borders);
                         {
                             if (ImGui::BeginTabBar("##widget_details_tab_bar"))

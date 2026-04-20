@@ -1902,7 +1902,7 @@ namespace ignite
 					channel.scaleKeys.AddFrame({ decomposedScale, timestamp });
 				}
 
-				animation->channels[jointIndex] = std::move(channel);
+				animation->channels[(int)jointIndex] = std::move(channel);
 			}
 
 			if (!animation->channels.empty())

@@ -38,7 +38,7 @@ namespace ignite
             bool popupNewProjectModal = false;
             bool assetRegistryWindow = false;
             bool takeScreenshot = false;
-            bool gameplayViewportWindow = false;
+            bool gameplayViewportWindow = true;
 
             uint32_t hoveredEntity = static_cast<uint32_t>(-1);
             ProjectInfo projectCreateInfo;

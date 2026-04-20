@@ -306,7 +306,13 @@ namespace ignite
             return false;
         }
 
-        return m_Host->Invoke(methodId, argsPtr, argCount, returnPtr);
+        const bool success = m_Host->Invoke(methodId, argsPtr, argCount, returnPtr);
+        if (!success)
+        {
+            LOG_ERROR("[Script Host] Invoke failed (methodId={}, argCount={})", methodId, argCount);
+        }
+
+        return success;
     }
 
     std::string ScriptHost::GetDerivedTypes(const std::filesystem::path &assemblyPath, const std::string &baseType)

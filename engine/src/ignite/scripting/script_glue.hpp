@@ -12,6 +12,8 @@ namespace ignite
     {
         void (*Debug_Log)(const char *message);
 
+        uint64_t(*Scene_PickEntityAt)(float mouseX, float mouseY, glm::vec2 viewportMin, glm::vec2 viewportMax);
+
         bool (*Entity_HasComponent)(uint64_t entityID, const char *componentTypeName);
         void (*Entity_AddComponent)(uint64_t entityID, const char *componentTypeName);
         uint64_t (*Entity_FindEntityByName)(const char *name);

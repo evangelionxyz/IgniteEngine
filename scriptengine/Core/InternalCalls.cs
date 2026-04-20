@@ -44,6 +44,7 @@ public static class InternalCalls
     private struct NativeApi
     {
         public IntPtr Debug_Log;
+        public IntPtr Scene_PickEntityAt;
         public IntPtr Entity_HasComponent;
         public IntPtr Entity_AddComponent;
         public IntPtr Entity_FindEntityByName;
@@ -164,6 +165,8 @@ public static class InternalCalls
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void DebugLogFn(IntPtr message);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private delegate void ScenePickEntityAtFn(float x, float y, Vector2 viewportMin, Vector2 viewportMax, out ulong entityID);
     [return: MarshalAs(UnmanagedType.I1)]
     private delegate bool EntityHasComponentFn(ulong entityID, IntPtr componentTypeName);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -316,6 +319,7 @@ public static class InternalCalls
 
     private static bool s_Initialized;
     private static DebugLogFn s_DebugLog;
+    private static ScenePickEntityAtFn s_ScenePickEntityAt;
     private static EntityHasComponentFn s_EntityHasComponent;
     private static EntityAddComponentFn s_EntityAddComponent;
     private static EntityFindEntityByNameFn s_EntityFindEntityByName;
@@ -437,6 +441,7 @@ public static class InternalCalls
         NativeApi api = Marshal.PtrToStructure<NativeApi>((IntPtr)apiPtr);
 
         s_DebugLog = Marshal.GetDelegateForFunctionPointer<DebugLogFn>(api.Debug_Log);
+        s_ScenePickEntityAt = Marshal.GetDelegateForFunctionPointer<ScenePickEntityAtFn>(api.Scene_PickEntityAt);
         s_EntityHasComponent = Marshal.GetDelegateForFunctionPointer<EntityHasComponentFn>(api.Entity_HasComponent);
         s_EntityAddComponent = Marshal.GetDelegateForFunctionPointer<EntityAddComponentFn>(api.Entity_AddComponent);
         s_EntityFindEntityByName = Marshal.GetDelegateForFunctionPointer<EntityFindEntityByNameFn>(api.Entity_FindEntityByName);
@@ -587,6 +592,12 @@ public static class InternalCalls
         {
             Marshal.FreeCoTaskMem(ptr);
         }
+    }
+
+    internal static void Scene_PickEntityAt(float x, float y, Vector2 viewportMin, Vector2 viewportMax, out ulong entityID)
+    {
+        EnsureInitialized();
+        s_ScenePickEntityAt(x, y, viewportMin, viewportMax, out entityID);
     }
 
     internal static bool Entity_HasComponent(ulong entityID, Type componentType)

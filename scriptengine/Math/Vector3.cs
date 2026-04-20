@@ -91,6 +91,24 @@ public struct Vector3
         return (float)Math.Sqrt(X * X + Y * Y + Z * Z);
     }
 
+    public static float Dot(Vector3 a, Vector3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
+
+    public static Vector3 Cross(Vector3 a, Vector3 b)
+    {
+        return new Vector3(
+            a.Y * b.Z - a.Z * b.Y,
+            a.Z * b.X - a.X * b.Z,
+            a.X * b.Y - a.Y * b.X
+        );
+    }
+
+    public static float Distance(Vector3 a, Vector3 b) => (a - b).Length();
+
+    public static Vector3 Lerp(Vector3 a, Vector3 b, float t)
+    {
+        return new Vector3(Mathf.Lerp(a.X, b.X, t), Mathf.Lerp(a.Y, b.Y, t), Mathf.Lerp(a.Z, b.Z, t));
+    }
+
     public static Vector3 operator *(Vector3 a, Vector3 b)
     {
         return new Vector3(a.X * b.X, a.Y * b.Y, a.Z * b.Z);

@@ -21,7 +21,9 @@
 * SOFTWARE.
 */
 
-﻿namespace Ignite;
+using System;
+
+namespace Ignite;
 
 public struct Vector4
 {
@@ -59,6 +61,30 @@ public struct Vector4
         Y = vector.Y;
         Z = z;
         W = w;
+    }
+
+    public float Length()
+    {
+        return (float)Math.Sqrt(X * X + Y * Y + Z * Z + W * W);
+    }
+
+    public Vector4 Normalized()
+    {
+        float length = Length();
+        if (length > 0.0f)
+        {
+            return new Vector4(X / length, Y / length, Z / length, W / length);
+        }
+        return Zero;
+    }
+
+    public static float Dot(Vector4 a, Vector4 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z + a.W * b.W;
+
+    public static float Distance(Vector4 a, Vector4 b) => (a - b).Length();
+
+    public static Vector4 Lerp(Vector4 a, Vector4 b, float t)
+    {
+        return new Vector4(Mathf.Lerp(a.X, b.X, t), Mathf.Lerp(a.Y, b.Y, t), Mathf.Lerp(a.Z, b.Z, t), Mathf.Lerp(a.W, b.W, t));
     }
 
     public Vector4(Vector3 vector, float w)

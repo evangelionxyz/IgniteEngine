@@ -67,33 +67,33 @@ namespace ignite
         using namespace glm;
         using T = float;
 
-        mat4 LocalMatrix(transform);
+        mat4 localMatrix(transform);
 
         // Normalize the matrix.
-        if (epsilonEqual(LocalMatrix[3][3], static_cast<float>(0), epsilon<T>()))
+        if (epsilonEqual(localMatrix[3][3], static_cast<float>(0), epsilon<T>()))
             return false;
 
         // First, isolate perspective. This is the messiest.
         if (
-            epsilonNotEqual(LocalMatrix[0][3], static_cast<T>(0), epsilon<T>()) ||
-            epsilonNotEqual(LocalMatrix[1][3], static_cast<T>(0), epsilon<T>()) ||
-            epsilonNotEqual(LocalMatrix[2][3], static_cast<T>(0), epsilon<T>()))
+            epsilonNotEqual(localMatrix[0][3], static_cast<T>(0), epsilon<T>()) ||
+            epsilonNotEqual(localMatrix[1][3], static_cast<T>(0), epsilon<T>()) ||
+            epsilonNotEqual(localMatrix[2][3], static_cast<T>(0), epsilon<T>()))
         {
             // Clear the perspective partition
-            LocalMatrix[0][3] = LocalMatrix[1][3] = LocalMatrix[2][3] = static_cast<T>(0);
-            LocalMatrix[3][3] = static_cast<T>(1);
+            localMatrix[0][3] = localMatrix[1][3] = localMatrix[2][3] = static_cast<T>(0);
+            localMatrix[3][3] = static_cast<T>(1);
         }
 
         // Next take care of translation (easy).
-        translation = vec3(LocalMatrix[3]);
-        LocalMatrix[3] = vec4(0, 0, 0, LocalMatrix[3].w);
+        translation = vec3(localMatrix[3]);
+        localMatrix[3] = vec4(0, 0, 0, localMatrix[3].w);
 
         vec3 Row[3], Pdum3{};
 
         // Now get scale and shear.
         for (length_t i = 0; i < 3; ++i)
             for (length_t j = 0; j < 3; ++j)
-                Row[i][j] = LocalMatrix[i][j];
+                Row[i][j] = localMatrix[i][j];
 
         // Compute X scale factor and normalize first row.
         outScale.x = length(Row[0]);
@@ -134,40 +134,40 @@ namespace ignite
         return true;
     }
 
-    bool Math::DecomposeTransformEuler(const glm::mat4 &transform, glm::vec3 &out_translation, glm::vec3 &out_rotation, glm::vec3 &outScale)
+    bool Math::DecomposeTransformEuler(const glm::mat4 &transform, glm::vec3 &outTranslation, glm::vec3 &outRotation, glm::vec3 &outScale)
     {
         // From glm::decompose in matrix_decompose.inl
 
         using namespace glm;
         using T = float;
 
-        mat4 LocalMatrix(transform);
+        mat4 localMatrix(transform);
 
         // Normalize the matrix.
-        if (epsilonEqual(LocalMatrix[3][3], static_cast<float>(0), epsilon<T>()))
+        if (epsilonEqual(localMatrix[3][3], static_cast<float>(0), epsilon<T>()))
             return false;
 
         // First, isolate perspective.  This is the messiest.
         if (
-            epsilonNotEqual(LocalMatrix[0][3], static_cast<T>(0), epsilon<T>()) ||
-            epsilonNotEqual(LocalMatrix[1][3], static_cast<T>(0), epsilon<T>()) ||
-            epsilonNotEqual(LocalMatrix[2][3], static_cast<T>(0), epsilon<T>()))
+            epsilonNotEqual(localMatrix[0][3], static_cast<T>(0), epsilon<T>()) ||
+            epsilonNotEqual(localMatrix[1][3], static_cast<T>(0), epsilon<T>()) ||
+            epsilonNotEqual(localMatrix[2][3], static_cast<T>(0), epsilon<T>()))
         {
             // Clear the perspective partition
-            LocalMatrix[0][3] = LocalMatrix[1][3] = LocalMatrix[2][3] = static_cast<T>(0);
-            LocalMatrix[3][3] = static_cast<T>(1);
+            localMatrix[0][3] = localMatrix[1][3] = localMatrix[2][3] = static_cast<T>(0);
+            localMatrix[3][3] = static_cast<T>(1);
         }
 
         // Next take care of translation (easy).
-        out_translation = vec3(LocalMatrix[3]);
-        LocalMatrix[3] = vec4(0, 0, 0, LocalMatrix[3].w);
+        outTranslation = vec3(localMatrix[3]);
+        localMatrix[3] = vec4(0, 0, 0, localMatrix[3].w);
 
         vec3 Row[3];
 
         // Now get scale and shear.
         for (length_t i = 0; i < 3; ++i)
             for (length_t j = 0; j < 3; ++j)
-                Row[i][j] = LocalMatrix[i][j];
+                Row[i][j] = localMatrix[i][j];
 
         // Compute X scale factor and normalize first row.
         outScale.x = length(Row[0]);
@@ -192,16 +192,16 @@ namespace ignite
         }
     #endif
 
-        out_rotation.y = asin(-Row[0][2]);
-        if (cos(out_rotation.y) != 0)
+        outRotation.y = asin(-Row[0][2]);
+        if (cos(outRotation.y) != 0)
         {
-            out_rotation.x = atan2(Row[1][2], Row[2][2]);
-            out_rotation.z = atan2(Row[0][1], Row[0][0]);
+            outRotation.x = atan2(Row[1][2], Row[2][2]);
+            outRotation.z = atan2(Row[0][1], Row[0][0]);
         }
         else
         {
-            out_rotation.x = atan2(-Row[2][0], Row[1][1]);
-            out_rotation.z = 0;
+            outRotation.x = atan2(-Row[2][0], Row[1][1]);
+            outRotation.z = 0;
         }
 
         return true;
@@ -215,18 +215,18 @@ namespace ignite
         return v;
     }
 
-    glm::vec3 Math::WorldToScreen(const glm::vec3 &world_position, const glm::mat4 &model_transform, const glm::mat4 &view_projection, const glm::vec2 &screen_size)
+    glm::vec3 Math::WorldToScreen(const glm::vec3 &worldPosition, const glm::mat4 &worldTransform, const glm::mat4 &viewProjection, const glm::vec2 &screenSize)
     {
-        glm::vec4 modelPos = model_transform * glm::vec4(world_position, 1.0f);
-        glm::vec4 clipPos = view_projection * modelPos;
-
+        glm::vec4 modelPos = worldTransform * glm::vec4(worldPosition, 1.0f);
+        glm::vec4 clipPos = viewProjection * modelPos;
         glm::vec3 ndcPos = glm::vec3(clipPos) / clipPos.w;
 
-        glm::vec3 screenSpacePos;
-        screenSpacePos.x = (ndcPos.x + 1.0f) * 0.5f * screen_size.x;
-        screenSpacePos.y = (1.0f - ndcPos.y) * 0.5f * screen_size.y;
-        screenSpacePos.z = ndcPos.z;
-        return screenSpacePos;
+        return 
+        {
+            (ndcPos.x + 1.0f) * 0.5f * screenSize.x,
+            (1.0f - ndcPos.y) * 0.5f * screenSize.y,
+            ndcPos.z
+        };
     }
 
     bool Math::ProjectWorldToScreen(const glm::vec3 &worldPos, const glm::mat4 &viewProjection, const Rect &viewportRect, ImVec2 &outScreen)
@@ -292,7 +292,9 @@ namespace ignite
 
         const glm::vec2 viewportSize = viewportRect.GetSize();
         if (viewportSize.x <= 0.0f || viewportSize.y <= 0.0f)
+        {
             return glm::vec3(0.0f);
+        }
 
         const float ndcX = ((screenPos.x - viewportRect.min.x) / viewportSize.x) * 2.0f - 1.0f;
         const float ndcY = 1.0f - ((screenPos.y - viewportRect.min.y) / viewportSize.y) * 2.0f;
@@ -302,7 +304,9 @@ namespace ignite
         glm::vec4 nearPoint = invViewProjection * glm::vec4(ndcX, ndcY, 0.0f, 1.0f);
         glm::vec4 farPoint = invViewProjection * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
         if (nearPoint.w == 0.0f || farPoint.w == 0.0f)
+        {
             return glm::vec3(0.0f);
+        }
 
         nearPoint /= nearPoint.w;
         farPoint /= farPoint.w;
@@ -354,31 +358,31 @@ namespace ignite
 
     void Math::ComputeCascadeMatrices(const glm::vec3 &cameraPos, const glm::mat4 &cameraView, const glm::mat4 &cameraProjection, const glm::vec3 lightDirection, i32 cascadedCount, const std::vector<f32> &cascedSplits, std::vector<glm::mat4> &cascadeLightMatrices)
     {
-        glm::mat4 light_view_matrix = glm::lookAt(-lightDirection * 1000.0f, glm::vec3(0.0f), glm::vec3(0, 1, 0));
+        glm::mat4 lightViewProjection = glm::lookAt(-lightDirection * 1000.0f, glm::vec3(0.0f), glm::vec3(0, 1, 0));
 
         for (i32 i = 0; i < cascadedCount; ++i)
         {
             std::array<glm::vec4, 8> frustumCorners;
             ExtractFrustumCorners(cameraView, cameraProjection, cascedSplits[i - 1], cascedSplits[i], frustumCorners.data());
 
-            auto min_bounds = glm::vec3(FLT_MAX);
-            auto max_bounds = glm::vec3(-FLT_MAX);
+            auto minBounds = glm::vec3(FLT_MAX);
+            auto maxBounds = glm::vec3(-FLT_MAX);
 
             for (i32 j = 0; j < 8; ++j)
             {
-                glm::vec3 corner_light_space = glm::vec3(light_view_matrix * frustumCorners[j]);
-                min_bounds = glm::min(min_bounds, corner_light_space);
-                max_bounds = glm::min(max_bounds, corner_light_space);
+                glm::vec3 corner_light_space = glm::vec3(lightViewProjection * frustumCorners[j]);
+                minBounds = glm::min(minBounds, corner_light_space);
+                maxBounds = glm::min(maxBounds, corner_light_space);
             }
 
-            glm::mat4 light_projection_matrix = glm::ortho(min_bounds.x, max_bounds.x, min_bounds.y, max_bounds.y, min_bounds.z, max_bounds.z);
-            cascadeLightMatrices[i] = light_projection_matrix * light_view_matrix;
+            glm::mat4 light_projection_matrix = glm::ortho(minBounds.x, maxBounds.x, minBounds.y, maxBounds.y, minBounds.z, maxBounds.z);
+            cascadeLightMatrices[i] = light_projection_matrix * lightViewProjection;
         }
     }
 
     void Math::ExtractFrustumCorners(const glm::mat4 &view, const glm::mat4 &projection, f32 nearPlane, f32 farPlane, glm::vec4 outCorners[8])
     {
-        glm::mat4 inverse_view_projection = glm::inverse(projection * view);
+        glm::mat4 inverseViewProjection = glm::inverse(projection * view);
 
         std::array<glm::vec4, 8> ndcCorners =
         {
@@ -388,15 +392,15 @@ namespace ignite
 
         for (size_t i = 0; i < ndcCorners.size(); i++)
         {
-            glm::vec4 world_corner = inverse_view_projection * ndcCorners[i];
-            world_corner /= world_corner.w;
-            outCorners[i] = world_corner;
+            glm::vec4 worldCorner = inverseViewProjection * ndcCorners[i];
+            worldCorner /= worldCorner.w;
+            outCorners[i] = worldCorner;
         }
     }
 
-    glm::vec3 Math::SnapToGrid(glm::vec3 position, f32 texel_size)
+    glm::vec3 Math::SnapToGrid(glm::vec3 position, f32 texelSize)
     {
-        return glm::floor(position / texel_size) * texel_size;
+        return glm::floor(position / texelSize) * texelSize;
     }
 
 }

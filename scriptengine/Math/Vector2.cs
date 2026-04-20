@@ -21,7 +21,9 @@
 * SOFTWARE.
 */
 
-﻿namespace Ignite;
+﻿using System;
+
+namespace Ignite;
 
 public struct Vector2
 {
@@ -53,7 +55,36 @@ public struct Vector2
 
     public static Vector2 Zero => new Vector2(0.0f);
 
+    public float Length()
+    {
+        return (float)Math.Sqrt(X * X + Y * Y);
+    }
+
+    public Vector2 Normalized()
+    {
+        float length = Length();
+        if (length > 0.0f)
+        {
+            return new Vector2(X / length, Y / length);
+        }
+        return Zero;
+    }
+
+    public static float Dot(Vector2 a, Vector2 b) => a.X * b.X + a.Y * b.Y;
+
+    public static float Distance(Vector2 a, Vector2 b) => (a - b).Length();
+
+    public static Vector2 Lerp(Vector2 a, Vector2 b, float t)
+    {
+        return new Vector2(Mathf.Lerp(a.X, b.X, t), Mathf.Lerp(a.Y, b.Y, t));
+    }
+
     public static Vector2 operator *(Vector2 vector, float scalar)
+    {
+        return new Vector2(vector.X * scalar, vector.Y * scalar);
+    }
+
+    public static Vector2 operator *(float scalar, Vector2 vector)
     {
         return new Vector2(vector.X * scalar, vector.Y * scalar);
     }
@@ -71,5 +102,10 @@ public struct Vector2
     public static Vector2 operator -(Vector2 vectorA, Vector2 vectorB)
     {
         return new Vector2(vectorA.X - vectorB.X, vectorA.Y - vectorB.Y);
+    }
+
+    public static Vector2 operator -(Vector2 vector)
+    {
+        return new Vector2(-vector.X, -vector.Y);
     }
 }
