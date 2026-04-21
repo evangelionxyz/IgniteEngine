@@ -182,7 +182,7 @@ namespace ignite
     glm::vec2 Math::GetNormalizedDeviceCoord(const glm::vec2 &position, const glm::vec2 &screen)
     {
         float x = (2.0f * position.x) / screen.x - 1.0f;
-        float y = 1.0f - (2.0f * position.y) / screen.y;
+        float y = (2.0f * position.y) / screen.y - 1.0f;
         return { x, y };
     }
 
@@ -203,7 +203,7 @@ namespace ignite
         const glm::mat4 &view, bool isPerspective, glm::vec3 &outRayOrigin)
     {
         glm::vec2 ndc = GetNormalizedDeviceCoord(coord, screen);
-        glm::vec4 hmc = glm::vec4(ndc.x, -ndc.y, -1.0f, 1.0f);
+        glm::vec4 hmc = glm::vec4(ndc.x, ndc.y, -1.0f, 1.0f);
 
         if (isPerspective)
         {

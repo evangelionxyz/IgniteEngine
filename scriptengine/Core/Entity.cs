@@ -88,6 +88,11 @@ public class Entity
         return new Entity(entityID);
     }
 
+    public string GetName()
+    {
+        return InternalCalls.Entity_GetName(ID);
+    }
+
     public Entity Instantiate(Entity entity)
     {
         ulong entityID = InternalCalls.Entity_Instantiate(entity.ID, entity.Translation);
@@ -117,6 +122,15 @@ public class Entity
     {
         object instance = InternalCalls.GetScriptInstance(ID);
         return instance as T;
+    }
+
+    public Entity PickEntityAt(float x, float y)
+    {
+        ulong entityID = InternalCalls.Scene_PickEntityAt(x, y);
+        if (entityID == 0)
+            return null;
+
+        return new Entity(entityID);
     }
 
     public bool Visible

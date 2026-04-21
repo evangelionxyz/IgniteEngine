@@ -52,6 +52,7 @@ public static class InternalCalls
         public IntPtr Entity_Destroy;
         public IntPtr Entity_SetVisibility;
         public IntPtr Entity_GetVisibility;
+        public IntPtr Entity_GetName;
         public IntPtr WidgetComponent_HasButton;
         public IntPtr WidgetComponent_AddButtonEventCallback;
         public IntPtr WidgetComponent_RemoveButtonEventCallback;
@@ -165,8 +166,7 @@ public static class InternalCalls
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void DebugLogFn(IntPtr message);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    [return: MarshalAs(UnmanagedType.I1)]
-    private delegate void ScenePickEntityAtFn(float x, float y, Vector2 viewportMin, Vector2 viewportMax, out ulong entityID);
+    private delegate ulong ScenePickEntityAtFn(float x, float y);
     [return: MarshalAs(UnmanagedType.I1)]
     private delegate bool EntityHasComponentFn(ulong entityID, IntPtr componentTypeName);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -181,6 +181,8 @@ public static class InternalCalls
     private delegate void EntitySetVisibilityFn(ulong entityID, [MarshalAs(UnmanagedType.I1)] bool value);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void EntityGetVisibilityFn(ulong entityID, [MarshalAs(UnmanagedType.I1)] out bool result);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate IntPtr EntityGetNameFn(ulong entityID);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]
     private delegate bool WidgetComponentHasButtonFn(ulong entityID, IntPtr buttonName);
@@ -327,6 +329,7 @@ public static class InternalCalls
     private static EntityDestroyFn s_EntityDestroy;
     private static EntitySetVisibilityFn s_EntitySetVisibility;
     private static EntityGetVisibilityFn s_EntityGetVisibility;
+    private static EntityGetNameFn s_EntityGetName;
     private static WidgetComponentHasButtonFn s_WidgetComponentHasButton;
     private static WidgetComponentButtonEventFn s_WidgetComponentAddButtonEventCallback;
     private static WidgetComponentButtonEventFn s_WidgetComponentRemoveButtonEventCallback;
@@ -449,6 +452,7 @@ public static class InternalCalls
         s_EntityDestroy = Marshal.GetDelegateForFunctionPointer<EntityDestroyFn>(api.Entity_Destroy);
         s_EntitySetVisibility = Marshal.GetDelegateForFunctionPointer<EntitySetVisibilityFn>(api.Entity_SetVisibility);
         s_EntityGetVisibility = Marshal.GetDelegateForFunctionPointer<EntityGetVisibilityFn>(api.Entity_GetVisibility);
+        s_EntityGetName = Marshal.GetDelegateForFunctionPointer<EntityGetNameFn>(api.Entity_GetName);
         s_WidgetComponentHasButton = Marshal.GetDelegateForFunctionPointer<WidgetComponentHasButtonFn>(api.WidgetComponent_HasButton);
         s_WidgetComponentAddButtonEventCallback = Marshal.GetDelegateForFunctionPointer<WidgetComponentButtonEventFn>(api.WidgetComponent_AddButtonEventCallback);
         s_WidgetComponentRemoveButtonEventCallback = Marshal.GetDelegateForFunctionPointer<WidgetComponentButtonEventFn>(api.WidgetComponent_RemoveButtonEventCallback);
@@ -594,10 +598,10 @@ public static class InternalCalls
         }
     }
 
-    internal static void Scene_PickEntityAt(float x, float y, Vector2 viewportMin, Vector2 viewportMax, out ulong entityID)
+    internal static ulong Scene_PickEntityAt(float x, float y)
     {
         EnsureInitialized();
-        s_ScenePickEntityAt(x, y, viewportMin, viewportMax, out entityID);
+        return s_ScenePickEntityAt(x, y);
     }
 
     internal static bool Entity_HasComponent(ulong entityID, Type componentType)
@@ -669,6 +673,16 @@ public static class InternalCalls
     {
         EnsureInitialized();
         s_EntityGetVisibility(entityID, out result);
+    }
+
+    internal static string Entity_GetName(ulong entityID)
+    {
+        EnsureInitialized();
+        IntPtr namePtr = s_EntityGetName(entityID);
+        if (namePtr == IntPtr.Zero)
+            return null;
+
+        return Marshal.PtrToStringUTF8(namePtr);
     }
 
     internal static bool WidgetComponent_HasButton(ulong entityID, string buttonName)
