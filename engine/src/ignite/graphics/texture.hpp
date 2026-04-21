@@ -228,7 +228,7 @@ namespace ignite
         const std::string &GetDebugName() const { return m_DebugName; }
         const std::filesystem::path &GetFilepath() { return m_Filepath; }
 
-        const Buffer &GetBuffer() { return m_Buffer; }
+        const std::vector<uint8_t> &GetBuffer() { return m_Buffer; }
         static AssetType GetStaticType() { return AssetType::Texture; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }
 
