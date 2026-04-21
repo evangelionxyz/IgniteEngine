@@ -22,6 +22,7 @@
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/core/input/input.hpp"
 #include "widget_renderer.hpp"
+#include "nuklear_renderer.hpp"
 
 #include <ranges>
 #include <cstdlib>
@@ -415,6 +416,9 @@ namespace ignite
         return bindingSet;
     }
 
+    // ===============================
+    // Scene Renderer Implementation
+    // ===============================
     SceneRenderer::SceneRenderer()
     {
         RenderTargetCreateInfo sceneRTCreateInfo = {};
@@ -448,12 +452,13 @@ namespace ignite
         m_CompositeRT = RenderTarget::Create(compositeRTCreateInfo, "[SceneRenderer] Composite RT");
         m_GameplayCompositeRT = RenderTarget::Create(compositeRTCreateInfo, "[SceneRenderer] Gameplay Composite RT");
 
-        m_EditorWidgetRenderer = WidgetRenderer::Create(1280, 720);
-        m_GameplayWidgetRenderer = WidgetRenderer::Create(1280, 720);
+        m_Nuklear = CreateScope<NuklearRenderer>();
     }
 
     SceneRenderer::~SceneRenderer()
     {
+        m_Nuklear = nullptr;
+
         s_GeometryPSOCache.clear();
         s_EnvironmentPSOCache.clear();
         s_CompositePSOCache.clear();
@@ -554,22 +559,6 @@ namespace ignite
         }
     }
 
-    void SceneRenderer::SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered)
-    {
-        m_EditorWidgetMouseX = mouseX;
-        m_EditorWidgetMouseY = mouseY;
-        m_EditorWidgetMouseHovered = hovered;
-        m_UseEditorWidgetMouseOverride = true;
-    }
-
-    void SceneRenderer::SetGameplayWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered)
-    {
-        m_GameplayWidgetMouseX = mouseX;
-        m_GameplayWidgetMouseY = mouseY;
-        m_GameplayWidgetMouseHovered = hovered;
-        m_UseGameplayWidgetMouseOverride = true;
-    }
-
     Ref<Mesh> SceneRenderer::ResolveMesh(Project *project, AssetHandle handle)
     {
         if (!project || handle == AssetHandle(0))
@@ -643,18 +632,6 @@ namespace ignite
         if (m_Scene)
         {
             m_Project = m_Scene->GetProject();
-        }
-
-        if (m_EditorWidgetRenderer)
-        {
-            m_EditorWidgetRenderer->SetProject(m_Project);
-            m_EditorWidgetRenderer->SetScene(m_Scene.get());
-        }
-
-        if (m_GameplayWidgetRenderer)
-        {
-            m_GameplayWidgetRenderer->SetProject(m_Project);
-            m_GameplayWidgetRenderer->SetScene(m_Scene.get());
         }
 
         s_GeometryPSOCache.clear();
@@ -831,6 +808,11 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::ColorPass");
                 ColorPass(cmd, camera, framebuffer);
+            }
+
+            {
+                IGN_PROFILE_SCOPE("SceneRenderer::UIPass");
+                UIPass(cmd, framebuffer);
             }
 
             if (m_EditorWidgetRenderer)
@@ -1049,11 +1031,17 @@ namespace ignite
                 const Ref<GraphicsPipeline> envPSO = GetEnvPipelineForFB(framebuffer, m_FillMode);
                 worldEnvironment->environment->Draw(cmd, camera, framebuffer, envPSO);
             }
+
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::ColorPass");
                 ColorPass(cmd, camera, framebuffer);
             }
 
+            {
+                IGN_PROFILE_SCOPE("SceneRenderer::UIPass");
+                UIPass(cmd, framebuffer);
+            }
+            
             if (m_GameplayWidgetRenderer)
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::WidgetPass");
@@ -1304,6 +1292,7 @@ namespace ignite
     void SceneRenderer::ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer)
     {
         IGN_PROFILE_FUNCTION();
+
         Project *project = m_Scene ? m_Scene->GetProject() : nullptr;
         std::unordered_set<Material *> uploadedMaterialsThisPass;
         Ref<GraphicsPipeline> geomPSO = GetGeomPipelineForFB(framebuffer, m_FillMode);
@@ -1556,6 +1545,12 @@ namespace ignite
             m_Has2DPreRenderCache = true;
             m_Renderer2D->End();
         }
+    }
+
+    void SceneRenderer::UIPass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
+    {
+        m_Nuklear->BeginFrame();
+        m_Nuklear->Render(cmd, framebuffer);
     }
 
     void SceneRenderer::DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const DebugGridStyle &style, bool is2D)

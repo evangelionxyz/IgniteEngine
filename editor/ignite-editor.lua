@@ -53,6 +53,7 @@ project "IgniteEditor"
         "%{IncludeDir.FREETYPE}",
         "%{IncludeDir.TRACY}",
         "%{IncludeDir.JSON}",
+        "%{IncludeDir.NUKLEAR}",
         "%{IncludeDir.MochiSharpNative}",
         "%{IncludeDir.Hostfxr}"
     }

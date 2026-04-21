@@ -92,8 +92,8 @@ namespace ignite
 
     struct ImGuiPushConstants
     {
-        f32 invDisplaySize[2];
-        f32 displayPos[2];
+        float invDisplaySize[2];
+        float displayPos[2];
     };
 
     bool ImGui_NVRHI::UpdateFontTexture()

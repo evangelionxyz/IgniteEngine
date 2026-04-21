@@ -169,7 +169,7 @@ namespace ignite
 
         while (m_RenderThreadRunning)
         {
-            uint64_t currentFrame;
+            uint64_t currentFrame = 0;
             nvrhi::IFramebuffer *framebuffer = nullptr;
             {
                 IGN_PROFILE_SCOPE("RenderThread::WaitForFrameReady");
@@ -231,7 +231,6 @@ namespace ignite
             // Record statistics
             Renderer::BeginStats();
 
-
             // Render layers
             {
                 IGN_PROFILE_SCOPE("RenderThread::LayerRender");
@@ -242,34 +241,32 @@ namespace ignite
                 }
             }
 
-            // ImGui rendering
             if (m_CreateInfo.useGui && m_ImGuiLayer)
             {
-                IGN_PROFILE_SCOPE("RenderThread::ImGuiRender");
+                IGN_PROFILE_SCOPE("RenderThread::ImGuiBeginFrame");
                 m_ImGuiLayer->BeginFrame();
+            }
 
+            if (m_CreateInfo.useGui)
+            {
+                IGN_PROFILE_SCOPE("RenderThread::OnGuiRender");
+                for (auto it = m_LayerStack.begin(); it != m_LayerStack.end(); ++it)
                 {
-                    IGN_PROFILE_SCOPE("RenderThread::ImGuiOnGuiRender");
-                    for (auto it = m_LayerStack.begin(); it != m_LayerStack.end(); ++it)
-                    {
-                        Layer *layer = *it;
-                        if (layer == m_ImGuiLayer)
-                        {
-                            continue;
-                        }
-                        layer->OnGuiRender();
-                    }
-                }
+                    Layer *layer = *it;
+                    if (layer == m_ImGuiLayer)
+                        continue;
 
-                {
-                    IGN_PROFILE_SCOPE("RenderThread::ImGuiEndFrame");
-                    m_ImGuiLayer->EndFrame(framebuffer);
+                    layer->OnGuiRender();
                 }
+            }
 
-                {
-                    IGN_PROFILE_SCOPE("RenderThread::ImGuiRenderPlatformWindows");
-                    m_ImGuiLayer->RenderPlatformWindows();
-                }
+            if (m_CreateInfo.useGui && m_ImGuiLayer)
+            {
+                IGN_PROFILE_SCOPE("RenderThread::ImGuiEndFrame");
+                m_ImGuiLayer->EndFrame(framebuffer);
+
+                IGN_PROFILE_SCOPE("RenderThread::ImGuiRenderPlatformWindows");
+                m_ImGuiLayer->RenderPlatformWindows();
             }
 
             // Collect worker command lists with minimal lock hold.
@@ -386,37 +383,6 @@ namespace ignite
                 FmodAudio::Update(m_DeltaTime);
             }
 
-            // update window title
-#if 0
-            if (m_AverageFrameTime > 0)
-            {
-                std::stringstream ss;
-                ss << m_CreateInfo.name;
-                ss << " (" << nvrhi::utils::GraphicsAPIToString(device->getGraphicsAPI());
-                if (deviceManager->GetDeviceParameters().enableDebugRuntime)
-                {
-                    if (m_CreateInfo.graphicsApi == nvrhi::GraphicsAPI::VULKAN)
-                        ss << ", VulkanValidationLayer";
-                    else
-                        ss << ", DebugRuntime";
-                }
-
-                if (deviceManager->GetDeviceParameters().enableNvrhiValidationLayer)
-                {
-                    ss << ", NvrhiValidationLayer";
-                }
-                ss << ")";
-
-                const float fps = 1.0f / m_AverageFrameTime;
-
-                const i32 precision = (fps <= 20.0) ? 1 : 0;
-
-                ss << " - " << std::fixed << std::setprecision(precision) << fps << " FPS ";
-
-                m_Window->SetTitle(ss.str());
-            }
-#endif
-
             if (m_Window->IsVisible() && m_Window->IsInFocus())
             {
                 IGN_PROFILE_SCOPE("MainThread::SimulationAndPresent");
@@ -459,8 +425,7 @@ namespace ignite
 
                             while (!m_RenderComplete.load())
                             {
-                                const bool signaled = m_FrameCV.wait_for(lock, std::chrono::microseconds(500), 
-                                    [this] { return m_RenderComplete.load(); });
+                                const bool signaled = m_FrameCV.wait_for(lock, std::chrono::microseconds(500), [this] { return m_RenderComplete.load(); });
                                 if (signaled)
                                     break;
                             }

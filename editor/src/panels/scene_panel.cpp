@@ -2167,7 +2167,7 @@ namespace ignite
                 {
                     const uint32_t localMouseX = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.x, 0.0f));
                     const uint32_t localMouseY = static_cast<uint32_t>(std::max(m_ViewportData.mousePos.y, 0.0f));
-                    sceneRenderer->SetEditorWidgetMousePosition(localMouseX, localMouseY, imageHovered);
+                    // sceneRenderer->SetEditorWidgetMousePosition(localMouseX, localMouseY, imageHovered);
                 }
 
                 const bool mouseDown = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
@@ -2578,7 +2578,7 @@ namespace ignite
                                 localMouseY = static_cast<uint32_t>(v * static_cast<float>(std::max(sceneRenderer->GetGameplayWidgetRT()->GetHeight(), 1u)));
                             }
 
-                            sceneRenderer->SetGameplayWidgetMousePosition(localMouseX, localMouseY, imageHovered);
+                            //sceneRenderer->SetGameplayWidgetMousePosition(localMouseX, localMouseY, imageHovered);
                         }
 
                         if (ImGui::IsWindowFocused() && ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
