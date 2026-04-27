@@ -128,6 +128,7 @@ namespace ignite
 
     static std::unordered_map<std::string, ScriptFieldType> s_ScriptFieldTypeMap =
     {
+        {"System.String",  ScriptFieldType::String},
         {"System.Boolean", ScriptFieldType::Bool},
         {"System.Single",  ScriptFieldType::Float},
         {"System.Char",    ScriptFieldType::Char},
@@ -630,17 +631,13 @@ namespace ignite
                         auto &currentFields = currentInstances[instanceId];
                         for (auto &[fieldName, fieldDef] : scriptClass->GetFields())
                         {
-                            ScriptInstanceField instanceField;
-                            instanceField.field = fieldDef;
-
                             auto previousFieldIt = previousFields.find(fieldName);
                             if (previousFieldIt != previousFields.end() && previousFieldIt->second.field.Type == fieldDef.Type)
                             {
-                                instanceField = previousFieldIt->second;
+                                ScriptInstanceField instanceField = previousFieldIt->second;
                                 instanceField.field = fieldDef;
+                                currentFields[fieldName] = instanceField;
                             }
-
-                            currentFields[fieldName] = instanceField;
                         }
                     }
                 }

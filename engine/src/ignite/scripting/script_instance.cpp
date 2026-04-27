@@ -61,6 +61,12 @@ namespace ignite
             ScriptInstanceField &instanceField = instanceFields[name];
             switch (field.Type)
             {
+            case ScriptFieldType::String:
+            {
+                if (hasDeserializedValues) SetFieldValue<std::string>(name, instanceField.GetValue<std::string>());
+                else instanceField.SetValue(GetFieldValue<std::string>(name));
+                break;
+            }
             case ScriptFieldType::Float:
             {
                 if (hasDeserializedValues) SetFieldValue<float>(name, instanceField.GetValue<float>());
@@ -160,6 +166,46 @@ namespace ignite
             default: break;
             }
         }
+    }
+
+    template<>
+    inline std::string ScriptInstance::GetFieldValue<std::string>(const std::string &fieldName)
+    {
+        if (!m_ScriptHost || fieldName.empty() || s_FieldValueBuffer == nullptr)
+        {
+            return std::string();
+        }
+
+        const bool success = m_ScriptHost->GetInstanceFieldValue(m_InstanceId, fieldName, s_FieldValueBuffer, sizeof(s_FieldValueBuffer));
+        if (!success)
+        {
+            return std::string();
+        }
+
+        m_ScriptClass->GetInstanceFieldsById(m_InstanceId)->at(fieldName).SetValue<std::string>(std::string(s_FieldValueBuffer));
+        return std::string(s_FieldValueBuffer);
+    }
+
+    template<>
+    inline bool ScriptInstance::SetFieldValue<std::string>(const std::string &fieldName, const std::string &value)
+    {
+        if (!m_ScriptHost || fieldName.empty())
+        {
+            return false;
+        }
+
+        memset(s_FieldValueBuffer, 0, sizeof(s_FieldValueBuffer));
+        size_t copyLen = std::min(value.size(), sizeof(s_FieldValueBuffer) - 1);
+        if (copyLen > 0)
+            memcpy(s_FieldValueBuffer, value.data(), copyLen);
+        s_FieldValueBuffer[copyLen] = '\0';
+
+        const bool success = m_ScriptHost->SetInstanceFieldValue(m_InstanceId, fieldName, s_FieldValueBuffer, copyLen);
+        if (success)
+        {
+            m_ScriptClass->GetInstanceFieldsById(m_InstanceId)->at(fieldName).SetValue<std::string>(std::string(s_FieldValueBuffer));
+        }
+        return success;
     }
 
     void ScriptInstance::InvokeOnCreate()

@@ -508,6 +508,7 @@ namespace ignite
 
                                     switch (fieldInstance.field.Type)
                                     {
+                                        case ScriptFieldType::String: sr.AddKeyValue("Value", fieldInstance.GetValue<std::string>()); break;
                                         case ScriptFieldType::Float: sr.AddKeyValue("Value", fieldInstance.GetValue<float>()); break;
                                         case ScriptFieldType::Double: sr.AddKeyValue("Value", fieldInstance.GetValue<double>()); break;
                                         case ScriptFieldType::Bool: sr.AddKeyValue("Value", fieldInstance.GetValue<bool>()); break;
@@ -1067,6 +1068,7 @@ namespace ignite
                             // Set the value
                             switch (type)
                             {
+                                case ScriptFieldType::String: instanceField.SetValue(fieldNode["Value"].as<std::string>()); break;
                                 case ScriptFieldType::Float: instanceField.SetValue(fieldNode["Value"].as<float>()); break;
                                 case ScriptFieldType::Double: instanceField.SetValue(fieldNode["Value"].as<double>()); break;
                                 case ScriptFieldType::Bool: instanceField.SetValue(fieldNode["Value"].as<bool>()); break;
