@@ -1815,8 +1815,9 @@ namespace ignite
                         }
                         if (classRegisteredInstanceField)
                         {
-                            for (const auto &[name, field] : scriptClass->GetFields())
+                            for (const auto &name : scriptClass->GetOrderedFieldNames())
                             {
+                                const auto &field = scriptClass->GetFields().at(name);
                                 ImGui::PushID(name.c_str());
 
                                 ScriptInstanceField dummy;

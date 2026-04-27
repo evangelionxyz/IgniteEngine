@@ -500,8 +500,11 @@ namespace ignite
                             if (auto instanceFields = scriptClass->GetInstanceFieldsById(entity.GetUUID()); instanceFields && !instanceFields->empty())
                             {
                                 sr.BeginSequence("Fields");
-                                for (auto &[name, fieldInstance] : *instanceFields)
+                                for (const auto &name : scriptClass->GetOrderedFieldNames())
                                 {
+                                    auto fieldIt = instanceFields->find(name);
+                                    if (fieldIt == instanceFields->end()) continue;
+                                    auto &fieldInstance = fieldIt->second;
                                     sr.BeginMap();
                                     sr.AddKeyValue("Name", name);
                                     sr.AddKeyValue("Type", Utils::ScriptFieldTypeToString(fieldInstance.field.Type));
