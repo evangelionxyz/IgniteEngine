@@ -133,23 +133,19 @@ namespace ignite
     void Application::ProcessMainThreadSubmissions()
     {
         IGN_PROFILE_FUNCTION();
-        // Process all pending submissions
-        if (!m_ThreadFuncs.empty())
+        std::queue<std::pair<std::function<void()>, std::string>> pending;
         {
-            std::pair<std::function<void()>, std::string> func;
+            std::lock_guard lock(m_ThreadFuncsMutex);
+            pending.swap(m_ThreadFuncs);
+        }
 
-            {
-                std::lock_guard lock(m_ThreadFuncsMutex);
-                func = m_ThreadFuncs.front();
-            }
-            
-            // Execute outside lock
+        while (!pending.empty())
+        {
+            auto func = std::move(pending.front());
+            pending.pop();
             if (func.first)
             {
                 func.first();
-
-                std::lock_guard lock(m_ThreadFuncsMutex);
-                m_ThreadFuncs.pop();
             }
         }
     }
@@ -409,7 +405,7 @@ namespace ignite
                         }
                         {
                             IGN_PROFILE_SCOPE("MainThread::BeginFrame::QueueMutexHold");
-                        frameBegan = deviceManager->BeginFrame();
+                            frameBegan = deviceManager->BeginFrame();
                         }
                     }
 
@@ -456,7 +452,7 @@ namespace ignite
                             }
                             {
                                 IGN_PROFILE_SCOPE("MainThread::Present::QueueMutexHold");
-                            presented = deviceManager->Present();
+                                presented = deviceManager->Present();
                             }
                         }
 

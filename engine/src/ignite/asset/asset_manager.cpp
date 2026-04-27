@@ -151,8 +151,8 @@ namespace ignite {
         if (handle == AssetHandle(0))
         {
             handle = AssetHandle();
-            Import(handle, metadata);
             AssignMetaData(handle, metadata);
+            GetAsset(handle);
         }
         else
         {
@@ -171,7 +171,7 @@ namespace ignite {
     void AssetManager::AssignMetaData(AssetHandle handle, const AssetMetaData &metadata)
     {
         IGN_PROFILE_FUNCTION();
-
+        std::lock_guard lock(m_RegistryMutex);
         m_AssetRegistry[handle] = metadata;
     }
 
@@ -194,7 +194,7 @@ namespace ignite {
     void AssetManager::RemoveAsset(AssetHandle handle)
     {
         IGN_PROFILE_FUNCTION();
-
+        std::lock_guard lock(m_RegistryMutex);
         auto it = m_AssetRegistry.find(handle);
         if (it != m_AssetRegistry.end())
             m_AssetRegistry.erase(it);
@@ -412,6 +412,7 @@ namespace ignite {
     const AssetMetaData &AssetManager::GetMetaData(const std::filesystem::path &filepath, AssetHandle &outHandle)
     {
         outHandle = GetAssetHandle(filepath);
+        std::lock_guard lock(m_RegistryMutex);
         if (m_AssetRegistry.contains(outHandle))
         {
             return m_AssetRegistry.at(outHandle);
@@ -421,6 +422,7 @@ namespace ignite {
 
     const AssetMetaData &AssetManager::GetMetaData(AssetHandle handle) const
     {
+        std::lock_guard lock(m_RegistryMutex);
         if (m_AssetRegistry.contains(handle))
         {
             return m_AssetRegistry.at(handle);
@@ -433,6 +435,7 @@ namespace ignite {
         // Normalize the input filepath to absolute path for comparison
         std::filesystem::path absoluteFilepath = std::filesystem::absolute(m_Project->GetAssetFilepath(filepath));
 
+        std::lock_guard lock(m_RegistryMutex);
         for (const auto &[handle, metadata] : m_AssetRegistry)
         {
             // Convert metadata filepath (relative) to absolute using project base path
@@ -457,6 +460,7 @@ namespace ignite {
 
     bool AssetManager::IsAssetHandleValid(AssetHandle handle) const
     {
+        std::lock_guard lock(m_RegistryMutex);
         return static_cast<uint64_t>(handle) != 0 && m_AssetRegistry.contains(handle);
     }
 

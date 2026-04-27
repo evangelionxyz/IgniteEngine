@@ -97,6 +97,7 @@ namespace ignite
     private:
         void WorkerLoop();
 
+        mutable std::mutex m_RegistryMutex;
         AssetRegistry m_AssetRegistry;
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
         std::unordered_set<AssetHandle> m_LoadingAssets; // Track assets currently being loaded
