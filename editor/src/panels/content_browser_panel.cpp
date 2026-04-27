@@ -1896,7 +1896,7 @@ namespace ignite
                 ImGui::OpenPopup("##asset_add_context");
             }
 
-            if (ImGui::BeginPopupContextWindow("##asset_add_context"))
+            if (ImGui::BeginPopup("##asset_add_context"))
             {
                 UIShowAssetAddContext();
                 ImGui::EndPopup();
