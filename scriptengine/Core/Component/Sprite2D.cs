@@ -1,4 +1,7 @@
-﻿namespace Ignite;
+﻿// Copyright (c) 2026 Evangelion Manuhutu
+
+using Ignite.Core;
+namespace Ignite;
 
 public class Sprite2D : IComponent
 {

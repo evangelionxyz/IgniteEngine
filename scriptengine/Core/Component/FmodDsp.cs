@@ -1,3 +1,4 @@
+using Ignite.Core;
 namespace Ignite;
 
 public abstract class FmodDsp

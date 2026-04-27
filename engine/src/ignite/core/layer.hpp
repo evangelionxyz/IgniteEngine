@@ -22,10 +22,14 @@
 */
 
 #pragma once
+#ifndef LAYER_HPP
+#define LAYER_HPP
 
 #include <string>
 #include "types.hpp"
 #include "input/event.hpp"
+
+#include "SDL3/SDL_events.h"
 
 namespace nvrhi
 {
@@ -51,6 +55,7 @@ namespace ignite
         virtual void OnUpdate(float deltaTime) { }
         virtual void OnRender(nvrhi::IFramebuffer *framebuffer) { }
         virtual void OnEvent(Event &e) { }
+        virtual void OnSDLEvent(SDL_Event *evt) { }
         virtual void OnGuiRender() { }
         std::string GetName() { return m_Name; }
 
@@ -58,3 +63,5 @@ namespace ignite
         std::string m_Name;
     };
 }
+
+#endif

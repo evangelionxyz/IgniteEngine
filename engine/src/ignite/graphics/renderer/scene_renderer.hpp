@@ -5,6 +5,7 @@
 #define SCENE_RENDERER_HPP
 
 #include "iscene_renderer.hpp"
+#include <SDL3/SDL_events.h>
 
 namespace ignite
 {
@@ -27,7 +28,7 @@ namespace ignite
 
         virtual void ResizeFramebuffer(uint32_t width, uint32_t height) override;
         void ResizeGameplayFramebuffer(uint32_t width, uint32_t height);
-        
+        void HandleNuklearEvent(SDL_Event *evt);
         void SetFillMode(nvrhi::RasterFillMode mode);
 
         void SetSelectedEntity(const Entity& entity);
@@ -92,8 +93,6 @@ namespace ignite
         };
         
     private:
-        Ref<WidgetRenderer> m_EditorWidgetRenderer;
-        Ref<WidgetRenderer> m_GameplayWidgetRenderer;
         Scope<NuklearRenderer> m_Nuklear;
 
         Ref<RenderTarget> m_SceneRT;

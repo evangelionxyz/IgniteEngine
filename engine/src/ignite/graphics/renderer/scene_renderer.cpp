@@ -21,7 +21,6 @@
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/core/input/input.hpp"
-#include "widget_renderer.hpp"
 #include "nuklear_renderer.hpp"
 
 #include <ranges>
@@ -536,27 +535,6 @@ namespace ignite
                 }
             }
         }
-
-        const bool editorHovered = m_UseEditorWidgetMouseOverride && m_EditorWidgetMouseHovered;
-        const bool gameplayHovered = m_UseGameplayWidgetMouseOverride && m_GameplayWidgetMouseHovered;
-
-        // Only update one widget renderer per frame to avoid shared widget hover state being overwritten.
-        if (editorHovered && m_EditorWidgetRenderer)
-        {
-            m_EditorWidgetRenderer->SetMousePosition(m_EditorWidgetMouseX, m_EditorWidgetMouseY);
-            m_EditorWidgetRenderer->Update(deltaTime);
-        }
-        else if (gameplayHovered && m_GameplayWidgetRenderer)
-        {
-            m_GameplayWidgetRenderer->SetMousePosition(m_GameplayWidgetMouseX, m_GameplayWidgetMouseY);
-            m_GameplayWidgetRenderer->Update(deltaTime);
-        }
-        else if (m_EditorWidgetRenderer)
-        {
-            const uint32_t offscreenMouse = std::numeric_limits<uint32_t>::max() / 2u;
-            m_EditorWidgetRenderer->SetMousePosition(offscreenMouse, offscreenMouse);
-            m_EditorWidgetRenderer->Update(deltaTime);
-        }
     }
 
     Ref<Mesh> SceneRenderer::ResolveMesh(Project *project, AssetHandle handle)
@@ -632,6 +610,12 @@ namespace ignite
         if (m_Scene)
         {
             m_Project = m_Scene->GetProject();
+        }
+
+        if (m_Nuklear)
+        {
+            m_Nuklear->SetScene(m_Scene.get());
+            m_Nuklear->SetProject(m_Project);
         }
 
         s_GeometryPSOCache.clear();
@@ -812,14 +796,7 @@ namespace ignite
 
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::UIPass");
-                UIPass(cmd, framebuffer);
-            }
-
-            if (m_EditorWidgetRenderer)
-            {
-                IGN_PROFILE_SCOPE("SceneRenderer::WidgetPass");
-                m_EditorWidgetRenderer->Resize(m_WidgetRT->GetWidth(), m_WidgetRT->GetHeight());
-                m_EditorWidgetRenderer->Render(cmd, m_WidgetRT->GetFramebuffer());
+                UIPass(cmd, m_WidgetRT->GetFramebuffer());
             }
 
             {
@@ -1039,14 +1016,7 @@ namespace ignite
 
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::UIPass");
-                UIPass(cmd, framebuffer);
-            }
-            
-            if (m_GameplayWidgetRenderer)
-            {
-                IGN_PROFILE_SCOPE("SceneRenderer::WidgetPass");
-                m_GameplayWidgetRenderer->Resize(m_GameplayWidgetRT->GetWidth(), m_GameplayWidgetRT->GetHeight());
-                m_GameplayWidgetRenderer->Render(cmd, m_GameplayWidgetRT->GetFramebuffer());
+                UIPass(cmd, m_GameplayWidgetRT->GetFramebuffer());
             }
 
             Ref<Texture> bloomTexture = nullptr;
@@ -1549,8 +1519,34 @@ namespace ignite
 
     void SceneRenderer::UIPass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
     {
-        m_Nuklear->BeginFrame();
+        auto viewport = framebuffer->getFramebufferInfo().getViewport();
+        auto widgetView = m_Scene->registry->view<WidgetComponent>();
+        for (const entt::entity entity : widgetView)
+        {
+            const WidgetComponent &widgetComp = widgetView.get<WidgetComponent>(entity);
+            if (widgetComp.widgetHandle == AssetHandle(0))
+                continue;
+
+            Ref<WidgetCanvas> canvas = m_Project->GetAsset<WidgetCanvas>(widgetComp.widgetHandle, AssetType::Widget);
+            if (!canvas)
+                canvas = m_Project->GetAssetImmediate<WidgetCanvas>(widgetComp.widgetHandle, AssetType::Widget);
+
+            if (!canvas || !canvas->IsEnabled())
+                continue;
+
+            m_Nuklear->BeginNuklearFrame(canvas, Rect(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY));
+        }
+
         m_Nuklear->Render(cmd, framebuffer);
+
+    }
+
+    void SceneRenderer::HandleNuklearEvent(SDL_Event *evt)
+    {
+        if (m_Nuklear)
+        {
+            m_Nuklear->HandleEvent(evt);
+        }
     }
 
     void SceneRenderer::DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const DebugGridStyle &style, bool is2D)

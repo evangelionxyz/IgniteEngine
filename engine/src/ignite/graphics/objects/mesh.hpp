@@ -78,14 +78,12 @@ namespace ignite
         ~MeshPrimitive();
 
         MeshPrimitive(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices);
-        void RecalculateAABB();
 
         Ref<VertexBuffer> vertexBuffer;
         Ref<IndexBuffer> indexBuffer;
 
         std::vector<VertexMesh_Anim> vertices;
         std::vector<uint32_t> indices;
-        AABB aabb;
 
         static Ref<MeshPrimitive> Create(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices);
 

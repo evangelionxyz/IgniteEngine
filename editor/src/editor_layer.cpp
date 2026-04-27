@@ -268,6 +268,30 @@ namespace ignite
         dispatcher.Dispatch<MouseButtonPressedEvent>(BIND_CLASS_EVENT_FN(EditorLayer::OnMouseButtonPressed));
     }
 
+    void EditorLayer::OnSDLEvent(SDL_Event *evt)
+    {
+        if (!m_SceneRenderer)
+            return;
+
+        SDL_Event modifiedEvent = *evt;
+        if (m_ScenePanel && (evt->type == SDL_EVENT_MOUSE_MOTION || evt->type == SDL_EVENT_MOUSE_BUTTON_DOWN || evt->type == SDL_EVENT_MOUSE_BUTTON_UP))
+        {
+            const glm::vec2& mousePos = m_ScenePanel->GetViewportMousePos();
+            if (evt->type == SDL_EVENT_MOUSE_MOTION)
+            {
+                modifiedEvent.motion.x = mousePos.x;
+                modifiedEvent.motion.y = mousePos.y;
+            }
+            else
+            {
+                modifiedEvent.button.x = mousePos.x;
+                modifiedEvent.button.y = mousePos.y;
+            }
+        }
+        
+        m_SceneRenderer->HandleNuklearEvent(&modifiedEvent);
+    }
+
     bool EditorLayer::OnKeyPressedEvent(KeyPressedEvent &event)
     {
         bool control = Input::IsModifierPressed(KeyMod::Control);

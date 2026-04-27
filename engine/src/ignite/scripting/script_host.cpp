@@ -154,19 +154,19 @@ namespace ignite
         }
 
         const auto *api = ScriptGlue::GetAPI();
-        const uint64_t apiPtr = reinterpret_cast<uint64_t>(api);
+        const auto apiPtr = reinterpret_cast<uint64_t>(api);
 
-        const int methodId = m_Host->BindStaticMethod("Ignite.InternalCalls", "Initialize", static_cast<int>(ScriptMethodSig::Void_UInt64));
+        const int methodId = m_Host->BindStaticMethod("Ignite.Core.InternalCalls", "Initialize", static_cast<int>(ScriptMethodSig::Void_UInt64));
         if (methodId == 0)
         {
-            LOG_ERROR("[Script Host] Failed to bind Ignite.InternalCalls.Initialize");
+            LOG_ERROR("[Script Host] Failed to bind Ignite.Core.InternalCalls.Initialize");
             return false;
         }
 
-        void *args[] = { const_cast<uint64_t *>(&apiPtr) };
-        if (!m_Host->Invoke(methodId, args, 1, nullptr))
+        std::array<void *, 1> args = { const_cast<uint64_t *>(&apiPtr) };
+        if (!m_Host->Invoke(methodId, args.data(), (int)args.size(), nullptr))
         {
-            LOG_ERROR("[Script Host] Failed to invoke Ignite.InternalCalls.Initialize");
+            LOG_ERROR("[Script Host] Failed to invoke Ignite.Core.InternalCalls.Initialize");
             return false;
         }
 

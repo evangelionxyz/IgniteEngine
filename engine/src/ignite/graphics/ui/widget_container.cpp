@@ -4,7 +4,6 @@
 // Date      : 18 April 2026
 
 #include "widget_container.hpp"
-#include "ignite/graphics/renderer/widget_renderer.hpp"
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/core/logger.hpp"
 
@@ -12,35 +11,6 @@
 
 namespace ignite
 {
-
-    void WidgetContainer::Update(float deltaTime, const glm::vec2 &mousePosition)
-    {
-        if (!visible)
-            return;
-
-        for (const Ref<IWidgetItem> &child : children)
-        {
-            if (!child || !child->IsVisible())
-                continue;
-
-            child->Update(deltaTime, mousePosition);
-        }
-    }
-
-    void WidgetContainer::Draw(WidgetRenderer *renderer, AssetManager *assetManager)
-    {
-        if (!visible)
-            return;
-
-        for (const Ref<IWidgetItem> &child : children)
-        {
-            if (!child || !child->IsVisible())
-                continue;
-
-            child->Draw(renderer, assetManager);
-        }
-    }
-
     void WidgetContainer::Measure()
     {
         float measuredWidth = 0.0f;
@@ -157,6 +127,15 @@ namespace ignite
             }
 
             child->Arrange(childRect);
+
+            // When using a non-absolute layout, the child item's explicit position
+            // should not influence layout — positions are governed by the layout
+            // system (Nuklear). Clear manual position for non-absolute containers
+            // to avoid accidental overrides.
+            if (layout != LayoutMode::Absolute)
+            {
+                child->position = glm::vec2(0.0f);
+            }
 
             if (layout == LayoutMode::Horizontal)
                 cursorX = child->GetAlignedRect().max.x + child->margin + gap;

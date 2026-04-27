@@ -5,7 +5,6 @@
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/core/input/input.hpp"
-#include "ignite/graphics/renderer/widget_renderer.hpp"
 #include "ignite/graphics/font.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/graphics/texture.hpp"
@@ -26,18 +25,6 @@ namespace ignite
 
     WidgetCanvas::~WidgetCanvas()
     {
-    }
-
-    void WidgetCanvas::Update(float deltaTime, const glm::uvec2 &mousePos)
-    {
-        if (!m_Root)
-        {
-            return;
-        }
-
-        m_Root->Measure();
-        m_Root->Arrange(Rect(0.0f, 0.0f, static_cast<float>(m_ViewportSize.x), static_cast<float>(m_ViewportSize.y)));
-        m_Root->Update(deltaTime, glm::vec2(mousePos));
     }
 
     bool WidgetCanvas::Serialize(const std::filesystem::path &filepath)
@@ -408,36 +395,6 @@ namespace ignite
         color = UI_COLOR_WHITE;
     }
 
-    void WidgetLabel::Draw(WidgetRenderer *renderer, AssetManager *assetManager)
-    {
-        if (!visible || !renderer || !assetManager)
-            return;
-
-        if (fontHandle == AssetHandle(0) || text.empty())
-        {
-            IWidgetItem::Draw(renderer, assetManager);
-            return;
-        }
-
-        Ref<Asset> fontAsset = assetManager->GetAsset(fontHandle, AssetType::Font);
-        if (!fontAsset)
-            return;
-
-        font = fontAsset ? fontAsset->As<Font>() : nullptr;
-        if (!font)
-        {
-            IWidgetItem::Draw(renderer, assetManager);
-            return;
-        }
-
-        const Rect rect = GetAlignedRect();
-        glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(rect.min, 0.0f));
-        transform = glm::scale(transform, glm::vec3(fontSize, fontSize, 1.0f));
-        renderer->DrawString(text, font, color, transform, kerning, lineSpacing);
-
-        IWidgetItem::Draw(renderer, assetManager);
-    }
-
     void WidgetLabel::Measure()
     {
         if (!font || text.empty())
@@ -491,12 +448,6 @@ namespace ignite
     bool WidgetLabel::HitTest(int px, int py)
     {
         return worldRect.Contains(glm::vec2(static_cast<float>(px), static_cast<float>(py)));
-    }
-
-    void WidgetLabel::Update(float deltaTime, const glm::vec2 &mousePosition)
-    {
-        (void)deltaTime;
-        (void)mousePosition;
     }
 
     // ==================================
@@ -656,56 +607,6 @@ namespace ignite
         }
     }
 
-    void WidgetButton::Draw(WidgetRenderer *renderer, AssetManager *assetManager)
-    {
-        if (!visible || !renderer)
-            return;
-
-        Ref<Texture> resolvedImage = image;
-        if (!resolvedImage && assetManager && imageHandle != AssetHandle(0))
-        {
-            Ref<Asset> imageAsset = assetManager->GetAsset(imageHandle, AssetType::Texture);
-            if (!imageAsset)
-                return;
-
-            if (imageAsset)
-                resolvedImage = imageAsset->As<Texture>();
-        }
-
-        const Rect &rect = GetAlignedRect();
-        renderer->DrawQuad(rect, 0.0f, GetCurrentColor(), resolvedImage, { 0.0f, 1.0f }, { 1.0f, 0.0f });
-
-        if (assetManager && GetFontHandle() != AssetHandle(0) && !GetText().empty())
-        {
-            Ref<Asset> fontAsset = assetManager->GetAsset(GetFontHandle(), AssetType::Font);
-            label->font = fontAsset ? fontAsset->As<Font>() : nullptr;
-            if (label->font)
-            {
-                // Ensure label size is measured
-                label->Measure();
-
-                const std::string &buttonText     = GetText();
-                const float        textKerning    = GetKerning();
-                const float        textLineSpacing = GetLineSpacing();
-                const float        textFontSize   = GetFontSize();
-                const glm::vec2    rectSize       = rect.GetSize();
-
-                // Center horizontally; center vertically (text goes downward from origin)
-                const glm::vec2 textPos =
-                {
-                    rect.min.x + (rectSize.x - label->size.x) * 0.5f,
-                    rect.min.y + (rectSize.y - label->size.y) * 0.5f
-                };
-
-                glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(textPos, 0.0f))
-                    * glm::scale(glm::mat4(1.0f), glm::vec3(textFontSize, textFontSize, 1.0f));
-                renderer->DrawString(buttonText, label->font, GetTextColor(), transform, textKerning, textLineSpacing);
-            }
-        }
-
-        IWidgetItem::Draw(renderer, assetManager);
-    }
-
     void WidgetButton::Measure()
     {
         if (label)
@@ -721,12 +622,4 @@ namespace ignite
     {
         return worldRect.Contains(glm::vec2(static_cast<float>(px), static_cast<float>(py)));
     }
-
-    void WidgetButton::Update(float deltaTime, const glm::vec2 &mousePosition)
-    {
-        (void)deltaTime;
-        const bool mousePressed = Input::IsMouseButtonPressed(Mouse::ButtonLeft);
-        OnMouseClick(glm::uvec2(static_cast<uint32_t>(mousePosition.x), static_cast<uint32_t>(mousePosition.y)), mousePressed);
-    }
-
 }

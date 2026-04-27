@@ -10,6 +10,12 @@
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/graphics/graphics_pipeline.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
+#include "ignite/scene/scene.hpp"
+#include "ignite/scene/component.hpp"
+#include "ignite/project/project.hpp"
+#include "ignite/graphics/ui/widget.hpp"
+#include "ignite/graphics/ui/widget_container.hpp"
+#include <SDL3/SDL_events.h>
 
 #include <algorithm>
 
@@ -22,10 +28,10 @@ namespace ignite
 
         switch (evt->type)
         {
-            case SDLK_UP: /* KEYUP & KEYDOWN share same routine */
-            case SDLK_DOWN:
+            case SDL_EVENT_KEY_UP: /* KEYUP & KEYDOWN share same routine */
+            case SDL_EVENT_KEY_DOWN:
             {
-                int down = evt->type == SDLK_DOWN;
+                int down = evt->type == SDL_EVENT_KEY_DOWN;
                 switch (evt->key.key)
                 {
                     case SDLK_RSHIFT: /* RSHIFT & LSHIFT share same routine */
@@ -173,7 +179,7 @@ namespace ignite
 
     NuklearRenderer::NuklearRenderer()
     {
-        nk_init_default(&m_Ctx, 0);
+        nk_init_default(&m_Ctx, nullptr);
 
         nk_font_atlas_init_default(&m_Atlas);
         nk_font_atlas_begin(&m_Atlas);
@@ -182,6 +188,9 @@ namespace ignite
         nk_font *font = nk_font_atlas_add_default(&m_Atlas, 13.0f, nullptr);
 
         m_Ctx.style.font = &font->handle;
+        m_Ctx.style.button.rounding = 8.0f;
+        m_Ctx.style.window.padding.x = 0.0f;
+        m_Ctx.style.window.padding.y = 0.0f;
 
         auto device = DeviceManager::GetInstance()->GetDevice();
         m_NvrhiCmd = device->createCommandList(nvrhi::CommandListParameters()
@@ -218,17 +227,109 @@ namespace ignite
         nk_free(&m_Ctx);
     }
 
-    void NuklearRenderer::BeginFrame()
+    void NuklearRenderer::HandleEvent(SDL_Event *evt)
     {
-        IGN_PROFILE_FUNCTION();
+        nk_sdl_handle_event(&m_Ctx, evt);
+    }
 
-        if (nk_begin(&m_Ctx, "Test UI", nk_rect(10, 10, 300, 250), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_TITLE))
+    void NuklearRenderer::SetScene(Scene *scene)
+    {
+        m_Scene = scene;
+    }
+
+    void NuklearRenderer::SetProject(Project *project)
+    {
+        m_Project = project;
+    }
+
+    static void RenderWidgetItems(nk_context *ctx, const std::vector<Ref<IWidgetItem>> &items)
+    {
+        for (const auto &item : items)
         {
-            nk_layout_row_static(&m_Ctx, 30, 80, 2);
-            nk_button_label(&m_Ctx, "button 1");
-            nk_button_label(&m_Ctx, "button 2");
+            if (!item || !item->IsVisible())
+                continue;
+
+            switch (item->GetWidgetType())
+            {
+                case WidgetType::Button:
+                {
+                    auto button = std::static_pointer_cast<WidgetButton>(item);
+                    nk_layout_row_static(ctx, button->size.y, (int)button->size.x, 1);
+                    
+                    nk_style_button bt_style = ctx->style.button;
+                    bt_style.normal.data.color = nk_rgba_f(button->normalColor.r, button->normalColor.g, button->normalColor.b, button->normalColor.a);
+                    bt_style.hover.data.color = nk_rgba_f(button->hoverColor.r, button->hoverColor.g, button->hoverColor.b, button->hoverColor.a);
+                    bt_style.active.data.color = nk_rgba_f(button->pressedColor.r, button->pressedColor.g, button->pressedColor.b, button->pressedColor.a);
+                    if (nk_button_text_styled(ctx, &bt_style, button->GetText().c_str(), (int)button->GetText().size()))
+                    {
+                        glm::uvec2 hitPos = glm::vec2(item->position.x + item->size.x * 0.5f, item->position.y + item->size.y * 0.5f);
+                        button->OnMouseClick(hitPos, true);
+                        button->OnMouseClick(hitPos, false);
+                    }
+
+                    break;
+                }
+                case WidgetType::Label:
+                {
+                    auto label = std::static_pointer_cast<WidgetLabel>(item);
+                    const auto &col = label->color;
+                    nk_layout_row_dynamic(ctx, label->fontSize, 1);
+                    nk_label_colored(ctx, label->GetText().c_str(), NK_TEXT_LEFT, nk_rgba_f(col.r, col.g, col.b, col.a));
+                    break;
+                }
+                case WidgetType::Container:
+                {
+                    auto container = std::static_pointer_cast<WidgetContainer>(item);
+                    if (nk_group_begin(ctx, container->name.c_str(), NK_WINDOW_NO_SCROLLBAR))
+                    {
+                        RenderWidgetItems(ctx, container->children);
+                        nk_group_end(ctx);
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
         }
-        nk_end(&m_Ctx);
+    }
+
+    void NuklearRenderer::BeginNuklearFrame(const Ref<WidgetCanvas> &canvas, const Rect &parentRect)
+    {
+        if (!canvas)
+            return;
+
+        IGN_PROFILE_FUNCTION();
+        nk_input_end(&m_Ctx);
+
+        canvas->GetRoot()->Measure();
+        canvas->GetRoot()->Arrange(parentRect);
+
+        // Find root containers
+        std::vector<Ref<IWidgetItem>> rootItems;
+        for (const auto &[id, widgetItem] : canvas->GetItems())
+        {
+            if (!widgetItem || !widgetItem->IsVisible() || widgetItem->parent)
+                continue;
+
+            rootItems.push_back(widgetItem);
+        }
+
+        // Stable sort by Z-Index
+        std::stable_sort(rootItems.begin(), rootItems.end(), [](const Ref<IWidgetItem> &a, const Ref<IWidgetItem> &b) { return a->zIndex < b->zIndex; });
+        for (const auto &rootItem : rootItems)
+        {
+            if (rootItem->GetWidgetType() == WidgetType::Container)
+            {
+                const nk_flags windowFlags = NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_NO_SCROLLBAR;
+                if (nk_begin(&m_Ctx, rootItem->name.c_str(), nk_rect(rootItem->position.x, rootItem->position.y, rootItem->size.x, rootItem->size.y), windowFlags))
+                {
+                    RenderWidgetItems(&m_Ctx, rootItem->children);
+                }
+                nk_end(&m_Ctx);
+                nk_window_set_bounds(&m_Ctx, rootItem->name.c_str(), nk_rect(rootItem->position.x, rootItem->position.y, rootItem->size.x, rootItem->size.y));
+            }
+        }
+        nk_input_begin(&m_Ctx);
     }
 
     void NuklearRenderer::Render(nvrhi::ICommandList *nvrhiCmd, nvrhi::IFramebuffer *framebuffer)
@@ -440,25 +541,17 @@ namespace ignite
             m_BindingLayout = device->createBindingLayout(layoutDesc);
         }
 
-        auto vertexShader = Shader::Create("resources/shaders/nuklear.vertex.hlsl", ShaderType::Vertex);
-        auto pixelShader = Shader::Create("resources/shaders/nuklear.pixel.hlsl", ShaderType::Pixel);
+        auto vertexShader = Shader::Create("resources/shaders/nuklear.vertex.hlsl", ShaderType::Vertex, true);
+        auto pixelShader = Shader::Create("resources/shaders/nuklear.pixel.hlsl", ShaderType::Pixel, true);
 
         GraphicsPipelineParams params;
+        params.enableBlend = true;
+        params.enableDepthWrite = false;
+        params.enableDepthTest = false;
+        params.enableDepthStencil = false;
         params.fillMode = nvrhi::RasterFillMode::Solid;
         params.cullMode = nvrhi::RasterCullMode::None;
-        
-        params.enableBlend = true;
-        params.srcBlend = nvrhi::BlendFactor::SrcAlpha;
-        params.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
-        params.srcBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
-        params.destBlendAlpha = nvrhi::BlendFactor::Zero;
-
-        params.enableDepthClip = true;
-        params.enableScissor = true;
-        
-        params.enableDepthTest = false;
-        params.enableDepthWrite = false;
-        params.enableDepthStencil = false;
+        params.depthFunc = nvrhi::ComparisonFunc::Always;
 
         Ref<GraphicsPipeline> pipeline = GraphicsPipeline::Create();
         pipeline->SetShaders({ vertexShader, pixelShader })
@@ -503,13 +596,6 @@ namespace ignite
         m_BindingSetCache.erase(texture);
     }
 
-    struct NkDrawVertex
-    {
-        float position[2];
-        float uv[2];
-        nk_byte col[4];
-    };
-
     bool NuklearRenderer::UpdateGeometry(nvrhi::ICommandList *commandList, nk_buffer *cmds)
     {
         IGN_PROFILE_FUNCTION();
@@ -518,7 +604,7 @@ namespace ignite
         {
             {NK_VERTEX_POSITION, NK_FORMAT_FLOAT, NK_OFFSETOF(NkDrawVertex, position)},
             {NK_VERTEX_TEXCOORD, NK_FORMAT_FLOAT, NK_OFFSETOF(NkDrawVertex, uv)},
-            {NK_VERTEX_COLOR, NK_FORMAT_R8G8B8A8, NK_OFFSETOF(NkDrawVertex, col)},
+            {NK_VERTEX_COLOR, NK_FORMAT_R32G32B32A32_FLOAT, NK_OFFSETOF(NkDrawVertex, col)},
             {NK_VERTEX_LAYOUT_END}
         };
 
@@ -554,9 +640,9 @@ namespace ignite
             return true;
         }
 
-        size_t expandedVertexSize = vtxCount * sizeof(NuklearVertexData);
+        size_t expandedVertexSize = vtxCount * sizeof(NkDrawVertex);
 
-        if (!ReallocateBuffer(m_VertexBuffer, expandedVertexSize, (vtxCount + 5000) * sizeof(NuklearVertexData), false))
+        if (!ReallocateBuffer(m_VertexBuffer, expandedVertexSize, (vtxCount + 5000) * sizeof(NkDrawVertex), false))
         {
             nk_buffer_free(&vbuf);
             nk_buffer_free(&ibuf);
@@ -570,33 +656,31 @@ namespace ignite
             return false;
         }
 
-        m_NkVertexBuffer.resize(m_VertexBuffer->getDesc().byteSize / sizeof(NuklearVertexData));
+        m_NkVertexBuffer.resize(m_VertexBuffer->getDesc().byteSize / sizeof(NkDrawVertex));
         m_NkIndexBuffer.resize(m_IndexBuffer->getDesc().byteSize / sizeof(nk_draw_index));
 
         auto srcVtx = static_cast<const NkDrawVertex *>(vertices);
         for (size_t i = 0; i < vtxCount; ++i)
         {
-            NuklearVertexData &dst = m_NkVertexBuffer[i];
-            dst.position = glm::vec2(srcVtx[i].position[0], srcVtx[i].position[1]);
-            dst.texCoord = glm::vec2(srcVtx[i].uv[0], srcVtx[i].uv[1]);
+            NkDrawVertex &dst = m_NkVertexBuffer[i];
+            dst.position[0] = srcVtx[i].position[0];
+            dst.position[1] = srcVtx[i].position[1];
+            dst.uv[0] = srcVtx[i].uv[0];
+            dst.uv[1] = srcVtx[i].uv[1];
             
-            dst.color.r = srcVtx[i].col[0] / 255.0f;
-            dst.color.g = srcVtx[i].col[1] / 255.0f;
-            dst.color.b = srcVtx[i].col[2] / 255.0f;
-            dst.color.a = srcVtx[i].col[3] / 255.0f;
+            dst.col[0] = srcVtx[i].col[0];
+            dst.col[1] = srcVtx[i].col[1];
+            dst.col[2] = srcVtx[i].col[2];
+            dst.col[3] = srcVtx[i].col[3];
         }
 
         memcpy(m_NkIndexBuffer.data(), indices, idxCount * sizeof(nk_draw_index));
 
-        commandList->writeBuffer(m_VertexBuffer, m_NkVertexBuffer.data(), vtxCount * sizeof(NuklearVertexData));
+        commandList->writeBuffer(m_VertexBuffer, m_NkVertexBuffer.data(), vtxCount * sizeof(NkDrawVertex));
         commandList->writeBuffer(m_IndexBuffer, m_NkIndexBuffer.data(), idxCount * sizeof(nk_draw_index));
 
         nk_buffer_free(&vbuf);
         nk_buffer_free(&ibuf);
-
-        // nk_input_begin(&m_Ctx);
-        // nk_sdl_handle_event(&m_Ctx, event);
-        // nk_input_end(&m_Ctx);
 
         return true;
     }

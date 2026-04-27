@@ -549,7 +549,6 @@ namespace ignite
 
                 primitive->indices.resize(indicesCount);
                 ReadRaw(inFile, primitive->indices.data(), indicesCount * sizeof(uint32_t));
-                primitive->RecalculateAABB();
 
                 uint32_t nameSize = 0;
                 ReadRaw(inFile, &nameSize);

@@ -607,7 +607,6 @@ namespace ignite
         std::string className = "EMPTY";
         ScriptComponent() = default;
 
-
         COMPONENT_CLASS_TYPE(CompType_Script)
     };
 

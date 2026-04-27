@@ -203,13 +203,8 @@ namespace ignite
     // Preview overlay  (bounds + corner handles)
     // =========================================================================
 
-    void WidgetEditor::DrawPreviewOverlay(
-        ImDrawList *drawList,
-        const Ref<WidgetCanvas> &widget,
-        int selectedItemId,
-        const ImVec2 &imagePos,
-        const ImVec2 &imageSize,
-        float canvasW, float canvasH)
+    void WidgetEditor::DrawPreviewOverlay(ImDrawList *drawList, const Ref<WidgetCanvas> &widget,
+        int selectedItemId, const ImVec2 &imagePos, const ImVec2 &imageSize, float canvasW, float canvasH)
     {
         if (!drawList || !widget || canvasW <= 0.0f || canvasH <= 0.0f)
             return;
@@ -268,13 +263,8 @@ namespace ignite
     // Anchor-point visualization
     // =========================================================================
 
-    void WidgetEditor::DrawAnchorPoints(
-        ImDrawList *drawList,
-        const Ref<IWidgetItem> &item,
-        const Ref<WidgetCanvas> &widget,
-        const ImVec2 &imagePos,
-        const ImVec2 &imageSize,
-        float canvasW, float canvasH)
+    void WidgetEditor::DrawAnchorPoints(ImDrawList *drawList, const Ref<IWidgetItem> &item, const Ref<WidgetCanvas> &widget,
+        const ImVec2 &imagePos, const ImVec2 &imageSize, float canvasW, float canvasH)
     {
         if (!drawList || !item || !widget || canvasW <= 0.0f || canvasH <= 0.0f)
             return;
@@ -427,7 +417,25 @@ namespace ignite
         }
 
         // --- Transform ---
-        dirty |= UI::DrawVec2Control("Position", selectedItem->position, 1.0f);
+        // Position is controlled by the parent container's layout system (Nuklear).
+        // Only allow editing position for items inside an Absolute layout container.
+        WidgetContainer *parentContainer = nullptr;
+        if (selectedItem->parent && selectedItem->parent->GetWidgetType() == WidgetType::Container)
+            parentContainer = dynamic_cast<WidgetContainer *>(selectedItem->parent);
+
+        const bool canEditPosition = parentContainer && parentContainer->layout == LayoutMode::Absolute;
+        if (!canEditPosition)
+        {
+            ImGui::BeginDisabled();
+            UI::DrawVec2Control("Position", selectedItem->position, 1.0f);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Position is controlled by the parent's layout. Switch parent to Absolute to edit.");
+            ImGui::EndDisabled();
+        }
+        else
+        {
+            dirty |= UI::DrawVec2Control("Position", selectedItem->position, 1.0f);
+        }
         if (selectedItem->sizingMode == SizingMode::ExpandToParent)
         {
             ImGui::BeginDisabled();
@@ -449,8 +457,20 @@ namespace ignite
             const char *layoutNames[] = { "Horizontal", "Vertical", "Grid", "Absolute" };
             if (ImGui::Combo("Layout", &layout, layoutNames, IM_ARRAYSIZE(layoutNames)))
             {
-                container->layout = static_cast<LayoutMode>(layout);
+                const LayoutMode newLayout = static_cast<LayoutMode>(layout);
+                const LayoutMode oldLayout = container->layout;
+                container->layout = newLayout;
                 dirty = true;
+
+                // If switching away from Absolute layout, clear manual positions on children
+                if (oldLayout == LayoutMode::Absolute && newLayout != LayoutMode::Absolute)
+                {
+                    for (auto &child : container->children)
+                    {
+                        if (child)
+                            child->position = glm::vec2(0.0f);
+                    }
+                }
             }
 
             dirty |= UI::DrawFloatControl("Padding", &container->padding, 0.5f, 0.0f, 512.0f);

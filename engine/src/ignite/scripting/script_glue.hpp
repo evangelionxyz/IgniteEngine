@@ -132,6 +132,15 @@ namespace ignite
 		void (*CircleCollider2DComponent_SetDensity)(uint64_t entityID, float value);
 		void (*CircleCollider2DComponent_GetIsSensor)(uint64_t entityID, bool *result);
 		void (*CircleCollider2DComponent_SetIsSensor)(uint64_t entityID, bool value);
+
+        void (*TextComponent_SetText)(uint64_t entityID, const char *value);
+        void (*TextComponent_GetText)(uint64_t entityID, const char **result);
+        void (*TextComponent_SetColor)(uint64_t entityID, const glm::vec4 &value);
+        void (*TextComponent_GetColor)(uint64_t entityID, glm::vec4 *result);
+        void (*TextComponent_SetKerning)(uint64_t entityID, float value);
+        void (*TextComponent_GetKerning)(uint64_t entityID, float *result);
+        void (*TextComponent_SetLineSpacing)(uint64_t entityID, float value);
+        void (*TextComponent_GetLineSpacing)(uint64_t entityID, float *result);
     };
 
     class ScriptGlue

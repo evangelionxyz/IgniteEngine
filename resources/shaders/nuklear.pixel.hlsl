@@ -12,6 +12,6 @@ sampler sampler0 : register(s0);
 
 float4 main(PS_INPUT input) : SV_Target
 {
-    float4 texColor = texture0.Sample(sampler0, input.uv);
-    return input.col * texColor;
+    float4 col = input.col * texture0.Sample(sampler0, input.uv);
+    return float4(col.r, col.g, col.b, col.a);
 }

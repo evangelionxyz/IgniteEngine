@@ -126,8 +126,6 @@ namespace ignite
             return ptr;
         }
 
-        virtual void Update(float deltaTime, const glm::vec2 &mousePosition) { }
-        virtual void Draw(WidgetRenderer *renderer, AssetManager *assetManager) { }
         virtual void Measure() { }
         virtual void Arrange(const Rect &parentArea) { }
         virtual bool HitTest(int px, int py) { return false; }
@@ -228,8 +226,6 @@ namespace ignite
         void SetLineSpacing(float newLineSpacing) { lineSpacing = newLineSpacing; }
         float GetLineSpacing() const { return lineSpacing; }
         
-        virtual void Update(float deltaTime, const glm::vec2 &mousePosition) override;
-        virtual void Draw(WidgetRenderer *renderer, AssetManager *assetManager) override;
         virtual void Measure() override;
         virtual void Arrange(const Rect &) override;
         virtual bool HitTest(int px, int py) override;
@@ -281,8 +277,6 @@ namespace ignite
 
         void OnMouseClick(const glm::uvec2 &mousePos, bool isPressed);
 
-        virtual void Update(float deltaTime, const glm::vec2 &mousePosition) override;
-        virtual void Draw(WidgetRenderer *renderer, AssetManager *assetManager) override;
         virtual void Measure() override;
         virtual void Arrange(const Rect &) override;
         virtual bool HitTest(int px, int py) override;
@@ -310,8 +304,6 @@ namespace ignite
     public:
         WidgetCanvas(Scene *scene = nullptr);
         ~WidgetCanvas();
-
-        void Update(float deltaTime, const glm::uvec2 &mousePos);
 
         virtual bool Serialize(const std::filesystem::path &filepath) override;
         static Ref<WidgetCanvas> Deserialize(const std::filesystem::path &filepath);

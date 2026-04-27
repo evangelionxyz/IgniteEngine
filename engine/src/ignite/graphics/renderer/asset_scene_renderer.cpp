@@ -7,7 +7,7 @@
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/animation/skeleton.hpp"
-#include "ignite/graphics/renderer/widget_renderer.hpp"
+#include "ignite/graphics/renderer/nuklear_renderer.hpp"
 #include "ignite/graphics/ui/widget.hpp"
 
 #include <algorithm>
@@ -28,11 +28,14 @@ namespace ignite
 
     AssetSceneRenderer::AssetSceneRenderer()
     {
+        m_Nuklear = nullptr;
+
         m_PreviewMesh = nullptr;
         m_PreviewWidget = nullptr;
         m_SourceMaterial = nullptr;
         m_RuntimeMaterial = CreateRef<Material>();
-        m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
+
+        m_Nuklear = CreateScope<NuklearRenderer>();
 
         auto samplerDesc = nvrhi::SamplerDesc();
         samplerDesc.setAllFilters(false);
@@ -102,28 +105,6 @@ namespace ignite
     void AssetSceneRenderer::SetPreviewWidget(const Ref<WidgetCanvas> &widget)
     {
         m_PreviewWidget = widget;
-        if (m_WidgetRenderer)
-        {
-            m_WidgetRenderer->SetPreviewWidget(widget);
-        }
-    }
-
-    void AssetSceneRenderer::SetWidgetPreviewMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered)
-    {
-        if (!m_WidgetRenderer)
-        {
-            return;
-        }
-
-        if (hovered)
-        {
-            m_WidgetRenderer->SetMousePosition(mouseX, mouseY);
-        }
-        else
-        {
-            const uint32_t offscreen = std::numeric_limits<uint32_t>::max() / 2u;
-            m_WidgetRenderer->SetMousePosition(offscreen, offscreen);
-        }
     }
 
     void AssetSceneRenderer::Render(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT)
@@ -131,7 +112,7 @@ namespace ignite
         SyncRuntimeMaterialFromSource();
 
         const bool hasMeshPreview = m_PreviewMesh && m_RuntimeMaterial;
-        const bool hasWidgetPreview = m_PreviewWidget && m_WidgetRenderer;
+        const bool hasWidgetPreview = m_PreviewWidget && m_Nuklear;
         if (!camera || !sceneRT || !uiRT || !compositeRT || (!hasMeshPreview && !hasWidgetPreview))
         {
             return;
@@ -186,18 +167,14 @@ namespace ignite
             DrawPreviewMesh(cmd, sceneRT->GetFramebuffer());
         }
 
-        if (hasWidgetPreview)
+        if (m_PreviewWidget)
         {
-            m_WidgetRenderer->SetProject(m_Project);
-            m_WidgetRenderer->SetScene(nullptr);
-            m_WidgetRenderer->SetPreviewWidget(m_PreviewWidget);
-            m_WidgetRenderer->Resize(uiRT->GetWidth(), uiRT->GetHeight());
-            m_WidgetRenderer->Update(0.0f);
-            m_WidgetRenderer->Render(cmd, uiRT->GetFramebuffer());
+            auto viewport = uiRT->GetFramebuffer()->getFramebufferInfo().getViewport();
+            m_Nuklear->BeginNuklearFrame(m_PreviewWidget, Rect(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY));
+            m_Nuklear->Render(cmd, uiRT->GetFramebuffer());
         }
 
         CompositePass(cmd, compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
-
         cmd->close();
         
         {

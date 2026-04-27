@@ -370,6 +370,11 @@ namespace ignite
                 {
                     m_ImGuiLayer->PollEvent(sdlEvent);
                 }
+
+                for (auto layer = m_LayerStack.rbegin(); layer != m_LayerStack.rend(); ++layer)
+                {
+                    (*layer)->OnSDLEvent(&sdlEvent);
+                }
             }
 
             const float currTime = static_cast<float>(SDL_GetTicks());

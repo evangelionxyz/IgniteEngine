@@ -64,6 +64,7 @@ namespace ignite
         void OnDetach() override;
         void OnUpdate(float deltaTime) override;
         void OnEvent(Event &e) override;
+        void OnSDLEvent(SDL_Event *evt) override;
 
         bool OnKeyPressedEvent(KeyPressedEvent &event);
         bool OnMouseButtonPressed(MouseButtonPressedEvent &event);

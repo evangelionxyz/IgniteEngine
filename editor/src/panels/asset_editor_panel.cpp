@@ -2263,11 +2263,10 @@ namespace ignite
 
                                             if (newId != 0 && widget->GetItems().contains(newId))
                                             {
-                                                if (insertParent && insertParent->layout == LayoutMode::Absolute)
-                                                {
-                                                    const Rect &pr = insertParent->GetAlignedRect();
-                                                    widget->GetItems().at(newId)->position = glm::vec2(dropCX - pr.min.x, dropCY - pr.min.y);
-                                                }
+                                                // Positioning is managed by the Nuklear layout system.
+                                                // Do not set item->position manually; only size/alignment
+                                                // should be adjusted by the editor. Leave positioning to
+                                                // the UI runtime.
                                                 selectedItemId = newId;
                                                 widget->SetDirtyFlag(true);
                                             }

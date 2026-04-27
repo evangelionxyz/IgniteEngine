@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+using Ignite.Core;
 namespace Ignite;
 
 public static class Input
