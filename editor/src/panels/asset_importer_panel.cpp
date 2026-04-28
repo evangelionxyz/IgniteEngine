@@ -340,7 +340,7 @@ namespace ignite
 		metadata.type = asset.assetType;
 
 		assetManager->AssignMetaData(handle, metadata);
-		if (Ref<Asset> importedAsset = assetManager->Import(handle, metadata, metadata.type))
+		if (Ref<Asset> importedAsset = assetManager->Import(handle, metadata))
 		{
 			importedAsset->SetReadyFlag(true);
 			assetManager->AssignAsset(handle, importedAsset);

@@ -5,6 +5,7 @@
 #define ASSET_MANAGER_HPP
 
 #include "asset.hpp"
+#include "ignite/core/logger.hpp"
 
 #include <map>
 #include <unordered_set>
@@ -34,21 +35,19 @@ namespace ignite
         AssetManager(Project *project);
         ~AssetManager();
 
-        Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata, AssetType requestedAssetType = AssetType::Auto);
+        Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
         AssetHandle ImportAsset(const std::filesystem::path &filepath);
 
         void AssignMetaData(AssetHandle handle, const AssetMetaData &metadata);
 
         const std::string GetAssetDisplayName(AssetHandle handle) const;
 
-        template<typename T>
+        template<typename T = Asset>
         void AssignAsset(AssetHandle handle, const Ref<T> &asset)
         {
             if (asset && std::is_base_of_v<Asset, T>)
             {
                 m_LoadedAssets[handle] = asset;
-                
-                // Notify listeners that asset was loaded
                 for (const auto &callback : m_LoadedCallbacks)
                 {
                     callback(handle, asset->GetAssetType());
@@ -66,8 +65,85 @@ namespace ignite
 
         void SubmitJob(AssetJob job);
 
-        Ref<Asset> GetAsset(AssetHandle handle, AssetType requestedAssetType = AssetType::Auto);
-        Ref<Asset> GetAssetImmediate(AssetHandle handle, AssetType requestedAssetType = AssetType::Auto); // Synchronous load - blocks until complete
+        template<typename T = Asset>
+        Ref<T> GetAsset(AssetHandle handle)
+        {
+            if (!IsAssetHandleValid(handle))
+            {
+                return nullptr;
+            }
+
+            // Quick check if already loaded
+            {
+                if (m_LoadedAssets.contains(handle))
+                {
+                    return std::static_pointer_cast<T>(m_LoadedAssets.at(handle));
+                }
+
+                if (m_LoadingAssets.contains(handle))
+                {
+                    return nullptr;
+                }
+
+                m_LoadingAssets.insert(handle);
+            }
+
+            // Submit import work to worker thread
+            const AssetMetaData metadata = GetMetaData(handle);
+
+            SubmitJob([this, handle, metadata]()
+            {
+                try
+                {
+                    // Do the heavy I/O work on worker thread
+                    Ref<Asset> asset = Import(handle, metadata);
+                    if (asset)
+                    {
+                        std::stringstream ss;
+                        ss << std::this_thread::get_id();
+                        unsigned long long threadId = std::stoull(ss.str());
+                        LOG_TRACE("[Asset Manager] Asset loaded on worker thread [{0}]: {1} ({2})", threadId, static_cast<uint64_t>(handle), metadata.filepath.generic_string());
+                    }
+                }
+                catch (const std::exception &e)
+                {
+                    LOG_ERROR("[Asset Manager] Failed to import asset {} \"{}\": {}", static_cast<uint64_t>(handle), metadata.filepath.generic_string(), e.what());
+                }
+
+                {
+                    std::unique_lock lock(m_AssetMutex);
+                    m_LoadingAssets.erase(handle);
+                }
+            });
+
+            return nullptr;
+        }
+        
+        template<typename T = Asset>
+        Ref<T> GetAssetImmediate(AssetHandle handle)
+        {
+            if (!IsAssetHandleValid(handle))
+            {
+                return nullptr;
+            }
+
+            // Check if already loaded
+            {
+                std::unique_lock lock(m_AssetMutex);
+                if (m_LoadedAssets.contains(handle))
+                {
+                    return std::static_pointer_cast<T>(m_LoadedAssets.at(handle));
+                }
+            }
+
+            // Synchronous load - blocks calling thread
+            const AssetMetaData metadata = GetMetaData(handle);
+            LOG_TRACE("[Asset Manager] Synchronous asset load requested: {}", metadata.filepath.generic_string());
+
+            Ref<Asset> asset = Import(handle, metadata);
+            return std::static_pointer_cast<T>(asset);
+        }
+
         AssetType GetAssetType(AssetHandle handle) const;
 
         const AssetMetaData &GetMetaData(const std::filesystem::path &filepath, AssetHandle &outHandle);
@@ -97,10 +173,9 @@ namespace ignite
     private:
         void WorkerLoop();
 
-        mutable std::mutex m_RegistryMutex;
         AssetRegistry m_AssetRegistry;
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
-        std::unordered_set<AssetHandle> m_LoadingAssets; // Track assets currently being loaded
+        std::unordered_set<AssetHandle> m_LoadingAssets;
         std::vector<AssetLoadedCallback> m_LoadedCallbacks;
 
         std::condition_variable m_ConditionVariable;
@@ -108,12 +183,14 @@ namespace ignite
         std::queue<AssetJob> m_Jobs;
         Project *m_Project;
 
-        bool m_Running;
+        fbxsdk::FbxManager *m_FbxSdkManager = nullptr;
 
         std::mutex m_FbxSdkMutex;
-        fbxsdk::FbxManager *m_FbxSdkManager = nullptr;
+        std::mutex m_JobMutex;
+        mutable std::mutex m_AssetMutex;
+        
+        bool m_Running;
     };
-
 }
 
 #endif

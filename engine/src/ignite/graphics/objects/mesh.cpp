@@ -2,7 +2,6 @@
 
 #include "mesh.hpp"
 #include "ignite/core/time.hpp"
-#include "environment.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/renderer/scene_renderer.hpp"
@@ -16,9 +15,6 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
-#include <limits>
-#include <mutex>
-#include <set>
 
 #include <fbxsdk.h>
 
@@ -264,6 +260,7 @@ namespace ignite
 						continue;
 					}
 
+					texture->PrepareUploadData(4);
 					Application::SubmitToRenderThread([texture]()
 					{
 						nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
@@ -1007,6 +1004,7 @@ namespace ignite
                     texture = Texture::Create(data, createInfo, nullptr);
                     LOG_TRACE(" Loaded embedded texture");
 
+                    texture->PrepareUploadData(4);
                     Application::SubmitToRenderThread([texture]()
                     {
                         nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
@@ -1548,17 +1546,6 @@ namespace ignite
 
             if (!vertices.empty() && !indices.empty())
             {
-                // Pre-bake vertex positions and normals from mesh-node-local space to model space.
-                // Skinning inverse-bind-pose matrices are computed in model space (relative to the
-                // skeleton root). When a mesh node is parented to a skeleton bone in FBX (e.g. the
-                // head mesh is a child of the head bone), its vertices are in bone-local space rather
-                // than model space. Without pre-baking, the skinning formula
-                //   worldPos = objectMatrix * boneTransform[j] * vertex
-                // produces incorrect results: at bind pose boneTransform = I so the position depends
-                // only on objectMatrix (correct at rest), but during animation objectMatrix and
-                // boneTransform compound incorrectly. Pre-baking to model space makes skinning
-                // consistent for all mesh topologies regardless of node hierarchy.
-                // For body meshes already at the root with identity global this is a no-op.
                 {
                     const glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(meshNode.global)));
                     for (auto &vertex : vertices)

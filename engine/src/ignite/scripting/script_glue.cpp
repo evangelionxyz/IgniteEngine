@@ -149,7 +149,7 @@ namespace ignite
                 return nullptr;
             }
 
-            return project->GetAsset<FmodSound>(audioSource.handle, AssetType::Audio);
+            return project->GetAsset<FmodSound>(audioSource.handle);
         }
 
         static FMOD::DSP *CreateAudioSourceDsp(const AudioSourceComponent::DspSettings &settings)
@@ -421,7 +421,7 @@ namespace ignite
                 return nullptr;
             }
 
-            return project->GetAsset<WidgetCanvas>(widgetComponent.widgetHandle, AssetType::Widget);
+            return project->GetAsset<WidgetCanvas>(widgetComponent.widgetHandle);
         }
 
         static Ref<WidgetButton> FindWidgetButton(Entity entity, const std::string &buttonName)
@@ -1027,7 +1027,8 @@ namespace ignite
             }
         }
 
-        static bool AudioSourceComponent_AddReverbDSP(uint64_t entityID, float decayTime, float earlyDelay, float lateDelay, float highFrequencyReference, float diffusion, float density, float lowShelfGain, float highCut, float dryLevel, float wetLevel)
+        static bool AudioSourceComponent_AddReverbDSP(uint64_t entityID, float decayTime, float earlyDelay, float lateDelay,
+            float highFrequencyReference, float diffusion, float density, float lowShelfGain, float highCut, float dryLevel, float wetLevel)
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())

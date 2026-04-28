@@ -95,6 +95,7 @@ namespace ignite
 
         nk_context m_Ctx;
         nk_font_atlas m_Atlas;
+        nk_draw_null_texture m_NullTexture {};
     };
 }
 

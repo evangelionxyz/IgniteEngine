@@ -18,6 +18,8 @@
 #include "stb_image_write.h"
 
 #include <algorithm>
+#include <mutex>
+#include <spdlog/spdlog.h>
 #include <cmath>
 #include <format>
 #include <limits>
@@ -540,18 +542,18 @@ namespace ignite
             }
         }
 
-	    // Render to Game Viewport
+        // Render to Game Viewport
         if (m_State.gameplayViewportWindow && m_ScenePanel->m_Data.sceneViewportGameplayVisible)
         {
-			if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
-			{
+            if (Entity primaryCam = m_ActiveScene->GetPrimaryCamera())
+            {
                 auto &cc = primaryCam.GetComponent<CameraComponent>();
-				ICamera *gameCamera = &cc.camera;
+                ICamera *gameCamera = &cc.camera;
                 {
                     IGN_PROFILE_SCOPE("SceneRenderer::RenderGameplayTo");
                     m_SceneRenderer->RenderGameplayTo(gameCamera);
                 }
-			}
+            }
         }
 
         m_Cmd->open();
@@ -825,43 +827,89 @@ namespace ignite
             ImGui::ShowDemoWindow(&m_State.imguiDemoWindow);
         }
 
+        // Console window
+        if (m_State.consoleWindow)
+        {
+            if (ImGui::Begin("Console", &m_State.consoleWindow))
+            {
+                if (ImGui::Button("Clear"))
+                {
+                    Logger::ClearLogs();
+                }
+
+                ImGui::Separator();
+
+                ImGui::BeginChild("ScrollingRegion", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
+
+                {
+                    const auto& logs = Logger::GetLogs();
+                    for (const auto& log : logs)
+                    {
+                        ImVec4 color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+                        switch (log.level)
+                        {
+                            case spdlog::level::trace: color = ImVec4(0.8f, 0.8f, 0.8f, 1.0f); break;
+                            case spdlog::level::debug: color = ImVec4(0.2f, 0.8f, 0.8f, 1.0f); break;
+                            case spdlog::level::info:  color = ImVec4(0.2f, 0.8f, 0.2f, 1.0f); break;
+                            case spdlog::level::warn:  color = ImVec4(0.8f, 0.8f, 0.2f, 1.0f); break;
+                            case spdlog::level::err:   color = ImVec4(0.8f, 0.2f, 0.2f, 1.0f); break;
+                            case spdlog::level::critical: color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f); break;
+                            default: break;
+                        }
+
+                        ImGui::PushStyleColor(ImGuiCol_Text, color);
+                        ImGui::TextUnformatted(log.message.c_str());
+                        ImGui::PopStyleColor();
+                    }
+                }
+
+                if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+                {
+                    ImGui::SetScrollHereY(1.0f);
+                }
+
+                ImGui::EndChild();
+            }
+            ImGui::End();
+        }
+
         // Draw UI
         UISettings();
     }
 
     void EditorLayer::SetActiveScene(const Ref<Scene> &scene)
     {
-		if (m_ActiveScene == scene)
-		{
-			return;
-		}
+        if (m_ActiveScene == scene)
+        {
+            return;
+        }
 
-		// Clear references in all systems before changing active scene
-		if (m_ScenePanel)
-		{
-			m_ScenePanel->SetActiveScene(nullptr);
-		}
-		m_SceneRenderer->SetActiveScene(nullptr);
-		if (m_ActiveProject)
-		{
-			m_ActiveProject->SetActiveScene(nullptr);
-		}
-
-		// Set new scene
-		m_ActiveScene = scene;
-
-		// Update all systems with new scene
-		if (m_ScenePanel)
-		{
-			m_ScenePanel->SetActiveScene(scene);
-		}
-		
+        // Clear references in all systems before changing active scene
+        if (m_ScenePanel)
+        {
+            m_ScenePanel->SetActiveScene(nullptr);
+        }
+        m_SceneRenderer->SetActiveScene(nullptr);
         if (m_ActiveProject)
-		{
-			m_ActiveProject->SetActiveScene(scene);
-		}
+        {
+            m_ActiveProject->SetActiveScene(nullptr);
+        }
 
-		m_SceneRenderer->SetActiveScene(scene);
+        // Set new scene
+        m_ActiveScene = scene;
+
+        // Update all systems with new scene
+        if (m_ScenePanel)
+        {
+            m_ScenePanel->SetActiveScene(scene);
+        }
+        
+        if (m_ActiveProject)
+        {
+            m_ActiveProject->SetActiveScene(scene);
+        }
+
+        m_SceneRenderer->SetActiveScene(scene);
     }
 
     void EditorLayer::RefreshContentBrowsers()
@@ -1077,43 +1125,43 @@ namespace ignite
                 NewScene();
             }
 
-			// Register callback for when textures are loaded to invalidate material binding sets
-			openedProject->GetAssetManager()->RegisterAssetLoadedCallback(
-				[this](AssetHandle handle, AssetType type)
-				{
-					if (type == AssetType::Texture)
-					{
-						// Find all materials that use this texture and mark them dirty
-						const auto &assets = m_ActiveProject->GetAssetManager()->GetLoadedAssets();
-						for (const auto &[matHandle, asset] : assets)
-						{
-							if (asset->GetAssetType() == AssetType::Material)
-							{
-								Ref<Material> material = std::static_pointer_cast<Material>(asset);
-								if (material)
-								{
-									// Check if this material uses the loaded texture
-									if (material->baseColorTextureHandle == handle ||
-										material->emissiveTextureHandle == handle ||
+            // Register callback for when textures are loaded to invalidate material binding sets
+            openedProject->GetAssetManager()->RegisterAssetLoadedCallback(
+                [this](AssetHandle handle, AssetType type)
+                {
+                    if (type == AssetType::Texture)
+                    {
+                        // Find all materials that use this texture and mark them dirty
+                        const auto &assets = m_ActiveProject->GetAssetManager()->GetLoadedAssets();
+                        for (const auto &[matHandle, asset] : assets)
+                        {
+                            if (asset->GetAssetType() == AssetType::Material)
+                            {
+                                Ref<Material> material = std::static_pointer_cast<Material>(asset);
+                                if (material)
+                                {
+                                    // Check if this material uses the loaded texture
+                                    if (material->baseColorTextureHandle == handle ||
+                                        material->emissiveTextureHandle == handle ||
                                         material->metallicTextureHandle == handle ||
                                         material->roughnessTextureHandle == handle ||
-										material->normalTextureHandle == handle ||
-										material->occlusionTextureHandle == handle)
-									{
-										material->InvalidateBindingSet();
-									}
-								}
-							}
-						}
-					}
-				}
-			);
+                                        material->normalTextureHandle == handle ||
+                                        material->occlusionTextureHandle == handle)
+                                    {
+                                        material->InvalidateBindingSet();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            );
         }
     }
 
     bool EditorLayer::OnMouseMovedEvent(MouseMovedEvent& event)
     {
-	    return false;
+        return false;
     }
 
     void EditorLayer::OnScenePlay()
@@ -1611,7 +1659,7 @@ namespace ignite
         ImGui::EndPopup();
     }
 
-	void EditorLayer::UISettings()
+    void EditorLayer::UISettings()
     {
         if (m_ActiveScene && m_State.settingsWindow)
         {
@@ -1670,155 +1718,155 @@ namespace ignite
             static int sortColumn = 0; // 0=Handle, 1=Type, 2=Filepath, 3=Status
             static bool sortAscending = true;
 
-			ImGui::SetNextWindowSize(ImVec2(1200, 700), ImGuiCond_FirstUseEver);
-			ImGui::Begin("Asset Registry & Memory Monitor", &m_State.assetRegistryWindow);
-			ImGui::BeginChild("asset_registry_scroll", ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_HorizontalScrollbar);
+            ImGui::SetNextWindowSize(ImVec2(1200, 700), ImGuiCond_FirstUseEver);
+            ImGui::Begin("Asset Registry & Memory Monitor", &m_State.assetRegistryWindow);
+            ImGui::BeginChild("asset_registry_scroll", ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_HorizontalScrollbar);
 
             // === STATISTICS PANEL ===
-			ImGui::Text("Asset Statistics & Memory Usage");
-			ImGui::Separator();
+            ImGui::Text("Asset Statistics & Memory Usage");
+            ImGui::Separator();
 
-			// Calculate statistics
-			std::unordered_map<AssetType, int> registeredCounts;
-			std::unordered_map<AssetType, int> loadedCounts;
-			std::unordered_map<AssetType, size_t> memoryUsage;
+            // Calculate statistics
+            std::unordered_map<AssetType, int> registeredCounts;
+            std::unordered_map<AssetType, int> loadedCounts;
+            std::unordered_map<AssetType, size_t> memoryUsage;
 
-			for (const auto &[handle, metadata] : assetRegistry)
-			{
-				registeredCounts[metadata.type]++;
-			}
+            for (const auto &[handle, metadata] : assetRegistry)
+            {
+                registeredCounts[metadata.type]++;
+            }
 
-			for (const auto &[handle, asset] : loadedAssets)
-			{
-				if (asset)
-				{
-					AssetType type = m_ActiveProject->GetAssetManager()->GetAssetType(handle);
-					loadedCounts[type]++;
-					// Estimate memory usage (this is approximate)
-					memoryUsage[type] += asset.use_count() * 8; // Basic pointer overhead
-				}
-			}
+            for (const auto &[handle, asset] : loadedAssets)
+            {
+                if (asset)
+                {
+                    AssetType type = m_ActiveProject->GetAssetManager()->GetAssetType(handle);
+                    loadedCounts[type]++;
+                    // Estimate memory usage (this is approximate)
+                    memoryUsage[type] += asset.use_count() * 8; // Basic pointer overhead
+                }
+            }
 
-			// Display statistics in columns
-			ImGui::Columns(2, "stats_columns", true);
+            // Display statistics in columns
+            ImGui::Columns(2, "stats_columns", true);
 
-			// Left column - Asset counts
-			ImGui::Text("REGISTERED ASSETS");
-			ImGui::Separator();
-			int totalRegistered = 0;
-			for (const auto &[type, count] : registeredCounts)
-			{
-				if (type != AssetType::Invalid)
-				{
-					ImGui::Text("%s: %d", AssetTypeToString(type).c_str(), count);
-					totalRegistered += count;
-				}
-			}
-			ImGui::Separator();
-			ImGui::Text("Total Registered: %d", totalRegistered);
+            // Left column - Asset counts
+            ImGui::Text("REGISTERED ASSETS");
+            ImGui::Separator();
+            int totalRegistered = 0;
+            for (const auto &[type, count] : registeredCounts)
+            {
+                if (type != AssetType::Invalid)
+                {
+                    ImGui::Text("%s: %d", AssetTypeToString(type).c_str(), count);
+                    totalRegistered += count;
+                }
+            }
+            ImGui::Separator();
+            ImGui::Text("Total Registered: %d", totalRegistered);
 
-			ImGui::NextColumn();
+            ImGui::NextColumn();
 
-			// Right column - Loaded assets & memory
-			ImGui::Text("LOADED IN MEMORY");
-			ImGui::Separator();
-			int totalLoaded = 0;
-			for (const auto &[type, count] : loadedCounts)
-			{
-				if (type != AssetType::Invalid)
-				{
-					float percentage = registeredCounts[type] > 0 ? (float)count / registeredCounts[type] * 100.0f : 0.0f;
+            // Right column - Loaded assets & memory
+            ImGui::Text("LOADED IN MEMORY");
+            ImGui::Separator();
+            int totalLoaded = 0;
+            for (const auto &[type, count] : loadedCounts)
+            {
+                if (type != AssetType::Invalid)
+                {
+                    float percentage = registeredCounts[type] > 0 ? (float)count / registeredCounts[type] * 100.0f : 0.0f;
 
-					// Color code by type
-					ImVec4 color = ImVec4(0.5f, 0.8f, 0.5f, 1.0f);
-					if (type == AssetType::Texture) color = ImVec4(0.9f, 0.5f, 0.5f, 1.0f);
-					else if (type == AssetType::Mesh) color = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
-					else if (type == AssetType::Material) color = ImVec4(0.9f, 0.9f, 0.5f, 1.0f);
+                    // Color code by type
+                    ImVec4 color = ImVec4(0.5f, 0.8f, 0.5f, 1.0f);
+                    if (type == AssetType::Texture) color = ImVec4(0.9f, 0.5f, 0.5f, 1.0f);
+                    else if (type == AssetType::Mesh) color = ImVec4(0.5f, 0.5f, 0.9f, 1.0f);
+                    else if (type == AssetType::Material) color = ImVec4(0.9f, 0.9f, 0.5f, 1.0f);
 
-					ImGui::TextColored(color, "%s: %d (%.1f%%)",
-						AssetTypeToString(type).c_str(), count, percentage);
+                    ImGui::TextColored(color, "%s: %d (%.1f%%)",
+                        AssetTypeToString(type).c_str(), count, percentage);
 
-					// Memory bar
-					if (memoryUsage[type] > 0)
-					{
-						ImGui::SameLine();
-						ImGui::Text("~%zu KB", memoryUsage[type] / 1024);
-					}
+                    // Memory bar
+                    if (memoryUsage[type] > 0)
+                    {
+                        ImGui::SameLine();
+                        ImGui::Text("~%zu KB", memoryUsage[type] / 1024);
+                    }
 
-					totalLoaded += count;
-				}
-			}
-			ImGui::Separator();
-			ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Total Loaded: %d", totalLoaded);
+                    totalLoaded += count;
+                }
+            }
+            ImGui::Separator();
+            ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Total Loaded: %d", totalLoaded);
 
-			ImGui::Columns(1);
+            ImGui::Columns(1);
 
-			// Memory usage bar
-			ImGui::Spacing();
-		 float loadRatio = totalRegistered > 0 ? (float)totalLoaded / totalRegistered : 0.0f;
-			ImGui::ProgressBar(loadRatio, ImVec2(-1, 0),
-				std::string("Memory Load: " + std::to_string((int)(loadRatio * 100)) + "%").c_str());
+            // Memory usage bar
+            ImGui::Spacing();
+         float loadRatio = totalRegistered > 0 ? (float)totalLoaded / totalRegistered : 0.0f;
+            ImGui::ProgressBar(loadRatio, ImVec2(-1, 0),
+                std::string("Memory Load: " + std::to_string((int)(loadRatio * 100)) + "%").c_str());
 
-			// === FILTERS & CONTROLS ===
-			if (ImGui::BeginTable("asset_registry_controls", 2, ImGuiTableFlags_SizingStretchProp))
-			{
-				ImGui::TableNextRow();
-				ImGui::TableNextColumn();
-				ImGui::AlignTextToFramePadding();
-				ImGui::Text("Search:");
-				ImGui::SameLine();
+            // === FILTERS & CONTROLS ===
+            if (ImGui::BeginTable("asset_registry_controls", 2, ImGuiTableFlags_SizingStretchProp))
+            {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::AlignTextToFramePadding();
+                ImGui::Text("Search:");
+                ImGui::SameLine();
 
-				static char buffer[256] = { 0 };
-				ImGui::SetNextItemWidth(300);
-				if (ImGui::InputTextWithHint("##asset_registry_filter", "Handle, Type, or Filepath...",
-					buffer, sizeof(buffer), ImGuiInputTextFlags_EscapeClearsAll))
-				{
-					assetRegistryFilterResultStr = std::string(buffer);
-				}
+                static char buffer[256] = { 0 };
+                ImGui::SetNextItemWidth(300);
+                if (ImGui::InputTextWithHint("##asset_registry_filter", "Handle, Type, or Filepath...",
+                    buffer, sizeof(buffer), ImGuiInputTextFlags_EscapeClearsAll))
+                {
+                    assetRegistryFilterResultStr = std::string(buffer);
+                }
 
-				ImGui::SameLine();
-				ImGui::Text("Type Filter:");
-			    ImGui::SameLine();
+                ImGui::SameLine();
+                ImGui::Text("Type Filter:");
+                ImGui::SameLine();
 
-				// Type filter dropdown
-				const char *typeNames[] = { "All", "Scene", "Texture", "Material", "StaticMesh", "Audio", "Skeleton" };
-				const AssetType typeValues[] = {
-					AssetType::Invalid, AssetType::Scene, AssetType::Texture,
+                // Type filter dropdown
+                const char *typeNames[] = { "All", "Scene", "Texture", "Material", "StaticMesh", "Audio", "Skeleton" };
+                const AssetType typeValues[] = {
+                    AssetType::Invalid, AssetType::Scene, AssetType::Texture,
                     AssetType::Material, AssetType::Mesh, AssetType::Audio, AssetType::Skeleton
-				};
+                };
 
-				int currentTypeIndex = 0;
-				for (int i = 0; i < IM_ARRAYSIZE(typeValues); i++)
-				{
-					if (typeValues[i] == selectedTypeFilter)
-					{
-						currentTypeIndex = i;
-						break;
-					}
-				}
+                int currentTypeIndex = 0;
+                for (int i = 0; i < IM_ARRAYSIZE(typeValues); i++)
+                {
+                    if (typeValues[i] == selectedTypeFilter)
+                    {
+                        currentTypeIndex = i;
+                        break;
+                    }
+                }
 
-				ImGui::SetNextItemWidth(150);
-				if (ImGui::Combo("##type_filter", &currentTypeIndex, typeNames, IM_ARRAYSIZE(typeNames)))
-				{
-					selectedTypeFilter = typeValues[currentTypeIndex];
-				}
+                ImGui::SetNextItemWidth(150);
+                if (ImGui::Combo("##type_filter", &currentTypeIndex, typeNames, IM_ARRAYSIZE(typeNames)))
+                {
+                    selectedTypeFilter = typeValues[currentTypeIndex];
+                }
 
-				ImGui::SameLine();
-				ImGui::Checkbox("Full Path", &showFullPath);
+                ImGui::SameLine();
+                ImGui::Checkbox("Full Path", &showFullPath);
 
-				ImGui::TableNextColumn();
-				ImGui::BeginGroup();
-				if (ImGui::SmallButton("Refresh Registry"))
-				{
-				 m_ActiveProject->ValidateAssetRegistry();
-				}
-				if (ImGui::SmallButton("Unload Unused Assets"))
-				{
-					m_ActiveProject->GetAssetManager()->UnloadUnusedAssets();
-				}
-				ImGui::EndGroup();
-				ImGui::EndTable();
-			}
+                ImGui::TableNextColumn();
+                ImGui::BeginGroup();
+                if (ImGui::SmallButton("Refresh Registry"))
+                {
+                 m_ActiveProject->ValidateAssetRegistry();
+                }
+                if (ImGui::SmallButton("Unload Unused Assets"))
+                {
+                    m_ActiveProject->GetAssetManager()->UnloadUnusedAssets();
+                }
+                ImGui::EndGroup();
+                ImGui::EndTable();
+            }
 
             ImGui::Spacing();
 
@@ -2036,8 +2084,8 @@ namespace ignite
                 }
                 ImGui::EndTable();
             }
-			ImGui::EndChild();
-			ImGui::End();
+            ImGui::EndChild();
+            ImGui::End();
         }
     }
 }

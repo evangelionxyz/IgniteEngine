@@ -17,6 +17,19 @@ namespace ignite
         m_Initialized = false;
     }
 
+    static void ManagedLogCallback(const char* message)
+    {
+        std::string msg(message);
+        if (msg.find("failed") != std::string::npos || msg.find("Exception") != std::string::npos)
+        {
+            LOG_ERROR("[MochiSharp] {}", msg);
+        }
+        else
+        {
+            LOG_INFO("[MochiSharp] {}", msg);
+        }
+    }
+
     bool ScriptHost::Init(const std::filesystem::path &configPath)
     {
         if (m_Initialized)
@@ -26,7 +39,7 @@ namespace ignite
         }
 
         std::wstring wConfigPath = configPath.wstring();
-        if (!m_Host->Init(wConfigPath))
+        if (!m_Host->Init(wConfigPath, ManagedLogCallback))
         {
             LOG_ERROR("[Script Host] Failed to initialize HostFXR with config: {}", configPath.generic_string());
             return false;

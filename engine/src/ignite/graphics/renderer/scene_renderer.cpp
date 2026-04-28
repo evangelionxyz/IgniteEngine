@@ -20,8 +20,8 @@
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/ui/widget.hpp"
+#include "ignite/graphics/ui/widget_renderer.hpp"
 #include "ignite/core/input/input.hpp"
-#include "nuklear_renderer.hpp"
 
 #include <ranges>
 #include <cstdlib>
@@ -451,12 +451,12 @@ namespace ignite
         m_CompositeRT = RenderTarget::Create(compositeRTCreateInfo, "[SceneRenderer] Composite RT");
         m_GameplayCompositeRT = RenderTarget::Create(compositeRTCreateInfo, "[SceneRenderer] Gameplay Composite RT");
 
-        m_Nuklear = CreateScope<NuklearRenderer>();
+        m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
     }
 
     SceneRenderer::~SceneRenderer()
     {
-        m_Nuklear = nullptr;
+        m_WidgetRenderer = nullptr;
 
         s_GeometryPSOCache.clear();
         s_EnvironmentPSOCache.clear();
@@ -496,7 +496,7 @@ namespace ignite
                                 return true;
                             }
 
-                            Ref<Asset> texAsset = assetManager->GetAsset(textureHandle);
+                            Ref<Texture> texAsset = assetManager->GetAsset<Texture>(textureHandle);
                             return texAsset && texAsset->IsReady();
                         };
 
@@ -551,7 +551,7 @@ namespace ignite
             return it->second;
         }
 
-        Ref<Mesh> mesh = project->GetAsset<Mesh>(handle, AssetType::Mesh);
+        Ref<Mesh> mesh = project->GetAsset<Mesh>(handle);
         if (mesh)
         {
             m_MeshResolveCache.emplace(key, mesh);
@@ -612,10 +612,10 @@ namespace ignite
             m_Project = m_Scene->GetProject();
         }
 
-        if (m_Nuklear)
+        if (m_WidgetRenderer)
         {
-            m_Nuklear->SetScene(m_Scene.get());
-            m_Nuklear->SetProject(m_Project);
+            m_WidgetRenderer->SetScene(m_Scene.get());
+            m_WidgetRenderer->SetProject(m_Project);
         }
 
         s_GeometryPSOCache.clear();
@@ -695,10 +695,9 @@ namespace ignite
             }
             else if (worldEnvironment->loadedHDRHandle != worldEnvironment->hdrHandle)
             {
-                Ref<Asset> hdrAsset = m_Scene->GetProject()->GetAssetManager()->GetAsset(worldEnvironment->hdrHandle, AssetType::Texture);
-                if (hdrAsset && hdrAsset->IsReady())
+                Ref<Texture> hdrTexture = m_Scene->GetProject()->GetAssetManager()->GetAsset<Texture>(worldEnvironment->hdrHandle);
+                if (hdrTexture && hdrTexture->IsReady())
                 {
-                    Ref<Texture> hdrTexture = std::static_pointer_cast<Texture>(hdrAsset);
                     worldEnvironment->environment->SetTexture(hdrTexture);
                     worldEnvironment->loadedHDRHandle = worldEnvironment->hdrHandle;
                     worldEnvironment->dirtyEnvironment = true;
@@ -765,7 +764,7 @@ namespace ignite
             // Clear Render Targets
             // far depth = 1.0f == LessOrEqual
             {
-                m_WidgetRT->ClearColorAttachmentFloat(cmd, 0);
+                m_WidgetRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
                 m_WidgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
                 m_SceneRT->ClearColorAttachmentFloat(cmd, 0);
@@ -925,10 +924,9 @@ namespace ignite
             }
             else if (worldEnvironment->loadedHDRHandle != worldEnvironment->hdrHandle)
             {
-                Ref<Asset> hdrAsset = m_Scene->GetProject()->GetAssetManager()->GetAsset(worldEnvironment->hdrHandle, AssetType::Texture);
-                if (hdrAsset && hdrAsset->IsReady())
+                Ref<Texture> hdrTexture = m_Scene->GetProject()->GetAssetManager()->GetAsset<Texture>(worldEnvironment->hdrHandle);
+                if (hdrTexture && hdrTexture->IsReady())
                 {
-                    Ref<Texture> hdrTexture = std::static_pointer_cast<Texture>(hdrAsset);
                     worldEnvironment->environment->SetTexture(hdrTexture);
                     worldEnvironment->loadedHDRHandle = worldEnvironment->hdrHandle;
                     worldEnvironment->dirtyEnvironment = true;
@@ -986,7 +984,7 @@ namespace ignite
             // Clear Render Targets
             // far depth = 1.0f == LessOrEqual
             {
-                m_GameplayWidgetRT->ClearColorAttachmentFloat(cmd, 0);
+                m_GameplayWidgetRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
                 m_GameplayWidgetRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
                 m_GameplaySceneRT->ClearColorAttachmentFloat(cmd, 0);
@@ -1489,7 +1487,7 @@ namespace ignite
                     if (text.fontHandle == AssetHandle(0) || text.text.empty())
                         continue;
 
-                    Ref<Font> font = m_Scene->GetProject()->GetAsset<Font>(text.fontHandle, AssetType::Font);
+                    Ref<Font> font = m_Scene->GetProject()->GetAsset<Font>(text.fontHandle);
                     if (!font)
                         continue;
 
@@ -1500,7 +1498,7 @@ namespace ignite
                     glm::vec4 textColor = text.color;
                     if (text.material2dHandle != AssetHandle(0))
                     {
-                        if (Ref<Material2D> material = m_Scene->GetProject()->GetAsset<Material2D>(text.material2dHandle, AssetType::Material2D))
+                        if (Ref<Material2D> material = m_Scene->GetProject()->GetAsset<Material2D>(text.material2dHandle))
                         {
                             textColor = text.color + material->data.baseColor;
                         }
@@ -1519,34 +1517,70 @@ namespace ignite
 
     void SceneRenderer::UIPass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
     {
-        auto viewport = framebuffer->getFramebufferInfo().getViewport();
-        auto widgetView = m_Scene->registry->view<WidgetComponent>();
-        for (const entt::entity entity : widgetView)
+        if (!m_WidgetRenderer || !m_Scene || !m_Scene->registry || !m_Project || !framebuffer)
         {
-            const WidgetComponent &widgetComp = widgetView.get<WidgetComponent>(entity);
-            if (widgetComp.widgetHandle == AssetHandle(0))
-                continue;
-
-            Ref<WidgetCanvas> canvas = m_Project->GetAsset<WidgetCanvas>(widgetComp.widgetHandle, AssetType::Widget);
-            if (!canvas)
-                canvas = m_Project->GetAssetImmediate<WidgetCanvas>(widgetComp.widgetHandle, AssetType::Widget);
-
-            if (!canvas || !canvas->IsEnabled())
-                continue;
-
-            m_Nuklear->BeginNuklearFrame(canvas, Rect(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY));
+            return;
         }
 
-        m_Nuklear->Render(cmd, framebuffer);
+        const nvrhi::Viewport viewport = framebuffer->getFramebufferInfo().getViewport();
+        const uint32_t width = std::max(1u, static_cast<uint32_t>(viewport.maxX - viewport.minX));
+        const uint32_t height = std::max(1u, static_cast<uint32_t>(viewport.maxY - viewport.minY));
+        if (m_WidgetRenderer->GetWidth() != width || m_WidgetRenderer->GetHeight() != height)
+        {
+            m_WidgetRenderer->Resize(width, height);
+        }
 
+        const bool isGameplayFramebuffer = framebuffer == m_GameplayWidgetRT->GetFramebuffer();
+        const bool useMouseOverride = isGameplayFramebuffer ? m_UseGameplayWidgetMouseOverride : m_UseEditorWidgetMouseOverride;
+        const bool isHovered = isGameplayFramebuffer ? m_GameplayWidgetMouseHovered : m_EditorWidgetMouseHovered;
+        const uint32_t mouseX = isGameplayFramebuffer ? m_GameplayWidgetMouseX : m_EditorWidgetMouseX;
+        const uint32_t mouseY = isGameplayFramebuffer ? m_GameplayWidgetMouseY : m_EditorWidgetMouseY;
+        const glm::ivec2 mousePos = Input::GetMousePosition();
+        m_WidgetRenderer->SetProject(m_Project);
+        m_WidgetRenderer->SetScene(m_Scene.get());
+        m_WidgetRenderer->SetPreviewWidget(nullptr);
+
+        if (useMouseOverride)
+        {
+            if (isHovered)
+            {
+                m_WidgetRenderer->SetMousePosition(mouseX, mouseY);
+            }
+            else
+            {
+                const uint32_t offscreen = std::numeric_limits<uint32_t>::max() / 2u;
+                m_WidgetRenderer->SetMousePosition(offscreen, offscreen);
+            }
+        }
+        else
+        {
+            m_WidgetRenderer->SetMousePosition(
+                static_cast<uint32_t>(std::max(mousePos.x, 0)),
+                static_cast<uint32_t>(std::max(mousePos.y, 0)));
+        }
+        m_WidgetRenderer->Update(0.0f);
+        m_WidgetRenderer->Render(cmd, framebuffer);
+    }
+
+    void SceneRenderer::SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered)
+    {
+        m_EditorWidgetMouseX = mouseX;
+        m_EditorWidgetMouseY = mouseY;
+        m_EditorWidgetMouseHovered = hovered;
+        m_UseEditorWidgetMouseOverride = true;
+    }
+
+    void SceneRenderer::SetGameplayWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered)
+    {
+        m_GameplayWidgetMouseX = mouseX;
+        m_GameplayWidgetMouseY = mouseY;
+        m_GameplayWidgetMouseHovered = hovered;
+        m_UseGameplayWidgetMouseOverride = true;
     }
 
     void SceneRenderer::HandleNuklearEvent(SDL_Event *evt)
     {
-        if (m_Nuklear)
-        {
-            m_Nuklear->HandleEvent(evt);
-        }
+        (void)evt;
     }
 
     void SceneRenderer::DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const DebugGridStyle &style, bool is2D)

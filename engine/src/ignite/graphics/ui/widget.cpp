@@ -256,6 +256,15 @@ namespace ignite
                 if (item->GetWidgetType() == WidgetType::Container && !widget->m_Root)
                 {
                     widget->m_Root = item->As<WidgetContainer>();
+                    const glm::vec2 rootSize = widget->m_Root->size;
+                    if (rootSize.x > 0.0f && rootSize.y > 0.0f)
+                    {
+                        widget->m_ViewportSize =
+                        {
+                            static_cast<uint32_t>(std::max(rootSize.x, 1.0f)),
+                            static_cast<uint32_t>(std::max(rootSize.y, 1.0f))
+                        };
+                    }
                 }
                 continue;
             }
@@ -349,6 +358,7 @@ namespace ignite
     {
         if (!m_Root)
         {
+            m_ViewportSize = { width, height };
             const int id = GetNextItemId();
             m_Root = CreateRef<WidgetContainer>();
             m_Root->id = id;
@@ -395,36 +405,95 @@ namespace ignite
         color = UI_COLOR_WHITE;
     }
 
-    void WidgetLabel::Measure()
+    Rect WidgetLabel::GetTextBounds() const
     {
-        if (!font || text.empty())
+        if (!font || !font->IsReady() || text.empty())
         {
-            size = glm::vec2(0.0f);
-            return;
+            return Rect(glm::vec2(0.0f), glm::vec2(0.0f));
         }
 
         const auto &fontGeometry = font->GetGeometry();
         const auto &metrics = fontGeometry.getMetrics();
-        double fsScale = 1.0 / (metrics.ascenderY - metrics.descenderY);
+        const double fsScale = 1.0 / (metrics.ascenderY - metrics.descenderY);
+        const double spaceGlyphAdvance = fontGeometry.getGlyph(' ') ? fontGeometry.getGlyph(' ')->getAdvance() : 0.0;
 
         double x = 0.0;
-        double maxWidth = 0.0;
-        int lines = 1;
+        double y = 0.0;
+        bool hasBounds = false;
+        glm::vec2 boundsMin(0.0f);
+        glm::vec2 boundsMax(0.0f);
 
         for (size_t i = 0; i < text.size(); ++i)
         {
-            char character = text[i];
+            const char character = text[i];
+            if (character == '\r')
+            {
+                continue;
+            }
+
             if (character == '\n')
             {
-                maxWidth = std::max(maxWidth, x);
                 x = 0.0;
-                lines++;
+                y += fsScale * metrics.lineHeight + lineSpacing;
+                continue;
+            }
+
+            if (character == ' ')
+            {
+                double advance = spaceGlyphAdvance;
+                if (i < text.size() - 1)
+                {
+                    fontGeometry.getAdvance(advance, character, text[i + 1]);
+                }
+                x += fsScale * advance + kerning;
+                continue;
+            }
+
+            if (character == '\t')
+            {
+                x += 4.0 * (fsScale * spaceGlyphAdvance + kerning);
                 continue;
             }
 
             auto glyph = fontGeometry.getGlyph(character);
-            if (!glyph) glyph = fontGeometry.getGlyph('?');
-            if (!glyph) continue;
+            if (!glyph)
+            {
+                glyph = fontGeometry.getGlyph('?');
+            }
+            if (!glyph)
+            {
+                continue;
+            }
+
+            double planeLeft, planeBottom, planeRight, planeTop;
+            glyph->getQuadPlaneBounds(planeLeft, planeBottom, planeRight, planeTop);
+
+            glm::vec2 quadMin(static_cast<float>(planeLeft), static_cast<float>(planeBottom));
+            glm::vec2 quadMax(static_cast<float>(planeRight), static_cast<float>(planeTop));
+
+            quadMin *= static_cast<float>(fsScale);
+            quadMax *= static_cast<float>(fsScale);
+
+            quadMin.y = -quadMin.y;
+            quadMax.y = -quadMax.y;
+
+            quadMin += glm::vec2(static_cast<float>(x), static_cast<float>(y));
+            quadMax += glm::vec2(static_cast<float>(x), static_cast<float>(y));
+
+            const glm::vec2 glyphMin(std::min(quadMin.x, quadMax.x), std::min(quadMin.y, quadMax.y));
+            const glm::vec2 glyphMax(std::max(quadMin.x, quadMax.x), std::max(quadMin.y, quadMax.y));
+
+            if (!hasBounds)
+            {
+                boundsMin = glyphMin;
+                boundsMax = glyphMax;
+                hasBounds = true;
+            }
+            else
+            {
+                boundsMin = glm::min(boundsMin, glyphMin);
+                boundsMax = glm::max(boundsMax, glyphMax);
+            }
 
             double advance = glyph->getAdvance();
             if (i < text.size() - 1)
@@ -434,10 +503,22 @@ namespace ignite
             x += fsScale * advance + kerning;
         }
 
-        maxWidth = std::max(maxWidth, x);
-        
-        size.x = static_cast<float>(maxWidth) * fontSize;
-        size.y = static_cast<float>(lines) * (static_cast<float>(metrics.lineHeight * fsScale) + lineSpacing) * fontSize;
+        if (!hasBounds)
+        {
+            return Rect(glm::vec2(0.0f), glm::vec2(0.0f));
+        }
+
+        return Rect(boundsMin * fontSize, boundsMax * fontSize);
+    }
+
+    void WidgetLabel::Measure()
+    {
+        if (!font || text.empty())
+        {
+            size = glm::vec2(0.0f);
+            return;
+        }
+        size = GetTextBounds().GetSize();
     }
 
     void WidgetLabel::Arrange(const Rect &parentRect)

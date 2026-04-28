@@ -417,7 +417,7 @@ namespace ignite
         }
 
         // --- Transform ---
-        // Position is controlled by the parent container's layout system (Nuklear).
+        // Position is controlled by the parent container's layout system.
         // Only allow editing position for items inside an Absolute layout container.
         WidgetContainer *parentContainer = nullptr;
         if (selectedItem->parent && selectedItem->parent->GetWidgetType() == WidgetType::Container)

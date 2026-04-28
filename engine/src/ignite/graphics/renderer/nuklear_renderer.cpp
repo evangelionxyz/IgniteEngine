@@ -8,6 +8,7 @@
 #include "ignite/core/logger.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/core/device/device_manager.hpp"
+#include "ignite/core/input/input.hpp"
 #include "ignite/graphics/graphics_pipeline.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/scene/scene.hpp"
@@ -244,6 +245,14 @@ namespace ignite
 
     static void RenderWidgetItems(nk_context *ctx, const std::vector<Ref<IWidgetItem>> &items)
     {
+        const glm::ivec2 mousePos = Input::GetMousePosition();
+        const glm::uvec2 mousePosU32 =
+        {
+            static_cast<uint32_t>(std::max(mousePos.x, 0)),
+            static_cast<uint32_t>(std::max(mousePos.y, 0))
+        };
+        const bool isMousePressed = Input::IsMouseButtonPressed(Mouse::ButtonLeft);
+
         for (const auto &item : items)
         {
             if (!item || !item->IsVisible())
@@ -254,18 +263,21 @@ namespace ignite
                 case WidgetType::Button:
                 {
                     auto button = std::static_pointer_cast<WidgetButton>(item);
+                    button->OnMouseClick(mousePosU32, isMousePressed);
                     nk_layout_row_static(ctx, button->size.y, (int)button->size.x, 1);
                     
                     nk_style_button bt_style = ctx->style.button;
                     bt_style.normal.data.color = nk_rgba_f(button->normalColor.r, button->normalColor.g, button->normalColor.b, button->normalColor.a);
                     bt_style.hover.data.color = nk_rgba_f(button->hoverColor.r, button->hoverColor.g, button->hoverColor.b, button->hoverColor.a);
                     bt_style.active.data.color = nk_rgba_f(button->pressedColor.r, button->pressedColor.g, button->pressedColor.b, button->pressedColor.a);
-                    if (nk_button_text_styled(ctx, &bt_style, button->GetText().c_str(), (int)button->GetText().size()))
-                    {
-                        glm::uvec2 hitPos = glm::vec2(item->position.x + item->size.x * 0.5f, item->position.y + item->size.y * 0.5f);
-                        button->OnMouseClick(hitPos, true);
-                        button->OnMouseClick(hitPos, false);
-                    }
+                    bt_style.text_normal = nk_rgba_f(button->GetTextColor().r, button->GetTextColor().g, button->GetTextColor().b, button->GetTextColor().a);
+                    bt_style.text_hover = bt_style.text_normal;
+                    bt_style.text_active = bt_style.text_normal;
+                    bt_style.border_color = nk_rgba_f(button->borderColor.r, button->borderColor.g, button->borderColor.b, button->borderColor.a);
+                    bt_style.normal.type = NK_STYLE_ITEM_COLOR;
+                    bt_style.hover.type = NK_STYLE_ITEM_COLOR;
+                    bt_style.active.type = NK_STYLE_ITEM_COLOR;
+                    nk_button_text_styled(ctx, &bt_style, button->GetText().c_str(), (int)button->GetText().size());
 
                     break;
                 }
@@ -480,7 +492,7 @@ namespace ignite
             device->executeCommandList(m_NvrhiCmd);
         }
 
-        nk_font_atlas_end(atlas, nk_handle_ptr(m_FontTexture.Get()), nullptr);
+        nk_font_atlas_end(atlas, nk_handle_ptr(m_FontTexture.Get()), &m_NullTexture);
         return true;
     }
 
@@ -546,9 +558,14 @@ namespace ignite
 
         GraphicsPipelineParams params;
         params.enableBlend = true;
+        params.srcBlend = nvrhi::BlendFactor::SrcAlpha;
+        params.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
+        params.srcBlendAlpha = nvrhi::BlendFactor::One;
+        params.destBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
         params.enableDepthWrite = false;
         params.enableDepthTest = false;
         params.enableDepthStencil = false;
+        params.enableScissor = true;
         params.fillMode = nvrhi::RasterFillMode::Solid;
         params.cullMode = nvrhi::RasterCullMode::None;
         params.depthFunc = nvrhi::ComparisonFunc::Always;
@@ -617,7 +634,7 @@ namespace ignite
         config.vertex_layout = vertex_layout;
         config.vertex_size = sizeof(NkDrawVertex);
         config.vertex_alignment = NK_ALIGNOF(NkDrawVertex);
-        
+        //config.null = m_NullTexture;
         config.global_alpha = 1.0f;
         config.shape_AA = NK_ANTI_ALIASING_ON;
         config.line_AA = NK_ANTI_ALIASING_ON;

@@ -64,6 +64,9 @@ namespace ignite
         void SetActiveScene(const Ref<Scene> &scene);
         void SetDefaultScene(AssetHandle handle);
         bool BuildSolution();
+        
+        void CreateCSharpScript(const std::filesystem::path &filepath);
+        void RegenerateCSharpProject();
 
         std::vector<std::pair<AssetHandle, AssetMetaData>> ValidateAssetRegistry();
 
@@ -103,27 +106,15 @@ namespace ignite
         }
 
         template<typename T>
-        Ref<T> GetAsset(AssetHandle handle, AssetType requestAssetType = AssetType::Auto)
+        Ref<T> GetAsset(AssetHandle handle)
         {
-            IGN_PROFILE_FUNCTION();
-
-            Ref<Asset> asset = m_AssetManager->GetAsset(handle, requestAssetType);
-            if (!asset)
-            {
-                return nullptr;
-            }
-            return std::static_pointer_cast<T>(asset);
+            return m_AssetManager->GetAsset<T>(handle);
         }
 
         template<typename T>
-        Ref<T> GetAssetImmediate(AssetHandle handle, AssetType requestAssetType = AssetType::Auto)
+        Ref<T> GetAssetImmediate(AssetHandle handle)
         {
-            Ref<Asset> asset = m_AssetManager->GetAssetImmediate(handle, requestAssetType);
-            if (!asset)
-            {
-                return nullptr;
-            }
-            return std::static_pointer_cast<T>(asset);
+            return m_AssetManager->GetAssetImmediate<T>(handle);
         }
 
         const std::string GetAssetDisplayName(AssetHandle handle) const;

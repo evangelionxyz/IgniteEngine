@@ -225,6 +225,7 @@ namespace ignite
         float GetKerning() const { return kerning; }
         void SetLineSpacing(float newLineSpacing) { lineSpacing = newLineSpacing; }
         float GetLineSpacing() const { return lineSpacing; }
+        Rect GetTextBounds() const;
         
         virtual void Measure() override;
         virtual void Arrange(const Rect &) override;

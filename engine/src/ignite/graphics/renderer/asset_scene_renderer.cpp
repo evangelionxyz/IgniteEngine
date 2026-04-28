@@ -7,8 +7,8 @@
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/animation/skeleton.hpp"
-#include "ignite/graphics/renderer/nuklear_renderer.hpp"
 #include "ignite/graphics/ui/widget.hpp"
+#include "ignite/graphics/ui/widget_renderer.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -28,14 +28,12 @@ namespace ignite
 
     AssetSceneRenderer::AssetSceneRenderer()
     {
-        m_Nuklear = nullptr;
-
         m_PreviewMesh = nullptr;
         m_PreviewWidget = nullptr;
         m_SourceMaterial = nullptr;
         m_RuntimeMaterial = CreateRef<Material>();
 
-        m_Nuklear = CreateScope<NuklearRenderer>();
+        m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
 
         auto samplerDesc = nvrhi::SamplerDesc();
         samplerDesc.setAllFilters(false);
@@ -96,6 +94,10 @@ namespace ignite
     void AssetSceneRenderer::SetProject(Project *project)
     {
         m_Project = project;
+        if (m_WidgetRenderer)
+        {
+            m_WidgetRenderer->SetProject(project);
+        }
         if (m_RuntimeMaterial)
         {
             m_RuntimeMaterial->InvalidateBindingSet();
@@ -105,6 +107,17 @@ namespace ignite
     void AssetSceneRenderer::SetPreviewWidget(const Ref<WidgetCanvas> &widget)
     {
         m_PreviewWidget = widget;
+        if (m_WidgetRenderer)
+        {
+            m_WidgetRenderer->SetPreviewWidget(widget);
+        }
+    }
+
+    void AssetSceneRenderer::SetPreviewMouseState(uint32_t mouseX, uint32_t mouseY, bool hovered)
+    {
+        m_PreviewMouseX = mouseX;
+        m_PreviewMouseY = mouseY;
+        m_PreviewMouseHovered = hovered;
     }
 
     void AssetSceneRenderer::Render(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT)
@@ -112,7 +125,7 @@ namespace ignite
         SyncRuntimeMaterialFromSource();
 
         const bool hasMeshPreview = m_PreviewMesh && m_RuntimeMaterial;
-        const bool hasWidgetPreview = m_PreviewWidget && m_Nuklear;
+        const bool hasWidgetPreview = m_PreviewWidget && m_WidgetRenderer;
         if (!camera || !sceneRT || !uiRT || !compositeRT || (!hasMeshPreview && !hasWidgetPreview))
         {
             return;
@@ -152,7 +165,7 @@ namespace ignite
         m_CSMGPUData.shadowStrength = 0.0f;
         m_CascadedShadowMapBuffer->SetData(cmd, Buffer(&m_CSMGPUData, sizeof(CascadedShadowMapBufferData)));
 
-        uiRT->ClearColorAttachmentFloat(cmd, 0);
+        uiRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
         uiRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
         uiRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
@@ -169,9 +182,29 @@ namespace ignite
 
         if (m_PreviewWidget)
         {
-            auto viewport = uiRT->GetFramebuffer()->getFramebufferInfo().getViewport();
-            m_Nuklear->BeginNuklearFrame(m_PreviewWidget, Rect(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY));
-            m_Nuklear->Render(cmd, uiRT->GetFramebuffer());
+            const nvrhi::Viewport viewport = uiRT->GetFramebuffer()->getFramebufferInfo().getViewport();
+            const uint32_t width = std::max(1u, static_cast<uint32_t>(viewport.maxX - viewport.minX));
+            const uint32_t height = std::max(1u, static_cast<uint32_t>(viewport.maxY - viewport.minY));
+
+            if (m_WidgetRenderer->GetWidth() != width || m_WidgetRenderer->GetHeight() != height)
+            {
+                m_WidgetRenderer->Resize(width, height);
+            }
+
+            m_WidgetRenderer->SetProject(m_Project);
+            m_WidgetRenderer->SetPreviewWidget(m_PreviewWidget);
+            if (m_PreviewMouseHovered)
+            {
+                m_WidgetRenderer->SetMousePosition(m_PreviewMouseX, m_PreviewMouseY);
+            }
+            else
+            {
+                const uint32_t offscreen = std::numeric_limits<uint32_t>::max() / 2u;
+                m_WidgetRenderer->SetMousePosition(offscreen, offscreen);
+            }
+
+            m_WidgetRenderer->Update(0.0f);
+            m_WidgetRenderer->Render(cmd, uiRT->GetFramebuffer());
         }
 
         CompositePass(cmd, compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
@@ -358,8 +391,8 @@ namespace ignite
                             return true;
                         }
 
-                        Ref<Asset> texAsset = assetManager->GetAsset(textureHandle);
-                        return texAsset && texAsset->IsReady();
+                        Ref<Texture> texture = assetManager->GetAsset<Texture>(textureHandle);
+                        return texture && texture->IsReady();
                     };
 
                     // Only update if all textures are available and ready

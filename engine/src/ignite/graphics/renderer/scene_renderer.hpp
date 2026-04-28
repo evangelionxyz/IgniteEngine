@@ -10,7 +10,6 @@
 namespace ignite
 {
     class WidgetRenderer;
-    class NuklearRenderer;
 
     class SceneRenderer : public ISceneRenderer
     {
@@ -25,6 +24,8 @@ namespace ignite
         
         void RenderEditorTo(ICamera *camera);
         void RenderGameplayTo(ICamera *camera);
+        void SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered);
+        void SetGameplayWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered);
 
         virtual void ResizeFramebuffer(uint32_t width, uint32_t height) override;
         void ResizeGameplayFramebuffer(uint32_t width, uint32_t height);
@@ -93,7 +94,7 @@ namespace ignite
         };
         
     private:
-        Scope<NuklearRenderer> m_Nuklear;
+        Ref<WidgetRenderer> m_WidgetRenderer;
 
         Ref<RenderTarget> m_SceneRT;
         Ref<RenderTarget> m_WidgetRT;

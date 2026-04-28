@@ -200,7 +200,7 @@ namespace ignite
             memcpy(s_FieldValueBuffer, value.data(), copyLen);
         s_FieldValueBuffer[copyLen] = '\0';
 
-        const bool success = m_ScriptHost->SetInstanceFieldValue(m_InstanceId, fieldName, s_FieldValueBuffer, copyLen);
+        const bool success = m_ScriptHost->SetInstanceFieldValue(m_InstanceId, fieldName, s_FieldValueBuffer, (int)copyLen);
         if (success)
         {
             m_ScriptClass->GetInstanceFieldsById(m_InstanceId)->at(fieldName).SetValue<std::string>(std::string(s_FieldValueBuffer));

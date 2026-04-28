@@ -473,7 +473,7 @@ namespace ignite
             if (!tr.visible || sm.handle == AssetHandle(0))
                 continue;
 
-            Ref<Mesh> mesh = m_Project->GetAsset<Mesh>(sm.handle, AssetType::Mesh);
+            Ref<Mesh> mesh = m_Project->GetAsset<Mesh>(sm.handle);
             if (!mesh)
                 continue;
 
@@ -529,16 +529,14 @@ namespace ignite
                 if (!sm.runtimeAnimatorInstance)
                 {
                     Ref<AnimatorController> sourceController = m_Project->GetAsset<AnimatorController>(sourceAnimatorHandle);
-                    if (!sourceController)
+                    if (sourceController)
                     {
-                        sourceController = m_Project->GetAssetImmediate<AnimatorController>(sourceAnimatorHandle);
-                    }
-
-                    sm.runtimeAnimatorInstance = CloneAnimatorController(sourceController);
-                    if (sm.runtimeAnimatorInstance)
-                    {
-                        sm.runtimeParams.clear();
-                        ResetMeshAnimatorRuntime(sm);
+                        sm.runtimeAnimatorInstance = CloneAnimatorController(sourceController);
+                        if (sm.runtimeAnimatorInstance)
+                        {
+                            sm.runtimeParams.clear();
+                            ResetMeshAnimatorRuntime(sm);
+                        }
                     }
                 }
 
@@ -552,12 +550,11 @@ namespace ignite
                 if (sharedIt == m_SharedAnimatorCache.end())
                 {
                     Ref<AnimatorController> controller = m_Project->GetAsset<AnimatorController>(sourceAnimatorHandle);
-                    if (!controller)
+                    if (controller)
                     {
-                        controller = m_Project->GetAssetImmediate<AnimatorController>(sourceAnimatorHandle);
+                        sharedIt = m_SharedAnimatorCache.emplace(sourceAnimatorHandle, controller).first;
                     }
 
-                    sharedIt = m_SharedAnimatorCache.emplace(sourceAnimatorHandle, controller).first;
                 }
 
                 animController = sharedIt->second;

@@ -115,8 +115,8 @@ namespace ignite
                     return true;
                 }
 
-                Ref<Asset> asset = assetManager->GetAsset(textureHandle);
-                return asset && asset->IsReady();
+                Ref<Texture> texture = assetManager->GetAsset<Texture>(textureHandle);
+                return texture && texture->IsReady();
             };
 
             const bool allTexturesReady =

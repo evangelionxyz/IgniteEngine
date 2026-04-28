@@ -1,34 +1,34 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "logger.hpp"
-
 #include <memory>
+#include <spdlog/sinks/base_sink.h>
+#include <mutex>
+#include <vector>
+
+namespace ignite
+{
+    class ImGuiConsoleSink : public spdlog::sinks::base_sink<std::mutex>
+    {
+    public:
+        void sink_it_(const spdlog::details::log_msg& msg) override
+        {
+            spdlog::memory_buf_t formatted;
+            spdlog::sinks::base_sink<std::mutex>::formatter_->format(msg, formatted);
+            m_Messages.push_back({ msg.level, fmt::to_string(formatted) });
+        }
+
+        void flush_() override {}
+
+        std::vector<LogMessage> m_Messages;
+    };
+}
 
 struct LoggerImpl
 {
     std::shared_ptr<spdlog::logger> logger;
-    std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> sink;
+    std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> stdoutSink;
+    std::shared_ptr<ignite::ImGuiConsoleSink> imguiSink;
 };
 
 static LoggerImpl *impl = nullptr;
@@ -40,12 +40,17 @@ namespace ignite
         impl = new LoggerImpl();
 
         spdlog::init_thread_pool(8192, 1);
-        impl->sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-        impl->sink->set_pattern("%^[%T] %n: %v%$");
+        impl->stdoutSink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+        impl->stdoutSink->set_pattern("%^[%T] %n: %v%$");
+
+        impl->imguiSink = std::make_shared<ImGuiConsoleSink>();
+        impl->imguiSink->set_pattern("[%T] %n: %v"); // Without color codes
+
+        std::vector<spdlog::sink_ptr> sinks { impl->stdoutSink, impl->imguiSink };
 
         impl->logger = std::make_shared<spdlog::logger>(
             "[IGNITE]",
-            impl->sink
+            sinks.begin(), sinks.end()
         );
 
         impl->logger->set_level(spdlog::level::trace);
@@ -55,7 +60,8 @@ namespace ignite
     {
         if (impl)
         {
-            impl->sink->flush();
+            impl->stdoutSink->flush();
+            impl->imguiSink->flush();
             impl->logger->flush();
             delete impl;
         }
@@ -64,5 +70,15 @@ namespace ignite
     spdlog::logger *Logger::GetLogger()
     {
         return impl ? impl->logger.get() : nullptr;
+    }
+
+    const std::vector<LogMessage>& Logger::GetLogs()
+    {
+        return impl->imguiSink->m_Messages;
+    }
+
+    void Logger::ClearLogs()
+    {
+        impl->imguiSink->m_Messages.clear();
     }
 }

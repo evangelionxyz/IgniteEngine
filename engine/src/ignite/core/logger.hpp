@@ -1,27 +1,8 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef LOGGER_HPP
+#define LOGGER_HPP
 
 #include "base.hpp"
 #include "types.hpp"
@@ -37,12 +18,21 @@
 
 namespace ignite
 {
+    struct LogMessage
+    {
+        spdlog::level::level_enum level;
+        std::string message;
+    };
+
     class Logger
     {
     public:
         static void Init();
         static void Shutdown();
         static spdlog::logger* GetLogger();
+
+        static const std::vector<LogMessage>& GetLogs();
+        static void ClearLogs();
     };
 }
 
@@ -82,7 +72,6 @@ OStream& operator<<(OStream& os, glm::qua<T, Q> quaternion)
     return os << glm::to_string(quaternion);
 }
 
-
 #define LOG_ERROR(...) Logger::GetLogger()->error(__VA_ARGS__)
 #define LOG_INFO(...) Logger::GetLogger()->info(__VA_ARGS__)
 #define LOG_WARN(...) Logger::GetLogger()->warn(__VA_ARGS__)
@@ -90,3 +79,5 @@ OStream& operator<<(OStream& os, glm::qua<T, Q> quaternion)
 #define LOG_TRACE(...) Logger::GetLogger()->trace(__VA_ARGS__)
 #define LOG_ASSERT(check, ...) if (!(check)) { LOG_ERROR(__VA_ARGS__); DEBUGBREAK(); }
 #define LOG_NOT_IMPLEMENTED LOG_ERROR("Not implemented yet!")
+
+#endif

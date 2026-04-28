@@ -23,7 +23,7 @@ R"(using Ignite;
 using System;
 
 namespace {PROJECT_NAME};
-public class Game : Entity
+public class {CLASS_NAME} : Entity
 {
     public override void OnCreate()
     {
@@ -70,7 +70,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <ImplicitUsing>enable</ImplicitUsing>
-    <Nullable>enable</Nullable>
+    <Nullable>disable</Nullable>
   </PropertyGroup>
   <ItemGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <Reference Include="MochiSharp.Managed">
@@ -313,6 +313,59 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         return appAssemblyAvailable;
     }
 
+    void Project::CreateCSharpScript(const std::filesystem::path &filepath)
+    {
+        if (std::filesystem::exists(filepath))
+            return;
+
+        std::string scriptTemplate = s_CSSharpScriptTemplate;
+        stringutils::ReplaceWith(scriptTemplate, "{PROJECT_NAME}", m_Info.name);
+        
+        std::string className = filepath.stem().string();
+        stringutils::ReplaceWith(scriptTemplate, "{CLASS_NAME}", className);
+
+        std::ofstream out(filepath, std::ios::out);
+        out << scriptTemplate;
+        out.close();
+
+        RegenerateCSharpProject();
+    }
+
+    void Project::RegenerateCSharpProject()
+    {
+        std::filesystem::path scriptsDir = GetScriptsDirectory();
+        std::string compileItems;
+
+        if (std::filesystem::exists(scriptsDir))
+        {
+            for (auto &p : std::filesystem::recursive_directory_iterator(scriptsDir))
+            {
+                if (!p.is_regular_file())
+                    continue;
+
+                if (p.path().extension() == ".cs")
+                {
+                    std::filesystem::path rel = std::filesystem::relative(p.path(), GetDirectory());
+                    std::string includepath = rel.generic_string();
+                    std::replace(includepath.begin(), includepath.end(), '/', '\\');
+                    compileItems += "    <Compile Include=\"" + includepath + "\" />\n";
+                }
+            }
+        }
+
+        std::string csproj = s_CSProjTemplate;
+        size_t pos = csproj.find("  <ItemGroup>\n    <Compile Include=\"Scripts\\Game.cs\" />\n  </ItemGroup>");
+        if (pos != std::string::npos)
+        {
+            std::string newItemGroup = "  <ItemGroup>\n" + compileItems + "  </ItemGroup>";
+            csproj.replace(pos, std::string("  <ItemGroup>\n    <Compile Include=\"Scripts\\Game.cs\" />\n  </ItemGroup>").length(), newItemGroup);
+        }
+
+        std::ofstream out(GetDirectory() / (m_Info.name + ".csproj"), std::ios::out);
+        out << csproj;
+        out.close();
+    }
+
 	void Project::CreateDirectories()
 	{
 		std::filesystem::path projectDir = GetDirectory();
@@ -459,12 +512,13 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
                     {
                         std::string csharpScriptTemplate = s_CSSharpScriptTemplate;
                         stringutils::ReplaceWith(csharpScriptTemplate, "{PROJECT_NAME}", m_Info.name);
+                        stringutils::ReplaceWith(csharpScriptTemplate, "{CLASS_NAME}", "Game");
                         std::ofstream out(defaultCSharpScriptFilepath, std::ios::out);
                         out << csharpScriptTemplate;
                         out.close();
                         std::string includepath = (m_Info.scriptsDirectory / "Game.cs").generic_string();
                         std::replace(includepath.begin(), includepath.end(), '/', '\\');
-                        compileItems += "  <Compile Include=\"" + includepath + "\" />\n";
+                        compileItems += "    <Compile Include=\"" + includepath + "\" />\n";
                     }
                 }
 
@@ -490,6 +544,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 
                 std::string csharpScriptTemplate = s_CSSharpScriptTemplate;
                 stringutils::ReplaceWith(csharpScriptTemplate, "{PROJECT_NAME}", m_Info.name);
+                stringutils::ReplaceWith(csharpScriptTemplate, "{CLASS_NAME}", "Game");
                 std::fstream outfile = std::fstream(defaultCSharpScriptFilepath, std::ios::out);
                 outfile << csharpScriptTemplate;
                 outfile.close();

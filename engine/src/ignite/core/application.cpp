@@ -108,6 +108,7 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
         std::queue<std::pair<std::function<void()>, std::string>> pending;
+
         {
             std::lock_guard lock(m_RenderThreadFuncsMutex);
             pending.swap(m_RenderThreadFuncs);
@@ -133,7 +134,9 @@ namespace ignite
     void Application::ProcessMainThreadSubmissions()
     {
         IGN_PROFILE_FUNCTION();
+
         std::queue<std::pair<std::function<void()>, std::string>> pending;
+        
         {
             std::lock_guard lock(m_ThreadFuncsMutex);
             pending.swap(m_ThreadFuncs);
@@ -387,11 +390,10 @@ namespace ignite
             if (m_Window->IsVisible() && m_Window->IsInFocus())
             {
                 IGN_PROFILE_SCOPE("MainThread::SimulationAndPresent");
-                // update system (physics etc..)
+
                 for (auto layer = m_LayerStack.rbegin(); layer != m_LayerStack.rend(); ++layer)
                     (*layer)->OnUpdate(m_DeltaTime);
 
-                // Begin frame acquisition on main thread (required for swap chain)
                 if (m_FrameIndex > 0)
                 {
                     bool frameBegan = false;
@@ -411,7 +413,6 @@ namespace ignite
 
                     if (frameBegan)
                     {
-                        // Signal render thread to start rendering
                         {
                             std::lock_guard<std::mutex> lock(m_FrameMutex);
                             m_FrameCounter++;
@@ -419,7 +420,6 @@ namespace ignite
                         }
                         m_FrameCV.notify_one();
                         
-                        // Wait for rendering to complete
                         {
                             IGN_PROFILE_SCOPE("MainThread::WaitForRenderComplete");
                             std::unique_lock<std::mutex> lock(m_FrameMutex);
@@ -440,12 +440,10 @@ namespace ignite
                             m_ImGuiLayer->RenderPlatformWindows();
                         }
                         
-                        // Present on main thread
                         bool presented = false;
                         {
                             IGN_PROFILE_SCOPE("MainThread::Present");
-                            auto &queueMutex = GPUUploadSync::GetQueueMutex();
-                            std::unique_lock<std::mutex> queueLock(queueMutex, std::defer_lock);
+                            std::unique_lock<std::mutex> queueLock(GPUUploadSync::GetQueueMutex(), std::defer_lock);
                             {
                                 IGN_PROFILE_SCOPE("MainThread::Present::QueueMutexWait");
                                 queueLock.lock();

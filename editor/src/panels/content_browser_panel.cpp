@@ -41,11 +41,11 @@ namespace ignite
             char path[1024] = {};
         };
 
-        static void DispatchOpenAssetEditorEvent(AssetHandle handle, const AssetMetaData &metadata)
+        static bool DispatchOpenAssetEditorEvent(AssetHandle handle, const AssetMetaData &metadata)
         {
             if (handle == AssetHandle(0) || metadata.type == AssetType::Invalid)
             {
-                return;
+                return false;
             }
 
             Application::SubmitToMainThread([handle, metadata]()
@@ -53,6 +53,8 @@ namespace ignite
                 AssetEditorOpenEvent openEvent(handle, metadata);
                 Application::GetInstance()->OnEvent(openEvent);
             });
+
+            return true;
         }
 
         static void DispatchCreateAssetEditorEvent(AssetType assetType, const std::filesystem::path &targetDirectory)
@@ -239,10 +241,10 @@ namespace ignite
         m_TreeNodes.emplace_back(".", AssetHandle(0));
         m_SortedRootNodeIndices.clear();
         
-        m_BaseDirectory = m_EditorLayer->GetActiveProject()->GetAssetDirectory();
+        m_BaseDirectory = m_EditorLayer->GetActiveProject()->GetDirectory();
         m_PathEntryList.push_back(m_BaseDirectory);
 
-        m_CurrentDirectory = m_EditorLayer->GetActiveProject()->GetAssetDirectory();
+        m_CurrentDirectory = m_EditorLayer->GetActiveProject()->GetDirectory();
         RefreshAssetTree();
     }
 
@@ -251,7 +253,7 @@ namespace ignite
         m_NeedsRefresh = false;
         auto project = m_EditorLayer->GetActiveProject();
         project->ValidateAssetRegistry();
-        PruneMissingNodes(0, m_EditorLayer->GetActiveProject()->GetAssetDirectory());
+        PruneMissingNodes(0, m_EditorLayer->GetActiveProject()->GetDirectory());
         RefreshAssetTree();
         CompactTree();
 
@@ -270,7 +272,7 @@ namespace ignite
         const auto nodeIndex = static_cast<uint32_t>(node - m_TreeNodes.data());
         
         // Build full path using helper function
-        const std::filesystem::path assetDir = m_EditorLayer->GetActiveProject()->GetAssetDirectory();
+        const std::filesystem::path assetDir = m_EditorLayer->GetActiveProject()->GetDirectory();
         const std::filesystem::path relativePath = GetNodeFullpath(nodeIndex);
         const std::filesystem::path fullPath = assetDir / relativePath;
         const std::string filename = node->path.filename().string();
@@ -354,10 +356,20 @@ namespace ignite
                 if (!project)
                     return;
 
-                const std::filesystem::path relativeAssetPath = project->GetAssetRelativeFilepath(fullPath);
-                AssetHandle handle = m_AssetManager->GetAssetHandle(relativeAssetPath);
-                AssetMetaData metadata = m_AssetManager->GetMetaData(handle);
-                DispatchOpenAssetEditorEvent(handle, metadata);
+                if (fullPath.extension() == ".cs")
+                {
+#ifdef PLATFORM_WINDOWS
+                    std::string command = std::format("start \"\" \"{}\"", fullPath.generic_string());
+                    std::system(command.c_str());
+#endif
+                }
+                else
+                {
+                    const std::filesystem::path relativeAssetPath = project->GetAssetRelativeFilepath(fullPath);
+                    AssetHandle handle = m_AssetManager->GetAssetHandle(relativeAssetPath);
+                    AssetMetaData metadata = m_AssetManager->GetMetaData(handle);
+                    DispatchOpenAssetEditorEvent(handle, metadata);
+                }
             }
         }
 
@@ -399,7 +411,7 @@ namespace ignite
                 ImGui::BeginChild("left_item_browser", { 300.0f, 0.0f }, ImGuiChildFlags_ResizeX);
                 if (!m_TreeNodes.empty())
                 {
-                    const std::filesystem::path assetDir = m_EditorLayer->GetActiveProject()->GetAssetDirectory();
+                    const std::filesystem::path assetDir = m_EditorLayer->GetActiveProject()->GetDirectory();
                     const std::string rootLabel = assetDir.filename().string().empty() ? assetDir.generic_string() : assetDir.filename().string();
 
                     ImGuiTreeNodeFlags rootFlags = (m_SelectedFileTree == assetDir ? ImGuiTreeNodeFlags_Selected : 0)
@@ -494,7 +506,7 @@ namespace ignite
                     FileTreeNode *node = m_TreeNodes.data();
                     if (node)
                     {
-                        auto f = m_EditorLayer->GetActiveProject()->GetAssetDirectory();
+                        auto f = m_EditorLayer->GetActiveProject()->GetDirectory();
                         const auto &relativePath = std::filesystem::relative(m_CurrentDirectory, f);
 
                         {
@@ -568,6 +580,11 @@ namespace ignite
                             {
                                 // show create folder modal
                                 m_ShowCreateFolderModal = true;
+                            }
+                            
+                            if (ImGui::MenuItem("C# Script"))
+                            {
+                                m_ShowCreateScriptModal = true;
                             }
 
                             if (ImGui::MenuItem("Sprite Sheet"))
@@ -672,6 +689,45 @@ namespace ignite
                         }
                     }
                     // clear
+                    m_PopupInputBuffer[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel"))
+                {
+                    m_PopupInputBuffer[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
+            
+            // Create C# Script Modal
+            if (m_ShowCreateScriptModal)
+            {
+                ImGui::OpenPopup("Create C# Script");
+                m_ShowCreateScriptModal = false;
+            }
+
+            if (ImGui::BeginPopupModal("Create C# Script", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+            {
+                ImGui::Text("Create script in: %s", m_CurrentDirectory.generic_string().c_str());
+                ImGui::Spacing();
+                const bool submitByEnter = ImGui::InputText("Script Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
+
+                ImGui::Separator();
+                if (submitByEnter || ImGui::Button("Create"))
+                {
+                    std::string name = m_PopupInputBuffer;
+                    if (!name.empty())
+                    {
+                        if (!name.ends_with(".cs")) name += ".cs";
+                        std::filesystem::path newPath = m_CurrentDirectory / name;
+                        if (!std::filesystem::exists(newPath))
+                        {
+                            m_EditorLayer->GetActiveProject()->CreateCSharpScript(newPath);
+                            m_NeedsRefresh = true;
+                        }
+                    }
                     m_PopupInputBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();
                 }
@@ -859,6 +915,11 @@ namespace ignite
 
                     if (!ec)
                     {
+                        if (m_PopupTargetPath.extension().string() == ".cs")
+                        {
+                            m_EditorLayer->GetActiveProject()->RegenerateCSharpProject();
+                        }
+
                         m_NeedsRefresh = true;
                     }
 
@@ -1008,7 +1069,7 @@ namespace ignite
 
     void ContentBrowserPanel::RefreshAssetTree()
     {
-        const std::filesystem::path &assetPath = m_EditorLayer->GetActiveProject()->GetAssetDirectory();
+        const std::filesystem::path &assetPath = m_EditorLayer->GetActiveProject()->GetDirectory();
         LoadAssetTree(assetPath);
         RebuildSortedTreeCache();
     }
@@ -1022,7 +1083,7 @@ namespace ignite
             return;
         }
 
-        const std::filesystem::path assetDir = m_EditorLayer->GetActiveProject()->GetAssetDirectory();
+        const std::filesystem::path assetDir = m_EditorLayer->GetActiveProject()->GetDirectory();
 
         for (uint32_t i = 0; i < m_TreeNodes.size(); ++i)
         {
@@ -1081,10 +1142,17 @@ namespace ignite
 
     void ContentBrowserPanel::LoadAssetTree(const std::filesystem::path &directory)
     {
-        const std::filesystem::path assetPath = m_EditorLayer->GetActiveProject()->GetAssetDirectory();
+        const std::filesystem::path assetPath = m_EditorLayer->GetActiveProject()->GetDirectory();
 
         for (const auto &entry : std::filesystem::directory_iterator(directory))
         {
+            if (entry.path().filename() == "Bin" || entry.path().filename() == "obj" || entry.path().filename() == ".vs" || 
+                entry.path().filename() == "AssetRegistry.ixreg" || entry.path().extension() == ".slnx" || 
+                entry.path().extension() == ".ixproj" || entry.path().filename() == "premake5.lua")
+            {
+                continue;
+            }
+
             if (!entry.is_directory() && entry.path().extension() == ".meta")
             {
                 continue;
@@ -1225,11 +1293,21 @@ namespace ignite
                 else if (m_EditorLayer && m_EditorLayer->GetActiveProject())
                 {
                     auto *project = m_EditorLayer->GetActiveProject().get();
-                    const std::filesystem::path relativeAssetPath = project->GetAssetRelativeFilepath(path);
+                    if (path.extension() == ".cs")
+                    {
+#ifdef PLATFORM_WINDOWS
+                        std::string command = std::format("start \"\" \"{}\"", path.generic_string());
+                        std::system(command.c_str());
+#endif
+                    }
+                    else
+                    {
+                        const std::filesystem::path relativeAssetPath = project->GetAssetRelativeFilepath(path);
 
-                    AssetHandle handle = m_AssetManager->GetAssetHandle(relativeAssetPath);
-                    AssetMetaData metadata = m_AssetManager->GetMetaData(handle);
-                    DispatchOpenAssetEditorEvent(handle, metadata);
+                        AssetHandle handle = m_AssetManager->GetAssetHandle(relativeAssetPath);
+                        AssetMetaData metadata = m_AssetManager->GetMetaData(handle);
+                        DispatchOpenAssetEditorEvent(handle, metadata);
+                    }
                 }
             }
         }
@@ -1237,19 +1315,6 @@ namespace ignite
         // Item Popup context
         if (ImGui::BeginPopupContextItem())
         {
-            if (!isDirectory && ImGui::MenuItem("Open in Asset Editor"))
-            {
-                if (m_EditorLayer && m_EditorLayer->GetActiveProject())
-                {
-                    auto *project = m_EditorLayer->GetActiveProject().get();
-                    const std::filesystem::path relativeAssetPath = project->GetAssetRelativeFilepath(path);
-
-                    AssetHandle handle = m_AssetManager->GetAssetHandle(relativeAssetPath);
-                    AssetMetaData metadata = m_AssetManager->GetMetaData(handle);
-                    DispatchOpenAssetEditorEvent(handle, metadata);
-                }
-            }
-
             if (ImGui::MenuItem("Open"))
             {
                 if (isDirectory)
@@ -1267,9 +1332,18 @@ namespace ignite
                 }
                 else
                 {
-                    // Windows
-                    std::string command = std::format("\"{}\"", path.generic_string());
-                    std::system(command.c_str());
+                    auto *project = m_EditorLayer->GetActiveProject().get();
+                    const std::filesystem::path relativeAssetPath = project->GetAssetRelativeFilepath(path);
+
+                    AssetHandle handle = m_AssetManager->GetAssetHandle(relativeAssetPath);
+                    AssetMetaData metadata = m_AssetManager->GetMetaData(handle);
+                    if (!DispatchOpenAssetEditorEvent(handle, metadata))
+                    {
+                        // If not handled
+                        // Windows
+                        std::string command = std::format("\"{}\"", path.generic_string());
+                        std::system(command.c_str());
+                    }
                 }
             }
 
@@ -1342,11 +1416,6 @@ namespace ignite
                                     montage->SetAnimationHandle(animHandle);
 
                                     Ref<SkeletalAnimation> animation = project->GetAsset<SkeletalAnimation>(animHandle);
-                                    if (!animation)
-                                    {
-                                        animation = project->GetAssetImmediate<SkeletalAnimation>(animHandle);
-                                    }
-
                                     if (animation)
                                     {
                                         montage->SetSkeletonHandle(animation->GetSkeletonHandle());
@@ -1375,8 +1444,7 @@ namespace ignite
                                         m_AssetManager->AssignAsset(montageHandle, montage);
                                         m_EditorLayer->SaveProject();
 
-                                        DispatchOpenAssetEditorEvent(montageHandle, montageMetaData);
-                                        m_NeedsRefresh = true;
+                                        m_NeedsRefresh = DispatchOpenAssetEditorEvent(montageHandle, montageMetaData);
                                     }
                                 }
                             }
@@ -1455,11 +1523,6 @@ namespace ignite
                 if (ImGui::BeginPopup(popupId.c_str()))
                 {
                     Ref<SpriteSheet> spriteSheet = project->GetAsset<SpriteSheet>(handle);
-                    if (!spriteSheet)
-                    {
-                        spriteSheet = project->GetAssetImmediate<SpriteSheet>(handle);
-                    }
-
                     if (spriteSheet)
                     {
                         Ref<Texture> texture = nullptr;
@@ -1567,13 +1630,8 @@ namespace ignite
 
         m_AssetManager->AssignMetaData(duplicateHandle, duplicateMetadata);
 
-        if (duplicateHandle != AssetHandle(0))
-        {
-            DispatchOpenAssetEditorEvent(duplicateHandle, duplicateMetadata);
-        }
-
-        m_NeedsRefresh = true;
-        return true;
+        m_NeedsRefresh = DispatchOpenAssetEditorEvent(duplicateHandle, duplicateMetadata);
+        return m_NeedsRefresh;
     }
 
     void ContentBrowserPanel::UpdateSelection(const std::filesystem::path &filepath)
@@ -1885,7 +1943,7 @@ namespace ignite
             if (ImGui::ImageButton("##refresh_bt", refreshBt, { navbarBtSize.y, navbarBtSize.y }))
             {
                 m_EditorLayer->GetActiveProject()->ValidateAssetRegistry();
-                PruneMissingNodes(0, m_EditorLayer->GetActiveProject()->GetAssetDirectory());
+                PruneMissingNodes(0, m_EditorLayer->GetActiveProject()->GetDirectory());
                 RefreshAssetTree();
                 CompactTree();
             }
@@ -2319,6 +2377,9 @@ namespace ignite
             case AssetType::AnimatorController2D: return s_SharedIcons["anim_ctrl_2d"];
             default: break;
         }
+
+        if (filepath.extension() == ".cs")
+            return s_SharedIcons["font"]; // reuse font icon or we could add a script icon
 
         auto it = s_SharedThumbnails.find(filepath);
         if (it != s_SharedThumbnails.end())
