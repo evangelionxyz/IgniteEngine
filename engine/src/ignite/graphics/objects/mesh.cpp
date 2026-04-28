@@ -2,7 +2,6 @@
 
 #include "mesh.hpp"
 #include "ignite/core/time.hpp"
-#include "environment.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/renderer/scene_renderer.hpp"
@@ -16,9 +15,6 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
-#include <limits>
-#include <mutex>
-#include <set>
 
 #include <fbxsdk.h>
 
@@ -34,86 +30,6 @@ namespace ignite
     {
         static Ref<ConstantBuffer> s_DefaultSkeletonBuffer;
         static bool s_DefaultSkeletonBufferInitialized = false;
-
-        static AABB CalculateAABB(const std::vector<VertexMesh_Anim> &vertices)
-        {
-            AABB bounds;
-            if (vertices.empty())
-            {
-                return bounds;
-            }
-
-            bounds.min = vertices.front().position;
-            bounds.max = vertices.front().position;
-
-            for (const VertexMesh_Anim &vertex : vertices)
-            {
-                bounds.min = glm::min(bounds.min, vertex.position);
-                bounds.max = glm::max(bounds.max, vertex.position);
-            }
-
-            return bounds;
-        }
-
-        static void ExpandAABB(AABB &bounds, const glm::vec3 &point)
-        {
-            bounds.min = glm::min(bounds.min, point);
-            bounds.max = glm::max(bounds.max, point);
-        }
-
-        static AABB TransformAABB(const AABB &bounds, const glm::mat4 &transform)
-        {
-            AABB transformed;
-            const glm::vec3 corners[8] =
-            {
-                { bounds.min.x, bounds.min.y, bounds.min.z },
-                { bounds.max.x, bounds.min.y, bounds.min.z },
-                { bounds.min.x, bounds.max.y, bounds.min.z },
-                { bounds.max.x, bounds.max.y, bounds.min.z },
-                { bounds.min.x, bounds.min.y, bounds.max.z },
-                { bounds.max.x, bounds.min.y, bounds.max.z },
-                { bounds.min.x, bounds.max.y, bounds.max.z },
-                { bounds.max.x, bounds.max.y, bounds.max.z },
-            };
-
-            transformed.min = glm::vec3(std::numeric_limits<float>::max());
-            transformed.max = glm::vec3(std::numeric_limits<float>::lowest());
-
-            for (const glm::vec3 &corner : corners)
-            {
-                const glm::vec4 world = transform * glm::vec4(corner, 1.0f);
-                ExpandAABB(transformed, glm::vec3(world));
-            }
-
-            return transformed;
-        }
-
-        static AABB CalculateSceneAABB(const std::vector<Ref<MeshInstance>> &meshes)
-        {
-            AABB bounds;
-            bool hasBounds = false;
-
-            for (const Ref<MeshInstance> &mesh : meshes)
-            {
-                if (!mesh || !mesh->GetPrimitive() || mesh->GetPrimitive()->vertices.empty())
-                {
-                    continue;
-                }
-
-                const AABB meshBounds = TransformAABB(mesh->GetPrimitive()->aabb, mesh->global);
-                if (!hasBounds)
-                {
-                    bounds = meshBounds;
-                    hasBounds = true;
-                    continue;
-                }
-
-                ExpandAABB(bounds, meshBounds.min);
-                ExpandAABB(bounds, meshBounds.max);
-            }
-
-            return bounds;
-        }
 
         static bool Mat4NearEqual(const glm::mat4 &a, const glm::mat4 &b, const float epsilon = 0.0001f)
         {
@@ -344,6 +260,7 @@ namespace ignite
 						continue;
 					}
 
+					texture->PrepareUploadData(4);
 					Application::SubmitToRenderThread([texture]()
 					{
 						nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
@@ -489,7 +406,6 @@ namespace ignite
     MeshPrimitive::MeshPrimitive(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices)
         : vertices(vertices), indices(indices)
     {
-        RecalculateAABB();
     }
 
     MeshPrimitive::~MeshPrimitive()
@@ -527,12 +443,6 @@ namespace ignite
     {
         vertices.clear();
         indices.clear();
-        aabb = {};
-    }
-
-    void MeshPrimitive::RecalculateAABB()
-    {
-        aabb = CalculateAABB(vertices);
     }
 
     // Mesh Instance class
@@ -1057,7 +967,7 @@ namespace ignite
             recurse(root, glm::mat4(1.0f));
         }
 
-        outScene.aabb = CalculateSceneAABB(outScene.flatMeshes);
+        outScene.aabb = AABB::CalculateMeshAABB(outScene.flatMeshes);
     }
 
     std::vector<std::pair<std::string, Ref<Texture>>> GLTFMeshLoader::LoadTexturesFromGLTF(const tinygltf::Model &model)
@@ -1087,9 +997,14 @@ namespace ignite
                 Ref<Texture> texture;
                 if (!image.image.empty())
                 {
-                    texture = Texture::Create(Buffer((void *)image.image.data(), image.image.size() * sizeof(uint8_t)), createInfo, nullptr);
+                    std::vector<uint8_t> data;
+                    data.resize(image.image.size() * sizeof(uint8_t));
+                    std::memcpy(data.data(), image.image.data(), data.size());
+
+                    texture = Texture::Create(data, createInfo, nullptr);
                     LOG_TRACE(" Loaded embedded texture");
 
+                    texture->PrepareUploadData(4);
                     Application::SubmitToRenderThread([texture]()
                     {
                         nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
@@ -1240,7 +1155,7 @@ namespace ignite
             }
         }
 
-        outScene.aabb = CalculateSceneAABB(outScene.flatMeshes);
+        outScene.aabb = AABB::CalculateMeshAABB(outScene.flatMeshes);
 
         fbxScene->Destroy();
     }
@@ -1631,17 +1546,6 @@ namespace ignite
 
             if (!vertices.empty() && !indices.empty())
             {
-                // Pre-bake vertex positions and normals from mesh-node-local space to model space.
-                // Skinning inverse-bind-pose matrices are computed in model space (relative to the
-                // skeleton root). When a mesh node is parented to a skeleton bone in FBX (e.g. the
-                // head mesh is a child of the head bone), its vertices are in bone-local space rather
-                // than model space. Without pre-baking, the skinning formula
-                //   worldPos = objectMatrix * boneTransform[j] * vertex
-                // produces incorrect results: at bind pose boneTransform = I so the position depends
-                // only on objectMatrix (correct at rest), but during animation objectMatrix and
-                // boneTransform compound incorrectly. Pre-baking to model space makes skinning
-                // consistent for all mesh topologies regardless of node hierarchy.
-                // For body meshes already at the root with identity global this is a no-op.
                 {
                     const glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(meshNode.global)));
                     for (auto &vertex : vertices)

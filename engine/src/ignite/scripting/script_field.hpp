@@ -20,9 +20,10 @@ namespace ignite
         Int, 
         Long,
         UByte, 
-        UShort, 
+        UShort,
         UInt, 
         ULong,
+		String,
         Vector2, 
         Vector3, 
         Vector4
@@ -58,6 +59,29 @@ namespace ignite
 		{
 			static_assert(sizeof(T) <= 16, "Type too large!");
 			memcpy(m_Buffer, &value, sizeof(T));
+		}
+
+		// Specialization for std::string stored in the fixed buffer (truncated to fit)
+		template<>
+		inline std::string GetValue<std::string>() const
+		{
+			// Ensure null-terminated
+			const size_t maxLen = sizeof(m_Buffer);
+			size_t len = 0;
+			while (len < maxLen && m_Buffer[len] != '\0') ++len;
+			return std::string(m_Buffer, static_cast<size_t>(len));
+		}
+
+		template<>
+		inline void SetValue<std::string>(std::string value)
+		{
+			// Truncate to fit into buffer (reserve one byte for null)
+			size_t maxCopy = sizeof(m_Buffer) - 1;
+			size_t copyLen = std::min(value.size(), maxCopy);
+			memset(m_Buffer, 0, sizeof(m_Buffer));
+			if (copyLen > 0)
+				memcpy(m_Buffer, value.data(), copyLen);
+			m_Buffer[copyLen] = '\0';
 		}
 
 	private:

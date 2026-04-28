@@ -92,27 +92,24 @@ namespace ignite
         createInfo.keepInitialState = true;
         createInfo.keepCpuData = true;
 
-        Buffer buffer(rgbaPixels.data(), rgbaPixels.size());
-        Ref<Texture> atlas = Texture::Create(buffer, createInfo, nullptr, "MSDF Font Atlas");
+        Ref<Texture> atlas = Texture::Create(rgbaPixels, createInfo, nullptr, "MSDF Font Atlas");
         atlas->SetReadyFlag(false);
 
+        atlas->PrepareUploadData(4);
         Application::SubmitToRenderThread([atlas]()
         {
             if (atlas)
             {
 				nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 				nvrhi::CommandListHandle cmd = device->createCommandList();
-
 				cmd->open();
 				atlas->SetData(cmd, 4);
 				cmd->close();
 
-				{
-					std::lock_guard<std::mutex> queueLock(GPUUploadSync::GetQueueMutex());
-					device->executeCommandList(cmd);
-				}
-
-				atlas->SetReadyFlag(true);
+                Application::SubmitWorkerCommandList(cmd, [atlas]()
+                {
+                    atlas->SetReadyFlag(true);
+                });
             }
         });
 

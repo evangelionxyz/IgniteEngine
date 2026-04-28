@@ -1,5 +1,7 @@
-using System;
+// Copyright (c) 2026 Evangelion Manuhutu
 
+using System;
+using Ignite.Core;
 namespace Ignite;
 
 internal enum WidgetButtonEventType

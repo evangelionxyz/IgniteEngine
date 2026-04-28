@@ -22,10 +22,13 @@
 */
 
 #pragma once
+#ifndef MATH_HPP
+#define MATH_HPP
 
-#include "ignite/scene/icamera.hpp"
+#ifndef GLM_ENABLE_EXPERIMENTAL
+#   define GLM_ENABLE_EXPERIMENTAL
+#endif
 
-#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/compatibility.hpp>
@@ -50,26 +53,22 @@ namespace ignite
     public:
         static glm::mat4 ComposeTransformComponent(const TransformComponent &transform);
         static void DecomposeTransformComponent(const glm::mat4 &matrix, TransformComponent &outTransform);
-
         static bool DecomposeTransform(const glm::mat4 &transform, glm::vec3 &outTranslation, glm::quat &outRotation, glm::vec3 &outScale);
         static bool DecomposeTransformEuler(const glm::mat4 &transform, glm::vec3 &outTranslation, glm::vec3 &outRotation, glm::vec3 &outScale);
-
+        static bool ProjectWorldToScreen(const glm::vec3 &worldPosition, const glm::mat4 &viewProjection, const Rect &viewportRect, ImVec2 &outScreen);
+        static bool RaySphereIntersection(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, const glm::vec3 &sphereCenter, float sphereRadius);
         static glm::vec3 Normalize(const glm::vec3 &v);
         static glm::vec3 WorldToScreen(const glm::vec3 &worldPosition, const glm::mat4 &modelTransform, const glm::mat4 &viewProjection, const glm::vec2 &screenSize);
-        static bool ProjectWorldToScreen(const glm::vec3 &worldPosition, const glm::mat4 &viewProjection, const Rect &viewportRect, ImVec2 &outScreen);
         static glm::vec2 GetNormalizedDeviceCoord(const glm::vec2 &mouse, const glm::vec2 &screen);
         static glm::vec4 GetEyeCoord(glm::vec4 clipCoords, const glm::mat4 &projectionMatrix);
-        static glm::vec3 GetWorldPosition(const glm::vec4 &eyeCoords, const glm::mat4 &viewMatrix);
+        static glm::vec3 GetWorldPosition(const glm::vec4 &eyeCoords, const glm::mat4 &view);
         static glm::vec3 GetRayFromScreenCoords(const glm::vec2 &coord, const glm::vec2 &screen, const glm::mat4 &projection, const glm::mat4 &view, bool isPerspective, glm::vec3 &rayOrigin);
         static glm::vec3 ScreenToWorldOnPlane(const glm::vec2 &screenPos, float planeZ, const glm::mat4 &viewProjection, const Rect &viewportRect, bool *isValid = nullptr);
-        static bool RaySphereIntersection(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, const glm::vec3 &sphereCenter, float sphereRadius);
-
         static glm::mat4 RemoveScale(const glm::mat4 &matrix);
-
-        static float CascadeSplit(i32 index, i32 cascade_count, f32 near_plane, f32 far_plane, f32 lambda);
-        static void ComputeCascadeMatrices(const glm::vec3 &camera_pos, const glm::mat4 &camera_view, const glm::mat4 &camera_projection, const glm::vec3 light_direction, i32 cascade_count, const std::vector<f32> &cascade_splits, std::vector<glm::mat4> &cascade_light_matrices);
-        static void ExtractFrustumCorners(const glm::mat4 &view, const glm::mat4 &projection, f32 near_plane, f32 far_plane, glm::vec4 out_corners[8]);
-        static glm::vec3 SnapToGrid(glm::vec3 position, f32 texel_size);
+        static void ComputeCascadeMatrices(const glm::vec3 &cameraPosition, const glm::mat4 &view, const glm::mat4 &projection, const glm::vec3 lightDriection, int32_t cascadeCount, const std::vector<float> &cascade_splits, std::vector<glm::mat4> &cascade_light_matrices);
+        static void ExtractFrustumCorners(const glm::mat4 &view, const glm::mat4 &projection, float nearPlane, float farPlane, glm::vec4 outCorners[8]);
+        static float CascadeSplit(int32_t index, int32_t cascade_count, float near_plane, float far_plane, float lambda);
+        static glm::vec3 SnapToGrid(glm::vec3 position, float texel_size);
     };
 
     struct Rect
@@ -139,3 +138,5 @@ namespace ignite
     };
 
 }
+
+#endif

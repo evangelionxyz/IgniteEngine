@@ -69,6 +69,7 @@ namespace ignite
             switch (type)
             {
             case ScriptFieldType::Invalid: return "Invalid";
+            case ScriptFieldType::String:   return "String";
             case ScriptFieldType::Float:   return "Float";
             case ScriptFieldType::Double:  return "Double";
             case ScriptFieldType::Bool:    return "Boolean";
@@ -94,6 +95,7 @@ namespace ignite
         inline ScriptFieldType ScriptFieldTypeFromString(std::string_view type)
         {
             if (type == "Invalid") return ScriptFieldType::Invalid;
+            if (type == "String")   return ScriptFieldType::String;
             if (type == "Float")   return ScriptFieldType::Float;
             if (type == "Double")  return ScriptFieldType::Double;
             if (type == "Boolean") return ScriptFieldType::Bool;

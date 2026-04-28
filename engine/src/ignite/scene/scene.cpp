@@ -351,45 +351,6 @@ namespace ignite
             auto &cc = cameraView.get<CameraComponent>(entity);
             cc.camera.SetTransform(tr.GetWorldMatrix());
         }
-
-        auto meshView = registry->view<TransformComponent, MeshComponent>();
-        for (entt::entity entity : meshView)
-        {
-            auto &tr = meshView.get<TransformComponent>(entity);
-            auto &mc = meshView.get<MeshComponent>(entity);
-            mc.worldMatrix = tr.GetWorldMatrix();
-            mc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(mc.worldMatrix)));
-
-            const auto &mesh = m_Project->GetAsset<Mesh>(mc.handle);
-            if (mesh)
-            {
-                // Transform the mesh AABB by the entity's world matrix so it reflects runtime transforms
-                const AABB &localAabb = mesh->aabb;
-                const glm::vec3 corners[8] =
-                {
-                    { localAabb.min.x, localAabb.min.y, localAabb.min.z },
-                    { localAabb.max.x, localAabb.min.y, localAabb.min.z },
-                    { localAabb.min.x, localAabb.max.y, localAabb.min.z },
-                    { localAabb.max.x, localAabb.max.y, localAabb.min.z },
-                    { localAabb.min.x, localAabb.min.y, localAabb.max.z },
-                    { localAabb.max.x, localAabb.min.y, localAabb.max.z },
-                    { localAabb.min.x, localAabb.max.y, localAabb.max.z },
-                    { localAabb.max.x, localAabb.max.y, localAabb.max.z },
-                };
-
-                mc.worldAABB.min = glm::vec3(std::numeric_limits<float>::max());
-                mc.worldAABB.max = glm::vec3(std::numeric_limits<float>::lowest());
-
-                const glm::mat4 &worldMat = mc.worldMatrix;
-                for (const glm::vec3 &corner : corners)
-                {
-                    const glm::vec4 wc = worldMat * glm::vec4(corner, 1.0f);
-                    mc.worldAABB.min = glm::min(mc.worldAABB.min, glm::vec3(wc));
-                    mc.worldAABB.max = glm::max(mc.worldAABB.max, glm::vec3(wc));
-                }
-            }
-            
-        }
     }
 
     void Scene::UpdateTransformRecursive(Entity entity, const glm::mat4 &parentWorldTransform)
@@ -425,12 +386,6 @@ namespace ignite
         m_StepFrame++;
     
         UpdateTransforms(deltaTime);
-    }
-
-    void Scene::Resize(uint32_t width, uint32_t height)
-    {
-        this->m_ViewportWidth = width;
-        this->m_ViewportHeight = height;
     }
 
     Entity Scene::GetPrimaryCamera()
@@ -518,9 +473,40 @@ namespace ignite
             if (!tr.visible || sm.handle == AssetHandle(0))
                 continue;
 
-            Ref<Mesh> mesh = m_Project->GetAsset<Mesh>(sm.handle, AssetType::Mesh);
+            Ref<Mesh> mesh = m_Project->GetAsset<Mesh>(sm.handle);
             if (!mesh)
                 continue;
+
+            sm.worldMatrix = tr.GetWorldMatrix();
+            sm.normalMatrix = glm::transpose(glm::inverse(glm::mat3(sm.worldMatrix)));
+
+            if (mesh)
+            {
+                // Transform the mesh AABB by the entity's world matrix so it reflects runtime transforms
+                const AABB &localAabb = mesh->aabb;
+                const glm::vec3 corners[8] =
+                {
+                    { localAabb.min.x, localAabb.min.y, localAabb.min.z },
+                    { localAabb.max.x, localAabb.min.y, localAabb.min.z },
+                    { localAabb.min.x, localAabb.max.y, localAabb.min.z },
+                    { localAabb.max.x, localAabb.max.y, localAabb.min.z },
+                    { localAabb.min.x, localAabb.min.y, localAabb.max.z },
+                    { localAabb.max.x, localAabb.min.y, localAabb.max.z },
+                    { localAabb.min.x, localAabb.max.y, localAabb.max.z },
+                    { localAabb.max.x, localAabb.max.y, localAabb.max.z },
+                };
+
+                sm.worldAABB.min = glm::vec3(std::numeric_limits<float>::max());
+                sm.worldAABB.max = glm::vec3(std::numeric_limits<float>::lowest());
+
+                const glm::mat4 &worldMat = sm.worldMatrix;
+                for (const glm::vec3 &corner : corners)
+                {
+                    const glm::vec4 wc = worldMat * glm::vec4(corner, 1.0f);
+                    sm.worldAABB.min = glm::min(sm.worldAABB.min, glm::vec3(wc));
+                    sm.worldAABB.max = glm::max(sm.worldAABB.max, glm::vec3(wc));
+                }
+            }
 
             AssetHandle sourceAnimatorHandle = ResolveMeshAnimatorSourceHandle(sm, mesh);
             if (sourceAnimatorHandle == AssetHandle(0))
@@ -543,16 +529,14 @@ namespace ignite
                 if (!sm.runtimeAnimatorInstance)
                 {
                     Ref<AnimatorController> sourceController = m_Project->GetAsset<AnimatorController>(sourceAnimatorHandle);
-                    if (!sourceController)
+                    if (sourceController)
                     {
-                        sourceController = m_Project->GetAssetImmediate<AnimatorController>(sourceAnimatorHandle);
-                    }
-
-                    sm.runtimeAnimatorInstance = CloneAnimatorController(sourceController);
-                    if (sm.runtimeAnimatorInstance)
-                    {
-                        sm.runtimeParams.clear();
-                        ResetMeshAnimatorRuntime(sm);
+                        sm.runtimeAnimatorInstance = CloneAnimatorController(sourceController);
+                        if (sm.runtimeAnimatorInstance)
+                        {
+                            sm.runtimeParams.clear();
+                            ResetMeshAnimatorRuntime(sm);
+                        }
                     }
                 }
 
@@ -566,12 +550,11 @@ namespace ignite
                 if (sharedIt == m_SharedAnimatorCache.end())
                 {
                     Ref<AnimatorController> controller = m_Project->GetAsset<AnimatorController>(sourceAnimatorHandle);
-                    if (!controller)
+                    if (controller)
                     {
-                        controller = m_Project->GetAssetImmediate<AnimatorController>(sourceAnimatorHandle);
+                        sharedIt = m_SharedAnimatorCache.emplace(sourceAnimatorHandle, controller).first;
                     }
 
-                    sharedIt = m_SharedAnimatorCache.emplace(sourceAnimatorHandle, controller).first;
                 }
 
                 animController = sharedIt->second;

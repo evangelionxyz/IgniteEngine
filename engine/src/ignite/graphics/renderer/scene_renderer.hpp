@@ -5,6 +5,7 @@
 #define SCENE_RENDERER_HPP
 
 #include "iscene_renderer.hpp"
+#include <SDL3/SDL_events.h>
 
 namespace ignite
 {
@@ -23,22 +24,22 @@ namespace ignite
         
         void RenderEditorTo(ICamera *camera);
         void RenderGameplayTo(ICamera *camera);
-
-        virtual void Resize(uint32_t width, uint32_t height) override;
-        void ResizeGameplay(uint32_t width, uint32_t height);
-        
-        void SetFillMode(nvrhi::RasterFillMode mode);
         void SetEditorWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered);
         void SetGameplayWidgetMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered);
+
+        virtual void ResizeFramebuffer(uint32_t width, uint32_t height) override;
+        void ResizeGameplayFramebuffer(uint32_t width, uint32_t height);
+        void HandleNuklearEvent(SDL_Event *evt);
+        void SetFillMode(nvrhi::RasterFillMode mode);
 
         void SetSelectedEntity(const Entity& entity);
         void UnselectEntity(const Entity& entity);
         void ClearSelectedEntities();
 
-		Ref<Texture> GetEnvironmentMapColorTexture() const;
-		Ref<Texture> GetCascadedShadowMapDepthTexture() const;
+		virtual Ref<Texture> GetEnvironmentMapColorTexture() const override;
+        virtual Ref<Texture> GetCascadedShadowMapDepthTexture() const override;
 
-        Ref<CascadedShadowMap> GetCascadedShadowMap();
+        virtual Ref<CascadedShadowMap> GetCascadedShadowMap() override;
         Ref<Renderer2D> &GetRenderer2D() { return m_Renderer2D; }
 
         DebugGridSettings &GetDebugGridSettings() { return m_DebugGridSettings; }
@@ -58,6 +59,7 @@ namespace ignite
 
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer);
+        void UIPass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
         void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, const PostProcessing &postProcessing, 
             nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture = nullptr,
             Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr);
@@ -92,9 +94,7 @@ namespace ignite
         };
         
     private:
-
-        Ref<WidgetRenderer> m_EditorWidgetRenderer;
-        Ref<WidgetRenderer> m_GameplayWidgetRenderer;
+        Ref<WidgetRenderer> m_WidgetRenderer;
 
         Ref<RenderTarget> m_SceneRT;
         Ref<RenderTarget> m_WidgetRT;

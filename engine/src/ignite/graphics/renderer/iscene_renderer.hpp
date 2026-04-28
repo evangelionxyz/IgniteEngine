@@ -65,7 +65,7 @@ namespace ignite
 
         virtual void OnUpdate(float deltaTime) { };
 
-        virtual void Resize(uint32_t width, uint32_t height);
+        virtual void ResizeFramebuffer(uint32_t width, uint32_t height);
         virtual Ref<Texture> GetEnvironmentMapColorTexture() const;
         virtual Ref<Texture> GetCascadedShadowMapDepthTexture() const;
         virtual Ref<CascadedShadowMap> GetCascadedShadowMap();

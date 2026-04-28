@@ -53,9 +53,6 @@ namespace ignite
 
         const glm::vec2 &GetViewportMousePos() const { return m_ViewportData.mousePos; }
 
-        const glm::vec2 GetEditorViewportSize() const { return m_Data.sceneEditorViewportRect.GetSize(); }
-        const glm::vec2 GetGameplayViewportSize() const { return m_Data.sceneGameplayViewportRect.GetSize(); }
-
         void RenderHierarchy();
         Entity ShowEntityContextMenu();
         void RenderEntityNode(Entity entity);
@@ -108,9 +105,6 @@ namespace ignite
 
             bool sceneViewportGameplayVisible = false;
             bool sceneViewportEditorVisible = false;
-
-            Rect sceneGameplayViewportRect;
-            Rect sceneEditorViewportRect;
 
             float gamePreviewZoom = 1.0f;
             glm::vec2 gamePreviewPan = glm::vec2(0.0f);

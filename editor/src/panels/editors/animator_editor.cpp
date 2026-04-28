@@ -68,20 +68,9 @@ namespace ignite
 
             if (animator->skeletonHandle == AssetHandle(0))
             {
-                Ref<Asset> asset = assetManager->GetAsset(animationHandle);
-
-                if (!asset)
+                Ref<SkeletalAnimation> animation = assetManager->GetAsset<SkeletalAnimation>(animationHandle);
+                if (animation)
                 {
-                    asset = assetManager->GetAssetImmediate(animationHandle);
-                    if (asset)
-                    {
-                        Ref<SkeletalAnimation> animation = asset->As<SkeletalAnimation>();
-                        animator->skeletonHandle = AssetHandle(animation->GetSkeletonHandle());
-                    }
-                }
-                else
-                {
-                    Ref<SkeletalAnimation> animation = asset->As<SkeletalAnimation>();
                     animator->skeletonHandle = AssetHandle(animation->GetSkeletonHandle());
                 }
             }

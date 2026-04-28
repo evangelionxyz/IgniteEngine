@@ -119,7 +119,7 @@ namespace ignite
         m_CameraBuffer = nullptr;
     }
 
-    void ISceneRenderer::Resize(uint32_t width, uint32_t height)
+    void ISceneRenderer::ResizeFramebuffer(uint32_t width, uint32_t height)
     {
         if (width == 0 || height == 0)
         {

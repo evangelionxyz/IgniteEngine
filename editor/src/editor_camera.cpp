@@ -218,7 +218,7 @@ namespace ignite
 			return;
 		}
 
-		const float safeHeight = glm::max(height, 1.0f);
+		const float safeHeight = glm::max(viewportSize.y, 1.0f);
 		float panUnitsPerPixel = controls.panSensitivity;
 
 		if (projectionType == ProjectionType::Orthographic)
@@ -312,10 +312,10 @@ namespace ignite
 				m_Distance = glm::clamp(orthoSize, controls.minDistance, controls.maxDistance);
 				m_ZoomVelocity = 0.0f;
 
-				if (this->width > 0.0f && this->height > 0.0f)
+				if (viewportSize.x > 0.0f && viewportSize.y > 0.0f)
 				{
 					UpdateView();
-					UpdateProjection(this->width, this->height);
+					UpdateProjection(viewportSize.x, viewportSize.y);
 				}
 
 				return;
@@ -342,10 +342,10 @@ namespace ignite
 					orthoSize = glm::clamp(orthoSize, minOrthoSize, controls.maxOrthoSize);
 					m_Distance = glm::clamp(orthoSize, controls.minDistance, controls.maxDistance);
 
-					if (this->width > 0.0f && this->height > 0.0f)
+					if (viewportSize.x > 0.0f && viewportSize.y > 0.0f)
 					{
 						UpdateView();
-						UpdateProjection(this->width, this->height);
+						UpdateProjection(viewportSize.x, viewportSize.y);
 					}
 				}
 			}
@@ -474,9 +474,7 @@ namespace ignite
 
 	void EditorCamera::UpdateProjection(float width, float height)
 	{
-		this->width = width;
-		this->height = height;
-
+		viewportSize = { width, height };
 		const float aspectRatio = width / height;
 
 		switch (projectionType)

@@ -94,6 +94,7 @@ namespace ignite
     {
         std::uniform_real_distribution<float> dist(0.0f, 1.0f);
         std::default_random_engine rng;
+
         std::vector<glm::vec4> noise;
         noise.reserve(16);
         for (int i = 0; i < 16; ++i)
@@ -106,9 +107,9 @@ namespace ignite
             );
         }
 
-        Buffer buffer;
-        buffer.Allocate(16 * sizeof(glm::vec4));
-        memcpy(buffer.data, noise.data(), buffer.size);
+        std::vector<uint8_t> pixelData;
+        pixelData.resize(16 * sizeof(glm::vec4));
+        std::memcpy(pixelData.data(), noise.data(), pixelData.size());
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         auto pool = device->createCommandList();
@@ -125,11 +126,10 @@ namespace ignite
         info.samplerLinearFiltering = false;
         info.keepInitialState = true;
 
-        m_NoiseTexture = Texture::Create(buffer, info, pool, "SSAO Noise");
+        m_NoiseTexture = Texture::Create(pixelData, info, pool, "SSAO Noise");
         
         pool->close();
         device->executeCommandList(pool);
-        buffer.Release();
     }
 
     void SSAO::CreateTextures(uint32_t width, uint32_t height)

@@ -17,6 +17,19 @@ namespace ignite
         m_Initialized = false;
     }
 
+    static void ManagedLogCallback(const char* message)
+    {
+        std::string msg(message);
+        if (msg.find("failed") != std::string::npos || msg.find("Exception") != std::string::npos)
+        {
+            LOG_ERROR("[MochiSharp] {}", msg);
+        }
+        else
+        {
+            LOG_INFO("[MochiSharp] {}", msg);
+        }
+    }
+
     bool ScriptHost::Init(const std::filesystem::path &configPath)
     {
         if (m_Initialized)
@@ -26,7 +39,7 @@ namespace ignite
         }
 
         std::wstring wConfigPath = configPath.wstring();
-        if (!m_Host->Init(wConfigPath))
+        if (!m_Host->Init(wConfigPath, ManagedLogCallback))
         {
             LOG_ERROR("[Script Host] Failed to initialize HostFXR with config: {}", configPath.generic_string());
             return false;
@@ -154,19 +167,19 @@ namespace ignite
         }
 
         const auto *api = ScriptGlue::GetAPI();
-        const uint64_t apiPtr = reinterpret_cast<uint64_t>(api);
+        const auto apiPtr = reinterpret_cast<uint64_t>(api);
 
-        const int methodId = m_Host->BindStaticMethod("Ignite.InternalCalls", "Initialize", static_cast<int>(ScriptMethodSig::Void_UInt64));
+        const int methodId = m_Host->BindStaticMethod("Ignite.Core.InternalCalls", "Initialize", static_cast<int>(ScriptMethodSig::Void_UInt64));
         if (methodId == 0)
         {
-            LOG_ERROR("[Script Host] Failed to bind Ignite.InternalCalls.Initialize");
+            LOG_ERROR("[Script Host] Failed to bind Ignite.Core.InternalCalls.Initialize");
             return false;
         }
 
-        void *args[] = { const_cast<uint64_t *>(&apiPtr) };
-        if (!m_Host->Invoke(methodId, args, 1, nullptr))
+        std::array<void *, 1> args = { const_cast<uint64_t *>(&apiPtr) };
+        if (!m_Host->Invoke(methodId, args.data(), (int)args.size(), nullptr))
         {
-            LOG_ERROR("[Script Host] Failed to invoke Ignite.InternalCalls.Initialize");
+            LOG_ERROR("[Script Host] Failed to invoke Ignite.Core.InternalCalls.Initialize");
             return false;
         }
 

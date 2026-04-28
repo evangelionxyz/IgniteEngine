@@ -25,7 +25,7 @@ namespace ignite
         void SetEnvironmentTexture(const Ref<Texture> &texture);
         void SetProject(Project *project);
         void SetPreviewWidget(const Ref<WidgetCanvas> &widget);
-        void SetWidgetPreviewMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered);
+        void SetPreviewMouseState(uint32_t mouseX, uint32_t mouseY, bool hovered);
 
         void Render(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT);
 
@@ -54,6 +54,9 @@ namespace ignite
         std::vector<glm::mat4> m_BoneTransforms;
         Ref<ConstantBuffer> m_SkeletonGpuBuffer;
         bool m_EnvironmentTextureLoadAttempted = false;
+        uint32_t m_PreviewMouseX = 0;
+        uint32_t m_PreviewMouseY = 0;
+        bool m_PreviewMouseHovered = false;
 
         SceneBufferData m_SceneGPUData;
         CascadedShadowMapBufferData m_CSMGPUData;

@@ -10,6 +10,7 @@
 #include "ignite/ignite.hpp"
 #include "ignite/graphics/renderer/scene_renderer.hpp"
 #include "ignite/serializer/serializer.hpp"
+#include "ignite/serializer/scene_serializer.hpp"
 #include "ignite/project/project.hpp"
 #include "states.hpp"
 
@@ -39,6 +40,14 @@ namespace ignite
             bool assetRegistryWindow = false;
             bool takeScreenshot = false;
             bool gameplayViewportWindow = true;
+            bool consoleWindow = true;
+
+            const int STABLE_RESIZE_FRAME = 12;
+
+            int editorResizingFrame = 0;
+            int gameplayResizingFrame = 0;
+            bool editorResizing = false;
+            bool gameplayResizing = false;
 
             uint32_t hoveredEntity = static_cast<uint32_t>(-1);
             ProjectInfo projectCreateInfo;
@@ -56,6 +65,7 @@ namespace ignite
         void OnDetach() override;
         void OnUpdate(float deltaTime) override;
         void OnEvent(Event &e) override;
+        void OnSDLEvent(SDL_Event *evt) override;
 
         bool OnKeyPressedEvent(KeyPressedEvent &event);
         bool OnMouseButtonPressed(MouseButtonPressedEvent &event);

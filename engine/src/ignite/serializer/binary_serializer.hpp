@@ -22,6 +22,8 @@
 */
 
 #pragma once
+#ifndef BINARY_SERIALIZER_HPP
+#define BINARY_SERIALIZER_HPP
 
 #include <stb_image.h>
 #include <stb_image_write.h>
@@ -547,7 +549,6 @@ namespace ignite
 
                 primitive->indices.resize(indicesCount);
                 ReadRaw(inFile, primitive->indices.data(), indicesCount * sizeof(uint32_t));
-                primitive->RecalculateAABB();
 
                 uint32_t nameSize = 0;
                 ReadRaw(inFile, &nameSize);
@@ -950,3 +951,5 @@ namespace ignite
         }
     };
 }
+
+#endif

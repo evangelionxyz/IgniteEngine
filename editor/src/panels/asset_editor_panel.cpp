@@ -50,9 +50,8 @@ namespace ignite
     {
         enum MeshType
         {
-            CUBE,
-            SPHERE,
-            ICO_SPHERE
+            ICO_SPHERE = 0,
+            SPHERE
         };
 
         struct TextureEditorState
@@ -100,7 +99,7 @@ namespace ignite
         {
             AssetHandle environmentTextureHandle = AssetHandle(0);
             float previewColumnWidth = 0.0f;
-            int selectedMeshType = 1;
+            int selectedMeshType = 0;
             bool initialized = false;
         };
 
@@ -284,10 +283,6 @@ namespace ignite
             if (textureHandle != AssetHandle(0))
             {
                 texture = project->GetAsset<Texture>(textureHandle);
-                if (!texture)
-                {
-                    texture = project->GetAssetImmediate<Texture>(textureHandle);
-                }
             }
 
             if (texture && texture->GetHandle())
@@ -382,9 +377,8 @@ namespace ignite
 
     void AssetEditorPanel::OnAttach()
     {
-        s_DefaultMeshes[CUBE] = BinarySerializer::DeserializeMesh("resources/staticmeshes/cube.mesh");
-        s_DefaultMeshes[SPHERE] = BinarySerializer::DeserializeMesh("resources/staticmeshes/sphere.mesh");
         s_DefaultMeshes[ICO_SPHERE] = BinarySerializer::DeserializeMesh("resources/staticmeshes/ico_sphere.mesh");
+        s_DefaultMeshes[SPHERE] = BinarySerializer::DeserializeMesh("resources/staticmeshes/sphere.mesh");
     }
 
     void AssetEditorPanel::OnDetach()
@@ -436,10 +430,6 @@ namespace ignite
                 if (skeletonHandle != AssetHandle(0))
                 {
                     skeleton = project->GetAsset<Skeleton>(skeletonHandle);
-                    if (!skeleton)
-                    {
-                        skeleton = project->GetAssetImmediate<Skeleton>(skeletonHandle);
-                    }
                 }
             }
 
@@ -458,10 +448,6 @@ namespace ignite
             if (previewState.previewAnimationHandle != AssetHandle(0))
             {
                 previewAnimation = project->GetAsset<SkeletalAnimation>(previewState.previewAnimationHandle);
-                if (!previewAnimation)
-                {
-                    previewAnimation = project->GetAssetImmediate<SkeletalAnimation>(previewState.previewAnimationHandle);
-                }
             }
 
             if (previewAnimation && previewAnimation->duration > 0.0f)
@@ -736,7 +722,7 @@ namespace ignite
         }
 
         // Append unsaved indicator
-        if (assetData.asset->IsDirty())
+        if (assetData.asset && assetData.asset->IsDirty())
             flags |= ImGuiWindowFlags_UnsavedDocument;
 
         ImGui::SetNextWindowSize(windowSize, ImGuiCond_Appearing);
@@ -1125,10 +1111,6 @@ namespace ignite
                         if (spriteSheet->GetTextureHandle() != AssetHandle(0))
                         {
                             texture = project->GetAsset<Texture>(spriteSheet->GetTextureHandle());
-                            if (!texture)
-                            {
-                                texture = project->GetAssetImmediate<Texture>(spriteSheet->GetTextureHandle());
-                            }
                         }
 
                         const ImVec2 contentSize = ImGui::GetContentRegionAvail();
@@ -1844,12 +1826,15 @@ namespace ignite
                     }
                     else
                     {
-                        ImGui::Text("Loading asset...");
+                        ImGui::Text("Invalid asset!");
                     }
                 }
                 else
                 {
-                    ImGui::Text("Loading asset...");
+                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                    assetData.asset = assetManager->GetAsset(assetData.handle);
+                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
+                        ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -1885,6 +1870,7 @@ namespace ignite
                         static std::unordered_map<uint64_t, int>       s_SelectedWidgetItem;
                         static std::unordered_map<uint64_t, float>     s_WidgetPreviewZoom;
                         static std::unordered_map<uint64_t, glm::vec2> s_WidgetPreviewPan;
+                        static std::unordered_map<uint64_t, int>       s_WidgetPreviewAspect;
 
                         const uint64_t stateKey = static_cast<uint64_t>(assetData.handle);
 
@@ -1895,6 +1881,7 @@ namespace ignite
                         float &widgetPreviewZoom = s_WidgetPreviewZoom[stateKey];
                         if (widgetPreviewZoom <= 0.0f) widgetPreviewZoom = 1.0f;
                         glm::vec2 &widgetPreviewPan = s_WidgetPreviewPan[stateKey];
+                        int &widgetPreviewAspect = s_WidgetPreviewAspect[stateKey];
 
                         if (sceneData.sceneRenderer)
                             sceneData.sceneRenderer->SetPreviewWidget(widget);
@@ -1938,9 +1925,43 @@ namespace ignite
                         // ============================================================
                         ImGui::BeginChild("##widget_scene_preview", { 0.0f, 0.0f }, ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
                         {
-                            const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
-                            sceneData.viewportWidth  = std::max(1u, static_cast<uint32_t>(viewportSize.x));
-                            sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
+                            static const char *aspectRatioLabels[] = { "Free", "16:9", "16:10", "4:3", "21:9", "1:1" };
+                            static const float aspectRatioValues[] = { 0.0f, 16.0f / 9.0f, 16.0f / 10.0f, 4.0f / 3.0f, 21.0f / 9.0f, 1.0f };
+
+                            widgetPreviewAspect = std::clamp(widgetPreviewAspect, 0, static_cast<int>(IM_ARRAYSIZE(aspectRatioLabels)) - 1);
+                            ImGui::SetNextItemWidth(140.0f);
+                            ImGui::Combo("Aspect Ratio", &widgetPreviewAspect, aspectRatioLabels, IM_ARRAYSIZE(aspectRatioLabels));
+
+                            const ImVec2 previewRegionSize = ImGui::GetContentRegionAvail();
+                            const ImVec2 previewRegionPos = ImGui::GetCursorScreenPos();
+                            const float selectedAspect = aspectRatioValues[widgetPreviewAspect];
+
+                            ImVec2 viewportSize = previewRegionSize;
+                            if (selectedAspect > 0.0f && viewportSize.x > 0.0f && viewportSize.y > 0.0f)
+                            {
+                                const float regionAspect = viewportSize.x / std::max(viewportSize.y, 1.0f);
+                                if (regionAspect > selectedAspect)
+                                {
+                                    viewportSize.x = viewportSize.y * selectedAspect;
+                                }
+                                else
+                                {
+                                    viewportSize.y = viewportSize.x / selectedAspect;
+                                }
+                            }
+
+                            viewportSize.x = std::max(viewportSize.x, 1.0f);
+                            viewportSize.y = std::max(viewportSize.y, 1.0f);
+
+                            const ImVec2 viewportOffset =
+                            {
+                                std::max((previewRegionSize.x - viewportSize.x) * 0.5f, 0.0f),
+                                std::max((previewRegionSize.y - viewportSize.y) * 0.5f, 0.0f)
+                            };
+                            const ImVec2 viewportPos = { previewRegionPos.x + viewportOffset.x, previewRegionPos.y + viewportOffset.y };
+
+                            sceneData.viewportWidth  = std::max(1u, static_cast<uint32_t>(viewportSize.x + 0.5f));
+                            sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y + 0.5f));
 
                             const float canvasW = static_cast<float>(sceneData.viewportWidth);
                             const float canvasH = static_cast<float>(sceneData.viewportHeight);
@@ -1948,15 +1969,24 @@ namespace ignite
                             if (sceneData.compositeRT)
                             {
                                 Ref<Texture> previewTexture = sceneData.compositeRT->GetColorAttachment(0);
-                                const ImVec2 viewportPos = ImGui::GetCursorScreenPos();
 
                                 // Single InvisibleButton — serves as the base for all interactions:
                                 // hover detection, click-to-select, DND target, context menu.
                                 const std::string previewBtnId = std::format("##widget_preview_{}", stateKey);
+                                ImGui::SetCursorScreenPos(viewportPos);
                                 ImGui::InvisibleButton(previewBtnId.c_str(), viewportSize);
                                 sceneData.viewportHovered = ImGui::IsItemHovered();
 
                                 const ImVec2 mousePos = ImGui::GetMousePos();
+                                if (sceneData.sceneRenderer)
+                                {
+                                    const float localMouseX = std::clamp(mousePos.x - viewportPos.x, 0.0f, std::max(viewportSize.x - 1.0f, 0.0f));
+                                    const float localMouseY = std::clamp(mousePos.y - viewportPos.y, 0.0f, std::max(viewportSize.y - 1.0f, 0.0f));
+                                    sceneData.sceneRenderer->SetPreviewMouseState(
+                                        static_cast<uint32_t>(localMouseX),
+                                        static_cast<uint32_t>(localMouseY),
+                                        sceneData.viewportHovered);
+                                }
 
                                 // --- Zoom with scroll wheel (towards cursor) ---
                                 const float previousZoom = widgetPreviewZoom;
@@ -2024,6 +2054,85 @@ namespace ignite
                                 constexpr float kHit    = 7.0f;    // screen-pixel hit radius for handles
                                 constexpr float kMinSz  = 8.0f;    // minimum widget size
 
+                                WidgetContainer *selectedParentContainer = nullptr;
+                                if (selectedItem && selectedItem->parent && selectedItem->parent->GetWidgetType() == WidgetType::Container)
+                                    selectedParentContainer = dynamic_cast<WidgetContainer *>(selectedItem->parent);
+
+                                const bool canManipulateRect = selectedItem
+                                    && (!selectedItem->parent
+                                        || (selectedParentContainer && selectedParentContainer->layout == LayoutMode::Absolute));
+
+                                auto getSelectedParentRect = [&]() -> Rect
+                                {
+                                    if (selectedItem && selectedItem->parent)
+                                        return selectedItem->parent->GetAlignedRect();
+
+                                    return Rect(0.0f, 0.0f, canvasW, canvasH);
+                                };
+
+                                auto resolveAnchorMin = [&](const Rect &parentRect, const glm::vec2 &resolvedSize) -> glm::vec2
+                                {
+                                    const glm::vec2 marginVec = glm::vec2(selectedItem ? selectedItem->margin : 0.0f);
+                                    const glm::vec2 availableMin = parentRect.min + marginVec;
+                                    const glm::vec2 availableMax = parentRect.max - marginVec;
+                                    const glm::vec2 availableSize = glm::max(availableMax - availableMin, glm::vec2(0.0f));
+
+                                    glm::vec2 alignedMin = availableMin;
+                                    switch (selectedItem ? selectedItem->alignment : WidgetAlignment::TopLeft)
+                                    {
+                                        case WidgetAlignment::TopLeft:
+                                            break;
+                                        case WidgetAlignment::TopCenter:
+                                            alignedMin.x += (availableSize.x - resolvedSize.x) * 0.5f;
+                                            break;
+                                        case WidgetAlignment::TopRight:
+                                            alignedMin.x += (availableSize.x - resolvedSize.x);
+                                            break;
+                                        case WidgetAlignment::CenterLeft:
+                                            alignedMin.y += (availableSize.y - resolvedSize.y) * 0.5f;
+                                            break;
+                                        case WidgetAlignment::Center:
+                                            alignedMin += (availableSize - resolvedSize) * 0.5f;
+                                            break;
+                                        case WidgetAlignment::CenterRight:
+                                            alignedMin.x += (availableSize.x - resolvedSize.x);
+                                            alignedMin.y += (availableSize.y - resolvedSize.y) * 0.5f;
+                                            break;
+                                        case WidgetAlignment::BottomLeft:
+                                            alignedMin.y += (availableSize.y - resolvedSize.y);
+                                            break;
+                                        case WidgetAlignment::BottomCenter:
+                                            alignedMin.x += (availableSize.x - resolvedSize.x) * 0.5f;
+                                            alignedMin.y += (availableSize.y - resolvedSize.y);
+                                            break;
+                                        case WidgetAlignment::BottomRight:
+                                            alignedMin += (availableSize - resolvedSize);
+                                            break;
+                                        default:
+                                            break;
+                                    }
+
+                                    return alignedMin;
+                                };
+
+                                auto applyWorldRectToSelected = [&](const Rect &desiredRect)
+                                {
+                                    if (!selectedItem || !canManipulateRect)
+                                        return;
+
+                                    glm::vec2 desiredMin = desiredRect.min;
+                                    glm::vec2 desiredMax = desiredRect.max;
+                                    if (desiredMax.x < desiredMin.x) std::swap(desiredMin.x, desiredMax.x);
+                                    if (desiredMax.y < desiredMin.y) std::swap(desiredMin.y, desiredMax.y);
+
+                                    const glm::vec2 resolvedSize = glm::max(desiredMax - desiredMin, glm::vec2(kMinSz));
+                                    const Rect parentRect = getSelectedParentRect();
+                                    const glm::vec2 alignedMin = resolveAnchorMin(parentRect, resolvedSize);
+
+                                    selectedItem->size = resolvedSize;
+                                    selectedItem->position = desiredMin - alignedMin;
+                                };
+
                                 // Lambda: is mouse within kHit pixels of a screen-space point?
                                 auto nearPt = [&](const ImVec2 &h) -> bool {
                                     return std::abs(mousePos.x - h.x) <= kHit
@@ -2055,21 +2164,24 @@ namespace ignite
                                 // --- Cursor feedback ---
                                 if (hs.valid && ImGui::IsItemHovered() && dragHandle == 0)
                                 {
-                                    if      (nearPt(hs.tl) || nearPt(hs.br)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
-                                    else if (nearPt(hs.tr) || nearPt(hs.bl)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNESW);
-                                    else if (nearPt(hs.tc) || nearPt(hs.bc)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-                                    else if (nearPt(hs.ml) || nearPt(hs.mr)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-                                    else
+                                    if (canManipulateRect)
                                     {
-                                        const float cx = (mousePos.x - imagePos.x) * scaleX;
-                                        const float cy = (mousePos.y - imagePos.y) * scaleY;
-                                        if (selectedItem->GetAlignedRect().Contains(glm::vec2(cx, cy)))
-                                            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+                                        if      (nearPt(hs.tl) || nearPt(hs.br)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
+                                        else if (nearPt(hs.tr) || nearPt(hs.bl)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNESW);
+                                        else if (nearPt(hs.tc) || nearPt(hs.bc)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+                                        else if (nearPt(hs.ml) || nearPt(hs.mr)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+                                        else
+                                        {
+                                            const float cx = (mousePos.x - imagePos.x) * scaleX;
+                                            const float cy = (mousePos.y - imagePos.y) * scaleY;
+                                            if (selectedItem->GetAlignedRect().Contains(glm::vec2(cx, cy)))
+                                                ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+                                        }
                                     }
                                 }
 
                                 // --- Assign drag handle on click-down ---
-                                if (hs.valid && ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && dragHandle == 0)
+                                if (hs.valid && canManipulateRect && ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && dragHandle == 0)
                                 {
                                     dragMoved = false;
 
@@ -2100,63 +2212,45 @@ namespace ignite
                                     if (std::abs(dx) > 0.001f || std::abs(dy) > 0.001f)
                                     {
                                         dragMoved = true;
-
-                                        // For edges that move the top/left side, compute the ACTUAL size
-                                        // change so position only shifts by what size actually shrank.
-                                        // This keeps the opposite edge pinned when hitting the minimum.
-                                        auto resizeLeft = [&](float rawDx)
-                                        {
-                                            const float newW  = std::max(kMinSz, selectedItem->size.x - rawDx);
-                                            const float actDx = selectedItem->size.x - newW; // always <= |rawDx|
-                                            selectedItem->position.x += actDx;
-                                            selectedItem->size.x = newW;
-                                        };
-                                        auto resizeTop = [&](float rawDy)
-                                        {
-                                            const float newH  = std::max(kMinSz, selectedItem->size.y - rawDy);
-                                            const float actDy = selectedItem->size.y - newH;
-                                            selectedItem->position.y += actDy;
-                                            selectedItem->size.y = newH;
-                                        };
-                                        auto resizeRight  = [&](float rawDx) { selectedItem->size.x = std::max(kMinSz, selectedItem->size.x + rawDx); };
-                                        auto resizeBottom = [&](float rawDy) { selectedItem->size.y = std::max(kMinSz, selectedItem->size.y + rawDy); };
+                                        Rect nextRect = selectedItem->GetAlignedRect();
 
                                         switch (dragHandle)
                                         {
                                             case 1: // move — body drag
-                                                selectedItem->position.x += dx;
-                                                selectedItem->position.y += dy;
+                                                nextRect.min += glm::vec2(dx, dy);
+                                                nextRect.max += glm::vec2(dx, dy);
                                                 break;
                                             case 2: // TL corner
-                                                resizeLeft(dx);
-                                                resizeTop(dy);
+                                                nextRect.min.x += dx;
+                                                nextRect.min.y += dy;
                                                 break;
                                             case 3: // TR corner
-                                                resizeRight(dx);
-                                                resizeTop(dy);
+                                                nextRect.max.x += dx;
+                                                nextRect.min.y += dy;
                                                 break;
                                             case 4: // BL corner
-                                                resizeLeft(dx);
-                                                resizeBottom(dy);
+                                                nextRect.min.x += dx;
+                                                nextRect.max.y += dy;
                                                 break;
                                             case 5: // BR corner
-                                                resizeRight(dx);
-                                                resizeBottom(dy);
+                                                nextRect.max += glm::vec2(dx, dy);
                                                 break;
                                             case 6: // TC edge
-                                                resizeTop(dy);
+                                                nextRect.min.y += dy;
                                                 break;
                                             case 7: // BC edge
-                                                resizeBottom(dy);
+                                                nextRect.max.y += dy;
                                                 break;
                                             case 8: // ML edge
-                                                resizeLeft(dx);
+                                                nextRect.min.x += dx;
                                                 break;
                                             case 9: // MR edge
-                                                resizeRight(dx);
+                                                nextRect.max.x += dx;
                                                 break;
                                             default: break;
                                         }
+
+                                        applyWorldRectToSelected(nextRect);
                                         widget->SetDirtyFlag(true);
                                     }
                                 }
@@ -2263,11 +2357,10 @@ namespace ignite
 
                                             if (newId != 0 && widget->GetItems().contains(newId))
                                             {
-                                                if (insertParent && insertParent->layout == LayoutMode::Absolute)
-                                                {
-                                                    const Rect &pr = insertParent->GetAlignedRect();
-                                                    widget->GetItems().at(newId)->position = glm::vec2(dropCX - pr.min.x, dropCY - pr.min.y);
-                                                }
+                                                // Positioning is managed by the Nuklear layout system.
+                                                // Do not set item->position manually; only size/alignment
+                                                // should be adjusted by the editor. Leave positioning to
+                                                // the UI runtime.
                                                 selectedItemId = newId;
                                                 widget->SetDirtyFlag(true);
                                             }
@@ -2331,12 +2424,15 @@ namespace ignite
                     }
                     else
                     {
-                        ImGui::Text("Loading asset...");
+                        ImGui::Text("Invalid asset!");
                     }
                 }
                 else
                 {
-                    ImGui::Text("Loading asset...");
+                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                    assetData.asset = assetManager->GetAsset(assetData.handle);
+                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
+                        ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -2405,12 +2501,15 @@ namespace ignite
                     }
                     else
                     {
-                        ImGui::Text("Loading asset...");
+                        ImGui::Text("Invalid asset!");
                     }
                 }
                 else
                 {
-                    ImGui::Text("Loading asset...");
+                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                    assetData.asset = assetManager->GetAsset(assetData.handle);
+                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
+                        ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -2439,11 +2538,10 @@ namespace ignite
                         Animation2DEditorState &st = s_Anim2DEditorState[stateKey];
 
                         // Resolve texture
-                        Ref<Texture> texture;
+                        Ref<Texture> texture = nullptr;
                         if (anim->textureHandle != AssetHandle(0))
                         {
                             texture = project->GetAsset<Texture>(anim->textureHandle);
-                            if (!texture) texture = project->GetAssetImmediate<Texture>(anim->textureHandle);
                         }
 
                         const int frameCount = static_cast<int>(anim->frames.size());
@@ -2727,7 +2825,6 @@ namespace ignite
                                         if (md.type == AssetType::SpriteSheet)
                                         {
                                             Ref<SpriteSheet> ss = project->GetAsset<SpriteSheet>(handle);
-                                            if (!ss) ss = project->GetAssetImmediate<SpriteSheet>(handle);
                                             if (ss)
                                             {
                                                 for (const auto &sp : ss->GetSprites())
@@ -2786,12 +2883,15 @@ namespace ignite
                     }
                     else
                     {
-                        ImGui::Text("Loading asset...");
+                        ImGui::Text("Invalid asset!");
                     }
                 }
                 else
                 {
-                    ImGui::Text("Loading asset...");
+                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                    assetData.asset = assetManager->GetAsset(assetData.handle);
+                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
+                        ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -3125,12 +3225,15 @@ namespace ignite
                     }
                     else
                     {
-                        ImGui::Text("Loading asset...");
+                        ImGui::Text("Invalid asset!");
                     }
                 }
                 else
                 {
-                    ImGui::Text("Loading asset...");
+                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                    assetData.asset = assetManager->GetAsset(assetData.handle);
+                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
+                        ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -3161,7 +3264,7 @@ namespace ignite
                         MaterialPreviewEditorState &previewState = s_MaterialPreviewEditorState[stateKey];
                         if (!previewState.initialized)
                         {
-                            previewState.selectedMeshType = static_cast<int>(CUBE);
+                            previewState.selectedMeshType = static_cast<int>(ICO_SPHERE);
                             previewState.initialized = true;
                         }
 
@@ -3215,11 +3318,10 @@ namespace ignite
                             {
                                 Project *project = m_EditorLayer->GetActiveProject().get();
                                 Ref<Texture> envTexture = project->GetAsset<Texture>(previewState.environmentTextureHandle);
-                                if (!envTexture)
+                                if (envTexture)
                                 {
-                                    envTexture = project->GetAssetImmediate<Texture>(previewState.environmentTextureHandle);
+                                    sceneData.sceneRenderer->SetEnvironmentTexture(envTexture);
                                 }
-                                sceneData.sceneRenderer->SetEnvironmentTexture(envTexture);
                             }
                         }
 
@@ -3244,7 +3346,7 @@ namespace ignite
                         ImGui::SameLine(0.0f, 0.0f);
                         ImGui::BeginChild("##material_controls_column", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
 
-                        const char *meshNames[] = { "Cube", "Sphere", "Ico Sphere" };
+                        const char *meshNames[] = { "Ico Sphere", "Sphere" };
                         int meshSelection = previewState.selectedMeshType;
                         if (ImGui::Combo("Preview Mesh", &meshSelection, meshNames, IM_ARRAYSIZE(meshNames)))
                         {
@@ -3376,12 +3478,15 @@ namespace ignite
                     }
                     else
                     {
-                        ImGui::Text("Loading asset...");
+                        ImGui::Text("Invalid asset!");
                     }
                 }
                 else
                 {
-                    ImGui::Text("Loading asset...");
+                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                    assetData.asset = assetManager->GetAsset(assetData.handle);
+                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
+                        ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -3545,12 +3650,15 @@ namespace ignite
                     }
                     else
                     {
-                        ImGui::Text("Loading asset...");
+                        ImGui::Text("Invalid asset!");
                     }
                 }
                 else
                 {
-                    ImGui::Text("Loading asset...");
+                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                    assetData.asset = assetManager->GetAsset(assetData.handle);
+                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
+                        ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -3621,12 +3729,15 @@ namespace ignite
                     }
                     else
                     {
-                        ImGui::Text("Loading asset...");
+                        ImGui::Text("Invalid asset!");
                     }
                 }
                 else
                 {
-                    ImGui::Text("Loading asset...");
+                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                    assetData.asset = assetManager->GetAsset(assetData.handle);
+                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
+                        ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -3675,10 +3786,6 @@ namespace ignite
                         if (skeletonHandle != AssetHandle(0) && !meshEditorState.cachedSkeleton)
                         {
                             meshEditorState.cachedSkeleton = project->GetAsset<Skeleton>(skeletonHandle);
-                            if (!meshEditorState.cachedSkeleton)
-                            {
-                                meshEditorState.cachedSkeleton = project->GetAssetImmediate<Skeleton>(skeletonHandle);
-                            }
                         }
 
                         if (assetData.sceneData.sceneRenderer)
@@ -3703,8 +3810,6 @@ namespace ignite
                             {
                                 selectedSocket = skeleton->sockets.empty() ? -1 : 0;
                             }
-
-
                         }
 
                         std::vector<std::vector<int32_t>> children(jointCount);
@@ -3725,11 +3830,8 @@ namespace ignite
                         if (previewState.previewAnimationHandle != AssetHandle(0))
                         {
                             previewAnimation = project->GetAsset<SkeletalAnimation>(previewState.previewAnimationHandle);
-                            if (!previewAnimation)
-                            {
-                                previewAnimation = project->GetAssetImmediate<SkeletalAnimation>(previewState.previewAnimationHandle);
-                            }
                         }
+
                         const float timelineFps = previewAnimation ? std::max(previewAnimation->ticksPerSeconds, 0.001f) : 0.001f;
                         const float timelineTotalDuration = (previewAnimation && previewAnimation->duration > 0.0f)
                             ? (previewAnimation->duration / timelineFps)
@@ -3783,10 +3885,6 @@ namespace ignite
                                                     skeletonHandle = droppedHandle;
                                                     meshEditorState.skeletonHandle = droppedHandle;
                                                     meshEditorState.cachedSkeleton = project->GetAsset<Skeleton>(droppedHandle);
-                                                    if (!meshEditorState.cachedSkeleton)
-                                                    {
-                                                        meshEditorState.cachedSkeleton = project->GetAssetImmediate<Skeleton>(droppedHandle);
-                                                    }
                                                     skeleton = meshEditorState.cachedSkeleton;
                                                 }
                                             }
@@ -4427,12 +4525,15 @@ namespace ignite
                     }
                     else
                     {
-                        ImGui::Text("Loading asset...");
+                        ImGui::Text("Invalid asset!");
                     }
                 }
                 else
                 {
-                    ImGui::Text("Loading asset...");
+                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                    assetData.asset = assetManager->GetAsset(assetData.handle);
+                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
+                        ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -4491,16 +4592,15 @@ namespace ignite
                                 if (previewMeshType == AssetType::Mesh)
                                 {
                                     Ref<Mesh> mesh = project->GetAsset<Mesh>(previewState.previewMeshHandle);
-                                    if (!mesh)
+                                    if (mesh)
                                     {
-                                        mesh = project->GetAssetImmediate<Mesh>(previewState.previewMeshHandle);
+                                        assetData.sceneData.sceneRenderer->SetPreviewMesh(mesh);
                                     }
-                                    assetData.sceneData.sceneRenderer->SetPreviewMesh(mesh);
                                 }
                             }
                             else
                             {
-                                assetData.sceneData.sceneRenderer->SetPreviewMesh(s_DefaultMeshes[CUBE]);
+                                assetData.sceneData.sceneRenderer->SetPreviewMesh(s_DefaultMeshes[ICO_SPHERE]);
                             }
                         }
 
@@ -4986,12 +5086,15 @@ namespace ignite
                     }
                     else
                     {
-                        ImGui::Text("Loading asset...");
+                        ImGui::Text("Invalid asset!");
                     }
                 }
                 else
                 {
-                    ImGui::Text("Loading asset...");
+                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                    assetData.asset = assetManager->GetAsset(assetData.handle);
+                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
+                        ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -5060,12 +5163,15 @@ namespace ignite
                     }
                     else
                     {
-                        ImGui::Text("Failed to load the asset!");
+                        ImGui::Text("Invalid asset!");
                     }
                 }
                 else
                 {
-                    ImGui::Text("Loading asset...");
+                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                    assetData.asset = assetManager->GetAsset(assetData.handle);
+                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
+                        ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -5348,7 +5454,7 @@ namespace ignite
         uint32_t width = assetData.sceneData.viewportWidth > 0 ? assetData.sceneData.viewportWidth : 1280;
         uint32_t height = assetData.sceneData.viewportHeight > 0 ? assetData.sceneData.viewportHeight : 720;
         Project *activeProject = m_EditorLayer->GetActiveProject().get();
-        Ref<Mesh> defaultMesh = s_DefaultMeshes[CUBE];
+        Ref<Mesh> defaultMesh = s_DefaultMeshes[ICO_SPHERE];
         AssetHandle handle = assetData.handle;
 
         if (assetType == AssetType::Skeleton)
@@ -5357,11 +5463,6 @@ namespace ignite
             if (matchedMeshHandle != AssetHandle(0))
             {
                 Ref<Mesh> matchedMesh = activeProject->GetAsset<Mesh>(matchedMeshHandle);
-                if (!matchedMesh)
-                {
-                    matchedMesh = activeProject->GetAssetImmediate<Mesh>(matchedMeshHandle);
-                }
-
                 if (matchedMesh)
                 {
                     defaultMesh = matchedMesh;
@@ -5489,38 +5590,29 @@ namespace ignite
 
         auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
         Ref<Asset> asset = assetManager->GetAsset(handle);
-        if (!asset)
+
+        std::string assetName = metadata.filepath.filename().string();
+        if (assetName.empty())
         {
-            asset = assetManager->GetAssetImmediate(handle);
+            assetName = metadata.filepath.generic_string();
         }
 
-        if (asset)
+        Application::SubmitToMainThread([asset, metadata, handle, assetName, this]()
         {
-            std::string assetName = metadata.filepath.filename().string();
-            if (assetName.empty())
-            {
-                assetName = metadata.filepath.generic_string();
-            }
+            AssetEditorData data;
+            data.asset = asset;
+            data.metadata = metadata;
+            data.handle = handle;
+            data.isOpen = true;
+            data.requestFocus = true;
+            data.windowTitle = std::format("{} - {}###asset_editor_{}", AssetTypeToString(metadata.type), assetName, static_cast<uint64_t>(handle));
 
-            Application::SubmitToMainThread([asset, metadata, handle, assetName, this]()
-            {
-                AssetEditorData data;
-                data.asset = asset;
-                data.metadata = metadata;
-                data.handle = handle;
-                data.isOpen = true;
-                data.requestFocus = true;
-                data.windowTitle = std::format("{} - {}###asset_editor_{}", AssetTypeToString(metadata.type), assetName, static_cast<uint64_t>(handle));
+            InitializeSceneData(data);
 
-                InitializeSceneData(data);
+            m_Assets.push_back(std::move(data));
+        });
 
-                m_Assets.push_back(std::move(data));
-            });
-
-            return true;
-        }
-
-        return false;
+        return true;
     }
 
     bool AssetEditorPanel::OnAssetEditorCreateEvent(AssetEditorCreateEvent &event)

@@ -51,6 +51,10 @@ namespace ignite
 
     void ScriptClass::InsertField(const std::string &fieldName, const ScriptField &field)
     {
+        if (m_Fields.find(fieldName) == m_Fields.end())
+        {
+            m_OrderedFieldNames.push_back(fieldName);
+        }
         m_Fields[fieldName] = field;
     }
 

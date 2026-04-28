@@ -651,7 +651,7 @@ namespace ignite
         if (it != m_Material2DResolveCache.end())
             return it->second;
 
-        Ref<Material2D> material = project->GetAsset<Material2D>(handle, AssetType::Material2D);
+        Ref<Material2D> material = project->GetAsset<Material2D>(handle);
         if (material)
         {
             m_Material2DResolveCache.emplace(key, material);

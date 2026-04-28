@@ -137,6 +137,7 @@ namespace ignite
 
         // Modal state for create/rename/delete operations
         bool m_ShowCreateFolderModal = false;
+        bool m_ShowCreateScriptModal = false;
         bool m_ShowRenameModal = false;
         bool m_ShowDeleteModal = false;
         bool m_ShowMoveCopyPopup = false;

@@ -128,6 +128,7 @@ namespace ignite
 
     static std::unordered_map<std::string, ScriptFieldType> s_ScriptFieldTypeMap =
     {
+        {"System.String",  ScriptFieldType::String},
         {"System.Boolean", ScriptFieldType::Bool},
         {"System.Single",  ScriptFieldType::Float},
         {"System.Char",    ScriptFieldType::Char},
@@ -480,8 +481,7 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
         const UUID uuid = entity.GetUUID();
-        if (const auto &it = scriptEngineData->entityInstances.find(uuid);
-            it == scriptEngineData->entityInstances.end())
+        if (const auto &it = scriptEngineData->entityInstances.find(uuid); it == scriptEngineData->entityInstances.end())
         {
             LOG_ERROR("[Script Engine] Entity script instance is not attached! {} {}", entity.GetName(), static_cast<uint64_t>(uuid));
             return;
@@ -558,10 +558,7 @@ namespace ignite
         while (start <= derivedTypes.size())
         {
             const size_t end = derivedTypes.find('|', start);
-            const std::string fullName = (end == std::string::npos)
-                ? derivedTypes.substr(start)
-                : derivedTypes.substr(start, end - start);
-
+            const std::string fullName = (end == std::string::npos) ? derivedTypes.substr(start) : derivedTypes.substr(start, end - start);
             if (!fullName.empty())
             {
                 const size_t lastDot = fullName.find_last_of('.');
@@ -575,9 +572,7 @@ namespace ignite
                 while (fieldStart <= fieldMetadata.size())
                 {
                     const size_t fieldEnd = fieldMetadata.find('|', fieldStart);
-                    const std::string fieldEntry = (fieldEnd == std::string::npos)
-                        ? fieldMetadata.substr(fieldStart)
-                        : fieldMetadata.substr(fieldStart, fieldEnd - fieldStart);
+                    const std::string fieldEntry = (fieldEnd == std::string::npos) ? fieldMetadata.substr(fieldStart) : fieldMetadata.substr(fieldStart, fieldEnd - fieldStart);
 
                     if (!fieldEntry.empty())
                     {
@@ -630,17 +625,13 @@ namespace ignite
                         auto &currentFields = currentInstances[instanceId];
                         for (auto &[fieldName, fieldDef] : scriptClass->GetFields())
                         {
-                            ScriptInstanceField instanceField;
-                            instanceField.field = fieldDef;
-
                             auto previousFieldIt = previousFields.find(fieldName);
                             if (previousFieldIt != previousFields.end() && previousFieldIt->second.field.Type == fieldDef.Type)
                             {
-                                instanceField = previousFieldIt->second;
+                                ScriptInstanceField instanceField = previousFieldIt->second;
                                 instanceField.field = fieldDef;
+                                currentFields[fieldName] = instanceField;
                             }
-
-                            currentFields[fieldName] = instanceField;
                         }
                     }
                 }
@@ -652,7 +643,6 @@ namespace ignite
             {
                 break;
             }
-
             start = end + 1;
         }
 

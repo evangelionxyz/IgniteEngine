@@ -7,8 +7,8 @@
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/animation/skeleton.hpp"
-#include "ignite/graphics/renderer/widget_renderer.hpp"
 #include "ignite/graphics/ui/widget.hpp"
+#include "ignite/graphics/ui/widget_renderer.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -32,6 +32,7 @@ namespace ignite
         m_PreviewWidget = nullptr;
         m_SourceMaterial = nullptr;
         m_RuntimeMaterial = CreateRef<Material>();
+
         m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
 
         auto samplerDesc = nvrhi::SamplerDesc();
@@ -93,6 +94,10 @@ namespace ignite
     void AssetSceneRenderer::SetProject(Project *project)
     {
         m_Project = project;
+        if (m_WidgetRenderer)
+        {
+            m_WidgetRenderer->SetProject(project);
+        }
         if (m_RuntimeMaterial)
         {
             m_RuntimeMaterial->InvalidateBindingSet();
@@ -108,22 +113,11 @@ namespace ignite
         }
     }
 
-    void AssetSceneRenderer::SetWidgetPreviewMousePosition(uint32_t mouseX, uint32_t mouseY, bool hovered)
+    void AssetSceneRenderer::SetPreviewMouseState(uint32_t mouseX, uint32_t mouseY, bool hovered)
     {
-        if (!m_WidgetRenderer)
-        {
-            return;
-        }
-
-        if (hovered)
-        {
-            m_WidgetRenderer->SetMousePosition(mouseX, mouseY);
-        }
-        else
-        {
-            const uint32_t offscreen = std::numeric_limits<uint32_t>::max() / 2u;
-            m_WidgetRenderer->SetMousePosition(offscreen, offscreen);
-        }
+        m_PreviewMouseX = mouseX;
+        m_PreviewMouseY = mouseY;
+        m_PreviewMouseHovered = hovered;
     }
 
     void AssetSceneRenderer::Render(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT)
@@ -171,7 +165,7 @@ namespace ignite
         m_CSMGPUData.shadowStrength = 0.0f;
         m_CascadedShadowMapBuffer->SetData(cmd, Buffer(&m_CSMGPUData, sizeof(CascadedShadowMapBufferData)));
 
-        uiRT->ClearColorAttachmentFloat(cmd, 0);
+        uiRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.0f));
         uiRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
         uiRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
@@ -186,18 +180,34 @@ namespace ignite
             DrawPreviewMesh(cmd, sceneRT->GetFramebuffer());
         }
 
-        if (hasWidgetPreview)
+        if (m_PreviewWidget)
         {
+            const nvrhi::Viewport viewport = uiRT->GetFramebuffer()->getFramebufferInfo().getViewport();
+            const uint32_t width = std::max(1u, static_cast<uint32_t>(viewport.maxX - viewport.minX));
+            const uint32_t height = std::max(1u, static_cast<uint32_t>(viewport.maxY - viewport.minY));
+
+            if (m_WidgetRenderer->GetWidth() != width || m_WidgetRenderer->GetHeight() != height)
+            {
+                m_WidgetRenderer->Resize(width, height);
+            }
+
             m_WidgetRenderer->SetProject(m_Project);
-            m_WidgetRenderer->SetScene(nullptr);
             m_WidgetRenderer->SetPreviewWidget(m_PreviewWidget);
-            m_WidgetRenderer->Resize(uiRT->GetWidth(), uiRT->GetHeight());
+            if (m_PreviewMouseHovered)
+            {
+                m_WidgetRenderer->SetMousePosition(m_PreviewMouseX, m_PreviewMouseY);
+            }
+            else
+            {
+                const uint32_t offscreen = std::numeric_limits<uint32_t>::max() / 2u;
+                m_WidgetRenderer->SetMousePosition(offscreen, offscreen);
+            }
+
             m_WidgetRenderer->Update(0.0f);
             m_WidgetRenderer->Render(cmd, uiRT->GetFramebuffer());
         }
 
         CompositePass(cmd, compositeRT->GetFramebuffer(), sceneRT->GetColorAttachment(0), uiRT->GetColorAttachment(0));
-
         cmd->close();
         
         {
@@ -381,8 +391,8 @@ namespace ignite
                             return true;
                         }
 
-                        Ref<Asset> texAsset = assetManager->GetAsset(textureHandle);
-                        return texAsset && texAsset->IsReady();
+                        Ref<Texture> texture = assetManager->GetAsset<Texture>(textureHandle);
+                        return texture && texture->IsReady();
                     };
 
                     // Only update if all textures are available and ready

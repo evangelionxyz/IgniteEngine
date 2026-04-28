@@ -5,10 +5,9 @@
 #define ASSET_IMPORTER_HPP
 
 #include "asset.hpp"
-#include <future>
-#include <nvrhi/nvrhi.h>
-
 #include "ignite/scene/entity.hpp"
+
+#include <future>
 
 namespace ignite
 {

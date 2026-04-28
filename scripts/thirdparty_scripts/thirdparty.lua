@@ -46,6 +46,7 @@ IncludeDir["FREETYPE"]         = "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdfgen/freet
 IncludeDir["OPENEXR"]          = "%{THIRDPARTY_DIR}/OpenEXR/include/OpenEXR"
 IncludeDir["IMATH"]            = "%{THIRDPARTY_DIR}/Imath/include/Imath"
 IncludeDir["TRACY"]            = "%{THIRDPARTY_DIR}/tracy/public"
+IncludeDir["NUKLEAR"]          = "%{THIRDPARTY_DIR}/Nuklear"
 
 --library dirs
 LibraryDir = {}

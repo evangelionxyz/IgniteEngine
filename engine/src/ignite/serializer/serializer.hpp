@@ -272,13 +272,6 @@ namespace ignite
 
 namespace ignite
 {
-
-    class Scene;
-    class Project;
-    class Skeleton;
-    class Material;
-    class Material2D;
-
     class Serializer
     {
     public:
@@ -341,19 +334,6 @@ namespace ignite
     private:
         YAML::Emitter m_Emitter;
         std::filesystem::path m_Filepath;
-    };
-
-    class SceneSerializer
-    {
-    public:
-        SceneSerializer(const Ref<Scene> &scene, Project *project);
-        bool Serialize(const std::filesystem::path &filepath);
-
-        static Ref<Scene> Deserialize(const std::filesystem::path &filepath, Project *project);
-
-    private:
-        Ref<Scene> m_Scene;
-        Project *m_Project;
     };
 }
 

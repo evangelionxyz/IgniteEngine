@@ -27,14 +27,14 @@ namespace ignite
         uint64_t GetInstanceID() const { return m_InstanceId; }
 
         template<typename T>
-		T GetFieldValue(const std::string &fieldName)
+        T GetFieldValue(const std::string &fieldName)
         {
             static_assert(sizeof(T) <= 24, "Type too large!");
 
-			if (!m_ScriptHost || fieldName.empty() || s_FieldValueBuffer == nullptr)
-			{
+            if (!m_ScriptHost || fieldName.empty() || s_FieldValueBuffer == nullptr)
+            {
                 return T();
-			}
+            }
 
             const bool success = m_ScriptHost->GetInstanceFieldValue(m_InstanceId, fieldName, s_FieldValueBuffer, sizeof(s_FieldValueBuffer));
             if (!success)
@@ -51,18 +51,24 @@ namespace ignite
         {
             static_assert(sizeof(T) <= 24, "Type too large!");
 
-			if (!m_ScriptHost || fieldName.empty() || &value == nullptr)
-			{
-				return false;
-			}
+            if (!m_ScriptHost || fieldName.empty() || &value == nullptr)
+            {
+                return false;
+            }
 
-			const bool success = m_ScriptHost->SetInstanceFieldValue(m_InstanceId, fieldName, &value, sizeof(s_FieldValueBuffer));
+            const bool success = m_ScriptHost->SetInstanceFieldValue(m_InstanceId, fieldName, &value, sizeof(s_FieldValueBuffer));
             if (success)
             {
-			    m_ScriptClass->GetInstanceFieldsById(m_InstanceId)->at(fieldName).SetValue(value);
+                m_ScriptClass->GetInstanceFieldsById(m_InstanceId)->at(fieldName).SetValue(value);
             }
             return success;
         }
+
+        template<>
+        inline std::string GetFieldValue<std::string>(const std::string &fieldName);
+
+        template<>
+        inline bool SetFieldValue<std::string>(const std::string &fieldName, const std::string &value);
 
     private:
         Ref<ScriptClass> m_ScriptClass;

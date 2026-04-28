@@ -24,16 +24,20 @@
 #ifndef TEXTURE_HPP
 #define TEXTURE_HPP
 
+#include "ignite/core/logger.hpp"
+#include "ignite/project/project.hpp"
 #include "ignite/asset/asset.hpp"
 #include "ignite/core/types.hpp"
 #include "ignite/core/buffer.hpp"
 #include "mip_generator.hpp"
+
+#include <openexr.h>
+#include <openexr_errors.h>
+
 #include <filesystem>
 
 namespace ignite
 {
-    class Project;
-
     struct TextureCreateInfo
     {
         uint32_t width = 0;
@@ -53,9 +57,9 @@ namespace ignite
         bool deferGpuCreate = false;
 
         bool keepInitialState = false;
-		bool isNativeObject = false;
+        bool isNativeObject = false;
 
-		void *nativeObjectPtr = nullptr;
+        void *nativeObjectPtr = nullptr;
         nvrhi::ObjectType nativeObjectType = 0;
 
         nvrhi::Format format = nvrhi::Format::UNKNOWN;
@@ -68,19 +72,134 @@ namespace ignite
         bool samplerLinearFiltering = true;
     };
 
+    namespace texture_utils
+    {
+        static std::string ToLowerCopy(std::string value)
+        {
+            std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c)
+            {
+                return static_cast<char>(std::tolower(c));
+            });
+            return value;
+        }
+
+        static bool IsExrFile(const std::filesystem::path &filepath)
+        {
+            return ToLowerCopy(filepath.extension().string()) == ".exr";
+        }
+
+        static int FindExrChannelIndex(exr_decode_pipeline_t &decode, const char *name)
+        {
+            for (int i = 0; i < decode.channel_count; ++i)
+            {
+                const char *channelName = decode.channels[i].channel_name;
+                if (channelName && ToLowerCopy(channelName) == ToLowerCopy(name))
+                {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        static std::filesystem::path BuildMetaPath(Project *project, const AssetMetaData &metadata, const char *extension)
+        {
+            if (!project)
+            {
+                return {};
+            }
+
+            std::filesystem::path assetPath = project->GetAssetFilepath(metadata.filepath);
+            assetPath += extension;
+            return assetPath;
+        }
+
+        static bool ConfigureExrChannel(exr_decode_pipeline_t &decode, int channelIndex, std::vector<float> &plane, uint32_t width, uint32_t height)
+        {
+            if (channelIndex < 0)
+            {
+                return false;
+            }
+
+            plane.resize(static_cast<size_t>(width) * static_cast<size_t>(height));
+            exr_coding_channel_info_t &channel = decode.channels[channelIndex];
+            channel.user_data_type = EXR_PIXEL_FLOAT;
+            channel.user_bytes_per_element = sizeof(float);
+            channel.user_pixel_stride = sizeof(float);
+            channel.user_line_stride = static_cast<int32_t>(sizeof(float) * width);
+            channel.decode_to_ptr = reinterpret_cast<unsigned char *>(plane.data());
+            return true;
+        }
+
+        static uint8_t FloatToByte(float value)
+        {
+            if (!std::isfinite(value))
+            {
+                value = 0.0f;
+            }
+
+            value = std::clamp(value, 0.0f, 1.0f);
+            return static_cast<uint8_t>(value * 255.0f + 0.5f);
+        }
+
+        static void DownSample(uint8_t *srcPixels, uint8_t *destPixels, int srcWidth, int srcHeight, int destWidth, int destHeight, int channels)
+        {
+            // Simple box - filter downsample — good enough for thumbnails and avoids
+            // pulling in stb_image_resize as an additional dependency.
+            const float xScale = static_cast<float>(srcWidth) / static_cast<float>(destWidth);
+            const float yScale = static_cast<float>(srcHeight) / static_cast<float>(destHeight);
+
+            for (int dy = 0; dy < destHeight; ++dy)
+            {
+                const int srcY0 = static_cast<int>(dy * yScale);
+                const int srcY1 = static_cast<int>((dy + 1) * yScale);
+                const int clampedSrcY1 = std::min(srcY1, srcHeight - 1);
+
+                for (int dx = 0; dx < destWidth; ++dx)
+                {
+                    const int srcX0 = static_cast<int>(dx * xScale);
+                    const int srcX1 = static_cast<int>((dx + 1) * xScale);
+                    const int clampedSrcX1 = std::min(srcX1, srcWidth - 1);
+
+                    uint32_t r = 0, g = 0, b = 0, a = 0, count = 0;
+                    for (int sy = srcY0; sy <= clampedSrcY1; ++sy)
+                    {
+                        for (int sx = srcX0; sx <= clampedSrcX1; ++sx)
+                        {
+                            const uint8_t *px = srcPixels + (sy * srcWidth + sx) * channels;
+                            r += px[0]; g += px[1]; b += px[2]; a += px[3];
+                            ++count;
+                        }
+                    }
+                    if (count == 0) count = 1;
+                    uint8_t *p = destPixels + (dy * destWidth + dx) * channels;
+                    p[0] = static_cast<uint8_t>(r / count);
+                    p[1] = static_cast<uint8_t>(g / count);
+                    p[2] = static_cast<uint8_t>(b / count);
+                    p[3] = static_cast<uint8_t>(a / count);
+                }
+
+            }
+        }
+
+        bool LoadEXRTexture(const std::filesystem::path &filepath, int &outWidth, int &outHeight, nvrhi::Format &outFormat, std::vector<uint8_t> &data);
+
+        // Utility function to flip image buffer vertically
+        void FlipImageBuffer(std::vector<uint8_t> &data, int width, int height, int rowPitch);
+    }
+
     class Texture : public Asset
     {
     public:
         Texture() = default;
         Texture(TextureCreateInfo createInfo, const std::string &debugName = "Texture Class");
-        Texture(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
+        Texture(const std::vector<uint8_t> &data, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
         Texture(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
 
         ~Texture() override;
 
         static Ref<Texture> Create();
         static Ref<Texture> Create(TextureCreateInfo createInfo, const std::string &debugName = "Texture Class");
-        static Ref<Texture> Create(Buffer buffer, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
+        static Ref<Texture> Create(const std::vector<uint8_t> &data, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
         static Ref<Texture> Create(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
 
         static TextureCreateInfo GetDefaultCreateInfo(const AssetMetaData &metadata);
@@ -109,7 +228,7 @@ namespace ignite
         const std::string &GetDebugName() const { return m_DebugName; }
         const std::filesystem::path &GetFilepath() { return m_Filepath; }
 
-        const Buffer &GetBuffer() { return m_Buffer; }
+        const std::vector<uint8_t> &GetBuffer() { return m_Buffer; }
         static AssetType GetStaticType() { return AssetType::Texture; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }
 
@@ -120,7 +239,7 @@ namespace ignite
         void EnsureTextureHandle();
         size_t GetApproxSizeBytes() const;
 
-        Buffer m_Buffer;
+        std::vector<uint8_t> m_Buffer;
         TextureCreateInfo m_CreateInfo;
         std::filesystem::path m_Filepath;
         nvrhi::TextureHandle m_Handle;

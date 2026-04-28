@@ -11,6 +11,7 @@
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/audio/fmod_sound.hpp"
 #include "ignite/audio/fmod_audio.hpp"
+#include "ignite/core/application.hpp"
 
 #include "ignite/physics/jolt/jolt_physics.hpp"
 #include "ignite/physics/2d/physics_2d.hpp"
@@ -24,6 +25,8 @@
 #include <typeinfo>
 #include <unordered_map>
 #include <vector>
+#include <cstring>
+#include <objbase.h>
 
 namespace ignite
 {
@@ -38,7 +41,7 @@ namespace ignite
             return nullptr;
         }
 
-        static uint64_t Scene_PickEntityAt(float mouseX, float mouseY, glm::vec2 viewportMin, glm::vec2 viewportMax)
+        static uint64_t Scene_PickEntityAt(float x, float y)
         {
             Scene *scene = GetSceneContext();
             if (!scene)
@@ -53,12 +56,16 @@ namespace ignite
             const glm::mat4 projection = cc.camera.GetProjection();
             const bool isPerspective = cc.camera.projectionType != ProjectionType::Orthographic;
 
-            glm::vec2 viewportSize = viewportMax - viewportMin;
+            glm::vec2 viewportSize = cc.camera.viewportSize;
             if (viewportSize.x <= 0.0f || viewportSize.y <= 0.0f)
                 return 0;
 
-            // Convert mouse absolute screen pos to viewport-local coords
-            glm::vec2 coord = glm::vec2(mouseX, mouseY) - viewportMin;
+            // x, y are already viewport-relative coords (see Input_GetMousePosition)
+            glm::vec2 coord = glm::vec2(x, viewportSize.y - y);
+
+            // Ensure the pick is within viewport bounds
+            if (coord.x < 0.0f || coord.y < 0.0f || coord.x > viewportSize.x || coord.y > viewportSize.y)
+                return 0;
 
             glm::vec3 rayOrigin;
             glm::vec3 rayDir = Math::GetRayFromScreenCoords(coord, viewportSize, projection, view, isPerspective, rayOrigin);
@@ -142,7 +149,7 @@ namespace ignite
                 return nullptr;
             }
 
-            return project->GetAsset<FmodSound>(audioSource.handle, AssetType::Audio);
+            return project->GetAsset<FmodSound>(audioSource.handle);
         }
 
         static FMOD::DSP *CreateAudioSourceDsp(const AudioSourceComponent::DspSettings &settings)
@@ -414,7 +421,7 @@ namespace ignite
                 return nullptr;
             }
 
-            return project->GetAsset<WidgetCanvas>(widgetComponent.widgetHandle, AssetType::Widget);
+            return project->GetAsset<WidgetCanvas>(widgetComponent.widgetHandle);
         }
 
         static Ref<WidgetButton> FindWidgetButton(Entity entity, const std::string &buttonName)
@@ -576,7 +583,7 @@ namespace ignite
             return entity.IsValid() ? static_cast<uint64_t>(entity.GetUUID()) : 0;
         }
 
-		static uint64_t Entity_Instantiate(uint64_t entityID, glm::vec3 value)
+        static uint64_t Entity_Instantiate(uint64_t entityID, glm::vec3 value)
         {
             Scene *scene = GetSceneContext();
             if (!scene)
@@ -625,10 +632,10 @@ namespace ignite
 
             if (scene->IsRunning())
             {
-				if (auto *scriptEngine = ScriptEngine::GetInstance())
-				{
-					scriptEngine->OnDestroyEntity(entity);
-				}
+                if (auto *scriptEngine = ScriptEngine::GetInstance())
+                {
+                    scriptEngine->OnDestroyEntity(entity);
+                }
             }
 
             std::erase_if(s_WidgetButtonEventBindings, [entityID](const auto &entry)
@@ -653,9 +660,7 @@ namespace ignite
         static void Entity_GetVisibility(uint64_t entityID, bool *result)
         {
             if (!result)
-            {
                 return;
-            }
 
             *result = false;
             Entity entity = GetEntityByID(entityID);
@@ -665,6 +670,14 @@ namespace ignite
             }
 
             *result = entity.GetComponent<TransformComponent>().visible;
+        }
+
+        static const char *Entity_GetName(uint64_t entityID)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid())
+                return nullptr;
+            return entity.GetName().c_str();
         }
 
         static bool WidgetComponent_HasButton(uint64_t entityID, const char *buttonName)
@@ -880,9 +893,7 @@ namespace ignite
             *result = 1.0f;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<AudioSourceComponent>().volume;
         }
@@ -891,9 +902,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
-            {
                 return;
-            }
 
             auto &audioSource = entity.GetComponent<AudioSourceComponent>();
             audioSource.volume = value;
@@ -914,9 +923,7 @@ namespace ignite
             *result = 1.0f;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<AudioSourceComponent>().pitch;
         }
@@ -925,9 +932,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
-            {
                 return;
-            }
 
             auto &audioSource = entity.GetComponent<AudioSourceComponent>();
             audioSource.pitch = value;
@@ -948,9 +953,7 @@ namespace ignite
             *result = 0.0f;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<AudioSourceComponent>().pan;
         }
@@ -959,9 +962,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
-            {
                 return;
-            }
 
             auto &audioSource = entity.GetComponent<AudioSourceComponent>();
             audioSource.pan = value;
@@ -982,9 +983,7 @@ namespace ignite
             *result = false;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<AudioSourceComponent>().playOnStart;
         }
@@ -993,9 +992,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
-            {
                 return;
-            }
 
             entity.GetComponent<AudioSourceComponent>().playOnStart = value;
         }
@@ -1010,9 +1007,7 @@ namespace ignite
             *result = false;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<AudioSourceComponent>().loop;
         }
@@ -1021,9 +1016,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
-            {
                 return;
-            }
 
             auto &audioSource = entity.GetComponent<AudioSourceComponent>();
             audioSource.loop = value;
@@ -1034,13 +1027,12 @@ namespace ignite
             }
         }
 
-        static bool AudioSourceComponent_AddReverbDSP(uint64_t entityID, float decayTime, float earlyDelay, float lateDelay, float highFrequencyReference, float diffusion, float density, float lowShelfGain, float highCut, float dryLevel, float wetLevel)
+        static bool AudioSourceComponent_AddReverbDSP(uint64_t entityID, float decayTime, float earlyDelay, float lateDelay,
+            float highFrequencyReference, float diffusion, float density, float lowShelfGain, float highCut, float dryLevel, float wetLevel)
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
-            {
                 return false;
-            }
 
             auto &audioSource = entity.GetComponent<AudioSourceComponent>();
             AudioSourceComponent::DspSettings dsp;
@@ -1069,9 +1061,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
-            {
                 return false;
-            }
 
             auto &audioSource = entity.GetComponent<AudioSourceComponent>();
             AudioSourceComponent::DspSettings dsp;
@@ -1091,9 +1081,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
-            {
                 return false;
-            }
 
             auto &audioSource = entity.GetComponent<AudioSourceComponent>();
             AudioSourceComponent::DspSettings dsp;
@@ -1115,9 +1103,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
-            {
                 return false;
-            }
 
             auto &audioSource = entity.GetComponent<AudioSourceComponent>();
             AudioSourceComponent::DspSettings dsp;
@@ -1141,9 +1127,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
-            {
                 return false;
-            }
 
             auto &audioSource = entity.GetComponent<AudioSourceComponent>();
             AudioSourceComponent::DspSettings dsp;
@@ -1164,9 +1148,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<AudioSourceComponent>())
-            {
                 return;
-            }
 
             auto &audioSource = entity.GetComponent<AudioSourceComponent>();
             audioSource.dsps.clear();
@@ -1200,7 +1182,19 @@ namespace ignite
             }
 
             const glm::ivec2 mousePos = Input::GetMousePosition();
-            *result = glm::vec2(mousePos.x, mousePos.y);
+            glm::vec2 absPos = glm::vec2(mousePos.x, mousePos.y);
+            Scene *scene = GetSceneContext();
+            if (scene)
+            {
+                Entity cameraEntity = scene->GetPrimaryCamera();
+                if (cameraEntity.IsValid() && cameraEntity.HasComponent<CameraComponent>())
+                {
+                    const auto &cc = cameraEntity.GetComponent<CameraComponent>();
+                    absPos -= cc.camera.viewportPosition;
+                }
+            }
+
+            *result = absPos;
         }
 
         static void Input_SetMouseToCenter()
@@ -1223,9 +1217,7 @@ namespace ignite
             *result = {};
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
                 return;
-            }
 
             const auto &transform = entity.GetComponent<TransformComponent>();
             *result = glm::vec3(transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f));
@@ -1235,9 +1227,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
                 return;
-            }
 
             glm::vec3 forward = glm::normalize(value);
             if (glm::length2(forward) <= 0.0f)
@@ -1262,9 +1252,7 @@ namespace ignite
             *result = {};
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
                 return;
-            }
 
             const auto &transform = entity.GetComponent<TransformComponent>();
             *result = glm::vec3(transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f));
@@ -1298,9 +1286,7 @@ namespace ignite
             *result = {};
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
                 return;
-            }
 
             const auto &transform = entity.GetComponent<TransformComponent>();
             *result = glm::vec3(transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f));
@@ -1316,9 +1302,7 @@ namespace ignite
 
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
                 return;
-            }
 
             auto &transform = entity.GetComponent<TransformComponent>();
             glm::vec3 right = glm::normalize(transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f));
@@ -1344,9 +1328,7 @@ namespace ignite
             *result = {};
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
                 return;
-            }
 
             *result = glm::vec3(entity.GetComponent<TransformComponent>().translation);
         }
@@ -1355,9 +1337,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
                 return;
-            }
 
             auto &transform = entity.GetComponent<TransformComponent>();
             transform.localTranslation = value;
@@ -1375,9 +1355,7 @@ namespace ignite
             *result = {};
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
                 return;
-            }
 
             *result = glm::quat(entity.GetComponent<TransformComponent>().rotation);
         }
@@ -1386,9 +1364,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
                 return;
-            }
 
             auto &transform = entity.GetComponent<TransformComponent>();
             transform.localRotation = value;
@@ -1406,9 +1382,7 @@ namespace ignite
             *result = {};
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
                 return;
-            }
 
             *result = glm::vec3(glm::eulerAngles(entity.GetComponent<TransformComponent>().rotation));
         }
@@ -1417,9 +1391,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
                 return;
-            }
 
             auto &transform = entity.GetComponent<TransformComponent>();
             const glm::quat rotation = glm::quat(value);
@@ -1438,9 +1410,7 @@ namespace ignite
             *result = {};
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
                 return;
-            }
 
             *result = glm::vec3(entity.GetComponent<TransformComponent>().scale);
         }
@@ -1449,9 +1419,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
                 return;
-            }
 
             auto &transform = entity.GetComponent<TransformComponent>();
             transform.localScale = value;
@@ -1459,82 +1427,70 @@ namespace ignite
             transform.dirty = true;
         }
 
-		static void Sprite2DComponent_SetColor(uint64_t entityID, glm::vec4 value)
-		{
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<Sprite2DComponent>())
-			{
-				return;
-			}
+        static void Sprite2DComponent_SetColor(uint64_t entityID, glm::vec4 value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Sprite2DComponent>())
+                return;
 
-			auto &comp = entity.GetComponent<Sprite2DComponent>();
-			comp.color = value;
-		}
+            auto &comp = entity.GetComponent<Sprite2DComponent>();
+            comp.color = value;
+        }
 
-		static void Sprite2DComponent_GetColor(uint64_t entityID, glm::vec4 *result)
-		{
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<Sprite2DComponent>())
-			{
-				return;
-			}
+        static void Sprite2DComponent_GetColor(uint64_t entityID, glm::vec4 *result)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Sprite2DComponent>())
+                return;
 
-			auto &comp = entity.GetComponent<Sprite2DComponent>();
-			*result = comp.color;
-		}
+            auto &comp = entity.GetComponent<Sprite2DComponent>();
+            *result = comp.color;
+        }
 
-		static void Circle2DComponent_SetColor(uint64_t entityID, glm::vec4 value)
-		{
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<Circle2DComponent>())
-			{
-				return;
-			}
+        static void Circle2DComponent_SetColor(uint64_t entityID, glm::vec4 value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Circle2DComponent>())
+                return;
 
-			auto &comp = entity.GetComponent<Circle2DComponent>();
-			comp.color = value;
-		}
+            auto &comp = entity.GetComponent<Circle2DComponent>();
+            comp.color = value;
+        }
 
-		static void Circle2DComponent_GetColor(uint64_t entityID, glm::vec4 *result)
-		{
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<Circle2DComponent>())
-			{
-				return;
-			}
+        static void Circle2DComponent_GetColor(uint64_t entityID, glm::vec4 *result)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Circle2DComponent>())
+                return;
 
-			auto &comp = entity.GetComponent<Circle2DComponent>();
-			*result = comp.color;
-		}
+            auto &comp = entity.GetComponent<Circle2DComponent>();
+            *result = comp.color;
+        }
 
-		static void Sprite2DComponent_SetTilingFactor(uint64_t entityID, glm::vec2 value)
-		{
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<Sprite2DComponent>())
-			{
-				return;
-			}
+        static void Sprite2DComponent_SetTilingFactor(uint64_t entityID, glm::vec2 value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Sprite2DComponent>())
+                return;
 
-			auto &comp = entity.GetComponent<Sprite2DComponent>();
-			comp.tilingFactor = value;
-		}
+            auto &comp = entity.GetComponent<Sprite2DComponent>();
+            comp.tilingFactor = value;
+        }
 
-		static void Sprite2DComponent_GetTilingFactor(uint64_t entityID, glm::vec2 *result)
-		{
+        static void Sprite2DComponent_GetTilingFactor(uint64_t entityID, glm::vec2 *result)
+        {
             if (!result)
             {
                 return;
             }
 
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<Sprite2DComponent>())
-			{
-				return;
-			}
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<Sprite2DComponent>())
+                return;
 
-			auto &comp = entity.GetComponent<Sprite2DComponent>();
-			*result = comp.tilingFactor;
-		}
+            auto &comp = entity.GetComponent<Sprite2DComponent>();
+            *result = comp.tilingFactor;
+        }
 
         static void Rigidbody2DComponent_GetType(uint64_t entityID, int32_t *result)
         {
@@ -1546,9 +1502,7 @@ namespace ignite
             *result = static_cast<int32_t>(Body2DType_Static);
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             *result = static_cast<int32_t>(entity.GetComponent<Rigidbody2DComponent>().type);
         }
@@ -1557,9 +1511,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.type = static_cast<Body2DType>(value);
@@ -1579,9 +1531,7 @@ namespace ignite
             *result = {};
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<Rigidbody2DComponent>().linearVelocity;
         }
@@ -1590,9 +1540,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.linearVelocity = value;
@@ -1612,9 +1560,7 @@ namespace ignite
             *result = 0.0f;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<Rigidbody2DComponent>().angularVelocity;
         }
@@ -1623,9 +1569,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.angularVelocity = value;
@@ -1645,9 +1589,7 @@ namespace ignite
             *result = 0.0f;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<Rigidbody2DComponent>().gravityScale;
         }
@@ -1656,9 +1598,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.gravityScale = value;
@@ -1678,9 +1618,7 @@ namespace ignite
             *result = 0.0f;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<Rigidbody2DComponent>().linearDamping;
         }
@@ -1689,9 +1627,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.linearDamping = value;
@@ -1711,9 +1647,7 @@ namespace ignite
             *result = 0.0f;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<Rigidbody2DComponent>().angularDamping;
         }
@@ -1722,9 +1656,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.angularDamping = value;
@@ -1744,9 +1676,7 @@ namespace ignite
             *result = false;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<Rigidbody2DComponent>().isAwake;
         }
@@ -1755,9 +1685,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.isAwake = value;
@@ -1777,9 +1705,7 @@ namespace ignite
             *result = false;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<Rigidbody2DComponent>().isEnabled;
         }
@@ -1788,9 +1714,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.isEnabled = value;
@@ -1817,9 +1741,7 @@ namespace ignite
             *result = false;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<Rigidbody2DComponent>().isEnableSleep;
         }
@@ -1828,9 +1750,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             rb.isEnableSleep = value;
@@ -1844,9 +1764,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             if (!b2Body_IsValid(rb.bodyId))
@@ -1861,9 +1779,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             if (!b2Body_IsValid(rb.bodyId))
@@ -1878,9 +1794,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             if (!b2Body_IsValid(rb.bodyId))
@@ -1895,9 +1809,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             if (!b2Body_IsValid(rb.bodyId))
@@ -1912,9 +1824,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             if (!b2Body_IsValid(rb.bodyId))
@@ -1929,9 +1839,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             if (!b2Body_IsValid(rb.bodyId))
@@ -1952,9 +1860,7 @@ namespace ignite
             *result = 0.0f;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             if (!b2Body_IsValid(rb.bodyId))
@@ -1975,9 +1881,7 @@ namespace ignite
             *result = false;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             if (!b2Body_IsValid(rb.bodyId))
@@ -1992,9 +1896,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
-            {
                 return;
-            }
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
             if (!b2Body_IsValid(rb.bodyId))
@@ -2015,9 +1917,7 @@ namespace ignite
             *result = {};
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<BoxCollider2DComponent>().size;
         }
@@ -2026,9 +1926,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
-            {
                 return;
-            }
 
             entity.GetComponent<BoxCollider2DComponent>().size = value;
         }
@@ -2043,9 +1941,7 @@ namespace ignite
             *result = {};
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<BoxCollider2DComponent>().offset;
         }
@@ -2054,9 +1950,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
-            {
                 return;
-            }
 
             entity.GetComponent<BoxCollider2DComponent>().offset = value;
         }
@@ -2071,9 +1965,7 @@ namespace ignite
             *result = 0.0f;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<BoxCollider2DComponent>().restitution;
         }
@@ -2082,9 +1974,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
-            {
                 return;
-            }
 
             entity.GetComponent<BoxCollider2DComponent>().restitution = value;
         }
@@ -2099,9 +1989,7 @@ namespace ignite
             *result = 0.0f;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<BoxCollider2DComponent>().friction;
         }
@@ -2110,9 +1998,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
-            {
                 return;
-            }
 
             entity.GetComponent<BoxCollider2DComponent>().friction = value;
         }
@@ -2127,9 +2013,7 @@ namespace ignite
             *result = 0.0f;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<BoxCollider2DComponent>().density;
         }
@@ -2138,9 +2022,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
-            {
                 return;
-            }
 
             entity.GetComponent<BoxCollider2DComponent>().density = value;
         }
@@ -2155,9 +2037,7 @@ namespace ignite
             *result = false;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<BoxCollider2DComponent>().isSensor;
         }
@@ -2166,180 +2046,241 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<BoxCollider2DComponent>())
-            {
                 return;
-            }
 
             entity.GetComponent<BoxCollider2DComponent>().isSensor = value;
         }
 
-		static void CircleCollider2DComponent_GetCenter(uint64_t entityID, glm::vec2 *result)
-		{
-			if (!result)
-			{
-				return;
-			}
+        static void CircleCollider2DComponent_GetCenter(uint64_t entityID, glm::vec2 *result)
+        {
+            if (!result)
+            {
+                return;
+            }
 
-			*result = {};
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
-			{
-				return;
-			}
+            *result = {};
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+                return;
 
-			*result = entity.GetComponent<CircleCollider2DComponent>().center;
-		}
+            *result = entity.GetComponent<CircleCollider2DComponent>().center;
+        }
 
-		static void CircleCollider2DComponent_SetCenter(uint64_t entityID, glm::vec2 value)
-		{
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
-			{
-				return;
-			}
+        static void CircleCollider2DComponent_SetCenter(uint64_t entityID, glm::vec2 value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+                return;
 
-			entity.GetComponent<CircleCollider2DComponent>().center = value;
-		}
+            entity.GetComponent<CircleCollider2DComponent>().center = value;
+        }
 
-		static void CircleCollider2DComponent_GetRadius(uint64_t entityID, float *result)
-		{
-			if (!result)
-			{
-				return;
-			}
+        static void CircleCollider2DComponent_GetRadius(uint64_t entityID, float *result)
+        {
+            if (!result)
+            {
+                return;
+            }
 
-			*result = {};
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
-			{
-				return;
-			}
+            *result = {};
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+                return;
 
-			*result = entity.GetComponent<CircleCollider2DComponent>().radius;
-		}
+            *result = entity.GetComponent<CircleCollider2DComponent>().radius;
+        }
 
-		static void CircleCollider2DComponent_SetRadius(uint64_t entityID, float value)
-		{
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
-			{
-				return;
-			}
+        static void CircleCollider2DComponent_SetRadius(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+                return;
 
-			entity.GetComponent<CircleCollider2DComponent>().radius = value;
-		}
+            entity.GetComponent<CircleCollider2DComponent>().radius = value;
+        }
 
-		static void CircleCollider2DComponent_GetRestitution(uint64_t entityID, float *result)
-		{
-			if (!result)
-			{
-				return;
-			}
+        static void CircleCollider2DComponent_GetRestitution(uint64_t entityID, float *result)
+        {
+            if (!result)
+            {
+                return;
+            }
 
-			*result = 0.0f;
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
-			{
-				return;
-			}
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+                return;
 
-			*result = entity.GetComponent<CircleCollider2DComponent>().restitution;
-		}
+            *result = entity.GetComponent<CircleCollider2DComponent>().restitution;
+        }
 
-		static void CircleCollider2DComponent_SetRestitution(uint64_t entityID, float value)
-		{
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
-			{
-				return;
-			}
+        static void CircleCollider2DComponent_SetRestitution(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+                return;
 
-			entity.GetComponent<CircleCollider2DComponent>().restitution = value;
-		}
+            entity.GetComponent<CircleCollider2DComponent>().restitution = value;
+        }
 
-		static void CircleCollider2DComponent_GetFriction(uint64_t entityID, float *result)
-		{
-			if (!result)
-			{
-				return;
-			}
+        static void CircleCollider2DComponent_GetFriction(uint64_t entityID, float *result)
+        {
+            if (!result)
+            {
+                return;
+            }
 
-			*result = 0.0f;
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
-			{
-				return;
-			}
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+                return;
 
-			*result = entity.GetComponent<CircleCollider2DComponent>().friction;
-		}
+            *result = entity.GetComponent<CircleCollider2DComponent>().friction;
+        }
 
-		static void CircleCollider2DComponent_SetFriction(uint64_t entityID, float value)
-		{
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
-			{
-				return;
-			}
+        static void CircleCollider2DComponent_SetFriction(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+                return;
 
-			entity.GetComponent<CircleCollider2DComponent>().friction = value;
-		}
+            entity.GetComponent<CircleCollider2DComponent>().friction = value;
+        }
 
-		static void CircleCollider2DComponent_GetDensity(uint64_t entityID, float *result)
-		{
-			if (!result)
-			{
-				return;
-			}
+        static void CircleCollider2DComponent_GetDensity(uint64_t entityID, float *result)
+        {
+            if (!result)
+            {
+                return;
+            }
 
-			*result = 0.0f;
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
-			{
-				return;
-			}
+            *result = 0.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+                return;
 
-			*result = entity.GetComponent<CircleCollider2DComponent>().density;
-		}
+            *result = entity.GetComponent<CircleCollider2DComponent>().density;
+        }
 
-		static void CircleCollider2DComponent_SetDensity(uint64_t entityID, float value)
-		{
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
-			{
-				return;
-			}
+        static void CircleCollider2DComponent_SetDensity(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+                return;
 
-			entity.GetComponent<CircleCollider2DComponent>().density = value;
-		}
+            entity.GetComponent<CircleCollider2DComponent>().density = value;
+        }
 
-		static void CircleCollider2DComponent_GetIsSensor(uint64_t entityID, bool *result)
-		{
-			if (!result)
-			{
-				return;
-			}
+        static void CircleCollider2DComponent_GetIsSensor(uint64_t entityID, bool *result)
+        {
+            if (!result)
+            {
+                return;
+            }
 
-			*result = false;
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
-			{
-				return;
-			}
+            *result = false;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+                return;
 
-			*result = entity.GetComponent<CircleCollider2DComponent>().isSensor;
-		}
+            *result = entity.GetComponent<CircleCollider2DComponent>().isSensor;
+        }
 
-		static void CircleCollider2DComponent_SetIsSensor(uint64_t entityID, bool value)
-		{
-			Entity entity = GetEntityByID(entityID);
-			if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
-			{
-				return;
-			}
+        static void CircleCollider2DComponent_SetIsSensor(uint64_t entityID, bool value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<CircleCollider2DComponent>())
+                return;
 
-			entity.GetComponent<CircleCollider2DComponent>().isSensor = value;
-		}
+            entity.GetComponent<CircleCollider2DComponent>().isSensor = value;
+        }
+
+        static char *AllocStringForManaged(const std::string &str)
+        {
+            const size_t len = str.size();
+            char *mem = static_cast<char *>(CoTaskMemAlloc(len + 1));
+            if (!mem)
+                return nullptr;
+            std::memcpy(mem, str.c_str(), len);
+            mem[len] = '\0';
+            return mem;
+        }
+
+        static void TextComponent_SetText(uint64_t entityID, const char *value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<TextComponent>())
+                return;
+
+            entity.GetComponent<TextComponent>().text = std::string(value ? value : "");
+        }
+
+        static void TextComponent_GetText(uint64_t entityID, const char **result)
+        {
+            if (!result)
+                return;
+
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<TextComponent>())
+                return;
+
+            const std::string &text = entity.GetComponent<TextComponent>().text;
+            *result = AllocStringForManaged(text);
+        }
+
+        static void TextComponent_SetColor(uint64_t entityID, const glm::vec4 &value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<TextComponent>())
+                return;
+
+            entity.GetComponent<TextComponent>().color = value;
+        }
+
+        static void TextComponent_GetColor(uint64_t entityID, glm::vec4 *result)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<TextComponent>())
+                return;
+
+            *result = entity.GetComponent<TextComponent>().color;
+        }
+
+        static void TextComponent_SetKerning(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<TextComponent>())
+                return;
+
+            entity.GetComponent<TextComponent>().kerning = value;
+        }
+
+        static void TextComponent_GetKerning(uint64_t entityID, float *result)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<TextComponent>())
+                return;
+
+            *result = entity.GetComponent<TextComponent>().kerning;
+        }
+
+        static void TextComponent_SetLineSpacing(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<TextComponent>())
+                return;
+
+            entity.GetComponent<TextComponent>().lineSpacing = value;
+        }
+
+        static void TextComponent_GetLineSpacing(uint64_t entityID, float *result)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<TextComponent>())
+                return;
+
+            *result = entity.GetComponent<TextComponent>().lineSpacing;
+        }
 
         static const ScriptGlueAPI s_API =
         {
@@ -2352,6 +2293,7 @@ namespace ignite
             &Entity_Destroy,
             &Entity_SetVisibility,
             &Entity_GetVisibility,
+            &Entity_GetName,
             &WidgetComponent_HasButton,
             &WidgetComponent_AddButtonEventCallback,
             &WidgetComponent_RemoveButtonEventCallback,
@@ -2404,8 +2346,8 @@ namespace ignite
             &Sprite2DComponent_SetTilingFactor,
             &Sprite2DComponent_GetTilingFactor,
 
-			&Circle2DComponent_SetColor,
-			&Circle2DComponent_GetColor,
+            &Circle2DComponent_SetColor,
+            &Circle2DComponent_GetColor,
 
             &Rigidbody2DComponent_GetType,
             &Rigidbody2DComponent_SetType,
@@ -2448,18 +2390,27 @@ namespace ignite
             &BoxCollider2DComponent_GetIsSensor,
             &BoxCollider2DComponent_SetIsSensor,
 
-			&CircleCollider2DComponent_GetCenter,
-			&CircleCollider2DComponent_SetCenter,
-			&CircleCollider2DComponent_GetRadius,
-			&CircleCollider2DComponent_SetRadius,
-			&CircleCollider2DComponent_GetRestitution,
-			&CircleCollider2DComponent_SetRestitution,
-			&CircleCollider2DComponent_GetFriction,
-			&CircleCollider2DComponent_SetFriction,
-			&CircleCollider2DComponent_GetDensity,
-			&CircleCollider2DComponent_SetDensity,
-			&CircleCollider2DComponent_GetIsSensor,
-			&CircleCollider2DComponent_SetIsSensor,
+            &CircleCollider2DComponent_GetCenter,
+            &CircleCollider2DComponent_SetCenter,
+            &CircleCollider2DComponent_GetRadius,
+            &CircleCollider2DComponent_SetRadius,
+            &CircleCollider2DComponent_GetRestitution,
+            &CircleCollider2DComponent_SetRestitution,
+            &CircleCollider2DComponent_GetFriction,
+            &CircleCollider2DComponent_SetFriction,
+            &CircleCollider2DComponent_GetDensity,
+            &CircleCollider2DComponent_SetDensity,
+            &CircleCollider2DComponent_GetIsSensor,
+            &CircleCollider2DComponent_SetIsSensor,
+
+            &TextComponent_SetText,
+            &TextComponent_GetText,
+            &TextComponent_SetColor,
+            &TextComponent_GetColor,
+            &TextComponent_SetKerning,
+            &TextComponent_GetKerning,
+            &TextComponent_SetLineSpacing,
+            &TextComponent_GetLineSpacing,
         };
     }
 

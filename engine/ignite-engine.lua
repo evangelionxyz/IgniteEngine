@@ -37,6 +37,7 @@ project "IgniteEngine"
         "%{IncludeDir.YAMLCPP}",
         "%{IncludeDir.TINYGLTF}",
         "%{IncludeDir.JSON}",
+        "%{IncludeDir.NUKLEAR}",
         "%{IncludeDir.MochiSharpNative}",
         "%{IncludeDir.Hostfxr}",
         "%{IncludeDir.ASSIMP}",

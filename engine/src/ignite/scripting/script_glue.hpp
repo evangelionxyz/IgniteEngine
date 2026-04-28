@@ -12,7 +12,7 @@ namespace ignite
     {
         void (*Debug_Log)(const char *message);
 
-        uint64_t(*Scene_PickEntityAt)(float mouseX, float mouseY, glm::vec2 viewportMin, glm::vec2 viewportMax);
+        uint64_t(*Scene_PickEntityAt)(float x, float y);
 
         bool (*Entity_HasComponent)(uint64_t entityID, const char *componentTypeName);
         void (*Entity_AddComponent)(uint64_t entityID, const char *componentTypeName);
@@ -21,6 +21,8 @@ namespace ignite
         void (*Entity_Destroy)(uint64_t entityID);
         void (*Entity_SetVisibility)(uint64_t entityID, bool value);
         void (*Entity_GetVisibility)(uint64_t entityID, bool *result);
+        const char *(*Entity_GetName)(uint64_t entityID);
+
         bool (*WidgetComponent_HasButton)(uint64_t entityID, const char *buttonName);
         bool (*WidgetComponent_AddButtonEventCallback)(uint64_t entityID, const char *buttonName, int32_t eventType, const char *methodName);
         bool (*WidgetComponent_RemoveButtonEventCallback)(uint64_t entityID, const char *buttonName, int32_t eventType, const char *methodName);
@@ -130,6 +132,15 @@ namespace ignite
 		void (*CircleCollider2DComponent_SetDensity)(uint64_t entityID, float value);
 		void (*CircleCollider2DComponent_GetIsSensor)(uint64_t entityID, bool *result);
 		void (*CircleCollider2DComponent_SetIsSensor)(uint64_t entityID, bool value);
+
+        void (*TextComponent_SetText)(uint64_t entityID, const char *value);
+        void (*TextComponent_GetText)(uint64_t entityID, const char **result);
+        void (*TextComponent_SetColor)(uint64_t entityID, const glm::vec4 &value);
+        void (*TextComponent_GetColor)(uint64_t entityID, glm::vec4 *result);
+        void (*TextComponent_SetKerning)(uint64_t entityID, float value);
+        void (*TextComponent_GetKerning)(uint64_t entityID, float *result);
+        void (*TextComponent_SetLineSpacing)(uint64_t entityID, float value);
+        void (*TextComponent_GetLineSpacing)(uint64_t entityID, float *result);
     };
 
     class ScriptGlue

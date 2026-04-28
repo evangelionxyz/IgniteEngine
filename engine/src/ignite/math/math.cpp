@@ -1,31 +1,6 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
 
 #include "math.hpp"
-
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/matrix_decompose.hpp>
-
 #include "ignite/scene/component.hpp"
 
 namespace ignite
@@ -62,61 +37,40 @@ namespace ignite
 
     bool Math::DecomposeTransform(const glm::mat4 &transform, glm::vec3 &translation, glm::quat &outOrientation, glm::vec3 &outScale)
     {
-        // From glm::decompose in matrix_decompose.inl
-
-        using namespace glm;
-        using T = float;
-
-        mat4 localMatrix(transform);
+        glm::mat4 localMatrix(transform);
 
         // Normalize the matrix.
-        if (epsilonEqual(localMatrix[3][3], static_cast<float>(0), epsilon<T>()))
+        if (glm::epsilonEqual(localMatrix[3][3], static_cast<float>(0), glm::epsilon<float>()))
             return false;
 
         // First, isolate perspective. This is the messiest.
-        if (
-            epsilonNotEqual(localMatrix[0][3], static_cast<T>(0), epsilon<T>()) ||
-            epsilonNotEqual(localMatrix[1][3], static_cast<T>(0), epsilon<T>()) ||
-            epsilonNotEqual(localMatrix[2][3], static_cast<T>(0), epsilon<T>()))
+        if (glm::epsilonNotEqual(localMatrix[0][3], static_cast<float>(0), glm::epsilon<float>()) ||
+            glm::epsilonNotEqual(localMatrix[1][3], static_cast<float>(0), glm::epsilon<float>()) ||
+            glm::epsilonNotEqual(localMatrix[2][3], static_cast<float>(0), glm::epsilon<float>()))
         {
             // Clear the perspective partition
-            localMatrix[0][3] = localMatrix[1][3] = localMatrix[2][3] = static_cast<T>(0);
-            localMatrix[3][3] = static_cast<T>(1);
+            localMatrix[0][3] = localMatrix[1][3] = localMatrix[2][3] = static_cast<float>(0);
+            localMatrix[3][3] = static_cast<float>(1);
         }
 
         // Next take care of translation (easy).
-        translation = vec3(localMatrix[3]);
-        localMatrix[3] = vec4(0, 0, 0, localMatrix[3].w);
+        translation = glm::vec3(localMatrix[3]);
+        localMatrix[3] = glm::vec4(0, 0, 0, localMatrix[3].w);
 
-        vec3 Row[3], Pdum3{};
+        glm::vec3 Row[3], Pdum3{};
 
         // Now get scale and shear.
-        for (length_t i = 0; i < 3; ++i)
-            for (length_t j = 0; j < 3; ++j)
+        for (glm::length_t i = 0; i < 3; ++i)
+            for (glm::length_t j = 0; j < 3; ++j)
                 Row[i][j] = localMatrix[i][j];
 
         // Compute X scale factor and normalize first row.
         outScale.x = length(Row[0]);
-        Row[0] = detail::scale(Row[0], static_cast<T>(1));
+        Row[0] = glm::detail::scale(Row[0], static_cast<float>(1));
         outScale.y = length(Row[1]);
-        Row[1] = detail::scale(Row[1], static_cast<T>(1));
+        Row[1] = glm::detail::scale(Row[1], static_cast<float>(1));
         outScale.z = length(Row[2]);
-        Row[2] = detail::scale(Row[2], static_cast<T>(1));
-
-        // At this point, the matrix (in rows[]) is orthonormal.
-        // Check for a coordinate system flip.  If the determinant
-        // is -1, then negate the matrix and the scaling factors.
-    #if 0
-        Pdum3 = cross(Row[1], Row[2]); // v3Cross(row[1], row[2], Pdum3);
-        if (dot(Row[0], Pdum3) < 0)
-        {
-            for (length_t i = 0; i < 3; i++)
-            {
-                scale[i] *= static_cast<T>(-1);
-                Row[i] *= static_cast<T>(-1);
-            }
-        }
-    #endif
+        Row[2] = glm::detail::scale(Row[2], static_cast<float>(1));
 
         outOrientation.y = asin(-Row[0][2]);
         if (cos(outOrientation.y) != 0)
@@ -136,61 +90,40 @@ namespace ignite
 
     bool Math::DecomposeTransformEuler(const glm::mat4 &transform, glm::vec3 &outTranslation, glm::vec3 &outRotation, glm::vec3 &outScale)
     {
-        // From glm::decompose in matrix_decompose.inl
-
-        using namespace glm;
-        using T = float;
-
-        mat4 localMatrix(transform);
+        glm::mat4 localMatrix(transform);
 
         // Normalize the matrix.
-        if (epsilonEqual(localMatrix[3][3], static_cast<float>(0), epsilon<T>()))
+        if (glm::epsilonEqual(localMatrix[3][3], static_cast<float>(0), glm::epsilon<float>()))
             return false;
 
         // First, isolate perspective.  This is the messiest.
-        if (
-            epsilonNotEqual(localMatrix[0][3], static_cast<T>(0), epsilon<T>()) ||
-            epsilonNotEqual(localMatrix[1][3], static_cast<T>(0), epsilon<T>()) ||
-            epsilonNotEqual(localMatrix[2][3], static_cast<T>(0), epsilon<T>()))
+        if (glm::epsilonNotEqual(localMatrix[0][3], static_cast<float>(0), glm::epsilon<float>()) ||
+            glm::epsilonNotEqual(localMatrix[1][3], static_cast<float>(0), glm::epsilon<float>()) ||
+            glm::epsilonNotEqual(localMatrix[2][3], static_cast<float>(0), glm::epsilon<float>()))
         {
             // Clear the perspective partition
-            localMatrix[0][3] = localMatrix[1][3] = localMatrix[2][3] = static_cast<T>(0);
-            localMatrix[3][3] = static_cast<T>(1);
+            localMatrix[0][3] = localMatrix[1][3] = localMatrix[2][3] = static_cast<float>(0);
+            localMatrix[3][3] = static_cast<float>(1);
         }
 
         // Next take care of translation (easy).
-        outTranslation = vec3(localMatrix[3]);
-        localMatrix[3] = vec4(0, 0, 0, localMatrix[3].w);
+        outTranslation = glm::vec3(localMatrix[3]);
+        localMatrix[3] = glm::vec4(0, 0, 0, localMatrix[3].w);
 
-        vec3 Row[3];
+        glm::vec3 Row[3];
 
         // Now get scale and shear.
-        for (length_t i = 0; i < 3; ++i)
-            for (length_t j = 0; j < 3; ++j)
+        for (glm::length_t i = 0; i < 3; ++i)
+            for (glm::length_t j = 0; j < 3; ++j)
                 Row[i][j] = localMatrix[i][j];
 
         // Compute X scale factor and normalize first row.
         outScale.x = length(Row[0]);
-        Row[0] = detail::scale(Row[0], static_cast<T>(1));
+        Row[0] = glm::detail::scale(Row[0], static_cast<float>(1));
         outScale.y = length(Row[1]);
-        Row[1] = detail::scale(Row[1], static_cast<T>(1));
+        Row[1] = glm::detail::scale(Row[1], static_cast<float>(1));
         outScale.z = length(Row[2]);
-        Row[2] = detail::scale(Row[2], static_cast<T>(1));
-
-        // At this point, the matrix (in rows[]) is orthonormal.
-        // Check for a coordinate system flip.  If the determinant
-        // is -1, then negate the matrix and the scaling factors.
-    #if 0
-        Pdum3 = cross(Row[1], Row[2]); // v3Cross(row[1], row[2], Pdum3);
-        if (dot(Row[0], Pdum3) < 0)
-        {
-            for (length_t i = 0; i < 3; i++)
-            {
-                scale[i] *= static_cast<T>(-1);
-                Row[i] *= static_cast<T>(-1);
-            }
-        }
-    #endif
+        Row[2] = glm::detail::scale(Row[2], static_cast<float>(1));
 
         outRotation.y = asin(-Row[0][2]);
         if (cos(outRotation.y) != 0)
@@ -215,7 +148,8 @@ namespace ignite
         return v;
     }
 
-    glm::vec3 Math::WorldToScreen(const glm::vec3 &worldPosition, const glm::mat4 &worldTransform, const glm::mat4 &viewProjection, const glm::vec2 &screenSize)
+    glm::vec3 Math::WorldToScreen(const glm::vec3 &worldPosition, const glm::mat4 &worldTransform,
+        const glm::mat4 &viewProjection, const glm::vec2 &screenSize)
     {
         glm::vec4 modelPos = worldTransform * glm::vec4(worldPosition, 1.0f);
         glm::vec4 clipPos = viewProjection * modelPos;
@@ -248,7 +182,7 @@ namespace ignite
     glm::vec2 Math::GetNormalizedDeviceCoord(const glm::vec2 &position, const glm::vec2 &screen)
     {
         float x = (2.0f * position.x) / screen.x - 1.0f;
-        float y = 1.0f - (2.0f * position.y) / screen.y;
+        float y = (2.0f * position.y) / screen.y - 1.0f;
         return { x, y };
     }
 
@@ -265,10 +199,11 @@ namespace ignite
         return glm::normalize(glm::vec3(worldCoords));
     }
 
-    glm::vec3 Math::GetRayFromScreenCoords(const glm::vec2 &coord, const glm::vec2 &screen, const glm::mat4 &projection, const glm::mat4 &view, bool isPerspective, glm::vec3 &outRayOrigin)
+    glm::vec3 Math::GetRayFromScreenCoords(const glm::vec2 &coord, const glm::vec2 &screen, const glm::mat4 &projection,
+        const glm::mat4 &view, bool isPerspective, glm::vec3 &outRayOrigin)
     {
         glm::vec2 ndc = GetNormalizedDeviceCoord(coord, screen);
-        glm::vec4 hmc = glm::vec4(ndc.x, -ndc.y, -1.0f, 1.0f);
+        glm::vec4 hmc = glm::vec4(ndc.x, ndc.y, -1.0f, 1.0f);
 
         if (isPerspective)
         {
@@ -335,7 +270,8 @@ namespace ignite
 
     glm::mat4 Math::RemoveScale(const glm::mat4 &matrix)
     {
-        glm::vec3 scale(
+        glm::vec3 scale
+        (
             glm::length(glm::vec3(matrix[0])),
             glm::length(glm::vec3(matrix[1])),
             glm::length(glm::vec3(matrix[2]))
@@ -349,26 +285,26 @@ namespace ignite
         return result;
     }
 
-    float Math::CascadeSplit(i32 index, i32 cascade_count, f32 near_plane, f32 far_plane, f32 lambda)
+    float Math::CascadeSplit(int32_t index, int32_t cascadeCount, float nearPlane, float farPlane, float lambda)
     {
-        f32 linear_split = near_plane + (far_plane - near_plane) * (index / cascade_count);
-        f32 log_split = near_plane * static_cast<f32>(pow(far_plane / near_plane, index / cascade_count));
+        float linear_split = nearPlane + (farPlane - nearPlane) * (index / cascadeCount);
+        float log_split = nearPlane * static_cast<float>(pow(farPlane / nearPlane, index / cascadeCount));
         return lambda * log_split + (1.0f - lambda) * linear_split;
     }
 
-    void Math::ComputeCascadeMatrices(const glm::vec3 &cameraPos, const glm::mat4 &cameraView, const glm::mat4 &cameraProjection, const glm::vec3 lightDirection, i32 cascadedCount, const std::vector<f32> &cascedSplits, std::vector<glm::mat4> &cascadeLightMatrices)
+    void Math::ComputeCascadeMatrices(const glm::vec3 &cameraPos, const glm::mat4 &view, const glm::mat4 &projection, const glm::vec3 lightDirection, int32_t cascadedCount, const std::vector<float> &cascedSplits, std::vector<glm::mat4> &cascadeLightMatrices)
     {
         glm::mat4 lightViewProjection = glm::lookAt(-lightDirection * 1000.0f, glm::vec3(0.0f), glm::vec3(0, 1, 0));
 
-        for (i32 i = 0; i < cascadedCount; ++i)
+        for (int32_t i = 0; i < cascadedCount; ++i)
         {
             std::array<glm::vec4, 8> frustumCorners;
-            ExtractFrustumCorners(cameraView, cameraProjection, cascedSplits[i - 1], cascedSplits[i], frustumCorners.data());
+            ExtractFrustumCorners(view, projection, cascedSplits[i - 1], cascedSplits[i], frustumCorners.data());
 
             auto minBounds = glm::vec3(FLT_MAX);
             auto maxBounds = glm::vec3(-FLT_MAX);
 
-            for (i32 j = 0; j < 8; ++j)
+            for (int32_t j = 0; j < 8; ++j)
             {
                 glm::vec3 corner_light_space = glm::vec3(lightViewProjection * frustumCorners[j]);
                 minBounds = glm::min(minBounds, corner_light_space);
@@ -380,7 +316,7 @@ namespace ignite
         }
     }
 
-    void Math::ExtractFrustumCorners(const glm::mat4 &view, const glm::mat4 &projection, f32 nearPlane, f32 farPlane, glm::vec4 outCorners[8])
+    void Math::ExtractFrustumCorners(const glm::mat4 &view, const glm::mat4 &projection, float nearPlane, float farPlane, glm::vec4 outCorners[8])
     {
         glm::mat4 inverseViewProjection = glm::inverse(projection * view);
 
@@ -398,7 +334,7 @@ namespace ignite
         }
     }
 
-    glm::vec3 Math::SnapToGrid(glm::vec3 position, f32 texelSize)
+    glm::vec3 Math::SnapToGrid(glm::vec3 position, float texelSize)
     {
         return glm::floor(position / texelSize) * texelSize;
     }

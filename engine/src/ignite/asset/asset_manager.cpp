@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
 
 #include "asset_manager.hpp"
 #include "asset_importer.hpp"
@@ -28,20 +7,13 @@
 #include "ignite/core/base.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/texture.hpp"
-
-#include "ignite/core/logger.hpp"
 #include <cstdint>
 
 #include <fbxsdk.h>
 
 namespace ignite {
 
-	static std::mutex s_AssetThreadMutex;
-	static AssetMetaData s_NullMetaData;
-
-    namespace
-    {
-    }
+    static AssetMetaData s_NullMetaData;
 
     AssetManager::AssetManager(Project *project)
         : m_Running(true), m_Project(project)
@@ -54,7 +26,7 @@ namespace ignite {
             m_Workers.emplace_back(&AssetManager::WorkerLoop, this);
         }
 
-		for (uint32_t i = 0; i < THREAD_COUNT; ++i)
+        for (uint32_t i = 0; i < THREAD_COUNT; ++i)
         {
             std::stringstream ss;
             ss << m_Workers[i].get_id();
@@ -65,7 +37,7 @@ namespace ignite {
 
     bool AssetManager::IsAssetLoaded(AssetHandle handle) const
     {
-        std::unique_lock lock(s_AssetThreadMutex);
+        std::unique_lock lock(m_AssetMutex);
 
         const auto it = m_LoadedAssets.find(handle);
         if (it == m_LoadedAssets.end() || !it->second)
@@ -78,7 +50,7 @@ namespace ignite {
 
     bool AssetManager::IsAssetLoading(AssetHandle handle) const
     {
-        std::unique_lock lock(s_AssetThreadMutex);
+        std::unique_lock lock(m_AssetMutex);
 
         if (m_LoadingAssets.contains(handle))
         {
@@ -97,7 +69,7 @@ namespace ignite {
     AssetManager::~AssetManager()
     {
         {
-            std::unique_lock lock(s_AssetThreadMutex);
+            std::unique_lock lock(m_JobMutex);
             m_Running = false;
         }
 
@@ -151,13 +123,13 @@ namespace ignite {
         if (handle == AssetHandle(0))
         {
             handle = AssetHandle();
-            Import(handle, metadata);
             AssignMetaData(handle, metadata);
+            GetAsset(handle);
         }
         else
         {
             // get the asset
-            Ref<Asset> asset = GetAsset(handle);
+            Ref<Asset> asset = GetAsset<Asset>(handle);
             if (!asset)
             {
                 AssignMetaData(handle, metadata);
@@ -170,8 +142,6 @@ namespace ignite {
 
     void AssetManager::AssignMetaData(AssetHandle handle, const AssetMetaData &metadata)
     {
-        IGN_PROFILE_FUNCTION();
-
         m_AssetRegistry[handle] = metadata;
     }
 
@@ -194,7 +164,6 @@ namespace ignite {
     void AssetManager::RemoveAsset(AssetHandle handle)
     {
         IGN_PROFILE_FUNCTION();
-
         auto it = m_AssetRegistry.find(handle);
         if (it != m_AssetRegistry.end())
             m_AssetRegistry.erase(it);
@@ -206,14 +175,13 @@ namespace ignite {
 
         LOG_TRACE("[Asset Manager] Clearing all loaded assets (Count: {})", m_LoadedAssets.size());
         
-        // Wait for GPU operations to complete before releasing assets
         if (auto* device = DeviceManager::GetInstance()->GetDevice())
         {
             GPUUploadSync::DeviceWaitIdle(device);
         }
         
         {
-            std::unique_lock lock(s_AssetThreadMutex);
+            std::unique_lock lock(m_AssetMutex);
             m_LoadedAssets.clear();
         }
         
@@ -224,7 +192,7 @@ namespace ignite {
     {
         IGN_PROFILE_FUNCTION();
 
-        std::unique_lock lock(s_AssetThreadMutex);
+        std::unique_lock lock(m_AssetMutex);
         
         auto it = m_LoadedAssets.find(handle);
         if (it != m_LoadedAssets.end())
@@ -241,8 +209,6 @@ namespace ignite {
             {
                 GPUUploadSync::DeviceWaitIdle(device);
             }
-
-            // asset will be destroyed here when going out of scope
         }
     }
 
@@ -255,9 +221,8 @@ namespace ignite {
         std::vector<AssetHandle> assetsToUnload;
         std::vector<Ref<Asset>> assetsToDestroy;
 
-        // Find assets that are only referenced by m_LoadedAssets (use_count == 1)
         {
-            std::unique_lock lock(s_AssetThreadMutex);
+            std::unique_lock lock(m_AssetMutex);
 
             for (const auto &[handle, asset] : m_LoadedAssets)
             {
@@ -303,107 +268,13 @@ namespace ignite {
         IGN_PROFILE_FUNCTION();
 
         {
-            std::unique_lock lock(s_AssetThreadMutex);
+            std::unique_lock lock(m_JobMutex);
             m_Jobs.push(std::move(job));
         }
 
         m_ConditionVariable.notify_one();
     }
-
-    Ref<Asset> AssetManager::GetAsset(AssetHandle handle, AssetType requestedAssetType)
-    {
-        IGN_PROFILE_FUNCTION();
-
-        if (!IsAssetHandleValid(handle))
-        {
-            return nullptr;
-        }
-
-        // Quick check if already loaded (no lock needed for read)
-        {
-            std::unique_lock lock(s_AssetThreadMutex);
-            
-            // Return immediately if loaded
-            if (m_LoadedAssets.contains(handle))
-            {
-                return m_LoadedAssets[handle];
-            }
-            
-            // Check if already loading to avoid duplicate work
-            if (m_LoadingAssets.contains(handle))
-            {
-                // Asset is being loaded on another thread, return nullptr for now
-                // Caller should check IsAssetLoaded() or retry later
-                return nullptr;
-            }
-            
-            // Mark as loading
-            m_LoadingAssets.insert(handle);
-        }
-
-        // Submit import work to worker thread
-        const AssetMetaData metadata = GetMetaData(handle);
-        
-        SubmitJob([this, handle, metadata, requestedAssetType]()
-        {
-            try
-            {
-                // Do the heavy I/O work on worker thread
-                Ref<Asset> asset = Import(handle, metadata, requestedAssetType);
-                
-                if (asset)
-                {
-					std::stringstream ss;
-					ss << std::this_thread::get_id();
-					unsigned long long threadId = std::stoull(ss.str());
-                    LOG_TRACE("[Asset Manager] Asset loaded on worker thread [{0}]: {1} ({2})",
-                        threadId,
-                        static_cast<uint64_t>(handle), 
-                        metadata.filepath.generic_string());
-                }
-            }
-            catch (const std::exception& e)
-            {
-                LOG_ERROR("[Asset Manager] Failed to import asset {} \"{}\": {}", 
-                    static_cast<uint64_t>(handle), metadata.filepath.generic_string(), e.what());
-            }
-            
-            // Remove from loading set
-            {
-                std::unique_lock lock(s_AssetThreadMutex);
-                m_LoadingAssets.erase(handle);
-            }
-        });
-        
-        // Return nullptr immediately - asset will be loaded asynchronously
-        // Caller should check IsAssetLoaded() or use a callback pattern
-        return nullptr;
-    }
-
-    Ref<Asset> AssetManager::GetAssetImmediate(AssetHandle handle, AssetType requestedAssetType)
-    {
-        if (!IsAssetHandleValid(handle))
-        {
-            return nullptr;
-        }
-
-        // Check if already loaded
-        {
-            std::unique_lock lock(s_AssetThreadMutex);
-            if (m_LoadedAssets.contains(handle))
-            {
-                return m_LoadedAssets[handle];
-            }
-        }
-
-        // Synchronous load - blocks calling thread
-        const AssetMetaData metadata = GetMetaData(handle);
-        LOG_TRACE("[Asset Manager] Synchronous asset load requested: {}", 
-            metadata.filepath.generic_string());
-        
-        return Import(handle, metadata, requestedAssetType);
-    }
-
+    
     AssetType AssetManager::GetAssetType(AssetHandle handle) const
     {
         return GetMetaData(handle).type;
@@ -430,7 +301,6 @@ namespace ignite {
 
     AssetHandle AssetManager::GetAssetHandle(const std::filesystem::path& filepath)
     {
-        // Normalize the input filepath to absolute path for comparison
         std::filesystem::path absoluteFilepath = std::filesystem::absolute(m_Project->GetAssetFilepath(filepath));
 
         for (const auto &[handle, metadata] : m_AssetRegistry)
@@ -460,7 +330,7 @@ namespace ignite {
         return static_cast<uint64_t>(handle) != 0 && m_AssetRegistry.contains(handle);
     }
 
-	void AssetManager::WorkerLoop()
+    void AssetManager::WorkerLoop()
     {
         while (true)
         {
@@ -469,7 +339,7 @@ namespace ignite {
             {
                 IGN_PROFILE_SCOPE("AssetManager::WorkerLoop");
 
-                std::unique_lock lock(s_AssetThreadMutex);
+                std::unique_lock lock(m_JobMutex);
                 m_ConditionVariable.wait(lock, [this]() { return !m_Running || !m_Jobs.empty(); });
 
                 // stop the loop if engine is shutting down
@@ -499,13 +369,11 @@ namespace ignite {
         }
     }
 
-    Ref<Asset> AssetManager::Import(AssetHandle handle, const AssetMetaData &metadata, AssetType requestedAssetType)
+    Ref<Asset> AssetManager::Import(AssetHandle handle, const AssetMetaData &metadata)
     {
         IGN_PROFILE_FUNCTION();
 
-        // Check if already loaded (thread-safe read)
         {
-            std::unique_lock lock(s_AssetThreadMutex);
             if (m_LoadedAssets.contains(handle))
             {
                 return m_LoadedAssets[handle];
@@ -515,11 +383,6 @@ namespace ignite {
         Ref<Asset> asset;
 
         AssetMetaData getterMetadata = metadata;
-        if (requestedAssetType != AssetType::Auto && requestedAssetType != AssetType::Invalid)
-        {
-            getterMetadata.type = requestedAssetType;
-        }
-
         switch (getterMetadata.type)
         {
             case AssetType::Invalid:
@@ -541,11 +404,7 @@ namespace ignite {
             case AssetType::AnimatorController2D:
             {
                 asset = AssetImporter::Import(handle, getterMetadata, this);
-
-                // Thread-safe assignment
                 {
-                    std::unique_lock lock(s_AssetThreadMutex);
-                    // Double-check if another thread loaded it while we were importing
                     if (m_LoadedAssets.contains(handle))
                     {
                         return m_LoadedAssets[handle];
@@ -574,10 +433,7 @@ namespace ignite {
                     asset = AssetImporter::Import(handle, getterMetadata, this);
                 }
 
-                // Thread-safe assignment
                 {
-                    std::unique_lock lock(s_AssetThreadMutex);
-                    // Double-check if another thread loaded it while we were importing
                     if (m_LoadedAssets.contains(handle))
                     {
                         return m_LoadedAssets[handle];
@@ -595,5 +451,4 @@ namespace ignite {
 
         return asset;
     }
-
 }

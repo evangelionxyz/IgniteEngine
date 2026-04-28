@@ -306,11 +306,7 @@ namespace ignite
         if (!assetManager || skeletonHandle == AssetHandle(0))
             return false;
 
-        Ref<Asset> skeletonAsset = assetManager->GetAsset(skeletonHandle);
-        if (!skeletonAsset)
-            skeletonAsset = assetManager->GetAssetImmediate(skeletonHandle);
-
-        Ref<Skeleton> skeleton = skeletonAsset ? skeletonAsset->As<Skeleton>() : nullptr;
+        Ref<Skeleton> skeleton = assetManager->GetAsset<Skeleton>(skeletonHandle);
         if (!skeleton)
             return false;
 
@@ -333,11 +329,8 @@ namespace ignite
         if (!state || state->animHandle == AssetHandle(0))
             return false;
 
-        Ref<Asset> animationAsset = assetManager->GetAsset(state->animHandle);
-        if (!animationAsset)
-            animationAsset = assetManager->GetAssetImmediate(state->animHandle);
+        Ref<SkeletalAnimation> animation = assetManager->GetAsset<SkeletalAnimation>(state->animHandle);
 
-        Ref<SkeletalAnimation> animation = animationAsset ? animationAsset->As<SkeletalAnimation>() : nullptr;
         if (!animation || animation->duration <= 0.0f)
             return false;
 
@@ -362,13 +355,7 @@ namespace ignite
                 runtime.stateNormalized = 0.0f;
 
                 state = nextState;
-                animationAsset = assetManager->GetAsset(state->animHandle);
-                if (!animationAsset)
-                {
-                    animationAsset = assetManager->GetAssetImmediate(state->animHandle);
-                }
-                
-                animation = animationAsset ? animationAsset->As<SkeletalAnimation>() : nullptr;
+                animation = assetManager->GetAsset<SkeletalAnimation>(state->animHandle);
                 
                 if (!animation || animation->duration <= 0.0f)
                     return false;

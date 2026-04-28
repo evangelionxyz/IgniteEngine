@@ -108,6 +108,7 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
         std::queue<std::pair<std::function<void()>, std::string>> pending;
+
         {
             std::lock_guard lock(m_RenderThreadFuncsMutex);
             pending.swap(m_RenderThreadFuncs);
@@ -133,23 +134,21 @@ namespace ignite
     void Application::ProcessMainThreadSubmissions()
     {
         IGN_PROFILE_FUNCTION();
-        // Process all pending submissions
-        if (!m_ThreadFuncs.empty())
-        {
-            std::pair<std::function<void()>, std::string> func;
 
-            {
-                std::lock_guard lock(m_ThreadFuncsMutex);
-                func = m_ThreadFuncs.front();
-            }
-            
-            // Execute outside lock
+        std::queue<std::pair<std::function<void()>, std::string>> pending;
+        
+        {
+            std::lock_guard lock(m_ThreadFuncsMutex);
+            pending.swap(m_ThreadFuncs);
+        }
+
+        while (!pending.empty())
+        {
+            auto func = std::move(pending.front());
+            pending.pop();
             if (func.first)
             {
                 func.first();
-
-                std::lock_guard lock(m_ThreadFuncsMutex);
-                m_ThreadFuncs.pop();
             }
         }
     }
@@ -169,7 +168,7 @@ namespace ignite
 
         while (m_RenderThreadRunning)
         {
-            uint64_t currentFrame;
+            uint64_t currentFrame = 0;
             nvrhi::IFramebuffer *framebuffer = nullptr;
             {
                 IGN_PROFILE_SCOPE("RenderThread::WaitForFrameReady");
@@ -231,7 +230,6 @@ namespace ignite
             // Record statistics
             Renderer::BeginStats();
 
-
             // Render layers
             {
                 IGN_PROFILE_SCOPE("RenderThread::LayerRender");
@@ -242,34 +240,32 @@ namespace ignite
                 }
             }
 
-            // ImGui rendering
             if (m_CreateInfo.useGui && m_ImGuiLayer)
             {
-                IGN_PROFILE_SCOPE("RenderThread::ImGuiRender");
+                IGN_PROFILE_SCOPE("RenderThread::ImGuiBeginFrame");
                 m_ImGuiLayer->BeginFrame();
+            }
 
+            if (m_CreateInfo.useGui)
+            {
+                IGN_PROFILE_SCOPE("RenderThread::OnGuiRender");
+                for (auto it = m_LayerStack.begin(); it != m_LayerStack.end(); ++it)
                 {
-                    IGN_PROFILE_SCOPE("RenderThread::ImGuiOnGuiRender");
-                    for (auto it = m_LayerStack.begin(); it != m_LayerStack.end(); ++it)
-                    {
-                        Layer *layer = *it;
-                        if (layer == m_ImGuiLayer)
-                        {
-                            continue;
-                        }
-                        layer->OnGuiRender();
-                    }
-                }
+                    Layer *layer = *it;
+                    if (layer == m_ImGuiLayer)
+                        continue;
 
-                {
-                    IGN_PROFILE_SCOPE("RenderThread::ImGuiEndFrame");
-                    m_ImGuiLayer->EndFrame(framebuffer);
+                    layer->OnGuiRender();
                 }
+            }
 
-                {
-                    IGN_PROFILE_SCOPE("RenderThread::ImGuiRenderPlatformWindows");
-                    m_ImGuiLayer->RenderPlatformWindows();
-                }
+            if (m_CreateInfo.useGui && m_ImGuiLayer)
+            {
+                IGN_PROFILE_SCOPE("RenderThread::ImGuiEndFrame");
+                m_ImGuiLayer->EndFrame(framebuffer);
+
+                IGN_PROFILE_SCOPE("RenderThread::ImGuiRenderPlatformWindows");
+                m_ImGuiLayer->RenderPlatformWindows();
             }
 
             // Collect worker command lists with minimal lock hold.
@@ -373,6 +369,11 @@ namespace ignite
                 {
                     m_ImGuiLayer->PollEvent(sdlEvent);
                 }
+
+                for (auto layer = m_LayerStack.rbegin(); layer != m_LayerStack.rend(); ++layer)
+                {
+                    (*layer)->OnSDLEvent(&sdlEvent);
+                }
             }
 
             const float currTime = static_cast<float>(SDL_GetTicks());
@@ -386,45 +387,13 @@ namespace ignite
                 FmodAudio::Update(m_DeltaTime);
             }
 
-            // update window title
-#if 0
-            if (m_AverageFrameTime > 0)
-            {
-                std::stringstream ss;
-                ss << m_CreateInfo.name;
-                ss << " (" << nvrhi::utils::GraphicsAPIToString(device->getGraphicsAPI());
-                if (deviceManager->GetDeviceParameters().enableDebugRuntime)
-                {
-                    if (m_CreateInfo.graphicsApi == nvrhi::GraphicsAPI::VULKAN)
-                        ss << ", VulkanValidationLayer";
-                    else
-                        ss << ", DebugRuntime";
-                }
-
-                if (deviceManager->GetDeviceParameters().enableNvrhiValidationLayer)
-                {
-                    ss << ", NvrhiValidationLayer";
-                }
-                ss << ")";
-
-                const float fps = 1.0f / m_AverageFrameTime;
-
-                const i32 precision = (fps <= 20.0) ? 1 : 0;
-
-                ss << " - " << std::fixed << std::setprecision(precision) << fps << " FPS ";
-
-                m_Window->SetTitle(ss.str());
-            }
-#endif
-
             if (m_Window->IsVisible() && m_Window->IsInFocus())
             {
                 IGN_PROFILE_SCOPE("MainThread::SimulationAndPresent");
-                // update system (physics etc..)
+
                 for (auto layer = m_LayerStack.rbegin(); layer != m_LayerStack.rend(); ++layer)
                     (*layer)->OnUpdate(m_DeltaTime);
 
-                // Begin frame acquisition on main thread (required for swap chain)
                 if (m_FrameIndex > 0)
                 {
                     bool frameBegan = false;
@@ -438,13 +407,12 @@ namespace ignite
                         }
                         {
                             IGN_PROFILE_SCOPE("MainThread::BeginFrame::QueueMutexHold");
-                        frameBegan = deviceManager->BeginFrame();
+                            frameBegan = deviceManager->BeginFrame();
                         }
                     }
 
                     if (frameBegan)
                     {
-                        // Signal render thread to start rendering
                         {
                             std::lock_guard<std::mutex> lock(m_FrameMutex);
                             m_FrameCounter++;
@@ -452,15 +420,13 @@ namespace ignite
                         }
                         m_FrameCV.notify_one();
                         
-                        // Wait for rendering to complete
                         {
                             IGN_PROFILE_SCOPE("MainThread::WaitForRenderComplete");
                             std::unique_lock<std::mutex> lock(m_FrameMutex);
 
                             while (!m_RenderComplete.load())
                             {
-                                const bool signaled = m_FrameCV.wait_for(lock, std::chrono::microseconds(500), 
-                                    [this] { return m_RenderComplete.load(); });
+                                const bool signaled = m_FrameCV.wait_for(lock, std::chrono::microseconds(500), [this] { return m_RenderComplete.load(); });
                                 if (signaled)
                                     break;
                             }
@@ -474,19 +440,17 @@ namespace ignite
                             m_ImGuiLayer->RenderPlatformWindows();
                         }
                         
-                        // Present on main thread
                         bool presented = false;
                         {
                             IGN_PROFILE_SCOPE("MainThread::Present");
-                            auto &queueMutex = GPUUploadSync::GetQueueMutex();
-                            std::unique_lock<std::mutex> queueLock(queueMutex, std::defer_lock);
+                            std::unique_lock<std::mutex> queueLock(GPUUploadSync::GetQueueMutex(), std::defer_lock);
                             {
                                 IGN_PROFILE_SCOPE("MainThread::Present::QueueMutexWait");
                                 queueLock.lock();
                             }
                             {
                                 IGN_PROFILE_SCOPE("MainThread::Present::QueueMutexHold");
-                            presented = deviceManager->Present();
+                                presented = deviceManager->Present();
                             }
                         }
 

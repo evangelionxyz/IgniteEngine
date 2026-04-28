@@ -5,7 +5,6 @@
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/core/input/input.hpp"
-#include "ignite/graphics/renderer/widget_renderer.hpp"
 #include "ignite/graphics/font.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/graphics/texture.hpp"
@@ -26,18 +25,6 @@ namespace ignite
 
     WidgetCanvas::~WidgetCanvas()
     {
-    }
-
-    void WidgetCanvas::Update(float deltaTime, const glm::uvec2 &mousePos)
-    {
-        if (!m_Root)
-        {
-            return;
-        }
-
-        m_Root->Measure();
-        m_Root->Arrange(Rect(0.0f, 0.0f, static_cast<float>(m_ViewportSize.x), static_cast<float>(m_ViewportSize.y)));
-        m_Root->Update(deltaTime, glm::vec2(mousePos));
     }
 
     bool WidgetCanvas::Serialize(const std::filesystem::path &filepath)
@@ -269,6 +256,15 @@ namespace ignite
                 if (item->GetWidgetType() == WidgetType::Container && !widget->m_Root)
                 {
                     widget->m_Root = item->As<WidgetContainer>();
+                    const glm::vec2 rootSize = widget->m_Root->size;
+                    if (rootSize.x > 0.0f && rootSize.y > 0.0f)
+                    {
+                        widget->m_ViewportSize =
+                        {
+                            static_cast<uint32_t>(std::max(rootSize.x, 1.0f)),
+                            static_cast<uint32_t>(std::max(rootSize.y, 1.0f))
+                        };
+                    }
                 }
                 continue;
             }
@@ -362,6 +358,7 @@ namespace ignite
     {
         if (!m_Root)
         {
+            m_ViewportSize = { width, height };
             const int id = GetNextItemId();
             m_Root = CreateRef<WidgetContainer>();
             m_Root->id = id;
@@ -408,66 +405,95 @@ namespace ignite
         color = UI_COLOR_WHITE;
     }
 
-    void WidgetLabel::Draw(WidgetRenderer *renderer, AssetManager *assetManager)
+    Rect WidgetLabel::GetTextBounds() const
     {
-        if (!visible || !renderer || !assetManager)
-            return;
-
-        if (fontHandle == AssetHandle(0) || text.empty())
+        if (!font || !font->IsReady() || text.empty())
         {
-            IWidgetItem::Draw(renderer, assetManager);
-            return;
-        }
-
-        Ref<Asset> fontAsset = assetManager->GetAsset(fontHandle, AssetType::Font);
-        if (!fontAsset)
-            return;
-
-        font = fontAsset ? fontAsset->As<Font>() : nullptr;
-        if (!font)
-        {
-            IWidgetItem::Draw(renderer, assetManager);
-            return;
-        }
-
-        const Rect rect = GetAlignedRect();
-        glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(rect.min, 0.0f));
-        transform = glm::scale(transform, glm::vec3(fontSize, fontSize, 1.0f));
-        renderer->DrawString(text, font, color, transform, kerning, lineSpacing);
-
-        IWidgetItem::Draw(renderer, assetManager);
-    }
-
-    void WidgetLabel::Measure()
-    {
-        if (!font || text.empty())
-        {
-            size = glm::vec2(0.0f);
-            return;
+            return Rect(glm::vec2(0.0f), glm::vec2(0.0f));
         }
 
         const auto &fontGeometry = font->GetGeometry();
         const auto &metrics = fontGeometry.getMetrics();
-        double fsScale = 1.0 / (metrics.ascenderY - metrics.descenderY);
+        const double fsScale = 1.0 / (metrics.ascenderY - metrics.descenderY);
+        const double spaceGlyphAdvance = fontGeometry.getGlyph(' ') ? fontGeometry.getGlyph(' ')->getAdvance() : 0.0;
 
         double x = 0.0;
-        double maxWidth = 0.0;
-        int lines = 1;
+        double y = 0.0;
+        bool hasBounds = false;
+        glm::vec2 boundsMin(0.0f);
+        glm::vec2 boundsMax(0.0f);
 
         for (size_t i = 0; i < text.size(); ++i)
         {
-            char character = text[i];
+            const char character = text[i];
+            if (character == '\r')
+            {
+                continue;
+            }
+
             if (character == '\n')
             {
-                maxWidth = std::max(maxWidth, x);
                 x = 0.0;
-                lines++;
+                y += fsScale * metrics.lineHeight + lineSpacing;
+                continue;
+            }
+
+            if (character == ' ')
+            {
+                double advance = spaceGlyphAdvance;
+                if (i < text.size() - 1)
+                {
+                    fontGeometry.getAdvance(advance, character, text[i + 1]);
+                }
+                x += fsScale * advance + kerning;
+                continue;
+            }
+
+            if (character == '\t')
+            {
+                x += 4.0 * (fsScale * spaceGlyphAdvance + kerning);
                 continue;
             }
 
             auto glyph = fontGeometry.getGlyph(character);
-            if (!glyph) glyph = fontGeometry.getGlyph('?');
-            if (!glyph) continue;
+            if (!glyph)
+            {
+                glyph = fontGeometry.getGlyph('?');
+            }
+            if (!glyph)
+            {
+                continue;
+            }
+
+            double planeLeft, planeBottom, planeRight, planeTop;
+            glyph->getQuadPlaneBounds(planeLeft, planeBottom, planeRight, planeTop);
+
+            glm::vec2 quadMin(static_cast<float>(planeLeft), static_cast<float>(planeBottom));
+            glm::vec2 quadMax(static_cast<float>(planeRight), static_cast<float>(planeTop));
+
+            quadMin *= static_cast<float>(fsScale);
+            quadMax *= static_cast<float>(fsScale);
+
+            quadMin.y = -quadMin.y;
+            quadMax.y = -quadMax.y;
+
+            quadMin += glm::vec2(static_cast<float>(x), static_cast<float>(y));
+            quadMax += glm::vec2(static_cast<float>(x), static_cast<float>(y));
+
+            const glm::vec2 glyphMin(std::min(quadMin.x, quadMax.x), std::min(quadMin.y, quadMax.y));
+            const glm::vec2 glyphMax(std::max(quadMin.x, quadMax.x), std::max(quadMin.y, quadMax.y));
+
+            if (!hasBounds)
+            {
+                boundsMin = glyphMin;
+                boundsMax = glyphMax;
+                hasBounds = true;
+            }
+            else
+            {
+                boundsMin = glm::min(boundsMin, glyphMin);
+                boundsMax = glm::max(boundsMax, glyphMax);
+            }
 
             double advance = glyph->getAdvance();
             if (i < text.size() - 1)
@@ -477,10 +503,22 @@ namespace ignite
             x += fsScale * advance + kerning;
         }
 
-        maxWidth = std::max(maxWidth, x);
-        
-        size.x = static_cast<float>(maxWidth) * fontSize;
-        size.y = static_cast<float>(lines) * (static_cast<float>(metrics.lineHeight * fsScale) + lineSpacing) * fontSize;
+        if (!hasBounds)
+        {
+            return Rect(glm::vec2(0.0f), glm::vec2(0.0f));
+        }
+
+        return Rect(boundsMin * fontSize, boundsMax * fontSize);
+    }
+
+    void WidgetLabel::Measure()
+    {
+        if (!font || text.empty())
+        {
+            size = glm::vec2(0.0f);
+            return;
+        }
+        size = GetTextBounds().GetSize();
     }
 
     void WidgetLabel::Arrange(const Rect &parentRect)
@@ -491,12 +529,6 @@ namespace ignite
     bool WidgetLabel::HitTest(int px, int py)
     {
         return worldRect.Contains(glm::vec2(static_cast<float>(px), static_cast<float>(py)));
-    }
-
-    void WidgetLabel::Update(float deltaTime, const glm::vec2 &mousePosition)
-    {
-        (void)deltaTime;
-        (void)mousePosition;
     }
 
     // ==================================
@@ -656,56 +688,6 @@ namespace ignite
         }
     }
 
-    void WidgetButton::Draw(WidgetRenderer *renderer, AssetManager *assetManager)
-    {
-        if (!visible || !renderer)
-            return;
-
-        Ref<Texture> resolvedImage = image;
-        if (!resolvedImage && assetManager && imageHandle != AssetHandle(0))
-        {
-            Ref<Asset> imageAsset = assetManager->GetAsset(imageHandle, AssetType::Texture);
-            if (!imageAsset)
-                return;
-
-            if (imageAsset)
-                resolvedImage = imageAsset->As<Texture>();
-        }
-
-        const Rect &rect = GetAlignedRect();
-        renderer->DrawQuad(rect, 0.0f, GetCurrentColor(), resolvedImage, { 0.0f, 1.0f }, { 1.0f, 0.0f });
-
-        if (assetManager && GetFontHandle() != AssetHandle(0) && !GetText().empty())
-        {
-            Ref<Asset> fontAsset = assetManager->GetAsset(GetFontHandle(), AssetType::Font);
-            label->font = fontAsset ? fontAsset->As<Font>() : nullptr;
-            if (label->font)
-            {
-                // Ensure label size is measured
-                label->Measure();
-
-                const std::string &buttonText     = GetText();
-                const float        textKerning    = GetKerning();
-                const float        textLineSpacing = GetLineSpacing();
-                const float        textFontSize   = GetFontSize();
-                const glm::vec2    rectSize       = rect.GetSize();
-
-                // Center horizontally; center vertically (text goes downward from origin)
-                const glm::vec2 textPos =
-                {
-                    rect.min.x + (rectSize.x - label->size.x) * 0.5f,
-                    rect.min.y + (rectSize.y - label->size.y) * 0.5f
-                };
-
-                glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(textPos, 0.0f))
-                    * glm::scale(glm::mat4(1.0f), glm::vec3(textFontSize, textFontSize, 1.0f));
-                renderer->DrawString(buttonText, label->font, GetTextColor(), transform, textKerning, textLineSpacing);
-            }
-        }
-
-        IWidgetItem::Draw(renderer, assetManager);
-    }
-
     void WidgetButton::Measure()
     {
         if (label)
@@ -721,12 +703,4 @@ namespace ignite
     {
         return worldRect.Contains(glm::vec2(static_cast<float>(px), static_cast<float>(py)));
     }
-
-    void WidgetButton::Update(float deltaTime, const glm::vec2 &mousePosition)
-    {
-        (void)deltaTime;
-        const bool mousePressed = Input::IsMouseButtonPressed(Mouse::ButtonLeft);
-        OnMouseClick(glm::uvec2(static_cast<uint32_t>(mousePosition.x), static_cast<uint32_t>(mousePosition.y)), mousePressed);
-    }
-
 }
