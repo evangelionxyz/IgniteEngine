@@ -65,10 +65,44 @@ namespace ignite
         }
 
         template<>
-        inline std::string GetFieldValue<std::string>(const std::string &fieldName);
+        inline std::string GetFieldValue<std::string>(const std::string &fieldName)
+        {
+            if (!m_ScriptHost || fieldName.empty() || s_FieldValueBuffer == nullptr)
+            {
+                return std::string();
+            }
+
+            const bool success = m_ScriptHost->GetInstanceFieldValue(m_InstanceId, fieldName, s_FieldValueBuffer, sizeof(s_FieldValueBuffer));
+            if (!success)
+            {
+                return std::string();
+            }
+
+            m_ScriptClass->GetInstanceFieldsById(m_InstanceId)->at(fieldName).SetValue<std::string>(std::string(s_FieldValueBuffer));
+            return std::string(s_FieldValueBuffer);
+        }
 
         template<>
-        inline bool SetFieldValue<std::string>(const std::string &fieldName, const std::string &value);
+        inline bool SetFieldValue<std::string>(const std::string &fieldName, const std::string &value)
+        {
+            if (!m_ScriptHost || fieldName.empty())
+            {
+                return false;
+            }
+
+            memset(s_FieldValueBuffer, 0, sizeof(s_FieldValueBuffer));
+            size_t copyLen = std::min(value.size(), sizeof(s_FieldValueBuffer) - 1);
+            if (copyLen > 0)
+                memcpy(s_FieldValueBuffer, value.data(), copyLen);
+            s_FieldValueBuffer[copyLen] = '\0';
+
+            const bool success = m_ScriptHost->SetInstanceFieldValue(m_InstanceId, fieldName, s_FieldValueBuffer, (int)copyLen);
+            if (success)
+            {
+                m_ScriptClass->GetInstanceFieldsById(m_InstanceId)->at(fieldName).SetValue<std::string>(std::string(s_FieldValueBuffer));
+            }
+            return success;
+        }
 
     private:
         Ref<ScriptClass> m_ScriptClass;
