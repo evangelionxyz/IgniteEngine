@@ -36,6 +36,7 @@
     #include <dxcapi.h>
     #include <d3d12shader.h>
     #include <wrl/client.h>
+
 using Microsoft::WRL::ComPtr;
 
     #ifndef DXC_PART_DXIL
@@ -170,6 +171,7 @@ namespace ignite
         spirv_cross::Compiler compiler(dataBlob);
         spirv_cross::ShaderResources resources = compiler.get_shader_resources();
 
+#if 0
         LOG_WARN("[Shader Reflect] {} Shader", GetShaderTypeString(type));
 
         // --- Uniform Buffers ---
@@ -224,6 +226,7 @@ namespace ignite
 
             LOG_TRACE("  [PushConstant] Name: {}, Size: {}", pcb.name, size);
         }
+#endif
 
 		// Vertex inputs (only for vertex shaders)
         if (type == ShaderType::Vertex)
@@ -327,8 +330,7 @@ namespace ignite
             }
         }
 
-        LOG_TRACE("[Shader Reflect] Attempting to reflect {} shader blob of size {} bytes", 
-            GetShaderTypeString(type), shaderCode.size());
+        LOG_TRACE("[Shader Reflect] Attempting to reflect {} shader blob of size {} bytes", GetShaderTypeString(type), shaderCode.size());
 
         ComPtr<ID3D12ShaderReflection> reflection;
         HRESULT result = E_FAIL;

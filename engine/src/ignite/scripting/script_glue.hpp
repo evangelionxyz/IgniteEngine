@@ -11,16 +11,19 @@ namespace ignite
     struct ScriptGlueAPI
     {
         void (*Debug_Log)(const char *message);
-
         uint64_t(*Scene_PickEntityAt)(float x, float y);
 
-        bool (*Entity_HasComponent)(uint64_t entityID, const char *componentTypeName);
-        void (*Entity_AddComponent)(uint64_t entityID, const char *componentTypeName);
-        uint64_t (*Entity_FindEntityByName)(const char *name);
-        uint64_t (*Entity_Instantiate)(uint64_t entityID, glm::vec3 value);
-        void (*Entity_Destroy)(uint64_t entityID);
-        void (*Entity_SetVisibility)(uint64_t entityID, bool value);
-        void (*Entity_GetVisibility)(uint64_t entityID, bool *result);
+        bool        (*Entity_HasComponent)(uint64_t entityID, const char *componentTypeName);
+        void        (*Entity_AddComponent)(uint64_t entityID, const char *componentTypeName);
+        uint64_t    (*Entity_FindEntityByName)(const char *name);
+        uint64_t    (*Entity_FindChildByName)(uint64_t entityID, const char *childName);
+        bool        (*Entity_IsParent)(uint64_t entityID, uint64_t parentEntityID);
+        uint64_t    (*Entity_GetParent)(uint64_t entityID);
+        uint64_t    (*Entity_InstantiateWithName)(const char *name, glm::vec3 value);
+        uint64_t    (*Entity_Instantiate)(uint64_t entityID, glm::vec3 value);
+        void        (*Entity_Destroy)(uint64_t entityID);
+        void        (*Entity_SetVisibility)(uint64_t entityID, bool value);
+        void        (*Entity_GetVisibility)(uint64_t entityID, bool *result);
         const char *(*Entity_GetName)(uint64_t entityID);
 
         bool (*WidgetComponent_HasButton)(uint64_t entityID, const char *buttonName);
@@ -141,6 +144,11 @@ namespace ignite
         void (*TextComponent_GetKerning)(uint64_t entityID, float *result);
         void (*TextComponent_SetLineSpacing)(uint64_t entityID, float value);
         void (*TextComponent_GetLineSpacing)(uint64_t entityID, float *result);
+
+        bool (*AssetManager_IsAssetHandleValid)(uint64_t handle);
+        bool (*AssetManager_IsAssetLoaded)(uint64_t handle);
+        void (*AssetManager_LoadAssetAsync)(uint64_t handle);
+        void (*AssetManager_LoadAssetImmediate)(uint64_t handle);
     };
 
     class ScriptGlue

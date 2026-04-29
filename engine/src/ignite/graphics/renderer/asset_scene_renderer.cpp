@@ -191,8 +191,6 @@ namespace ignite
                 m_WidgetRenderer->Resize(width, height);
             }
 
-            m_WidgetRenderer->SetProject(m_Project);
-            m_WidgetRenderer->SetPreviewWidget(m_PreviewWidget);
             if (m_PreviewMouseHovered)
             {
                 m_WidgetRenderer->SetMousePosition(m_PreviewMouseX, m_PreviewMouseY);

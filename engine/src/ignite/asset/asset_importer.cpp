@@ -25,9 +25,12 @@
 #include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/animation/animator/animator_controller_2d.hpp"
 
+#include "ignite/graphics/ui/widget.hpp"
+#include "ignite/graphics/ui/widget_canvas.hpp"
+
+
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/sprite_sheet.hpp"
-#include "ignite/graphics/ui/widget.hpp"
 #include "ignite/graphics/font.hpp"
 
 #include <mutex>

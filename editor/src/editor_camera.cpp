@@ -284,16 +284,6 @@ namespace ignite
 			mouse.scroll.y = 0;
 		}
 
-		// handle keyboard zoom controls
-		if (Input::IsKeyPressed(Key::Equal) || Input::IsKeyPressed(Key::KPAdd))
-		{
-			wheelDelta -= controls.zoomSensitivity * deltaTime * 10.0f;
-		}
-		if (Input::IsKeyPressed(Key::Minus) || Input::IsKeyPressed(Key::KPSubtract))
-		{
-			wheelDelta += controls.zoomSensitivity * deltaTime * 10.0f;
-		}
-
 		if (wheelDelta != 0.0f)
 		{
 			if (m_NavigationMode == NavigationMode::Fly)

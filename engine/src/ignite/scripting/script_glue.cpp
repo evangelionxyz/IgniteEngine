@@ -8,7 +8,13 @@
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/project/project.hpp"
+
 #include "ignite/graphics/ui/widget.hpp"
+#include "ignite/graphics/ui/widget_canvas.hpp"
+#include "ignite/graphics/ui/widget_button.hpp"
+#include "ignite/graphics/ui/widget_label.hpp"
+#include "ignite/graphics/ui/widget_image.hpp"
+
 #include "ignite/audio/fmod_sound.hpp"
 #include "ignite/audio/fmod_audio.hpp"
 #include "ignite/core/application.hpp"
@@ -137,8 +143,8 @@ namespace ignite
                 return nullptr;
             }
 
-            Project *project = scene->GetProject();
-            if (!project)
+            AssetManager *assetManager = scene->GetAssetManager();
+            if (!assetManager)
             {
                 return nullptr;
             }
@@ -149,7 +155,7 @@ namespace ignite
                 return nullptr;
             }
 
-            return project->GetAsset<FmodSound>(audioSource.handle);
+            return assetManager->GetAsset<FmodSound>(audioSource.handle);
         }
 
         static FMOD::DSP *CreateAudioSourceDsp(const AudioSourceComponent::DspSettings &settings)
@@ -409,8 +415,8 @@ namespace ignite
                 return nullptr;
             }
 
-            Project *project = scene->GetProject();
-            if (!project)
+            AssetManager *assetManager = scene->GetAssetManager();
+            if (!assetManager)
             {
                 return nullptr;
             }
@@ -421,7 +427,7 @@ namespace ignite
                 return nullptr;
             }
 
-            return project->GetAsset<WidgetCanvas>(widgetComponent.widgetHandle);
+            return assetManager->GetAsset<WidgetCanvas>(widgetComponent.widgetHandle);
         }
 
         static Ref<WidgetButton> FindWidgetButton(Entity entity, const std::string &buttonName)
@@ -583,34 +589,77 @@ namespace ignite
             return entity.IsValid() ? static_cast<uint64_t>(entity.GetUUID()) : 0;
         }
 
+        static uint64_t Entity_FindChildEntityByName(uint64_t entityID, const char *childName)
+        {
+            Scene *scene = GetSceneContext();
+            if (!scene || entityID == 0 || !childName)
+                return 0;
+
+            Entity entity = SceneManager::GetEntity(scene, UUID(entityID));
+            Entity childEntity = SceneManager::GetEntity(scene, childName);
+            SceneManager::FindChild(scene, entity, childEntity.GetUUID());
+
+            return childEntity.IsValid() ? static_cast<uint64_t>(childEntity.GetUUID()) : 0;
+        }
+
+        static bool Entity_IsParent(uint64_t entityID, uint64_t parentID)
+        {
+            Scene *scene = GetSceneContext();
+            if (!scene || entityID == 0)
+                return false;
+
+            Entity entity = SceneManager::GetEntity(scene, UUID(entityID));
+            return entity.GetParentUUID() == UUID(parentID);
+        }
+
+        static uint64_t Entity_GetParent(uint64_t entityID)
+        {
+            Scene *scene = GetSceneContext();
+            if (!scene || entityID == 0)
+                return false;
+
+            Entity entity = SceneManager::GetEntity(scene, UUID(entityID));
+            return static_cast<uint64_t>(entity.GetParentUUID());
+        }
+
+        static uint64_t Entity_InstantiateWithName(const char *name, glm::vec3 value)
+        {
+            Scene *scene = GetSceneContext();
+            if (!scene)
+                return 0;
+
+            Entity entity = SceneManager::CreateEmptyEntity(scene, name);
+            entity.GetComponent<TransformComponent>().translation = value;
+
+            if (scene->IsRunning())
+            {
+                if (auto *scriptEngine = ScriptEngine::GetInstance())
+                    scriptEngine->OnCreateEntity(entity);
+            }
+
+            return static_cast<uint64_t>(entity.GetUUID());
+        }
+
         static uint64_t Entity_Instantiate(uint64_t entityID, glm::vec3 value)
         {
             Scene *scene = GetSceneContext();
             if (!scene)
-            {
                 return 0;
-            }
 
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid())
-            {
                 return 0;
-            }
 
             Entity copyEntity = SceneManager::DuplicateEntity(scene, entity);
             if (!copyEntity.IsValid())
-            {
                 return 0;
-            }
 
             copyEntity.GetComponent<TransformComponent>().translation = value;
             
             if (scene->IsRunning())
             {
                 if (auto *scriptEngine = ScriptEngine::GetInstance())
-                {
                     scriptEngine->OnCreateEntity(copyEntity);
-                }
             }
 
             return static_cast<uint64_t>(copyEntity.GetUUID());
@@ -620,22 +669,16 @@ namespace ignite
         {
             Scene *scene = GetSceneContext();
             if (!scene)
-            {
                 return;
-            }
 
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid())
-            {
                 return;
-            }
 
             if (scene->IsRunning())
             {
                 if (auto *scriptEngine = ScriptEngine::GetInstance())
-                {
                     scriptEngine->OnDestroyEntity(entity);
-                }
             }
 
             std::erase_if(s_WidgetButtonEventBindings, [entityID](const auto &entry)
@@ -650,9 +693,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
                 return;
-            }
 
             entity.GetComponent<TransformComponent>().visible = value;
         }
@@ -665,9 +706,7 @@ namespace ignite
             *result = false;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<TransformComponent>().visible;
         }
@@ -683,15 +722,11 @@ namespace ignite
         static bool WidgetComponent_HasButton(uint64_t entityID, const char *buttonName)
         {
             if (!buttonName)
-            {
                 return false;
-            }
 
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid())
-            {
                 return false;
-            }
 
             return static_cast<bool>(FindWidgetButton(entity, std::string(buttonName)));
         }
@@ -2282,6 +2317,52 @@ namespace ignite
             *result = entity.GetComponent<TextComponent>().lineSpacing;
         }
 
+        static bool AssetManager_IsAssetHandleValid(uint64_t handle)
+        {
+            if (Scene *scene = GetSceneContext())
+            {
+                if (AssetManager *assetManager = scene->GetAssetManager())
+                {
+                    return assetManager->IsAssetHandleValid(AssetHandle(handle));
+                }
+            }
+            return false;
+        }
+
+        static bool AssetManager_IsAssetLoaded(uint64_t handle)
+        {
+            if (Scene *scene = GetSceneContext())
+            {
+                if (AssetManager *assetManager = scene->GetAssetManager())
+                {
+                    return assetManager->IsAssetLoaded(AssetHandle(handle));
+                }
+            }
+            return false;
+        }
+
+        static void AssetManager_LoadAssetAsync(uint64_t handle)
+        {
+            if (Scene *scene = GetSceneContext())
+            {
+                if (AssetManager *assetManager = scene->GetAssetManager())
+                {
+                    assetManager->GetAsset<Asset>(AssetHandle(handle));
+                }
+            }
+        }
+
+        static void AssetManager_LoadAssetImmediate(uint64_t handle)
+        {
+            if (Scene *scene = GetSceneContext())
+            {
+                if (AssetManager *assetManager = scene->GetAssetManager())
+                {
+                    assetManager->GetAssetImmediate<Asset>(AssetHandle(handle));
+                }
+            }
+        }
+
         static const ScriptGlueAPI s_API =
         {
             &Debug_Log,
@@ -2289,6 +2370,10 @@ namespace ignite
             &Entity_HasComponent,
             &Entity_AddComponent,
             &Entity_FindEntityByName,
+            &Entity_FindChildEntityByName,
+            &Entity_IsParent,
+            &Entity_GetParent,
+            &Entity_InstantiateWithName,
             &Entity_Instantiate,
             &Entity_Destroy,
             &Entity_SetVisibility,
@@ -2411,6 +2496,11 @@ namespace ignite
             &TextComponent_GetKerning,
             &TextComponent_SetLineSpacing,
             &TextComponent_GetLineSpacing,
+
+            &AssetManager_IsAssetHandleValid,
+            &AssetManager_IsAssetLoaded,
+            &AssetManager_LoadAssetAsync,
+            &AssetManager_LoadAssetImmediate,
         };
     }
 

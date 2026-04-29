@@ -36,6 +36,7 @@
 #include "ignite/animation/animator/animator_controller.hpp"
 
 #include <unordered_map>
+#include <unordered_set>
 
 namespace ignite
 {
@@ -73,6 +74,7 @@ namespace ignite
 
         Entity GetPrimaryCamera();
         Project *GetProject() { return m_Project; }
+        AssetManager *GetAssetManager() { return m_AssetManager; }
 
         std::string name;
         entt::registry *registry;
@@ -87,6 +89,7 @@ namespace ignite
         
         SceneRenderer *GetSceneRenderer() { return m_SceneRenderer; }
         Environment *GetEnvironment();
+        std::unordered_set<AssetHandle> CollectReferencedAssetHandles() const;
 
         glm::vec3 physicsGravity{ 0.0f, -9.8f, 0.0f };
         float timeInSeconds = 0.0f;
@@ -101,6 +104,7 @@ namespace ignite
         SceneRenderer *m_SceneRenderer;
 
         Project *m_Project;
+        AssetManager *m_AssetManager;
         
         uint32_t m_ViewportWidth;
         uint32_t m_ViewportHeight;

@@ -23,6 +23,8 @@
 #include <cmath>
 #include <format>
 #include <limits>
+#include <string_view>
+#include <unordered_set>
 #include <SDL3/SDL_dialog.h>
 
 namespace ignite
@@ -839,8 +841,7 @@ namespace ignite
 
                 ImGui::Separator();
 
-                ImGui::BeginChild("ScrollingRegion", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
-
+                if (ImGui::BeginChild("ScrollingRegion", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar))
                 {
                     const auto& logs = Logger::GetLogs();
                     for (const auto& log : logs)
@@ -882,6 +883,18 @@ namespace ignite
         if (m_ActiveScene == scene)
         {
             return;
+        }
+
+        constexpr std::string_view kActiveSceneAssetOwner = "editor.active-scene";
+        if (m_ActiveProject)
+        {
+            std::unordered_set<AssetHandle> referencedHandles;
+            if (scene)
+            {
+                referencedHandles = scene->CollectReferencedAssetHandles();
+            }
+
+            m_ActiveProject->GetAssetManager()->ReplaceAssetPins(std::string(kActiveSceneAssetOwner), referencedHandles);
         }
 
         // Clear references in all systems before changing active scene

@@ -1,7 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-// Created by: Evangelion Manuhutu
-// Date      : 18 April 2026
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
 #ifndef WIDGET_CONTAINER_HPP
@@ -14,6 +13,9 @@ namespace ignite
     class WidgetContainer : public IWidgetItem
     {
     public:
+        WidgetContainer(WidgetID wID);
+        virtual ~WidgetContainer() override;
+
         LayoutMode layout = LayoutMode::Vertical;
         float gap = 0.0f;
 

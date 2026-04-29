@@ -652,7 +652,7 @@ namespace ignite
 
                 static const char *resolutionLabels[] = { "Low - 512px", "Medium - 1024px", "High - 2048px", "Ultra - 4096px" };
                 int resolution = std::clamp(c.shadowResolution, 0, 3);
-                if (UI::DrawComboBox("Resolution", resolutionLabels, IM_ARRAYSIZE(resolutionLabels), resolutionLabels[resolution], &resolution))
+                if (UI::DrawComboBox("Resolution", resolutionLabels, IM_ARRAYSIZE(resolutionLabels), &resolution))
                 {
                     c.shadowResolution = resolution;
                 }
@@ -834,7 +834,7 @@ namespace ignite
                             }
                         }
 
-                        if (UI::DrawComboBox("Current State", stateLabels.data(), static_cast<int>(stateLabels.size()), stateLabels[currentStateIndex], &currentStateIndex))
+                        if (UI::DrawComboBox("Current State", stateLabels.data(), static_cast<int>(stateLabels.size()), &currentStateIndex))
                         {
                             c.currentStateName = animCtrl->states[static_cast<size_t>(currentStateIndex)].name;
                         }
@@ -1018,7 +1018,7 @@ namespace ignite
                                         }
 
                                         ImGui::BeginDisabled(true);
-                                        if (UI::DrawComboBox("Preview State", stateLabels.data(), static_cast<int>(stateLabels.size()), stateLabels[currentStateIndex], &currentStateIndex))
+                                        if (UI::DrawComboBox("Preview State", stateLabels.data(), static_cast<int>(stateLabels.size()), &currentStateIndex))
                                         {
                                             c.currentStateName = animCtrl->states[static_cast<size_t>(currentStateIndex)].name;
                                             c.stateElapsed = 0.0f;
@@ -1145,7 +1145,7 @@ namespace ignite
                 auto &c = selectedEntity.GetComponent<Rigidbody2DComponent>();
                 std::array<const char *, 3> bodyTypeStr = { "Static", "Dynamic", "Kinematic" };
                 int bodyTypeIndex = std::clamp(static_cast<int>(c.type), 0, static_cast<int>(bodyTypeStr.size()) - 1);
-                if (UI::DrawComboBox("Body Type", bodyTypeStr.data(), static_cast<int>(bodyTypeStr.size()), bodyTypeStr[bodyTypeIndex], &bodyTypeIndex))
+                if (UI::DrawComboBox("Body Type", bodyTypeStr.data(), static_cast<int>(bodyTypeStr.size()), &bodyTypeIndex))
                 {
                     c.type = static_cast<Body2DType>(bodyTypeIndex);
                 }
@@ -1175,7 +1175,7 @@ namespace ignite
                 {
                     static const char *projectionTypeStr[] = { "Orthographic", "Perspective" };
                     int projectionIdx = static_cast<int>(c.camera.projectionType);
-                    if (UI::DrawComboBox("Projection", projectionTypeStr, IM_ARRAYSIZE(projectionTypeStr), projectionTypeStr[projectionIdx], &projectionIdx))
+                    if (UI::DrawComboBox("Projection", projectionTypeStr, IM_ARRAYSIZE(projectionTypeStr), &projectionIdx))
                     {
                         c.camera.projectionType = static_cast<ProjectionType>(projectionIdx);
                     }
@@ -1185,7 +1185,7 @@ namespace ignite
                 {
                     static const char *aspectRatioLabels[] = { "Free", "16:9", "16:10", "4:3", "21:9", "1:1" };
                     int aspectRatioIndex = static_cast<int>(c.camera.GetAspectRatioPreset());
-                    if (UI::DrawComboBox("Aspect Ratio", aspectRatioLabels, IM_ARRAYSIZE(aspectRatioLabels), aspectRatioLabels[aspectRatioIndex], &aspectRatioIndex))
+                    if (UI::DrawComboBox("Aspect Ratio", aspectRatioLabels, IM_ARRAYSIZE(aspectRatioLabels), &aspectRatioIndex))
                     {
                         c.camera.SetAspectRatioPreset(static_cast<SceneCamera::AspectRatioPreset>(aspectRatioIndex));
                         c.dirty = true;
@@ -1777,7 +1777,7 @@ namespace ignite
                         }
                     }
 
-                    if (UI::DrawComboBox("Script Class", scriptClassLabels.data(), static_cast<int>(scriptClassLabels.size()), scriptClassLabels[scriptClassIndex], &scriptClassIndex))
+                    if (UI::DrawComboBox("Script Class", scriptClassLabels.data(), static_cast<int>(scriptClassLabels.size()), &scriptClassIndex))
                     {
                         currentScriptClasses = scriptStorage[static_cast<size_t>(scriptClassIndex)];
                         c.className = currentScriptClasses;

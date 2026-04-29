@@ -13,6 +13,10 @@ public static class InternalCalls
     private static NativeAPI.Funcs.EntityHasComponentFn s_EntityHasComponent;
     private static NativeAPI.Funcs.EntityAddComponentFn s_EntityAddComponent;
     private static NativeAPI.Funcs.EntityFindEntityByNameFn s_EntityFindEntityByName;
+    private static NativeAPI.Funcs.EntityFindChildEntityByNameFn s_EntityFindChildEntityByName;
+    private static NativeAPI.Funcs.EntityIsParent s_EntityIsParent;
+    private static NativeAPI.Funcs.EntityGetParent s_EntityGetParent;
+    private static NativeAPI.Funcs.EntityInstantiateWithNameFn s_EntityInstantiateWithName;
     private static NativeAPI.Funcs.EntityInstantiateFn s_EntityInstantiate;
     private static NativeAPI.Funcs.EntityDestroyFn s_EntityDestroy;
     private static NativeAPI.Funcs.EntitySetVisibilityFn s_EntitySetVisibility;
@@ -132,6 +136,10 @@ public static class InternalCalls
     private static NativeAPI.Funcs.GetFloatFn s_TextComponentGetKerning;
     private static NativeAPI.Funcs.SetFloatFn s_TextComponentSetLineSpacing;
     private static NativeAPI.Funcs.GetFloatFn s_TextComponentGetLineSpacing;
+    private static NativeAPI.Funcs.AssetManagerQueryFn s_AssetManagerIsAssetHandleValid;
+    private static NativeAPI.Funcs.AssetManagerQueryFn s_AssetManagerIsAssetLoaded;
+    private static NativeAPI.Funcs.AssetManagerLoadFn s_AssetManagerLoadAssetAsync;
+    private static NativeAPI.Funcs.AssetManagerLoadFn s_AssetManagerLoadAssetImmediate;
 
     public static void Initialize(ulong apiPtr)
     {
@@ -145,6 +153,10 @@ public static class InternalCalls
         s_EntityHasComponent = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.EntityHasComponentFn>(api.Entity_HasComponent);
         s_EntityAddComponent = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.EntityAddComponentFn>(api.Entity_AddComponent);
         s_EntityFindEntityByName = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.EntityFindEntityByNameFn>(api.Entity_FindEntityByName);
+        s_EntityFindChildEntityByName = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.EntityFindChildEntityByNameFn>(api.Entity_FindChildEntityByName);
+        s_EntityIsParent = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.EntityIsParent>(api.Entity_IsParent);
+        s_EntityGetParent = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.EntityGetParent>(api.Entity_GetParent);
+        s_EntityInstantiateWithName = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.EntityInstantiateWithNameFn>(api.Entity_InstantiateWithName);
         s_EntityInstantiate = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.EntityInstantiateFn>(api.Entity_Instantiate);
         s_EntityDestroy = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.EntityDestroyFn>(api.Entity_Destroy);
         s_EntitySetVisibility = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.EntitySetVisibilityFn>(api.Entity_SetVisibility);
@@ -266,6 +278,10 @@ public static class InternalCalls
         s_TextComponentGetKerning = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.GetFloatFn>(api.TextComponent_GetKerning);
         s_TextComponentSetLineSpacing = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.SetFloatFn>(api.TextComponent_SetLineSpacing);
         s_TextComponentGetLineSpacing = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.GetFloatFn>(api.TextComponent_GetLineSpacing);
+        s_AssetManagerIsAssetHandleValid = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.AssetManagerQueryFn>(api.AssetManager_IsAssetHandleValid);
+        s_AssetManagerIsAssetLoaded = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.AssetManagerQueryFn>(api.AssetManager_IsAssetLoaded);
+        s_AssetManagerLoadAssetAsync = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.AssetManagerLoadFn>(api.AssetManager_LoadAssetAsync);
+        s_AssetManagerLoadAssetImmediate = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.AssetManagerLoadFn>(api.AssetManager_LoadAssetImmediate);
 
         s_Initialized = true;
     }
@@ -341,7 +357,7 @@ public static class InternalCalls
         }
     }
 
-    internal static ulong Entity_FindEntityByName(string name)
+    internal static ulong Entity_FindEntity(string name)
     {
         EnsureInitialized();
 
@@ -349,6 +365,47 @@ public static class InternalCalls
         try
         {
             return s_EntityFindEntityByName(ptr);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(ptr);
+        }
+    }
+
+    internal static ulong Entity_FindChildEntity(ulong entityID, string childName)
+    {
+        EnsureInitialized();
+
+        IntPtr ptr = StringToUtf8(childName);
+        try
+        {
+            return s_EntityFindChildEntityByName(entityID, ptr);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(ptr);
+        }
+    }
+
+    internal static bool Entity_IsParent(ulong entityID, ulong parentEntityID)
+    {
+        EnsureInitialized();
+        return s_EntityIsParent(entityID, parentEntityID);
+    }
+
+    internal static ulong Entity_GetParent(ulong entityID)
+    {
+        EnsureInitialized();
+        return s_EntityGetParent(entityID);
+    }
+
+    internal static ulong Entity_Instantiate(string name, Vector3 value)
+    {
+        EnsureInitialized();
+        IntPtr ptr = StringToUtf8(name);
+        try
+        {
+            return s_EntityInstantiateWithName(ptr, ToNative(value));
         }
         finally
         {
@@ -1114,5 +1171,29 @@ public static class InternalCalls
     {
         EnsureInitialized();
         s_TextComponentGetLineSpacing(entityID, out result);
+    }
+
+    internal static bool AssetManager_IsAssetHandleValid(ulong handle)
+    {
+        EnsureInitialized();
+        return s_AssetManagerIsAssetHandleValid(handle);
+    }
+
+    internal static bool AssetManager_IsAssetLoaded(ulong handle)
+    {
+        EnsureInitialized();
+        return s_AssetManagerIsAssetLoaded(handle);
+    }
+
+    internal static void AssetManager_LoadAssetAsync(ulong handle)
+    {
+        EnsureInitialized();
+        s_AssetManagerLoadAssetAsync(handle);
+    }
+
+    internal static void AssetManager_LoadAssetImmediate(ulong handle)
+    {
+        EnsureInitialized();
+        s_AssetManagerLoadAssetImmediate(handle);
     }
 }

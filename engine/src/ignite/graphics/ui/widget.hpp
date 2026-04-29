@@ -17,9 +17,6 @@
 #include <type_traits>
 #include <glm/glm.hpp>
 
-namespace ignite
-{
-
 #define UI_COLOR_RED { 1.0f, 0.0f, 0.0f, 1.0f }
 #define UI_COLOR_BLUE { 0.0f, 0.0f, 1.0f, 1.0f }
 #define UI_COLOR_WHITE { 1.0f, 1.0f, 1.0f, 1.0f }
@@ -29,20 +26,14 @@ namespace ignite
 #define UI_COLOR_YELLOW { 1.0f, 1.0f, 0.0f, 1.0f }
 #define UI_COLOR_GRAY { 0.5f, 0.5f, 0.5f, 1.0f }
 
+namespace ignite
+{
     class WidgetCanvas;
     class Scene;
     class Texture;
     class Font;
     class WidgetRenderer;
     class WidgetContainer;
-
-    enum class SizingMode : uint8_t
-    {
-        Default,
-        ExpandToParent,
-
-        COUNT
-    };
 
     enum class LayoutMode : uint8_t
     {
@@ -54,17 +45,22 @@ namespace ignite
         COUNT
     };
 
-    enum class WidgetAlignment : uint8_t
+    enum class VerticalAlignment : uint8_t
     {
-        TopLeft,
-        TopCenter,
-        TopRight,
-        CenterLeft,
+        Top = 0,
+        Middle,
+        Bottom,
+        ExpandVertically,
+
+        COUNT
+    };
+
+    enum class HorizontalAlignment : uint8_t
+    {
+        Left = 0,
         Center,
-        CenterRight,
-        BottomLeft,
-        BottomCenter,
-        BottomRight,
+        Right,
+        ExpandHorizontally,
 
         COUNT
     };
@@ -74,9 +70,12 @@ namespace ignite
         Container = 0,
         Button,
         Label,
+        Image,
 
         COUNT
     };
+
+    typedef int WidgetID;
 
     // Base widget item
     class IWidgetItem : public std::enable_shared_from_this<IWidgetItem>
@@ -89,11 +88,13 @@ namespace ignite
         std::function<void()> m_OnHoverExit;
 
     public:
+        IWidgetItem(WidgetID wID) : id(wID) { }
+
         IWidgetItem *parent = nullptr;
         std::vector<Ref<IWidgetItem>> children;
 
         std::string name; // widget name
-        int id = -1;
+        WidgetID id = -1;
 
         // Layout info
         glm::vec2 position = glm::vec2(0.0f); // x, y
@@ -101,8 +102,10 @@ namespace ignite
         float padding = 0.0f;
         float margin = 0.0f;
         int zIndex = 0;
-        WidgetAlignment alignment = WidgetAlignment::TopLeft;
-        SizingMode sizingMode = SizingMode::Default;
+
+        VerticalAlignment VAlignment = VerticalAlignment::Top;
+        HorizontalAlignment HAlignment = HorizontalAlignment::Left;
+
         Rect worldRect;
         bool visible = true;
 
@@ -142,44 +145,22 @@ namespace ignite
             const glm::vec2 availableSize = glm::max(availableMax - availableMin, glm::vec2(0.0f));
 
             glm::vec2 resolvedSize = size;
-            if (sizingMode == SizingMode::ExpandToParent)
+            glm::vec2 alignedMin = availableMin;
+
+            switch (HAlignment)
             {
-                resolvedSize = availableSize;
+                case HorizontalAlignment::Left: break;
+                case HorizontalAlignment::Center: alignedMin.x += (availableSize.x - size.x) / 2.0f; break;
+                case HorizontalAlignment::Right: alignedMin.x += (availableSize.x - size.x); break;
+                case HorizontalAlignment::ExpandHorizontally: resolvedSize.x = availableSize.x; break;
             }
 
-            glm::vec2 alignedMin = availableMin;
-            switch (alignment)
+            switch (VAlignment)
             {
-                case WidgetAlignment::TopLeft:
-                    break;
-                case WidgetAlignment::TopCenter:
-                    alignedMin.x += (availableSize.x - resolvedSize.x) * 0.5f;
-                    break;
-                case WidgetAlignment::TopRight:
-                    alignedMin.x += (availableSize.x - resolvedSize.x);
-                    break;
-                case WidgetAlignment::CenterLeft:
-                    alignedMin.y += (availableSize.y - resolvedSize.y) * 0.5f;
-                    break;
-                case WidgetAlignment::Center:
-                    alignedMin += (availableSize - resolvedSize) * 0.5f;
-                    break;
-                case WidgetAlignment::CenterRight:
-                    alignedMin.x += (availableSize.x - resolvedSize.x);
-                    alignedMin.y += (availableSize.y - resolvedSize.y) * 0.5f;
-                    break;
-                case WidgetAlignment::BottomLeft:
-                    alignedMin.y += (availableSize.y - resolvedSize.y);
-                    break;
-                case WidgetAlignment::BottomCenter:
-                    alignedMin.x += (availableSize.x - resolvedSize.x) * 0.5f;
-                    alignedMin.y += (availableSize.y - resolvedSize.y);
-                    break;
-                case WidgetAlignment::BottomRight:
-                    alignedMin += (availableSize - resolvedSize);
-                    break;
-                default:
-                    break;
+                case VerticalAlignment::Top: break;
+                case VerticalAlignment::Middle: alignedMin.y += (availableSize.y - size.y) / 2.0f; break;
+                case VerticalAlignment::Bottom: alignedMin.y += (availableSize.y - size.y); break;
+                case VerticalAlignment::ExpandVertically: resolvedSize.y = availableSize.y; break;
             }
 
             alignedMin += position;
@@ -197,165 +178,6 @@ namespace ignite
         Ref<T> As() { return std::dynamic_pointer_cast<T>(shared_from_this()); }
 
         virtual WidgetType GetWidgetType() const = 0;
-    };
-
-    class WidgetLabel : public IWidgetItem
-    {
-    public:
-        AssetHandle fontHandle = AssetHandle(0);
-        Ref<Font> font;
-        std::string text;
-        glm::vec4 color;
-        float fontSize = 16.0f; // In Pixel
-        float kerning = 0.0f;
-        float lineSpacing = -0.025f;
-
-    public:
-        WidgetLabel(const std::string &text);
-
-        void SetText(const std::string &newText) { text = newText; }
-        const std::string &GetText() const { return text; }
-        void SetColor(const glm::vec4 &newColor) { color = newColor; }
-        const glm::vec4 &GetColor() const { return color; }
-        void SetFontHandle(AssetHandle handle) { fontHandle = handle; }
-        AssetHandle GetFontHandle() const { return fontHandle; }
-        void SetFontSize(float newFontSize) { fontSize = newFontSize; }
-        float GetFontSize() const { return fontSize; }
-        void SetKerning(float newKerning) { kerning = newKerning; }
-        float GetKerning() const { return kerning; }
-        void SetLineSpacing(float newLineSpacing) { lineSpacing = newLineSpacing; }
-        float GetLineSpacing() const { return lineSpacing; }
-        Rect GetTextBounds() const;
-        
-        virtual void Measure() override;
-        virtual void Arrange(const Rect &) override;
-        virtual bool HitTest(int px, int py) override;
-
-        virtual WidgetType GetWidgetType() const override { return WidgetType::Label; }
-    };
-
-    class WidgetButton : public IWidgetItem
-    {
-    public:
-        bool hovered = false;
-        bool pressed = false;
-
-        glm::vec4 normalColor;
-        glm::vec4 hoverColor;
-        glm::vec4 pressedColor;
-        glm::vec4 borderColor;
-
-        AssetHandle imageHandle = AssetHandle(0);
-        Ref<Texture> image = nullptr;
-
-        Scope<WidgetLabel> label;
-
-    public:
-        WidgetButton(const std::string &text);
-        virtual ~WidgetButton() override;
-        const glm::vec4 &GetCurrentColor() const;
-
-        void SetText(const std::string &text);
-        const std::string &GetText() const;
-        void SetImageHandle(AssetHandle handle) { imageHandle = handle; }
-        AssetHandle GetImageHandle() const { return imageHandle; }
-        void SetImage(const Ref<Texture> &newImage) { image = newImage; }
-        Ref<Texture> GetImage() const { return image; }
-
-        void SetColors(const glm::vec4 &normal, const glm::vec4 &hover, const glm::vec4 &pressed);
-        void SetTextColor(const glm::vec4 &textColor);
-        const glm::vec4 &GetTextColor() const;
-        void SetBorderColor(const glm::vec4 &newBorderColor) { borderColor = newBorderColor; }
-
-        void SetFontHandle(AssetHandle handle);
-        AssetHandle GetFontHandle() const;
-        void SetFontSize(float newFontSize);
-        float GetFontSize() const;
-        void SetKerning(float newKerning);
-        float GetKerning() const;
-        void SetLineSpacing(float newLineSpacing);
-        float GetLineSpacing() const;
-
-        void OnMouseClick(const glm::uvec2 &mousePos, bool isPressed);
-
-        virtual void Measure() override;
-        virtual void Arrange(const Rect &) override;
-        virtual bool HitTest(int px, int py) override;
-
-        virtual WidgetType GetWidgetType() const override { return WidgetType::Button; }
-
-    private:
-        std::function<void()> m_OnClick;
-        std::function<void()> m_OnPressed;
-        std::function<void()> m_OnReleased;
-        std::function<void()> m_OnHoverEnter;
-        std::function<void()> m_OnHoverExit;
-    };
-
-    struct WidgetChildEntry
-    {
-        AssetHandle handle = AssetHandle(0);
-        bool enabled = true;
-        bool blockWidgetsBelow = true;
-    };
-
-    // Widget for widget items container
-    class WidgetCanvas : public Asset
-    {
-    public:
-        WidgetCanvas(Scene *scene = nullptr);
-        ~WidgetCanvas();
-
-        virtual bool Serialize(const std::filesystem::path &filepath) override;
-        static Ref<WidgetCanvas> Deserialize(const std::filesystem::path &filepath);
-
-        void SetViewportSize(const uint32_t width, const uint32_t height) { m_ViewportSize = { width, height }; }
-        const glm::uvec2 &GetViewportSize() const { return m_ViewportSize; }
-        void SetScene(Scene *scene) { m_Scene = scene; }
-        Scene *GetScene() const { return m_Scene; }
-
-        void SetName(const std::string &newName) { name = newName; }
-        const std::string &GetName() const { return name; }
-
-        void SetEnabled(bool enabled) { m_Enabled = enabled; }
-        bool IsEnabled() const { return m_Enabled; }
-
-        void SetBlocksWidgetsBelow(bool blockWidgetsBelow) { m_BlocksWidgetsBelow = blockWidgetsBelow; }
-        bool BlocksWidgetsBelow() const { return m_BlocksWidgetsBelow; }
-
-        int AddButton(WidgetContainer *container, const std::string &text);
-        int AddLabel(WidgetContainer *container, const std::string &text);
-        int AddContainer(WidgetContainer *container = nullptr);
-        bool RemoveItem(int id);
-
-        WidgetContainer *CreateRoot(uint32_t width, uint32_t height);
-        WidgetContainer *GetRoot() const { return m_Root.get(); }
-
-        static AssetType GetStaticAssetType() { return AssetType::Widget; }
-        virtual AssetType GetAssetType() override { return GetStaticAssetType(); }
-
-        // ID, Widget
-        std::unordered_map<int, Ref<IWidgetItem>> &GetItems() { return m_WidgetItems; }
-        const std::unordered_map<int, Ref<IWidgetItem>> &GetItems() const { return m_WidgetItems; }
-
-        std::vector<WidgetChildEntry> &GetChildWidgets() { return m_ChildWidgets; }
-        const std::vector<WidgetChildEntry> &GetChildWidgets() const { return m_ChildWidgets; }
-
-    private:
-        int GetNextItemId();
-
-        std::string name;
-
-        // ID, Widget
-        std::unordered_map<int, Ref<IWidgetItem>> m_WidgetItems;
-        std::vector<WidgetChildEntry> m_ChildWidgets;
-        Ref<WidgetContainer> m_Root = nullptr;
-        int m_NextWidgetItemId = 1;
-        bool m_Enabled = true;
-        bool m_BlocksWidgetsBelow = false;
-
-        Scene *m_Scene;
-        glm::uvec2 m_ViewportSize;
     };
 }
 

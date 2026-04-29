@@ -47,6 +47,10 @@ public static class NativeAPI
         public IntPtr Entity_HasComponent;
         public IntPtr Entity_AddComponent;
         public IntPtr Entity_FindEntityByName;
+        public IntPtr Entity_FindChildEntityByName;
+        public IntPtr Entity_IsParent;
+        public IntPtr Entity_GetParent;
+        public IntPtr Entity_InstantiateWithName;
         public IntPtr Entity_Instantiate;
         public IntPtr Entity_Destroy;
         public IntPtr Entity_SetVisibility;
@@ -169,6 +173,11 @@ public static class NativeAPI
         public IntPtr TextComponent_GetKerning;
         public IntPtr TextComponent_SetLineSpacing;
         public IntPtr TextComponent_GetLineSpacing;
+
+        public IntPtr AssetManager_IsAssetHandleValid;
+        public IntPtr AssetManager_IsAssetLoaded;
+        public IntPtr AssetManager_LoadAssetAsync;
+        public IntPtr AssetManager_LoadAssetImmediate;
     }
 
     public struct Funcs
@@ -182,6 +191,9 @@ public static class NativeAPI
         public delegate ulong ScenePickEntityAtFn(float x, float y);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate ulong EntityInstantiateWithNameFn(IntPtr name, NativeVector3 value);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate ulong EntityInstantiateFn(ulong entityID, NativeVector3 value);
 
         [return: MarshalAs(UnmanagedType.I1)]
@@ -192,6 +204,15 @@ public static class NativeAPI
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate ulong EntityFindEntityByNameFn(IntPtr name);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate ulong EntityFindChildEntityByNameFn(ulong entityID, IntPtr childName);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate bool EntityIsParent(ulong entityID, ulong parentEntityID);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate ulong EntityGetParent(ulong entityID);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void EntityDestroyFn(ulong entityID);
@@ -335,5 +356,12 @@ public static class NativeAPI
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void InputSetCursorModeFn(int mode);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        public delegate bool AssetManagerQueryFn(ulong handle);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void AssetManagerLoadFn(ulong handle);
     }
 }

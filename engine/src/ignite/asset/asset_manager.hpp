@@ -14,6 +14,7 @@
 #include <functional>
 #include <condition_variable>
 #include <queue>
+#include <string_view>
 
 namespace fbxsdk
 {
@@ -56,6 +57,14 @@ namespace ignite
         }
 
         void RemoveAsset(AssetHandle handle);
+        void LoadAssetAsync(AssetHandle handle);
+        void LoadAssetImmediate(AssetHandle handle);
+
+        void AddAssetPin(AssetHandle handle, std::string_view ownerTag);
+        void RemoveAssetPin(AssetHandle handle, std::string_view ownerTag);
+        void ReplaceAssetPins(const std::string &ownerTag, const std::unordered_set<AssetHandle> &handles);
+        void ClearAssetPins(std::string_view ownerTag);
+        bool IsAssetPinned(AssetHandle handle) const;
         
         // Register callback to be notified when assets are loaded
         void RegisterAssetLoadedCallback(AssetLoadedCallback callback)
@@ -190,6 +199,9 @@ namespace ignite
         mutable std::mutex m_AssetMutex;
         
         bool m_Running;
+
+        std::unordered_map<AssetHandle, uint32_t> m_AssetPinCounts;
+        std::unordered_map<std::string, std::unordered_set<AssetHandle>> m_PinnedAssetsByOwner;
     };
 }
 

@@ -1,7 +1,13 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #include "widget_renderer.hpp"
+
+#include "widget_canvas.hpp"
 #include "widget_container.hpp"
+#include "widget_button.hpp"
+#include "widget_label.hpp"
+#include "widget_image.hpp"
+
 #include "ignite/core/input/input.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/graphics/graphics_pipeline.hpp"
@@ -35,11 +41,10 @@ namespace ignite
                 }
             }
 
-            std::stable_sort(sorted.begin(), sorted.end(),
-                [](const Ref<IWidgetItem> &a, const Ref<IWidgetItem> &b)
-                {
-                    return a->zIndex < b->zIndex;
-                });
+            std::stable_sort(sorted.begin(), sorted.end(), [](const Ref<IWidgetItem> &a, const Ref<IWidgetItem> &b)
+            {
+                return a->zIndex < b->zIndex;
+            });
 
             return sorted;
         }
@@ -140,7 +145,7 @@ namespace ignite
 
             if (Ref<WidgetButton> button = item->As<WidgetButton>())
             {
-                renderer->DrawQuad(button->GetAlignedRect(), 0.0f, button->GetCurrentColor(), button->GetImage(), glm::vec2(0.0f), glm::vec2(1.0f));
+                renderer->DrawQuad(button->GetAlignedRect(), 0.0f, button->GetCurrentColor(), button->image, glm::vec2(0.0f), glm::vec2(1.0f));
 
                 if (button->label && button->label->font && button->label->font->IsReady())
                 {
@@ -152,11 +157,11 @@ namespace ignite
                         button->GetAlignedRect().min.y + std::max((button->GetAlignedRect().GetSize().y - textSize.y) * 0.5f, 0.0f) - textBounds.min.y
                     };
 
-                    const glm::mat4 textTransform =
-                        glm::translate(glm::mat4(1.0f), glm::vec3(textPos, 0.0f)) *
-                        glm::scale(glm::mat4(1.0f), glm::vec3(button->label->fontSize, button->label->fontSize, 1.0f));
+                    const glm::mat4 textTransform = glm::translate(glm::mat4(1.0f), glm::vec3(textPos, 0.0f)) *
+                        glm::scale(glm::mat4(1.0f), { button->label->style.fontSize, button->label->style.fontSize, 1.0f });
 
-                    renderer->DrawString(button->label->GetText(), button->label->font, button->label->GetColor(), textTransform, button->label->kerning, button->label->lineSpacing);
+                    const LabelStyle &labelStyle = button->label->style;
+                    renderer->DrawString(button->label->text, button->label->font, labelStyle.color, textTransform, labelStyle.kerning, labelStyle.lineSpacing);
                 }
             }
             else if (Ref<WidgetLabel> label = item->As<WidgetLabel>())
@@ -164,11 +169,12 @@ namespace ignite
                 if (label->font && label->font->IsReady())
                 {
                     const Rect textBounds = label->GetTextBounds();
-                    const glm::mat4 textTransform =
-                        glm::translate(glm::mat4(1.0f), glm::vec3(label->GetAlignedRect().min - textBounds.min, 0.0f)) *
-                        glm::scale(glm::mat4(1.0f), glm::vec3(label->fontSize, label->fontSize, 1.0f));
+                    const LabelStyle &labelStyle = label->style;
 
-                    renderer->DrawString(label->GetText(), label->font, label->GetColor(), textTransform, label->kerning, label->lineSpacing);
+                    const glm::mat4 textTransform = glm::translate(glm::mat4(1.0f), glm::vec3(label->GetAlignedRect().min - textBounds.min, 0.0f)) *
+                        glm::scale(glm::mat4(1.0f), { labelStyle.fontSize, labelStyle.fontSize, 1.0f });
+
+                    renderer->DrawString(label->text, label->font, labelStyle.color, textTransform, labelStyle.kerning, labelStyle.lineSpacing);
                 }
             }
 
@@ -659,7 +665,6 @@ namespace ignite
         {
             if (m_QuadBatch.textureSlotIndex >= 32)
             {
-                // Should flush here but for now just fallback to 0
                 return 0;
             }
             texIndex = m_QuadBatch.textureSlotIndex;
