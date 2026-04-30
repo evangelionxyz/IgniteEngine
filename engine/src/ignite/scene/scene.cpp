@@ -494,7 +494,6 @@ namespace ignite
         registry->view<WorldEnvironment>().each([&](entt::entity, const WorldEnvironment &env)
         {
             addHandle(env.hdrHandle);
-            addHandle(env.loadedHDRHandle);
         });
 
         registry->view<Sprite2DComponent>().each([&](entt::entity, const Sprite2DComponent &sprite)
@@ -889,7 +888,6 @@ namespace ignite
 
         comp.dirtyEnvironment = true;
         comp.gpuInitialized = false;
-        comp.loadedHDRHandle = AssetHandle(0);
     }
 
     template<>

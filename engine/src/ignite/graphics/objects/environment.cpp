@@ -145,11 +145,6 @@ namespace ignite
             m_HDRTexture = Renderer::GetBlackTexture();
         }
 
-        if (!m_HDRTexture || !m_HDRTexture->GetHandle())
-        {
-            return false;
-        }
-
         // create binding set after load the texture
         nvrhi::BindingSetDesc bsDesc;
         bsDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));

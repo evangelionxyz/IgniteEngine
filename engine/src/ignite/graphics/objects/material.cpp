@@ -168,6 +168,7 @@ namespace ignite
         Ref<Texture> result = assetManager->GetProject()->GetAsset<Texture>(handle);
         if (result && result->IsReady())
         {
+            assetManager->AddAssetPin(handle, std::format("material.{}", static_cast<uint64_t>(handle)));
             return result;
         }
 

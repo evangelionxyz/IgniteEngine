@@ -608,8 +608,8 @@ namespace ignite
                                 if (metadata.type == AssetType::Texture && metadata.filepath.extension() == ".hdr")
                                 {
                                     c.hdrHandle = handle;
-                                    c.loadedHDRHandle = AssetHandle(0);
                                     c.dirtyEnvironment = true;
+                                    c.gpuInitialized = false;
                                 }
                             }
                             ImGui::EndDragDropTarget();
@@ -621,8 +621,8 @@ namespace ignite
                             if (ImGui::Button("X"))
                             {
                                 c.hdrHandle = AssetHandle(0);
-                                c.loadedHDRHandle = AssetHandle(0);
                                 c.dirtyEnvironment = true;
+                                c.gpuInitialized = false;
                             }
                         }
                     });

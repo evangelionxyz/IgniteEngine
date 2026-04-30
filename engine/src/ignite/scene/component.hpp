@@ -358,8 +358,6 @@ namespace ignite
 
         bool primary = false;
         bool enabled = true;
-
-        AssetHandle loadedHDRHandle = AssetHandle(0);
         bool gpuInitialized = false;
         bool dirtyEnvironment = true;
 
