@@ -16,6 +16,8 @@
 #include "ignite/graphics/ui/widget_label.hpp"
 #include "ignite/graphics/ui/widget_image.hpp"
 
+#include "ignite/core/string_utils.hpp"
+
 #include <format>
 #include <string>
 #include <cstring>
@@ -32,6 +34,8 @@ namespace ignite
                 case WidgetType::Button:    return "Button";
                 case WidgetType::Label:     return "Label";
                 case WidgetType::Image:     return "Image";
+                case WidgetType::BoxSizing: return "BoxSizing";
+                case WidgetType::Overlay:   return "Overlay";
                 default:                    return "Widget";
             }
         }
@@ -98,6 +102,7 @@ namespace ignite
 
         const bool selected = (selectedItemId == item->id);
         const bool hasChildren = !item->children.empty();
+        bool reparent = false;
 
         ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen;
         if (!hasChildren) flags |= ImGuiTreeNodeFlags_Leaf;
@@ -108,17 +113,135 @@ namespace ignite
         if (ImGui::IsItemClicked())
             selectedItemId = item->id;
 
-        bool isDeleting = false;
-        // Handle deleting item
+        // --- Drag source: allow reparenting by dragging a tree node ---
+        if (!canvas || !canvas->GetRoot() || item.get() != canvas->GetRoot())
+        {
+            if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
+            {
+                const int dragId = item->id;
+                ImGui::SetDragDropPayload(DND_WIDGET_ITEM_REPARENT, &dragId, sizeof(int));
+                ImGui::TextUnformatted(GetWidgetTreeLabel(item, canvas).c_str());
+                ImGui::EndDragDropSource();
+            }
+        }
 
+        // --- Drop target: accept toolbox items AND reparenting payloads ---
+        if (ImGui::BeginDragDropTarget())
+        {
+            // Helper: walk up to the nearest WidgetContainer ancestor (including self).
+            // Returns nullptr if none found.
+            // NOTE: we must store the Ref<> to keep the object alive while we hold the raw ptr.
+            auto ResolveContainer = [&](IWidgetItem *target) -> WidgetContainer *
+            {
+                // Is target itself a container?
+                if (auto *c = dynamic_cast<WidgetContainer *>(target))
+                    return c;
+                // Walk up parents
+                IWidgetItem *p = target ? target->parent : nullptr;
+                while (p)
+                {
+                    if (auto *c = dynamic_cast<WidgetContainer *>(p))
+                        return c;
+                    p = p->parent;
+                }
+                // Fallback to canvas root
+                return canvas ? canvas->GetRoot() : nullptr;
+            };
+
+            // Toolbox → tree
+            if (const ImGuiPayload *p = ImGui::AcceptDragDropPayload(DND_WIDGET_TOOLBOX_ITEM))
+            {
+                if (p->Data && p->DataSize == sizeof(int))
+                {
+                    const WidgetType droppedType = static_cast<WidgetType>(*static_cast<const int *>(p->Data));
+
+                    // Rule 1: do not add the same type onto the same type
+                    const bool sameType = (item->GetWidgetType() == droppedType);
+
+                    // Resolve container: if target is a container of a DIFFERENT type, add inside it;
+                    // otherwise add to its nearest container ancestor.
+                    WidgetContainer *container = nullptr;
+                    if (!sameType)
+                    {
+                        // If target is a container (and not the same type), use it directly
+                        container = dynamic_cast<WidgetContainer *>(item.get());
+                    }
+                    // If target is not a container, or same-type, climb to nearest container ancestor
+                    if (!container)
+                        container = ResolveContainer(item->parent);
+
+                    if (container)
+                    {
+                        switch (droppedType)
+                        {
+                            case WidgetType::Container:
+                                selectedItemId = const_cast<WidgetCanvas *>(canvas)->AddContainer(container); break;
+                            case WidgetType::Button:
+                                selectedItemId = const_cast<WidgetCanvas *>(canvas)->AddButton(container, "Button"); break;
+                            case WidgetType::Label:
+                                selectedItemId = const_cast<WidgetCanvas *>(canvas)->AddLabel(container, "Label"); break;
+                            case WidgetType::Image:
+                                selectedItemId = const_cast<WidgetCanvas *>(canvas)->AddImage(container); break;
+                            case WidgetType::BoxSizing:
+                                selectedItemId = const_cast<WidgetCanvas *>(canvas)->AddBoxSizing(container); break;
+                            case WidgetType::Overlay:
+                                selectedItemId = const_cast<WidgetCanvas *>(canvas)->AddOverlay(container); break;
+                            default: break;
+                        }
+                        const_cast<WidgetCanvas *>(canvas)->SetDirtyFlag(true);
+                    }
+
+                    reparent = true;
+                }
+            }
+
+            // Reparent: move a dragged tree item to a new parent
+            if (const ImGuiPayload *p = ImGui::AcceptDragDropPayload(DND_WIDGET_ITEM_REPARENT))
+            {
+                if (p->Data && p->DataSize == sizeof(int))
+                {
+                    const int draggedId = *static_cast<const int *>(p->Data);
+
+                    // Look up the dragged item to check its type
+                    const auto &items = canvas->GetItems();
+                    const auto draggedIt = items.find(draggedId);
+                    const WidgetType draggedType = (draggedIt != items.end() && draggedIt->second)
+                        ? draggedIt->second->GetWidgetType()
+                        : WidgetType::COUNT;
+
+                    // Rule 1: do not reparent onto a node of the same type
+                    const bool sameType = (item->GetWidgetType() == draggedType);
+
+                    // Resolve new parent container (same logic as toolbox drop)
+                    WidgetContainer *newParent = nullptr;
+                    if (!sameType)
+                        newParent = dynamic_cast<WidgetContainer *>(item.get());
+                    if (!newParent)
+                        newParent = ResolveContainer(item->parent);
+
+                    if (newParent && const_cast<WidgetCanvas *>(canvas)->ReparentItem(draggedId, newParent))
+                        const_cast<WidgetCanvas *>(canvas)->SetDirtyFlag(true);
+
+                    reparent = true;
+                }
+            }
+
+            ImGui::EndDragDropTarget();
+        }
+
+        bool isDeleting = false;
         if (opened)
         {
-            if (!isDeleting)
+            if (!isDeleting && !reparent)
             {
-                for (const Ref<IWidgetItem> &child : item->children)
+                // Snapshot children BEFORE recursing: a DnD drop inside any recursive call
+                // may push_back into item->children (or an ancestor's children vector),
+                // which would invalidate the range-based-for iterator and cause a crash.
+                const std::vector<Ref<IWidgetItem>> childrenSnapshot = item->children;
+                for (const Ref<IWidgetItem> &child : childrenSnapshot)
                     DrawWidgetTreeRecursive(child, selectedItemId, canvas);
             }
-            
+
             ImGui::TreePop();
         }
     }
@@ -155,17 +278,28 @@ namespace ignite
             { "Container", "[ ]", WidgetType::Container, { 0.22f, 0.52f, 0.82f, 1.0f } },
             { "Button",    "[B]", WidgetType::Button,    { 0.18f, 0.62f, 0.38f, 1.0f } },
             { "Label",     "[T]", WidgetType::Label,     { 0.72f, 0.52f, 0.12f, 1.0f } },
-            // { "Image",     "[I]", WidgetType::Image,     { 0.18f, 0.82f, 0.12f, 1.0f } },
+            { "Image",     "[I]", WidgetType::Image,     { 0.18f, 0.82f, 0.12f, 1.0f } },
+            { "BoxSizing", "[X]", WidgetType::BoxSizing, { 0.60f, 0.20f, 0.80f, 1.0f } },
+            { "Overlay",   "[O]", WidgetType::Overlay,   { 0.80f, 0.40f, 0.10f, 1.0f } },
         };
 
         ImGui::Spacing();
-        ImGui::TextDisabled("Drag items onto the preview to add:");
+
+        // ----- Search filter -----
+        static char s_ToolboxSearch[128] = {};
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputTextWithHint("##toolbox_search", "Search...", s_ToolboxSearch, sizeof(s_ToolboxSearch));
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
 
+        const bool hasFilter = s_ToolboxSearch[0] != '\0';
+
         for (const ToolboxEntry &entry : entries)
         {
+            if (hasFilter && !strstr(stringutils::ToLower(entry.label).c_str(), stringutils::ToLower(s_ToolboxSearch).c_str()))
+                continue;
+
             const ImVec4 hovered = { entry.color.x + 0.12f, entry.color.y + 0.12f, entry.color.z + 0.12f, 1.0f };
             const ImVec4 active  = { entry.color.x - 0.08f, entry.color.y - 0.08f, entry.color.z - 0.08f, 1.0f };
 
@@ -197,7 +331,7 @@ namespace ignite
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
-        ImGui::TextDisabled("Tip: Right-click the preview\nto add a widget at that position.");
+        ImGui::TextDisabled("Tip: Drag onto the tree or preview\nto add a widget at that position.");
     }
 
     // =========================================================================
@@ -387,7 +521,6 @@ namespace ignite
             ImGui::TreePop();
         }
 
-
         // Z-Index ordering
         if (ImGui::TreeNodeEx("##widget_order", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, "Order"))
         {
@@ -422,63 +555,11 @@ namespace ignite
 
             ImGui::TreePop();
         }
-        
 
         // Transform
         WidgetContainer *parentContainer = nullptr;
         if (selectedItem->parent && selectedItem->parent->GetWidgetType() == WidgetType::Container)
             parentContainer = dynamic_cast<WidgetContainer *>(selectedItem->parent);
-
-        // Container-specific
-        if (Ref<WidgetContainer> container = selectedItem->As<WidgetContainer>())
-        {
-            ImGui::PushID(container.get());
-            ImGui::SeparatorText("Container");
-
-            int layout = static_cast<int>(container->layout);
-            const char *layoutNames[] = { "Horizontal", "Vertical", "Grid", "Absolute" };
-            if (UI::DrawComboBox("Layout", layoutNames, IM_ARRAYSIZE(layoutNames), &layout))
-            {
-                const LayoutMode newLayout = static_cast<LayoutMode>(layout);
-                const LayoutMode oldLayout = container->layout;
-                container->layout = newLayout;
-                dirty = true;
-
-                if (oldLayout == LayoutMode::Absolute && newLayout != LayoutMode::Absolute)
-                {
-                    for (auto &child : container->children)
-                    {
-                        if (child)
-                            child->position = glm::vec2(0.0f);
-                    }
-                }
-            }
-
-            dirty |= UI::DrawFloatControl("Padding", &container->padding, 0.5f, 0.0f, 512.0f);
-            dirty |= UI::DrawFloatControl("Margin", &container->margin, 0.5f, 0.0f, 512.0f);
-            dirty |= UI::DrawFloatControl("Gap", &container->gap, 0.5f, 0.0f, 512.0f);
-
-            // Quick-add children from the details panel too
-            if (ImGui::Button("+ Container##c"))
-            {
-                selectedItemId = widget->AddContainer(container.get());
-                dirty = true;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("+ Button##c"))
-            {
-                selectedItemId = widget->AddButton(container.get(), "Button");
-                dirty = true;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("+ Label##c"))
-            {
-                selectedItemId = widget->AddLabel(container.get(), "Label");
-                dirty = true;
-            }
-
-            ImGui::PopID();
-        }
 
         // --- Button-specific ---
         if (Ref<WidgetButton> button = selectedItem->As<WidgetButton>())
@@ -536,25 +617,71 @@ namespace ignite
         }
         else if (Ref<WidgetLabel> label = selectedItem->As<WidgetLabel>())
         {
-            ImGui::SeparatorText("Label");
-            dirty |= DrawWidgetLabel(label.get(), assetManager);
+            if (ImGui::TreeNodeEx("##widget_label_props", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, "Label"))
+            {
+                dirty |= DrawWidgetLabel(label.get(), assetManager);
+                ImGui::TreePop();
+            }
+        }
+        else if (Ref<WidgetImage> img = selectedItem->As<WidgetImage>())
+        {
+            if (ImGui::TreeNodeEx("##widget_image_props", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, "Image"))
+            {
+                dirty |= DrawWidgetImage(img.get(), assetManager);
+                ImGui::TreePop();
+            }
         }
 
-        // --- Add Child / Remove ---
-        WidgetContainer *insertParent = ResolveInsertionParent(selectedItem, widget);
-        if (widget->GetRoot() && selectedItem->id != widget->GetRoot()->id)
+        // Container-specific
+        else if (Ref<WidgetContainer> container = selectedItem->As<WidgetContainer>())
         {
-            ImGui::Spacing();
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.15f, 0.15f, 1.0f));
-            if (ImGui::Button("Remove Selected Item", ImVec2(-1.0f, 0.0f)))
+            ImGui::PushID(container.get());
+            if (ImGui::TreeNodeEx("##widget_container_props", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, "Container"))
             {
-                if (widget->RemoveItem(selectedItem->id))
+
+                int layout = static_cast<int>(container->layout);
+                const char *layoutNames[] = { "Horizontal", "Vertical", "Grid", "Absolute" };
+                if (UI::DrawComboBox("Layout", layoutNames, IM_ARRAYSIZE(layoutNames), &layout))
                 {
-                    selectedItemId = widget->GetRoot() ? widget->GetRoot()->id : 0;
+                    const LayoutMode newLayout = static_cast<LayoutMode>(layout);
+                    const LayoutMode oldLayout = container->layout;
+                    container->layout = newLayout;
                     dirty = true;
+
+                    if (oldLayout == LayoutMode::Absolute && newLayout != LayoutMode::Absolute)
+                    {
+                        for (auto &child : container->children)
+                        {
+                            if (child)
+                                child->position = glm::vec2(0.0f);
+                        }
+                    }
                 }
+
+                dirty |= UI::DrawFloatControl("Padding", &container->padding, 0.5f, 0.0f, 512.0f);
+                dirty |= UI::DrawFloatControl("Margin", &container->margin, 0.5f, 0.0f, 512.0f);
+                dirty |= UI::DrawFloatControl("Gap", &container->gap, 0.5f, 0.0f, 512.0f);
+
+                ImGui::TreePop();
+                ImGui::PopID();
             }
-            ImGui::PopStyleColor();
+
+            // --- Add Child / Remove ---
+            WidgetContainer *insertParent = ResolveInsertionParent(selectedItem, widget);
+            if (widget->GetRoot() && selectedItem->id != widget->GetRoot()->id)
+            {
+                ImGui::Spacing();
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.15f, 0.15f, 1.0f));
+                if (ImGui::Button("Remove Selected Item", ImVec2(-1.0f, 0.0f)))
+                {
+                    if (widget->RemoveItem(selectedItem->id))
+                    {
+                        selectedItemId = widget->GetRoot() ? widget->GetRoot()->id : 0;
+                        dirty = true;
+                    }
+                }
+                ImGui::PopStyleColor();
+            }
         }
 
         if (dirty)
@@ -762,6 +889,28 @@ namespace ignite
                     ImGui::InvisibleButton(previewBtnId.c_str(), viewportSize);
                     sceneData.viewportHovered = ImGui::IsItemHovered();
 
+                    // Drop a WidgetCanvas from the Content Browser as a child canvas
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload *p = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                        {
+                            if (p->Data && p->DataSize == sizeof(AssetHandle) && assetManager)
+                            {
+                                const AssetHandle dropped = *static_cast<const AssetHandle *>(p->Data);
+                                if (assetManager->GetMetaData(dropped).type == AssetType::Widget)
+                                {
+                                    WidgetChildEntry entry;
+                                    entry.handle = dropped;
+                                    entry.enabled = true;
+                                    entry.blockWidgetsBelow = false;
+                                    widget->GetChildWidgets().push_back(entry);
+                                    widget->SetDirtyFlag(true);
+                                }
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+
                     const ImVec2 mousePos = ImGui::GetMousePos();
                     if (sceneData.sceneRenderer)
                     {
@@ -848,7 +997,50 @@ namespace ignite
 
     bool WidgetEditor::DrawWidgetImage(WidgetImage *image, AssetManager *assetManager)
     {
-        return false;
+        if (!image || !assetManager)
+            return false;
+
+        bool dirty = false;
+
+        const bool isLoaded = image->imageHandle != AssetHandle(0);
+        const std::string imageName = isLoaded
+            ? assetManager->GetAssetDisplayName(image->imageHandle)
+            : "Drop Texture Here";
+
+        UI::DrawButtonWithColumn("Image", std::format("Image: {}", imageName).c_str(), nullptr,
+            [assetManager, image, &dirty, &isLoaded]()
+        {
+            if (ImGui::BeginDragDropTarget())
+            {
+                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                {
+                    if (payload->Data && payload->DataSize == sizeof(AssetHandle))
+                    {
+                        const AssetHandle dropped = *static_cast<const AssetHandle *>(payload->Data);
+                        if (assetManager->GetMetaData(dropped).type == AssetType::Texture)
+                        {
+                            image->imageHandle = dropped;
+                            image->image = nullptr; // will be resolved next frame
+                            dirty = true;
+                        }
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+
+            if (isLoaded)
+            {
+                ImGui::SameLine();
+                if (ImGui::Button("X##ClearWidgetImage"))
+                {
+                    image->imageHandle = AssetHandle(0);
+                    image->image = nullptr;
+                    dirty = true;
+                }
+            }
+        });
+
+        return dirty;
     }
 
 }

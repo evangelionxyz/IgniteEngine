@@ -13,7 +13,9 @@
 namespace ignite
 {
     // Drag-and-drop payload type for the toolbox panel
-    static constexpr const char *DND_WIDGET_TOOLBOX_ITEM = "WIDGET_TOOLBOX_ITEM";
+    static constexpr const char *DND_WIDGET_TOOLBOX_ITEM  = "WIDGET_TOOLBOX_ITEM";
+    // Drag-and-drop payload type for reparenting tree nodes
+    static constexpr const char *DND_WIDGET_ITEM_REPARENT = "WIDGET_ITEM_REPARENT";
 
     class WidgetEditor
     {

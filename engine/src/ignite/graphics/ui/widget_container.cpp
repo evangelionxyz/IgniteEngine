@@ -166,4 +166,55 @@ namespace ignite
         return true;
     }
 
+    // =========================================================================
+    // WidgetBoxSizing
+    // =========================================================================
+
+    WidgetBoxSizing::WidgetBoxSizing(WidgetID wID)
+        : WidgetContainer(wID)
+    {
+    }
+
+    WidgetBoxSizing::~WidgetBoxSizing()
+    {
+    }
+
+    void WidgetBoxSizing::Measure()
+    {
+        WidgetContainer::Measure();
+        size.x = std::clamp(size.x, minSize.x, maxSize.x);
+        size.y = std::clamp(size.y, minSize.y, maxSize.y);
+    }
+
+    // =========================================================================
+    // WidgetOverlay
+    // =========================================================================
+
+    WidgetOverlay::WidgetOverlay(WidgetID wID)
+        : WidgetContainer(wID)
+    {
+    }
+
+    WidgetOverlay::~WidgetOverlay()
+    {
+    }
+
+    void WidgetOverlay::Arrange(const Rect &parentArea)
+    {
+        worldRect = CalculateAlignedRect(parentArea);
+
+        const glm::vec2 contentMin = worldRect.min + glm::vec2(padding);
+        const glm::vec2 contentMax = worldRect.max - glm::vec2(padding);
+        const Rect contentRect(contentMin, contentMax);
+
+        // Every child fills the full overlay area, stacked by z-index
+        for (const Ref<IWidgetItem> &child : children)
+        {
+            if (!child || !child->IsVisible())
+                continue;
+
+            child->Arrange(contentRect);
+        }
+    }
+
 }

@@ -848,6 +848,117 @@ namespace ignite
             return true;
         }
 
+        // =====================================================================
+        // Widget Label / Image helper finders
+        // =====================================================================
+
+        static Ref<WidgetLabel> FindWidgetLabel(Entity entity, const std::string &name)
+        {
+            Ref<WidgetCanvas> canvas = GetEntityWidgetCanvas(entity);
+            if (!canvas) return nullptr;
+            for (const auto &[_, item] : canvas->GetItems())
+                if (item && item->name == name && item->GetWidgetType() == WidgetType::Label)
+                    return item->As<WidgetLabel>();
+            return nullptr;
+        }
+
+        static Ref<WidgetImage> FindWidgetImage(Entity entity, const std::string &name)
+        {
+            Ref<WidgetCanvas> canvas = GetEntityWidgetCanvas(entity);
+            if (!canvas) return nullptr;
+            for (const auto &[_, item] : canvas->GetItems())
+                if (item && item->name == name && item->GetWidgetType() == WidgetType::Image)
+                    return item->As<WidgetImage>();
+            return nullptr;
+        }
+
+        // --- Label ---
+        static bool WidgetComponent_HasLabel(uint64_t entityID, const char *labelName)
+        {
+            if (!labelName) return false;
+            return static_cast<bool>(FindWidgetLabel(GetEntityByID(entityID), std::string(labelName)));
+        }
+
+        static void WidgetComponent_GetLabelText(uint64_t entityID, const char *labelName, const char **result)
+        {
+            if (!labelName || !result) return;
+            if (Ref<WidgetLabel> lbl = FindWidgetLabel(GetEntityByID(entityID), std::string(labelName)))
+                *result = lbl->text.c_str();
+        }
+
+        static void WidgetComponent_SetLabelText(uint64_t entityID, const char *labelName, const char *text)
+        {
+            if (!labelName || !text) return;
+            Entity entity = GetEntityByID(entityID);
+            if (Ref<WidgetLabel> lbl = FindWidgetLabel(entity, std::string(labelName)))
+            {
+                lbl->text = text;
+                if (Ref<WidgetCanvas> c = GetEntityWidgetCanvas(entity)) c->SetDirtyFlag(true);
+            }
+        }
+
+        static void WidgetComponent_GetLabelColor(uint64_t entityID, const char *labelName, glm::vec4 *result)
+        {
+            if (!labelName || !result) return;
+            if (Ref<WidgetLabel> lbl = FindWidgetLabel(GetEntityByID(entityID), std::string(labelName)))
+                *result = lbl->style.color;
+        }
+
+        static void WidgetComponent_SetLabelColor(uint64_t entityID, const char *labelName, glm::vec4 *color)
+        {
+            if (!labelName || !color) return;
+            Entity entity = GetEntityByID(entityID);
+            if (Ref<WidgetLabel> lbl = FindWidgetLabel(entity, std::string(labelName)))
+            {
+                lbl->style.color = *color;
+                if (Ref<WidgetCanvas> c = GetEntityWidgetCanvas(entity)) c->SetDirtyFlag(true);
+            }
+        }
+
+        static void WidgetComponent_GetLabelFontSize(uint64_t entityID, const char *labelName, float *result)
+        {
+            if (!labelName || !result) return;
+            if (Ref<WidgetLabel> lbl = FindWidgetLabel(GetEntityByID(entityID), std::string(labelName)))
+                *result = lbl->style.fontSize;
+        }
+
+        static void WidgetComponent_SetLabelFontSize(uint64_t entityID, const char *labelName, float size)
+        {
+            if (!labelName) return;
+            Entity entity = GetEntityByID(entityID);
+            if (Ref<WidgetLabel> lbl = FindWidgetLabel(entity, std::string(labelName)))
+            {
+                lbl->style.fontSize = size;
+                if (Ref<WidgetCanvas> c = GetEntityWidgetCanvas(entity)) c->SetDirtyFlag(true);
+            }
+        }
+
+        // --- Image ---
+        static bool WidgetComponent_HasImage(uint64_t entityID, const char *imageName)
+        {
+            if (!imageName) return false;
+            return static_cast<bool>(FindWidgetImage(GetEntityByID(entityID), std::string(imageName)));
+        }
+
+        static void WidgetComponent_GetImageHandle(uint64_t entityID, const char *imageName, uint64_t *result)
+        {
+            if (!imageName || !result) return;
+            if (Ref<WidgetImage> img = FindWidgetImage(GetEntityByID(entityID), std::string(imageName)))
+                *result = static_cast<uint64_t>(img->imageHandle);
+        }
+
+        static void WidgetComponent_SetImageHandle(uint64_t entityID, const char *imageName, uint64_t handle)
+        {
+            if (!imageName) return;
+            Entity entity = GetEntityByID(entityID);
+            if (Ref<WidgetImage> img = FindWidgetImage(entity, std::string(imageName)))
+            {
+                img->imageHandle = AssetHandle(handle);
+                img->image = nullptr;
+                if (Ref<WidgetCanvas> c = GetEntityWidgetCanvas(entity)) c->SetDirtyFlag(true);
+            }
+        }
+
         static bool AudioSourceComponent_HasAudio(uint64_t entityID)
         {
             Entity entity = GetEntityByID(entityID);
@@ -2382,6 +2493,19 @@ namespace ignite
             &WidgetComponent_HasButton,
             &WidgetComponent_AddButtonEventCallback,
             &WidgetComponent_RemoveButtonEventCallback,
+
+            &WidgetComponent_HasLabel,
+            &WidgetComponent_GetLabelText,
+            &WidgetComponent_SetLabelText,
+            &WidgetComponent_GetLabelColor,
+            &WidgetComponent_SetLabelColor,
+            &WidgetComponent_GetLabelFontSize,
+            &WidgetComponent_SetLabelFontSize,
+
+            &WidgetComponent_HasImage,
+            &WidgetComponent_GetImageHandle,
+            &WidgetComponent_SetImageHandle,
+
             &AudioSourceComponent_HasAudio,
             &AudioSourceComponent_Play,
             &AudioSourceComponent_Stop,

@@ -71,6 +71,8 @@ namespace ignite
         Button,
         Label,
         Image,
+        BoxSizing,
+        Overlay,
 
         COUNT
     };

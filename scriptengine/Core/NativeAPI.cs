@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Evangelion Manuhutu
+// Copyright (c) 2026 Evangelion Manuhutu
 
 using System;
 using System.Runtime.InteropServices;
@@ -59,6 +59,18 @@ public static class NativeAPI
         public IntPtr WidgetComponent_HasButton;
         public IntPtr WidgetComponent_AddButtonEventCallback;
         public IntPtr WidgetComponent_RemoveButtonEventCallback;
+        // Label
+        public IntPtr WidgetComponent_HasLabel;
+        public IntPtr WidgetComponent_GetLabelText;
+        public IntPtr WidgetComponent_SetLabelText;
+        public IntPtr WidgetComponent_GetLabelColor;
+        public IntPtr WidgetComponent_SetLabelColor;
+        public IntPtr WidgetComponent_GetLabelFontSize;
+        public IntPtr WidgetComponent_SetLabelFontSize;
+        // Image
+        public IntPtr WidgetComponent_HasImage;
+        public IntPtr WidgetComponent_GetImageHandle;
+        public IntPtr WidgetComponent_SetImageHandle;
         public IntPtr AudioSourceComponent_HasAudio;
         public IntPtr AudioSourceComponent_Play;
         public IntPtr AudioSourceComponent_Stop;
@@ -324,15 +336,49 @@ public static class NativeAPI
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.I1)]
+        public delegate bool AudioSourceHasAudioFn(ulong entityID);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
         public delegate bool WidgetComponentHasButtonFn(ulong entityID, IntPtr buttonName);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.I1)]
         public delegate bool WidgetComponentButtonEventFn(ulong entityID, IntPtr buttonName, int eventType, IntPtr methodName);
 
+        
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.I1)]
-        public delegate bool AudioSourceHasAudioFn(ulong entityID);
+        public delegate bool WidgetComponentHasNamedItemFn(ulong entityID, IntPtr name);
+        
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        public delegate void WidgetComponentGetStringByNameFn(ulong entityID, IntPtr name, out IntPtr result);
+        
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        public delegate bool WidgetComponentSetStringByNameF(ulong entityID, IntPtr name);
+        
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void WidgetComponentGetVec4ByNameFn(ulong entityID, IntPtr name, out NativeVector4 result);
+        
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void WidgetComponentSetVec4ByNameFn(ulong entityID, IntPtr name, ref NativeVector4 value);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void WidgetComponentSetStringByNameFn(ulong entityID, IntPtr name, IntPtr value);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void WidgetComponentGetFloatByNameFn(ulong entityID, IntPtr name, out float result);
+        
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void WidgetComponentSetFloatByNameFn(ulong entityID, IntPtr name, float value);
+              
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void WidgetComponentGetU64ByNameFn(ulong entityID, IntPtr name, out ulong result);
+        
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void WidgetComponentSetU64ByNameFn(ulong entityID, IntPtr name, ulong value);
 
         // ========================
         // INPUT FUNCSS

@@ -24,6 +24,16 @@ public static class InternalCalls
     private static NativeAPI.Funcs.EntityGetNameFn s_EntityGetName;
     private static NativeAPI.Funcs.WidgetComponentHasButtonFn s_WidgetComponentHasButton;
     private static NativeAPI.Funcs.WidgetComponentButtonEventFn s_WidgetComponentAddButtonEventCallback;
+    private static NativeAPI.Funcs.WidgetComponentHasNamedItemFn  s_WidgetComponentHasLabel;
+    private static NativeAPI.Funcs.WidgetComponentGetStringByNameFn s_WidgetComponentGetLabelText;
+    private static NativeAPI.Funcs.WidgetComponentSetStringByNameFn s_WidgetComponentSetLabelText;
+    private static NativeAPI.Funcs.WidgetComponentGetVec4ByNameFn  s_WidgetComponentGetLabelColor;
+    private static NativeAPI.Funcs.WidgetComponentSetVec4ByNameFn  s_WidgetComponentSetLabelColor;
+    private static NativeAPI.Funcs.WidgetComponentGetFloatByNameFn s_WidgetComponentGetLabelFontSize;
+    private static NativeAPI.Funcs.WidgetComponentSetFloatByNameFn s_WidgetComponentSetLabelFontSize;
+    private static NativeAPI.Funcs.WidgetComponentHasNamedItemFn  s_WidgetComponentHasImage;
+    private static NativeAPI.Funcs.WidgetComponentGetU64ByNameFn  s_WidgetComponentGetImageHandle;
+    private static NativeAPI.Funcs.WidgetComponentSetU64ByNameFn  s_WidgetComponentSetImageHandle;
     private static NativeAPI.Funcs.WidgetComponentButtonEventFn s_WidgetComponentRemoveButtonEventCallback;
     private static NativeAPI.Funcs.AudioSourceHasAudioFn s_AudioSourceHasAudio;
     private static NativeAPI.Funcs.AudioSourceActionFn s_AudioSourcePlay;
@@ -164,7 +174,16 @@ public static class InternalCalls
         s_EntityGetName = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.EntityGetNameFn>(api.Entity_GetName);
         s_WidgetComponentHasButton = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.WidgetComponentHasButtonFn>(api.WidgetComponent_HasButton);
         s_WidgetComponentAddButtonEventCallback = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.WidgetComponentButtonEventFn>(api.WidgetComponent_AddButtonEventCallback);
-        s_WidgetComponentRemoveButtonEventCallback = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.WidgetComponentButtonEventFn>(api.WidgetComponent_RemoveButtonEventCallback);
+        s_WidgetComponentHasLabel = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.WidgetComponentHasNamedItemFn>(api.WidgetComponent_HasLabel);
+        s_WidgetComponentGetLabelText = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.WidgetComponentGetStringByNameFn>(api.WidgetComponent_GetLabelText);
+        s_WidgetComponentSetLabelText = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.WidgetComponentSetStringByNameFn>(api.WidgetComponent_SetLabelText);
+        s_WidgetComponentGetLabelColor = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.WidgetComponentGetVec4ByNameFn>(api.WidgetComponent_GetLabelColor);
+        s_WidgetComponentSetLabelColor = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.WidgetComponentSetVec4ByNameFn>(api.WidgetComponent_SetLabelColor);
+        s_WidgetComponentGetLabelFontSize = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.WidgetComponentGetFloatByNameFn>(api.WidgetComponent_GetLabelFontSize);
+        s_WidgetComponentSetLabelFontSize = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.WidgetComponentSetFloatByNameFn>(api.WidgetComponent_SetLabelFontSize);
+        s_WidgetComponentHasImage = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.WidgetComponentHasNamedItemFn>(api.WidgetComponent_HasImage);
+        s_WidgetComponentGetImageHandle = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.WidgetComponentGetU64ByNameFn>(api.WidgetComponent_GetImageHandle);
+        s_WidgetComponentSetImageHandle = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.WidgetComponentSetU64ByNameFn>(api.WidgetComponent_SetImageHandle);        s_WidgetComponentRemoveButtonEventCallback = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.WidgetComponentButtonEventFn>(api.WidgetComponent_RemoveButtonEventCallback);
         s_AudioSourceHasAudio = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.AudioSourceHasAudioFn>(api.AudioSourceComponent_HasAudio);
         s_AudioSourcePlay = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.AudioSourceActionFn>(api.AudioSourceComponent_Play);
         s_AudioSourceStop = Marshal.GetDelegateForFunctionPointer<NativeAPI.Funcs.AudioSourceActionFn>(api.AudioSourceComponent_Stop);
@@ -1195,5 +1214,99 @@ public static class InternalCalls
     {
         EnsureInitialized();
         s_AssetManagerLoadAssetImmediate(handle);
+    }
+
+    // =========================================================================
+    // Widget Label
+    // =========================================================================
+
+    internal static bool WidgetComponent_HasLabel(ulong entityID, string labelName)
+    {
+        EnsureInitialized();
+        IntPtr ptr = StringToUtf8(labelName);
+        try { return s_WidgetComponentHasLabel(entityID, ptr); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static string WidgetComponent_GetLabelText(ulong entityID, string labelName)
+    {
+        EnsureInitialized();
+        IntPtr namePtr = StringToUtf8(labelName);
+        try
+        {
+            s_WidgetComponentGetLabelText(entityID, namePtr, out IntPtr result);
+            return result == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(result);
+        }
+        finally { Marshal.FreeCoTaskMem(namePtr); }
+    }
+
+    internal static void WidgetComponent_SetLabelText(ulong entityID, string labelName, string text)
+    {
+        EnsureInitialized();
+        IntPtr namePtr = StringToUtf8(labelName);
+        IntPtr textPtr = StringToUtf8(text);
+        try { s_WidgetComponentSetLabelText(entityID, namePtr, textPtr); }
+        finally { Marshal.FreeCoTaskMem(namePtr); Marshal.FreeCoTaskMem(textPtr); }
+    }
+
+    internal static void WidgetComponent_GetLabelColor(ulong entityID, string labelName, out Vector4 result)
+    {
+        EnsureInitialized();
+        IntPtr ptr = StringToUtf8(labelName);
+        try { s_WidgetComponentGetLabelColor(entityID, ptr, out NativeAPI.NativeVector4 native); result = ToManaged(native); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static void WidgetComponent_SetLabelColor(ulong entityID, string labelName, Vector4 color)
+    {
+        EnsureInitialized();
+        IntPtr ptr = StringToUtf8(labelName);
+        NativeAPI.NativeVector4 native = ToNative(color);
+        try { s_WidgetComponentSetLabelColor(entityID, ptr, ref native); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static void WidgetComponent_GetLabelFontSize(ulong entityID, string labelName, out float result)
+    {
+        EnsureInitialized();
+        IntPtr ptr = StringToUtf8(labelName);
+        try { s_WidgetComponentGetLabelFontSize(entityID, ptr, out result); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static void WidgetComponent_SetLabelFontSize(ulong entityID, string labelName, float size)
+    {
+        EnsureInitialized();
+        IntPtr ptr = StringToUtf8(labelName);
+        try { s_WidgetComponentSetLabelFontSize(entityID, ptr, size); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    // =========================================================================
+    // Widget Image
+    // =========================================================================
+
+    internal static bool WidgetComponent_HasImage(ulong entityID, string imageName)
+    {
+        EnsureInitialized();
+        IntPtr ptr = StringToUtf8(imageName);
+        try { return s_WidgetComponentHasImage(entityID, ptr); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static ulong WidgetComponent_GetImageHandle(ulong entityID, string imageName)
+    {
+        EnsureInitialized();
+        IntPtr ptr = StringToUtf8(imageName);
+        try { s_WidgetComponentGetImageHandle(entityID, ptr, out ulong result); return result; }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static void WidgetComponent_SetImageHandle(ulong entityID, string imageName, ulong handle)
+    {
+        EnsureInitialized();
+        IntPtr ptr = StringToUtf8(imageName);
+        try { s_WidgetComponentSetImageHandle(entityID, ptr, handle); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
     }
 }

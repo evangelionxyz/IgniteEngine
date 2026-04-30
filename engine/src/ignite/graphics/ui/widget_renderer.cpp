@@ -111,6 +111,12 @@ namespace ignite
                     label->font = nullptr;
                 }
             }
+            else if (Ref<WidgetImage> img = item->As<WidgetImage>())
+            {
+                img->image = img->imageHandle != AssetHandle(0)
+                    ? assetManager->GetAsset<Texture>(img->imageHandle)
+                    : nullptr;
+            }
 
             for (const Ref<IWidgetItem> &child : item->children)
             {
@@ -176,6 +182,10 @@ namespace ignite
 
                     renderer->DrawString(label->text, label->font, labelStyle.color, textTransform, labelStyle.kerning, labelStyle.lineSpacing);
                 }
+            }
+            else if (Ref<WidgetImage> img = item->As<WidgetImage>())
+            {
+                renderer->DrawQuad(img->GetAlignedRect(), 0.0f, glm::vec4(1.0f), img->image, glm::vec2(0.0f), glm::vec2(1.0f));
             }
 
             const std::vector<Ref<IWidgetItem>> sortedChildren = GetSortedVisibleChildren(item->children);

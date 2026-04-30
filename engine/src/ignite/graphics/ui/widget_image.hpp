@@ -14,9 +14,13 @@ namespace ignite
         WidgetImage(WidgetID wID);
         virtual ~WidgetImage() override;
 
-        AssetHandle imageHandle;
+        AssetHandle imageHandle = AssetHandle(0);
         Ref<Texture> image;
 
+        virtual void Arrange(const Rect &parentArea) override;
+        virtual bool HitTest(int px, int py) override;
+
+        virtual WidgetType GetWidgetType() const override { return WidgetType::Image; }
     };
 }
 #endif

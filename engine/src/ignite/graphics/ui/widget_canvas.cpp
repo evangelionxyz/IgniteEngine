@@ -4,6 +4,7 @@
 #include "widget_container.hpp"
 #include "widget_label.hpp"
 #include "widget_button.hpp"
+#include "widget_image.hpp"
 
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/asset/asset_manager.hpp"
@@ -53,7 +54,7 @@ namespace ignite
             sr.AddKeyValue("Position", item->position);
             sr.AddKeyValue("Size", item->size);
             sr.AddKeyValue("VerticalAlignment", static_cast<int>(item->VAlignment));
-            sr.AddKeyValue("HorizontalAligment", static_cast<int>(item->HAlignment));
+            sr.AddKeyValue("HorizontalAlignment", static_cast<int>(item->HAlignment));
             sr.AddKeyValue("Visible", item->visible);
             sr.AddKeyValue("ZIndex", item->zIndex);
 
@@ -101,6 +102,14 @@ namespace ignite
                     sr.AddKeyValue("FontSize", label->style.fontSize);
                     sr.AddKeyValue("Kerning", label->style.kerning);
                     sr.AddKeyValue("LineSpacing", label->style.lineSpacing);
+                }
+            }
+
+            if (item->GetWidgetType() == WidgetType::Image)
+            {
+                if (const Ref<WidgetImage> img = item->As<WidgetImage>())
+                {
+                    sr.AddKeyValue("ImageHandle", static_cast<uint64_t>(img->imageHandle));
                 }
             }
 
@@ -164,8 +173,11 @@ namespace ignite
                 switch (type)
                 {
                     case WidgetType::Container: item = CreateRef<WidgetContainer>(id); break;
-                    case WidgetType::Button: item = CreateRef<WidgetButton>("", id); break;
-                    case WidgetType::Label: item = CreateRef<WidgetLabel>("", id); break;
+                    case WidgetType::Button:    item = CreateRef<WidgetButton>("", id); break;
+                    case WidgetType::Label:     item = CreateRef<WidgetLabel>("", id); break;
+                    case WidgetType::Image:     item = CreateRef<WidgetImage>(id); break;
+                    case WidgetType::BoxSizing: item = CreateRef<WidgetBoxSizing>(id); break;
+                    case WidgetType::Overlay:   item = CreateRef<WidgetOverlay>(id); break;
                     default: break;
                 }
 
@@ -223,6 +235,14 @@ namespace ignite
                         if (itemNode["Color"]) text->style.color = itemNode["Color"].as<glm::vec4>();
                         if (itemNode["Kerning"]) text->style.kerning = itemNode["Kerning"].as<float>();
                         if (itemNode["LineSpacing"]) text->style.lineSpacing = itemNode["LineSpacing"].as<float>();
+                    }
+                }
+
+                else if (type == WidgetType::Image)
+                {
+                    if (Ref<WidgetImage> img = item->As<WidgetImage>())
+                    {
+                        if (auto n = itemNode["ImageHandle"]) img->imageHandle = AssetHandle(n.as<uint64_t>());
                     }
                 }
 
@@ -329,6 +349,92 @@ namespace ignite
 
         m_WidgetItems[wID] = child;
         return wID;
+    }
+
+    WidgetID WidgetCanvas::AddImage(WidgetContainer *container)
+    {
+        const WidgetID wID = GetNextItemId();
+        Ref<WidgetImage> image = CreateRef<WidgetImage>(wID);
+
+        if (container)
+        {
+            image->parent = container;
+            container->children.push_back(image);
+        }
+
+        m_WidgetItems[wID] = image;
+        return wID;
+    }
+
+    WidgetID WidgetCanvas::AddBoxSizing(WidgetContainer *container)
+    {
+        const WidgetID wID = GetNextItemId();
+        Ref<WidgetBoxSizing> box = CreateRef<WidgetBoxSizing>(wID);
+
+        if (container)
+        {
+            box->parent = container;
+            container->children.push_back(box);
+        }
+
+        m_WidgetItems[wID] = box;
+        return wID;
+    }
+
+    WidgetID WidgetCanvas::AddOverlay(WidgetContainer *container)
+    {
+        const WidgetID wID = GetNextItemId();
+        Ref<WidgetOverlay> overlay = CreateRef<WidgetOverlay>(wID);
+
+        if (container)
+        {
+            overlay->parent = container;
+            container->children.push_back(overlay);
+        }
+
+        m_WidgetItems[wID] = overlay;
+        return wID;
+    }
+
+    bool WidgetCanvas::ReparentItem(WidgetID id, WidgetContainer *newParent)
+    {
+        if (!newParent)
+            return false;
+
+        const auto it = m_WidgetItems.find(id);
+        if (it == m_WidgetItems.end() || !it->second)
+            return false;
+
+        Ref<IWidgetItem> item = it->second;
+
+        // Prevent reparenting root or to itself
+        if (m_Root && item.get() == m_Root.get())
+            return false;
+        if (item.get() == newParent)
+            return false;
+
+        // Prevent reparenting to a descendant (cycle check)
+        IWidgetItem *check = newParent;
+        while (check)
+        {
+            if (check == item.get())
+                return false;
+            check = check->parent;
+        }
+
+        // Remove from old parent
+        if (item->parent)
+        {
+            auto &siblings = item->parent->children;
+            siblings.erase(std::remove_if(siblings.begin(), siblings.end(),
+                [&](const Ref<IWidgetItem> &c) { return c.get() == item.get(); }),
+                siblings.end());
+        }
+
+        // Attach to new parent
+        item->parent = newParent;
+        newParent->children.push_back(item);
+        return true;
     }
 
     WidgetContainer *WidgetCanvas::CreateRoot(uint32_t width, uint32_t height)

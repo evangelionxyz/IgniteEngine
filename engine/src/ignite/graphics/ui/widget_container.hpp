@@ -1,7 +1,5 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-// Copyright (c) 2026 Evangelion Manuhutu
-
 #pragma once
 #ifndef WIDGET_CONTAINER_HPP
 #define WIDGET_CONTAINER_HPP
@@ -24,6 +22,31 @@ namespace ignite
         virtual bool HitTest(int px, int py) override;
 
         virtual WidgetType GetWidgetType() const override { return WidgetType::Container; }
+    };
+
+    // A container that clamps its own size to [minSize, maxSize] before layout.
+    class WidgetBoxSizing : public WidgetContainer
+    {
+    public:
+        WidgetBoxSizing(WidgetID wID);
+        virtual ~WidgetBoxSizing() override;
+
+        glm::vec2 minSize = glm::vec2(0.0f);
+        glm::vec2 maxSize = glm::vec2(FLT_MAX);
+
+        virtual void Measure() override;
+        virtual WidgetType GetWidgetType() const override { return WidgetType::BoxSizing; }
+    };
+
+    // A container that stacks all children on top of each other (each child fills the full parent area).
+    class WidgetOverlay : public WidgetContainer
+    {
+    public:
+        WidgetOverlay(WidgetID wID);
+        virtual ~WidgetOverlay() override;
+
+        virtual void Arrange(const Rect &parentArea) override;
+        virtual WidgetType GetWidgetType() const override { return WidgetType::Overlay; }
     };
 }
 

@@ -30,6 +30,20 @@ namespace ignite
         bool (*WidgetComponent_AddButtonEventCallback)(uint64_t entityID, const char *buttonName, int32_t eventType, const char *methodName);
         bool (*WidgetComponent_RemoveButtonEventCallback)(uint64_t entityID, const char *buttonName, int32_t eventType, const char *methodName);
 
+        // Label
+        bool (*WidgetComponent_HasLabel)(uint64_t entityID, const char *labelName);
+        void (*WidgetComponent_GetLabelText)(uint64_t entityID, const char *labelName, const char **result);
+        void (*WidgetComponent_SetLabelText)(uint64_t entityID, const char *labelName, const char *text);
+        void (*WidgetComponent_GetLabelColor)(uint64_t entityID, const char *labelName, glm::vec4 *result);
+        void (*WidgetComponent_SetLabelColor)(uint64_t entityID, const char *labelName, glm::vec4 *color);
+        void (*WidgetComponent_GetLabelFontSize)(uint64_t entityID, const char *labelName, float *result);
+        void (*WidgetComponent_SetLabelFontSize)(uint64_t entityID, const char *labelName, float size);
+
+        // Image
+        bool (*WidgetComponent_HasImage)(uint64_t entityID, const char *imageName);
+        void (*WidgetComponent_GetImageHandle)(uint64_t entityID, const char *imageName, uint64_t *result);
+        void (*WidgetComponent_SetImageHandle)(uint64_t entityID, const char *imageName, uint64_t handle);
+
         bool (*AudioSourceComponent_HasAudio)(uint64_t entityID);
         void (*AudioSourceComponent_Play)(uint64_t entityID);
         void (*AudioSourceComponent_Stop)(uint64_t entityID);

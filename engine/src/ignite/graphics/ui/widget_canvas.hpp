@@ -43,6 +43,10 @@ namespace ignite
         WidgetID AddButton(WidgetContainer *container, const std::string &text);
         WidgetID AddLabel(WidgetContainer *container, const std::string &text);
         WidgetID AddContainer(WidgetContainer *container = nullptr);
+        WidgetID AddImage(WidgetContainer *container = nullptr);
+        WidgetID AddBoxSizing(WidgetContainer *container = nullptr);
+        WidgetID AddOverlay(WidgetContainer *container = nullptr);
+        bool ReparentItem(WidgetID id, WidgetContainer *newParent);
         bool RemoveItem(WidgetID id);
 
         WidgetContainer *CreateRoot(uint32_t width, uint32_t height);

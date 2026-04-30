@@ -260,9 +260,12 @@ namespace ignite
         for (entt::entity e : audioView)
         {
             AudioSourceComponent &as = audioView.get<AudioSourceComponent>(e);
+            if (as.handle == AssetHandle(0))
+                continue;
+
+            Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
             if (as.playOnStart)
             {
-                Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
                 if (sound)
                 {
                     RebuildAudioSourceDspChain(as, sound);
