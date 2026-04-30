@@ -3,7 +3,7 @@
 using Ignite.Core;
 namespace Ignite;
 
-public sealed class BoxCollider2D : IComponent
+public sealed class BoxCollider2DComponent : IComponent
 {
     public Vector2 Size
     {

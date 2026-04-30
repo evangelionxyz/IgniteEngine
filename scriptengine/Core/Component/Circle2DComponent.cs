@@ -3,7 +3,7 @@
 using Ignite.Core;
 namespace Ignite;
 
-public class Circle2D : IComponent
+public class Circle2DComponent : IComponent
 {
     public Vector4 Color
     {

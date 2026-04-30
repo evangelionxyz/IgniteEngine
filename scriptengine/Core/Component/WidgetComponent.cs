@@ -3,7 +3,7 @@
 using Ignite.Core;
 namespace Ignite;
 
-public class Widget : IComponent
+public class WidgetComponent : IComponent
 {
     /// <summary>Returns a <see cref="WidgetButton"/> by name, or null if not found.</summary>
     public WidgetButton GetButton(string buttonName)

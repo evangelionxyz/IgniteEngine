@@ -19,7 +19,6 @@ public sealed class FmodReverb : FmodDsp
     public float DryLevel { get; set; } = 0.0f;
     public float WetLevel { get; set; } = -6.0f;
 
-    public void setMix(float wetLevel) => WetLevel = wetLevel;
     public void SetMix(float wetLevel) => WetLevel = wetLevel;
 
     internal override bool Apply(ulong entityID)
@@ -44,7 +43,6 @@ public sealed class FmodChorus : FmodDsp
     public float Rate { get; set; } = 0.8f;
     public float Depth { get; set; } = 3.0f;
 
-    public void setMix(float value) => Mix = value;
     public void SetMix(float value) => Mix = value;
 
     internal override bool Apply(ulong entityID)

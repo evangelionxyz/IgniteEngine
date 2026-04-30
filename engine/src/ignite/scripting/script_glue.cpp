@@ -633,8 +633,13 @@ namespace ignite
 
             if (scene->IsRunning())
             {
-                if (auto *scriptEngine = ScriptEngine::GetInstance())
-                    scriptEngine->OnCreateEntity(entity);
+                auto *scriptEngine = ScriptEngine::GetInstance();
+                if (entity.HasComponent<ScriptComponent>())
+                {
+                    const auto &sc = entity.GetComponent<ScriptComponent>();
+                    const ScriptInstanceID instanceID = entity.GetUUID();
+                    scriptEngine->OnCreateEntityInstance(instanceID, sc.className);
+                }
             }
 
             return static_cast<uint64_t>(entity.GetUUID());
@@ -658,8 +663,13 @@ namespace ignite
             
             if (scene->IsRunning())
             {
-                if (auto *scriptEngine = ScriptEngine::GetInstance())
-                    scriptEngine->OnCreateEntity(copyEntity);
+                auto *scriptEngine = ScriptEngine::GetInstance();
+                if (entity.HasComponent<ScriptComponent>())
+                {
+                    auto &sc = entity.GetComponent<ScriptComponent>();
+                    const ScriptInstanceID instanceID = entity.GetUUID();
+                    sc.runtimeScriptInstance = scriptEngine->OnCreateEntityInstance(instanceID, sc.className);
+                }
             }
 
             return static_cast<uint64_t>(copyEntity.GetUUID());
@@ -677,8 +687,14 @@ namespace ignite
 
             if (scene->IsRunning())
             {
-                if (auto *scriptEngine = ScriptEngine::GetInstance())
-                    scriptEngine->OnDestroyEntity(entity);
+                auto *scriptEngine = ScriptEngine::GetInstance();
+                if (entity.HasComponent<ScriptComponent>())
+                {
+                    auto &sc = entity.GetComponent<ScriptComponent>();
+                    sc.runtimeScriptInstance = nullptr;
+                    const ScriptInstanceID instanceID = entity.GetUUID();
+                    ScriptEngine::GetInstance()->OnDestroyEntityInstance(instanceID);
+                }
             }
 
             std::erase_if(s_WidgetButtonEventBindings, [entityID](const auto &entry)

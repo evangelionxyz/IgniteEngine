@@ -281,7 +281,8 @@ namespace ignite
         registry->view<ScriptComponent>().each([this](entt::entity e, ScriptComponent &script)
         {
             Entity entity{ e, this };
-            ScriptEngine::GetInstance()->OnCreateEntity(entity);
+            ScriptInstanceID instanceID = entity.GetUUID();
+            script.runtimeScriptInstance = ScriptEngine::GetInstance()->OnCreateEntityInstance(instanceID, script.className);
         });
 
         registry->view<MeshComponent>().each([](entt::entity, MeshComponent &meshComp)
@@ -318,7 +319,9 @@ namespace ignite
         registry->view<ScriptComponent>().each([this](entt::entity e, ScriptComponent &script)
         {
             Entity entity { e, this };
-            ScriptEngine::GetInstance()->OnDestroyEntity(entity);
+            script.runtimeScriptInstance = nullptr;
+            const ScriptInstanceID instanceID = entity.GetUUID();
+            ScriptEngine::GetInstance()->OnDestroyEntityInstance(instanceID);
         });
 
         ScriptEngine::GetInstance()->ClearSceneContext();
@@ -422,11 +425,10 @@ namespace ignite
 
             {
                 IGN_PROFILE_SCOPE("Scene::ScriptUpdate");
-                registry->view<ScriptComponent>().each([this, deltaTime](entt::entity e, ScriptComponent &sc)
+                registry->view<ScriptComponent>().each([this, deltaTime](entt::entity e, ScriptComponent &script)
                 {
-                    IGN_PROFILE_SCOPE("Scene::ScriptUpdateEntity");
-                    Entity entity { e, this };
-                    ScriptEngine::GetInstance()->OnUpdateEntity(entity, deltaTime);
+                    if (script.runtimeScriptInstance)
+                        script.runtimeScriptInstance->InvokeOnUpdate(deltaTime);
                 });
             }
 

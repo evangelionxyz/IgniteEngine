@@ -3,7 +3,7 @@
 using Ignite.Core;
 namespace Ignite;
 
-public class Sprite2D : IComponent
+public class Sprite2DComponent : IComponent
 {
     public Vector4 Color
     {

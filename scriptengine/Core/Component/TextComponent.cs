@@ -3,7 +3,7 @@
 using Ignite.Core;
 namespace Ignite;
 
-public class Text : IComponent
+public class TextComponent : IComponent
 {
     public string TextString
     {

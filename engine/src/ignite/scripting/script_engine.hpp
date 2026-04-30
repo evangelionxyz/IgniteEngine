@@ -33,16 +33,19 @@ namespace ignite
         void SetSceneContext(Scene *scene);
         void ClearSceneContext();
         
-        bool EntityClassExists(const std::string &fullClassName);
-        
-        void OnCreateEntity(Entity entity);
-        void OnDestroyEntity(Entity entity);
-        void OnUpdateEntity(Entity entity, float time);
-        
+        // Entity script
+        bool IsEntityClassExists(const std::string &fullClassName);
+        Ref<ScriptInstance> OnCreateEntityInstance(ScriptInstanceID instanceID, const std::string &className);
+        void OnDestroyEntityInstance(ScriptInstanceID instanceID);
+
         std::shared_ptr<ScriptClass> GetEntityClassesByName(const std::string &name);
         std::unordered_map<std::string, std::shared_ptr<ScriptClass>> GetEntityClasses();
+        std::shared_ptr<ScriptInstance> GetEntityScriptInstance(ScriptInstanceID instanceID);
         
-        std::shared_ptr<ScriptInstance> GetEntityScriptInstance(UUID uuid);
+        // UI Script
+
+
+
         std::vector<std::string> GetScriptClassStorage();
         Scene *GetSceneContext();
         ScriptHost *GetScriptHost();

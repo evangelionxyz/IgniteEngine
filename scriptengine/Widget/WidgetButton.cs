@@ -2,6 +2,7 @@
 
 using System;
 using Ignite.Core;
+
 namespace Ignite;
 
 internal enum WidgetButtonEventType

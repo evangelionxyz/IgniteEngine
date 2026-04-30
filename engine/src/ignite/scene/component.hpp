@@ -35,6 +35,7 @@ namespace ignite
     class Skeleton;
     class AnimatorController;
     class ConstantBuffer;
+    class ScriptInstance;
 
     static std::unordered_map<std::string, CompType> s_ComponentsName =
     {
@@ -606,6 +607,8 @@ namespace ignite
     public:
         std::string className = "EMPTY";
         ScriptComponent() = default;
+
+        Ref<ScriptInstance> runtimeScriptInstance = nullptr;
 
         COMPONENT_CLASS_TYPE(CompType_Script)
     };

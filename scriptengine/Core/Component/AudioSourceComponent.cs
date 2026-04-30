@@ -3,7 +3,7 @@
 using Ignite.Core;
 namespace Ignite;
 
-public class AudioSource : IComponent
+public class AudioSourceComponent : IComponent
 {
     public bool HasAudio => InternalCalls.AudioSourceComponent_HasAudio(Entity.ID);
 

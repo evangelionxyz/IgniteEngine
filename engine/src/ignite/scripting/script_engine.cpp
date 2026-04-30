@@ -164,7 +164,7 @@ namespace ignite
         bool hasAppAssemblyLastWriteTime = false;
 
         std::unordered_map<std::string, Ref<ScriptClass>> entityClasses;
-        std::unordered_map<UUID, Ref<ScriptInstance>> entityInstances;
+        std::unordered_map<ScriptInstanceID, Ref<ScriptInstance>> entityScriptInstances;
     };
 
     ScriptEngineData *scriptEngineData = nullptr;
@@ -273,7 +273,7 @@ namespace ignite
         }
 
         scriptEngineData->entityClasses.clear();
-        scriptEngineData->entityInstances.clear();
+        scriptEngineData->entityScriptInstances.clear();
 
         delete scriptEngineData;
         scriptEngineData = nullptr;
@@ -388,7 +388,7 @@ namespace ignite
     void ScriptEngine::ReloadAssembly()
     {
         // Clear existing instances
-        scriptEngineData->entityInstances.clear();
+        scriptEngineData->entityScriptInstances.clear();
 
         // Reload app assembly (MochiSharp handles unloading through collectible context)
         if (LoadAppAssembly(scriptEngineData->appAssemblyFilepath))
@@ -417,12 +417,12 @@ namespace ignite
         if (!scriptEngineData)
             return;
 
-        for (auto &instance : scriptEngineData->entityInstances)
+        for (auto &instance : scriptEngineData->entityScriptInstances)
         {
 			scriptEngine->GetScriptHost()->DestroyInstance(instance.second->GetInstanceID());
         }
 
-        scriptEngineData->entityInstances.clear();
+        scriptEngineData->entityScriptInstances.clear();
         if (scriptEngineData->assemblyReloadDeferred)
         {
             scriptEngineData->assemblyReloadDeferred = false;
@@ -433,63 +433,40 @@ namespace ignite
 		m_Scene = nullptr;
     }
 
-    bool ScriptEngine::EntityClassExists(const std::string &fullClassName)
+    bool ScriptEngine::IsEntityClassExists(const std::string &fullClassName)
     {
         if (scriptEngineData)
             return scriptEngineData->entityClasses.contains(fullClassName);
         return false;
     }
 
-    void ScriptEngine::OnCreateEntity(Entity entity)
+    Ref<ScriptInstance> ScriptEngine::OnCreateEntityInstance(ScriptInstanceID instanceID, const std::string &className)
     {
         IGN_PROFILE_FUNCTION();
-        if (!entity.HasComponent<ScriptComponent>())
-            return;
 
-        if (const auto &sc = entity.GetComponent<ScriptComponent>(); 
-            EntityClassExists(sc.className))
+        if (IsEntityClassExists(className))
         {
-            const UUID uuid = entity.GetUUID();
-
-            const auto instance = std::make_shared<ScriptInstance>(scriptEngineData->entityClasses[sc.className], entity);
-            scriptEngineData->entityInstances[uuid] = instance;
+            auto scriptInstance = CreateRef<ScriptInstance>(scriptEngineData->entityClasses[className], instanceID);
+            scriptEngineData->entityScriptInstances[instanceID] = scriptInstance;
 
             // C# On Create Function
-            instance->InvokeOnCreate();
+            scriptInstance->InvokeOnCreate();
+            return scriptInstance;
         }
+
+        return nullptr;
     }
 
-	void ScriptEngine::OnDestroyEntity(Entity entity)
+	void ScriptEngine::OnDestroyEntityInstance(ScriptInstanceID instanceID)
 	{
         IGN_PROFILE_FUNCTION();
-		if (!entity.HasComponent<ScriptComponent>())
-			return;
 
-        if (const auto &sc = entity.GetComponent<ScriptComponent>();
-            EntityClassExists(sc.className))
-        {
-            auto &instance = scriptEngineData->entityInstances[entity.GetUUID()];
-            if (instance)
-            {
-                instance->InvokeOnDestroy();
-            }
-            scriptEngineData->entityInstances.erase(entity.GetUUID());
-        }
+        auto &scriptInstance = scriptEngineData->entityScriptInstances[instanceID];
+        if (scriptInstance)
+            scriptInstance->InvokeOnDestroy();
+
+        scriptEngineData->entityScriptInstances.erase(instanceID);
 	}
-
-	void ScriptEngine::OnUpdateEntity(Entity entity, float time)
-    {
-        IGN_PROFILE_FUNCTION();
-        const UUID uuid = entity.GetUUID();
-        if (const auto &it = scriptEngineData->entityInstances.find(uuid); it == scriptEngineData->entityInstances.end())
-        {
-            LOG_ERROR("[Script Engine] Entity script instance is not attached! {} {}", entity.GetName(), static_cast<uint64_t>(uuid));
-            return;
-        }
-
-        const auto &instance = scriptEngineData->entityInstances.at(uuid);
-        instance->InvokeOnUpdate(time);
-    }
 
     Ref<ScriptClass> ScriptEngine::GetEntityClassesByName(const std::string &name)
     {
@@ -512,12 +489,12 @@ namespace ignite
         return scriptEngineData->entityScriptStorage;
     }
 
-    Ref<ScriptInstance> ScriptEngine::GetEntityScriptInstance(UUID uuid)
+    Ref<ScriptInstance> ScriptEngine::GetEntityScriptInstance(ScriptInstanceID instanceID)
     {
-        const auto &it = scriptEngineData->entityInstances.find(uuid);
-        if (it == scriptEngineData->entityInstances.end())
+        const auto &it = scriptEngineData->entityScriptInstances.find(instanceID);
+        if (it == scriptEngineData->entityScriptInstances.end())
         {
-            LOG_ERROR("[Script Engine] Failed to find {}", static_cast<uint64_t>(uuid));
+            LOG_ERROR("[Script Engine] Failed to find {}", instanceID);
             return nullptr;
         }
 

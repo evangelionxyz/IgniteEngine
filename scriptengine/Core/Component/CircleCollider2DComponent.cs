@@ -3,7 +3,7 @@
 using Ignite.Core;
 namespace Ignite;
 
-public sealed class CircleCollider2D : IComponent
+public sealed class CircleCollider2DComponent : IComponent
 {
     public Vector2 Center
     {

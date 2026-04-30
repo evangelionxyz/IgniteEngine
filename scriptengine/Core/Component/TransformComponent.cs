@@ -3,7 +3,7 @@
 using Ignite.Core;
 namespace Ignite;
 
-public class Transform : IComponent
+public class TransformComponent : IComponent
 {
     public Vector3 Forward
     {

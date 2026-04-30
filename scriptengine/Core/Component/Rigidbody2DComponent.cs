@@ -10,7 +10,7 @@ public enum Body2DType
     Kinematic = 2
 }
 
-public sealed class Rigidbody2D : IComponent
+public sealed class Rigidbody2DComponent : IComponent
 {
     public Body2DType Type
     {

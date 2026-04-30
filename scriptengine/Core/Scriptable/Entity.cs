@@ -5,47 +5,10 @@ using System;
 using Ignite.Core;
 namespace Ignite;
 
-public class Entity : IEquatable<Entity>
+public class Entity : ScriptableObject
 {
-    public ulong ID { get; internal set; }
-    
-    internal Entity(ulong id) { ID = id; }
-    protected Entity() { ID = 0; }
-
-    public virtual void OnCreate() { }
-    public virtual void OnUpdate(float deltaTime) { }
-    public virtual void OnDestroy() { }
-
-    internal void SetID(ulong id) => ID = id;
-
-    public bool Equals(Entity other)
-    {
-        if (ReferenceEquals(other, null))
-            return false;
-
-        if (ReferenceEquals(this, other))
-            return true;
-
-        return ID == other.ID;
-    }
-    public override bool Equals(object obj) => obj is Entity entity && Equals(entity);
-    public override int GetHashCode() => ID.GetHashCode();
-    public override string ToString() => $"{typeof(Entity)} {GetName()} {ID}";
-
-    public static bool operator == (Entity left, Entity right)
-    {
-        if (ReferenceEquals(left, right))
-            return true;
-
-        if (ReferenceEquals(left, null) || ReferenceEquals(right, null))
-            return false;
-
-        return left.ID == right.ID;
-    }
-
-    public static bool operator != (Entity left, Entity right) => !(left == right);
-
-    public static implicit operator ulong(Entity entity) => entity?.ID ?? 0UL;
+    internal Entity(ulong id) : base(id) { }
+    protected Entity() : base(0) { }
 
     public Vector3 Translation
     {
