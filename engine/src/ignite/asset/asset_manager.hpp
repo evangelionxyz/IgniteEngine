@@ -48,8 +48,14 @@ namespace ignite
         {
             if (asset && std::is_base_of_v<Asset, T>)
             {
-                m_LoadedAssets[handle] = asset;
-                for (const auto &callback : m_LoadedCallbacks)
+                std::vector<AssetLoadedCallback> callbacksCopy;
+                {
+                    std::unique_lock lock(m_AssetMutex);
+                    m_LoadedAssets[handle] = asset;
+                    callbacksCopy = m_LoadedCallbacks;
+                }
+                // Fire callbacks outside lock to avoid re-entrancy deadlocks
+                for (const auto &callback : callbacksCopy)
                 {
                     callback(handle, asset->GetAssetType());
                 }
@@ -82,8 +88,11 @@ namespace ignite
                 return nullptr;
             }
 
-            // Quick check if already loaded
+            AssetMetaData metadata;
+            // Protect all reads/writes to LoadedAssets and LoadingAssets
             {
+                std::unique_lock lock(m_AssetMutex);
+
                 if (m_LoadedAssets.contains(handle))
                 {
                     return std::static_pointer_cast<T>(m_LoadedAssets.at(handle));
@@ -95,11 +104,15 @@ namespace ignite
                 }
 
                 m_LoadingAssets.insert(handle);
+
+                // Capture metadata while holding the lock so AssetRegistry read is safe
+                if (m_AssetRegistry.contains(handle))
+                {
+                    metadata = m_AssetRegistry.at(handle);
+                }
             }
 
             // Submit import work to worker thread
-            const AssetMetaData metadata = GetMetaData(handle);
-
             SubmitJob([this, handle, metadata]()
             {
                 try

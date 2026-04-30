@@ -887,6 +887,45 @@ namespace ignite
                     std::error_code ec;
                     if (std::filesystem::is_directory(m_PopupTargetPath))
                     {
+                        Project *project = m_EditorLayer->GetActiveProject().get();
+
+                        if (project && m_AssetManager)
+                        {
+                            for (const auto &entry : std::filesystem::recursive_directory_iterator(m_PopupTargetPath))
+                            {
+                                if (!entry.is_regular_file())
+                                    continue;
+
+                                const std::filesystem::path &filePath = entry.path();
+
+                                const std::filesystem::path relativePath = project->GetAssetRelativeFilepath(filePath);
+                                const AssetHandle handle = m_AssetManager->GetAssetHandle(relativePath);
+
+                                if (handle != AssetHandle(0))
+                                {
+                                    m_AssetManager->UnloadAsset(handle);
+                                    m_AssetManager->RemoveAsset(handle);
+                                }
+
+                                // Also remove .meta from asset system if needed
+                                if (filePath.extension() != ".meta")
+                                {
+                                    std::filesystem::path metaPath = filePath.string() + ".meta";
+                                    if (std::filesystem::exists(metaPath))
+                                    {
+                                        const std::filesystem::path metaRelative = project->GetAssetRelativeFilepath(metaPath);
+                                        const AssetHandle metaHandle = m_AssetManager->GetAssetHandle(metaRelative);
+
+                                        if (metaHandle != AssetHandle(0))
+                                        {
+                                            m_AssetManager->UnloadAsset(metaHandle);
+                                            m_AssetManager->RemoveAsset(metaHandle);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         std::filesystem::remove_all(m_PopupTargetPath, ec);
                     }
                     else

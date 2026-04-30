@@ -168,30 +168,38 @@ namespace ignite
 
         while (m_RenderThreadRunning)
         {
+            // Process any pending render-thread tasks BEFORE waiting for a frame.
+            // This uses a dedicated CV so it never interferes with m_FrameCV.
+            {
+                std::unique_lock<std::mutex> taskLock(m_RenderTaskMutex);
+                m_RenderTaskCV.wait_for(taskLock, std::chrono::microseconds(100),
+                    [this] { return m_RenderThreadHasTasks.load() || !m_RenderThreadRunning.load(); });
+            }
+
+            if (m_RenderThreadHasTasks.load())
+            {
+                IGN_PROFILE_SCOPE("RenderThread::PreFrameSubmissions");
+                ProcessRenderThreadSubmissions();
+            }
+
+            if (!m_RenderThreadRunning)
+                break;
+
             uint64_t currentFrame = 0;
-            nvrhi::IFramebuffer *framebuffer = nullptr;
             {
                 IGN_PROFILE_SCOPE("RenderThread::WaitForFrameReady");
                 std::unique_lock<std::mutex> lock(m_FrameMutex);
-                m_FrameCV.wait(lock, [this]
-                {
-                    return m_CurrentFrameReady.load() || !m_RenderThreadRunning.load() || m_RenderThreadHasTasks.load();
-                });
+                // Only wait for frame-ready — task wakeups are handled above via m_RenderTaskCV.
+                const bool frameReady = m_FrameCV.wait_for(lock, std::chrono::milliseconds(4),
+                    [this] { return m_CurrentFrameReady.load() || !m_RenderThreadRunning.load(); });
 
                 if (!m_RenderThreadRunning)
                     break;
 
-                if (m_RenderThreadHasTasks.load() && !m_CurrentFrameReady.load())
+                if (!frameReady || !m_CurrentFrameReady.load())
                 {
-                    IGN_PROFILE_SCOPE("RenderThread::Submissions");
-                    lock.unlock();
-                    ProcessRenderThreadSubmissions();
-                    lock.lock();
-
-                    if (!m_CurrentFrameReady.load())
-                    {
-                        continue;
-                    }
+                    // Timeout — loop back to check tasks and try again.
+                    continue;
                 }
 
                 currentFrame = m_FrameCounter;
@@ -205,7 +213,7 @@ namespace ignite
             FrameResources &frame = m_FrameResources[frameIndex];
 
             // Get the current framebuffer (must be done after BeginFrame on main thread)
-            framebuffer = deviceManager->GetCurrentFramebuffer();
+            nvrhi::IFramebuffer *framebuffer = deviceManager->GetCurrentFramebuffer();
 
             // Clear framebuffer
             {
@@ -319,6 +327,7 @@ namespace ignite
                 }
             }
 
+            // Drain any render-thread tasks that arrived during the frame.
             if (m_RenderThreadHasTasks.load())
             {
                 IGN_PROFILE_SCOPE("RenderThread::PostFrameSubmissions");
@@ -473,6 +482,7 @@ namespace ignite
         // Shutdown render thread
         m_RenderThreadRunning = false;
         m_FrameCV.notify_all();
+        m_RenderTaskCV.notify_all();
         if (m_RenderThread && m_RenderThread->joinable())
             m_RenderThread->join();
         
@@ -559,7 +569,8 @@ namespace ignite
             GetInstance()->m_RenderThreadFuncs.push({ func, funcName });
             GetInstance()->m_RenderThreadHasTasks = true;
         }
-        GetInstance()->m_FrameCV.notify_all();
+        // Notify via the dedicated render-task CV, not the frame CV.
+        GetInstance()->m_RenderTaskCV.notify_one();
     }
 
     void Application::SubmitWorkerCommandList(nvrhi::CommandListHandle commandList, std::function<void()> onExecuted)

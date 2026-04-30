@@ -406,6 +406,51 @@ namespace ignite
         }
 
         Project *project = m_EditorLayer->GetActiveProject().get();
+        auto *assetManager = project->GetAssetManager();
+
+        // -----------------------------------------------------------------------
+        // Poll for async-loaded assets.
+        // GetAsset() submits a background job and returns nullptr immediately.
+        // Once the worker completes, GetAsset() returns the loaded Ref on the
+        // next call. We keep polling each frame until the asset arrives.
+        // -----------------------------------------------------------------------
+        for (auto &assetData : m_Assets)
+        {
+            if (!assetData.isOpen)
+                continue;
+
+            if (!assetData.asset || !assetData.asset->IsReady())
+            {
+                // Try to retrieve the loaded asset from the manager.
+                Ref<Asset> loaded = assetManager->GetAsset(assetData.handle);
+                if (loaded && loaded->IsReady())
+                {
+                    assetData.asset = loaded;
+                }
+            }
+        }
+
+        // -----------------------------------------------------------------------
+        // Periodic auto-unload of unused assets.
+        // After an asset editor tab is closed, ClearAssetPins() is called (in
+        // the erase_if below). If no scene entity references the asset either,
+        // it becomes unused and should be evicted from m_LoadedAssets to free
+        // memory. We throttle this to at most once every 5 seconds.
+        // -----------------------------------------------------------------------
+        m_UnloadTimer += deltaTime;
+        constexpr float kUnloadInterval = 5.0f;
+        if (m_UnloadTimer >= kUnloadInterval)
+        {
+            m_UnloadTimer = 0.0f;
+            if (assetManager)
+            {
+                assetManager->UnloadUnusedAssets();
+            }
+        }
+
+        // -----------------------------------------------------------------------
+        // Per-asset animation / skeleton preview update (unchanged logic).
+        // -----------------------------------------------------------------------
         for (auto &assetData : m_Assets)
         {
             if (!assetData.sceneData.viewportVisible || !assetData.isOpen || !assetData.asset || !assetData.asset->IsReady())
