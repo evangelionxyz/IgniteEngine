@@ -48,6 +48,7 @@ namespace ignite
         AssetMetaData metadata;
         AssetHandle handle;
         EditorSceneData sceneData;
+        AssetHandle previewEnvTexHandle = AssetHandle(0);
         std::string windowTitle;
         bool isOpen = true;
         bool requestFocus = false;
@@ -107,6 +108,7 @@ namespace ignite
 
         std::vector<AssetEditorData> m_Assets;
         CreateAssetRequest m_CreateRequest;
+        float m_UnloadTimer = 0.0f; // accumulated time for periodic UnloadUnusedAssets()
     };
 }
 

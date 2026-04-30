@@ -54,7 +54,7 @@ public static class CoreInternalCalls
     internal static void Debug_Log(string message, Debug.LogLevel level)
     {
         EnsureInitialized();
-        IntPtr ptr = NativeAPI.StringToUtf8(message);
+        IntPtr ptr = NativeObject.StringToUtf8(message);
         try
         {
             s_DebugLog(ptr, level);
@@ -83,11 +83,11 @@ public static class CoreInternalCalls
         return s_InputIsMouseButtonPressed(button);
     }
 
-    internal static void Input_GetMousePosition(out Vector2 result)
+    internal static void Input_GetMousePosition(out Mathf.Vector2 result)
     {
         EnsureInitialized();
-        s_InputGetMousePosition(out NativeAPI.NativeVector2 native);
-        result = NativeAPI.ToManaged(native);
+        s_InputGetMousePosition(out NativeObject.Vector2 native);
+        result = NativeObject.ToManaged(native);
     }
 
     internal static void Input_SetMouseToCenter()

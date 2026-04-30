@@ -11,6 +11,8 @@ namespace ignite
     class Project;
     class WidgetCanvas;
     class WidgetRenderer;
+    class Environment;
+    class Texture;
 
     class AssetSceneRenderer : public ISceneRenderer
     {
@@ -19,21 +21,23 @@ namespace ignite
         ~AssetSceneRenderer() override;
 
         void BeginFrame();
-        void SetMaterial(const Ref<Material> &material);
+        void SetPreviewMaterial(const Ref<Material> &material);
         void SetPreviewMesh(const Ref<Mesh> &mesh);
+        void SetEnvironmentTexture(AssetHandle textureHandle);
+        
         void SetBoneTransforms(const std::vector<glm::mat4> &boneTransforms);
-        void SetEnvironmentTexture(const Ref<Texture> &texture);
         void SetProject(Project *project);
         void SetPreviewWidget(const Ref<WidgetCanvas> &widget);
         void SetPreviewMouseState(uint32_t mouseX, uint32_t mouseY, bool hovered);
 
         void Render(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT);
 
-        Ref<Texture> GetEnvironmentMapColorTexture() const override;
-
     private:
         void SyncRuntimeMaterialFromSource();
+
+        void DrawEnvironment(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer);
         void DrawPreviewMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
+
         void CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture);
 
     private:
@@ -42,21 +46,26 @@ namespace ignite
         Ref<WidgetRenderer> m_WidgetRenderer;
         Ref<Material> m_SourceMaterial;
         Ref<Material> m_RuntimeMaterial;
-        Ref<Texture> m_EnvironmentTexture;
+
+        Ref<Environment> m_Environment;
+        Ref<Texture> m_DefaultEnvTexture;
+        AssetHandle m_EnvTexHandle = AssetHandle(0);
 
         nvrhi::BindingLayoutHandle m_CompositeBindingLayout;
-        nvrhi::ITexture *m_LastBoundEnvironmentTexture = nullptr;
         Project *m_Project = nullptr;
 
         std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_GeometryPipelineCache;
+        std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_EnvironmentPipelineCache;
         std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_CompositePipelineCache;
 
         std::vector<glm::mat4> m_BoneTransforms;
         Ref<ConstantBuffer> m_SkeletonGpuBuffer;
-        bool m_EnvironmentTextureLoadAttempted = false;
         uint32_t m_PreviewMouseX = 0;
         uint32_t m_PreviewMouseY = 0;
         bool m_PreviewMouseHovered = false;
+        bool m_UseEnvironment = false;;
+        bool m_EnvTextureInvalidating = false;
+        bool m_EnvironmentTextureLoadAttempted = false;
 
         SceneBufferData m_SceneGPUData;
         CascadedShadowMapBufferData m_CSMGPUData;

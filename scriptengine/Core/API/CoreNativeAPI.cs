@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Runtime.InteropServices;
-using static Ignite.Core.NativeAPI;
 
 namespace Ignite.Core;
 
@@ -59,28 +58,28 @@ public static class CoreNativeAPI
         // ================================
         // Vectors & Quaternion
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void GetVector2Fn(ulong entityID, out NativeVector2 result);
+        public delegate void GetVector2Fn(ulong entityID, out NativeObject.Vector2 result);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void SetVector2Fn(ulong entityID, NativeVector2 value);
+        public delegate void SetVector2Fn(ulong entityID, NativeObject.Vector2 value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate ulong GetVector3Fn(ulong entityID, out NativeVector3 value);
+        public delegate ulong GetVector3Fn(ulong entityID, out NativeObject.Vector3 value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate ulong SetVector3Fn(ulong entityID, NativeVector3 value);
+        public delegate ulong SetVector3Fn(ulong entityID, NativeObject.Vector3 value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate ulong GetVector4Fn(ulong entityID, out NativeVector4 value);
+        public delegate ulong GetVector4Fn(ulong entityID, out NativeObject.Vector4 value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate ulong SetVector4Fn(ulong entityID, NativeVector4 value);
+        public delegate ulong SetVector4Fn(ulong entityID, NativeObject.Vector4 value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void GetQuaternionFn(ulong entityID, out NativeQuaternion result);
+        public delegate void GetQuaternionFn(ulong entityID, out NativeObject.Quaternion result);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void SetQuaternionFn(ulong entityID, NativeQuaternion value);
+        public delegate void SetQuaternionFn(ulong entityID, NativeObject.Quaternion value);
 
         // Input system
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -96,7 +95,7 @@ public static class CoreNativeAPI
         public delegate bool InputIsMouseButtonPressedFn(byte button);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void InputGetMousePositionFn(out NativeAPI.NativeVector2 result);
+        public delegate void InputGetMousePositionFn(out NativeObject.Vector2 result);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void InputSetMouseToCenterFn();

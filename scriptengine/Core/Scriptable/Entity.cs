@@ -3,6 +3,8 @@
 using System;
 
 using Ignite.Core.Component;
+using static Ignite.Mathf;
+
 namespace Ignite;
 
 public class Entity : ScriptableObject

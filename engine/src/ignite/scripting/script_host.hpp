@@ -17,19 +17,34 @@ namespace ignite
     enum class ScriptMethodSig : int
     {
         Void = 0,
-        Void_Float = 1,
-        Void_UInt64 = 2,
-        Bool_Type = 3,
-        Void_UInt64_Type = 4,
-        UInt64_String = 5,
-        UInt64_UInt64_Vec3 = 6,
-        Void_UInt64_Bool = 8,
-        Void_UInt64_OutBool = 9,
-        Void_UInt64_OutVec3 = 10,
-        Void_UInt64_Vec3 = 11,
-        Void_UInt64_OutQuat = 12,
-        Void_UInt64_Quat = 13,
-        Object_UInt64 = 14,
+        Void_Float,
+        Void_UInt64,
+        Void_UInt64_Type,
+        
+        Bool_Type,
+
+        UInt64_String,
+        UInt64_UInt64_Vec2,
+        UInt64_UInt64_Vec3,
+        UInt64_UInt64_Vec4,
+        UInt64_UInt64_Quat,
+
+        Void_UInt64_Bool,
+        Void_UInt64_OutBool,
+        
+        Void_UInt64_Vec2,
+        Void_UInt64_OutVec2,
+
+        Void_UInt64_Vec3,
+        Void_UInt64_OutVec3,
+
+        Void_UInt64_Vec4,
+        Void_UInt64_OutVec4,
+
+        Void_UInt64_Quat,
+        Void_UInt64_OutQuat,
+
+        Object_UInt64,
     };
 
     // Wrapper around MochiSharp's DotNetHost for Ignite scripting

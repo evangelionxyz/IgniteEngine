@@ -88,6 +88,7 @@ namespace ignite
             case ScriptFieldType::Vector2: return "Vec2";
             case ScriptFieldType::Vector3: return "Vec3";
             case ScriptFieldType::Vector4: return "Vec4";
+            case ScriptFieldType::Quat:    return "Quat";
             case ScriptFieldType::Entity:  return "Entity";
             }
 
@@ -114,6 +115,7 @@ namespace ignite
             if (type == "Vec2")    return ScriptFieldType::Vector2;
             if (type == "Vec3")    return ScriptFieldType::Vector3;
             if (type == "Vec4")    return ScriptFieldType::Vector4;
+            if (type == "Quat")    return ScriptFieldType::Quat;
             if (type == "Entity")  return ScriptFieldType::Entity;
 
             return ScriptFieldType::Invalid;

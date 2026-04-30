@@ -527,6 +527,7 @@ namespace ignite
                                         case ScriptFieldType::Vector2: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec2>()); break;
                                         case ScriptFieldType::Vector3: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec3>()); break;
                                         case ScriptFieldType::Vector4: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec4>()); break;
+                                        case ScriptFieldType::Quat: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::quat>()); break;
                                         case ScriptFieldType::Entity: sr.AddKeyValue("Value", fieldInstance.GetValue<uint64_t>()); break;
                                         default: break;
                                     }
@@ -1088,6 +1089,7 @@ namespace ignite
                                 case ScriptFieldType::Vector2: instanceField.SetValue(fieldNode["Value"].as<glm::vec2>()); break;
                                 case ScriptFieldType::Vector3: instanceField.SetValue(fieldNode["Value"].as<glm::vec3>()); break;
                                 case ScriptFieldType::Vector4: instanceField.SetValue(fieldNode["Value"].as<glm::vec4>()); break;
+                                case ScriptFieldType::Quat: instanceField.SetValue(fieldNode["Value"].as<glm::quat>()); break;
                             }
 
                             instanceFields[name] = instanceField;

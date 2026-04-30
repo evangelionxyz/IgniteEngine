@@ -41,11 +41,10 @@ namespace ignite {
     class Environment : public Asset
     {
     public:
-        Environment(Scene *scene);
+        Environment();
     	~Environment();
 
         void Draw(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *fb, const Ref<GraphicsPipeline> &gp);
-        void SetScene(Scene *scene) { m_Scene = scene; }
 
         bool UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer);
 
@@ -53,7 +52,7 @@ namespace ignite {
         void SetTexture(const Ref<Texture> &texture);
         void WriteBuffer(nvrhi::ICommandList *cmd);
 
-        static Ref<Environment> Create(Scene *scene);
+        static Ref<Environment> Create();
         static nvrhi::BindingLayoutDesc GetBindingLayoutDesc();
 
         Ref<Texture> GetHDRTexture() { return m_HDRTexture; }
@@ -62,7 +61,6 @@ namespace ignite {
         Ref<IndexBuffer> m_IndexBuffer;
         Ref<Texture> m_HDRTexture;
     	nvrhi::SamplerHandle m_Sampler;
-        Scene* m_Scene;
 
         nvrhi::BindingSetHandle m_BindingSet;
     };

@@ -142,6 +142,7 @@ namespace ignite {
 
     void AssetManager::AssignMetaData(AssetHandle handle, const AssetMetaData &metadata)
     {
+        std::unique_lock lock(m_AssetMutex);
         m_AssetRegistry[handle] = metadata;
     }
 
@@ -164,6 +165,9 @@ namespace ignite {
     void AssetManager::RemoveAsset(AssetHandle handle)
     {
         IGN_PROFILE_FUNCTION();
+        
+        std::unique_lock lock(m_AssetMutex);
+
         auto it = m_AssetRegistry.find(handle);
         if (it != m_AssetRegistry.end())
             m_AssetRegistry.erase(it);
@@ -322,6 +326,11 @@ namespace ignite {
     {
         IGN_PROFILE_FUNCTION();
 
+        if (auto *device = DeviceManager::GetInstance()->GetDevice())
+        {
+            GPUUploadSync::DeviceWaitIdle(device);
+        }
+
         std::unique_lock lock(m_AssetMutex);
         
         auto it = m_LoadedAssets.find(handle);
@@ -430,17 +439,19 @@ namespace ignite {
         return s_NullMetaData;
     }
 
-    AssetHandle AssetManager::GetAssetHandle(const std::filesystem::path& filepath)
+    AssetHandle AssetManager::GetAssetHandle(const std::filesystem::path &filepath)
     {
         std::filesystem::path absoluteFilepath = std::filesystem::absolute(m_Project->GetAssetFilepath(filepath));
 
+        std::unique_lock lock(m_AssetMutex);
+     
         for (const auto &[handle, metadata] : m_AssetRegistry)
         {
             // Convert metadata filepath (relative) to absolute using project base path
-            std::filesystem::path absoluteMetadataPath = m_Project 
+            std::filesystem::path absoluteMetadataPath = m_Project
                 ? std::filesystem::absolute(m_Project->GetAssetFilepath(metadata.filepath))
                 : std::filesystem::absolute(metadata.filepath);
-            
+
             // Compare normalized absolute paths
             if (absoluteFilepath == absoluteMetadataPath)
             {
@@ -505,6 +516,7 @@ namespace ignite {
         IGN_PROFILE_FUNCTION();
 
         {
+            std::unique_lock lock(m_AssetMutex);
             if (m_LoadedAssets.contains(handle))
             {
                 return m_LoadedAssets[handle];
@@ -536,12 +548,15 @@ namespace ignite {
             {
                 asset = AssetImporter::Import(handle, getterMetadata, this);
                 {
+                    // Check if another worker already loaded this asset while we were importing
+                    std::unique_lock lock(m_AssetMutex);
                     if (m_LoadedAssets.contains(handle))
                     {
                         return m_LoadedAssets[handle];
                     }
-                    AssignAsset(handle, asset);
                 }
+                // AssignAsset acquires its own lock
+                AssignAsset(handle, asset);
                 break;
             }
             case AssetType::Skeleton:
@@ -565,12 +580,15 @@ namespace ignite {
                 }
 
                 {
+                    // Check if another worker already loaded this asset while we were importing
+                    std::unique_lock lock(m_AssetMutex);
                     if (m_LoadedAssets.contains(handle))
                     {
                         return m_LoadedAssets[handle];
                     }
-                    AssignAsset(handle, asset);
                 }
+                // AssignAsset acquires its own lock
+                AssignAsset(handle, asset);
                 break;
             }
         }

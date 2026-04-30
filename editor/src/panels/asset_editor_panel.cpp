@@ -103,7 +103,6 @@ namespace ignite
 
         struct MaterialPreviewEditorState
         {
-            AssetHandle environmentTextureHandle = AssetHandle(0);
             float previewColumnWidth = 0.0f;
             int selectedMeshType = 0;
             bool initialized = false;
@@ -407,6 +406,51 @@ namespace ignite
         }
 
         Project *project = m_EditorLayer->GetActiveProject().get();
+        auto *assetManager = project->GetAssetManager();
+
+        // -----------------------------------------------------------------------
+        // Poll for async-loaded assets.
+        // GetAsset() submits a background job and returns nullptr immediately.
+        // Once the worker completes, GetAsset() returns the loaded Ref on the
+        // next call. We keep polling each frame until the asset arrives.
+        // -----------------------------------------------------------------------
+        for (auto &assetData : m_Assets)
+        {
+            if (!assetData.isOpen)
+                continue;
+
+            if (!assetData.asset || !assetData.asset->IsReady())
+            {
+                // Try to retrieve the loaded asset from the manager.
+                Ref<Asset> loaded = assetManager->GetAsset(assetData.handle);
+                if (loaded && loaded->IsReady())
+                {
+                    assetData.asset = loaded;
+                }
+            }
+        }
+
+        // -----------------------------------------------------------------------
+        // Periodic auto-unload of unused assets.
+        // After an asset editor tab is closed, ClearAssetPins() is called (in
+        // the erase_if below). If no scene entity references the asset either,
+        // it becomes unused and should be evicted from m_LoadedAssets to free
+        // memory. We throttle this to at most once every 5 seconds.
+        // -----------------------------------------------------------------------
+        m_UnloadTimer += deltaTime;
+        constexpr float kUnloadInterval = 5.0f;
+        if (m_UnloadTimer >= kUnloadInterval)
+        {
+            m_UnloadTimer = 0.0f;
+            if (assetManager)
+            {
+                assetManager->UnloadUnusedAssets();
+            }
+        }
+
+        // -----------------------------------------------------------------------
+        // Per-asset animation / skeleton preview update (unchanged logic).
+        // -----------------------------------------------------------------------
         for (auto &assetData : m_Assets)
         {
             if (!assetData.sceneData.viewportVisible || !assetData.isOpen || !assetData.asset || !assetData.asset->IsReady())
@@ -597,9 +641,6 @@ namespace ignite
                 {
                     continue;
                 }
-
-                sceneData.sceneRenderer->SetMaterial(material);
-                sceneData.sceneRenderer->SetPreviewWidget(nullptr);
             }
 
             sceneData.sceneRenderer->BeginFrame();
@@ -1847,10 +1888,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -1929,8 +1967,7 @@ namespace ignite
                             material2D->SetDirtyFlag(true);
                         }
 
-                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Texture Preview", material2D->textureHandle,
-                            [&]()
+                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Texture Preview", material2D->textureHandle, [&]()
                         {
                             material2D->SetDirtyFlag(true);
                         });
@@ -1942,10 +1979,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -2324,10 +2358,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -2666,10 +2697,8 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -2695,7 +2724,6 @@ namespace ignite
                 {
                     if (Ref<Material> material = assetData.asset->As<Material>())
                     {
-                        EditorSceneData &sceneData = assetData.sceneData;
                         const uint64_t stateKey = static_cast<uint64_t>(assetData.handle);
                         MaterialPreviewEditorState &previewState = s_MaterialPreviewEditorState[stateKey];
                         if (!previewState.initialized)
@@ -2721,45 +2749,25 @@ namespace ignite
                         ImGui::BeginChild("##material_preview_viewport", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
                         {
                             const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
-                            sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
-                            sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
+                            assetData.sceneData.viewportWidth = std::max(1u, static_cast<uint32_t>(viewportSize.x));
+                            assetData.sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y));
 
-                            Ref<Texture> previewTexture = sceneData.compositeRT ? sceneData.compositeRT->GetColorAttachment(0) : nullptr;
+                            Ref<Texture> previewTexture = assetData.sceneData.compositeRT ? assetData.sceneData.compositeRT->GetColorAttachment(0) : nullptr;
                             if (previewTexture && previewTexture->GetHandle())
                             {
                                 ImGui::Image(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), viewportSize, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
-                                sceneData.viewportHovered = ImGui::IsItemHovered();
+                                assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
                             }
                             else
                             {
                                 ImGui::Dummy(viewportSize);
-                                sceneData.viewportHovered = ImGui::IsItemHovered();
+                                assetData.sceneData.viewportHovered = ImGui::IsItemHovered();
                             }
                         }
                         ImGui::EndChild();
                         ImGui::EndChild();
 
-                        UpdateSceneCamera(sceneData, ImGui::GetIO().DeltaTime);
-
-                        if (sceneData.sceneRenderer)
-                        {
-                            sceneData.sceneRenderer->SetMaterial(material);
-
-                            const Ref<Mesh> previewMesh = s_DefaultMeshes.contains(static_cast<MeshType>(previewState.selectedMeshType))
-                                ? s_DefaultMeshes[static_cast<MeshType>(previewState.selectedMeshType)]
-                                : nullptr;
-                            sceneData.sceneRenderer->SetPreviewMesh(previewMesh);
-
-                            if (previewState.environmentTextureHandle != AssetHandle(0) && m_EditorLayer && m_EditorLayer->GetActiveProject())
-                            {
-                                Project *project = m_EditorLayer->GetActiveProject().get();
-                                Ref<Texture> envTexture = project->GetAsset<Texture>(previewState.environmentTextureHandle);
-                                if (envTexture)
-                                {
-                                    sceneData.sceneRenderer->SetEnvironmentTexture(envTexture);
-                                }
-                            }
-                        }
+                        UpdateSceneCamera(assetData.sceneData, ImGui::GetIO().DeltaTime);
 
                         ImGui::SameLine(0.0f, 0.0f);
                         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));
@@ -2787,26 +2795,20 @@ namespace ignite
                         if (ImGui::Combo("Preview Mesh", &meshSelection, meshNames, IM_ARRAYSIZE(meshNames)))
                         {
                             previewState.selectedMeshType = meshSelection;
+                            assetData.sceneData.sceneRenderer->SetPreviewMesh(s_DefaultMeshes[(MeshType)meshSelection]);
                         }
 
-                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Environment", previewState.environmentTextureHandle,
-                            [&]()
+                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Environment", assetData.previewEnvTexHandle, [&]()
                         {
-                            if (sceneData.sceneRenderer)
+                            if (assetData.sceneData.sceneRenderer)
                             {
-                                if (previewState.environmentTextureHandle == AssetHandle(0))
+                                if (assetData.previewEnvTexHandle == AssetHandle(0))
                                 {
-                                    sceneData.sceneRenderer->SetEnvironmentTexture(nullptr);
+                                    assetData.sceneData.sceneRenderer->SetEnvironmentTexture(AssetHandle(0));
                                 }
                                 else
                                 {
-                                    Project *project = m_EditorLayer->GetActiveProject().get();
-                                    Ref<Texture> envTexture = project->GetAsset<Texture>(previewState.environmentTextureHandle);
-                                    if (!envTexture)
-                                    {
-                                        envTexture = project->GetAssetImmediate<Texture>(previewState.environmentTextureHandle);
-                                    }
-                                    sceneData.sceneRenderer->SetEnvironmentTexture(envTexture);
+                                    assetData.sceneData.sceneRenderer->SetEnvironmentTexture(assetData.previewEnvTexHandle);
                                 }
                             }
                         });
@@ -2919,10 +2921,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -3090,10 +3089,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -3169,10 +3165,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -3221,11 +3214,6 @@ namespace ignite
                         if (skeletonHandle != AssetHandle(0) && !meshEditorState.cachedSkeleton)
                         {
                             meshEditorState.cachedSkeleton = project->GetAsset<Skeleton>(skeletonHandle);
-                        }
-
-                        if (assetData.sceneData.sceneRenderer)
-                        {
-                            assetData.sceneData.sceneRenderer->SetPreviewMesh(mesh);
                         }
 
                         Ref<Skeleton> skeleton = meshEditorState.cachedSkeleton;
@@ -3781,6 +3769,22 @@ namespace ignite
                                     // Scene details preview child
                                     if (ImGui::BeginChild("##scene_details_preview", { 0.0f, 0.0f }, ImGuiChildFlags_None))
                                     {
+
+                                        DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Environment", assetData.previewEnvTexHandle, [&]()
+                                        {
+                                            if (assetData.sceneData.sceneRenderer)
+                                            {
+                                                if (assetData.previewEnvTexHandle == AssetHandle(0))
+                                                {
+                                                    assetData.sceneData.sceneRenderer->SetEnvironmentTexture(AssetHandle(0));
+                                                }
+                                                else
+                                                {
+                                                    assetData.sceneData.sceneRenderer->SetEnvironmentTexture(assetData.previewEnvTexHandle);
+                                                }
+                                            }
+                                        });
+
                                         if (skeleton)
                                         {
                                             // Preview animation
@@ -3965,10 +3969,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -4017,27 +4018,6 @@ namespace ignite
                         int32_t &selectedJoint = s_SelectedJoint[key];
                         int32_t &selectedSocket = s_SelectedSocket[key];
                         int32_t &lastAutoScrolledJoint = s_LastAutoScrolledJoint[key];
-
-                        if (assetData.sceneData.sceneRenderer)
-                        {
-                            if (previewState.previewMeshHandle != AssetHandle(0))
-                            {
-                                const AssetType previewMeshType = assetManager->GetAssetType(previewState.previewMeshHandle);
-
-                                if (previewMeshType == AssetType::Mesh)
-                                {
-                                    Ref<Mesh> mesh = project->GetAsset<Mesh>(previewState.previewMeshHandle);
-                                    if (mesh)
-                                    {
-                                        assetData.sceneData.sceneRenderer->SetPreviewMesh(mesh);
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                assetData.sceneData.sceneRenderer->SetPreviewMesh(s_DefaultMeshes[ICO_SPHERE]);
-                            }
-                        }
 
                         if (selectedJoint >= static_cast<int32_t>(skeleton->joints.size()))
                         {
@@ -4526,10 +4506,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -4603,10 +4580,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -4889,10 +4863,20 @@ namespace ignite
         uint32_t width = assetData.sceneData.viewportWidth > 0 ? assetData.sceneData.viewportWidth : 1280;
         uint32_t height = assetData.sceneData.viewportHeight > 0 ? assetData.sceneData.viewportHeight : 720;
         Project *activeProject = m_EditorLayer->GetActiveProject().get();
-        Ref<Mesh> defaultMesh = s_DefaultMeshes[ICO_SPHERE];
+        Ref<Mesh> meshResult = s_DefaultMeshes[ICO_SPHERE];
         AssetHandle handle = assetData.handle;
 
-        if (assetType == AssetType::Skeleton)
+        Ref<Material> material;
+
+        if (assetType == AssetType::Material)
+        {
+            material = activeProject->GetAsset<Material>(handle);
+        }
+        else if (assetType == AssetType::Mesh)
+        {
+            meshResult = activeProject->GetAsset<Mesh>(handle);
+        }
+        else if (assetType == AssetType::Skeleton)
         {
             const AssetHandle matchedMeshHandle = FindFirstMeshHandleForSkeleton(activeProject, assetData.handle);
             if (matchedMeshHandle != AssetHandle(0))
@@ -4900,7 +4884,7 @@ namespace ignite
                 Ref<Mesh> matchedMesh = activeProject->GetAsset<Mesh>(matchedMeshHandle);
                 if (matchedMesh)
                 {
-                    defaultMesh = matchedMesh;
+                    meshResult = matchedMesh;
                     SkeletonPreviewEditorState &previewState = s_SkeletonPreviewEditorState[static_cast<uint64_t>(assetData.handle)];
                     previewState.previewMeshHandle = matchedMeshHandle;
                     previewState.cachedPreviewMesh.reset();
@@ -4908,7 +4892,7 @@ namespace ignite
             }
         }
 
-        Application::SubmitToRenderThread([this, handle, width, height, activeProject, defaultMesh, assetType]()
+        Application::SubmitToRenderThread([this, handle, width, height, activeProject, meshResult, assetType, material]()
         {
             RenderTargetCreateInfo rtCreateInfo = {};
             rtCreateInfo.width = width;
@@ -4936,7 +4920,11 @@ namespace ignite
             renderer->SetProject(activeProject);
             if (renderer && assetType != AssetType::Widget)
             {
-                renderer->SetPreviewMesh(defaultMesh);
+                renderer->SetPreviewMesh(meshResult);
+                if (material)
+                {
+                    renderer->SetPreviewMaterial(material);
+                }
             }
 
             Application::SubmitToMainThread([this, handle, sceneRT, uiRT, compositeRT, renderer]()
@@ -5025,7 +5013,6 @@ namespace ignite
 
         auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
         assetManager->AddAssetPin(handle, BuildAssetEditorPinOwnerTag(handle));
-        Ref<Asset> asset = assetManager->GetAsset(handle);
 
         std::string assetName = metadata.filepath.filename().string();
         if (assetName.empty())
@@ -5033,10 +5020,10 @@ namespace ignite
             assetName = metadata.filepath.generic_string();
         }
 
-        Application::SubmitToMainThread([asset, metadata, handle, assetName, this]()
+        Application::SubmitToMainThread([metadata, handle, assetName, this]()
         {
             AssetEditorData data;
-            data.asset = asset;
+            data.asset = nullptr;
             data.metadata = metadata;
             data.handle = handle;
             data.isOpen = true;

@@ -69,8 +69,7 @@ namespace ignite
         glm::vec3( 1.0f, -1.0f,  1.0f), // bottom right front
     };
 
-    Environment::Environment(Scene *scene)
-        : m_Scene(scene)
+    Environment::Environment()
     {
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
@@ -130,11 +129,6 @@ namespace ignite
 
     bool Environment::UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer)
     {
-        if (!m_Scene)
-        {
-            return false;
-        }
-
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         if (!device)
         {
@@ -208,9 +202,9 @@ namespace ignite
         m_IndexBuffer->SetData(cmd, Buffer(indices.data(), sizeof(uint32_t) * indices.size()));
     }
 
-    Ref<Environment> Environment::Create(Scene* scene)
+    Ref<Environment> Environment::Create()
     {
-        return CreateRef<Environment>(scene);
+        return CreateRef<Environment>();
     }
 
     nvrhi::BindingLayoutDesc Environment::GetBindingLayoutDesc()

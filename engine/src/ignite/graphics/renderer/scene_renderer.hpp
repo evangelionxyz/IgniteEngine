@@ -104,6 +104,12 @@ namespace ignite
         Ref<RenderTarget> m_GameplayWidgetRT;
         Ref<RenderTarget> m_GameplayCompositeRT;
 
+        Ref<Bloom> m_EditorBloom;
+        Ref<SSAO> m_EditorSSAO;
+
+        Ref<Bloom> m_GameplayBloom;
+        Ref<SSAO> m_GameplaySSAO;
+
         std::unordered_map<std::string, Ref<Texture>> m_Icons;
         std::unordered_map<AssetResolveKey, Ref<Mesh>, AssetResolveKeyHash> m_MeshResolveCache;
         std::unordered_map<AssetResolveKey, Ref<Material>, AssetResolveKeyHash> m_MaterialResolveCache;

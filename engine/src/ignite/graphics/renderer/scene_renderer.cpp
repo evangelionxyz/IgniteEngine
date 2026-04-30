@@ -69,25 +69,6 @@ namespace ignite
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_CompositePSOCache;
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_DebugGridPSOCache;
 
-    struct DebugGrid_GPUData
-    {
-        glm::vec4 thinColor = glm::vec4(0.0f);
-        glm::vec4 thickColor = glm::vec4(0.0f);
-        glm::vec4 xAxisColor = glm::vec4(0.0f);
-        glm::vec4 yAxisColor = glm::vec4(0.0f);
-        glm::vec4 zAxisColor = glm::vec4(0.0f);
-        glm::vec4 settings0 = glm::vec4(0.0f); // x=cellSize y=minPixelsBetweenCells z=gridSize w=majorLineScale
-        glm::vec4 settings1 = glm::vec4(0.0f); // x=planeMode(0:XZ, 1:XY) y=enableX z=enableY w=enableZ
-    };
-
-    struct CompositePostProcess_GPUData
-    {
-        glm::vec4 flags = glm::vec4(0.0f); // x=enableBloom y=bloomIntensity z=enableVignette w=enableChromAb
-        glm::vec4 vignetteParams = glm::vec4(0.0f); // x=radius y=softness z=intensity w=chromAbAmount
-        glm::vec4 chromAbParams = glm::vec4(0.0f); // x=chromAbRadial
-        glm::vec4 vignetteColor = glm::vec4(0.0f);
-    };
-
     // Helper to build a debug-grid pipeline per framebuffer (once)
     static Ref<GraphicsPipeline> GetDebugGridPipelineForFB(nvrhi::IFramebuffer *framebuffer)
     {
@@ -420,6 +401,44 @@ namespace ignite
     // ===============================
     SceneRenderer::SceneRenderer()
     {
+        m_Device = DeviceManager::GetInstance()->GetDevice();
+
+        auto compositeSamplerDesc = nvrhi::SamplerDesc();
+        compositeSamplerDesc.setAllFilters(false);
+        compositeSamplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp);
+        m_CompositeSampler = m_Device->createSampler(compositeSamplerDesc);
+
+        std::array vertices
+        {
+            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+            VertexScreen{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },
+            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
+
+            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
+            VertexScreen{ {  1.0f, -1.0f }, { 1.0f, 1.0f } },
+            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+        };
+
+        m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
+
+        m_Renderer2D = Renderer2D::Create();
+        m_EdgeDetection = EdgeDetection::Create();
+        m_EdgeDetection->CreatePipeline();
+        m_DebugGridBuffer = ConstantBuffer::Create(sizeof(DebugGrid_GPUData), true, 16, "Debug Grid Buffer");
+        m_CompositePostProcessBuffer = ConstantBuffer::Create(sizeof(CompositePostProcess_GPUData), true, 16, "Composite PostProcess Buffer");
+
+        {
+            m_EditorBloom = CreateRef<Bloom>(1280, 720);
+            m_EditorSSAO = CreateRef<SSAO>(1280, 720);
+
+            m_GameplayBloom = CreateRef<Bloom>(1280, 720);
+            m_GameplaySSAO = CreateRef<SSAO>(1280, 720);
+        }
+
+        m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
+
+        // =========================================
+        // Create Render Targets
         RenderTargetCreateInfo sceneRTCreateInfo = {};
         sceneRTCreateInfo.attachments =
         {
@@ -452,6 +471,7 @@ namespace ignite
         m_GameplayCompositeRT = RenderTarget::Create(compositeRTCreateInfo, "[SceneRenderer] Gameplay Composite RT");
 
         m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
+
     }
 
     SceneRenderer::~SceneRenderer()
@@ -678,7 +698,7 @@ namespace ignite
         {
             if (!worldEnvironment->environment)
             {
-                worldEnvironment->environment = Environment::Create(m_Scene.get());
+                worldEnvironment->environment = Environment::Create();
                 worldEnvironment->dirtyEnvironment = true;
                 worldEnvironment->gpuInitialized = false;
                 worldEnvironment->loadedHDRHandle = AssetHandle(0);
@@ -721,7 +741,6 @@ namespace ignite
             }
         }
 
-
         // Create fresh command list for this frame
         nvrhi::CommandListHandle cmd = m_Device->createCommandList();
         {
@@ -731,8 +750,6 @@ namespace ignite
 
             if (worldEnvironment && worldEnvironment->environment)
             {
-                worldEnvironment->environment->SetScene(m_Scene.get());
-
                 if (!worldEnvironment->gpuInitialized)
                 {
                     worldEnvironment->environment->WriteBuffer(cmd);
@@ -907,7 +924,7 @@ namespace ignite
         {
             if (!worldEnvironment->environment)
             {
-                worldEnvironment->environment = Environment::Create(m_Scene.get());
+                worldEnvironment->environment = Environment::Create();
                 worldEnvironment->dirtyEnvironment = true;
                 worldEnvironment->gpuInitialized = false;
                 worldEnvironment->loadedHDRHandle = AssetHandle(0);
@@ -959,8 +976,6 @@ namespace ignite
 
             if (worldEnvironment && worldEnvironment->environment)
             {
-                worldEnvironment->environment->SetScene(m_Scene.get());
-
                 if (!worldEnvironment->gpuInitialized)
                 {
                     worldEnvironment->environment->WriteBuffer(cmd);
@@ -1059,6 +1074,14 @@ namespace ignite
 
     void SceneRenderer::ResizeFramebuffer(uint32_t width, uint32_t height)
     {
+        ISceneRenderer::ResizeFramebuffer(width, height);
+
+        if (m_EditorBloom)
+            m_EditorBloom->Resize(width, height);
+
+        if (m_EditorSSAO)
+            m_EditorSSAO->Resize(width, height);
+
         s_CompositeBindingSetCache.clear();
         s_DebugGridBindingSetCache.clear();
         s_CSMBindingSetCache.clear();
@@ -1070,6 +1093,14 @@ namespace ignite
 
     void SceneRenderer::ResizeGameplayFramebuffer(uint32_t width, uint32_t height)
     {
+        ISceneRenderer::ResizeFramebuffer(width, height);
+
+        if (m_GameplayBloom)
+            m_GameplayBloom->Resize(width, height);
+
+        if (m_GameplaySSAO)
+            m_GameplaySSAO->Resize(width, height);
+
         s_CompositeBindingSetCache.clear();
         s_DebugGridBindingSetCache.clear();
         s_CSMBindingSetCache.clear();

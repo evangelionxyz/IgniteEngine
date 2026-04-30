@@ -57,6 +57,25 @@ namespace ignite
         }
     };
 
+    struct DebugGrid_GPUData
+    {
+        glm::vec4 thinColor = glm::vec4(0.0f);
+        glm::vec4 thickColor = glm::vec4(0.0f);
+        glm::vec4 xAxisColor = glm::vec4(0.0f);
+        glm::vec4 yAxisColor = glm::vec4(0.0f);
+        glm::vec4 zAxisColor = glm::vec4(0.0f);
+        glm::vec4 settings0 = glm::vec4(0.0f); // x=cellSize y=minPixelsBetweenCells z=gridSize w=majorLineScale
+        glm::vec4 settings1 = glm::vec4(0.0f); // x=planeMode(0:XZ, 1:XY) y=enableX z=enableY w=enableZ
+    };
+
+    struct CompositePostProcess_GPUData
+    {
+        glm::vec4 flags = glm::vec4(0.0f); // x=enableBloom y=bloomIntensity z=enableVignette w=enableChromAb
+        glm::vec4 vignetteParams = glm::vec4(0.0f); // x=radius y=softness z=intensity w=chromAbAmount
+        glm::vec4 chromAbParams = glm::vec4(0.0f); // x=chromAbRadial
+        glm::vec4 vignetteColor = glm::vec4(0.0f);
+    };
+
     class ISceneRenderer
     {
     public:
@@ -80,16 +99,12 @@ namespace ignite
 
         Ref<Renderer2D> m_Renderer2D;
         Ref<EdgeDetection> m_EdgeDetection;
-        Ref<Bloom> m_EditorBloom;
-        Ref<SSAO> m_EditorSSAO;
-
-        Ref<Bloom> m_GameplayBloom;
-        Ref<SSAO> m_GameplaySSAO;
         
         Ref<ConstantBuffer> m_CompositePostProcessBuffer;
-        Ref<ConstantBuffer> m_CascadedShadowMapBuffer;
+
         Ref<ConstantBuffer> m_SceneBuffer;
         Ref<ConstantBuffer> m_CameraBuffer;
+        Ref<ConstantBuffer> m_CascadedShadowMapBuffer;
 
         nvrhi::BindingSetHandle m_MeshBindingSet;
         SceneBufferData m_SceneGPUData;

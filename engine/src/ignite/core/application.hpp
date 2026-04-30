@@ -121,6 +121,8 @@ namespace ignite
 
         std::queue<std::pair<std::function<void()>, std::string>> m_RenderThreadFuncs;
         std::mutex m_RenderThreadFuncsMutex;
+        std::mutex m_RenderTaskMutex;
+        std::condition_variable m_RenderTaskCV;
         std::atomic<bool> m_RenderThreadHasTasks{ false };
 
         // Rendering thread

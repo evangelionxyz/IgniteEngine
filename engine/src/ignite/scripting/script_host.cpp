@@ -75,8 +75,7 @@ namespace ignite
     void ScriptHost::RegisterSignatures()
     {
         // Void signatures
-        m_Host->RegisterSignature(static_cast<int>(ScriptMethodSig::Void), 
-            "System.Void", nullptr, 0);
+        m_Host->RegisterSignature(static_cast<int>(ScriptMethodSig::Void), "System.Void", nullptr, 0);
 
         // Void with float parameter
         {
@@ -108,12 +107,6 @@ namespace ignite
             m_Host->RegisterSignature(static_cast<int>(ScriptMethodSig::UInt64_String), "System.UInt64", params, 1);
         }
 
-        // UInt64 with UInt64 and Vector3 parameters
-        {
-            const char *params[] = { "System.UInt64", "Ignite.Vector3, Ignite" };
-            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSig::UInt64_UInt64_Vec3), "System.UInt64", params, 2);
-        }
-
         // Void with UInt64 and Bool parameters
         {
             const char *params[] = { "System.UInt64", "System.Boolean" };
@@ -126,27 +119,84 @@ namespace ignite
             m_Host->RegisterSignature(static_cast<int>(ScriptMethodSig::Void_UInt64_OutBool), "System.Void", params, 2);
         }
 
+        // ===================================
+        // VECTOR 2
+        // UInt64 with UInt64 and Vector2 parameters
+        {
+            const char *params[] = { "System.UInt64", "Ignite.Mathf+Vector2, Ignite" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSig::UInt64_UInt64_Vec2), "System.UInt64", params, 2);
+        }
+
+        // Void with UInt64 and out Vector2
+        {
+            const char *params[] = { "System.UInt64", "Ignite.Mathf+Vector2&, Ignite" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSig::Void_UInt64_OutVec2), "System.Void", params, 2);
+        }
+
+        // Void with UInt64 and Vector2
+        {
+            const char *params[] = { "System.UInt64", "Ignite.Mathf+Vector2, Ignite" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSig::Void_UInt64_Vec2), "System.Void", params, 2);
+        }
+
+
+        // ===================================
+        // VECTOR 3
+        // UInt64 with UInt64 and Vector3 parameters
+        {
+            const char *params[] = { "System.UInt64", "Ignite.Mathf+Vector3, Ignite" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSig::UInt64_UInt64_Vec3), "System.UInt64", params, 2);
+        }
+
         // Void with UInt64 and out Vector3
         {
-			const char *params[] = { "System.UInt64", "Ignite.Vector3&, Ignite" };
+            const char *params[] = { "System.UInt64", "Ignite.Mathf+Vector3&, Ignite" };
             m_Host->RegisterSignature(static_cast<int>(ScriptMethodSig::Void_UInt64_OutVec3), "System.Void", params, 2);
         }
 
         // Void with UInt64 and Vector3
         {
-            const char *params[] = { "System.UInt64", "Ignite.Vector3, Ignite" };
+            const char *params[] = { "System.UInt64", "Ignite.Mathf+Vector3, Ignite" };
             m_Host->RegisterSignature(static_cast<int>(ScriptMethodSig::Void_UInt64_Vec3), "System.Void", params, 2);
+        }
+
+        // ===================================
+        // VECTOR 4
+        // UInt64 with UInt64 and Vector4 parameters
+        {
+            const char *params[] = { "System.UInt64", "Ignite.Mathf+Vector4, Ignite" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSig::UInt64_UInt64_Vec4), "System.UInt64", params, 2);
+        }
+
+        // Void with UInt64 and out Vector4
+        {
+            const char *params[] = { "System.UInt64", "Ignite.Mathf+Vector4&, Ignite" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSig::Void_UInt64_OutVec4), "System.Void", params, 2);
+        }
+
+        // Void with UInt64 and Vector4
+        {
+            const char *params[] = { "System.UInt64", "Ignite.Mathf+Vector4, Ignite" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSig::Void_UInt64_Vec4), "System.Void", params, 2);
+        }
+
+        // ===================================
+        // Quaternion
+        // Void with UInt64 and out Quaternion
+        {
+            const char *params[] = { "System.UInt64", "Ignite.Mathf+Quaternion&, Ignite" };
+            m_Host->RegisterSignature(static_cast<int>(ScriptMethodSig::Void_UInt64_OutQuat), "System.Void", params, 2);
         }
 
         // Void with UInt64 and out Quaternion
         {
-            const char *params[] = { "System.UInt64", "Ignite.Quaternion&, Ignite" };
+            const char *params[] = { "System.UInt64", "Ignite.Mathf+Quaternion&, Ignite" };
             m_Host->RegisterSignature(static_cast<int>(ScriptMethodSig::Void_UInt64_OutQuat), "System.Void", params, 2);
         }
 
         // Void with UInt64 and Quaternion
         {
-            const char *params[] = { "System.UInt64", "Ignite.Quaternion, Ignite" };
+            const char *params[] = { "System.UInt64", "Ignite.Mathf+Quaternion, Ignite" };
             m_Host->RegisterSignature(static_cast<int>(ScriptMethodSig::Void_UInt64_Quat), "System.Void", params, 2);
         }
 

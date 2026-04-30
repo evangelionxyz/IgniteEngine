@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 using Ignite.Core.Component;
+using static Ignite.Mathf;
+
 namespace Ignite;
 
 public sealed class BoxCollider2DComponent : IComponent
