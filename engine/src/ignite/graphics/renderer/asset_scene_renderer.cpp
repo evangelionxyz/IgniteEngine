@@ -1,6 +1,10 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #include "asset_scene_renderer.hpp"
+
+#include "renderer_2d.hpp"
+#include "ignite/graphics/vertex_data.hpp"
+#include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/shader.hpp"
 #include "ignite/graphics/gpu_data.hpp"
@@ -15,30 +19,41 @@
 
 namespace ignite
 {
-    namespace
-    {
-        struct CompositePostProcess_GPUData
-        {
-            glm::vec4 flags = glm::vec4(0.0f);
-            glm::vec4 vignetteParams = glm::vec4(0.0f);
-            glm::vec4 chromAbParams = glm::vec4(0.0f);
-            glm::vec4 vignetteColor = glm::vec4(0.0f);
-        };
-    }
-
     AssetSceneRenderer::AssetSceneRenderer()
     {
+        m_Device = DeviceManager::GetInstance()->GetDevice();
+
+        {
+            auto samplerDesc = nvrhi::SamplerDesc();
+            samplerDesc.setAllFilters(false);
+            samplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp);
+            m_CompositeSampler = m_Device->createSampler(samplerDesc);
+        }
+
+        std::array vertices
+        {
+            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+            VertexScreen{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },
+            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
+
+            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
+            VertexScreen{ {  1.0f, -1.0f }, { 1.0f, 1.0f } },
+            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
+        };
+
+        m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
+        m_CompositePostProcessBuffer = ConstantBuffer::Create(sizeof(CompositePostProcess_GPUData), true, 16, "Composite PostProcess Buffer");
+
+        // m_Renderer2D = Renderer2D::Create();
+
+        // m_EdgeDetection = EdgeDetection::Create();
+        // m_EdgeDetection->CreatePipeline();
+        // m_DebugGridBuffer = ConstantBuffer::Create(sizeof(DebugGrid_GPUData), true, 16, "Debug Grid Buffer");
+
         m_PreviewMesh = nullptr;
         m_PreviewWidget = nullptr;
         m_SourceMaterial = nullptr;
         m_RuntimeMaterial = CreateRef<Material>();
-
-        m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
-
-        auto samplerDesc = nvrhi::SamplerDesc();
-        samplerDesc.setAllFilters(false);
-        samplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp);
-        m_EnvironmentTexture = Renderer::GetBlackTexture();
 
         m_SceneGPUData.sunColor = glm::vec4(1.0f, 0.98f, 0.92f, 3.0f);
         m_SceneGPUData.sungAngles = glm::vec2(glm::radians(45.0f), glm::radians(35.0f));
@@ -58,14 +73,37 @@ namespace ignite
         m_Has2DPreRenderCache = false;
     }
 
-    void AssetSceneRenderer::SetMaterial(const Ref<Material> &material)
+    void AssetSceneRenderer::SetPreviewMaterial(const Ref<Material> &material)
     {
+        m_UseEnvironment = true;
+
+        // Create environment lazily when a material preview is requested to save memory
+        if (!m_Environment)
+        {
+            m_Environment = Environment::Create();
+            m_EnvironmentTextureLoadAttempted = false;
+        }
+
         m_SourceMaterial = material;
         SyncRuntimeMaterialFromSource();
     }
 
     void AssetSceneRenderer::SetPreviewMesh(const Ref<Mesh> &mesh)
     {
+        m_UseEnvironment = true;
+
+        // Create environment lazily when a mesh preview is requested to save memory
+        if (!m_Environment)
+        {
+            m_Environment = Environment::Create();
+            m_EnvironmentTextureLoadAttempted = false;
+        }
+
+        if (!m_CascadedShadowMap)
+        {
+            m_CascadedShadowMap = CreateRef<CascadedShadowMap>(ShadowMapQuality::HIGH);
+        }
+
         m_PreviewMesh = mesh;
     }
 
@@ -74,21 +112,11 @@ namespace ignite
         m_BoneTransforms = boneTransforms;
     }
 
-    void AssetSceneRenderer::SetEnvironmentTexture(const Ref<Texture> &texture)
+    void AssetSceneRenderer::SetEnvironmentTexture(AssetHandle textureHandle)
     {
-        m_EnvironmentTextureLoadAttempted = true;
-        m_EnvironmentTexture = texture ? texture : Renderer::GetBlackTexture();
-        if (!m_EnvironmentTexture || !m_EnvironmentTexture->GetHandle())
-        {
-            m_EnvironmentTexture = Renderer::GetBlackTexture();
-        }
-
-        if (m_RuntimeMaterial)
-        {
-            m_RuntimeMaterial->InvalidateBindingSet();
-        }
-
-        m_LastBoundEnvironmentTexture = nullptr;
+        m_EnvTexHandle = textureHandle;
+        m_UseEnvironment = true;
+        m_EnvironmentTextureLoadAttempted = false;
     }
 
     void AssetSceneRenderer::SetProject(Project *project)
@@ -106,7 +134,14 @@ namespace ignite
 
     void AssetSceneRenderer::SetPreviewWidget(const Ref<WidgetCanvas> &widget)
     {
+        m_UseEnvironment = false;
         m_PreviewWidget = widget;
+
+        if (!m_WidgetRenderer)
+        {
+            m_WidgetRenderer = WidgetRenderer::Create(1280, 720);
+        }
+
         if (m_WidgetRenderer)
         {
             m_WidgetRenderer->SetPreviewWidget(widget);
@@ -134,25 +169,53 @@ namespace ignite
         nvrhi::CommandListHandle cmd = m_Device->createCommandList();
         cmd->open();
 
-        if (!m_EnvironmentTextureLoadAttempted)
+        // Reload environment
+        if (!m_EnvironmentTextureLoadAttempted && m_UseEnvironment)
         {
             m_EnvironmentTextureLoadAttempted = true;
-
-            TextureCreateInfo textureCI;
-            textureCI.dimension = nvrhi::TextureDimension::Texture2D;
-            textureCI.format = nvrhi::Format::RGBA32_FLOAT;
-            textureCI.flip = true;
-            textureCI.keepInitialState = true;
-            textureCI.initialState = nvrhi::ResourceStates::ShaderResource;
-
-            Ref<Texture> defaultEnvironment = Texture::Create("resources/hdr/rogland_clear_night_4k.hdr", textureCI, cmd, "Asset Preview HDR");
-            if (defaultEnvironment && defaultEnvironment->GetHandle())
+            if (!m_DefaultEnvTexture && m_EnvTexHandle == AssetHandle(0))
             {
-                m_EnvironmentTexture = defaultEnvironment;
+                TextureCreateInfo textureCI;
+                textureCI.dimension = nvrhi::TextureDimension::Texture2D;
+                textureCI.format = nvrhi::Format::RGBA32_FLOAT;
+                textureCI.flip = true;
+                textureCI.keepInitialState = true;
+                textureCI.initialState = nvrhi::ResourceStates::ShaderResource;
+                m_DefaultEnvTexture = Texture::Create("resources/hdr/snowy_field_2k.hdr", textureCI, cmd, "Asset Preview HDR");
+
+                m_DefaultEnvTexture->SetReadyFlag(true);
             }
-            else
+
+            Ref<Texture> envTex;
+            if (m_Environment)
             {
-                m_EnvironmentTexture = Renderer::GetBlackTexture();
+                // prefer explicit handle if provided
+                if (m_EnvTexHandle != AssetHandle(0))
+                {
+                    envTex = m_Project->GetAsset<Texture>(m_EnvTexHandle);
+                }
+                else
+                {
+                    envTex = (m_DefaultEnvTexture && m_DefaultEnvTexture->GetHandle()) ? m_DefaultEnvTexture : Renderer::GetBlackTexture();
+                }
+
+                // Texture not loaded yet
+                // so we need to retrieve it again until we got it
+                if (!envTex)
+                {
+                    m_EnvironmentTextureLoadAttempted = false;
+                }
+                else
+                {
+                    m_Environment->SetTexture(envTex);
+                    m_EnvTextureInvalidating = true;
+                }
+            }
+
+            // Refresh material
+            if (m_RuntimeMaterial && envTex)
+            {
+                m_RuntimeMaterial->InvalidateBindingSet();
             }
         }
 
@@ -169,11 +232,16 @@ namespace ignite
         uiRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
         uiRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
-        sceneRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.08f, 0.08f, 0.1f, 1.0f));
+        sceneRT->ClearColorAttachmentFloat(cmd, 0, glm::vec4(0.1f, 0.1f, 0.1f, 1.0f));
         sceneRT->ClearColorAttachmentUint(cmd, 1, 0xFFFFFFFFu);
         sceneRT->ClearDepthAttachment(cmd, 1.0f, 0);
 
         compositeRT->ClearColorAttachmentFloat(cmd, 0);
+
+        if (m_Environment && m_UseEnvironment)
+        {
+            DrawEnvironment(cmd, camera, sceneRT->GetFramebuffer());
+        }
 
         if (hasMeshPreview)
         {
@@ -214,16 +282,6 @@ namespace ignite
         }
     }
 
-    Ref<Texture> AssetSceneRenderer::GetEnvironmentMapColorTexture() const
-    {
-        if (m_EnvironmentTexture && m_EnvironmentTexture->GetHandle())
-        {
-            return m_EnvironmentTexture;
-        }
-
-        return Renderer::GetBlackTexture();
-    }
-
     void AssetSceneRenderer::SyncRuntimeMaterialFromSource()
     {
         if (!m_SourceMaterial)
@@ -248,19 +306,58 @@ namespace ignite
         m_RuntimeMaterial->InvalidateBindingSet();
     }
 
+    void AssetSceneRenderer::DrawEnvironment(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer)
+    {
+        Ref<GraphicsPipeline> envPipeline;
+        if (auto it = m_EnvironmentPipelineCache.find(framebuffer); it != m_EnvironmentPipelineCache.end())
+        {
+            envPipeline = it->second;
+        }
+        else
+        {
+            const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+            bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+
+            GraphicsPipelineParams params;
+            params.enableBlend = true;
+            params.enableDepthWrite = hasDepthAttachment;
+            params.enableDepthTest = hasDepthAttachment;
+            params.enableDepthStencil = false;
+            params.fillMode = nvrhi::RasterFillMode::Solid;
+            params.cullMode = nvrhi::RasterCullMode::Front;
+            params.depthFunc = nvrhi::ComparisonFunc::Always;
+
+            Ref<Shader> vertexShader = Shader::Create("resources/shaders/skybox.vertex.hlsl", ShaderType::Vertex, false);
+            Ref<Shader> pixelShader = Shader::Create("resources/shaders/skybox.pixel.hlsl", ShaderType::Pixel, false);
+
+            envPipeline = GraphicsPipeline::Create();
+            envPipeline->SetShaders({ vertexShader, pixelShader })
+                .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT))
+                .Build(framebuffer, params);
+
+            m_EnvironmentPipelineCache.clear();
+            m_EnvironmentPipelineCache[framebuffer] = envPipeline;
+        }
+
+        if (m_EnvTextureInvalidating)
+        {
+            Ref<Texture> tex = m_Environment->GetHDRTexture();
+            if (tex && tex->IsReady())
+            {
+                m_Environment->WriteBuffer(cmd);
+                m_Environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer);
+                m_EnvTextureInvalidating = false;
+            }
+        }
+
+        m_Environment->Draw(cmd, camera, framebuffer, envPipeline);
+    }
+
     void AssetSceneRenderer::DrawPreviewMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
     {
         if (!m_PreviewMesh || !m_RuntimeMaterial)
         {
             return;
-        }
-
-        Ref<Texture> environmentTexture = GetEnvironmentMapColorTexture();
-        nvrhi::ITexture *currentEnvHandle = environmentTexture ? environmentTexture->GetHandle() : nullptr;
-        if (m_LastBoundEnvironmentTexture != currentEnvHandle)
-        {
-            m_RuntimeMaterial->InvalidateBindingSet();
-            m_LastBoundEnvironmentTexture = currentEnvHandle;
         }
 
         MaterialTextures textures;
@@ -278,10 +375,10 @@ namespace ignite
 
         m_RuntimeMaterial->UploadToGpu(cmd);
 
-        Ref<GraphicsPipeline> pipeline;
+        Ref<GraphicsPipeline> geopPipeline;
         if (auto it = m_GeometryPipelineCache.find(framebuffer); it != m_GeometryPipelineCache.end())
         {
-            pipeline = it->second;
+            geopPipeline = it->second;
         }
         else
         {
@@ -297,18 +394,18 @@ namespace ignite
             Ref<Shader> vertexShader = Shader::Create("resources/shaders/mesh_anim.vertex.hlsl", ShaderType::Vertex, false);
             Ref<Shader> pixelShader = Shader::Create("resources/shaders/mesh_anim.pixel.hlsl", ShaderType::Pixel, false);
 
-            pipeline = GraphicsPipeline::Create();
-            pipeline->SetShaders({ vertexShader, pixelShader })
+            geopPipeline = GraphicsPipeline::Create();
+            geopPipeline->SetShaders({ vertexShader, pixelShader })
                 .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
                 .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
                 .Build(framebuffer, params);
 
             m_GeometryPipelineCache.clear();
-            m_GeometryPipelineCache[framebuffer] = pipeline;
+            m_GeometryPipelineCache[framebuffer] = geopPipeline;
         }
 
         nvrhi::GraphicsState state;
-        state.pipeline = pipeline->GetHandle();
+        state.pipeline = geopPipeline->GetHandle();
         state.framebuffer = framebuffer;
         state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
@@ -372,7 +469,7 @@ namespace ignite
             const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
             gpuData.normal = glm::mat4(normalMat3);
             meshInstance->SetData(cmd, &gpuData, sizeof(SkinnedMeshBufferData));
-              meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, m_SkeletonGpuBuffer);
+            meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, m_SkeletonGpuBuffer);
 
             nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
             
@@ -526,4 +623,3 @@ namespace ignite
         cmd->draw(args);
     }
 }
-

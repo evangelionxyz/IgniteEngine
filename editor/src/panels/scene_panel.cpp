@@ -82,11 +82,12 @@ namespace ignite
         m_EditorCamera.UpdateSphericalPosition();
         m_EditorCamera.UpdateView();
         m_EditorCamera.UpdateProjection(width, height);
+        m_EditorCamera.SetNavigationMode(EditorCamera::NavigationMode::Fly);
         
         m_EditorCamera2D = m_EditorCamera;
         m_EditorCamera3D = m_EditorCamera;
         m_EditorCamera2D->SetNavigationMode(EditorCamera::NavigationMode::Mode2D);
-        m_EditorCamera3D->SetNavigationMode(EditorCamera::NavigationMode::Orbit);
+        m_EditorCamera3D->SetNavigationMode(EditorCamera::NavigationMode::Fly);
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
@@ -2609,7 +2610,8 @@ namespace ignite
                         camera->viewportPosition = { baseImagePos.x, baseImagePos.y };
                         camera->viewportSize = { baseImageSize.x, baseImageSize.y };
                         
-                        ImTextureID gameplayViewImaage = (ImTextureID)m_EditorLayer->GetSceneRenderer()->GetGameplayCompositeRT()->GetColorAttachment(0)->GetHandle().Get();
+                        const auto &sceneRenderer = m_EditorLayer->GetSceneRenderer();
+                        ImTextureID gameplayViewImaage = (ImTextureID)sceneRenderer->GetGameplayCompositeRT()->GetColorAttachment(0)->GetHandle().Get();
                         ImDrawList *drawList = ImGui::GetWindowDrawList();
                         drawList->PushClipRect(baseImagePos, ImVec2(baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y), true);
                         drawList->AddImage(gameplayViewImaage, imagePos, ImVec2(imagePos.x + imageSize.x, imagePos.y + imageSize.y));

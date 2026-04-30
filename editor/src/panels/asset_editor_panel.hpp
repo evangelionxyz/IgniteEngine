@@ -48,6 +48,7 @@ namespace ignite
         AssetMetaData metadata;
         AssetHandle handle;
         EditorSceneData sceneData;
+        AssetHandle previewEnvTexHandle = AssetHandle(0);
         std::string windowTitle;
         bool isOpen = true;
         bool requestFocus = false;

@@ -816,7 +816,7 @@ namespace ignite
 
     void WidgetRenderer::InitQuadData()
     {
-        m_QuadBatch.minCount = 256;
+        m_QuadBatch.minCount = 64;
         m_QuadBatch.maxCount = m_QuadBatch.minCount;
         m_QuadBatch.verticesPerObject = 4;
         m_QuadBatch.indicesPerObject = 6;
@@ -856,7 +856,7 @@ namespace ignite
 
     void WidgetRenderer::InitTextData()
     {
-        m_TextBatch.minCount = 256;
+        m_TextBatch.minCount = 64;
         m_TextBatch.maxCount = m_TextBatch.minCount;
         m_TextBatch.verticesPerObject = 4;
         m_TextBatch.indicesPerObject = 6;

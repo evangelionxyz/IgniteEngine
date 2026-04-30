@@ -884,7 +884,7 @@ namespace ignite
     {
         if (!comp.environment)
         {
-            comp.environment = Environment::Create(this);
+            comp.environment = Environment::Create();
         }
 
         comp.dirtyEnvironment = true;

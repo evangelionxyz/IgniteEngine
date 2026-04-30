@@ -174,19 +174,33 @@ namespace ignite
 		if (m_NavigationMode != NavigationMode::Fly)
 			return;
 
+		glm::vec3 moveDir(0.0f);
 		if (mouse.rightButtonDown)
 		{
+            m_FocusActive = false;
+
 			const glm::vec2 delta = mouse.position - mouse.lastPosition;
 			yaw += delta.x * controls.mouseSensitivity;
 			pitch += delta.y * controls.mouseSensitivity;
 			pitch = glm::clamp(pitch, controls.minPitch, controls.maxPitch);
-		}
 
-		glm::vec3 moveDir(0.0f);
-		if (Input::IsKeyPressed(Key::W)) moveDir += GetForwardDirection();
-		if (Input::IsKeyPressed(Key::S)) moveDir -= GetForwardDirection();
-		if (Input::IsKeyPressed(Key::D)) moveDir += GetRightDirection();
-		if (Input::IsKeyPressed(Key::A)) moveDir -= GetRightDirection();
+            if (Input::IsKeyPressed(Key::W))
+			{
+				moveDir += GetForwardDirection();
+			}
+            if (Input::IsKeyPressed(Key::S))
+			{
+				moveDir -= GetForwardDirection();
+			}
+            if (Input::IsKeyPressed(Key::D))
+			{
+				moveDir += GetRightDirection();
+			}
+            if (Input::IsKeyPressed(Key::A))
+			{
+				moveDir -= GetRightDirection();
+			}
+		}
 
 		if (glm::length(moveDir) > 0.0f)
 		{
@@ -286,12 +300,20 @@ namespace ignite
 
 		if (wheelDelta != 0.0f)
 		{
-			if (m_NavigationMode == NavigationMode::Fly)
-			{
-				position += GetForwardDirection() * (wheelDelta * controls.zoomSensitivity);
-				m_Target = position + GetForwardDirection() * glm::max(m_Distance, 1.0f);
-				return;
-			}
+            if (m_NavigationMode == NavigationMode::Fly)
+            {
+				// Right mouse down == Moving
+                if (mouse.rightButtonDown)
+                {
+					m_FlySpeed = glm::max(0.01f, m_FlySpeed += wheelDelta * 0.5f);
+                }
+				else
+				{
+                    position += GetForwardDirection() * (wheelDelta * controls.zoomSensitivity);
+                    m_Target = position + GetForwardDirection() * glm::max(m_Distance, 1.0f);
+				}
+                return;
+            }
 
 			if (projectionType == ProjectionType::Orthographic)
 			{
@@ -421,19 +443,72 @@ namespace ignite
 
 	void EditorCamera::UpdateCameraPosition(float deltaTime)
 	{
-	   if (m_FocusActive)
-	   {
-		   const float blend = 1.0f - std::exp(-m_FocusSpeed * glm::max(deltaTime, 0.0f));
-		   m_Target = glm::mix(m_Target, m_FocusTarget, blend);
-		   m_Distance = glm::mix(m_Distance, m_FocusDistance, blend);
+		if (m_FocusActive)
+		{
+			const float blend = 1.0f - std::exp(-m_FocusSpeed * glm::max(deltaTime, 0.0f));
 
-		   if (glm::length(m_Target - m_FocusTarget) < 0.001f && std::abs(m_Distance - m_FocusDistance) < 0.001f)
-		   {
-			   m_Target = m_FocusTarget;
-			   m_Distance = m_FocusDistance;
-			   m_FocusActive = false;
-		   }
-	   }
+			if (m_NavigationMode != NavigationMode::Fly)
+			{
+				m_Target = glm::mix(m_Target, m_FocusTarget, blend);
+				m_Distance = glm::mix(m_Distance, m_FocusDistance, blend);
+
+				if (glm::length(m_Target - m_FocusTarget) < 0.001f && std::abs(m_Distance - m_FocusDistance) < 0.001f)
+				{
+					m_Target = m_FocusTarget;
+					m_Distance = m_FocusDistance;
+					m_FocusActive = false;
+				}
+			}
+			else
+			{
+				const glm::vec3 toTarget = m_FocusTarget - position;
+				const float toTargetLen = glm::length(toTarget);
+
+#if 0
+				const float PI = 3.14159265358979323846f;
+
+				if (toTargetLen > 0.0001f)
+				{
+					const glm::vec3 forwardToTarget = glm::normalize(toTarget);
+
+					// derive desired pitch and yaw the same way other code does
+					const float desiredPitch = glm::clamp(std::asin(glm::clamp(-forwardToTarget.y, -1.0f, 1.0f)), controls.minPitch, controls.maxPitch);
+					const float desiredYaw = std::atan2(-forwardToTarget.z, -forwardToTarget.x);
+
+					// shortest-path angle interpolation
+					auto LerpAngle = [&](float current, float target, float t)
+					{
+						float diff = std::fmod(target - current, 2.0f * PI);
+						if (diff < -PI) diff += 2.0f * PI;
+						if (diff > PI) diff -= 2.0f * PI;
+						return current + diff * t;
+					};
+
+					yaw = LerpAngle(yaw, desiredYaw, blend * 0.45f);
+					pitch = LerpAngle(pitch, desiredPitch, blend * 0.45);
+					pitch = glm::clamp(pitch, controls.minPitch, controls.maxPitch);
+				}
+#endif
+
+				// Move the camera position so that the camera will be at focusDistance from the focus target
+				const glm::vec3 desiredPosition = m_FocusTarget - GetForwardDirection() * m_FocusDistance;
+				position = glm::mix(position, desiredPosition, blend);
+
+				m_Distance = glm::mix(m_Distance, m_FocusDistance, blend);
+
+				// compute new target and check if we've arrived
+				m_Target = position + GetForwardDirection() * glm::max(m_Distance, 1.0f);
+
+				if (glm::length(m_Target - m_FocusTarget) < 0.001f && glm::length(position - desiredPosition) < 0.001f)
+				{
+					position = desiredPosition;
+					m_Target = m_FocusTarget;
+					m_Distance = m_FocusDistance;
+					m_FlySpeed = 6.0f;
+					m_FocusActive = false;
+				}
+			}
+		}
 
 		if (m_NavigationMode == NavigationMode::Mode2D)
 		{
@@ -454,8 +529,7 @@ namespace ignite
 	{
 		if (m_NavigationMode == NavigationMode::Mode2D)
 		{
-			const glm::vec3 target = { m_Target.x, m_Target.y, 0.0f };
-			m_View = glm::lookAt(position, target, { 0.0f, 1.0f, 0.0f });
+			m_View = glm::lookAt(position, { m_Target.x, m_Target.y, 0.0f }, { 0.0f, 1.0f, 0.0f });
 			return;
 		}
 
@@ -469,19 +543,19 @@ namespace ignite
 
 		switch (projectionType)
 		{
-		case ProjectionType::Orthographic:
-		{
-			const float halfH = orthoSize * 0.5f;
-			const float halfW = halfH * aspectRatio;
-			m_Projection = glm::orthoZO(-halfW, halfW, -halfH, halfH, nearPlane, farPlane);
-			break;
-		}
-		case ProjectionType::Perspective:
-		default:
-		{
-			m_Projection = glm::perspectiveZO(glm::radians(fov), aspectRatio, nearPlane, farPlane);
-			break;
-		}
+			case ProjectionType::Orthographic:
+			{
+				const float halfH = orthoSize * 0.5f;
+				const float halfW = halfH * aspectRatio;
+				m_Projection = glm::orthoZO(-halfW, halfW, -halfH, halfH, nearPlane, farPlane);
+				break;
+			}
+			case ProjectionType::Perspective:
+			default:
+			{
+				m_Projection = glm::perspectiveZO(glm::radians(fov), aspectRatio, nearPlane, farPlane);
+				break;
+			}
 		}
 	}
 

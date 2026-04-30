@@ -343,10 +343,10 @@ namespace ignite
                         }
 
                         focusCenter = (worldMin + worldMax) * 0.5f;
-                        halfExtents = glm::abs(worldMax - worldMin) * 0.5f;
+                        halfExtents = glm::abs(worldMax - worldMin);
                     };
 
-                    if (m_ActiveProject && entity.HasComponent<MeshComponent>())
+                    if (entity.HasComponent<MeshComponent>())
                     {
                         const auto &smc = entity.GetComponent<MeshComponent>();
                         if (smc.handle != AssetHandle(0))
@@ -361,7 +361,6 @@ namespace ignite
                     const float radius = glm::max(halfExtents.x, glm::max(halfExtents.y, halfExtents.z));
                     const float fov = glm::radians(cam.fov);
                     float distance = radius / std::tan(fov * 0.5f);
-                    distance *= 2.0f;
 
                     cam.FocusTarget(focusCenter, distance);
                 }
