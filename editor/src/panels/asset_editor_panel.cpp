@@ -1888,10 +1888,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -1982,10 +1979,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -2364,10 +2358,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -2706,10 +2697,8 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -2932,10 +2921,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -3103,10 +3089,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -3182,10 +3165,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -3989,10 +3969,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -4529,10 +4506,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -4606,10 +4580,7 @@ namespace ignite
                 }
                 else
                 {
-                    auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
-                    assetData.asset = assetManager->GetAsset(assetData.handle);
-                    if (!assetData.asset || (assetData.asset && !assetData.asset->IsReady()))
-                        ImGui::Text("Loading asset...");
+                    ImGui::Text("Loading asset...");
                 }
             }
         }
@@ -5042,7 +5013,6 @@ namespace ignite
 
         auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
         assetManager->AddAssetPin(handle, BuildAssetEditorPinOwnerTag(handle));
-        Ref<Asset> asset = assetManager->GetAsset(handle);
 
         std::string assetName = metadata.filepath.filename().string();
         if (assetName.empty())
@@ -5050,10 +5020,10 @@ namespace ignite
             assetName = metadata.filepath.generic_string();
         }
 
-        Application::SubmitToMainThread([asset, metadata, handle, assetName, this]()
+        Application::SubmitToMainThread([metadata, handle, assetName, this]()
         {
             AssetEditorData data;
-            data.asset = asset;
+            data.asset = nullptr;
             data.metadata = metadata;
             data.handle = handle;
             data.isOpen = true;
