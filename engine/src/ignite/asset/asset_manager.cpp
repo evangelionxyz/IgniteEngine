@@ -169,6 +169,136 @@ namespace ignite {
             m_AssetRegistry.erase(it);
     }
 
+    void AssetManager::LoadAssetAsync(AssetHandle handle)
+    {
+        GetAsset<Asset>(handle);
+    }
+
+    void AssetManager::LoadAssetImmediate(AssetHandle handle)
+    {
+        GetAssetImmediate<Asset>(handle);
+    }
+
+    void AssetManager::AddAssetPin(AssetHandle handle, std::string_view ownerTag)
+    {
+        if (handle == AssetHandle(0) || ownerTag.empty())
+        {
+            return;
+        }
+
+        std::unique_lock lock(m_AssetMutex);
+        auto &ownedAssets = m_PinnedAssetsByOwner[std::string(ownerTag)];
+        if (ownedAssets.insert(handle).second)
+        {
+            ++m_AssetPinCounts[handle];
+        }
+    }
+
+    void AssetManager::RemoveAssetPin(AssetHandle handle, std::string_view ownerTag)
+    {
+        if (handle == AssetHandle(0) || ownerTag.empty())
+        {
+            return;
+        }
+
+        std::unique_lock lock(m_AssetMutex);
+        const auto ownerIt = m_PinnedAssetsByOwner.find(std::string(ownerTag));
+        if (ownerIt == m_PinnedAssetsByOwner.end())
+        {
+            return;
+        }
+
+        if (!ownerIt->second.erase(handle))
+        {
+            return;
+        }
+
+        if (ownerIt->second.empty())
+        {
+            m_PinnedAssetsByOwner.erase(ownerIt);
+        }
+
+        const auto pinIt = m_AssetPinCounts.find(handle);
+        if (pinIt == m_AssetPinCounts.end())
+        {
+            return;
+        }
+
+        if (pinIt->second <= 1)
+        {
+            m_AssetPinCounts.erase(pinIt);
+        }
+        else
+        {
+            --pinIt->second;
+        }
+    }
+
+    void AssetManager::ReplaceAssetPins(const std::string &ownerTag, const std::unordered_set<AssetHandle> &handles)
+    {
+        if (ownerTag.empty())
+        {
+            return;
+        }
+
+        std::unique_lock lock(m_AssetMutex);
+        std::unordered_set<AssetHandle> previousHandles;
+        if (const auto ownerIt = m_PinnedAssetsByOwner.find(ownerTag); ownerIt != m_PinnedAssetsByOwner.end())
+        {
+            previousHandles = ownerIt->second;
+        }
+
+        for (AssetHandle handle : previousHandles)
+        {
+            if (handles.contains(handle))
+            {
+                continue;
+            }
+
+            if (auto pinIt = m_AssetPinCounts.find(handle); pinIt != m_AssetPinCounts.end())
+            {
+                if (pinIt->second <= 1)
+                {
+                    m_AssetPinCounts.erase(pinIt);
+                }
+                else
+                {
+                    --pinIt->second;
+                }
+            }
+        }
+
+        for (AssetHandle handle : handles)
+        {
+            if (handle == AssetHandle(0) || previousHandles.contains(handle))
+            {
+                continue;
+            }
+
+            ++m_AssetPinCounts[handle];
+        }
+
+        if (handles.empty())
+        {
+            m_PinnedAssetsByOwner.erase(ownerTag);
+        }
+        else
+        {
+            m_PinnedAssetsByOwner[ownerTag] = handles;
+        }
+    }
+
+    void AssetManager::ClearAssetPins(std::string_view ownerTag)
+    {
+        ReplaceAssetPins(std::string(ownerTag), {});
+    }
+
+    bool AssetManager::IsAssetPinned(AssetHandle handle) const
+    {
+        std::unique_lock lock(m_AssetMutex);
+        return m_AssetPinCounts.contains(handle);
+    }
+
     void AssetManager::ClearAllLoadedAssets()
     {
         IGN_PROFILE_FUNCTION();
@@ -226,7 +356,8 @@ namespace ignite {
 
             for (const auto &[handle, asset] : m_LoadedAssets)
             {
-                if (asset && asset.use_count() == 1)
+                const bool pinned = m_AssetPinCounts.contains(handle);
+                if (asset && !pinned && asset.use_count() == 1)
                 {
                     assetsToUnload.push_back(handle);
                     assetsToDestroy.push_back(asset);

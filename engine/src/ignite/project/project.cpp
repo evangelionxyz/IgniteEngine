@@ -27,8 +27,13 @@ public class {CLASS_NAME} : Entity
 {
     public override void OnCreate()
     {
-        // Initialize you object here
+        // Called when entity created
         Console.WriteLine("Hello From C#!");
+    }
+
+    public override void OnDestroy()
+    {
+        // Called when entity destroyed
     }
 
     public override void OnUpdate(float deltaTime)
@@ -403,6 +408,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         std::filesystem::path exeDir = GetExecutableDirectory();
 
         bool dependenciesAvailable = false;
+        bool upToDate = true;
         for (auto &dep : dependencies)
         {
             std::filesystem::path targetDepFilename = projectBinDir / dep;
@@ -432,8 +438,15 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
                     std::filesystem::copy_options::overwrite_existing
                 );
                 dependenciesAvailable = true;
+                upToDate = false;
             }
             catch (...) { }
+        }
+
+        // Build with newest dependencies
+        if (!upToDate)
+        {
+            BuildSolution();
         }
 
         LOG_ASSERT(dependenciesAvailable, "[Project] Failed to copy script dependencies");

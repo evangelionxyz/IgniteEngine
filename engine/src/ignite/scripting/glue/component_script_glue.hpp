@@ -1,31 +1,47 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#ifndef SCRIPT_GLUE_HPP
-#define SCRIPT_GLUE_HPP
+#ifndef COMPONENT_SCRIPT_GLUE_HPP
+#define COMPONENT_SCRIPT_GLUE_HPP
 
 #include <cstdint>
 #include <glm/glm.hpp>
 
 namespace ignite
 {
-    struct ScriptGlueAPI
+    struct ComponentScriptGlueAPI
     {
-        void (*Debug_Log)(const char *message);
-
         uint64_t(*Scene_PickEntityAt)(float x, float y);
 
-        bool (*Entity_HasComponent)(uint64_t entityID, const char *componentTypeName);
-        void (*Entity_AddComponent)(uint64_t entityID, const char *componentTypeName);
-        uint64_t (*Entity_FindEntityByName)(const char *name);
-        uint64_t (*Entity_Instantiate)(uint64_t entityID, glm::vec3 value);
-        void (*Entity_Destroy)(uint64_t entityID);
-        void (*Entity_SetVisibility)(uint64_t entityID, bool value);
-        void (*Entity_GetVisibility)(uint64_t entityID, bool *result);
+        bool        (*Entity_HasComponent)(uint64_t entityID, const char *componentTypeName);
+        void        (*Entity_AddComponent)(uint64_t entityID, const char *componentTypeName);
+        uint64_t    (*Entity_FindEntityByName)(const char *name);
+        uint64_t    (*Entity_FindChildByName)(uint64_t entityID, const char *childName);
+        bool        (*Entity_IsParent)(uint64_t entityID, uint64_t parentEntityID);
+        uint64_t    (*Entity_GetParent)(uint64_t entityID);
+        uint64_t    (*Entity_InstantiateWithName)(const char *name, glm::vec3 value);
+        uint64_t    (*Entity_Instantiate)(uint64_t entityID, glm::vec3 value);
+        void        (*Entity_Destroy)(uint64_t entityID);
+        void        (*Entity_SetVisibility)(uint64_t entityID, bool value);
+        void        (*Entity_GetVisibility)(uint64_t entityID, bool *result);
         const char *(*Entity_GetName)(uint64_t entityID);
 
         bool (*WidgetComponent_HasButton)(uint64_t entityID, const char *buttonName);
         bool (*WidgetComponent_AddButtonEventCallback)(uint64_t entityID, const char *buttonName, int32_t eventType, const char *methodName);
         bool (*WidgetComponent_RemoveButtonEventCallback)(uint64_t entityID, const char *buttonName, int32_t eventType, const char *methodName);
+
+        // Label
+        bool (*WidgetComponent_HasLabel)(uint64_t entityID, const char *labelName);
+        void (*WidgetComponent_GetLabelText)(uint64_t entityID, const char *labelName, const char **result);
+        void (*WidgetComponent_SetLabelText)(uint64_t entityID, const char *labelName, const char *text);
+        void (*WidgetComponent_GetLabelColor)(uint64_t entityID, const char *labelName, glm::vec4 *result);
+        void (*WidgetComponent_SetLabelColor)(uint64_t entityID, const char *labelName, glm::vec4 *color);
+        void (*WidgetComponent_GetLabelFontSize)(uint64_t entityID, const char *labelName, float *result);
+        void (*WidgetComponent_SetLabelFontSize)(uint64_t entityID, const char *labelName, float size);
+
+        // Image
+        bool (*WidgetComponent_HasImage)(uint64_t entityID, const char *imageName);
+        void (*WidgetComponent_GetImageHandle)(uint64_t entityID, const char *imageName, uint64_t *result);
+        void (*WidgetComponent_SetImageHandle)(uint64_t entityID, const char *imageName, uint64_t handle);
 
         bool (*AudioSourceComponent_HasAudio)(uint64_t entityID);
         void (*AudioSourceComponent_Play)(uint64_t entityID);
@@ -49,12 +65,7 @@ namespace ignite
         bool (*AudioSourceComponent_AddDelayDSP)(uint64_t entityID, float delayMs, float feedback);
         void (*AudioSourceComponent_ClearDSPs)(uint64_t entityID);
 
-        bool (*Input_IsKeyPressed)(uint32_t keyCode);
-        bool (*Input_IsModifierPressed)(uint16_t modCode);
-        bool (*Input_IsMouseButtonPressed)(uint8_t button);
-        void (*Input_GetMousePosition)(glm::vec2 *result);
-        void (*Input_SetMouseToCenter)();
-        void (*Input_SetCursorMode)(int32_t mode);
+        
 
         void (*TransformComponent_GetForward)(uint64_t entityID, glm::vec3 *result);
         void (*TransformComponent_SetForward)(uint64_t entityID, glm::vec3 value);
@@ -143,12 +154,12 @@ namespace ignite
         void (*TextComponent_GetLineSpacing)(uint64_t entityID, float *result);
     };
 
-    class ScriptGlue
+    class ComponentScriptGlue
     {
     public:
         static void RegisterComponents();
         static void RegisterFunctions();
-        static const ScriptGlueAPI *GetAPI();
+        static const ComponentScriptGlueAPI *GetAPI();
     };
 }
 

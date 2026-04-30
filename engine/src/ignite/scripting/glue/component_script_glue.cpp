@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#include "script_glue.hpp"
+#include "component_script_glue.hpp"
 #include "ignite/core/input/input.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/scene/component.hpp"
@@ -8,7 +8,13 @@
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/project/project.hpp"
+
 #include "ignite/graphics/ui/widget.hpp"
+#include "ignite/graphics/ui/widget_canvas.hpp"
+#include "ignite/graphics/ui/widget_button.hpp"
+#include "ignite/graphics/ui/widget_label.hpp"
+#include "ignite/graphics/ui/widget_image.hpp"
+
 #include "ignite/audio/fmod_sound.hpp"
 #include "ignite/audio/fmod_audio.hpp"
 #include "ignite/core/application.hpp"
@@ -137,8 +143,8 @@ namespace ignite
                 return nullptr;
             }
 
-            Project *project = scene->GetProject();
-            if (!project)
+            AssetManager *assetManager = scene->GetAssetManager();
+            if (!assetManager)
             {
                 return nullptr;
             }
@@ -149,7 +155,7 @@ namespace ignite
                 return nullptr;
             }
 
-            return project->GetAsset<FmodSound>(audioSource.handle);
+            return assetManager->GetAsset<FmodSound>(audioSource.handle);
         }
 
         static FMOD::DSP *CreateAudioSourceDsp(const AudioSourceComponent::DspSettings &settings)
@@ -409,8 +415,8 @@ namespace ignite
                 return nullptr;
             }
 
-            Project *project = scene->GetProject();
-            if (!project)
+            AssetManager *assetManager = scene->GetAssetManager();
+            if (!assetManager)
             {
                 return nullptr;
             }
@@ -421,7 +427,7 @@ namespace ignite
                 return nullptr;
             }
 
-            return project->GetAsset<WidgetCanvas>(widgetComponent.widgetHandle);
+            return assetManager->GetAsset<WidgetCanvas>(widgetComponent.widgetHandle);
         }
 
         static Ref<WidgetButton> FindWidgetButton(Entity entity, const std::string &buttonName)
@@ -520,11 +526,6 @@ namespace ignite
             }
         }
 
-        static void Debug_Log(const char *message)
-        {
-            LOG_INFO("[C#] {}", message ? message : "");
-        }
-
         static bool Entity_HasComponent(uint64_t entityID, const char *componentTypeName)
         {
             Entity entity = GetEntityByID(entityID);
@@ -583,33 +584,86 @@ namespace ignite
             return entity.IsValid() ? static_cast<uint64_t>(entity.GetUUID()) : 0;
         }
 
+        static uint64_t Entity_FindChildEntityByName(uint64_t entityID, const char *childName)
+        {
+            Scene *scene = GetSceneContext();
+            if (!scene || entityID == 0 || !childName)
+                return 0;
+
+            Entity entity = SceneManager::GetEntity(scene, UUID(entityID));
+            Entity childEntity = SceneManager::GetEntity(scene, childName);
+            SceneManager::FindChild(scene, entity, childEntity.GetUUID());
+
+            return childEntity.IsValid() ? static_cast<uint64_t>(childEntity.GetUUID()) : 0;
+        }
+
+        static bool Entity_IsParent(uint64_t entityID, uint64_t parentID)
+        {
+            Scene *scene = GetSceneContext();
+            if (!scene || entityID == 0)
+                return false;
+
+            Entity entity = SceneManager::GetEntity(scene, UUID(entityID));
+            return entity.GetParentUUID() == UUID(parentID);
+        }
+
+        static uint64_t Entity_GetParent(uint64_t entityID)
+        {
+            Scene *scene = GetSceneContext();
+            if (!scene || entityID == 0)
+                return false;
+
+            Entity entity = SceneManager::GetEntity(scene, UUID(entityID));
+            return static_cast<uint64_t>(entity.GetParentUUID());
+        }
+
+        static uint64_t Entity_InstantiateWithName(const char *name, glm::vec3 value)
+        {
+            Scene *scene = GetSceneContext();
+            if (!scene)
+                return 0;
+
+            Entity entity = SceneManager::CreateEmptyEntity(scene, name);
+            entity.GetComponent<TransformComponent>().translation = value;
+
+            if (scene->IsRunning())
+            {
+                auto *scriptEngine = ScriptEngine::GetInstance();
+                if (entity.HasComponent<ScriptComponent>())
+                {
+                    const auto &sc = entity.GetComponent<ScriptComponent>();
+                    const ScriptInstanceID instanceID = entity.GetUUID();
+                    scriptEngine->OnCreateEntityInstance(instanceID, sc.className);
+                }
+            }
+
+            return static_cast<uint64_t>(entity.GetUUID());
+        }
+
         static uint64_t Entity_Instantiate(uint64_t entityID, glm::vec3 value)
         {
             Scene *scene = GetSceneContext();
             if (!scene)
-            {
                 return 0;
-            }
 
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid())
-            {
                 return 0;
-            }
 
             Entity copyEntity = SceneManager::DuplicateEntity(scene, entity);
             if (!copyEntity.IsValid())
-            {
                 return 0;
-            }
 
             copyEntity.GetComponent<TransformComponent>().translation = value;
             
             if (scene->IsRunning())
             {
-                if (auto *scriptEngine = ScriptEngine::GetInstance())
+                auto *scriptEngine = ScriptEngine::GetInstance();
+                if (entity.HasComponent<ScriptComponent>())
                 {
-                    scriptEngine->OnCreateEntity(copyEntity);
+                    auto &sc = entity.GetComponent<ScriptComponent>();
+                    const ScriptInstanceID instanceID = entity.GetUUID();
+                    sc.runtimeScriptInstance = scriptEngine->OnCreateEntityInstance(instanceID, sc.className);
                 }
             }
 
@@ -620,21 +674,21 @@ namespace ignite
         {
             Scene *scene = GetSceneContext();
             if (!scene)
-            {
                 return;
-            }
 
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid())
-            {
                 return;
-            }
 
             if (scene->IsRunning())
             {
-                if (auto *scriptEngine = ScriptEngine::GetInstance())
+                auto *scriptEngine = ScriptEngine::GetInstance();
+                if (entity.HasComponent<ScriptComponent>())
                 {
-                    scriptEngine->OnDestroyEntity(entity);
+                    auto &sc = entity.GetComponent<ScriptComponent>();
+                    sc.runtimeScriptInstance = nullptr;
+                    const ScriptInstanceID instanceID = entity.GetUUID();
+                    ScriptEngine::GetInstance()->OnDestroyEntityInstance(instanceID);
                 }
             }
 
@@ -650,9 +704,7 @@ namespace ignite
         {
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
                 return;
-            }
 
             entity.GetComponent<TransformComponent>().visible = value;
         }
@@ -665,9 +717,7 @@ namespace ignite
             *result = false;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
-            {
                 return;
-            }
 
             *result = entity.GetComponent<TransformComponent>().visible;
         }
@@ -683,15 +733,11 @@ namespace ignite
         static bool WidgetComponent_HasButton(uint64_t entityID, const char *buttonName)
         {
             if (!buttonName)
-            {
                 return false;
-            }
 
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid())
-            {
                 return false;
-            }
 
             return static_cast<bool>(FindWidgetButton(entity, std::string(buttonName)));
         }
@@ -811,6 +857,117 @@ namespace ignite
 
             ApplyWidgetButtonCallback(button, key);
             return true;
+        }
+
+        // =====================================================================
+        // Widget Label / Image helper finders
+        // =====================================================================
+
+        static Ref<WidgetLabel> FindWidgetLabel(Entity entity, const std::string &name)
+        {
+            Ref<WidgetCanvas> canvas = GetEntityWidgetCanvas(entity);
+            if (!canvas) return nullptr;
+            for (const auto &[_, item] : canvas->GetItems())
+                if (item && item->name == name && item->GetWidgetType() == WidgetType::Label)
+                    return item->As<WidgetLabel>();
+            return nullptr;
+        }
+
+        static Ref<WidgetImage> FindWidgetImage(Entity entity, const std::string &name)
+        {
+            Ref<WidgetCanvas> canvas = GetEntityWidgetCanvas(entity);
+            if (!canvas) return nullptr;
+            for (const auto &[_, item] : canvas->GetItems())
+                if (item && item->name == name && item->GetWidgetType() == WidgetType::Image)
+                    return item->As<WidgetImage>();
+            return nullptr;
+        }
+
+        // --- Label ---
+        static bool WidgetComponent_HasLabel(uint64_t entityID, const char *labelName)
+        {
+            if (!labelName) return false;
+            return static_cast<bool>(FindWidgetLabel(GetEntityByID(entityID), std::string(labelName)));
+        }
+
+        static void WidgetComponent_GetLabelText(uint64_t entityID, const char *labelName, const char **result)
+        {
+            if (!labelName || !result) return;
+            if (Ref<WidgetLabel> lbl = FindWidgetLabel(GetEntityByID(entityID), std::string(labelName)))
+                *result = lbl->text.c_str();
+        }
+
+        static void WidgetComponent_SetLabelText(uint64_t entityID, const char *labelName, const char *text)
+        {
+            if (!labelName || !text) return;
+            Entity entity = GetEntityByID(entityID);
+            if (Ref<WidgetLabel> lbl = FindWidgetLabel(entity, std::string(labelName)))
+            {
+                lbl->text = text;
+                if (Ref<WidgetCanvas> c = GetEntityWidgetCanvas(entity)) c->SetDirtyFlag(true);
+            }
+        }
+
+        static void WidgetComponent_GetLabelColor(uint64_t entityID, const char *labelName, glm::vec4 *result)
+        {
+            if (!labelName || !result) return;
+            if (Ref<WidgetLabel> lbl = FindWidgetLabel(GetEntityByID(entityID), std::string(labelName)))
+                *result = lbl->style.color;
+        }
+
+        static void WidgetComponent_SetLabelColor(uint64_t entityID, const char *labelName, glm::vec4 *color)
+        {
+            if (!labelName || !color) return;
+            Entity entity = GetEntityByID(entityID);
+            if (Ref<WidgetLabel> lbl = FindWidgetLabel(entity, std::string(labelName)))
+            {
+                lbl->style.color = *color;
+                if (Ref<WidgetCanvas> c = GetEntityWidgetCanvas(entity)) c->SetDirtyFlag(true);
+            }
+        }
+
+        static void WidgetComponent_GetLabelFontSize(uint64_t entityID, const char *labelName, float *result)
+        {
+            if (!labelName || !result) return;
+            if (Ref<WidgetLabel> lbl = FindWidgetLabel(GetEntityByID(entityID), std::string(labelName)))
+                *result = lbl->style.fontSize;
+        }
+
+        static void WidgetComponent_SetLabelFontSize(uint64_t entityID, const char *labelName, float size)
+        {
+            if (!labelName) return;
+            Entity entity = GetEntityByID(entityID);
+            if (Ref<WidgetLabel> lbl = FindWidgetLabel(entity, std::string(labelName)))
+            {
+                lbl->style.fontSize = size;
+                if (Ref<WidgetCanvas> c = GetEntityWidgetCanvas(entity)) c->SetDirtyFlag(true);
+            }
+        }
+
+        // --- Image ---
+        static bool WidgetComponent_HasImage(uint64_t entityID, const char *imageName)
+        {
+            if (!imageName) return false;
+            return static_cast<bool>(FindWidgetImage(GetEntityByID(entityID), std::string(imageName)));
+        }
+
+        static void WidgetComponent_GetImageHandle(uint64_t entityID, const char *imageName, uint64_t *result)
+        {
+            if (!imageName || !result) return;
+            if (Ref<WidgetImage> img = FindWidgetImage(GetEntityByID(entityID), std::string(imageName)))
+                *result = static_cast<uint64_t>(img->imageHandle);
+        }
+
+        static void WidgetComponent_SetImageHandle(uint64_t entityID, const char *imageName, uint64_t handle)
+        {
+            if (!imageName) return;
+            Entity entity = GetEntityByID(entityID);
+            if (Ref<WidgetImage> img = FindWidgetImage(entity, std::string(imageName)))
+            {
+                img->imageHandle = AssetHandle(handle);
+                img->image = nullptr;
+                if (Ref<WidgetCanvas> c = GetEntityWidgetCanvas(entity)) c->SetDirtyFlag(true);
+            }
         }
 
         static bool AudioSourceComponent_HasAudio(uint64_t entityID)
@@ -1157,54 +1314,6 @@ namespace ignite
             {
                 sound->ClearDsps(true);
             }
-        }
-
-        static bool Input_IsKeyPressed(uint32_t keyCode)
-        {
-            return Input::IsKeyPressed(static_cast<KeyCode>(keyCode));
-        }
-
-        static bool Input_IsModifierPressed(uint16_t modCode)
-        {
-            return Input::IsModifierPressed(static_cast<KeyModCode>(modCode));
-        }
-
-        static bool Input_IsMouseButtonPressed(uint8_t button)
-        {
-            return Input::IsMouseButtonPressed(static_cast<MouseCode>(button));
-        }
-
-        static void Input_GetMousePosition(glm::vec2 *result)
-        {
-            if (!result)
-            {
-                return;
-            }
-
-            const glm::ivec2 mousePos = Input::GetMousePosition();
-            glm::vec2 absPos = glm::vec2(mousePos.x, mousePos.y);
-            Scene *scene = GetSceneContext();
-            if (scene)
-            {
-                Entity cameraEntity = scene->GetPrimaryCamera();
-                if (cameraEntity.IsValid() && cameraEntity.HasComponent<CameraComponent>())
-                {
-                    const auto &cc = cameraEntity.GetComponent<CameraComponent>();
-                    absPos -= cc.camera.viewportPosition;
-                }
-            }
-
-            *result = absPos;
-        }
-
-        static void Input_SetMouseToCenter()
-        {
-            Input::SetMouseToCenter();
-        }
-
-        static void Input_SetCursorMode(int32_t mode)
-        {
-            Input::SetCursorMode(static_cast<CursorMode>(mode));
         }
 
         static void TransformComponent_GetForward(uint64_t entityID, glm::vec3 *result)
@@ -2282,13 +2391,16 @@ namespace ignite
             *result = entity.GetComponent<TextComponent>().lineSpacing;
         }
 
-        static const ScriptGlueAPI s_API =
+        static const ComponentScriptGlueAPI s_ComponentScriptGlueAPI =
         {
-            &Debug_Log,
             &Scene_PickEntityAt,
             &Entity_HasComponent,
             &Entity_AddComponent,
             &Entity_FindEntityByName,
+            &Entity_FindChildEntityByName,
+            &Entity_IsParent,
+            &Entity_GetParent,
+            &Entity_InstantiateWithName,
             &Entity_Instantiate,
             &Entity_Destroy,
             &Entity_SetVisibility,
@@ -2297,6 +2409,19 @@ namespace ignite
             &WidgetComponent_HasButton,
             &WidgetComponent_AddButtonEventCallback,
             &WidgetComponent_RemoveButtonEventCallback,
+
+            &WidgetComponent_HasLabel,
+            &WidgetComponent_GetLabelText,
+            &WidgetComponent_SetLabelText,
+            &WidgetComponent_GetLabelColor,
+            &WidgetComponent_SetLabelColor,
+            &WidgetComponent_GetLabelFontSize,
+            &WidgetComponent_SetLabelFontSize,
+
+            &WidgetComponent_HasImage,
+            &WidgetComponent_GetImageHandle,
+            &WidgetComponent_SetImageHandle,
+
             &AudioSourceComponent_HasAudio,
             &AudioSourceComponent_Play,
             &AudioSourceComponent_Stop,
@@ -2319,13 +2444,6 @@ namespace ignite
             &AudioSourceComponent_AddDelayDSP,
             &AudioSourceComponent_ClearDSPs,
 
-            &Input_IsKeyPressed,
-            &Input_IsModifierPressed,
-            &Input_IsMouseButtonPressed,
-            &Input_GetMousePosition,
-            &Input_SetMouseToCenter,
-            &Input_SetCursorMode,
-            
             &TransformComponent_GetForward,
             &TransformComponent_SetForward,
             &TransformComponent_GetRight,
@@ -2414,24 +2532,24 @@ namespace ignite
         };
     }
 
-    const ScriptGlueAPI *ScriptGlue::GetAPI()
+    const ComponentScriptGlueAPI *ComponentScriptGlue::GetAPI()
     {
-        return &s_API;
+        return &s_ComponentScriptGlueAPI;
     }
 
-    void ScriptGlue::RegisterComponents()
+    void ComponentScriptGlue::RegisterComponents()
     {
         s_EntityHasComponentFuncs.clear();
         s_EntityAddComponentFuncs.clear();
         s_WidgetButtonEventBindings.clear();
         RegisterComponent(AllComponents {});
 
-        LOG_INFO("[ScriptGlue] Component bridge initialized (HostFXR)");
+        LOG_INFO("[ComponentScriptGlue] Component bridge initialized (HostFXR)");
     }
 
-    void ScriptGlue::RegisterFunctions()
+    void ComponentScriptGlue::RegisterFunctions()
     {
         s_WidgetButtonEventBindings.clear();
-        LOG_INFO("[ScriptGlue] Function bridge initialized (HostFXR)");
+        LOG_INFO("[ComponentScriptGlue] Function bridge initialized (HostFXR)");
     }
 }

@@ -195,15 +195,21 @@ namespace ignite
         , m_ViewportWidth(1280), m_ViewportHeight(720)
     {
         LOG_TRACE("Scene::Scene() - Creating scene: {0}", name);
+
         registry = new entt::registry();
         physics2D = CreateScope<Physics2D>(this);
         physics = CreateScope<JoltScene>(this);
 
 		ScriptEngine::GetInstance()->SetSceneContext(this);
+
+        m_AssetManager = m_Project->GetAssetManager();
     }
 
     Scene::~Scene()
     {
+        m_AssetManager = nullptr;
+        m_Project = nullptr;
+
 		// Stop physics simulations first
 		if (physics2D)
 		{
@@ -228,6 +234,7 @@ namespace ignite
 		// Release physics systems
 		physics2D.reset();
 		physics.reset();
+
     }
 
     void Scene::OnStart()
@@ -253,9 +260,12 @@ namespace ignite
         for (entt::entity e : audioView)
         {
             AudioSourceComponent &as = audioView.get<AudioSourceComponent>(e);
+            if (as.handle == AssetHandle(0))
+                continue;
+
+            Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
             if (as.playOnStart)
             {
-                Ref<FmodSound> sound = m_Project->GetAsset<FmodSound>(as.handle);
                 if (sound)
                 {
                     RebuildAudioSourceDspChain(as, sound);
@@ -271,7 +281,8 @@ namespace ignite
         registry->view<ScriptComponent>().each([this](entt::entity e, ScriptComponent &script)
         {
             Entity entity{ e, this };
-            ScriptEngine::GetInstance()->OnCreateEntity(entity);
+            ScriptInstanceID instanceID = entity.GetUUID();
+            script.runtimeScriptInstance = ScriptEngine::GetInstance()->OnCreateEntityInstance(instanceID, script.className);
         });
 
         registry->view<MeshComponent>().each([](entt::entity, MeshComponent &meshComp)
@@ -298,7 +309,7 @@ namespace ignite
         for (entt::entity e : audioView)
         {
             AudioSourceComponent &as = audioView.get<AudioSourceComponent>(e);
-            Ref<FmodSound> sound = m_Project->GetAsset<FmodSound>(as.handle);
+            Ref<FmodSound> sound = m_AssetManager->GetAsset<FmodSound>(as.handle);
             if (sound)
             {
                 sound->Stop();
@@ -308,8 +319,11 @@ namespace ignite
         registry->view<ScriptComponent>().each([this](entt::entity e, ScriptComponent &script)
         {
             Entity entity { e, this };
-            ScriptEngine::GetInstance()->OnDestroyEntity(entity);
+            script.runtimeScriptInstance = nullptr;
+            const ScriptInstanceID instanceID = entity.GetUUID();
+            ScriptEngine::GetInstance()->OnDestroyEntityInstance(instanceID);
         });
+
         ScriptEngine::GetInstance()->ClearSceneContext();
 
         m_SharedAnimatorRuntime.clear();
@@ -411,11 +425,10 @@ namespace ignite
 
             {
                 IGN_PROFILE_SCOPE("Scene::ScriptUpdate");
-                registry->view<ScriptComponent>().each([this, deltaTime](entt::entity e, ScriptComponent &sc)
+                registry->view<ScriptComponent>().each([this, deltaTime](entt::entity e, ScriptComponent &script)
                 {
-                    IGN_PROFILE_SCOPE("Scene::ScriptUpdateEntity");
-                    Entity entity { e, this };
-                    ScriptEngine::GetInstance()->OnUpdateEntity(entity, deltaTime);
+                    if (script.runtimeScriptInstance)
+                        script.runtimeScriptInstance->InvokeOnUpdate(deltaTime);
                 });
             }
 
@@ -462,6 +475,64 @@ namespace ignite
         return fallback ? fallback->environment.get() : nullptr;
     }
 
+    std::unordered_set<AssetHandle> Scene::CollectReferencedAssetHandles() const
+    {
+        std::unordered_set<AssetHandle> handles;
+        if (!registry)
+        {
+            return handles;
+        }
+
+        auto addHandle = [&handles](AssetHandle handle)
+        {
+            if (handle != AssetHandle(0))
+            {
+                handles.insert(handle);
+            }
+        };
+
+        registry->view<WorldEnvironment>().each([&](entt::entity, const WorldEnvironment &env)
+        {
+            addHandle(env.hdrHandle);
+            addHandle(env.loadedHDRHandle);
+        });
+
+        registry->view<Sprite2DComponent>().each([&](entt::entity, const Sprite2DComponent &sprite)
+        {
+            addHandle(sprite.handle);
+            addHandle(sprite.materialHandle);
+        });
+
+        registry->view<TextComponent>().each([&](entt::entity, const TextComponent &text)
+        {
+            addHandle(text.fontHandle);
+            addHandle(text.material2dHandle);
+        });
+
+        registry->view<WidgetComponent>().each([&](entt::entity, const WidgetComponent &widget)
+        {
+            addHandle(widget.widgetHandle);
+        });
+
+        registry->view<MeshComponent>().each([&](entt::entity, const MeshComponent &mesh)
+        {
+            addHandle(mesh.handle);
+            addHandle(mesh.runtimeAnimatorHandle);
+        });
+
+        registry->view<AudioSourceComponent>().each([&](entt::entity, const AudioSourceComponent &audio)
+        {
+            addHandle(audio.handle);
+        });
+
+        registry->view<Animator2DComponent>().each([&](entt::entity, const Animator2DComponent &animator)
+        {
+            addHandle(animator.controllerHandle);
+        });
+
+        return handles;
+    }
+
     void Scene::UpdateAnimations(float deltaTime)
     {
         auto skeletalMeshView = registry->view<TransformComponent, MeshComponent>();
@@ -473,7 +544,7 @@ namespace ignite
             if (!tr.visible || sm.handle == AssetHandle(0))
                 continue;
 
-            Ref<Mesh> mesh = m_Project->GetAsset<Mesh>(sm.handle);
+            Ref<Mesh> mesh = m_AssetManager->GetAsset<Mesh>(sm.handle);
             if (!mesh)
                 continue;
 
@@ -528,7 +599,7 @@ namespace ignite
             {
                 if (!sm.runtimeAnimatorInstance)
                 {
-                    Ref<AnimatorController> sourceController = m_Project->GetAsset<AnimatorController>(sourceAnimatorHandle);
+                    Ref<AnimatorController> sourceController = m_AssetManager->GetAsset<AnimatorController>(sourceAnimatorHandle);
                     if (sourceController)
                     {
                         sm.runtimeAnimatorInstance = CloneAnimatorController(sourceController);
@@ -549,7 +620,7 @@ namespace ignite
                 auto sharedIt = m_SharedAnimatorCache.find(sourceAnimatorHandle);
                 if (sharedIt == m_SharedAnimatorCache.end())
                 {
-                    Ref<AnimatorController> controller = m_Project->GetAsset<AnimatorController>(sourceAnimatorHandle);
+                    Ref<AnimatorController> controller = m_AssetManager->GetAsset<AnimatorController>(sourceAnimatorHandle);
                     if (controller)
                     {
                         sharedIt = m_SharedAnimatorCache.emplace(sourceAnimatorHandle, controller).first;
@@ -580,7 +651,7 @@ namespace ignite
                 if (updatedSharedHandles.find(sourceAnimatorHandle) == updatedSharedHandles.end())
                 {
                     AnimatorControllerRuntime tmpRuntime = *sharedRuntime;
-                    if (animController->UpdateSkeleton(deltaTime, tmpRuntime, m_Project->GetAssetManager()))
+                    if (animController->UpdateSkeleton(deltaTime, tmpRuntime, m_AssetManager))
                     {
                         *sharedRuntime = std::move(tmpRuntime);
                         updatedSharedHandles.insert(sourceAnimatorHandle);
@@ -602,7 +673,7 @@ namespace ignite
                 runtime.stateElapsed = sm.stateElapsed;
                 runtime.stateNormalized = sm.stateNormalized;
 
-                if (animController->UpdateSkeleton(deltaTime, runtime, m_Project->GetAssetManager()))
+                if (animController->UpdateSkeleton(deltaTime, runtime, m_AssetManager))
                 {
                     sm.finalBoneTransforms = std::move(runtime.finalTransforms);
                     sm.currentStateName = runtime.currentStateName;
@@ -621,7 +692,7 @@ namespace ignite
             if (animComp.controllerHandle == AssetHandle(0))
                 continue;
 
-            Ref<AnimatorController2D> ctrl = m_Project->GetAsset<AnimatorController2D>(animComp.controllerHandle);
+            Ref<AnimatorController2D> ctrl = m_AssetManager->GetAsset<AnimatorController2D>(animComp.controllerHandle);
             if (!ctrl)
             {
                 continue;
@@ -641,7 +712,7 @@ namespace ignite
             if (!state || state->animHandle == AssetHandle(0))
                 continue;
 
-            Ref<Animation2D> anim = m_Project->GetAsset<Animation2D>(state->animHandle);
+            Ref<Animation2D> anim = m_AssetManager->GetAsset<Animation2D>(state->animHandle);
             if (!anim || anim->frames.empty())
             {
                 continue;

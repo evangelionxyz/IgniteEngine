@@ -29,6 +29,31 @@ namespace ignite
     class Skeleton;
     class Mesh;
 
+    struct EditorSceneData
+    {
+        Ref<AssetSceneRenderer> sceneRenderer;
+        EditorCamera camera;
+        Ref<RenderTarget> sceneRT;
+        Ref<RenderTarget> uiRT;
+        Ref<RenderTarget> compositeRT;
+        uint32_t viewportWidth = 512;
+        uint32_t viewportHeight = 512;
+        bool viewportVisible = false;
+        bool viewportHovered = false;
+    };
+
+    struct AssetEditorData
+    {
+        Ref<Asset> asset;
+        AssetMetaData metadata;
+        AssetHandle handle;
+        EditorSceneData sceneData;
+        std::string windowTitle;
+        bool isOpen = true;
+        bool requestFocus = false;
+        bool showUnsavedClosePopup = false;
+    };
+
 	class AssetEditorPanel : public IPanel
     {
     public:
@@ -49,31 +74,6 @@ namespace ignite
         bool OnMouseScrollEvent(MouseScrolledEvent &event);
 
     private:
-        struct EditorSceneData
-        {
-            Ref<AssetSceneRenderer> sceneRenderer;
-            EditorCamera camera;
-            Ref<RenderTarget> sceneRT;
-            Ref<RenderTarget> uiRT;
-            Ref<RenderTarget> compositeRT;
-            uint32_t viewportWidth = 512;
-            uint32_t viewportHeight = 512;
-            bool viewportVisible = false;
-            bool viewportHovered = false;
-        };
-
-		struct AssetEditorData
-		{
-			Ref<Asset> asset;
-			AssetMetaData metadata;
-			AssetHandle handle;
-            EditorSceneData sceneData;
-			std::string windowTitle;
-			bool isOpen = true;
-            bool requestFocus = false;
-            bool showUnsavedClosePopup = false;
-		};
-
         struct CreateAssetRequest
         {
             Ref<Asset> asset;

@@ -5,24 +5,24 @@ namespace Ignite;
 
 public static class Input
 {
-    public static bool IsKeyPressed(KeyCode keyCode) => InternalCalls.Input_IsKeyPressed((uint)keyCode);
-    public static bool IsKeyPressed(uint keyCode) => InternalCalls.Input_IsKeyPressed(keyCode);
+    public static bool IsKeyPressed(KeyCode keyCode) => CoreInternalCalls.Input_IsKeyPressed((uint)keyCode);
+    public static bool IsKeyPressed(uint keyCode) => CoreInternalCalls.Input_IsKeyPressed(keyCode);
 
-    public static bool IsModifierPressed(ushort modCode) => InternalCalls.Input_IsModifierPressed(modCode);
+    public static bool IsModifierPressed(ushort modCode) => CoreInternalCalls.Input_IsModifierPressed(modCode);
 
-    public static bool IsMouseButtonPressed(MouseCode button) => InternalCalls.Input_IsMouseButtonPressed((byte)button);
+    public static bool IsMouseButtonPressed(MouseCode button) => CoreInternalCalls.Input_IsMouseButtonPressed((byte)button);
 
     public static Vector2 MousePosition
     {
         get
         {
-            InternalCalls.Input_GetMousePosition(out Vector2 result);
+            CoreInternalCalls.Input_GetMousePosition(out Vector2 result);
             return result;
         }
     }
 
-    public static void SetMouseToCenter() => InternalCalls.Input_SetMouseToCenter();
-    public static void SetCursorMode(CursorMode mode) => InternalCalls.Input_SetCursorMode((int)mode);
+    public static void SetMouseToCenter() => CoreInternalCalls.Input_SetMouseToCenter();
+    public static void SetCursorMode(CursorMode mode) => CoreInternalCalls.Input_SetCursorMode((int)mode);
 }
 
 public enum CursorMode

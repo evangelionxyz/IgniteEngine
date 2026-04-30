@@ -8,15 +8,12 @@
 
 namespace ignite
 {
-    ScriptInstance::ScriptInstance(Ref<ScriptClass> scriptClass, Entity entity)
-        : m_ScriptClass(scriptClass), m_InstanceId(0)
+    ScriptInstance::ScriptInstance(Ref<ScriptClass> scriptClass, ScriptInstanceID instanceID)
+        : m_ScriptClass(scriptClass), m_InstanceId(instanceID)
     {
         IGN_PROFILE_FUNCTION();
         m_ScriptHost = ScriptEngine::GetInstance()->GetScriptHost();
         LOG_ASSERT(m_ScriptHost, "[Script Instance] ScriptHost is null");
-
-        // Use entity UUID as GUID key for the managed instance
-        m_InstanceId = entity.GetUUID();
 
         // Create managed instance
         if (!m_ScriptHost->CreateInstance(m_InstanceId, scriptClass->GetFullName()))
@@ -34,7 +31,7 @@ namespace ignite
         const int setIdMethod = scriptClass->BindInstanceMethod(m_InstanceId, "SetID", ScriptMethodSig::Void_UInt64);
         if (setIdMethod)
         {
-            const uint64_t entityId = static_cast<uint64_t>(entity.GetUUID());
+            const uint64_t entityId = static_cast<uint64_t>(m_InstanceId);
             void *args[] = { const_cast<uint64_t *>(&entityId) };
             m_ScriptHost->Invoke(setIdMethod, args, 1, nullptr);
         }

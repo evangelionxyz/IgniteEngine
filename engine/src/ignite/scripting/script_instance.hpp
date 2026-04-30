@@ -14,17 +14,19 @@ namespace ignite
     class Entity;
     class ScriptClass;
 
+    using ScriptInstanceID = uint64_t;
+
     class ScriptInstance
     {
     public:
-        ScriptInstance(Ref<ScriptClass> scriptClass, Entity entity);
+        ScriptInstance(Ref<ScriptClass> scriptClass, ScriptInstanceID instanceID);
 
         void InvokeOnCreate();
         void InvokeOnDestroy();
         void InvokeOnUpdate(float time);
 
         const Ref<ScriptClass> &GetScriptClass() const { return m_ScriptClass; }
-        uint64_t GetInstanceID() const { return m_InstanceId; }
+        ScriptInstanceID GetInstanceID() const { return m_InstanceId; }
 
         template<typename T>
         T GetFieldValue(const std::string &fieldName)
@@ -69,13 +71,13 @@ namespace ignite
         {
             if (!m_ScriptHost || fieldName.empty() || s_FieldValueBuffer == nullptr)
             {
-                return std::string();
+                return {};
             }
 
             const bool success = m_ScriptHost->GetInstanceFieldValue(m_InstanceId, fieldName, s_FieldValueBuffer, sizeof(s_FieldValueBuffer));
             if (!success)
             {
-                return std::string();
+                return {};
             }
 
             m_ScriptClass->GetInstanceFieldsById(m_InstanceId)->at(fieldName).SetValue<std::string>(std::string(s_FieldValueBuffer));
@@ -109,7 +111,7 @@ namespace ignite
 
         ScriptHost *m_ScriptHost = nullptr;
 
-        uint64_t m_InstanceId = 0;
+        ScriptInstanceID m_InstanceId = 0;
         int m_OnCreateMethodId = 0;
         int m_OnDestroyMethodId = 0;
         int m_OnUpdateMethodId = 0;

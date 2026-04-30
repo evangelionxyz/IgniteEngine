@@ -375,7 +375,7 @@ namespace ignite::UI
 		return state;
 	}
 
-	static bool DrawComboBox(const char *label, const char **labels, int labelsCount, const char *currentLabel, int *selectedIndex, float &coloumnWidth = defColWidth)
+	static bool DrawComboBox(const char *label, const char **labels, int labelsCount, int *selectedIndex, float &coloumnWidth = defColWidth)
 	{
 		State state;
 		ImGui::PushID(label);
@@ -398,10 +398,6 @@ namespace ignite::UI
 			*selectedIndex = labelsCount - 1;
 
 		const char *previewLabel = labels[*selectedIndex] ? labels[*selectedIndex] : "";
-		if ((previewLabel[0] == '\0') && currentLabel)
-		{
-			previewLabel = currentLabel;
-		}
 
 		ImGui::BeginColumns(label, 2);
 		ImGui::SetColumnWidth(0, coloumnWidth);

@@ -1,4 +1,4 @@
-using Ignite.Core;
+using Ignite.Core.Component;
 namespace Ignite;
 
 public abstract class FmodDsp
@@ -19,12 +19,11 @@ public sealed class FmodReverb : FmodDsp
     public float DryLevel { get; set; } = 0.0f;
     public float WetLevel { get; set; } = -6.0f;
 
-    public void setMix(float wetLevel) => WetLevel = wetLevel;
     public void SetMix(float wetLevel) => WetLevel = wetLevel;
 
     internal override bool Apply(ulong entityID)
     {
-        return InternalCalls.AudioSourceComponent_AddReverbDSP(entityID, DecayTime, EarlyDelay, LateDelay, HighFrequencyReference, Diffusion, Density, LowShelfGain, HighCut, DryLevel, WetLevel);
+        return ComponentInternalCalls.AudioSourceComponent_AddReverbDSP(entityID, DecayTime, EarlyDelay, LateDelay, HighFrequencyReference, Diffusion, Density, LowShelfGain, HighCut, DryLevel, WetLevel);
     }
 }
 
@@ -34,7 +33,7 @@ public sealed class FmodDistortion : FmodDsp
 
     internal override bool Apply(ulong entityID)
     {
-        return InternalCalls.AudioSourceComponent_AddDistortionDSP(entityID, DistortionLevel);
+        return ComponentInternalCalls.AudioSourceComponent_AddDistortionDSP(entityID, DistortionLevel);
     }
 }
 
@@ -44,12 +43,11 @@ public sealed class FmodChorus : FmodDsp
     public float Rate { get; set; } = 0.8f;
     public float Depth { get; set; } = 3.0f;
 
-    public void setMix(float value) => Mix = value;
     public void SetMix(float value) => Mix = value;
 
     internal override bool Apply(ulong entityID)
     {
-        return InternalCalls.AudioSourceComponent_AddChorusDSP(entityID, Mix, Rate, Depth);
+        return ComponentInternalCalls.AudioSourceComponent_AddChorusDSP(entityID, Mix, Rate, Depth);
     }
 }
 
@@ -63,7 +61,7 @@ public sealed class FmodCompressor : FmodDsp
 
     internal override bool Apply(ulong entityID)
     {
-        return InternalCalls.AudioSourceComponent_AddCompressorDSP(entityID, Threshold, Ratio, Release, GainMakeup, UseSidechain);
+        return ComponentInternalCalls.AudioSourceComponent_AddCompressorDSP(entityID, Threshold, Ratio, Release, GainMakeup, UseSidechain);
     }
 }
 
@@ -74,6 +72,6 @@ public sealed class FmodDelay : FmodDsp
 
     internal override bool Apply(ulong entityID)
     {
-        return InternalCalls.AudioSourceComponent_AddDelayDSP(entityID, DelayMs, Feedback);
+        return ComponentInternalCalls.AudioSourceComponent_AddDelayDSP(entityID, DelayMs, Feedback);
     }
 }

@@ -1,8 +1,5 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-// Created by: Evangelion Manuhutu
-// Date      : 18 April 2026
-
 #include "widget_container.hpp"
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/core/logger.hpp"
@@ -11,6 +8,16 @@
 
 namespace ignite
 {
+
+    WidgetContainer::WidgetContainer(WidgetID wID)
+        : IWidgetItem(wID)
+    {
+    }
+
+    WidgetContainer::~WidgetContainer()
+    {
+    }
+
     void WidgetContainer::Measure()
     {
         float measuredWidth = 0.0f;
@@ -97,8 +104,6 @@ namespace ignite
             {
                 case LayoutMode::Horizontal:
                 {
-                    // NOTE: do NOT pre-add child->margin here; CalculateAlignedRect
-                    // already applies it internally. Adding it here caused double-margin.
                     const glm::vec2 min = { cursorX, contentMin.y };
                     const glm::vec2 max = { contentMax.x, contentMax.y };
                     childRect = Rect(min, max);
@@ -127,11 +132,6 @@ namespace ignite
             }
 
             child->Arrange(childRect);
-
-            // When using a non-absolute layout, the child item's explicit position
-            // should not influence layout — positions are governed by the layout
-            // system (Nuklear). Clear manual position for non-absolute containers
-            // to avoid accidental overrides.
             if (layout != LayoutMode::Absolute)
             {
                 child->position = glm::vec2(0.0f);
@@ -164,6 +164,57 @@ namespace ignite
         }
 
         return true;
+    }
+
+    // =========================================================================
+    // WidgetBoxSizing
+    // =========================================================================
+
+    WidgetBoxSizing::WidgetBoxSizing(WidgetID wID)
+        : WidgetContainer(wID)
+    {
+    }
+
+    WidgetBoxSizing::~WidgetBoxSizing()
+    {
+    }
+
+    void WidgetBoxSizing::Measure()
+    {
+        WidgetContainer::Measure();
+        size.x = std::clamp(size.x, minSize.x, maxSize.x);
+        size.y = std::clamp(size.y, minSize.y, maxSize.y);
+    }
+
+    // =========================================================================
+    // WidgetOverlay
+    // =========================================================================
+
+    WidgetOverlay::WidgetOverlay(WidgetID wID)
+        : WidgetContainer(wID)
+    {
+    }
+
+    WidgetOverlay::~WidgetOverlay()
+    {
+    }
+
+    void WidgetOverlay::Arrange(const Rect &parentArea)
+    {
+        worldRect = CalculateAlignedRect(parentArea);
+
+        const glm::vec2 contentMin = worldRect.min + glm::vec2(padding);
+        const glm::vec2 contentMax = worldRect.max - glm::vec2(padding);
+        const Rect contentRect(contentMin, contentMax);
+
+        // Every child fills the full overlay area, stacked by z-index
+        for (const Ref<IWidgetItem> &child : children)
+        {
+            if (!child || !child->IsVisible())
+                continue;
+
+            child->Arrange(contentRect);
+        }
     }
 
 }
