@@ -1,50 +1,27 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
-
-﻿using System;
+// Copyright (c) 2026 Evangelion Manuhutu
 
 namespace Ignite;
 
-public static class Mathf
+public static partial class Mathf
 {
     public const float PI = 3.14159265358979323846f;
     public const float Deg2Rad = PI / 180f;
     public const float Rad2Deg = 180f / PI;
     public const float Epsilon = 1e-5f;
 
-    public static float Sin(float x) => (float)Math.Sin(x);
-    public static float Cos(float x) => (float)Math.Cos(x);
-    public static float Tan(float x) => (float)Math.Tan(x);
+    public static float Sin(float x) => (float)System.Math.Sin(x);
+    public static float Cos(float x) => (float)System.Math.Cos(x);
+    public static float Tan(float x) => (float)System.Math.Tan(x);
 
-    public static float Asin(float x) => (float)Math.Asin(x);
-    public static float Acos(float x) => (float)Math.Acos(x);
-    public static float Atan(float x) => (float)Math.Atan(x);
-    public static float Atan2(float y, float x) => (float)Math.Atan2(y, x);
+    public static float Asin(float x) => (float)System.Math.Asin(x);
+    public static float Acos(float x) => (float)System.Math.Acos(x);
+    public static float Atan(float x) => (float)System.Math.Atan(x);
+    public static float Atan2(float y, float x) => (float)System.Math.Atan2(y, x);
 
-    public static float Sqrt(float x) => (float)Math.Sqrt(x);
-    public static float Pow(float x, float y) => (float)Math.Pow(x, y);
+    public static float Sqrt(float x) => (float)System.Math.Sqrt(x);
+    public static float Pow(float x, float y) => (float)System.Math.Pow(x, y);
 
-    public static float Abs(float x) => Math.Abs(x);
+    public static float Abs(float x) => System.Math.Abs(x);
 
     public static float Min(float a, float b) => (a < b) ? a : b;
     public static float Max(float a, float b) => (a > b) ? a : b;
@@ -87,8 +64,8 @@ public static class Mathf
         return x * x * (3 - 2 * x);
     }
 
-    public static int FloorToInt(float f) => (int)Math.Floor(f);
-    public static int CeilToInt(float f) => (int)Math.Ceiling(f);
-    public static int RoundToInt(float f) => (int)Math.Round(f);
+    public static int FloorToInt(float f) => (int)System.Math.Floor(f);
+    public static int CeilToInt(float f) => (int)System.Math.Ceiling(f);
+    public static int RoundToInt(float f) => (int)System.Math.Round(f);
 
 }

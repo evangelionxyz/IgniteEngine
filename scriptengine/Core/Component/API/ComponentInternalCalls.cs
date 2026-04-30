@@ -299,7 +299,7 @@ public static class ComponentInternalCalls
         EnsureInitialized();
 
         string typeName = componentType?.FullName ?? componentType?.Name ?? string.Empty;
-        IntPtr ptr = NativeAPI.StringToUtf8(typeName);
+        IntPtr ptr = NativeObject.StringToUtf8(typeName);
         try
         {
             return s_EntityHasComponent(entityID, ptr);
@@ -315,7 +315,7 @@ public static class ComponentInternalCalls
         EnsureInitialized();
 
         string typeName = componentType?.FullName ?? componentType?.Name ?? string.Empty;
-        IntPtr ptr = NativeAPI.StringToUtf8(typeName);
+        IntPtr ptr = NativeObject.StringToUtf8(typeName);
         try
         {
             s_EntityAddComponent(entityID, ptr);
@@ -330,7 +330,7 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
 
-        IntPtr ptr = NativeAPI.StringToUtf8(name);
+        IntPtr ptr = NativeObject.StringToUtf8(name);
         try
         {
             return s_EntityFindEntityByName(ptr);
@@ -345,7 +345,7 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
 
-        IntPtr ptr = NativeAPI.StringToUtf8(childName);
+        IntPtr ptr = NativeObject.StringToUtf8(childName);
         try
         {
             return s_EntityFindChildEntityByName(entityID, ptr);
@@ -368,13 +368,13 @@ public static class ComponentInternalCalls
         return s_EntityGetParent(entityID);
     }
 
-    internal static ulong Entity_Instantiate(string name, Vector3 value)
+    internal static ulong Entity_Instantiate(string name, Mathf.Vector3 value)
     {
         EnsureInitialized();
-        IntPtr ptr = NativeAPI.StringToUtf8(name);
+        IntPtr ptr = NativeObject.StringToUtf8(name);
         try
         {
-            return s_EntityInstantiateWithName(ptr, NativeAPI.ToNative(value));
+            return s_EntityInstantiateWithName(ptr, NativeObject.ToNative(value));
         }
         finally
         {
@@ -382,10 +382,10 @@ public static class ComponentInternalCalls
         }
     }
 
-    internal static ulong Entity_Instantiate(ulong entityID, Vector3 value)
+    internal static ulong Entity_Instantiate(ulong entityID, Mathf.Vector3 value)
     {
         EnsureInitialized();
-        return s_EntityInstantiate(entityID, NativeAPI.ToNative(value));
+        return s_EntityInstantiate(entityID, NativeObject.ToNative(value));
     }
 
     internal static void Entity_Destroy(ulong entityID)
@@ -420,7 +420,7 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
 
-        IntPtr buttonNamePtr = NativeAPI.StringToUtf8(buttonName);
+        IntPtr buttonNamePtr = NativeObject.StringToUtf8(buttonName);
         try
         {
             return s_WidgetComponentHasButton(entityID, buttonNamePtr);
@@ -435,8 +435,8 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
 
-        IntPtr buttonNamePtr = NativeAPI.StringToUtf8(buttonName);
-        IntPtr methodNamePtr = NativeAPI.StringToUtf8(methodName);
+        IntPtr buttonNamePtr = NativeObject.StringToUtf8(buttonName);
+        IntPtr methodNamePtr = NativeObject.StringToUtf8(methodName);
         try
         {
             return s_WidgetComponentAddButtonEventCallback(entityID, buttonNamePtr, eventType, methodNamePtr);
@@ -452,8 +452,8 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
 
-        IntPtr buttonNamePtr = NativeAPI.StringToUtf8(buttonName);
-        IntPtr methodNamePtr = NativeAPI.StringToUtf8(methodName);
+        IntPtr buttonNamePtr = NativeObject.StringToUtf8(buttonName);
+        IntPtr methodNamePtr = NativeObject.StringToUtf8(methodName);
         try
         {
             return s_WidgetComponentRemoveButtonEventCallback(entityID, buttonNamePtr, eventType, methodNamePtr);
@@ -597,135 +597,135 @@ public static class ComponentInternalCalls
         return null;
     }
 
-    internal static void TransformComponent_GetForward(ulong entityID, out Vector3 result)
+    internal static void TransformComponent_GetForward(ulong entityID, out Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformGetForward(entityID, out NativeAPI.NativeVector3 native);
-        result = NativeAPI.ToManaged(native);
+        s_TransformGetForward(entityID, out NativeObject.Vector3 native);
+        result = NativeObject.ToManaged(native);
     }
 
-    internal static void TransformComponent_SetForward(ulong entityID, Vector3 result)
+    internal static void TransformComponent_SetForward(ulong entityID, Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformSetForward(entityID, NativeAPI.ToNative(result));
+        s_TransformSetForward(entityID, NativeObject.ToNative(result));
     }
 
-    internal static void TransformComponent_GetRight(ulong entityID, out Vector3 result)
+    internal static void TransformComponent_GetRight(ulong entityID, out Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformGetRight(entityID, out NativeAPI.NativeVector3 native);
-        result = NativeAPI.ToManaged(native);
+        s_TransformGetRight(entityID, out NativeObject.Vector3 native);
+        result = NativeObject.ToManaged(native);
     }
 
-    internal static void TransformComponent_SetRight(ulong entityID, Vector3 result)
+    internal static void TransformComponent_SetRight(ulong entityID, Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformSetRight(entityID, NativeAPI.ToNative(result));
+        s_TransformSetRight(entityID, NativeObject.ToNative(result));
     }
 
-    internal static void TransformComponent_GetUp(ulong entityID, out Vector3 result)
+    internal static void TransformComponent_GetUp(ulong entityID, out Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformGetUp(entityID, out NativeAPI.NativeVector3 native);
-        result = NativeAPI.ToManaged(native);
+        s_TransformGetUp(entityID, out NativeObject.Vector3 native);
+        result = NativeObject.ToManaged(native);
     }
 
-    internal static void TransformComponent_SetUp(ulong entityID, Vector3 result)
+    internal static void TransformComponent_SetUp(ulong entityID, Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformSetUp(entityID, NativeAPI.ToNative(result));
+        s_TransformSetUp(entityID, NativeObject.ToNative(result));
     }
 
-    internal static void TransformComponent_GetTranslation(ulong entityID, out Vector3 result)
+    internal static void TransformComponent_GetTranslation(ulong entityID, out Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformGetTranslation(entityID, out NativeAPI.NativeVector3 native);
-        result = NativeAPI.ToManaged(native);
+        s_TransformGetTranslation(entityID, out NativeObject.Vector3 native);
+        result = NativeObject.ToManaged(native);
     }
 
-    internal static void TransformComponent_SetTranslation(ulong entityID, Vector3 value)
+    internal static void TransformComponent_SetTranslation(ulong entityID, Mathf.Vector3 value)
     {
         EnsureInitialized();
-        s_TransformSetTranslation(entityID, NativeAPI.ToNative(value));
+        s_TransformSetTranslation(entityID, NativeObject.ToNative(value));
     }
 
-    internal static void TransformComponent_GetRotation(ulong entityID, out Quaternion result)
+    internal static void TransformComponent_GetRotation(ulong entityID, out Mathf.Quaternion result)
     {
         EnsureInitialized();
-        s_TransformGetRotation(entityID, out NativeAPI.NativeQuaternion native);
-        result = NativeAPI.ToManaged(native);
+        s_TransformGetRotation(entityID, out NativeObject.Quaternion native);
+        result = NativeObject.ToManaged(native);
     }
 
-    internal static void TransformComponent_SetRotation(ulong entityID, Quaternion value)
+    internal static void TransformComponent_SetRotation(ulong entityID, Mathf.Quaternion value)
     {
         EnsureInitialized();
-        s_TransformSetRotation(entityID, NativeAPI.ToNative(value ?? Quaternion.Identity));
+        s_TransformSetRotation(entityID, NativeObject.ToNative(value));
     }
 
-    internal static void TransformComponent_GetEulerAngles(ulong entityID, out Vector3 result)
+    internal static void TransformComponent_GetEulerAngles(ulong entityID, out Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformGetEulerAngles(entityID, out NativeAPI.NativeVector3 native);
-        result = NativeAPI.ToManaged(native);
+        s_TransformGetEulerAngles(entityID, out NativeObject.Vector3 native);
+        result = NativeObject.ToManaged(native);
     }
 
-    internal static void TransformComponent_SetEulerAngles(ulong entityID, Vector3 value)
+    internal static void TransformComponent_SetEulerAngles(ulong entityID, Mathf.Vector3 value)
     {
         EnsureInitialized();
-        s_TransformSetEulerAngles(entityID, NativeAPI.ToNative(value));
+        s_TransformSetEulerAngles(entityID, NativeObject.ToNative(value));
     }
 
-    internal static void TransformComponent_GetScale(ulong entityID, out Vector3 result)
+    internal static void TransformComponent_GetScale(ulong entityID, out Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformGetScale(entityID, out NativeAPI.NativeVector3 native);
-        result = NativeAPI.ToManaged(native);
+        s_TransformGetScale(entityID, out NativeObject.Vector3 native);
+        result = NativeObject.ToManaged(native);
     }
 
-    internal static void TransformComponent_SetScale(ulong entityID, Vector3 value)
+    internal static void TransformComponent_SetScale(ulong entityID, Mathf.Vector3 value)
     {
         EnsureInitialized();
-        s_TransformSetScale(entityID, NativeAPI.ToNative(value));
+        s_TransformSetScale(entityID, NativeObject.ToNative(value));
     }
 
 
-    internal static void Sprite2DComponent_SetColor(ulong entityID, Vector4 value)
+    internal static void Sprite2DComponent_SetColor(ulong entityID, Mathf.Vector4 value)
     {
         EnsureInitialized();
-        s_Sprite2DSetColor(entityID, NativeAPI.ToNative(value));
+        s_Sprite2DSetColor(entityID, NativeObject.ToNative(value));
     }
 
-    internal static void Sprite2DComponent_GetColor(ulong entityID, out Vector4 result)
+    internal static void Sprite2DComponent_GetColor(ulong entityID, out Mathf.Vector4 result)
     {
         EnsureInitialized();
-        s_Sprite2DGetColor(entityID, out NativeAPI.NativeVector4 native);
-        result = NativeAPI.ToManaged(native);
+        s_Sprite2DGetColor(entityID, out NativeObject.Vector4 native);
+        result = NativeObject.ToManaged(native);
     }
 
-    internal static void Sprite2DComponent_SetTilingFactor(ulong entityID, Vector2 value)
+    internal static void Sprite2DComponent_SetTilingFactor(ulong entityID, Mathf.Vector2 value)
     {
         EnsureInitialized();
-        s_Sprite2DSetTilingFactor(entityID, NativeAPI.ToNative(value));
+        s_Sprite2DSetTilingFactor(entityID, NativeObject.ToNative(value));
     }
 
-    internal static void Sprite2DComponent_GetTilingFactor(ulong entityID, out Vector2 result)
+    internal static void Sprite2DComponent_GetTilingFactor(ulong entityID, out Mathf.Vector2 result)
     {
         EnsureInitialized();
-        s_Sprite2DGetTilingFactor(entityID, out NativeAPI.NativeVector2 native);
-        result = NativeAPI.ToManaged(native);
+        s_Sprite2DGetTilingFactor(entityID, out NativeObject.Vector2 native);
+        result = NativeObject.ToManaged(native);
     }
 
-    internal static void Circle2DComponent_SetColor(ulong entityID, Vector4 value)
+    internal static void Circle2DComponent_SetColor(ulong entityID, Mathf.Vector4 value)
     {
         EnsureInitialized();
-        s_Circle2DSetColor(entityID, NativeAPI.ToNative(value));
+        s_Circle2DSetColor(entityID, NativeObject.ToNative(value));
     }
 
-    internal static void Circle2DComponent_GetColor(ulong entityID, out Vector4 result)
+    internal static void Circle2DComponent_GetColor(ulong entityID, out Mathf.Vector4 result)
     {
         EnsureInitialized();
-        s_Circle2DGetColor(entityID, out NativeAPI.NativeVector4 native);
-        result = NativeAPI.ToManaged(native);
+        s_Circle2DGetColor(entityID, out NativeObject.Vector4 native);
+        result = NativeObject.ToManaged(native);
     }
 
     internal static void Rigidbody2DComponent_GetType(ulong entityID, out int result)
@@ -740,17 +740,17 @@ public static class ComponentInternalCalls
         s_Rigidbody2DSetType(entityID, value);
     }
 
-    internal static void Rigidbody2DComponent_GetLinearVelocity(ulong entityID, out Vector2 result)
+    internal static void Rigidbody2DComponent_GetLinearVelocity(ulong entityID, out Mathf.Vector2 result)
     {
         EnsureInitialized();
-        s_Rigidbody2DGetLinearVelocity(entityID, out NativeAPI.NativeVector2 native);
-        result = NativeAPI.ToManaged(native);
+        s_Rigidbody2DGetLinearVelocity(entityID, out NativeObject.Vector2 native);
+        result = NativeObject.ToManaged(native);
     }
 
-    internal static void Rigidbody2DComponent_SetLinearVelocity(ulong entityID, Vector2 value)
+    internal static void Rigidbody2DComponent_SetLinearVelocity(ulong entityID, Mathf.Vector2 value)
     {
         EnsureInitialized();
-        s_Rigidbody2DSetLinearVelocity(entityID, NativeAPI.ToNative(value));
+        s_Rigidbody2DSetLinearVelocity(entityID, NativeObject.ToNative(value));
     }
 
     internal static void Rigidbody2DComponent_GetAngularVelocity(ulong entityID, out float result)
@@ -837,28 +837,28 @@ public static class ComponentInternalCalls
         s_Rigidbody2DSetIsEnableSleep(entityID, value);
     }
 
-    internal static void Rigidbody2DComponent_ApplyForce(ulong entityID, Vector2 force, Vector2 point, bool wake)
+    internal static void Rigidbody2DComponent_ApplyForce(ulong entityID, Mathf.Vector2 force, Mathf.Vector2 point, bool wake)
     {
         EnsureInitialized();
-        s_Rigidbody2DApplyForce(entityID, NativeAPI.ToNative(force), NativeAPI.ToNative(point), wake);
+        s_Rigidbody2DApplyForce(entityID, NativeObject.ToNative(force), NativeObject.ToNative(point), wake);
     }
 
-    internal static void Rigidbody2DComponent_ApplyForceToCenter(ulong entityID, Vector2 force, bool wake)
+    internal static void Rigidbody2DComponent_ApplyForceToCenter(ulong entityID, Mathf.Vector2 force, bool wake)
     {
         EnsureInitialized();
-        s_Rigidbody2DApplyForceToCenter(entityID, NativeAPI.ToNative(force), wake);
+        s_Rigidbody2DApplyForceToCenter(entityID, NativeObject.ToNative(force), wake);
     }
 
-    internal static void Rigidbody2DComponent_ApplyLinearImpulse(ulong entityID, Vector2 impulse, Vector2 point, bool wake)
+    internal static void Rigidbody2DComponent_ApplyLinearImpulse(ulong entityID, Mathf.Vector2 impulse, Mathf.Vector2 point, bool wake)
     {
         EnsureInitialized();
-        s_Rigidbody2DApplyLinearImpulse(entityID, NativeAPI.ToNative(impulse), NativeAPI.ToNative(point), wake);
+        s_Rigidbody2DApplyLinearImpulse(entityID, NativeObject.ToNative(impulse), NativeObject.ToNative(point), wake);
     }
 
-    internal static void Rigidbody2DComponent_ApplyLinearImpulseToCenter(ulong entityID, Vector2 impulse, bool wake)
+    internal static void Rigidbody2DComponent_ApplyLinearImpulseToCenter(ulong entityID, Mathf.Vector2 impulse, bool wake)
     {
         EnsureInitialized();
-        s_Rigidbody2DApplyLinearImpulseToCenter(entityID, NativeAPI.ToNative(impulse), wake);
+        s_Rigidbody2DApplyLinearImpulseToCenter(entityID, NativeObject.ToNative(impulse), wake);
     }
 
     internal static void Rigidbody2DComponent_ApplyAngularImpulse(ulong entityID, float impulse, bool wake)
@@ -891,30 +891,30 @@ public static class ComponentInternalCalls
         s_Rigidbody2DSetIsBullet(entityID, value);
     }
 
-    internal static void BoxCollider2DComponent_GetSize(ulong entityID, out Vector2 result)
+    internal static void BoxCollider2DComponent_GetSize(ulong entityID, out Mathf.Vector2 result)
     {
         EnsureInitialized();
-        s_BoxCollider2DGetSize(entityID, out NativeAPI.NativeVector2 native);
-        result = NativeAPI.ToManaged(native);
+        s_BoxCollider2DGetSize(entityID, out NativeObject.Vector2 native);
+        result = NativeObject.ToManaged(native);
     }
 
-    internal static void BoxCollider2DComponent_SetSize(ulong entityID, Vector2 value)
+    internal static void BoxCollider2DComponent_SetSize(ulong entityID, Mathf.Vector2 value)
     {
         EnsureInitialized();
-        s_BoxCollider2DSetSize(entityID, NativeAPI.ToNative(value));
+        s_BoxCollider2DSetSize(entityID, NativeObject.ToNative(value));
     }
 
-    internal static void BoxCollider2DComponent_GetOffset(ulong entityID, out Vector2 result)
+    internal static void BoxCollider2DComponent_GetOffset(ulong entityID, out Mathf.Vector2 result)
     {
         EnsureInitialized();
-        s_BoxCollider2DGetOffset(entityID, out NativeAPI.NativeVector2 native);
-        result = NativeAPI.ToManaged(native);
+        s_BoxCollider2DGetOffset(entityID, out NativeObject.Vector2 native);
+        result = NativeObject.ToManaged(native);
     }
 
-    internal static void BoxCollider2DComponent_SetOffset(ulong entityID, Vector2 value)
+    internal static void BoxCollider2DComponent_SetOffset(ulong entityID, Mathf.Vector2 value)
     {
         EnsureInitialized();
-        s_BoxCollider2DSetOffset(entityID, NativeAPI.ToNative(value));
+        s_BoxCollider2DSetOffset(entityID, NativeObject.ToNative(value));
     }
 
     internal static void BoxCollider2DComponent_GetRestitution(ulong entityID, out float result)
@@ -965,17 +965,17 @@ public static class ComponentInternalCalls
         s_BoxCollider2DSetIsSensor(entityID, value);
     }
 
-    internal static void CircleCollider2DComponent_GetCenter(ulong entityID, out Vector2 result)
+    internal static void CircleCollider2DComponent_GetCenter(ulong entityID, out Mathf.Vector2 result)
     {
         EnsureInitialized();
-        s_CircleCollider2DGetCenter(entityID, out NativeAPI.NativeVector2 native);
-        result = NativeAPI.ToManaged(native);
+        s_CircleCollider2DGetCenter(entityID, out NativeObject.Vector2 native);
+        result = NativeObject.ToManaged(native);
     }
 
-    internal static void CircleCollider2DComponent_SetCenter(ulong entityID, Vector2 value)
+    internal static void CircleCollider2DComponent_SetCenter(ulong entityID, Mathf.Vector2 value)
     {
         EnsureInitialized();
-        s_CircleCollider2DSetCenter(entityID, NativeAPI.ToNative(value));
+        s_CircleCollider2DSetCenter(entityID, NativeObject.ToNative(value));
     }
 
     internal static void CircleCollider2DComponent_GetRadius(ulong entityID, out float result)
@@ -1042,7 +1042,7 @@ public static class ComponentInternalCalls
     internal static void TextComponent_SetText(ulong entityID, string value)
     {
         EnsureInitialized();
-        IntPtr ptr = NativeAPI.StringToUtf8(value);
+        IntPtr ptr = NativeObject.StringToUtf8(value);
         try
         {
             s_TextComponentSetText(entityID, ptr);
@@ -1068,17 +1068,17 @@ public static class ComponentInternalCalls
         }
     }
 
-    internal static void TextComponent_SetColor(ulong entityID, Vector4 value)
+    internal static void TextComponent_SetColor(ulong entityID, Mathf.Vector4 value)
     {
         EnsureInitialized();
-        s_TextComponentSetColor(entityID, NativeAPI.ToNative(value));
+        s_TextComponentSetColor(entityID, NativeObject.ToNative(value));
     }
 
-    internal static void TextComponent_GetColor(ulong entityID, out Vector4 result)
+    internal static void TextComponent_GetColor(ulong entityID, out Mathf.Vector4 result)
     {
         EnsureInitialized();
-        s_TextComponentGetColor(entityID, out NativeAPI.NativeVector4 outResult);
-        result = NativeAPI.ToManaged(outResult);
+        s_TextComponentGetColor(entityID, out NativeObject.Vector4 outResult);
+        result = NativeObject.ToManaged(outResult);
     }
 
     internal static void TextComponent_SetKerning(ulong entityID, float value)
@@ -1112,7 +1112,7 @@ public static class ComponentInternalCalls
     internal static bool WidgetComponent_HasLabel(ulong entityID, string labelName)
     {
         EnsureInitialized();
-        IntPtr ptr = NativeAPI.StringToUtf8(labelName);
+        IntPtr ptr = NativeObject.StringToUtf8(labelName);
         try { return s_WidgetComponentHasLabel(entityID, ptr); }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
@@ -1120,7 +1120,7 @@ public static class ComponentInternalCalls
     internal static string WidgetComponent_GetLabelText(ulong entityID, string labelName)
     {
         EnsureInitialized();
-        IntPtr namePtr = NativeAPI.StringToUtf8(labelName);
+        IntPtr namePtr = NativeObject.StringToUtf8(labelName);
         try
         {
             s_WidgetComponentGetLabelText(entityID, namePtr, out IntPtr result);
@@ -1132,25 +1132,25 @@ public static class ComponentInternalCalls
     internal static void WidgetComponent_SetLabelText(ulong entityID, string labelName, string text)
     {
         EnsureInitialized();
-        IntPtr namePtr = NativeAPI.StringToUtf8(labelName);
-        IntPtr textPtr = NativeAPI.StringToUtf8(text);
+        IntPtr namePtr = NativeObject.StringToUtf8(labelName);
+        IntPtr textPtr = NativeObject.StringToUtf8(text);
         try { s_WidgetComponentSetLabelText(entityID, namePtr, textPtr); }
         finally { Marshal.FreeCoTaskMem(namePtr); Marshal.FreeCoTaskMem(textPtr); }
     }
 
-    internal static void WidgetComponent_GetLabelColor(ulong entityID, string labelName, out Vector4 result)
+    internal static void WidgetComponent_GetLabelColor(ulong entityID, string labelName, out Mathf.Vector4 result)
     {
         EnsureInitialized();
-        IntPtr ptr = NativeAPI.StringToUtf8(labelName);
-        try { s_WidgetComponentGetLabelColor(entityID, ptr, out NativeAPI.NativeVector4 native); result = NativeAPI.ToManaged(native); }
+        IntPtr ptr = NativeObject.StringToUtf8(labelName);
+        try { s_WidgetComponentGetLabelColor(entityID, ptr, out NativeObject.Vector4 native); result = NativeObject.ToManaged(native); }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
 
-    internal static void WidgetComponent_SetLabelColor(ulong entityID, string labelName, Vector4 color)
+    internal static void WidgetComponent_SetLabelColor(ulong entityID, string labelName, Mathf.Vector4 color)
     {
         EnsureInitialized();
-        IntPtr ptr = NativeAPI.StringToUtf8(labelName);
-        NativeAPI.NativeVector4 native = NativeAPI.ToNative(color);
+        IntPtr ptr = NativeObject.StringToUtf8(labelName);
+        NativeObject.Vector4 native = NativeObject.ToNative(color);
         try { s_WidgetComponentSetLabelColor(entityID, ptr, ref native); }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
@@ -1158,7 +1158,7 @@ public static class ComponentInternalCalls
     internal static void WidgetComponent_GetLabelFontSize(ulong entityID, string labelName, out float result)
     {
         EnsureInitialized();
-        IntPtr ptr = NativeAPI.StringToUtf8(labelName);
+        IntPtr ptr = NativeObject.StringToUtf8(labelName);
         try { s_WidgetComponentGetLabelFontSize(entityID, ptr, out result); }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
@@ -1166,7 +1166,7 @@ public static class ComponentInternalCalls
     internal static void WidgetComponent_SetLabelFontSize(ulong entityID, string labelName, float size)
     {
         EnsureInitialized();
-        IntPtr ptr = NativeAPI.StringToUtf8(labelName);
+        IntPtr ptr = NativeObject.StringToUtf8(labelName);
         try { s_WidgetComponentSetLabelFontSize(entityID, ptr, size); }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
@@ -1178,7 +1178,7 @@ public static class ComponentInternalCalls
     internal static bool WidgetComponent_HasImage(ulong entityID, string imageName)
     {
         EnsureInitialized();
-        IntPtr ptr = NativeAPI.StringToUtf8(imageName);
+        IntPtr ptr = NativeObject.StringToUtf8(imageName);
         try { return s_WidgetComponentHasImage(entityID, ptr); }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
@@ -1186,7 +1186,7 @@ public static class ComponentInternalCalls
     internal static ulong WidgetComponent_GetImageHandle(ulong entityID, string imageName)
     {
         EnsureInitialized();
-        IntPtr ptr = NativeAPI.StringToUtf8(imageName);
+        IntPtr ptr = NativeObject.StringToUtf8(imageName);
         try { s_WidgetComponentGetImageHandle(entityID, ptr, out ulong result); return result; }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
@@ -1194,7 +1194,7 @@ public static class ComponentInternalCalls
     internal static void WidgetComponent_SetImageHandle(ulong entityID, string imageName, ulong handle)
     {
         EnsureInitialized();
-        IntPtr ptr = NativeAPI.StringToUtf8(imageName);
+        IntPtr ptr = NativeObject.StringToUtf8(imageName);
         try { s_WidgetComponentSetImageHandle(entityID, ptr, handle); }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }

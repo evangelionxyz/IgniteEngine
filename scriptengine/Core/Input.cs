@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 using Ignite.Core;
+using static Ignite.Mathf;
+
 namespace Ignite;
 
 public static class Input

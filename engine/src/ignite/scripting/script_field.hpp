@@ -26,7 +26,8 @@ namespace ignite
 		String,
         Vector2, 
         Vector3, 
-        Vector4
+        Vector4,
+		Quat,
     };
 
 	struct ScriptField

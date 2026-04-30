@@ -1,10 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
-using static Ignite.Core.NativeAPI;
 
 namespace Ignite.Core.Component;
 
@@ -159,10 +154,10 @@ public static class ComponentNativeAPI
         public delegate ulong ScenePickEntityAtFn(float x, float y);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate ulong EntityInstantiateWithNameFn(IntPtr name, NativeVector3 value);
+        public delegate ulong EntityInstantiateWithNameFn(IntPtr name, NativeObject.Vector3 value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate ulong EntityInstantiateFn(ulong entityID, NativeVector3 value);
+        public delegate ulong EntityInstantiateFn(ulong entityID, NativeObject.Vector3 value);
 
         [return: MarshalAs(UnmanagedType.I1)]
         public delegate bool EntityHasComponentFn(ulong entityID, IntPtr componentTypeName);
@@ -197,16 +192,16 @@ public static class ComponentNativeAPI
         // =================================
         // Custom functions
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void Rigidbody2DApplyForceFn(ulong entityID, NativeVector2 force, NativeVector2 point, [MarshalAs(UnmanagedType.I1)] bool value);
+        public delegate void Rigidbody2DApplyForceFn(ulong entityID, NativeObject.Vector2 force, NativeObject.Vector2 point, [MarshalAs(UnmanagedType.I1)] bool value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void Rigidbody2DApplyForceToCenterFn(ulong entityID, NativeVector2 force, [MarshalAs(UnmanagedType.I1)] bool value);
+        public delegate void Rigidbody2DApplyForceToCenterFn(ulong entityID, NativeObject.Vector2 force, [MarshalAs(UnmanagedType.I1)] bool value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void Rigidbody2DApplyLinearImpulseFn(ulong entityID, NativeVector2 impulse, NativeVector2 point, [MarshalAs(UnmanagedType.I1)] bool value);
+        public delegate void Rigidbody2DApplyLinearImpulseFn(ulong entityID, NativeObject.Vector2 impulse, NativeObject.Vector2 point, [MarshalAs(UnmanagedType.I1)] bool value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void Rigidbody2DApplyLinearImpulseToCenterFn(ulong entityID, NativeVector2 impulse, [MarshalAs(UnmanagedType.I1)] bool value);
+        public delegate void Rigidbody2DApplyLinearImpulseToCenterFn(ulong entityID, NativeObject.Vector2 impulse, [MarshalAs(UnmanagedType.I1)] bool value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void Rigidbody2DApplyAngularImpulseFn(ulong entityID, float impulse, [MarshalAs(UnmanagedType.I1)] bool value);
@@ -263,10 +258,10 @@ public static class ComponentNativeAPI
         public delegate bool WidgetComponentSetStringByNameF(ulong entityID, IntPtr name);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void WidgetComponentGetVec4ByNameFn(ulong entityID, IntPtr name, out NativeVector4 result);
+        public delegate void WidgetComponentGetVec4ByNameFn(ulong entityID, IntPtr name, out NativeObject.Vector4 result);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void WidgetComponentSetVec4ByNameFn(ulong entityID, IntPtr name, ref NativeVector4 value);
+        public delegate void WidgetComponentSetVec4ByNameFn(ulong entityID, IntPtr name, ref NativeObject.Vector4 value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void WidgetComponentSetStringByNameFn(ulong entityID, IntPtr name, IntPtr value);
