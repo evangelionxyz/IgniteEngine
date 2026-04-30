@@ -1,6 +1,6 @@
 ﻿// Copyright (c) 2026 Evangelion Manuhutu
 
-using Ignite.Core;
+using Ignite.Core.Component;
 namespace Ignite;
 
 public class TransformComponent : IComponent
@@ -9,13 +9,13 @@ public class TransformComponent : IComponent
     {
         get
         {
-            InternalCalls.TransformComponent_GetForward(Entity.ID, out Vector3 forward);
+            ComponentInternalCalls.TransformComponent_GetForward(Entity.ID, out Vector3 forward);
             return forward;
         }
 
         set
         {
-            InternalCalls.TransformComponent_SetForward(Entity.ID, value);
+            ComponentInternalCalls.TransformComponent_SetForward(Entity.ID, value);
         }
     }
 
@@ -23,13 +23,13 @@ public class TransformComponent : IComponent
     {
         get
         {
-            InternalCalls.TransformComponent_GetRight(Entity.ID, out Vector3 right);
+            ComponentInternalCalls.TransformComponent_GetRight(Entity.ID, out Vector3 right);
             return right;
         }
 
         set
         {
-            InternalCalls.TransformComponent_SetRight(Entity.ID, value);
+            ComponentInternalCalls.TransformComponent_SetRight(Entity.ID, value);
         }
     }
 
@@ -37,13 +37,13 @@ public class TransformComponent : IComponent
     {
         get
         {
-            InternalCalls.TransformComponent_GetUp(Entity.ID, out Vector3 up);
+            ComponentInternalCalls.TransformComponent_GetUp(Entity.ID, out Vector3 up);
             return up;
         }
 
         set
         {
-            InternalCalls.TransformComponent_SetUp(Entity.ID, value);
+            ComponentInternalCalls.TransformComponent_SetUp(Entity.ID, value);
         }
     }
 
@@ -51,12 +51,12 @@ public class TransformComponent : IComponent
     {
         get
         {
-            InternalCalls.TransformComponent_GetTranslation(Entity.ID, out Vector3 translation);
+            ComponentInternalCalls.TransformComponent_GetTranslation(Entity.ID, out Vector3 translation);
             return translation;
         }
         set
         {
-            InternalCalls.TransformComponent_SetTranslation(Entity.ID, value);
+            ComponentInternalCalls.TransformComponent_SetTranslation(Entity.ID, value);
         }
     }
 
@@ -64,12 +64,12 @@ public class TransformComponent : IComponent
     {
         get
         {
-            InternalCalls.TransformComponent_GetRotation(Entity.ID, out Quaternion quat);
+            ComponentInternalCalls.TransformComponent_GetRotation(Entity.ID, out Quaternion quat);
             return quat;
         }
         set
         {
-            InternalCalls.TransformComponent_SetRotation(Entity.ID, value);
+            ComponentInternalCalls.TransformComponent_SetRotation(Entity.ID, value);
         }
     }
 
@@ -77,12 +77,12 @@ public class TransformComponent : IComponent
     {
         get
         {
-            InternalCalls.TransformComponent_GetEulerAngles(Entity.ID, out Vector3 quat);
+            ComponentInternalCalls.TransformComponent_GetEulerAngles(Entity.ID, out Vector3 quat);
             return quat;
         }
         set
         {
-            InternalCalls.TransformComponent_SetEulerAngles(Entity.ID, value);
+            ComponentInternalCalls.TransformComponent_SetEulerAngles(Entity.ID, value);
         }
     }
 
@@ -90,12 +90,12 @@ public class TransformComponent : IComponent
     {
         get
         {
-            InternalCalls.TransformComponent_GetScale(Entity.ID, out Vector3 scale);
+            ComponentInternalCalls.TransformComponent_GetScale(Entity.ID, out Vector3 scale);
             return scale;
         }
         set
         {
-            InternalCalls.TransformComponent_SetScale(Entity.ID, value);
+            ComponentInternalCalls.TransformComponent_SetScale(Entity.ID, value);
         }
     }
 }

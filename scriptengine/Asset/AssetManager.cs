@@ -29,15 +29,15 @@ public readonly struct AssetHandle : IEquatable<AssetHandle>
 
 public static class AssetManager
 {
-    public static bool IsValid(AssetHandle handle) => InternalCalls.AssetManager_IsAssetHandleValid(handle.Value);
-    public static bool IsLoaded(AssetHandle handle) => InternalCalls.AssetManager_IsAssetLoaded(handle.Value);
+    public static bool IsValid(AssetHandle handle) => CoreInternalCalls.AssetManager_IsAssetHandleValid(handle.Value);
+    public static bool IsLoaded(AssetHandle handle) => CoreInternalCalls.AssetManager_IsAssetLoaded(handle.Value);
 
     public static void LoadAsync(AssetHandle handle)
     {
         if (!handle.IsValid)
             return;
 
-        InternalCalls.AssetManager_LoadAssetAsync(handle.Value);
+        CoreInternalCalls.AssetManager_LoadAssetAsync(handle.Value);
     }
 
     public static void LoadImmediate(AssetHandle handle)
@@ -45,6 +45,6 @@ public static class AssetManager
         if (!handle.IsValid)
             return;
 
-        InternalCalls.AssetManager_LoadAssetImmediate(handle.Value);
+        CoreInternalCalls.AssetManager_LoadAssetImmediate(handle.Value);
     }
 }

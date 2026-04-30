@@ -2,7 +2,7 @@
 
 using System;
 
-using Ignite.Core;
+using Ignite.Core.Component;
 namespace Ignite;
 
 public class Entity : ScriptableObject
@@ -14,51 +14,51 @@ public class Entity : ScriptableObject
     {
         get
         {
-            InternalCalls.TransformComponent_GetTranslation(ID, out Vector3 translation);
+            ComponentInternalCalls.TransformComponent_GetTranslation(ID, out Vector3 translation);
             return translation;
         }
-        set => InternalCalls.TransformComponent_SetTranslation(ID, value);
+        set => ComponentInternalCalls.TransformComponent_SetTranslation(ID, value);
     }
 
     public Quaternion Rotation
     {
         get
         {
-            InternalCalls.TransformComponent_GetRotation(ID, out Quaternion quat);
+            ComponentInternalCalls.TransformComponent_GetRotation(ID, out Quaternion quat);
             return quat;
         }
-        set => InternalCalls.TransformComponent_SetRotation(ID, value);
+        set => ComponentInternalCalls.TransformComponent_SetRotation(ID, value);
     }
 
     public Vector3 Scale
     {
         get
         {
-            InternalCalls.TransformComponent_GetScale(ID, out Vector3 scale);
+            ComponentInternalCalls.TransformComponent_GetScale(ID, out Vector3 scale);
             return scale;
         }
-        set => InternalCalls.TransformComponent_SetScale(ID, value);
+        set => ComponentInternalCalls.TransformComponent_SetScale(ID, value);
     }
 
     public bool Visible
     {
         get
         {
-            InternalCalls.Entity_GetVisibility(ID, out bool result);
+            ComponentInternalCalls.Entity_GetVisibility(ID, out bool result);
             return result;
         }
 
-        set => InternalCalls.Entity_SetVisibility(ID, value);
+        set => ComponentInternalCalls.Entity_SetVisibility(ID, value);
     }
 
     public void Destroy()
     {
-        InternalCalls.Entity_Destroy(ID);
+        ComponentInternalCalls.Entity_Destroy(ID);
     }
 
     public T As<T>() where T : Entity, new()
     {
-        object instance = InternalCalls.GetScriptInstance(ID);
+        object instance = ComponentInternalCalls.GetScriptInstance(ID);
         return instance as T;
     }
 
@@ -69,14 +69,14 @@ public class Entity : ScriptableObject
 
         T component = new() { Entity = this };
         Type componentType = typeof(T);
-        InternalCalls.Entity_AddComponent(ID, componentType);
+        ComponentInternalCalls.Entity_AddComponent(ID, componentType);
         return component;
     }
 
     public bool HasComponent<T>() where T : IComponent, new()
     {
         Type componentType = typeof(T);
-        return InternalCalls.Entity_HasComponent(ID, componentType);
+        return ComponentInternalCalls.Entity_HasComponent(ID, componentType);
     }
 
     public T GetComponent<T>() where T : IComponent, new()
@@ -90,36 +90,36 @@ public class Entity : ScriptableObject
 
     public string GetName()
     {
-        return InternalCalls.Entity_GetName(ID);
+        return ComponentInternalCalls.Entity_GetName(ID);
     }
 
     // Instantiate function
     public static Entity Instantiate(string name, Vector3 translation)
     {
-        ulong entityID = InternalCalls.Entity_Instantiate(name, translation);
+        ulong entityID = ComponentInternalCalls.Entity_Instantiate(name, translation);
         return new Entity(entityID);
     }
 
     public static Entity Instantiate(Entity entity)
     {
-        ulong entityID = InternalCalls.Entity_Instantiate(entity.ID, entity.Translation);
+        ulong entityID = ComponentInternalCalls.Entity_Instantiate(entity.ID, entity.Translation);
         return new Entity(entityID);
     }
 
     public static Entity Instantiate(Entity entity, Vector3 translation)
     {
-        ulong entityID = InternalCalls.Entity_Instantiate(entity.ID, translation);
+        ulong entityID = ComponentInternalCalls.Entity_Instantiate(entity.ID, translation);
         return new Entity(entityID);
     }
 
     public static void Destroy(Entity entity)
     {
-        InternalCalls.Entity_Destroy(entity.ID);
+        ComponentInternalCalls.Entity_Destroy(entity.ID);
     }
 
     public static Entity FindEntity(string name)
     {
-        ulong entityID = InternalCalls.Entity_FindEntity(name);
+        ulong entityID = ComponentInternalCalls.Entity_FindEntity(name);
         if (entityID == 0)
             return null;
 
@@ -128,7 +128,7 @@ public class Entity : ScriptableObject
 
     public Entity FindChild(string childName)
     {
-        ulong entityID = InternalCalls.Entity_FindChildEntity(ID, childName);
+        ulong entityID = ComponentInternalCalls.Entity_FindChildEntity(ID, childName);
         if (entityID == 0)
             return null;
         return new Entity(entityID);
@@ -136,18 +136,18 @@ public class Entity : ScriptableObject
 
     public bool IsParent(Entity entity)
     {
-        return InternalCalls.Entity_IsParent(ID, entity.ID);
+        return ComponentInternalCalls.Entity_IsParent(ID, entity.ID);
     }
 
     public Entity GetParent()
     {
-        ulong parentID = InternalCalls.Entity_GetParent(ID);
+        ulong parentID = ComponentInternalCalls.Entity_GetParent(ID);
         return new Entity(parentID);
     }
 
     public static Entity PickEntityAt(float x, float y)
     {
-        ulong entityID = InternalCalls.Scene_PickEntityAt(x, y);
+        ulong entityID = ComponentInternalCalls.Scene_PickEntityAt(x, y);
         if (entityID == 0)
             return null;
 

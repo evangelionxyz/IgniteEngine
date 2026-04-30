@@ -49,7 +49,8 @@ namespace ignite
         void RegisterSignatures();
 
         // Initialize C# InternalCalls bridge with native callbacks
-        bool InitializeInternalCalls();
+        bool InitializeCoreInternalCalls();
+        bool InitializeComponentInternalCalls();
 
         // Create a script instance
         bool CreateInstance(uint64_t instanceId, const std::string &typeName);

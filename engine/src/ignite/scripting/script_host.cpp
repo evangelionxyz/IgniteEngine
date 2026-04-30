@@ -2,7 +2,8 @@
 
 #include "script_host.hpp"
 #include "ignite/core/logger.hpp"
-#include "script_glue.hpp"
+#include "glue/component_script_glue.hpp"
+#include "glue/core_script_glue.hpp"
 
 namespace ignite
 {
@@ -158,32 +159,61 @@ namespace ignite
         LOG_INFO("[Script Host] Registered method signatures");
     }
 
-    bool ScriptHost::InitializeInternalCalls()
+    bool ScriptHost::InitializeCoreInternalCalls()
     {
         if (!m_Initialized)
         {
-            LOG_ERROR("[Script Host] Cannot initialize internal calls - host not initialized");
+            LOG_ERROR("[Script Host] Cannot initialize CORE internal calls - host not initialized");
             return false;
         }
 
-        const auto *api = ScriptGlue::GetAPI();
+        const auto *api = CoreScriptGlue::GetAPI();
         const auto apiPtr = reinterpret_cast<uint64_t>(api);
 
-        const int methodId = m_Host->BindStaticMethod("Ignite.Core.InternalCalls", "Initialize", static_cast<int>(ScriptMethodSig::Void_UInt64));
+        const int methodId = m_Host->BindStaticMethod("Ignite.Core.CoreInternalCalls", "Initialize", static_cast<int>(ScriptMethodSig::Void_UInt64));
         if (methodId == 0)
         {
-            LOG_ERROR("[Script Host] Failed to bind Ignite.Core.InternalCalls.Initialize");
+            LOG_ERROR("[Script Host] Failed to bind Ignite.Core.CoreInternalCalls.Initialize");
             return false;
         }
 
         std::array<void *, 1> args = { const_cast<uint64_t *>(&apiPtr) };
         if (!m_Host->Invoke(methodId, args.data(), (int)args.size(), nullptr))
         {
-            LOG_ERROR("[Script Host] Failed to invoke Ignite.Core.InternalCalls.Initialize");
+            LOG_ERROR("[Script Host] Failed to invoke Ignite.Core.CoreInternalCalls.Initialize");
             return false;
         }
 
-        LOG_INFO("[Script Host] Internal calls bridge initialized");
+        LOG_INFO("[Script Host] CORE Internal calls bridge initialized");
+        return true;
+    }
+
+    bool ScriptHost::InitializeComponentInternalCalls()
+    {
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot initialize COMPONENT internal calls - host not initialized");
+            return false;
+        }
+
+        const auto *api = ComponentScriptGlue::GetAPI();
+        const auto apiPtr = reinterpret_cast<uint64_t>(api);
+
+        const int methodId = m_Host->BindStaticMethod("Ignite.Core.Component.ComponentInternalCalls", "Initialize", static_cast<int>(ScriptMethodSig::Void_UInt64));
+        if (methodId == 0)
+        {
+            LOG_ERROR("[Script Host] Failed to bind Ignite.Core.Component.ComponentInternalCalls.Initialize");
+            return false;
+        }
+
+        std::array<void *, 1> args = { const_cast<uint64_t *>(&apiPtr) };
+        if (!m_Host->Invoke(methodId, args.data(), (int)args.size(), nullptr))
+        {
+            LOG_ERROR("[Script Host] Failed to invoke Ignite.Core.Component.ComponentInternalCalls.Initialize");
+            return false;
+        }
+
+        LOG_INFO("[Script Host] COMPONENT Internal calls bridge initialized");
         return true;
     }
 

@@ -1,16 +1,15 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
-#ifndef SCRIPT_GLUE_HPP
-#define SCRIPT_GLUE_HPP
+#ifndef COMPONENT_SCRIPT_GLUE_HPP
+#define COMPONENT_SCRIPT_GLUE_HPP
 
 #include <cstdint>
 #include <glm/glm.hpp>
 
 namespace ignite
 {
-    struct ScriptGlueAPI
+    struct ComponentScriptGlueAPI
     {
-        void (*Debug_Log)(const char *message);
         uint64_t(*Scene_PickEntityAt)(float x, float y);
 
         bool        (*Entity_HasComponent)(uint64_t entityID, const char *componentTypeName);
@@ -66,12 +65,7 @@ namespace ignite
         bool (*AudioSourceComponent_AddDelayDSP)(uint64_t entityID, float delayMs, float feedback);
         void (*AudioSourceComponent_ClearDSPs)(uint64_t entityID);
 
-        bool (*Input_IsKeyPressed)(uint32_t keyCode);
-        bool (*Input_IsModifierPressed)(uint16_t modCode);
-        bool (*Input_IsMouseButtonPressed)(uint8_t button);
-        void (*Input_GetMousePosition)(glm::vec2 *result);
-        void (*Input_SetMouseToCenter)();
-        void (*Input_SetCursorMode)(int32_t mode);
+        
 
         void (*TransformComponent_GetForward)(uint64_t entityID, glm::vec3 *result);
         void (*TransformComponent_SetForward)(uint64_t entityID, glm::vec3 value);
@@ -158,19 +152,14 @@ namespace ignite
         void (*TextComponent_GetKerning)(uint64_t entityID, float *result);
         void (*TextComponent_SetLineSpacing)(uint64_t entityID, float value);
         void (*TextComponent_GetLineSpacing)(uint64_t entityID, float *result);
-
-        bool (*AssetManager_IsAssetHandleValid)(uint64_t handle);
-        bool (*AssetManager_IsAssetLoaded)(uint64_t handle);
-        void (*AssetManager_LoadAssetAsync)(uint64_t handle);
-        void (*AssetManager_LoadAssetImmediate)(uint64_t handle);
     };
 
-    class ScriptGlue
+    class ComponentScriptGlue
     {
     public:
         static void RegisterComponents();
         static void RegisterFunctions();
-        static const ScriptGlueAPI *GetAPI();
+        static const ComponentScriptGlueAPI *GetAPI();
     };
 }
 

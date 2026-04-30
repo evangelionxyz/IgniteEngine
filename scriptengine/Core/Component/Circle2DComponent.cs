@@ -1,6 +1,6 @@
 ﻿// Copyright (c) 2026 Evangelion Manuhutu
 
-using Ignite.Core;
+using Ignite.Core.Component;
 namespace Ignite;
 
 public class Circle2DComponent : IComponent
@@ -9,13 +9,13 @@ public class Circle2DComponent : IComponent
     {
         get
         {
-            InternalCalls.Circle2DComponent_GetColor(Entity.ID, out Vector4 result);
+            ComponentInternalCalls.Circle2DComponent_GetColor(Entity.ID, out Vector4 result);
             return result;
         }
 
         set
         {
-            InternalCalls.Circle2DComponent_SetColor(Entity.ID, value);
+            ComponentInternalCalls.Circle2DComponent_SetColor(Entity.ID, value);
         }
     }
 }

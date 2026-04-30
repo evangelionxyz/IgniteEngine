@@ -1,6 +1,6 @@
 ﻿// Copyright (c) 2026 Evangelion Manuhutu
 
-using Ignite.Core;
+using Ignite.Core.Component;
 namespace Ignite;
 
 public class TextComponent : IComponent
@@ -9,39 +9,39 @@ public class TextComponent : IComponent
     {
         get
         {
-            InternalCalls.TextComponent_GetText(Entity.ID, out string result);
+            ComponentInternalCalls.TextComponent_GetText(Entity.ID, out string result);
             return result;
         }
-        set => InternalCalls.TextComponent_SetText(Entity.ID, value);
+        set => ComponentInternalCalls.TextComponent_SetText(Entity.ID, value);
     }
 
     public Vector4 Color
     {
         get
         {
-            InternalCalls.TextComponent_GetColor(Entity.ID, out Vector4 result);
+            ComponentInternalCalls.TextComponent_GetColor(Entity.ID, out Vector4 result);
             return result;
         }
-        set => InternalCalls.TextComponent_SetColor(Entity.ID, value);
+        set => ComponentInternalCalls.TextComponent_SetColor(Entity.ID, value);
     }
 
     public float Kerning
     {
         get
         {
-            InternalCalls.TextComponent_GetKerning(Entity.ID, out float result);
+            ComponentInternalCalls.TextComponent_GetKerning(Entity.ID, out float result);
             return result;
         }
-        set => InternalCalls.TextComponent_SetKerning(Entity.ID, value);
+        set => ComponentInternalCalls.TextComponent_SetKerning(Entity.ID, value);
     }
 
     public float LineSpacing
     {
         get
         {
-            InternalCalls.TextComponent_GetLineSpacing(Entity.ID, out float result);
+            ComponentInternalCalls.TextComponent_GetLineSpacing(Entity.ID, out float result);
             return result;
         }
-        set => InternalCalls.TextComponent_SetLineSpacing(Entity.ID, value);
+        set => ComponentInternalCalls.TextComponent_SetLineSpacing(Entity.ID, value);
     }
 }

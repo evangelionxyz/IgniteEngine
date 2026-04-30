@@ -1,7 +1,8 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #include "script_engine.hpp"
-#include "script_glue.hpp"
+#include "glue/component_script_glue.hpp"
+#include "glue/core_script_glue.hpp"
 #include "script_class.hpp"
 #include "script_host.hpp"
 
@@ -284,8 +285,8 @@ namespace ignite
     void ScriptEngine::RegisterCoreClassesAndFunctions()
     {
         // Register glue functions and components via HostFXR
-        ScriptGlue::RegisterFunctions();
-        ScriptGlue::RegisterComponents();
+        ComponentScriptGlue::RegisterFunctions();
+        ComponentScriptGlue::RegisterComponents();
     }
 
     bool ScriptEngine::LoadCoreAssembly(const std::filesystem::path &filepath)
@@ -365,9 +366,16 @@ namespace ignite
             return false;
         }
 
-        if (!scriptEngineData->scriptHost->InitializeInternalCalls())
+        // Initialize CORE & COMPONENT Internal Calls
+        if (!scriptEngineData->scriptHost->InitializeCoreInternalCalls())
         {
-            LOG_ERROR("[Script Engine] Failed to initialize internal calls bridge");
+            LOG_ERROR("[Script Engine] Failed to initialize CORE internal calls bridge");
+            return false;
+        }
+
+        if (!scriptEngineData->scriptHost->InitializeComponentInternalCalls())
+        {
+            LOG_ERROR("[Script Engine] Failed to initialize COMPONENT internal calls bridge");
             return false;
         }
 

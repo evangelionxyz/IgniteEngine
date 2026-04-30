@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+using Ignite.Core.Component;
 using System;
-using Ignite.Core;
 
 namespace Ignite;
 
@@ -64,7 +64,7 @@ public sealed class WidgetButton
             return;
         }
 
-        InternalCalls.WidgetComponent_AddButtonEventCallback(
+        ComponentInternalCalls.WidgetComponent_AddButtonEventCallback(
             m_EntityId,
             m_ButtonName,
             (int)eventType,
@@ -78,7 +78,7 @@ public sealed class WidgetButton
             return;
         }
 
-        InternalCalls.WidgetComponent_RemoveButtonEventCallback(
+        ComponentInternalCalls.WidgetComponent_RemoveButtonEventCallback(
             m_EntityId,
             m_ButtonName,
             (int)eventType,
