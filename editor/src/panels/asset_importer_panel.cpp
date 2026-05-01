@@ -13,13 +13,38 @@
 #include "editor_layer.hpp"
 
 #include <algorithm>
-#include <format>
 #include <cctype>
+#include <condition_variable>
+#include <format>
+#include <mutex>
 
 namespace ignite
 {
     namespace
     {
+        template<typename T>
+        void PublishImportedAsset(AssetManager *assetManager, const AssetMetaData &metadata, const Ref<T> &asset)
+        {
+            if (!assetManager || !asset)
+            {
+                return;
+            }
+
+            Application::SubmitToMainThread([assetManager, metadata, asset]()
+            {
+                AssetHandle handle = assetManager->GetAssetHandle(metadata.filepath);
+                if (handle == AssetHandle(0))
+                {
+                    handle = AssetHandle();
+                }
+
+                asset->handle = handle;
+                asset->SetReadyFlag(true);
+                assetManager->AssignMetaData(handle, metadata);
+                assetManager->AssignAsset(handle, asset);
+            }, "AssetImporterPanel::PublishImportedAsset");
+        }
+
         std::string ToLower(std::string value)
         {
             std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -345,7 +370,7 @@ namespace ignite
                 return;
             }
 
-            const std::filesystem::path relativePath = jobProject->GetAssetRelativeFilepath(importedPath);
+            const std::filesystem::path relativePath = jobProject->GetProjectFilepath(importedPath);
             const AssetType assetType = jobData.assetType;
 
             // Commit the registry entry on the main thread to prevent TOCTOU races
@@ -562,7 +587,7 @@ namespace ignite
         const std::filesystem::path filename = filepath.stem();
         const std::filesystem::path outputRootDirectory = options.targetDirectory.empty() ? project->GetAssetDirectory() : options.targetDirectory;
         const std::filesystem::path skmBinaryPath = outputRootDirectory / filename / "Mesh" / (filename.string() + GetAssetExtensionFromType(AssetType::Mesh));
-        const std::filesystem::path skmRelativePath = project->GetAssetRelativeFilepath(skmBinaryPath);
+        const std::filesystem::path skmRelativePath = project->GetProjectFilepath(skmBinaryPath);
 
         AssetHandle handle = assetManager->GetAssetHandle(skmRelativePath);
         if (handle == AssetHandle(0))
@@ -587,8 +612,7 @@ namespace ignite
             registryMetadata.filepath = skmRelativePath;
             registryMetadata.type = AssetType::Mesh;
 
-            assetManager->AssignMetaData(handle, registryMetadata);
-            assetManager->AssignAsset(handle, importedAsset);
+            PublishImportedAsset(assetManager, registryMetadata, importedAsset);
         }
     }
 
@@ -630,11 +654,27 @@ namespace ignite
         Ref<Skeleton> skeleton = nullptr;
         if (options.useExistingSkeletonForAnimations && options.existingSkeletonHandle != AssetHandle(0))
         {
-            skeleton = project->GetAsset<Skeleton>(options.existingSkeletonHandle);
-            if (!skeleton)
+            std::mutex waitMutex;
+            std::condition_variable waitCv;
+            bool resolved = false;
+
+            Application::SubmitToMainThread([project, existingHandle = options.existingSkeletonHandle, &skeleton, &waitMutex, &waitCv, &resolved]()
             {
-                skeleton = project->GetAssetImmediate<Skeleton>(options.existingSkeletonHandle);
-            }
+                skeleton = project->GetAsset<Skeleton>(existingHandle);
+                if (!skeleton)
+                {
+                    skeleton = project->GetAssetImmediate<Skeleton>(existingHandle);
+                }
+
+                {
+                    std::lock_guard<std::mutex> guard(waitMutex);
+                    resolved = true;
+                }
+                waitCv.notify_one();
+            }, "AssetImporterPanel::ResolveExistingSkeleton");
+
+            std::unique_lock<std::mutex> waitLock(waitMutex);
+            waitCv.wait(waitLock, [&resolved]() { return resolved; });
         }
 
         if (!skeleton)
@@ -651,6 +691,7 @@ namespace ignite
 
         const std::string skeletonExt = GetAssetExtensionFromType(AssetType::Skeleton);
         const std::string animationExt = GetAssetExtensionFromType(AssetType::SkeletalAnimation);
+        std::filesystem::path importedSkeletonRelativePath;
 
         if (options.importSkeleton)
         {
@@ -658,19 +699,17 @@ namespace ignite
             skeleton->Serialize(skeletonPath);
 
             AssetMetaData skeletonMD;
-            skeletonMD.filepath = project->GetAssetRelativeFilepath(skeletonPath);
+            skeletonMD.filepath = project->GetProjectFilepath(skeletonPath);
             skeletonMD.type = AssetType::Skeleton;
+            importedSkeletonRelativePath = skeletonMD.filepath;
 
-            AssetHandle skeletonHandle = assetManager->GetAssetHandle(skeletonMD.filepath);
-            if (skeletonHandle == AssetHandle(0))
+            skeleton->handle = assetManager->GetAssetHandle(skeletonMD.filepath);
+            if (skeleton->handle == AssetHandle(0))
             {
-                skeletonHandle = AssetHandle();
+                skeleton->handle = AssetHandle();
             }
 
-            skeleton->handle = skeletonHandle;
-            skeleton->SetReadyFlag(true);
-            assetManager->AssignMetaData(skeletonHandle, skeletonMD);
-            assetManager->AssignAsset(skeletonHandle, skeleton);
+            PublishImportedAsset(assetManager, skeletonMD, skeleton);
         }
         else if (options.existingSkeletonHandle != AssetHandle(0))
         {
@@ -700,20 +739,34 @@ namespace ignite
                 animation->Serialize(animationPath);
 
                 AssetMetaData animationMD;
-                animationMD.filepath = project->GetAssetRelativeFilepath(animationPath);
+                animationMD.filepath = project->GetProjectFilepath(animationPath);
                 animationMD.type = AssetType::SkeletalAnimation;
 
-                AssetHandle animationHandle = assetManager->GetAssetHandle(animationMD.filepath);
-                if (animationHandle == AssetHandle(0))
+                const AssetHandle fallbackSkeletonHandle = skeleton ? skeleton->handle : AssetHandle(0);
+                Application::SubmitToMainThread([assetManager, animationMD, animation, importedSkeletonRelativePath, fallbackSkeletonHandle]()
                 {
-                    animationHandle = AssetHandle();
-                }
+                    AssetHandle skeletonHandle = fallbackSkeletonHandle;
+                    if (!importedSkeletonRelativePath.empty())
+                    {
+                        const AssetHandle importedSkeletonHandle = assetManager->GetAssetHandle(importedSkeletonRelativePath);
+                        if (importedSkeletonHandle != AssetHandle(0))
+                        {
+                            skeletonHandle = importedSkeletonHandle;
+                        }
+                    }
 
-                animation->handle = animationHandle;
-                animation->SetSkeletonHandle(skeleton ? skeleton->handle : AssetHandle(0));
-                animation->SetReadyFlag(true);
-                assetManager->AssignMetaData(animationHandle, animationMD);
-                assetManager->AssignAsset(animationHandle, animation);
+                    AssetHandle animationHandle = assetManager->GetAssetHandle(animationMD.filepath);
+                    if (animationHandle == AssetHandle(0))
+                    {
+                        animationHandle = AssetHandle();
+                    }
+
+                    animation->handle = animationHandle;
+                    animation->SetSkeletonHandle(skeletonHandle);
+                    animation->SetReadyFlag(true);
+                    assetManager->AssignMetaData(animationHandle, animationMD);
+                    assetManager->AssignAsset(animationHandle, animation);
+                }, "AssetImporterPanel::PublishImportedAnimation");
             }
         }
     }

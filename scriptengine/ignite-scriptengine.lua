@@ -8,8 +8,7 @@ project "IgniteScriptEngine"
     objdir (INTOUTPUT_DIR)
 
     files {
-        "%{prj.location}/Core/**.cs",
-        "%{prj.location}/Math/**.cs",
+        "%{prj.location}/Ignite/**.cs",
         "%{prj.location}/Properties/**.cs"
     }
 

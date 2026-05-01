@@ -108,20 +108,10 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         delete m_AssetManager;
     }
 
-    std::filesystem::path Project::GetAssetRelativeFilepath(const std::filesystem::path &filepath) const
+    std::filesystem::path Project::GetProjectFilepath(const std::filesystem::path &filepath) const
     {
-        auto basePath = m_Info.filepath.parent_path() / m_Info.assetDirectory;
-        return std::filesystem::relative(filepath, basePath);
-    }
-
-    std::filesystem::path Project::GetAssetFilepath(const std::filesystem::path &filepath) const
-    {
-        return m_Info.filepath.parent_path() / m_Info.assetDirectory / filepath;
-    }
-
-    std::filesystem::path Project::GetRelativeFilepath(const std::filesystem::path &filepath) const
-    {
-        return std::filesystem::relative(filepath, m_Info.filepath.parent_path());
+        const auto relativePath = std::filesystem::relative(filepath, m_Info.rootDirectory);
+        return m_Info.rootDirectory / (!relativePath.generic_string().empty() ? relativePath : filepath);
     }
 
     void Project::SetActiveScene(const Ref<Scene> &scene)
@@ -141,7 +131,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 
         for (auto it = assetRegistry.begin(); it != assetRegistry.end();)
         {
-            const std::filesystem::path &filepath = GetAssetFilepath(it->second.filepath);
+            const std::filesystem::path &filepath = GetProjectFilepath(it->second.filepath);
             if (!std::filesystem::exists(filepath))
             {
                 invalidRegistry.emplace_back(it->first, it->second);
@@ -189,7 +179,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 		auto &assetRegistry = m_AssetManager->GetAssetAssetRegistry();
 
 		{
-			const std::filesystem::path assetRegFilepath = filepath.parent_path() / m_Info.assetRegistryFilepath;
+			const std::filesystem::path assetRegFilepath = m_Info.rootDirectory / m_Info.assetRegistryFilepath;
 			Serializer assetSr(assetRegFilepath);
 
 			assetSr.BeginMap(); // Start
@@ -251,10 +241,11 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 		ProjectInfo info;
 		info.name = projectNode["Name"].as<std::string>();
 		info.filepath = filepath;
+        info.rootDirectory = filepath.parent_path();
+		info.scriptModuleFilepath = projectNode["ScriptModule"].as<std::string>();
 		info.assetDirectory = projectNode["AssetPath"].as<std::string>();
 		info.assetRegistryFilepath = projectNode["AssetRegistry"].as<std::string>();
 		info.defaultSceneHandle = AssetHandle(projectNode["DefaultSceneHandle"].as<uint64_t>());
-		info.scriptModuleFilepath = projectNode["ScriptModule"].as<std::string>();
 
 		Ref<Project> project = Project::Create(info);
 
@@ -264,7 +255,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 		if (!info.assetRegistryFilepath.empty())
 		{
 			// project filepath / asset filename (.ixreg)
-			std::filesystem::path assetRegFilepath = filepath.parent_path() / info.assetRegistryFilepath;
+			std::filesystem::path assetRegFilepath = info.rootDirectory / info.assetRegistryFilepath;
 			YAML::Node assetRegFileNode = Serializer::Deserialize(assetRegFilepath);
 			YAML::Node assetRegNode = assetRegFileNode["AssetRegistry"];
 

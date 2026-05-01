@@ -65,14 +65,14 @@ namespace ignite
     {
         // should be always importing with full filepath
         AssetMetaData metadataCopy = metadata;
-        metadataCopy.filepath = assetManager->GetProject()->GetAssetFilepath(metadata.filepath);
+        metadataCopy.filepath = assetManager->GetProject()->GetProjectFilepath(metadata.filepath);
 
         if (s_ImportFunctions.contains(metadataCopy.type))
         {
             return s_ImportFunctions.at(metadataCopy.type)(handle, metadataCopy, assetManager);
         }
         return nullptr;
-	}
+    }
 
     Ref<SpriteSheet> AssetImporter::ImportSpriteSheet(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
     {
@@ -103,7 +103,7 @@ namespace ignite
         std::filesystem::path fontFilepath = metadata.filepath;
         if (!std::filesystem::exists(fontFilepath))
         {
-            fontFilepath = assetManager->GetProject()->GetAssetFilepath(metadata.filepath);
+            fontFilepath = assetManager->GetProject()->GetProjectFilepath(metadata.filepath);
         }
 
         if (!std::filesystem::exists(fontFilepath))
@@ -148,14 +148,14 @@ namespace ignite
         {
             // should be always importing with full filepath
             AssetMetaData metadataCopy = metadata;
-            metadataCopy.filepath = assetManager->GetProject()->GetAssetFilepath(metadata.filepath);
+            metadataCopy.filepath = assetManager->GetProject()->GetProjectFilepath(metadata.filepath);
 
             Ref<Asset> asset;
             if (s_ImportFunctions.contains(metadataCopy.type))
             {
                 asset = s_ImportFunctions.at(metadataCopy.type)(handle, metadataCopy, assetManager);
             }
-            
+
             if (asset)
             {
                 callback(asset, handle);
@@ -230,7 +230,7 @@ namespace ignite
                 AssetMetaData materialMetadata = assetManager->GetMetaData(materialHandle);
                 if (materialMetadata.type == AssetType::Material)
                 {
-                    const auto &materialFilepath = assetManager->GetProject()->GetAssetFilepath(materialMetadata.filepath);
+                    const auto &materialFilepath = assetManager->GetProject()->GetProjectFilepath(materialMetadata.filepath);
                     Ref<Material> material = Material::Deserialize(materialFilepath);
                     assetManager->AssignAsset(materialHandle, material);
                 }
@@ -271,7 +271,7 @@ namespace ignite
 
             // skeleton
             AssetMetaData skeletonMD;
-            skeletonMD.filepath = assetManager->GetProject()->GetAssetRelativeFilepath(skeletonPath);
+            skeletonMD.filepath = assetManager->GetProject()->GetProjectFilepath(skeletonPath);
             skeletonMD.type = AssetType::Skeleton;
 
             AssetHandle skeletonHandle = assetManager->GetAssetHandle(skeletonMD.filepath);
@@ -306,7 +306,7 @@ namespace ignite
             for (const auto &animationPath : animationFiles)
             {
                 AssetMetaData animationMD;
-                animationMD.filepath = assetManager->GetProject()->GetAssetRelativeFilepath(animationPath);
+                animationMD.filepath = assetManager->GetProject()->GetProjectFilepath(animationPath);
                 animationMD.type = AssetType::SkeletalAnimation;
 
                 AssetHandle animationHandle = assetManager->GetAssetHandle(animationMD.filepath);
@@ -372,7 +372,7 @@ namespace ignite
                         BinarySerializer::SerializeTextureToPNG(texture, textureOutputFullPath);
                     }
 
-                    const auto relativeTexturePath = assetManager->GetProject()->GetAssetRelativeFilepath(textureOutputFullPath);
+                    const auto relativeTexturePath = assetManager->GetProject()->GetProjectFilepath(textureOutputFullPath);
 
                     AssetHandle textureHandle = assetManager->GetAssetHandle(relativeTexturePath);
                     if (textureHandle == AssetHandle(0))
@@ -407,7 +407,7 @@ namespace ignite
                 // Serialize Material
                 mat->Serialize(materialBinFullPath);
 
-                const auto relativeMaterialPath = assetManager->GetProject()->GetAssetRelativeFilepath(materialBinFullPath);
+                const auto relativeMaterialPath = assetManager->GetProject()->GetProjectFilepath(materialBinFullPath);
 
                 AssetHandle materialHandle = assetManager->GetAssetHandle(relativeMaterialPath);
                 if (materialHandle == AssetHandle(0))
@@ -454,7 +454,7 @@ namespace ignite
             meshScene.skeleton->handle = skeletonHandle;
 
             AssetMetaData skeletonMD;
-            skeletonMD.filepath = assetManager->GetProject()->GetAssetRelativeFilepath(skeletonPath);
+            skeletonMD.filepath = assetManager->GetProject()->GetProjectFilepath(skeletonPath);
             skeletonMD.type = AssetType::Skeleton;
 
             assetManager->AssignAsset(skeletonHandle, meshScene.skeleton);
@@ -483,7 +483,7 @@ namespace ignite
                 animation->handle = animationHandle;
 
                 AssetMetaData animationMD;
-                animationMD.filepath = assetManager->GetProject()->GetAssetRelativeFilepath(animationPath);
+                animationMD.filepath = assetManager->GetProject()->GetProjectFilepath(animationPath);
                 animationMD.type = AssetType::SkeletalAnimation;
 
                 assetManager->AssignAsset(animationHandle, animation);

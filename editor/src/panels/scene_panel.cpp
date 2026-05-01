@@ -2283,7 +2283,7 @@ namespace ignite
                             AssetMetaData metadata = m_EditorLayer->GetActiveProject()->GetAssetManager()->GetMetaData(*handle);
                             if (metadata.type == AssetType::Scene)
                             {
-                                std::filesystem::path filepath = m_EditorLayer->GetActiveProject()->GetAssetFilepath(metadata.filepath);
+                                std::filesystem::path filepath = m_EditorLayer->GetActiveProject()->GetProjectFilepath(metadata.filepath);
                                 m_EditorLayer->OpenScene(filepath);
                             }
                         }

@@ -442,18 +442,13 @@ namespace ignite {
 
     AssetHandle AssetManager::GetAssetHandle(const std::filesystem::path &filepath)
     {
-        std::filesystem::path absoluteFilepath = std::filesystem::absolute(m_Project->GetAssetFilepath(filepath));
+        std::filesystem::path absoluteFilepath = std::filesystem::absolute(m_Project->GetProjectFilepath(filepath));
 
         std::unique_lock lock(m_AssetMutex);
      
         for (const auto &[handle, metadata] : m_AssetRegistry)
         {
-            // Convert metadata filepath (relative) to absolute using project base path
-            std::filesystem::path absoluteMetadataPath = m_Project
-                ? std::filesystem::absolute(m_Project->GetAssetFilepath(metadata.filepath))
-                : std::filesystem::absolute(metadata.filepath);
-
-            // Compare normalized absolute paths
+            std::filesystem::path absoluteMetadataPath = m_Project->GetProjectFilepath(metadata.filepath);
             if (absoluteFilepath == absoluteMetadataPath)
             {
                 return handle;
@@ -565,7 +560,7 @@ namespace ignite {
                 if (getterMetadata.type == AssetType::Texture)
                 {
                     AssetMetaData textureMetadata = getterMetadata;
-                    textureMetadata.filepath = m_Project->GetAssetFilepath(getterMetadata.filepath);
+                    textureMetadata.filepath = m_Project->GetProjectFilepath(getterMetadata.filepath);
                     TextureCreateInfo createInfo = Texture::GetDefaultCreateInfo(getterMetadata);
                     if (!Texture::LoadCreateInfoFile(Texture::GetMetaPath(m_Project, getterMetadata), createInfo))
                     {

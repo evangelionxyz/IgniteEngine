@@ -1,0 +1,105 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <TargetFramework>net9.0</TargetFramework>
+    <Configurations>Debug;Release;Shipping</Configurations>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
+    <PlatformTarget>x64</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <Optimize>false</Optimize>
+    <OutputPath>..\bin\Debug\</OutputPath>
+    <IntermediateOutputPath>..\bin\objs\Debug\IgniteScriptEngine\</IntermediateOutputPath>
+    <DefineConstants></DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <ImplicitUsing>enable</ImplicitUsing>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
+    <PlatformTarget>x64</PlatformTarget>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <Optimize>true</Optimize>
+    <OutputPath>..\bin\Release\</OutputPath>
+    <IntermediateOutputPath>..\bin\objs\Release\IgniteScriptEngine\</IntermediateOutputPath>
+    <DefineConstants></DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <ImplicitUsing>enable</ImplicitUsing>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Shipping|x64' ">
+    <PlatformTarget>x64</PlatformTarget>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <Optimize>true</Optimize>
+    <OutputPath>..\bin\Shipping\</OutputPath>
+    <IntermediateOutputPath>..\bin\objs\Shipping\IgniteScriptEngine\</IntermediateOutputPath>
+    <DefineConstants></DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <ImplicitUsing>enable</ImplicitUsing>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
+  </ItemGroup>
+  <ItemGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
+  </ItemGroup>
+  <ItemGroup Condition=" '$(Configuration)|$(Platform)' == 'Shipping|x64' ">
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Ignite\Asset\AssetManager.cs" />
+    <Compile Include="Ignite\Audio\FmodDsp.cs" />
+    <Compile Include="Ignite\Core\API\CoreInternalCalls.cs" />
+    <Compile Include="Ignite\Core\API\CoreNativeAPI.cs" />
+    <Compile Include="Ignite\Core\Attributes.cs" />
+    <Compile Include="Ignite\Core\Component\API\ComponentInternalCalls.cs" />
+    <Compile Include="Ignite\Core\Component\API\ComponentNativeAPI.cs" />
+    <Compile Include="Ignite\Core\Component\AudioSourceComponent.cs" />
+    <Compile Include="Ignite\Core\Component\BoxCollider2DComponent.cs" />
+    <Compile Include="Ignite\Core\Component\Circle2DComponent.cs" />
+    <Compile Include="Ignite\Core\Component\CircleCollider2DComponent.cs" />
+    <Compile Include="Ignite\Core\Component\FmodDsp.cs" />
+    <Compile Include="Ignite\Core\Component\IComponent.cs" />
+    <Compile Include="Ignite\Core\Component\Rigidbody2DComponent.cs" />
+    <Compile Include="Ignite\Core\Component\Sprite2DComponent.cs" />
+    <Compile Include="Ignite\Core\Component\TextComponent.cs" />
+    <Compile Include="Ignite\Core\Component\TransformComponent.cs" />
+    <Compile Include="Ignite\Core\Component\WidgetComponent.cs" />
+    <Compile Include="Ignite\Core\Debug.cs" />
+    <Compile Include="Ignite\Core\Input.cs" />
+    <Compile Include="Ignite\Core\NativeObject.cs" />
+    <Compile Include="Ignite\Core\Reflection.cs" />
+    <Compile Include="Ignite\Core\Scriptable\Entity.cs" />
+    <Compile Include="Ignite\Core\Scriptable\ScriptableObject.cs" />
+    <Compile Include="Ignite\Core\Scriptable\Widget.cs" />
+    <Compile Include="Ignite\Math\Math.cs" />
+    <Compile Include="Ignite\Math\Quaternion.cs" />
+    <Compile Include="Ignite\Math\Vector2.cs" />
+    <Compile Include="Ignite\Math\Vector3.cs" />
+    <Compile Include="Ignite\Math\Vector4.cs" />
+    <Compile Include="Ignite\Scene\Scene.cs" />
+    <Compile Include="Ignite\Widget\WidgetButton.cs" />
+    <Compile Include="Ignite\Widget\WidgetImage.cs" />
+    <Compile Include="Ignite\Widget\WidgetLabel.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\thirdparty\MochiSharp\MochiSharp.Managed\MochiSharp.Managed.csproj">
+      <Project>{4EA00172-3A84-C2C7-A3E4-BC1A8FE7AC49}</Project>
+      <Name>MochiSharp.Managed</Name>
+    </ProjectReference>
+  </ItemGroup>
+</Project>
