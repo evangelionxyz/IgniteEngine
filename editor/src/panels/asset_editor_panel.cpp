@@ -423,7 +423,44 @@ namespace ignite
                 Ref<Asset> loaded = assetManager->GetAsset(assetData.handle);
                 if (loaded && loaded->IsReady())
                 {
-                    assetData.asset = loaded;
+                    auto &sceneRenderer = assetData.sceneData.sceneRenderer;
+                    switch (assetData.metadata.type)
+                    {
+                        case AssetType::Material:
+                        {
+                            if (sceneRenderer)
+                            {
+                                assetData.sceneData.sceneRenderer->SetPreviewMesh(s_DefaultMeshes[ICO_SPHERE]);
+                                sceneRenderer->SetPreviewMaterial(loaded->As<Material>());
+                                assetData.asset = loaded;
+                            }
+                            break;
+                        }
+                        case AssetType::Mesh:
+                        {
+                            if (sceneRenderer)
+                            {
+                                sceneRenderer->SetPreviewMesh(loaded->As<Mesh>());
+                                assetData.asset = loaded;
+                            }
+                            break;
+                        }
+                        case AssetType::Widget:
+                        {
+                            if (sceneRenderer)
+                            {
+                                sceneRenderer->SetPreviewWidget(loaded->As<WidgetCanvas>());
+                                assetData.asset = loaded;
+
+                            }
+                            break;
+                        }
+                        default:
+                        {
+                            assetData.asset = loaded;
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -609,41 +646,6 @@ namespace ignite
                 sceneData.compositeRT->Resize(width, height);
             }
 
-            sceneData.sceneRenderer->SetProject(m_EditorLayer->GetActiveProject().get());
-
-            if (assetData.metadata.type == AssetType::Widget)
-            {
-                if (Ref<WidgetCanvas> widget = assetData.asset->As<WidgetCanvas>())
-                {
-                    sceneData.sceneRenderer->SetPreviewWidget(widget);
-                }
-            }
-            else
-            {
-                Ref<Material> material = nullptr;
-                if (assetData.metadata.type == AssetType::Material)
-                {
-                    material = assetData.asset->As<Material>();
-                }
-                else
-                {
-                    if (!s_SkeletonPreviewMaterial)
-                    {
-                        s_SkeletonPreviewMaterial = CreateRef<Material>();
-                        s_SkeletonPreviewMaterial->name = "SkeletonPreviewMaterial";
-                        s_SkeletonPreviewMaterial->SetDirtyFlag(false);
-                        s_SkeletonPreviewMaterial->SetReadyFlag(true);
-                    }
-
-                    material = s_SkeletonPreviewMaterial;
-                }
-
-                if (!material)
-                {
-                    continue;
-                }
-            }
-
             sceneData.sceneRenderer->BeginFrame();
             sceneData.sceneRenderer->Render(&sceneData.camera, sceneData.sceneRT, sceneData.uiRT, sceneData.compositeRT);
         }
@@ -659,6 +661,7 @@ namespace ignite
         {
             if (!assetData.isOpen)
                 continue;
+
             switch (assetData.metadata.type)
             {
                 case AssetType::SpriteSheet:
@@ -4868,7 +4871,6 @@ namespace ignite
         AssetHandle handle = assetData.handle;
 
         Ref<Material> material;
-
         if (assetType == AssetType::Material)
         {
             material = activeProject->GetAsset<Material>(handle);
@@ -4917,18 +4919,7 @@ namespace ignite
             };
             auto compositeRT = RenderTarget::Create(compositeInfo, "[Asset Preview Composite RT]");
 
-            auto renderer = CreateRef<AssetSceneRenderer>();
-            renderer->SetProject(activeProject);
-            if (renderer && assetType != AssetType::Widget)
-            {
-                renderer->SetPreviewMesh(meshResult);
-                if (material)
-                {
-                    renderer->SetPreviewMaterial(material);
-                }
-            }
-
-            Application::SubmitToMainThread([this, handle, sceneRT, uiRT, compositeRT, renderer]()
+            Application::SubmitToMainThread([this, handle, sceneRT, uiRT, compositeRT, activeProject]()
             {
                 auto it = std::ranges::find(m_Assets, handle, &AssetEditorData::handle);
                 if (it != m_Assets.end())
@@ -4936,7 +4927,8 @@ namespace ignite
                     it->sceneData.sceneRT = sceneRT;
                     it->sceneData.uiRT = uiRT;
                     it->sceneData.compositeRT = compositeRT;
-                    it->sceneData.sceneRenderer = renderer;
+                    it->sceneData.sceneRenderer = CreateRef<AssetSceneRenderer>();
+                    it->sceneData.sceneRenderer->SetProject(activeProject);
                 }
             });
         });

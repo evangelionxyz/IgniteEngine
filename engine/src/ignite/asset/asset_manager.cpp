@@ -143,6 +143,12 @@ namespace ignite {
     void AssetManager::AssignMetaData(AssetHandle handle, const AssetMetaData &metadata)
     {
         m_AssetRegistry[handle] = metadata;
+
+        if (!metadata.filepath.empty())
+        {
+            const std::filesystem::path absoluteMetadataPath = std::filesystem::absolute(m_Project->GetProjectFilepath(metadata.filepath));
+            m_AssetHandleByPath[absoluteMetadataPath.generic_string()] = handle;
+        }
     }
 
     const std::string AssetManager::GetAssetDisplayName(AssetHandle handle) const
@@ -169,7 +175,15 @@ namespace ignite {
 
         auto it = m_AssetRegistry.find(handle);
         if (it != m_AssetRegistry.end())
+        {
+            if (!it->second.filepath.empty())
+            {
+                const std::filesystem::path absoluteMetadataPath = std::filesystem::absolute(m_Project->GetProjectFilepath(it->second.filepath));
+                m_AssetHandleByPath.erase(absoluteMetadataPath.generic_string());
+            }
+
             m_AssetRegistry.erase(it);
+        }
     }
 
     void AssetManager::LoadAssetAsync(AssetHandle handle)
@@ -442,17 +456,13 @@ namespace ignite {
 
     AssetHandle AssetManager::GetAssetHandle(const std::filesystem::path &filepath)
     {
-        std::filesystem::path absoluteFilepath = std::filesystem::absolute(m_Project->GetProjectFilepath(filepath));
+        const std::filesystem::path absoluteFilepath = std::filesystem::absolute(m_Project->GetProjectFilepath(filepath));
 
         std::unique_lock lock(m_AssetMutex);
-     
-        for (const auto &[handle, metadata] : m_AssetRegistry)
+        auto it = m_AssetHandleByPath.find(absoluteFilepath.generic_string());
+        if (it != m_AssetHandleByPath.end())
         {
-            std::filesystem::path absoluteMetadataPath = m_Project->GetProjectFilepath(metadata.filepath);
-            if (absoluteFilepath == absoluteMetadataPath)
-            {
-                return handle;
-            }
+            return it->second;
         }
 
         return AssetHandle(0);

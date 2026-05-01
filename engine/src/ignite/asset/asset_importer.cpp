@@ -235,13 +235,15 @@ namespace ignite
                     assetManager->AssignAsset(materialHandle, material);
                 }
 
-                Application::SubmitToRenderThread([m = mesh]()
+                Application::SubmitToRenderThread([mesh]()
                 {
                     nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
                     nvrhi::CommandListHandle cmd = device->createCommandList();
                     cmd->open();
-                    m->GetPrimitive()->CreateBuffer(cmd);
+                    mesh->GetPrimitive()->CreateBuffer(cmd);
                     cmd->close();
+
+                    LOG_DEBUG("Submitting mesh \"{}\" to render thread", mesh->GetName());
 
                     Application::SubmitWorkerCommandList(cmd);
                 });

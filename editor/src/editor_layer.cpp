@@ -1136,56 +1136,6 @@ namespace ignite
                 // Create a default scene
                 NewScene();
             }
-
-            // Register callback for when assets are loaded. This callback may be invoked
-            // from a worker thread, so we defer all editor-state access to the main thread.
-            openedProject->GetAssetManager()->RegisterAssetLoadedCallback(
-                [this](AssetHandle handle, AssetType type)
-            {
-                if (type != AssetType::Texture)
-                    return;
-
-                // Defer to main thread: safe iteration of GetLoadedAssets() and
-                // safe access to m_ActiveProject (could be null if project was closed).
-                Application::SubmitToMainThread([this, handle]()
-                {
-                    // Guard: project may have been closed between callback registration
-                    // and this deferred execution.
-                    if (!m_ActiveProject)
-                        return;
-
-                    auto *assetManager = m_ActiveProject->GetAssetManager();
-                    if (!assetManager)
-                        return;
-
-                    // Find all materials that use this texture and mark them dirty.
-                    const auto &assets = assetManager->GetLoadedAssets();
-                    for (const auto &[matHandle, asset] : assets)
-                    {
-                        // Guard against null asset entries in the map.
-                        if (!asset)
-                            continue;
-
-                        if (asset->GetAssetType() != AssetType::Material)
-                            continue;
-
-                        Ref<Material> material = std::static_pointer_cast<Material>(asset);
-                        if (!material)
-                            continue;
-
-                        if (material->baseColorTextureHandle == handle ||
-                            material->emissiveTextureHandle == handle ||
-                            material->metallicTextureHandle == handle ||
-                            material->roughnessTextureHandle == handle ||
-                            material->normalTextureHandle == handle ||
-                            material->occlusionTextureHandle == handle)
-                        {
-                            material->InvalidateBindingSet();
-                        }
-                    }
-                }, "EditorLayer::InvalidateMaterialsForTexture");
-            }
-            );
         }
     }
 
