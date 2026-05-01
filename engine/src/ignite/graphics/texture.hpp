@@ -108,7 +108,7 @@ namespace ignite
                 return {};
             }
 
-            std::filesystem::path assetPath = project->GetAssetFilepath(metadata.filepath);
+            std::filesystem::path assetPath = project->GetProjectFilepath(metadata.filepath);
             assetPath += extension;
             return assetPath;
         }

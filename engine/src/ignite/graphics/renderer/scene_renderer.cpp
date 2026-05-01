@@ -701,43 +701,30 @@ namespace ignite
                 worldEnvironment->environment = Environment::Create();
                 worldEnvironment->dirtyEnvironment = true;
                 worldEnvironment->gpuInitialized = false;
-                worldEnvironment->loadedHDRHandle = AssetHandle(0);
             }
 
-            if (worldEnvironment->hdrHandle == AssetHandle(0))
-            {
-                if (worldEnvironment->loadedHDRHandle != AssetHandle(0))
-                {
-                    worldEnvironment->environment->SetTexture(Renderer::GetBlackTexture());
-                    worldEnvironment->loadedHDRHandle = AssetHandle(0);
-                    worldEnvironment->dirtyEnvironment = true;
-                }
-            }
-            else if (worldEnvironment->loadedHDRHandle != worldEnvironment->hdrHandle)
-            {
-                Ref<Texture> hdrTexture = m_Scene->GetProject()->GetAssetManager()->GetAsset<Texture>(worldEnvironment->hdrHandle);
-                if (hdrTexture && hdrTexture->IsReady())
-                {
-                    worldEnvironment->environment->SetTexture(hdrTexture);
-                    worldEnvironment->loadedHDRHandle = worldEnvironment->hdrHandle;
-                    worldEnvironment->dirtyEnvironment = true;
-                }
-            }
-
+            const bool isHDRLoaded = worldEnvironment->hdrHandle != AssetHandle(0);
             if (worldEnvironment->dirtyEnvironment)
             {
-                const auto &assets = m_Scene->GetProject()->GetAssetManager()->GetLoadedAssets();
-                for (const auto &[handle, asset] : assets)
+                Ref<Texture> hdrTexture;
+                if (isHDRLoaded)
                 {
-                    if (asset->GetAssetType() == AssetType::Material)
+                    hdrTexture = m_Scene->GetProject()->GetAssetManager()->GetAsset<Texture>(worldEnvironment->hdrHandle);
+                    if (hdrTexture && hdrTexture->IsReady())
                     {
-                        Ref<Material> material = std::static_pointer_cast<Material>(asset);
-                        if (material)
-                        {
-                            material->InvalidateBindingSet();
-                        }
+                        worldEnvironment->environment->SetTexture(hdrTexture);
                     }
                 }
+                else
+                {
+                    worldEnvironment->environment->SetTexture(Renderer::GetBlackTexture());
+                }
+
+                // Keep retrieve HDR If it is loaded, but still empty
+                if (isHDRLoaded && hdrTexture == nullptr || (hdrTexture && !hdrTexture->IsReady()))
+                    worldEnvironment->dirtyEnvironment = true;
+                else
+                    worldEnvironment->dirtyEnvironment = false;
             }
         }
 
@@ -748,20 +735,24 @@ namespace ignite
             cmd->open();
             m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
 
-            if (worldEnvironment && worldEnvironment->environment)
+            if (worldEnvironment && worldEnvironment->environment && !worldEnvironment->gpuInitialized && !worldEnvironment->dirtyEnvironment)
             {
-                if (!worldEnvironment->gpuInitialized)
-                {
-                    worldEnvironment->environment->WriteBuffer(cmd);
-                    worldEnvironment->gpuInitialized = true;
-                    worldEnvironment->dirtyEnvironment = true;
-                }
+                worldEnvironment->environment->WriteBuffer(cmd);
+                worldEnvironment->gpuInitialized = true;
 
-                if (worldEnvironment->dirtyEnvironment)
+                // Update env & materials if already  get the HDR texture
+                worldEnvironment->environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer);
+
+                const auto &assets = m_Scene->GetProject()->GetAssetManager()->GetLoadedAssets();
+                for (const auto &[handle, asset] : assets)
                 {
-                    if (worldEnvironment->environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer))
+                    if (asset->GetAssetType() == AssetType::Material)
                     {
-                        worldEnvironment->dirtyEnvironment = false;
+                        Ref<Material> material = std::static_pointer_cast<Material>(asset);
+                        if (material)
+                        {
+                            material->InvalidateBindingSet();
+                        }
                     }
                 }
             }
@@ -927,31 +918,48 @@ namespace ignite
                 worldEnvironment->environment = Environment::Create();
                 worldEnvironment->dirtyEnvironment = true;
                 worldEnvironment->gpuInitialized = false;
-                worldEnvironment->loadedHDRHandle = AssetHandle(0);
             }
 
-            if (worldEnvironment->hdrHandle == AssetHandle(0))
-            {
-                if (worldEnvironment->loadedHDRHandle != AssetHandle(0))
-                {
-                    worldEnvironment->environment->SetTexture(Renderer::GetBlackTexture());
-                    worldEnvironment->loadedHDRHandle = AssetHandle(0);
-                    worldEnvironment->dirtyEnvironment = true;
-                }
-            }
-            else if (worldEnvironment->loadedHDRHandle != worldEnvironment->hdrHandle)
-            {
-                Ref<Texture> hdrTexture = m_Scene->GetProject()->GetAssetManager()->GetAsset<Texture>(worldEnvironment->hdrHandle);
-                if (hdrTexture && hdrTexture->IsReady())
-                {
-                    worldEnvironment->environment->SetTexture(hdrTexture);
-                    worldEnvironment->loadedHDRHandle = worldEnvironment->hdrHandle;
-                    worldEnvironment->dirtyEnvironment = true;
-                }
-            }
-
+            const bool isHDRLoaded = worldEnvironment->hdrHandle != AssetHandle(0);
             if (worldEnvironment->dirtyEnvironment)
             {
+                Ref<Texture> hdrTexture;
+                if (isHDRLoaded)
+                {
+                    hdrTexture = m_Scene->GetProject()->GetAssetManager()->GetAsset<Texture>(worldEnvironment->hdrHandle);
+                    if (hdrTexture && hdrTexture->IsReady())
+                    {
+                        worldEnvironment->environment->SetTexture(hdrTexture);
+                    }
+                }
+                else
+                {
+                    worldEnvironment->environment->SetTexture(Renderer::GetBlackTexture());
+                }
+
+                // Keep retrieve HDR If it is loaded, but still empty
+                if (isHDRLoaded && hdrTexture == nullptr || (hdrTexture && !hdrTexture->IsReady()))
+                    worldEnvironment->dirtyEnvironment = true;
+                else
+                    worldEnvironment->dirtyEnvironment = false;
+            }
+        }
+
+        // Create fresh command list for this frame
+        nvrhi::CommandListHandle cmd = m_Device->createCommandList();
+        {
+            IGN_PROFILE_SCOPE("SceneRenderer::RecordEditorCommandList");
+            cmd->open();
+            m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
+
+            if (worldEnvironment && worldEnvironment->environment && !worldEnvironment->gpuInitialized && !worldEnvironment->dirtyEnvironment)
+            {
+                worldEnvironment->environment->WriteBuffer(cmd);
+                worldEnvironment->gpuInitialized = true;
+
+                // Update env & materials if already  get the HDR texture
+                worldEnvironment->environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer);
+
                 const auto &assets = m_Scene->GetProject()->GetAssetManager()->GetLoadedAssets();
                 for (const auto &[handle, asset] : assets)
                 {
@@ -962,32 +970,6 @@ namespace ignite
                         {
                             material->InvalidateBindingSet();
                         }
-                    }
-                }
-            }
-        }
-
-        // Create fresh command list for this frame
-        nvrhi::CommandListHandle cmd = m_Device->createCommandList();
-        {
-            IGN_PROFILE_SCOPE("SceneRenderer::RecordGameplayCommandList");
-            cmd->open();
-            m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
-
-            if (worldEnvironment && worldEnvironment->environment)
-            {
-                if (!worldEnvironment->gpuInitialized)
-                {
-                    worldEnvironment->environment->WriteBuffer(cmd);
-                    worldEnvironment->gpuInitialized = true;
-                    worldEnvironment->dirtyEnvironment = true;
-                }
-
-                if (worldEnvironment->dirtyEnvironment)
-                {
-                    if (worldEnvironment->environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer))
-                    {
-                        worldEnvironment->dirtyEnvironment = false;
                     }
                 }
             }

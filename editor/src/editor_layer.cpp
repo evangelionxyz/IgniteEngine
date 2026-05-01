@@ -1122,7 +1122,7 @@ namespace ignite
 
                     const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
 
-                    m_CurrentSceneFilePath = m_ActiveProject->GetAssetFilepath(assetFilepath);
+                    m_CurrentSceneFilePath = m_ActiveProject->GetProjectFilepath(assetFilepath);
                     m_CurrentSceneHandle = activeScene->handle;
                 }
                 else
@@ -1141,55 +1141,55 @@ namespace ignite
             // from a worker thread, so we defer all editor-state access to the main thread.
             openedProject->GetAssetManager()->RegisterAssetLoadedCallback(
                 [this](AssetHandle handle, AssetType type)
+            {
+                if (type != AssetType::Texture)
+                    return;
+
+                // Defer to main thread: safe iteration of GetLoadedAssets() and
+                // safe access to m_ActiveProject (could be null if project was closed).
+                Application::SubmitToMainThread([this, handle]()
                 {
-                    if (type != AssetType::Texture)
+                    // Guard: project may have been closed between callback registration
+                    // and this deferred execution.
+                    if (!m_ActiveProject)
                         return;
 
-                    // Defer to main thread: safe iteration of GetLoadedAssets() and
-                    // safe access to m_ActiveProject (could be null if project was closed).
-                    Application::SubmitToMainThread([this, handle]()
+                    auto *assetManager = m_ActiveProject->GetAssetManager();
+                    if (!assetManager)
+                        return;
+
+                    // Find all materials that use this texture and mark them dirty.
+                    const auto &assets = assetManager->GetLoadedAssets();
+                    for (const auto &[matHandle, asset] : assets)
                     {
-                        // Guard: project may have been closed between callback registration
-                        // and this deferred execution.
-                        if (!m_ActiveProject)
-                            return;
+                        // Guard against null asset entries in the map.
+                        if (!asset)
+                            continue;
 
-                        auto *assetManager = m_ActiveProject->GetAssetManager();
-                        if (!assetManager)
-                            return;
+                        if (asset->GetAssetType() != AssetType::Material)
+                            continue;
 
-                        // Find all materials that use this texture and mark them dirty.
-                        const auto &assets = assetManager->GetLoadedAssets();
-                        for (const auto &[matHandle, asset] : assets)
+                        Ref<Material> material = std::static_pointer_cast<Material>(asset);
+                        if (!material)
+                            continue;
+
+                        if (material->baseColorTextureHandle == handle ||
+                            material->emissiveTextureHandle == handle ||
+                            material->metallicTextureHandle == handle ||
+                            material->roughnessTextureHandle == handle ||
+                            material->normalTextureHandle == handle ||
+                            material->occlusionTextureHandle == handle)
                         {
-                            // Guard against null asset entries in the map.
-                            if (!asset)
-                                continue;
-
-                            if (asset->GetAssetType() != AssetType::Material)
-                                continue;
-
-                            Ref<Material> material = std::static_pointer_cast<Material>(asset);
-                            if (!material)
-                                continue;
-
-                            if (material->baseColorTextureHandle == handle ||
-                                material->emissiveTextureHandle  == handle ||
-                                material->metallicTextureHandle  == handle ||
-                                material->roughnessTextureHandle == handle ||
-                                material->normalTextureHandle    == handle ||
-                                material->occlusionTextureHandle == handle)
-                            {
-                                material->InvalidateBindingSet();
-                            }
+                            material->InvalidateBindingSet();
                         }
-                    }, "EditorLayer::InvalidateMaterialsForTexture");
-                }
+                    }
+                }, "EditorLayer::InvalidateMaterialsForTexture");
+            }
             );
         }
     }
 
-    bool EditorLayer::OnMouseMovedEvent(MouseMovedEvent& event)
+    bool EditorLayer::OnMouseMovedEvent(MouseMovedEvent &event)
     {
         return false;
     }
@@ -1216,7 +1216,7 @@ namespace ignite
     void EditorLayer::OnSceneStop()
     {
         m_State.sceneState = State::SceneEdit;
-        
+
         m_ActiveScene->OnStop();
         SetActiveScene(m_EditorScene);
     }
@@ -1233,14 +1233,14 @@ namespace ignite
         m_ActiveScene->OnStart();
     }
 
-    void EditorLayer::OnSceneSaveFileSelected(void* userData, const char* const* filelist, int filter)
+    void EditorLayer::OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter)
     {
         EditorLayer *editor = (EditorLayer *)userData;
 
         // Check for errors
         if (editor == nullptr || filelist == nullptr)
         {
-            const char* error = SDL_GetError();
+            const char *error = SDL_GetError();
             LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
             return;
         }
@@ -1268,14 +1268,14 @@ namespace ignite
         }
     }
 
-    void EditorLayer::OnSceneOpenFileSelected(void* userData, const char* const* filelist, int filter)
+    void EditorLayer::OnSceneOpenFileSelected(void *userData, const char *const *filelist, int filter)
     {
         EditorLayer *editor = (EditorLayer *)userData;
 
         // Check for errors
         if (editor == nullptr || filelist == nullptr)
         {
-            const char* error = SDL_GetError();
+            const char *error = SDL_GetError();
             LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
             return;
         }
@@ -1295,14 +1295,14 @@ namespace ignite
         }
     }
 
-    void EditorLayer::OnProjectSaveFileSelected(void* userData, const char* const* filelist, int filter)
+    void EditorLayer::OnProjectSaveFileSelected(void *userData, const char *const *filelist, int filter)
     {
         EditorLayer *editor = (EditorLayer *)userData;
 
         // Check for errors
         if (editor == nullptr || filelist == nullptr)
         {
-            const char* error = SDL_GetError();
+            const char *error = SDL_GetError();
             LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
             return;
         }
@@ -1335,7 +1335,7 @@ namespace ignite
         // Check for errors
         if (filelist == nullptr)
         {
-            const char* error = SDL_GetError();
+            const char *error = SDL_GetError();
             LOG_ERROR("SDL File Dialog Error: {0}", error ? error : "Unknown error");
             return;
         }
@@ -1354,7 +1354,7 @@ namespace ignite
         }
     }
 
-    void EditorLayer::OnScreenshotSaveFileSelected(void* userData, const char* const* filelist, int filter)
+    void EditorLayer::OnScreenshotSaveFileSelected(void *userData, const char *const *filelist, int filter)
     {
         if (filelist == nullptr || *filelist == nullptr) return;
 
@@ -1366,27 +1366,27 @@ namespace ignite
                 filepath += ".png";
             }
 
-            EditorLayer* editor = static_cast<EditorLayer*>(userData);
+            EditorLayer *editor = static_cast<EditorLayer *>(userData);
             if (!editor->m_ScreenshotPixelData.empty())
             {
                 const int channels = 4;
                 // stride is width * 4 because we packed it
                 stbi_write_png(filepath.c_str(), editor->m_ScreenshotWidth, editor->m_ScreenshotHeight, channels, editor->m_ScreenshotPixelData.data(), editor->m_ScreenshotWidth * channels);
-                
+
                 editor->m_ScreenshotPixelData.clear();
                 editor->m_ScreenshotPixelData.shrink_to_fit();
             }
         }
     }
 
-    void EditorLayer::OnProjectFolderSelected(void* userData, const char* const* filelist, int filter)
+    void EditorLayer::OnProjectFolderSelected(void *userData, const char *const *filelist, int filter)
     {
         if (filelist == nullptr || *filelist == nullptr) return;
 
         std::string filepath = filelist[0];
         if (!filepath.empty())
         {
-            EditorLayer* editor = static_cast<EditorLayer*>(userData);
+            EditorLayer *editor = static_cast<EditorLayer *>(userData);
             editor->m_State.projectCreateInfo.filepath = std::filesystem::path(filepath) / editor->m_State.projectCreateInfo.name; // Append project name
         }
     }
@@ -1407,12 +1407,12 @@ namespace ignite
                         // Submit scene loading to asset worker
                         std::filesystem::path filepath = pf.metadata.filepath;
                         AssetHandle sceneHandle = m_ActiveProject->GetAssetManager()->GetAssetHandle(filepath);
-                        
+
                         if (m_CurrentSceneHandle == sceneHandle)
                             break;
-                        
+
                         m_CurrentSceneHandle = sceneHandle;
-                        
+
                         // Submit heavy I/O work to asset worker
                         m_ActiveProject->GetAssetManager()->SubmitJob([this, filepath, sceneHandle]()
                         {
@@ -1427,31 +1427,31 @@ namespace ignite
                                     {
                                         m_EditorScene->OnStop();
                                     }
-                                    
+
                                     if (m_State.sceneState == State::ScenePlay)
                                     {
                                         OnSceneStop();
                                     }
-                                    
+
                                     // Clear active scene references
                                     SetActiveScene(nullptr);
-                                    
+
                                     // Wait for GPU
                                     if (m_Device)
                                     {
                                         m_Device->waitForIdle();
                                     }
-                        
+
                                     // Reset old scene
                                     m_EditorScene.reset();
                                     m_ActiveScene.reset();
-                        
+
                                     // Unload unused assets
                                     if (m_ActiveProject)
                                     {
                                         m_ActiveProject->GetAssetManager()->UnloadUnusedAssets();
                                     }
-                                    
+
                                     // Copy and activate new scene
                                     m_EditorScene = SceneManager::Copy(loadedScene);
                                     m_EditorScene->SetDirtyFlag(false);
@@ -1479,7 +1479,8 @@ namespace ignite
                         if (loadedProject)
                         {
                             // Submit UI update back to main thread
-                            Application::SubmitToMainThread([this, loadedProject, filepath]() mutable {
+                            Application::SubmitToMainThread([this, loadedProject, filepath]() mutable
+                            {
                                 // Clear old project's assets
                                 if (m_ActiveProject)
                                 {
@@ -1512,7 +1513,7 @@ namespace ignite
                                         SetActiveScene(m_EditorScene);
 
                                         const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
-                                        m_CurrentSceneFilePath = m_ActiveProject->GetAssetFilepath(assetFilepath);
+                                        m_CurrentSceneFilePath = m_ActiveProject->GetProjectFilepath(assetFilepath);
                                         m_CurrentSceneHandle = activeScene->handle;
                                     }
                                     else
@@ -1524,7 +1525,7 @@ namespace ignite
                                 {
                                     NewScene();
                                 }
-                                });
+                            });
                         }
                         else
                         {
@@ -1539,11 +1540,12 @@ namespace ignite
                     {
                         // Submit scene save to asset worker
                         std::filesystem::path filepath = pf.metadata.filepath;
-                        
-                        m_ActiveProject->GetAssetManager()->SubmitJob([this, filepath]() {
+
+                        m_ActiveProject->GetAssetManager()->SubmitJob([this, filepath]()
+                        {
                             SceneSerializer serializer(m_ActiveScene, m_ActiveProject.get());
                             serializer.Serialize(filepath);
-                            
+
                             LOG_INFO("[Editor] Scene saved: {}", filepath.generic_string());
                         });
                     }
@@ -1658,7 +1660,7 @@ namespace ignite
                         SetActiveScene(m_EditorScene);
 
                         AssetMetaData metadata = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
-                        auto scenePath = m_ActiveProject->GetAssetFilepath(metadata.filepath);
+                        auto scenePath = m_ActiveProject->GetProjectFilepath(metadata.filepath);
                         m_CurrentSceneFilePath = scenePath;
                     }
                 }
@@ -1727,7 +1729,7 @@ namespace ignite
             }
             ImGui::End(); // !settings window
         }
-        
+
         if (m_State.assetRegistryWindow)
         {
             AssetRegistry assetRegistry = m_ActiveProject->GetAssetManager()->GetAssetAssetRegistry();
@@ -1833,7 +1835,7 @@ namespace ignite
 
             // Memory usage bar
             ImGui::Spacing();
-         float loadRatio = totalRegistered > 0 ? (float)totalLoaded / totalRegistered : 0.0f;
+            float loadRatio = totalRegistered > 0 ? (float)totalLoaded / totalRegistered : 0.0f;
             ImGui::ProgressBar(loadRatio, ImVec2(-1, 0),
                 std::string("Memory Load: " + std::to_string((int)(loadRatio * 100)) + "%").c_str());
 
@@ -1888,7 +1890,7 @@ namespace ignite
                 ImGui::BeginGroup();
                 if (ImGui::SmallButton("Refresh Registry"))
                 {
-                 m_ActiveProject->ValidateAssetRegistry();
+                    m_ActiveProject->ValidateAssetRegistry();
                 }
                 if (ImGui::SmallButton("Unload Unused Assets"))
                 {
@@ -1917,7 +1919,7 @@ namespace ignite
                     const std::string &handleStr = std::to_string(handle);
                     const std::string &typeStr = stringutils::ToLower(AssetTypeToString(metadata.type));
                     const std::string &filepathStr = stringutils::ToLower(
-                        std::filesystem::absolute(m_ActiveProject->GetAssetFilepath(metadata.filepath)).generic_string());
+                        std::filesystem::absolute(m_ActiveProject->GetProjectFilepath(metadata.filepath)).generic_string());
 
                     if (handleStr.find(findKey) == std::string::npos &&
                         typeStr.find(findKey) == std::string::npos &&
@@ -1956,7 +1958,7 @@ namespace ignite
 
                 // Determine which assets to display
                 bool useFiltered = !filteredAssets.empty() || !assetRegistryFilterResultStr.empty() || selectedTypeFilter != AssetType::Invalid;
-                
+
                 // Iterate through appropriate asset collection
                 if (useFiltered)
                 {
@@ -2013,7 +2015,7 @@ namespace ignite
                         std::string displayPath;
                         if (showFullPath)
                         {
-                            displayPath = std::filesystem::absolute(m_ActiveProject->GetAssetFilepath(metadata.filepath)).generic_string();
+                            displayPath = std::filesystem::absolute(m_ActiveProject->GetProjectFilepath(metadata.filepath)).generic_string();
                         }
                         else
                         {
@@ -2090,7 +2092,7 @@ namespace ignite
                         std::string displayPath;
                         if (showFullPath)
                         {
-                            displayPath = std::filesystem::absolute(m_ActiveProject->GetAssetFilepath(metadata.filepath)).generic_string();
+                            displayPath = std::filesystem::absolute(m_ActiveProject->GetProjectFilepath(metadata.filepath)).generic_string();
                         }
                         else
                         {

@@ -19,6 +19,8 @@
 
 namespace ignite
 {
+    Ref<Texture> AssetSceneRenderer::m_DefaultEnvTexture;
+
     AssetSceneRenderer::AssetSceneRenderer()
     {
         m_Device = DeviceManager::GetInstance()->GetDevice();
@@ -66,6 +68,13 @@ namespace ignite
     {
         m_GeometryPipelineCache.clear();
         m_CompositePipelineCache.clear();
+
+        m_Environment = nullptr;
+
+        if (m_DefaultEnvTexture && m_DefaultEnvTexture.use_count() == 1)
+        {
+            m_DefaultEnvTexture = nullptr;
+        }
     }
 
     void AssetSceneRenderer::BeginFrame()

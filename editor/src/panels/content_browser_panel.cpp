@@ -314,7 +314,7 @@ namespace ignite
                     Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
                     if (project && droppedHandle != AssetHandle(0) && droppedMetadata.type != AssetType::Invalid && !droppedMetadata.filepath.empty())
                     {
-                        QueueMoveCopyPopup(project->GetAssetFilepath(droppedMetadata.filepath), fullPath);
+                        QueueMoveCopyPopup(project->GetProjectFilepath(droppedMetadata.filepath), fullPath);
                         queuedPopup = true;
                     }
                 }
@@ -365,7 +365,7 @@ namespace ignite
                 }
                 else
                 {
-                    const std::filesystem::path relativeAssetPath = project->GetAssetRelativeFilepath(fullPath);
+                    const std::filesystem::path relativeAssetPath = project->GetProjectFilepath(fullPath);
                     AssetHandle handle = m_AssetManager->GetAssetHandle(relativeAssetPath);
                     AssetMetaData metadata = m_AssetManager->GetMetaData(handle);
                     DispatchOpenAssetEditorEvent(handle, metadata);
@@ -443,7 +443,7 @@ namespace ignite
                                 Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
                                 if (project && droppedHandle != AssetHandle(0) && droppedMetadata.type != AssetType::Invalid && !droppedMetadata.filepath.empty())
                                 {
-                                    QueueMoveCopyPopup(project->GetAssetFilepath(droppedMetadata.filepath), assetDir);
+                                    QueueMoveCopyPopup(project->GetProjectFilepath(droppedMetadata.filepath), assetDir);
                                     queuedPopup = true;
                                 }
                             }
@@ -489,7 +489,7 @@ namespace ignite
                 }
                 ImGui::EndChild();
             }
-                
+
             ImGui::SameLine();
 
 
@@ -499,7 +499,7 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE_COLOR("ContentBrowser::FileList", 0xCD5C5C);
 
-                
+
                 if (ImGui::BeginChild("##file_lists", { 0.0f, 0.0f }))
                 {
                     // Insert path nodes
@@ -581,7 +581,7 @@ namespace ignite
                                 // show create folder modal
                                 m_ShowCreateFolderModal = true;
                             }
-                            
+
                             if (ImGui::MenuItem("C# Script"))
                             {
                                 m_ShowCreateScriptModal = true;
@@ -654,7 +654,7 @@ namespace ignite
                     }
 
                 }
-                
+
                 ImGui::EndChild();
             }
 
@@ -700,7 +700,7 @@ namespace ignite
                 }
                 ImGui::EndPopup();
             }
-            
+
             // Create C# Script Modal
             if (m_ShowCreateScriptModal)
             {
@@ -790,8 +790,8 @@ namespace ignite
                             Project *project = m_EditorLayer->GetActiveProject().get();
                             if (project && m_AssetManager)
                             {
-                                const std::filesystem::path oldRelativePath = project->GetAssetRelativeFilepath(target);
-                                const std::filesystem::path newRelativePath = project->GetAssetRelativeFilepath(dest);
+                                const std::filesystem::path oldRelativePath = project->GetProjectFilepath(target);
+                                const std::filesystem::path newRelativePath = project->GetProjectFilepath(dest);
 
                                 if (isDirectory)
                                 {
@@ -898,7 +898,7 @@ namespace ignite
 
                                 const std::filesystem::path &filePath = entry.path();
 
-                                const std::filesystem::path relativePath = project->GetAssetRelativeFilepath(filePath);
+                                const std::filesystem::path relativePath = project->GetProjectFilepath(filePath);
                                 const AssetHandle handle = m_AssetManager->GetAssetHandle(relativePath);
 
                                 if (handle != AssetHandle(0))
@@ -913,7 +913,7 @@ namespace ignite
                                     std::filesystem::path metaPath = filePath.string() + ".meta";
                                     if (std::filesystem::exists(metaPath))
                                     {
-                                        const std::filesystem::path metaRelative = project->GetAssetRelativeFilepath(metaPath);
+                                        const std::filesystem::path metaRelative = project->GetProjectFilepath(metaPath);
                                         const AssetHandle metaHandle = m_AssetManager->GetAssetHandle(metaRelative);
 
                                         if (metaHandle != AssetHandle(0))
@@ -942,7 +942,7 @@ namespace ignite
                         Project *project = m_EditorLayer->GetActiveProject().get();
                         if (project && m_AssetManager)
                         {
-                            const std::filesystem::path relativePath = project->GetAssetRelativeFilepath(m_PopupTargetPath);
+                            const std::filesystem::path relativePath = project->GetProjectFilepath(m_PopupTargetPath);
                             const AssetHandle handle = m_AssetManager->GetAssetHandle(relativePath);
                             if (handle != AssetHandle(0))
                             {
@@ -1021,28 +1021,28 @@ namespace ignite
         ImGui::End();
     }
 
-	void ContentBrowserPanel::OnUpdate(float deltaTime)
-	{
+    void ContentBrowserPanel::OnUpdate(float deltaTime)
+    {
         // Increment frame counter
         s_SharedCurrentFrame++;
 
         while (!m_PendingAssetLoading.empty())
         {
             auto [assetType, assetMetaData, _] = m_PendingAssetLoading.front();
-			m_PendingAssetLoading.pop();
+            m_PendingAssetLoading.pop();
 
             if (assetType == PendingFileLoading::ImportAssets)
             {
                 // submit to asset worker
                 m_AssetManager->SubmitJob([this, assetType, assetMetaData]()
                 {
-					if (Ref<Asset> asset = m_AssetManager->Import(AssetHandle(), assetMetaData))
-					{
+                    if (Ref<Asset> asset = m_AssetManager->Import(AssetHandle(), assetMetaData))
+                    {
                         Application::SubmitToMainThread([this]() mutable
                         {
-							m_NeedsRefresh = true;
+                            m_NeedsRefresh = true;
                         });
-					}
+                    }
                 });
             }
         }
@@ -1065,7 +1065,7 @@ namespace ignite
         {
             std::filesystem::path filepath = s_SharedPendingThumbnailLoads.front();
             s_SharedPendingThumbnailLoads.pop();
-            
+
             // Check if still needs loading (not already loaded)
             auto it = s_SharedThumbnails.find(filepath);
             if (it != s_SharedThumbnails.end() && it->second.thumbnail == nullptr)
@@ -1083,9 +1083,9 @@ namespace ignite
         {
             UnloadUnusedThumbnails();
         }
-	}
+    }
 
-	void ContentBrowserPanel::RefreshEntryPathList()
+    void ContentBrowserPanel::RefreshEntryPathList()
     {
         if (!m_PathEntryList.empty())
         {
@@ -1185,8 +1185,8 @@ namespace ignite
 
         for (const auto &entry : std::filesystem::directory_iterator(directory))
         {
-            if (entry.path().filename() == "Bin" || entry.path().filename() == "obj" || entry.path().filename() == ".vs" || 
-                entry.path().filename() == "AssetRegistry.ixreg" || entry.path().extension() == ".slnx" || 
+            if (entry.path().filename() == "Bin" || entry.path().filename() == "obj" || entry.path().filename() == ".vs" ||
+                entry.path().filename() == "AssetRegistry.ixreg" || entry.path().extension() == ".slnx" ||
                 entry.path().extension() == ".ixproj" || entry.path().filename() == "premake5.lua")
             {
                 continue;
@@ -1199,9 +1199,13 @@ namespace ignite
 
             const std::filesystem::path &relativePath = std::filesystem::relative(entry.path(), assetPath);
             uint32_t currentNodeIndex = 0;
-            
+
             for (const std::filesystem::path &path : relativePath)
             {
+                // Skip dot file/directory
+                if (relativePath.string()[0] == '.')
+                    continue;
+
                 const auto it = m_TreeNodes[currentNodeIndex].children.find(path.generic_string());
                 if (it != m_TreeNodes[currentNodeIndex].children.end())
                 {
@@ -1341,7 +1345,7 @@ namespace ignite
                     }
                     else
                     {
-                        const std::filesystem::path relativeAssetPath = project->GetAssetRelativeFilepath(path);
+                        const std::filesystem::path relativeAssetPath = project->GetProjectFilepath(path);
 
                         AssetHandle handle = m_AssetManager->GetAssetHandle(relativeAssetPath);
                         AssetMetaData metadata = m_AssetManager->GetMetaData(handle);
@@ -1372,7 +1376,7 @@ namespace ignite
                 else
                 {
                     auto *project = m_EditorLayer->GetActiveProject().get();
-                    const std::filesystem::path relativeAssetPath = project->GetAssetRelativeFilepath(path);
+                    const std::filesystem::path relativeAssetPath = project->GetProjectFilepath(path);
 
                     AssetHandle handle = m_AssetManager->GetAssetHandle(relativeAssetPath);
                     AssetMetaData metadata = m_AssetManager->GetMetaData(handle);
@@ -1444,7 +1448,7 @@ namespace ignite
                             Project *project = m_EditorLayer->GetActiveProject().get();
                             if (project && m_AssetManager)
                             {
-                                const std::filesystem::path relativeAnimPath = project->GetAssetRelativeFilepath(path);
+                                const std::filesystem::path relativeAnimPath = project->GetProjectFilepath(path);
                                 const AssetHandle animHandle = m_AssetManager->GetAssetHandle(relativeAnimPath);
                                 const AssetMetaData animationMetadata = m_AssetManager->GetMetaData(animHandle);
 
@@ -1477,7 +1481,7 @@ namespace ignite
 
                                         AssetMetaData montageMetaData;
                                         montageMetaData.type = AssetType::AnimationMontage;
-                                        montageMetaData.filepath = project->GetAssetRelativeFilepath(montagePath);
+                                        montageMetaData.filepath = project->GetProjectFilepath(montagePath);
 
                                         m_AssetManager->AssignMetaData(montageHandle, montageMetaData);
                                         m_AssetManager->AssignAsset(montageHandle, montage);
@@ -1515,7 +1519,7 @@ namespace ignite
                         Project *project = m_EditorLayer ? m_EditorLayer->GetActiveProject().get() : nullptr;
                         if (project && droppedHandle != AssetHandle(0) && droppedMetadata.type != AssetType::Invalid && !droppedMetadata.filepath.empty())
                         {
-                            QueueMoveCopyPopup(project->GetAssetFilepath(droppedMetadata.filepath), path);
+                            QueueMoveCopyPopup(project->GetProjectFilepath(droppedMetadata.filepath), path);
                             queuedPopup = true;
                         }
                     }
@@ -1654,7 +1658,7 @@ namespace ignite
         }
 
         Project *project = m_EditorLayer->GetActiveProject().get();
-        const std::filesystem::path relativeDuplicatePath = project->GetAssetRelativeFilepath(duplicatePath);
+        const std::filesystem::path relativeDuplicatePath = project->GetProjectFilepath(duplicatePath);
         const AssetType duplicateType = GetAssetTypeFromExtension(duplicatePath.extension().generic_string());
         if (duplicateType == AssetType::Invalid)
         {
@@ -1812,8 +1816,8 @@ namespace ignite
         }
 
         const bool sourceIsDirectory = std::filesystem::is_directory(sourcePath);
-        const std::filesystem::path oldRelativePath = project->GetAssetRelativeFilepath(sourcePath);
-        const std::filesystem::path newRelativePath = project->GetAssetRelativeFilepath(destinationPath);
+        const std::filesystem::path oldRelativePath = project->GetProjectFilepath(sourcePath);
+        const std::filesystem::path newRelativePath = project->GetProjectFilepath(destinationPath);
 
         std::error_code ec;
         if (moveItem)
@@ -2248,7 +2252,7 @@ namespace ignite
             if (!isDirectory)
             {
                 auto project = m_EditorLayer->GetActiveProject();
-                const std::filesystem::path relativeAssetPath = project ? project->GetAssetRelativeFilepath(filepath) : filepath;
+                const std::filesystem::path relativeAssetPath = project ? project->GetProjectFilepath(filepath) : filepath;
                 AssetHandle handle = project ? m_AssetManager->GetAssetHandle(relativeAssetPath) : AssetHandle(0);
                 if (handle != AssetHandle(0))
                 {

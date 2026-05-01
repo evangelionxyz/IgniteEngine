@@ -168,15 +168,13 @@ namespace ignite
 
         while (m_RenderThreadRunning)
         {
-            // Process any pending render-thread tasks BEFORE waiting for a frame.
-            // This uses a dedicated CV so it never interferes with m_FrameCV.
-            {
-                std::unique_lock<std::mutex> taskLock(m_RenderTaskMutex);
-                m_RenderTaskCV.wait_for(taskLock, std::chrono::microseconds(100),
-                    [this] { return m_RenderThreadHasTasks.load() || !m_RenderThreadRunning.load(); });
-            }
-
-            if (m_RenderThreadHasTasks.load())
+            // ---------------------------------------------------------------
+            // Frame takes absolute priority over task processing.
+            // If the main thread has already signalled a frame-ready, jump
+            // straight to executing it so we never stall m_RenderComplete.
+            // Only drain pre-frame render-thread tasks when no frame is pending.
+            // ---------------------------------------------------------------
+            if (!m_CurrentFrameReady.load() && m_RenderThreadHasTasks.load())
             {
                 IGN_PROFILE_SCOPE("RenderThread::PreFrameSubmissions");
                 ProcessRenderThreadSubmissions();
@@ -189,16 +187,20 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE("RenderThread::WaitForFrameReady");
                 std::unique_lock<std::mutex> lock(m_FrameMutex);
-                // Only wait for frame-ready — task wakeups are handled above via m_RenderTaskCV.
-                const bool frameReady = m_FrameCV.wait_for(lock, std::chrono::milliseconds(4),
+
+                // Wait up to 2 ms for a frame OR until a task arrives so we
+                // loop back and check m_RenderThreadHasTasks quickly.
+                m_FrameCV.wait_for(lock, std::chrono::milliseconds(2),
                     [this] { return m_CurrentFrameReady.load() || !m_RenderThreadRunning.load(); });
 
                 if (!m_RenderThreadRunning)
                     break;
 
-                if (!frameReady || !m_CurrentFrameReady.load())
+                if (!m_CurrentFrameReady.load())
                 {
-                    // Timeout — loop back to check tasks and try again.
+                    // No frame yet — wake the render-task CV briefly so we
+                    // re-check tasks on the next iteration without extra latency.
+                    m_RenderTaskCV.notify_one();
                     continue;
                 }
 
@@ -435,6 +437,18 @@ namespace ignite
 
                             while (!m_RenderComplete.load())
                             {
+                                // Keep servicing queued main-thread work while we wait for the
+                                // render thread. Asset/GPU workers can post back here during
+                                // imports, and starving that queue can deadlock the frame.
+                                lock.unlock();
+                                ProcessMainThreadSubmissions();
+                                lock.lock();
+
+                                if (m_RenderComplete.load())
+                                {
+                                    break;
+                                }
+
                                 const bool signaled = m_FrameCV.wait_for(lock, std::chrono::microseconds(500), [this] { return m_RenderComplete.load(); });
                                 if (signaled)
                                     break;
@@ -569,8 +583,13 @@ namespace ignite
             GetInstance()->m_RenderThreadFuncs.push({ func, funcName });
             GetInstance()->m_RenderThreadHasTasks = true;
         }
-        // Notify via the dedicated render-task CV, not the frame CV.
+        // Wake the render thread:
+        // - m_RenderTaskCV: dedicated task signal (used by the pre-frame check)
+        // - m_FrameCV: wakes the render thread out of its frame wait_for so it
+        //   can loop back immediately and process the new task without waiting
+        //   the full 2ms timeout.
         GetInstance()->m_RenderTaskCV.notify_one();
+        GetInstance()->m_FrameCV.notify_one();
     }
 
     void Application::SubmitWorkerCommandList(nvrhi::CommandListHandle commandList, std::function<void()> onExecuted)

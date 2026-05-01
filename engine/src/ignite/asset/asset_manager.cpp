@@ -142,7 +142,6 @@ namespace ignite {
 
     void AssetManager::AssignMetaData(AssetHandle handle, const AssetMetaData &metadata)
     {
-        std::unique_lock lock(m_AssetMutex);
         m_AssetRegistry[handle] = metadata;
     }
 
@@ -307,7 +306,7 @@ namespace ignite {
     {
         IGN_PROFILE_FUNCTION();
 
-        LOG_TRACE("[Asset Manager] Clearing all loaded assets (Count: {})", m_LoadedAssets.size());
+        LOG_DEBUG("[Asset Manager] Clearing all loaded assets (Count: {})", m_LoadedAssets.size());
         
         if (auto* device = DeviceManager::GetInstance()->GetDevice())
         {
@@ -319,7 +318,7 @@ namespace ignite {
             m_LoadedAssets.clear();
         }
         
-        LOG_TRACE("[Asset Manager] All loaded assets cleared");
+        LOG_DEBUG("[Asset Manager] All loaded assets cleared");
     }
 
     void AssetManager::UnloadAsset(AssetHandle handle)
@@ -336,7 +335,7 @@ namespace ignite {
         auto it = m_LoadedAssets.find(handle);
         if (it != m_LoadedAssets.end())
         {
-            LOG_TRACE("[Asset Manager] Unloading asset: {}", static_cast<uint64_t>(handle));
+            LOG_DEBUG("[Asset Manager] Unloading asset: {}", static_cast<uint64_t>(handle));
             
             // Release lock before GPU sync to avoid blocking other threads
             Ref<Asset> asset = it->second;
@@ -355,7 +354,7 @@ namespace ignite {
     {
         IGN_PROFILE_FUNCTION();
 
-        LOG_TRACE("[Asset Manager] Checking for unused assets (Loaded: {})", m_LoadedAssets.size());
+        LOG_DEBUG("[Asset Manager] Checking for unused assets (Loaded: {})", m_LoadedAssets.size());
 
         std::vector<AssetHandle> assetsToUnload;
         std::vector<Ref<Asset>> assetsToDestroy;
@@ -375,11 +374,13 @@ namespace ignite {
 
             if (!assetsToUnload.empty())
             {
-                LOG_TRACE("[Asset Manager] Unloading {} unused assets", assetsToUnload.size());
+                LOG_DEBUG("[Asset Manager] Unloading {} unused assets", assetsToUnload.size());
 
                 for (AssetHandle handle : assetsToUnload)
                 {
                     m_LoadedAssets.erase(handle);
+
+                    LOG_DEBUG("[Asset Manager]    \"{}\" unloaded", GetAssetDisplayName(handle));
                 }
             }
         }
@@ -395,11 +396,11 @@ namespace ignite {
             
             assetsToDestroy.clear();
             
-            LOG_TRACE("[Asset Manager] Unused assets unloaded. Remaining: {}", m_LoadedAssets.size());
+            LOG_DEBUG("[Asset Manager] Unused assets unloaded. Remaining: {}", m_LoadedAssets.size());
         }
         else
         {
-            LOG_TRACE("[Asset Manager] No unused assets found");
+            LOG_DEBUG("[Asset Manager] No unused assets found");
         }
     }
 
@@ -441,18 +442,13 @@ namespace ignite {
 
     AssetHandle AssetManager::GetAssetHandle(const std::filesystem::path &filepath)
     {
-        std::filesystem::path absoluteFilepath = std::filesystem::absolute(m_Project->GetAssetFilepath(filepath));
+        std::filesystem::path absoluteFilepath = std::filesystem::absolute(m_Project->GetProjectFilepath(filepath));
 
         std::unique_lock lock(m_AssetMutex);
      
         for (const auto &[handle, metadata] : m_AssetRegistry)
         {
-            // Convert metadata filepath (relative) to absolute using project base path
-            std::filesystem::path absoluteMetadataPath = m_Project
-                ? std::filesystem::absolute(m_Project->GetAssetFilepath(metadata.filepath))
-                : std::filesystem::absolute(metadata.filepath);
-
-            // Compare normalized absolute paths
+            std::filesystem::path absoluteMetadataPath = m_Project->GetProjectFilepath(metadata.filepath);
             if (absoluteFilepath == absoluteMetadataPath)
             {
                 return handle;
@@ -548,14 +544,12 @@ namespace ignite {
             {
                 asset = AssetImporter::Import(handle, getterMetadata, this);
                 {
-                    // Check if another worker already loaded this asset while we were importing
                     std::unique_lock lock(m_AssetMutex);
                     if (m_LoadedAssets.contains(handle))
                     {
                         return m_LoadedAssets[handle];
                     }
                 }
-                // AssignAsset acquires its own lock
                 AssignAsset(handle, asset);
                 break;
             }
@@ -566,7 +560,7 @@ namespace ignite {
                 if (getterMetadata.type == AssetType::Texture)
                 {
                     AssetMetaData textureMetadata = getterMetadata;
-                    textureMetadata.filepath = m_Project->GetAssetFilepath(getterMetadata.filepath);
+                    textureMetadata.filepath = m_Project->GetProjectFilepath(getterMetadata.filepath);
                     TextureCreateInfo createInfo = Texture::GetDefaultCreateInfo(getterMetadata);
                     if (!Texture::LoadCreateInfoFile(Texture::GetMetaPath(m_Project, getterMetadata), createInfo))
                     {
@@ -580,14 +574,12 @@ namespace ignite {
                 }
 
                 {
-                    // Check if another worker already loaded this asset while we were importing
                     std::unique_lock lock(m_AssetMutex);
                     if (m_LoadedAssets.contains(handle))
                     {
                         return m_LoadedAssets[handle];
                     }
                 }
-                // AssignAsset acquires its own lock
                 AssignAsset(handle, asset);
                 break;
             }

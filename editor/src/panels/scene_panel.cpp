@@ -608,8 +608,8 @@ namespace ignite
                                 if (metadata.type == AssetType::Texture && metadata.filepath.extension() == ".hdr")
                                 {
                                     c.hdrHandle = handle;
-                                    c.loadedHDRHandle = AssetHandle(0);
                                     c.dirtyEnvironment = true;
+                                    c.gpuInitialized = false;
                                 }
                             }
                             ImGui::EndDragDropTarget();
@@ -621,8 +621,8 @@ namespace ignite
                             if (ImGui::Button("X"))
                             {
                                 c.hdrHandle = AssetHandle(0);
-                                c.loadedHDRHandle = AssetHandle(0);
                                 c.dirtyEnvironment = true;
+                                c.gpuInitialized = false;
                             }
                         }
                     });
@@ -2283,7 +2283,7 @@ namespace ignite
                             AssetMetaData metadata = m_EditorLayer->GetActiveProject()->GetAssetManager()->GetMetaData(*handle);
                             if (metadata.type == AssetType::Scene)
                             {
-                                std::filesystem::path filepath = m_EditorLayer->GetActiveProject()->GetAssetFilepath(metadata.filepath);
+                                std::filesystem::path filepath = m_EditorLayer->GetActiveProject()->GetProjectFilepath(metadata.filepath);
                                 m_EditorLayer->OpenScene(filepath);
                             }
                         }

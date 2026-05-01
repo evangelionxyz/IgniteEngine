@@ -48,7 +48,7 @@ namespace ignite
         Ref<Material> m_RuntimeMaterial;
 
         Ref<Environment> m_Environment;
-        Ref<Texture> m_DefaultEnvTexture;
+        static Ref<Texture> m_DefaultEnvTexture;
         AssetHandle m_EnvTexHandle = AssetHandle(0);
 
         nvrhi::BindingLayoutHandle m_CompositeBindingLayout;

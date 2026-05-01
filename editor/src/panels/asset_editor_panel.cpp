@@ -151,7 +151,7 @@ namespace ignite
                 return {};
             }
 
-            std::filesystem::path assetPath = project->GetAssetFilepath(metadata.filepath);
+            std::filesystem::path assetPath = project->GetProjectFilepath(metadata.filepath);
             assetPath += ".meta";
             return assetPath;
         }
@@ -377,13 +377,11 @@ namespace ignite
 
     // :Constructor
     AssetEditorPanel::AssetEditorPanel(const char *windowTitle, EditorLayer *editor) : IPanel(windowTitle, editor)
-    {
-    }
+    { }
 
     // :Desctructor
     AssetEditorPanel::~AssetEditorPanel()
-    {
-    }
+    { }
 
     void AssetEditorPanel::OnAttach()
     {
@@ -435,22 +433,25 @@ namespace ignite
         // After an asset editor tab is closed, ClearAssetPins() is called (in
         // the erase_if below). If no scene entity references the asset either,
         // it becomes unused and should be evicted from m_LoadedAssets to free
-        // memory. We throttle this to at most once every 5 seconds.
+        // memory. We throttle this to at most once every 10 seconds.
         // -----------------------------------------------------------------------
-        m_UnloadTimer += deltaTime;
-        constexpr float kUnloadInterval = 5.0f;
-        if (m_UnloadTimer >= kUnloadInterval)
         {
-            m_UnloadTimer = 0.0f;
-            if (assetManager)
+            auto &state = m_EditorLayer->GetState();
+            state.assetUnloadTimer += deltaTime;
+            constexpr float kUnloadInterval = 10.0f;
+            if (m_EditorLayer->GetState().assetUnloadTimer >= kUnloadInterval)
             {
-                assetManager->UnloadUnusedAssets();
+                state.assetUnloadTimer = 0.0f;
+                if (assetManager)
+                {
+                    assetManager->UnloadUnusedAssets();
+                }
             }
         }
 
-        // -----------------------------------------------------------------------
-        // Per-asset animation / skeleton preview update (unchanged logic).
-        // -----------------------------------------------------------------------
+        // -----------------------------------------------
+        // Per-asset animation / skeleton preview update
+        // -----------------------------------------------
         for (auto &assetData : m_Assets)
         {
             if (!assetData.sceneData.viewportVisible || !assetData.isOpen || !assetData.asset || !assetData.asset->IsReady())
@@ -1058,7 +1059,7 @@ namespace ignite
                         AssetHandle handle = AssetHandle();
                         AssetMetaData metadata;
                         metadata.type = m_CreateRequest.type;
-                        metadata.filepath = project->GetAssetRelativeFilepath(fullAssetPath);
+                        metadata.filepath = project->GetProjectFilepath(fullAssetPath);
 
                         createdAsset->handle = handle;
                         assetManager->AssignMetaData(handle, metadata);
@@ -2935,7 +2936,7 @@ namespace ignite
     void AssetEditorPanel::UITextureEditor(AssetEditorData &assetData)
     {
         bool isOpen = assetData.isOpen;
-        if (BeginAssetEditorWindow(assetData, isOpen, {420.0f, 720.0f}, ImVec2(420.0f, 720.0f), ImGuiWindowFlags_NoScrollbar))
+        if (BeginAssetEditorWindow(assetData, isOpen, { 420.0f, 720.0f }, ImVec2(420.0f, 720.0f), ImGuiWindowFlags_NoScrollbar))
         {
             if (DrawAssetEditorHeader(assetData))
             {
@@ -2959,7 +2960,7 @@ namespace ignite
                         ImGui::Text("Channels: %d", texture->GetChannels());
                         ImGui::Text("Current Format: %s", TextureFormatToString(texture->GetFormat()));
 
-                        const float previewMaxWidth = std::min(420.0f, ImGui::GetContentRegionAvail().x);
+                        const float previewMaxWidth = std::max(420.0f, ImGui::GetContentRegionAvail().x);
                         if (previewMaxWidth > 0.0f && texture->GetWidth() > 0 && texture->GetHeight() > 0)
                         {
                             const float aspectRatio = static_cast<float>(texture->GetWidth()) / static_cast<float>(texture->GetHeight());
@@ -3068,7 +3069,7 @@ namespace ignite
                             Texture::SerializeMetaFile(BuildAssetMetaPath(project, assetData.metadata), assetData.handle, state.createInfo);
 
                             AssetMetaData importMetadata = assetData.metadata;
-                            importMetadata.filepath = project->GetAssetFilepath(assetData.metadata.filepath);
+                            importMetadata.filepath = project->GetProjectFilepath(assetData.metadata.filepath);
 
                             Ref<Texture> reimportedTexture = AssetImporter::ImportTexture(assetData.handle, importMetadata, state.createInfo, assetManager);
                             if (reimportedTexture)
@@ -4601,7 +4602,7 @@ namespace ignite
         }
 
         Project *project = m_EditorLayer->GetActiveProject().get();
-        const std::filesystem::path savePath = project->GetAssetFilepath(assetData.metadata.filepath);
+        const std::filesystem::path savePath = project->GetProjectFilepath(assetData.metadata.filepath);
         const std::filesystem::path metaPath = BuildAssetMetaPath(project, assetData.metadata);
 
         auto saveDefaultMeta = [&]()
