@@ -251,6 +251,7 @@ namespace ignite
     void ContentBrowserPanel::RefreshFiles()
     {
         m_NeedsRefresh = false;
+
         auto project = m_EditorLayer->GetActiveProject();
         project->ValidateAssetRegistry();
         PruneMissingNodes(0, m_EditorLayer->GetActiveProject()->GetDirectory());

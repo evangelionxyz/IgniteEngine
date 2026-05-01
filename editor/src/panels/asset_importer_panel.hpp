@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <unordered_map>
 #include <optional>
+#include <atomic>
 
 namespace ignite
 {
@@ -67,6 +68,9 @@ namespace ignite
 		bool m_ShowImporterWindow = false;
 		bool m_OpenImporterPopup = false;
 		bool m_SkipDialogForSameType = false;
+		bool m_IsImporting = false;
+		std::atomic<int> m_ActiveImportJobs;
+
    };
 }
 

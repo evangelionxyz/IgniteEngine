@@ -437,19 +437,11 @@ namespace ignite
 
                             while (!m_RenderComplete.load())
                             {
-                                // Keep servicing queued main-thread work while we wait for the
-                                // render thread. Asset/GPU workers can post back here during
-                                // imports, and starving that queue can deadlock the frame.
-                                lock.unlock();
-                                ProcessMainThreadSubmissions();
-                                lock.lock();
+                                const bool signaled = m_FrameCV.wait_for(lock, std::chrono::microseconds(500), [this] 
+                                { 
+                                    return m_RenderComplete.load();
+                                });
 
-                                if (m_RenderComplete.load())
-                                {
-                                    break;
-                                }
-
-                                const bool signaled = m_FrameCV.wait_for(lock, std::chrono::microseconds(500), [this] { return m_RenderComplete.load(); });
                                 if (signaled)
                                     break;
                             }

@@ -25,7 +25,6 @@ namespace ignite
 {
 
     using AssetRegistry = std::map<AssetHandle, AssetMetaData>;
-	using AssetLoadedCallback = std::function<void(AssetHandle, AssetType)>;
     using AssetJob = std::function<void()>;
 
     class Project;
@@ -48,16 +47,9 @@ namespace ignite
         {
             if (asset && std::is_base_of_v<Asset, T>)
             {
-                std::vector<AssetLoadedCallback> callbacksCopy;
                 {
                     std::unique_lock lock(m_AssetMutex);
                     m_LoadedAssets[handle] = asset;
-                    callbacksCopy = m_LoadedCallbacks;
-                }
-                // Fire callbacks outside lock to avoid re-entrancy deadlocks
-                for (const auto &callback : callbacksCopy)
-                {
-                    callback(handle, asset->GetAssetType());
                 }
             }
         }
@@ -71,12 +63,6 @@ namespace ignite
         void ReplaceAssetPins(const std::string &ownerTag, const std::unordered_set<AssetHandle> &handles);
         void ClearAssetPins(std::string_view ownerTag);
         bool IsAssetPinned(AssetHandle handle) const;
-        
-        // Register callback to be notified when assets are loaded
-        void RegisterAssetLoadedCallback(AssetLoadedCallback callback)
-        {
-            m_LoadedCallbacks.push_back(callback);
-        }
 
         void SubmitJob(AssetJob job);
 
@@ -91,8 +77,6 @@ namespace ignite
             AssetMetaData metadata;
             // Protect all reads/writes to LoadedAssets and LoadingAssets
             {
-                std::unique_lock lock(m_AssetMutex);
-
                 if (m_LoadedAssets.contains(handle))
                 {
                     return std::static_pointer_cast<T>(m_LoadedAssets.at(handle));
@@ -198,7 +182,6 @@ namespace ignite
         AssetRegistry m_AssetRegistry;
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
         std::unordered_set<AssetHandle> m_LoadingAssets;
-        std::vector<AssetLoadedCallback> m_LoadedCallbacks;
 
         std::condition_variable m_ConditionVariable;
         std::vector<std::thread> m_Workers;
@@ -215,6 +198,7 @@ namespace ignite
 
         std::unordered_map<AssetHandle, uint32_t> m_AssetPinCounts;
         std::unordered_map<std::string, std::unordered_set<AssetHandle>> m_PinnedAssetsByOwner;
+        std::unordered_map<std::string, AssetHandle> m_AssetHandleByPath;
     };
 }
 

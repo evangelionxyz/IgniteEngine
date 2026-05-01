@@ -148,6 +148,20 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
         (void)deltaTime;
+
+        // Poll importer
+        if (m_IsImporting && m_ActiveImportJobs == 0)
+        {
+            m_EditorLayer->SaveProject();
+            m_EditorLayer->RefreshContentBrowsers();
+
+            if (!AdvanceToNextAsset())
+            {
+                ResetImportState();
+            }
+
+            m_IsImporting = false;
+        }
     }
 
     void AssetImporterPanel::OnGuiRender()
@@ -333,71 +347,59 @@ namespace ignite
             return false;
         }
 
-        // Submit the import work to the AssetManager worker threads so the main thread
-        // is not blocked by file IO or heavy processing. Capture copies of the
-        // relevant data so the lambda is independent of the caller's stack.
+        m_ActiveImportJobs++;
+
         AssetImportData jobData = asset;
         auto jobProject = project;
         auto jobAssetManager = assetManager;
 
-        jobAssetManager->SubmitJob([this, jobProject, jobAssetManager, jobData]() mutable
+        if (IsFbxFile(jobData.filepath))
         {
-            IGN_PROFILE_SCOPE("AssetImporterPanel::ProcessImportRequest::SubmitJob");
-
-            // FBX handling (mesh or skeleton/animations) — these do their own heavy work
-            // and register everything internally, so we leave them unchanged.
-            if (IsFbxFile(jobData.filepath))
+            if (jobData.meshOptions.importMesh || jobData.meshOptions.importMaterials)
             {
-                if (jobData.meshOptions.importMesh || jobData.meshOptions.importMaterials)
-                {
-                    ImportFbxMesh(jobData.filepath, jobData.meshOptions);
-                }
-                else
-                {
-                    ImportFbxSkeletonAndAnimations(jobData.filepath, jobData.meshOptions);
-                }
-                return;
+                ImportFbxMesh(jobData.filepath, jobData.meshOptions);
             }
-
-            // Non-FBX generic asset import:
-            // 1. Copy the file into the project asset directory (filesystem work on worker thread).
-            // 2. Register only the metadata — do NOT load the asset into memory.
-            //    Assets are loaded lazily the first time they are actually used
-            //    (opened in the editor, referenced in a scene, dropped into a slot, etc.).
-            const std::filesystem::path importedPath = PrepareAssetForImport(jobData);
-            if (importedPath.empty())
+            else
             {
-                return;
+                ImportFbxSkeletonAndAnimations(jobData.filepath, jobData.meshOptions);
             }
-
-            const std::filesystem::path relativePath = jobProject->GetProjectFilepath(importedPath);
-            const AssetType assetType = jobData.assetType;
-
-            // Commit the registry entry on the main thread to prevent TOCTOU races
-            // between concurrent workers importing different assets to the same path.
-            Application::SubmitToMainThread([jobAssetManager, relativePath, assetType]()
+        }
+        else
+        {
+            jobAssetManager->SubmitJob([this, jobProject, jobAssetManager, jobData]() mutable
             {
-                // Re-check: another concurrent import job may have already registered this path.
-                AssetHandle finalHandle = jobAssetManager->GetAssetHandle(relativePath);
-                if (finalHandle == AssetHandle(0))
+                IGN_PROFILE_SCOPE("AssetImporterPanel::ProcessImportRequest::SubmitJob");
+                const std::filesystem::path importedPath = PrepareAssetForImport(jobData);
+                if (importedPath.empty())
                 {
-                    // Not yet registered — create a new entry in the registry only.
-                    finalHandle = AssetHandle();
-
-                    AssetMetaData metadata;
-                    metadata.filepath = relativePath;
-                    metadata.type = assetType;
-
-                    jobAssetManager->AssignMetaData(finalHandle, metadata);
-
-                    LOG_TRACE("[Asset Importer] Registered asset (not loaded): {} ({})",
-                        static_cast<uint64_t>(finalHandle), relativePath.generic_string());
+                    m_ActiveImportJobs--;
+                    return;
                 }
-                // The asset is intentionally NOT loaded here.
-                // It will be loaded on demand via GetAsset() / GetAssetImmediate()
-                // the first time it is referenced in a scene or opened in the editor.
-            }, "AssetImporterPanel::RegisterMetaData");
-        });
+
+                const std::filesystem::path relativePath = jobProject->GetProjectFilepath(importedPath);
+                const AssetType assetType = jobData.assetType;
+
+                Application::SubmitToMainThread([this, jobAssetManager, relativePath, assetType]()
+                {
+                    AssetHandle finalHandle = jobAssetManager->GetAssetHandle(relativePath);
+                    if (finalHandle == AssetHandle(0))
+                    {
+                        finalHandle = AssetHandle();
+
+                        AssetMetaData metadata;
+                        metadata.filepath = relativePath;
+                        metadata.type = assetType;
+
+                        jobAssetManager->AssignMetaData(finalHandle, metadata);
+
+                        LOG_TRACE("[Asset Importer] Registered asset (not loaded): {} ({})", static_cast<uint64_t>(finalHandle), relativePath.generic_string());
+                    }
+
+                    m_ActiveImportJobs--;
+
+                }, "AssetImporterPanel::RegisterMetaData");
+            });
+        }
 
         return true;
     }
@@ -456,9 +458,9 @@ namespace ignite
             return;
         }
 
-        bool importedAny = false;
+        m_IsImporting = false;
         const AssetType currentType = m_CurrentAsset->assetType;
-        importedAny |= ProcessImportRequest(BuildCurrentImportData());
+        m_IsImporting |= ProcessImportRequest(BuildCurrentImportData());
 
         if (m_SkipDialogForSameType)
         {
@@ -471,20 +473,9 @@ namespace ignite
                     queueIt->second.pop();
                     data.meshOptions = m_MeshOptions;
                     data.meshOptions.targetDirectory = m_TargetDirectory;
-                    importedAny |= ProcessImportRequest(data);
+                    m_IsImporting |= ProcessImportRequest(data);
                 }
             }
-        }
-
-        if (importedAny)
-        {
-            m_EditorLayer->SaveProject();
-            m_EditorLayer->RefreshContentBrowsers();
-        }
-
-        if (!AdvanceToNextAsset())
-        {
-            ResetImportState();
         }
     }
 
@@ -580,6 +571,7 @@ namespace ignite
         auto project = m_EditorLayer->GetActiveProject();
         if (!project)
         {
+            m_ActiveImportJobs--;
             return;
         }
 
@@ -602,6 +594,7 @@ namespace ignite
         Ref<Mesh> importedAsset = AssetImporter::ImportMesh(handle, sourceMetadata, assetManager, options);
         if (!importedAsset)
         {
+            m_ActiveImportJobs--;
             LOG_ERROR("[Asset Importer] Failed to import mesh from {}", filepath.generic_string());
             return;
         }
@@ -613,6 +606,7 @@ namespace ignite
             registryMetadata.type = AssetType::Mesh;
 
             PublishImportedAsset(assetManager, registryMetadata, importedAsset);
+            m_ActiveImportJobs--;
         }
     }
 
@@ -621,12 +615,14 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
         if (!options.importSkeleton && !options.importAnimations)
         {
+            m_ActiveImportJobs--;
             return;
         }
 
         auto project = m_EditorLayer->GetActiveProject();
         if (!project)
         {
+            m_ActiveImportJobs--;
             return;
         }
 
@@ -686,6 +682,7 @@ namespace ignite
         if (!skeleton)
         {
             LOG_WARN("[Asset Importer] FBX has no valid skeleton: {}", filepath.generic_string());
+            m_ActiveImportJobs--;
             return;
         }
 
@@ -724,6 +721,7 @@ namespace ignite
             if (animations.empty())
             {
                 LOG_WARN("[Asset Importer] FBX has no animation clips: {}", filepath.generic_string());
+                m_ActiveImportJobs--;
                 return;
             }
 
@@ -743,7 +741,7 @@ namespace ignite
                 animationMD.type = AssetType::SkeletalAnimation;
 
                 const AssetHandle fallbackSkeletonHandle = skeleton ? skeleton->handle : AssetHandle(0);
-                Application::SubmitToMainThread([assetManager, animationMD, animation, importedSkeletonRelativePath, fallbackSkeletonHandle]()
+                Application::SubmitToMainThread([this, assetManager, animationMD, animation, importedSkeletonRelativePath, fallbackSkeletonHandle]()
                 {
                     AssetHandle skeletonHandle = fallbackSkeletonHandle;
                     if (!importedSkeletonRelativePath.empty())
@@ -766,6 +764,8 @@ namespace ignite
                     animation->SetReadyFlag(true);
                     assetManager->AssignMetaData(animationHandle, animationMD);
                     assetManager->AssignAsset(animationHandle, animation);
+
+                    m_ActiveImportJobs--;
                 }, "AssetImporterPanel::PublishImportedAnimation");
             }
         }
