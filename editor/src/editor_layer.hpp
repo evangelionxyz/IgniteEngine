@@ -35,7 +35,7 @@ namespace ignite
             bool developerMode = false;
             bool multiSelect = false;
             bool settingsWindow = false;
-            bool imguiDemoWindow = false;
+            bool imguiDemoWindow = true;
             bool popupNewProjectModal = false;
             bool assetRegistryWindow = false;
             bool takeScreenshot = false;
@@ -120,10 +120,10 @@ namespace ignite
         void UIProjectCreation();
         void UISettings();
 
-        ScenePanel *m_ScenePanel;
-        AssetImporterPanel *m_AssetImporterPanel;
-        ContentBrowserPanel *m_ContentBrowserPanel;
-        AssetEditorPanel *m_AssetEditorPanel;
+        ScenePanel *m_ScenePanel = nullptr;
+        AssetImporterPanel *m_AssetImporterPanel = nullptr;
+        ContentBrowserPanel *m_ContentBrowserPanel = nullptr;
+        AssetEditorPanel *m_AssetEditorPanel = nullptr;
         std::vector<ContentBrowserPanel *> m_ContentBrowserPanels;
 
         Ref<SceneRenderer> m_SceneRenderer;

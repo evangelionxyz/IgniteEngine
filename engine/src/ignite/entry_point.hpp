@@ -36,7 +36,9 @@ inline int Main(const int argc, char **argv)
     return 0;
 }
 
+#ifndef IGNITE_CUSTOM_ENTRY_POINT
 int main(const int argc, char **argv)
 {
     return Main(argc, argv);
 }
+#endif

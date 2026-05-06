@@ -15,6 +15,7 @@
 #include "ignite/core/platform_utils.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/imgui/imgui_nvrhi.hpp"
+#include "ignite/scene/scene_manager.hpp"
 #include "stb_image_write.h"
 
 #include <algorithm>
@@ -25,6 +26,7 @@
 #include <limits>
 #include <string_view>
 #include <unordered_set>
+#include <QCursor>
 #include <SDL3/SDL_dialog.h>
 
 namespace ignite
@@ -70,15 +72,14 @@ namespace ignite
         auto *app = Application::GetInstance();
 
         m_ScenePanel = new ScenePanel("Scene Panel", this);
+        app->PushLayer(m_ScenePanel);
+
         m_AssetImporterPanel = new AssetImporterPanel("AssetImporter Panel", this);
         m_AssetEditorPanel = new AssetEditorPanel("Animation Panel", this);
-
-        app->PushLayer(m_ScenePanel);
         app->PushLayer(m_AssetImporterPanel);
         app->PushLayer(m_AssetEditorPanel);
-
         AddContentBrowserPanel();
-
+        
         // create render target framebuffer
         m_SceneRenderer = CreateRef<SceneRenderer>();
 
@@ -605,6 +606,7 @@ namespace ignite
     void EditorLayer::OnGuiRender()
     {
         IGN_PROFILE_FUNCTION();
+
         constexpr ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_MenuBar
             | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus
             | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;

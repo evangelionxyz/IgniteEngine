@@ -12,6 +12,13 @@ if not FBX_SDK_PATH then
 end
 print("FBX_SDK_PATH: " ..  tostring(FBX_SDK_PATH))
 
+-- QT SDK
+QT_PATH = os.getenv("QT_PATH")
+if not QT_PATH then
+    print("Error: QT_PATH environment variable is not set!")
+end
+print("QT_PATH: " .. tostring(QT_PATH))
+
 --includedirs
 IncludeDir = {}
 IncludeDir["ASSIM"]             = "%{THIRDPARTY_DIR}/ASSIMP/include"
@@ -53,6 +60,7 @@ LibraryDir = {}
 LibraryDir["VULKAN_SDK"]       = "%{VULKAN_SDK_PATH}/Lib"
 LibraryDir["VULKAN_SDK_BIN"]   = "%{VULKAN_SDK_PATH}/Bin"
 LibraryDir["FBX_SDK"]          = "%{FBX_SDK_PATH}/lib"
+LibraryDir["QT"]               = "%{QT_PATH}"
 
 -- =============== WINDOWS ONLY ===============
 Library                                = {}

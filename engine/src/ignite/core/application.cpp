@@ -39,6 +39,7 @@ namespace ignite
         DeviceParameters deviceParams;
         deviceParams.backBufferWidth = m_CreateInfo.width;
         deviceParams.backBufferHeight = m_CreateInfo.height;
+        deviceParams.nativeWindowHandle = m_CreateInfo.nativeHostWindowHandle;
         deviceParams.startMaximized = m_CreateInfo.maximized;
         deviceParams.startBorderless = m_CreateInfo.borderless;
 #if _DEBUG
@@ -50,12 +51,15 @@ namespace ignite
         deviceParams.enableGPUValidation = true;
         deviceParams.supportExplicitDisplayScaling = true;
 
+        // Create window
         m_Window = CreateScope<Window>(m_CreateInfo.name.c_str(),  deviceParams, m_CreateInfo.graphicsApi );
         m_Window->SetEventCallback(BIND_CLASS_EVENT_FN(Application::OnEvent));
         m_Window->SetIcon("resources/icon.png");
 
+        // Create input handler
         m_Input = CreateScope<Input>(m_Window.get());
 
+        // Create Renderer
         m_Renderer = CreateRef<Renderer>(m_Window->GetDeviceManager(), m_CreateInfo.graphicsApi);
 
         if (createInfo.useGui)
@@ -373,6 +377,11 @@ namespace ignite
         while (m_Window->IsLooping())
         {
             IGN_PROFILE_SCOPE("MainThread::Frame");
+            if (m_CreateInfo.platformEventPump)
+            {
+                m_CreateInfo.platformEventPump();
+            }
+
             while (SDL_PollEvent(&sdlEvent))
             {
                 m_Window->PollEvents(sdlEvent);

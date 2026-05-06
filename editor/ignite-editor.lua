@@ -13,10 +13,15 @@ project "IgniteEditor"
         "src/**.cpp",
         "src/**.hpp",
         "src/**.h",
+        "../resources/qt_schema/**.ui",
     }
 
     links {
         "IgniteEngine",
+        "Qt6Core",
+        "Qt6Gui",
+        "Qt6UiTools",
+        "Qt6Widgets",
         "JOLT",
         "ZLIB",
         "YAMLCPP"
@@ -26,6 +31,11 @@ project "IgniteEditor"
         "src",
         "%{wks.location}/engine/src",
         "%{IncludeDir.SDL3}",
+        "%{LibraryDir.QT}/include",
+        "%{LibraryDir.QT}/include/QtCore",
+        "%{LibraryDir.QT}/include/QtGui",
+        "%{LibraryDir.QT}/include/QtUiTools",
+        "%{LibraryDir.QT}/include/QtWidgets",
         "%{IncludeDir.BOX2D}",
         "%{IncludeDir.ENTT}",
         "%{IncludeDir.JOLT}",
@@ -73,12 +83,17 @@ project "IgniteEditor"
      filter { "system:windows", "toolset:msc*"}
         disablewarnings { "4099" }
         buildoptions {
-            "/utf-8"
+            "/utf-8",
+            "/Zc:__cplusplus"
         }
 
     filter "system:windows"
+    libdirs {
+        "%{LibraryDir.QT}/lib"
+    }
     defines {
         "PLATFORM_WINDOWS",
+        "IGNITE_CUSTOM_ENTRY_POINT",
         "IGNITE_WITH_DX12",
         "IGNITE_WITH_VULKAN",
         "NOMINMAX",
@@ -88,6 +103,15 @@ project "IgniteEditor"
     }
     
     links { "d3dcompiler", "dxcompiler", "delayimp" }
+    postbuildcommands {
+        'cmake -E make_directory "%{cfg.targetdir}/platforms"',
+        '{COPYFILE} "%{LibraryDir.QT}/Qt6Core.dll" "%{cfg.targetdir}"',
+        '{COPYFILE} "%{LibraryDir.QT}/Qt6Gui.dll" "%{cfg.targetdir}"',
+        '{COPYFILE} "%{LibraryDir.QT}/Qt6UiTools.dll" "%{cfg.targetdir}"',
+        '{COPYFILE} "%{LibraryDir.QT}/Qt6Widgets.dll" "%{cfg.targetdir}"',
+        '{COPYFILE} "%{wks.location}/resources/qt_schema/MainWindow.ui" "%{cfg.targetdir}/MainWindow.ui"',
+        '{COPYFILE} "%{LibraryDir.QT}/plugins/platforms/qwindows.dll" "%{cfg.targetdir}/platforms/qwindows.dll"'
+    }
 
     filter "configurations:Debug"
         runtime "Debug"
