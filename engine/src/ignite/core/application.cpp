@@ -407,8 +407,7 @@ namespace ignite
                 FmodAudio::Update(m_DeltaTime);
             }
 
-            const bool isHostedInExternalWindow = m_CreateInfo.nativeHostWindowHandle != nullptr;
-            if (m_Window->IsVisible() && (m_Window->IsInFocus() || isHostedInExternalWindow))
+            if (m_Window->IsVisible() && m_Window->IsInFocus())
             {
                 IGN_PROFILE_SCOPE("MainThread::SimulationAndPresent");
 

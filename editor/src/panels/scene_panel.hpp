@@ -66,7 +66,7 @@ namespace ignite
         Entity SetSelectedEntity(Entity entity);
         Entity GetSelectedEntity();
 
-        std::unordered_map<UUID, Entity> GetSelectedEntities() const;
+        const std::unordered_map<UUID, Entity> &GetSelectedEntities() { return m_SelectedEntities; }
         
         template<typename T, typename UIFunction>
         void RenderComponent(const std::string &name, Entity entity, UIFunction uiFunction, bool allowedToRemove = true);
@@ -82,7 +82,10 @@ namespace ignite
 
         Ref<Scene> m_Scene;
         Gizmo m_Gizmo;
+        std::unordered_map<UUID, Entity> m_SelectedEntities;
         std::unordered_map<std::string, Ref<Texture>> m_Icons;
+
+        static UUID m_TrackingSelectedEntity;
 
 		struct ViewportData
 		{

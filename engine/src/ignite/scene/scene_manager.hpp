@@ -68,10 +68,13 @@ namespace ignite
                     auto view = srcRegistry->view<Component>();
                     for (auto srcEntity : view)
                     {
-                        const IDComponent &srcIdComp = srcRegistry->get<IDComponent>(srcEntity);
-                        if (auto destIt = entityMap.find(srcIdComp.uuid); destIt != entityMap.end())
+                        for (auto [uuid, destEntity] : entityMap)
                         {
-                            destRegistry->emplace_or_replace<Component>(destIt->second, srcRegistry->get<Component>(srcEntity));
+                            // key (UUID)
+                            if (uuid == srcRegistry->get<IDComponent>(srcEntity).uuid)
+                            {
+                                destRegistry->emplace_or_replace<Component>(destEntity, srcRegistry->get<Component>(srcEntity));
+                            }
                         }
                     }
                 }(), ...
