@@ -12,11 +12,14 @@
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/serializer/scene_serializer.hpp"
 #include "ignite/project/project.hpp"
+#include "ignite/scene/entity.hpp"
 #include "states.hpp"
 
 #include <future>
+#include <mutex>
 #include <optional>
 #include <unordered_set>
+#include <vector>
 
 namespace ignite
 {
@@ -52,6 +55,8 @@ namespace ignite
             float assetUnloadTimer = 0.0f;
 
             uint32_t hoveredEntity = static_cast<uint32_t>(-1);
+            UUID trackingSelectedEntity = UUID(0);
+            std::unordered_map<UUID, Entity> selectedEntities;
             ProjectInfo projectCreateInfo;
 
             State sceneState = State::SceneEdit;
@@ -62,6 +67,9 @@ namespace ignite
     public:
         EditorLayer(const std::string &name);
         ~EditorLayer();
+
+        static EditorLayer *GetInstance();
+        void SetQtSceneHierarchyRefreshCallback(std::function<void()> callback);
 
         void OnAttach() override;
         void OnDetach() override;
@@ -99,6 +107,15 @@ namespace ignite
         uint32_t GetActiveDockspaceID() const { return m_ActiveEditorDockspaceId; }
 
         EditorState &GetState() { return m_State; }
+        std::unordered_map<UUID, Entity> &GetSelectedEntities();
+        size_t GetSelectedEntityCount() const;
+        UUID GetTrackingSelectedEntity() const;
+
+        void ClearSelection(bool notifyQt = true);
+        Entity SetSelectedEntity(Entity entity, bool appendSelection = false, bool notifyQt = true);
+        void SetSelectedEntities(const std::vector<Entity> &entities, UUID trackingEntity = UUID(0), bool notifyQt = true);
+        Entity GetSelectedEntity() const;
+        void DuplicateSelectedEntities();
 
         void RefreshContentBrowsers();
 
@@ -116,6 +133,7 @@ namespace ignite
         void AddContentBrowserPanel();
         void ReloadContentBrowserPanels();
         uint32_t GetOpenContentBrowserCount() const;
+        void NotifyQtSceneHierarchyChanged();
 
         void UIProjectCreation();
         void UISettings();
@@ -159,6 +177,8 @@ namespace ignite
         std::unordered_set<ContentBrowserPanel *> m_ContentBrowserPanelsPendingRemoval;
         uint32_t m_NextContentBrowserPanelId = 1;
         uint32_t m_ActiveEditorDockspaceId = 0;
+        std::function<void()> m_QtSceneHierarchyRefreshCallback;
+        mutable std::mutex m_SelectionMutex;
 
         friend class ScenePanel;
         friend class AssetImporterPanel;

@@ -6,6 +6,7 @@
 #include "panels/asset_importer_panel.hpp"
 #include "panels/asset_editor_panel.hpp"
 #include "ext/editor_ui.hpp"
+#include "ignite/core/application.hpp"
 #include "ignite/core/command.hpp"
 #include "ignite/graphics/renderer/renderer_2d.hpp"
 #include "ignite/asset/asset.hpp"
@@ -24,6 +25,7 @@
 #include <cmath>
 #include <format>
 #include <limits>
+#include <ranges>
 #include <string_view>
 #include <unordered_set>
 #include <QCursor>
@@ -31,6 +33,8 @@
 
 namespace ignite
 {
+    static EditorLayer *s_EditorLayerInstance = nullptr;
+
     namespace
     {
         const SDL_DialogFileFilter kSceneFileFilters[] =
@@ -57,10 +61,183 @@ namespace ignite
     EditorLayer::EditorLayer(const std::string &name)
         : Layer(name)
     {
+        s_EditorLayerInstance = this;
     }
 
     EditorLayer::~EditorLayer()
     {
+        if (s_EditorLayerInstance == this)
+        {
+            s_EditorLayerInstance = nullptr;
+        }
+    }
+
+    EditorLayer *EditorLayer::GetInstance()
+    {
+        return s_EditorLayerInstance;
+    }
+
+    void EditorLayer::SetQtSceneHierarchyRefreshCallback(std::function<void()> callback)
+    {
+        m_QtSceneHierarchyRefreshCallback = std::move(callback);
+    }
+
+    void EditorLayer::NotifyQtSceneHierarchyChanged()
+    {
+        if (m_QtSceneHierarchyRefreshCallback)
+        {
+            Application::SubmitToMainThread([callback = m_QtSceneHierarchyRefreshCallback]()
+            {
+                if (callback)
+                {
+                    callback();
+                }
+            });
+        }
+    }
+
+    void EditorLayer::ClearSelection(bool notifyQt)
+    {
+        std::scoped_lock lock(m_SelectionMutex);
+        m_State.selectedEntities.clear();
+        m_State.trackingSelectedEntity = UUID(0);
+
+        if (notifyQt)
+        {
+            NotifyQtSceneHierarchyChanged();
+        }
+    }
+
+    Entity EditorLayer::SetSelectedEntity(Entity entity, bool appendSelection, bool notifyQt)
+    {
+        if (!entity.IsValid())
+        {
+            ClearSelection(notifyQt);
+            return {};
+        }
+
+        std::scoped_lock lock(m_SelectionMutex);
+
+        if (!appendSelection)
+        {
+            m_State.selectedEntities.clear();
+
+            m_State.selectedEntities[entity.GetUUID()] = entity;
+        }
+        else
+        {
+            if (auto it = m_State.selectedEntities.find(entity.GetUUID()); it != m_State.selectedEntities.end())
+            {
+                m_State.selectedEntities.erase(it);
+
+                if (m_State.selectedEntities.empty())
+                {
+                    m_State.trackingSelectedEntity = UUID(0);
+
+                    if (notifyQt)
+                    {
+                        NotifyQtSceneHierarchyChanged();
+                    }
+                    return {};
+                }
+
+                m_State.trackingSelectedEntity = m_State.selectedEntities.begin()->first;
+                if (notifyQt)
+                {
+                    NotifyQtSceneHierarchyChanged();
+                }
+                return m_State.selectedEntities.begin()->second;
+            }
+
+            m_State.selectedEntities[entity.GetUUID()] = entity;
+        }
+
+        m_State.trackingSelectedEntity = entity.GetUUID();
+
+        if (notifyQt)
+        {
+            NotifyQtSceneHierarchyChanged();
+        }
+
+        return entity;
+    }
+
+    void EditorLayer::SetSelectedEntities(const std::vector<Entity> &entities, UUID trackingEntity, bool notifyQt)
+    {
+        std::scoped_lock lock(m_SelectionMutex);
+        m_State.selectedEntities.clear();
+        m_State.trackingSelectedEntity = UUID(0);
+
+        for (const Entity &entity : entities)
+        {
+            if (!entity.IsValid())
+            {
+                continue;
+            }
+
+            m_State.selectedEntities[entity.GetUUID()] = entity;
+        }
+
+        if (!m_State.selectedEntities.empty())
+        {
+            if (trackingEntity != UUID(0) && m_State.selectedEntities.contains(trackingEntity))
+            {
+                m_State.trackingSelectedEntity = trackingEntity;
+            }
+            else
+            {
+                m_State.trackingSelectedEntity = m_State.selectedEntities.begin()->first;
+            }
+        }
+
+        if (notifyQt)
+        {
+            NotifyQtSceneHierarchyChanged();
+        }
+    }
+
+    Entity EditorLayer::GetSelectedEntity() const
+    {
+        std::scoped_lock lock(m_SelectionMutex);
+        if (m_State.trackingSelectedEntity != UUID(0))
+        {
+            if (auto it = m_State.selectedEntities.find(m_State.trackingSelectedEntity); it != m_State.selectedEntities.end())
+            {
+                return it->second;
+            }
+        }
+
+        return m_State.selectedEntities.empty() ? Entity{} : m_State.selectedEntities.begin()->second;
+    }
+
+    std::unordered_map<UUID, Entity> &EditorLayer::GetSelectedEntities()
+    {
+        std::scoped_lock lock(m_SelectionMutex);
+        return m_State.selectedEntities;
+    }
+
+    size_t EditorLayer::GetSelectedEntityCount() const
+    {
+        std::scoped_lock lock(m_SelectionMutex);
+        return m_State.selectedEntities.size();
+    }
+
+    UUID EditorLayer::GetTrackingSelectedEntity() const
+    {
+        std::scoped_lock lock(m_SelectionMutex);
+        return m_State.trackingSelectedEntity;
+    }
+
+    void EditorLayer::DuplicateSelectedEntities()
+    {
+        const auto selectedEntities = GetSelectedEntities();
+        for (const Entity &entity : selectedEntities | std::views::values)
+        {
+            if (entity.IsValid())
+            {
+                SceneManager::DuplicateEntity(m_ActiveScene.get(), entity);
+            }
+        }
     }
 
     void EditorLayer::OnAttach()
@@ -463,6 +640,16 @@ namespace ignite
         if (m_SceneRenderer)
         {
             m_SceneRenderer->BeginFrame();
+            m_SceneRenderer->ClearSelectedEntities();
+
+            const auto selectedEntities = GetSelectedEntities();
+            for (const Entity &entity : selectedEntities | std::views::values)
+            {
+                if (entity.IsValid())
+                {
+                    m_SceneRenderer->SetSelectedEntity(entity);
+                }
+            }
         }
 
         // Resizing editor camera
@@ -886,6 +1073,8 @@ namespace ignite
             return;
         }
 
+        ClearSelection(false);
+
         constexpr std::string_view kActiveSceneAssetOwner = "editor.active-scene";
         if (m_ActiveProject)
         {
@@ -924,6 +1113,7 @@ namespace ignite
         }
 
         m_SceneRenderer->SetActiveScene(scene);
+        NotifyQtSceneHierarchyChanged();
     }
 
     void EditorLayer::RefreshContentBrowsers()

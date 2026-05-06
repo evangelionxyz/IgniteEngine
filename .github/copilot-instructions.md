@@ -17,4 +17,5 @@
 ## UI Guidelines
 - Always use `ImGuiListClipper` for lists in this codebase to ensure efficient rendering and management of list items.
 - For mesh scene previews, use the full height and hide the animation timeline only when the skeleton is null; keep the timeline visible when the skeleton exists.
+- When building Qt strings in this codebase, prefer using `.c_str()` instead of `QString::fromStdString()` for scene hierarchy UI code.
 

@@ -62,8 +62,6 @@ namespace ignite
         };
     }
 
-    UUID ScenePanel::m_TrackingSelectedEntity = UUID(0);
-
     ScenePanel::ScenePanel(const char *windowTitle, EditorLayer *editor)
         : IPanel(windowTitle, editor), m_Gizmo()
     {
@@ -126,12 +124,16 @@ namespace ignite
     void ScenePanel::SetActiveScene(const Ref<Scene> &scene)
     {
         m_Scene = scene;
-        m_SelectedEntities.clear();
     }
 
     void ScenePanel::OnGuiRender()
     {
         IGN_PROFILE_FUNCTION();
+
+        if (!m_EditorLayer->GetSelectedEntity().IsValid() && m_Data.gizmoOp != GizmoOperation::NONE)
+        {
+            SetGizmoOperation(GizmoOperation::NONE);
+        }
 
         if (m_Scene)
         {
@@ -315,7 +317,10 @@ namespace ignite
         }
 
         static UUID s_LastAutoScrolledTarget = UUID(0);
-        if (m_TrackingSelectedEntity == UUID(0))
+        const UUID trackingSelectedEntity = m_EditorLayer->GetTrackingSelectedEntity();
+        const auto selectedEntities = m_EditorLayer->GetSelectedEntities();
+
+        if (trackingSelectedEntity == UUID(0))
         {
             s_LastAutoScrolledTarget = UUID(0);
         }
@@ -324,7 +329,7 @@ namespace ignite
         bool isDeleting = false;
         const bool isPrefab = idComp.IsInType(EntityType_Prefab);
 
-        const bool isSelected = m_SelectedEntities.contains(entity.GetUUID());
+        const bool isSelected = selectedEntities.contains(entity.GetUUID());
 
         const std::function<bool(Entity)> hasSelectedDescendant = [&](Entity current) -> bool
         {
@@ -334,7 +339,7 @@ namespace ignite
             const IDComponent& currentID = current.GetComponent<IDComponent>();
             for (const UUID childUuid : currentID.children)
             {
-                if (m_SelectedEntities.contains(childUuid))
+                if (selectedEntities.contains(childUuid))
                     return true;
 
                 Entity child = SceneManager::GetEntity(m_Scene.get(), childUuid);
@@ -366,14 +371,14 @@ namespace ignite
         
         const bool opened = ImGui::TreeNodeEx(reinterpret_cast<void *>(imguiPushId), flags, "%s", idComp.name.c_str());
 
-        if (isSelected && entity.GetUUID() == m_TrackingSelectedEntity && s_LastAutoScrolledTarget != m_TrackingSelectedEntity)
+        if (isSelected && entity.GetUUID() == trackingSelectedEntity && s_LastAutoScrolledTarget != trackingSelectedEntity)
         {
             if (!ImGui::IsItemVisible())
             {
                 ImGui::SetScrollHereY(0.5f);
             }
 
-            s_LastAutoScrolledTarget = m_TrackingSelectedEntity;
+            s_LastAutoScrolledTarget = trackingSelectedEntity;
         }
         
         ImGui::PopStyleColor(3);
@@ -399,7 +404,7 @@ namespace ignite
                     DestroyEntity(entity);
                     isDeleting = true;
 
-                    m_SelectedEntities.clear();
+                    ClearSelection();
                 }
 
                 ImGui::EndPopup();
@@ -2329,13 +2334,14 @@ namespace ignite
             // Start manipulation: Fired only on the first frame of interaction
             const bool allowGizmoManipulation = !m_Data.is2DBoundsSizing;
             bool isManipulatingNow = allowGizmoManipulation && m_Gizmo.IsManipulating();
+            auto &selectedEntities = m_EditorLayer->GetSelectedEntities();
 
             static std::unordered_map<UUID, TransformComponent> initialTransforms;
 
             if (isManipulatingNow && !m_Data.isGizmoManipulating)
             {
                 initialTransforms.clear();
-                for (auto [uuid, entity] : m_SelectedEntities)
+                for (auto [uuid, entity] : selectedEntities)
                 {
                     // Store the original transform of each selected entity
                     initialTransforms[uuid] = entity.GetTransform();
@@ -2346,15 +2352,15 @@ namespace ignite
             m_Data.isGizmoManipulating = isManipulatingNow;
             m_Data.isGizmoBeingUse = isManipulatingNow || m_Gizmo.IsHovered() || m_Data.is2DBoundsHovered || m_Data.is2DBoundsSizing;
 
-            if (allowGizmoManipulation && m_SelectedEntities.size() > 1)
+            if (allowGizmoManipulation && selectedEntities.size() > 1)
             {
                 // Step 1: Compute shared pivot (center of all selected entities)
                 glm::vec3 pivot(0.0f);
-                for (Entity entity : m_SelectedEntities | std::views::values)
+                for (Entity entity : selectedEntities | std::views::values)
                 {
                     pivot += entity.GetTransform().translation;
                 }
-                pivot /= static_cast<float>(m_SelectedEntities.size());
+                pivot /= static_cast<float>(selectedEntities.size());
 
                 // Step 2: create a transform matrix for the gizmo at the pivot point
                 glm::mat4 gizmoTransform = glm::translate(glm::mat4(1.0f), pivot);
@@ -2372,7 +2378,7 @@ namespace ignite
                     glm::vec3 deltaTranslation, deltaScale, deltaRotation;
                     Math::DecomposeTransformEuler(gizmoDelta, deltaTranslation, deltaRotation, deltaScale);
 
-                    for (auto &[uuid, entity] : m_SelectedEntities)
+                    for (auto &[uuid, entity] : selectedEntities)
                     {
                         // Get the live transform component to apply changes to it
                         auto &tr = entity.GetTransform();
@@ -2423,7 +2429,7 @@ namespace ignite
                 if (!isManipulatingNow && wasManipulating)
                 {
                     std::vector<ComponentPropertyBatchCommand<TransformComponent>::Entry> entries;
-                    for (auto &[uuid, entity] : m_SelectedEntities)
+                    for (auto &[uuid, entity] : selectedEntities)
                     {
                         if (auto it = initialTransforms.find(uuid); it != initialTransforms.end())
                         {
@@ -2877,7 +2883,7 @@ namespace ignite
             clearResizeState();
         };
 
-        if (!m_Scene || m_EditorCamera.GetNavigationMode() != EditorCamera::NavigationMode::Mode2D || m_SelectedEntities.size() != 1 || m_Data.gizmoOp != GizmoOperation::BOUND_SIZING_2D)
+        if (!m_Scene || m_EditorCamera.GetNavigationMode() != EditorCamera::NavigationMode::Mode2D || m_EditorLayer->GetSelectedEntityCount() != 1 || m_Data.gizmoOp != GizmoOperation::BOUND_SIZING_2D)
         {
             if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
             {
@@ -3205,76 +3211,31 @@ namespace ignite
 
     void ScenePanel::ClearSelection()
     {
-        m_SelectedEntities.clear();
+        m_EditorLayer->ClearSelection();
     }
 
     Entity ScenePanel::SetSelectedEntity(Entity entity)
     {
-        auto sceneRenderer = m_Scene->GetSceneRenderer();
-
-        if (!entity.IsValid())
-        {
-            m_SelectedEntities.clear();
-            m_TrackingSelectedEntity = UUID(0);
-
-            sceneRenderer->ClearSelectedEntities();
-            return {};
-        }
-
-        // multi select
-        if (m_EditorLayer->GetState().multiSelect)
-        {
-            if (auto it = m_SelectedEntities.find(entity.GetUUID()); it != m_SelectedEntities.end())
-            {
-                // de-select
-                sceneRenderer->UnselectEntity(it->second);
-                it = m_SelectedEntities.erase(it);
-
-                if (!m_SelectedEntities.empty())
-                {
-                    m_TrackingSelectedEntity = m_SelectedEntities.begin()->first;
-                    sceneRenderer->SetSelectedEntity(m_SelectedEntities.begin()->second);
-
-                    return m_SelectedEntities.begin()->second;
-                }
-            }
-            else
-            {
-                m_SelectedEntities[entity.GetUUID()] = entity;
-                sceneRenderer->SetSelectedEntity(entity);
-            }
-        }
-        else // single select
-        {
-            m_SelectedEntities.clear();
-            sceneRenderer->ClearSelectedEntities();
-
-            m_SelectedEntities[entity.GetUUID()] = entity;
-            sceneRenderer->SetSelectedEntity(entity);
-        }
-
-        if (m_SelectedEntities.empty())
+        const Entity selectedEntity = m_EditorLayer->SetSelectedEntity(entity, m_EditorLayer->GetState().multiSelect);
+        if (!selectedEntity.IsValid())
         {
             SetGizmoOperation(GizmoOperation::NONE);
         }
-
-        m_TrackingSelectedEntity = entity.GetUUID();
-        return entity;
+        return selectedEntity;
     }
 
     Entity ScenePanel::GetSelectedEntity()
     {
-        return m_SelectedEntities.empty() ? Entity{} : m_SelectedEntities.begin()->second;
+        return m_EditorLayer->GetSelectedEntity();
     }
 
     void ScenePanel::DuplicateSelectedEntity()
     {
-        for (const Entity& entity : m_SelectedEntities | std::views::values)
-        {
-            if (entity.IsValid())
-            {
-                SceneManager::DuplicateEntity(m_Scene.get(), entity);
-            }
-        }
+        m_EditorLayer->DuplicateSelectedEntities();
+    }
+
+    std::unordered_map<UUID, Entity> ScenePanel::GetSelectedEntities() const
+    {
+        return m_EditorLayer->GetSelectedEntities();
     }
 }
