@@ -48,7 +48,6 @@ namespace ignite
         bool IsLooping() const { return m_Looping; };
         bool IsVisible() const { return m_IsVisible; }
         bool IsInFocus() const { return m_IsInFocus; }
-        bool IsEmbedded() const { return m_NativeHostWindowHandle != nullptr; }
 
         void SetEventCallback(const std::function<void(Event&)>& callback);
         void SetTitle(const std::string &title) const;
@@ -76,7 +75,6 @@ namespace ignite
 		SDL_Window *m_Window = nullptr;
         DeviceManager *m_DeviceManager;
         std::string m_WindowTitle;
-        void *m_NativeHostWindowHandle = nullptr;
         std::function<void(Event&)> m_Callback;
         bool m_Looping = true;
         bool m_IsVisible = true;

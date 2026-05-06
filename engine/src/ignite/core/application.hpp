@@ -20,7 +20,6 @@
 #include <queue>
 #include <mutex>
 #include <filesystem>
-#include <functional>
 
 namespace ignite
 {
@@ -46,8 +45,6 @@ namespace ignite
         std::string iconPath = " ";
         std::string workingDirectory;
         nvrhi::GraphicsAPI graphicsApi = nvrhi::GraphicsAPI::VULKAN;
-        std::function<void()> platformEventPump;
-        void *nativeHostWindowHandle = nullptr;
 
         u32 width = 1280;
         u32 height = 640;

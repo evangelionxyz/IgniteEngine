@@ -88,7 +88,6 @@ namespace ignite
         int windowPosY = -1;
 		int windowWidth = 1080;
 		int windowHeight = 640;
-        void *nativeWindowHandle = nullptr;
 
         uint32_t backBufferWidth = 1080;
         uint32_t backBufferHeight = 640;

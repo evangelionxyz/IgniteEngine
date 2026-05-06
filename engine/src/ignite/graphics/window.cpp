@@ -84,11 +84,9 @@ namespace ignite
         { nvrhi::Format::RGBA32_UINT,       32, 32, 32, 32,  0,  0, },
         { nvrhi::Format::RGBA32_FLOAT,      32, 32, 32, 32,  0,  0, }
     };
-
     Window::Window(const char *windowTitle, const DeviceParameters &params, nvrhi::GraphicsAPI graphicsApi)
         : m_WindowTitle(windowTitle)
     {
-        m_NativeHostWindowHandle = params.nativeWindowHandle;
         m_DeviceManager = DeviceManager::Create(this, params, graphicsApi);
 
 		DeviceParameters& deviceParams = m_DeviceManager->GetDeviceParameters();
@@ -121,34 +119,15 @@ namespace ignite
 		    windowFlags |= SDL_WINDOW_VULKAN;
         }
 
-        // Create window with Qt Native window handle
-        if (m_NativeHostWindowHandle)
-        {
-            SDL_PropertiesID props = SDL_CreateProperties();
-            SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, windowTitle);
-            SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, params.windowWidth);
-            SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, params.windowHeight);
-            SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, windowFlags);
-            SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_HIDDEN_BOOLEAN, true);
-#ifdef PLATFORM_WINDOWS
-            SDL_SetPointerProperty(props, SDL_PROP_WINDOW_CREATE_WIN32_HWND_POINTER, m_NativeHostWindowHandle);
-#endif
-            m_Window = SDL_CreateWindowWithProperties(props);
-            SDL_DestroyProperties(props);
-        }
-        else
-        {
-            m_Window = SDL_CreateWindow(windowTitle, params.windowWidth, params.windowHeight, windowFlags);
-        }
-
+        m_Window = SDL_CreateWindow(windowTitle, params.windowWidth, params.windowHeight, windowFlags);
         LOG_ASSERT(m_Window, "Failed to create SDL3 window\n");
 
-        if (!m_NativeHostWindowHandle && params.startMaximized)
+        if (params.startMaximized)
         {
             SDL_MaximizeWindow(m_Window);
         }
 
-        if (!m_NativeHostWindowHandle && params.startFullscreen)
+        if (params.startFullscreen)
         {
             SDL_SetWindowFullscreen(m_Window, SDL_WINDOW_FULLSCREEN);
         }
@@ -160,21 +139,19 @@ namespace ignite
             deviceParams.backBufferHeight = height;
         }
 
-        if (!m_NativeHostWindowHandle)
-        {
-	        SDL_SetWindowPosition(m_Window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
-        }
+	    SDL_SetWindowPosition(m_Window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
 #if PLATFORM_WINDOWS
-        if (!m_NativeHostWindowHandle)
-        {
-		    HWND hwnd = GetNativeWindow();
-            BOOL useDarkMode = TRUE;
-            DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &useDarkMode, sizeof(useDarkMode));
-            // 7160E8 visual studio purple
-            COLORREF rgbRed = 0x00E86071;
-            DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
-        }
+		HWND hwnd = GetNativeWindow();
+        BOOL useDarkMode = TRUE;
+        DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &useDarkMode, sizeof(useDarkMode));
+
+        // 7160E8 visual studio purple
+        COLORREF rgbRed = 0x00E86071;
+        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &rgbRed, sizeof(rgbRed));
+
+        // DWM_WINDOW_CORNER_PREFERENCE cornerPreference = DWMWCP_ROUNDSMALL;
+        // DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &cornerPreference, sizeof(cornerPreference));
 #endif
 
         result = m_DeviceManager->CreateDevice();
@@ -227,6 +204,7 @@ namespace ignite
             }
 
 			SDL_WindowFlags flags = SDL_GetWindowFlags(m_Window);
+            // m_DeviceManager->m_WindowIsInFocus = (flags & SDL_WINDOW_INPUT_FOCUS) == 0;
             m_IsVisible = true;
 
             deviceParams.windowWidth = event.window.data1;
@@ -288,22 +266,6 @@ namespace ignite
             m_Callback(e);
             break;
         }
-        case SDL_EVENT_WINDOW_FOCUS_GAINED:
-        {
-            if (event.window.windowID != mainWindowId)
-                break;
-
-            m_IsInFocus = true;
-            break;
-        }
-        case SDL_EVENT_WINDOW_FOCUS_LOST:
-        {
-            if (event.window.windowID != mainWindowId)
-                break;
-
-            m_IsInFocus = false;
-            break;
-        }
         case SDL_EVENT_JOYSTICK_ADDED:
         {
             SDL_JoystickID jID = event.jdevice.which;
@@ -322,6 +284,8 @@ namespace ignite
             if (event.text.windowID != mainWindowId)
                 break;
 
+			/*KeyTypedEvent e(std::string(event.text.text));
+			m_Callback(e);*/
             break;
         }
         case SDL_EVENT_KEY_DOWN:
@@ -509,7 +473,7 @@ namespace ignite
 
     void Window::Show()
     {
-        if (!m_NativeHostWindowHandle && !m_DeviceManager->GetDeviceParameters().startMaximized)
+        if (!m_DeviceManager->GetDeviceParameters().startMaximized)
         {
 			int width, height;
 			SDL_GetWindowSize(m_Window, &width, &height);
