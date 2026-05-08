@@ -82,12 +82,12 @@ namespace ignite
         m_EditorCamera.UpdateSphericalPosition();
         m_EditorCamera.UpdateView();
         m_EditorCamera.UpdateProjection(width, height);
-        m_EditorCamera.SetNavigationMode(EditorCamera::NavigationMode::Fly);
+        m_EditorCamera.SetNavigationMode(EditorCamera::NavigationMode::Orbit);
         
         m_EditorCamera2D = m_EditorCamera;
         m_EditorCamera3D = m_EditorCamera;
         m_EditorCamera2D->SetNavigationMode(EditorCamera::NavigationMode::Mode2D);
-        m_EditorCamera3D->SetNavigationMode(EditorCamera::NavigationMode::Fly);
+        m_EditorCamera3D->SetNavigationMode(EditorCamera::NavigationMode::Orbit);
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();

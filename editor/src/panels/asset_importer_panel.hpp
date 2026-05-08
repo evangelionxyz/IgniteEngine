@@ -53,8 +53,8 @@ namespace ignite
 		AssetImportData BuildCurrentImportData() const;
 		std::filesystem::path PrepareAssetForImport(const AssetImportData &asset) const;
 
-		void ImportFbxMesh(const std::filesystem::path &filepath, const MeshImportOptions &options);
-		void ImportFbxSkeletonAndAnimations(const std::filesystem::path &filepath, const MeshImportOptions &options);
+		bool ImportFbxMesh(const std::filesystem::path &filepath, const MeshImportOptions &options);
+		bool ImportFbxSkeletonAndAnimations(const std::filesystem::path &filepath, const MeshImportOptions &options);
 
 		std::filesystem::path BuildUniquePath(const std::filesystem::path &directory, const std::string &baseName, const std::string &extension) const;
 
@@ -69,7 +69,9 @@ namespace ignite
 		bool m_OpenImporterPopup = false;
 		bool m_SkipDialogForSameType = false;
 		bool m_IsImporting = false;
-		std::atomic<int> m_ActiveImportJobs;
+		std::atomic<int> m_ActiveImportJobs = 0;
+		std::atomic<int> m_TotalImportItems = 0;
+		std::atomic<int> m_ImportedItems = 0;
 
    };
 }

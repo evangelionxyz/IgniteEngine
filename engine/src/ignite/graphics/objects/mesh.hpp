@@ -87,7 +87,7 @@ namespace ignite
 
         static Ref<MeshPrimitive> Create(const std::vector<VertexMesh_Anim> &vertices, const std::vector<uint32_t> &indices);
 
-        void CreateBuffer(nvrhi::ICommandList *cmd);
+        void WriteBuffer(nvrhi::ICommandList *cmd);
         void ClearPrimitivesData();
     };
 

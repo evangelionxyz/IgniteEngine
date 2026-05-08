@@ -144,7 +144,7 @@ namespace ignite
 
     void AssetImporter::ImportAsync(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager, std::function<void(Ref<Asset>, AssetHandle)> callback)
     {
-        assetManager->SubmitJob([handle, metadata, assetManager, callback]()
+        AssetWorker::SubmitJob([handle, metadata, assetManager, callback]()
         {
             // should be always importing with full filepath
             AssetMetaData metadataCopy = metadata;
@@ -234,19 +234,6 @@ namespace ignite
                     Ref<Material> material = Material::Deserialize(materialFilepath);
                     assetManager->AssignAsset(materialHandle, material);
                 }
-
-                Application::SubmitToRenderThread([mesh]()
-                {
-                    nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-                    nvrhi::CommandListHandle cmd = device->createCommandList();
-                    cmd->open();
-                    mesh->GetPrimitive()->CreateBuffer(cmd);
-                    cmd->close();
-
-                    LOG_DEBUG("Submitting mesh \"{}\" to render thread", mesh->GetName());
-
-                    Application::SubmitWorkerCommandList(cmd);
-                });
             }
         };
 

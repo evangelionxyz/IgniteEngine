@@ -1226,6 +1226,18 @@ namespace ignite
 
                     for (auto &meshInstance : sm->GetMeshInstances())
                     {
+                        // Write vertex/index buffer
+                        auto &primitive = meshInstance->GetPrimitive();
+                        const bool buffersCreated = primitive->vertexBuffer && primitive->indexBuffer;
+                        if (!buffersCreated)
+                        {
+                            primitive->WriteBuffer(cmd);
+                        }
+                        if (!buffersCreated)
+                        {
+                            continue;
+                        }
+
                         meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, smc.skeletonGpuBuffer);
 
                         SkinnedMeshBufferData gpuData;
@@ -1249,7 +1261,6 @@ namespace ignite
 
                         nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
 
-                        auto &primitive = meshInstance->GetPrimitive();
                         if (meshBindingSet && primitive->vertexBuffer && primitive->indexBuffer)
                         {
                             csmState.bindings = { meshBindingSet };
@@ -1352,6 +1363,10 @@ namespace ignite
                     nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
 
                     auto &primitive = meshInstance->GetPrimitive();
+                    if (!primitive->vertexBuffer || !primitive->indexBuffer)
+                    {
+                        primitive->WriteBuffer(cmd);
+                    }
 
                     Ref<Material> material = ResolveMaterial(project, meshInstance->GetMaterialHandle());
                     if (!material)

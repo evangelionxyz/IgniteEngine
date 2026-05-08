@@ -110,8 +110,45 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 
     std::filesystem::path Project::GetProjectFilepath(const std::filesystem::path &filepath) const
     {
-        const auto relativePath = std::filesystem::relative(filepath, m_Info.rootDirectory);
-        return m_Info.rootDirectory / (!relativePath.generic_string().empty() ? relativePath : filepath);
+        if (filepath.empty())
+        {
+            return {};
+        }
+
+        if (filepath.is_absolute())
+        {
+            return filepath.lexically_normal();
+        }
+
+        return (m_Info.rootDirectory / filepath).lexically_normal();
+    }
+
+    std::filesystem::path Project::GetProjectRelativeFilepath(const std::filesystem::path &filepath) const
+    {
+        if (filepath.empty())
+        {
+            return {};
+        }
+
+        const std::filesystem::path normalizedRoot = m_Info.rootDirectory.lexically_normal();
+        const std::filesystem::path normalizedPath = filepath.lexically_normal();
+
+        if (!normalizedPath.is_absolute())
+        {
+            return normalizedPath;
+        }
+
+        const std::filesystem::path relativePath = normalizedPath.lexically_relative(normalizedRoot);
+        if (!relativePath.empty())
+        {
+            const auto firstComponent = *relativePath.begin();
+            if (firstComponent != "..")
+            {
+                return relativePath;
+            }
+        }
+
+        return normalizedPath;
     }
 
     void Project::SetActiveScene(const Ref<Scene> &scene)
@@ -194,9 +231,11 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 
 				assetSr.BeginMap(); // Begin Metadata
 
+                const auto assetRelativePath = GetProjectRelativeFilepath(metadata.filepath);
+
 				assetSr.AddKeyValue("Handle", static_cast<uint64_t>(handle));
 				assetSr.AddKeyValue("Type", AssetTypeToString(metadata.type));
-				assetSr.AddKeyValue("Filepath", metadata.filepath.generic_string());
+				assetSr.AddKeyValue("Filepath", assetRelativePath.generic_string());
 
 				assetSr.EndMap();
 			}

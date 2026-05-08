@@ -1035,7 +1035,7 @@ namespace ignite
             if (assetType == PendingFileLoading::ImportAssets)
             {
                 // submit to asset worker
-                m_AssetManager->SubmitJob([this, assetType, assetMetaData]()
+                AssetWorker::SubmitJob(std::format("Importing {}...", assetMetaData.filepath.filename().string()), [this, assetType, assetMetaData]()
                 {
                     if (Ref<Asset> asset = m_AssetManager->Import(AssetHandle(), assetMetaData))
                     {
@@ -2248,12 +2248,12 @@ namespace ignite
             IGN_PROFILE_SCOPE("ContentBrowser::DragDropSource");
 
             m_ActiveDragItems = GetDragSourcePaths(filepath);
+            auto project = m_EditorLayer->GetActiveProject();
+            const std::filesystem::path relativeAssetPath = project ? project->GetProjectFilepath(filepath) : filepath;
 
             const bool isDirectory = std::filesystem::is_directory(filepath);
             if (!isDirectory)
             {
-                auto project = m_EditorLayer->GetActiveProject();
-                const std::filesystem::path relativeAssetPath = project ? project->GetProjectFilepath(filepath) : filepath;
                 AssetHandle handle = project ? m_AssetManager->GetAssetHandle(relativeAssetPath) : AssetHandle(0);
                 if (handle != AssetHandle(0))
                 {
@@ -2470,7 +2470,7 @@ namespace ignite
         int thumbnailSize = m_ThumbnailSize;
         const uint64_t requestGeneration = s_SharedThumbnailLoadGeneration;
 
-        m_AssetManager->SubmitJob([this, capturedPath, thumbnailSize, requestGeneration]()
+        AssetWorker::SubmitJob("Generating thumbnails...", [this, capturedPath, thumbnailSize, requestGeneration]()
         {
             // -----------------------------------------------------------------------
             // WORKER THREAD: Load raw CPU pixels only — NO GPU objects created here.

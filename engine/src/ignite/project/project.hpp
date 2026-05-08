@@ -39,6 +39,7 @@ namespace ignite
         ~Project() override;
         
         std::filesystem::path GetProjectFilepath(const std::filesystem::path &filepath) const;
+        std::filesystem::path GetProjectRelativeFilepath(const std::filesystem::path &filepath) const;
         
         void SetActiveScene(const Ref<Scene> &scene);
         void SetDefaultScene(AssetHandle handle);

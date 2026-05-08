@@ -16,23 +16,8 @@ namespace ignite {
     static AssetMetaData s_NullMetaData;
 
     AssetManager::AssetManager(Project *project)
-        : m_Running(true), m_Project(project)
+        : m_Project(project)
     {
-        const uint32_t THREAD_COUNT = std::max(std::thread::hardware_concurrency() / 2u, 1u);
-        LOG_WARN("[Asset Manager] Creating {} worker threads!", THREAD_COUNT);
-
-        for (uint32_t i = 0; i < THREAD_COUNT; ++i)
-        {
-            m_Workers.emplace_back(&AssetManager::WorkerLoop, this);
-        }
-
-        for (uint32_t i = 0; i < THREAD_COUNT; ++i)
-        {
-            std::stringstream ss;
-            ss << m_Workers[i].get_id();
-            unsigned long long id = std::stoull(ss.str());
-            LOG_WARN("[Asset Manager] Worker [{0}]: {1}", i, id);
-        }
     }
 
     bool AssetManager::IsAssetLoaded(AssetHandle handle) const
@@ -68,17 +53,9 @@ namespace ignite {
 
     AssetManager::~AssetManager()
     {
-        {
-            std::unique_lock lock(m_JobMutex);
-            m_Running = false;
-        }
-
-        // Notify other threads
-        m_ConditionVariable.notify_all();
-        for (std::thread &worker : m_Workers)
-        {
-            worker.join();
-        }
+        m_PinnedAssetsByOwner.clear();
+        m_AssetPinCounts.clear();
+        m_AssetHandleByPath.clear();
 
         if (m_FbxSdkManager)
         {
@@ -91,14 +68,18 @@ namespace ignite {
     {
         if (!m_FbxSdkManager)
         {
-            m_FbxSdkManager = fbxsdk::FbxManager::Create();
-            if (!m_FbxSdkManager)
             {
-                return nullptr;
-            }
+                std::unique_lock lock(m_FbxSdkMutex);
 
-            fbxsdk::FbxIOSettings *ioSettings = fbxsdk::FbxIOSettings::Create(m_FbxSdkManager, IOSROOT);
-            m_FbxSdkManager->SetIOSettings(ioSettings);
+                m_FbxSdkManager = fbxsdk::FbxManager::Create();
+                if (!m_FbxSdkManager)
+                {
+                    return nullptr;
+                }
+
+                fbxsdk::FbxIOSettings *ioSettings = fbxsdk::FbxIOSettings::Create(m_FbxSdkManager, IOSROOT);
+                m_FbxSdkManager->SetIOSettings(ioSettings);
+            }
         }
 
         return m_FbxSdkManager;
@@ -146,7 +127,7 @@ namespace ignite {
 
         if (!metadata.filepath.empty())
         {
-            const std::filesystem::path absoluteMetadataPath = std::filesystem::absolute(m_Project->GetProjectFilepath(metadata.filepath));
+            const std::filesystem::path absoluteMetadataPath = m_Project->GetProjectFilepath(metadata.filepath);
             m_AssetHandleByPath[absoluteMetadataPath.generic_string()] = handle;
         }
     }
@@ -320,7 +301,7 @@ namespace ignite {
     {
         IGN_PROFILE_FUNCTION();
 
-        LOG_DEBUG("[Asset Manager] Clearing all loaded assets (Count: {})", m_LoadedAssets.size());
+        // LOG_DEBUG("[Asset Manager] Clearing all loaded assets (Count: {})", m_LoadedAssets.size());
         
         if (auto* device = DeviceManager::GetInstance()->GetDevice())
         {
@@ -332,7 +313,7 @@ namespace ignite {
             m_LoadedAssets.clear();
         }
         
-        LOG_DEBUG("[Asset Manager] All loaded assets cleared");
+        // LOG_DEBUG("[Asset Manager] All loaded assets cleared");
     }
 
     void AssetManager::UnloadAsset(AssetHandle handle)
@@ -349,7 +330,7 @@ namespace ignite {
         auto it = m_LoadedAssets.find(handle);
         if (it != m_LoadedAssets.end())
         {
-            LOG_DEBUG("[Asset Manager] Unloading asset: {}", static_cast<uint64_t>(handle));
+            // LOG_DEBUG("[Asset Manager] Unloading asset: {}", static_cast<uint64_t>(handle));
             
             // Release lock before GPU sync to avoid blocking other threads
             Ref<Asset> asset = it->second;
@@ -366,9 +347,12 @@ namespace ignite {
 
     void AssetManager::UnloadUnusedAssets()
     {
-        IGN_PROFILE_FUNCTION();
+        if (m_UnloadPaused)
+        {
+            return;
+        }
 
-        LOG_DEBUG("[Asset Manager] Checking for unused assets (Loaded: {})", m_LoadedAssets.size());
+        IGN_PROFILE_FUNCTION();
 
         std::vector<AssetHandle> assetsToUnload;
         std::vector<Ref<Asset>> assetsToDestroy;
@@ -393,7 +377,6 @@ namespace ignite {
                 for (AssetHandle handle : assetsToUnload)
                 {
                     m_LoadedAssets.erase(handle);
-
                     LOG_DEBUG("[Asset Manager]    \"{}\" unloaded", GetAssetDisplayName(handle));
                 }
             }
@@ -409,25 +392,8 @@ namespace ignite {
             }
             
             assetsToDestroy.clear();
-            
             LOG_DEBUG("[Asset Manager] Unused assets unloaded. Remaining: {}", m_LoadedAssets.size());
         }
-        else
-        {
-            LOG_DEBUG("[Asset Manager] No unused assets found");
-        }
-    }
-
-    void AssetManager::SubmitJob(AssetJob job)
-    {
-        IGN_PROFILE_FUNCTION();
-
-        {
-            std::unique_lock lock(m_JobMutex);
-            m_Jobs.push(std::move(job));
-        }
-
-        m_ConditionVariable.notify_one();
     }
     
     AssetType AssetManager::GetAssetType(AssetHandle handle) const
@@ -476,45 +442,6 @@ namespace ignite {
     bool AssetManager::IsAssetHandleValid(AssetHandle handle) const
     {
         return static_cast<uint64_t>(handle) != 0 && m_AssetRegistry.contains(handle);
-    }
-
-    void AssetManager::WorkerLoop()
-    {
-        while (true)
-        {
-            AssetJob job;
-            
-            {
-                IGN_PROFILE_SCOPE("AssetManager::WorkerLoop");
-
-                std::unique_lock lock(m_JobMutex);
-                m_ConditionVariable.wait(lock, [this]() { return !m_Running || !m_Jobs.empty(); });
-
-                // stop the loop if engine is shutting down
-                if (!m_Running && m_Jobs.empty())
-                {
-                    return;
-                }
-
-                job = std::move(m_Jobs.front());
-                m_Jobs.pop();
-            }
-
-            // Execute job outside lock with exception handling
-            try
-            {
-                IGN_PROFILE_SCOPE_COLOR("AssetManager::WorkerLoop::Execute", 0x00AABCFF);
-                job();
-            }
-            catch (const std::exception& e)
-            {
-                LOG_ERROR("[Asset Manager] Worker thread exception: {}", e.what());
-            }
-            catch (...)
-            {
-                LOG_ERROR("[Asset Manager] Worker thread exception: unknown error");
-            }
-        }
     }
 
     Ref<Asset> AssetManager::Import(AssetHandle handle, const AssetMetaData &metadata)
