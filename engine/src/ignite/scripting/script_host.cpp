@@ -318,7 +318,7 @@ namespace ignite
         return m_Host->GetTypeFields(typeName.c_str());
     }
 
-    bool ScriptHost::ConfigureSerialization(const std::string &serializeFieldAttributeTypeName, const std::string &entityTypeName)
+    bool ScriptHost::ConfigureSerialization(const std::string &serializeFieldAttributeTypeName, const std::string &typeName)
     {
         if (!m_Initialized)
         {
@@ -326,7 +326,7 @@ namespace ignite
             return false;
         }
 
-        return m_Host->ConfigureSerialization(serializeFieldAttributeTypeName.c_str(), entityTypeName.c_str());
+        return m_Host->ConfigureSerialization(serializeFieldAttributeTypeName.c_str(), typeName.c_str());
     }
 
     bool ScriptHost::GetInstanceFieldValue(uint64_t instanceId, const std::string &fieldName, void *buffer, int bufferSize)

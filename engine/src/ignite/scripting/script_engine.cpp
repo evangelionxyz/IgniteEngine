@@ -18,17 +18,17 @@
 #include <fstream>
 #include <thread>
 #include <chrono>
+#include <ranges>
 
 namespace ignite
 {
     namespace
     {
+        // Constants
         constexpr const char *kSerializeFieldAttributeTypeName = "Ignite.SerializeFieldAttribute";
         constexpr const char *kEntityTypeName = "Ignite.Entity";
-    }
+        constexpr const char *kScriptableObjectTypeName = "Ignite.ScriptableObject";
 
-    namespace
-    {
         static bool TryGetAssemblyWriteTime(const std::filesystem::path &filepath, std::filesystem::file_time_type &outTime)
         {
             std::error_code ec;
@@ -154,8 +154,6 @@ namespace ignite
     {
         std::unique_ptr<ScriptHost> scriptHost;
 
-        std::vector<std::string> entityScriptStorage;
-
         std::filesystem::path mochiSharpAssemblyFilepath;
         std::filesystem::path coreAssemblyFilepath;
         std::filesystem::path appAssemblyFilepath;
@@ -166,8 +164,14 @@ namespace ignite
         std::filesystem::file_time_type appAssemblyLastWriteTime{};
         bool hasAppAssemblyLastWriteTime = false;
 
-        std::unordered_map<std::string, Ref<ScriptClass>> entityClasses;
+        // Entity script
+        ScriptClassMap entityClasses;
         std::unordered_map<ScriptInstanceID, Ref<ScriptInstance>> entityScriptInstances;
+        std::vector<std::string> entityScriptClassStorage;
+
+        // Scriptable object script
+        ScriptClassMap scriptableObjectClasses;
+        std::vector<std::string> scriptableObjecClassStorage;
     };
 
     ScriptEngineData *scriptEngineData = nullptr;
@@ -182,7 +186,7 @@ namespace ignite
 
         // Find the runtimeconfig.json for MochiSharp.Managed
         const std::filesystem::path configPath = m_Project->GetDirectory() / "Bin/MochiSharp.Managed.runtimeconfig.json";
-        
+
         if (!std::filesystem::exists(configPath))
         {
             LOG_ERROR("[Script Engine] HostFXR config not found: {}", configPath.generic_string());
@@ -256,13 +260,6 @@ namespace ignite
         LoadAppAssembly(appAssemblyPath);
         LoadAppAssemblyClasses();
 
-        // storing classes name into storage
-        for (auto &it : scriptEngineData->entityClasses)
-        {
-            LOG_INFO("Script '{}' loaded", it.first);
-            scriptEngineData->entityScriptStorage.emplace_back(it.first);
-        }
-
         LOG_WARN("[Script Engine] Initialized");
     }
 
@@ -323,7 +320,7 @@ namespace ignite
                     LOG_INFO("[Script Engine] App assembly change detected during play. Reload deferred until scene stops.");
                     return;
                 }
-                
+
                 scriptEngineData->appAssemblyFileWatcher.reset();
                 scriptEngine->ReloadAssembly();
                 scriptEngineData->assemblyReloadingPending = false;
@@ -355,16 +352,23 @@ namespace ignite
         {
             LOG_WARN("[Script Engine] App assembly may still be updating: {}", filepath.generic_string());
         }
-        
+
         if (!scriptEngineData->scriptHost->LoadAssembly(filepath))
         {
             LOG_ERROR("[Script Engine] Failed to load app assembly: {}", filepath.generic_string());
             return false;
         }
 
+        // Configure field serialization
         if (!scriptEngineData->scriptHost->ConfigureSerialization(kSerializeFieldAttributeTypeName, kEntityTypeName))
         {
-            LOG_ERROR("[Script Engine] Failed to configure script serialization type names");
+            LOG_ERROR("[Script Engine] Failed to configure Entity script serialization type names");
+            return false;
+        }
+
+        if (!scriptEngineData->scriptHost->ConfigureSerialization(kSerializeFieldAttributeTypeName, kScriptableObjectTypeName))
+        {
+            LOG_ERROR("[Script Engine] Failed to configure Scriptable Object serialization type names");
             return false;
         }
 
@@ -384,7 +388,7 @@ namespace ignite
         scriptEngineData->appAssemblyFileWatcher = CreateScope<filewatch::FileWatch<std::string>>(filepath.string(), ScriptEngine::OnAppAssemblyFileSystemEvent);
         scriptEngineData->assemblyReloadingPending = false;
 
-        std::filesystem::file_time_type currentWriteTime{};
+        std::filesystem::file_time_type currentWriteTime {};
         if (TryGetAssemblyWriteTime(filepath, currentWriteTime))
         {
             scriptEngineData->appAssemblyLastWriteTime = currentWriteTime;
@@ -404,15 +408,6 @@ namespace ignite
         if (LoadAppAssembly(scriptEngineData->appAssemblyFilepath))
         {
             LoadAppAssemblyClasses();
-
-            // storing classes name into storage
-            scriptEngineData->entityScriptStorage.clear();
-
-            for (auto &it : scriptEngineData->entityClasses)
-            {
-                scriptEngineData->entityScriptStorage.emplace_back(it.first);
-            }
-
             LOG_INFO("[Script Engine] App Assembly Reloaded '{}'", scriptEngineData->appAssemblyFilepath.generic_string());
         }
     }
@@ -429,10 +424,11 @@ namespace ignite
 
         for (auto &instance : scriptEngineData->entityScriptInstances)
         {
-			scriptEngine->GetScriptHost()->DestroyInstance(instance.second->GetInstanceID());
+            scriptEngine->GetScriptHost()->DestroyInstance(instance.second->GetInstanceID());
         }
 
         scriptEngineData->entityScriptInstances.clear();
+
         if (scriptEngineData->assemblyReloadDeferred)
         {
             scriptEngineData->assemblyReloadDeferred = false;
@@ -440,7 +436,7 @@ namespace ignite
             ReloadAssembly();
         }
 
-		m_Scene = nullptr;
+        m_Scene = nullptr;
     }
 
     bool ScriptEngine::IsEntityClassExists(const std::string &fullClassName)
@@ -467,8 +463,8 @@ namespace ignite
         return nullptr;
     }
 
-	void ScriptEngine::OnDestroyEntityInstance(ScriptInstanceID instanceID)
-	{
+    void ScriptEngine::OnDestroyEntityInstance(ScriptInstanceID instanceID)
+    {
         IGN_PROFILE_FUNCTION();
 
         auto &scriptInstance = scriptEngineData->entityScriptInstances[instanceID];
@@ -476,27 +472,24 @@ namespace ignite
             scriptInstance->InvokeOnDestroy();
 
         scriptEngineData->entityScriptInstances.erase(instanceID);
-	}
+    }
 
-    Ref<ScriptClass> ScriptEngine::GetEntityClassesByName(const std::string &name)
+    Ref<ScriptClass> ScriptEngine::GetEntityClassByName(const std::string &name)
     {
-        if (!scriptEngineData)
-            return nullptr;
-
         if (!scriptEngineData->entityClasses.contains(name))
             return nullptr;
 
         return scriptEngineData->entityClasses.at(name);
     }
 
-    std::unordered_map<std::string, Ref<ScriptClass>> ScriptEngine::GetEntityClasses()
+    const ScriptClassMap &ScriptEngine::GetEntityClasses()
     {
         return scriptEngineData->entityClasses;
     }
 
-    std::vector<std::string> ScriptEngine::GetScriptClassStorage()
+    const std::vector<std::string> &ScriptEngine::GetEntityScriptClassStorage()
     {
-        return scriptEngineData->entityScriptStorage;
+        return scriptEngineData->entityScriptClassStorage;
     }
 
     Ref<ScriptInstance> ScriptEngine::GetEntityScriptInstance(ScriptInstanceID instanceID)
@@ -509,6 +502,23 @@ namespace ignite
         }
 
         return it->second;
+    }
+
+    bool ScriptEngine::IsScriptableObjectClassExists(const std::string &fullClassName)
+    {
+        return scriptEngineData->scriptableObjectClasses.contains(fullClassName);
+    }
+
+    Ref<ScriptClass> ScriptEngine::GetScriptableObjectClassByName(const std::string &name)
+    {
+        if (!scriptEngineData->scriptableObjectClasses.contains(name))
+            return nullptr;
+        return scriptEngineData->scriptableObjectClasses.at(name);
+    }
+
+    const std::vector<std::string> &ScriptEngine::GetScriptableObjectClassStorage()
+    {
+        return scriptEngineData->scriptableObjecClassStorage;
     }
 
     Scene *ScriptEngine::GetSceneContext()
@@ -528,12 +538,39 @@ namespace ignite
 
     void ScriptEngine::LoadAppAssemblyClasses()
     {
-        auto previousEntityClasses = std::move(scriptEngineData->entityClasses);
-        scriptEngineData->entityClasses.clear();
+        // Load Entity and ScriptableObject classes
+        LoadAppClasses(kEntityTypeName, scriptEngineData->entityClasses);
+        LoadAppClasses(kScriptableObjectTypeName, scriptEngineData->scriptableObjectClasses);
+
+        // Store class name to class storage
+        // Entity class storage
+        scriptEngineData->entityScriptClassStorage.clear();
+        for (const auto &className : scriptEngineData->entityClasses | std::views::keys)
+        {
+            LOG_TRACE("Entity script '{}' loaded", className);
+            scriptEngineData->entityScriptClassStorage.push_back(className);
+        }
+
+        // Scriptable object
+        scriptEngineData->scriptableObjecClassStorage.clear();
+        for (const auto &className : scriptEngineData->scriptableObjectClasses | std::views::keys)
+        {
+            LOG_TRACE("Scriptable object '{}' loaded", className);
+            scriptEngineData->scriptableObjecClassStorage.push_back(className);
+        }
+    }
+
+    void ScriptEngine::LoadAppClasses(const std::string &classFullName, ScriptClassMap &outClasses)
+    {
+        // Copy the classes first to get previous field data
+        ScriptClassMap prevClasses = outClasses;
+
+        // Clear
+        outClasses.clear();
 
         const std::string appAssemblyName = scriptEngineData->appAssemblyFilepath.stem().string();
-        std::string derivedTypes = scriptEngineData->scriptHost->GetDerivedTypes(scriptEngineData->appAssemblyFilepath, "Ignite.Entity");
-        
+        std::string derivedTypes = scriptEngineData->scriptHost->GetDerivedTypes(scriptEngineData->appAssemblyFilepath, classFullName);
+
         if (derivedTypes.empty())
         {
             LOG_WARN("[Script Engine] No derived script classes found in {}", scriptEngineData->appAssemblyFilepath.generic_string());
@@ -552,8 +589,10 @@ namespace ignite
                 const std::string classNamespace = (lastDot == std::string::npos) ? "" : fullName.substr(0, lastDot);
                 const std::string className = (lastDot == std::string::npos) ? fullName : fullName.substr(lastDot + 1);
 
-                const auto scriptClass = CreateRef<ScriptClass>(classNamespace, className, appAssemblyName);
+                // Create the script class
+                const Ref<ScriptClass> scriptClass = CreateRef<ScriptClass>(classNamespace, className, appAssemblyName);
 
+                // Get field typename
                 const std::string fieldMetadata = scriptEngineData->scriptHost->GetTypeFields(fullName);
                 size_t fieldStart = 0;
                 auto fieldEntries = stringutils::SplitString(fieldMetadata, '|');
@@ -585,9 +624,11 @@ namespace ignite
                                 auto valStrings = stringutils::SplitString(parts[6], ',');
                                 for (const auto &vs : valStrings)
                                 {
-                                    try {
+                                    try
+                                    {
                                         field.EnumValues.push_back(std::stoi(vs));
-                                    } catch (...) {}
+                                    }
+                                    catch (...) { }
                                 }
                             }
                         }
@@ -611,8 +652,9 @@ namespace ignite
                     }
                 }
 
-                auto previousClassIt = previousEntityClasses.find(fullName);
-                if (previousClassIt != previousEntityClasses.end() && previousClassIt->second)
+                // Iterate previous class and get the field data
+                auto previousClassIt = prevClasses.find(fullName);
+                if (previousClassIt != prevClasses.end() && previousClassIt->second)
                 {
                     auto &previousInstances = previousClassIt->second->GetInstancesFields();
                     auto &currentInstances = scriptClass->GetInstancesFields();
@@ -633,7 +675,8 @@ namespace ignite
                     }
                 }
 
-                scriptEngineData->entityClasses[fullName] = scriptClass;
+                // Store the class
+                outClasses[fullName] = scriptClass;
             }
 
             if (end == std::string::npos)
@@ -643,6 +686,6 @@ namespace ignite
             start = end + 1;
         }
 
-        LOG_INFO("[Script Engine] Loaded {} script classes", scriptEngineData->entityClasses.size());
+        LOG_INFO("[Script Engine] Loaded {} script classes", outClasses.size());
     }
 }

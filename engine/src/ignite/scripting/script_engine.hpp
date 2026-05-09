@@ -5,7 +5,8 @@
 
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/entity.hpp"
-#include "script_instance.hpp"
+#include "script_instances/script_instance.hpp"
+#include "scriptable_object.hpp"
 #include "script_host.hpp"
 
 #include "FileWatch.hpp"
@@ -19,6 +20,8 @@ namespace ignite
     class Project;
     class Scene;
 
+    using ScriptClassMap = std::unordered_map<std::string, Ref<ScriptClass>>;
+
     class ScriptEngine
     {
     public:
@@ -29,7 +32,9 @@ namespace ignite
 
         bool LoadCoreAssembly(const std::filesystem::path &filepath);
         bool LoadAppAssembly(const std::filesystem::path &filepath);
+
         void ReloadAssembly();
+
         void SetSceneContext(Scene *scene);
         void ClearSceneContext();
         
@@ -38,15 +43,16 @@ namespace ignite
         Ref<ScriptInstance> OnCreateEntityInstance(ScriptInstanceID instanceID, const std::string &className);
         void OnDestroyEntityInstance(ScriptInstanceID instanceID);
 
-        std::shared_ptr<ScriptClass> GetEntityClassesByName(const std::string &name);
-        std::unordered_map<std::string, std::shared_ptr<ScriptClass>> GetEntityClasses();
-        std::shared_ptr<ScriptInstance> GetEntityScriptInstance(ScriptInstanceID instanceID);
-        
-        // UI Script
+        Ref<ScriptClass> GetEntityClassByName(const std::string &name);
+        const ScriptClassMap &GetEntityClasses();
+        Ref<ScriptInstance> GetEntityScriptInstance(ScriptInstanceID instanceID);
+        const std::vector<std::string> &GetEntityScriptClassStorage();
 
+        // Scriptable Object script
+        bool IsScriptableObjectClassExists(const std::string &fullClassName);
+        Ref<ScriptClass> GetScriptableObjectClassByName(const std::string &name);
+        const std::vector<std::string> &GetScriptableObjectClassStorage();
 
-
-        std::vector<std::string> GetScriptClassStorage();
         Scene *GetSceneContext();
         ScriptHost *GetScriptHost();
 
@@ -58,6 +64,7 @@ namespace ignite
         static void OnAppAssemblyFileSystemEvent(const std::string &path, const filewatch::Event eventType);
 
         void LoadAppAssemblyClasses();
+        void LoadAppClasses(const std::string &classFullName, ScriptClassMap &outClasses);
 
         Project *m_Project;
         Scene *m_Scene;

@@ -18,6 +18,10 @@ public static class CoreNativeAPI
         public IntPtr Input_SetCursorMode;
 
         public IntPtr AssetManager_IsAssetHandleValid;
+
+        public IntPtr AssetManager_LoadAssetAsyncFromFile;
+        public IntPtr AssetManager_LoadAssetImmedateFromFile;
+
         public IntPtr AssetManager_IsAssetLoaded;
         public IntPtr AssetManager_LoadAssetAsync;
         public IntPtr AssetManager_LoadAssetImmediate;
@@ -110,5 +114,8 @@ public static class CoreNativeAPI
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void AssetManagerLoadFn(ulong handle);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate ulong AssetManagerLoadFromPathFn(IntPtr filename);
     }
 }

@@ -36,7 +36,9 @@ namespace ignite
         ~AssetManager();
 
         Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
+
         AssetHandle ImportAsset(const std::filesystem::path &filepath);
+        AssetHandle ImportAssetImmedate(const std::filesystem::path &filepath);
 
         void AssignMetaData(AssetHandle handle, const AssetMetaData &metadata);
 

@@ -24,6 +24,7 @@ namespace ignite
 
         Auto,
         Audio,
+        ScriptableObject,
         AudioMixer,
         SoundCue,
         Model,
@@ -62,6 +63,7 @@ namespace ignite
             case ignite::AssetType::Shader: return "Shader";
             case ignite::AssetType::AnimationMontage: return "AnimationMontage";
             case ignite::AssetType::Material: return "Material";
+            case ignite::AssetType::ScriptableObject: return "ScriptableObject";
             case ignite::AssetType::Audio: return "Audio";
             case ignite::AssetType::Model: return "Model";
             case ignite::AssetType::Font: return "Font";
@@ -90,6 +92,7 @@ namespace ignite
     {
         if (typeStr == "Metadata") return AssetType::Metadata;
         if (typeStr == "Shader") return AssetType::Shader;
+        if (typeStr == "ScriptableObject") return AssetType::ScriptableObject;
         if (typeStr == "Widget") return AssetType::Widget;
         if (typeStr == "AnimationMontage") return AssetType::AnimationMontage;
         if (typeStr == "Scene") return AssetType::Scene;
@@ -124,6 +127,7 @@ namespace ignite
         { ".wdgt", AssetType::Widget },
         { ".ixproj", AssetType::Project },
         { ".ixscene", AssetType::Scene },
+        { ".ixso", AssetType::ScriptableObject },
         
         // Textures
         { ".jpg", AssetType::Texture },
@@ -175,6 +179,7 @@ namespace ignite
         case AssetType::AnimationMontage: return ".mtg";
         case AssetType::Widget: return ".wdgt";
         case AssetType::Mesh: return ".mesh";
+        case AssetType::ScriptableObject: return ".ixso";
         case AssetType::MeshInstance: return ".meshinstance";
         case AssetType::Skeleton: return ".ixskel";
         case AssetType::SkeletalAnimation: return ".ixanim";

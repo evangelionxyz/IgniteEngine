@@ -1,7 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #include "application.hpp"
-#include "ignite/graphics/shader_factory.hpp"
 #include "input/app_event.hpp"
 #include "ignite/imgui/imgui_layer.hpp"
 #include "ignite/asset/asset_worker.hpp"

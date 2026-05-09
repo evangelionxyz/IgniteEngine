@@ -19,7 +19,7 @@
 #include "ignite/math/math.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/script_field.hpp"
-#include "ignite/scripting/script_instance.hpp"
+#include "ignite/scripting/script_instances/script_instance.hpp"
 #include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/profiler/profiler.hpp"
@@ -1752,16 +1752,16 @@ namespace ignite
             RenderComponent<ScriptComponent>("C# Script", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<ScriptComponent>();
+                ScriptEngine *scriptEngine = ScriptEngine::GetInstance();
 
-                bool scriptClassExist = ScriptEngine::GetInstance()->IsEntityClassExists(c.className);
-
+                bool scriptClassExist = scriptEngine->IsEntityClassExists(c.className);
                 if (!scriptClassExist)
                 {
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));
                 }
 
                 const bool isRunning = m_Scene && m_Scene->IsRunning();
-                const auto &scriptStorage = ScriptEngine::GetInstance()->GetScriptClassStorage();
+                const auto &scriptStorage = scriptEngine->GetEntityScriptClassStorage();
                 std::string currentScriptClasses = c.className;
 
                 if (!scriptStorage.empty())
@@ -1793,7 +1793,7 @@ namespace ignite
                 const bool detached = c.className == "Detached";
                 if (scriptClassExist && !detached)
                 {
-                    Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(c.className);
+                    Ref<ScriptClass> scriptClass = scriptEngine->GetEntityClassByName(c.className);
                     if (scriptClass)
                     {
                         const uint64_t instanceId = selectedEntity.GetUUID();

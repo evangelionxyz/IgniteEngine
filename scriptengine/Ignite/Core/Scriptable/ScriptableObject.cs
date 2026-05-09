@@ -2,9 +2,9 @@
 
 namespace Ignite;
 
-public abstract class ScriptableObject(ulong id) : IEquatable<ScriptableObject>
+public abstract class ScriptableObject : IEquatable<ScriptableObject>
 {
-    public ulong ID { get; protected set; } = id;
+    public ulong ID { get; protected set; }
 
     internal void SetID(ulong id) { ID = id; }
 

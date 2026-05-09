@@ -3,11 +3,12 @@
 #ifndef SCRIPT_INSTANCE_HPP
 #define SCRIPT_INSTANCE_HPP
 
-#include "script_field.hpp"
-#include "script_class.hpp"
-#include "script_host.hpp"
+#include "ignite/scripting/script_field.hpp"
+#include "ignite/scripting/script_class.hpp"
+#include "ignite/scripting/script_host.hpp"
 
 #include "ignite/core/types.hpp"
+#include "ignite/core/logger.hpp"
 
 namespace ignite
 {
@@ -31,7 +32,7 @@ namespace ignite
         template<typename T>
         T GetFieldValue(const std::string &fieldName)
         {
-            static_assert(sizeof(T) <= 24, "Type too large!");
+            static_assert(sizeof(T) <= 64, "Type too large!");
 
             if (!m_ScriptHost || fieldName.empty() || s_FieldValueBuffer == nullptr)
             {
@@ -39,10 +40,9 @@ namespace ignite
             }
 
             const bool success = m_ScriptHost->GetInstanceFieldValue(m_InstanceId, fieldName, s_FieldValueBuffer, sizeof(s_FieldValueBuffer));
+            LOG_ASSERT(success, "Invalid field data");
             if (!success)
-            {
                 return T();
-            }
 
             m_ScriptClass->GetInstanceFieldsById(m_InstanceId)->at(fieldName).SetValue(s_FieldValueBuffer);
             return *(T *)s_FieldValueBuffer;
@@ -51,18 +51,17 @@ namespace ignite
         template<typename T>
         bool SetFieldValue(const std::string &fieldName, const T &value)
         {
-            static_assert(sizeof(T) <= 24, "Type too large!");
+            static_assert(sizeof(T) <= 64, "Type too large!");
 
             if (!m_ScriptHost || fieldName.empty() || &value == nullptr)
             {
                 return false;
             }
 
-            const bool success = m_ScriptHost->SetInstanceFieldValue(m_InstanceId, fieldName, &value, sizeof(s_FieldValueBuffer));
+            const bool success = m_ScriptHost->SetInstanceFieldValue(m_InstanceId, fieldName, &value, (int)sizeof(T));
+            LOG_ASSERT(success, "Invalid field data");
             if (success)
-            {
                 m_ScriptClass->GetInstanceFieldsById(m_InstanceId)->at(fieldName).SetValue(value);
-            }
             return success;
         }
 
@@ -75,10 +74,9 @@ namespace ignite
             }
 
             const bool success = m_ScriptHost->GetInstanceFieldValue(m_InstanceId, fieldName, s_FieldValueBuffer, sizeof(s_FieldValueBuffer));
+            LOG_ASSERT(success, "Invalid field data");
             if (!success)
-            {
                 return {};
-            }
 
             m_ScriptClass->GetInstanceFieldsById(m_InstanceId)->at(fieldName).SetValue<std::string>(std::string(s_FieldValueBuffer));
             return std::string(s_FieldValueBuffer);
@@ -99,14 +97,13 @@ namespace ignite
             s_FieldValueBuffer[copyLen] = '\0';
 
             const bool success = m_ScriptHost->SetInstanceFieldValue(m_InstanceId, fieldName, s_FieldValueBuffer, (int)copyLen);
+            LOG_ASSERT(success, "Invalid field data");
             if (success)
-            {
                 m_ScriptClass->GetInstanceFieldsById(m_InstanceId)->at(fieldName).SetValue<std::string>(std::string(s_FieldValueBuffer));
-            }
             return success;
         }
 
-    private:
+    protected:
         Ref<ScriptClass> m_ScriptClass;
 
         ScriptHost *m_ScriptHost = nullptr;
@@ -116,7 +113,7 @@ namespace ignite
         int m_OnDestroyMethodId = 0;
         int m_OnUpdateMethodId = 0;
 
-        inline static char s_FieldValueBuffer[24];
+        inline static char s_FieldValueBuffer[64];
         friend class ScriptEngine;
     };
 }

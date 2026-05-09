@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #include "script_instance.hpp"
-#include "script_engine.hpp"
+#include "ignite/scripting/script_engine.hpp"
 #include "ignite/scene/entity.hpp"
-#include "script_class.hpp"
+#include "ignite/scripting/script_class.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 
 namespace ignite

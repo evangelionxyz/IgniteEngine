@@ -2,6 +2,7 @@
 
 using Ignite.Core.Component;
 using System;
+using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 
 namespace Ignite.Core;
@@ -19,6 +20,10 @@ public static class CoreInternalCalls
     private static CoreNativeAPI.Funcs.InputSetCursorModeFn s_InputSetCursorMode;
 
     private static CoreNativeAPI.Funcs.AssetManagerQueryFn s_AssetManagerIsAssetHandleValid;
+
+    private static CoreNativeAPI.Funcs.AssetManagerLoadFromPathFn s_AssetManagerLoadAssetAsyncFromFile;
+    private static CoreNativeAPI.Funcs.AssetManagerLoadFromPathFn s_AssetManagerLoadAssetImmediateFromFile;
+    
     private static CoreNativeAPI.Funcs.AssetManagerQueryFn s_AssetManagerIsAssetLoaded;
     private static CoreNativeAPI.Funcs.AssetManagerLoadFn s_AssetManagerLoadAssetAsync;
     private static CoreNativeAPI.Funcs.AssetManagerLoadFn s_AssetManagerLoadAssetImmediate;
@@ -38,6 +43,10 @@ public static class CoreInternalCalls
         s_InputSetCursorMode = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.InputSetCursorModeFn>(api.Input_SetCursorMode);
         
         s_AssetManagerIsAssetHandleValid = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.AssetManagerQueryFn>(api.AssetManager_IsAssetHandleValid);
+
+        s_AssetManagerLoadAssetAsyncFromFile = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.AssetManagerLoadFromPathFn>(api.AssetManager_LoadAssetAsyncFromFile);
+        s_AssetManagerLoadAssetImmediateFromFile = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.AssetManagerLoadFromPathFn>(api.AssetManager_LoadAssetImmedateFromFile);
+
         s_AssetManagerIsAssetLoaded = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.AssetManagerQueryFn>(api.AssetManager_IsAssetLoaded);
         s_AssetManagerLoadAssetAsync = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.AssetManagerLoadFn>(api.AssetManager_LoadAssetAsync);
         s_AssetManagerLoadAssetImmediate = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.AssetManagerLoadFn>(api.AssetManager_LoadAssetImmediate);
@@ -113,6 +122,37 @@ public static class CoreInternalCalls
     {
         EnsureInitialized();
         return s_AssetManagerIsAssetLoaded(handle);
+    }
+
+    internal static AssetHandle AssetManager_LoadAssetAsyncFromFile(string filename)
+    {
+        EnsureInitialized();
+
+        IntPtr ptr = NativeObject.StringToUtf8(filename);
+        try
+        {
+            return new AssetHandle(s_AssetManagerLoadAssetAsyncFromFile(ptr));
+
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(ptr);
+        }
+
+    }
+
+    internal static AssetHandle AssetManager_LoadAssetImmedateFromFile(string filename)
+    {
+        EnsureInitialized();
+        IntPtr ptr = NativeObject.StringToUtf8(filename);
+        try
+        {
+            return new AssetHandle(s_AssetManagerLoadAssetImmediateFromFile(ptr));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(ptr);
+        }
     }
 
     internal static void AssetManager_LoadAssetAsync(ulong handle)

@@ -104,6 +104,30 @@ namespace ignite
             return false;
         }
 
+        static uint64_t AssetManager_LoadAssetAsyncFromFile(const char *filename)
+        {
+            if (Scene *scene = GetSceneContext())
+            {
+                if (AssetManager *assetManager = scene->GetAssetManager())
+                {
+                    return assetManager->ImportAsset(filename);
+                }
+            }
+            return 0;
+        }
+
+        static uint64_t AssetManager_LoadAssetImmediateFromFile(const char *filename)
+        {
+            if (Scene *scene = GetSceneContext())
+            {
+                if (AssetManager *assetManager = scene->GetAssetManager())
+                {
+                    return assetManager->ImportAssetImmedate(filename);
+                }
+            }
+            return 0;
+        }
+
         static void AssetManager_LoadAssetAsync(uint64_t handle)
         {
             if (Scene *scene = GetSceneContext())
@@ -139,6 +163,10 @@ namespace ignite
 
             &AssetManager_IsAssetHandleValid,
             &AssetManager_IsAssetLoaded,
+
+            &AssetManager_LoadAssetAsyncFromFile,
+            &AssetManager_LoadAssetImmediateFromFile,
+
             &AssetManager_LoadAssetAsync,
             &AssetManager_LoadAssetImmediate,
         };

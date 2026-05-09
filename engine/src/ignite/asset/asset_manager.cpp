@@ -121,6 +121,42 @@ namespace ignite {
         return handle;
     }
 
+    AssetHandle AssetManager::ImportAssetImmedate(const std::filesystem::path &filepath)
+    {
+        IGN_PROFILE_FUNCTION();
+
+        // Invalid 
+        if (GetAssetTypeFromExtension(filepath.extension().generic_string()) == AssetType::Invalid)
+        {
+            LOG_ERROR("[Asset Manager] Invalid asset type '{}'", filepath.generic_string());
+            return AssetHandle(0);
+        }
+
+        // Find in registered asset first
+        AssetHandle handle = AssetHandle(0);
+        AssetMetaData metadata = GetMetaData(filepath, handle);
+
+        // generate handle for new asset
+        if (handle == AssetHandle(0))
+        {
+            handle = AssetHandle();
+            AssignMetaData(handle, metadata);
+            GetAssetImmediate(handle);
+        }
+        else
+        {
+            // get the asset
+            Ref<Asset> asset = GetAssetImmediate<Asset>(handle);
+            if (!asset)
+            {
+                AssignMetaData(handle, metadata);
+                AssignAsset(handle, asset);
+            }
+        }
+
+        return handle;
+    }
+
     void AssetManager::AssignMetaData(AssetHandle handle, const AssetMetaData &metadata)
     {
         m_AssetRegistry[handle] = metadata;

@@ -9,8 +9,8 @@ namespace Ignite;
 
 public class Entity : ScriptableObject
 {
-    internal Entity(ulong id) : base(id) { }
-    protected Entity() : base(0) { }
+    internal Entity(ulong id) { SetID(id); }
+    protected Entity() { SetID(0); }
 
     public Vector3 Translation
     {

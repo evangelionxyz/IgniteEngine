@@ -494,7 +494,7 @@ namespace ignite
                     {
                         sr.AddKeyValue("ClassName", comp.className);
 
-                        Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(comp.className);
+                        Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassByName(comp.className);
                         if (scriptClass)
                         {
                             if (auto instanceFields = scriptClass->GetInstanceFieldsById(entity.GetUUID()); instanceFields && !instanceFields->empty())
@@ -1043,7 +1043,7 @@ namespace ignite
                 auto &sc = desEntity.AddComponent<ScriptComponent>();
                 sc.className = node["ClassName"].as<std::string>();
 
-                Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(sc.className);
+                Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassByName(sc.className);
 
                 if (scriptClass)
                 {
