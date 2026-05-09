@@ -36,6 +36,17 @@ namespace ignite
             case ScriptFieldType::Color:   { auto v = instanceField.GetValue<glm::vec4>(); host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
             case ScriptFieldType::Quat:    { auto v = instanceField.GetValue<glm::quat>(); host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
             case ScriptFieldType::Enum:    { auto v = instanceField.GetValue<int32_t>();   host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v)); break; }
+            case ScriptFieldType::Entity:
+            case ScriptFieldType::Asset:
+            {
+                // Both Entity and Asset reference types are stored as uint64_t IDs.
+                // MochiSharp's TryReadFieldValueFromBuffer will reconstruct the managed
+                // reference via ctor(ulong) / _instances lookup.
+                auto v = instanceField.GetValue<uint64_t>();
+                if (v != 0)
+                    host->SetInstanceFieldValue(instanceId, fieldName, &v, sizeof(v));
+                break;
+            }
             case ScriptFieldType::String:
             {
                 auto str = instanceField.GetValue<std::string>();
