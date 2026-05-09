@@ -149,9 +149,10 @@ namespace ignite
         {"Ignite.Mathf+Quaternion", ScriptFieldType::Quat},
         {"Ignite.Mathf+Color",   ScriptFieldType::Color},
         {"Ignite.Entity",        ScriptFieldType::Entity},
-        // ScriptableObject subclasses are matched dynamically (see LoadAppClasses),
-        // but the base type is registered here for direct field declarations.
+        
         {"Ignite.ScriptableObject", ScriptFieldType::Asset},
+        {"Ignite.AssetHandle", ScriptFieldType::Asset},
+        {"Ignite.Asset", ScriptFieldType::Asset},
     };
 
     struct ScriptEngineData
@@ -717,7 +718,6 @@ namespace ignite
                         else
                         {
                             LOG_ERROR("[Script Engine] Unsupported script field type '{}.{}' ({})", fullName, fieldName, managedTypeName);
-                            LOG_ASSERT(false, "");
                         }
                     }
                 }
