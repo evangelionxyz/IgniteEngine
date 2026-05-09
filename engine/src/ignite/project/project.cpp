@@ -387,6 +387,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         // Create and immediately serialize a default ScriptableObject
         auto so = ScriptableObject::Create(className);
         so->Serialize(outPath);
+        so->SetReadyFlag(true);
 
         // Register it in the asset manager
         const auto relPath = GetProjectRelativeFilepath(outPath);
