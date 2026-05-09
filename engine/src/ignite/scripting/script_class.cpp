@@ -5,20 +5,8 @@
 
 namespace ignite
 {
-    ScriptClass::ScriptClass(const std::string &classNamespace, const std::string &className, bool core)
-        : m_ClassNamespace(classNamespace), m_ClassName(className), m_IsCore(core)
-    {
-        m_FullName = m_ClassName;
-        if (!m_ClassNamespace.empty())
-        {
-            m_FullName = m_ClassNamespace + "." + m_ClassName;
-        }
-
-        m_ScriptHost = ScriptEngine::GetInstance()->GetScriptHost();
-    }
-
     ScriptClass::ScriptClass(const std::string &classNamespace, const std::string &className, const std::string &assemblyName)
-        : m_ClassNamespace(classNamespace), m_ClassName(className), m_AssemblyName(assemblyName), m_IsCore(false)
+        : m_ClassNamespace(classNamespace), m_ClassName(className), m_AssemblyName(assemblyName)
     {
         m_FullName = m_ClassName;
         if (!m_ClassNamespace.empty())

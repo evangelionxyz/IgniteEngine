@@ -318,7 +318,7 @@ namespace ignite
         return m_Host->GetTypeFields(typeName.c_str());
     }
 
-    bool ScriptHost::ConfigureSerialization(const std::string &serializeFieldAttributeTypeName, const std::string &entityTypeName)
+    bool ScriptHost::ConfigureSerialization(const std::string &serializeFieldAttributeTypeName, const std::string &typeName)
     {
         if (!m_Initialized)
         {
@@ -326,7 +326,7 @@ namespace ignite
             return false;
         }
 
-        return m_Host->ConfigureSerialization(serializeFieldAttributeTypeName.c_str(), entityTypeName.c_str());
+        return m_Host->ConfigureSerialization(serializeFieldAttributeTypeName.c_str(), typeName.c_str());
     }
 
     bool ScriptHost::GetInstanceFieldValue(uint64_t instanceId, const std::string &fieldName, void *buffer, int bufferSize)
@@ -418,5 +418,17 @@ namespace ignite
 
         std::string path = assemblyPath.string();
         return m_Host->GetDerivedTypes(path.c_str(), baseType.c_str());
+    }
+
+    std::string ScriptHost::GetCreateAssetMenuData(const std::filesystem::path &assemblyPath, const std::string &baseType)
+    {
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot get CreateAssetMenu data - host not initialized");
+            return {};
+        }
+
+        std::string path = assemblyPath.string();
+        return m_Host->GetCreateAssetMenuData(path.c_str(), baseType.c_str());
     }
 }

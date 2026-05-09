@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #include "application.hpp"
-#include "ignite/graphics/shader_factory.hpp"
 #include "input/app_event.hpp"
 #include "ignite/imgui/imgui_layer.hpp"
+#include "ignite/asset/asset_worker.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/audio/fmod_audio.hpp"
 #include "ignite/physics/jolt/jolt_physics.hpp"
@@ -63,6 +63,8 @@ namespace ignite
             m_ImGuiLayer = new ImGuiLayer(m_Window->GetDeviceManager());
             PushLayer(m_ImGuiLayer);
         }
+
+        AssetWorker::Init();
 
         if (m_CreateInfo.useAudio)
         {
@@ -491,6 +493,8 @@ namespace ignite
         m_RenderTaskCV.notify_all();
         if (m_RenderThread && m_RenderThread->joinable())
             m_RenderThread->join();
+
+        AssetWorker::Shutdown();
         
         GPUUploadSync::DeviceWaitIdle(device);
         

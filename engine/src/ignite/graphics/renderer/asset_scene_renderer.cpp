@@ -448,9 +448,9 @@ namespace ignite
                 continue;
             }
 
-            if ((!primitive->vertexBuffer || !primitive->indexBuffer) && !primitive->vertices.empty() && !primitive->indices.empty())
+            if (!primitive->vertexBuffer || !primitive->indexBuffer)
             {
-                primitive->CreateBuffer(cmd);
+                primitive->WriteBuffer(cmd);
             }
 
             if (!primitive->vertexBuffer || !primitive->indexBuffer)

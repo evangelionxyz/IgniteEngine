@@ -8,6 +8,7 @@
 #include "ext/editor_ui.hpp"
 #include "ignite/core/command.hpp"
 #include "ignite/graphics/renderer/renderer_2d.hpp"
+#include "ignite/asset/asset_worker.hpp"
 #include "ignite/asset/asset.hpp"
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/scripting/script_engine.hpp"
@@ -53,7 +54,7 @@ namespace ignite
     }
 
     EditorLayer::EditorLayer(const std::string &name)
-        : Layer(name)
+        : Layer(name), m_StatusText("Ready")
     {
     }
 
@@ -78,6 +79,16 @@ namespace ignite
         app->PushLayer(m_AssetEditorPanel);
 
         AddContentBrowserPanel();
+        
+        AssetWorker::SetStatusCallback([this](std::string_view status, float progress)
+        {
+            Application::SubmitToMainThread([this, s = std::string(status), progress]()
+            {
+                SetStatusText(s);
+                if (progress >= 0.0f)
+                    SetLoadingProgress(progress);
+            });
+        });
 
         // create render target framebuffer
         m_SceneRenderer = CreateRef<SceneRenderer>();
@@ -707,18 +718,20 @@ namespace ignite
             ImGui::OpenPopup("New Project");
             m_State.popupNewProjectModal = false;
         }
+
+        // Reserve space for status bar
+        constexpr float statusBarHeight = 32.0f;
         
         {
             // RENDER TOOL BAR
-            ImGui::BeginChild("##toolbar_child", {0.0f, 32.0f }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
+            ImGui::BeginChild("##toolbar_child", {0.0f, statusBarHeight }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
             m_ScenePanel->RenderToolbar();
             ImGui::EndChild();
         }
         
         UIProjectCreation();
 
-        // Reserve space for status bar
-        constexpr float statusBarHeight = 32.0f;
+        
         ImVec2 avail = ImGui::GetContentRegionAvail();
 
         // Dockspace tabs area gets everything except status bar
@@ -808,16 +821,32 @@ namespace ignite
         }
         ImGui::EndChild();
 
+        const auto bottomStatusBarAvail = ImGui::GetContentRegionMax();
         // Status bar at bottom
-        ImGui::BeginChild("##status_bar", { 0.0f, statusBarHeight }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
+        ImGui::BeginChild("##status_bar", { 0.0f, bottomStatusBarAvail.y }, 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar);
+        
         ImGui::BeginDisabled((GetOpenContentBrowserCount() + m_PendingContentBrowserPanelsToAdd) >= 4);
-        if (ImGui::SmallButton("+ Content Browser"))
+        if (ImGui::Button("+ Content Browser"))
         {
             ++m_PendingContentBrowserPanelsToAdd;
         }
         ImGui::EndDisabled();
+        
+        if (m_LoadingProgress > 0.0f && m_LoadingProgress < 1.0f)
+        {
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(120.0f);
+            ImGui::ProgressBar(m_LoadingProgress, ImVec2(0.0f, 0.0f), "");
+        }
+
         ImGui::SameLine();
-        ImGui::Text("Version: %s", ENGINE_VERSION);
+        ImGui::TextUnformatted(m_StatusText.c_str());
+
+        const std::string versionStr = std::format("Version: {}", ENGINE_VERSION);
+        float versionWidth = ImGui::CalcTextSize(versionStr.c_str()).x;
+        ImGui::SameLine(ImGui::GetWindowWidth() - versionWidth - 10.0f);
+        ImGui::TextUnformatted(versionStr.c_str());
+
         ImGui::EndChild();
 
         ImGui::End();
@@ -1364,8 +1393,10 @@ namespace ignite
                         m_CurrentSceneHandle = sceneHandle;
 
                         // Submit heavy I/O work to asset worker
-                        m_ActiveProject->GetAssetManager()->SubmitJob([this, filepath, sceneHandle]()
+                        AssetWorker::SubmitJob([this, filepath, sceneHandle]()
                         {
+                            AssetWorker::ReportStatus(std::format("Loading scene {}...", filepath.filename().string()), 0.5f);
+                            
                             // Load scene on worker thread (I/O happens here)
                             Ref<Scene> loadedScene = SceneSerializer::Deserialize(filepath, m_ActiveProject.get());
                             if (loadedScene)
@@ -1373,6 +1404,8 @@ namespace ignite
                                 // Submit UI update back to main thread
                                 Application::SubmitToMainThread([this, loadedScene, filepath]() mutable
                                 {
+                                    AssetWorker::ReportStatus("Finalizing scene load...", 0.9f);
+                                    
                                     if (m_EditorScene)
                                     {
                                         m_EditorScene->OnStop();
@@ -1407,6 +1440,8 @@ namespace ignite
                                     m_EditorScene->SetDirtyFlag(false);
                                     SetActiveScene(m_EditorScene);
                                     m_CurrentSceneFilePath = filepath;
+                                    
+                                    AssetWorker::ReportStatus("Ready", 0.0f);
                                 });
                             }
                             else
@@ -1428,9 +1463,13 @@ namespace ignite
                         Ref<Project> loadedProject = Project::Deserialize(filepath);
                         if (loadedProject)
                         {
+                            AssetWorker::ReportStatus(std::format("Loading project {}...", filepath.filename().string()), 0.5f);
+                            
                             // Submit UI update back to main thread
                             Application::SubmitToMainThread([this, loadedProject, filepath]() mutable
                             {
+                                AssetWorker::ReportStatus("Finalizing project load...", 0.9f);
+                                
                                 // Clear old project's assets
                                 if (m_ActiveProject)
                                 {
@@ -1491,12 +1530,14 @@ namespace ignite
                         // Submit scene save to asset worker
                         std::filesystem::path filepath = pf.metadata.filepath;
 
-                        m_ActiveProject->GetAssetManager()->SubmitJob([this, filepath]()
+                        AssetWorker::SubmitJob([this, filepath]()
                         {
                             SceneSerializer serializer(m_ActiveScene, m_ActiveProject.get());
                             serializer.Serialize(filepath);
 
                             LOG_INFO("[Editor] Scene saved: {}", filepath.generic_string());
+
+                            RefreshContentBrowsers();
                         });
                     }
                     else if (pf.metadata.type == AssetType::Project)
@@ -1541,6 +1582,7 @@ namespace ignite
             ImGui::AlignTextToFramePadding();
             ImGui::Text("Location");
             ImGui::TableNextColumn();
+
             // Path input with Browse button
             ImGui::PushItemWidth(-120);
             std::string pathStr = m_State.projectCreateInfo.filepath.generic_string();
@@ -1580,53 +1622,61 @@ namespace ignite
         ImGui::SameLine(ImGui::GetWindowWidth() - 220);
         if (ImGui::Button("Create", ImVec2(100, 0)))
         {
-            // sanitize name
-            while (m_State.projectCreateInfo.name.find(' ') != std::string::npos)
+            AssetWorker::SubmitJob([this]()
             {
-                const size_t spacePos = m_State.projectCreateInfo.name.find(' ');
-                m_State.projectCreateInfo.name.replace(spacePos, 1, "");
-            }
-
-            m_State.projectCreateInfo.filepath /= (m_State.projectCreateInfo.name + ".ixproj");
-
-            if (Ref<Project> newProject = Project::Create(m_State.projectCreateInfo))
-            {
-                m_ActiveProject = newProject;
-
-                // Serialize
-                m_ActiveProject->Serialize(m_State.projectCreateInfo.filepath);
-
-                // Reload content browser
-                ReloadContentBrowserPanels();
-
-
-                if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
+                // sanitize name
+                while (m_State.projectCreateInfo.name.find(' ') != std::string::npos)
                 {
-                    if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
+                    const size_t spacePos = m_State.projectCreateInfo.name.find(' ');
+                    m_State.projectCreateInfo.name.replace(spacePos, 1, "");
+                }
+
+                m_State.projectCreateInfo.filepath /= (m_State.projectCreateInfo.name + ".ixproj");
+                m_State.projectCreateInfo.rootDirectory = m_State.projectCreateInfo.filepath.parent_path();
+
+                if (Ref<Project> newProject = Project::Create(m_State.projectCreateInfo))
+                {
+                    // Submit to main thread to sync
+                    Application::SubmitToMainThread([this, newProject]()
                     {
-                        m_EditorScene = SceneManager::Copy(activeScene);
-                        m_EditorScene->SetDirtyFlag(false);
+                        m_ActiveProject = newProject;
 
-                        SetActiveScene(m_EditorScene);
+                        // Serialize
+                        m_ActiveProject->Serialize(m_State.projectCreateInfo.filepath);
 
-                        AssetMetaData metadata = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
-                        auto scenePath = m_ActiveProject->GetProjectFilepath(metadata.filepath);
-                        m_CurrentSceneFilePath = scenePath;
-                    }
+                        // Reload content browser
+                        ReloadContentBrowserPanels();
+
+                        if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
+                        {
+                            if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
+                            {
+                                m_EditorScene = SceneManager::Copy(activeScene);
+                                m_EditorScene->SetDirtyFlag(false);
+
+                                SetActiveScene(m_EditorScene);
+
+                                AssetMetaData metadata = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
+                                auto scenePath = m_ActiveProject->GetProjectFilepath(metadata.filepath);
+                                m_CurrentSceneFilePath = scenePath;
+                            }
+                        }
+                        else
+                        {
+                            NewScene();
+                        }
+
+                        // clear modal inputs
+                        m_State.projectCreateInfo.filepath.clear();
+                        m_State.projectCreateInfo.name.clear();
+                        memset(nameBuffer, 0, sizeof(nameBuffer));
+                    });
                 }
-                else
-                {
-                    NewScene();
-                }
+            });
 
-                // clear modal inputs
-                m_State.projectCreateInfo.filepath.clear();
-                m_State.projectCreateInfo.name.clear();
-                memset(nameBuffer, 0, sizeof(nameBuffer));
-
-                ImGui::CloseCurrentPopup();
-            }
+            ImGui::CloseCurrentPopup();
         }
+
         ImGui::EndDisabled();
 
         ImGui::SameLine(ImGui::GetWindowWidth() - 110);

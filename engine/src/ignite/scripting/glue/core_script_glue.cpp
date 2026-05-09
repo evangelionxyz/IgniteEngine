@@ -4,6 +4,7 @@
 #include "ignite/core/input/input.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/scripting/script_engine.hpp"
+#include "ignite/scripting/scriptable_object.hpp"
 #include "ignite/project/project.hpp"
 
 namespace ignite
@@ -104,6 +105,30 @@ namespace ignite
             return false;
         }
 
+        static uint64_t AssetManager_LoadAssetAsyncFromFile(const char *filename)
+        {
+            if (Scene *scene = GetSceneContext())
+            {
+                if (AssetManager *assetManager = scene->GetAssetManager())
+                {
+                    return assetManager->ImportAsset(filename);
+                }
+            }
+            return 0;
+        }
+
+        static uint64_t AssetManager_LoadAssetImmediateFromFile(const char *filename)
+        {
+            if (Scene *scene = GetSceneContext())
+            {
+                if (AssetManager *assetManager = scene->GetAssetManager())
+                {
+                    return assetManager->ImportAssetImmedate(filename);
+                }
+            }
+            return 0;
+        }
+
         static void AssetManager_LoadAssetAsync(uint64_t handle)
         {
             if (Scene *scene = GetSceneContext())
@@ -126,6 +151,80 @@ namespace ignite
             }
         }
 
+        // ---- ScriptableObject runtime field access ----
+
+        static Ref<ScriptableObject> GetSO(uint64_t handle)
+        {
+            if (Scene *scene = GetSceneContext())
+            {
+                if (AssetManager *am = scene->GetAssetManager())
+                    return am->GetAssetImmediate<ScriptableObject>(AssetHandle(handle));
+            }
+            return nullptr;
+        }
+
+        static float ScriptableObject_GetFieldValueFloat(uint64_t handle, const char *fieldName)
+        {
+            if (auto so = GetSO(handle))
+            {
+                auto &fields = so->GetFields();
+                if (auto it = fields.find(fieldName); it != fields.end())
+                    return it->second.GetValue<float>();
+            }
+            return 0.0f;
+        }
+
+        static int32_t ScriptableObject_GetFieldValueInt(uint64_t handle, const char *fieldName)
+        {
+            if (auto so = GetSO(handle))
+            {
+                auto &fields = so->GetFields();
+                if (auto it = fields.find(fieldName); it != fields.end())
+                    return it->second.GetValue<int32_t>();
+            }
+            return 0;
+        }
+
+        static bool ScriptableObject_GetFieldValueBool(uint64_t handle, const char *fieldName)
+        {
+            if (auto so = GetSO(handle))
+            {
+                auto &fields = so->GetFields();
+                if (auto it = fields.find(fieldName); it != fields.end())
+                    return it->second.GetValue<bool>();
+            }
+            return false;
+        }
+
+        // String storage for the return value (per-call static buffer - single-threaded only)
+        static std::string s_StringReturnBuffer;
+
+        static const char *ScriptableObject_GetFieldValueString(uint64_t handle, const char *fieldName)
+        {
+            if (auto so = GetSO(handle))
+            {
+                auto &fields = so->GetFields();
+                if (auto it = fields.find(fieldName); it != fields.end())
+                {
+                    s_StringReturnBuffer = it->second.GetValue<std::string>();
+                    return s_StringReturnBuffer.c_str();
+                }
+            }
+            return "";
+        }
+
+        static std::string s_ClassNameBuffer;
+
+        static const char *ScriptableObject_GetClassName(uint64_t handle)
+        {
+            if (auto so = GetSO(handle))
+            {
+                s_ClassNameBuffer = so->GetClassName();
+                return s_ClassNameBuffer.c_str();
+            }
+            return "";
+        }
+
         static const CoreScriptGlueAPI s_CoreScriptGlueAPI =
         {
             &Debug_Log,
@@ -139,8 +238,19 @@ namespace ignite
 
             &AssetManager_IsAssetHandleValid,
             &AssetManager_IsAssetLoaded,
+
+            &AssetManager_LoadAssetAsyncFromFile,
+            &AssetManager_LoadAssetImmediateFromFile,
+
             &AssetManager_LoadAssetAsync,
             &AssetManager_LoadAssetImmediate,
+
+            // ScriptableObject
+            &ScriptableObject_GetFieldValueFloat,
+            &ScriptableObject_GetFieldValueInt,
+            &ScriptableObject_GetFieldValueBool,
+            &ScriptableObject_GetFieldValueString,
+            &ScriptableObject_GetClassName,
         };
     }
 

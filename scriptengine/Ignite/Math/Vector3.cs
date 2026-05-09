@@ -131,6 +131,16 @@ public static partial class Mathf
         {
             return new Vector3(vectorA.X - vectorB.X, vectorA.Y - vectorB.Y, vectorA.Z - vectorB.Z);
         }
+
+        public static Vector3 Min(Vector3 a, Vector3 b)
+        {
+            return new Vector3(Mathf.Min(a.X, b.X), Mathf.Min(a.Y, b.Y), Mathf.Min(a.Z, b.Z));
+        }
+
+        public static Vector3 Max(Vector3 a, Vector3 b)
+        {
+            return new Vector3(Mathf.Max(a.X, b.X), Mathf.Max(a.Y, b.Y), Mathf.Max(a.Z, b.Z));
+        }
     }
 
 }

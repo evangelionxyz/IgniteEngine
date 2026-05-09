@@ -10,7 +10,8 @@ namespace ignite
 {
     struct ComponentScriptGlueAPI
     {
-        uint64_t(*Scene_PickEntityAt)(float x, float y);
+        void (*Scene_GetScreenToWorldRay)(float x, float y, glm::vec3 *outOrigin, glm::vec3 *outDirection);
+        uint64_t (*Scene_Raycast)(glm::vec3 origin, glm::vec3 direction);
 
         bool        (*Entity_HasComponent)(uint64_t entityID, const char *componentTypeName);
         void        (*Entity_AddComponent)(uint64_t entityID, const char *componentTypeName);

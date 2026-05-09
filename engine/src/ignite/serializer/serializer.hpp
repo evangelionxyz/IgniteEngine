@@ -21,17 +21,36 @@
 namespace YAML
 {
     template<>
+    struct convert<char16_t>
+    {
+        static Node encode(const char16_t &rhs)
+        {
+            return Node(static_cast<uint16_t>(rhs));
+        }
+
+        static bool decode(const Node &node, char16_t &rhs)
+        {
+            if (!node.IsScalar())
+                return false;
+
+            rhs = static_cast<char16_t>(node.as<uint16_t>());
+            return true;
+        }
+    };
+
+    template<>
     struct convert<ignite::UUID>
     {
         static Node encode(const ignite::UUID uuid)
         {
-            Node node;
-            node.push_back(static_cast<uint64_t>(uuid));
-            return node;
+            return Node(static_cast<uint64_t>(uuid));
         }
 
-        static bool decode(const Node &node, ignite::UUID uuid)
+        static bool decode(const Node &node, ignite::UUID &uuid)
         {
+            if (!node.IsScalar())
+                return false;
+
             uuid = ignite::UUID(node.as<uint64_t>());
             return true;
         }
@@ -304,32 +323,32 @@ namespace ignite
 
         const std::filesystem::path &GetFilepath() const { return m_Filepath; }
 
-		static void SerializeMat4(Serializer &sr, const char *key, const glm::mat4 &mat)
-		{
-			sr.BeginSequence(key);
-			for (int col = 0; col < 4; ++col)
-			{
-				sr.AddValue(glm::vec4(mat[col]));
-			}
-			sr.EndSequence();
-		}
+        static void SerializeMat4(Serializer &sr, const char *key, const glm::mat4 &mat)
+        {
+            sr.BeginSequence(key);
+            for (int col = 0; col < 4; ++col)
+            {
+                sr.AddValue(glm::vec4(mat[col]));
+            }
+            sr.EndSequence();
+        }
 
-		static bool DeserializeMat4(const YAML::Node &node, const char *key, glm::mat4 &outMat)
-		{
-			const YAML::Node matNode = node[key];
-			if (!matNode || !matNode.IsSequence() || matNode.size() != 4)
-			{
-				return false;
-			}
+        static bool DeserializeMat4(const YAML::Node &node, const char *key, glm::mat4 &outMat)
+        {
+            const YAML::Node matNode = node[key];
+            if (!matNode || !matNode.IsSequence() || matNode.size() != 4)
+            {
+                return false;
+            }
 
-			for (size_t col = 0; col < 4; ++col)
-			{
-				const glm::vec4 v = matNode[col].as<glm::vec4>();
-				outMat[static_cast<int>(col)] = v;
-			}
+            for (size_t col = 0; col < 4; ++col)
+            {
+                const glm::vec4 v = matNode[col].as<glm::vec4>();
+                outMat[static_cast<int>(col)] = v;
+            }
 
-			return true;
-		}
+            return true;
+        }
 
     private:
         YAML::Emitter m_Emitter;

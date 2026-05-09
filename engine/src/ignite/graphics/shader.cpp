@@ -87,7 +87,6 @@ namespace ignite
         return "Invalid Graphics API";
     }
 
-
     Shader::Shader(const std::filesystem::path &filepath, ShaderType type, bool recompile)
         : m_Type(type)
     {

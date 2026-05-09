@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Evangelion Manuhutu
+// Copyright (c) 2026 Evangelion Manuhutu
 
 using System;
 using System.Runtime.InteropServices;
@@ -8,7 +8,8 @@ namespace Ignite.Core.Component;
 public static class ComponentInternalCalls
 {
     private static bool s_Initialized;
-    private static ComponentNativeAPI.Funcs.ScenePickEntityAtFn s_ScenePickEntityAt;
+    private static ComponentNativeAPI.Funcs.SceneGetScreenToWorldRayFn s_SceneGetScreenToWorldRay;
+    private static ComponentNativeAPI.Funcs.SceneRaycastFn s_SceneRaycast;
     private static ComponentNativeAPI.Funcs.EntityHasComponentFn s_EntityHasComponent;
     private static ComponentNativeAPI.Funcs.EntityAddComponentFn s_EntityAddComponent;
     private static ComponentNativeAPI.Funcs.EntityFindEntityByNameFn s_EntityFindEntityByName;
@@ -146,7 +147,8 @@ public static class ComponentInternalCalls
             throw new ArgumentException("Invalid internal calls API pointer", nameof(apiPtr));
 
         ComponentNativeAPI.API api = Marshal.PtrToStructure<ComponentNativeAPI.API>((IntPtr)apiPtr);
-        s_ScenePickEntityAt = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.ScenePickEntityAtFn>(api.Scene_PickEntityAt);
+        s_SceneGetScreenToWorldRay = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SceneGetScreenToWorldRayFn>(api.Scene_GetScreenToWorldRay);
+        s_SceneRaycast = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SceneRaycastFn>(api.Scene_Raycast);
         s_EntityHasComponent = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityHasComponentFn>(api.Entity_HasComponent);
         s_EntityAddComponent = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityAddComponentFn>(api.Entity_AddComponent);
         s_EntityFindEntityByName = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityFindEntityByNameFn>(api.Entity_FindEntityByName);
@@ -288,10 +290,18 @@ public static class ComponentInternalCalls
             throw new InvalidOperationException("InternalCalls bridge is not initialized.");
     }
 
-    internal static ulong Scene_PickEntityAt(float x, float y)
+    internal static void Scene_GetScreenToWorldRay(float x, float y, out Mathf.Vector3 outOrigin, out Mathf.Vector3 outDirection)
     {
         EnsureInitialized();
-        return s_ScenePickEntityAt(x, y);
+        s_SceneGetScreenToWorldRay(x, y, out NativeObject.Vector3 origin, out NativeObject.Vector3 dir);
+        outOrigin = NativeObject.ToManaged(origin);
+        outDirection = NativeObject.ToManaged(dir);
+    }
+
+    internal static ulong Scene_Raycast(Mathf.Vector3 origin, Mathf.Vector3 direction)
+    {
+        EnsureInitialized();
+        return s_SceneRaycast(NativeObject.ToNative(origin), NativeObject.ToNative(direction));
     }
 
     internal static bool Entity_HasComponent(ulong entityID, Type componentType)
@@ -1124,7 +1134,7 @@ public static class ComponentInternalCalls
         try
         {
             s_WidgetComponentGetLabelText(entityID, namePtr, out IntPtr result);
-            return result == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(result);
+            return NativeObject.Utf8ToString(result);
         }
         finally { Marshal.FreeCoTaskMem(namePtr); }
     }

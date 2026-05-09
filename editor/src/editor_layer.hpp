@@ -101,6 +101,9 @@ namespace ignite
         EditorState &GetState() { return m_State; }
 
         void RefreshContentBrowsers();
+        
+        void SetStatusText(std::string_view text) { m_StatusText = text; }
+        void SetLoadingProgress(float progress) { m_LoadingProgress = progress; }
 
     private:
         static void OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter);
@@ -159,6 +162,9 @@ namespace ignite
         std::unordered_set<ContentBrowserPanel *> m_ContentBrowserPanelsPendingRemoval;
         uint32_t m_NextContentBrowserPanelId = 1;
         uint32_t m_ActiveEditorDockspaceId = 0;
+        
+        std::string m_StatusText;
+        float m_LoadingProgress = 0.0f;
 
         friend class ScenePanel;
         friend class AssetImporterPanel;

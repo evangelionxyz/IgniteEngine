@@ -73,7 +73,7 @@ namespace ignite
 
         std::string GetInstanceFields(uint64_t instanceId);
         std::string GetTypeFields(const std::string &typeName);
-        bool ConfigureSerialization(const std::string &serializeFieldAttributeTypeName, const std::string &entityTypeName);
+        bool ConfigureSerialization(const std::string &serializeFieldAttributeTypeName, const std::string &typeName);
         bool GetInstanceFieldValue(uint64_t instanceId, const std::string &fieldName, void *buffer, int bufferSize);
         bool SetInstanceFieldValue(uint64_t instanceId, const std::string &fieldName, const void *buffer, int bufferSize);
 
@@ -88,6 +88,7 @@ namespace ignite
 
         // Get all non-abstract classes derived from baseType in an assembly
         std::string GetDerivedTypes(const std::filesystem::path &assemblyPath, const std::string &baseType);
+        std::string GetCreateAssetMenuData(const std::filesystem::path &assemblyPath, const std::string &baseType);
 
         // Check if initialized
         bool IsInitialized() const { return m_Initialized; }

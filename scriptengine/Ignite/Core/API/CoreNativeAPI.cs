@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 
 namespace Ignite.Core;
@@ -18,9 +18,20 @@ public static class CoreNativeAPI
         public IntPtr Input_SetCursorMode;
 
         public IntPtr AssetManager_IsAssetHandleValid;
+
+        public IntPtr AssetManager_LoadAssetAsyncFromFile;
+        public IntPtr AssetManager_LoadAssetImmedateFromFile;
+
         public IntPtr AssetManager_IsAssetLoaded;
         public IntPtr AssetManager_LoadAssetAsync;
         public IntPtr AssetManager_LoadAssetImmediate;
+
+        // ScriptableObject
+        public IntPtr ScriptableObject_GetFieldValueFloat;
+        public IntPtr ScriptableObject_GetFieldValueInt;
+        public IntPtr ScriptableObject_GetFieldValueBool;
+        public IntPtr ScriptableObject_GetFieldValueString;
+        public IntPtr ScriptableObject_GetClassName;
     }
 
     public struct Funcs
@@ -110,5 +121,25 @@ public static class CoreNativeAPI
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void AssetManagerLoadFn(ulong handle);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate ulong AssetManagerLoadFromPathFn(IntPtr filename);
+
+        // ScriptableObject field access (keyed by AssetHandle + field name)
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate float  ScriptableObjectGetFieldFloatFn(ulong handle, IntPtr fieldName);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate int    ScriptableObjectGetFieldIntFn(ulong handle, IntPtr fieldName);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        public delegate bool   ScriptableObjectGetFieldBoolFn(ulong handle, IntPtr fieldName);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate IntPtr ScriptableObjectGetFieldStringFn(ulong handle, IntPtr fieldName);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate IntPtr ScriptableObjectGetClassNameFn(ulong handle);
     }
 }

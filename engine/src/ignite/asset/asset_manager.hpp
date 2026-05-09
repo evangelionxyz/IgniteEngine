@@ -6,6 +6,7 @@
 
 #include "asset.hpp"
 #include "ignite/core/logger.hpp"
+#include "asset_worker.hpp"
 
 #include <map>
 #include <unordered_set>
@@ -15,6 +16,7 @@
 #include <condition_variable>
 #include <queue>
 #include <string_view>
+#include <atomic>
 
 namespace fbxsdk
 {
@@ -23,9 +25,7 @@ namespace fbxsdk
 
 namespace ignite
 {
-
     using AssetRegistry = std::map<AssetHandle, AssetMetaData>;
-    using AssetJob = std::function<void()>;
 
     class Project;
 
@@ -36,7 +36,9 @@ namespace ignite
         ~AssetManager();
 
         Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
+
         AssetHandle ImportAsset(const std::filesystem::path &filepath);
+        AssetHandle ImportAssetImmedate(const std::filesystem::path &filepath);
 
         void AssignMetaData(AssetHandle handle, const AssetMetaData &metadata);
 
@@ -63,8 +65,6 @@ namespace ignite
         void ReplaceAssetPins(const std::string &ownerTag, const std::unordered_set<AssetHandle> &handles);
         void ClearAssetPins(std::string_view ownerTag);
         bool IsAssetPinned(AssetHandle handle) const;
-
-        void SubmitJob(AssetJob job);
 
         template<typename T = Asset>
         Ref<T> GetAsset(AssetHandle handle)
@@ -97,7 +97,7 @@ namespace ignite
             }
 
             // Submit import work to worker thread
-            SubmitJob([this, handle, metadata]()
+            AssetWorker::SubmitJob(std::format("Loading {}...", metadata.filepath.filename().string()), [this, handle, metadata]()
             {
                 try
                 {
@@ -164,6 +164,8 @@ namespace ignite
         void ClearAllLoadedAssets();
         void UnloadAsset(AssetHandle handle);
         void UnloadUnusedAssets();
+        void PauseUnloadAssets() { m_UnloadPaused = true; }
+        void ResumeUnloadAssets() { m_UnloadPaused = false; }
         size_t GetLoadedAssetCount() const { return m_LoadedAssets.size(); }
         bool IsAssetLoaded(AssetHandle handle) const;
         bool IsAssetLoading(AssetHandle handle) const;
@@ -177,25 +179,17 @@ namespace ignite
         std::mutex &GetFbxSdkMutex() { return m_FbxSdkMutex; }
 
     private:
-        void WorkerLoop();
-
         AssetRegistry m_AssetRegistry;
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
         std::unordered_set<AssetHandle> m_LoadingAssets;
-
-        std::condition_variable m_ConditionVariable;
-        std::vector<std::thread> m_Workers;
-        std::queue<AssetJob> m_Jobs;
         Project *m_Project;
 
         fbxsdk::FbxManager *m_FbxSdkManager = nullptr;
+        std::atomic<bool> m_UnloadPaused = false;
 
         std::mutex m_FbxSdkMutex;
-        std::mutex m_JobMutex;
         mutable std::mutex m_AssetMutex;
         
-        bool m_Running;
-
         std::unordered_map<AssetHandle, uint32_t> m_AssetPinCounts;
         std::unordered_map<std::string, std::unordered_set<AssetHandle>> m_PinnedAssetsByOwner;
         std::unordered_map<std::string, AssetHandle> m_AssetHandleByPath;

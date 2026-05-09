@@ -19,7 +19,7 @@
 #include "ignite/math/math.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/script_field.hpp"
-#include "ignite/scripting/script_instance.hpp"
+#include "ignite/scripting/script_instances/script_instance.hpp"
 #include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/core/profiler/profiler.hpp"
@@ -82,12 +82,12 @@ namespace ignite
         m_EditorCamera.UpdateSphericalPosition();
         m_EditorCamera.UpdateView();
         m_EditorCamera.UpdateProjection(width, height);
-        m_EditorCamera.SetNavigationMode(EditorCamera::NavigationMode::Fly);
+        m_EditorCamera.SetNavigationMode(EditorCamera::NavigationMode::Orbit);
         
         m_EditorCamera2D = m_EditorCamera;
         m_EditorCamera3D = m_EditorCamera;
         m_EditorCamera2D->SetNavigationMode(EditorCamera::NavigationMode::Mode2D);
-        m_EditorCamera3D->SetNavigationMode(EditorCamera::NavigationMode::Fly);
+        m_EditorCamera3D->SetNavigationMode(EditorCamera::NavigationMode::Orbit);
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
         nvrhi::CommandListHandle cmd = device->createCommandList();
@@ -1752,16 +1752,16 @@ namespace ignite
             RenderComponent<ScriptComponent>("C# Script", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<ScriptComponent>();
+                ScriptEngine *scriptEngine = ScriptEngine::GetInstance();
 
-                bool scriptClassExist = ScriptEngine::GetInstance()->IsEntityClassExists(c.className);
-
+                bool scriptClassExist = scriptEngine->IsEntityClassExists(c.className);
                 if (!scriptClassExist)
                 {
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));
                 }
 
                 const bool isRunning = m_Scene && m_Scene->IsRunning();
-                const auto &scriptStorage = ScriptEngine::GetInstance()->GetScriptClassStorage();
+                const auto &scriptStorage = scriptEngine->GetEntityScriptClassStorage();
                 std::string currentScriptClasses = c.className;
 
                 if (!scriptStorage.empty())
@@ -1793,9 +1793,10 @@ namespace ignite
                 const bool detached = c.className == "Detached";
                 if (scriptClassExist && !detached)
                 {
-                    Ref<ScriptClass> scriptClass = ScriptEngine::GetInstance()->GetEntityClassesByName(c.className);
+                    Ref<ScriptClass> scriptClass = scriptEngine->GetEntityClassByName(c.className);
                     if (scriptClass)
                     {
+                        auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
                         const uint64_t instanceId = selectedEntity.GetUUID();
                         auto classRegisteredInstanceField = scriptClass->GetInstanceFieldsById(instanceId);
 
@@ -1823,6 +1824,18 @@ namespace ignite
 
                                 switch (field.Type)
                                 {
+                                    case ScriptFieldType::Bool:
+                                    {
+                                        auto data = dummy.GetValue<bool>();
+                                        if (UI::DrawCheckbox(name.c_str(), &data))
+                                        {
+                                            dummy.SetValue<bool>(data);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<bool>(name, data);
+                                        }
+                                        break;
+                                    }
                                     case ScriptFieldType::String:
                                     {
                                         auto data = dummy.GetValue<std::string>();
@@ -1865,6 +1878,134 @@ namespace ignite
                                         auto data = dummy.GetValue<int>();
                                         if (UI::DrawIntControl(name.c_str(), &data, 1.0f, INT_MIN, INT_MAX))
                                         {
+                                            dummy.SetValue<int>(data);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<int>(name, data);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::UInt:
+                                    {
+                                        auto val = dummy.GetValue<uint32_t>();
+                                        int data = static_cast<int>(val);
+                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, INT_MAX))
+                                        {
+                                            val = static_cast<uint32_t>(data);
+                                            dummy.SetValue<uint32_t>(val);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<uint32_t>(name, val);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::Byte:
+                                    {
+                                        auto val = dummy.GetValue<uint8_t>();
+                                        int data = static_cast<int>(val);
+                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, 255))
+                                        {
+                                            val = static_cast<uint8_t>(data);
+                                            dummy.SetValue<uint8_t>(val);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<uint8_t>(name, val);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::SByte:
+                                    {
+                                        auto val = dummy.GetValue<int8_t>();
+                                        int data = static_cast<int>(val);
+                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, -128, 127))
+                                        {
+                                            val = static_cast<int8_t>(data);
+                                            dummy.SetValue<int8_t>(val);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<int8_t>(name, val);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::Short:
+                                    {
+                                        auto val = dummy.GetValue<int16_t>();
+                                        int data = static_cast<int>(val);
+                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, SHRT_MIN, SHRT_MAX))
+                                        {
+                                            val = static_cast<int16_t>(data);
+                                            dummy.SetValue<int16_t>(val);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<int16_t>(name, val);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::UShort:
+                                    {
+                                        auto val = dummy.GetValue<uint16_t>();
+                                        int data = static_cast<int>(val);
+                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, USHRT_MAX))
+                                        {
+                                            val = static_cast<uint16_t>(data);
+                                            dummy.SetValue<uint16_t>(val);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<uint16_t>(name, val);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::Long:
+                                    {
+                                        auto val = dummy.GetValue<int64_t>();
+                                        int data = static_cast<int>(val);
+                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, INT_MIN, INT_MAX))
+                                        {
+                                            val = static_cast<int64_t>(data);
+                                            dummy.SetValue<int64_t>(val);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<int64_t>(name, val);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::ULong:
+                                    {
+                                        auto val = dummy.GetValue<uint64_t>();
+                                        int data = static_cast<int>(val);
+                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, INT_MAX))
+                                        {
+                                            val = static_cast<uint64_t>(data);
+                                            dummy.SetValue<uint64_t>(val);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, val);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::Enum:
+                                    {
+                                        auto data = dummy.GetValue<int>();
+                                        const auto &enumNames = field.EnumNames;
+                                        const auto &enumValues = field.EnumValues;
+
+                                        int selectedIndex = -1;
+                                        for (int i = 0; i < (int)enumValues.size(); ++i)
+                                        {
+                                            if (enumValues[i] == data)
+                                            {
+                                                selectedIndex = i;
+                                                break;
+                                            }
+                                        }
+
+                                        std::vector<const char*> labels;
+                                        for (const auto& n : enumNames)
+                                            labels.push_back(n.c_str());
+
+                                        if (UI::DrawComboBox(name.c_str(), labels.data(), (int)labels.size(), &selectedIndex))
+                                        {
+                                            data = enumValues[selectedIndex];
                                             dummy.SetValue<int>(data);
                                             (*classRegisteredInstanceField)[name] = dummy;
                                             if (c.runtimeScriptInstance)
@@ -1922,35 +2063,90 @@ namespace ignite
                                         }
                                         break;
                                     }
-                                    case ScriptFieldType::Entity:
+                                    case ScriptFieldType::Quat:
                                     {
-                                        auto uuid = dummy.GetValue<uint64_t>();
-                                        std::string label = "Drag Here";
-                                        if (uuid)
+                                        auto data = dummy.GetValue<glm::quat>();
+                                        glm::vec4 vec = { data.x, data.y, data.z, data.w };
+                                        if (UI::DrawVec4Control(name.c_str(), vec, 0.1f))
                                         {
-                                            Entity e = SceneManager::GetEntity(m_Scene.get(), UUID(uuid));
-                                            if (e)
+                                            data = { vec.w, vec.x, vec.y, vec.z };
+                                            dummy.SetValue<glm::quat>(data);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<glm::quat>(name, data);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::Color:
+                                    {
+                                        auto data = dummy.GetValue<glm::vec4>();
+                                        if (UI::DrawColorVec4(name.c_str(), data))
+                                        {
+                                            dummy.SetValue<glm::vec4>(data);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<glm::vec4>(name, data);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::Entity:
+                                    case ScriptFieldType::Asset:
+                                    {
+                                        auto handle = dummy.GetValue<uint64_t>();
+                                        std::string label = "Drag Here";
+
+                                        if (field.Type == ScriptFieldType::Entity)
+                                        {
+                                            if (handle)
                                             {
-                                                label = e.GetName();
+                                                Entity e = SceneManager::GetEntity(m_Scene.get(), UUID(handle));
+                                                if (e)
+                                                    label = e.GetName();
+                                            }
+                                        }
+                                        else if (field.Type == ScriptFieldType::Asset)
+                                        {
+                                            if (handle)
+                                            {
+                                                label = assetManager->GetAssetDisplayName(AssetHandle(handle));
                                             }
                                         }
 
                                         ImGui::BeginDisabled(isRunning);
-                                        UI::DrawButtonWithColumn(name.c_str(), label.c_str(), nullptr, [this, &name, &dummy, &classRegisteredInstanceField, &c, &uuid]()
+                                        UI::DrawButtonWithColumn(name.c_str(), label.c_str(), nullptr, [this, &name, &dummy, &classRegisteredInstanceField, &c, handle, assetManager, &field]()
                                         {
                                             if (ImGui::BeginDragDropTarget())
                                             {
-                                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
+                                                if (field.Type == ScriptFieldType::Entity)
                                                 {
-                                                    LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ENTITY ITEM");
-                                                    if (payload->DataSize == sizeof(Entity))
+                                                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
                                                     {
-                                                        Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
-                                                        uint64_t id = (uint64_t)src.GetUUID();
-                                                        dummy.SetValue<uint64_t>(id);
-                                                        (*classRegisteredInstanceField)[name] = dummy;
-                                                        if (c.runtimeScriptInstance)
-                                                            c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, id);
+                                                        LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ENTITY ITEM");
+                                                        if (payload->DataSize == sizeof(Entity))
+                                                        {
+                                                            Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
+                                                            uint64_t id = (uint64_t)src.GetUUID();
+                                                            dummy.SetValue<uint64_t>(id);
+                                                            (*classRegisteredInstanceField)[name] = dummy;
+                                                            if (c.runtimeScriptInstance)
+                                                                c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, id);
+                                                        }
+                                                    }
+                                                }
+                                                else if (field.Type == ScriptFieldType::Asset)
+                                                {
+                                                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                                    {
+                                                        LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ASSET ITEM");
+                                                        if (payload->DataSize == sizeof(AssetHandle))
+                                                        {
+                                                            AssetHandle h = *static_cast<AssetHandle *>(payload->Data);
+                                                            uint64_t id = (uint64_t)h;
+                                                            dummy.SetValue<uint64_t>(id);
+                                                            (*classRegisteredInstanceField)[name] = dummy;
+                                                            if (c.runtimeScriptInstance)
+                                                                c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, id);
+                                                        }
                                                     }
                                                 }
                                                 ImGui::EndDragDropTarget();
@@ -1968,20 +2164,28 @@ namespace ignite
                                                 }
 
                                                 ImGui::BeginTooltip();
-                                                if (uuid)
+                                                if (handle)
                                                 {
-                                                    Entity e = SceneManager::GetEntity(m_Scene.get(), UUID(uuid));
-                                                    if (e) ImGui::Text("Entity Name : %s\nEntity ID : %llu", e.GetName().c_str(), uuid);
-                                                    else ImGui::Text("Invalid Entity");
+                                                    if (field.Type == ScriptFieldType::Entity)
+                                                    {
+                                                        Entity e = SceneManager::GetEntity(m_Scene.get(), UUID(handle));
+                                                        if (e) ImGui::Text("Entity Name : %s\nEntity ID : %llu", e.GetName().c_str(), handle);
+                                                        else ImGui::Text("Invalid Entity");
+                                                    }
+                                                    else
+                                                    {
+                                                        AssetMetaData metadata = assetManager->GetMetaData(AssetHandle(handle));
+                                                        ImGui::Text("Asset Name : %s\nAsset ID : %llu\nType : %s", assetManager->GetAssetDisplayName(AssetHandle(handle)).c_str(), handle, AssetTypeToString(metadata.type).c_str());
+                                                    }
                                                 }
                                                 else
                                                 {
-                                                    ImGui::Text("Empty Entity");
+                                                    ImGui::Text(field.Type == ScriptFieldType::Entity ? "Empty Entity" : "Empty Asset");
                                                 }
                                                 ImGui::EndTooltip();
                                             }
                                         });
-                                        if (uuid)
+                                        if (handle)
                                         {
                                             ImGui::SameLine();
                                             if (ImGui::Button("X"))

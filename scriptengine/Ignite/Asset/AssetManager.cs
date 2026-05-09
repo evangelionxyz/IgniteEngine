@@ -32,19 +32,18 @@ public static class AssetManager
     public static bool IsValid(AssetHandle handle) => CoreInternalCalls.AssetManager_IsAssetHandleValid(handle.Value);
     public static bool IsLoaded(AssetHandle handle) => CoreInternalCalls.AssetManager_IsAssetLoaded(handle.Value);
 
+    public static AssetHandle LoadAsyncFromFile(string filename) => CoreInternalCalls.AssetManager_LoadAssetAsyncFromFile(filename);
+    public static AssetHandle LoadImmedateFromFile(string filename) => CoreInternalCalls.AssetManager_LoadAssetImmedateFromFile(filename);
+
     public static void LoadAsync(AssetHandle handle)
     {
-        if (!handle.IsValid)
-            return;
-
+        if (!handle.IsValid) return;
         CoreInternalCalls.AssetManager_LoadAssetAsync(handle.Value);
     }
 
     public static void LoadImmediate(AssetHandle handle)
     {
-        if (!handle.IsValid)
-            return;
-
+        if (!handle.IsValid) return;
         CoreInternalCalls.AssetManager_LoadAssetImmediate(handle.Value);
     }
 }

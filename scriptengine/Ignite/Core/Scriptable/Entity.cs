@@ -9,8 +9,8 @@ namespace Ignite;
 
 public class Entity : ScriptableObject
 {
-    internal Entity(ulong id) : base(id) { }
-    protected Entity() : base(0) { }
+    internal Entity(ulong id) { SetID(id); }
+    protected Entity() { SetID(0); }
 
     public Vector3 Translation
     {
@@ -144,16 +144,8 @@ public class Entity : ScriptableObject
     public Entity GetParent()
     {
         ulong parentID = ComponentInternalCalls.Entity_GetParent(ID);
+        if (parentID == 0)
+            return null;
         return new Entity(parentID);
     }
-
-    public static Entity PickEntityAt(float x, float y)
-    {
-        ulong entityID = ComponentInternalCalls.Scene_PickEntityAt(x, y);
-        if (entityID == 0)
-            return null;
-
-        return new Entity(entityID);
-    }
-
 }

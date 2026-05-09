@@ -68,4 +68,43 @@ public static partial class Mathf
     public static int CeilToInt(float f) => (int)System.Math.Ceiling(f);
     public static int RoundToInt(float f) => (int)System.Math.Round(f);
 
+    public static bool RayPlaneIntersection(Ray ray, Vector3 planeNormal, Vector3 planePoint, out float distance)
+    {
+        float denom = Vector3.Dot(planeNormal, ray.Direction);
+        if (Abs(denom) > Epsilon)
+        {
+            Vector3 diff = planePoint - ray.Origin;
+            distance = Vector3.Dot(diff, planeNormal) / denom;
+            return distance >= 0f;
+        }
+        distance = 0f;
+        return false;
+    }
+
+    public static bool RayQuadIntersection(Ray ray, Vector3 v0, Vector3 v1, Vector3 v2, Vector3 v3, out float distance)
+    {
+        Vector3 edge1 = v1 - v0;
+        Vector3 edge2 = v3 - v0;
+        Vector3 normal = Vector3.Cross(edge1, edge2).Normalized();
+
+        if (RayPlaneIntersection(ray, normal, v0, out distance))
+        {
+            Vector3 hitPoint = ray.Origin + ray.Direction * distance;
+
+            Vector3 n0 = Vector3.Cross(v1 - v0, hitPoint - v0);
+            Vector3 n1 = Vector3.Cross(v2 - v1, hitPoint - v1);
+            Vector3 n2 = Vector3.Cross(v3 - v2, hitPoint - v2);
+            Vector3 n3 = Vector3.Cross(v0 - v3, hitPoint - v3);
+
+            if (Vector3.Dot(normal, n0) >= 0 &&
+                Vector3.Dot(normal, n1) >= 0 &&
+                Vector3.Dot(normal, n2) >= 0 &&
+                Vector3.Dot(normal, n3) >= 0)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
 }

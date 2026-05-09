@@ -1,7 +1,8 @@
-﻿// Copyright (c) 2026 Evangelion Manuhutu
+// Copyright (c) 2026 Evangelion Manuhutu
 
 using Ignite.Core.Component;
 using System;
+using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 
 namespace Ignite.Core;
@@ -19,6 +20,10 @@ public static class CoreInternalCalls
     private static CoreNativeAPI.Funcs.InputSetCursorModeFn s_InputSetCursorMode;
 
     private static CoreNativeAPI.Funcs.AssetManagerQueryFn s_AssetManagerIsAssetHandleValid;
+
+    private static CoreNativeAPI.Funcs.AssetManagerLoadFromPathFn s_AssetManagerLoadAssetAsyncFromFile;
+    private static CoreNativeAPI.Funcs.AssetManagerLoadFromPathFn s_AssetManagerLoadAssetImmediateFromFile;
+    
     private static CoreNativeAPI.Funcs.AssetManagerQueryFn s_AssetManagerIsAssetLoaded;
     private static CoreNativeAPI.Funcs.AssetManagerLoadFn s_AssetManagerLoadAssetAsync;
     private static CoreNativeAPI.Funcs.AssetManagerLoadFn s_AssetManagerLoadAssetImmediate;
@@ -38,9 +43,16 @@ public static class CoreInternalCalls
         s_InputSetCursorMode = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.InputSetCursorModeFn>(api.Input_SetCursorMode);
         
         s_AssetManagerIsAssetHandleValid = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.AssetManagerQueryFn>(api.AssetManager_IsAssetHandleValid);
+
+        s_AssetManagerLoadAssetAsyncFromFile = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.AssetManagerLoadFromPathFn>(api.AssetManager_LoadAssetAsyncFromFile);
+        s_AssetManagerLoadAssetImmediateFromFile = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.AssetManagerLoadFromPathFn>(api.AssetManager_LoadAssetImmedateFromFile);
+
         s_AssetManagerIsAssetLoaded = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.AssetManagerQueryFn>(api.AssetManager_IsAssetLoaded);
         s_AssetManagerLoadAssetAsync = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.AssetManagerLoadFn>(api.AssetManager_LoadAssetAsync);
         s_AssetManagerLoadAssetImmediate = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.AssetManagerLoadFn>(api.AssetManager_LoadAssetImmediate);
+
+        // Optional: ScriptableObject runtime field access
+        TryBindScriptableObjectFunctions(api);
 
         s_Initialized = true;
     }
@@ -115,6 +127,37 @@ public static class CoreInternalCalls
         return s_AssetManagerIsAssetLoaded(handle);
     }
 
+    internal static AssetHandle AssetManager_LoadAssetAsyncFromFile(string filename)
+    {
+        EnsureInitialized();
+
+        IntPtr ptr = NativeObject.StringToUtf8(filename);
+        try
+        {
+            return new AssetHandle(s_AssetManagerLoadAssetAsyncFromFile(ptr));
+
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(ptr);
+        }
+
+    }
+
+    internal static AssetHandle AssetManager_LoadAssetImmedateFromFile(string filename)
+    {
+        EnsureInitialized();
+        IntPtr ptr = NativeObject.StringToUtf8(filename);
+        try
+        {
+            return new AssetHandle(s_AssetManagerLoadAssetImmediateFromFile(ptr));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(ptr);
+        }
+    }
+
     internal static void AssetManager_LoadAssetAsync(ulong handle)
     {
         EnsureInitialized();
@@ -125,5 +168,79 @@ public static class CoreInternalCalls
     {
         EnsureInitialized();
         s_AssetManagerLoadAssetImmediate(handle);
+    }
+
+    // ---- ScriptableObject field accessors ----
+    private static CoreNativeAPI.Funcs.ScriptableObjectGetFieldFloatFn  s_SOGetFieldFloat;
+    private static CoreNativeAPI.Funcs.ScriptableObjectGetFieldIntFn    s_SOGetFieldInt;
+    private static CoreNativeAPI.Funcs.ScriptableObjectGetFieldBoolFn   s_SOGetFieldBool;
+    private static CoreNativeAPI.Funcs.ScriptableObjectGetFieldStringFn s_SOGetFieldString;
+    private static CoreNativeAPI.Funcs.ScriptableObjectGetClassNameFn   s_SOGetClassName;
+
+    internal static bool HasScriptableObjectBridge => s_SOGetFieldFloat != null;
+
+    internal static float ScriptableObject_GetFieldFloat(ulong handle, string fieldName)
+    {
+        EnsureInitialized();
+        IntPtr ptr = NativeObject.StringToUtf8(fieldName);
+        try { return s_SOGetFieldFloat(handle, ptr); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static int ScriptableObject_GetFieldInt(ulong handle, string fieldName)
+    {
+        EnsureInitialized();
+        IntPtr ptr = NativeObject.StringToUtf8(fieldName);
+        try { return s_SOGetFieldInt(handle, ptr); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static bool ScriptableObject_GetFieldBool(ulong handle, string fieldName)
+    {
+        EnsureInitialized();
+        IntPtr ptr = NativeObject.StringToUtf8(fieldName);
+        try { return s_SOGetFieldBool(handle, ptr); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    internal static string ScriptableObject_GetFieldString(ulong handle, string fieldName)
+    {
+        EnsureInitialized();
+        IntPtr namePtr = NativeObject.StringToUtf8(fieldName);
+        try
+        {
+            IntPtr result = s_SOGetFieldString(handle, namePtr);
+            return NativeObject.Utf8ToString(result);
+        }
+        finally { Marshal.FreeCoTaskMem(namePtr); }
+    }
+
+    internal static string ScriptableObject_GetClassName(ulong handle)
+    {
+        EnsureInitialized();
+        IntPtr result = s_SOGetClassName(handle);
+        return NativeObject.Utf8ToString(result);
+    }
+
+    /// <summary>
+    /// Called during Initialize() to bind the ScriptableObject function pointers if present.
+    /// Separate method so the struct size doesn't break older native hosts that don't provide SO funcs.
+    /// </summary>
+    internal static void TryBindScriptableObjectFunctions(CoreNativeAPI.API api)
+    {
+        try
+        {
+            if (api.ScriptableObject_GetFieldValueFloat != IntPtr.Zero)
+                s_SOGetFieldFloat = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.ScriptableObjectGetFieldFloatFn>(api.ScriptableObject_GetFieldValueFloat);
+            if (api.ScriptableObject_GetFieldValueInt != IntPtr.Zero)
+                s_SOGetFieldInt = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.ScriptableObjectGetFieldIntFn>(api.ScriptableObject_GetFieldValueInt);
+            if (api.ScriptableObject_GetFieldValueBool != IntPtr.Zero)
+                s_SOGetFieldBool = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.ScriptableObjectGetFieldBoolFn>(api.ScriptableObject_GetFieldValueBool);
+            if (api.ScriptableObject_GetFieldValueString != IntPtr.Zero)
+                s_SOGetFieldString = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.ScriptableObjectGetFieldStringFn>(api.ScriptableObject_GetFieldValueString);
+            if (api.ScriptableObject_GetClassName != IntPtr.Zero)
+                s_SOGetClassName = Marshal.GetDelegateForFunctionPointer<CoreNativeAPI.Funcs.ScriptableObjectGetClassNameFn>(api.ScriptableObject_GetClassName);
+        }
+        catch { /* optional binding - older native hosts may not have SO support */ }
     }
 }

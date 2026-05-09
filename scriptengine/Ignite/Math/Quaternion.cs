@@ -92,6 +92,22 @@ public static partial class Mathf
             );
         }
 
+        public static Quaternion Lerp(Quaternion a, Quaternion b, float t)
+        {
+            float dot = a.X * b.X + a.Y * b.Y + a.Z * b.Z + a.W * b.W;
+            if (dot < 0.0f)
+            {
+                b.X = -b.X; b.Y = -b.Y; b.Z = -b.Z; b.W = -b.W;
+            }
+
+            return new Quaternion(
+                Mathf.Lerp(a.X, b.X, t),
+                Mathf.Lerp(a.Y, b.Y, t),
+                Mathf.Lerp(a.Z, b.Z, t),
+                Mathf.Lerp(a.W, b.W, t)
+            ).Normalized;
+        }
+
         public static Quaternion Euler(float pitch, float yaw, float roll)
         {
             return FromEuler(pitch, yaw, roll);

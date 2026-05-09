@@ -31,4 +31,3 @@ namespace ignite
         return new EditorApp(createInfo);
     }
 }
-

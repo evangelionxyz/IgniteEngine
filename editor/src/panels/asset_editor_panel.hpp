@@ -26,6 +26,7 @@ namespace ignite
     class LocomotionController;
     class AnimatorController;
     class AnimatorController2D;
+    class ScriptableObject;
     class Skeleton;
     class Mesh;
 
@@ -74,7 +75,6 @@ namespace ignite
         bool OnAssetEditorCreateEvent(AssetEditorCreateEvent &event);
         bool OnMouseScrollEvent(MouseScrolledEvent &event);
 
-    private:
         struct CreateAssetRequest
         {
             Ref<Asset> asset;
@@ -99,6 +99,8 @@ namespace ignite
         void UIAnimatorControllerEditor(AssetEditorData &assetData);
         void UITextureEditor(AssetEditorData &assetData);
         void UIMaterialEditor(AssetEditorData &assetData);
+
+        void UIScriptableObjectEditor(AssetEditorData &assetData);
 
         bool SaveAsset(AssetEditorData &assetData);
         void UICreateAssetPopup();

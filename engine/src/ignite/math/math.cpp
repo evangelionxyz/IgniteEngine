@@ -268,6 +268,45 @@ namespace ignite
         return (discriminant > 0);
     }
 
+    bool Math::RayPlaneIntersection(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, const glm::vec3 &planeNormal, const glm::vec3 &planePoint, float &t)
+    {
+        float denom = glm::dot(planeNormal, rayDirection);
+        if (glm::abs(denom) > 1e-5f)
+        {
+            glm::vec3 diff = planePoint - rayOrigin;
+            t = glm::dot(diff, planeNormal) / denom;
+            return t >= 0.0f;
+        }
+        t = 0.0f;
+        return false;
+    }
+
+    bool Math::RayQuadIntersection(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2, const glm::vec3 &v3, float &t)
+    {
+        glm::vec3 edge1 = v1 - v0;
+        glm::vec3 edge2 = v3 - v0;
+        glm::vec3 normal = glm::normalize(glm::cross(edge1, edge2));
+
+        if (RayPlaneIntersection(rayOrigin, rayDirection, normal, v0, t))
+        {
+            glm::vec3 hitPoint = rayOrigin + rayDirection * t;
+
+            glm::vec3 n0 = glm::cross(v1 - v0, hitPoint - v0);
+            glm::vec3 n1 = glm::cross(v2 - v1, hitPoint - v1);
+            glm::vec3 n2 = glm::cross(v3 - v2, hitPoint - v2);
+            glm::vec3 n3 = glm::cross(v0 - v3, hitPoint - v3);
+
+            if (glm::dot(normal, n0) >= 0.0f &&
+                glm::dot(normal, n1) >= 0.0f &&
+                glm::dot(normal, n2) >= 0.0f &&
+                glm::dot(normal, n3) >= 0.0f)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     glm::mat4 Math::RemoveScale(const glm::mat4 &matrix)
     {
         glm::vec3 scale

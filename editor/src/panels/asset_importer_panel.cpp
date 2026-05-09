@@ -3,6 +3,7 @@
 #include "asset_importer_panel.hpp"
 
 #include "ignite/project/project.hpp"
+#include "ignite/asset/asset_worker.hpp"
 #include "ignite/asset/asset_importer.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/font.hpp"
@@ -30,19 +31,16 @@ namespace ignite
                 return;
             }
 
-            Application::SubmitToMainThread([assetManager, metadata, asset]()
+            AssetHandle handle = assetManager->GetAssetHandle(metadata.filepath);
+            if (handle == AssetHandle(0))
             {
-                AssetHandle handle = assetManager->GetAssetHandle(metadata.filepath);
-                if (handle == AssetHandle(0))
-                {
-                    handle = AssetHandle();
-                }
+                handle = AssetHandle();
+            }
 
-                asset->handle = handle;
-                asset->SetReadyFlag(true);
-                assetManager->AssignMetaData(handle, metadata);
-                assetManager->AssignAsset(handle, asset);
-            }, "AssetImporterPanel::PublishImportedAsset");
+            asset->handle = handle;
+            asset->SetReadyFlag(true);
+            assetManager->AssignMetaData(handle, metadata);
+            assetManager->AssignAsset(handle, asset);
         }
 
         std::string ToLower(std::string value)
@@ -134,6 +132,13 @@ namespace ignite
             m_ImportQueues[assetType].push(importData);
         }
 
+        m_TotalImportItems = 0;
+        for (const auto &[type, queue] : m_ImportQueues)
+        {
+            m_TotalImportItems += (int)queue.size();
+        }
+        m_ImportedItems = 0;
+
         if (!AdvanceToNextAsset())
         {
             return false;
@@ -150,17 +155,41 @@ namespace ignite
         (void)deltaTime;
 
         // Poll importer
-        if (m_IsImporting && m_ActiveImportJobs == 0)
+        if (m_IsImporting)
         {
-            m_EditorLayer->SaveProject();
-            m_EditorLayer->RefreshContentBrowsers();
-
-            if (!AdvanceToNextAsset())
+            if (m_TotalImportItems > 0)
             {
-                ResetImportState();
+                float progress = (float)m_ImportedItems / (float)m_TotalImportItems;
+                m_EditorLayer->SetLoadingProgress(progress);
             }
 
-            m_IsImporting = false;
+            if (m_ActiveImportJobs <= 0)
+            {
+                m_EditorLayer->SaveProject();
+                m_EditorLayer->RefreshContentBrowsers();
+
+                if (auto project = m_EditorLayer->GetActiveProject())
+                {
+                    if (auto assetManager = project->GetAssetManager())
+                    {
+                        assetManager->ResumeUnloadAssets();
+                    }
+                }
+
+                if (AdvanceToNextAsset())
+                {
+                    m_ShowImporterWindow = true;
+                    m_OpenImporterPopup = true;
+                }
+                else
+                {
+                    ResetImportState();
+                    m_EditorLayer->SetStatusText("Ready");
+                    m_EditorLayer->SetLoadingProgress(0.0f);
+                }
+
+                m_IsImporting = false;
+            }
         }
     }
 
@@ -168,9 +197,7 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
         if (!m_ShowImporterWindow)
-        {
             return;
-        }
 
         if (m_OpenImporterPopup)
         {
@@ -337,69 +364,63 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
         auto project = m_EditorLayer->GetActiveProject();
         if (!project)
-        {
             return false;
-        }
 
         auto assetManager = project->GetAssetManager();
         if (!assetManager)
-        {
             return false;
-        }
 
         m_ActiveImportJobs++;
 
         AssetImportData jobData = asset;
-        auto jobProject = project;
         auto jobAssetManager = assetManager;
-
-        if (IsFbxFile(jobData.filepath))
+        
+        AssetWorker::SubmitJob([this, project, jobAssetManager, jobData]() mutable
         {
-            if (jobData.meshOptions.importMesh || jobData.meshOptions.importMaterials)
+            IGN_PROFILE_SCOPE("AssetImporterPanel::ProcessImportRequest::SubmitJob");
+            
+            m_EditorLayer->SetStatusText(std::format("Importing {}...", jobData.filepath.filename().string()));
+
+            if (IsFbxFile(jobData.filepath))
             {
-                ImportFbxMesh(jobData.filepath, jobData.meshOptions);
+                if (jobData.meshOptions.importMesh || jobData.meshOptions.importMaterials)
+                {
+                    ImportFbxMesh(jobData.filepath, jobData.meshOptions);
+                }
+                else
+                {
+                    ImportFbxSkeletonAndAnimations(jobData.filepath, jobData.meshOptions);
+                }
             }
             else
             {
-                ImportFbxSkeletonAndAnimations(jobData.filepath, jobData.meshOptions);
-            }
-        }
-        else
-        {
-            jobAssetManager->SubmitJob([this, jobProject, jobAssetManager, jobData]() mutable
-            {
-                IGN_PROFILE_SCOPE("AssetImporterPanel::ProcessImportRequest::SubmitJob");
                 const std::filesystem::path importedPath = PrepareAssetForImport(jobData);
+
                 if (importedPath.empty())
                 {
                     m_ActiveImportJobs--;
                     return;
                 }
 
-                const std::filesystem::path relativePath = jobProject->GetProjectFilepath(importedPath);
+                const std::filesystem::path relativePath = project->GetProjectFilepath(importedPath);
                 const AssetType assetType = jobData.assetType;
 
-                Application::SubmitToMainThread([this, jobAssetManager, relativePath, assetType]()
+                AssetHandle finalHandle = jobAssetManager->GetAssetHandle(relativePath);
+                if (finalHandle == AssetHandle(0))
                 {
-                    AssetHandle finalHandle = jobAssetManager->GetAssetHandle(relativePath);
-                    if (finalHandle == AssetHandle(0))
-                    {
-                        finalHandle = AssetHandle();
+                    finalHandle = AssetHandle();
 
-                        AssetMetaData metadata;
-                        metadata.filepath = relativePath;
-                        metadata.type = assetType;
+                    AssetMetaData metadata;
+                    metadata.filepath = relativePath;
+                    metadata.type = assetType;
 
-                        jobAssetManager->AssignMetaData(finalHandle, metadata);
-
-                        LOG_TRACE("[Asset Importer] Registered asset (not loaded): {} ({})", static_cast<uint64_t>(finalHandle), relativePath.generic_string());
-                    }
-
-                    m_ActiveImportJobs--;
-
-                }, "AssetImporterPanel::RegisterMetaData");
-            });
-        }
+                    jobAssetManager->AssignMetaData(finalHandle, metadata);
+                    LOG_TRACE("[Asset Importer] Registered asset (not loaded): {} ({})", static_cast<uint64_t>(finalHandle), relativePath.generic_string());
+                }
+            }
+            m_ActiveImportJobs--;
+            m_ImportedItems++;
+        });
 
         return true;
     }
@@ -437,6 +458,8 @@ namespace ignite
         m_SkipDialogForSameType = false;
         m_OpenImporterPopup = false;
         m_ShowImporterWindow = false;
+        m_TotalImportItems = 0;
+        m_ImportedItems = 0;
     }
 
     AssetImporterPanel::AssetImportData AssetImporterPanel::BuildCurrentImportData() const
@@ -454,33 +477,48 @@ namespace ignite
     void AssetImporterPanel::ImportCurrentAsset()
     {
         if (!m_CurrentAsset.has_value())
-        {
             return;
+
+        auto project = m_EditorLayer->GetActiveProject();
+        auto assetManager = project->GetAssetManager();
+
+        if (assetManager)
+        {
+            assetManager->PauseUnloadAssets();
         }
 
-        m_IsImporting = false;
-        const AssetType currentType = m_CurrentAsset->assetType;
-        m_IsImporting |= ProcessImportRequest(BuildCurrentImportData());
+        m_IsImporting = true;
+        m_EditorLayer->SetStatusText("Starting import...");
 
-        if (m_SkipDialogForSameType)
+        AssetWorker::SubmitJob([this]()
         {
-            auto queueIt = m_ImportQueues.find(currentType);
-            if (queueIt != m_ImportQueues.end())
+            const AssetType currentType = m_CurrentAsset->assetType;
+            ProcessImportRequest(BuildCurrentImportData());
+
+            if (m_SkipDialogForSameType)
             {
-                while (!queueIt->second.empty())
+                auto queueIt = m_ImportQueues.find(currentType);
+                if (queueIt != m_ImportQueues.end())
                 {
-                    AssetImportData data = queueIt->second.front();
-                    queueIt->second.pop();
-                    data.meshOptions = m_MeshOptions;
-                    data.meshOptions.targetDirectory = m_TargetDirectory;
-                    m_IsImporting |= ProcessImportRequest(data);
+                    while (!queueIt->second.empty())
+                    {
+                        AssetImportData data = queueIt->second.front();
+                        queueIt->second.pop();
+                        data.meshOptions = m_MeshOptions;
+                        data.meshOptions.targetDirectory = m_TargetDirectory;
+                        ProcessImportRequest(data);
+                    }
                 }
             }
-        }
+
+            m_OpenImporterPopup = false;
+            m_ShowImporterWindow = false;
+        });
     }
 
     void AssetImporterPanel::SkipCurrentAsset()
     {
+        m_ImportedItems++;
         AdvanceToNextAsset();
         if (!m_CurrentAsset.has_value())
         {
@@ -492,9 +530,7 @@ namespace ignite
     {
         auto project = m_EditorLayer->GetActiveProject();
         if (!project)
-        {
             return {};
-        }
 
         std::error_code ec;
         const std::filesystem::path sourcePath = std::filesystem::weakly_canonical(asset.filepath, ec);
@@ -506,20 +542,14 @@ namespace ignite
 
         const std::filesystem::path assetDirectory = std::filesystem::weakly_canonical(project->GetAssetDirectory(), ec);
         if (ec)
-        {
             return {};
-        }
 
         if (IsPathWithin(sourcePath, assetDirectory))
-        {
             return sourcePath;
-        }
 
         std::filesystem::path targetDirectory = m_TargetDirectory;
         if (targetDirectory.empty())
-        {
             targetDirectory = project->GetAssetDirectory();
-        }
 
         std::filesystem::create_directories(targetDirectory, ec);
         if (ec)
@@ -565,14 +595,13 @@ namespace ignite
         }
     }
 
-    void AssetImporterPanel::ImportFbxMesh(const std::filesystem::path &filepath, const MeshImportOptions &options)
+    bool AssetImporterPanel::ImportFbxMesh(const std::filesystem::path &filepath, const MeshImportOptions &options)
     {
         IGN_PROFILE_FUNCTION();
         auto project = m_EditorLayer->GetActiveProject();
         if (!project)
         {
-            m_ActiveImportJobs--;
-            return;
+            return false;
         }
 
         auto assetManager = project->GetAssetManager();
@@ -594,9 +623,8 @@ namespace ignite
         Ref<Mesh> importedAsset = AssetImporter::ImportMesh(handle, sourceMetadata, assetManager, options);
         if (!importedAsset)
         {
-            m_ActiveImportJobs--;
             LOG_ERROR("[Asset Importer] Failed to import mesh from {}", filepath.generic_string());
-            return;
+            return false;
         }
 
         if (options.importMesh)
@@ -606,24 +634,23 @@ namespace ignite
             registryMetadata.type = AssetType::Mesh;
 
             PublishImportedAsset(assetManager, registryMetadata, importedAsset);
-            m_ActiveImportJobs--;
         }
+
+        return true;
     }
 
-    void AssetImporterPanel::ImportFbxSkeletonAndAnimations(const std::filesystem::path &filepath, const MeshImportOptions &options)
+    bool AssetImporterPanel::ImportFbxSkeletonAndAnimations(const std::filesystem::path &filepath, const MeshImportOptions &options)
     {
         IGN_PROFILE_FUNCTION();
         if (!options.importSkeleton && !options.importAnimations)
         {
-            m_ActiveImportJobs--;
-            return;
+            return false;
         }
 
         auto project = m_EditorLayer->GetActiveProject();
         if (!project)
         {
-            m_ActiveImportJobs--;
-            return;
+            return false;
         }
 
         auto assetManager = project->GetAssetManager();
@@ -682,8 +709,7 @@ namespace ignite
         if (!skeleton)
         {
             LOG_WARN("[Asset Importer] FBX has no valid skeleton: {}", filepath.generic_string());
-            m_ActiveImportJobs--;
-            return;
+            return false;
         }
 
         const std::string skeletonExt = GetAssetExtensionFromType(AssetType::Skeleton);
@@ -721,17 +747,14 @@ namespace ignite
             if (animations.empty())
             {
                 LOG_WARN("[Asset Importer] FBX has no animation clips: {}", filepath.generic_string());
-                m_ActiveImportJobs--;
-                return;
+                return false;
             }
 
             for (size_t i = 0; i < animations.size(); ++i)
             {
                 Ref<SkeletalAnimation> animation = animations[i];
                 if (!animation)
-                {
                     continue;
-                }
 
                 const std::filesystem::path animationPath = animationDirectory / (std::format("{}_{}", filename.string(), i) + animationExt);
                 animation->Serialize(animationPath);
@@ -741,34 +764,30 @@ namespace ignite
                 animationMD.type = AssetType::SkeletalAnimation;
 
                 const AssetHandle fallbackSkeletonHandle = skeleton ? skeleton->handle : AssetHandle(0);
-                Application::SubmitToMainThread([this, assetManager, animationMD, animation, importedSkeletonRelativePath, fallbackSkeletonHandle]()
+                AssetHandle skeletonHandle = fallbackSkeletonHandle;
+                if (!importedSkeletonRelativePath.empty())
                 {
-                    AssetHandle skeletonHandle = fallbackSkeletonHandle;
-                    if (!importedSkeletonRelativePath.empty())
+                    const AssetHandle importedSkeletonHandle = assetManager->GetAssetHandle(importedSkeletonRelativePath);
+                    if (importedSkeletonHandle != AssetHandle(0))
                     {
-                        const AssetHandle importedSkeletonHandle = assetManager->GetAssetHandle(importedSkeletonRelativePath);
-                        if (importedSkeletonHandle != AssetHandle(0))
-                        {
-                            skeletonHandle = importedSkeletonHandle;
-                        }
+                        skeletonHandle = importedSkeletonHandle;
                     }
+                }
 
-                    AssetHandle animationHandle = assetManager->GetAssetHandle(animationMD.filepath);
-                    if (animationHandle == AssetHandle(0))
-                    {
-                        animationHandle = AssetHandle();
-                    }
+                AssetHandle animationHandle = assetManager->GetAssetHandle(animationMD.filepath);
+                if (animationHandle == AssetHandle(0))
+                {
+                    animationHandle = AssetHandle();
+                }
 
-                    animation->handle = animationHandle;
-                    animation->SetSkeletonHandle(skeletonHandle);
-                    animation->SetReadyFlag(true);
-                    assetManager->AssignMetaData(animationHandle, animationMD);
-                    assetManager->AssignAsset(animationHandle, animation);
-
-                    m_ActiveImportJobs--;
-                }, "AssetImporterPanel::PublishImportedAnimation");
+                animation->handle = animationHandle;
+                animation->SetSkeletonHandle(skeletonHandle);
+                animation->SetReadyFlag(true);
+                assetManager->AssignMetaData(animationHandle, animationMD);
+                assetManager->AssignAsset(animationHandle, animation);
             }
         }
-    }
 
+        return true;
+    }
 }

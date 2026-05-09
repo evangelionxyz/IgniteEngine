@@ -4,6 +4,7 @@
 #define SCRIPT_FIELD_HPP
 
 #include <string>
+#include <vector>
 
 namespace ignite
 {
@@ -11,86 +12,93 @@ namespace ignite
     {
         Invalid = 0,
         Entity,
-        Float, 
-        Double,
         Bool, 
         Char,
+        String,
         Byte, 
+        SByte,
         Short, 
+        UShort, 
         Int, 
-        Long,
-        UByte, 
-        UShort,
-        UInt, 
+        UInt,
+        Long, 
         ULong,
-		String,
+        Float, 
+        Double,
         Vector2, 
         Vector3, 
         Vector4,
-		Quat,
+        Quat,
+        Color,
+        Enum,
+        Asset,   // AssetHandle - uint64_t; covers ScriptableObject, Texture, etc.
     };
 
-	struct ScriptField
-	{
-		ScriptFieldType Type = ScriptFieldType::Invalid;
-		std::string Name;
-		std::string ManagedTypeName;
-		bool IsPublic = false;
-		bool HasSerializeFieldAttribute = false;
-	};
+    struct ScriptField
+    {
+        ScriptFieldType Type = ScriptFieldType::Invalid;
+        std::string Name;
+        std::string ManagedTypeName;
+        bool IsPublic = false;
+        bool HasSerializeFieldAttribute = false;
 
-	struct ScriptInstanceField
-	{
-		ScriptField field;
+        bool IsEnum = false;
+        std::vector<std::string> EnumNames;
+        std::vector<int> EnumValues;
+    };
 
-		ScriptInstanceField()
-		{
-			memset(m_Buffer, 0, sizeof(m_Buffer));
-		}
+    struct ScriptInstanceField
+    {
+        ScriptField field;
 
-		template<typename T>
-		T GetValue() const
-		{
-			static_assert(sizeof(T) <= 16, "Type too large!");
-			return *reinterpret_cast<const T *>(m_Buffer);
-		}
+        ScriptInstanceField()
+        {
+            memset(m_Buffer, 0, sizeof(m_Buffer));
+        }
 
-		template<typename T>
-		void SetValue(T value)
-		{
-			static_assert(sizeof(T) <= 16, "Type too large!");
-			memcpy(m_Buffer, &value, sizeof(T));
-		}
+        template<typename T>
+        T GetValue() const
+        {
+            static_assert(sizeof(T) <= 64, "Type too large!");
+            return *reinterpret_cast<const T *>(m_Buffer);
+        }
 
-		// Specialization for std::string stored in the fixed buffer (truncated to fit)
-		template<>
-		inline std::string GetValue<std::string>() const
-		{
-			// Ensure null-terminated
-			const size_t maxLen = sizeof(m_Buffer);
-			size_t len = 0;
-			while (len < maxLen && m_Buffer[len] != '\0') ++len;
-			return std::string(m_Buffer, static_cast<size_t>(len));
-		}
+        template<typename T>
+        void SetValue(T value)
+        {
+            static_assert(sizeof(T) <= 64, "Type too large!");
+            memcpy(m_Buffer, &value, sizeof(T));
+        }
 
-		template<>
-		inline void SetValue<std::string>(std::string value)
-		{
-			// Truncate to fit into buffer (reserve one byte for null)
-			size_t maxCopy = sizeof(m_Buffer) - 1;
-			size_t copyLen = std::min(value.size(), maxCopy);
-			memset(m_Buffer, 0, sizeof(m_Buffer));
-			if (copyLen > 0)
-				memcpy(m_Buffer, value.data(), copyLen);
-			m_Buffer[copyLen] = '\0';
-		}
+        // Specialization for std::string stored in the fixed buffer (truncated to fit)
+        template<>
+        inline std::string GetValue<std::string>() const
+        {
+            // Ensure null-terminated
+            const size_t maxLen = sizeof(m_Buffer);
+            size_t len = 0;
+            while (len < maxLen && m_Buffer[len] != '\0') ++len;
+            return std::string(m_Buffer, static_cast<size_t>(len));
+        }
 
-	private:
-		char m_Buffer[16];
+        template<>
+        inline void SetValue<std::string>(std::string value)
+        {
+            // Truncate to fit into buffer (reserve one byte for null)
+            size_t maxCopy = sizeof(m_Buffer) - 1;
+            size_t copyLen = std::min(value.size(), maxCopy);
+            memset(m_Buffer, 0, sizeof(m_Buffer));
+            if (copyLen > 0)
+                memcpy(m_Buffer, value.data(), copyLen);
+            m_Buffer[copyLen] = '\0';
+        }
 
-		friend class ScriptEngine;
-		friend class ScriptInstance;
-	};
+    private:
+        char m_Buffer[64];
+
+        friend class ScriptEngine;
+        friend class ScriptInstance;
+    };
 }
 
 #endif
