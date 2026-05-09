@@ -531,6 +531,7 @@ namespace ignite
                                         case ScriptFieldType::Color: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec4>()); break;
                                         case ScriptFieldType::Enum: sr.AddKeyValue("Value", fieldInstance.GetValue<int>()); break;
                                         case ScriptFieldType::Entity: sr.AddKeyValue("Value", fieldInstance.GetValue<uint64_t>()); break;
+                                        case ScriptFieldType::Asset: sr.AddKeyValue("Value", fieldInstance.GetValue<uint64_t>()); break;
                                         default: break;
                                     }
 
@@ -1094,6 +1095,7 @@ namespace ignite
                                 case ScriptFieldType::Color: instanceField.SetValue(fieldNode["Value"].as<glm::vec4>()); break;
                                 case ScriptFieldType::Enum: instanceField.SetValue(fieldNode["Value"].as<int>()); break;
                                 case ScriptFieldType::Entity: instanceField.SetValue(fieldNode["Value"].as<uint64_t>()); break;
+                                case ScriptFieldType::Asset: instanceField.SetValue(fieldNode["Value"].as<uint64_t>()); break;
                             }
 
                             instanceFields[name] = instanceField;

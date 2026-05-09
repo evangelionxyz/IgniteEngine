@@ -51,7 +51,12 @@ namespace ignite
         // Scriptable Object script
         bool IsScriptableObjectClassExists(const std::string &fullClassName);
         Ref<ScriptClass> GetScriptableObjectClassByName(const std::string &name);
+        const ScriptClassMap &GetScriptableObjectClasses();
         const std::vector<std::string> &GetScriptableObjectClassStorage();
+
+        // Returns all menu entries gathered from [CreateAssetMenu] attributes
+        const std::vector<ScriptableObjectMenuEntry> &GetScriptableObjectMenuEntries();
+        void RefreshScriptableObjectMenuEntries();
 
         Scene *GetSceneContext();
         ScriptHost *GetScriptHost();
@@ -78,27 +83,28 @@ namespace ignite
         {
             switch (type)
             {
-            case ScriptFieldType::Invalid: return "Invalid";
-            case ScriptFieldType::String:   return "String";
-            case ScriptFieldType::Float:   return "Float";
-            case ScriptFieldType::Double:  return "Double";
-            case ScriptFieldType::Bool:    return "Boolean";
-            case ScriptFieldType::Char:    return "Char";
-            case ScriptFieldType::Byte:    return "Byte";
-            case ScriptFieldType::SByte:   return "SByte";
-            case ScriptFieldType::Short:   return "Short";
-            case ScriptFieldType::UShort:  return "UShort";
-            case ScriptFieldType::Int:     return "Int";
-            case ScriptFieldType::UInt:    return "UInt";
-            case ScriptFieldType::Long:    return "Long";
-            case ScriptFieldType::ULong:   return "ULong";
-            case ScriptFieldType::Vector2: return "Vec2";
-            case ScriptFieldType::Vector3: return "Vec3";
-            case ScriptFieldType::Vector4: return "Vec4";
-            case ScriptFieldType::Quat:    return "Quat";
-            case ScriptFieldType::Color:   return "Color";
-            case ScriptFieldType::Enum:    return "Enum";
-            case ScriptFieldType::Entity:  return "Entity";
+                case ScriptFieldType::Invalid: return "Invalid";
+                case ScriptFieldType::String:   return "String";
+                case ScriptFieldType::Float:   return "Float";
+                case ScriptFieldType::Double:  return "Double";
+                case ScriptFieldType::Bool:    return "Boolean";
+                case ScriptFieldType::Char:    return "Char";
+                case ScriptFieldType::Byte:    return "Byte";
+                case ScriptFieldType::SByte:   return "SByte";
+                case ScriptFieldType::Short:   return "Short";
+                case ScriptFieldType::UShort:  return "UShort";
+                case ScriptFieldType::Int:     return "Int";
+                case ScriptFieldType::UInt:    return "UInt";
+                case ScriptFieldType::Long:    return "Long";
+                case ScriptFieldType::ULong:   return "ULong";
+                case ScriptFieldType::Vector2: return "Vec2";
+                case ScriptFieldType::Vector3: return "Vec3";
+                case ScriptFieldType::Vector4: return "Vec4";
+                case ScriptFieldType::Quat:    return "Quat";
+                case ScriptFieldType::Color:   return "Color";
+                case ScriptFieldType::Enum:    return "Enum";
+                case ScriptFieldType::Asset:   return "Asset";
+                case ScriptFieldType::Entity:  return "Entity";
             }
 
             LOG_ASSERT(false, "Invalid Script Field Type!");
@@ -127,6 +133,7 @@ namespace ignite
             if (type == "Quat")    return ScriptFieldType::Quat;
             if (type == "Color")   return ScriptFieldType::Color;
             if (type == "Enum")    return ScriptFieldType::Enum;
+            if (type == "Asset")   return ScriptFieldType::Asset;
             if (type == "Entity")  return ScriptFieldType::Entity;
 
             return ScriptFieldType::Invalid;

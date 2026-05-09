@@ -25,9 +25,10 @@ namespace ignite
     namespace
     {
         // Constants
-        constexpr const char *kSerializeFieldAttributeTypeName = "Ignite.SerializeFieldAttribute";
-        constexpr const char *kEntityTypeName = "Ignite.Entity";
+        constexpr const char *kSerializeFieldTypeName = "Ignite.SerializeField";
         constexpr const char *kScriptableObjectTypeName = "Ignite.ScriptableObject";
+
+        constexpr const char *kEntityTypeName = "Ignite.Entity";
 
         static bool TryGetAssemblyWriteTime(const std::filesystem::path &filepath, std::filesystem::file_time_type &outTime)
         {
@@ -148,6 +149,9 @@ namespace ignite
         {"Ignite.Mathf+Quaternion", ScriptFieldType::Quat},
         {"Ignite.Mathf+Color",   ScriptFieldType::Color},
         {"Ignite.Entity",        ScriptFieldType::Entity},
+        // ScriptableObject subclasses are matched dynamically (see LoadAppClasses),
+        // but the base type is registered here for direct field declarations.
+        {"Ignite.ScriptableObject", ScriptFieldType::Asset},
     };
 
     struct ScriptEngineData
@@ -172,6 +176,7 @@ namespace ignite
         // Scriptable object script
         ScriptClassMap scriptableObjectClasses;
         std::vector<std::string> scriptableObjecClassStorage;
+        std::vector<ScriptableObjectMenuEntry> scriptableObjectMenuEntries;
     };
 
     ScriptEngineData *scriptEngineData = nullptr;
@@ -360,13 +365,13 @@ namespace ignite
         }
 
         // Configure field serialization
-        if (!scriptEngineData->scriptHost->ConfigureSerialization(kSerializeFieldAttributeTypeName, kEntityTypeName))
+        if (!scriptEngineData->scriptHost->ConfigureSerialization(kSerializeFieldTypeName, kEntityTypeName))
         {
             LOG_ERROR("[Script Engine] Failed to configure Entity script serialization type names");
             return false;
         }
 
-        if (!scriptEngineData->scriptHost->ConfigureSerialization(kSerializeFieldAttributeTypeName, kScriptableObjectTypeName))
+        if (!scriptEngineData->scriptHost->ConfigureSerialization(kSerializeFieldTypeName, kScriptableObjectTypeName))
         {
             LOG_ERROR("[Script Engine] Failed to configure Scriptable Object serialization type names");
             return false;
@@ -516,9 +521,65 @@ namespace ignite
         return scriptEngineData->scriptableObjectClasses.at(name);
     }
 
+    const ScriptClassMap &ScriptEngine::GetScriptableObjectClasses()
+    {
+        return scriptEngineData->scriptableObjectClasses;
+    }
+
     const std::vector<std::string> &ScriptEngine::GetScriptableObjectClassStorage()
     {
         return scriptEngineData->scriptableObjecClassStorage;
+    }
+
+    const std::vector<ScriptableObjectMenuEntry> &ScriptEngine::GetScriptableObjectMenuEntries()
+    {
+        return scriptEngineData->scriptableObjectMenuEntries;
+    }
+
+    void ScriptEngine::RefreshScriptableObjectMenuEntries()
+    {
+        scriptEngineData->scriptableObjectMenuEntries.clear();
+        if (!scriptEngineData || !scriptEngineData->scriptHost)
+            return;
+
+        const std::string rawData = scriptEngineData->scriptHost->GetCreateAssetMenuData(
+            scriptEngineData->appAssemblyFilepath,
+            kScriptableObjectTypeName);
+
+        if (rawData.empty())
+            return;
+
+        // Format: "FullClassName~FileName~MenuName|..."
+        size_t start = 0;
+        while (start <= rawData.size())
+        {
+            const size_t end = rawData.find('|', start);
+            const std::string entry = (end == std::string::npos)
+                ? rawData.substr(start)
+                : rawData.substr(start, end - start);
+
+            if (!entry.empty())
+            {
+                const size_t sep1 = entry.find('~');
+                const size_t sep2 = (sep1 != std::string::npos) ? entry.find('~', sep1 + 1) : std::string::npos;
+
+                if (sep1 != std::string::npos && sep2 != std::string::npos)
+                {
+                    ScriptableObjectMenuEntry menuEntry;
+                    menuEntry.className = entry.substr(0, sep1);
+                    menuEntry.fileName  = entry.substr(sep1 + 1, sep2 - sep1 - 1);
+                    menuEntry.menuName  = entry.substr(sep2 + 1);
+                    scriptEngineData->scriptableObjectMenuEntries.push_back(menuEntry);
+                    LOG_TRACE("[Script Engine] CreateAssetMenu: class='{}' file='{}' menu='{}'",
+                              menuEntry.className, menuEntry.fileName, menuEntry.menuName);
+                }
+            }
+
+            if (end == std::string::npos) break;
+            start = end + 1;
+        }
+
+        LOG_INFO("[Script Engine] Found {} CreateAssetMenu entries", scriptEngineData->scriptableObjectMenuEntries.size());
     }
 
     Scene *ScriptEngine::GetSceneContext()
@@ -538,9 +599,9 @@ namespace ignite
 
     void ScriptEngine::LoadAppAssemblyClasses()
     {
-        // Load Entity and ScriptableObject classes
-        LoadAppClasses(kEntityTypeName, scriptEngineData->entityClasses);
+        // Load ScriptableObject classes FIRST so entity field parsing can reference them
         LoadAppClasses(kScriptableObjectTypeName, scriptEngineData->scriptableObjectClasses);
+        LoadAppClasses(kEntityTypeName, scriptEngineData->entityClasses);
 
         // Store class name to class storage
         // Entity class storage
@@ -558,6 +619,9 @@ namespace ignite
             LOG_TRACE("Scriptable object '{}' loaded", className);
             scriptEngineData->scriptableObjecClassStorage.push_back(className);
         }
+
+        // Refresh CreateAssetMenu entries (used by content browser context menu)
+        RefreshScriptableObjectMenuEntries();
     }
 
     void ScriptEngine::LoadAppClasses(const std::string &classFullName, ScriptClassMap &outClasses)
@@ -639,6 +703,11 @@ namespace ignite
                             {
                                 field.Type = fieldTypeIt->second;
                             }
+                            else if (scriptEngineData->scriptableObjectClasses.count(managedTypeName))
+                            {
+                                // Field is a specific ScriptableObject subclass (same assembly)
+                                field.Type = ScriptFieldType::Asset;
+                            }
                         }
 
                         if (field.Type != ScriptFieldType::Invalid)
@@ -647,7 +716,8 @@ namespace ignite
                         }
                         else
                         {
-                            LOG_WARN("[Script Engine] Unsupported script field type '{}.{}' ({})", fullName, fieldName, managedTypeName);
+                            LOG_ERROR("[Script Engine] Unsupported script field type '{}.{}' ({})", fullName, fieldName, managedTypeName);
+                            LOG_ASSERT(false, "");
                         }
                     }
                 }

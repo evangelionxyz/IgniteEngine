@@ -27,6 +27,13 @@ namespace ignite
 
         void (*AssetManager_LoadAssetAsync)(uint64_t handle);
         void (*AssetManager_LoadAssetImmediate)(uint64_t handle);
+
+        // ScriptableObject runtime field access
+        float       (*ScriptableObject_GetFieldValueFloat)(uint64_t handle, const char *fieldName);
+        int32_t     (*ScriptableObject_GetFieldValueInt)(uint64_t handle, const char *fieldName);
+        bool        (*ScriptableObject_GetFieldValueBool)(uint64_t handle, const char *fieldName);
+        const char *(*ScriptableObject_GetFieldValueString)(uint64_t handle, const char *fieldName);
+        const char *(*ScriptableObject_GetClassName)(uint64_t handle);
     };
 
     class CoreScriptGlue

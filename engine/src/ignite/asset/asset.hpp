@@ -116,6 +116,7 @@ namespace ignite
         if (typeStr == "Animation2D")  return AssetType::Animation2D;
         if (typeStr == "AnimatorController")  return AssetType::AnimatorController;
         if (typeStr == "AnimatorController2D")  return AssetType::AnimatorController2D;
+        if (typeStr == "ScriptableObject")       return AssetType::ScriptableObject;
         return AssetType::Invalid;
     }
 

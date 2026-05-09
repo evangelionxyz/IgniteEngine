@@ -514,6 +514,7 @@ namespace ignite {
             case AssetType::SkeletalAnimation:
             case AssetType::AnimatorController:
             case AssetType::AnimatorController2D:
+            case AssetType::ScriptableObject:
             {
                 asset = AssetImporter::Import(handle, getterMetadata, this);
                 {

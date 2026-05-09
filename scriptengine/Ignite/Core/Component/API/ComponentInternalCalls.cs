@@ -1134,7 +1134,7 @@ public static class ComponentInternalCalls
         try
         {
             s_WidgetComponentGetLabelText(entityID, namePtr, out IntPtr result);
-            return result == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(result);
+            return NativeObject.Utf8ToString(result);
         }
         finally { Marshal.FreeCoTaskMem(namePtr); }
     }

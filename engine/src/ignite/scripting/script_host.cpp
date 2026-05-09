@@ -419,4 +419,16 @@ namespace ignite
         std::string path = assemblyPath.string();
         return m_Host->GetDerivedTypes(path.c_str(), baseType.c_str());
     }
+
+    std::string ScriptHost::GetCreateAssetMenuData(const std::filesystem::path &assemblyPath, const std::string &baseType)
+    {
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot get CreateAssetMenu data - host not initialized");
+            return {};
+        }
+
+        std::string path = assemblyPath.string();
+        return m_Host->GetCreateAssetMenuData(path.c_str(), baseType.c_str());
+    }
 }

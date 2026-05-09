@@ -4,6 +4,7 @@
 #include "ignite/core/string_utils.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/scripting/script_engine.hpp"
+#include "ignite/scripting/scriptable_object.hpp"
 #include "ignite/core/platform_utils.hpp"
 
 #include "ignite/serializer/serializer.hpp"
@@ -364,6 +365,45 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         out.close();
 
         RegenerateCSharpProject();
+    }
+
+    void Project::CreateScriptableObject(const std::string &className, const std::string &fileName, const std::filesystem::path &targetDirectory)
+    {
+        // Build output path: <targetDirectory>/<fileName>.ixso
+        const std::string safeFileName = fileName.empty() ? className : fileName;
+        const std::filesystem::path filepath = targetDirectory / (safeFileName + GetAssetExtensionFromType(AssetType::ScriptableObject));
+
+        // Avoid overwriting - generate a unique name
+        std::filesystem::path outPath = filepath;
+        {
+            uint32_t suffix = 1;
+            while (std::filesystem::exists(outPath))
+            {
+                outPath = targetDirectory / std::format("{}_{}{}", safeFileName, suffix, GetAssetExtensionFromType(AssetType::ScriptableObject));
+                ++suffix;
+            }
+        }
+
+        // Create and immediately serialize a default ScriptableObject
+        auto so = ScriptableObject::Create(className);
+        so->Serialize(outPath);
+
+        // Register it in the asset manager
+        const auto relPath = GetProjectRelativeFilepath(outPath);
+        AssetHandle handle = m_AssetManager->GetAssetHandle(relPath);
+        if (handle == AssetHandle(0))
+        {
+            handle = AssetHandle(); // new UUID
+        }
+        so->handle = handle;
+
+        AssetMetaData metadata;
+        metadata.filepath = relPath;
+        metadata.type = AssetType::ScriptableObject;
+        m_AssetManager->AssignAsset(handle, so);
+        m_AssetManager->AssignMetaData(handle, metadata);
+
+        LOG_INFO("[Project] Created ScriptableObject '{}' at '{}'", className, outPath.generic_string());
     }
 
     void Project::RegenerateCSharpProject()

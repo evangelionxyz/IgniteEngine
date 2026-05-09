@@ -31,6 +31,7 @@ namespace ignite
         Quat,
         Color,
         Enum,
+        Asset,   // AssetHandle - uint64_t; covers ScriptableObject, Texture, etc.
     };
 
     struct ScriptField

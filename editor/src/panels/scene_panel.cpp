@@ -1796,6 +1796,7 @@ namespace ignite
                     Ref<ScriptClass> scriptClass = scriptEngine->GetEntityClassByName(c.className);
                     if (scriptClass)
                     {
+                        auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
                         const uint64_t instanceId = selectedEntity.GetUUID();
                         auto classRegisteredInstanceField = scriptClass->GetInstanceFieldsById(instanceId);
 
@@ -2089,34 +2090,63 @@ namespace ignite
                                         break;
                                     }
                                     case ScriptFieldType::Entity:
+                                    case ScriptFieldType::Asset:
                                     {
-                                        auto uuid = dummy.GetValue<uint64_t>();
+                                        auto handle = dummy.GetValue<uint64_t>();
                                         std::string label = "Drag Here";
-                                        if (uuid)
+
+                                        if (field.Type == ScriptFieldType::Entity)
                                         {
-                                            Entity e = SceneManager::GetEntity(m_Scene.get(), UUID(uuid));
-                                            if (e)
+                                            if (handle)
                                             {
-                                                label = e.GetName();
+                                                Entity e = SceneManager::GetEntity(m_Scene.get(), UUID(handle));
+                                                if (e)
+                                                    label = e.GetName();
+                                            }
+                                        }
+                                        else if (field.Type == ScriptFieldType::Asset)
+                                        {
+                                            if (handle)
+                                            {
+                                                label = assetManager->GetAssetDisplayName(AssetHandle(handle));
                                             }
                                         }
 
                                         ImGui::BeginDisabled(isRunning);
-                                        UI::DrawButtonWithColumn(name.c_str(), label.c_str(), nullptr, [this, &name, &dummy, &classRegisteredInstanceField, &c, &uuid]()
+                                        UI::DrawButtonWithColumn(name.c_str(), label.c_str(), nullptr, [this, &name, &dummy, &classRegisteredInstanceField, &c, handle, assetManager, &field]()
                                         {
                                             if (ImGui::BeginDragDropTarget())
                                             {
-                                                if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
+                                                if (field.Type == ScriptFieldType::Entity)
                                                 {
-                                                    LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ENTITY ITEM");
-                                                    if (payload->DataSize == sizeof(Entity))
+                                                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_ENTITY_SOURCE_ITEM))
                                                     {
-                                                        Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
-                                                        uint64_t id = (uint64_t)src.GetUUID();
-                                                        dummy.SetValue<uint64_t>(id);
-                                                        (*classRegisteredInstanceField)[name] = dummy;
-                                                        if (c.runtimeScriptInstance)
-                                                            c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, id);
+                                                        LOG_ASSERT(payload->DataSize == sizeof(Entity), "WRONG ENTITY ITEM");
+                                                        if (payload->DataSize == sizeof(Entity))
+                                                        {
+                                                            Entity src{ *static_cast<entt::entity *>(payload->Data), m_Scene.get() };
+                                                            uint64_t id = (uint64_t)src.GetUUID();
+                                                            dummy.SetValue<uint64_t>(id);
+                                                            (*classRegisteredInstanceField)[name] = dummy;
+                                                            if (c.runtimeScriptInstance)
+                                                                c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, id);
+                                                        }
+                                                    }
+                                                }
+                                                else if (field.Type == ScriptFieldType::Asset)
+                                                {
+                                                    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                                    {
+                                                        LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ASSET ITEM");
+                                                        if (payload->DataSize == sizeof(AssetHandle))
+                                                        {
+                                                            AssetHandle h = *static_cast<AssetHandle *>(payload->Data);
+                                                            uint64_t id = (uint64_t)h;
+                                                            dummy.SetValue<uint64_t>(id);
+                                                            (*classRegisteredInstanceField)[name] = dummy;
+                                                            if (c.runtimeScriptInstance)
+                                                                c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, id);
+                                                        }
                                                     }
                                                 }
                                                 ImGui::EndDragDropTarget();
@@ -2134,20 +2164,28 @@ namespace ignite
                                                 }
 
                                                 ImGui::BeginTooltip();
-                                                if (uuid)
+                                                if (handle)
                                                 {
-                                                    Entity e = SceneManager::GetEntity(m_Scene.get(), UUID(uuid));
-                                                    if (e) ImGui::Text("Entity Name : %s\nEntity ID : %llu", e.GetName().c_str(), uuid);
-                                                    else ImGui::Text("Invalid Entity");
+                                                    if (field.Type == ScriptFieldType::Entity)
+                                                    {
+                                                        Entity e = SceneManager::GetEntity(m_Scene.get(), UUID(handle));
+                                                        if (e) ImGui::Text("Entity Name : %s\nEntity ID : %llu", e.GetName().c_str(), handle);
+                                                        else ImGui::Text("Invalid Entity");
+                                                    }
+                                                    else
+                                                    {
+                                                        AssetMetaData metadata = assetManager->GetMetaData(AssetHandle(handle));
+                                                        ImGui::Text("Asset Name : %s\nAsset ID : %llu\nType : %s", assetManager->GetAssetDisplayName(AssetHandle(handle)).c_str(), handle, AssetTypeToString(metadata.type).c_str());
+                                                    }
                                                 }
                                                 else
                                                 {
-                                                    ImGui::Text("Empty Entity");
+                                                    ImGui::Text(field.Type == ScriptFieldType::Entity ? "Empty Entity" : "Empty Asset");
                                                 }
                                                 ImGui::EndTooltip();
                                             }
                                         });
-                                        if (uuid)
+                                        if (handle)
                                         {
                                             ImGui::SameLine();
                                             if (ImGui::Button("X"))

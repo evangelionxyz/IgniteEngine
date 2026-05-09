@@ -46,6 +46,7 @@ namespace ignite
         bool BuildSolution();
         
         void CreateCSharpScript(const std::filesystem::path &filepath);
+        void CreateScriptableObject(const std::string &className, const std::string &fileName, const std::filesystem::path &targetDirectory);
         void RegenerateCSharpProject();
 
         std::vector<std::pair<AssetHandle, AssetMetaData>> ValidateAssetRegistry();

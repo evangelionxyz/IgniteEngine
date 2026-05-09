@@ -30,6 +30,7 @@ namespace ignite
     class Scene;
     class Font;
     class WidgetCanvas;
+    class ScriptableObject;
 
     struct PendingFileLoading
     {
@@ -91,6 +92,7 @@ namespace ignite
         static Ref<Animation2D> ImportAnimation2D(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<AnimatorController2D> ImportAnimatorController2D(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
 
+        static Ref<ScriptableObject> ImportScriptableObject(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<Scene> ImportScene(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager);
         static Ref<Texture> ImportTexture(AssetHandle handle, const AssetMetaData &metadata, const TextureCreateInfo &createInfo, AssetManager *assetManager);

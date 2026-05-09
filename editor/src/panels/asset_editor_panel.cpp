@@ -6,6 +6,7 @@
 #include "animation_timeline.hpp"
 #include "editors/animator_editor.hpp"
 #include "editors/widget_editor.hpp"
+#include "editors/scriptable_object_editor.hpp"
 #include "ignite/animation/animator/animator.hpp"
 #include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/animation/animator/animator_controller_2d.hpp"
@@ -23,6 +24,8 @@
 #include "ignite/graphics/ui/widget_button.hpp"
 #include "ignite/graphics/ui/widget_label.hpp"
 #include "ignite/graphics/ui/widget_image.hpp"
+
+#include "ignite/scripting/scriptable_object.hpp"
 
 #include "ignite/graphics/objects/material_2d.hpp"
 #include "ignite/graphics/texture.hpp"
@@ -712,6 +715,11 @@ namespace ignite
                 case AssetType::Material:
                 {
                     UIMaterialEditor(assetData);
+                    break;
+                }
+                case AssetType::ScriptableObject:
+                {
+                    UIScriptableObjectEditor(assetData);
                     break;
                 }
                 case AssetType::Widget:
@@ -2936,6 +2944,39 @@ namespace ignite
         assetData.requestFocus = false;
     }
 
+    void AssetEditorPanel::UIScriptableObjectEditor(AssetEditorData &assetData)
+    {
+        bool isOpen = assetData.isOpen;
+        if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(600.0f, 400.0f), ImVec2(400.0f, 300.0f), 0))
+        {
+            if (DrawAssetEditorHeader(assetData))
+            {
+                if (assetData.asset && assetData.asset->IsReady())
+                {
+                    if (Ref<ScriptableObject> so = assetData.asset->As<ScriptableObject>())
+                    {
+                        bool classAvails = ScriptableObjectEditor::DrawEditor(so, m_EditorLayer);
+                        if (!classAvails)
+                            ImGui::TextColored(ImVec4(0.9f, 0.2f, 0.2f, 1.0f), "C# Class '%s' not found!", so->GetClassName().c_str());
+                    }
+                    else
+                    {
+                        ImGui::Text("Invalid asset...");
+                    }
+                }
+                else
+                {
+                    ImGui::Text("Loading asset...");
+                }
+            }
+
+            UIAssetEditorClosePopup(assetData, isOpen);
+            ImGui::End();
+            assetData.isOpen = isOpen;
+            assetData.requestFocus = false;
+        }
+    }
+
     void AssetEditorPanel::UITextureEditor(AssetEditorData &assetData)
     {
         bool isOpen = assetData.isOpen;
@@ -4822,6 +4863,18 @@ namespace ignite
                 {
                     return false;
                 }
+                return saveDefaultMeta();
+            }
+            case AssetType::ScriptableObject:
+            {
+                Ref<ScriptableObject> so = assetData.asset->As<ScriptableObject>();
+                if (!so)
+                    return false;
+
+                if (!so->Serialize(savePath))
+                    return false;
+
+                so->SetDirtyFlag(false);
                 return saveDefaultMeta();
             }
             case AssetType::Widget:

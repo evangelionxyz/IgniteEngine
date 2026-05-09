@@ -32,6 +32,7 @@
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/sprite_sheet.hpp"
 #include "ignite/graphics/font.hpp"
+#include "ignite/scripting/scriptable_object.hpp"
 
 #include <mutex>
 #include <condition_variable>
@@ -59,6 +60,7 @@ namespace ignite
         { AssetType::AnimatorController, AssetImporter::ImportAnimatorController },
         { AssetType::Animation2D, AssetImporter::ImportAnimation2D },
         { AssetType::AnimatorController2D, AssetImporter::ImportAnimatorController2D },
+        { AssetType::ScriptableObject, AssetImporter::ImportScriptableObject },
     };
 
     Ref<Asset> AssetImporter::Import(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
@@ -589,6 +591,24 @@ namespace ignite
             asset->SetReadyFlag(true);
         }
         return asset;
+    }
+
+    Ref<ScriptableObject> AssetImporter::ImportScriptableObject(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)
+    {
+        if (!std::filesystem::exists(metadata.filepath))
+        {
+            LOG_ERROR("[AssetImporter] ScriptableObject file does not exist: {}", metadata.filepath.generic_string());
+            return nullptr;
+        }
+
+        Ref<ScriptableObject> so = ScriptableObject::Deserialize(metadata.filepath);
+        if (so)
+        {
+            so->handle = handle;
+            so->SetReadyFlag(true);
+            so->SetDirtyFlag(false);
+        }
+        return so;
     }
 
     Ref<Scene> AssetImporter::ImportScene(AssetHandle handle, const AssetMetaData &metadata, AssetManager *assetManager)

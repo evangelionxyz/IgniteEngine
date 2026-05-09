@@ -9,6 +9,7 @@
 #include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/animation/animation_montage.hpp"
 #include "ignite/scene/sprite_sheet.hpp"
+#include "ignite/scripting/script_engine.hpp"
 
 #include "ignite/core/input/asset_import_event.hpp"
 #include "ignite/core/input/app_event.hpp"
@@ -633,6 +634,35 @@ namespace ignite
                                 ImGui::EndMenu();
                             }
 
+                            // ----- Scriptable Object submenu (dynamic, from [CreateAssetMenu]) -----
+                            {
+                                ScriptEngine *scriptEngine = ScriptEngine::GetInstance();
+                                const auto *menuEntries = scriptEngine
+                                    ? &scriptEngine->GetScriptableObjectMenuEntries()
+                                    : nullptr;
+
+                                if (menuEntries && !menuEntries->empty())
+                                {
+                                    ImGui::Separator();
+                                    if (ImGui::BeginMenu("Scriptable Object"))
+                                    {
+                                        for (const auto &entry : *menuEntries)
+                                        {
+                                            const std::string &label = entry.menuName.empty() ? entry.className : entry.menuName;
+                                            if (ImGui::MenuItem(label.c_str()))
+                                            {
+                                                m_PendingScriptableObjectClassName = entry.className;
+                                                m_PendingScriptableObjectFileName  = entry.fileName;
+                                                strncpy_s(m_PopupInputBuffer, sizeof(m_PopupInputBuffer),
+                                                          entry.fileName.c_str(), sizeof(m_PopupInputBuffer) - 1);
+                                                m_ShowCreateScriptableObjectModal = true;
+                                            }
+                                        }
+                                        ImGui::EndMenu();
+                                    }
+                                }
+                            }
+
                             ImGui::EndMenu();
                         }
 
@@ -736,6 +766,48 @@ namespace ignite
                 if (ImGui::Button("Cancel"))
                 {
                     m_PopupInputBuffer[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
+
+            // Create Scriptable Object Modal
+            if (m_ShowCreateScriptableObjectModal)
+            {
+                ImGui::OpenPopup("Create Scriptable Object");
+                m_ShowCreateScriptableObjectModal = false;
+            }
+
+            if (ImGui::BeginPopupModal("Create Scriptable Object", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+            {
+                ImGui::Text("Class: %s", m_PendingScriptableObjectClassName.c_str());
+                ImGui::Text("Location: %s", m_CurrentDirectory.generic_string().c_str());
+                ImGui::Spacing();
+                const bool submitByEnter = ImGui::InputText("Asset Name", m_PopupInputBuffer, sizeof(m_PopupInputBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
+
+                ImGui::Separator();
+                if (submitByEnter || ImGui::Button("Create"))
+                {
+                    const std::string assetName = m_PopupInputBuffer;
+                    if (!assetName.empty() && !m_PendingScriptableObjectClassName.empty())
+                    {
+                        m_EditorLayer->GetActiveProject()->CreateScriptableObject(
+                            m_PendingScriptableObjectClassName,
+                            assetName,
+                            m_CurrentDirectory);
+                        m_NeedsRefresh = true;
+                    }
+                    m_PopupInputBuffer[0] = '\0';
+                    m_PendingScriptableObjectClassName.clear();
+                    m_PendingScriptableObjectFileName.clear();
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel"))
+                {
+                    m_PopupInputBuffer[0] = '\0';
+                    m_PendingScriptableObjectClassName.clear();
+                    m_PendingScriptableObjectFileName.clear();
                     ImGui::CloseCurrentPopup();
                 }
                 ImGui::EndPopup();
