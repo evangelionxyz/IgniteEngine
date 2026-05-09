@@ -78,17 +78,19 @@ namespace ignite
             case ScriptFieldType::Bool:    return "Boolean";
             case ScriptFieldType::Char:    return "Char";
             case ScriptFieldType::Byte:    return "Byte";
+            case ScriptFieldType::SByte:   return "SByte";
             case ScriptFieldType::Short:   return "Short";
-            case ScriptFieldType::Int:     return "Int";
-            case ScriptFieldType::Long:    return "Long";
-            case ScriptFieldType::UByte:   return "UByte";
             case ScriptFieldType::UShort:  return "UShort";
+            case ScriptFieldType::Int:     return "Int";
             case ScriptFieldType::UInt:    return "UInt";
+            case ScriptFieldType::Long:    return "Long";
             case ScriptFieldType::ULong:   return "ULong";
             case ScriptFieldType::Vector2: return "Vec2";
             case ScriptFieldType::Vector3: return "Vec3";
             case ScriptFieldType::Vector4: return "Vec4";
             case ScriptFieldType::Quat:    return "Quat";
+            case ScriptFieldType::Color:   return "Color";
+            case ScriptFieldType::Enum:    return "Enum";
             case ScriptFieldType::Entity:  return "Entity";
             }
 
@@ -105,17 +107,19 @@ namespace ignite
             if (type == "Boolean") return ScriptFieldType::Bool;
             if (type == "Char")    return ScriptFieldType::Char;
             if (type == "Byte")    return ScriptFieldType::Byte;
+            if (type == "SByte")   return ScriptFieldType::SByte;
             if (type == "Short")   return ScriptFieldType::Short;
-            if (type == "Int")     return ScriptFieldType::Int;
-            if (type == "Long")    return ScriptFieldType::Long;
-            if (type == "UByte")   return ScriptFieldType::UByte;
             if (type == "UShort")  return ScriptFieldType::UShort;
+            if (type == "Int")     return ScriptFieldType::Int;
             if (type == "UInt")    return ScriptFieldType::UInt;
+            if (type == "Long")    return ScriptFieldType::Long;
             if (type == "ULong")   return ScriptFieldType::ULong;
             if (type == "Vec2")    return ScriptFieldType::Vector2;
             if (type == "Vec3")    return ScriptFieldType::Vector3;
             if (type == "Vec4")    return ScriptFieldType::Vector4;
             if (type == "Quat")    return ScriptFieldType::Quat;
+            if (type == "Color")   return ScriptFieldType::Color;
+            if (type == "Enum")    return ScriptFieldType::Enum;
             if (type == "Entity")  return ScriptFieldType::Entity;
 
             return ScriptFieldType::Invalid;

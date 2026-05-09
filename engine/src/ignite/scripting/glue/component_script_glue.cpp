@@ -32,6 +32,7 @@
 #include <unordered_map>
 #include <vector>
 #include <cstring>
+#include <limits>
 #include <objbase.h>
 
 namespace ignite
@@ -47,15 +48,18 @@ namespace ignite
             return nullptr;
         }
 
-        static uint64_t Scene_PickEntityAt(float x, float y)
+        static void Scene_GetScreenToWorldRay(float x, float y, glm::vec3 *outOrigin, glm::vec3 *outDirection)
         {
+            if (outOrigin) *outOrigin = glm::vec3(0.0f);
+            if (outDirection) *outDirection = glm::vec3(0.0f, 0.0f, -1.0f);
+
             Scene *scene = GetSceneContext();
             if (!scene)
-                return 0;
+                return;
 
             Entity cameraEntity = scene->GetPrimaryCamera();
             if (!cameraEntity.IsValid())
-                return 0;
+                return;
 
             auto &cc = cameraEntity.GetComponent<CameraComponent>();
             const glm::mat4 view = cc.camera.GetView();
@@ -64,43 +68,97 @@ namespace ignite
 
             glm::vec2 viewportSize = cc.camera.viewportSize;
             if (viewportSize.x <= 0.0f || viewportSize.y <= 0.0f)
-                return 0;
+                return;
 
             // x, y are already viewport-relative coords (see Input_GetMousePosition)
             glm::vec2 coord = glm::vec2(x, viewportSize.y - y);
 
             // Ensure the pick is within viewport bounds
             if (coord.x < 0.0f || coord.y < 0.0f || coord.x > viewportSize.x || coord.y > viewportSize.y)
-                return 0;
+                return;
 
             glm::vec3 rayOrigin;
             glm::vec3 rayDir = Math::GetRayFromScreenCoords(coord, viewportSize, projection, view, isPerspective, rayOrigin);
 
-            float bestT = FLT_MAX;
-            uint64_t bestUUID = 0;
+            if (outOrigin) *outOrigin = rayOrigin;
+            if (outDirection) *outDirection = rayDir;
+        }
 
-            auto viewEntities = scene->registry->view<IDComponent, TransformComponent, MeshComponent>();
-            for (entt::entity e : viewEntities)
+        static uint64_t Scene_Raycast(glm::vec3 origin, glm::vec3 direction)
+        {
+            Scene *scene = GetSceneContext();
+            if (!scene)
+                return 0;
+
+            float minDistance = std::numeric_limits<float>::max();
+            uint64_t resultID = 0;
+
+            // --- 3D Meshes ---
+            auto meshView = scene->registry->view<MeshComponent, TransformComponent>();
+            for (auto entityID : meshView)
             {
-                const IDComponent &id = viewEntities.get<IDComponent>(e);
-                const TransformComponent &tr = viewEntities.get<TransformComponent>(e);
-                const MeshComponent &mc = viewEntities.get<MeshComponent>(e);
+                Entity entity(entityID, scene);
+                auto &transform = entity.GetComponent<TransformComponent>();
+                if (!transform.visible) continue;
 
-                if (mc.handle == AssetHandle(0))
-                    continue;
-
-                float t = 0.0f;
-                if (mc.worldAABB.IntersectRay(rayOrigin, rayDir, t))
+                auto &mesh = entity.GetComponent<MeshComponent>();
+                float t;
+                if (mesh.worldAABB.IntersectRay(origin, direction, t))
                 {
-                    if (t >= 0.0f && t < bestT)
+                    if (t < minDistance)
                     {
-                        bestT = t;
-                        bestUUID = static_cast<uint64_t>(id.uuid);
+                        minDistance = t;
+                        resultID = (uint64_t)entity.GetUUID();
                     }
                 }
             }
 
-            return bestUUID;
+            // Helper for quad intersection (2D components)
+            auto CheckQuad = [&](Entity entity, glm::vec2 size) {
+                auto &transform = entity.GetComponent<TransformComponent>();
+                if (!transform.visible) return;
+
+                glm::vec3 pos = transform.translation;
+                glm::quat rot = transform.rotation;
+                glm::vec3 scale = transform.scale;
+                
+                glm::vec3 halfSize = glm::vec3(size.x * 0.5f, size.y * 0.5f, 0.0f) * scale;
+
+                glm::vec3 v0 = pos + rot * glm::vec3(-halfSize.x, -halfSize.y, 0.0f);
+                glm::vec3 v1 = pos + rot * glm::vec3( halfSize.x, -halfSize.y, 0.0f);
+                glm::vec3 v2 = pos + rot * glm::vec3( halfSize.x,  halfSize.y, 0.0f);
+                glm::vec3 v3 = pos + rot * glm::vec3(-halfSize.x,  halfSize.y, 0.0f);
+
+                float t;
+                if (Math::RayQuadIntersection(origin, direction, v0, v1, v2, v3, t))
+                {
+                    if (t < minDistance)
+                    {
+                        minDistance = t;
+                        resultID = (uint64_t)entity.GetUUID();
+                    }
+                }
+            };
+
+            auto spriteView = scene->registry->view<Sprite2DComponent, TransformComponent>();
+            for (auto entityID : spriteView)
+            {
+                CheckQuad(Entity(entityID, scene), { 1.0f, 1.0f });
+            }
+
+            auto circleView = scene->registry->view<Circle2DComponent, TransformComponent>();
+            for (auto entityID : circleView)
+            {
+                CheckQuad(Entity(entityID, scene), { 1.0f, 1.0f });
+            }
+
+            auto textView = scene->registry->view<TextComponent, TransformComponent>();
+            for (auto entityID : textView)
+            {
+                CheckQuad(Entity(entityID, scene), { 1.0f, 1.0f });
+            }
+
+            return resultID;
         }
 
         static Entity GetEntityByID(uint64_t entityID)
@@ -603,7 +661,10 @@ namespace ignite
             if (!scene || entityID == 0)
                 return false;
 
-            Entity entity = SceneManager::GetEntity(scene, UUID(entityID));
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid())
+                return false;
+
             return entity.GetParentUUID() == UUID(parentID);
         }
 
@@ -611,9 +672,12 @@ namespace ignite
         {
             Scene *scene = GetSceneContext();
             if (!scene || entityID == 0)
-                return false;
+                return 0;
 
-            Entity entity = SceneManager::GetEntity(scene, UUID(entityID));
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid())
+                return 0;
+
             return static_cast<uint64_t>(entity.GetParentUUID());
         }
 
@@ -654,15 +718,15 @@ namespace ignite
             if (!copyEntity.IsValid())
                 return 0;
 
-            copyEntity.GetComponent<TransformComponent>().translation = value;
+            copyEntity.GetComponent<TransformComponent>().SetWorldTranslation(value);
             
             if (scene->IsRunning())
             {
                 auto *scriptEngine = ScriptEngine::GetInstance();
-                if (entity.HasComponent<ScriptComponent>())
+                if (copyEntity.HasComponent<ScriptComponent>())
                 {
-                    auto &sc = entity.GetComponent<ScriptComponent>();
-                    const ScriptInstanceID instanceID = entity.GetUUID();
+                    auto &sc = copyEntity.GetComponent<ScriptComponent>();
+                    const ScriptInstanceID instanceID = copyEntity.GetUUID();
                     sc.runtimeScriptInstance = scriptEngine->OnCreateEntityInstance(instanceID, sc.className);
                 }
             }
@@ -2393,7 +2457,8 @@ namespace ignite
 
         static const ComponentScriptGlueAPI s_ComponentScriptGlueAPI =
         {
-            &Scene_PickEntityAt,
+            &Scene_GetScreenToWorldRay,
+            &Scene_Raycast,
             &Entity_HasComponent,
             &Entity_AddComponent,
             &Entity_FindEntityByName,

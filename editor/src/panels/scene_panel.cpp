@@ -1823,6 +1823,18 @@ namespace ignite
 
                                 switch (field.Type)
                                 {
+                                    case ScriptFieldType::Bool:
+                                    {
+                                        auto data = dummy.GetValue<bool>();
+                                        if (UI::DrawCheckbox(name.c_str(), &data))
+                                        {
+                                            dummy.SetValue<bool>(data);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<bool>(name, data);
+                                        }
+                                        break;
+                                    }
                                     case ScriptFieldType::String:
                                     {
                                         auto data = dummy.GetValue<std::string>();
@@ -1872,6 +1884,134 @@ namespace ignite
                                         }
                                         break;
                                     }
+                                    case ScriptFieldType::UInt:
+                                    {
+                                        auto val = dummy.GetValue<uint32_t>();
+                                        int data = static_cast<int>(val);
+                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, INT_MAX))
+                                        {
+                                            val = static_cast<uint32_t>(data);
+                                            dummy.SetValue<uint32_t>(val);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<uint32_t>(name, val);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::Byte:
+                                    {
+                                        auto val = dummy.GetValue<uint8_t>();
+                                        int data = static_cast<int>(val);
+                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, 255))
+                                        {
+                                            val = static_cast<uint8_t>(data);
+                                            dummy.SetValue<uint8_t>(val);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<uint8_t>(name, val);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::SByte:
+                                    {
+                                        auto val = dummy.GetValue<int8_t>();
+                                        int data = static_cast<int>(val);
+                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, -128, 127))
+                                        {
+                                            val = static_cast<int8_t>(data);
+                                            dummy.SetValue<int8_t>(val);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<int8_t>(name, val);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::Short:
+                                    {
+                                        auto val = dummy.GetValue<int16_t>();
+                                        int data = static_cast<int>(val);
+                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, SHRT_MIN, SHRT_MAX))
+                                        {
+                                            val = static_cast<int16_t>(data);
+                                            dummy.SetValue<int16_t>(val);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<int16_t>(name, val);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::UShort:
+                                    {
+                                        auto val = dummy.GetValue<uint16_t>();
+                                        int data = static_cast<int>(val);
+                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, USHRT_MAX))
+                                        {
+                                            val = static_cast<uint16_t>(data);
+                                            dummy.SetValue<uint16_t>(val);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<uint16_t>(name, val);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::Long:
+                                    {
+                                        auto val = dummy.GetValue<int64_t>();
+                                        int data = static_cast<int>(val);
+                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, INT_MIN, INT_MAX))
+                                        {
+                                            val = static_cast<int64_t>(data);
+                                            dummy.SetValue<int64_t>(val);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<int64_t>(name, val);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::ULong:
+                                    {
+                                        auto val = dummy.GetValue<uint64_t>();
+                                        int data = static_cast<int>(val);
+                                        if (UI::DrawIntControl(name.c_str(), &data, 1.0f, 0, INT_MAX))
+                                        {
+                                            val = static_cast<uint64_t>(data);
+                                            dummy.SetValue<uint64_t>(val);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<uint64_t>(name, val);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::Enum:
+                                    {
+                                        auto data = dummy.GetValue<int>();
+                                        const auto &enumNames = field.EnumNames;
+                                        const auto &enumValues = field.EnumValues;
+
+                                        int selectedIndex = -1;
+                                        for (int i = 0; i < (int)enumValues.size(); ++i)
+                                        {
+                                            if (enumValues[i] == data)
+                                            {
+                                                selectedIndex = i;
+                                                break;
+                                            }
+                                        }
+
+                                        std::vector<const char*> labels;
+                                        for (const auto& n : enumNames)
+                                            labels.push_back(n.c_str());
+
+                                        if (UI::DrawComboBox(name.c_str(), labels.data(), (int)labels.size(), &selectedIndex))
+                                        {
+                                            data = enumValues[selectedIndex];
+                                            dummy.SetValue<int>(data);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<int>(name, data);
+                                        }
+                                        break;
+                                    }
                                     case ScriptFieldType::Double:
                                     {
                                         auto dData = dummy.GetValue<double>();
@@ -1914,6 +2054,32 @@ namespace ignite
                                     {
                                         auto data = dummy.GetValue<glm::vec4>();
                                         if (UI::DrawVec4Control(name.c_str(), data, 0.1f))
+                                        {
+                                            dummy.SetValue<glm::vec4>(data);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<glm::vec4>(name, data);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::Quat:
+                                    {
+                                        auto data = dummy.GetValue<glm::quat>();
+                                        glm::vec4 vec = { data.x, data.y, data.z, data.w };
+                                        if (UI::DrawVec4Control(name.c_str(), vec, 0.1f))
+                                        {
+                                            data = { vec.w, vec.x, vec.y, vec.z };
+                                            dummy.SetValue<glm::quat>(data);
+                                            (*classRegisteredInstanceField)[name] = dummy;
+                                            if (c.runtimeScriptInstance)
+                                                c.runtimeScriptInstance->SetFieldValue<glm::quat>(name, data);
+                                        }
+                                        break;
+                                    }
+                                    case ScriptFieldType::Color:
+                                    {
+                                        auto data = dummy.GetValue<glm::vec4>();
+                                        if (UI::DrawColorVec4(name.c_str(), data))
                                         {
                                             dummy.SetValue<glm::vec4>(data);
                                             (*classRegisteredInstanceField)[name] = dummy;

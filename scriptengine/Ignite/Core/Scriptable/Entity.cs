@@ -144,16 +144,8 @@ public class Entity : ScriptableObject
     public Entity GetParent()
     {
         ulong parentID = ComponentInternalCalls.Entity_GetParent(ID);
+        if (parentID == 0)
+            return null;
         return new Entity(parentID);
     }
-
-    public static Entity PickEntityAt(float x, float y)
-    {
-        ulong entityID = ComponentInternalCalls.Scene_PickEntityAt(x, y);
-        if (entityID == 0)
-            return null;
-
-        return new Entity(entityID);
-    }
-
 }

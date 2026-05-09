@@ -57,7 +57,6 @@
 #include "graphics/renderer/renderer_2d.hpp"
 #include "graphics/renderer/scene_renderer.hpp"
 #include "graphics/renderer/iscene_renderer.hpp"
-#include "graphics/shader_factory.hpp"
 #include "graphics/window.hpp"
 #include "graphics/objects/mesh.hpp"
 

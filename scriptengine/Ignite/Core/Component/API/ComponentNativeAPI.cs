@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 
 namespace Ignite.Core.Component;
@@ -8,7 +8,8 @@ public static class ComponentNativeAPI
     [StructLayout(LayoutKind.Sequential)]
     public struct API
     {
-        public IntPtr Scene_PickEntityAt;
+        public IntPtr Scene_GetScreenToWorldRay;
+        public IntPtr Scene_Raycast;
         public IntPtr Entity_HasComponent;
         public IntPtr Entity_AddComponent;
         public IntPtr Entity_FindEntityByName;
@@ -151,7 +152,10 @@ public static class ComponentNativeAPI
         // ===========================
         // Entity funcs
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate ulong ScenePickEntityAtFn(float x, float y);
+        public delegate void SceneGetScreenToWorldRayFn(float x, float y, out NativeObject.Vector3 outOrigin, out NativeObject.Vector3 outDirection);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate ulong SceneRaycastFn(NativeObject.Vector3 origin, NativeObject.Vector3 direction);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate ulong EntityInstantiateWithNameFn(IntPtr name, NativeObject.Vector3 value);

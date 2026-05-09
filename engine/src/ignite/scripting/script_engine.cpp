@@ -141,11 +141,12 @@ namespace ignite
         {"System.UInt16",        ScriptFieldType::UShort},
         {"System.UInt32",        ScriptFieldType::UInt},
         {"System.UInt64",        ScriptFieldType::ULong},
-        {"System.UInt",          ScriptFieldType::UByte},
+        {"System.SByte",         ScriptFieldType::SByte},
         {"Ignite.Mathf+Vector2", ScriptFieldType::Vector2},
         {"Ignite.Mathf+Vector3", ScriptFieldType::Vector3},
         {"Ignite.Mathf+Vector4", ScriptFieldType::Vector4},
         {"Ignite.Mathf+Quaternion", ScriptFieldType::Quat},
+        {"Ignite.Mathf+Color",   ScriptFieldType::Color},
         {"Ignite.Entity",        ScriptFieldType::Entity},
     };
 
@@ -555,49 +556,59 @@ namespace ignite
 
                 const std::string fieldMetadata = scriptEngineData->scriptHost->GetTypeFields(fullName);
                 size_t fieldStart = 0;
-                while (fieldStart <= fieldMetadata.size())
+                auto fieldEntries = stringutils::SplitString(fieldMetadata, '|');
+                for (const auto &fieldEntry : fieldEntries)
                 {
-                    const size_t fieldEnd = fieldMetadata.find('|', fieldStart);
-                    const std::string fieldEntry = (fieldEnd == std::string::npos) ? fieldMetadata.substr(fieldStart) : fieldMetadata.substr(fieldStart, fieldEnd - fieldStart);
+                    if (fieldEntry.empty()) continue;
 
-                    if (!fieldEntry.empty())
+                    auto parts = stringutils::SplitString(fieldEntry, '~');
+                    if (parts.size() >= 4)
                     {
-                        const size_t sep0 = fieldEntry.find('~');
-                        const size_t sep1 = (sep0 == std::string::npos) ? std::string::npos : fieldEntry.find('~', sep0 + 1);
-                        const size_t sep2 = (sep1 == std::string::npos) ? std::string::npos : fieldEntry.find('~', sep1 + 1);
+                        const std::string &fieldName = parts[0];
+                        const std::string &managedTypeName = parts[1];
+                        bool isPublic = parts[2] == "1";
+                        bool hasSerializeField = parts[3] == "1";
 
-                        if (sep0 != std::string::npos && sep1 != std::string::npos && sep2 != std::string::npos)
+                        ScriptField field;
+                        field.Name = fieldName;
+                        field.ManagedTypeName = managedTypeName;
+                        field.IsPublic = isPublic;
+                        field.HasSerializeFieldAttribute = hasSerializeField;
+
+                        if (parts.size() >= 5 && parts[4] == "1")
                         {
-                            const std::string fieldName = fieldEntry.substr(0, sep0);
-                            const std::string managedTypeName = fieldEntry.substr(sep0 + 1, sep1 - sep0 - 1);
-                            const bool isPublic = fieldEntry.substr(sep1 + 1, sep2 - sep1 - 1) == "1";
-                            const bool hasSerializeField = fieldEntry.substr(sep2 + 1) == "1";
-
-                            ScriptField field;
-                            field.Name = fieldName;
-                            field.ManagedTypeName = managedTypeName;
-                            field.IsPublic = isPublic;
-                            field.HasSerializeFieldAttribute = hasSerializeField;
-
+                            field.IsEnum = true;
+                            field.Type = ScriptFieldType::Enum;
+                            if (parts.size() >= 7)
+                            {
+                                field.EnumNames = stringutils::SplitString(parts[5], ',');
+                                auto valStrings = stringutils::SplitString(parts[6], ',');
+                                for (const auto &vs : valStrings)
+                                {
+                                    try {
+                                        field.EnumValues.push_back(std::stoi(vs));
+                                    } catch (...) {}
+                                }
+                            }
+                        }
+                        else
+                        {
                             const auto fieldTypeIt = s_ScriptFieldTypeMap.find(managedTypeName);
                             if (fieldTypeIt != s_ScriptFieldTypeMap.end())
                             {
                                 field.Type = fieldTypeIt->second;
-                                scriptClass->InsertField(fieldName, field);
-                            }
-                            else
-                            {
-                                LOG_WARN("[Script Engine] Unsupported script field type '{}.{}' ({})", fullName, fieldName, managedTypeName);
                             }
                         }
-                    }
 
-                    if (fieldEnd == std::string::npos)
-                    {
-                        break;
+                        if (field.Type != ScriptFieldType::Invalid)
+                        {
+                            scriptClass->InsertField(fieldName, field);
+                        }
+                        else
+                        {
+                            LOG_WARN("[Script Engine] Unsupported script field type '{}.{}' ({})", fullName, fieldName, managedTypeName);
+                        }
                     }
-
-                    fieldStart = fieldEnd + 1;
                 }
 
                 auto previousClassIt = previousEntityClasses.find(fullName);

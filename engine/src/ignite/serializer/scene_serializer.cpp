@@ -515,19 +515,21 @@ namespace ignite
                                         case ScriptFieldType::Float: sr.AddKeyValue("Value", fieldInstance.GetValue<float>()); break;
                                         case ScriptFieldType::Double: sr.AddKeyValue("Value", fieldInstance.GetValue<double>()); break;
                                         case ScriptFieldType::Bool: sr.AddKeyValue("Value", fieldInstance.GetValue<bool>()); break;
-                                        case ScriptFieldType::Char: sr.AddKeyValue("Value", fieldInstance.GetValue<char>()); break;
-                                        case ScriptFieldType::Byte: sr.AddKeyValue("Value", fieldInstance.GetValue<int8_t>()); break;
+                                        case ScriptFieldType::Char: sr.AddKeyValue("Value", fieldInstance.GetValue<char16_t>()); break;
+                                        case ScriptFieldType::Byte: sr.AddKeyValue("Value", (int)fieldInstance.GetValue<uint8_t>()); break;
+                                        case ScriptFieldType::SByte: sr.AddKeyValue("Value", (int)fieldInstance.GetValue<int8_t>()); break;
                                         case ScriptFieldType::Short: sr.AddKeyValue("Value", fieldInstance.GetValue<int16_t>()); break;
-                                        case ScriptFieldType::Long: sr.AddKeyValue("Value", fieldInstance.GetValue<int64_t>()); break;
-                                        case ScriptFieldType::UByte: sr.AddKeyValue("Value", fieldInstance.GetValue<uint8_t>()); break;
                                         case ScriptFieldType::UShort: sr.AddKeyValue("Value", fieldInstance.GetValue<uint16_t>()); break;
-                                        case ScriptFieldType::UInt: sr.AddKeyValue("Value", fieldInstance.GetValue<uint32_t>()); break;
-                                        case ScriptFieldType::ULong: sr.AddKeyValue("Value", fieldInstance.GetValue<uint64_t>()); break;
                                         case ScriptFieldType::Int: sr.AddKeyValue("Value", fieldInstance.GetValue<int>()); break;
+                                        case ScriptFieldType::UInt: sr.AddKeyValue("Value", fieldInstance.GetValue<uint32_t>()); break;
+                                        case ScriptFieldType::Long: sr.AddKeyValue("Value", fieldInstance.GetValue<int64_t>()); break;
+                                        case ScriptFieldType::ULong: sr.AddKeyValue("Value", fieldInstance.GetValue<uint64_t>()); break;
                                         case ScriptFieldType::Vector2: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec2>()); break;
                                         case ScriptFieldType::Vector3: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec3>()); break;
                                         case ScriptFieldType::Vector4: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec4>()); break;
                                         case ScriptFieldType::Quat: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::quat>()); break;
+                                        case ScriptFieldType::Color: sr.AddKeyValue("Value", fieldInstance.GetValue<glm::vec4>()); break;
+                                        case ScriptFieldType::Enum: sr.AddKeyValue("Value", fieldInstance.GetValue<int>()); break;
                                         case ScriptFieldType::Entity: sr.AddKeyValue("Value", fieldInstance.GetValue<uint64_t>()); break;
                                         default: break;
                                     }
@@ -1076,20 +1078,22 @@ namespace ignite
                                 case ScriptFieldType::Float: instanceField.SetValue(fieldNode["Value"].as<float>()); break;
                                 case ScriptFieldType::Double: instanceField.SetValue(fieldNode["Value"].as<double>()); break;
                                 case ScriptFieldType::Bool: instanceField.SetValue(fieldNode["Value"].as<bool>()); break;
-                                case ScriptFieldType::Char: instanceField.SetValue(fieldNode["Value"].as<char>()); break;
-                                case ScriptFieldType::Byte: instanceField.SetValue(fieldNode["Value"].as<int8_t>()); break;
+                                case ScriptFieldType::Char: instanceField.SetValue(fieldNode["Value"].as<char16_t>()); break;
+                                case ScriptFieldType::Byte: instanceField.SetValue(static_cast<uint8_t>(fieldNode["Value"].as<int>())); break;
+                                case ScriptFieldType::SByte: instanceField.SetValue(static_cast<int8_t>(fieldNode["Value"].as<int>())); break;
                                 case ScriptFieldType::Short: instanceField.SetValue(fieldNode["Value"].as<int16_t>()); break;
-                                case ScriptFieldType::Long: instanceField.SetValue(fieldNode["Value"].as<int64_t>()); break;
-                                case ScriptFieldType::UByte: instanceField.SetValue(fieldNode["Value"].as<uint8_t>()); break;
                                 case ScriptFieldType::UShort: instanceField.SetValue(fieldNode["Value"].as<uint16_t>()); break;
-                                case ScriptFieldType::UInt: instanceField.SetValue(fieldNode["Value"].as<uint32_t>()); break;
-                                case ScriptFieldType::ULong: instanceField.SetValue(fieldNode["Value"].as<uint64_t>()); break;
                                 case ScriptFieldType::Int: instanceField.SetValue(fieldNode["Value"].as<int>()); break;
-                                case ScriptFieldType::Entity: instanceField.SetValue(fieldNode["Value"].as<uint64_t>()); break;
+                                case ScriptFieldType::UInt: instanceField.SetValue(fieldNode["Value"].as<uint32_t>()); break;
+                                case ScriptFieldType::Long: instanceField.SetValue(fieldNode["Value"].as<int64_t>()); break;
+                                case ScriptFieldType::ULong: instanceField.SetValue(fieldNode["Value"].as<uint64_t>()); break;
                                 case ScriptFieldType::Vector2: instanceField.SetValue(fieldNode["Value"].as<glm::vec2>()); break;
                                 case ScriptFieldType::Vector3: instanceField.SetValue(fieldNode["Value"].as<glm::vec3>()); break;
                                 case ScriptFieldType::Vector4: instanceField.SetValue(fieldNode["Value"].as<glm::vec4>()); break;
                                 case ScriptFieldType::Quat: instanceField.SetValue(fieldNode["Value"].as<glm::quat>()); break;
+                                case ScriptFieldType::Color: instanceField.SetValue(fieldNode["Value"].as<glm::vec4>()); break;
+                                case ScriptFieldType::Enum: instanceField.SetValue(fieldNode["Value"].as<int>()); break;
+                                case ScriptFieldType::Entity: instanceField.SetValue(fieldNode["Value"].as<uint64_t>()); break;
                             }
 
                             instanceFields[name] = instanceField;

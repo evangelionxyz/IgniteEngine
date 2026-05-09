@@ -58,10 +58,70 @@ namespace ignite
             ScriptInstanceField &instanceField = instanceFields[name];
             switch (field.Type)
             {
+            case ScriptFieldType::Bool:
+            {
+                if (hasDeserializedValues) SetFieldValue<bool>(name, instanceField.GetValue<bool>());
+                else instanceField.SetValue(GetFieldValue<bool>(name));
+                break;
+            }
+            case ScriptFieldType::Char:
+            {
+                if (hasDeserializedValues) SetFieldValue<char16_t>(name, instanceField.GetValue<char16_t>());
+                else instanceField.SetValue(GetFieldValue<char16_t>(name));
+                break;
+            }
             case ScriptFieldType::String:
             {
                 if (hasDeserializedValues) SetFieldValue<std::string>(name, instanceField.GetValue<std::string>());
                 else instanceField.SetValue(GetFieldValue<std::string>(name));
+                break;
+            }
+            case ScriptFieldType::Byte:
+            {
+                if (hasDeserializedValues) SetFieldValue<uint8_t>(name, instanceField.GetValue<uint8_t>());
+                else instanceField.SetValue(GetFieldValue<uint8_t>(name));
+                break;
+            }
+            case ScriptFieldType::SByte:
+            {
+                if (hasDeserializedValues) SetFieldValue<int8_t>(name, instanceField.GetValue<int8_t>());
+                else instanceField.SetValue(GetFieldValue<int8_t>(name));
+                break;
+            }
+            case ScriptFieldType::Short:
+            {
+                if (hasDeserializedValues) SetFieldValue<int16_t>(name, instanceField.GetValue<int16_t>());
+                else instanceField.SetValue(GetFieldValue<int16_t>(name));
+                break;
+            }
+            case ScriptFieldType::UShort:
+            {
+                if (hasDeserializedValues) SetFieldValue<uint16_t>(name, instanceField.GetValue<uint16_t>());
+                else instanceField.SetValue(GetFieldValue<uint16_t>(name));
+                break;
+            }
+            case ScriptFieldType::Int:
+            {
+                if (hasDeserializedValues) SetFieldValue<int32_t>(name, instanceField.GetValue<int32_t>());
+                else instanceField.SetValue(GetFieldValue<int32_t>(name));
+                break;
+            }
+            case ScriptFieldType::UInt:
+            {
+                if (hasDeserializedValues) SetFieldValue<uint32_t>(name, instanceField.GetValue<uint32_t>());
+                else instanceField.SetValue(GetFieldValue<uint32_t>(name));
+                break;
+            }
+            case ScriptFieldType::Long:
+            {
+                if (hasDeserializedValues) SetFieldValue<int64_t>(name, instanceField.GetValue<int64_t>());
+                else instanceField.SetValue(GetFieldValue<int64_t>(name));
+                break;
+            }
+            case ScriptFieldType::ULong:
+            {
+                if (hasDeserializedValues) SetFieldValue<uint64_t>(name, instanceField.GetValue<uint64_t>());
+                else instanceField.SetValue(GetFieldValue<uint64_t>(name));
                 break;
             }
             case ScriptFieldType::Float:
@@ -74,66 +134,6 @@ namespace ignite
             {
                 if (hasDeserializedValues) SetFieldValue<double>(name, instanceField.GetValue<double>());
                 else instanceField.SetValue(GetFieldValue<double>(name));
-                break;
-            }
-            case ScriptFieldType::Bool:
-            {
-                if (hasDeserializedValues) SetFieldValue<bool>(name, instanceField.GetValue<bool>());
-                else instanceField.SetValue(GetFieldValue<bool>(name));
-                break;
-            }
-            case ScriptFieldType::Char:
-            {
-                if (hasDeserializedValues) SetFieldValue<char>(name, instanceField.GetValue<char>());
-                else instanceField.SetValue(GetFieldValue<char>(name));
-                break;
-            }
-            case ScriptFieldType::Byte:
-            {
-                if (hasDeserializedValues) SetFieldValue<int8_t>(name, instanceField.GetValue<int8_t>());
-                else instanceField.SetValue(GetFieldValue<int8_t>(name));
-                break;
-            }
-            case ScriptFieldType::Short:
-            {
-                if (hasDeserializedValues) SetFieldValue<int16_t>(name, instanceField.GetValue<int16_t>());
-                else instanceField.SetValue(GetFieldValue<int16_t>(name));
-                break;
-            }
-            case ScriptFieldType::Int:
-            {
-                if (hasDeserializedValues) SetFieldValue<int>(name, instanceField.GetValue<int>());
-                else instanceField.SetValue(GetFieldValue<int>(name));
-                break;
-            }
-            case ScriptFieldType::Long:
-            {
-                if (hasDeserializedValues) SetFieldValue<int64_t>(name, instanceField.GetValue<int64_t>());
-                else instanceField.SetValue(GetFieldValue<int64_t>(name));
-                break;
-            }
-            case ScriptFieldType::UByte:
-            {
-                if (hasDeserializedValues) SetFieldValue<uint8_t>(name, instanceField.GetValue<uint8_t>());
-                else instanceField.SetValue(GetFieldValue<uint8_t>(name));
-                break;
-            }
-            case ScriptFieldType::UShort:
-            {
-                if (hasDeserializedValues) SetFieldValue<uint16_t>(name, instanceField.GetValue<uint16_t>());
-                else instanceField.SetValue(GetFieldValue<uint16_t>(name));
-                break;
-            }
-            case ScriptFieldType::UInt:
-            {
-                if (hasDeserializedValues) SetFieldValue<uint32_t>(name, instanceField.GetValue<uint32_t>());
-                else instanceField.SetValue(GetFieldValue<uint32_t>(name));
-                break;
-            }
-            case ScriptFieldType::ULong:
-            {
-                if (hasDeserializedValues) SetFieldValue<uint64_t>(name, instanceField.GetValue<uint64_t>());
-                else instanceField.SetValue(GetFieldValue<uint64_t>(name));
                 break;
             }
             case ScriptFieldType::Vector2:
@@ -152,6 +152,24 @@ namespace ignite
             {
                 if (hasDeserializedValues) SetFieldValue<glm::vec4>(name, instanceField.GetValue<glm::vec4>());
                 else instanceField.SetValue(GetFieldValue<glm::vec4>(name));
+                break;
+            }
+            case ScriptFieldType::Quat:
+            {
+                if (hasDeserializedValues) SetFieldValue<glm::quat>(name, instanceField.GetValue<glm::quat>());
+                else instanceField.SetValue(GetFieldValue<glm::quat>(name));
+                break;
+            }
+            case ScriptFieldType::Color:
+            {
+                if (hasDeserializedValues) SetFieldValue<glm::vec4>(name, instanceField.GetValue<glm::vec4>());
+                else instanceField.SetValue(GetFieldValue<glm::vec4>(name));
+                break;
+            }
+            case ScriptFieldType::Enum:
+            {
+                if (hasDeserializedValues) SetFieldValue<int>(name, instanceField.GetValue<int>());
+                else instanceField.SetValue(GetFieldValue<int>(name));
                 break;
             }
             case ScriptFieldType::Entity:
