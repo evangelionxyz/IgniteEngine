@@ -2,19 +2,19 @@ name: CI-Pipeline
 
 on:
   push:
-    branches: [master, dev]
+    branches: [master]
   pull_request:
-    branches: [master, dev]
+    branches: [master]
 
 jobs:
    build:
-    runs-on: windows-latest
+    runs-on: windows-2025-vs2026
     strategy:
       matrix:
         configuration: [Release]
     env:
-      VS_VERSION: "2022"
-      SLNX_FILE_IGN: IGN.sln
+      VS_VERSION: "2026"
+      SLNX_FILE_IGN: IGN.slnx
       PREMAKE_VERSION: 5.0.0-beta8
 
     steps:
@@ -28,6 +28,13 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Cache Python packages
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@v5
         with:
@@ -36,24 +43,30 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v3
 
-      - name: Install Premake
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $version = "${{ env.PREMAKE_VERSION }}"
-          $zipUrl = "https://github.com/premake/premake-core/releases/download/v$version/premake-$version-windows.zip"
-          $dst = "$PWD/scripts/tools"
-          New-Item -ItemType Directory -Force -Path $dst | Out-Null
-          $zipPath = "$dst/premake.zip"
-          Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
-          Expand-Archive -Path $zipPath -DestinationPath $dst -Force
-          "$dst" | Out-File -FilePath $env:GITHUB_PATH -Append
+      - name: Cache SDK downloads
+        uses: actions/cache@v4
+        with:
+          path: scripts/downloads
+          key: ${{ runner.os }}-sdk-cache-v1-${{ hashFiles('scripts/setup_dependencies.py') }}-${{ env.PREMAKE_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-sdk-cache-v1-${{ hashFiles('scripts/setup_dependencies.py') }}-
+            ${{ runner.os }}-sdk-cache-v1-
 
-      - name: Generate Solution with Premake
+      - name: Run Generate Script
         shell: pwsh
-        run:
-          ./scripts/tools/premake5 vs${{ env.VS_VERSION }} --file=scripts/premake5.lua
+        run: ./gen.bat
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.vcxproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
 
       - name: Resore NuGet packages
         shell: pwsh
         run: msbuild $env:SLNX_FILE_IGN /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform="x64"
+
+      - name: Build Visual Studio
+        shell: pwsh
+        run: msbuild $env:SLNX_FILE_IGN /t:Rebuild /p:Configuration=${{ matrix.configuration }} /p:Platform="x64"

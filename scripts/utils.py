@@ -11,13 +11,23 @@ if platform.system() == "Windows":
 
 def set_env_variable(variable_name, directory_path):
     if platform.system() == "Windows":
-        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment", 0, winreg.KEY_SET_VALUE)
-        winreg.SetValueEx(key, variable_name, 0, winreg.REG_EXPAND_SZ, directory_path)
-        winreg.CloseKey(key)
+        try:
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment", 0, winreg.KEY_SET_VALUE)
+            winreg.SetValueEx(key, variable_name, 0, winreg.REG_EXPAND_SZ, directory_path)
+            winreg.CloseKey(key)
+        except Exception as e:
+            print(f"Warning: Could not set system environment variable {variable_name}: {e}")
+            
     elif platform.system() == "Linux":
         os.environ[variable_name] = directory_path
         with open('/etc/environment', 'a') as file:
             file.write(f'\n{variable_name}="{directory_path}"\n')
+
+    # Persist for GitHub Actions
+    if "GITHUB_ENV" in os.environ:
+        with open(os.environ["GITHUB_ENV"], "a") as f:
+            f.write(f"{variable_name}={directory_path}\n")
+            print(f"Added {variable_name} to GITHUB_ENV")
 
 
 def get_env_variable(name):
@@ -62,18 +72,32 @@ def get_user_env_variable(name):
 
 def set_system_path_variable(new_path):
     if platform.system() == "Windows":
-        current_path = current_path = os.environ.get('PATH', '')
+        current_path = os.environ.get('PATH', '')
         if new_path not in current_path:
-            new_path = f'{current_path};{new_path}'
-            set_env_variable("Path", new_path)
+            updated_path = f'{current_path};{new_path}'
+            set_env_variable("Path", updated_path)
+            
+            # Update current process environment for immediate use in same step
+            os.environ['PATH'] = updated_path
+            
+            # Persist for GitHub Actions
+            if "GITHUB_PATH" in os.environ:
+                with open(os.environ["GITHUB_PATH"], "a") as f:
+                    f.write(f"{new_path}\n")
+                    print(f"Added {new_path} to GITHUB_PATH")
             return True
     if platform.system() == "Linux":
         current_path = os.environ.get('PATH', '')
         if new_path not in current_path.split(':'):
-            new_path = f'{current_path}:{new_path}'
-            os.environ['PATH'] = new_path
+            updated_path = f'{current_path}:{new_path}'
+            os.environ['PATH'] = updated_path
             with open('/etc/environment', 'a') as file:
-                file.write(f'\nPATH="{new_path}"\n')
+                file.write(f'\nPATH="{updated_path}"\n')
+            
+            # Persist for GitHub Actions
+            if "GITHUB_PATH" in os.environ:
+                with open(os.environ["GITHUB_PATH"], "a") as f:
+                    f.write(f"{new_path}\n")
             return True
     return False
 

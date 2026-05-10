@@ -1,27 +1,54 @@
 -- VULKAN SDK
 VULKAN_SDK_PATH = os.getenv("VULKAN_SDK")
-if not VULKAN_SDK_PATH then
-    print("Error: VULKAN_SDK environment variable is not set!")
+if not VULKAN_SDK_PATH or VULKAN_SDK_PATH == "" then
+    -- Try a default path if not set
+    VULKAN_SDK_PATH = "C:/VulkanSDK/1.4.341.1"
 end
-print("VULKAN_SDK_PATH: " .. tostring(VULKAN_SDK_PATH))
+
+-- Detect correct include folder casing
+VULKAN_SDK_INCLUDE_PATH = VULKAN_SDK_PATH .. "/Include"
+if not os.isdir(VULKAN_SDK_INCLUDE_PATH) then
+    if os.isdir(VULKAN_SDK_PATH .. "/include") then
+        VULKAN_SDK_INCLUDE_PATH = VULKAN_SDK_PATH .. "/include"
+    end
+end
+
+-- Detect correct lib folder casing
+VULKAN_SDK_LIB_PATH = VULKAN_SDK_PATH .. "/Lib"
+if not os.isdir(VULKAN_SDK_LIB_PATH) then
+    if os.isdir(VULKAN_SDK_PATH .. "/lib") then
+        VULKAN_SDK_LIB_PATH = VULKAN_SDK_PATH .. "/lib"
+    end
+end
+
+-- Detect correct bin folder casing
+VULKAN_SDK_BIN_PATH = VULKAN_SDK_PATH .. "/Bin"
+if not os.isdir(VULKAN_SDK_BIN_PATH) then
+    if os.isdir(VULKAN_SDK_PATH .. "/bin") then
+        VULKAN_SDK_BIN_PATH = VULKAN_SDK_PATH .. "/bin"
+    end
+end
+
+print("VULKAN_SDK path: " .. tostring(VULKAN_SDK_PATH))
+print("VULKAN_SDK include: " .. tostring(VULKAN_SDK_INCLUDE_PATH))
 
 -- FBX SDK
-FBX_SDK_PATH = os.getenv("FBX_SDK_PATH")
+FBX_SDK_PATH = os.getenv("FBX_SDK")
 if not FBX_SDK_PATH then
-    print("Error: FBX_SDK_PATH environment variable is not set!")
+    print("Error: FBX_SDK path environment variable is not set!")
 end
-print("FBX_SDK_PATH: " ..  tostring(FBX_SDK_PATH))
+print("FBX_SDK path: " ..  tostring(FBX_SDK_PATH))
 
 --includedirs
 IncludeDir = {}
-IncludeDir["ASSIM"]             = "%{THIRDPARTY_DIR}/ASSIMP/include"
+IncludeDir["ASSIM"]            = "%{THIRDPARTY_DIR}/ASSIMP/include"
 IncludeDir["GLFW"]             = "%{THIRDPARTY_DIR}/GLFW/include"
 IncludeDir["BOX2D"]            = "%{THIRDPARTY_DIR}/BOX2D/include"
 IncludeDir["ENTT"]             = "%{THIRDPARTY_DIR}/entt/"
 IncludeDir["GLM"]              = "%{THIRDPARTY_DIR}/GLM/"
 IncludeDir["IMGUI"]            = "%{THIRDPARTY_DIR}/IMGUI/"
 IncludeDir["IMGUIZMO"]         = "%{THIRDPARTY_DIR}/IMGUIZMO/"
-IncludeDir["IMGUI_NODE"]         = "%{THIRDPARTY_DIR}/imgui_node_editor/"
+IncludeDir["IMGUI_NODE"]       = "%{THIRDPARTY_DIR}/imgui_node_editor/"
 IncludeDir["NVRHI"]            = "%{THIRDPARTY_DIR}/NVRHI/include"
 IncludeDir["SPDLOG"]           = "%{THIRDPARTY_DIR}/SPDLOG/include"
 IncludeDir["STB"]              = "%{THIRDPARTY_DIR}/STB/include"
@@ -37,7 +64,7 @@ IncludeDir["FILEWATCHER"]      = "%{THIRDPARTY_DIR}/Filewatcher/include"
 IncludeDir["NVRHI_VULKAN_HEADERS"] = "%{THIRDPARTY_DIR}/NVRHI/thirdparty/Vulkan-Headers/include"
 IncludeDir["NVRHI_DIRECTX_HEADERS"] = "%{THIRDPARTY_DIR}/NVRHI/thirdparty/DirectX-Headers/include"
 IncludeDir["MochiSharpNative"] = "%{THIRDPARTY_DIR}/MochiSharp/MochiSharp.Native/Source"
-IncludeDir["VULKAN_SDK"]       = "%{VULKAN_SDK_PATH}/Include"
+IncludeDir["VULKAN_SDK"]       = VULKAN_SDK_INCLUDE_PATH
 IncludeDir["FBX_SDK"]          = "%{FBX_SDK_PATH}/include"
 IncludeDir["Hostfxr"]          = "%{THIRDPARTY_DIR}/MochiSharp/NetCore/include"
 IncludeDir["MSDFATLASGEN"]     = "%{THIRDPARTY_DIR}/MSDF-ATLAS-GEN/msdf-atlas-gen"
@@ -50,8 +77,8 @@ IncludeDir["NUKLEAR"]          = "%{THIRDPARTY_DIR}/Nuklear"
 
 --library dirs
 LibraryDir = {}
-LibraryDir["VULKAN_SDK"]       = "%{VULKAN_SDK_PATH}/Lib"
-LibraryDir["VULKAN_SDK_BIN"]   = "%{VULKAN_SDK_PATH}/Bin"
+LibraryDir["VULKAN_SDK"]       = VULKAN_SDK_LIB_PATH
+LibraryDir["VULKAN_SDK_BIN"]   = VULKAN_SDK_BIN_PATH
 LibraryDir["FBX_SDK"]          = "%{FBX_SDK_PATH}/lib"
 
 -- =============== WINDOWS ONLY ===============

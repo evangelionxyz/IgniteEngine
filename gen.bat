@@ -1,5 +1,7 @@
 @echo off
+setlocal enabledelayedexpansion
 
+:main_setup
 rem ensure python requests module is available
 python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('requests') else 1)" >nul 2>&1
 if errorlevel 1 (
@@ -18,5 +20,13 @@ rem push directory to scripts dir
 rem and running setup.py scripts
 pushd %~dp0\scripts
 python setup.py
+set SETUP_EXIT_CODE=!ERRORLEVEL!
 popd
-pause
+
+if !SETUP_EXIT_CODE! neq 0 (
+	echo.
+	echo ERROR: Setup script failed with exit code !SETUP_EXIT_CODE!
+	exit /b !SETUP_EXIT_CODE!
+)
+echo.
+exit /b 0
