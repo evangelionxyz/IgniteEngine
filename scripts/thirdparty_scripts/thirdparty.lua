@@ -3,25 +3,25 @@ VULKAN_SDK_PATH = os.getenv("VULKAN_SDK")
 if not VULKAN_SDK_PATH then
     print("Error: VULKAN_SDK environment variable is not set!")
 end
-print("VULKAN_SDK_PATH: " .. tostring(VULKAN_SDK_PATH))
+print("VULKAN_SDK path: " .. tostring(VULKAN_SDK_PATH))
 
 -- FBX SDK
-FBX_SDK_PATH = os.getenv("FBX_SDK_PATH")
+FBX_SDK_PATH = os.getenv("FBX_SDK")
 if not FBX_SDK_PATH then
-    print("Error: FBX_SDK_PATH environment variable is not set!")
+    print("Error: FBX_SDK path environment variable is not set!")
 end
-print("FBX_SDK_PATH: " ..  tostring(FBX_SDK_PATH))
+print("FBX_SDK path: " ..  tostring(FBX_SDK_PATH))
 
 --includedirs
 IncludeDir = {}
-IncludeDir["ASSIM"]             = "%{THIRDPARTY_DIR}/ASSIMP/include"
+IncludeDir["ASSIM"]            = "%{THIRDPARTY_DIR}/ASSIMP/include"
 IncludeDir["GLFW"]             = "%{THIRDPARTY_DIR}/GLFW/include"
 IncludeDir["BOX2D"]            = "%{THIRDPARTY_DIR}/BOX2D/include"
 IncludeDir["ENTT"]             = "%{THIRDPARTY_DIR}/entt/"
 IncludeDir["GLM"]              = "%{THIRDPARTY_DIR}/GLM/"
 IncludeDir["IMGUI"]            = "%{THIRDPARTY_DIR}/IMGUI/"
 IncludeDir["IMGUIZMO"]         = "%{THIRDPARTY_DIR}/IMGUIZMO/"
-IncludeDir["IMGUI_NODE"]         = "%{THIRDPARTY_DIR}/imgui_node_editor/"
+IncludeDir["IMGUI_NODE"]       = "%{THIRDPARTY_DIR}/imgui_node_editor/"
 IncludeDir["NVRHI"]            = "%{THIRDPARTY_DIR}/NVRHI/include"
 IncludeDir["SPDLOG"]           = "%{THIRDPARTY_DIR}/SPDLOG/include"
 IncludeDir["STB"]              = "%{THIRDPARTY_DIR}/STB/include"

@@ -36,24 +36,18 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v3
 
-      - name: Install Premake
+      - name: Run Generate Script
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $version = "${{ env.PREMAKE_VERSION }}"
-          $zipUrl = "https://github.com/premake/premake-core/releases/download/v$version/premake-$version-windows.zip"
-          $dst = "$PWD/scripts/tools"
-          New-Item -ItemType Directory -Force -Path $dst | Out-Null
-          $zipPath = "$dst/premake.zip"
-          Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
-          Expand-Archive -Path $zipPath -DestinationPath $dst -Force
-          "$dst" | Out-File -FilePath $env:GITHUB_PATH -Append
+        run: ./gen.bat
 
-      - name: Generate Solution with Premake
+      - name: Run Premake5
         shell: pwsh
-        run:
-          ./scripts/tools/premake5 vs${{ env.VS_VERSION }} --file=scripts/premake5.lua
+        run: scripts/downloads/premake5.exe vs${{ env.VS_VERSION }} --file="scripts/premake5.lua"
 
       - name: Resore NuGet packages
         shell: pwsh
         run: msbuild $env:SLNX_FILE_IGN /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform="x64"
+
+      - name: Build Visual Studio
+        shell: pwsh
+        run: msbuild $env:SLNX_FILE_IGN /t:Rebuild /p:Configuration=${{ matrix.configuration }} /p:Platform="x64"

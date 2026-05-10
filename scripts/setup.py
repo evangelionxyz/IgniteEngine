@@ -28,26 +28,29 @@ def ensure_admin():
 
 def run():
     ensure_admin()
-
+    
     DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-
-    dp.install_vulkan_sdk(DOWNLOADS_DIR)
+    
+    # Install dependencies
+    vulkan_installed = dp.install_vulkan_sdk(DOWNLOADS_DIR)
     dp.install_fbx_sdk(DOWNLOADS_DIR)
     premake_binary = dp.install_premake5(DOWNLOADS_DIR)
-
-    # Generate Solution for premake native and managed
-    premake_scripts = ["premake5.lua", "premake5-managed.lua"]
-    for script in premake_scripts:
-        premake_args = [str(premake_binary), f"--file=scripts/{script}"]
-        if platform.system() == "Windows":
-            premake_args.append("vs2026")
-        else:
-            premake_args.append("gmake")
-            premake_args.append("--cc=clang")
-        premake_args.append("pause")
-        subprocess.call(premake_args, cwd=ROOT_DIR)
-
-    input("Press any key to continue")
     
+    # If Vulkan was just installed, indicate need to re-run
+    if vulkan_installed:
+        print("Vulkan SDK has been installed. Generating project files...")
+    
+        # Generate Solution for premake native and managed
+        premake_scripts = ["premake5.lua", "premake5-managed.lua"]
+        for script in premake_scripts:
+            premake_args = [str(premake_binary), f"--file=scripts/{script}"]
+            if platform.system() == "Windows":
+                premake_args.append("vs2026")
+            else:
+                premake_args.append("gmake")
+                premake_args.append("--cc=clang")
+            premake_args.append("pause")
+            subprocess.call(premake_args, cwd=ROOT_DIR)
+
 if __name__ == "__main__":
     run()

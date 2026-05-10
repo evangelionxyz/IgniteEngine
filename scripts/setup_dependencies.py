@@ -9,16 +9,40 @@ def install_vulkan_sdk(target_directory):
     vulkan_version = "1.4.341.1"
     vulkan_sdk_link_windows = f"https://sdk.lunarg.com/sdk/download/{vulkan_version}/windows/vulkansdk-windows-X64-{vulkan_version}.exe"
     vulkan_executable_path = target_directory / f"vulkansdk-{vulkan_version}.exe"
+    vulkan_install_root = Path(f"C:/VulkanSDK/{vulkan_version}")
 
     if platform.system() == "Windows":
-        if utils.get_env_variable("VULKAN_SDK") is None:
+        if not vulkan_install_root.exists():
+            # download installer if not exists
             if not vulkan_executable_path.exists():
+                print(f"Downloading Vulkan SDK {vulkan_version}...")
                 utils.download_file(vulkan_sdk_link_windows, str(vulkan_executable_path))
 
-            subprocess.call([str(vulkan_executable_path)])
-            print("Re-run this script after installing Vulkan SDK")
+            # install
+            print("Installing Vulkan SDK...")
+            install_args = [str(vulkan_executable_path), "install"]
+            install_input = "accept\nyes\n"
+            result = subprocess.run(install_args, input=install_input, text=True,).returncode
+
+            print(f"Vulkan SDK installation completed with exit code: {result}")
+            utils.set_env_variable("VULKAN_SDK_PATH", str(vulkan_install_root))
+            os.environ["VULKAN_SDK_PATH"] = str(vulkan_install_root)
+
+            return True 
         else:
-            print("Vulkan SDK Installed")
+            # get existing from VULKAN_SDK
+            existing_vulkan_sdk = utils.get_env_variable('VULKAN_SDK')
+            
+            if existing_vulkan_sdk is None:
+                existing_vulkan_sdk = str(vulkan_install_root)
+
+            if not existing_vulkan_sdk is None:
+                print(f"Vulkan SDK already installed at: {existing_vulkan_sdk}")
+                if existing_vulkan_sdk:
+                    utils.set_env_variable("VULKAN_SDK", str(existing_vulkan_sdk))
+                    os.environ["VULKAN_SDK"] = str(existing_vulkan_sdk)
+                return True
+            else: return False
 
 
 def install_premake5(target_directory):
@@ -56,7 +80,7 @@ def install_fbx_sdk(target_directory):
         return (root / "include" / "fbxsdk.h").exists() and (root / "lib" / "x64").exists()
 
     def find_existing_fbx_root():
-        env_path = utils.get_env_variable("FBX_SDK_PATH") or utils.get_user_env_variable("FBX_SDK_PATH")
+        env_path = utils.get_env_variable("FBX_SDK") or utils.get_user_env_variable("FBX_SDK")
         if is_valid_fbx_root(env_path):
             return Path(env_path)
 
@@ -79,8 +103,8 @@ def install_fbx_sdk(target_directory):
 
     existing_path = find_existing_fbx_root()
     if existing_path is not None:
-        utils.set_env_variable("FBX_SDK_PATH", str(existing_path))
-        os.environ["FBX_SDK_PATH"] = str(existing_path)
+        utils.set_env_variable("FBX_SDK", str(existing_path))
+        os.environ["FBX_SDK"] = str(existing_path)
         print(f"FBX SDK Installed: {existing_path}")
         return existing_path
 
@@ -99,21 +123,22 @@ def install_fbx_sdk(target_directory):
 
     for args in install_attempts:
         try:
-            print(f"Installing FBX SDK using: {' '.join(args[1:]) if len(args) > 1 else 'interactive mode'}")
-            subprocess.call(args)
+            mode_desc = ' '.join(args[1:]) if len(args) > 1 else 'interactive mode'
+            print(f"Installing FBX SDK using: {mode_desc}")
+            result = subprocess.call(args)
+            print(f"FBX SDK installer exited with code: {result}")
         except OSError as exc:
             print(f"FBX installer launch failed with args {args[1:]}: {exc}")
+            continue
 
         detected_path = find_existing_fbx_root()
         if detected_path is not None:
-            utils.set_env_variable("FBX_SDK_PATH", str(detected_path))
-            os.environ["FBX_SDK_PATH"] = str(detected_path)
+            utils.set_env_variable("FBX_SDK", str(detected_path))
+            os.environ["FBX_SDK"] = str(detected_path)
             print(f"FBX SDK Installed: {detected_path}")
             return detected_path
 
     raise RuntimeError(
         "FBX SDK installation could not be verified. "
-        "Please install manually and set FBX_SDK_PATH to the SDK root (contains include/fbxsdk.h and lib/x64)."
+        "Please install manually and set FBX_SDK to the SDK root (contains include/fbxsdk.h and lib/x64)."
     )
-
-        
