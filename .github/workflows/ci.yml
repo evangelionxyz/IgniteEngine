@@ -56,6 +56,4 @@ jobs:
 
       - name: Resore NuGet packages
         shell: pwsh
-        run: |
-          msbuild $env:SLNX_FILE_IGN /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform="x64" /m ^
-          msbuild scriptengine/IgniteScriptEngine.csproj /t:rebuild -verbosity:diag /p:Configuration=${{ matrix.configuration }} /p:Platform="x64" /m
+        run: msbuild $env:SLNX_FILE_IGN /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform="x64"
