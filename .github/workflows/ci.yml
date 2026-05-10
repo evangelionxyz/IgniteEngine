@@ -33,6 +33,7 @@ jobs:
         with:
           path: ~\AppData\Local\pip\Cache
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
 
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@v5
@@ -42,27 +43,29 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v3
 
-      - name: Run Generate Script
-        shell: pwsh
-        run: ./gen.bat
-
       - name: Cache SDK downloads
         uses: actions/cache@v4
         with:
           path: scripts/downloads
-          key: ${{ runner.os }}-sdk-cache-vulkan-fbx-premake
+          key: ${{ runner.os }}-sdk-cache-v1-${{ hashFiles('scripts/setup_dependencies.py') }}-${{ env.PREMAKE_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-sdk-cache-v1-${{ hashFiles('scripts/setup_dependencies.py') }}-
+            ${{ runner.os }}-sdk-cache-v1-
 
-      - name: Resore NuGet packages
+      - name: Run Generate Script
         shell: pwsh
-        run: msbuild $env:SLNX_FILE_IGN /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform="x64"
+        run: ./gen.bat
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.nuget/packages
-            bin/objs
+          path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.vcxproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Resore NuGet packages
+        shell: pwsh
+        run: msbuild $env:SLNX_FILE_IGN /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform="x64"
 
       - name: Build Visual Studio
         shell: pwsh

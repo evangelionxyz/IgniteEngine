@@ -12,19 +12,50 @@ def install_vulkan_sdk(target_directory):
     vulkan_install_root = Path(f"C:/VulkanSDK/{vulkan_version}")
 
     if platform.system() == "Windows":
-        if not vulkan_install_root.exists():
+        if not vulkan_install_root.exists() or not (vulkan_install_root / "Include").exists():
             # download installer if not exists
             if not vulkan_executable_path.exists():
                 print(f"Downloading Vulkan SDK {vulkan_version}...")
                 utils.download_file(vulkan_sdk_link_windows, str(vulkan_executable_path))
 
+            # See https://vulkan.lunarg.com/doc/view/1.3.283.0/windows/getting_started.html for argument details
             # install
-            print("Installing Vulkan SDK...")
-            install_args = [str(vulkan_executable_path), "install"]
-            install_input = "accept\nyes\n"
-            result = subprocess.run(install_args, input=install_input, text=True,).returncode
+            print(f"Installing Vulkan SDK {vulkan_version} to {vulkan_install_root}...")
+            # For modern LunarG installers (1.3.216+), use these flags for silent install
+            install_args = [
+                str(vulkan_executable_path),
+                "--root", str(vulkan_install_root),
+                "--accept-licenses",
+                "--default-answer",
+                "--confirm-command", "install",
+            ]
 
-            print(f"Vulkan SDK installation completed with exit code: {result}")
+            # Only install debug symbols if NOT in GitHub Actions
+            if os.environ.get("GITHUB_ACTIONS") != "true":
+                install_args.append("com.lunarg.vulkan.debug")
+            else:
+                print("Skipping Vulkan debug symbols on GitHub Actions")
+            
+            try:
+                result = subprocess.run(install_args, check=True).returncode
+                print(f"Vulkan SDK installation completed with exit code: {result}")
+            except subprocess.CalledProcessError as e:
+                print(f"Vulkan SDK installation failed with error: {e}")
+                # Fallback to /S if it's an older installer style for some reason
+                print("Attempting fallback installation with /S...")
+                fallback_args = [str(vulkan_executable_path), "/S", f"/D={vulkan_install_root}"]
+                subprocess.run(fallback_args)
+
+            if not (vulkan_install_root / "Include").exists():
+                print(f"Warning: Vulkan SDK Include folder not found at {vulkan_install_root / 'Include'}")
+                # Check for lowercase 'include'
+                if (vulkan_install_root / "include").exists():
+                    print("Found lowercase 'include' folder, updating path...")
+                    # We might need to handle this in premake scripts too, 
+                    # but let's see if we can just use the path as is.
+                else:
+                    print("Critical: Installation seems incomplete or failed to create Include directory.")
+
             utils.set_env_variable("VULKAN_SDK", str(vulkan_install_root))
             os.environ["VULKAN_SDK"] = str(vulkan_install_root)
 
