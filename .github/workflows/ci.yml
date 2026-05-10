@@ -28,6 +28,13 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Cache Python packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@v5
         with:
@@ -40,9 +47,23 @@ jobs:
         shell: pwsh
         run: ./gen.bat
 
+      - name: Cache SDK downloads
+        uses: actions/cache@v4
+        with:
+          path: scripts/downloads
+          key: ${{ runner.os }}-sdk-cache-vulkan-fbx-premake
+
       - name: Resore NuGet packages
         shell: pwsh
         run: msbuild $env:SLNX_FILE_IGN /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform="x64"
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nuget/packages
+            bin/objs
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.vcxproj') }}
 
       - name: Build Visual Studio
         shell: pwsh
