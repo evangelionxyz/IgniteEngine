@@ -1,0 +1,59 @@
+name: CI-Pipeline
+
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master, dev]
+
+jobs:
+   build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        configuration: [Release]
+    env:
+      VS_VERSION: "2022"
+      SLNX_FILE_IGN: IGN.sln
+      PREMAKE_VERSION: 5.0.0-beta8
+
+    steps:
+      - name: Checkout repository recursively (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Install Premake
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = "${{ env.PREMAKE_VERSION }}"
+          $zipUrl = "https://github.com/premake/premake-core/releases/download/v$version/premake-$version-windows.zip"
+          $dst = "$PWD/scripts/tools"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          $zipPath = "$dst/premake.zip"
+          Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
+          Expand-Archive -Path $zipPath -DestinationPath $dst -Force
+          "$dst" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Generate Solution with Premake
+        shell: pwsh
+        run:
+          ./scripts/tools/premake5 vs${{ env.VS_VERSION }} --file=scripts/premake5.lua
+
+      - name: Resore NuGet packages
+        shell: pwsh
+        run: msbuild $env:SLNX_FILE_IGN /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform="x64"
