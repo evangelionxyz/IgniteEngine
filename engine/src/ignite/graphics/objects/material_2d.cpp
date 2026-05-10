@@ -6,7 +6,7 @@
 namespace ignite
 {
 
-	bool Material2D::Serialize(const std::filesystem::path &filepath)
+	bool Material2D::Serialize(const ignite::Path &filepath)
 	{
 		Serializer sr(filepath);
 
@@ -29,9 +29,9 @@ namespace ignite
 		return true;
 	}
 
-	Ref<Material2D> Material2D::Deserialize(const std::filesystem::path &filepath)
+	Ref<Material2D> Material2D::Deserialize(const ignite::Path &filepath)
 	{
-		if (!std::filesystem::exists(filepath))
+		if (!ignite::Path::exists(filepath))
 		{
 			return nullptr;
 		}

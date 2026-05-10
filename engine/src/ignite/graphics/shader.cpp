@@ -1,6 +1,6 @@
 /* MIT License
 * 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2025 Evangelion Manuhutu
 * 
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -57,8 +57,8 @@ namespace ignite
     void CreateShaderCachedDirectoryIfNeeded()
     {
         static std::string cachedDirectory = GetShaderCacheDirectory();
-        if (!std::filesystem::exists(cachedDirectory))
-            std::filesystem::create_directories(cachedDirectory);
+        if (!ignite::Path::exists(cachedDirectory))
+            ignite::Path::create_directories(cachedDirectory);
     }
 
     const char* GetShaderTypeString(ShaderType type)
@@ -87,7 +87,7 @@ namespace ignite
         return "Invalid Graphics API";
     }
 
-    Shader::Shader(const std::filesystem::path &filepath, ShaderType type, bool recompile)
+    Shader::Shader(const ignite::Path &filepath, ShaderType type, bool recompile)
         : m_Type(type)
     {
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
@@ -117,9 +117,9 @@ namespace ignite
         }
     }
 
-    std::vector<uint8_t> Shader::CompileOrGetShader(const std::filesystem::path &filepath, ShaderType type, bool recompile)
+    std::vector<uint8_t> Shader::CompileOrGetShader(const ignite::Path &filepath, ShaderType type, bool recompile)
     {
-        LOG_ASSERT(std::filesystem::exists(filepath), "[Shader] File does not exists! '{}'", filepath.generic_string().c_str());
+        LOG_ASSERT(ignite::Path::exists(filepath), "[Shader] File does not exists! '{}'", filepath.generic_string().c_str());
         
         const nvrhi::GraphicsAPI api = DeviceManager::GetInstance()->GetGraphicsAPI();
 
@@ -137,8 +137,8 @@ namespace ignite
         }
 
         std::vector<uint8_t> shaderCode;
-        std::filesystem::path cacheFilepath = opt.outputFilepath / filepath.filename().replace_extension(GetShaderExtension(api));
-        if (std::filesystem::exists(cacheFilepath) && !recompile)
+        ignite::Path cacheFilepath = opt.outputFilepath / filepath.filename().replace_extension(GetShaderExtension(api));
+        if (ignite::Path::exists(cacheFilepath) && !recompile)
         {
             std::ifstream file(cacheFilepath, std::ios::binary);
             file.seekg(0, std::ios::end);
@@ -673,7 +673,7 @@ namespace ignite
 #endif
     }
 
-    Ref<Shader> Shader::Create(const std::filesystem::path &filepath, ShaderType type, bool recompile)
+    Ref<Shader> Shader::Create(const ignite::Path &filepath, ShaderType type, bool recompile)
     {
         Ref<Shader> returnShader = CreateRef<Shader>(filepath, type, recompile);
         if (returnShader->GetHandle() == nullptr)

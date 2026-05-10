@@ -14,9 +14,9 @@ namespace ignite
     {
     public:
         SceneSerializer(const Ref<Scene> &scene, Project *project);
-        bool Serialize(const std::filesystem::path &filepath);
+        bool Serialize(const ignite::Path &filepath);
 
-        static Ref<Scene> Deserialize(const std::filesystem::path &filepath, Project *project);
+        static Ref<Scene> Deserialize(const ignite::Path &filepath, Project *project);
 
     private:
         Ref<Scene> m_Scene;

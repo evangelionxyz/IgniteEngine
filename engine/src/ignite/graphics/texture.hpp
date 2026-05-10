@@ -1,6 +1,6 @@
 /* MIT License
 * 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2025 Evangelion Manuhutu
 * 
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -34,7 +34,7 @@
 #include <openexr.h>
 #include <openexr_errors.h>
 
-#include <filesystem>
+#include "ignite/core/path.hpp"
 
 namespace ignite
 {
@@ -83,7 +83,7 @@ namespace ignite
             return value;
         }
 
-        static bool IsExrFile(const std::filesystem::path &filepath)
+        static bool IsExrFile(const ignite::Path &filepath)
         {
             return ToLowerCopy(filepath.extension().string()) == ".exr";
         }
@@ -101,14 +101,14 @@ namespace ignite
             return -1;
         }
 
-        static std::filesystem::path BuildMetaPath(Project *project, const AssetMetaData &metadata, const char *extension)
+        static ignite::Path BuildMetaPath(Project *project, const AssetMetaData &metadata, const char *extension)
         {
             if (!project)
             {
                 return {};
             }
 
-            std::filesystem::path assetPath = project->GetProjectFilepath(metadata.filepath);
+            ignite::Path assetPath = project->GetProjectFilepath(metadata.filepath);
             assetPath += extension;
             return assetPath;
         }
@@ -181,7 +181,7 @@ namespace ignite
             }
         }
 
-        bool LoadEXRTexture(const std::filesystem::path &filepath, int &outWidth, int &outHeight, nvrhi::Format &outFormat, std::vector<uint8_t> &data);
+        bool LoadEXRTexture(const ignite::Path &filepath, int &outWidth, int &outHeight, nvrhi::Format &outFormat, std::vector<uint8_t> &data);
 
         // Utility function to flip image buffer vertically
         void FlipImageBuffer(std::vector<uint8_t> &data, int width, int height, int rowPitch);
@@ -193,20 +193,20 @@ namespace ignite
         Texture() = default;
         Texture(TextureCreateInfo createInfo, const std::string &debugName = "Texture Class");
         Texture(const std::vector<uint8_t> &data, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
-        Texture(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
+        Texture(const ignite::Path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
 
         ~Texture() override;
 
         static Ref<Texture> Create();
         static Ref<Texture> Create(TextureCreateInfo createInfo, const std::string &debugName = "Texture Class");
         static Ref<Texture> Create(const std::vector<uint8_t> &data, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
-        static Ref<Texture> Create(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
+        static Ref<Texture> Create(const ignite::Path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName = "Texture Class");
 
         static TextureCreateInfo GetDefaultCreateInfo(const AssetMetaData &metadata);
-        static std::filesystem::path GetMetaPath(Project *project, const AssetMetaData &metadata);
-        static std::filesystem::path GetLegacyMetaPath(Project *project, const AssetMetaData &metadata);
-        static bool LoadCreateInfoFile(const std::filesystem::path &filepath, TextureCreateInfo &outCreateInfo);
-        static bool SerializeMetaFile(const std::filesystem::path &filepath, AssetHandle handle, const TextureCreateInfo &createInfo);
+        static ignite::Path GetMetaPath(Project *project, const AssetMetaData &metadata);
+        static ignite::Path GetLegacyMetaPath(Project *project, const AssetMetaData &metadata);
+        static bool LoadCreateInfoFile(const ignite::Path &filepath, TextureCreateInfo &outCreateInfo);
+        static bool SerializeMetaFile(const ignite::Path &filepath, AssetHandle handle, const TextureCreateInfo &createInfo);
 
         void SetData(nvrhi::ICommandList *cmd, uint32_t channelCount);
         void SetData(nvrhi::ICommandList *cmd, uint32_t rowPitch, uint32_t depthPitch);
@@ -226,7 +226,7 @@ namespace ignite
         nvrhi::Format GetFormat() const { return m_CreateInfo.format; }
 
         const std::string &GetDebugName() const { return m_DebugName; }
-        const std::filesystem::path &GetFilepath() { return m_Filepath; }
+        const ignite::Path &GetFilepath() { return m_Filepath; }
 
         const std::vector<uint8_t> &GetBuffer() { return m_Buffer; }
         static AssetType GetStaticType() { return AssetType::Texture; }
@@ -241,7 +241,7 @@ namespace ignite
 
         std::vector<uint8_t> m_Buffer;
         TextureCreateInfo m_CreateInfo;
-        std::filesystem::path m_Filepath;
+        ignite::Path m_Filepath;
         nvrhi::TextureHandle m_Handle;
         nvrhi::SamplerHandle m_Sampler;
         std::string m_DebugName;

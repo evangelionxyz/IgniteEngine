@@ -28,8 +28,8 @@ namespace ignite
         std::string defaultState;
         std::vector<LocomotionState> states;
 
-        virtual bool Serialize(const std::filesystem::path &filepath) override;
-        static Ref<LocomotionController> Deserialize(const std::filesystem::path &filepath);
+        virtual bool Serialize(const ignite::Path &filepath) override;
+        static Ref<LocomotionController> Deserialize(const ignite::Path &filepath);
 
         static AssetType GetStaticType() { return AssetType::LocomotionController; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }

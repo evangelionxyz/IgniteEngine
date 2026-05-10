@@ -1,6 +1,6 @@
 /* MIT License
 * 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2025 Evangelion Manuhutu
 * 
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -25,7 +25,7 @@
 
 #include <string>
 #include <vector>
-#include <filesystem>
+#include "ignite/core/path.hpp"
 
 namespace ignite
 {
@@ -38,8 +38,8 @@ namespace ignite
     };
 
     // Returns the full path to the running executable, e.g. C:\Dev\Ignite\Build\MyExe.exe
-    std::filesystem::path GetExecutablePath();
+    ignite::Path GetExecutablePath();
 
     // Returns the directory that contains the running executable, e.g. C:\Dev\Ignite\Build
-    std::filesystem::path GetExecutableDirectory();
+    ignite::Path GetExecutableDirectory();
 }

@@ -6,8 +6,9 @@
 
 #include "ignite/core/uuid.hpp"
 
+#include "ignite/core/path.hpp"
+
 #include <string>
-#include <filesystem>
 #include <map>
 #include <functional>
 
@@ -213,11 +214,11 @@ namespace ignite
     {
     public:
         AssetMetaData() = default;
-        AssetMetaData(const std::filesystem::path &filepath, const AssetType type)
+        AssetMetaData(const ignite::Path &filepath, const AssetType type)
             : filepath(filepath), type(type)
         { }
 
-        std::filesystem::path filepath;
+        ignite::Path filepath;
         AssetType type = AssetType::Invalid;
     };
 
@@ -236,8 +237,8 @@ namespace ignite
             return std::dynamic_pointer_cast<T>(shared_from_this());
         }
 
-        virtual bool Serialize(const std::filesystem::path &filepath) { return true; }
-        virtual bool SerializeMetaFile(const std::filesystem::path &filepath, const MetaSerializer &customSerializer = nullptr) const;
+        virtual bool Serialize(const ignite::Path &filepath) { return true; }
+        virtual bool SerializeMetaFile(const ignite::Path &filepath, const MetaSerializer &customSerializer = nullptr) const;
 
         virtual AssetType GetAssetType() { return AssetType::Invalid; }
 

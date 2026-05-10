@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #ifndef SERIALIZER_HPP
 #define SERIALIZER_HPP
@@ -16,7 +16,7 @@
 #include <glm/glm.hpp>
 #include <string>
 
-#include <filesystem>
+#include "ignite/core/path.hpp"
 
 namespace YAML
 {
@@ -294,10 +294,10 @@ namespace ignite
     class Serializer
     {
     public:
-        explicit Serializer(const std::filesystem::path &filepath);
+        explicit Serializer(const ignite::Path &filepath);
 
         void Serialize() const;
-        void Serialize(const std::filesystem::path &filepath);
+        void Serialize(const ignite::Path &filepath);
 
         void BeginMap();
         void BeginMap(const std::string &mapName);
@@ -319,9 +319,9 @@ namespace ignite
             m_Emitter << value;
         }
 
-        static YAML::Node Deserialize(const std::filesystem::path &filepath);
+        static YAML::Node Deserialize(const ignite::Path &filepath);
 
-        const std::filesystem::path &GetFilepath() const { return m_Filepath; }
+        const ignite::Path &GetFilepath() const { return m_Filepath; }
 
         static void SerializeMat4(Serializer &sr, const char *key, const glm::mat4 &mat)
         {
@@ -352,7 +352,7 @@ namespace ignite
 
     private:
         YAML::Emitter m_Emitter;
-        std::filesystem::path m_Filepath;
+        ignite::Path m_Filepath;
     };
 }
 

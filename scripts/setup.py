@@ -52,6 +52,8 @@ def run():
             premake_args.append("pause")
             subprocess.call(premake_args, cwd=ROOT_DIR)
 
+    input()
+
 
 if __name__ == "__main__":
     run()

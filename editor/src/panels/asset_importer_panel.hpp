@@ -11,7 +11,7 @@
 
 #include <queue>
 #include <vector>
-#include <filesystem>
+#include "ignite/core/path.hpp"
 #include <unordered_map>
 #include <optional>
 #include <atomic>
@@ -36,7 +36,7 @@ namespace ignite
 	private:
 		struct AssetImportData
 		{
-			std::filesystem::path filepath;
+			ignite::Path filepath;
 			AssetType assetType = AssetType::Invalid;
 			MeshImportOptions meshOptions;
 		};
@@ -51,14 +51,14 @@ namespace ignite
 		void ImportCurrentAsset();
 		void SkipCurrentAsset();
 		AssetImportData BuildCurrentImportData() const;
-		std::filesystem::path PrepareAssetForImport(const AssetImportData &asset) const;
+		ignite::Path PrepareAssetForImport(const AssetImportData &asset) const;
 
-		bool ImportFbxMesh(const std::filesystem::path &filepath, const MeshImportOptions &options);
-		bool ImportFbxSkeletonAndAnimations(const std::filesystem::path &filepath, const MeshImportOptions &options);
+		bool ImportFbxMesh(const ignite::Path &filepath, const MeshImportOptions &options);
+		bool ImportFbxSkeletonAndAnimations(const ignite::Path &filepath, const MeshImportOptions &options);
 
-		std::filesystem::path BuildUniquePath(const std::filesystem::path &directory, const std::string &baseName, const std::string &extension) const;
+		ignite::Path BuildUniquePath(const ignite::Path &directory, const std::string &baseName, const std::string &extension) const;
 
-		std::filesystem::path m_TargetDirectory;
+		ignite::Path m_TargetDirectory;
 		std::unordered_map<AssetType, std::queue<AssetImportData>> m_ImportQueues;
 		std::vector<AssetType> m_ImportTypeOrder;
 		size_t m_CurrentTypeQueueIndex = 0;

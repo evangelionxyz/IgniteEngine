@@ -7,7 +7,7 @@
 #include "script_field.hpp"
 
 #include <string>
-#include <filesystem>
+#include "ignite/core/path.hpp"
 #include <unordered_map>
 #include <vector>
 
@@ -31,9 +31,9 @@ namespace ignite
 
         // ---- Asset interface ----
         virtual AssetType GetAssetType() override { return AssetType::ScriptableObject; }
-        virtual bool Serialize(const std::filesystem::path &filepath) override;
+        virtual bool Serialize(const ignite::Path &filepath) override;
 
-        static Ref<ScriptableObject> Deserialize(const std::filesystem::path &filepath);
+        static Ref<ScriptableObject> Deserialize(const ignite::Path &filepath);
         static Ref<ScriptableObject> Create(const std::string &className);
 
         // The fully-qualified C# class name (e.g. "MyProject.MyData")

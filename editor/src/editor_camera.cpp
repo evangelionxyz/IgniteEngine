@@ -1,5 +1,6 @@
 //Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 
+#include "pch.hpp"
 #include "editor_camera.hpp"
 
 #include "ignite/core/application.hpp"

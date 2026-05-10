@@ -1,6 +1,6 @@
 /* MIT License
 * 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2025 Evangelion Manuhutu
 * 
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -175,7 +175,7 @@ namespace ignite
         return fallback;
     }
 
-	bool Material::Serialize(const std::filesystem::path &filepath)
+	bool Material::Serialize(const ignite::Path &filepath)
 	{
 		Serializer sr(filepath);
 
@@ -213,7 +213,7 @@ namespace ignite
 		return true;
 	}
 
-    Ref<Material> Material::Deserialize(const std::filesystem::path &filepath)
+    Ref<Material> Material::Deserialize(const ignite::Path &filepath)
     {
         YAML::Node fileNode = Serializer::Deserialize(filepath);
         YAML::Node materialNode = fileNode["Material"];

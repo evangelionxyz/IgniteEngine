@@ -10,7 +10,7 @@
 #include "ignite/core/profiler/profiler.hpp"
 
 #include <string>
-#include <filesystem>
+#include "ignite/core/path.hpp"
 
 namespace ignite
 {
@@ -22,12 +22,12 @@ namespace ignite
         std::string name;
         AssetHandle defaultSceneHandle = AssetHandle(0);
 
-        std::filesystem::path filepath; // the actual project file (.ixproj)
-        std::filesystem::path rootDirectory; // project directory
-        std::filesystem::path scriptModuleFilepath; // .dll Script file
-        std::filesystem::path assetDirectory = "Assets";
-        std::filesystem::path scriptsDirectory = "Scripts";
-        std::filesystem::path assetRegistryFilepath = "AssetRegistry.ixreg";
+        ignite::Path filepath; // the actual project file (.ixproj)
+        ignite::Path rootDirectory; // project directory
+        ignite::Path scriptModuleFilepath; // .dll Script file
+        ignite::Path assetDirectory = "Assets";
+        ignite::Path scriptsDirectory = "Scripts";
+        ignite::Path assetRegistryFilepath = "AssetRegistry.ixreg";
     };
 
     class Project : public Asset
@@ -38,50 +38,50 @@ namespace ignite
 
         ~Project() override;
         
-        std::filesystem::path GetProjectFilepath(const std::filesystem::path &filepath) const;
-        std::filesystem::path GetProjectRelativeFilepath(const std::filesystem::path &filepath) const;
+        ignite::Path GetProjectFilepath(const ignite::Path &filepath) const;
+        ignite::Path GetProjectRelativeFilepath(const ignite::Path &filepath) const;
         
         void SetActiveScene(const Ref<Scene> &scene);
         void SetDefaultScene(AssetHandle handle);
         bool BuildSolution();
         
-        void CreateCSharpScript(const std::filesystem::path &filepath);
-        void CreateScriptableObject(const std::string &className, const std::string &fileName, const std::filesystem::path &targetDirectory);
+        void CreateCSharpScript(const ignite::Path &filepath);
+        void CreateScriptableObject(const std::string &className, const std::string &fileName, const ignite::Path &targetDirectory);
         void RegenerateCSharpProject();
 
         std::vector<std::pair<AssetHandle, AssetMetaData>> ValidateAssetRegistry();
 
-        std::filesystem::path GetFilepath() const
+        ignite::Path GetFilepath() const
         {
             return m_Info.rootDirectory / m_Info.filepath;
         }
 
-        const std::filesystem::path &GetDirectory() const
+        const ignite::Path &GetDirectory() const
         {
             return m_Info.rootDirectory;
         }
 
-        std::filesystem::path GetSolutionFilepath() const
+        ignite::Path GetSolutionFilepath() const
         {
             return m_Info.rootDirectory / std::string(m_Info.name + ".slnx");
         }
 
-        std::filesystem::path GetAssetDirectory() const
+        ignite::Path GetAssetDirectory() const
         {
             return m_Info.rootDirectory / m_Info.assetDirectory;
         }
 
-        std::filesystem::path GetScriptsDirectory() const
+        ignite::Path GetScriptsDirectory() const
         {
             return m_Info.rootDirectory / m_Info.scriptsDirectory;
         }
 
-        std::filesystem::path GetScriptBinDirectory() const
+        ignite::Path GetScriptBinDirectory() const
         {
             return m_Info.rootDirectory / "Bin";
         }
 
-        std::filesystem::path GetScriptModulePath() const
+        ignite::Path GetScriptModulePath() const
         {
             return m_Info.rootDirectory / m_Info.scriptModuleFilepath;
         }
@@ -100,8 +100,8 @@ namespace ignite
 
         const std::string GetAssetDisplayName(AssetHandle handle) const;
 
-        virtual bool Serialize(const std::filesystem::path &filepath) override;
-        static Ref<Project> Deserialize(const std::filesystem::path &filepath);
+        virtual bool Serialize(const ignite::Path &filepath) override;
+        static Ref<Project> Deserialize(const ignite::Path &filepath);
 
         AssetManager *GetAssetManager() { return m_AssetManager; }
         MaterialManager &GetMaterialManager() { return m_MaterialManager; }

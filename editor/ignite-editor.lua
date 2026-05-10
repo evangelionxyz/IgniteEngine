@@ -9,6 +9,9 @@ project "IgniteEditor"
     targetdir (OUTPUT_DIR)
     objdir (INTOUTPUT_DIR)
 
+    pchheader "pch.hpp"
+    pchsource "src/pch.cpp"
+
     files {
         "src/**.cpp",
         "src/**.hpp",

@@ -1,6 +1,6 @@
 /* MIT License
 * 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2025 Evangelion Manuhutu
 * 
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -28,7 +28,7 @@
 
 #include <vector>
 #include <sstream>
-#include <filesystem>
+#include "ignite/core/path.hpp"
 
 namespace ignite
 {
@@ -88,17 +88,17 @@ namespace ignite
     class WindowDropEvent final : public Event
     {
     public:
-        explicit WindowDropEvent(const std::vector<std::filesystem::path> &paths)
+        explicit WindowDropEvent(const std::vector<ignite::Path> &paths)
             : m_Paths(paths) {}
-        explicit WindowDropEvent(std::vector <std::filesystem::path> &&paths)
+        explicit WindowDropEvent(std::vector <ignite::Path> &&paths)
             : m_Paths(std::move(paths)) {}
 
-        const std::vector<std::filesystem::path> &GetPaths() const { return m_Paths; }
+        const std::vector<ignite::Path> &GetPaths() const { return m_Paths; }
 
         EVENT_CLASS_TYPE(WindowDrop);
         EVENT_CLASS_CATEGORY(EventCategoryApplication);
     private:
-        std::vector<std::filesystem::path> m_Paths;
+        std::vector<ignite::Path> m_Paths;
     };
 
     class WindowMaximizedEvent final : public Event
@@ -185,19 +185,19 @@ namespace ignite
     class AssetEditorCreateEvent final : public Event
     {
     public:
-        AssetEditorCreateEvent(AssetType type, std::filesystem::path targetDirectory)
+        AssetEditorCreateEvent(AssetType type, ignite::Path targetDirectory)
             : m_Type(type), m_TargetDirectory(std::move(targetDirectory))
         {
         }
 
         AssetType GetAssetType() const { return m_Type; }
-        const std::filesystem::path &GetTargetDirectory() const { return m_TargetDirectory; }
+        const ignite::Path &GetTargetDirectory() const { return m_TargetDirectory; }
 
         EVENT_CLASS_TYPE(AssetEditorCreate);
 		EVENT_CLASS_CATEGORY(EventCategoryApplication);
 
     private:
         AssetType m_Type = AssetType::Invalid;
-        std::filesystem::path m_TargetDirectory;
+        ignite::Path m_TargetDirectory;
     };
 }

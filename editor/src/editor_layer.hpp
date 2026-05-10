@@ -81,14 +81,14 @@ namespace ignite
         void NewScene();
         void SaveScene();
         void SaveSceneAs();
-        void SaveScene(const std::filesystem::path &filepath) const;
+        void SaveScene(const ignite::Path &filepath) const;
         void OpenScene();
-        void OpenScene(const std::filesystem::path &filepath);
+        void OpenScene(const ignite::Path &filepath);
         
         void SaveProject();
         void SaveProjectAs();
         void OpenProject();
-        void OpenProject(const std::filesystem::path &filepath);
+        void OpenProject(const ignite::Path &filepath);
 
         void SetActiveScene(const Ref<Scene> &scene);
 
@@ -136,8 +136,8 @@ namespace ignite
         Ref<Project> m_ActiveProject;
         EditorState m_State;
 
-        std::filesystem::path m_CurrentSceneFilePath;
-    	std::filesystem::path m_CurrentProjectFilepath;
+        ignite::Path m_CurrentSceneFilePath;
+    	ignite::Path m_CurrentProjectFilepath;
 
         std::vector<uint8_t> m_ScreenshotPixelData;
         int m_ScreenshotWidth = 0;

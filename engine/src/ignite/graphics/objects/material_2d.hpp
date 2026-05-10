@@ -33,8 +33,8 @@ namespace ignite
 		AssetHandle textureHandle = AssetHandle(0);
 		Material2DData data;
 
-		virtual bool Serialize(const std::filesystem::path &filepath) override;
-		static Ref<Material2D> Deserialize(const std::filesystem::path &filepath);
+		virtual bool Serialize(const ignite::Path &filepath) override;
+		static Ref<Material2D> Deserialize(const ignite::Path &filepath);
 
 		static AssetType GetStaticAssetType() { return AssetType::Material2D; }
 		virtual AssetType GetAssetType() { return GetStaticAssetType(); }

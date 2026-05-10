@@ -1,6 +1,6 @@
 /* MIT License
 * 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2025 Evangelion Manuhutu
 * 
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -68,17 +68,17 @@ namespace ignite::vfs
         m_Size = 0;
     }
 
-    bool NativeFileSystem::DirectoryExists(const std::filesystem::path &path)
+    bool NativeFileSystem::DirectoryExists(const ignite::Path &path)
     {
-        return std::filesystem::exists(path) && std::filesystem::is_directory(path);
+        return ignite::Path::exists(path) && ignite::Path::is_directory(path);
     }
 
-    bool NativeFileSystem::FileExists(const std::filesystem::path &path)
+    bool NativeFileSystem::FileExists(const ignite::Path &path)
     {
-        return std::filesystem::exists(path) && std::filesystem::is_regular_file(path);
+        return ignite::Path::exists(path) && ignite::Path::is_regular_file(path);
     }
 
-    Ref<IBlob> NativeFileSystem::ReadFile(const std::filesystem::path &path)
+    Ref<IBlob> NativeFileSystem::ReadFile(const ignite::Path &path)
     {
         std::ifstream file(path, std::ios::binary);
         if (!file.is_open())
@@ -115,7 +115,7 @@ namespace ignite::vfs
         return CreateRef<Blob>(data, size);
     }
 
-    bool NativeFileSystem::WriteFile(const std::filesystem::path &path, const void *data, size_t size)
+    bool NativeFileSystem::WriteFile(const ignite::Path &path, const void *data, size_t size)
     {
         std::ofstream file(path, std::ios::binary);
         if (!file.is_open())
@@ -200,7 +200,7 @@ namespace ignite::vfs
 #endif
     }
 
-    int NativeFileSystem::EnumerateFiles(const std::filesystem::path &path, const std::vector<std::string> &extensions, enumerate_callback_t callback, bool allowDuplicates)
+    int NativeFileSystem::EnumerateFiles(const ignite::Path &path, const std::vector<std::string> &extensions, enumerate_callback_t callback, bool allowDuplicates)
     {
         (void)allowDuplicates;
 
@@ -225,7 +225,7 @@ namespace ignite::vfs
         return numEntries;
     }
 
-    int NativeFileSystem::EnumerateDirectories(const std::filesystem::path &path, enumerate_callback_t callback, bool allowDuplicates)
+    int NativeFileSystem::EnumerateDirectories(const ignite::Path &path, enumerate_callback_t callback, bool allowDuplicates)
     {
         (void)allowDuplicates;
 
@@ -233,43 +233,43 @@ namespace ignite::vfs
         return EnumerateNativeFiles(pattern.c_str(), true, callback);
     }
 
-    RelativeFileSystem::RelativeFileSystem(Ref<IFileSystem> fs, const std::filesystem::path& basePath)
+    RelativeFileSystem::RelativeFileSystem(Ref<IFileSystem> fs, const ignite::Path& basePath)
         : m_UnderlyingFS(std::move(fs))
         , m_BasePath(basePath.lexically_normal())
     {
     }
 
-    bool RelativeFileSystem::DirectoryExists(const std::filesystem::path& name)
+    bool RelativeFileSystem::DirectoryExists(const ignite::Path& name)
     {
         return m_UnderlyingFS->DirectoryExists(m_BasePath / name.relative_path());
     }
 
-    bool RelativeFileSystem::FileExists(const std::filesystem::path& name)
+    bool RelativeFileSystem::FileExists(const ignite::Path& name)
     {
         return m_UnderlyingFS->FileExists(m_BasePath / name.relative_path());
     }
 
-    Ref<IBlob> RelativeFileSystem::ReadFile(const std::filesystem::path& name)
+    Ref<IBlob> RelativeFileSystem::ReadFile(const ignite::Path& name)
     {
         return m_UnderlyingFS->ReadFile(m_BasePath / name.relative_path());
     }
 
-    bool RelativeFileSystem::WriteFile(const std::filesystem::path& name, const void* data, size_t size)
+    bool RelativeFileSystem::WriteFile(const ignite::Path& name, const void* data, size_t size)
     {
         return m_UnderlyingFS->WriteFile(m_BasePath / name.relative_path(), data, size);
     }
 
-    int RelativeFileSystem::EnumerateFiles(const std::filesystem::path& path, const std::vector<std::string>& extensions, enumerate_callback_t callback, bool allowDuplicates)
+    int RelativeFileSystem::EnumerateFiles(const ignite::Path& path, const std::vector<std::string>& extensions, enumerate_callback_t callback, bool allowDuplicates)
     {
         return m_UnderlyingFS->EnumerateFiles(m_BasePath / path.relative_path(), extensions, callback, allowDuplicates);
     }
 
-    int RelativeFileSystem::EnumerateDirectories(const std::filesystem::path& path, enumerate_callback_t callback, bool allowDuplicates)
+    int RelativeFileSystem::EnumerateDirectories(const ignite::Path& path, enumerate_callback_t callback, bool allowDuplicates)
     {
         return m_UnderlyingFS->EnumerateDirectories(m_BasePath / path.relative_path(), callback, allowDuplicates);
     }
 
-    void RootFileSystem::Mount(const std::filesystem::path& path, std::shared_ptr<IFileSystem> fs)
+    void RootFileSystem::Mount(const ignite::Path& path, std::shared_ptr<IFileSystem> fs)
     {
         if (FindMountPoint(path, nullptr, nullptr))
         {
@@ -280,12 +280,12 @@ namespace ignite::vfs
         m_MountPoints.push_back(std::make_pair(path.lexically_normal().generic_string(), fs));
     }
 
-    void RootFileSystem::Mount(const std::filesystem::path& path, const std::filesystem::path& nativePath)
+    void RootFileSystem::Mount(const ignite::Path& path, const ignite::Path& nativePath)
     {
         Mount(path, std::make_shared<RelativeFileSystem>(std::make_shared<NativeFileSystem>(), nativePath));
     }
 
-    bool RootFileSystem::Unmount(const std::filesystem::path &path)
+    bool RootFileSystem::Unmount(const ignite::Path &path)
     {
         std::string spath = path.lexically_normal().generic_string();
 
@@ -301,7 +301,7 @@ namespace ignite::vfs
         return false;
     }
 
-    bool RootFileSystem::FindMountPoint(const std::filesystem::path& path, std::filesystem::path* pRelativePath, IFileSystem** ppFS)
+    bool RootFileSystem::FindMountPoint(const ignite::Path& path, ignite::Path* pRelativePath, IFileSystem** ppFS)
     {
         std::string spath = path.lexically_normal().generic_string();
 
@@ -327,9 +327,9 @@ namespace ignite::vfs
         return false;
     }
 
-    bool RootFileSystem::DirectoryExists(const std::filesystem::path& name)
+    bool RootFileSystem::DirectoryExists(const ignite::Path& name)
     {
-        std::filesystem::path relativePath;
+        ignite::Path relativePath;
         IFileSystem* fs = nullptr;
 
         if (FindMountPoint(name, &relativePath, &fs))
@@ -340,9 +340,9 @@ namespace ignite::vfs
         return false;
     }
 
-    bool RootFileSystem::FileExists(const std::filesystem::path& name)
+    bool RootFileSystem::FileExists(const ignite::Path& name)
     {
-        std::filesystem::path relativePath;
+        ignite::Path relativePath;
         IFileSystem* fs = nullptr;
 
         if (FindMountPoint(name, &relativePath, &fs))
@@ -353,9 +353,9 @@ namespace ignite::vfs
         return false;
     }
 
-    std::shared_ptr<IBlob> RootFileSystem::ReadFile(const std::filesystem::path& name)
+    std::shared_ptr<IBlob> RootFileSystem::ReadFile(const ignite::Path& name)
     {
-        std::filesystem::path relativePath;
+        ignite::Path relativePath;
         IFileSystem* fs = nullptr;
 
         if (FindMountPoint(name, &relativePath, &fs))
@@ -366,9 +366,9 @@ namespace ignite::vfs
         return nullptr;
     }
 
-    bool RootFileSystem::WriteFile(const std::filesystem::path& name, const void* data, size_t size)
+    bool RootFileSystem::WriteFile(const ignite::Path& name, const void* data, size_t size)
     {
-        std::filesystem::path relativePath;
+        ignite::Path relativePath;
         IFileSystem* fs = nullptr;
 
         if (FindMountPoint(name, &relativePath, &fs))
@@ -379,9 +379,9 @@ namespace ignite::vfs
         return false;
     }
 
-    int RootFileSystem::EnumerateFiles(const std::filesystem::path& path, const std::vector<std::string>& extensions, enumerate_callback_t callback, bool allowDuplicates)
+    int RootFileSystem::EnumerateFiles(const ignite::Path& path, const std::vector<std::string>& extensions, enumerate_callback_t callback, bool allowDuplicates)
     {
-        std::filesystem::path relativePath;
+        ignite::Path relativePath;
         IFileSystem* fs = nullptr;
 
         if (FindMountPoint(path, &relativePath, &fs))
@@ -392,9 +392,9 @@ namespace ignite::vfs
         return status::PathNotFound;
     }
 
-    int RootFileSystem::EnumerateDirectories(const std::filesystem::path& path, enumerate_callback_t callback, bool allowDuplicates)
+    int RootFileSystem::EnumerateDirectories(const ignite::Path& path, enumerate_callback_t callback, bool allowDuplicates)
     {
-        std::filesystem::path relativePath;
+        ignite::Path relativePath;
         IFileSystem* fs = nullptr;
 
         if (FindMountPoint(path, &relativePath, &fs))
@@ -419,9 +419,9 @@ namespace ignite::vfs
         }
     }
 
-    std::string GetFileSearchRegex(const std::filesystem::path &path, const std::vector<std::string> &extensions)
+    std::string GetFileSearchRegex(const ignite::Path &path, const std::vector<std::string> &extensions)
     {
-        std::filesystem::path normalizedPath = path.lexically_normal();
+        ignite::Path normalizedPath = path.lexically_normal();
         std::string normalizedPathStr = normalizedPath.generic_string();
 
         std::stringstream regex;

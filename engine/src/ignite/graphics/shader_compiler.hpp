@@ -1,25 +1,4 @@
-/* MIT License
-*
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
-*
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #ifndef SHADER_COMPILER_HPP
 #define SHADER_COMPILERH_PP
@@ -28,7 +7,7 @@
 
 #include <cstdint>
 #include <string>
-#include <filesystem>
+#include "ignite/core/path.hpp"
 #include <vector>
 #include <unordered_map>
 
@@ -198,11 +177,6 @@ namespace ignite
 		return uint32_t(hash) ^ (uint32_t(hash >> 32));
 	}
 
-	static std::string PathToString(std::filesystem::path path)
-	{
-		return path.lexically_normal().make_preferred().string();
-	}
-
 	static std::wstring AnsiToWide(const std::string& s)
 	{
 		return std::wstring(s.begin(), s.end());
@@ -241,15 +215,15 @@ namespace ignite
 	{
 		CompilerType compilerType;
 		ShaderPlatformType platformType;
-		std::filesystem::path filepath;
-		std::filesystem::path outputFilepath;
+		ignite::Path filepath;
+		ignite::Path outputFilepath;
 
 		void AddDefine(const std::string& define) { defines.push_back(define); }
 		void AddSPIRVExtension(const std::string& ext) { spirvExtensions.push_back(ext); }
 		void AddCompilerOptions(const std::string& opt) { compilerOptions.push_back(opt); }
 
-		std::vector<std::filesystem::path> includeDirectories;
-		std::vector<std::filesystem::path> relaxedIncludes;
+		std::vector<ignite::Path> includeDirectories;
+		std::vector<ignite::Path> relaxedIncludes;
 		std::vector<std::string> spirvExtensions = { "SPV_EXT_descriptor_indexing", "KHR" };
 		std::vector<std::string> compilerOptions;
 		std::vector<std::string> defines;

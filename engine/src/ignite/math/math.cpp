@@ -1,4 +1,6 @@
-// Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+// Copyright (c) 2026 Evangelion Manuhutu
+
+#include "ignite_pch.hpp"
 
 #include "math.hpp"
 #include "ignite/scene/component.hpp"

@@ -11,7 +11,7 @@
 
 #include "FileWatch.hpp"
 
-#include <filesystem>
+#include "ignite/core/path.hpp"
 #include <string>
 #include <unordered_map>
 
@@ -30,8 +30,8 @@ namespace ignite
 
         void RegisterCoreClassesAndFunctions();
 
-        bool LoadCoreAssembly(const std::filesystem::path &filepath);
-        bool LoadAppAssembly(const std::filesystem::path &filepath);
+        bool LoadCoreAssembly(const ignite::Path &filepath);
+        bool LoadAppAssembly(const ignite::Path &filepath);
 
         void ReloadAssembly();
 

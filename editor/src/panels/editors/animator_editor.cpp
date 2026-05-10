@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "pch.hpp"
 #include "animator_editor.hpp"
 #include "states.hpp"
 #include "ignite/animation/skeletal_animation.hpp"

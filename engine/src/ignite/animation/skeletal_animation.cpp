@@ -1,4 +1,6 @@
-// Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+// Copyright (c) 2026 Evangelion Manuhutu
+
+#include "ignite_pch.hpp"
 
 #include "skeletal_animation.hpp"
 #include "ignite/serializer/binary_serializer.hpp"
@@ -30,13 +32,13 @@ namespace ignite
             glm::toMat4(trs.rotation) * glm::scale(glm::mat4(1.0f), trs.scale);
     }
 
-    bool SkeletalAnimation::Serialize(const std::filesystem::path &filepath)
+    bool SkeletalAnimation::Serialize(const ignite::Path &filepath)
 	{
 		BinarySerializer::SerializeSkeletalAnimation(this, filepath);
 		return true;
 	}
 
-	Ref<SkeletalAnimation> SkeletalAnimation::Deserialize(const std::filesystem::path &filepath)
+	Ref<SkeletalAnimation> SkeletalAnimation::Deserialize(const ignite::Path &filepath)
 	{
         return BinarySerializer::DeserializeSkeletalAnimation(filepath);
 	}

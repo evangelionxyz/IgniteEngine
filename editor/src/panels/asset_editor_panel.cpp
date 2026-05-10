@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "pch.hpp"
 #include "asset_editor_panel.hpp"
 #include "editor_layer.hpp"
 #include "ext/editor_ui.hpp"
@@ -147,14 +148,14 @@ namespace ignite
         static std::unordered_map<MeshType, Ref<Mesh>> s_DefaultMeshes;
         static Ref<Material> s_SkeletonPreviewMaterial;
 
-        static std::filesystem::path BuildAssetMetaPath(Project *project, const AssetMetaData &metadata)
+        static ignite::Path BuildAssetMetaPath(Project *project, const AssetMetaData &metadata)
         {
             if (!project)
             {
                 return {};
             }
 
-            std::filesystem::path assetPath = project->GetProjectFilepath(metadata.filepath);
+            ignite::Path assetPath = project->GetProjectFilepath(metadata.filepath);
             assetPath += ".meta";
             return assetPath;
         }
@@ -172,7 +173,7 @@ namespace ignite
                 return;
             }
 
-            const std::filesystem::path metaPath = BuildAssetMetaPath(project, metadata);
+            const ignite::Path metaPath = BuildAssetMetaPath(project, metadata);
             if (metaPath.empty())
             {
                 return;
@@ -199,8 +200,8 @@ namespace ignite
                 return false;
             }
 
-            const std::filesystem::path metadataPath = BuildAssetMetaPath(project, metadata);
-            if (metadataPath.empty() || !std::filesystem::exists(metadataPath))
+            const ignite::Path metadataPath = BuildAssetMetaPath(project, metadata);
+            if (metadataPath.empty() || !ignite::Path::exists(metadataPath))
             {
                 return false;
             }
@@ -894,10 +895,10 @@ namespace ignite
         {
             ImGui::Text("Asset Type: %s", AssetTypeToString(m_CreateRequest.type).c_str());
 
-            std::filesystem::path targetDirectory = m_CreateRequest.targetDirectory.empty() ? project->GetAssetDirectory() : m_CreateRequest.targetDirectory;
-            if (!std::filesystem::exists(targetDirectory))
+            ignite::Path targetDirectory = m_CreateRequest.targetDirectory.empty() ? project->GetAssetDirectory() : m_CreateRequest.targetDirectory;
+            if (!ignite::Path::exists(targetDirectory))
             {
-                std::filesystem::create_directories(targetDirectory);
+                ignite::Path::create_directories(targetDirectory);
             }
 
             const std::string extension = GetAssetExtensionFromType(m_CreateRequest.type);
@@ -906,13 +907,13 @@ namespace ignite
             std::string assetName = m_CreateRequest.nameBuffer;
             if (!assetName.empty())
             {
-                std::filesystem::path proposed(assetName);
+                ignite::Path proposed(assetName);
                 assetName = proposed.stem().string();
             }
 
             const bool hasValidName = !assetName.empty();
-            const std::filesystem::path requestedPath = targetDirectory / (assetName + extension);
-            const bool isNameAvailable = hasValidName && !std::filesystem::exists(requestedPath);
+            const ignite::Path requestedPath = targetDirectory / (assetName + extension);
+            const bool isNameAvailable = hasValidName && !ignite::Path::exists(requestedPath);
 
             if (!hasValidName)
             {
@@ -931,15 +932,15 @@ namespace ignite
                     return;
                 }
 
-                std::filesystem::path proposed(finalAssetName);
+                ignite::Path proposed(finalAssetName);
                 finalAssetName = proposed.stem().string();
                 if (finalAssetName.empty())
                 {
                     return;
                 }
 
-                const std::filesystem::path fullAssetPath = targetDirectory / (finalAssetName + extension);
-                if (std::filesystem::exists(fullAssetPath))
+                const ignite::Path fullAssetPath = targetDirectory / (finalAssetName + extension);
+                if (ignite::Path::exists(fullAssetPath))
                 {
                     return;
                 }
@@ -4646,8 +4647,8 @@ namespace ignite
         }
 
         Project *project = m_EditorLayer->GetActiveProject().get();
-        const std::filesystem::path savePath = project->GetProjectFilepath(assetData.metadata.filepath);
-        const std::filesystem::path metaPath = BuildAssetMetaPath(project, assetData.metadata);
+        const ignite::Path savePath = project->GetProjectFilepath(assetData.metadata.filepath);
+        const ignite::Path metaPath = BuildAssetMetaPath(project, assetData.metadata);
 
         auto saveDefaultMeta = [&]()
         {
@@ -5010,10 +5011,10 @@ namespace ignite
         sceneData.camera.UpdateView();
     }
 
-    std::filesystem::path AssetEditorPanel::BuildUniqueAssetPath(const std::filesystem::path &baseDirectory, const std::string &baseName, const std::string &extension) const
+    ignite::Path AssetEditorPanel::BuildUniqueAssetPath(const ignite::Path &baseDirectory, const std::string &baseName, const std::string &extension) const
     {
-        std::filesystem::path candidate = baseDirectory / (baseName + extension);
-        if (!std::filesystem::exists(candidate))
+        ignite::Path candidate = baseDirectory / (baseName + extension);
+        if (!ignite::Path::exists(candidate))
         {
             return candidate;
         }
@@ -5022,7 +5023,7 @@ namespace ignite
         while (true)
         {
             candidate = baseDirectory / std::format("{}_{}{}", baseName, suffix, extension);
-            if (!std::filesystem::exists(candidate))
+            if (!ignite::Path::exists(candidate))
             {
                 return candidate;
             }

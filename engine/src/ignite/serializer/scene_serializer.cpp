@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "scene_serializer.hpp"
 #include "ignite/scene/component.hpp"
 
@@ -27,7 +29,7 @@ namespace ignite
     {
     }
 
-    bool SceneSerializer::Serialize(const std::filesystem::path &filepath)
+    bool SceneSerializer::Serialize(const ignite::Path &filepath)
     {
         if (!m_Scene || !m_Project)
             return false;
@@ -608,9 +610,9 @@ namespace ignite
         return true;
     }
 
-    Ref<Scene> SceneSerializer::Deserialize(const std::filesystem::path &filepath, Project *project)
+    Ref<Scene> SceneSerializer::Deserialize(const ignite::Path &filepath, Project *project)
     {
-        if (!std::filesystem::exists(filepath))
+        if (!ignite::Path::exists(filepath))
         {
             LOG_ERROR("[Scene SR] File does not exists!\n{}", filepath.generic_string());
             return nullptr;

@@ -1,6 +1,6 @@
 /* MIT License
 * 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2025 Evangelion Manuhutu
 * 
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -31,7 +31,7 @@
 
 #include <nvrhi/nvrhi.h>
 #include <initializer_list>
-#include <filesystem>
+#include "ignite/core/path.hpp"
 #include <string>
 
 namespace ignite
@@ -110,14 +110,14 @@ namespace ignite
     {
     public:
         Shader() = default;
-        Shader(const std::filesystem::path &filepath, ShaderType type, bool recompile = false);
+        Shader(const ignite::Path &filepath, ShaderType type, bool recompile = false);
 
 		const std::vector<nvrhi::VertexAttributeDesc> &GetVertexAttributes() { return m_VertexAttributes; }
         nvrhi::ShaderHandle GetHandle() { return m_Handle; }
         ShaderType GetType() const { return m_Type; }
 
-        static std::vector<uint8_t> CompileOrGetShader(const std::filesystem::path &filepath, ShaderType type, bool recompile);
-        static Ref<Shader> Create(const std::filesystem::path &filepath, ShaderType type, bool recompile = false);
+        static std::vector<uint8_t> CompileOrGetShader(const ignite::Path &filepath, ShaderType type, bool recompile);
+        static Ref<Shader> Create(const ignite::Path &filepath, ShaderType type, bool recompile = false);
 
         static void SPIRVReflect(ShaderType type, const std::vector<uint8_t> &shaderCode, std::vector<nvrhi::VertexAttributeDesc> &vertexAttributes);
         static void DXILReflect(ShaderType type, const std::vector<uint8_t>& shaderCode, std::vector<nvrhi::VertexAttributeDesc> &vertexAttributes);

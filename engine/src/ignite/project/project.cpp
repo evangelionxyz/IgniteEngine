@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "project.hpp"
 #include "ignite/core/string_utils.hpp"
 #include "ignite/core/logger.hpp"
@@ -13,7 +15,7 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
-
+#include <filesystem>
 #include <fstream>
 #include <format>
 
@@ -109,7 +111,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         delete m_AssetManager;
     }
 
-    std::filesystem::path Project::GetProjectFilepath(const std::filesystem::path &filepath) const
+    ignite::Path Project::GetProjectFilepath(const ignite::Path &filepath) const
     {
         if (filepath.empty())
         {
@@ -124,25 +126,25 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         return (m_Info.rootDirectory / filepath).lexically_normal();
     }
 
-    std::filesystem::path Project::GetProjectRelativeFilepath(const std::filesystem::path &filepath) const
+    ignite::Path Project::GetProjectRelativeFilepath(const ignite::Path &filepath) const
     {
         if (filepath.empty())
         {
             return {};
         }
 
-        const std::filesystem::path normalizedRoot = m_Info.rootDirectory.lexically_normal();
-        const std::filesystem::path normalizedPath = filepath.lexically_normal();
+        const ignite::Path normalizedRoot = m_Info.rootDirectory.lexically_normal();
+        const ignite::Path normalizedPath = filepath.lexically_normal();
 
         if (!normalizedPath.is_absolute())
         {
             return normalizedPath;
         }
 
-        const std::filesystem::path relativePath = normalizedPath.lexically_relative(normalizedRoot);
+        const ignite::Path relativePath = normalizedPath.lexically_relative(normalizedRoot);
         if (!relativePath.empty())
         {
-            const auto firstComponent = *relativePath.begin();
+            const auto firstComponent = relativePath.begin();
             if (firstComponent != "..")
             {
                 return relativePath;
@@ -169,8 +171,8 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 
         for (auto it = assetRegistry.begin(); it != assetRegistry.end();)
         {
-            const std::filesystem::path &filepath = GetProjectFilepath(it->second.filepath);
-            if (!std::filesystem::exists(filepath))
+            const ignite::Path &filepath = GetProjectFilepath(it->second.filepath);
+            if (!ignite::Path::exists(filepath))
             {
                 invalidRegistry.emplace_back(it->first, it->second);
                 it = assetRegistry.erase(it);
@@ -189,7 +191,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         return m_AssetManager->GetAssetDisplayName(handle);
     }
 
-    bool Project::Serialize(const std::filesystem::path &filepath)
+    bool Project::Serialize(const ignite::Path &filepath)
 	{
 		Serializer projectSr(filepath);
 
@@ -217,7 +219,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 		auto &assetRegistry = m_AssetManager->GetAssetAssetRegistry();
 
 		{
-			const std::filesystem::path assetRegFilepath = m_Info.rootDirectory / m_Info.assetRegistryFilepath;
+			const ignite::Path assetRegFilepath = m_Info.rootDirectory / m_Info.assetRegistryFilepath;
 			Serializer assetSr(assetRegFilepath);
 
 			assetSr.BeginMap(); // Start
@@ -266,9 +268,9 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         return true;
 	}
 
-	Ref<Project> Project::Deserialize(const std::filesystem::path &filepath)
+	Ref<Project> Project::Deserialize(const ignite::Path &filepath)
 	{
-		bool exists = std::filesystem::exists(filepath);
+		bool exists = ignite::Path::exists(filepath);
 		LOG_ASSERT(exists, "[Project Serializer] File does not exists {}", filepath.string());
 		if (!exists)
 		{
@@ -295,7 +297,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 		if (!info.assetRegistryFilepath.empty())
 		{
 			// project filepath / asset filename (.ixreg)
-			std::filesystem::path assetRegFilepath = info.rootDirectory / info.assetRegistryFilepath;
+			ignite::Path assetRegFilepath = info.rootDirectory / info.assetRegistryFilepath;
 			YAML::Node assetRegFileNode = Serializer::Deserialize(assetRegFilepath);
 			YAML::Node assetRegNode = assetRegFileNode["AssetRegistry"];
 
@@ -324,7 +326,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
     bool Project::BuildSolution()
     {
 		m_Info.scriptModuleFilepath = std::format("Bin/{}.dll", m_Info.name);
-		bool appAssemblyAvailable = std::filesystem::exists(GetScriptModulePath());
+		bool appAssemblyAvailable = ignite::Path::exists(GetScriptModulePath());
 
         if (!appAssemblyAvailable)
         {
@@ -342,16 +344,16 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         }
         
         m_Info.scriptModuleFilepath = std::format("Bin/{}.dll", m_Info.name);
-        appAssemblyAvailable = std::filesystem::exists(GetScriptModulePath());
+        appAssemblyAvailable = ignite::Path::exists(GetScriptModulePath());
 
         // Validate .dll file
         LOG_ASSERT(appAssemblyAvailable, "[Project] Failed to build Solution");
         return appAssemblyAvailable;
     }
 
-    void Project::CreateCSharpScript(const std::filesystem::path &filepath)
+    void Project::CreateCSharpScript(const ignite::Path &filepath)
     {
-        if (std::filesystem::exists(filepath))
+        if (ignite::Path::exists(filepath))
             return;
 
         std::string scriptTemplate = s_CSSharpScriptTemplate;
@@ -367,17 +369,17 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         RegenerateCSharpProject();
     }
 
-    void Project::CreateScriptableObject(const std::string &className, const std::string &fileName, const std::filesystem::path &targetDirectory)
+    void Project::CreateScriptableObject(const std::string &className, const std::string &fileName, const ignite::Path &targetDirectory)
     {
         // Build output path: <targetDirectory>/<fileName>.ixso
         const std::string safeFileName = fileName.empty() ? className : fileName;
-        const std::filesystem::path filepath = targetDirectory / (safeFileName + GetAssetExtensionFromType(AssetType::ScriptableObject));
+        const ignite::Path filepath = targetDirectory / (safeFileName + GetAssetExtensionFromType(AssetType::ScriptableObject));
 
         // Avoid overwriting - generate a unique name
-        std::filesystem::path outPath = filepath;
+        ignite::Path outPath = filepath;
         {
             uint32_t suffix = 1;
-            while (std::filesystem::exists(outPath))
+            while (ignite::Path::exists(outPath))
             {
                 outPath = targetDirectory / std::format("{}_{}{}", safeFileName, suffix, GetAssetExtensionFromType(AssetType::ScriptableObject));
                 ++suffix;
@@ -409,19 +411,19 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 
     void Project::RegenerateCSharpProject()
     {
-        std::filesystem::path scriptsDir = GetScriptsDirectory();
+        ignite::Path scriptsDir = GetScriptsDirectory();
         std::string compileItems;
 
-        if (std::filesystem::exists(scriptsDir))
+        if (ignite::Path::exists(scriptsDir))
         {
-            for (auto &p : std::filesystem::recursive_directory_iterator(scriptsDir))
+            for (auto &p : std::filesystem::recursive_directory_iterator(scriptsDir.string()))
             {
                 if (!p.is_regular_file())
                     continue;
 
                 if (p.path().extension() == ".cs")
                 {
-                    std::filesystem::path rel = std::filesystem::relative(p.path(), GetDirectory());
+                    ignite::Path rel = ignite::Path::relative(p.path().string(), GetDirectory());
                     std::string includepath = rel.generic_string();
                     std::replace(includepath.begin(), includepath.end(), '/', '\\');
                     compileItems += "    <Compile Include=\"" + includepath + "\" />\n";
@@ -444,26 +446,26 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 
 	void Project::CreateDirectories()
 	{
-		std::filesystem::path projectDir = GetDirectory();
+		ignite::Path projectDir = GetDirectory();
 
 		// Create asset directory
-		std::filesystem::path assetDirectory = GetAssetDirectory();
-		if (!std::filesystem::exists(assetDirectory))
-			std::filesystem::create_directories(assetDirectory);
+		ignite::Path assetDirectory = GetAssetDirectory();
+		if (!ignite::Path::exists(assetDirectory))
+			ignite::Path::create_directories(assetDirectory);
 
 		// Create script directory
-		std::filesystem::path scriptDirectory = GetScriptsDirectory();
-		if (!std::filesystem::exists(scriptDirectory))
-			std::filesystem::create_directories(scriptDirectory);
+		ignite::Path scriptDirectory = GetScriptsDirectory();
+		if (!ignite::Path::exists(scriptDirectory))
+			ignite::Path::create_directories(scriptDirectory);
 	}
 
 	void Project::CopyDependencies()
 	{
 		// copy IgniteScriptEngine.dll to project dir
-		std::filesystem::path projectBinDir = GetScriptBinDirectory();
-		if (!std::filesystem::exists(projectBinDir))
+		ignite::Path projectBinDir = GetScriptBinDirectory();
+		if (!ignite::Path::exists(projectBinDir))
 		{
-			std::filesystem::create_directory(projectBinDir);
+			ignite::Path::create_directory(projectBinDir);
 		}
 
         static std::array<std::string, 5> dependencies =
@@ -476,20 +478,20 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         };
 
         // Candidate source directories to search for dependencies. Prefer the executable directory.
-        std::filesystem::path exeDir = GetExecutableDirectory();
+        ignite::Path exeDir = GetExecutableDirectory();
 
         bool dependenciesAvailable = false;
         bool upToDate = true;
         for (auto &dep : dependencies)
         {
-            std::filesystem::path targetDepFilename = projectBinDir / dep;
-            std::filesystem::path depFilename = exeDir / dep;
-            if (!std::filesystem::exists(depFilename))
+            ignite::Path targetDepFilename = projectBinDir / dep;
+            ignite::Path depFilename = exeDir / dep;
+            if (!ignite::Path::exists(depFilename))
                 continue;
 
-            auto srcTime = std::filesystem::last_write_time(depFilename);
-            auto dstTime = std::filesystem::exists(targetDepFilename)
-                ? std::filesystem::last_write_time(targetDepFilename)
+            auto srcTime = std::filesystem::last_write_time(depFilename.string());
+            auto dstTime = std::filesystem::exists(targetDepFilename.string())
+                ? std::filesystem::last_write_time(targetDepFilename.string())
                 : std::filesystem::file_time_type::min();
 
             // Skip copy if the target is newer or equal
@@ -503,11 +505,8 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
             try
             {
                 LOG_INFO("[Project] Copying script dependency \"{}\".", dep);
-                std::filesystem::copy_file(
-                    depFilename,
-                    targetDepFilename,
-                    std::filesystem::copy_options::overwrite_existing
-                );
+                std::filesystem::copy_file(depFilename.string(), targetDepFilename.string(),
+                    std::filesystem::copy_options::overwrite_existing);
                 dependenciesAvailable = true;
                 upToDate = false;
             }
@@ -528,8 +527,8 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         CreateDirectories();
 
         // Generate the Visual Studio project if there is no solution file
-        std::filesystem::path solutionFilepath = GetSolutionFilepath();
-        if (!std::filesystem::exists(solutionFilepath))
+        ignite::Path solutionFilepath = GetSolutionFilepath();
+        if (!ignite::Path::exists(solutionFilepath))
         {
             // Create visual studio .slnx
             {
@@ -567,10 +566,10 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
             // Create .csproj
             {
                 // Build ItemGroup for all .cs files under Scripts directory
-                std::filesystem::path scriptsDir = GetScriptsDirectory();
+                ignite::Path scriptsDir = GetScriptsDirectory();
                 std::string compileItems;
 
-                for (auto &p : std::filesystem::recursive_directory_iterator(scriptsDir))
+                for (auto &p : std::filesystem::recursive_directory_iterator(scriptsDir.string()))
                 {
                     if (!p.is_regular_file())
                         continue;
@@ -578,7 +577,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
                     if (p.path().extension() == ".cs")
                     {
                         // compute path relative to project directory
-                        std::filesystem::path rel = std::filesystem::relative(p.path(), GetDirectory());
+                        ignite::Path rel = ignite::Path::relative(p.path().string(), GetDirectory());
                         std::string includepath = rel.generic_string();
                         // convert forward slashes to backslashes for csproj
                         std::replace(includepath.begin(), includepath.end(), '/', '\\');
@@ -591,8 +590,8 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
                 // If no .cs files found, create Game.cs using template but do not overwrite if exists
                 if (compileItems.empty())
                 {
-                    std::filesystem::path defaultCSharpScriptFilepath = scriptsDir / "Game.cs";
-                    if (!std::filesystem::exists(defaultCSharpScriptFilepath) || std::filesystem::is_empty(scriptsDir))
+                    ignite::Path defaultCSharpScriptFilepath = scriptsDir / "Game.cs";
+                    if (!ignite::Path::exists(defaultCSharpScriptFilepath) || std::filesystem::is_empty(scriptsDir.string()))
                     {
                         std::string csharpScriptTemplate = s_CSSharpScriptTemplate;
                         stringutils::ReplaceWith(csharpScriptTemplate, "{PROJECT_NAME}", m_Info.name);
@@ -621,8 +620,8 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
             }
 
             // Create dummy c# script when there is no scripts (new project)
-            std::filesystem::path defaultCSharpScriptFilepath = GetScriptsDirectory() / "Game.cs";
-            if (!std::filesystem::exists(defaultCSharpScriptFilepath) || std::filesystem::is_empty(GetScriptsDirectory()))
+            ignite::Path defaultCSharpScriptFilepath = GetScriptsDirectory() / "Game.cs";
+            if (!ignite::Path::exists(defaultCSharpScriptFilepath) || std::filesystem::is_empty(GetScriptsDirectory().string()))
             {
                 LOG_WARN("[Project] Creating default C# script {}", defaultCSharpScriptFilepath.filename().generic_string());
 

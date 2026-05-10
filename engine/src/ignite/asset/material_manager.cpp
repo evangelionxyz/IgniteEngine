@@ -1,6 +1,6 @@
 /* MIT License
 * 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2025 Evangelion Manuhutu
 * 
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -165,7 +165,7 @@ namespace ignite
         return nullptr;
     }
 
-    bool MaterialManager::SaveMaterial(const std::string &name, const std::filesystem::path &filepath)
+    bool MaterialManager::SaveMaterial(const std::string &name, const ignite::Path &filepath)
     {
         auto material = GetMaterial(name);
         if (!material)
@@ -179,7 +179,7 @@ namespace ignite
         return false;
     }
 
-    Ref<Material> MaterialManager::LoadMaterial(const std::filesystem::path &filepath)
+    Ref<Material> MaterialManager::LoadMaterial(const ignite::Path &filepath)
     {
         // TODO: Implement material deserialization
         LOG_INFO("[MaterialManager] Material deserialization not yet implemented");

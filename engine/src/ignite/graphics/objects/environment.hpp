@@ -1,6 +1,6 @@
 /* MIT License
 * 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2025 Evangelion Manuhutu
 * 
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -28,7 +28,7 @@
 #include "ignite/graphics/buffers/index_buffer.hpp"
 #include "ignite/graphics/buffers/vertex_buffer.hpp"
 #include <string>
-#include <filesystem>
+#include "ignite/core/path.hpp"
 #include <nvrhi/nvrhi.h>
 
 namespace ignite {

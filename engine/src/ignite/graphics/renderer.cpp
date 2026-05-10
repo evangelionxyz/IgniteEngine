@@ -1,6 +1,6 @@
 /* MIT License
 * 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2025 Evangelion Manuhutu
 * 
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -33,7 +33,7 @@
 #include "ignite/core/device/device_manager.hpp"
 
 #include <ranges>
-#include <filesystem>
+#include "ignite/core/path.hpp"
 
 namespace ignite
 {

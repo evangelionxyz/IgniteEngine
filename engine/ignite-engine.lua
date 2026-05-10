@@ -8,7 +8,13 @@ project "IgniteEngine"
     targetdir (OUTPUT_DIR)
     objdir (INTOUTPUT_DIR)
 
+    pchheader "ignite_pch.hpp"
+    pchsource "src/ignite_pch.cpp"
+    forceincludes { "ignite_pch.hpp" }
+
     files {
+        "src/ignite_pch.cpp",
+        "src/ignite_pch.hpp",
         "src/ignite/**.cpp",
         "src/ignite/**.hpp",
         "src/ignite/**.h",

@@ -1,4 +1,6 @@
-// Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+// Copyright (c) 2026 Evangelion Manuhutu
+
+#include "ignite_pch.hpp"
 
 #include "serializer.hpp"
 
@@ -9,7 +11,7 @@
 
 namespace ignite
 {    
-    Serializer::Serializer(const std::filesystem::path &filepath)
+    Serializer::Serializer(const ignite::Path &filepath)
         : m_Filepath(filepath)
     {
     }
@@ -24,7 +26,7 @@ namespace ignite
         outFile.close();
     }
 
-    void Serializer::Serialize(const std::filesystem::path &filepath)
+    void Serializer::Serialize(const ignite::Path &filepath)
     {
         m_Filepath = filepath;
 
@@ -66,7 +68,7 @@ namespace ignite
         m_Emitter << YAML::EndSeq;
     }
 
-    YAML::Node Serializer::Deserialize(const std::filesystem::path &filepath)
+    YAML::Node Serializer::Deserialize(const ignite::Path &filepath)
     {
         std::ifstream inFile(filepath);
         std::stringstream buffer;

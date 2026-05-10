@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "scriptable_object.hpp"
 #include "script_engine.hpp"
 #include "ignite/serializer/serializer.hpp"
@@ -171,7 +173,7 @@ namespace ignite
         return CreateRef<ScriptableObject>(className);
     }
 
-    bool ScriptableObject::Serialize(const std::filesystem::path &filepath)
+    bool ScriptableObject::Serialize(const ignite::Path &filepath)
     {
         Serializer sr(filepath);
 
@@ -240,9 +242,9 @@ namespace ignite
         return true;
     }
 
-    Ref<ScriptableObject> ScriptableObject::Deserialize(const std::filesystem::path &filepath)
+    Ref<ScriptableObject> ScriptableObject::Deserialize(const ignite::Path &filepath)
     {
-        if (!std::filesystem::exists(filepath))
+        if (!ignite::Path::exists(filepath))
         {
             LOG_ERROR("[ScriptableObject] File does not exist: {}", filepath.generic_string());
             return nullptr;

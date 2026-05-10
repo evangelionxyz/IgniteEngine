@@ -9,7 +9,7 @@
 
 #include <string>
 #include <map>
-#include <filesystem>
+#include "ignite/core/path.hpp"
 
 namespace ignite
 {
@@ -39,8 +39,8 @@ namespace ignite
         Ref<Material> GetMaterialByHandle(AssetHandle handle);
         
         // Save/Load materials
-        bool SaveMaterial(const std::string &name, const std::filesystem::path &filepath);
-        Ref<Material> LoadMaterial(const std::filesystem::path &filepath);
+        bool SaveMaterial(const std::string &name, const ignite::Path &filepath);
+        Ref<Material> LoadMaterial(const ignite::Path &filepath);
         
         void Clear();
         

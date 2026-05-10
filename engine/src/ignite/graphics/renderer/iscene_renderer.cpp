@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "iscene_renderer.hpp"
 #include "renderer_2d.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"

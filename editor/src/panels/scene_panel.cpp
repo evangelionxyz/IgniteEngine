@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "pch.hpp"
 #include "scene_panel.hpp"
 #include "editor_layer.hpp"
 #include "ignite/audio/fmod_sound.hpp"
@@ -2487,7 +2488,7 @@ namespace ignite
                             AssetMetaData metadata = m_EditorLayer->GetActiveProject()->GetAssetManager()->GetMetaData(*handle);
                             if (metadata.type == AssetType::Scene)
                             {
-                                std::filesystem::path filepath = m_EditorLayer->GetActiveProject()->GetProjectFilepath(metadata.filepath);
+                                const auto &filepath = m_EditorLayer->GetActiveProject()->GetProjectFilepath(metadata.filepath);
                                 m_EditorLayer->OpenScene(filepath);
                             }
                         }

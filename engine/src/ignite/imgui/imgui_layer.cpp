@@ -1,6 +1,6 @@
 /* MIT License
 * 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2025 Evangelion Manuhutu
 * 
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -110,9 +110,9 @@ namespace ignite
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
 
-        std::filesystem::path fontPath = "resources/fonts/segoeui.ttf";
+        ignite::Path fontPath = "resources/fonts/segoeui.ttf";
         
-        LOG_ASSERT(std::filesystem::exists(fontPath), "[ImGui Layer] font does not found");
+        LOG_ASSERT(ignite::Path::exists(fontPath), "[ImGui Layer] font does not found");
 
         std::ifstream file(fontPath, std::ios::binary);
         if (file.is_open())

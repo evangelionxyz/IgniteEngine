@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "script_engine.hpp"
 #include "glue/component_script_glue.hpp"
 #include "glue/core_script_glue.hpp"
@@ -30,19 +32,19 @@ namespace ignite
 
         constexpr const char *kEntityTypeName = "Ignite.Entity";
 
-        static bool TryGetAssemblyWriteTime(const std::filesystem::path &filepath, std::filesystem::file_time_type &outTime)
+        static bool TryGetAssemblyWriteTime(const ignite::Path &filepath, std::filesystem::file_time_type &outTime)
         {
             std::error_code ec;
-            if (!std::filesystem::exists(filepath, ec) || ec)
+            if (!std::filesystem::exists(filepath.string(), ec) || ec)
             {
                 return false;
             }
 
-            outTime = std::filesystem::last_write_time(filepath, ec);
+            outTime = std::filesystem::last_write_time(filepath.string(), ec);
             return !ec;
         }
 
-        static bool WaitForAssemblyFileReady(const std::filesystem::path &filepath)
+        static bool WaitForAssemblyFileReady(const ignite::Path &filepath)
         {
             using namespace std::chrono_literals;
 
@@ -55,20 +57,20 @@ namespace ignite
             for (int i = 0; i < 80; i++)
             {
                 std::error_code ec;
-                if (!std::filesystem::exists(filepath, ec) || ec)
+                if (!std::filesystem::exists(filepath.string(), ec) || ec)
                 {
                     std::this_thread::sleep_for(25ms);
                     continue;
                 }
 
-                const auto writeTime = std::filesystem::last_write_time(filepath, ec);
+                const auto writeTime = std::filesystem::last_write_time(filepath.string(), ec);
                 if (ec)
                 {
                     std::this_thread::sleep_for(25ms);
                     continue;
                 }
 
-                const auto fileSize = std::filesystem::file_size(filepath, ec);
+                const auto fileSize = std::filesystem::file_size(filepath.string(), ec);
                 if (ec)
                 {
                     std::this_thread::sleep_for(25ms);
@@ -109,7 +111,7 @@ namespace ignite
             return false;
         }
 
-        static bool WaitForAssemblyNewerThan(const std::filesystem::path &filepath, const std::filesystem::file_time_type &previousWriteTime)
+        static bool WaitForAssemblyNewerThan(const ignite::Path &filepath, const std::filesystem::file_time_type &previousWriteTime)
         {
             using namespace std::chrono_literals;
 
@@ -159,9 +161,9 @@ namespace ignite
     {
         std::unique_ptr<ScriptHost> scriptHost;
 
-        std::filesystem::path mochiSharpAssemblyFilepath;
-        std::filesystem::path coreAssemblyFilepath;
-        std::filesystem::path appAssemblyFilepath;
+        ignite::Path mochiSharpAssemblyFilepath;
+        ignite::Path coreAssemblyFilepath;
+        ignite::Path appAssemblyFilepath;
 
         std::unique_ptr<filewatch::FileWatch<std::string>> appAssemblyFileWatcher;
         bool assemblyReloadingPending = false;
@@ -191,9 +193,9 @@ namespace ignite
         }
 
         // Find the runtimeconfig.json for MochiSharp.Managed
-        const std::filesystem::path configPath = m_Project->GetDirectory() / "Bin/MochiSharp.Managed.runtimeconfig.json";
+        const ignite::Path configPath = m_Project->GetDirectory() / "Bin/MochiSharp.Managed.runtimeconfig.json";
 
-        if (!std::filesystem::exists(configPath))
+        if (!std::filesystem::exists(configPath.string()))
         {
             LOG_ERROR("[Script Engine] HostFXR config not found: {}", configPath.generic_string());
             return;
@@ -239,8 +241,8 @@ namespace ignite
         InitHostFxr();
 
         // Load MochiSharp.Managed core
-        const std::filesystem::path mochiSharpPath = m_Project->GetScriptBinDirectory() / "MochiSharp.Managed.dll";
-        if (!std::filesystem::exists(mochiSharpPath))
+        const ignite::Path mochiSharpPath = m_Project->GetScriptBinDirectory() / "MochiSharp.Managed.dll";
+        if (!std::filesystem::exists(mochiSharpPath.string()))
         {
             LOG_ERROR("[Script Engine] MochiSharp.Managed.dll not found!");
             return;
@@ -255,8 +257,8 @@ namespace ignite
         LOG_INFO("[Script Engine] Loaded MochiSharp.Managed.dll");
 
         // Script Core Assembly (IgniteScriptEngine.dll)
-        const std::filesystem::path coreAssemblyPath = m_Project->GetScriptBinDirectory() / "IgniteScriptEngine.dll";
-        LOG_ASSERT(std::filesystem::exists(coreAssemblyPath), "[Script Engine] Script core assembly not found!");
+        const ignite::Path coreAssemblyPath = m_Project->GetScriptBinDirectory() / "IgniteScriptEngine.dll";
+        LOG_ASSERT(std::filesystem::exists(coreAssemblyPath.string()), "[Script Engine] Script core assembly not found!");
         LoadCoreAssembly(coreAssemblyPath);
 
         // Register method signatures AFTER assemblies are loaded
@@ -294,7 +296,7 @@ namespace ignite
         ComponentScriptGlue::RegisterComponents();
     }
 
-    bool ScriptEngine::LoadCoreAssembly(const std::filesystem::path &filepath)
+    bool ScriptEngine::LoadCoreAssembly(const ignite::Path &filepath)
     {
         scriptEngineData->coreAssemblyFilepath = filepath;
 
@@ -334,9 +336,9 @@ namespace ignite
         }
     }
 
-    bool ScriptEngine::LoadAppAssembly(const std::filesystem::path &filepath)
+    bool ScriptEngine::LoadAppAssembly(const ignite::Path &filepath)
     {
-        if (!exists(filepath))
+        if (!ignite::Path::exists(filepath))
         {
             if (!m_Project->BuildSolution())
             {

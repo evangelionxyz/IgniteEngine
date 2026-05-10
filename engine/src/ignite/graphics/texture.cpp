@@ -1,6 +1,6 @@
 /* MIT License
 * 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2025 Evangelion Manuhutu
 * 
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -52,19 +52,19 @@ namespace ignite
         return createInfo;
     }
 
-    std::filesystem::path Texture::GetMetaPath(Project *project, const AssetMetaData &metadata)
+    ignite::Path Texture::GetMetaPath(Project *project, const AssetMetaData &metadata)
     {
         return texture_utils::BuildMetaPath(project, metadata, ".meta");
     }
 
-    std::filesystem::path Texture::GetLegacyMetaPath(Project *project, const AssetMetaData &metadata)
+    ignite::Path Texture::GetLegacyMetaPath(Project *project, const AssetMetaData &metadata)
     {
         return texture_utils::BuildMetaPath(project, metadata, ".ixtex");
     }
 
-    bool Texture::LoadCreateInfoFile(const std::filesystem::path &filepath, TextureCreateInfo &outCreateInfo)
+    bool Texture::LoadCreateInfoFile(const ignite::Path &filepath, TextureCreateInfo &outCreateInfo)
     {
-        if (filepath.empty() || !std::filesystem::exists(filepath))
+        if (filepath.empty() || !ignite::Path::exists(filepath))
         {
             return false;
         }
@@ -108,7 +108,7 @@ namespace ignite
         return true;
     }
 
-    bool Texture::SerializeMetaFile(const std::filesystem::path &filepath, AssetHandle handle, const TextureCreateInfo &createInfo)
+    bool Texture::SerializeMetaFile(const ignite::Path &filepath, AssetHandle handle, const TextureCreateInfo &createInfo)
     {
         if (filepath.empty())
         {
@@ -207,10 +207,10 @@ namespace ignite
         }
     }
 
-    Texture::Texture(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName)
+    Texture::Texture(const ignite::Path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName)
         : m_CreateInfo(createInfo), m_Filepath(filepath), m_DebugName(debugName)
     {
-        if (!std::filesystem::exists(filepath))
+        if (!ignite::Path::exists(filepath))
         {
             LOG_ERROR("[Texture] File does not found! {}", filepath.generic_string());
             return;
@@ -514,12 +514,12 @@ namespace ignite
         return CreateRef<Texture>(data, createInfo, cmd, debugName);
     }
 
-    Ref<Texture> Texture::Create(const std::filesystem::path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName)
+    Ref<Texture> Texture::Create(const ignite::Path &filepath, TextureCreateInfo createInfo, nvrhi::ICommandList *cmd, const std::string &debugName)
     {
         return CreateRef<Texture>(filepath, createInfo, cmd, debugName);
     }
 
-    bool texture_utils::LoadEXRTexture(const std::filesystem::path &filepath, int &outWidth, int &outHeight, nvrhi::Format &outFormat, std::vector<uint8_t> &data)
+    bool texture_utils::LoadEXRTexture(const ignite::Path &filepath, int &outWidth, int &outHeight, nvrhi::Format &outFormat, std::vector<uint8_t> &data)
     {
         exr_context_t ctx = nullptr;
         exr_context_initializer_t cinit = EXR_DEFAULT_CONTEXT_INITIALIZER;

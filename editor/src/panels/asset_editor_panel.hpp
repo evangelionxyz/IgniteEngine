@@ -6,6 +6,7 @@
 
 #include "ipanel.hpp"
 #include "editor_camera.hpp"
+#include "ignite/core/path.hpp"
 #include "ignite/asset/asset.hpp"
 #include "ignite/graphics/render_target.hpp"
 #include "ignite/graphics/renderer/asset_scene_renderer.hpp"
@@ -79,7 +80,7 @@ namespace ignite
         {
             Ref<Asset> asset;
             AssetType type = AssetType::Invalid;
-            std::filesystem::path targetDirectory;
+            ignite::Path targetDirectory;
             char nameBuffer[256] = "NewAsset";
             bool open = false;
         };
@@ -106,7 +107,7 @@ namespace ignite
         void UICreateAssetPopup();
         void InitializeSceneData(AssetEditorData &assetData);
         void UpdateSceneCamera(EditorSceneData &sceneData, float deltaTime);
-        std::filesystem::path BuildUniqueAssetPath(const std::filesystem::path &baseDirectory, const std::string &baseName, const std::string &extension) const;
+        ignite::Path BuildUniqueAssetPath(const ignite::Path &baseDirectory, const std::string &baseName, const std::string &extension) const;
 
         std::vector<AssetEditorData> m_Assets;
         CreateAssetRequest m_CreateRequest;
