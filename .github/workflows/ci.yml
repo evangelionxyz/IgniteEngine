@@ -8,7 +8,7 @@ on:
 
 jobs:
    build:
-    runs-on: windows-latest
+    runs-on: windows-2025-vs2026
     strategy:
       matrix:
         configuration: [Release]
@@ -31,8 +31,7 @@ jobs:
       - name: Cache Python packages
         uses: actions/cache@v4
         with:
-          path: |
-            ~\AppData\Local\pip\Cache
+          path: ~\AppData\Local\pip\Cache
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
 
       - name: Setup .NET 10 SDK
