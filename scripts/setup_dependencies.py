@@ -25,8 +25,8 @@ def install_vulkan_sdk(target_directory):
             result = subprocess.run(install_args, input=install_input, text=True,).returncode
 
             print(f"Vulkan SDK installation completed with exit code: {result}")
-            utils.set_env_variable("VULKAN_SDK_PATH", str(vulkan_install_root))
-            os.environ["VULKAN_SDK_PATH"] = str(vulkan_install_root)
+            utils.set_env_variable("VULKAN_SDK", str(vulkan_install_root))
+            os.environ["VULKAN_SDK"] = str(vulkan_install_root)
 
             return True 
         else:
