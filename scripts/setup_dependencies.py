@@ -61,8 +61,10 @@ def install_premake5(target_directory):
     if not premake_binary.exists():
         raise FileNotFoundError(f"Premake executable not found at {premake_binary}")
     
+    print("\nPremake Installed\n")
     return premake_binary
-    
+
+
 def install_fbx_sdk(target_directory):
     fbx_sdk_version = "fbx202037"
 

@@ -40,10 +40,6 @@ jobs:
         shell: pwsh
         run: ./gen.bat
 
-      - name: Run Premake5
-        shell: pwsh
-        run: scripts/downloads/premake5.exe vs${{ env.VS_VERSION }} --file="scripts/premake5.lua"
-
       - name: Resore NuGet packages
         shell: pwsh
         run: msbuild $env:SLNX_FILE_IGN /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform="x64"
