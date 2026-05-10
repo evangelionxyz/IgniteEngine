@@ -13,8 +13,8 @@ jobs:
       matrix:
         configuration: [Release]
     env:
-      VS_VERSION: "2022"
-      SLNX_FILE_IGN: IGN.sln
+      VS_VERSION: "2026"
+      SLNX_FILE_IGN: IGN.slnx
       PREMAKE_VERSION: 5.0.0-beta8
 
     steps:
