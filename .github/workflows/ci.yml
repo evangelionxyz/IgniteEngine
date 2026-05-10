@@ -13,7 +13,8 @@ jobs:
       matrix:
         configuration: [Release]
     env:
-      SLNX_FILE_IGN: IGN.slnx
+      VS_VERSION: "2022"
+      SLNX_FILE_IGN: IGN.sln
       PREMAKE_VERSION: 5.0.0-beta8
 
     steps:
@@ -51,10 +52,10 @@ jobs:
       - name: Generate Solution with Premake
         shell: pwsh
         run:
-          ./scripts/tools/premake5 vs2026 --file=scripts/premake5.lua
+          ./scripts/tools/premake5 vs${{ env.VS_VERSION }} --file=scripts/premake5.lua
 
       - name: Resore NuGet packages
         shell: pwsh
         run: |
-          msbuild $env:SLNX_FILE_IGN /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform="x64" ^
-          msbuild scriptengine/IgniteScriptEngine.csproj /t:rebuild -verbosity:diag /p:Configuration=${{ matrix.configuration }} /p:Platform="x64"
+          msbuild $env:SLNX_FILE_IGN /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform="x64" /m ^
+          msbuild scriptengine/IgniteScriptEngine.csproj /t:rebuild -verbosity:diag /p:Configuration=${{ matrix.configuration }} /p:Platform="x64" /m
