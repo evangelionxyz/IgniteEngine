@@ -11,12 +11,16 @@
 #include "ignite/physics/jolt/jolt_physics.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/core/profiler/profiler.hpp"
-
+#include "ignite/graphics/window.hpp"
+#include "input/input.hpp"
+#include "command.hpp"
 #include <nvrhi/utils.h>
 
 namespace ignite
 {
     static Application *s_AppInstance = nullptr;
+
+    Application::~Application() = default;
 
     Application::Application(const ApplicationCreateInfo &createInfo)
         : m_CreateInfo(createInfo)

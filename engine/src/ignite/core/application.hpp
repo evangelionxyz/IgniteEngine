@@ -10,21 +10,19 @@
 #include "types.hpp"
 #include "device/device_manager.hpp"
 #include "ignite/core/input/event.hpp"
-#include "ignite/graphics/window.hpp"
-#include "ignite/imgui/imgui_layer.hpp"
-#include "input/app_event.hpp"
-#include "input/input.hpp"
-#include "command.hpp"
-
+#include "ignite/core/path.hpp"
 
 #include <queue>
 #include <mutex>
-#include "ignite/core/path.hpp"
 
 namespace ignite
 {
     class ShaderFactory;
     class Renderer;
+    class Window;
+    class CommandManager;
+    class Input;
+    class ImGuiLayer;
 
     struct ApplicationCommandLineArgs
     {
@@ -59,7 +57,7 @@ namespace ignite
     {
     public:
         Application(const ApplicationCreateInfo &createInfo);
-        virtual ~Application() = default;
+        virtual ~Application();
 
         void PushLayer(Layer *layer);
         void PopLayer(Layer *layer);

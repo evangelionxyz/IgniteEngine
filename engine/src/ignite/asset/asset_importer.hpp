@@ -7,7 +7,7 @@
 #include "asset.hpp"
 #include "ignite/scene/entity.hpp"
 
-#include <future>
+#include <functional>
 
 namespace ignite
 {

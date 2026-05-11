@@ -4,6 +4,7 @@
 #include "editor_camera.hpp"
 
 #include "ignite/core/application.hpp"
+#include "ignite/core/input/input.hpp"
 
 #include <cmath>
 
