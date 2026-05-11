@@ -636,8 +636,8 @@ namespace ignite
 
         if (m_WidgetRenderer)
         {
-            m_WidgetRenderer->SetScene(m_Scene.get());
             m_WidgetRenderer->SetProject(m_Project);
+            m_WidgetRenderer->SetActiveWidget(scene->GetRootWidget());
         }
 
         s_GeometryPSOCache.clear();
@@ -1566,9 +1566,6 @@ namespace ignite
         const uint32_t mouseX = isGameplayFramebuffer ? m_GameplayWidgetMouseX : m_EditorWidgetMouseX;
         const uint32_t mouseY = isGameplayFramebuffer ? m_GameplayWidgetMouseY : m_EditorWidgetMouseY;
         const glm::ivec2 mousePos = Input::GetMousePosition();
-        m_WidgetRenderer->SetProject(m_Project);
-        m_WidgetRenderer->SetScene(m_Scene.get());
-        m_WidgetRenderer->SetPreviewWidget(nullptr);
 
         if (useMouseOverride)
         {

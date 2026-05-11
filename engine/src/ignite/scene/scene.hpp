@@ -1,27 +1,8 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef SCENE_HPP
+#define SCENE_HPP
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <entt/entt.hpp>
@@ -31,9 +12,10 @@
 #include "ignite/asset/asset.hpp"
 #include "ignite/math/aabb.hpp"
 
+#include "ignite/animation/animator/animator_controller.hpp"
+
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/gpu_data.hpp"
-#include "ignite/animation/animator/animator_controller.hpp"
 
 #include <unordered_map>
 #include <unordered_set>
@@ -47,6 +29,7 @@ namespace ignite
     class Environment;
     class SceneRenderer;
     class Project;
+    class WidgetCanvas;
 
     class Scene : public Asset
     {
@@ -75,6 +58,8 @@ namespace ignite
         Entity GetPrimaryCamera();
         Project *GetProject() { return m_Project; }
         AssetManager *GetAssetManager() { return m_AssetManager; }
+
+        Ref<WidgetCanvas> GetRootWidget();
 
         std::string name;
         entt::registry *registry;
@@ -120,3 +105,5 @@ namespace ignite
         friend class SceneManager;
     };
 }
+
+#endif

@@ -92,7 +92,7 @@ namespace ignite::vfs
 
         if (size > static_cast<u64>(std::numeric_limits<size_t>::max()))
         {
-            LOG_ASSERT(false, "File too larege");
+            LOG_ASSERT(false, "File too large");
             return nullptr;
         }
 

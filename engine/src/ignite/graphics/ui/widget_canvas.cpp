@@ -14,7 +14,7 @@
 namespace ignite
 {
     WidgetCanvas::WidgetCanvas(Scene *scene)
-        : m_Scene(scene), m_ViewportSize({ 1280, 720 })
+        : m_ViewportSize({ 1280, 720 })
     { }
 
     WidgetCanvas::~WidgetCanvas()
