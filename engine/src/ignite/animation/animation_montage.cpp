@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "animation_montage.hpp"
 
 #include "ignite/core/logger.hpp"
@@ -47,7 +49,7 @@ namespace ignite
         return AnimNotif {};
     }
 
-    bool AnimationMontage::Serialize(const std::filesystem::path &filepath)
+    bool AnimationMontage::Serialize(const ignite::Path &filepath)
     {
         YAML::Emitter out;
         out << YAML::BeginMap;
@@ -82,9 +84,9 @@ namespace ignite
         return true;
     }
 
-    Ref<AnimationMontage> AnimationMontage::Deserialize(const std::filesystem::path &filepath)
+    Ref<AnimationMontage> AnimationMontage::Deserialize(const ignite::Path &filepath)
     {
-        if (!std::filesystem::exists(filepath))
+        if (!ignite::Path::exists(filepath))
         {
             LOG_ERROR("[AnimationMontage] File does not exist: {}", filepath.string());
             return nullptr;

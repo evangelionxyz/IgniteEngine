@@ -1,4 +1,6 @@
-// Copyright (c) 2025 Evangelion Manuhutu
+// Copyright (c) 2026 Evangelion Manuhutu
+
+#include "ignite_pch.hpp"
 
 #include "renderer_2d.hpp"
 #include "ignite/graphics/render_target.hpp"

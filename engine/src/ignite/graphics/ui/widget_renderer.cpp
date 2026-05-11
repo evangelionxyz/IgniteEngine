@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "widget_renderer.hpp"
 
 #include "widget_canvas.hpp"

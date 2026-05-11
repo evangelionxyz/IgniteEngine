@@ -1,6 +1,6 @@
 /* MIT License
 * 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2025 Evangelion Manuhutu
 * 
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -44,36 +44,36 @@ namespace ignite
 {
     // --- Executable helpers ---
 #ifdef PLATFORM_WINDOWS
-    std::filesystem::path GetExecutablePath()
+    ignite::Path GetExecutablePath()
     {
         char buffer[MAX_PATH] = { 0 };
         DWORD size = GetModuleFileNameA(nullptr, buffer, MAX_PATH);
         if (size == 0 || size == MAX_PATH)
-            return std::filesystem::current_path();
-        return std::filesystem::path(std::string(buffer, buffer + size));
+            return ignite::Path(std::filesystem::current_path().string());
+        return ignite::Path(std::string(buffer, buffer + size));
     }
 #elif defined(PLATFORM_LINUX)
-    std::filesystem::path GetExecutablePath()
+    ignite::Path GetExecutablePath()
     {
         std::array<char, 1024> buffer;
         ssize_t len = readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
         if (len == -1)
-            return std::filesystem::current_path();
+            return ignite::Path(std::filesystem::current_path().string());
         buffer[len] = '\0';
-        return std::filesystem::path(buffer.data());
+        return ignite::Path(buffer.data());
     }
 #else
-    std::filesystem::path GetExecutablePath()
+    ignite::Path GetExecutablePath()
     {
-        return std::filesystem::current_path();
+        return ignite::Path(std::filesystem::current_path().string());
     }
 #endif
 
-    std::filesystem::path GetExecutableDirectory()
+    ignite::Path GetExecutableDirectory()
     {
         auto exe = GetExecutablePath();
         if (exe.empty())
-            return std::filesystem::current_path();
+            return ignite::Path(std::filesystem::current_path().string());
         return exe.parent_path();
     }
 

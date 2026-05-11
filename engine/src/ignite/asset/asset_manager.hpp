@@ -37,8 +37,8 @@ namespace ignite
 
         Ref<Asset> Import(AssetHandle handle, const AssetMetaData &metadata);
 
-        AssetHandle ImportAsset(const std::filesystem::path &filepath);
-        AssetHandle ImportAssetImmedate(const std::filesystem::path &filepath);
+        AssetHandle ImportAsset(const ignite::Path &filepath);
+        AssetHandle ImportAssetImmedate(const ignite::Path &filepath);
 
         void AssignMetaData(AssetHandle handle, const AssetMetaData &metadata);
 
@@ -152,12 +152,12 @@ namespace ignite
 
         AssetType GetAssetType(AssetHandle handle) const;
 
-        const AssetMetaData &GetMetaData(const std::filesystem::path &filepath, AssetHandle &outHandle);
+        const AssetMetaData &GetMetaData(const ignite::Path &filepath, AssetHandle &outHandle);
         const AssetMetaData &GetMetaData(AssetHandle handle) const;
         
-        AssetHandle GetAssetHandle(const std::filesystem::path &filepath);
+        AssetHandle GetAssetHandle(const ignite::Path &filepath);
         
-        const std::filesystem::path &GetFilepath(AssetHandle handle) const;
+        const ignite::Path &GetFilepath(AssetHandle handle) const;
         bool IsAssetHandleValid(AssetHandle handle) const;
         
         // Asset lifecycle management

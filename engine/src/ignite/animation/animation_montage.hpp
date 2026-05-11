@@ -54,8 +54,8 @@ namespace ignite
         void SetSkeletonHandle(AssetHandle skeletonHandle) { m_SkeletonHandle = skeletonHandle; }
         AssetHandle GetSkeletonHandle() const { return m_SkeletonHandle; }
 
-        virtual bool Serialize(const std::filesystem::path &filepath);
-        static Ref<AnimationMontage> Deserialize(const std::filesystem::path &filepath);
+        virtual bool Serialize(const ignite::Path &filepath);
+        static Ref<AnimationMontage> Deserialize(const ignite::Path &filepath);
 
         static AssetType GetStaticType() { return AssetType::AnimationMontage; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }

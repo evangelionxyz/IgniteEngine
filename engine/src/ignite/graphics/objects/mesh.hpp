@@ -14,7 +14,7 @@
 
 #include <tinygltf.h>
 #include <nvrhi/nvrhi.h>
-#include <filesystem>
+#include "ignite/core/path.hpp"
 #include <unordered_map>
 
 namespace fbxsdk
@@ -183,8 +183,8 @@ namespace ignite
         void SetAnimator(AssetHandle handle) { m_AnimatorHandle = handle; }
         AssetHandle GetAnimatorHandle() const { return m_AnimatorHandle; }
 
-        virtual bool Serialize(const std::filesystem::path &filepath) override;
-        static Ref<Mesh> Deserialize(const std::filesystem::path &filepath);
+        virtual bool Serialize(const ignite::Path &filepath) override;
+        static Ref<Mesh> Deserialize(const ignite::Path &filepath);
 
         AABB aabb;
     private:
@@ -239,7 +239,7 @@ namespace ignite
         static void LoadSkeletonOnlyFromFBX(const std::string &filename, Ref<Skeleton> &skeleton, AssetManager *assetManager);
         static void LoadAnimationsOnlyFromFBX(const std::string &filename, Ref<Skeleton> skeleton, std::vector<Ref<SkeletalAnimation>> &outAnimations, AssetManager *assetManager);
 
-        static void BuildNode(fbxsdk::FbxNode *node, fbxsdk::FbxScene *fbxScene, MeshScene &outscene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, float scaleFactor, bool importSkinningData = true);
+        static void BuildNode(fbxsdk::FbxNode *node, fbxsdk::FbxScene *fbxScene, MeshScene &outscene, MaterialLoader &materialLoader, JointLoader &jointLoader, const ignite::Path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, float scaleFactor, bool importSkinningData = true);
 
         static Ref<Skeleton> LoadSkeletonFBX(fbxsdk::FbxScene *fbxScene, JointLoader &outJointResult, float scaleFactor);
         static void LoadAnimationsFBX(fbxsdk::FbxScene *fbxScene, const Ref<Skeleton> &skeleton, JointMap &jointNodes, std::vector<Ref<SkeletalAnimation>> &outAnimations, float scaleFactor);

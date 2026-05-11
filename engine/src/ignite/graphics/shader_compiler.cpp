@@ -1,7 +1,7 @@
 #include "shader_compiler.hpp"
 /* MIT License
 *
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2025 Evangelion Manuhutu
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -182,7 +182,7 @@ namespace ignite
 			}
 
 			// Include directories
-			for (const std::filesystem::path& path : options.includeDirectories)
+			for (const ignite::Path& path : options.includeDirectories)
 			{
 				args.push_back(L"-I");
 				args.push_back(path.wstring());
@@ -347,13 +347,13 @@ namespace ignite
 			if (isSucceeded)
 			{
 				std::string outputExtension = ShaderPlatformExtension(options.platformType);
-				std::filesystem::path parentPath = options.filepath.parent_path();
+				ignite::Path parentPath = options.filepath.parent_path();
 				if (!options.outputFilepath.empty())
 				{
 					parentPath = options.outputFilepath;
 				}
 
-				std::filesystem::path filename = parentPath / options.filepath.filename().replace_extension(outputExtension);
+				ignite::Path filename = parentPath / options.filepath.filename().replace_extension(outputExtension);
 
 				size_t bufferSize = shaderBlob->GetBufferSize();
 				const void* bufferPtr = shaderBlob->GetBufferPointer();

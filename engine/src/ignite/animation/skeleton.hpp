@@ -62,8 +62,8 @@ namespace ignite
         void RebuildSocketMap();
         glm::mat4 GetSocketWorldTransform(const std::string &socketName) const;
 
-        virtual bool Serialize(const std::filesystem::path &filepath) override;
-        static Ref<Skeleton> Deserialize(const std::filesystem::path &filepath);
+        virtual bool Serialize(const ignite::Path &filepath) override;
+        static Ref<Skeleton> Deserialize(const ignite::Path &filepath);
 
         static AssetType GetStaticType() { return AssetType::Skeleton; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }

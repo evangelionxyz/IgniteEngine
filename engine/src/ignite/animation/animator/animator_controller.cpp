@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "animator_controller.hpp"
 
 #include "ignite/asset/asset_manager.hpp"
@@ -89,7 +91,7 @@ namespace ignite
         return it != states.end() ? &(*it) : nullptr;
     }
 
-    bool AnimatorController::Serialize(const std::filesystem::path &filepath)
+    bool AnimatorController::Serialize(const ignite::Path &filepath)
     {
         YAML::Emitter out;
         out << YAML::BeginMap;
@@ -181,9 +183,9 @@ namespace ignite
         return true;
     }
 
-    Ref<AnimatorController> AnimatorController::Deserialize(const std::filesystem::path &filepath)
+    Ref<AnimatorController> AnimatorController::Deserialize(const ignite::Path &filepath)
     {
-        if (!std::filesystem::exists(filepath))
+        if (!ignite::Path::exists(filepath))
         {
             LOG_ERROR("[AnimatorController] File does not exists {}", filepath.string());
             return nullptr;

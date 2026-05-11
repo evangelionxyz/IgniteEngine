@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "mesh.hpp"
 #include "ignite/core/time.hpp"
 #include "ignite/project/project.hpp"
@@ -17,7 +19,6 @@
 #include <cmath>
 
 #include <fbxsdk.h>
-
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -185,7 +186,7 @@ namespace ignite
         }
 
         static bool TryLoadFBXTextureFromProperty(FbxSurfaceMaterial *material, const std::initializer_list<const char *> &propertyNames,
-            const std::filesystem::path &sourceDir, FBXMeshLoader::MaterialLoader &materialLoader, MeshScene::MaterialTextureMap &textureMap)
+            const ignite::Path &sourceDir, FBXMeshLoader::MaterialLoader &materialLoader, MeshScene::MaterialTextureMap &textureMap)
         {
             if (!material)
             {
@@ -214,7 +215,7 @@ namespace ignite
                         continue;
                     }
 
-                    std::filesystem::path texturePath = fbxTexture->GetFileName();
+                    ignite::Path texturePath = fbxTexture->GetFileName();
                     if (texturePath.empty())
                     {
                         texturePath = fbxTexture->GetRelativeFileName();
@@ -231,7 +232,7 @@ namespace ignite
                     }
 
                     texturePath = texturePath.lexically_normal();
-                    if (!std::filesystem::exists(texturePath))
+                    if (!ignite::Path::exists(texturePath))
                     {
                         continue;
                     }
@@ -614,13 +615,13 @@ namespace ignite
         return CreateRef<Mesh>();
     }
 
-    bool Mesh::Serialize(const std::filesystem::path &filepath)
+    bool Mesh::Serialize(const ignite::Path &filepath)
     {
         BinarySerializer::SerializeMesh(this, filepath);
         return true;
     }
 
-    Ref<Mesh> Mesh::Deserialize(const std::filesystem::path &filepath)
+    Ref<Mesh> Mesh::Deserialize(const ignite::Path &filepath)
     {
         return BinarySerializer::DeserializeMesh(filepath);
     }
@@ -1158,7 +1159,7 @@ namespace ignite
                 outScene.animations.clear();
             }
 
-            const std::filesystem::path sourceDir = std::filesystem::path(filename).parent_path();
+            const ignite::Path sourceDir = ignite::Path(filename).parent_path();
 
             MaterialLoader materialLoader;
             FbxNode *rootNode = fbxScene->GetRootNode();
@@ -1306,7 +1307,7 @@ namespace ignite
         }
     }
 
-    void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene &outScene, MaterialLoader &materialLoader, JointLoader &jointLoader, const std::filesystem::path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, float scaleFactor, bool importSkinningData)
+    void FBXMeshLoader::BuildNode(FbxNode *node, FbxScene *fbxScene, MeshScene &outScene, MaterialLoader &materialLoader, JointLoader &jointLoader, const ignite::Path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, float scaleFactor, bool importSkinningData)
     {
         if (!node)
         {
@@ -1909,7 +1910,7 @@ namespace ignite
 
     void MeshLoader::LoadSceneGraph(const std::string &filename, MeshScene &outScene, AssetManager *assetManager)
     {
-        const std::string extension = ToLowerCopy(std::filesystem::path(filename).extension().string());
+        const std::string extension = ToLowerCopy(ignite::Path(filename).extension().string());
         if (extension == ".fbx")
         {
             FBXMeshLoader::LoadSceneGraphFromFBX(filename, outScene, assetManager);

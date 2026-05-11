@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "blend_space.hpp"
 
 #include "ignite/core/logger.hpp"
@@ -12,7 +14,7 @@
 
 namespace ignite
 {
-    bool BlendSpace::Serialize(const std::filesystem::path &filepath)
+    bool BlendSpace::Serialize(const ignite::Path &filepath)
     {
         YAML::Emitter out;
         out << YAML::BeginMap;
@@ -49,9 +51,9 @@ namespace ignite
         return true;
     }
 
-    Ref<BlendSpace> BlendSpace::Deserialize(const std::filesystem::path &filepath)
+    Ref<BlendSpace> BlendSpace::Deserialize(const ignite::Path &filepath)
     {
-        if (!std::filesystem::exists(filepath))
+        if (!ignite::Path::exists(filepath))
         {
             return nullptr;
         }

@@ -1,5 +1,6 @@
-//Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
+// Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 
+#include "pch.hpp"
 #include "editor_layer.hpp"
 #include "panels/scene_panel.hpp"
 #include "panels/content_browser_panel.hpp"
@@ -1020,7 +1021,7 @@ namespace ignite
         }
     }
 
-    void EditorLayer::SaveScene(const std::filesystem::path &filepath) const
+    void EditorLayer::SaveScene(const ignite::Path &filepath) const
     {
         SceneSerializer serializer(m_ActiveScene, m_ActiveProject.get());
         serializer.Serialize(filepath);
@@ -1042,7 +1043,7 @@ namespace ignite
             nullptr, false);
     }
 
-    void EditorLayer::OpenScene(const std::filesystem::path &filepath)
+    void EditorLayer::OpenScene(const ignite::Path &filepath)
     {
         AssetHandle openSceneHandle = m_ActiveProject->GetAssetManager()->GetAssetHandle(filepath);
 
@@ -1111,7 +1112,7 @@ namespace ignite
             nullptr, false);
     }
 
-    void EditorLayer::OpenProject(const std::filesystem::path &filepath)
+    void EditorLayer::OpenProject(const ignite::Path &filepath)
     {
         if (filepath == m_CurrentProjectFilepath)
         {
@@ -1366,7 +1367,7 @@ namespace ignite
         if (!filepath.empty())
         {
             EditorLayer *editor = static_cast<EditorLayer *>(userData);
-            editor->m_State.projectCreateInfo.filepath = std::filesystem::path(filepath) / editor->m_State.projectCreateInfo.name; // Append project name
+            editor->m_State.projectCreateInfo.filepath = ignite::Path(filepath) / editor->m_State.projectCreateInfo.name; // Append project name
         }
     }
 
@@ -1384,7 +1385,7 @@ namespace ignite
                     if (pf.metadata.type == AssetType::Scene)
                     {
                         // Submit scene loading to asset worker
-                        std::filesystem::path filepath = pf.metadata.filepath;
+                        ignite::Path filepath = pf.metadata.filepath;
                         AssetHandle sceneHandle = m_ActiveProject->GetAssetManager()->GetAssetHandle(filepath);
 
                         if (m_CurrentSceneHandle == sceneHandle)
@@ -1452,7 +1453,7 @@ namespace ignite
                     }
                     else if (pf.metadata.type == AssetType::Project)
                     {
-                        std::filesystem::path filepath = pf.metadata.filepath;
+                        ignite::Path filepath = pf.metadata.filepath;
 
                         if (filepath == m_CurrentProjectFilepath)
                         {
@@ -1528,7 +1529,7 @@ namespace ignite
                     if (pf.metadata.type == AssetType::Scene)
                     {
                         // Submit scene save to asset worker
-                        std::filesystem::path filepath = pf.metadata.filepath;
+                        ignite::Path filepath = pf.metadata.filepath;
 
                         AssetWorker::SubmitJob([this, filepath]()
                         {
@@ -1590,7 +1591,7 @@ namespace ignite
             if (!pathStr.empty()) strncpy(pathBuf, pathStr.c_str(), sizeof(pathBuf) - 1);
             if (ImGui::InputText("##ProjectLocation", pathBuf, sizeof(pathBuf)))
             {
-                m_State.projectCreateInfo.filepath = std::filesystem::path(pathBuf);
+                m_State.projectCreateInfo.filepath = ignite::Path(pathBuf);
             }
             ImGui::PopItemWidth();
             ImGui::SameLine();
@@ -1599,7 +1600,7 @@ namespace ignite
                 std::string filepath = FileDialogs::SelectFolder();
                 if (!filepath.empty())
                 {
-                    m_State.projectCreateInfo.filepath = std::filesystem::path(filepath) / m_State.projectCreateInfo.name;
+                    m_State.projectCreateInfo.filepath = ignite::Path(filepath) / m_State.projectCreateInfo.name;
                 }
             }
 
@@ -1919,7 +1920,7 @@ namespace ignite
                     const std::string &handleStr = std::to_string(handle);
                     const std::string &typeStr = stringutils::ToLower(AssetTypeToString(metadata.type));
                     const std::string &filepathStr = stringutils::ToLower(
-                        std::filesystem::absolute(m_ActiveProject->GetProjectFilepath(metadata.filepath)).generic_string());
+                        std::filesystem::absolute(m_ActiveProject->GetProjectFilepath(metadata.filepath).string()).generic_string());
 
                     if (handleStr.find(findKey) == std::string::npos &&
                         typeStr.find(findKey) == std::string::npos &&
@@ -2015,7 +2016,7 @@ namespace ignite
                         std::string displayPath;
                         if (showFullPath)
                         {
-                            displayPath = std::filesystem::absolute(m_ActiveProject->GetProjectFilepath(metadata.filepath)).generic_string();
+                            displayPath = std::filesystem::absolute(m_ActiveProject->GetProjectFilepath(metadata.filepath).string()).generic_string();
                         }
                         else
                         {
@@ -2092,7 +2093,7 @@ namespace ignite
                         std::string displayPath;
                         if (showFullPath)
                         {
-                            displayPath = std::filesystem::absolute(m_ActiveProject->GetProjectFilepath(metadata.filepath)).generic_string();
+                            displayPath = std::filesystem::absolute(m_ActiveProject->GetProjectFilepath(metadata.filepath).string()).generic_string();
                         }
                         else
                         {

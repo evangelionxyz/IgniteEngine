@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "pch.hpp"
 #include "node_graph.hpp"
 
 #include <algorithm>

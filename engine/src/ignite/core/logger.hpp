@@ -11,7 +11,7 @@
 #include <spdlog/async.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
-#include <filesystem>
+#include "ignite/core/path.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/string_cast.hpp>
@@ -38,7 +38,7 @@ namespace ignite
 
 namespace fmt {
 template<>
-struct formatter<std::filesystem::path>
+struct formatter<ignite::Path>
 {
     template<typename ParseContext>
     constexpr auto parse(ParseContext &ctx)
@@ -47,7 +47,7 @@ struct formatter<std::filesystem::path>
     }
 
     template<typename FormatContext>
-    auto format(const std::filesystem::path &filepath, FormatContext &ctx) const
+    auto format(const ignite::Path &filepath, FormatContext &ctx) const
     {
         return fmt::format_to(ctx.out(), "{}", filepath.generic_string());
     }

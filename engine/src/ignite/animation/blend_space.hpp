@@ -29,8 +29,8 @@ namespace ignite
         glm::vec2 axisMax = glm::vec2(1.0f);
         std::vector<BlendSpaceSample> samples;
 
-        virtual bool Serialize(const std::filesystem::path &filepath) override;
-        static Ref<BlendSpace> Deserialize(const std::filesystem::path &filepath);
+        virtual bool Serialize(const ignite::Path &filepath) override;
+        static Ref<BlendSpace> Deserialize(const ignite::Path &filepath);
 
         static AssetType GetStaticType() { return AssetType::BlendSpace; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }

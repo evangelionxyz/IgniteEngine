@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "script_host.hpp"
 #include "ignite/core/logger.hpp"
 #include "glue/component_script_glue.hpp"
@@ -31,7 +33,7 @@ namespace ignite
         }
     }
 
-    bool ScriptHost::Init(const std::filesystem::path &configPath)
+    bool ScriptHost::Init(const ignite::Path &configPath)
     {
         if (m_Initialized)
         {
@@ -53,7 +55,7 @@ namespace ignite
         return true;
     }
 
-    bool ScriptHost::LoadAssembly(const std::filesystem::path &assemblyPath)
+    bool ScriptHost::LoadAssembly(const ignite::Path &assemblyPath)
     {
         if (!m_Initialized)
         {
@@ -408,7 +410,7 @@ namespace ignite
         return success;
     }
 
-    std::string ScriptHost::GetDerivedTypes(const std::filesystem::path &assemblyPath, const std::string &baseType)
+    std::string ScriptHost::GetDerivedTypes(const ignite::Path &assemblyPath, const std::string &baseType)
     {
         if (!m_Initialized)
         {
@@ -420,7 +422,7 @@ namespace ignite
         return m_Host->GetDerivedTypes(path.c_str(), baseType.c_str());
     }
 
-    std::string ScriptHost::GetCreateAssetMenuData(const std::filesystem::path &assemblyPath, const std::string &baseType)
+    std::string ScriptHost::GetCreateAssetMenuData(const ignite::Path &assemblyPath, const std::string &baseType)
     {
         if (!m_Initialized)
         {

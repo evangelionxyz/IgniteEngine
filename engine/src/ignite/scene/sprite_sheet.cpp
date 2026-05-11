@@ -1,11 +1,13 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "sprite_sheet.hpp"
 #include "ignite/serializer/serializer.hpp"
 
 namespace ignite
 {
-	bool SpriteSheet::Serialize(const std::filesystem::path &filepath)
+	bool SpriteSheet::Serialize(const ignite::Path &filepath)
 	{
 		YAML::Emitter out;
 		out << YAML::BeginMap;
@@ -36,9 +38,9 @@ namespace ignite
 		return true;
 	}
 
-	Ref<SpriteSheet> SpriteSheet::Deserialize(const std::filesystem::path &filepath)
+	Ref<SpriteSheet> SpriteSheet::Deserialize(const ignite::Path &filepath)
 	{
-		if (!std::filesystem::exists(filepath))
+		if (!ignite::Path::exists(filepath))
 		{
 			return nullptr;
 		}

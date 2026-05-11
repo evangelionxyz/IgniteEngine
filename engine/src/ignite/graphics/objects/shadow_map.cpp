@@ -1,5 +1,6 @@
-// Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+// Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
 
 #include "ignite/graphics/gpu_data.hpp"
 

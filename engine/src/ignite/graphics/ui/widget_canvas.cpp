@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "widget_canvas.hpp"
 #include "widget_container.hpp"
 #include "widget_label.hpp"
@@ -27,7 +29,7 @@ namespace ignite
         return m_NextWidgetItemId++;
     }
 
-    bool WidgetCanvas::Serialize(const std::filesystem::path &filepath)
+    bool WidgetCanvas::Serialize(const ignite::Path &filepath)
     {
         Serializer sr(filepath);
         sr.BeginMap();
@@ -136,9 +138,9 @@ namespace ignite
         return true;
     }
 
-    Ref<WidgetCanvas> WidgetCanvas::Deserialize(const std::filesystem::path &filepath)
+    Ref<WidgetCanvas> WidgetCanvas::Deserialize(const ignite::Path &filepath)
     {
-        if (!std::filesystem::exists(filepath))
+        if (!ignite::Path::exists(filepath))
         {
             return nullptr;
         }

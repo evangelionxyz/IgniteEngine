@@ -1,4 +1,5 @@
 // Copyright (c) 2026 Evangelion Manuhutu
+#include "ignite_pch.hpp"
 
 #include "asset.hpp"
 
@@ -7,7 +8,7 @@
 
 namespace ignite
 {
-    bool Asset::SerializeMetaFile(const std::filesystem::path &filepath, const MetaSerializer &customSerializer) const
+    bool Asset::SerializeMetaFile(const ignite::Path &filepath, const MetaSerializer &customSerializer) const
     {
         if (filepath.empty())
         {

@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #ifndef RENDERER_2D_HPP
 #define RENDERER_2D_HPP

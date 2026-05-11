@@ -52,6 +52,9 @@ def run():
             premake_args.append("pause")
             subprocess.call(premake_args, cwd=ROOT_DIR)
 
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        input("Press any key to continue")
+
 
 if __name__ == "__main__":
     run()

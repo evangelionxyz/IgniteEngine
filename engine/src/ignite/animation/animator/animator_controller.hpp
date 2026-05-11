@@ -48,8 +48,8 @@ namespace ignite
         AnimState *FindState(const std::string &name);
         const AnimState *FindState(const std::string &name) const;
 
-        virtual bool Serialize(const std::filesystem::path &filepath) override;
-        static Ref<AnimatorController> Deserialize(const std::filesystem::path &filepath);
+        virtual bool Serialize(const ignite::Path &filepath) override;
+        static Ref<AnimatorController> Deserialize(const ignite::Path &filepath);
         static Ref<AnimatorController> Create();
 
         static AssetType GetStaticAssetType() { return AssetType::AnimatorController; }

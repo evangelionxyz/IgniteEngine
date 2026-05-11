@@ -1,6 +1,6 @@
 /* MIT License
 * 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2025 Evangelion Manuhutu
 * 
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -379,12 +379,12 @@ namespace ignite
         {
 			// TODO: implement multiple file drop
 #if 0
-            std::vector<std::filesystem::path> filepaths(event.drop.reserved);
+            std::vector<ignite::Path> filepaths(event.drop.reserved);
 
             LOG_INFO("Paths: ");
             for (uint32_t i = 0; i < static_cast<uint32_t>(filepaths.size()); i++)
             {
-                filepaths[i] = std::filesystem::path(std::string(event.drop.data));
+                filepaths[i] = ignite::Path(std::string(event.drop.data));
                 LOG_INFO(" {}", filepaths[i].generic_string().c_str());
             }
 

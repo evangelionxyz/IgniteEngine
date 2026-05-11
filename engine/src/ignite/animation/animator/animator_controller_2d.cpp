@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "animator_controller_2d.hpp"
 #include "ignite/core/logger.hpp"
 
@@ -60,7 +62,7 @@ namespace ignite
     // -----------------------------------------------------------------------
     // Serialize
     // -----------------------------------------------------------------------
-    bool AnimatorController2D::Serialize(const std::filesystem::path &filepath)
+    bool AnimatorController2D::Serialize(const ignite::Path &filepath)
     {
         YAML::Emitter out;
         out << YAML::BeginMap;
@@ -159,9 +161,9 @@ namespace ignite
     // -----------------------------------------------------------------------
     // Deserialize
     // -----------------------------------------------------------------------
-    Ref<AnimatorController2D> AnimatorController2D::Deserialize(const std::filesystem::path &filepath)
+    Ref<AnimatorController2D> AnimatorController2D::Deserialize(const ignite::Path &filepath)
     {
-        if (!std::filesystem::exists(filepath))
+        if (!ignite::Path::exists(filepath))
         {
             LOG_ERROR("[AnimCtrl2D] File does not exist: {}", filepath.string());
             return nullptr;

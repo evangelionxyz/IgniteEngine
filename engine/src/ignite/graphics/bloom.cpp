@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "bloom.hpp"
 
 #include "buffers/vertex_buffer.hpp"

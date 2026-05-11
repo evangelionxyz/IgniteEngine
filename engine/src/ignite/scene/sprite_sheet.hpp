@@ -7,7 +7,7 @@
 #include "ignite/math/math.hpp"
 
 #include <vector>
-#include <filesystem>
+#include "ignite/core/path.hpp"
 #include <yaml-cpp/yaml.h>
 #include <fstream>
 
@@ -52,8 +52,8 @@ namespace ignite
 		std::vector<Data> &GetSprites() { return m_Sprites; }
 		const std::vector<Data> &GetSprites() const { return m_Sprites; }
 
-		virtual bool Serialize(const std::filesystem::path &filepath) override;
-		static Ref<SpriteSheet> Deserialize(const std::filesystem::path &filepath);
+		virtual bool Serialize(const ignite::Path &filepath) override;
+		static Ref<SpriteSheet> Deserialize(const ignite::Path &filepath);
 
 		static AssetType GetStaticType() { return AssetType::SpriteSheet; }
 		virtual AssetType GetAssetType() override { return GetStaticType(); }

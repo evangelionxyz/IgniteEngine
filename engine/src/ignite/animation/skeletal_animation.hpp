@@ -45,8 +45,8 @@ namespace ignite
         bool isPlaying = false;
         std::unordered_map<int, AnimationChannel> channels;
 
-        virtual bool Serialize(const std::filesystem::path &filepath) override;
-        static Ref<SkeletalAnimation> Deserialize(const std::filesystem::path &filepath);
+        virtual bool Serialize(const ignite::Path &filepath) override;
+        static Ref<SkeletalAnimation> Deserialize(const ignite::Path &filepath);
 
         void SetSkeletonHandle(UUID skeletonHandle);
         UUID GetSkeletonHandle() { return m_SkeletonHandle; }

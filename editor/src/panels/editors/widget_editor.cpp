@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "pch.hpp"
 #include "widget_editor.hpp"
 #include "states.hpp"
 #include "ext/editor_ui.hpp"

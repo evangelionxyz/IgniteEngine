@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "widget_label.hpp"
 #include "ignite/graphics/font.hpp"
 

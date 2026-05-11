@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "skeleton.hpp"
 #include "ignite/serializer/binary_serializer.hpp"
 
@@ -82,13 +84,13 @@ namespace ignite
         return joints[static_cast<size_t>(socket.parentJointId)].globalTransform * socketLocal;
     }
 
-    bool Skeleton::Serialize(const std::filesystem::path &filepath)
+    bool Skeleton::Serialize(const ignite::Path &filepath)
     {
         BinarySerializer::SerializeSkeleton(this, filepath);
         return true;
     }
 
-    Ref<Skeleton> Skeleton::Deserialize(const std::filesystem::path &filepath)
+    Ref<Skeleton> Skeleton::Deserialize(const ignite::Path &filepath)
     {
         auto skeleton = BinarySerializer::DeserializeSkeleton(filepath);
         if (skeleton)

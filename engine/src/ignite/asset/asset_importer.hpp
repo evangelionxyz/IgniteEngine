@@ -49,7 +49,7 @@ namespace ignite
 
     struct AssetImporterPayload
     {
-        std::filesystem::path targetDirectory;
+        ignite::Path targetDirectory;
         AssetType assetType = AssetType::Invalid;
     };
 
@@ -60,14 +60,14 @@ namespace ignite
         bool importAnimations = true;
         bool importMaterials = true;
         bool forceRebuild = false;
-        std::filesystem::path targetDirectory;
+        ignite::Path targetDirectory;
         bool useExistingSkeletonForAnimations = false;
         AssetHandle existingSkeletonHandle = AssetHandle(0);
     };
 
     struct StaticMeshImportOptions
     {
-        std::filesystem::path targetDirectory;
+        ignite::Path targetDirectory;
     };
 
     class AssetImporter

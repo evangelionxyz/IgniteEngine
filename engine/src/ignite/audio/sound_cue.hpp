@@ -15,7 +15,7 @@ namespace ignite
     public:
         SoundCue();
 
-        void AddSound(const std::filesystem::path &filepath);
+        void AddSound(const ignite::Path &filepath);
         void AddSound(Ref<FmodSound> sound);
 
         void AddDSP(Ref<FmodDsp> dsp);

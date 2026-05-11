@@ -1,5 +1,6 @@
 //Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 
+#include "pch.hpp"
 #include <ignite/entry_point.hpp>
 #include <ignite/core/application.hpp>
 #include "editor_layer.hpp"
@@ -20,7 +21,7 @@ namespace ignite
     {
         ApplicationCreateInfo createInfo;
         createInfo.cmdLineArgs = args;
-		createInfo.name = "Ignite Editor";
+        createInfo.name = "Ignite Editor";
         createInfo.width = 1640;
         createInfo.height = 940;
         createInfo.useGui = true;

@@ -8,7 +8,7 @@
 
 #include <string>
 #include <memory>
-#include <filesystem>
+#include "ignite/core/path.hpp"
 #include <unordered_map>
 
 namespace ignite
@@ -55,10 +55,10 @@ namespace ignite
         ~ScriptHost();
 
         // Initialize the .NET runtime with the specified config
-        bool Init(const std::filesystem::path &configPath);
+        bool Init(const ignite::Path &configPath);
 
         // Load a .NET assembly (core or app)
-        bool LoadAssembly(const std::filesystem::path &assemblyPath);
+        bool LoadAssembly(const ignite::Path &assemblyPath);
 
         // Register method signatures for script methods
         void RegisterSignatures();
@@ -87,8 +87,8 @@ namespace ignite
         bool Invoke(int methodId, const void *argsPtr, int argCount, void *returnPtr);
 
         // Get all non-abstract classes derived from baseType in an assembly
-        std::string GetDerivedTypes(const std::filesystem::path &assemblyPath, const std::string &baseType);
-        std::string GetCreateAssetMenuData(const std::filesystem::path &assemblyPath, const std::string &baseType);
+        std::string GetDerivedTypes(const ignite::Path &assemblyPath, const std::string &baseType);
+        std::string GetCreateAssetMenuData(const ignite::Path &assemblyPath, const std::string &baseType);
 
         // Check if initialized
         bool IsInitialized() const { return m_Initialized; }
@@ -99,7 +99,7 @@ namespace ignite
     private:
         std::unique_ptr<MochiSharp::DotNetHost> m_Host;
         bool m_Initialized = false;
-        std::filesystem::path m_BaseDir;
+        ignite::Path m_BaseDir;
         std::unordered_map<std::string, int> m_InstanceMap; // GUID -> instance ID
     };
 }

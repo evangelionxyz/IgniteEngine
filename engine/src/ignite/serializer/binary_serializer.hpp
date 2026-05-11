@@ -1,6 +1,6 @@
 /* MIT License
 * 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2025 Evangelion Manuhutu
 * 
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -34,7 +34,7 @@
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/objects/mesh.hpp"
 
-#include <filesystem>
+#include "ignite/core/path.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -128,7 +128,7 @@ namespace ignite
         }
 
 
-        static bool SerializeTextureToPNG(const Ref<Texture> &texture, const std::filesystem::path &filepath)
+        static bool SerializeTextureToPNG(const Ref<Texture> &texture, const ignite::Path &filepath)
         {
             if (!texture)
                 return false;
@@ -153,8 +153,8 @@ namespace ignite
             }
             else
             {
-                const std::filesystem::path &sourceFilepath = texture->GetFilepath();
-                if (sourceFilepath.empty() || !std::filesystem::exists(sourceFilepath))
+                const ignite::Path &sourceFilepath = texture->GetFilepath();
+                if (sourceFilepath.empty() || !ignite::Path::exists(sourceFilepath))
                     return false;
 
                 int sourceWidth = 0;
@@ -178,7 +178,7 @@ namespace ignite
             return result == 1;
         }
 
-        static bool SerializeTextureToEXR(const Ref<Texture> &texture, const std::filesystem::path &filepath)
+        static bool SerializeTextureToEXR(const Ref<Texture> &texture, const ignite::Path &filepath)
         {
             if (!texture)
             {
@@ -379,7 +379,7 @@ namespace ignite
             return success;
         }
 
-        static std::vector<std::byte> SerializeMaterial(const Ref<Material> &mat, const std::filesystem::path &filepath)
+        static std::vector<std::byte> SerializeMaterial(const Ref<Material> &mat, const ignite::Path &filepath)
         {
             std::vector<std::byte> buffer;
 
@@ -407,7 +407,7 @@ namespace ignite
             return buffer;
         }
 
-        static Ref<Material> DeserializeMaterial(const std::filesystem::path &filepath)
+        static Ref<Material> DeserializeMaterial(const ignite::Path &filepath)
         {
             Ref<Material> mat = CreateRef<Material>();
             std::ifstream inFile(filepath, std::ios::binary);
@@ -442,7 +442,7 @@ namespace ignite
             return mat;
         }
 
-        static std::vector<std::byte> SerializeMesh(const Mesh *mesh, const std::filesystem::path &filepath)
+        static std::vector<std::byte> SerializeMesh(const Mesh *mesh, const ignite::Path &filepath)
         {
             std::vector<std::byte> buffer;
 
@@ -510,7 +510,7 @@ namespace ignite
             return buffer;
         }
 
-        static Ref<Mesh> DeserializeMesh(const std::filesystem::path &filepath)
+        static Ref<Mesh> DeserializeMesh(const ignite::Path &filepath)
         {
             Ref<Mesh> skeletalMesh = Mesh::Create();
 
@@ -598,7 +598,7 @@ namespace ignite
             return skeletalMesh;
         }
 
-        static std::vector<std::byte> SerializeSkeletalAnimation(SkeletalAnimation *anim, const std::filesystem::path &filepath)
+        static std::vector<std::byte> SerializeSkeletalAnimation(SkeletalAnimation *anim, const ignite::Path &filepath)
         {
             std::vector<std::byte> buffer;
 
@@ -668,7 +668,7 @@ namespace ignite
             return buffer;
         }
 
-        static Ref<SkeletalAnimation> DeserializeSkeletalAnimation(const std::filesystem::path &filepath)
+        static Ref<SkeletalAnimation> DeserializeSkeletalAnimation(const ignite::Path &filepath)
         {
             Ref<SkeletalAnimation> anim = CreateRef<SkeletalAnimation>();
 
@@ -777,7 +777,7 @@ namespace ignite
             return anim;
         }
 
-        static std::vector<std::byte> SerializeSkeleton(Skeleton *skeleton, const std::filesystem::path &filepath)
+        static std::vector<std::byte> SerializeSkeleton(Skeleton *skeleton, const ignite::Path &filepath)
         {
             std::vector<std::byte> buffer;
 
@@ -864,7 +864,7 @@ namespace ignite
             return buffer;
         }
 
-        static Ref<Skeleton> DeserializeSkeleton(const std::filesystem::path &filepath)
+        static Ref<Skeleton> DeserializeSkeleton(const ignite::Path &filepath)
         {
             Ref<Skeleton> skeleton = CreateRef<Skeleton>();
 

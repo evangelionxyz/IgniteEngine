@@ -19,7 +19,7 @@
 
 #include <queue>
 #include <mutex>
-#include <filesystem>
+#include "ignite/core/path.hpp"
 
 namespace ignite
 {

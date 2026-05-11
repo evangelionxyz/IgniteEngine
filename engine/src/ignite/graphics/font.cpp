@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "font.hpp"
 
 #include "ignite/core/logger.hpp"
@@ -117,7 +119,7 @@ namespace ignite
         return atlas;
     }
 
-    Font::Font(const std::filesystem::path &filepath)
+    Font::Font(const ignite::Path &filepath)
     {
         LoadGlyphs(filepath);
     }
@@ -127,7 +129,7 @@ namespace ignite
         m_Glyphs.clear();
     }
 
-	Ref<Font> Font::Create(const std::filesystem::path &filepath)
+	Ref<Font> Font::Create(const ignite::Path &filepath)
 	{
 		return CreateRef<Font>(filepath);
 	}
@@ -197,7 +199,7 @@ namespace ignite
 		return glm::vec2(static_cast<float>(maxX), static_cast<float>(-minY));
 	}
 
-	void Font::LoadGlyphs(const std::filesystem::path &filepath)
+	void Font::LoadGlyphs(const ignite::Path &filepath)
 	{
         msdfgen::FreetypeHandle *ft = msdfgen::initializeFreetype();
 

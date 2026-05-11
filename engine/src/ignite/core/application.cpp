@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "application.hpp"
 #include "input/app_event.hpp"
 #include "ignite/imgui/imgui_layer.hpp"

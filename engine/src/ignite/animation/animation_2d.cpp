@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
+#include "ignite_pch.hpp"
+
 #include "animation_2d.hpp"
 #include "ignite/core/logger.hpp"
 
@@ -64,7 +66,7 @@ namespace ignite
         return std::min(elapsed_total / totalDuration, 1.0f);
     }
 
-    bool Animation2D::Serialize(const std::filesystem::path &filepath)
+    bool Animation2D::Serialize(const ignite::Path &filepath)
     {
         YAML::Emitter out;
         out << YAML::BeginMap;
@@ -100,9 +102,9 @@ namespace ignite
         return true;
     }
 
-    Ref<Animation2D> Animation2D::Deserialize(const std::filesystem::path &filepath)
+    Ref<Animation2D> Animation2D::Deserialize(const ignite::Path &filepath)
     {
-        if (!std::filesystem::exists(filepath))
+        if (!ignite::Path::exists(filepath))
         {
             LOG_ERROR("[Animation2D] File does not exist: {}", filepath.string());
             return nullptr;
