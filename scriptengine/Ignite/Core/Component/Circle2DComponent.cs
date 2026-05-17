@@ -11,13 +11,13 @@ public class Circle2DComponent : IComponent
     {
         get
         {
-            ComponentInternalCalls.Circle2DComponent_GetColor(Entity.ID, out Vector4 result);
+            ComponentInternalCalls.Circle2DComponent_GetColor(Entity!.ID, out Vector4 result);
             return result;
         }
 
         set
         {
-            ComponentInternalCalls.Circle2DComponent_SetColor(Entity.ID, value);
+            ComponentInternalCalls.Circle2DComponent_SetColor(Entity!.ID, value);
         }
     }
 }

@@ -75,12 +75,12 @@ namespace ignite
         }
 
         // Bind lifecycle methods
-        m_OnCreateMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnCreate", ScriptMethodSig::Void);
-        m_OnDestroyMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnDestroy", ScriptMethodSig::Void);
-        m_OnUpdateMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnUpdate", ScriptMethodSig::Void_Float);
+        m_OnCreateMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnCreate");
+        m_OnDestroyMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnDestroy");
+        m_OnUpdateMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnUpdate");
 
         // Set Entity ID on managed instance if available
-        const int setIdMethod = scriptClass->BindInstanceMethod(m_InstanceId, "SetID", ScriptMethodSig::Void_UInt64);
+        const int setIdMethod = scriptClass->BindInstanceMethod(m_InstanceId, "SetID");
         if (setIdMethod)
         {
             const uint64_t entityId = static_cast<uint64_t>(m_InstanceId);

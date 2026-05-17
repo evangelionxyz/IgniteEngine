@@ -19,24 +19,24 @@ namespace ignite
         m_ScriptHost = ScriptEngine::GetInstance()->GetScriptHost();
     }
 
-    int ScriptClass::BindInstanceMethod(uint64_t instanceId, const std::string &methodName, ScriptMethodSig signature)
+    int ScriptClass::BindInstanceMethod(uint64_t instanceId, const std::string &methodName)
     {
         if (!m_ScriptHost)
         {
             return 0;
         }
 
-        return m_ScriptHost->BindInstanceMethod(instanceId, methodName, signature);
+        return m_ScriptHost->BindInstanceMethod(instanceId, methodName);
     }
 
-    int ScriptClass::BindStaticMethod(const std::string &methodName, ScriptMethodSig signature)
+    int ScriptClass::BindStaticMethod(const std::string &methodName)
     {
         if (!m_ScriptHost)
         {
             return 0;
         }
 
-        return m_ScriptHost->BindStaticMethod(m_FullName, methodName, signature);
+        return m_ScriptHost->BindStaticMethod(m_FullName, methodName);
     }
 
     void ScriptClass::InsertField(const std::string &fieldName, const ScriptField &field)

@@ -44,7 +44,7 @@ namespace ignite
             if (!success)
                 return T();
 
-            m_ScriptClass->GetInstanceFieldsById(m_InstanceId)->at(fieldName).SetValue(s_FieldValueBuffer);
+            m_ScriptClass->GetInstanceFieldsById(m_InstanceId)->at(fieldName).SetValue(*(T *)s_FieldValueBuffer);
             return *(T *)s_FieldValueBuffer;
         }
 
@@ -53,7 +53,7 @@ namespace ignite
         {
             static_assert(sizeof(T) <= 64, "Type too large!");
 
-            if (!m_ScriptHost || fieldName.empty() || &value == nullptr)
+            if (!m_ScriptHost || fieldName.empty())
             {
                 return false;
             }

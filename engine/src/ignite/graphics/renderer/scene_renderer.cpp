@@ -632,12 +632,12 @@ namespace ignite
         if (m_Scene)
         {
             m_Project = m_Scene->GetProject();
-        }
 
-        if (m_WidgetRenderer)
-        {
-            m_WidgetRenderer->SetProject(m_Project);
-            m_WidgetRenderer->SetActiveWidget(scene->GetRootWidget());
+            if (m_WidgetRenderer)
+            {
+                m_WidgetRenderer->SetProject(m_Project);
+                m_WidgetRenderer->SetActiveWidget(m_Scene->GetRootWidget());
+            }
         }
 
         s_GeometryPSOCache.clear();

@@ -38,11 +38,11 @@ public abstract class ScriptableObject : IEquatable<ScriptableObject>
     public virtual void OnUpdate(float deltaTime) { }
     public virtual void OnDestroy() { }
 
-    public override bool Equals(object obj) => obj is ScriptableObject so && Equals(so);
+    public override bool Equals(object? obj) => obj is ScriptableObject so && Equals(so);
     public override int GetHashCode() => ID.GetHashCode();
     public override string ToString() => $"{GetType().Name} [{ID}]";
 
-    public bool Equals(ScriptableObject other)
+    public bool Equals(ScriptableObject? other)
     {
         if (other is null)
             return false;

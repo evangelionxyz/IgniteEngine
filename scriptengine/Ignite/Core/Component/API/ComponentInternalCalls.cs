@@ -8,138 +8,138 @@ namespace Ignite.Core.Component;
 public static class ComponentInternalCalls
 {
     private static bool s_Initialized;
-    private static ComponentNativeAPI.Funcs.SceneGetScreenToWorldRayFn s_SceneGetScreenToWorldRay;
-    private static ComponentNativeAPI.Funcs.SceneRaycastFn s_SceneRaycast;
-    private static ComponentNativeAPI.Funcs.EntityHasComponentFn s_EntityHasComponent;
-    private static ComponentNativeAPI.Funcs.EntityAddComponentFn s_EntityAddComponent;
-    private static ComponentNativeAPI.Funcs.EntityFindEntityByNameFn s_EntityFindEntityByName;
-    private static ComponentNativeAPI.Funcs.EntityFindChildEntityByNameFn s_EntityFindChildEntityByName;
-    private static ComponentNativeAPI.Funcs.EntityIsParent s_EntityIsParent;
-    private static ComponentNativeAPI.Funcs.EntityGetParent s_EntityGetParent;
-    private static ComponentNativeAPI.Funcs.EntityInstantiateWithNameFn s_EntityInstantiateWithName;
-    private static ComponentNativeAPI.Funcs.EntityInstantiateFn s_EntityInstantiate;
-    private static ComponentNativeAPI.Funcs.EntityDestroyFn s_EntityDestroy;
-    private static ComponentNativeAPI.Funcs.EntitySetVisibilityFn s_EntitySetVisibility;
-    private static ComponentNativeAPI.Funcs.EntityGetVisibilityFn s_EntityGetVisibility;
-    private static ComponentNativeAPI.Funcs.EntityGetNameFn s_EntityGetName;
-    private static ComponentNativeAPI.Funcs.WidgetComponentHasButtonFn s_WidgetComponentHasButton;
-    private static ComponentNativeAPI.Funcs.WidgetComponentButtonEventFn s_WidgetComponentAddButtonEventCallback;
-    private static ComponentNativeAPI.Funcs.WidgetComponentHasNamedItemFn s_WidgetComponentHasLabel;
-    private static ComponentNativeAPI.Funcs.WidgetComponentGetStringByNameFn s_WidgetComponentGetLabelText;
-    private static ComponentNativeAPI.Funcs.WidgetComponentSetStringByNameFn s_WidgetComponentSetLabelText;
-    private static ComponentNativeAPI.Funcs.WidgetComponentGetVec4ByNameFn s_WidgetComponentGetLabelColor;
-    private static ComponentNativeAPI.Funcs.WidgetComponentSetVec4ByNameFn s_WidgetComponentSetLabelColor;
-    private static ComponentNativeAPI.Funcs.WidgetComponentGetFloatByNameFn s_WidgetComponentGetLabelFontSize;
-    private static ComponentNativeAPI.Funcs.WidgetComponentSetFloatByNameFn s_WidgetComponentSetLabelFontSize;
-    private static ComponentNativeAPI.Funcs.WidgetComponentHasNamedItemFn s_WidgetComponentHasImage;
-    private static ComponentNativeAPI.Funcs.WidgetComponentGetU64ByNameFn s_WidgetComponentGetImageHandle;
-    private static ComponentNativeAPI.Funcs.WidgetComponentSetU64ByNameFn s_WidgetComponentSetImageHandle;
-    private static ComponentNativeAPI.Funcs.WidgetComponentButtonEventFn s_WidgetComponentRemoveButtonEventCallback;
-    private static ComponentNativeAPI.Funcs.AudioSourceHasAudioFn s_AudioSourceHasAudio;
-    private static ComponentNativeAPI.Funcs.AudioSourceActionFn s_AudioSourcePlay;
-    private static ComponentNativeAPI.Funcs.AudioSourceActionFn s_AudioSourceStop;
-    private static ComponentNativeAPI.Funcs.AudioSourceActionFn s_AudioSourcePause;
-    private static ComponentNativeAPI.Funcs.AudioSourceActionFn s_AudioSourceResume;
-    private static CoreNativeAPI.Funcs.GetFloatFn s_AudioSourceGetVolume;
-    private static CoreNativeAPI.Funcs.SetFloatFn s_AudioSourceSetVolume;
-    private static CoreNativeAPI.Funcs.GetFloatFn s_AudioSourceGetPitch;
-    private static CoreNativeAPI.Funcs.SetFloatFn s_AudioSourceSetPitch;
-    private static CoreNativeAPI.Funcs.GetFloatFn s_AudioSourceGetPan;
-    private static CoreNativeAPI.Funcs.SetFloatFn s_AudioSourceSetPan;
-    private static CoreNativeAPI.Funcs.GetBoolFn s_AudioSourceGetPlayOnStart;
-    private static CoreNativeAPI.Funcs.SetBoolFn s_AudioSourceSetPlayOnStart;
-    private static CoreNativeAPI.Funcs.GetBoolFn s_AudioSourceGetLoop;
-    private static CoreNativeAPI.Funcs.SetBoolFn s_AudioSourceSetLoop;
-    private static ComponentNativeAPI.Funcs.AudioSourceAddReverbDspFn s_AudioSourceAddReverbDsp;
-    private static ComponentNativeAPI.Funcs.AudioSourceAddDistortionDspFn s_AudioSourceAddDistortionDsp;
-    private static ComponentNativeAPI.Funcs.AudioSourceAddChorusDspFn s_AudioSourceAddChorusDsp;
-    private static ComponentNativeAPI.Funcs.AudioSourceAddCompressorDspFn s_AudioSourceAddCompressorDsp;
-    private static ComponentNativeAPI.Funcs.AudioSourceAddDelayDspFn s_AudioSourceAddDelayDsp;
-    private static ComponentNativeAPI.Funcs.AudioSourceActionFn s_AudioSourceClearDsps;
-    private static CoreNativeAPI.Funcs.GetVector3Fn s_TransformGetForward;
-    private static CoreNativeAPI.Funcs.SetVector3Fn s_TransformSetForward;
-    private static CoreNativeAPI.Funcs.GetVector3Fn s_TransformGetRight;
-    private static CoreNativeAPI.Funcs.SetVector3Fn s_TransformSetRight;
-    private static CoreNativeAPI.Funcs.GetVector3Fn s_TransformGetUp;
-    private static CoreNativeAPI.Funcs.SetVector3Fn s_TransformSetUp;
-    private static CoreNativeAPI.Funcs.GetVector3Fn s_TransformGetTranslation;
-    private static CoreNativeAPI.Funcs.SetVector3Fn s_TransformSetTranslation;
-    private static CoreNativeAPI.Funcs.GetQuaternionFn s_TransformGetRotation;
-    private static CoreNativeAPI.Funcs.SetQuaternionFn s_TransformSetRotation;
-    private static CoreNativeAPI.Funcs.GetVector3Fn s_TransformGetEulerAngles;
-    private static CoreNativeAPI.Funcs.SetVector3Fn s_TransformSetEulerAngles;
-    private static CoreNativeAPI.Funcs.GetVector3Fn s_TransformGetScale;
-    private static CoreNativeAPI.Funcs.SetVector3Fn s_TransformSetScale;
+    private static ComponentNativeAPI.Funcs.SceneGetScreenToWorldRayFn? s_SceneGetScreenToWorldRay;
+    private static ComponentNativeAPI.Funcs.SceneRaycastFn? s_SceneRaycast;
+    private static ComponentNativeAPI.Funcs.EntityHasComponentFn? s_EntityHasComponent;
+    private static ComponentNativeAPI.Funcs.EntityAddComponentFn? s_EntityAddComponent;
+    private static ComponentNativeAPI.Funcs.EntityFindEntityByNameFn? s_EntityFindEntityByName;
+    private static ComponentNativeAPI.Funcs.EntityFindChildEntityByNameFn? s_EntityFindChildEntityByName;
+    private static ComponentNativeAPI.Funcs.EntityIsParentFn? s_EntityIsParent;
+    private static ComponentNativeAPI.Funcs.EntityGetParentFn? s_EntityGetParent;
+    private static ComponentNativeAPI.Funcs.EntityInstantiateWithNameFn? s_EntityInstantiateWithName;
+    private static ComponentNativeAPI.Funcs.EntityInstantiateFn? s_EntityInstantiate;
+    private static ComponentNativeAPI.Funcs.EntityDestroyFn? s_EntityDestroy;
+    private static ComponentNativeAPI.Funcs.EntitySetVisibilityFn? s_EntitySetVisibility;
+    private static ComponentNativeAPI.Funcs.EntityGetVisibilityFn? s_EntityGetVisibility;
+    private static ComponentNativeAPI.Funcs.EntityGetNameFn? s_EntityGetName;
+    private static ComponentNativeAPI.Funcs.WidgetComponentHasButtonFn? s_WidgetComponentHasButton;
+    private static ComponentNativeAPI.Funcs.WidgetComponentButtonEventFn? s_WidgetComponentAddButtonEventCallback;
+    private static ComponentNativeAPI.Funcs.WidgetComponentHasNamedItemFn? s_WidgetComponentHasLabel;
+    private static ComponentNativeAPI.Funcs.WidgetComponentGetStringByNameFn? s_WidgetComponentGetLabelText;
+    private static ComponentNativeAPI.Funcs.WidgetComponentSetStringByNameFn? s_WidgetComponentSetLabelText;
+    private static ComponentNativeAPI.Funcs.WidgetComponentGetVec4ByNameFn? s_WidgetComponentGetLabelColor;
+    private static ComponentNativeAPI.Funcs.WidgetComponentSetVec4ByNameFn? s_WidgetComponentSetLabelColor;
+    private static ComponentNativeAPI.Funcs.WidgetComponentGetFloatByNameFn? s_WidgetComponentGetLabelFontSize;
+    private static ComponentNativeAPI.Funcs.WidgetComponentSetFloatByNameFn? s_WidgetComponentSetLabelFontSize;
+    private static ComponentNativeAPI.Funcs.WidgetComponentHasNamedItemFn? s_WidgetComponentHasImage;
+    private static ComponentNativeAPI.Funcs.WidgetComponentGetU64ByNameFn? s_WidgetComponentGetImageHandle;
+    private static ComponentNativeAPI.Funcs.WidgetComponentSetU64ByNameFn? s_WidgetComponentSetImageHandle;
+    private static ComponentNativeAPI.Funcs.WidgetComponentButtonEventFn? s_WidgetComponentRemoveButtonEventCallback;
+    private static ComponentNativeAPI.Funcs.AudioSourceHasAudioFn? s_AudioSourceHasAudio;
+    private static ComponentNativeAPI.Funcs.AudioSourceActionFn? s_AudioSourcePlay;
+    private static ComponentNativeAPI.Funcs.AudioSourceActionFn? s_AudioSourceStop;
+    private static ComponentNativeAPI.Funcs.AudioSourceActionFn? s_AudioSourcePause;
+    private static ComponentNativeAPI.Funcs.AudioSourceActionFn? s_AudioSourceResume;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_AudioSourceGetVolume;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_AudioSourceSetVolume;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_AudioSourceGetPitch;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_AudioSourceSetPitch;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_AudioSourceGetPan;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_AudioSourceSetPan;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_AudioSourceGetPlayOnStart;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_AudioSourceSetPlayOnStart;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_AudioSourceGetLoop;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_AudioSourceSetLoop;
+    private static ComponentNativeAPI.Funcs.AudioSourceAddReverbDspFn? s_AudioSourceAddReverbDsp;
+    private static ComponentNativeAPI.Funcs.AudioSourceAddDistortionDspFn? s_AudioSourceAddDistortionDsp;
+    private static ComponentNativeAPI.Funcs.AudioSourceAddChorusDspFn? s_AudioSourceAddChorusDsp;
+    private static ComponentNativeAPI.Funcs.AudioSourceAddCompressorDspFn? s_AudioSourceAddCompressorDsp;
+    private static ComponentNativeAPI.Funcs.AudioSourceAddDelayDspFn? s_AudioSourceAddDelayDsp;
+    private static ComponentNativeAPI.Funcs.AudioSourceActionFn? s_AudioSourceClearDsps;
+    private static CoreNativeAPI.Funcs.GetVector3Fn? s_TransformGetForward;
+    private static CoreNativeAPI.Funcs.SetVector3Fn? s_TransformSetForward;
+    private static CoreNativeAPI.Funcs.GetVector3Fn? s_TransformGetRight;
+    private static CoreNativeAPI.Funcs.SetVector3Fn? s_TransformSetRight;
+    private static CoreNativeAPI.Funcs.GetVector3Fn? s_TransformGetUp;
+    private static CoreNativeAPI.Funcs.SetVector3Fn? s_TransformSetUp;
+    private static CoreNativeAPI.Funcs.GetVector3Fn? s_TransformGetTranslation;
+    private static CoreNativeAPI.Funcs.SetVector3Fn? s_TransformSetTranslation;
+    private static CoreNativeAPI.Funcs.GetQuaternionFn? s_TransformGetRotation;
+    private static CoreNativeAPI.Funcs.SetQuaternionFn? s_TransformSetRotation;
+    private static CoreNativeAPI.Funcs.GetVector3Fn? s_TransformGetEulerAngles;
+    private static CoreNativeAPI.Funcs.SetVector3Fn? s_TransformSetEulerAngles;
+    private static CoreNativeAPI.Funcs.GetVector3Fn? s_TransformGetScale;
+    private static CoreNativeAPI.Funcs.SetVector3Fn? s_TransformSetScale;
 
-    private static CoreNativeAPI.Funcs.SetVector4Fn s_Sprite2DSetColor;
-    private static CoreNativeAPI.Funcs.GetVector4Fn s_Sprite2DGetColor;
-    private static CoreNativeAPI.Funcs.SetVector2Fn s_Sprite2DSetTilingFactor;
-    private static CoreNativeAPI.Funcs.GetVector2Fn s_Sprite2DGetTilingFactor;
+    private static CoreNativeAPI.Funcs.SetVector4Fn? s_Sprite2DSetColor;
+    private static CoreNativeAPI.Funcs.GetVector4Fn? s_Sprite2DGetColor;
+    private static CoreNativeAPI.Funcs.SetVector2Fn? s_Sprite2DSetTilingFactor;
+    private static CoreNativeAPI.Funcs.GetVector2Fn? s_Sprite2DGetTilingFactor;
 
-    private static CoreNativeAPI.Funcs.SetVector4Fn s_Circle2DSetColor;
-    private static CoreNativeAPI.Funcs.GetVector4Fn s_Circle2DGetColor;
+    private static CoreNativeAPI.Funcs.SetVector4Fn? s_Circle2DSetColor;
+    private static CoreNativeAPI.Funcs.GetVector4Fn? s_Circle2DGetColor;
 
-    private static CoreNativeAPI.Funcs.GetIntFn s_Rigidbody2DGetType;
-    private static CoreNativeAPI.Funcs.SetIntFn s_Rigidbody2DSetType;
-    private static CoreNativeAPI.Funcs.GetVector2Fn s_Rigidbody2DGetLinearVelocity;
-    private static CoreNativeAPI.Funcs.SetVector2Fn s_Rigidbody2DSetLinearVelocity;
-    private static CoreNativeAPI.Funcs.GetFloatFn s_Rigidbody2DGetAngularVelocity;
-    private static CoreNativeAPI.Funcs.SetFloatFn s_Rigidbody2DSetAngularVelocity;
-    private static CoreNativeAPI.Funcs.GetFloatFn s_Rigidbody2DGetGravityScale;
-    private static CoreNativeAPI.Funcs.SetFloatFn s_Rigidbody2DSetGravityScale;
-    private static CoreNativeAPI.Funcs.GetFloatFn s_Rigidbody2DGetLinearDamping;
-    private static CoreNativeAPI.Funcs.SetFloatFn s_Rigidbody2DSetLinearDamping;
-    private static CoreNativeAPI.Funcs.GetFloatFn s_Rigidbody2DGetAngularDamping;
-    private static CoreNativeAPI.Funcs.SetFloatFn s_Rigidbody2DSetAngularDamping;
-    private static CoreNativeAPI.Funcs.GetBoolFn s_Rigidbody2DGetIsAwake;
-    private static CoreNativeAPI.Funcs.SetBoolFn s_Rigidbody2DSetIsAwake;
-    private static CoreNativeAPI.Funcs.GetBoolFn s_Rigidbody2DGetIsEnabled;
-    private static CoreNativeAPI.Funcs.SetBoolFn s_Rigidbody2DSetIsEnabled;
-    private static CoreNativeAPI.Funcs.GetBoolFn s_Rigidbody2DGetIsEnableSleep;
-    private static CoreNativeAPI.Funcs.SetBoolFn s_Rigidbody2DSetIsEnableSleep;
-    private static ComponentNativeAPI.Funcs.Rigidbody2DApplyForceFn s_Rigidbody2DApplyForce;
-    private static ComponentNativeAPI.Funcs.Rigidbody2DApplyForceToCenterFn s_Rigidbody2DApplyForceToCenter;
-    private static ComponentNativeAPI.Funcs.Rigidbody2DApplyLinearImpulseFn s_Rigidbody2DApplyLinearImpulse;
-    private static ComponentNativeAPI.Funcs.Rigidbody2DApplyLinearImpulseToCenterFn s_Rigidbody2DApplyLinearImpulseToCenter;
-    private static ComponentNativeAPI.Funcs.Rigidbody2DApplyAngularImpulseFn s_Rigidbody2DApplyAngularImpulse;
-    private static ComponentNativeAPI.Funcs.Rigidbody2DApplyTorqueFn s_Rigidbody2DApplyTorque;
-    private static CoreNativeAPI.Funcs.GetFloatFn s_Rigidbody2DGetMass;
-    private static CoreNativeAPI.Funcs.GetBoolFn s_Rigidbody2DGetIsBullet;
-    private static CoreNativeAPI.Funcs.SetBoolFn s_Rigidbody2DSetIsBullet;
-    private static CoreNativeAPI.Funcs.GetVector2Fn s_BoxCollider2DGetSize;
-    private static CoreNativeAPI.Funcs.SetVector2Fn s_BoxCollider2DSetSize;
-    private static CoreNativeAPI.Funcs.GetVector2Fn s_BoxCollider2DGetOffset;
-    private static CoreNativeAPI.Funcs.SetVector2Fn s_BoxCollider2DSetOffset;
-    private static CoreNativeAPI.Funcs.GetFloatFn s_BoxCollider2DGetRestitution;
-    private static CoreNativeAPI.Funcs.SetFloatFn s_BoxCollider2DSetRestitution;
-    private static CoreNativeAPI.Funcs.GetFloatFn s_BoxCollider2DGetFriction;
-    private static CoreNativeAPI.Funcs.SetFloatFn s_BoxCollider2DSetFriction;
-    private static CoreNativeAPI.Funcs.GetFloatFn s_BoxCollider2DGetDensity;
-    private static CoreNativeAPI.Funcs.SetFloatFn s_BoxCollider2DSetDensity;
-    private static CoreNativeAPI.Funcs.GetBoolFn s_BoxCollider2DGetIsSensor;
-    private static CoreNativeAPI.Funcs.SetBoolFn s_BoxCollider2DSetIsSensor;
+    private static CoreNativeAPI.Funcs.GetIntFn? s_Rigidbody2DGetType;
+    private static CoreNativeAPI.Funcs.SetIntFn? s_Rigidbody2DSetType;
+    private static CoreNativeAPI.Funcs.GetVector2Fn? s_Rigidbody2DGetLinearVelocity;
+    private static CoreNativeAPI.Funcs.SetVector2Fn? s_Rigidbody2DSetLinearVelocity;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_Rigidbody2DGetAngularVelocity;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_Rigidbody2DSetAngularVelocity;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_Rigidbody2DGetGravityScale;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_Rigidbody2DSetGravityScale;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_Rigidbody2DGetLinearDamping;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_Rigidbody2DSetLinearDamping;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_Rigidbody2DGetAngularDamping;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_Rigidbody2DSetAngularDamping;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_Rigidbody2DGetIsAwake;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_Rigidbody2DSetIsAwake;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_Rigidbody2DGetIsEnabled;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_Rigidbody2DSetIsEnabled;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_Rigidbody2DGetIsEnableSleep;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_Rigidbody2DSetIsEnableSleep;
+    private static ComponentNativeAPI.Funcs.Rigidbody2DApplyForceFn? s_Rigidbody2DApplyForce;
+    private static ComponentNativeAPI.Funcs.Rigidbody2DApplyForceToCenterFn? s_Rigidbody2DApplyForceToCenter;
+    private static ComponentNativeAPI.Funcs.Rigidbody2DApplyLinearImpulseFn? s_Rigidbody2DApplyLinearImpulse;
+    private static ComponentNativeAPI.Funcs.Rigidbody2DApplyLinearImpulseToCenterFn? s_Rigidbody2DApplyLinearImpulseToCenter;
+    private static ComponentNativeAPI.Funcs.Rigidbody2DApplyAngularImpulseFn? s_Rigidbody2DApplyAngularImpulse;
+    private static ComponentNativeAPI.Funcs.Rigidbody2DApplyTorqueFn? s_Rigidbody2DApplyTorque;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_Rigidbody2DGetMass;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_Rigidbody2DGetIsBullet;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_Rigidbody2DSetIsBullet;
+    private static CoreNativeAPI.Funcs.GetVector2Fn? s_BoxCollider2DGetSize;
+    private static CoreNativeAPI.Funcs.SetVector2Fn? s_BoxCollider2DSetSize;
+    private static CoreNativeAPI.Funcs.GetVector2Fn? s_BoxCollider2DGetOffset;
+    private static CoreNativeAPI.Funcs.SetVector2Fn? s_BoxCollider2DSetOffset;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_BoxCollider2DGetRestitution;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_BoxCollider2DSetRestitution;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_BoxCollider2DGetFriction;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_BoxCollider2DSetFriction;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_BoxCollider2DGetDensity;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_BoxCollider2DSetDensity;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_BoxCollider2DGetIsSensor;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_BoxCollider2DSetIsSensor;
 
-    private static CoreNativeAPI.Funcs.GetVector2Fn s_CircleCollider2DGetCenter;
-    private static CoreNativeAPI.Funcs.SetVector2Fn s_CircleCollider2DSetCenter;
-    private static CoreNativeAPI.Funcs.GetFloatFn s_CircleCollider2DGetRadius;
-    private static CoreNativeAPI.Funcs.SetFloatFn s_CircleCollider2DSetRadius;
-    private static CoreNativeAPI.Funcs.GetFloatFn s_CircleCollider2DGetRestitution;
-    private static CoreNativeAPI.Funcs.SetFloatFn s_CircleCollider2DSetRestitution;
-    private static CoreNativeAPI.Funcs.GetFloatFn s_CircleCollider2DGetFriction;
-    private static CoreNativeAPI.Funcs.SetFloatFn s_CircleCollider2DSetFriction;
-    private static CoreNativeAPI.Funcs.GetFloatFn s_CircleCollider2DGetDensity;
-    private static CoreNativeAPI.Funcs.SetFloatFn s_CircleCollider2DSetDensity;
-    private static CoreNativeAPI.Funcs.GetBoolFn s_CircleCollider2DGetIsSensor;
-    private static CoreNativeAPI.Funcs.SetBoolFn s_CircleCollider2DSetIsSensor;
+    private static CoreNativeAPI.Funcs.GetVector2Fn? s_CircleCollider2DGetCenter;
+    private static CoreNativeAPI.Funcs.SetVector2Fn? s_CircleCollider2DSetCenter;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_CircleCollider2DGetRadius;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_CircleCollider2DSetRadius;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_CircleCollider2DGetRestitution;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_CircleCollider2DSetRestitution;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_CircleCollider2DGetFriction;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_CircleCollider2DSetFriction;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_CircleCollider2DGetDensity;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_CircleCollider2DSetDensity;
+    private static CoreNativeAPI.Funcs.GetBoolFn? s_CircleCollider2DGetIsSensor;
+    private static CoreNativeAPI.Funcs.SetBoolFn? s_CircleCollider2DSetIsSensor;
 
-    private static CoreNativeAPI.Funcs.SetStringFn s_TextComponentSetText;
-    private static CoreNativeAPI.Funcs.GetStringFn s_TextComponentGetText;
-    private static CoreNativeAPI.Funcs.SetVector4Fn s_TextComponentSetColor;
-    private static CoreNativeAPI.Funcs.GetVector4Fn s_TextComponentGetColor;
-    private static CoreNativeAPI.Funcs.SetFloatFn s_TextComponentSetKerning;
-    private static CoreNativeAPI.Funcs.GetFloatFn s_TextComponentGetKerning;
-    private static CoreNativeAPI.Funcs.SetFloatFn s_TextComponentSetLineSpacing;
-    private static CoreNativeAPI.Funcs.GetFloatFn s_TextComponentGetLineSpacing;
+    private static CoreNativeAPI.Funcs.SetStringFn? s_TextComponentSetText;
+    private static CoreNativeAPI.Funcs.GetStringFn? s_TextComponentGetText;
+    private static CoreNativeAPI.Funcs.SetVector4Fn? s_TextComponentSetColor;
+    private static CoreNativeAPI.Funcs.GetVector4Fn? s_TextComponentGetColor;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_TextComponentSetKerning;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_TextComponentGetKerning;
+    private static CoreNativeAPI.Funcs.SetFloatFn? s_TextComponentSetLineSpacing;
+    private static CoreNativeAPI.Funcs.GetFloatFn? s_TextComponentGetLineSpacing;
 
     public static void Initialize(ulong apiPtr)
     {
@@ -153,8 +153,8 @@ public static class ComponentInternalCalls
         s_EntityAddComponent = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityAddComponentFn>(api.Entity_AddComponent);
         s_EntityFindEntityByName = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityFindEntityByNameFn>(api.Entity_FindEntityByName);
         s_EntityFindChildEntityByName = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityFindChildEntityByNameFn>(api.Entity_FindChildEntityByName);
-        s_EntityIsParent = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityIsParent>(api.Entity_IsParent);
-        s_EntityGetParent = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityGetParent>(api.Entity_GetParent);
+        s_EntityIsParent = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityIsParentFn>(api.Entity_IsParent);
+        s_EntityGetParent = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityGetParentFn>(api.Entity_GetParent);
         s_EntityInstantiateWithName = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityInstantiateWithNameFn>(api.Entity_InstantiateWithName);
         s_EntityInstantiate = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityInstantiateFn>(api.Entity_Instantiate);
         s_EntityDestroy = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityDestroyFn>(api.Entity_Destroy);
@@ -293,7 +293,7 @@ public static class ComponentInternalCalls
     internal static void Scene_GetScreenToWorldRay(float x, float y, out Mathf.Vector3 outOrigin, out Mathf.Vector3 outDirection)
     {
         EnsureInitialized();
-        s_SceneGetScreenToWorldRay(x, y, out NativeObject.Vector3 origin, out NativeObject.Vector3 dir);
+        s_SceneGetScreenToWorldRay!(x, y, out NativeObject.Vector3 origin, out NativeObject.Vector3 dir);
         outOrigin = NativeObject.ToManaged(origin);
         outDirection = NativeObject.ToManaged(dir);
     }
@@ -301,7 +301,7 @@ public static class ComponentInternalCalls
     internal static ulong Scene_Raycast(Mathf.Vector3 origin, Mathf.Vector3 direction)
     {
         EnsureInitialized();
-        return s_SceneRaycast(NativeObject.ToNative(origin), NativeObject.ToNative(direction));
+        return s_SceneRaycast!(NativeObject.ToNative(origin), NativeObject.ToNative(direction));
     }
 
     internal static bool Entity_HasComponent(ulong entityID, Type componentType)
@@ -312,7 +312,7 @@ public static class ComponentInternalCalls
         IntPtr ptr = NativeObject.StringToUtf8(typeName);
         try
         {
-            return s_EntityHasComponent(entityID, ptr);
+            return s_EntityHasComponent!(entityID, ptr);
         }
         finally
         {
@@ -328,7 +328,7 @@ public static class ComponentInternalCalls
         IntPtr ptr = NativeObject.StringToUtf8(typeName);
         try
         {
-            s_EntityAddComponent(entityID, ptr);
+            s_EntityAddComponent!(entityID, ptr);
         }
         finally
         {
@@ -343,7 +343,7 @@ public static class ComponentInternalCalls
         IntPtr ptr = NativeObject.StringToUtf8(name);
         try
         {
-            return s_EntityFindEntityByName(ptr);
+            return s_EntityFindEntityByName!(ptr);
         }
         finally
         {
@@ -358,7 +358,7 @@ public static class ComponentInternalCalls
         IntPtr ptr = NativeObject.StringToUtf8(childName);
         try
         {
-            return s_EntityFindChildEntityByName(entityID, ptr);
+            return s_EntityFindChildEntityByName!(entityID, ptr);
         }
         finally
         {
@@ -369,13 +369,13 @@ public static class ComponentInternalCalls
     internal static bool Entity_IsParent(ulong entityID, ulong parentEntityID)
     {
         EnsureInitialized();
-        return s_EntityIsParent(entityID, parentEntityID);
+        return s_EntityIsParent!(entityID, parentEntityID);
     }
 
     internal static ulong Entity_GetParent(ulong entityID)
     {
         EnsureInitialized();
-        return s_EntityGetParent(entityID);
+        return s_EntityGetParent!(entityID);
     }
 
     internal static ulong Entity_Instantiate(string name, Mathf.Vector3 value)
@@ -384,7 +384,7 @@ public static class ComponentInternalCalls
         IntPtr ptr = NativeObject.StringToUtf8(name);
         try
         {
-            return s_EntityInstantiateWithName(ptr, NativeObject.ToNative(value));
+            return s_EntityInstantiateWithName!(ptr, NativeObject.ToNative(value));
         }
         finally
         {
@@ -395,35 +395,35 @@ public static class ComponentInternalCalls
     internal static ulong Entity_Instantiate(ulong entityID, Mathf.Vector3 value)
     {
         EnsureInitialized();
-        return s_EntityInstantiate(entityID, NativeObject.ToNative(value));
+        return s_EntityInstantiate!(entityID, NativeObject.ToNative(value));
     }
 
     internal static void Entity_Destroy(ulong entityID)
     {
         EnsureInitialized();
-        s_EntityDestroy(entityID);
+        s_EntityDestroy!(entityID);
     }
 
     internal static void Entity_SetVisibility(ulong entityID, bool value)
     {
         EnsureInitialized();
-        s_EntitySetVisibility(entityID, value);
+        s_EntitySetVisibility!(entityID, value);
     }
 
     internal static void Entity_GetVisibility(ulong entityID, out bool result)
     {
         EnsureInitialized();
-        s_EntityGetVisibility(entityID, out result);
+        s_EntityGetVisibility!(entityID, out result);
     }
 
     internal static string Entity_GetName(ulong entityID)
     {
         EnsureInitialized();
-        IntPtr namePtr = s_EntityGetName(entityID);
+        IntPtr namePtr = s_EntityGetName!(entityID);
         if (namePtr == IntPtr.Zero)
-            return null;
+            return "<invalid>";
 
-        return Marshal.PtrToStringUTF8(namePtr);
+        return Marshal.PtrToStringUTF8(namePtr) ?? "<invalid>";
     }
 
     internal static bool WidgetComponent_HasButton(ulong entityID, string buttonName)
@@ -433,7 +433,7 @@ public static class ComponentInternalCalls
         IntPtr buttonNamePtr = NativeObject.StringToUtf8(buttonName);
         try
         {
-            return s_WidgetComponentHasButton(entityID, buttonNamePtr);
+            return s_WidgetComponentHasButton!(entityID, buttonNamePtr);
         }
         finally
         {
@@ -449,7 +449,7 @@ public static class ComponentInternalCalls
         IntPtr methodNamePtr = NativeObject.StringToUtf8(methodName);
         try
         {
-            return s_WidgetComponentAddButtonEventCallback(entityID, buttonNamePtr, eventType, methodNamePtr);
+            return s_WidgetComponentAddButtonEventCallback!(entityID, buttonNamePtr, eventType, methodNamePtr);
         }
         finally
         {
@@ -466,7 +466,7 @@ public static class ComponentInternalCalls
         IntPtr methodNamePtr = NativeObject.StringToUtf8(methodName);
         try
         {
-            return s_WidgetComponentRemoveButtonEventCallback(entityID, buttonNamePtr, eventType, methodNamePtr);
+            return s_WidgetComponentRemoveButtonEventCallback!(entityID, buttonNamePtr, eventType, methodNamePtr);
         }
         finally
         {
@@ -478,130 +478,130 @@ public static class ComponentInternalCalls
     internal static bool AudioSourceComponent_HasAudio(ulong entityID)
     {
         EnsureInitialized();
-        return s_AudioSourceHasAudio(entityID);
+        return s_AudioSourceHasAudio!(entityID);
     }
 
     internal static void AudioSourceComponent_Play(ulong entityID)
     {
         EnsureInitialized();
-        s_AudioSourcePlay(entityID);
+        s_AudioSourcePlay!(entityID);
     }
 
     internal static void AudioSourceComponent_Stop(ulong entityID)
     {
         EnsureInitialized();
-        s_AudioSourceStop(entityID);
+        s_AudioSourceStop!(entityID);
     }
 
     internal static void AudioSourceComponent_Pause(ulong entityID)
     {
         EnsureInitialized();
-        s_AudioSourcePause(entityID);
+        s_AudioSourcePause!(entityID);
     }
 
     internal static void AudioSourceComponent_Resume(ulong entityID)
     {
         EnsureInitialized();
-        s_AudioSourceResume(entityID);
+        s_AudioSourceResume!(entityID);
     }
 
     internal static void AudioSourceComponent_GetVolume(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_AudioSourceGetVolume(entityID, out result);
+        s_AudioSourceGetVolume!(entityID, out result);
     }
 
     internal static void AudioSourceComponent_SetVolume(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_AudioSourceSetVolume(entityID, value);
+        s_AudioSourceSetVolume!(entityID, value);
     }
 
     internal static void AudioSourceComponent_GetPitch(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_AudioSourceGetPitch(entityID, out result);
+        s_AudioSourceGetPitch!(entityID, out result);
     }
 
     internal static void AudioSourceComponent_SetPitch(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_AudioSourceSetPitch(entityID, value);
+        s_AudioSourceSetPitch!(entityID, value);
     }
 
     internal static void AudioSourceComponent_GetPan(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_AudioSourceGetPan(entityID, out result);
+        s_AudioSourceGetPan!(entityID, out result);
     }
 
     internal static void AudioSourceComponent_SetPan(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_AudioSourceSetPan(entityID, value);
+        s_AudioSourceSetPan!(entityID, value);
     }
 
     internal static void AudioSourceComponent_GetPlayOnStart(ulong entityID, out bool result)
     {
         EnsureInitialized();
-        s_AudioSourceGetPlayOnStart(entityID, out result);
+        s_AudioSourceGetPlayOnStart!(entityID, out result);
     }
 
     internal static void AudioSourceComponent_SetPlayOnStart(ulong entityID, bool value)
     {
         EnsureInitialized();
-        s_AudioSourceSetPlayOnStart(entityID, value);
+        s_AudioSourceSetPlayOnStart!(entityID, value);
     }
 
     internal static void AudioSourceComponent_GetLoop(ulong entityID, out bool result)
     {
         EnsureInitialized();
-        s_AudioSourceGetLoop(entityID, out result);
+        s_AudioSourceGetLoop!(entityID, out result);
     }
 
     internal static void AudioSourceComponent_SetLoop(ulong entityID, bool value)
     {
         EnsureInitialized();
-        s_AudioSourceSetLoop(entityID, value);
+        s_AudioSourceSetLoop!(entityID, value);
     }
 
     internal static bool AudioSourceComponent_AddReverbDSP(ulong entityID, float decayTime, float earlyDelay, float lateDelay, float highFrequencyReference, float diffusion, float density, float lowShelfGain, float highCut, float dryLevel, float wetLevel)
     {
         EnsureInitialized();
-        return s_AudioSourceAddReverbDsp(entityID, decayTime, earlyDelay, lateDelay, highFrequencyReference, diffusion, density, lowShelfGain, highCut, dryLevel, wetLevel);
+        return s_AudioSourceAddReverbDsp!(entityID, decayTime, earlyDelay, lateDelay, highFrequencyReference, diffusion, density, lowShelfGain, highCut, dryLevel, wetLevel);
     }
 
     internal static bool AudioSourceComponent_AddDistortionDSP(ulong entityID, float distortionLevel)
     {
         EnsureInitialized();
-        return s_AudioSourceAddDistortionDsp(entityID, distortionLevel);
+        return s_AudioSourceAddDistortionDsp!(entityID, distortionLevel);
     }
 
     internal static bool AudioSourceComponent_AddChorusDSP(ulong entityID, float mix, float rate, float depth)
     {
         EnsureInitialized();
-        return s_AudioSourceAddChorusDsp(entityID, mix, rate, depth);
+        return s_AudioSourceAddChorusDsp!(entityID, mix, rate, depth);
     }
 
     internal static bool AudioSourceComponent_AddCompressorDSP(ulong entityID, float threshold, float ratio, float release, float gainMakeup, bool useSidechain)
     {
         EnsureInitialized();
-        return s_AudioSourceAddCompressorDsp(entityID, threshold, ratio, release, gainMakeup, useSidechain);
+        return s_AudioSourceAddCompressorDsp!(entityID, threshold, ratio, release, gainMakeup, useSidechain);
     }
 
     internal static bool AudioSourceComponent_AddDelayDSP(ulong entityID, float delayMs, float feedback)
     {
         EnsureInitialized();
-        return s_AudioSourceAddDelayDsp(entityID, delayMs, feedback);
+        return s_AudioSourceAddDelayDsp!(entityID, delayMs, feedback);
     }
 
     internal static void AudioSourceComponent_ClearDSPs(ulong entityID)
     {
         EnsureInitialized();
-        s_AudioSourceClearDsps(entityID);
+        s_AudioSourceClearDsps!(entityID);
     }
 
-    internal static object GetScriptInstance(ulong entityID)
+    internal static object? GetScriptInstance(ulong entityID)
     {
         _ = entityID;
         return null;
@@ -610,443 +610,443 @@ public static class ComponentInternalCalls
     internal static void TransformComponent_GetForward(ulong entityID, out Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformGetForward(entityID, out NativeObject.Vector3 native);
+        s_TransformGetForward!(entityID, out NativeObject.Vector3 native);
         result = NativeObject.ToManaged(native);
     }
 
     internal static void TransformComponent_SetForward(ulong entityID, Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformSetForward(entityID, NativeObject.ToNative(result));
+        s_TransformSetForward!(entityID, NativeObject.ToNative(result));
     }
 
     internal static void TransformComponent_GetRight(ulong entityID, out Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformGetRight(entityID, out NativeObject.Vector3 native);
+        s_TransformGetRight!(entityID, out NativeObject.Vector3 native);
         result = NativeObject.ToManaged(native);
     }
 
     internal static void TransformComponent_SetRight(ulong entityID, Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformSetRight(entityID, NativeObject.ToNative(result));
+        s_TransformSetRight!(entityID, NativeObject.ToNative(result));
     }
 
     internal static void TransformComponent_GetUp(ulong entityID, out Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformGetUp(entityID, out NativeObject.Vector3 native);
+        s_TransformGetUp!(entityID, out NativeObject.Vector3 native);
         result = NativeObject.ToManaged(native);
     }
 
     internal static void TransformComponent_SetUp(ulong entityID, Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformSetUp(entityID, NativeObject.ToNative(result));
+        s_TransformSetUp!(entityID, NativeObject.ToNative(result));
     }
 
     internal static void TransformComponent_GetTranslation(ulong entityID, out Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformGetTranslation(entityID, out NativeObject.Vector3 native);
+        s_TransformGetTranslation!(entityID, out NativeObject.Vector3 native);
         result = NativeObject.ToManaged(native);
     }
 
     internal static void TransformComponent_SetTranslation(ulong entityID, Mathf.Vector3 value)
     {
         EnsureInitialized();
-        s_TransformSetTranslation(entityID, NativeObject.ToNative(value));
+        s_TransformSetTranslation!(entityID, NativeObject.ToNative(value));
     }
 
     internal static void TransformComponent_GetRotation(ulong entityID, out Mathf.Quaternion result)
     {
         EnsureInitialized();
-        s_TransformGetRotation(entityID, out NativeObject.Quaternion native);
+        s_TransformGetRotation!(entityID, out NativeObject.Quaternion native);
         result = NativeObject.ToManaged(native);
     }
 
     internal static void TransformComponent_SetRotation(ulong entityID, Mathf.Quaternion value)
     {
         EnsureInitialized();
-        s_TransformSetRotation(entityID, NativeObject.ToNative(value));
+        s_TransformSetRotation!(entityID, NativeObject.ToNative(value));
     }
 
     internal static void TransformComponent_GetEulerAngles(ulong entityID, out Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformGetEulerAngles(entityID, out NativeObject.Vector3 native);
+        s_TransformGetEulerAngles!(entityID, out NativeObject.Vector3 native);
         result = NativeObject.ToManaged(native);
     }
 
     internal static void TransformComponent_SetEulerAngles(ulong entityID, Mathf.Vector3 value)
     {
         EnsureInitialized();
-        s_TransformSetEulerAngles(entityID, NativeObject.ToNative(value));
+        s_TransformSetEulerAngles!(entityID, NativeObject.ToNative(value));
     }
 
     internal static void TransformComponent_GetScale(ulong entityID, out Mathf.Vector3 result)
     {
         EnsureInitialized();
-        s_TransformGetScale(entityID, out NativeObject.Vector3 native);
+        s_TransformGetScale!(entityID, out NativeObject.Vector3 native);
         result = NativeObject.ToManaged(native);
     }
 
     internal static void TransformComponent_SetScale(ulong entityID, Mathf.Vector3 value)
     {
         EnsureInitialized();
-        s_TransformSetScale(entityID, NativeObject.ToNative(value));
+        s_TransformSetScale!(entityID, NativeObject.ToNative(value));
     }
 
 
     internal static void Sprite2DComponent_SetColor(ulong entityID, Mathf.Vector4 value)
     {
         EnsureInitialized();
-        s_Sprite2DSetColor(entityID, NativeObject.ToNative(value));
+        s_Sprite2DSetColor!(entityID, NativeObject.ToNative(value));
     }
 
     internal static void Sprite2DComponent_GetColor(ulong entityID, out Mathf.Vector4 result)
     {
         EnsureInitialized();
-        s_Sprite2DGetColor(entityID, out NativeObject.Vector4 native);
+        s_Sprite2DGetColor!(entityID, out NativeObject.Vector4 native);
         result = NativeObject.ToManaged(native);
     }
 
     internal static void Sprite2DComponent_SetTilingFactor(ulong entityID, Mathf.Vector2 value)
     {
         EnsureInitialized();
-        s_Sprite2DSetTilingFactor(entityID, NativeObject.ToNative(value));
+        s_Sprite2DSetTilingFactor!(entityID, NativeObject.ToNative(value));
     }
 
     internal static void Sprite2DComponent_GetTilingFactor(ulong entityID, out Mathf.Vector2 result)
     {
         EnsureInitialized();
-        s_Sprite2DGetTilingFactor(entityID, out NativeObject.Vector2 native);
+        s_Sprite2DGetTilingFactor!(entityID, out NativeObject.Vector2 native);
         result = NativeObject.ToManaged(native);
     }
 
     internal static void Circle2DComponent_SetColor(ulong entityID, Mathf.Vector4 value)
     {
         EnsureInitialized();
-        s_Circle2DSetColor(entityID, NativeObject.ToNative(value));
+        s_Circle2DSetColor!(entityID, NativeObject.ToNative(value));
     }
 
     internal static void Circle2DComponent_GetColor(ulong entityID, out Mathf.Vector4 result)
     {
         EnsureInitialized();
-        s_Circle2DGetColor(entityID, out NativeObject.Vector4 native);
+        s_Circle2DGetColor!(entityID, out NativeObject.Vector4 native);
         result = NativeObject.ToManaged(native);
     }
 
     internal static void Rigidbody2DComponent_GetType(ulong entityID, out int result)
     {
         EnsureInitialized();
-        s_Rigidbody2DGetType(entityID, out result);
+        s_Rigidbody2DGetType!(entityID, out result);
     }
 
     internal static void Rigidbody2DComponent_SetType(ulong entityID, int value)
     {
         EnsureInitialized();
-        s_Rigidbody2DSetType(entityID, value);
+        s_Rigidbody2DSetType!(entityID, value);
     }
 
     internal static void Rigidbody2DComponent_GetLinearVelocity(ulong entityID, out Mathf.Vector2 result)
     {
         EnsureInitialized();
-        s_Rigidbody2DGetLinearVelocity(entityID, out NativeObject.Vector2 native);
+        s_Rigidbody2DGetLinearVelocity!(entityID, out NativeObject.Vector2 native);
         result = NativeObject.ToManaged(native);
     }
 
     internal static void Rigidbody2DComponent_SetLinearVelocity(ulong entityID, Mathf.Vector2 value)
     {
         EnsureInitialized();
-        s_Rigidbody2DSetLinearVelocity(entityID, NativeObject.ToNative(value));
+        s_Rigidbody2DSetLinearVelocity!(entityID, NativeObject.ToNative(value));
     }
 
     internal static void Rigidbody2DComponent_GetAngularVelocity(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_Rigidbody2DGetAngularVelocity(entityID, out result);
+        s_Rigidbody2DGetAngularVelocity!(entityID, out result);
     }
 
     internal static void Rigidbody2DComponent_SetAngularVelocity(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_Rigidbody2DSetAngularVelocity(entityID, value);
+        s_Rigidbody2DSetAngularVelocity!(entityID, value);
     }
 
     internal static void Rigidbody2DComponent_GetGravityScale(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_Rigidbody2DGetGravityScale(entityID, out result);
+        s_Rigidbody2DGetGravityScale!(entityID, out result);
     }
 
     internal static void Rigidbody2DComponent_SetGravityScale(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_Rigidbody2DSetGravityScale(entityID, value);
+        s_Rigidbody2DSetGravityScale!(entityID, value);
     }
 
     internal static void Rigidbody2DComponent_GetLinearDamping(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_Rigidbody2DGetLinearDamping(entityID, out result);
+        s_Rigidbody2DGetLinearDamping!(entityID, out result);
     }
 
     internal static void Rigidbody2DComponent_SetLinearDamping(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_Rigidbody2DSetLinearDamping(entityID, value);
+        s_Rigidbody2DSetLinearDamping!(entityID, value);
     }
 
     internal static void Rigidbody2DComponent_GetAngularDamping(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_Rigidbody2DGetAngularDamping(entityID, out result);
+        s_Rigidbody2DGetAngularDamping!(entityID, out result);
     }
 
     internal static void Rigidbody2DComponent_SetAngularDamping(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_Rigidbody2DSetAngularDamping(entityID, value);
+        s_Rigidbody2DSetAngularDamping!(entityID, value);
     }
 
     internal static void Rigidbody2DComponent_GetIsAwake(ulong entityID, out bool result)
     {
         EnsureInitialized();
-        s_Rigidbody2DGetIsAwake(entityID, out result);
+        s_Rigidbody2DGetIsAwake!(entityID, out result);
     }
 
     internal static void Rigidbody2DComponent_SetIsAwake(ulong entityID, bool value)
     {
         EnsureInitialized();
-        s_Rigidbody2DSetIsAwake(entityID, value);
+        s_Rigidbody2DSetIsAwake!(entityID, value);
     }
 
     internal static void Rigidbody2DComponent_GetIsEnabled(ulong entityID, out bool result)
     {
         EnsureInitialized();
-        s_Rigidbody2DGetIsEnabled(entityID, out result);
+        s_Rigidbody2DGetIsEnabled!(entityID, out result);
     }
 
     internal static void Rigidbody2DComponent_SetIsEnabled(ulong entityID, bool value)
     {
         EnsureInitialized();
-        s_Rigidbody2DSetIsEnabled(entityID, value);
+        s_Rigidbody2DSetIsEnabled!(entityID, value);
     }
 
     internal static void Rigidbody2DComponent_GetIsEnableSleep(ulong entityID, out bool result)
     {
         EnsureInitialized();
-        s_Rigidbody2DGetIsEnableSleep(entityID, out result);
+        s_Rigidbody2DGetIsEnableSleep!(entityID, out result);
     }
 
     internal static void Rigidbody2DComponent_SetIsEnableSleep(ulong entityID, bool value)
     {
         EnsureInitialized();
-        s_Rigidbody2DSetIsEnableSleep(entityID, value);
+        s_Rigidbody2DSetIsEnableSleep!(entityID, value);
     }
 
     internal static void Rigidbody2DComponent_ApplyForce(ulong entityID, Mathf.Vector2 force, Mathf.Vector2 point, bool wake)
     {
         EnsureInitialized();
-        s_Rigidbody2DApplyForce(entityID, NativeObject.ToNative(force), NativeObject.ToNative(point), wake);
+        s_Rigidbody2DApplyForce!(entityID, NativeObject.ToNative(force), NativeObject.ToNative(point), wake);
     }
 
     internal static void Rigidbody2DComponent_ApplyForceToCenter(ulong entityID, Mathf.Vector2 force, bool wake)
     {
         EnsureInitialized();
-        s_Rigidbody2DApplyForceToCenter(entityID, NativeObject.ToNative(force), wake);
+        s_Rigidbody2DApplyForceToCenter!(entityID, NativeObject.ToNative(force), wake);
     }
 
     internal static void Rigidbody2DComponent_ApplyLinearImpulse(ulong entityID, Mathf.Vector2 impulse, Mathf.Vector2 point, bool wake)
     {
         EnsureInitialized();
-        s_Rigidbody2DApplyLinearImpulse(entityID, NativeObject.ToNative(impulse), NativeObject.ToNative(point), wake);
+        s_Rigidbody2DApplyLinearImpulse!(entityID, NativeObject.ToNative(impulse), NativeObject.ToNative(point), wake);
     }
 
     internal static void Rigidbody2DComponent_ApplyLinearImpulseToCenter(ulong entityID, Mathf.Vector2 impulse, bool wake)
     {
         EnsureInitialized();
-        s_Rigidbody2DApplyLinearImpulseToCenter(entityID, NativeObject.ToNative(impulse), wake);
+        s_Rigidbody2DApplyLinearImpulseToCenter!(entityID, NativeObject.ToNative(impulse), wake);
     }
 
     internal static void Rigidbody2DComponent_ApplyAngularImpulse(ulong entityID, float impulse, bool wake)
     {
         EnsureInitialized();
-        s_Rigidbody2DApplyAngularImpulse(entityID, impulse, wake);
+        s_Rigidbody2DApplyAngularImpulse!(entityID, impulse, wake);
     }
 
     internal static void Rigidbody2DComponent_ApplyTorque(ulong entityID, float torque, bool wake)
     {
         EnsureInitialized();
-        s_Rigidbody2DApplyTorque(entityID, torque, wake);
+        s_Rigidbody2DApplyTorque!(entityID, torque, wake);
     }
 
     internal static void Rigidbody2DComponent_GetMass(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_Rigidbody2DGetMass(entityID, out result);
+        s_Rigidbody2DGetMass!(entityID, out result);
     }
 
     internal static void Rigidbody2DComponent_GetIsBullet(ulong entityID, out bool result)
     {
         EnsureInitialized();
-        s_Rigidbody2DGetIsBullet(entityID, out result);
+        s_Rigidbody2DGetIsBullet!(entityID, out result);
     }
 
     internal static void Rigidbody2DComponent_SetIsBullet(ulong entityID, bool value)
     {
         EnsureInitialized();
-        s_Rigidbody2DSetIsBullet(entityID, value);
+        s_Rigidbody2DSetIsBullet!(entityID, value);
     }
 
     internal static void BoxCollider2DComponent_GetSize(ulong entityID, out Mathf.Vector2 result)
     {
         EnsureInitialized();
-        s_BoxCollider2DGetSize(entityID, out NativeObject.Vector2 native);
+        s_BoxCollider2DGetSize!(entityID, out NativeObject.Vector2 native);
         result = NativeObject.ToManaged(native);
     }
 
     internal static void BoxCollider2DComponent_SetSize(ulong entityID, Mathf.Vector2 value)
     {
         EnsureInitialized();
-        s_BoxCollider2DSetSize(entityID, NativeObject.ToNative(value));
+        s_BoxCollider2DSetSize!(entityID, NativeObject.ToNative(value));
     }
 
     internal static void BoxCollider2DComponent_GetOffset(ulong entityID, out Mathf.Vector2 result)
     {
         EnsureInitialized();
-        s_BoxCollider2DGetOffset(entityID, out NativeObject.Vector2 native);
+        s_BoxCollider2DGetOffset!(entityID, out NativeObject.Vector2 native);
         result = NativeObject.ToManaged(native);
     }
 
     internal static void BoxCollider2DComponent_SetOffset(ulong entityID, Mathf.Vector2 value)
     {
         EnsureInitialized();
-        s_BoxCollider2DSetOffset(entityID, NativeObject.ToNative(value));
+        s_BoxCollider2DSetOffset!(entityID, NativeObject.ToNative(value));
     }
 
     internal static void BoxCollider2DComponent_GetRestitution(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_BoxCollider2DGetRestitution(entityID, out result);
+        s_BoxCollider2DGetRestitution!(entityID, out result);
     }
 
     internal static void BoxCollider2DComponent_SetRestitution(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_BoxCollider2DSetRestitution(entityID, value);
+        s_BoxCollider2DSetRestitution!(entityID, value);
     }
 
     internal static void BoxCollider2DComponent_GetFriction(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_BoxCollider2DGetFriction(entityID, out result);
+        s_BoxCollider2DGetFriction!(entityID, out result);
     }
 
     internal static void BoxCollider2DComponent_SetFriction(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_BoxCollider2DSetFriction(entityID, value);
+        s_BoxCollider2DSetFriction!(entityID, value);
     }
 
     internal static void BoxCollider2DComponent_GetDensity(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_BoxCollider2DGetDensity(entityID, out result);
+        s_BoxCollider2DGetDensity!(entityID, out result);
     }
 
     internal static void BoxCollider2DComponent_SetDensity(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_BoxCollider2DSetDensity(entityID, value);
+        s_BoxCollider2DSetDensity!(entityID, value);
     }
 
     internal static void BoxCollider2DComponent_GetIsSensor(ulong entityID, out bool result)
     {
         EnsureInitialized();
-        s_BoxCollider2DGetIsSensor(entityID, out result);
+        s_BoxCollider2DGetIsSensor!(entityID, out result);
     }
 
     internal static void BoxCollider2DComponent_SetIsSensor(ulong entityID, bool value)
     {
         EnsureInitialized();
-        s_BoxCollider2DSetIsSensor(entityID, value);
+        s_BoxCollider2DSetIsSensor!(entityID, value);
     }
 
     internal static void CircleCollider2DComponent_GetCenter(ulong entityID, out Mathf.Vector2 result)
     {
         EnsureInitialized();
-        s_CircleCollider2DGetCenter(entityID, out NativeObject.Vector2 native);
+        s_CircleCollider2DGetCenter!(entityID, out NativeObject.Vector2 native);
         result = NativeObject.ToManaged(native);
     }
 
     internal static void CircleCollider2DComponent_SetCenter(ulong entityID, Mathf.Vector2 value)
     {
         EnsureInitialized();
-        s_CircleCollider2DSetCenter(entityID, NativeObject.ToNative(value));
+        s_CircleCollider2DSetCenter!(entityID, NativeObject.ToNative(value));
     }
 
     internal static void CircleCollider2DComponent_GetRadius(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_CircleCollider2DGetRadius(entityID, out float native);
+        s_CircleCollider2DGetRadius!(entityID, out float native);
         result = native;
     }
 
     internal static void CircleCollider2DComponent_SetRadius(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_CircleCollider2DSetRadius(entityID, value);
+        s_CircleCollider2DSetRadius!(entityID, value);
     }
 
     internal static void CircleCollider2DComponent_GetRestitution(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_CircleCollider2DGetRestitution(entityID, out result);
+        s_CircleCollider2DGetRestitution!(entityID, out result);
     }
 
     internal static void CircleCollider2DComponent_SetRestitution(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_CircleCollider2DSetRestitution(entityID, value);
+        s_CircleCollider2DSetRestitution!(entityID, value);
     }
 
     internal static void CircleCollider2DComponent_GetFriction(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_CircleCollider2DGetFriction(entityID, out result);
+        s_CircleCollider2DGetFriction!(entityID, out result);
     }
 
     internal static void CircleCollider2DComponent_SetFriction(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_CircleCollider2DSetFriction(entityID, value);
+        s_CircleCollider2DSetFriction!(entityID, value);
     }
 
     internal static void CircleCollider2DComponent_GetDensity(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_CircleCollider2DGetDensity(entityID, out result);
+        s_CircleCollider2DGetDensity!(entityID, out result);
     }
 
     internal static void CircleCollider2DComponent_SetDensity(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_CircleCollider2DSetDensity(entityID, value);
+        s_CircleCollider2DSetDensity!(entityID, value);
     }
 
     internal static void CircleCollider2DComponent_GetIsSensor(ulong entityID, out bool result)
     {
         EnsureInitialized();
-        s_CircleCollider2DGetIsSensor(entityID, out result);
+        s_CircleCollider2DGetIsSensor!(entityID, out result);
     }
 
     internal static void CircleCollider2DComponent_SetIsSensor(ulong entityID, bool value)
     {
         EnsureInitialized();
-        s_CircleCollider2DSetIsSensor(entityID, value);
+        s_CircleCollider2DSetIsSensor!(entityID, value);
     }
 
     internal static void TextComponent_SetText(ulong entityID, string value)
@@ -1055,7 +1055,7 @@ public static class ComponentInternalCalls
         IntPtr ptr = NativeObject.StringToUtf8(value);
         try
         {
-            s_TextComponentSetText(entityID, ptr);
+            s_TextComponentSetText!(entityID, ptr);
         }
         finally
         {
@@ -1066,10 +1066,10 @@ public static class ComponentInternalCalls
     internal static void TextComponent_GetText(ulong entityID, out string result)
     {
         EnsureInitialized();
-        s_TextComponentGetText(entityID, out IntPtr ptr);
+        s_TextComponentGetText!(entityID, out IntPtr ptr);
         try
         {
-            result = Marshal.PtrToStringUTF8(ptr);
+            result = Marshal.PtrToStringUTF8(ptr) ?? "<invalid>";
         }
         finally
         {
@@ -1081,38 +1081,38 @@ public static class ComponentInternalCalls
     internal static void TextComponent_SetColor(ulong entityID, Mathf.Vector4 value)
     {
         EnsureInitialized();
-        s_TextComponentSetColor(entityID, NativeObject.ToNative(value));
+        s_TextComponentSetColor!(entityID, NativeObject.ToNative(value));
     }
 
     internal static void TextComponent_GetColor(ulong entityID, out Mathf.Vector4 result)
     {
         EnsureInitialized();
-        s_TextComponentGetColor(entityID, out NativeObject.Vector4 outResult);
+        s_TextComponentGetColor!(entityID, out NativeObject.Vector4 outResult);
         result = NativeObject.ToManaged(outResult);
     }
 
     internal static void TextComponent_SetKerning(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_TextComponentSetKerning(entityID, value);
+        s_TextComponentSetKerning!(entityID, value);
     }
 
     internal static void TextComponent_GetKerning(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_TextComponentGetKerning(entityID, out result);
+        s_TextComponentGetKerning!(entityID, out result);
     }
 
     internal static void TextComponent_SetLineSpacing(ulong entityID, float value)
     {
         EnsureInitialized();
-        s_TextComponentSetLineSpacing(entityID, value);
+        s_TextComponentSetLineSpacing!(entityID, value);
     }
 
     internal static void TextComponent_GetLineSpacing(ulong entityID, out float result)
     {
         EnsureInitialized();
-        s_TextComponentGetLineSpacing(entityID, out result);
+        s_TextComponentGetLineSpacing!(entityID, out result);
     }
 
     // =========================================================================
@@ -1123,7 +1123,7 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
         IntPtr ptr = NativeObject.StringToUtf8(labelName);
-        try { return s_WidgetComponentHasLabel(entityID, ptr); }
+        try { return s_WidgetComponentHasLabel!(entityID, ptr); }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
 
@@ -1133,8 +1133,8 @@ public static class ComponentInternalCalls
         IntPtr namePtr = NativeObject.StringToUtf8(labelName);
         try
         {
-            s_WidgetComponentGetLabelText(entityID, namePtr, out IntPtr result);
-            return NativeObject.Utf8ToString(result);
+            s_WidgetComponentGetLabelText!(entityID, namePtr, out IntPtr result);
+            return NativeObject.Utf8ToString(result)!;
         }
         finally { Marshal.FreeCoTaskMem(namePtr); }
     }
@@ -1144,7 +1144,7 @@ public static class ComponentInternalCalls
         EnsureInitialized();
         IntPtr namePtr = NativeObject.StringToUtf8(labelName);
         IntPtr textPtr = NativeObject.StringToUtf8(text);
-        try { s_WidgetComponentSetLabelText(entityID, namePtr, textPtr); }
+        try { s_WidgetComponentSetLabelText!(entityID, namePtr, textPtr); }
         finally { Marshal.FreeCoTaskMem(namePtr); Marshal.FreeCoTaskMem(textPtr); }
     }
 
@@ -1152,7 +1152,7 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
         IntPtr ptr = NativeObject.StringToUtf8(labelName);
-        try { s_WidgetComponentGetLabelColor(entityID, ptr, out NativeObject.Vector4 native); result = NativeObject.ToManaged(native); }
+        try { s_WidgetComponentGetLabelColor!(entityID, ptr, out NativeObject.Vector4 native); result = NativeObject.ToManaged(native); }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
 
@@ -1161,7 +1161,7 @@ public static class ComponentInternalCalls
         EnsureInitialized();
         IntPtr ptr = NativeObject.StringToUtf8(labelName);
         NativeObject.Vector4 native = NativeObject.ToNative(color);
-        try { s_WidgetComponentSetLabelColor(entityID, ptr, ref native); }
+        try { s_WidgetComponentSetLabelColor!(entityID, ptr, ref native); }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
 
@@ -1169,7 +1169,7 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
         IntPtr ptr = NativeObject.StringToUtf8(labelName);
-        try { s_WidgetComponentGetLabelFontSize(entityID, ptr, out result); }
+        try { s_WidgetComponentGetLabelFontSize!(entityID, ptr, out result); }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
 
@@ -1177,7 +1177,7 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
         IntPtr ptr = NativeObject.StringToUtf8(labelName);
-        try { s_WidgetComponentSetLabelFontSize(entityID, ptr, size); }
+        try { s_WidgetComponentSetLabelFontSize!(entityID, ptr, size); }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
 
@@ -1189,7 +1189,7 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
         IntPtr ptr = NativeObject.StringToUtf8(imageName);
-        try { return s_WidgetComponentHasImage(entityID, ptr); }
+        try { return s_WidgetComponentHasImage!(entityID, ptr); }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
 
@@ -1197,7 +1197,7 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
         IntPtr ptr = NativeObject.StringToUtf8(imageName);
-        try { s_WidgetComponentGetImageHandle(entityID, ptr, out ulong result); return result; }
+        try { s_WidgetComponentGetImageHandle!(entityID, ptr, out ulong result); return result; }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
 
@@ -1205,7 +1205,7 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
         IntPtr ptr = NativeObject.StringToUtf8(imageName);
-        try { s_WidgetComponentSetImageHandle(entityID, ptr, handle); }
+        try { s_WidgetComponentSetImageHandle!(entityID, ptr, handle); }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
 }

@@ -3,51 +3,21 @@
 #ifndef SCRIPT_HOST_HPP
 #define SCRIPT_HOST_HPP
 
+#include "MochiSharp/HostInstance.hpp"
+#include "MochiSharp/ManagedObject.hpp"
+#include "MochiSharp/Assembly.hpp"
+
 #include "ignite/core/types.hpp"
-#include "Host.h"
+#include "ignite/core/path.hpp"
 
 #include <string>
 #include <memory>
-#include "ignite/core/path.hpp"
+#include <vector>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace ignite
 {
-    // Method signature IDs for Ignite scripting
-    enum class ScriptMethodSig : int
-    {
-        Void = 0,
-        Void_Float,
-        Void_UInt64,
-        Void_UInt64_Type,
-        
-        Bool_Type,
-
-        UInt64_String,
-        UInt64_UInt64_Vec2,
-        UInt64_UInt64_Vec3,
-        UInt64_UInt64_Vec4,
-        UInt64_UInt64_Quat,
-
-        Void_UInt64_Bool,
-        Void_UInt64_OutBool,
-        
-        Void_UInt64_Vec2,
-        Void_UInt64_OutVec2,
-
-        Void_UInt64_Vec3,
-        Void_UInt64_OutVec3,
-
-        Void_UInt64_Vec4,
-        Void_UInt64_OutVec4,
-
-        Void_UInt64_Quat,
-        Void_UInt64_OutQuat,
-
-        Object_UInt64,
-    };
-
-    // Wrapper around MochiSharp's DotNetHost for Ignite scripting
     class ScriptHost
     {
     public:
@@ -78,10 +48,10 @@ namespace ignite
         bool SetInstanceFieldValue(uint64_t instanceId, const std::string &fieldName, const void *buffer, int bufferSize);
 
         // Bind an instance method and return a method handle
-        int BindInstanceMethod(uint64_t instanceId, const std::string &methodName, ScriptMethodSig signature);
+        int BindInstanceMethod(uint64_t instanceId, const std::string &methodName);
 
         // Bind a static method and return a method handle
-        int BindStaticMethod(const std::string &typeName, const std::string &methodName, ScriptMethodSig signature);
+        int BindStaticMethod(const std::string &typeName, const std::string &methodName);
 
         // Invoke a method with arguments
         bool Invoke(int methodId, const void *argsPtr, int argCount, void *returnPtr);
@@ -94,13 +64,45 @@ namespace ignite
         bool IsInitialized() const { return m_Initialized; }
 
         // Get the underlying MochiSharp host
-        MochiSharp::DotNetHost *GetHost() { return m_Host.get(); }
+        mochi::HostInstance *GetHost() { return &m_Host; }
 
     private:
-        std::unique_ptr<MochiSharp::DotNetHost> m_Host;
-        bool m_Initialized = false;
+        struct MethodBinding
+        {
+            enum class Kind
+            {
+                Instance,
+                Static,
+            };
+
+            Kind kind = Kind::Instance;
+            uint64_t instanceId = 0;
+            mochi::Type *type = nullptr;
+            std::string methodName;
+            std::vector<mochi::ManagedType> parameterTypes;
+        };
+
+        mochi::HostInstance m_Host;
+        Scope<mochi::AssemblyLoadContext> m_LoadContext;
+        mochi::ManagedAssembly *m_CoreAssembly = nullptr;
+        mochi::ManagedAssembly *m_AppAssembly = nullptr;
         ignite::Path m_BaseDir;
-        std::unordered_map<std::string, int> m_InstanceMap; // GUID -> instance ID
+        std::unordered_map<uint64_t, mochi::ManagedObject> m_InstanceMap;
+        std::unordered_map<std::string, mochi::Type *> m_TypeMap;
+        std::unordered_map<int, MethodBinding> m_MethodBindings;
+        std::unordered_set<std::string> m_ReferenceTypeNames;
+        std::string m_SerializeFieldAttributeTypeName;
+        bool m_Initialized = false;
+        int m_NextMethodId = 1;
+
+    private:
+        mochi::ManagedAssembly *LoadAssemblyInternal(const ignite::Path &assemblyPath, mochi::ManagedAssembly *&targetSlot);
+        mochi::Type *FindType(const std::string &typeName) const;
+        std::optional<MethodBinding> CreateMethodBinding(MethodBinding::Kind kind, uint64_t instanceId, mochi::Type *type, const std::string &methodName) const;
+        mochi::Type *FindFieldType(mochi::ManagedObject &instance, const std::string &fieldName);
+        bool IsReferenceType(const mochi::Type &type) const;
+        mochi::ManagedObject *EnsureReferenceInstance(uint64_t instanceId, const mochi::Type &type);
+        mochi::Type *GetReflectionBridgeType() const;
     };
 }
 

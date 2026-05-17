@@ -10,23 +10,23 @@ namespace Ignite.Core;
 public static class CoreInternalCalls
 {
     private static bool s_Initialized;
-    private static CoreNativeAPI.Funcs.DebugLogFn s_DebugLog;
+    private static CoreNativeAPI.Funcs.DebugLogFn? s_DebugLog;
     
-    private static CoreNativeAPI.Funcs.InputIsKeyPressedFn s_InputIsKeyPressed;
-    private static CoreNativeAPI.Funcs.InputIsModifierPressedFn s_InputIsModifierPressed;
-    private static CoreNativeAPI.Funcs.InputIsMouseButtonPressedFn s_InputIsMouseButtonPressed;
-    private static CoreNativeAPI.Funcs.InputGetMousePositionFn s_InputGetMousePosition;
-    private static CoreNativeAPI.Funcs.InputSetMouseToCenterFn s_InputSetMouseToCenter;
-    private static CoreNativeAPI.Funcs.InputSetCursorModeFn s_InputSetCursorMode;
+    private static CoreNativeAPI.Funcs.InputIsKeyPressedFn? s_InputIsKeyPressed;
+    private static CoreNativeAPI.Funcs.InputIsModifierPressedFn? s_InputIsModifierPressed;
+    private static CoreNativeAPI.Funcs.InputIsMouseButtonPressedFn? s_InputIsMouseButtonPressed;
+    private static CoreNativeAPI.Funcs.InputGetMousePositionFn? s_InputGetMousePosition;
+    private static CoreNativeAPI.Funcs.InputSetMouseToCenterFn? s_InputSetMouseToCenter;
+    private static CoreNativeAPI.Funcs.InputSetCursorModeFn? s_InputSetCursorMode;
 
-    private static CoreNativeAPI.Funcs.AssetManagerQueryFn s_AssetManagerIsAssetHandleValid;
+    private static CoreNativeAPI.Funcs.AssetManagerQueryFn? s_AssetManagerIsAssetHandleValid;
 
-    private static CoreNativeAPI.Funcs.AssetManagerLoadFromPathFn s_AssetManagerLoadAssetAsyncFromFile;
-    private static CoreNativeAPI.Funcs.AssetManagerLoadFromPathFn s_AssetManagerLoadAssetImmediateFromFile;
+    private static CoreNativeAPI.Funcs.AssetManagerLoadFromPathFn? s_AssetManagerLoadAssetAsyncFromFile;
+    private static CoreNativeAPI.Funcs.AssetManagerLoadFromPathFn? s_AssetManagerLoadAssetImmediateFromFile;
     
-    private static CoreNativeAPI.Funcs.AssetManagerQueryFn s_AssetManagerIsAssetLoaded;
-    private static CoreNativeAPI.Funcs.AssetManagerLoadFn s_AssetManagerLoadAssetAsync;
-    private static CoreNativeAPI.Funcs.AssetManagerLoadFn s_AssetManagerLoadAssetImmediate;
+    private static CoreNativeAPI.Funcs.AssetManagerQueryFn? s_AssetManagerIsAssetLoaded;
+    private static CoreNativeAPI.Funcs.AssetManagerLoadFn? s_AssetManagerLoadAssetAsync;
+    private static CoreNativeAPI.Funcs.AssetManagerLoadFn? s_AssetManagerLoadAssetImmediate;
 
     public static void Initialize(ulong apiPtr)
     {
@@ -69,7 +69,7 @@ public static class CoreInternalCalls
         IntPtr ptr = NativeObject.StringToUtf8(message);
         try
         {
-            s_DebugLog(ptr, level);
+            s_DebugLog!(ptr, level);
         }
         finally
         {
@@ -80,51 +80,51 @@ public static class CoreInternalCalls
     internal static bool Input_IsKeyPressed(uint keyCode)
     {
         EnsureInitialized();
-        return s_InputIsKeyPressed(keyCode);
+        return s_InputIsKeyPressed!(keyCode);
     }
 
     internal static bool Input_IsModifierPressed(ushort modCode)
     {
         EnsureInitialized();
-        return s_InputIsModifierPressed(modCode);
+        return s_InputIsModifierPressed!(modCode);
     }
 
     internal static bool Input_IsMouseButtonPressed(byte button)
     {
         EnsureInitialized();
-        return s_InputIsMouseButtonPressed(button);
+        return s_InputIsMouseButtonPressed!(button);
     }
 
     internal static void Input_GetMousePosition(out Mathf.Vector2 result)
     {
         EnsureInitialized();
-        s_InputGetMousePosition(out NativeObject.Vector2 native);
+        s_InputGetMousePosition!(out NativeObject.Vector2 native);
         result = NativeObject.ToManaged(native);
     }
 
     internal static void Input_SetMouseToCenter()
     {
         EnsureInitialized();
-        s_InputSetMouseToCenter();
+        s_InputSetMouseToCenter!();
     }
 
     internal static void Input_SetCursorMode(int mode)
     {
         EnsureInitialized();
-        s_InputSetCursorMode(mode);
+        s_InputSetCursorMode!(mode);
     }
 
     // Asset manager
     internal static bool AssetManager_IsAssetHandleValid(ulong handle)
     {
         EnsureInitialized();
-        return s_AssetManagerIsAssetHandleValid(handle);
+        return s_AssetManagerIsAssetHandleValid!(handle);
     }
 
     internal static bool AssetManager_IsAssetLoaded(ulong handle)
     {
         EnsureInitialized();
-        return s_AssetManagerIsAssetLoaded(handle);
+        return s_AssetManagerIsAssetLoaded!(handle);
     }
 
     internal static AssetHandle AssetManager_LoadAssetAsyncFromFile(string filename)
@@ -134,7 +134,7 @@ public static class CoreInternalCalls
         IntPtr ptr = NativeObject.StringToUtf8(filename);
         try
         {
-            return new AssetHandle(s_AssetManagerLoadAssetAsyncFromFile(ptr));
+            return new AssetHandle(s_AssetManagerLoadAssetAsyncFromFile!(ptr));
 
         }
         finally
@@ -150,7 +150,7 @@ public static class CoreInternalCalls
         IntPtr ptr = NativeObject.StringToUtf8(filename);
         try
         {
-            return new AssetHandle(s_AssetManagerLoadAssetImmediateFromFile(ptr));
+            return new AssetHandle(s_AssetManagerLoadAssetImmediateFromFile!(ptr));
         }
         finally
         {
@@ -161,21 +161,21 @@ public static class CoreInternalCalls
     internal static void AssetManager_LoadAssetAsync(ulong handle)
     {
         EnsureInitialized();
-        s_AssetManagerLoadAssetAsync(handle);
+        s_AssetManagerLoadAssetAsync!(handle);
     }
 
     internal static void AssetManager_LoadAssetImmediate(ulong handle)
     {
         EnsureInitialized();
-        s_AssetManagerLoadAssetImmediate(handle);
+        s_AssetManagerLoadAssetImmediate!(handle);
     }
 
     // ---- ScriptableObject field accessors ----
-    private static CoreNativeAPI.Funcs.ScriptableObjectGetFieldFloatFn  s_SOGetFieldFloat;
-    private static CoreNativeAPI.Funcs.ScriptableObjectGetFieldIntFn    s_SOGetFieldInt;
-    private static CoreNativeAPI.Funcs.ScriptableObjectGetFieldBoolFn   s_SOGetFieldBool;
-    private static CoreNativeAPI.Funcs.ScriptableObjectGetFieldStringFn s_SOGetFieldString;
-    private static CoreNativeAPI.Funcs.ScriptableObjectGetClassNameFn   s_SOGetClassName;
+    private static CoreNativeAPI.Funcs.ScriptableObjectGetFieldFloatFn? s_SOGetFieldFloat;
+    private static CoreNativeAPI.Funcs.ScriptableObjectGetFieldIntFn? s_SOGetFieldInt;
+    private static CoreNativeAPI.Funcs.ScriptableObjectGetFieldBoolFn? s_SOGetFieldBool;
+    private static CoreNativeAPI.Funcs.ScriptableObjectGetFieldStringFn? s_SOGetFieldString;
+    private static CoreNativeAPI.Funcs.ScriptableObjectGetClassNameFn? s_SOGetClassName;
 
     internal static bool HasScriptableObjectBridge => s_SOGetFieldFloat != null;
 
@@ -183,7 +183,7 @@ public static class CoreInternalCalls
     {
         EnsureInitialized();
         IntPtr ptr = NativeObject.StringToUtf8(fieldName);
-        try { return s_SOGetFieldFloat(handle, ptr); }
+        try { return s_SOGetFieldFloat!(handle, ptr); }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
 
@@ -191,7 +191,7 @@ public static class CoreInternalCalls
     {
         EnsureInitialized();
         IntPtr ptr = NativeObject.StringToUtf8(fieldName);
-        try { return s_SOGetFieldInt(handle, ptr); }
+        try { return s_SOGetFieldInt!(handle, ptr); }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
 
@@ -199,7 +199,7 @@ public static class CoreInternalCalls
     {
         EnsureInitialized();
         IntPtr ptr = NativeObject.StringToUtf8(fieldName);
-        try { return s_SOGetFieldBool(handle, ptr); }
+        try { return s_SOGetFieldBool!(handle, ptr); }
         finally { Marshal.FreeCoTaskMem(ptr); }
     }
 
@@ -209,8 +209,8 @@ public static class CoreInternalCalls
         IntPtr namePtr = NativeObject.StringToUtf8(fieldName);
         try
         {
-            IntPtr result = s_SOGetFieldString(handle, namePtr);
-            return NativeObject.Utf8ToString(result);
+            IntPtr result = s_SOGetFieldString!(handle, namePtr);
+            return NativeObject.Utf8ToString(result)!;
         }
         finally { Marshal.FreeCoTaskMem(namePtr); }
     }
@@ -218,8 +218,8 @@ public static class CoreInternalCalls
     internal static string ScriptableObject_GetClassName(ulong handle)
     {
         EnsureInitialized();
-        IntPtr result = s_SOGetClassName(handle);
-        return NativeObject.Utf8ToString(result);
+        IntPtr result = s_SOGetClassName!(handle);
+        return NativeObject.Utf8ToString(result)!;
     }
 
     /// <summary>

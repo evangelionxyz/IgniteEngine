@@ -176,10 +176,10 @@ public static class ComponentNativeAPI
         public delegate ulong EntityFindChildEntityByNameFn(ulong entityID, IntPtr childName);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate bool EntityIsParent(ulong entityID, ulong parentEntityID);
+        public delegate bool EntityIsParentFn(ulong entityID, ulong parentEntityID);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate ulong EntityGetParent(ulong entityID);
+        public delegate ulong EntityGetParentFn(ulong entityID);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void EntityDestroyFn(ulong entityID);

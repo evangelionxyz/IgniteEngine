@@ -13,17 +13,17 @@ namespace ignite
         void (*Scene_GetScreenToWorldRay)(float x, float y, glm::vec3 *outOrigin, glm::vec3 *outDirection);
         uint64_t (*Scene_Raycast)(glm::vec3 origin, glm::vec3 direction);
 
-        bool        (*Entity_HasComponent)(uint64_t entityID, const char *componentTypeName);
-        void        (*Entity_AddComponent)(uint64_t entityID, const char *componentTypeName);
-        uint64_t    (*Entity_FindEntityByName)(const char *name);
-        uint64_t    (*Entity_FindChildByName)(uint64_t entityID, const char *childName);
-        bool        (*Entity_IsParent)(uint64_t entityID, uint64_t parentEntityID);
-        uint64_t    (*Entity_GetParent)(uint64_t entityID);
-        uint64_t    (*Entity_InstantiateWithName)(const char *name, glm::vec3 value);
-        uint64_t    (*Entity_Instantiate)(uint64_t entityID, glm::vec3 value);
-        void        (*Entity_Destroy)(uint64_t entityID);
-        void        (*Entity_SetVisibility)(uint64_t entityID, bool value);
-        void        (*Entity_GetVisibility)(uint64_t entityID, bool *result);
+        bool (*Entity_HasComponent)(uint64_t entityID, const char *componentTypeName);
+        void (*Entity_AddComponent)(uint64_t entityID, const char *componentTypeName);
+        uint64_t (*Entity_FindEntityByName)(const char *name);
+        uint64_t (*Entity_FindChildByName)(uint64_t entityID, const char *childName);
+        bool (*Entity_IsParent)(uint64_t entityID, uint64_t parentEntityID);
+        uint64_t (*Entity_GetParent)(uint64_t entityID);
+        uint64_t (*Entity_InstantiateWithName)(const char *name, glm::vec3 value);
+        uint64_t (*Entity_Instantiate)(uint64_t entityID, glm::vec3 value);
+        void (*Entity_Destroy)(uint64_t entityID);
+        void (*Entity_SetVisibility)(uint64_t entityID, bool value);
+        void (*Entity_GetVisibility)(uint64_t entityID, bool *result);
         const char *(*Entity_GetName)(uint64_t entityID);
 
         bool (*WidgetComponent_HasButton)(uint64_t entityID, const char *buttonName);
@@ -65,8 +65,6 @@ namespace ignite
         bool (*AudioSourceComponent_AddCompressorDSP)(uint64_t entityID, float threshold, float ratio, float release, float gainMakeup, bool useSidechain);
         bool (*AudioSourceComponent_AddDelayDSP)(uint64_t entityID, float delayMs, float feedback);
         void (*AudioSourceComponent_ClearDSPs)(uint64_t entityID);
-
-        
 
         void (*TransformComponent_GetForward)(uint64_t entityID, glm::vec3 *result);
         void (*TransformComponent_SetForward)(uint64_t entityID, glm::vec3 value);

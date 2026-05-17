@@ -12,7 +12,7 @@ public static class Physics
         return new Ray(origin, direction);
     }
 
-    public static Entity Raycast(Ray ray)
+    public static Entity? Raycast(Ray ray)
     {
         ulong entityID = ComponentInternalCalls.Scene_Raycast(ray.Origin, ray.Direction);
         if (entityID == 0)
