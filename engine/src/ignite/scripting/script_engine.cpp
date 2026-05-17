@@ -155,17 +155,41 @@ namespace ignite
         {"Ignite.ScriptableObject", ScriptFieldType::Asset},
         {"Ignite.AssetHandle", ScriptFieldType::Asset},
         {"Ignite.Asset", ScriptFieldType::Asset},
+
+        // Normalized List<T> keys emitted by ScriptReflectionBridge
+        {"List<System.Boolean>",          ScriptFieldType::List_Bool},
+        {"List<System.Char>",             ScriptFieldType::List_Char},
+        {"List<System.String>",           ScriptFieldType::List_String},
+        {"List<System.Byte>",             ScriptFieldType::List_Byte},
+        {"List<System.SByte>",            ScriptFieldType::List_SByte},
+        {"List<System.Int16>",            ScriptFieldType::List_Short},
+        {"List<System.UInt16>",           ScriptFieldType::List_UShort},
+        {"List<System.Int32>",            ScriptFieldType::List_Int},
+        {"List<System.UInt32>",           ScriptFieldType::List_UInt},
+        {"List<System.Int64>",            ScriptFieldType::List_Long},
+        {"List<System.UInt64>",           ScriptFieldType::List_ULong},
+        {"List<System.Single>",           ScriptFieldType::List_Float},
+        {"List<System.Double>",           ScriptFieldType::List_Double},
+        {"List<Ignite.Mathf+Vector2>",    ScriptFieldType::List_Vector2},
+        {"List<Ignite.Mathf+Vector3>",    ScriptFieldType::List_Vector3},
+        {"List<Ignite.Mathf+Vector4>",    ScriptFieldType::List_Vector4},
+        {"List<Ignite.Mathf+Quaternion>", ScriptFieldType::List_Quat},
+        {"List<Ignite.Mathf+Color>",      ScriptFieldType::List_Color},
+        {"List<Ignite.Entity>",           ScriptFieldType::List_Entity},
+        {"List<Ignite.ScriptableObject>", ScriptFieldType::List_Asset},
+        {"List<Ignite.AssetHandle>",      ScriptFieldType::List_Asset},
+        {"List<Ignite.Asset>",            ScriptFieldType::List_Asset},
     };
 
     struct ScriptEngineData
     {
-        std::unique_ptr<ScriptHost> scriptHost;
+        Scope<ScriptHost> scriptHost;
 
         ignite::Path mochiSharpAssemblyFilepath;
         ignite::Path coreAssemblyFilepath;
         ignite::Path appAssemblyFilepath;
 
-        std::unique_ptr<filewatch::FileWatch<std::string>> appAssemblyFileWatcher;
+        Scope<filewatch::FileWatch<std::string>> appAssemblyFileWatcher;
         bool assemblyReloadingPending = false;
         bool assemblyReloadDeferred = false;
         std::filesystem::file_time_type appAssemblyLastWriteTime{};
@@ -189,7 +213,7 @@ namespace ignite
     {
         if (!scriptEngineData->scriptHost)
         {
-            scriptEngineData->scriptHost = std::make_unique<ScriptHost>();
+            scriptEngineData->scriptHost = CreateScope<ScriptHost>();
         }
 
         // Find the runtimeconfig.json for MochiSharp.Managed
@@ -240,21 +264,7 @@ namespace ignite
 
         InitHostFxr();
 
-        // Load MochiSharp.Managed core
-        const ignite::Path mochiSharpPath = m_Project->GetScriptBinDirectory() / "MochiSharp.Managed.dll";
-        if (!std::filesystem::exists(mochiSharpPath.string()))
-        {
-            LOG_ERROR("[Script Engine] MochiSharp.Managed.dll not found!");
-            return;
-        }
-
-        scriptEngineData->mochiSharpAssemblyFilepath = mochiSharpPath;
-        if (!scriptEngineData->scriptHost->LoadAssembly(mochiSharpPath))
-        {
-            LOG_ERROR("[Script Engine] Failed to load MochiSharp.Managed.dll");
-            return;
-        }
-        LOG_INFO("[Script Engine] Loaded MochiSharp.Managed.dll");
+        scriptEngineData->mochiSharpAssemblyFilepath = m_Project->GetScriptBinDirectory() / "MochiSharp.Managed.dll";
 
         // Script Core Assembly (IgniteScriptEngine.dll)
         const ignite::Path coreAssemblyPath = m_Project->GetScriptBinDirectory() / "IgniteScriptEngine.dll";
@@ -411,6 +421,20 @@ namespace ignite
     {
         // Clear existing instances
         scriptEngineData->entityScriptInstances.clear();
+
+        if (!scriptEngineData->scriptHost || !scriptEngineData->scriptHost->ResetLoadContext())
+        {
+            LOG_ERROR("[Script Engine] Failed to reset script host load context during reload");
+            return;
+        }
+
+        if (!LoadCoreAssembly(scriptEngineData->coreAssemblyFilepath))
+        {
+            LOG_ERROR("[Script Engine] Failed to reload core assembly '{}'", scriptEngineData->coreAssemblyFilepath.generic_string());
+            return;
+        }
+
+        scriptEngineData->scriptHost->RegisterSignatures();
 
         // Reload app assembly (MochiSharp handles unloading through collectible context)
         if (LoadAppAssembly(scriptEngineData->appAssemblyFilepath))
@@ -711,15 +735,39 @@ namespace ignite
                                 // Field is a specific ScriptableObject subclass (same assembly)
                                 field.Type = ScriptFieldType::Asset;
                             }
+                            else if (managedTypeName.rfind("List<", 0) == 0 &&
+                                     managedTypeName.size() > 5 &&
+                                     managedTypeName.back() == '>')
+                            {
+                                // Normalized "List<ElementTypeName>" emitted by ScriptReflectionBridge
+                                const std::string elementType = managedTypeName.substr(5, managedTypeName.size() - 6);
+                                field.ListElementTypeName = elementType;
+
+                                // Try direct map lookup (covers all primitive + engine types)
+                                const auto listTypeIt = s_ScriptFieldTypeMap.find(managedTypeName);
+                                if (listTypeIt != s_ScriptFieldTypeMap.end())
+                                {
+                                    field.Type = listTypeIt->second;
+                                }
+                                else if (scriptEngineData->scriptableObjectClasses.count(elementType))
+                                {
+                                    // List of a specific ScriptableObject subclass
+                                    field.Type = ScriptFieldType::List_Asset;
+                                }
+                                else if (scriptEngineData->entityClasses.count(elementType))
+                                {
+                                    // List of a custom entity script class (treat as List<Entity>)
+                                    field.Type = ScriptFieldType::List_Entity;
+                                }
+                            }
                         }
 
+                        // Only register the field if it resolved to a known type.
+                        // Unknown types (e.g. engine component wrappers not in the map) are silently
+                        // skipped — the C# side already filtered out private/non-serializable fields.
                         if (field.Type != ScriptFieldType::Invalid)
                         {
                             scriptClass->InsertField(fieldName, field);
-                        }
-                        else
-                        {
-                            LOG_ERROR("[Script Engine] Unsupported script field type '{}.{}' ({})", fullName, fieldName, managedTypeName);
                         }
                     }
                 }

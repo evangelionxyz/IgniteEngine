@@ -1,27 +1,8 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef IMGUI_LAYER_HPP
+#define IMGUI_LAYER_HPP
 
 #include "ignite/core/types.hpp"
 #include "ignite/core/device/device_manager.hpp"
@@ -45,22 +26,22 @@ namespace ignite
     {
     public:
         GuiFont();
-        GuiFont(f32 size);
-        GuiFont(Buffer data, bool isCompressed, f32 size);
+        GuiFont(float size);
+        GuiFont(std::vector<uint8_t> data, bool isCompressed, float size);
 
-        bool HasFontData() const { return m_Data.data != nullptr; }
+        bool HasFontData() const { return m_Data.data() != nullptr; }
         ImFont *GetScaledFont() const { return m_ImFont; }
 
     protected:
         friend class ImGuiLayer;
 
-        Buffer m_Data;
+        std::vector<uint8_t> m_Data;
         bool const m_IsDefault;
         bool const m_IsCompressed;
-        f32 const m_SizeAtDefaultScale;
+        float const m_SizeAtDefaultScale;
         ImFont *m_ImFont = nullptr;
 
-        void CreateScaledFont(f32 displayScale);
+        void CreateScaledFont(float displayScale);
         void ReleaseScaledFont();
     };
 
@@ -97,6 +78,8 @@ namespace ignite
         
         // Store original style for proper scaling
         ImGuiStyle m_OriginalStyle;
-        f32 m_CurrentDPIScale = 1.0f;
+        float m_CurrentDPIScale = 1.0f;
     };
 }
+
+#endif

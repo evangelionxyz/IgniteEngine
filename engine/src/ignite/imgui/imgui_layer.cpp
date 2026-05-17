@@ -1,28 +1,8 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "imgui_layer.hpp"
 #include "ignite/core/application.hpp"
+#include "ignite/graphics/window.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 
@@ -54,43 +34,45 @@ namespace ignite
     {
     }
 
-    GuiFont::GuiFont(f32 size)
+    GuiFont::GuiFont(float size)
         : m_IsDefault(true)
         , m_IsCompressed(false)
-        , m_SizeAtDefaultScale(0.0f)
+        , m_SizeAtDefaultScale(size)
     {
     }
 
-    GuiFont::GuiFont(Buffer data, bool isCompressed, f32 size)
-        : m_Data(data)
+    GuiFont::GuiFont(std::vector<uint8_t> data, bool isCompressed, float size)
+        : m_Data(std::move(data))
         , m_IsDefault(false)
         , m_IsCompressed(isCompressed)
         , m_SizeAtDefaultScale(size)
     {
     }
 
-    void GuiFont::CreateScaledFont(f32 displayScale)
+    void GuiFont::CreateScaledFont(float displayScale)
     {
         ImFontConfig fontConfig;
         fontConfig.SizePixels = m_SizeAtDefaultScale * displayScale;
 
         m_ImFont = nullptr;
 
-        if (m_Data.data)
+        auto &io = ImGui::GetIO();
+
+        if (m_Data.data() && !m_Data.empty())
         {
             fontConfig.FontDataOwnedByAtlas = false;
             m_ImFont = m_IsCompressed 
-                ? ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(m_Data.data, static_cast<int>(m_Data.size), 0.0f, &fontConfig)
-                : ImGui::GetIO().Fonts->AddFontFromMemoryTTF(m_Data.data, static_cast<int>(m_Data.size), 0.0f, &fontConfig);
+                ? io.Fonts->AddFontFromMemoryCompressedTTF(m_Data.data(), static_cast<int>(m_Data.size()), 0.0f, &fontConfig)
+                : io.Fonts->AddFontFromMemoryTTF(m_Data.data(), static_cast<int>(m_Data.size()), 0.0f, &fontConfig);
         }
         else if (m_IsDefault)
         {
-            m_ImFont = ImGui::GetIO().Fonts->AddFontDefault(&fontConfig);
+            m_ImFont = io.Fonts->AddFontDefault(&fontConfig);
         }
 
         if (m_ImFont)
         {
-            ImGui::GetIO().Fonts->TexID = 0;
+            io.Fonts->TexID = 0;
         }
     }
 
@@ -118,22 +100,20 @@ namespace ignite
         if (file.is_open())
         {
             file.seekg(0, std::ios::end);
-            u64 size = file.tellg();
+            const uint64_t size = file.tellg();
             file.seekg(0, std::ios::beg);
 
-            char *data = static_cast<char *>(malloc(size));
-            LOG_ASSERT(data, "Out of memory");
+            std::vector<uint8_t> dataArray;
+            dataArray.resize(size);
 
-            file.read(data, size);
+            file.read(reinterpret_cast<char *>(dataArray.data()), static_cast<std::streamsize>(dataArray.size()));
             
             if (file.good())
             {
-                m_Font = std::make_shared<GuiFont>(Buffer(data, size), false, 16);
+                constexpr float fontSize = 16.0f;
+                m_Font = CreateRef<GuiFont>(dataArray, false, fontSize);
             }
-            else
-            {
-                free(data);
-            }
+
             file.close();
         }
 
@@ -366,7 +346,7 @@ namespace ignite
         if (!imguiNVRHI || m_BeginFrameCalled)
             return;
 
-        f32 scaleX, scaleY;
+        float scaleX, scaleY;
         m_DeviceManager->GetDPIScaleInfo(scaleX, scaleY);
 
         // Check if DPI has changed and recreate font if necessary

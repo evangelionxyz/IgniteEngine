@@ -24,8 +24,9 @@
 #include "ignite/animation/animation_2d.hpp"
 #include "ignite/animation/animator/animator_controller.hpp"
 #include "ignite/animation/animator/animator_controller_2d.hpp"
-
 #include "ignite/project/project.hpp"
+#include "ignite/graphics/ui/widget_canvas.hpp"
+
 #include "ignite/core/profiler/profiler.hpp"
 
 #include <ranges>
@@ -415,6 +416,21 @@ namespace ignite
         }
         
         return Entity{};
+    }
+
+    Ref<WidgetCanvas> Scene::GetRootWidget()
+    {
+        const auto &widgetView = registry->view<WidgetComponent>();
+        for (const auto e : widgetView)
+        {
+            const WidgetComponent &widgetComp = widgetView.get<WidgetComponent>(e);
+            if (widgetComp.widgetHandle == AssetHandle(0))
+                continue;
+
+            return m_Project->GetAssetImmediate<WidgetCanvas>(widgetComp.widgetHandle);
+        }
+
+        return nullptr;
     }
 
     void Scene::OnUpdateRuntimeSimulate(f32 deltaTime)

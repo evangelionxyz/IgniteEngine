@@ -8,12 +8,20 @@ project "MochiSharp.Native"
     targetdir (OUTPUT_DIR)
     objdir (INTOUTPUT_DIR)
 
+    pchheader "PCH.hpp"
+    pchsource "../thirdparty/MochiSharp/MochiSharp.Native/Source/PCH.cpp"
+    forceincludes {
+        "PCH.hpp"
+    }
+
     files {
         "%{prj.location}/Source/**.cpp",
-        "%{prj.location}/Source/**.h"
+        "%{prj.location}/Source/**.hpp"
     }
 
     includedirs {
+        "%{prj.location}/Source",
+        "%{prj.location}/Source/MochiSharp",
         "%{IncludeDir.Hostfxr}"
     }
 

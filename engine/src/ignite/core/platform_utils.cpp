@@ -24,6 +24,7 @@
 #include "platform_utils.hpp"
 
 #include "application.hpp"
+#include "ignite/graphics/window.hpp"
 
 #ifdef PLATFORM_WINDOWS
     #include <Windows.h>

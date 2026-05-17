@@ -28,8 +28,6 @@ namespace ignite
 
         void SetViewportSize(const uint32_t width, const uint32_t height) { m_ViewportSize = { width, height }; }
         const glm::uvec2 &GetViewportSize() const { return m_ViewportSize; }
-        void SetScene(Scene *scene) { m_Scene = scene; }
-        Scene *GetScene() const { return m_Scene; }
 
         void SetName(const std::string &newName) { name = newName; }
         const std::string &GetName() const { return name; }
@@ -73,7 +71,6 @@ namespace ignite
         bool m_BlocksWidgetsBelow = false;
         WidgetID m_NextWidgetItemId = 0;
 
-        Scene *m_Scene;
         glm::uvec2 m_ViewportSize;
     };
 }

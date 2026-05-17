@@ -32,6 +32,28 @@ namespace ignite
         Color,
         Enum,
         Asset,   // AssetHandle - uint64_t; covers ScriptableObject, Texture, etc.
+
+        // Generic List<T> variants
+        List_Bool,
+        List_Char,
+        List_String,
+        List_Byte,
+        List_SByte,
+        List_Short,
+        List_UShort,
+        List_Int,
+        List_UInt,
+        List_Long,
+        List_ULong,
+        List_Float,
+        List_Double,
+        List_Vector2,
+        List_Vector3,
+        List_Vector4,
+        List_Quat,
+        List_Color,
+        List_Entity,
+        List_Asset,
     };
 
     struct ScriptField
@@ -39,12 +61,18 @@ namespace ignite
         ScriptFieldType Type = ScriptFieldType::Invalid;
         std::string Name;
         std::string ManagedTypeName;
+        std::string ListElementTypeName; // Populated when Type is a List_* variant
         bool IsPublic = false;
         bool HasSerializeFieldAttribute = false;
 
         bool IsEnum = false;
         std::vector<std::string> EnumNames;
         std::vector<int> EnumValues;
+
+        bool IsList() const
+        {
+            return Type >= ScriptFieldType::List_Bool && Type <= ScriptFieldType::List_Asset;
+        }
     };
 
     struct ScriptInstanceField

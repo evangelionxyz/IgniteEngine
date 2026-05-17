@@ -16,7 +16,7 @@ public readonly struct AssetHandle : IEquatable<AssetHandle>
     public bool IsValid => Value != 0;
 
     public bool Equals(AssetHandle other) => Value == other.Value;
-    public override bool Equals(object obj) => obj is AssetHandle other && Equals(other);
+    public override bool Equals(object? obj) => obj is AssetHandle other && Equals(other);
     public override int GetHashCode() => Value.GetHashCode();
     public override string ToString() => Value.ToString();
 

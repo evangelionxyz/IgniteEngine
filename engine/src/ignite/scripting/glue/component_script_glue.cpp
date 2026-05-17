@@ -852,7 +852,7 @@ namespace ignite
                 return false;
             }
 
-            const int methodId = scriptInstance->GetScriptClass()->BindInstanceMethod(scriptInstance->GetInstanceID(), resolvedMethodName, ScriptMethodSig::Void);
+            const int methodId = scriptInstance->GetScriptClass()->BindInstanceMethod(scriptInstance->GetInstanceID(), resolvedMethodName);
             if (methodId == 0)
             {
                 LOG_WARN("[ScriptGlue] Failed to bind widget callback '{}.{}'", entityID, resolvedMethodName);

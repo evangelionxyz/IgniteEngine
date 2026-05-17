@@ -2,7 +2,7 @@ project "IgniteScriptEngine"
     location "%{wks.location}/scriptengine"
     kind "SharedLib"
     language "C#"
-    dotnetframework "net9.0"
+    dotnetframework "net10.0"
     
     targetdir (OUTPUT_DIR)
     objdir (INTOUTPUT_DIR)
@@ -20,6 +20,7 @@ project "IgniteScriptEngine"
         vsprops {
             AppendTargetFrameworkToOutputPath = "false",
             Nullable = "enable",
+            AllowUnsafeBlocks = "true",
             CopyLocalLockFileAssemblies = "true",
             EnableDynamicLoading = "true",
             ImplicitUsing = "enable"

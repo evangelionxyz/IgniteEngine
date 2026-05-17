@@ -11,13 +11,13 @@ public class Sprite2DComponent : IComponent
     {
         get
         {
-            ComponentInternalCalls.Sprite2DComponent_GetColor(Entity.ID, out Vector4 result);
+            ComponentInternalCalls.Sprite2DComponent_GetColor(Entity!.ID, out Vector4 result);
             return result;
         }
 
         set
         {
-            ComponentInternalCalls.Sprite2DComponent_SetColor(Entity.ID, value);
+            ComponentInternalCalls.Sprite2DComponent_SetColor(Entity!.ID, value);
         }
     }
 
@@ -25,13 +25,13 @@ public class Sprite2DComponent : IComponent
     {
         get
         {
-            ComponentInternalCalls.Sprite2DComponent_GetTilingFactor(Entity.ID, out Vector2 result);
+            ComponentInternalCalls.Sprite2DComponent_GetTilingFactor(Entity!.ID, out Vector2 result);
             return result;
         }
 
         set
         {
-            ComponentInternalCalls.Sprite2DComponent_SetTilingFactor(Entity.ID, value);
+            ComponentInternalCalls.Sprite2DComponent_SetTilingFactor(Entity!.ID, value);
         }
     }
 }

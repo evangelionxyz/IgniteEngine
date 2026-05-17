@@ -28,7 +28,6 @@
 #include <charconv>
 #include <optional>
 #include <string>
-#include <regex>
 #include <vector>
 
 namespace ignite::stringutils

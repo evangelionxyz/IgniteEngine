@@ -58,9 +58,9 @@ public class Entity : ScriptableObject
         ComponentInternalCalls.Entity_Destroy(ID);
     }
 
-    public T As<T>() where T : Entity, new()
+    public T? As<T>() where T : Entity, new()
     {
-        object instance = ComponentInternalCalls.GetScriptInstance(ID);
+        object? instance = ComponentInternalCalls.GetScriptInstance(ID);
         return instance as T;
     }
 
@@ -119,7 +119,7 @@ public class Entity : ScriptableObject
         ComponentInternalCalls.Entity_Destroy(entity.ID);
     }
 
-    public static Entity FindEntity(string name)
+    public static Entity? FindEntity(string name)
     {
         ulong entityID = ComponentInternalCalls.Entity_FindEntity(name);
         if (entityID == 0)
@@ -128,7 +128,7 @@ public class Entity : ScriptableObject
         return new Entity(entityID);
     }
 
-    public Entity FindChild(string childName)
+    public Entity? FindChild(string childName)
     {
         ulong entityID = ComponentInternalCalls.Entity_FindChildEntity(ID, childName);
         if (entityID == 0)
@@ -141,7 +141,7 @@ public class Entity : ScriptableObject
         return ComponentInternalCalls.Entity_IsParent(ID, entity.ID);
     }
 
-    public Entity GetParent()
+    public Entity? GetParent()
     {
         ulong parentID = ComponentInternalCalls.Entity_GetParent(ID);
         if (parentID == 0)

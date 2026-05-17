@@ -537,27 +537,15 @@ namespace ignite
         }
     }
 
-    void WidgetRenderer::SetScene(Scene *scene)
-    {
-        m_Scene = scene;
-
-        for (auto it = m_RenderLayers.rbegin(); it != m_RenderLayers.rend(); ++it)
-        {
-            if (!it->widget)
-                continue;
-
-            it->widget->SetViewportSize(m_Width, m_Height);
-            it->widget->SetScene(m_Scene);
-        }
-    }
-
     void WidgetRenderer::Update(float deltaTime)
     {
         (void)deltaTime;
         BuildRenderLayers();
 
-        if (!m_Project || (!m_PreviewWidget && !m_Scene))
+        if (!m_Project || !m_ActiveWidget)
+        {
             return;
+        }
 
         const glm::uvec2 mousePos = { m_MouseX, m_MouseY };
         const bool isMousePressed = Input::IsMouseButtonPressed(Mouse::ButtonLeft);
@@ -728,8 +716,9 @@ namespace ignite
     void WidgetRenderer::BuildRenderLayers()
     {
         m_RenderLayers.clear();
-        if (!m_Project)
+        if (!m_Project || !m_ActiveWidget)
         {
+            LOG_ASSERT(m_Project, "[Widget Renderer] Project should not be null!");
             return;
         }
 
@@ -766,36 +755,16 @@ namespace ignite
             }
         };
 
-        if (m_PreviewWidget)
-        {
-            collectWidget(m_PreviewWidget, m_PreviewWidget->BlocksWidgetsBelow());
-            return;
-        }
-
-        if (!m_Scene || !m_Scene->registry)
-        {
-            return;
-        }
-
-        auto widgetView = m_Scene->registry->view<WidgetComponent>();
-        for (const entt::entity entity : widgetView)
-        {
-            const WidgetComponent &widgetComp = widgetView.get<WidgetComponent>(entity);
-            if (widgetComp.widgetHandle == AssetHandle(0))
-                continue;
-
-            Ref<WidgetCanvas> widget = m_Project->GetAsset<WidgetCanvas>(widgetComp.widgetHandle);
-            if (!widget)
-                continue;
-
-            collectWidget(widget, widget ? widget->BlocksWidgetsBelow() : false);
-        }
+        collectWidget(m_ActiveWidget, m_ActiveWidget->BlocksWidgetsBelow());
     }
 
     void WidgetRenderer::RenderWidgetItems()
     {
-        if (!m_Project)
+        if (!m_Project || !m_ActiveWidget)
+        {
+            LOG_ASSERT(m_Project, "[Widget Renderer] Project should not be null!");
             return;
+        }
 
         for (const WidgetRenderLayer &layer : m_RenderLayers)
         {

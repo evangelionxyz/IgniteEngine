@@ -34,10 +34,8 @@ namespace ignite
         void DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1);
         void DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing);
 
-        void SetScene(Scene *scene);
-
         void SetProject(Project *project) { m_Project = project; }
-        void SetPreviewWidget(const Ref<WidgetCanvas> &widget) { m_PreviewWidget = widget; }
+        void SetActiveWidget(const Ref<WidgetCanvas> &widget) { m_ActiveWidget = widget; }
         void SetMousePosition(uint32_t mouseX, uint32_t mouseY);
 
         void Update(float deltaTime);
@@ -77,9 +75,8 @@ namespace ignite
         BatchRender<VertexWidgetQuad> m_QuadBatch;
         BatchRender<VertexWidgetText> m_TextBatch;
 
-        Scene *m_Scene = nullptr;
         Project *m_Project = nullptr;
-        Ref<WidgetCanvas> m_PreviewWidget = nullptr;
+        Ref<WidgetCanvas> m_ActiveWidget = nullptr;
         std::vector<WidgetRenderLayer> m_RenderLayers;
 
         glm::mat4 m_Projection;

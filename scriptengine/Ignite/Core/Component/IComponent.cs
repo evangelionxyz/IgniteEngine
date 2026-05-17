@@ -4,6 +4,6 @@ namespace Ignite;
 
 public abstract class IComponent
 {
-    public Entity Entity { get; internal set; }
+    public Entity? Entity { get; internal set; }
 }
 

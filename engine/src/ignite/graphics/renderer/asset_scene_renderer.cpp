@@ -155,7 +155,8 @@ namespace ignite
 
         if (m_WidgetRenderer)
         {
-            m_WidgetRenderer->SetPreviewWidget(widget);
+            m_WidgetRenderer->SetProject(m_Project);
+            m_WidgetRenderer->SetActiveWidget(widget);
         }
     }
 
