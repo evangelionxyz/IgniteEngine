@@ -29,6 +29,7 @@ namespace ignite
 
         // Load a .NET assembly (core or app)
         bool LoadAssembly(const ignite::Path &assemblyPath);
+        bool ResetLoadContext();
 
         // Register method signatures for script methods
         void RegisterSignatures();

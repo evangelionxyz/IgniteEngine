@@ -422,12 +422,9 @@ namespace ignite
         // Clear existing instances
         scriptEngineData->entityScriptInstances.clear();
 
-        ShutdownHostFxr();
-        InitHostFxr();
-
-        if (!scriptEngineData->scriptHost)
+        if (!scriptEngineData->scriptHost || !scriptEngineData->scriptHost->ResetLoadContext())
         {
-            LOG_ERROR("[Script Engine] Failed to recreate script host during reload");
+            LOG_ERROR("[Script Engine] Failed to reset script host load context during reload");
             return;
         }
 

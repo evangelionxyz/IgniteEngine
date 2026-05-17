@@ -154,6 +154,40 @@ namespace ignite
         return true;
     }
 
+    bool ScriptHost::ResetLoadContext()
+    {
+        if (!m_Initialized)
+        {
+            LOG_ERROR("[Script Host] Cannot reset load context - host not initialized");
+            return false;
+        }
+
+        for (auto &[instanceId, instance] : m_InstanceMap)
+        {
+            (void)instanceId;
+            instance.Destroy();
+        }
+
+        m_InstanceMap.clear();
+        m_MethodBindings.clear();
+        m_TypeMap.clear();
+        m_ReferenceTypeNames.clear();
+        m_SerializeFieldAttributeTypeName.clear();
+        m_NextMethodId = 1;
+        m_CoreAssembly = nullptr;
+        m_AppAssembly = nullptr;
+
+        m_LoadContext.reset();
+        m_LoadContext = CreateScope<mochi::AssemblyLoadContext>(m_Host.CreateAssemblyLoadContext("Ignite.Scripting", m_BaseDir.string()));
+        if (!m_LoadContext)
+        {
+            LOG_ERROR("[Script Host] Failed to create assembly load context for reload");
+            return false;
+        }
+
+        return true;
+    }
+
     void ScriptHost::RegisterSignatures()
     {
         if (!m_Initialized)
