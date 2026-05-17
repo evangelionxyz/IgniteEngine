@@ -16,5 +16,6 @@ project "MochiSharp.Managed"
     objdir (INTOUTPUT_DIR)
 
     files {
-        "%{prj.location}/**.cs",
+        "%{prj.location}/Interop/**.cs",
+        "%{prj.location}/Managed/**.cs",
     }
