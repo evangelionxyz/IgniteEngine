@@ -420,10 +420,7 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
         IntPtr namePtr = s_EntityGetName!(entityID);
-        if (namePtr == IntPtr.Zero)
-            return "<invalid>";
-
-        return Marshal.PtrToStringUTF8(namePtr) ?? "<invalid>";
+        return NativeObject.Utf8ToString(namePtr) ?? string.Empty;
     }
 
     internal static bool WidgetComponent_HasButton(ulong entityID, string buttonName)

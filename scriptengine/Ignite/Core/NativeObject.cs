@@ -51,5 +51,5 @@ public static class NativeObject
     public static Mathf.Quaternion ToManaged(Quaternion value) => new(value.X, value.Y, value.Z, value.W);
 
     public static IntPtr StringToUtf8(string value) => Marshal.StringToCoTaskMemUTF8(value ?? string.Empty);
-    public static string? Utf8ToString(IntPtr? ptr) => ptr == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(ptr.GetValueOrDefault());
+    public static string? Utf8ToString(IntPtr ptr) => ptr == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(ptr);
 }

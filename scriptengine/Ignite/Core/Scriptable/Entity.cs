@@ -60,7 +60,7 @@ public class Entity : ScriptableObject
 
     public T? As<T>() where T : Entity, new()
     {
-        object instance = ComponentInternalCalls.GetScriptInstance(ID)!;
+        object? instance = ComponentInternalCalls.GetScriptInstance(ID);
         return instance as T;
     }
 
