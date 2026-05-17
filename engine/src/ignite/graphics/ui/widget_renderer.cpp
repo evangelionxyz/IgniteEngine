@@ -544,7 +544,6 @@ namespace ignite
 
         if (!m_Project || !m_ActiveWidget)
         {
-            LOG_ASSERT(m_Project, "[Widget Renderer] Project should not be null!");
             return;
         }
 
