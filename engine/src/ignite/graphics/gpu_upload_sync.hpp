@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
-#ifndef GPU_UPDLOAD_SYNC_HPP
-#define GPU_UPDLOAD_SYNC_HPP
+#ifndef GPU_UPLOAD_SYNC_HPP
+#define GPU_UPLOAD_SYNC_HPP
 
 #include <mutex>
 #include <atomic>
