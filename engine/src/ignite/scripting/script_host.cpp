@@ -162,10 +162,9 @@ namespace ignite
             return false;
         }
 
-        for (auto &[instanceId, instance] : m_InstanceMap)
+        for (auto &entry : m_InstanceMap)
         {
-            (void)instanceId;
-            instance.Destroy();
+            entry.second.Destroy();
         }
 
         m_InstanceMap.clear();
