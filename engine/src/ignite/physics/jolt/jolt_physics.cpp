@@ -220,8 +220,12 @@ namespace ignite
 
         glm::vec3 halfExtents = col.scale * tc.scale;
         JPH::Plane inPlane(JPH::Vec3Arg{0.0f, 1.0f, 0.0f}, 1.0f);
-        JPH::PlaneShape planeShape(inPlane);
-        JPH::ShapeRefC shape = &planeShape;
+        JPH::PlaneShapeSettings planeShapeSettings(inPlane);
+        JPH::ShapeSettings::ShapeResult shapeResult = planeShapeSettings.Create();
+        if (shapeResult.HasError())
+            return;
+
+        JPH::ShapeRefC shape = shapeResult.Get();
 
         JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation + col.center, tc.rotation);
 

@@ -51,7 +51,6 @@ namespace ignite
         { "Text", CompType_Text },
         { "Mesh", CompType_Mesh },
         { "Rigid Body", CompType_Rigidbody },
-        { "Plane Collider", CompType_PlaneCollider },
         { "Box Collider", CompType_BoxCollider },
         { "Widget", CompType_Widget },
         { "Sphere Collider", CompType_SphereCollider },
