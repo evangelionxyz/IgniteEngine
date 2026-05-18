@@ -489,7 +489,7 @@ namespace ignite
 
         for (auto &instance : scriptEngineData->entityScriptInstances)
         {
-            scriptEngine->GetScriptHost()->DestroyInstance(instance.second->GetInstanceID());
+            scriptEngineData->scriptHost->DestroyInstance(instance.second->GetInstanceID());
         }
 
         scriptEngineData->entityScriptInstances.clear();
@@ -535,6 +535,11 @@ namespace ignite
         auto &scriptInstance = scriptEngineData->entityScriptInstances[instanceID];
         if (scriptInstance)
             scriptInstance->InvokeOnDestroy();
+
+        if (scriptEngineData->scriptHost)
+        {
+            scriptEngineData->scriptHost->DestroyInstance(instanceID);
+        }
 
         scriptEngineData->entityScriptInstances.erase(instanceID);
     }
