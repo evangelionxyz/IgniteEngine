@@ -186,7 +186,7 @@ namespace ignite
                 *outHitNormal = hit.hitNormal;
 
             // Resolve body ID to entity UUID directly from the Jolt body user data.
-            const uint64_t entityID = static_cast<uint64_t>(scene->physics->GetBodyInterface().GetUserData(hit.bodyId));
+            const uint64_t entityID = static_cast<uint64_t>(scene->physics->GetUserData(hit.bodyId));
             return entityID;
         }
 
