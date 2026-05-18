@@ -3,6 +3,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Loader;
 using System.Text;
 
 namespace Ignite.Core;
@@ -15,7 +16,9 @@ internal static class ScriptReflectionBridge
             return string.Empty;
 
         Assembly? assembly = ResolveAssembly(assemblyName);
-        Type? baseType = ResolveType(baseTypeFullName);
+        Type? baseType = assembly != null
+            ? ResolveTypeInContext(assembly, baseTypeFullName)
+            : ResolveType(baseTypeFullName);
         if (assembly == null || baseType == null)
             return string.Empty;
 
@@ -32,8 +35,8 @@ internal static class ScriptReflectionBridge
         if (string.IsNullOrWhiteSpace(typeName))
             return string.Empty;
 
-        Type? type = ResolveType(typeName);
-        Type? serializeFieldAttributeType = ResolveType(serializeFieldAttributeTypeName);
+        Type? type = ResolveTypePreferScriptingContext(typeName);
+        Type? serializeFieldAttributeType = ResolveTypePreferScriptingContext(serializeFieldAttributeTypeName);
         if (type == null)
             return string.Empty;
 
@@ -99,8 +102,12 @@ internal static class ScriptReflectionBridge
             return string.Empty;
 
         Assembly? assembly = ResolveAssembly(assemblyName);
-        Type? baseType = ResolveType(baseTypeFullName);
-        Type? createAssetMenuType = ResolveType("Ignite.CreateAssetMenu");
+        Type? baseType = assembly != null
+            ? ResolveTypeInContext(assembly, baseTypeFullName)
+            : ResolveType(baseTypeFullName);
+        Type? createAssetMenuType = assembly != null
+            ? ResolveTypeInContext(assembly, "Ignite.CreateAssetMenu")
+            : ResolveType("Ignite.CreateAssetMenu");
         if (assembly == null || baseType == null || createAssetMenuType == null)
             return string.Empty;
 
@@ -156,5 +163,50 @@ internal static class ScriptReflectionBridge
             ?? AppDomain.CurrentDomain.GetAssemblies()
                 .Select(assembly => assembly.GetType(trimmedName, throwOnError: false, ignoreCase: false))
                 .FirstOrDefault(type => type != null);
+    }
+
+    private static Type? ResolveTypeInContext(Assembly contextAssembly, string typeName)
+    {
+        if (string.IsNullOrWhiteSpace(typeName))
+            return null;
+
+        string trimmedName = typeName.Trim();
+        var loadContext = AssemblyLoadContext.GetLoadContext(contextAssembly);
+        if (loadContext != null)
+        {
+            foreach (var assembly in loadContext.Assemblies)
+            {
+                var type = assembly.GetType(trimmedName, throwOnError: false, ignoreCase: false);
+                if (type != null)
+                    return type;
+            }
+        }
+
+        return ResolveType(trimmedName);
+    }
+
+    private static Type? ResolveTypePreferScriptingContext(string typeName)
+    {
+        if (string.IsNullOrWhiteSpace(typeName))
+            return null;
+
+        string trimmedName = typeName.Trim();
+        Type? fallback = null;
+
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            var type = assembly.GetType(trimmedName, throwOnError: false, ignoreCase: false);
+            if (type == null)
+                continue;
+
+            var loadContext = AssemblyLoadContext.GetLoadContext(assembly);
+            if (loadContext != null && loadContext.Name != null && loadContext.Name.StartsWith("Ignite.Scripting", StringComparison.OrdinalIgnoreCase))
+                return type;
+
+            if (fallback == null)
+                fallback = type;
+        }
+
+        return fallback ?? ResolveType(trimmedName);
     }
 }

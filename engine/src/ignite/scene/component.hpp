@@ -51,6 +51,7 @@ namespace ignite
         { "Text", CompType_Text },
         { "Mesh", CompType_Mesh },
         { "Rigid Body", CompType_Rigidbody },
+        { "Plane Collider", CompType_PlaneCollider },
         { "Box Collider", CompType_BoxCollider },
         { "Widget", CompType_Widget },
         { "Sphere Collider", CompType_SphereCollider },
@@ -162,6 +163,7 @@ namespace ignite
             case CompType_PointLight2D: return "CompType_PointLight2D";
             case CompType_Mesh: return "CompType_Mesh";
             case CompType_Rigidbody: return "CompType_Rigidbody";
+            case CompType_PlaneCollider: return "CompType_BoxCollider";
             case CompType_BoxCollider: return "CompType_BoxCollider";
             case CompType_SphereCollider: return "CompType_SphereCollider";
             case CompType_CapsuleCollider: return "CompType_CapsuleCollider";
@@ -504,6 +506,17 @@ namespace ignite
         BoxColliderComponent() = default;
 
         COMPONENT_CLASS_TYPE(CompType_BoxCollider)
+    };
+
+    class PlaneColliderComponent : public PhysicsColliderComponent, public IComponent
+    {
+    public:
+        glm::vec3 center = { 0.0f, 0.0f, 0.0f };
+        glm::vec3 scale = { 1.0f, 1.0f, 1.0f };
+
+        PlaneColliderComponent() = default;
+
+        COMPONENT_CLASS_TYPE(CompType_PlaneCollider)
     };
 
     class SphereColliderComponent: public PhysicsColliderComponent, public IComponent

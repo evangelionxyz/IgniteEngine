@@ -313,6 +313,7 @@ namespace ignite
                     sr.BeginMap("BoxCollider");
                     {
                         sr.AddKeyValue("Scale", comp.scale);
+                        sr.AddKeyValue("Center", comp.center);
                         sr.AddKeyValue("Friction", comp.friction);
                         sr.AddKeyValue("StaticFriction", comp.staticFriction);
                         sr.AddKeyValue("Restitution", comp.restitution);
@@ -328,6 +329,7 @@ namespace ignite
                     sr.BeginMap("SphereCollider");
                     {
                         sr.AddKeyValue("Radius", comp.radius);
+                        sr.AddKeyValue("Center", comp.center);
                         sr.AddKeyValue("Friction", comp.friction);
                         sr.AddKeyValue("StaticFriction", comp.staticFriction);
                         sr.AddKeyValue("Restitution", comp.restitution);
@@ -343,6 +345,7 @@ namespace ignite
                     sr.BeginMap("CapsuleCollider");
                     {
                         sr.AddKeyValue("Radius", comp.radius);
+                        sr.AddKeyValue("Center", comp.center);
                         sr.AddKeyValue("Height", comp.height);
                         sr.AddKeyValue("Friction", comp.friction);
                         sr.AddKeyValue("StaticFriction", comp.staticFriction);
@@ -812,34 +815,37 @@ namespace ignite
             if (YAML::Node node = entityNode["BoxCollider"])
             {
                 auto &comp = desEntity.AddComponent<BoxColliderComponent>();
-                comp.scale = node["Scale"].as<glm::vec3>();
-                comp.friction = node["Friction"].as<float>();
-                comp.staticFriction = node["StaticFriction"].as<float>();
-                comp.restitution = node["Restitution"].as<float>();
-                comp.density = node["Density"].as<float>();
+                if (auto n = node["Scale"]) comp.scale = n.as<glm::vec3>();
+                if (auto n = node["Center"]) comp.center = n.as<glm::vec3>();
+                if (auto n = node["Friction"]) comp.friction = n.as<float>();
+                if (auto n = node["StaticFriction"]) comp.staticFriction = n.as<float>();
+                if (auto n = node["Restitution"]) comp.restitution = n.as<float>();
+                if (auto n = node["Density"]) comp.density = n.as<float>();
             }
 
             // SphereCollider
             if (YAML::Node node = entityNode["SphereCollider"])
             {
                 auto &comp = desEntity.AddComponent<SphereColliderComponent>();
-                comp.radius = node["Radius"].as<float>();
-                comp.friction = node["Friction"].as<float>();
-                comp.staticFriction = node["StaticFriction"].as<float>();
-                comp.restitution = node["Restitution"].as<float>();
-                comp.density = node["Density"].as<float>();
+                if (auto n = node["Radius"]) comp.radius = n.as<float>();
+                if (auto n = node["Center"]) comp.center = n.as<glm::vec3>();
+                if (auto n = node["Friction"]) comp.friction = n.as<float>();
+                if (auto n = node["StaticFriction"]) comp.staticFriction = n.as<float>();
+                if (auto n = node["Restitution"]) comp.restitution = n.as<float>();
+                if (auto n = node["Density"]) comp.density = n.as<float>();
             }
 
             // CapsuleCollider
             if (YAML::Node node = entityNode["CapsuleCollider"])
             {
                 auto &comp = desEntity.AddComponent<CapsuleColliderComponent>();
-                comp.radius = node["Radius"].as<float>();
-                comp.height = node["Height"].as<float>();
-                comp.friction = node["Friction"].as<float>();
-                comp.staticFriction = node["StaticFriction"].as<float>();
-                comp.restitution = node["Restitution"].as<float>();
-                comp.density = node["Density"].as<float>();
+                if (auto n = node["Radius"]) comp.radius = n.as<float>();
+                if (auto n = node["Center"]) comp.center = n.as<glm::vec3>();
+                if (auto n = node["Height"]) comp.height = n.as<float>();
+                if (auto n = node["Friction"]) comp.friction = n.as<float>();
+                if (auto n = node["StaticFriction"]) comp.staticFriction = n.as<float>();
+                if (auto n = node["Restitution"]) comp.restitution = n.as<float>();
+                if (auto n = node["Density"]) comp.density = n.as<float>();
             }
 
             // MeshCollider

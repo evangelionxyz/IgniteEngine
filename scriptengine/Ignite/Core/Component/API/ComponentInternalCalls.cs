@@ -10,6 +10,7 @@ public static class ComponentInternalCalls
     private static bool s_Initialized;
     private static ComponentNativeAPI.Funcs.SceneGetScreenToWorldRayFn? s_SceneGetScreenToWorldRay;
     private static ComponentNativeAPI.Funcs.SceneRaycastFn? s_SceneRaycast;
+    private static ComponentNativeAPI.Funcs.ScenePhysicsRaycastFn? s_ScenePhysicsRaycast;
     private static ComponentNativeAPI.Funcs.EntityHasComponentFn? s_EntityHasComponent;
     private static ComponentNativeAPI.Funcs.EntityAddComponentFn? s_EntityAddComponent;
     private static ComponentNativeAPI.Funcs.EntityFindEntityByNameFn? s_EntityFindEntityByName;
@@ -149,6 +150,7 @@ public static class ComponentInternalCalls
         ComponentNativeAPI.API api = Marshal.PtrToStructure<ComponentNativeAPI.API>((IntPtr)apiPtr);
         s_SceneGetScreenToWorldRay = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SceneGetScreenToWorldRayFn>(api.Scene_GetScreenToWorldRay);
         s_SceneRaycast = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.SceneRaycastFn>(api.Scene_Raycast);
+        s_ScenePhysicsRaycast = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.ScenePhysicsRaycastFn>(api.Scene_PhysicsRaycast);
         s_EntityHasComponent = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityHasComponentFn>(api.Entity_HasComponent);
         s_EntityAddComponent = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityAddComponentFn>(api.Entity_AddComponent);
         s_EntityFindEntityByName = Marshal.GetDelegateForFunctionPointer<ComponentNativeAPI.Funcs.EntityFindEntityByNameFn>(api.Entity_FindEntityByName);
@@ -302,6 +304,20 @@ public static class ComponentInternalCalls
     {
         EnsureInitialized();
         return s_SceneRaycast!(NativeObject.ToNative(origin), NativeObject.ToNative(direction));
+    }
+
+    internal static unsafe ulong Scene_PhysicsRaycast(Mathf.Vector3 origin, Mathf.Vector3 direction, float maxDistance,
+                                                        out Mathf.Vector3 hitPoint, out Mathf.Vector3 hitNormal)
+    {
+        EnsureInitialized();
+        NativeObject.Vector3 nHitPoint  = default;
+        NativeObject.Vector3 nHitNormal = default;
+        ulong id = s_ScenePhysicsRaycast!(
+            NativeObject.ToNative(origin), NativeObject.ToNative(direction),
+            maxDistance, &nHitPoint, &nHitNormal);
+        hitPoint  = NativeObject.ToManaged(nHitPoint);
+        hitNormal = NativeObject.ToManaged(nHitNormal);
+        return id;
     }
 
     internal static bool Entity_HasComponent(ulong entityID, Type componentType)

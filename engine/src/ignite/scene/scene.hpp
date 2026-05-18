@@ -48,8 +48,8 @@ namespace ignite
         void UpdateTransforms(float deltaTime);
         void UpdateTransformRecursive(Entity entity, const glm::mat4 &parentWorldTransform);
         
-        void OnUpdateRuntimeSimulate(f32 deltaTime);
-        void OnUpdateEdit(f32 deltaTime);
+        void OnUpdateRuntimeSimulate(float deltaTime);
+        void OnUpdateEdit(float deltaTime);
         void SetSceneRenderer(SceneRenderer *sceneRenderer) { m_SceneRenderer = sceneRenderer; }
 
         template<typename T>

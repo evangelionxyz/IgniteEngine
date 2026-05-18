@@ -177,7 +177,8 @@ namespace ignite
         m_AppAssembly = nullptr;
 
         m_LoadContext.reset();
-        m_LoadContext = CreateScope<mochi::AssemblyLoadContext>(m_Host.CreateAssemblyLoadContext("Ignite.Scripting", m_BaseDir.string()));
+        const std::string alcName = "Ignite.Scripting." + std::to_string(++m_ReloadCounter);
+        m_LoadContext = CreateScope<mochi::AssemblyLoadContext>(m_Host.CreateAssemblyLoadContext(alcName, m_BaseDir.string()));
         if (!m_LoadContext)
         {
             LOG_ERROR("[Script Host] Failed to create assembly load context for reload");

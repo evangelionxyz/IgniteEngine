@@ -163,6 +163,42 @@ namespace ignite
             return resultID;
         }
 
+        // Physics (Jolt narrow-phase) raycast - returns first solid-body hit
+        // outHitEntityID: UUID of the hit entity (0 if none)
+        // outHitPoint, outHitNormal: world-space hit info
+        static uint64_t Scene_PhysicsRaycast(glm::vec3 origin, glm::vec3 direction, float maxDistance, glm::vec3 *outHitPoint, glm::vec3 *outHitNormal)
+        {
+            if (outHitPoint)  *outHitPoint = glm::vec3(0.f);
+            if (outHitNormal) *outHitNormal = glm::vec3(0.f, 1.f, 0.f);
+
+            Scene *scene = GetSceneContext();
+            if (!scene || !scene->physics)
+                return 0;
+
+            JoltRaycastHit hit = scene->physics->Raycast(origin, direction, maxDistance);
+            if (!hit.hit)
+                return 0;
+
+            if (outHitPoint)
+                *outHitPoint = hit.hitPoint;
+            
+            if (outHitNormal)
+                *outHitNormal = hit.hitNormal;
+
+            // Resolve body ID to entity UUID
+            auto view = scene->registry->view<RigibodyComponent, IDComponent>();
+            for (entt::entity e : view)
+            {
+                const auto &rb = view.get<RigibodyComponent>(e);
+                if (rb.body && rb.body->GetID() == hit.bodyId)
+                {
+                    return static_cast<uint64_t>(view.get<IDComponent>(e).uuid);
+                }
+            }
+
+            return 0;
+        }
+
         static Entity GetEntityByID(uint64_t entityID)
         {
             Scene *scene = GetSceneContext();
@@ -2461,6 +2497,7 @@ namespace ignite
         {
             &Scene_GetScreenToWorldRay,
             &Scene_Raycast,
+            &Scene_PhysicsRaycast,
             &Entity_HasComponent,
             &Entity_AddComponent,
             &Entity_FindEntityByName,

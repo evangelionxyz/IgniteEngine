@@ -46,6 +46,7 @@ namespace ignite
         CompType_CircleCollider2D,
         CompType_Rigidbody2D,
         CompType_Rigidbody,
+        CompType_PlaneCollider,
         CompType_BoxCollider,
         CompType_SphereCollider,
         CompType_CapsuleCollider,

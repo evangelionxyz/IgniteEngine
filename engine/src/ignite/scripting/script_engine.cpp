@@ -9,6 +9,7 @@
 #include "script_host.hpp"
 
 #include "ignite/scene/component.hpp"
+#include "ignite/asset/asset_manager.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/string_utils.hpp"
@@ -247,7 +248,7 @@ namespace ignite
     }
 
     ScriptEngine::ScriptEngine(Project *project)
-        : m_Project(project)
+        : m_Project(project), m_Scene(nullptr)
     {
         scriptEngine = this;
 
@@ -269,16 +270,20 @@ namespace ignite
         // Script Core Assembly (IgniteScriptEngine.dll)
         const ignite::Path coreAssemblyPath = m_Project->GetScriptBinDirectory() / "IgniteScriptEngine.dll";
         LOG_ASSERT(std::filesystem::exists(coreAssemblyPath.string()), "[Script Engine] Script core assembly not found!");
-        LoadCoreAssembly(coreAssemblyPath);
+        bool initialized = LoadCoreAssembly(coreAssemblyPath);
 
         // Register method signatures AFTER assemblies are loaded
         scriptEngineData->scriptHost->RegisterSignatures();
         LOG_INFO("[Script Engine] Registered method signatures");
 
-        LoadAppAssembly(appAssemblyPath);
-        LoadAppAssemblyClasses();
+        initialized |= LoadAppAssembly(appAssemblyPath);
+        if (initialized)
+        {
+            LoadAppAssemblyClasses();
+            LOG_WARN("[Script Engine] Initialized");
+        }
 
-        LOG_WARN("[Script Engine] Initialized");
+        LOG_ASSERT(initialized, "[Script Engine] Failed to initialize!");
     }
 
     ScriptEngine::~ScriptEngine()
@@ -419,8 +424,21 @@ namespace ignite
 
     void ScriptEngine::ReloadAssembly()
     {
-        // Clear existing instances
-        scriptEngineData->entityScriptInstances.clear();
+        // CRITICAL: Destroy all script instances BEFORE reloading the assembly
+        // This prevents TargetException due to managed objects holding old type references
+        if (!scriptEngineData->entityScriptInstances.empty())
+        {
+            // Destroy all instances first (calls OnDestroy on each)
+            for (auto &[instanceID, instance] : scriptEngineData->entityScriptInstances)
+            {
+                if (scriptEngineData->scriptHost)
+                {
+                    scriptEngineData->scriptHost->DestroyInstance(instanceID);
+                }
+            }
+            // Clear the instances map
+            scriptEngineData->entityScriptInstances.clear();
+        }
 
         if (!scriptEngineData->scriptHost || !scriptEngineData->scriptHost->ResetLoadContext())
         {
@@ -430,11 +448,26 @@ namespace ignite
 
         if (!LoadCoreAssembly(scriptEngineData->coreAssemblyFilepath))
         {
-            LOG_ERROR("[Script Engine] Failed to reload core assembly '{}'", scriptEngineData->coreAssemblyFilepath.generic_string());
+            LOG_ERROR("[Script Engine] Failed to reload core assembly '{}'" , scriptEngineData->coreAssemblyFilepath.generic_string());
             return;
         }
 
         scriptEngineData->scriptHost->RegisterSignatures();
+
+        // Re-initialize the native bridge into the freshly loaded core assembly.
+        // The new ALC gives CoreInternalCalls/ComponentInternalCalls clean static
+        // fields, so they must be re-populated before any managed code runs.
+        if (!scriptEngineData->scriptHost->InitializeCoreInternalCalls())
+        {
+            LOG_ERROR("[Script Engine] Failed to re-initialize CORE internal calls bridge after reload");
+            return;
+        }
+
+        if (!scriptEngineData->scriptHost->InitializeComponentInternalCalls())
+        {
+            LOG_ERROR("[Script Engine] Failed to re-initialize COMPONENT internal calls bridge after reload");
+            return;
+        }
 
         // Reload app assembly (MochiSharp handles unloading through collectible context)
         if (LoadAppAssembly(scriptEngineData->appAssemblyFilepath))
@@ -664,7 +697,7 @@ namespace ignite
 
         if (derivedTypes.empty())
         {
-            LOG_WARN("[Script Engine] No derived script classes found in {}", scriptEngineData->appAssemblyFilepath.generic_string());
+            LOG_WARN("[Script Engine] No derived script classes found in {} for '{}'", scriptEngineData->appAssemblyFilepath.generic_string(), classFullName);
             return;
         }
 

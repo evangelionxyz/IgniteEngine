@@ -1,27 +1,8 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
+#ifndef JOLT_PHYSICS_HPP
+#define JOLT_PHYSICS_HPP
 
 #include "ignite/core/logger.hpp"
 #include "ignite/scene/entity.hpp"
@@ -38,49 +19,104 @@
 #include <Jolt/Core/JobSystemSingleThreaded.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
+
+#include <Jolt/Physics/Collision/Shape/PlaneShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+
 #include <Jolt/Geometry/Triangle.h>
 #include <Jolt/Physics/Body/BodyActivationListener.h>
 #include <Jolt/Physics/Collision/ContactListener.h>
+#include <Jolt/Physics/Collision/RayCast.h>
+#include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
 
-namespace ignite {
+#include <mutex>
+#include <vector>
+
+namespace ignite
+{
+    // -------------------------------------------------------------------------
+    // Collision event types (mirrors Unity's OnCollisionEnter/Stay/Exit)
+    // -------------------------------------------------------------------------
+    enum class JoltCollisionEventType : uint8_t
+    {
+        Enter = 0,  // OnContactAdded
+        Stay  = 1,  // OnContactPersisted
+        Exit  = 2,  // OnContactRemoved
+    };
+
+    struct JoltCollisionEvent
+    {
+        JoltCollisionEventType type;
+        JPH::BodyID bodyA;
+        JPH::BodyID bodyB;
+      
+        // Contact point in world space (only valid for Enter/Stay)
+        JPH::Vec3 contactPoint { 0.f, 0.f, 0.f };
+        JPH::Vec3 contactNormal { 0.f, 1.f, 0.f };
+    };
+
+    
+    enum class JoltActivationEventType : uint8_t
+    {
+        Activated = 0,
+        Deactivated = 1,
+    };
+
+    struct JoltBodyActivationEvent
+    {
+        UUID entityId = UUID(0);
+        JPH::BodyID bodyId;
+    };
+
+    // -------------------------------------------------------------------------
+    // Result of a physics raycast (Jolt narrow-phase)
+    // -------------------------------------------------------------------------
+    struct JoltRaycastHit
+    {
+        bool hit = false;
+        JPH::BodyID bodyId = {};
+        float fraction = 1.0f;   // [0..1] along the ray
+        glm::vec3 hitPoint = {};
+        glm::vec3 hitNormal = {};
+    };
 
     static JPH::Vec3 GlmToJoltVec3(const glm::vec3 &v)
     {
-        return JPH::Vec3(v.x, v.y, v.z);
+        return { v.x, v.y, v.z };
     }
 
     static glm::vec3 JoltToGlmVec3(const JPH::Vec3 &v)
     {
-        return glm::vec3(v.GetX(), v.GetY(), v.GetZ());
+        return { v.GetX(), v.GetY(), v.GetZ() };
     }
 
     static JPH::Quat GlmToJoltQuat(const glm::quat &q)
     {
-        return JPH::Quat(q.x, q.y, q.z, q.w);
+        return { q.x, q.y, q.z, q.w };
     }
 
     static glm::quat JoltToGlmQuat(const JPH::Quat &q)
     {
-        return glm::quat(q.GetW(), q.GetX(), q.GetY(), q.GetZ());
+        return { q.GetW(), q.GetX(), q.GetY(), q.GetZ() };
     }
 
     static void TraceImpl(const char *inFMT, ...)
     {
         // Format the message
-        va_list list;
+        va_list list = { 0 };
         va_start(list, inFMT);
-        char buffer[1024];
-        vsnprintf(buffer, sizeof(buffer), inFMT, list);
+        std::array<char, 1024> buffer;
+        vsnprintf(buffer.data(), buffer.size(), inFMT, list);
         va_end(list);
 
         // Print to the TTY
-        LOG_INFO("{}", buffer);
+        LOG_INFO("{}", buffer.data());
     }
 
 #ifdef JPH_ENABLE_ASSERTS
@@ -118,11 +154,9 @@ namespace ignite {
         {
             switch (inObject1)
             {
-            case Layers::NON_MOVING:
-                return inObject2 == Layers::MOVING; // Non moving only collides with moving
-            case Layers::MOVING:
-                return true; // Moving collides with everything
-            default:
+                case Layers::NON_MOVING: return inObject2 == Layers::MOVING; // Non moving only collides with moving
+                case Layers::MOVING: return true; // Moving collides with everything
+                default:
                 JPH_ASSERT(false);
                 return false;
             }
@@ -173,12 +207,10 @@ namespace ignite {
         {
             switch (inLayer1)
             {
-            case Layers::NON_MOVING:
-                return inLayer2 == BroadPhaseLayers::MOVING;
-            case Layers::MOVING:
-                return true;
-            default:
-                LOG_ASSERT(false, "");
+                case Layers::NON_MOVING: return inLayer2 == BroadPhaseLayers::MOVING;
+                case Layers::MOVING: return true;
+                default:
+                LOG_ASSERT(false, "Invalid layer!");
                 return false;
             }
         }
@@ -188,38 +220,69 @@ namespace ignite {
     class JoltContactListener : public JPH::ContactListener
     {
     public:
-        virtual JPH::ValidateResult OnContactValidate(const JPH::Body &inBody1, const JPH::Body &inBody2, JPH::RVec3Arg inBaseOffset, const JPH::CollideShapeResult &inCollisionResult) override
+        virtual JPH::ValidateResult OnContactValidate(const JPH::Body &bodyA, const JPH::Body &bodyB, JPH::RVec3Arg inBaseOffset, const JPH::CollideShapeResult &inCollisionResult) override
         {
-            // Allow all contacts by default
             return JPH::ValidateResult::AcceptAllContactsForThisBodyPair;
         }
 
-        virtual void OnContactAdded(const JPH::Body &inBody1, const JPH::Body &inBody2, const JPH::ContactManifold &inManifold, JPH::ContactSettings &ioSettings) override
+        virtual void OnContactAdded(const JPH::Body &bodyA, const JPH::Body &bodyB, const JPH::ContactManifold &manifold, JPH::ContactSettings &ioSettings) override
         {
-            LOG_INFO("[Jolt] Contact added between body {} and body {}", inBody1.GetID().GetIndex(), inBody2.GetID().GetIndex());
+            JoltCollisionEvent ev;
+            ev.type = JoltCollisionEventType::Enter;
+            ev.bodyA = bodyA.GetID();
+            ev.bodyB = bodyB.GetID();
+            ev.contactPoint = manifold.GetWorldSpaceContactPointOn1(0);
+            ev.contactNormal = manifold.mWorldSpaceNormal;
+            std::lock_guard<std::mutex> lock(m_EventMutex);
+            m_PendingEvents.push_back(ev);
         }
 
-        virtual void OnContactPersisted(const JPH::Body &inBody1, const JPH::Body &inBody2, const JPH::ContactManifold &inManifold, JPH::ContactSettings &ioSettings) override
+        virtual void OnContactPersisted(const JPH::Body &bodyA, const JPH::Body &bodyB, const JPH::ContactManifold &manifold, JPH::ContactSettings &ioSettings) override
         {
-            // Handle persistent contact
+            JoltCollisionEvent ev;
+            ev.type = JoltCollisionEventType::Stay;
+            ev.bodyA = bodyA.GetID();
+            ev.bodyB = bodyB.GetID();
+            ev.contactPoint = manifold.GetWorldSpaceContactPointOn1(0);
+            ev.contactNormal = manifold.mWorldSpaceNormal;
+            std::lock_guard<std::mutex> lock(m_EventMutex);
+            m_PendingEvents.push_back(ev);
         }
 
         virtual void OnContactRemoved(const JPH::SubShapeIDPair &inSubShapePair) override
         {
-            LOG_INFO("[Jolt] Contact removed between shapes");
+            JoltCollisionEvent ev;
+            ev.type = JoltCollisionEventType::Exit;
+            ev.bodyA = inSubShapePair.GetBody1ID();
+            ev.bodyB = inSubShapePair.GetBody2ID();
+            std::lock_guard<std::mutex> lock(m_EventMutex);
+            m_PendingEvents.push_back(ev);
         }
+
+        // Drain all accumulated events (called once per frame by the scene)
+        std::vector<JoltCollisionEvent> DrainEvents()
+        {
+            std::lock_guard<std::mutex> lock(m_EventMutex);
+            std::vector<JoltCollisionEvent> result;
+            result.swap(m_PendingEvents);
+            return result;
+        }
+
+    private:
+        std::mutex m_EventMutex;
+        std::vector<JoltCollisionEvent> m_PendingEvents;
     };
 
     // Jolt Body Activation Listener
     class JoltBodyActivationListener : public JPH::BodyActivationListener
     {
     public:
-        virtual void OnBodyActivated(const JPH::BodyID &inBodyID, uint64_t inBodyUserData) override
+        virtual void OnBodyActivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override
         {
             LOG_INFO("[Jolt] Body {} activated", inBodyID.GetIndex());
         }
 
-        virtual void OnBodyDeactivated(const JPH::BodyID &inBodyID, uint64_t inBodyUserData) override
+        virtual void OnBodyDeactivated(const JPH::BodyID &inBodyID, JPH::uint64 inBodyUserData) override
         {
             LOG_INFO("[Jolt] Body {} deactivated", inBodyID.GetIndex());
         }
@@ -261,10 +324,19 @@ namespace ignite {
 
         JPH::BodyCreationSettings CreateBody(JPH::ShapeRefC shape, RigibodyComponent &rb, const glm::vec3 &position, const glm::quat &rotation);
 
+        void CreatePlaneCollider(Entity entity);
         void CreateBoxCollider(Entity entity);
         void CreateCapsuleCollider(Entity entity);
         void CreateSphereCollider(Entity entity);
         void CreateMeshCollider(Entity entity);
+
+        // Narrow-phase ray cast (returns first hit)
+        JoltRaycastHit Raycast(const glm::vec3 &origin, const glm::vec3 &direction, float maxDistance = 1000.0f);
+
+        // Drain collision events accumulated this frame
+        std::vector<JoltCollisionEvent> DrainCollisionEvents();
+
+        JPH::uint64 GetUserData(const JPH::BodyID &bodyId);
 
         void AddForce(const JPH::Body &body, const glm::vec3 &force);
         void AddTorque(const JPH::Body &body, const glm::vec3 &torque);
@@ -296,7 +368,6 @@ namespace ignite {
         void SetMaxAngularVelocity(JPH::Body &body, float max);
 
         JPH::BodyInterface *GetBodyInterface() const;
-
     private:
         Scene *m_Scene;
         JPH::BodyInterface *m_BodyInterface = nullptr;
@@ -304,3 +375,5 @@ namespace ignite {
 
     };
 }
+
+#endif
