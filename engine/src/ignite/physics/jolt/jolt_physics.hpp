@@ -36,6 +36,7 @@
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
 
 #include <mutex>
+#include <array>
 #include <vector>
 
 namespace ignite
