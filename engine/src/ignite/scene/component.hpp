@@ -510,10 +510,42 @@ namespace ignite
     class PlaneColliderComponent : public PhysicsColliderComponent, public IComponent
     {
     public:
+        struct SerializedData
+        {
+            glm::vec3 center = { 0.0f, 0.0f, 0.0f };
+            glm::vec3 scale = { 1.0f, 1.0f, 1.0f };
+            float friction = 0.6f;
+            float staticFriction = 0.6f;
+            float restitution = 0.6f;
+            float density = 1.0f;
+        };
+
         glm::vec3 center = { 0.0f, 0.0f, 0.0f };
         glm::vec3 scale = { 1.0f, 1.0f, 1.0f };
 
         PlaneColliderComponent() = default;
+
+        [[nodiscard]] SerializedData GetSerializedData() const
+        {
+            return SerializedData {
+                center,
+                scale,
+                friction,
+                staticFriction,
+                restitution,
+                density
+            };
+        }
+
+        void SetSerializedData(const SerializedData &data)
+        {
+            center = data.center;
+            scale = data.scale;
+            friction = data.friction;
+            staticFriction = data.staticFriction;
+            restitution = data.restitution;
+            density = data.density;
+        }
 
         COMPONENT_CLASS_TYPE(CompType_PlaneCollider)
     };
