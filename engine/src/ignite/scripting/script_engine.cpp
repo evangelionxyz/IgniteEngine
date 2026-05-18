@@ -276,7 +276,7 @@ namespace ignite
         scriptEngineData->scriptHost->RegisterSignatures();
         LOG_INFO("[Script Engine] Registered method signatures");
 
-        initialized |= LoadAppAssembly(appAssemblyPath);
+        initialized &= LoadAppAssembly(appAssemblyPath);
         if (initialized)
         {
             LoadAppAssemblyClasses();
