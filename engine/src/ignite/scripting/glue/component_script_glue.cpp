@@ -185,18 +185,9 @@ namespace ignite
             if (outHitNormal)
                 *outHitNormal = hit.hitNormal;
 
-            // Resolve body ID to entity UUID
-            auto view = scene->registry->view<RigibodyComponent, IDComponent>();
-            for (entt::entity e : view)
-            {
-                const auto &rb = view.get<RigibodyComponent>(e);
-                if (rb.body && rb.body->GetID() == hit.bodyId)
-                {
-                    return static_cast<uint64_t>(view.get<IDComponent>(e).uuid);
-                }
-            }
-
-            return 0;
+            // Resolve body ID to entity UUID directly from the Jolt body user data.
+            const uint64_t entityID = static_cast<uint64_t>(scene->physics->GetBodyInterface().GetUserData(hit.bodyId));
+            return entityID;
         }
 
         static Entity GetEntityByID(uint64_t entityID)
