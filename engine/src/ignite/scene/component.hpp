@@ -163,7 +163,7 @@ namespace ignite
             case CompType_PointLight2D: return "CompType_PointLight2D";
             case CompType_Mesh: return "CompType_Mesh";
             case CompType_Rigidbody: return "CompType_Rigidbody";
-            case CompType_PlaneCollider: return "CompType_BoxCollider";
+            case CompType_PlaneCollider: return "CompType_PlaneCollider";
             case CompType_BoxCollider: return "CompType_BoxCollider";
             case CompType_SphereCollider: return "CompType_SphereCollider";
             case CompType_CapsuleCollider: return "CompType_CapsuleCollider";
