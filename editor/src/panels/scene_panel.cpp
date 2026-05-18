@@ -1324,31 +1324,40 @@ namespace ignite
             {
                 auto &c = selectedEntity.GetComponent<BoxColliderComponent>();
                 c.dirty = UI::DrawVec3Control("Scale", c.scale, 0.025f, 1.0f);
+                c.dirty |= UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
                 c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
                 c.dirty |= UI::DrawFloatControl("Static Friction", &c.staticFriction, 0.025f);
                 c.dirty |= UI::DrawFloatControl("Restitution", &c.restitution, 0.025f);
                 c.dirty |= UI::DrawFloatControl("Density", &c.density, 0.025f);
+
+                // TODO: Collider Edit from UI (TOGGLES)
             });
 
             RenderComponent<SphereColliderComponent>("Sphere Collider", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<SphereColliderComponent>();
                 c.dirty = UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.01f, 10000.0f, 1.0f);
+                c.dirty |= UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
                 c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
                 c.dirty |= UI::DrawFloatControl("Static Friction", &c.staticFriction, 0.025f);
                 c.dirty |= UI::DrawFloatControl("Restitution", &c.restitution, 0.025f);
                 c.dirty |= UI::DrawFloatControl("Density", &c.density, 0.025f);
+
+                // TODO: Collider Edit from UI (TOGGLES)
             });
 
             RenderComponent<CapsuleColliderComponent>("Capsule Collider", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<CapsuleColliderComponent>();
                 c.dirty = UI::DrawFloatControl("Radius", &c.radius, 0.025f, 0.01f, 10000.0f, 1.0f);
+                c.dirty |= UI::DrawVec3Control("Center", c.center, 0.025f, 0.0f);
                 c.dirty |= UI::DrawFloatControl("Height", &c.height, 0.025f, 0.01f, 10000.0f, 1.0f);
                 c.dirty |= UI::DrawFloatControl("Friction", &c.friction, 0.025f);
                 c.dirty |= UI::DrawFloatControl("Static Friction", &c.staticFriction, 0.025f);
                 c.dirty |= UI::DrawFloatControl("Restitution", &c.restitution, 0.025f);
                 c.dirty |= UI::DrawFloatControl("Density", &c.density, 0.025f);
+
+                // TODO: Collider Edit from UI (TOGGLES)
             });
 
             RenderComponent<MeshColliderComponent>("Mesh Collider", selectedEntity, [&]()

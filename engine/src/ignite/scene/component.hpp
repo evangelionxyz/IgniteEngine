@@ -162,6 +162,7 @@ namespace ignite
             case CompType_PointLight2D: return "CompType_PointLight2D";
             case CompType_Mesh: return "CompType_Mesh";
             case CompType_Rigidbody: return "CompType_Rigidbody";
+            case CompType_PlaneCollider: return "CompType_PlaneCollider";
             case CompType_BoxCollider: return "CompType_BoxCollider";
             case CompType_SphereCollider: return "CompType_SphereCollider";
             case CompType_CapsuleCollider: return "CompType_CapsuleCollider";
@@ -504,6 +505,49 @@ namespace ignite
         BoxColliderComponent() = default;
 
         COMPONENT_CLASS_TYPE(CompType_BoxCollider)
+    };
+
+    class PlaneColliderComponent : public PhysicsColliderComponent, public IComponent
+    {
+    public:
+        struct SerializedData
+        {
+            glm::vec3 center = { 0.0f, 0.0f, 0.0f };
+            glm::vec3 scale = { 1.0f, 1.0f, 1.0f };
+            float friction = 0.6f;
+            float staticFriction = 0.6f;
+            float restitution = 0.6f;
+            float density = 1.0f;
+        };
+
+        glm::vec3 center = { 0.0f, 0.0f, 0.0f };
+        glm::vec3 scale = { 1.0f, 1.0f, 1.0f };
+
+        PlaneColliderComponent() = default;
+
+        [[nodiscard]] SerializedData GetSerializedData() const
+        {
+            return SerializedData {
+                center,
+                scale,
+                friction,
+                staticFriction,
+                restitution,
+                density
+            };
+        }
+
+        void SetSerializedData(const SerializedData &data)
+        {
+            center = data.center;
+            scale = data.scale;
+            friction = data.friction;
+            staticFriction = data.staticFriction;
+            restitution = data.restitution;
+            density = data.density;
+        }
+
+        COMPONENT_CLASS_TYPE(CompType_PlaneCollider)
     };
 
     class SphereColliderComponent: public PhysicsColliderComponent, public IComponent

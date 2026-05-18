@@ -26,6 +26,11 @@ namespace ignite
         void InvokeOnDestroy();
         void InvokeOnUpdate(float time);
 
+        // Collision lifecycle callbacks
+        void InvokeOnCollisionEnter(uint64_t otherEntityID);
+        void InvokeOnCollisionStay(uint64_t otherEntityID);
+        void InvokeOnCollisionExit(uint64_t otherEntityID);
+
         const Ref<ScriptClass> &GetScriptClass() const { return m_ScriptClass; }
         ScriptInstanceID GetInstanceID() const { return m_InstanceId; }
 
@@ -112,6 +117,9 @@ namespace ignite
         int m_OnCreateMethodId = 0;
         int m_OnDestroyMethodId = 0;
         int m_OnUpdateMethodId = 0;
+        int m_OnCollisionEnterMethodId = 0;
+        int m_OnCollisionStayMethodId  = 0;
+        int m_OnCollisionExitMethodId  = 0;
 
         inline static char s_FieldValueBuffer[64];
         friend class ScriptEngine;

@@ -10,6 +10,7 @@ public static class ComponentNativeAPI
     {
         public IntPtr Scene_GetScreenToWorldRay;
         public IntPtr Scene_Raycast;
+        public IntPtr Scene_PhysicsRaycast;
         public IntPtr Entity_HasComponent;
         public IntPtr Entity_AddComponent;
         public IntPtr Entity_FindEntityByName;
@@ -156,6 +157,9 @@ public static class ComponentNativeAPI
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate ulong SceneRaycastFn(NativeObject.Vector3 origin, NativeObject.Vector3 direction);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public unsafe delegate ulong ScenePhysicsRaycastFn(NativeObject.Vector3 origin, NativeObject.Vector3 direction, float maxDistance, NativeObject.Vector3* outHitPoint, NativeObject.Vector3* outHitNormal);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate ulong EntityInstantiateWithNameFn(IntPtr name, NativeObject.Vector3 value);

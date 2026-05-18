@@ -78,6 +78,9 @@ namespace ignite
         m_OnCreateMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnCreate");
         m_OnDestroyMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnDestroy");
         m_OnUpdateMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnUpdate");
+        m_OnCollisionEnterMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "_OnCollisionEnterNative");
+        m_OnCollisionStayMethodId  = scriptClass->BindInstanceMethod(m_InstanceId, "_OnCollisionStayNative");
+        m_OnCollisionExitMethodId  = scriptClass->BindInstanceMethod(m_InstanceId, "_OnCollisionExitNative");
 
         // Set Entity ID on managed instance if available
         const int setIdMethod = scriptClass->BindInstanceMethod(m_InstanceId, "SetID");
@@ -238,15 +241,35 @@ namespace ignite
                         {
                             Scene *scene = ScriptEngine::GetInstance()->GetSceneContext();
                             AssetManager *am = scene ? scene->GetAssetManager() : nullptr;
-                            if (am && am->IsAssetHandleValid(AssetHandle(id)))
+                            if (!scene)
+                            {
+                                LOG_WARN("[Script Instance] ScriptableObject field '{}' could not resolve: Scene context is null (instanceId={})", name, m_InstanceId);
+                            }
+                            else if (!am)
+                            {
+                                LOG_WARN("[Script Instance] ScriptableObject field '{}' could not resolve: AssetManager is null (instanceId={})", name, m_InstanceId);
+                            }
+                            else if (!am->IsAssetHandleValid(AssetHandle(id)))
+                            {
+                                LOG_WARN("[Script Instance] ScriptableObject field '{}' handle {} is invalid (instanceId={})", name, id, m_InstanceId);
+                            }
+                            else
                             {
                                 auto so = am->GetAssetImmediate<ScriptableObject>(AssetHandle(id));
                                 if (so)
                                 {
                                     // Create the managed C# instance keyed by asset handle
-                                    m_ScriptHost->CreateInstance(id, so->GetClassName());
+                                    if (!m_ScriptHost->CreateInstance(id, so->GetClassName()))
+                                    {
+                                        LOG_ERROR("[Script Instance] Failed to create ScriptableObject managed instance '{}' (handle={}, instanceId={})", so->GetClassName(), id, m_InstanceId);
+                                    }
                                     // Populate its serialized fields from the .ixso data
                                     PopulateSOFields(m_ScriptHost, id, *so);
+                                }
+                                else
+                                {
+                                    const AssetMetaData &metadata = am->GetMetaData(AssetHandle(id));
+                                    LOG_ERROR("[Script Instance] Failed to load ScriptableObject handle {} (file='{}', instanceId={})", id, metadata.filepath.generic_string(), m_InstanceId);
                                 }
                             }
                         }
@@ -301,6 +324,48 @@ namespace ignite
             {
                 LOG_ERROR("[Script Instance] OnUpdate invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
                 m_OnUpdateMethodId = 0;
+            }
+        }
+    }
+
+    void ScriptInstance::InvokeOnCollisionEnter(uint64_t otherEntityID)
+    {
+        IGN_PROFILE_FUNCTION();
+        if (m_OnCollisionEnterMethodId)
+        {
+            void *args[] = { &otherEntityID };
+            if (!m_ScriptHost->Invoke(m_OnCollisionEnterMethodId, args, 1, nullptr))
+            {
+                LOG_ERROR("[Script Instance] OnCollisionEnter invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+                m_OnCollisionEnterMethodId = 0;
+            }
+        }
+    }
+
+    void ScriptInstance::InvokeOnCollisionStay(uint64_t otherEntityID)
+    {
+        IGN_PROFILE_FUNCTION();
+        if (m_OnCollisionStayMethodId)
+        {
+            void *args[] = { &otherEntityID };
+            if (!m_ScriptHost->Invoke(m_OnCollisionStayMethodId, args, 1, nullptr))
+            {
+                LOG_ERROR("[Script Instance] OnCollisionStay invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+                m_OnCollisionStayMethodId = 0;
+            }
+        }
+    }
+
+    void ScriptInstance::InvokeOnCollisionExit(uint64_t otherEntityID)
+    {
+        IGN_PROFILE_FUNCTION();
+        if (m_OnCollisionExitMethodId)
+        {
+            void *args[] = { &otherEntityID };
+            if (!m_ScriptHost->Invoke(m_OnCollisionExitMethodId, args, 1, nullptr))
+            {
+                LOG_ERROR("[Script Instance] OnCollisionExit invocation failed (instanceId={}, type={})", m_InstanceId, m_ScriptClass->GetFullName());
+                m_OnCollisionExitMethodId = 0;
             }
         }
     }

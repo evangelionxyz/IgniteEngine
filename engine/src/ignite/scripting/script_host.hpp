@@ -95,6 +95,7 @@ namespace ignite
         std::string m_SerializeFieldAttributeTypeName;
         bool m_Initialized = false;
         int m_NextMethodId = 1;
+        int m_ReloadCounter = 0;
 
     private:
         mochi::ManagedAssembly *LoadAssemblyInternal(const ignite::Path &assemblyPath, mochi::ManagedAssembly *&targetSlot);

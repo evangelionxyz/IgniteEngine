@@ -396,7 +396,7 @@ namespace ignite
         }
     }
 
-    void Scene::OnUpdateEdit(f32 deltaTime)
+    void Scene::OnUpdateEdit(float deltaTime)
     {
         IGN_PROFILE_FUNCTION();
         timeInSeconds += deltaTime;
@@ -433,7 +433,7 @@ namespace ignite
         return nullptr;
     }
 
-    void Scene::OnUpdateRuntimeSimulate(f32 deltaTime)
+    void Scene::OnUpdateRuntimeSimulate(float deltaTime)
     {
         IGN_PROFILE_FUNCTION();
         if (!m_IsPaused || m_StepFrame-- > 0)
@@ -460,6 +460,52 @@ namespace ignite
             {
                 IGN_PROFILE_SCOPE("Scene::Physics3D");
                 physics->Simulate(deltaTime);
+            }
+
+            // Dispatch Jolt collision events to C# scripts
+            {
+                IGN_PROFILE_SCOPE("Scene::CollisionEvents");
+
+                auto events = physics->DrainCollisionEvents();
+
+                for (const auto &ev : events)
+                {
+                    // UserData must be returns entity UUID
+                    const uint64_t entityIDA = physics->GetUserData(ev.bodyA);
+                    const uint64_t entityIDB = physics->GetUserData(ev.bodyB);
+                    
+                    if (entityIDA == 0 || entityIDB == 0)
+                        continue;
+
+                    // Helper: try to find a script instance for an entity
+                    // Uses the ScriptComponent view to avoid error-logging for entities without scripts
+                    auto getScriptInst = [&](uint64_t entityId) -> Ref<ScriptInstance>
+                    {
+                        auto it = entities.find(UUID(entityId));
+                        if (it == entities.end())
+                            return nullptr;
+
+                        Entity ent { it->second, this };
+                        if (!ent.HasComponent<ScriptComponent>())
+                            return nullptr;
+
+                        return ent.GetComponent<ScriptComponent>().runtimeScriptInstance;
+                    };
+
+                    auto dispatch = [&ev](Ref<ScriptInstance> inst, uint64_t otherId)
+                    {
+                        if (!inst) return;
+                        switch (ev.type)
+                        {
+                            case JoltCollisionEventType::Enter: inst->InvokeOnCollisionEnter(otherId); break;
+                            case JoltCollisionEventType::Stay:  inst->InvokeOnCollisionStay(otherId);  break;
+                            case JoltCollisionEventType::Exit:  inst->InvokeOnCollisionExit(otherId);  break;
+                        }
+                    };
+
+                    dispatch(getScriptInst(entityIDA), entityIDB);
+                    dispatch(getScriptInst(entityIDB), entityIDA);
+                }
             }
         }
     }

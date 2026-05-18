@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "jolt_physics.hpp"
 #include "ignite/core/types.hpp"
@@ -233,6 +212,38 @@ namespace ignite
         return m_BodyInterface;
     }
 
+    void JoltScene::CreatePlaneCollider(Entity entity)
+    {
+        auto &tc = entity.GetComponent<TransformComponent>();
+        auto &rb = entity.GetComponent<RigibodyComponent>();
+        auto &col = entity.GetComponent<PlaneColliderComponent>();
+
+        glm::vec3 halfExtents = col.scale * tc.scale;
+        JPH::Plane inPlane(JPH::Vec3Arg{0.0f, 1.0f, 0.0f}, 1.0f);
+        JPH::PlaneShapeSettings planeShapeSettings(inPlane);
+        JPH::ShapeSettings::ShapeResult shapeResult = planeShapeSettings.Create();
+        if (shapeResult.HasError())
+            return;
+
+        JPH::ShapeRefC shape = shapeResult.Get();
+
+        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation + col.center, tc.rotation);
+
+        JPH::Body *body = m_BodyInterface->CreateBody(bodySettings);
+        if (body)
+        {
+            JPH::BodyID bodyId = body->GetID();
+            m_BodyInterface->AddBody(bodyId, JPH::EActivation::Activate);
+            m_BodyInterface->SetFriction(bodyId, col.friction);
+            m_BodyInterface->SetRestitution(bodyId, col.restitution);
+            body->SetUserData((uint64_t)entity.GetUUID());
+            rb.body = body;
+        }
+
+        col.shape = (void *)shape.GetPtr();
+
+    }
+
     void JoltScene::CreateBoxCollider(Entity entity)
     {
         auto &tc = entity.GetComponent<TransformComponent>();
@@ -254,6 +265,7 @@ namespace ignite
             m_BodyInterface->AddBody(bodyId, JPH::EActivation::Activate);
             m_BodyInterface->SetFriction(bodyId, col.friction);
             m_BodyInterface->SetRestitution(bodyId, col.restitution);
+            body->SetUserData((uint64_t)entity.GetUUID());
             rb.body = body;
         }
 
@@ -291,6 +303,7 @@ namespace ignite
             m_BodyInterface->AddBody(bodyId, JPH::EActivation::Activate);
             m_BodyInterface->SetFriction(bodyId, col.friction);
             m_BodyInterface->SetRestitution(bodyId, col.restitution);
+            body->SetUserData((uint64_t)entity.GetUUID());
             rb.body = body;
         }
 
@@ -317,6 +330,7 @@ namespace ignite
             m_BodyInterface->AddBody(bodyId, JPH::EActivation::Activate);
             m_BodyInterface->SetFriction(bodyId, col.friction);
             m_BodyInterface->SetRestitution(bodyId, col.restitution);
+            body->SetUserData((uint64_t)entity.GetUUID());
             rb.body = body;
         }
 
@@ -424,6 +438,7 @@ namespace ignite
             m_BodyInterface->AddBody(bodyId, JPH::EActivation::Activate);
             m_BodyInterface->SetFriction(bodyId, col.friction);
             m_BodyInterface->SetRestitution(bodyId, col.restitution);
+            body->SetUserData((uint64_t)entity.GetUUID());
             rb.body = body;
         }
 
@@ -568,6 +583,59 @@ namespace ignite
     void JoltScene::SetMaxAngularVelocity(JPH::Body &body, float max)
     {
         body.GetMotionProperties()->SetMaxAngularVelocity(max);
+    }
+
+    JoltRaycastHit JoltScene::Raycast(const glm::vec3 &origin, const glm::vec3 &direction, float maxDistance)
+    {
+        JoltRaycastHit result;
+
+        if (!m_BodyInterface)
+            return result;
+
+        // Build the ray
+        JPH::Vec3 rayOrigin = GlmToJoltVec3(origin);
+        JPH::Vec3 rayDir = GlmToJoltVec3(glm::normalize(direction) * maxDistance);
+
+        JPH::RRayCast ray { JPH::RVec3(rayOrigin), rayDir };
+
+        JPH::RayCastResult hit;
+        const JPH::NarrowPhaseQuery &narrowPhase = m_PhysicsSystem.GetNarrowPhaseQuery();
+
+        if (narrowPhase.CastRay(ray, hit))
+        {
+            result.hit = true;
+            result.bodyId = hit.mBodyID;
+            result.fraction = hit.mFraction;
+
+            // Compute world-space hit point
+            JPH::Vec3 hitPos = rayOrigin + rayDir * hit.mFraction;
+            result.hitPoint = JoltToGlmVec3(hitPos);
+
+            // Retrieve the surface normal at the hit sub-shape
+            JPH::BodyLockRead bodyLock(m_PhysicsSystem.GetBodyLockInterface(), hit.mBodyID);
+            if (bodyLock.Succeeded())
+            {
+                const JPH::Body &body = bodyLock.GetBody();
+                JPH::Vec3 normal = body.GetWorldSpaceSurfaceNormal(hit.mSubShapeID2, JPH::RVec3(hitPos));
+                result.hitNormal = JoltToGlmVec3(normal);
+            }
+        }
+
+        return result;
+    }
+
+    std::vector<JoltCollisionEvent> JoltScene::DrainCollisionEvents()
+    {
+        if (auto *listener = dynamic_cast<JoltContactListener *>(s_JoltInstance->contactListener.get()))
+        {
+            return listener->DrainEvents();
+        }
+        return {};
+    }
+
+    JPH::uint64 JoltScene::GetUserData(const JPH::BodyID &bodyId)
+    {
+        return m_BodyInterface->GetUserData(bodyId);
     }
 
 }
