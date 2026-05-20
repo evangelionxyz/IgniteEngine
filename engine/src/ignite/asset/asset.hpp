@@ -14,7 +14,6 @@
 
 namespace ignite
 {
-
     class Serializer;
     using AssetHandle = UUID;
 

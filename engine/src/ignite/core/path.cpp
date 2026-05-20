@@ -366,8 +366,115 @@ namespace ignite
         return result;
     }
 
+    Scope<filewatch::FileWatch<std::string>> Path::WatchFile(const Path &path, FileWatchCallback callback)
+    {
+        if (path.empty())
+        {
+            return {};
+        }
+
+        return CreateScope<filewatch::FileWatch<std::string>>(path.string(), std::move(callback));
+    }
+
     Path::operator std::string() const
     {
         return string();
+    }
+
+    bool Path::TryGetAssemblyWriteTime(const ignite::Path &filepath, std::chrono::time_point<std::chrono::file_clock> &outTime)
+    {
+        std::error_code ec;
+        if (!std::filesystem::exists(filepath.string(), ec) || ec)
+        {
+            return false;
+        }
+
+        outTime = std::filesystem::last_write_time(filepath.string(), ec);
+        return !ec;
+    }
+
+    bool Path::WaitForAssemblyFileReady(const ignite::Path &filepath)
+    {
+        using namespace std::chrono_literals;
+
+        uintmax_t lastSize = 0;
+        bool hasLastSize = false;
+        std::chrono::time_point<std::chrono::file_clock> lastWriteTime {};
+        bool hasLastWrite = false;
+        int stableCount = 0;
+
+        for (int i = 0; i < 80; i++)
+        {
+            std::error_code ec;
+            if (!std::filesystem::exists(filepath.string(), ec) || ec)
+            {
+                std::this_thread::sleep_for(25ms);
+                continue;
+            }
+
+            const auto writeTime = std::filesystem::last_write_time(filepath.string(), ec);
+            if (ec)
+            {
+                std::this_thread::sleep_for(25ms);
+                continue;
+            }
+
+            const auto fileSize = std::filesystem::file_size(filepath.string(), ec);
+            if (ec)
+            {
+                std::this_thread::sleep_for(25ms);
+                continue;
+            }
+
+            std::ifstream stream(filepath, std::ios::binary);
+            if (!stream.good())
+            {
+                std::this_thread::sleep_for(25ms);
+                continue;
+            }
+
+            const bool sameWrite = hasLastWrite && writeTime == lastWriteTime;
+            const bool sameSize = hasLastSize && fileSize == lastSize;
+
+            if (sameWrite && sameSize)
+            {
+                stableCount++;
+                if (stableCount >= 3)
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                stableCount = 0;
+            }
+
+            hasLastWrite = true;
+            hasLastSize = true;
+            lastWriteTime = writeTime;
+            lastSize = fileSize;
+
+            std::this_thread::sleep_for(25ms);
+        }
+
+        return false;
+    }
+
+    bool Path::WaitForAssemblyNewerThan(const ignite::Path &filepath, const std::chrono::time_point<std::chrono::file_clock> &previousWriteTime)
+    {
+        using namespace std::chrono_literals;
+
+        for (int i = 0; i < 120; i++)
+        {
+            std::chrono::time_point<std::chrono::file_clock> currentWriteTime {};
+            if (TryGetAssemblyWriteTime(filepath, currentWriteTime) && currentWriteTime > previousWriteTime)
+            {
+                return true;
+            }
+
+            std::this_thread::sleep_for(25ms);
+        }
+
+        return false;
     }
 }

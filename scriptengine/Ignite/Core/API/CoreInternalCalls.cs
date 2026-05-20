@@ -67,14 +67,8 @@ public static class CoreInternalCalls
     {
         EnsureInitialized();
         IntPtr ptr = NativeObject.StringToUtf8(message);
-        try
-        {
-            s_DebugLog!(ptr, level);
-        }
-        finally
-        {
-            Marshal.FreeCoTaskMem(ptr);
-        }
+        try { s_DebugLog!(ptr, level); }
+        finally { Marshal.FreeCoTaskMem(ptr); }
     }
 
     internal static bool Input_IsKeyPressed(uint keyCode)

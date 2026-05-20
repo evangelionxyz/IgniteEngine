@@ -14,6 +14,7 @@ namespace ignite
 {
     class Entity;
     class ScriptClass;
+    class ScriptableObject;
 
     using ScriptInstanceID = uint64_t;
 
@@ -21,6 +22,8 @@ namespace ignite
     {
     public:
         ScriptInstance(Ref<ScriptClass> scriptClass, ScriptInstanceID instanceID);
+
+        static void PopulateSOFields(ScriptHost *host, uint64_t instanceId, const ScriptableObject &so);
 
         void InvokeOnCreate();
         void InvokeOnDestroy();

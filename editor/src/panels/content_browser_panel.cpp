@@ -1068,10 +1068,10 @@ namespace ignite
 
         while (!m_PendingAssetLoading.empty())
         {
-            auto [assetType, assetMetaData, _] = m_PendingAssetLoading.front();
+            auto &[assetType, fileStatus, assetMetaData, userData] = m_PendingAssetLoading.front();
             m_PendingAssetLoading.pop();
 
-            if (assetType == PendingFileLoading::ImportAssets)
+            if (assetType == ImportType::ImportAssets)
             {
                 // submit to asset worker
                 AssetWorker::SubmitJob(std::format("Importing {}...", assetMetaData.filepath.filename().string()), [this, assetType, assetMetaData]()

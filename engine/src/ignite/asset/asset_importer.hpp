@@ -32,17 +32,27 @@ namespace ignite
     class WidgetCanvas;
     class ScriptableObject;
 
+    enum class FileStatus : uint8_t
+    {
+        Failure = 0,
+        Success = 1,
+        Pending = 2,
+
+        Unknown,
+    };
+
+    enum class ImportType : uint8_t
+    {
+        None = 0,
+        Open,
+        Save,
+        ImportAssets,
+    };
+
     struct PendingFileLoading
     {
-        enum Type : uint8_t
-        {
-            None = 0,
-            Open,
-            Save,
-            ImportAssets,
-        };
-
-        Type type = None;
+        ImportType type = ImportType::None;
+        FileStatus loadStatus = FileStatus::Unknown;
         AssetMetaData metadata;
         void *userData = nullptr;
     };
