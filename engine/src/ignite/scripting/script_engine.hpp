@@ -56,7 +56,7 @@ namespace ignite
         const std::vector<ScriptableObjectMenuEntry> &GetScriptableObjectMenuEntries();
         void RefreshScriptableObjectMenuEntries();
 
-        inline bool IsReady() const;
+        bool IsReady() const;
 
         Scene *GetSceneContext();
         ScriptHost *GetScriptHost();
