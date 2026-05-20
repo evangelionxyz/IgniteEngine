@@ -1068,7 +1068,7 @@ namespace ignite
 
         while (!m_PendingAssetLoading.empty())
         {
-            auto &[assetType, fileStatus, assetMetaData, userData] = m_PendingAssetLoading.front();
+            auto [assetType, fileStatus, assetMetaData, userData] = m_PendingAssetLoading.front();
             m_PendingAssetLoading.pop();
 
             if (assetType == ImportType::ImportAssets)
