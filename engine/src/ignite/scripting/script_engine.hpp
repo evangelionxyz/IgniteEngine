@@ -5,10 +5,10 @@
 
 #include "ignite/scene/scene.hpp"
 #include "ignite/scene/entity.hpp"
+#include "ignite/asset/asset_importer.hpp"
 #include "script_instances/script_instance.hpp"
 #include "scriptable_object.hpp"
 #include "script_host.hpp"
-
 #include "FileWatch.hpp"
 
 #include "ignite/core/path.hpp"
@@ -27,8 +27,6 @@ namespace ignite
     public:
         ScriptEngine(Project *project);
         ~ScriptEngine();
-
-        void RegisterCoreClassesAndFunctions();
 
         bool LoadCoreAssembly(const ignite::Path &filepath);
         bool LoadAppAssembly(const ignite::Path &filepath);
@@ -58,12 +56,16 @@ namespace ignite
         const std::vector<ScriptableObjectMenuEntry> &GetScriptableObjectMenuEntries();
         void RefreshScriptableObjectMenuEntries();
 
+        inline bool IsReady() const;
+
         Scene *GetSceneContext();
         ScriptHost *GetScriptHost();
 
         static ScriptEngine *GetInstance();
 
     private:
+        FileStatus EnsureAppAssembly();
+
         void InitHostFxr();
         void ShutdownHostFxr();
         static void OnAppAssemblyFileSystemEvent(const std::string &path, const filewatch::Event eventType);

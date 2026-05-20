@@ -28,107 +28,12 @@ namespace ignite
     namespace
     {
         // Constants
+        constexpr const char *kIgniteObjectName = "Ignite.IgniteObject";
         constexpr const char *kSerializeFieldTypeName = "Ignite.SerializeField";
         constexpr const char *kScriptableObjectTypeName = "Ignite.ScriptableObject";
-
         constexpr const char *kEntityTypeName = "Ignite.Entity";
 
-        static bool TryGetAssemblyWriteTime(const ignite::Path &filepath, std::filesystem::file_time_type &outTime)
-        {
-            std::error_code ec;
-            if (!std::filesystem::exists(filepath.string(), ec) || ec)
-            {
-                return false;
-            }
-
-            outTime = std::filesystem::last_write_time(filepath.string(), ec);
-            return !ec;
-        }
-
-        static bool WaitForAssemblyFileReady(const ignite::Path &filepath)
-        {
-            using namespace std::chrono_literals;
-
-            uintmax_t lastSize = 0;
-            bool hasLastSize = false;
-            std::filesystem::file_time_type lastWriteTime{};
-            bool hasLastWrite = false;
-            int stableCount = 0;
-
-            for (int i = 0; i < 80; i++)
-            {
-                std::error_code ec;
-                if (!std::filesystem::exists(filepath.string(), ec) || ec)
-                {
-                    std::this_thread::sleep_for(25ms);
-                    continue;
-                }
-
-                const auto writeTime = std::filesystem::last_write_time(filepath.string(), ec);
-                if (ec)
-                {
-                    std::this_thread::sleep_for(25ms);
-                    continue;
-                }
-
-                const auto fileSize = std::filesystem::file_size(filepath.string(), ec);
-                if (ec)
-                {
-                    std::this_thread::sleep_for(25ms);
-                    continue;
-                }
-
-                std::ifstream stream(filepath, std::ios::binary);
-                if (!stream.good())
-                {
-                    std::this_thread::sleep_for(25ms);
-                    continue;
-                }
-
-                const bool sameWrite = hasLastWrite && writeTime == lastWriteTime;
-                const bool sameSize = hasLastSize && fileSize == lastSize;
-
-                if (sameWrite && sameSize)
-                {
-                    stableCount++;
-                    if (stableCount >= 3)
-                    {
-                        return true;
-                    }
-                }
-                else
-                {
-                    stableCount = 0;
-                }
-
-                hasLastWrite = true;
-                hasLastSize = true;
-                lastWriteTime = writeTime;
-                lastSize = fileSize;
-
-                std::this_thread::sleep_for(25ms);
-            }
-
-            return false;
-        }
-
-        static bool WaitForAssemblyNewerThan(const ignite::Path &filepath, const std::filesystem::file_time_type &previousWriteTime)
-        {
-            using namespace std::chrono_literals;
-
-            for (int i = 0; i < 120; i++)
-            {
-                std::filesystem::file_time_type currentWriteTime{};
-                if (TryGetAssemblyWriteTime(filepath, currentWriteTime) && currentWriteTime > previousWriteTime)
-                {
-                    return true;
-                }
-
-                std::this_thread::sleep_for(25ms);
-            }
-
-            return false;
-        }
+        
     }
 
     static std::unordered_map<std::string, ScriptFieldType> s_ScriptFieldTypeMap =
@@ -188,12 +93,13 @@ namespace ignite
 
         ignite::Path mochiSharpAssemblyFilepath;
         ignite::Path coreAssemblyFilepath;
-        ignite::Path appAssemblyFilepath;
+
+        bool isReady = false;
 
         Scope<filewatch::FileWatch<std::string>> appAssemblyFileWatcher;
         bool assemblyReloadingPending = false;
         bool assemblyReloadDeferred = false;
-        std::filesystem::file_time_type appAssemblyLastWriteTime{};
+        std::chrono::time_point<std::chrono::file_clock> appAssemblyLastWriteTime{};
         bool hasAppAssemblyLastWriteTime = false;
 
         // Entity script
@@ -209,6 +115,36 @@ namespace ignite
 
     ScriptEngineData *scriptEngineData = nullptr;
     ScriptEngine *scriptEngine = nullptr;
+
+    FileStatus ScriptEngine::EnsureAppAssembly()
+    {
+        LOG_ASSERT(!m_Project->GetScriptModulePath().empty(), "[Script Engine] App Assembly should not empty!");
+
+        // Skip building if the App Assembly exists AND the DLL is Up-To-Date
+        if (ignite::Path::exists(m_Project->GetScriptModulePath()) && m_Project->IsCoreDependenciesUpToDate())
+        {
+            // Load App Assembly immediately
+            scriptEngineData->isReady = LoadAppAssembly(m_Project->GetScriptModulePath());
+            m_Project->ProcessOnProjectReadyFuncs(scriptEngineData->isReady);
+            return FileStatus::Success;
+        }
+
+        // Register Build Solution callback
+        m_Project->AddBuildSolutionFunc([this](bool isSuccess)
+        {
+            LOG_ASSERT(isSuccess, "[Script Engine] Failed to build solution!");
+            if (isSuccess)
+            {
+                scriptEngineData->isReady = LoadAppAssembly(m_Project->GetScriptModulePath());
+            }
+            m_Project->ProcessOnProjectReadyFuncs(isSuccess && scriptEngineData->isReady);
+        });
+
+        // Run the build and load the App Assembly if success
+        LOG_DEBUG("Building Visual Studio Solution...");
+        m_Project->BuildSolution(true);
+        return FileStatus::Pending;
+    }
 
     void ScriptEngine::InitHostFxr()
     {
@@ -252,11 +188,8 @@ namespace ignite
     {
         scriptEngine = this;
 
-        const auto appAssemblyPath = m_Project->GetScriptModulePath();
-
         if (scriptEngineData)
         {
-            scriptEngineData->appAssemblyFilepath = appAssemblyPath.generic_string();
             ReloadAssembly();
             return;
         }
@@ -268,22 +201,20 @@ namespace ignite
         scriptEngineData->mochiSharpAssemblyFilepath = m_Project->GetScriptBinDirectory() / "MochiSharp.Managed.dll";
 
         // Script Core Assembly (IgniteScriptEngine.dll)
-        const ignite::Path coreAssemblyPath = m_Project->GetScriptBinDirectory() / "IgniteScriptEngine.dll";
-        LOG_ASSERT(std::filesystem::exists(coreAssemblyPath.string()), "[Script Engine] Script core assembly not found!");
-        bool initialized = LoadCoreAssembly(coreAssemblyPath);
+        scriptEngineData->coreAssemblyFilepath = m_Project->GetScriptBinDirectory() / "IgniteScriptEngine.dll";
+        LOG_ASSERT(ignite::Path::exists(scriptEngineData->coreAssemblyFilepath), "[Script Engine] Script core assembly not found!");
+        if (!LoadCoreAssembly(scriptEngineData->coreAssemblyFilepath))
+        {
+            LOG_ASSERT(false, "[Script Engine] Failed to reload core assembly '{}'", scriptEngineData->coreAssemblyFilepath.generic_string());
+            return;
+        }
 
-        // Register method signatures AFTER assemblies are loaded
+        // Register method signatures AFTER Core Assembly is loaded
         scriptEngineData->scriptHost->RegisterSignatures();
         LOG_INFO("[Script Engine] Registered method signatures");
 
-        initialized &= LoadAppAssembly(appAssemblyPath);
-        if (initialized)
-        {
-            LoadAppAssemblyClasses();
-            LOG_WARN("[Script Engine] Initialized");
-        }
-
-        LOG_ASSERT(initialized, "[Script Engine] Failed to initialize!");
+        // Build solution if the App Assembly is not available yet
+        EnsureAppAssembly();
     }
 
     ScriptEngine::~ScriptEngine()
@@ -304,25 +235,16 @@ namespace ignite
         LOG_WARN("[Script Engine] Shutdown");
     }
 
-    void ScriptEngine::RegisterCoreClassesAndFunctions()
+    bool ScriptEngine::LoadCoreAssembly(const ignite::Path &filepath)
     {
+        LOG_ASSERT(!filepath.empty(), "[Script Engine] Core Assembly should not empty!");
+
+        if (!scriptEngineData->scriptHost->LoadAssembly(filepath))
+            return false;
+
         // Register glue functions and components via HostFXR
         ComponentScriptGlue::RegisterFunctions();
         ComponentScriptGlue::RegisterComponents();
-    }
-
-    bool ScriptEngine::LoadCoreAssembly(const ignite::Path &filepath)
-    {
-        scriptEngineData->coreAssemblyFilepath = filepath;
-
-        if (!scriptEngineData->scriptHost->LoadAssembly(filepath))
-        {
-            LOG_ERROR("[Script Engine] Failed to load core assembly: {}", filepath.generic_string());
-            return false;
-        }
-
-        // Register glue functions and components
-        RegisterCoreClassesAndFunctions();
 
         LOG_INFO("[Script Engine] Core assembly loaded: {}", filepath.generic_string());
         return true;
@@ -353,32 +275,24 @@ namespace ignite
 
     bool ScriptEngine::LoadAppAssembly(const ignite::Path &filepath)
     {
-        if (!ignite::Path::exists(filepath))
-        {
-            if (!m_Project->BuildSolution())
-            {
-                return false;
-            }
-        }
-
-        scriptEngineData->appAssemblyFilepath = filepath;
+        LOG_ASSERT(!filepath.empty(), "[Script Engine] App Assembly should not empty!");
 
         if (scriptEngineData->hasAppAssemblyLastWriteTime)
         {
-            if (!WaitForAssemblyNewerThan(filepath, scriptEngineData->appAssemblyLastWriteTime))
+            if (!ignite::Path::WaitForAssemblyNewerThan(filepath, scriptEngineData->appAssemblyLastWriteTime))
             {
                 LOG_WARN("[Script Engine] App assembly timestamp did not advance before reload: {}", filepath.generic_string());
             }
         }
 
-        if (!WaitForAssemblyFileReady(filepath))
+        if (!ignite::Path::WaitForAssemblyFileReady(filepath))
         {
             LOG_WARN("[Script Engine] App assembly may still be updating: {}", filepath.generic_string());
         }
 
         if (!scriptEngineData->scriptHost->LoadAssembly(filepath))
         {
-            LOG_ERROR("[Script Engine] Failed to load app assembly: {}", filepath.generic_string());
+            LOG_ASSERT(false, "[Script Engine] Failed to load App Assembly: {}", filepath.generic_string());
             return false;
         }
 
@@ -408,22 +322,29 @@ namespace ignite
             return false;
         }
 
-        scriptEngineData->appAssemblyFileWatcher = CreateScope<filewatch::FileWatch<std::string>>(filepath.string(), ScriptEngine::OnAppAssemblyFileSystemEvent);
+        // Create App Assembly File-watcher
+        scriptEngineData->appAssemblyFileWatcher = ignite::Path::WatchFile(filepath.string(), ScriptEngine::OnAppAssemblyFileSystemEvent);
         scriptEngineData->assemblyReloadingPending = false;
 
-        std::filesystem::file_time_type currentWriteTime {};
-        if (TryGetAssemblyWriteTime(filepath, currentWriteTime))
+        std::chrono::time_point<std::chrono::file_clock> currentWriteTime {};
+        if (ignite::Path::TryGetAssemblyWriteTime(filepath, currentWriteTime))
         {
             scriptEngineData->appAssemblyLastWriteTime = currentWriteTime;
             scriptEngineData->hasAppAssemblyLastWriteTime = true;
         }
 
         LOG_INFO("[Script Engine] App assembly loaded: {}", filepath.generic_string());
+
+        // Load the classes
+        LoadAppAssemblyClasses();
+
         return true;
     }
 
     void ScriptEngine::ReloadAssembly()
     {
+        scriptEngineData->isReady = false;
+
         // CRITICAL: Destroy all script instances BEFORE reloading the assembly
         // This prevents TargetException due to managed objects holding old type references
         if (!scriptEngineData->entityScriptInstances.empty())
@@ -448,11 +369,13 @@ namespace ignite
 
         if (!LoadCoreAssembly(scriptEngineData->coreAssemblyFilepath))
         {
-            LOG_ERROR("[Script Engine] Failed to reload core assembly '{}'" , scriptEngineData->coreAssemblyFilepath.generic_string());
+            LOG_ASSERT(false, "[Script Engine] Failed to reload core assembly '{}'", scriptEngineData->coreAssemblyFilepath.generic_string());
             return;
         }
 
+        // Register method signatures AFTER Core Assembly is loaded
         scriptEngineData->scriptHost->RegisterSignatures();
+        LOG_INFO("[Script Engine] Registered method signatures");
 
         // Re-initialize the native bridge into the freshly loaded core assembly.
         // The new ALC gives CoreInternalCalls/ComponentInternalCalls clean static
@@ -470,11 +393,7 @@ namespace ignite
         }
 
         // Reload app assembly (MochiSharp handles unloading through collectible context)
-        if (LoadAppAssembly(scriptEngineData->appAssemblyFilepath))
-        {
-            LoadAppAssemblyClasses();
-            LOG_INFO("[Script Engine] App Assembly Reloaded '{}'", scriptEngineData->appAssemblyFilepath.generic_string());
-        }
+        EnsureAppAssembly();
     }
 
     void ScriptEngine::SetSceneContext(Scene *scene)
@@ -607,9 +526,7 @@ namespace ignite
         if (!scriptEngineData || !scriptEngineData->scriptHost)
             return;
 
-        const std::string rawData = scriptEngineData->scriptHost->GetCreateAssetMenuData(
-            scriptEngineData->appAssemblyFilepath,
-            kScriptableObjectTypeName);
+        const std::string rawData = scriptEngineData->scriptHost->GetCreateAssetMenuData(m_Project->GetScriptModulePath(), kScriptableObjectTypeName);
 
         if (rawData.empty())
             return;
@@ -619,9 +536,7 @@ namespace ignite
         while (start <= rawData.size())
         {
             const size_t end = rawData.find('|', start);
-            const std::string entry = (end == std::string::npos)
-                ? rawData.substr(start)
-                : rawData.substr(start, end - start);
+            const std::string entry = (end == std::string::npos) ? rawData.substr(start) : rawData.substr(start, end - start);
 
             if (!entry.empty())
             {
@@ -632,11 +547,11 @@ namespace ignite
                 {
                     ScriptableObjectMenuEntry menuEntry;
                     menuEntry.className = entry.substr(0, sep1);
-                    menuEntry.fileName  = entry.substr(sep1 + 1, sep2 - sep1 - 1);
-                    menuEntry.menuName  = entry.substr(sep2 + 1);
+                    menuEntry.fileName = entry.substr(sep1 + 1, sep2 - sep1 - 1);
+                    menuEntry.menuName = entry.substr(sep2 + 1);
                     scriptEngineData->scriptableObjectMenuEntries.push_back(menuEntry);
                     LOG_TRACE("[Script Engine] CreateAssetMenu: class='{}' file='{}' menu='{}'",
-                              menuEntry.className, menuEntry.fileName, menuEntry.menuName);
+                        menuEntry.className, menuEntry.fileName, menuEntry.menuName);
                 }
             }
 
@@ -645,6 +560,14 @@ namespace ignite
         }
 
         LOG_INFO("[Script Engine] Found {} CreateAssetMenu entries", scriptEngineData->scriptableObjectMenuEntries.size());
+    }
+
+    bool ScriptEngine::IsReady() const
+    {
+        if (!scriptEngineData)
+            return false;
+
+        return scriptEngineData->isReady;
     }
 
     Scene *ScriptEngine::GetSceneContext()
@@ -697,12 +620,12 @@ namespace ignite
         // Clear
         outClasses.clear();
 
-        const std::string appAssemblyName = scriptEngineData->appAssemblyFilepath.stem().string();
-        std::string derivedTypes = scriptEngineData->scriptHost->GetDerivedTypes(scriptEngineData->appAssemblyFilepath, classFullName);
+        const std::string appAssemblyName = m_Project->GetScriptModulePath().stem().string();
+        std::string derivedTypes = scriptEngineData->scriptHost->GetDerivedTypes(m_Project->GetScriptModulePath(), classFullName);
 
         if (derivedTypes.empty())
         {
-            LOG_WARN("[Script Engine] No derived script classes found in {} for '{}'", scriptEngineData->appAssemblyFilepath.generic_string(), classFullName);
+            LOG_WARN("[Script Engine] No derived script classes found in {} for '{}'", m_Project->GetScriptModulePath().generic_string(), classFullName);
             return;
         }
 

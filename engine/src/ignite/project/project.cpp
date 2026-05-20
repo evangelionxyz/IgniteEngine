@@ -18,6 +18,9 @@
 #include <filesystem>
 #include <fstream>
 #include <format>
+#include <chrono>
+#include <thread>
+#include <ranges>
 
 namespace ignite
 {
@@ -102,13 +105,20 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         GenerateProject();
 
         m_AssetManager = new AssetManager(this);
+    }
+
+    void Project::InitScriptEngine()
+    {
         m_ScriptEngine = new ScriptEngine(this);
     }
 
     Project::~Project()
     {
-        delete m_ScriptEngine;
-        delete m_AssetManager;
+        m_CoreDependencyWatchers.clear();
+        if (m_ScriptEngine)
+            delete m_ScriptEngine;
+        if (m_AssetManager)
+            delete m_AssetManager;
     }
 
     ignite::Path Project::GetProjectFilepath(const ignite::Path &filepath) const
@@ -318,37 +328,253 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 		return project;
 	}
 
+    void Project::AddBuildSolutionFunc(const ProjectCallbackFn &func)
+    {
+        m_BuildSolutionFuncs.push_back(func);
+    }
+
+    void Project::AddOnProjectReadyFuncs(const ProjectCallbackFn &func)
+    {
+        m_OnProjectReadyFuncs.push_back(func);
+    }
+
+    void Project::ProcessOnProjectReadyFuncs(bool isSuccess)
+    {
+        // Process the OnReady callbacks
+        if (!m_IsReady)
+        {
+            m_IsReady = true;
+            for (auto &func : m_OnProjectReadyFuncs)
+            {
+                if (func)
+                    func(isSuccess);
+            }
+            m_OnProjectReadyFuncs.clear();
+        }
+    }
+
+    void Project::ResetReadyState()
+    {
+        m_IsReady = false;
+        m_OnProjectReadyFuncs.clear();
+    }
+
     Ref<Project> Project::Create(const ProjectInfo &info)
     {
         return CreateRef<Project>(info);
     }
 
-    bool Project::BuildSolution()
+    bool Project::IsCoreDependenciesUpToDate()
     {
-		m_Info.scriptModuleFilepath = std::format("Bin/{}.dll", m_Info.name);
-		bool appAssemblyAvailable = ignite::Path::exists(GetScriptModulePath());
-
-        if (!appAssemblyAvailable)
+        static std::array<std::string, 5> coreDeps =
         {
-		    // restore NuGet
-            {
-			    std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /t:Restore /p:Configuration=Release /p:Platform=\"Any CPU\"";
-			    std::system(buildCommand.c_str());
-		    }
+            "IgniteScriptEngine.dll",
+            "IgniteScriptEngine.deps.json",
+            "MochiSharp.Managed.dll",
+            "MochiSharp.Managed.deps.json",
+            "MochiSharp.Managed.runtimeconfig.json"
+        };
 
-            // Build
+        // Candidate source directories to search for dependencies. Prefer the executable directory.
+        const ignite::Path exeDir = GetExecutableDirectory();
+        const ignite::Path projectBinDir = GetScriptBinDirectory();
+
+        std::lock_guard<std::mutex> lock(m_CoreDependencyMutex);
+
+        bool isUpToDate = true;
+        for (auto &dep : coreDeps)
+        {
+            const ignite::Path targetDepFilename = projectBinDir / dep;
+            const ignite::Path depFilename = exeDir / dep;
+            m_CoreDependenciesPending[dep] = true;
+            if (!ignite::Path::exists(depFilename))
             {
-			    std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /p:Configuration=Release /p:Platform=\"Any CPU\"";
-			    std::system(buildCommand.c_str());
+                isUpToDate = false;
+                m_CoreDependencies[dep] = false;
+                continue;
             }
-        }
-        
-        m_Info.scriptModuleFilepath = std::format("Bin/{}.dll", m_Info.name);
-        appAssemblyAvailable = ignite::Path::exists(GetScriptModulePath());
 
-        // Validate .dll file
-        LOG_ASSERT(appAssemblyAvailable, "[Project] Failed to build Solution");
-        return appAssemblyAvailable;
+            const auto srcTime = std::filesystem::last_write_time(depFilename.string());
+            const auto dstTime = std::filesystem::exists(targetDepFilename.string())
+                ? std::filesystem::last_write_time(targetDepFilename.string()) : std::filesystem::file_time_type::min();
+
+            m_CoreDependencies[dep] = srcTime <= dstTime;
+            if (!(srcTime <= dstTime))
+                isUpToDate = false;
+        }
+
+        return isUpToDate;
+    }
+
+    void Project::StartCoreDependencyWatchers()
+    {
+        m_CoreDependencyWatchers.clear();
+
+        const ignite::Path exeDir = GetExecutableDirectory();
+        for (const auto &[dep, upToDate] : m_CoreDependencies)
+        {
+            const ignite::Path depFilename = exeDir / dep;
+            if (!ignite::Path::exists(depFilename))
+                continue;
+
+            m_CoreDependencyWatchers.push_back(Path::WatchFile(depFilename, [this](const std::string &path, const filewatch::Event eventType)
+            {
+                OnCoreDependencyChanged(path, eventType);
+            }));
+        }
+    }
+
+    void Project::OnCoreDependencyChanged(const std::string &path, const filewatch::Event eventType)
+    {
+        if (eventType != filewatch::Event::added && eventType != filewatch::Event::modified)
+            return;
+
+        {
+            std::lock_guard<std::mutex> lock(m_CoreDependencyMutex);
+            auto it = m_CoreDependenciesPending.find(path);
+            if (it == m_CoreDependenciesPending.end() || !it->second)
+                return;
+            it->second = false;
+        }
+
+        AssetWorker::SubmitJob([this, path]()
+        {
+            using namespace std::chrono_literals;
+
+            const ignite::Path exeDir = GetExecutableDirectory();
+            const ignite::Path sourcePath = exeDir / path;
+            if (!ignite::Path::exists(sourcePath))
+            {
+                LOG_ERROR("[Project] Dependency {} is not found!", sourcePath.generic_string());
+                std::lock_guard<std::mutex> lock(m_CoreDependencyMutex);
+                m_CoreDependenciesPending[path] = true;
+                return;
+            }
+
+            const ignite::Path targetPath = GetScriptBinDirectory() / sourcePath.filename();
+
+            for (int i = 0; i < 80; ++i)
+            {
+                std::error_code ec;
+                if (!std::filesystem::exists(sourcePath.string(), ec) || ec)
+                {
+                    std::this_thread::sleep_for(25ms);
+                    continue;
+                }
+
+                const auto fileSize = std::filesystem::file_size(sourcePath.string(), ec);
+                if (ec)
+                {
+                    std::this_thread::sleep_for(25ms);
+                    continue;
+                }
+
+                std::ifstream stream(sourcePath.string(), std::ios::binary);
+                if (!stream.good())
+                {
+                    std::this_thread::sleep_for(25ms);
+                    continue;
+                }
+
+                std::this_thread::sleep_for(25ms);
+                std::error_code ecAfter;
+                const auto fileSizeAfter = std::filesystem::file_size(sourcePath.string(), ecAfter);
+                if (!ecAfter && fileSize == fileSizeAfter)
+                {
+                    break;
+                }
+            }
+
+            bool success = false;
+            try
+            {
+                std::filesystem::copy_file(sourcePath.string(), targetPath.string(), std::filesystem::copy_options::overwrite_existing);
+                LOG_TRACE("[Project] Dependency {} available", sourcePath.generic_string());
+                success = true;
+            }
+            catch (...)
+            {
+                // Failed to copy
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(m_CoreDependencyMutex);
+                m_CoreDependenciesPending[path] = true;
+            }
+
+            if (!success)
+                return;
+
+            auto checkPendingDeps = [this]() -> bool
+            {
+                std::lock_guard<std::mutex> lock(m_CoreDependencyMutex);
+                for (const auto &[dep, ready] : m_CoreDependenciesPending)
+                {
+                    if (!ready)
+                        return false;
+                }
+                return true;
+            };
+
+            // Check every deps update
+            if (checkPendingDeps())
+            {
+                Application::SubmitToMainThread([this]()
+                {
+                    LOG_TRACE("[Project] Dependencies are up to date.");
+                    BuildSolution(true);
+                });
+            }
+            
+        });
+    }
+
+    void Project::BuildSolution(bool forceRebuild)
+    {
+        AssetWorker::SubmitJob([this, forceRebuild]()
+        {
+            bool buildSuccess = ignite::Path::exists(GetScriptModulePath());
+
+            if (!buildSuccess || forceRebuild)
+            {
+                // restore NuGet
+                {
+                    AssetWorker::ReportStatus("Building Solution - Restore NuGet Packages...", 0.4f);
+                    std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /t:Restore /p:Configuration=Release /p:Platform=\"Any CPU\"";
+                    std::system(buildCommand.c_str());
+                }
+
+                // Build
+                {
+                    AssetWorker::ReportStatus("Building Solution...", 0.8f);
+                    std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /p:Configuration=Release /p:Platform=\"Any CPU\"";
+                    std::system(buildCommand.c_str());
+                }
+            }
+
+            m_Info.scriptModuleFilepath = std::format("Bin/{}.dll", m_Info.name);
+            buildSuccess = ignite::Path::exists(GetScriptModulePath());
+
+            // Validate .dll file
+            LOG_ASSERT(buildSuccess, "[Project] Failed to build Solution");
+
+            // MAIN THREAD
+            // Calling on result when done building
+            Application::SubmitToMainThread([this, buildSuccess]()
+            {
+                // Process the solution build callback
+                for (auto &func : m_BuildSolutionFuncs)
+                {
+                    if (func)
+                        func(buildSuccess);
+                }
+                m_BuildSolutionFuncs.clear();
+
+                ProcessOnProjectReadyFuncs(buildSuccess);
+
+                AssetWorker::ReportStatus("Project loaded...", 1.0f);
+            });
+        });
     }
 
     void Project::CreateCSharpScript(const ignite::Path &filepath)
@@ -409,11 +635,11 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         LOG_INFO("[Project] Created ScriptableObject '{}' at '{}'", className, outPath.generic_string());
     }
 
-    void Project::RegenerateCSharpProject()
+    void Project::RegenerateCSharpProject() const
     {
         ignite::Path scriptsDir = GetScriptsDirectory();
-        std::string compileItems;
 
+        std::string compileItems;
         if (ignite::Path::exists(scriptsDir))
         {
             for (auto &p : std::filesystem::recursive_directory_iterator(scriptsDir.string()))
@@ -444,9 +670,12 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         out.close();
     }
 
-	void Project::CreateDirectories()
+	void Project::CreateDirectories() const
 	{
-		ignite::Path projectDir = GetDirectory();
+        // Create script bin
+        ignite::Path projectBinDir = GetScriptBinDirectory();
+        if (!ignite::Path::exists(projectBinDir))
+            ignite::Path::create_directory(projectBinDir);
 
 		// Create asset directory
 		ignite::Path assetDirectory = GetAssetDirectory();
@@ -459,72 +688,49 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 			ignite::Path::create_directories(scriptDirectory);
 	}
 
-	void Project::CopyDependencies()
+	void Project::CopyCoreDependencies()
 	{
+		const ignite::Path projectBinDir = GetScriptBinDirectory();
+
 		// copy IgniteScriptEngine.dll to project dir
-		ignite::Path projectBinDir = GetScriptBinDirectory();
-		if (!ignite::Path::exists(projectBinDir))
-		{
-			ignite::Path::create_directory(projectBinDir);
-		}
-
-        static std::array<std::string, 5> dependencies =
-        {
-            "IgniteScriptEngine.dll",
-            "IgniteScriptEngine.deps.json",
-            "MochiSharp.Managed.dll",
-            "MochiSharp.Managed.deps.json",
-            "MochiSharp.Managed.runtimeconfig.json"
-        };
-
         // Candidate source directories to search for dependencies. Prefer the executable directory.
-        ignite::Path exeDir = GetExecutableDirectory();
+        const ignite::Path exeDir = GetExecutableDirectory();
 
-        bool dependenciesAvailable = false;
-        bool upToDate = true;
-        for (auto &dep : dependencies)
+        bool depAvailable = false;
+        for (auto &[dep, upToDate] : m_CoreDependencies)
         {
-            ignite::Path targetDepFilename = projectBinDir / dep;
-            ignite::Path depFilename = exeDir / dep;
+            const ignite::Path targetDepFilename = projectBinDir / dep;
+            const ignite::Path depFilename = exeDir / dep;
             if (!ignite::Path::exists(depFilename))
                 continue;
 
-            auto srcTime = std::filesystem::last_write_time(depFilename.string());
-            auto dstTime = std::filesystem::exists(targetDepFilename.string())
-                ? std::filesystem::last_write_time(targetDepFilename.string())
-                : std::filesystem::file_time_type::min();
-
             // Skip copy if the target is newer or equal
-            if (srcTime <= dstTime)
+            if (upToDate)
             {
                 LOG_INFO("[Project] Dependency \"{}\" is up to date.", dep);
-                dependenciesAvailable = true;
+                depAvailable = true;
                 continue;
             }
 
             try
             {
+                AssetWorker::ReportStatus(std::format("Copying Dependency {}", dep));
+
                 LOG_INFO("[Project] Copying script dependency \"{}\".", dep);
-                std::filesystem::copy_file(depFilename.string(), targetDepFilename.string(),
-                    std::filesystem::copy_options::overwrite_existing);
-                dependenciesAvailable = true;
-                upToDate = false;
+                std::filesystem::copy_file(depFilename.string(), targetDepFilename.string(), std::filesystem::copy_options::overwrite_existing);
+                depAvailable = true;
             }
             catch (...) { }
         }
 
-        // Build with newest dependencies
-        if (!upToDate)
-        {
-            BuildSolution();
-        }
-
-        LOG_ASSERT(dependenciesAvailable, "[Project] Failed to copy script dependencies");
+        LOG_ASSERT(depAvailable, "[Project] Failed to copy script dependencies");
 	}
 
 	void Project::GenerateProject()
     {
         CreateDirectories();
+
+        m_Info.scriptModuleFilepath = std::format("Bin/{}.dll", m_Info.name);
 
         // Generate the Visual Studio project if there is no solution file
         ignite::Path solutionFilepath = GetSolutionFilepath();
@@ -634,8 +840,8 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
             }
         }
 
-        CopyDependencies();
-
-        BuildSolution();
+        IsCoreDependenciesUpToDate();
+        CopyCoreDependencies();
+        StartCoreDependencyWatchers();
     }
 }

@@ -6,4 +6,3 @@ public abstract class IComponent
 {
     public Entity? Entity { get; internal set; }
 }
-

@@ -1,12 +1,19 @@
 #pragma once
 
 #include <string>
+#include <functional>
+#include <chrono>
+
+#include "ignite/core/types.hpp"
+#include "FileWatch.hpp"
 
 namespace ignite
 {
     class Path
     {
     public:
+        using FileWatchCallback = std::function<void(const std::string &, const filewatch::Event)>;
+        
         Path();
         Path(const char *p);
         Path(const std::string &p);
@@ -84,6 +91,12 @@ namespace ignite
         static Path relative(const Path &path, const Path &base);
 
         Path replace_extension(const std::string &ext);
+
+        static Scope<filewatch::FileWatch<std::string>> WatchFile(const Path &path, FileWatchCallback callback);
+
+        static bool TryGetAssemblyWriteTime(const ignite::Path &filepath, std::chrono::time_point<std::chrono::file_clock> &outTime);
+        static bool WaitForAssemblyFileReady(const ignite::Path &filepath);
+        static bool WaitForAssemblyNewerThan(const ignite::Path &filepath, const std::chrono::time_point<std::chrono::file_clock> &previousWriteTime);
 
         // implicit conversion to string for convenience
         operator std::string() const;

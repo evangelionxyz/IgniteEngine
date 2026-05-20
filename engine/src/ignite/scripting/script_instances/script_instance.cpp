@@ -14,7 +14,7 @@
 namespace ignite
 {
     // Helper: push every field from a C++ ScriptableObject into a managed instance already registered under (assetHandle) in MochiSharp.
-    static void PopulateSOFields(ScriptHost *host, uint64_t instanceId, const ScriptableObject &so)
+    void ScriptInstance::PopulateSOFields(ScriptHost *host, uint64_t instanceId, const ScriptableObject &so)
     {
         for (const auto &[fieldName, instanceField] : so.GetFields())
         {
@@ -78,9 +78,11 @@ namespace ignite
         m_OnCreateMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnCreate");
         m_OnDestroyMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnDestroy");
         m_OnUpdateMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "OnUpdate");
-        m_OnCollisionEnterMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "_OnCollisionEnterNative");
-        m_OnCollisionStayMethodId  = scriptClass->BindInstanceMethod(m_InstanceId, "_OnCollisionStayNative");
-        m_OnCollisionExitMethodId  = scriptClass->BindInstanceMethod(m_InstanceId, "_OnCollisionExitNative");
+
+        // Bind internal collision callback
+        m_OnCollisionEnterMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnCollisionEnterNative");
+        m_OnCollisionStayMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnCollisionStayNative");
+        m_OnCollisionExitMethodId = scriptClass->BindInstanceMethod(m_InstanceId, "Internal_OnCollisionExitNative");
 
         // Set Entity ID on managed instance if available
         const int setIdMethod = scriptClass->BindInstanceMethod(m_InstanceId, "SetID");

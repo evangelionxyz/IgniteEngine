@@ -8,6 +8,11 @@
 #include "MochiSharp/MochiManagedFunctions.hpp"
 #include "MochiSharp/String.hpp"
 
+#include "ignite/scripting/script_engine.hpp"
+#include "ignite/scene/scene.hpp"
+#include "ignite/asset/asset_manager.hpp"
+#include "ignite/scripting/script_instances/script_instance.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -140,18 +145,8 @@ namespace ignite
         }
 
         const bool isCoreAssembly = assemblyPath.filename() == "IgniteScriptEngine.dll";
-        mochi::ManagedAssembly *loadedAssembly = LoadAssemblyInternal(
-            assemblyPath,
-            isCoreAssembly ? m_CoreAssembly : m_AppAssembly);
-
-        if (!loadedAssembly)
-        {
-            LOG_ERROR("[Script Host] Failed to load assembly: {}", assemblyPath.generic_string());
-            return false;
-        }
-
-        LOG_INFO("[Script Host] Loaded assembly: {}", assemblyPath.generic_string());
-        return true;
+        mochi::ManagedAssembly *loadedAssembly = LoadAssemblyInternal(assemblyPath, isCoreAssembly ? m_CoreAssembly : m_AppAssembly);
+        return loadedAssembly;
     }
 
     bool ScriptHost::ResetLoadContext()
@@ -263,11 +258,7 @@ namespace ignite
         return it != m_TypeMap.end() ? it->second : nullptr;
     }
 
-    std::optional<ScriptHost::MethodBinding> ScriptHost::CreateMethodBinding(
-        MethodBinding::Kind kind,
-        uint64_t instanceId,
-        mochi::Type *type,
-        const std::string &methodName) const
+    std::optional<ScriptHost::MethodBinding> ScriptHost::CreateMethodBinding(MethodBinding::Kind kind, uint64_t instanceId, mochi::Type *type, const std::string &methodName) const
     {
         if (!type)
         {
@@ -275,7 +266,7 @@ namespace ignite
         }
 
         std::optional<MethodBinding> result;
-        for (auto method : type->GetMethods())
+        for (auto &method : type->GetMethods())
         {
             if (static_cast<std::string>(method.GetName()) != methodName)
             {
@@ -284,10 +275,8 @@ namespace ignite
 
             if (result.has_value())
             {
-                LOG_ERROR(
-                    "[Script Host] Failed to bind method '{}.{}': multiple overloads match by name",
-                    static_cast<std::string>(type->GetFullName()),
-                    methodName);
+                LOG_ERROR("[Script Host] Failed to bind method '{}.{}': multiple overloads match by name", 
+                    static_cast<std::string>(type->GetFullName()), methodName);
                 return std::nullopt;
             }
 
@@ -340,7 +329,11 @@ namespace ignite
             return false;
         }
 
-        m_InstanceMap.emplace(instanceId, std::move(instance));
+        auto [insertedIt, inserted] = m_InstanceMap.emplace(instanceId, std::move(instance));
+        // Ensure the managed object knows its own ID (same as EnsureReferenceInstance does).
+        // Without this, C# code that checks 'obj == null' or reads 'obj.ID' sees zero
+        // and treats the instance as null.
+        insertedIt->second.InvokeMethod("SetID", instanceId);
         LOG_TRACE("[Script Host] Created instance {} of type {}", instanceId, typeName);
         return true;
     }
@@ -412,7 +405,26 @@ namespace ignite
 
         reference.InvokeMethod("SetID", instanceId);
         auto [it, inserted] = m_InstanceMap.emplace(instanceId, std::move(reference));
-        return inserted ? &it->second : nullptr;
+        if (inserted)
+        {
+            mochi::Type *soBaseType = FindType("Ignite.ScriptableObject");
+            if (soBaseType && type.IsAssignableTo(*soBaseType))
+            {
+                ScriptEngine *se = ScriptEngine::GetInstance();
+                Scene *scene = se ? se->GetSceneContext() : nullptr;
+                AssetManager *am = scene ? scene->GetAssetManager() : nullptr;
+                if (am && am->IsAssetHandleValid(AssetHandle(instanceId)))
+                {
+                    auto so = am->GetAssetImmediate<ScriptableObject>(AssetHandle(instanceId));
+                    if (so)
+                    {
+                        ScriptInstance::PopulateSOFields(this, instanceId, *so);
+                    }
+                }
+            }
+            return &it->second;
+        }
+        return nullptr;
     }
 
     std::string ScriptHost::GetInstanceFields(uint64_t instanceId)
@@ -496,7 +508,19 @@ namespace ignite
 
         if (IsReferenceType(*fieldType))
         {
-            *static_cast<uint64_t *>(buffer) = 0;
+            void *handle = nullptr;
+            instanceIt->second.GetFieldValueRaw(fieldName, &handle);
+            if (handle == nullptr)
+            {
+                *static_cast<uint64_t *>(buffer) = 0;
+            }
+            else
+            {
+                mochi::ManagedObject refObj;
+                refObj.m_Handle = mochi::s_ManagedFunctions.CopyObjectFptr(handle);
+                refObj.m_Type = fieldType;
+                *static_cast<uint64_t *>(buffer) = refObj.GetPropertyValue<uint64_t>("ID");
+            }
             return true;
         }
 
@@ -541,6 +565,8 @@ namespace ignite
             const uint64_t referenceId = *static_cast<const uint64_t *>(buffer);
             if (referenceId == 0)
             {
+                void *nullHandle = nullptr;
+                instanceIt->second.SetFieldValueRaw(fieldName, &nullHandle);
                 return true;
             }
 
@@ -615,10 +641,7 @@ namespace ignite
             return false;
         }
 
-        auto parameters = argCount > 0
-            ? reinterpret_cast<const void **>(const_cast<void *>(argsPtr))
-            : nullptr;
-
+        auto parameters = argCount > 0 ? (const void **)(const_cast<void *>(argsPtr)) : nullptr;
         auto methodName = mochi::String::New(bindingIt->second.methodName);
 
         switch (bindingIt->second.kind)

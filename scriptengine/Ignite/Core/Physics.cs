@@ -4,6 +4,17 @@ using Ignite.Core.Component;
 
 namespace Ignite;
 
+/// <summary>Holds information about a collision event, similar to Unity's Collision class.</summary>
+public class Collision
+{
+    /// <summary>The other entity involved in the collision.</summary>
+    public Entity Other { get; }
+    internal Collision(Entity other)
+    {
+        Other = other;
+    }
+}
+
 /// <summary>Carries the result of a physics (Jolt narrow-phase) raycast.</summary>
 public struct RaycastHit
 {

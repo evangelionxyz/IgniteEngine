@@ -7,24 +7,10 @@ using static Ignite.Mathf;
 
 namespace Ignite;
 
-/// <summary>
-/// Holds information about a collision event, similar to Unity's Collision class.
-/// </summary>
-public class Collision
+public class Entity : IgniteObject
 {
-    /// <summary>The other entity involved in the collision.</summary>
-    public Entity Other { get; }
-
-    internal Collision(Entity other)
-    {
-        Other = other;
-    }
-}
-
-public class Entity : ScriptableObject
-{
-    internal Entity(ulong id) { SetID(id); }
-    protected Entity() { SetID(0); }
+    internal Entity(ulong id): base(id) { }
+    protected Entity(): base(0) { }
 
     public Vector3 Translation
     {
@@ -169,7 +155,7 @@ public class Entity : ScriptableObject
 
     // Internal entry-points called by ScriptInstance::InvokeOnCollision*
     // Named distinctly to avoid overload ambiguity with the public virtual methods.
-    internal void _OnCollisionEnterNative(ulong otherID) => OnCollisionEnter(new Collision(new Entity(otherID)));
-    internal void _OnCollisionStayNative (ulong otherID) => OnCollisionStay (new Collision(new Entity(otherID)));
-    internal void _OnCollisionExitNative (ulong otherID) => OnCollisionExit (new Collision(new Entity(otherID)));
+    internal void Internal_OnCollisionEnterNative(ulong otherID) => OnCollisionEnter(new Collision(new Entity(otherID)));
+    internal void Internal_OnCollisionStayNative (ulong otherID) => OnCollisionStay (new Collision(new Entity(otherID)));
+    internal void Internal_OnCollisionExitNative (ulong otherID) => OnCollisionExit (new Collision(new Entity(otherID)));
 }

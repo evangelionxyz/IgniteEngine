@@ -9,8 +9,11 @@
 #include "ignite/asset/material_manager.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 
+#include <atomic>
 #include <string>
+#include <mutex>
 #include "ignite/core/path.hpp"
+#include "FileWatch.hpp"
 
 namespace ignite
 {
@@ -30,24 +33,35 @@ namespace ignite
         ignite::Path assetRegistryFilepath = "AssetRegistry.ixreg";
     };
 
+    using ProjectCallbackFn = std::function<void(bool)>;
+    
     class Project : public Asset
     {
     public:
         Project() = default;
         Project(const ProjectInfo &info);
-
         ~Project() override;
+
+        void InitScriptEngine();
         
         ignite::Path GetProjectFilepath(const ignite::Path &filepath) const;
         ignite::Path GetProjectRelativeFilepath(const ignite::Path &filepath) const;
         
+        void CopyCoreDependencies();
+
         void SetActiveScene(const Ref<Scene> &scene);
         void SetDefaultScene(AssetHandle handle);
-        bool BuildSolution();
+        void BuildSolution(bool forceRebuild = false);
         
         void CreateCSharpScript(const ignite::Path &filepath);
         void CreateScriptableObject(const std::string &className, const std::string &fileName, const ignite::Path &targetDirectory);
-        void RegenerateCSharpProject();
+        void RegenerateCSharpProject() const;
+
+        void AddBuildSolutionFunc(const ProjectCallbackFn &func);
+        void AddOnProjectReadyFuncs(const ProjectCallbackFn &func);
+
+        void ProcessOnProjectReadyFuncs(bool isSuccess = true);
+        void ResetReadyState();
 
         std::vector<std::pair<AssetHandle, AssetMetaData>> ValidateAssetRegistry();
 
@@ -115,9 +129,14 @@ namespace ignite
         static AssetType GetStaticType() { return AssetType::Project; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }
 
+        bool IsCoreDependenciesUpToDate();
+        bool IsReady() const { return m_IsReady; }
+
+        void StartCoreDependencyWatchers();
+        void OnCoreDependencyChanged(const std::string &path, const filewatch::Event eventType);
+
     private:
-        void CreateDirectories();
-        void CopyDependencies();
+        void CreateDirectories() const;
         void GenerateProject();
 
         Ref<Scene> m_ActiveScene; // current active scene in editor
@@ -126,6 +145,16 @@ namespace ignite
         MaterialManager m_MaterialManager;
         AssetManager *m_AssetManager = nullptr;
         ScriptEngine *m_ScriptEngine = nullptr;
+
+        std::vector<ProjectCallbackFn> m_BuildSolutionFuncs;
+        std::vector<ProjectCallbackFn> m_OnProjectReadyFuncs;
+
+        std::map<std::string, bool> m_CoreDependencies;
+        std::map<std::string, bool> m_CoreDependenciesPending;
+        std::vector<Scope<filewatch::FileWatch<std::string>>> m_CoreDependencyWatchers;
+        std::mutex m_CoreDependencyMutex;
+
+        bool m_IsReady = false;
     };
 }
 
