@@ -26,31 +26,52 @@ def ensure_admin():
         sys.exit()
 
 
+def generate_project_files(premake_binary):
+    """Generate project files using premake5 for the current platform."""
+    premake_scripts = ["premake5.lua"]
+    for script in premake_scripts:
+        premake_args = [str(premake_binary), f"--file=scripts/{script}"]
+        if platform.system() == "Windows":
+            premake_args.append("vs2026")
+        else:
+            # gmake2 is the modern GNU Makefile generator in premake5
+            premake_args.append("gmake2")
+            premake_args.append("--cc=clang")
+        subprocess.call(premake_args, cwd=ROOT_DIR)
+
+
 def run():
     ensure_admin()
-    
+
     DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    
-    # Install dependencies
-    vulkan_installed = dp.install_vulkan_sdk(DOWNLOADS_DIR)
-    dp.install_fbx_sdk(DOWNLOADS_DIR)
+
+    if platform.system() == "Windows":
+        # Vulkan SDK is only installed via the installer on Windows.
+        # On Linux, Vulkan is installed via apt (libvulkan-dev etc.).
+        dp.install_vulkan_sdk(DOWNLOADS_DIR)
+    else:
+        print("Linux detected — skipping Vulkan SDK installer (use system packages via apt).")
+
+    # On Linux inside the dev container the FBX SDK is pre-installed by the
+    # Dockerfile and FBX_SDK env var is already set correctly.  Skip the
+    # download/install if the env var already points to a valid SDK root.
+    fbx_sdk_env = os.environ.get("FBX_SDK", "")
+    fbx_sdk_preinstalled = (
+        platform.system() == "Linux"
+        and fbx_sdk_env
+        and (Path(fbx_sdk_env) / "include" / "fbxsdk.h").exists()
+    )
+
+    if fbx_sdk_preinstalled:
+        print(f"FBX SDK already available at: {fbx_sdk_env} (skipping download)")
+    else:
+        dp.install_fbx_sdk(DOWNLOADS_DIR)
+
     premake_binary = dp.install_premake5(DOWNLOADS_DIR)
-    
-    # If Vulkan was just installed, indicate need to re-run
-    if vulkan_installed:
-        print("Vulkan SDK has been installed. Generating project files...")
-    
-        # Generate Solution for premake native and managed
-        premake_scripts = ["premake5.lua", "premake5-managed.lua"]
-        for script in premake_scripts:
-            premake_args = [str(premake_binary), f"--file=scripts/{script}"]
-            if platform.system() == "Windows":
-                premake_args.append("vs2026")
-            else:
-                premake_args.append("gmake")
-                premake_args.append("--cc=clang")
-            premake_args.append("pause")
-            subprocess.call(premake_args, cwd=ROOT_DIR)
+
+    # Always generate project files regardless of whether deps were freshly installed.
+    print("\nGenerating project files...")
+    generate_project_files(premake_binary)
 
     if os.environ.get("GITHUB_ACTIONS") != "true":
         input("Press any key to continue")

@@ -1,17 +1,40 @@
-## Ignite Engine
+# Ignite Engine
 
 Work in progress C++ Game Engine
 
-### Preview
-<div style='display:flex;flex-direction:column;width:80%;margin:auto; gap:12px'>
-  <img src="resources/examples/image_01.png">
-  <img src="resources/examples/image_02.png">
-  <img src="resources/examples/image_03.png">
-  <img src="resources/examples/image_04.png">
-  <img src="resources/examples/image_05.png">
-  <img src="resources/examples/image_06.png">
-  <img src="resources/examples/image_07.png">
-</div>
+## Installation
+
+### Clone repository Recursively
+
+We are actively develop in 'dev' branch. you can use ```-b dev``` when cloning the repository. <br>
+Command: ```git clone --recursively https://github.com/evangelionxyz/Ignite.git -b master```
+
+## Windows Build
+
+ Run ```gen.bat```
+
+## Linux Build
+
+ Run ```sudo bash ./gen.sh```
+
+
+## Docker build
+
+### 1. Build the image once (downloads FBX SDK, installs everything)
+
+```docker build -t ignite-dev .```
+
+### 2. Attach with source mounted
+
+```docker run -it --rm -v "${PWD}:/workspace" ignite-dev```
+
+### 3. Inside the container — generate makefiles and build
+
+```python3 scripts/setup.py```
+
+#### FBX_SDK already set, premake5 in PATH → instant
+
+```make -j6 config=debug IgniteEditor```
 
 ## MVP Roadmap
 
@@ -64,3 +87,15 @@ This roadmap is focused on the minimum feature set needed for a strong 3D gamepl
 - [ ] Add animation compression and streaming for larger projects
 - [ ] Add more advanced rendering features such as shadows, post-processing, and LOD
 - [ ] Expand editor tooling for animation debugging and content iteration
+
+## Preview
+
+<div style='display:flex;flex-direction:column;width:80%;margin:auto; gap:12px'>
+  <img src="resources/examples/image_01.png">
+  <img src="resources/examples/image_02.png">
+  <img src="resources/examples/image_03.png">
+  <img src="resources/examples/image_04.png">
+  <img src="resources/examples/image_05.png">
+  <img src="resources/examples/image_06.png">
+  <img src="resources/examples/image_07.png">
+</div>

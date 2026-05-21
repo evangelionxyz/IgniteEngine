@@ -228,8 +228,8 @@ namespace ignite
 
 	void CascadedShadowMap::CreatePipeline(nvrhi::IFramebuffer *framebuffer)
 	{
-        if (!m_VS) m_VS = Shader::Create("resources/shaders/cascaded_shadow_depth.vertex.hlsl", ShaderType::Vertex, false);
-		if (!m_PS) m_PS = Shader::Create("resources/shaders/cascaded_shadow_depth.pixel.hlsl", ShaderType::Pixel, false);
+        if (!m_VS) m_VS = Shader::Create("resources/shaders/cascaded_shadow_depth.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
+		if (!m_PS) m_PS = Shader::Create("resources/shaders/cascaded_shadow_depth.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
 
 		GraphicsPipelineParams params;
 		params.enableDepthWrite = true;

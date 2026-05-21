@@ -52,10 +52,11 @@ namespace ignite
         m_BlurParamsBuffer = ConstantBuffer::Create(sizeof(BlurParams), true, kBloomCBVersions, "Bloom Blur Params");
         m_UpsampleParamsBuffer = ConstantBuffer::Create(sizeof(UpsampleParams), true, kBloomCBVersions, "Bloom Upsample Params");
 
-        m_FullscreenVertexShader = Shader::Create("resources/shaders/bloom_fullscreen.vertex.hlsl", ShaderType::Vertex, false);
-        m_DownsamplePixelShader = Shader::Create("resources/shaders/bloom_downsample.pixel.hlsl", ShaderType::Pixel, false);
-        m_BlurPixelShader = Shader::Create("resources/shaders/bloom_blur.pixel.hlsl", ShaderType::Pixel, false);
-        m_UpsamplePixelShader = Shader::Create("resources/shaders/bloom_upsample.pixel.hlsl", ShaderType::Pixel, false);
+        m_FullscreenVertexShader = Shader::Create("resources/shaders/bloom_fullscreen.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
+
+        m_DownsamplePixelShader = Shader::Create("resources/shaders/bloom_downsample.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
+        m_BlurPixelShader = Shader::Create("resources/shaders/bloom_blur.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
+        m_UpsamplePixelShader = Shader::Create("resources/shaders/bloom_upsample.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
 
         CreateRenderTargets(m_Width, m_Height);
     }

@@ -339,8 +339,8 @@ namespace ignite
             params.cullMode = nvrhi::RasterCullMode::Front;
             params.depthFunc = nvrhi::ComparisonFunc::Always;
 
-            Ref<Shader> vertexShader = Shader::Create("resources/shaders/skybox.vertex.hlsl", ShaderType::Vertex, false);
-            Ref<Shader> pixelShader = Shader::Create("resources/shaders/skybox.pixel.hlsl", ShaderType::Pixel, false);
+            Ref<Shader> vertexShader = Shader::Create("resources/shaders/skybox.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
+            Ref<Shader> pixelShader = Shader::Create("resources/shaders/skybox.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
 
             envPipeline = GraphicsPipeline::Create();
             envPipeline->SetShaders({ vertexShader, pixelShader })
@@ -403,8 +403,8 @@ namespace ignite
             params.cullMode = nvrhi::RasterCullMode::None;
             params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
 
-            Ref<Shader> vertexShader = Shader::Create("resources/shaders/mesh_anim.vertex.hlsl", ShaderType::Vertex, false);
-            Ref<Shader> pixelShader = Shader::Create("resources/shaders/mesh_anim.pixel.hlsl", ShaderType::Pixel, false);
+            Ref<Shader> vertexShader = Shader::Create("resources/shaders/mesh_anim.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
+            Ref<Shader> pixelShader = Shader::Create("resources/shaders/mesh_anim.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
 
             geopPipeline = GraphicsPipeline::Create();
             geopPipeline->SetShaders({ vertexShader, pixelShader })
@@ -598,8 +598,8 @@ namespace ignite
             params.fillMode = nvrhi::RasterFillMode::Solid;
             params.cullMode = nvrhi::RasterCullMode::None;
 
-            Ref<Shader> vertexShader = Shader::Create("resources/shaders/composite.vertex.hlsl", ShaderType::Vertex, false);
-            Ref<Shader> pixelShader = Shader::Create("resources/shaders/composite.pixel.hlsl", ShaderType::Pixel, false);
+            Ref<Shader> vertexShader = Shader::Create("resources/shaders/composite.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
+            Ref<Shader> pixelShader = Shader::Create("resources/shaders/composite.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
 
             pipeline = GraphicsPipeline::Create();
             pipeline->SetShaders({ vertexShader, pixelShader })

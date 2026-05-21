@@ -1,25 +1,5 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2025 Evangelion Manuhutu
+
 
 #include "graphics_pipeline.hpp"
 #include "ignite/core/device/device_manager.hpp"
@@ -27,7 +7,6 @@
 #include "shader.hpp"
 
 #include "renderer.hpp"
-
 
 namespace ignite
 {
@@ -88,7 +67,7 @@ namespace ignite
 
         for (const Ref<Shader> &shader : m_Shaders)
         {
-            if (shader->GetType() == ShaderType::Vertex)
+            if (shader->GetType() == UMBRA_SHADER_TYPE_VERTEX)
             {
                 pipelineDesc.setVertexShader(shader->GetHandle());
 
@@ -96,7 +75,7 @@ namespace ignite
                 m_InputLayout = device->createInputLayout(vertexAttributes.data(), static_cast<uint32_t>(vertexAttributes.size()), nullptr);
                 LOG_ASSERT(m_InputLayout, "[Graphics Pipeline] Failed to create input layout");
             }
-            else if (shader->GetType() == ShaderType::Pixel)
+            else if (shader->GetType() == UMBRA_SHADER_TYPE_PIXEL)
             {
                 pipelineDesc.setPixelShader(shader->GetHandle());
             }

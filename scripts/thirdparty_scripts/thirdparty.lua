@@ -74,6 +74,13 @@ IncludeDir["OPENEXR"]          = "%{THIRDPARTY_DIR}/OpenEXR/include/OpenEXR"
 IncludeDir["IMATH"]            = "%{THIRDPARTY_DIR}/Imath/include/Imath"
 IncludeDir["TRACY"]            = "%{THIRDPARTY_DIR}/tracy/public"
 IncludeDir["NUKLEAR"]          = "%{THIRDPARTY_DIR}/Nuklear"
+IncludeDir["UmbraShaderCompiler"]          = "%{THIRDPARTY_DIR}/UmbraShaderCompiler/Include"
+
+-- =============== LINUX SYSTEM PATHS ===============
+-- These are used inside filter "system:linux" blocks in project files.
+IncludeDir["OPENEXR_LINUX"]    = "/usr/include/OpenEXR"
+IncludeDir["IMATH_LINUX"]      = "/usr/include/Imath"
+IncludeDir["SDL3_LINUX"]       = "/usr/include/SDL3"
 
 --library dirs
 LibraryDir = {}
@@ -103,7 +110,9 @@ Library["IlmThread"]                   = "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Il
 Library["Imath"]                       = "%{THIRDPARTY_DIR}/Imath/lib/win32/Imath-3_2.lib"
 
 Library["ShaderC_Debug"]               = "%{LibraryDir.VULKAN_SDK}/shaderc_sharedd.lib"
-Library["SPIRV_Cross_Debug"]           = "%{LibraryDir.VULKAN_SDK}/spirv-cross-cored.lib"
+Library["SPIRV_Cross_Core_Debug"]      = "%{LibraryDir.VULKAN_SDK}/spirv-cross-cored.lib"
+Library["SPIRV_Cross_CPP_Debug"]       = "%{LibraryDir.VULKAN_SDK}/spirv-cross-cppd.lib"
+Library["SPIRV_Cross_MSL_Debug"]       = "%{LibraryDir.VULKAN_SDK}/spirv-cross-msld.lib"
 Library["SPIRV_Cross_GLSL_Debug"]      = "%{LibraryDir.VULKAN_SDK}/spirv-cross-glsld.lib"
 Library["SPIRV_Cross_HLSL_Debug"]      = "%{LibraryDir.VULKAN_SDK}/spirv-cross-hlsld.lib"
 Library["SPIRV_Cross_Reflect_Debug"]   = "%{LibraryDir.VULKAN_SDK}/spirv-cross-reflectd.lib"
@@ -111,12 +120,18 @@ Library["SPIRV_Cross_Util_Debug"]      = "%{LibraryDir.VULKAN_SDK}/spirv-cross-u
 Library["SPIRV_Tools_Debug"]           = "%{LibraryDir.VULKAN_SDK}/SPIRV-Toolsd.lib"
 
 Library["ShaderC"]                     = "%{LibraryDir.VULKAN_SDK}/shaderc_shared.lib"
-Library["SPIRV_Cross"]                 = "%{LibraryDir.VULKAN_SDK}/spirv-cross-core.lib"
+Library["SPIRV_Cross_Core"]            = "%{LibraryDir.VULKAN_SDK}/spirv-cross-core.lib"
+Library["SPIRV_Cross_CPP"]             = "%{LibraryDir.VULKAN_SDK}/spirv-cross-cpp.lib"
+Library["SPIRV_Cross_MSL"]             = "%{LibraryDir.VULKAN_SDK}/spirv-cross-msl.lib"
 Library["SPIRV_Cross_GLSL"]            = "%{LibraryDir.VULKAN_SDK}/spirv-cross-glsl.lib"
 Library["SPIRV_Cross_HLSL"]            = "%{LibraryDir.VULKAN_SDK}/spirv-cross-hlsl.lib"
 Library["SPIRV_Cross_Reflect"]         = "%{LibraryDir.VULKAN_SDK}/spirv-cross-reflect.lib"
 Library["SPIRV_Cross_Util"]            = "%{LibraryDir.VULKAN_SDK}/spirv-cross-util.lib"
 Library["SPIRV_Tools"]                 = "%{LibraryDir.VULKAN_SDK}/SPIRV-Tools.lib"
+
+-- Vulkan C API
+Library["SPIRV_Cross_C_Debug"]         = "%{LibraryDir.VULKAN_SDK}/spirv-cross-cd.lib"
+Library["SPIRV_Cross_C"]                = "%{LibraryDir.VULKAN_SDK}/spirv-cross-c.lib"
 
 -- AUTODESK FBX
 Library["FBX_ALEMBIC_DEBUG"]           = "%{LibraryDir.FBX_SDK}/x64/debug/alembic.lib"
@@ -126,6 +141,16 @@ Library["FBX_XML_DEBUG"]               = "%{LibraryDir.FBX_SDK}/x64/debug/libxml
 Library["FBX_ALEMBIC"]                = "%{LibraryDir.FBX_SDK}/x64/release/alembic.lib"
 Library["FBX_SDK"]                    = "%{LibraryDir.FBX_SDK}/x64/release/libfbxsdk-md.lib"
 Library["FBX_XML"]                    = "%{LibraryDir.FBX_SDK}/x64/release/libxml2.lib"
+
+
+-- =============== LINUX ONLY ===============
+-- FMOD bundled .so files (already in the repo at thirdparty/FMOD/lib/linux)
+LibraryDir["FMOD_LINUX"]              = "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64"
+
+-- FBX SDK Linux (GCC tarball layout: lib/gcc/x64/{debug,release}/libfbxsdk.so)
+-- FBX_SDK_PATH is set via FBX_SDK env var, same as Windows.
+LibraryDir["FBX_SDK_LINUX_DEBUG"]     = "%{FBX_SDK_PATH}/lib/gcc/x64/debug"
+LibraryDir["FBX_SDK_LINUX_RELEASE"]   = "%{FBX_SDK_PATH}/lib/gcc/x64/release"
 
 
 -- include lua files
@@ -142,6 +167,7 @@ group "Third Party"
     include "msdfgen.lua"
     include "freetype.lua"
     include "tracy.lua"
+    include "umbrashadercompiler.lua"
 group ""
 
 group "NVIDIA"

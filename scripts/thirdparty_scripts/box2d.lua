@@ -24,6 +24,8 @@ project "BOX2D"
     --linux
     filter "system:linux"
         pic "on"
+        defines { "_POSIX_C_SOURCE=199309L" }
+        links { "rt" }
 
     --windows
     filter "system:windows"

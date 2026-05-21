@@ -23,6 +23,7 @@ project "IgniteEngine"
     includedirs {
         "src",
         "%{IncludeDir.SDL3}",
+        "%{IncludeDir.UmbraShaderCompiler}",
         "%{IncludeDir.BOX2D}",
         "%{IncludeDir.ENTT}",
         "%{IncludeDir.FMOD}",
@@ -70,7 +71,8 @@ project "IgniteEngine"
         "msdfgen",
         "freetype",
         "tracy",
-        "MochiSharp.Native"
+        "MochiSharp.Native",
+        "UmbraShaderCompiler",
     }
 
     defines {
@@ -86,26 +88,46 @@ project "IgniteEngine"
     filter "system:linux"
         pic "on"
         defines {
-            "PLATFORM_LINUX"
+            "PLATFORM_LINUX",
+            "IGNITE_WITH_VULKAN"
         }
         libdirs {
-            "/usr/lib"
+            "/usr/lib",
+            "/usr/local/lib",
+            "%{LibraryDir.FMOD_LINUX}"
         }
         includedirs {
-            "/usr/include"
+            "/usr/include",
+            "%{IncludeDir.OPENEXR_LINUX}",
+            "%{IncludeDir.IMATH_LINUX}",
+            "%{IncludeDir.SDL3_LINUX}"
         }
-
         links {
             "vulkan",
             "shaderc_shared",
             "spirv-cross-core",
             "spirv-cross-glsl",
+            "nethost",
+            "SDL3",
+            "OpenEXR",
+            "Iex",
+            "IlmThread",
+            "Imath",
+            "xml2",
             "pthread",
             "dl",
             "m",
             "rt",
             "glib-2.0"
-    }
+        }
+        -- Set rpath to $ORIGIN so the binary finds .so files next to itself
+        linkoptions { "-Wl,-rpath,'$$ORIGIN'" }
+        postbuildcommands {
+            '{COPYDIR} "%{wks.location}/resources" "%{cfg.targetdir}/resources"',
+            '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so" "%{cfg.targetdir}"',
+            '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14" "%{cfg.targetdir}"',
+            '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14.13" "%{cfg.targetdir}"'
+        }
 
     --windows
     filter { "system:windows", "toolset:msc*"}
@@ -171,15 +193,20 @@ project "IgniteEngine"
 
         filter "configurations:Debug"
             runtime "Debug"
-            symbols "on"
+            symbols "on" -- with debug info
             defines {
                 "IGN_DEBUG_BUILD",
                 "DEBUG",
                 "_DEBUG"
             }
+
+        filter { "system:windows", "configurations:Debug" }
             links {
                 "%{Library.ShaderC_Debug}",
-                "%{Library.SPIRV_Cross_Debug}",
+                "%{Library.SPIRV_Cross_Core_Debug}",
+                "%{Library.SPIRV_Cross_CPP_Debug}",
+                "%{Library.SPIRV_Cross_MSL_Debug}",
+                "%{Library.SPIRV_Cross_C_Debug}",
                 "%{Library.SPIRV_Cross_GLSL_Debug}",
                 "%{Library.SPIRV_Cross_HLSL_Debug}",
                 "%{Library.SPIRV_Cross_Reflect_Debug}",
@@ -203,6 +230,17 @@ project "IgniteEngine"
                 '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll" "%{cfg.targetdir}"',
                 '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll" "%{cfg.targetdir}"'
             }
+
+        filter { "system:linux", "configurations:Debug" }
+            libdirs { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}" }
+            links { "fmodL", "fbxsdk" }
+            postbuildcommands {
+                '{COPYFILE} "%{FBX_SDK_PATH}/lib/gcc/x64/debug/libfbxsdk.so" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14" "%{cfg.targetdir}"',
+                '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmodL.so.14.13" "%{cfg.targetdir}"'
+            }
+
         filter "configurations:Release"
             runtime "release"
             optimize "on"
@@ -211,9 +249,14 @@ project "IgniteEngine"
                 "IGN_RELEASE_BUILD",
                 "NDEBUG"
             }
+
+        filter { "system:windows", "configurations:Release" }
             links {
                 "%{Library.ShaderC}",
-                "%{Library.SPIRV_Cross}",
+                "%{Library.SPIRV_Cross_Core}",
+                "%{Library.SPIRV_Cross_CPP}",
+                "%{Library.SPIRV_Cross_MSL}",
+                "%{Library.SPIRV_Cross_C}",
                 "%{Library.SPIRV_Cross_GLSL}",
                 "%{Library.SPIRV_Cross_HLSL}",
                 "%{Library.SPIRV_Cross_Reflect}",
@@ -238,6 +281,13 @@ project "IgniteEngine"
                 '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll" "%{cfg.targetdir}"'
             }
 
+        filter { "system:linux", "configurations:Release" }
+            libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }
+            links { "fmod", "fbxsdk" }
+            postbuildcommands {
+                '{COPYFILE} "%{FBX_SDK_PATH}/lib/gcc/x64/release/libfbxsdk.so" "%{cfg.targetdir}"'
+            }
+
         filter "configurations:Shipping"
             runtime "release"
             optimize "speed"
@@ -246,9 +296,12 @@ project "IgniteEngine"
                 "IGN_SHIPPING_BUILD",
                 "NDEBUG"
             }
+
+        filter { "system:windows", "configurations:Shipping" }
             links {
                 "%{Library.ShaderC}",
-                "%{Library.SPIRV_Cross}",
+                "%{Library.SPIRV_Cross_Core}",
+                "%{Library.SPIRV_Cross_C}",
                 "%{Library.SPIRV_Cross_GLSL}",
                 "%{Library.SPIRV_Cross_HLSL}",
                 "%{Library.SPIRV_Cross_Reflect}",
@@ -271,4 +324,11 @@ project "IgniteEngine"
                 '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/OpenEXRUtil-3_4.dll" "%{cfg.targetdir}"',
                 '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/Iex-3_4.dll" "%{cfg.targetdir}"',
                 '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/IlmThread-3_4.dll" "%{cfg.targetdir}"'
+            }
+
+        filter { "system:linux", "configurations:Shipping" }
+            libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }
+            links { "fmod", "fbxsdk" }
+            postbuildcommands {
+                '{COPYFILE} "%{FBX_SDK_PATH}/lib/gcc/x64/release/libfbxsdk.so" "%{cfg.targetdir}"'
             }

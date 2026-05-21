@@ -4,7 +4,6 @@ workspace "IGN"
     multiprocessorcompile("On")
     configurations {
         "Debug",
-        "Debug",
         "Release",
         "Shipping"
     }
@@ -32,6 +31,10 @@ workspace "IGN"
     group "Engine/Managed"
         include "../scriptengine/ignite-scriptengine.lua"
         include "mochisharp-managed.lua"
+    group ""
+
+    group "Utilities"
+        include "utility_project.lua"
     group ""
 
 -- Automatically generate MSBuild properties to combat Any CPU mapping bugs for Slnx when forcing x64 workspace architecture

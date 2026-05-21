@@ -28,3 +28,6 @@
 [submodule "thirdparty/tracy"]
 	path = thirdparty/tracy
 	url = https://github.com/wolfpld/tracy.git
+[submodule "thirdparty/UmbraShaderCompiler"]
+	path = thirdparty/UmbraShaderCompiler
+	url = https://github.com/evangelionxyz/Umbra-ShaderCompiler.git

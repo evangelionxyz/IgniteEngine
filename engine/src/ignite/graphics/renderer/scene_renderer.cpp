@@ -106,8 +106,8 @@ namespace ignite
         bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1));
         nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
 
-        Ref<Shader> vertexShader = Shader::Create("resources/shaders/infinite_grid.vertex.hlsl", ShaderType::Vertex, true);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/infinite_grid.pixel.hlsl", ShaderType::Pixel, true);
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/infinite_grid.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/infinite_grid.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
 
         auto gp = GraphicsPipeline::Create();
         gp->SetShaders({ vertexShader, pixelShader })
@@ -134,7 +134,7 @@ namespace ignite
     {
         size_t operator()(const DebugGridBindingKey &k) const noexcept
         {
-            size_t h = std::hash<const void *>{}(k.layout);
+            size_t h = std::hash<const void *> {}(k.layout);
             h ^= (std::hash<const void *>{}(k.gridBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
             return h;
         }
@@ -144,7 +144,7 @@ namespace ignite
 
     static nvrhi::BindingSetHandle GetOrCreateDebugGridBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &gridBuffer)
     {
-        DebugGridBindingKey key{ bindingLayout, gridBuffer ? gridBuffer->GetHandle() : nullptr };
+        DebugGridBindingKey key { bindingLayout, gridBuffer ? gridBuffer->GetHandle() : nullptr };
         auto it = s_DebugGridBindingSetCache.find(key);
         if (it != s_DebugGridBindingSetCache.end())
         {
@@ -188,8 +188,8 @@ namespace ignite
         params.cullMode = nvrhi::RasterCullMode::Front;
         params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
 
-        Ref<Shader> vertexShader = Shader::Create("resources/shaders/mesh_anim.vertex.hlsl", ShaderType::Vertex, true);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/mesh_anim.pixel.hlsl", ShaderType::Pixel, true);
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/mesh_anim.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/mesh_anim.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
 
         auto gp = GraphicsPipeline::Create();
         gp->SetShaders({ vertexShader, pixelShader })
@@ -224,8 +224,8 @@ namespace ignite
         params.cullMode = nvrhi::RasterCullMode::Front;
         params.depthFunc = nvrhi::ComparisonFunc::Always;
 
-        Ref<Shader> vertexShader = Shader::Create("resources/shaders/skybox.vertex.hlsl", ShaderType::Vertex, true);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/skybox.pixel.hlsl", ShaderType::Pixel, true);
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/skybox.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/skybox.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
 
         auto gp = GraphicsPipeline::Create();
         gp->SetShaders({ vertexShader, pixelShader })
@@ -274,8 +274,8 @@ namespace ignite
         params.cullMode = nvrhi::RasterCullMode::None;
 
         // Create pipeline
-        Ref<Shader> vertexShader = Shader::Create("resources/shaders/composite.vertex.hlsl", ShaderType::Vertex, true);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/composite.pixel.hlsl", ShaderType::Pixel, true);
+        Ref<Shader> vertexShader = Shader::Create("resources/shaders/composite.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
+        Ref<Shader> pixelShader = Shader::Create("resources/shaders/composite.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
 
         auto gp = GraphicsPipeline::Create();
         gp->SetShaders({ vertexShader, pixelShader })
