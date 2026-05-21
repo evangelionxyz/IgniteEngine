@@ -1,5 +1,5 @@
 project "Project Generator"
-	location "${wks.location}/scripts"
+	location "%{wks.location}/scripts"
 	kind "Utility"
 
 	files {
