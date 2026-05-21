@@ -11,18 +11,6 @@
 #include <iterator>
 #include <string>
 
-#ifdef PLATFORM_WINDOWS
-    #include <wrl/client.h>
-    using Microsoft::WRL::ComPtr;
-    
-    #ifndef DXC_PART_DXIL
-        #define DXC_PART_DXIL (('D') | ('X' << 8) | ('I' << 16) | ('L' << 24))
-    #endif
-    #ifndef DXC_PART_DXBC
-        #define DXC_PART_DXBC (('D') | ('X' << 8) | ('B' << 16) | ('C' << 24))
-    #endif
-#endif
-
 namespace ignite
 {
     Ref<umbra::DXCInstance> Shader::s_DXCInstance = nullptr;
@@ -164,17 +152,17 @@ namespace ignite
             reflectInfo = umbra::ShaderReflection::DXILReflect(shaderType, shaderCode);
         }
 
-		// Vertex inputs (only for vertex shaders)
+        // Vertex inputs (only for vertex shaders)
         if (shaderType == UMBRA_SHADER_TYPE_VERTEX)
         {
             vertexAttributes.clear();
             
             uint32_t offset = 0;
-            for (size_t i = 0; i < reflectInfo.numStageInputs; ++i)
+            for (uint32_t i = 0; i < reflectInfo.numStageInputs; ++i)
             {
                 umbra::ShaderStageIOInfo stageInput = reflectInfo.stageInputs[i];
 
-				nvrhi::Format format = MapUmbraTypeToNVRHIFormat(stageInput.format);
+                nvrhi::Format format = MapUmbraTypeToNVRHIFormat(stageInput.format);
 
                 const uint32_t attributeSize = GetVertexStride(format);
 
@@ -186,15 +174,15 @@ namespace ignite
                 attr.isInstanced = false;
                 // attr.elementStride; // calculated later
 
-				offset += attributeSize;
+                offset += attributeSize;
                 vertexAttributes.push_back(attr);
             }
 
-			const uint32_t stride = offset;
+            const uint32_t stride = offset;
             for (auto& attr : vertexAttributes)
             {
                 attr.elementStride = stride;
-			}
+            }
         }
     }
 
@@ -202,15 +190,7 @@ namespace ignite
     {
         if (!s_DXCInstance)
         {
-            s_DXCInstance = CreateRef<umbra::DXCInstance>();
-
-            HRESULT hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&s_DXCInstance->compiler));
-            LOG_ASSERT(SUCCEEDED(hr), "Failed to create IDxcCompiler3 instance. HRESULT {} {}", hr, std::system_category().message(hr).c_str());
-            if (FAILED(hr)) return nullptr;
-
-            hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&s_DXCInstance->utils));
-            LOG_ASSERT(SUCCEEDED(hr), "Failed to create IDxcUtils instance. HRESULT {} {}", hr, std::system_category().message(hr).c_str());
-            if (FAILED(hr)) return nullptr;
+            s_DXCInstance = umbra::ShaderCompiler::CreateDXCCompiler();
         }
 
         return s_DXCInstance;

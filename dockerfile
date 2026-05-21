@@ -7,16 +7,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Base system utilities
 # ---------------------------------------------------------------------------
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-       ca-certificates wget curl gnupg apt-transport-https \
+    && apt-get install -y --no-install-recommends ca-certificates wget curl gnupg xz-utils apt-transport-https \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
 # Install Python 3 + pip
 # ---------------------------------------------------------------------------
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-       python3 python3-pip python3-venv \
+    && apt-get install -y --no-install-recommends python3 python3-pip python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
@@ -37,9 +35,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        build-essential clang lld cmake ninja-build pkg-config \
        git tar \
-       libvulkan-dev libvulkan1 vulkan-tools mesa-vulkan-drivers \
-       libshaderc-dev glslang-tools spirv-tools \
-       libspirv-cross-c-shared-dev \
+       vulkan-tools mesa-vulkan-drivers \
        libwayland-dev libxkbcommon-dev xorg-dev \
        libasound2-dev libudev-dev zlib1g-dev \
        libfmt-dev libxml2-dev \
@@ -47,6 +43,29 @@ RUN apt-get update \
        libglib2.0-dev \
        gdb libgmock-dev zenity expect \
     && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+# VULKAN Linux docs ref https://vulkan.lunarg.com/doc/sdk/latest/linux/getting_started.html
+# $VULKAN_SDK/bin = SDK executables
+# $VULKAN_SDK/lib = Dynamically-loaded libraries (e.g, layers)
+# ---------------------------------------------------------------------------
+
+RUN wget -qO /tmp/vulkan_sdk.tar.xz \
+        "https://sdk.lunarg.com/sdk/download/1.4.350.0/linux/vulkansdk-linux-x86_64-1.4.350.0.tar.xz" \
+    && mkdir -p /vulkan \
+    && tar -xf /tmp/vulkan_sdk.tar.xz -C /vulkan \
+    && rm /tmp/vulkan_sdk.tar.xz
+
+ENV VULKAN_SDK=/vulkan/1.4.350.0/x86_64
+ENV PATH="$VULKAN_SDK/bin:$PATH"
+
+# ---------------------------------------------------------------------------
+# Install Microsoft DirectX Compiler
+# ---------------------------------------------------------------------------
+# RUN wget -qO /tmp/linux_dxcompiler.tar.gz \
+#         "https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.9.2602/linux_dxc_2026_02_20.x86_64.tar.gz" \
+#     && tar -xzf /tmp/linux_dxcompiler.tar.gz -C "$VULKAN_SDK" \
+#     && rm /tmp/linux_dxcompiler.tar.gz
 
 # ---------------------------------------------------------------------------
 # Python virtual environment (avoids PEP 668 issues)

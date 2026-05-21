@@ -34,8 +34,8 @@ def generate_project_files(premake_binary):
         if platform.system() == "Windows":
             premake_args.append("vs2026")
         else:
-            # gmake2 is the modern GNU Makefile generator in premake5
-            premake_args.append("gmake2")
+            # gmake is the modern GNU Makefile generator in premake5
+            premake_args.append("gmake")
             premake_args.append("--cc=clang")
         subprocess.call(premake_args, cwd=ROOT_DIR)
 
