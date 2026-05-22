@@ -94,34 +94,73 @@ namespace ignite
         return UMBRA_SHADER_TYPE_VERTEX;
     }
 
+    struct ShaderKey
+    {
+        std::string filename;
+        std::string entryName;
+        UMBRA_ShaderType shaderType;
+
+        bool operator==(const ShaderKey &other) const noexcept
+        {
+            return filename == other.filename
+                && entryName == other.filename
+                && shaderType == other.shaderType;
+        }
+    };
+
+    struct ShaderKeyHasher
+    {
+        size_t operator()(const ShaderKey &k) const noexcept
+        {
+            size_t h = std::hash<int> {}(static_cast<int>(k.shaderType));
+            for (size_t i = 0; i < k.filename.size(); ++i)
+                h ^= (std::hash<int>{}(static_cast<int>(k.filename[i])) + 0x9e3779b9 + (h << 6) + (h >> 2));
+            for (size_t i = 0; i < k.entryName.size(); ++i)
+                h ^= (std::hash<int>{}(static_cast<int>(k.entryName[i])) + 0x9e3779b9 + (h << 6) + (h >> 2));
+            return h;
+        }
+    };
+
     class Shader
     {
     public:
         Shader() = default;
-        Shader(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile = false);
+        Shader(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile = false, const char *entryName = "main");
 
-
-		const std::vector<nvrhi::VertexAttributeDesc> &GetVertexAttributes() { return m_VertexAttributes; }
+		const inline std::vector<nvrhi::VertexAttributeDesc> &GetVertexAttributes() { return m_VertexAttributes; }
         inline nvrhi::ShaderHandle GetHandle() { return m_Handle; }
         inline UMBRA_ShaderType GetType() const { return m_Type; }
 
-        static std::vector<uint8_t> CompileOrGetShader(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile);
-        static Ref<Shader> Create(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile = false);
+        // Returns true if recompile successful.
+        bool Recompile();
 
-        void Reflect(UMBRA_ShaderType shaderType, const std::vector<uint8_t> &shaderCode, std::vector<nvrhi::VertexAttributeDesc> &vertexAttributes);
+        // Compile or Get shader code from cached binary data (.spirv/.dxil).
+        static std::vector<uint8_t> CompileOrGetShader(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile, const char *entryPoint);
+        
+        // Helper for reflecting shader code and construct the NVRHI Vertex Attributes
+        // Returns UMBRA Shader Reflection Info
+        static umbra::ShaderReflectionInfo Reflect(UMBRA_ShaderType shaderType, const std::vector<uint8_t> &shaderCode, std::vector<nvrhi::VertexAttributeDesc> &vertexAttributes);
+        
+        // Create interface
+        static Ref<Shader> Create(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile = false, const char *entryName = "main");
 
+        // DX Compiler Instance, automatically create if not created yet.
         static Ref<umbra::DXCInstance> GetDXCInstance();
     
     private:
-        static void SetupLogCallback();
-        static void ClearLogCallback();
+        static void InitShaderData();
+        static void ShutdownShaderData();
     
     private:
         UMBRA_ShaderType m_Type;
-		std::vector<nvrhi::VertexAttributeDesc> m_VertexAttributes;
+        nvrhi::ShaderDesc m_ShaderDesc;
         nvrhi::ShaderHandle m_Handle = nullptr;
+        ignite::Path m_Filepath;
+
+		std::vector<nvrhi::VertexAttributeDesc> m_VertexAttributes;
 
         static Ref<umbra::DXCInstance> s_DXCInstance;
+        static std::unordered_map<ShaderKey, Ref<Shader>, ShaderKeyHasher> s_ShaderCache;
 
         friend class Renderer;
     };

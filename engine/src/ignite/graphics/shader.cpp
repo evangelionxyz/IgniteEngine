@@ -14,6 +14,7 @@
 namespace ignite
 {
     Ref<umbra::DXCInstance> Shader::s_DXCInstance = nullptr;
+    std::unordered_map<ShaderKey, Ref<Shader>, ShaderKeyHasher> Shader::s_ShaderCache;
 
     namespace
     {
@@ -34,10 +35,10 @@ namespace ignite
             switch (type)
             {
                 default:
-                case UMBRA_LOG_TYPE_INFO: LOG_TRACE("[Shader] {}", message); break;
-                case UMBRA_LOG_TYPE_WARNING: LOG_WARN("[Shader] {}", message); break;
-                case UMBRA_LOG_TYPE_ERROR: LOG_ERROR("[Shader] {}", message); break;
-                case UMBRA_LOG_TYPE_CRITICAL: LOG_ASSERT(false, "[Shader] {}", message); break;
+                case UMBRA_LOG_TYPE_INFO: LOG_TRACE("[Shader]\t{}", message); break;
+                case UMBRA_LOG_TYPE_WARNING: LOG_WARN("[Shader]\t{}", message); break;
+                case UMBRA_LOG_TYPE_ERROR: LOG_ERROR("[Shader]\t{}", message); break;
+                case UMBRA_LOG_TYPE_CRITICAL: LOG_ASSERT(false, "[Shader]\t{}", message); break;
             }
         }
 
@@ -54,40 +55,71 @@ namespace ignite
         }
     }
     
-    void Shader::SetupLogCallback()
+    void Shader::InitShaderData()
     {
         umbra::ShaderCompiler::SetLogCallback(ShaderDebugLog, nullptr);
+        Shader::s_ShaderCache.clear();
     }
 
-    void Shader::ClearLogCallback()
+    void Shader::ShutdownShaderData()
     {
+        Shader::s_ShaderCache.clear();
         umbra::ShaderCompiler::ClearLogCallback();
     }
 
-    Shader::Shader(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile)
-        : m_Type(shaderType)
+    Shader::Shader(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile, const char *entryName)
+        : m_Filepath(filepath), m_Type(shaderType)
     {
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-        const nvrhi::GraphicsAPI api = device->getGraphicsAPI();
-
         CreateShaderCachedDirectoryIfNeeded();
 
-        std::vector<uint8_t> shaderCode = CompileOrGetShader(filepath, shaderType, recompile);
-        LOG_ASSERT(shaderCode.data(), "[Shader] Blob data is not valid {}", filepath);
+        // Setup the shader desc
+        m_ShaderDesc.shaderType = GetNVRHIShaderType(m_Type);
+        m_ShaderDesc.entryName = entryName;
 
-        nvrhi::ShaderDesc shaderDesc;
-        shaderDesc.shaderType = GetNVRHIShaderType(shaderType);
+        // Compile shader source
+        std::vector<uint8_t> shaderCode = CompileOrGetShader(m_Filepath, m_Type, recompile, m_ShaderDesc.entryName.c_str());
+        LOG_ASSERT(shaderCode.data() && !shaderCode.empty(), "[Shader] Blob data is not valid {}", m_Filepath);
 
-        m_Handle = device->createShader(shaderDesc, shaderCode.data(), shaderCode.size());
-        LOG_ASSERT(m_Handle, "Failed to create {} shader: {}", UMBRA_GetShaderTypeString(shaderType), filepath.generic_string());
-
-        if (!shaderCode.empty())
+        // Create the handle and reflect to construct the vertex attributes
+        if (shaderCode.data() && !shaderCode.empty())
         {
-            Reflect(shaderType, shaderCode, m_VertexAttributes);
+            nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+            m_Handle = device->createShader(m_ShaderDesc, shaderCode.data(), shaderCode.size());
+            LOG_ASSERT(m_Handle, "[Shader] Failed to create {} shader: {}", UMBRA_GetShaderTypeString(m_Type), m_Filepath.generic_string());
+
+            LOG_WARN("[Shader] Reflection for '{}': ", m_Filepath.generic_string());
+            Reflect(m_Type, shaderCode, m_VertexAttributes);
         }
     }
 
-    std::vector<uint8_t> Shader::CompileOrGetShader(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile)
+    bool Shader::Recompile()
+    {
+        nvrhi::ShaderHandle newShaderHandle = nullptr;
+
+        // Compile shader source
+        std::vector<uint8_t> shaderCode = CompileOrGetShader(m_Filepath, m_Type, true, m_ShaderDesc.entryName.c_str());
+        LOG_ASSERT(shaderCode.data() && !shaderCode.empty(), "[Shader] Blob data is not valid {}", m_Filepath);
+
+        // Create the handle and reflect to construct the vertex attributes
+        if (shaderCode.data() && !shaderCode.empty())
+        {
+            nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+            newShaderHandle = device->createShader(m_ShaderDesc, shaderCode.data(), shaderCode.size());
+            LOG_ASSERT(newShaderHandle, "[Shader] Failed to create {} shader: {}", UMBRA_GetShaderTypeString(m_Type), m_Filepath.generic_string());
+
+            // Only replace the Main Shader handle if the creation is successful.
+            if (newShaderHandle)
+            {
+                m_Handle = newShaderHandle;
+                LOG_WARN("[Shader] Reflection for '{}': ", m_Filepath.generic_string());
+                Reflect(m_Type, shaderCode, m_VertexAttributes);
+            }
+        }
+
+        return newShaderHandle != nullptr;
+    }
+
+    std::vector<uint8_t> Shader::CompileOrGetShader(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile, const char *entryName)
     {
         LOG_ASSERT(ignite::Path::exists(filepath), "[Shader] File does not exists! '{}'", filepath.generic_string().c_str());
         
@@ -95,10 +127,14 @@ namespace ignite
 
         umbra::CompilerOptions options = {};
         options.compilerType = UMBRA_SHADER_COMPILER_TYPE_DXC;
+#ifdef PLATFORM_WINDOWS
         options.platformType = api == nvrhi::GraphicsAPI::D3D12 ? UMBRA_SHADER_PLATFORM_TYPE_DXIL : UMBRA_SHADER_PLATFORM_TYPE_SPIRV;
+#elif PLATFORM_LINUX
+        options.platformType = UMBRA_SHADER_PLATFORM_TYPE_SPIRV;
+#endif
         options.filepath = filepath.generic_string();
         options.outputFilepath = (filepath.parent_path() / "bin").generic_string();
-        options.shaderDesc.entryPoint = "main";
+        options.shaderDesc.entryPoint = entryName;
         options.shaderDesc.shaderModel = "6_5";
         options.shaderDesc.vulkanVersion = "1.3";
         options.shaderDesc.shaderType = shaderType;
@@ -134,56 +170,49 @@ namespace ignite
         return shaderCode;
     }
 
-    void Shader::Reflect(UMBRA_ShaderType shaderType, const std::vector<uint8_t> &shaderCode, std::vector<nvrhi::VertexAttributeDesc> &vertexAttributes)
+    umbra::ShaderReflectionInfo Shader::Reflect(UMBRA_ShaderType shaderType, const std::vector<uint8_t> &shaderCode, std::vector<nvrhi::VertexAttributeDesc> &outVertexAttributes)
     {
         if (shaderCode.size() % sizeof(uint32_t) != 0)
         {
             throw std::runtime_error("Shader blob size is not aligned to 4 bytes");
         }
 
-        const nvrhi::GraphicsAPI api = DeviceManager::GetInstance()->GetGraphicsAPI();
         umbra::ShaderReflectionInfo reflectInfo;
-        if (api == nvrhi::GraphicsAPI::VULKAN)
-        {
-            reflectInfo = umbra::ShaderReflection::SPIRVReflect(shaderType, shaderCode);
-        }
-        else if (api == nvrhi::GraphicsAPI::D3D12)
+
+#ifdef PLATFORM_WINDOWS
+        const nvrhi::GraphicsAPI api = DeviceManager::GetInstance()->GetGraphicsAPI();
+        if (api == nvrhi::GraphicsAPI::D3D12)
         {
             reflectInfo = umbra::ShaderReflection::DXILReflect(shaderType, shaderCode);
+        }
+        else if (api == nvrhi::GraphicsAPI::VULKAN)
+#endif
+        {
+            reflectInfo = umbra::ShaderReflection::SPIRVReflect(shaderType, shaderCode);
         }
 
         // Vertex inputs (only for vertex shaders)
         if (shaderType == UMBRA_SHADER_TYPE_VERTEX)
         {
-            vertexAttributes.clear();
-            
-            uint32_t offset = 0;
-            for (uint32_t i = 0; i < reflectInfo.numStageInputs; ++i)
+            outVertexAttributes.clear();
+            outVertexAttributes.reserve(reflectInfo.vertexAttributes.size());
+
+            for (const auto &vertexAttr : reflectInfo.vertexAttributes)
             {
-                umbra::ShaderStageIOInfo stageInput = reflectInfo.stageInputs[i];
-
-                nvrhi::Format format = MapUmbraTypeToNVRHIFormat(stageInput.format);
-
-                const uint32_t attributeSize = GetVertexStride(format);
-
                 nvrhi::VertexAttributeDesc attr;
-                attr.name = stageInput.name;
-                attr.format = format;
-                attr.offset = offset;
-                attr.bufferIndex = 0; // TODO: FIX THIS; Currently we are assuming single vertex buffer for simplicity
+
+                attr.name = vertexAttr.name;
+                attr.format = MapUmbraTypeToNVRHIFormat(vertexAttr.format);
+                attr.offset = vertexAttr.offset;
+                attr.bufferIndex = vertexAttr.bufferIndex;
                 attr.isInstanced = false;
-                // attr.elementStride; // calculated later
-
-                offset += attributeSize;
-                vertexAttributes.push_back(attr);
-            }
-
-            const uint32_t stride = offset;
-            for (auto& attr : vertexAttributes)
-            {
-                attr.elementStride = stride;
+                attr.elementStride = vertexAttr.elementStride;
+                
+                outVertexAttributes.push_back(attr);
             }
         }
+
+        return reflectInfo;
     }
 
     Ref<umbra::DXCInstance> Shader::GetDXCInstance()
@@ -586,14 +615,20 @@ namespace ignite
     }
 #endif
 
-    Ref<Shader> Shader::Create(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile)
+    Ref<Shader> Shader::Create(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile, const char *entryName)
     {
-        Ref<Shader> returnShader = CreateRef<Shader>(filepath, shaderType, recompile);
-        if (returnShader->GetHandle() == nullptr)
-        {
-            return nullptr;
-        }
+        // Try to get cached Shader Object
+        ShaderKey key = { filepath.filename(), entryName, shaderType };
+        auto shaderIt = s_ShaderCache.find(key);
+        if (shaderIt != s_ShaderCache.end() && !recompile)
+            return shaderIt->second;
 
+        Ref<Shader> returnShader = CreateRef<Shader>(filepath, shaderType, recompile, entryName);
+        if (returnShader->GetHandle() == nullptr)
+            return nullptr;
+
+        // Cache the shader object
+        s_ShaderCache[key] = returnShader;
         return returnShader;
     }
 }

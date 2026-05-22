@@ -27,7 +27,7 @@ namespace ignite
 
         s_instance->m_Device = deviceManager->GetDevice();
 
-        Shader::SetupLogCallback();
+        Shader::InitShaderData();
 
         nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
         cmd->open();
@@ -72,7 +72,7 @@ namespace ignite
     {
         MeshInstance::ReleaseGlobalResources();
         
-        Shader::ClearLogCallback();
+        Shader::ShutdownShaderData();
         Shader::s_DXCInstance.reset();
 
         m_WhiteTexture.reset();

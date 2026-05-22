@@ -48,7 +48,6 @@ namespace ignite
 
         std::string string() const;
         std::string generic_string() const;
-        const char *c_str() const;
 
         std::wstring wstring() const;
         std::wstring generic_wstring() const;
@@ -94,9 +93,9 @@ namespace ignite
 
         static Scope<filewatch::FileWatch<std::string>> WatchFile(const Path &path, FileWatchCallback callback);
 
-        static bool TryGetAssemblyWriteTime(const ignite::Path &filepath, std::chrono::time_point<std::chrono::file_clock> &outTime);
-        static bool WaitForAssemblyFileReady(const ignite::Path &filepath);
-        static bool WaitForAssemblyNewerThan(const ignite::Path &filepath, const std::chrono::time_point<std::chrono::file_clock> &previousWriteTime);
+        static bool TryGetFileWriteTime(const ignite::Path &filepath, std::chrono::time_point<std::chrono::file_clock> &outTime);
+        static bool WaitForFileReady(const ignite::Path &filepath);
+        static bool WaitForFileNewerThan(const ignite::Path &filepath, const std::chrono::time_point<std::chrono::file_clock> &previousWriteTime);
 
         // implicit conversion to string for convenience
         operator std::string() const;

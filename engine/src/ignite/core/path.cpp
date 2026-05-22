@@ -172,12 +172,6 @@ namespace ignite
         return m_Impl->internalPath.generic_string();
     }
 
-    const char* Path::c_str() const
-    {
-        return (const char *)m_Impl->internalPath.c_str();
-    }
-
-
     std::wstring Path::wstring() const
     {
         return m_Impl->internalPath.wstring();
@@ -381,7 +375,7 @@ namespace ignite
         return string();
     }
 
-    bool Path::TryGetAssemblyWriteTime(const ignite::Path &filepath, std::chrono::time_point<std::chrono::file_clock> &outTime)
+    bool Path::TryGetFileWriteTime(const ignite::Path &filepath, std::chrono::time_point<std::chrono::file_clock> &outTime)
     {
         std::error_code ec;
         if (!std::filesystem::exists(filepath.string(), ec) || ec)
@@ -393,7 +387,7 @@ namespace ignite
         return !ec;
     }
 
-    bool Path::WaitForAssemblyFileReady(const ignite::Path &filepath)
+    bool Path::WaitForFileReady(const ignite::Path &filepath)
     {
         using namespace std::chrono_literals;
 
@@ -460,14 +454,14 @@ namespace ignite
         return false;
     }
 
-    bool Path::WaitForAssemblyNewerThan(const ignite::Path &filepath, const std::chrono::time_point<std::chrono::file_clock> &previousWriteTime)
+    bool Path::WaitForFileNewerThan(const ignite::Path &filepath, const std::chrono::time_point<std::chrono::file_clock> &previousWriteTime)
     {
         using namespace std::chrono_literals;
 
         for (int i = 0; i < 120; i++)
         {
             std::chrono::time_point<std::chrono::file_clock> currentWriteTime {};
-            if (TryGetAssemblyWriteTime(filepath, currentWriteTime) && currentWriteTime > previousWriteTime)
+            if (TryGetFileWriteTime(filepath, currentWriteTime) && currentWriteTime > previousWriteTime)
             {
                 return true;
             }
