@@ -103,7 +103,7 @@ namespace ignite
         bool operator==(const ShaderKey &other) const noexcept
         {
             return filename == other.filename
-                && entryName == other.filename
+                && entryName == other.entryName
                 && shaderType == other.shaderType;
         }
     };
@@ -112,12 +112,15 @@ namespace ignite
     {
         size_t operator()(const ShaderKey &k) const noexcept
         {
-            size_t h = std::hash<int> {}(static_cast<int>(k.shaderType));
-            for (size_t i = 0; i < k.filename.size(); ++i)
-                h ^= (std::hash<int>{}(static_cast<int>(k.filename[i])) + 0x9e3779b9 + (h << 6) + (h >> 2));
-            for (size_t i = 0; i < k.entryName.size(); ++i)
-                h ^= (std::hash<int>{}(static_cast<int>(k.entryName[i])) + 0x9e3779b9 + (h << 6) + (h >> 2));
-            return h;
+            size_t h1 = std::hash<std::string> {}(k.filename);
+            size_t h2 = std::hash<std::string> {}(k.entryName);
+            size_t h3 = std::hash<uint32_t> {}(static_cast<uint32_t>(k.shaderType));
+
+            // Combine hashes (boost::hash_combine style)
+            size_t seed = h1;
+            seed ^= h2 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^= h3 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            return seed;
         }
     };
 

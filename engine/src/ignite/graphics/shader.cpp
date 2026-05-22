@@ -620,7 +620,7 @@ namespace ignite
         // Try to get cached Shader Object
         ShaderKey key = { filepath.filename(), entryName, shaderType };
         auto shaderIt = s_ShaderCache.find(key);
-        if (shaderIt != s_ShaderCache.end() && !recompile)
+        if (shaderIt != s_ShaderCache.end())
             return shaderIt->second;
 
         Ref<Shader> returnShader = CreateRef<Shader>(filepath, shaderType, recompile, entryName);
