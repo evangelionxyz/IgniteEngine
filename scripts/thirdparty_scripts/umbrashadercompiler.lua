@@ -32,7 +32,10 @@ project("UmbraShaderCompiler")
             "spirv-cross-msl",
             "spirv-cross-cpp",
             "spirv-cross-reflect",
-            "pthread dl m rt",
+            "pthread",
+            "dl",
+            "m",
+            "rt",
         }
 
     -- Windows Default Linking

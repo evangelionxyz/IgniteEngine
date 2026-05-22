@@ -4,10 +4,10 @@ Work in progress C++ Game Engine
 
 ## Installation
 
-### Clone repository Recursively
+### Clone Repository Recursively
 
-We are actively develop in 'dev' branch. you can use ```-b dev``` when cloning the repository. <br>
-Command: ```git clone --recursively https://github.com/evangelionxyz/Ignite.git -b master```
+We actively develop on the `dev` branch. You can use `-b dev` when cloning the repository. <br>
+Command: `git clone --recursive https://github.com/evangelionxyz/Ignite.git -b dev`
 
 ## Windows Build
 
