@@ -2,7 +2,8 @@ name: CI-Pipeline
 
 on:
   push:
-    branches: [master]
+    branches: [master, dev]
+  
   pull_request:
     branches: [master]
 
@@ -14,7 +15,9 @@ jobs:
         configuration: [Release]
     env:
       VS_VERSION: "2026"
-      SLNX_FILE_IGN: IGN.slnx
+      PROJECT_FILE_EDITOR: editor/IgniteEditor.vcxproj
+      PROJECT_FILE_SCRIPTENGINE: scriptengine/IgniteScriptEngine.csproj
+      SOLUTION_FILE_IGN: IGN.slnx
       PREMAKE_VERSION: 5.0.0-beta8
 
     steps:
@@ -63,10 +66,10 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.vcxproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      - name: Resore NuGet packages
+      - name: Resore NuGet packages - Visual Studio
         shell: pwsh
-        run: msbuild $env:SLNX_FILE_IGN /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform="x64"
+        run: msbuild $env:SOLUTION_FILE_IGN /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform="x64"
 
-      - name: Build Visual Studio
+      - name: Build Solution - Visual Studio
         shell: pwsh
-        run: msbuild $env:SLNX_FILE_IGN /t:Rebuild /p:Configuration=${{ matrix.configuration }} /p:Platform="x64"
+        run: msbuild $env:SOLUTION_FILE_IGN /t:Rebuild /p:Configuration=${{ matrix.configuration }} /p:Platform="x64"

@@ -6,6 +6,8 @@
 
 #include "ignite/core/logger.hpp"
 #include "ignite/core/application.hpp"
+#include "ignite/core/time.hpp"
+#include "ignite/asset/asset_worker.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 
@@ -15,6 +17,8 @@
 
 #include <algorithm>
 #include <limits>
+#include <chrono>
+#include <functional>
 #include <thread>
 #include <type_traits>
 
@@ -23,10 +27,9 @@ namespace ignite
 #define DEFAULT_ANGLE_THRESHOLD 3.0
 #define LCG_MULTIPLIER 6364136223846793005ull
 #define LCG_INCREMENT 1442695040888963407ull
-#define THREAD_COUNT 8
 
     template<typename T, typename S, int N, msdf_atlas::GeneratorFunction<S, N> GenFunc>
-    static Ref<Texture> CreateAndCacheAtlas(const std::vector<msdf_atlas::GlyphGeometry> &glyphs, uint32_t width, uint32_t height)
+    static Ref<Texture> CreateAndCacheAtlas(const std::vector<msdf_atlas::GlyphGeometry> &glyphs, uint32_t width, uint32_t height, std::function<void(const Ref<Texture> &)> onReady = nullptr)
     {
         msdf_atlas::GeneratorAttributes attributes;
         attributes.config.overlapSupport = true;
@@ -37,7 +40,7 @@ namespace ignite
         generator.setThreadCount(static_cast<int>(std::max(1u, std::thread::hardware_concurrency())));
         generator.generate(glyphs.data(), static_cast<int>(glyphs.size()));
 
-        msdfgen::BitmapConstRef<T, N> bitmap = static_cast<msdfgen::BitmapConstRef<T, N>>(generator.atlasStorage());
+        auto bitmap = static_cast<msdfgen::BitmapConstRef<T, N>>(generator.atlasStorage());
 
         const size_t pixelCount = static_cast<size_t>(bitmap.width) * static_cast<size_t>(bitmap.height);
         std::vector<uint8_t> rgbaPixels(pixelCount * 4u, 255u);
@@ -99,7 +102,7 @@ namespace ignite
         atlas->SetReadyFlag(false);
 
         atlas->PrepareUploadData(4);
-        Application::SubmitToRenderThread([atlas]()
+        Application::SubmitToRenderThread([atlas, onReady]()
         {
             if (atlas)
             {
@@ -109,9 +112,11 @@ namespace ignite
 				atlas->SetData(cmd, 4);
 				cmd->close();
 
-                Application::SubmitWorkerCommandList(cmd, [atlas]()
+                Application::SubmitWorkerCommandList(cmd, [atlas, onReady]()
                 {
                     atlas->SetReadyFlag(true);
+                    if (onReady)
+                        Application::SubmitToMainThread([atlas, onReady]() { onReady(atlas); });
                 });
             }
         });
@@ -246,31 +251,37 @@ namespace ignite
         packer.getDimensions(width, height);
         emSize = packer.getScale();
 
-        uint64_t coloringSeed = 0;
-        bool expensiveColoring = false;
-        if (expensiveColoring)
+        // Get thread count
+        const auto THREAD_COUNT = std::max(std::thread::hardware_concurrency(), 1u);
+
+        uint64_t coloringSeed = static_cast<uint64_t>(std::hash<std::string>{}(filepathStr));
+        if (coloringSeed == 0)
         {
-            msdf_atlas::Workload([&glyphs = m_Glyphs, &coloringSeed](int i, int threadNo) -> bool
-            {
-                const uint64_t glyphSeed = (LCG_MULTIPLIER * (coloringSeed ^ i) + LCG_INCREMENT) * !!coloringSeed;
-                glyphs[i].edgeColoring (msdfgen::edgeColoringInkTrap, DEFAULT_ANGLE_THRESHOLD, glyphSeed);
-                return true;
-            }, 
-                static_cast<int>(m_Glyphs.size()))
-                .finish(THREAD_COUNT);
+            coloringSeed = static_cast<uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
         }
-        else
+        bool expensiveColoring = true;
+
         {
-            uint64_t glyphSeed = coloringSeed;
-            for (msdf_atlas::GlyphGeometry &glyph : m_Glyphs)
+            Timer timer;
+            msdf_atlas::Workload([&glyphs = m_Glyphs, &coloringSeed, expensiveColoring](int i, int threadNo) -> bool
             {
-                glyphSeed *= LCG_MULTIPLIER;
-                glyph.edgeColoring(msdfgen::edgeColoringInkTrap, DEFAULT_ANGLE_THRESHOLD, glyphSeed);
-            }
+                const uint64_t glyphSeed = expensiveColoring
+                    ? (LCG_MULTIPLIER * (coloringSeed ^ i) + LCG_INCREMENT) * !!coloringSeed
+                    : coloringSeed;
+
+                glyphs[i].edgeColoring(msdfgen::edgeColoringInkTrap, DEFAULT_ANGLE_THRESHOLD, glyphSeed);
+                
+                return true;
+            }, static_cast<int>(m_Glyphs.size())).finish(THREAD_COUNT);
+
+            LOG_WARN("[Font] Edge coloring takes {}s to be done.", timer.Elapsed());
         }
 
-        m_AtlasTexture = CreateAndCacheAtlas<float, float, 3, msdf_atlas::msdfGenerator>(m_Glyphs, width, height);
-        SetReadyFlag(m_AtlasTexture && m_AtlasTexture->IsReady());
+        m_AtlasTexture = CreateAndCacheAtlas<float, float, 3, msdf_atlas::msdfGenerator>(m_Glyphs, width, height,
+        [this](const Ref<Texture> &texture)
+        {
+            SetReadyFlag(texture && texture->IsReady());
+        });
 
         msdfgen::destroyFont(font);
         msdfgen::deinitializeFreetype(ft);

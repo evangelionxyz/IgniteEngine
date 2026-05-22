@@ -3,16 +3,24 @@ project "Project Generator"
 	kind "Utility"
 
 	files {
+		-- Project Generator & Thirdparty Project
 		"%{prj.location}/**.lua",
 		"%{prj.location}/**.py",
 
-		"%{prj.location}/editor/ignite-editor.lua",
-		"%{prj.location}/engine/ignite-engine.lua",
-		"%{prj.location}/scriptengine/ignite-scriptengine.lua",
+		-- Core Project
+		"%{wks.location}/editor/ignite-editor.lua",
+		"%{wks.location}/engine/ignite-engine.lua",
+		"%{wks.location}/scriptengine/ignite-scriptengine.lua",
+		
+		-- Dockerfile
+		"%{wks.location}/dockerfile",
+
+		-- CI File
+		"%{wks.location}/.github/workflows/ci.yml",
 	}
 
 	filter "system:windows"
-		postbuildcommands { "premake5 vs2026 --file=%{wks.location}/scripts/premake5.lua" }
+		prebuildcommands { "premake5 vs2026 --file=%{wks.location}/scripts/premake5.lua" }
 
 	filter "system:linux"
-		postbuildcommands { "premake5 gmake --file=%{wks.location}/scripts/premake5.lua" }
+		prebuildcommands { "premake5 gmake --file=%{wks.location}/scripts/premake5.lua" }

@@ -14,19 +14,14 @@ project("UmbraShaderCompiler")
         "%{THIRDPARTY_DIR}/UmbraShaderCompiler/Include/Umbra/**.h",
     }
 
-    includedirs {
-        "%{IncludeDir.UmbraShaderCompiler}",
-    }
+    includedirs { "%{IncludeDir.UmbraShaderCompiler}", }
 
-    defines {
-        "UMBRACOMPILER_BUILD_SHARED"
-    }
+    defines { "UMBRACOMPILER_BUILD_SHARED", }
 
+    -- Linux Default
     filter "system:linux"
         systemversion "latest"
-        includedirs {
-
-        }
+        includedirs { "usr/" }
         links {
             "vulkan",
             "shaderc_shared",
@@ -40,19 +35,28 @@ project("UmbraShaderCompiler")
             "pthread dl m rt",
         }
 
+    -- Windows Default Linking
     filter "system:windows"
         systemversion "latest"
-        includedirs {
-            "%{IncludeDir.VULKAN_SDK}",
-        }
+        includedirs { "%{IncludeDir.VULKAN_SDK}", }
         links {
             "d3d12.lib",
             "dxgi.lib",
             "dxcompiler.lib",
             "d3dcompiler",
             "dxguid",
-
             "%{Library.vulkan}",
+        }
+        defines {
+            "NOMINMAX",
+            "WIN32",
+            "_WINDOWS",
+            "_CRT_SECURE_NO_WARNINGS"
+        }
+
+    -- Windows Debug Linking
+    filter { "configurations:Debug", "system:windows" }
+        links {
             "%{Library.ShaderC_Debug}",
             "%{Library.SPIRV_Cross_C_Debug}", -- C API
             "%{Library.SPIRV_Cross_Core_Debug}",
@@ -64,11 +68,35 @@ project("UmbraShaderCompiler")
             "%{Library.SPIRV_Cross_Util_Debug}",
             "%{Library.SPIRV_Tools_Debug}",
         }
-        defines {
-            "NOMINMAX",
-            "WIN32",
-            "_WINDOWS",
-            "_CRT_SECURE_NO_WARNINGS"
+
+    -- Windows Release Linking
+    filter { "configurations:Release", "system:windows" }
+        links {
+            "%{Library.ShaderC}",
+            "%{Library.SPIRV_Cross_C}", -- C API
+            "%{Library.SPIRV_Cross_Core}",
+            "%{Library.SPIRV_Cross_CPP}",
+            "%{Library.SPIRV_Cross_MSL}",
+            "%{Library.SPIRV_Cross_GLSL}",
+            "%{Library.SPIRV_Cross_HLSL}",
+            "%{Library.SPIRV_Cross_Reflect}",
+            "%{Library.SPIRV_Cross_Util}",
+            "%{Library.SPIRV_Tools}",
+        }
+
+    -- Windows Shipping Linking
+    filter { "configurations:Shipping", "system:windows" }
+        links {
+            "%{Library.ShaderC}",
+            "%{Library.SPIRV_Cross_C}", -- C API
+            "%{Library.SPIRV_Cross_Core}",
+            "%{Library.SPIRV_Cross_CPP}",
+            "%{Library.SPIRV_Cross_MSL}",
+            "%{Library.SPIRV_Cross_GLSL}",
+            "%{Library.SPIRV_Cross_HLSL}",
+            "%{Library.SPIRV_Cross_Reflect}",
+            "%{Library.SPIRV_Cross_Util}",
+            "%{Library.SPIRV_Tools}",
         }
 
     filter "configurations:Debug"
