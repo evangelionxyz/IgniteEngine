@@ -7,34 +7,58 @@ Work in progress C++ Game Engine
 ### Clone Repository Recursively
 
 We actively develop on the `dev` branch. You can use `-b dev` when cloning the repository. <br>
-Command: `git clone --recursive https://github.com/evangelionxyz/Ignite.git -b dev`
+```bash
+git clone --recursively https://github.com/evangelionxyz/Ignite.git -b master
+```
 
 ## Windows Build
 
- Run ```gen.bat```
+Run Visual Studio Project Generator
+```bash
+gen.bat
+```
 
 ## Linux Build
 
- Run ```sudo bash ./gen.sh```
+Run Make Generator.
+
+Will automatically download dependencies
+ ```bash
+ sudo bash ./gen.sh
+ ```
 
 
 ## Docker build
 
-### 1. Build the image once (downloads FBX SDK, installs everything)
+```bash
+-------------------------------------------------------------
+1. Build the image once (downloads FBX SDK, installs everything)
+command: docker build -t ignite-dev .
+-------------------------------------------------------------
 
-```docker build -t ignite-dev .```
+-------------------------------------------------------------
+2. Attach with source mounted
+command: docker run -it --rm -v "${PWD}:/workspace" ignite-dev
+-------------------------------------------------------------
 
-### 2. Attach with source mounted
+-------------------------------------------------------------
+3. Inside the container — generate makefiles and build
+command: python3 scripts/setup.py
+-------------------------------------------------------------
 
-```docker run -it --rm -v "${PWD}:/workspace" ignite-dev```
+-------------------------------------------------------------
+4. FBX_SDK already set, premake5 in PATH → instant
+now, lets build.
+-------------------------------------------------------------
 
-### 3. Inside the container — generate makefiles and build
+-------------------------------------------------------------
+5. Build
+   5.1. This is C++ Project Build
+        command: make -j6 config=debug IgniteEditor
 
-```python3 scripts/setup.py```
-
-#### FBX_SDK already set, premake5 in PATH → instant
-
-```make -j6 config=debug IgniteEditor```
+    5.2. We also need to build the C# Project
+         command: make -j6 config=debug IgniteScriptEngine
+```
 
 ## MVP Roadmap
 

@@ -27,8 +27,8 @@ def ensure_admin():
 
 
 def generate_project_files(premake_binary):
-    """Generate project files using premake5 for the current platform."""
-    premake_scripts = ["premake5.lua"]
+    # Generate project files using premake5 for the current platform.
+    premake_scripts = ["premake5.lua", "premake5-managed.lua"]
     for script in premake_scripts:
         premake_args = [str(premake_binary), f"--file=scripts/{script}"]
         if platform.system() == "Windows":

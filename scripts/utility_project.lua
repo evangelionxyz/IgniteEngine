@@ -12,15 +12,25 @@ project "Project Generator"
 		"%{wks.location}/engine/ignite-engine.lua",
 		"%{wks.location}/scriptengine/ignite-scriptengine.lua",
 		
-		-- Dockerfile
+		-- Project Root
 		"%{wks.location}/dockerfile",
+		"%{wks.location}/README.md",
+		"%{wks.location}/LICENSE.txt",
+		"%{wks.location}/gen.bat",
+		"%{wks.location}/gen.sh",
 
 		-- CI File
 		"%{wks.location}/.github/workflows/ci.yml",
 	}
 
 	filter "system:windows"
-		prebuildcommands { "premake5 vs2026 --file=%{wks.location}/scripts/premake5.lua" }
+		prebuildcommands {
+			"premake5 vs2026 --file=%{wks.location}/scripts/premake5.lua",
+			"premake5 vs2026 --file=%{wks.location}/scripts/premake5-managed.lua",
+		}
 
 	filter "system:linux"
-		prebuildcommands { "premake5 gmake --file=%{wks.location}/scripts/premake5.lua" }
+		prebuildcommands {
+			"premake5 gmake --file=%{wks.location}/scripts/premake5.lua",
+			"premake5 gmake --file=%{wks.location}/scripts/premake5-managed.lua",
+		}
