@@ -1,33 +1,13 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
+#pragma once
 #ifndef SHADER_HPP
 #define SHADER_HPP
 
+#include "Umbra/ShaderCompiler.h"
+
 #include "ignite/core/types.hpp"
 #include "ignite/core/logger.hpp"
-
-#include "shader_compiler.hpp"
 
 #include <nvrhi/nvrhi.h>
 #include <initializer_list>
@@ -36,96 +16,156 @@
 
 namespace ignite
 {
-    static std::string GetShaderCacheDirectory();
-    static void CreateShaderCachedDirectoryIfNeeded();
-
-    static nvrhi::Format MapSPIRVTypeToNVRHIFormat(const spirv_cross::SPIRType& type)
+    static nvrhi::Format MapUmbraTypeToNVRHIFormat(const UMBRA_VertexElementFormat &format)
     {
-        using spirv_cross::SPIRType;
-        if (type.basetype == SPIRType::Float && type.columns == 1)
+        switch (format)
         {
-            switch (type.vecsize)
-            {
-            case 1: return nvrhi::Format::R32_FLOAT;
-            case 2: return nvrhi::Format::RG32_FLOAT;
-            case 3: return nvrhi::Format::RGB32_FLOAT;
-            case 4: return nvrhi::Format::RGBA32_FLOAT;
-            default: break;
-            }
+            case UMBRA_VERTEX_ELEMENT_FORMAT_FLOAT: return nvrhi::Format::R32_FLOAT;
+            case UMBRA_VERTEX_ELEMENT_FORMAT_FLOAT2: return nvrhi::Format::RG32_FLOAT;
+            case UMBRA_VERTEX_ELEMENT_FORMAT_FLOAT3: return nvrhi::Format::RGB32_FLOAT;
+            case UMBRA_VERTEX_ELEMENT_FORMAT_FLOAT4: return nvrhi::Format::RGBA32_FLOAT;
+
+            case UMBRA_VERTEX_ELEMENT_FORMAT_INT: return nvrhi::Format::R32_SINT;
+            case UMBRA_VERTEX_ELEMENT_FORMAT_INT2: return nvrhi::Format::RG32_SINT;
+            case UMBRA_VERTEX_ELEMENT_FORMAT_INT3: return nvrhi::Format::RGB32_SINT;
+            case UMBRA_VERTEX_ELEMENT_FORMAT_INT4: return nvrhi::Format::RGBA32_SINT;
+
+            case UMBRA_VERTEX_ELEMENT_FORMAT_UINT: return nvrhi::Format::R32_UINT;
+            case UMBRA_VERTEX_ELEMENT_FORMAT_UINT2: return nvrhi::Format::RG32_UINT;
+            case UMBRA_VERTEX_ELEMENT_FORMAT_UINT3: return nvrhi::Format::RGB32_UINT;
+            case UMBRA_VERTEX_ELEMENT_FORMAT_UINT4: return nvrhi::Format::RGBA32_UINT;
+            default:
+                LOG_ASSERT(false, "[Shader] Unreachable, Invalid Vertex Format");
+                return nvrhi::Format::UNKNOWN;
         }
-        if (type.basetype == SPIRType::Int && type.columns == 1)
-        {
-            switch (type.vecsize)
-            {
-            case 1: return nvrhi::Format::R32_SINT;
-            case 2: return nvrhi::Format::RG32_SINT;
-            case 3: return nvrhi::Format::RGB32_SINT;
-            case 4: return nvrhi::Format::RGBA32_SINT;
-            default: break;
-            }
-        }
-        if (type.basetype == spirv_cross::SPIRType::UInt && type.columns == 1)
-        {
-            switch (type.vecsize)
-            {
-            case 1: return nvrhi::Format::R32_UINT;
-            case 2: return nvrhi::Format::RG32_UINT;
-            case 3: return nvrhi::Format::RGB32_UINT;
-            case 4: return nvrhi::Format::RGBA32_UINT;
-            default: break;
-            }
-        }
-        return nvrhi::Format::UNKNOWN;
     }
 
-    static nvrhi::ShaderType GetNVRHIShaderType(ShaderType type)
+    static uint32_t GetVertexStride(nvrhi::Format format)
     {
-        switch (type)
+        constexpr uint32_t BASE_SIZE = 4;
+        switch (format)
         {
-            case ShaderType::Vertex: return nvrhi::ShaderType::Vertex;
-            case ShaderType::Pixel: return nvrhi::ShaderType::Pixel;
-            case ShaderType::Geometry: return nvrhi::ShaderType::Geometry;
-            case ShaderType::Compute: return nvrhi::ShaderType::Compute;
-        }
+            case nvrhi::Format::R32_FLOAT:
+            case nvrhi::Format::R32_SINT:
+            case nvrhi::Format::R32_UINT: return BASE_SIZE * 1;
 
-        LOG_ASSERT(false, "Invalid shader stage");
-        return nvrhi::ShaderType::None;
+            case nvrhi::Format::RG32_FLOAT:
+            case nvrhi::Format::RG32_SINT:
+            case nvrhi::Format::RG32_UINT: return BASE_SIZE * 2;
+
+            case nvrhi::Format::RGB32_FLOAT:
+            case nvrhi::Format::RGB32_SINT:
+            case nvrhi::Format::RGB32_UINT: return BASE_SIZE * 3;
+
+            case nvrhi::Format::RGBA32_FLOAT:
+            case nvrhi::Format::RGBA32_SINT:
+            case nvrhi::Format::RGBA32_UINT: return BASE_SIZE * 4;
+            default:
+                LOG_ASSERT(false, "[Shader] Unreachable, Invalid Vertex Format!");
+                return 0;
+        }
     }
 
-    static ShaderType GetShaderType(nvrhi::ShaderType type)
+    static nvrhi::ShaderType GetNVRHIShaderType(UMBRA_ShaderType shaderType)
     {
-        switch (type)
+        switch (shaderType)
         {
-            case nvrhi::ShaderType::Vertex: return ShaderType::Vertex;
-            case nvrhi::ShaderType::Pixel: return ShaderType::Pixel;
-            case nvrhi::ShaderType::Geometry: return ShaderType::Geometry;
-            case nvrhi::ShaderType::Compute: return ShaderType::Compute;
+            case UMBRA_SHADER_TYPE_VERTEX: return nvrhi::ShaderType::Vertex;
+            case UMBRA_SHADER_TYPE_PIXEL: return nvrhi::ShaderType::Pixel;
+            case UMBRA_SHADER_TYPE_GEOMETRY: return nvrhi::ShaderType::Geometry;
+            case UMBRA_SHADER_TYPE_COMPUTE: return nvrhi::ShaderType::Compute;
+            default:
+                LOG_ASSERT(false, "[Shader] Unreachable, Invalid Shader Type");
+                return nvrhi::ShaderType::None;
+        }
+    }
+
+    static UMBRA_ShaderType GetUmbraShaderType(nvrhi::ShaderType shaderType)
+    {
+        switch (shaderType)
+        {
+            case nvrhi::ShaderType::Vertex: return UMBRA_SHADER_TYPE_VERTEX;
+            case nvrhi::ShaderType::Pixel: return UMBRA_SHADER_TYPE_PIXEL;
+            case nvrhi::ShaderType::Geometry: return UMBRA_SHADER_TYPE_GEOMETRY;
+            case nvrhi::ShaderType::Compute: return UMBRA_SHADER_TYPE_COMPUTE;
         }
 
-        LOG_ASSERT(false, "Invalid shader stage");
-        return ShaderType::Vertex;
+        LOG_ASSERT(false, "[Shader] Unreachable, Invalid Shader Type");
+        return UMBRA_SHADER_TYPE_VERTEX;
     }
+
+    struct ShaderKey
+    {
+        std::string filename;
+        std::string entryName;
+        UMBRA_ShaderType shaderType;
+
+        bool operator==(const ShaderKey &other) const noexcept
+        {
+            return filename == other.filename
+                && entryName == other.entryName
+                && shaderType == other.shaderType;
+        }
+    };
+
+    struct ShaderKeyHasher
+    {
+        size_t operator()(const ShaderKey &k) const noexcept
+        {
+            size_t h1 = std::hash<std::string> {}(k.filename);
+            size_t h2 = std::hash<std::string> {}(k.entryName);
+            size_t h3 = std::hash<uint32_t> {}(static_cast<uint32_t>(k.shaderType));
+
+            // Combine hashes (boost::hash_combine style)
+            size_t seed = h1;
+            seed ^= h2 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^= h3 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            return seed;
+        }
+    };
 
     class Shader
     {
     public:
         Shader() = default;
-        Shader(const ignite::Path &filepath, ShaderType type, bool recompile = false);
+        Shader(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile = false, const char *entryName = "main");
 
-		const std::vector<nvrhi::VertexAttributeDesc> &GetVertexAttributes() { return m_VertexAttributes; }
-        nvrhi::ShaderHandle GetHandle() { return m_Handle; }
-        ShaderType GetType() const { return m_Type; }
+		const inline std::vector<nvrhi::VertexAttributeDesc> &GetVertexAttributes() { return m_VertexAttributes; }
+        inline nvrhi::ShaderHandle GetHandle() { return m_Handle; }
+        inline UMBRA_ShaderType GetType() const { return m_Type; }
 
-        static std::vector<uint8_t> CompileOrGetShader(const ignite::Path &filepath, ShaderType type, bool recompile);
-        static Ref<Shader> Create(const ignite::Path &filepath, ShaderType type, bool recompile = false);
+        // Returns true if recompile successful.
+        bool Recompile();
 
-        static void SPIRVReflect(ShaderType type, const std::vector<uint8_t> &shaderCode, std::vector<nvrhi::VertexAttributeDesc> &vertexAttributes);
-        static void DXILReflect(ShaderType type, const std::vector<uint8_t>& shaderCode, std::vector<nvrhi::VertexAttributeDesc> &vertexAttributes);
+        // Compile or Get shader code from cached binary data (.spirv/.dxil).
+        static std::vector<uint8_t> CompileOrGetShader(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile, const char *entryPoint);
+        
+        // Helper for reflecting shader code and construct the NVRHI Vertex Attributes
+        // Returns UMBRA Shader Reflection Info
+        static umbra::ShaderReflectionInfo Reflect(UMBRA_ShaderType shaderType, const std::vector<uint8_t> &shaderCode, std::vector<nvrhi::VertexAttributeDesc> &vertexAttributes);
+        
+        // Create interface
+        static Ref<Shader> Create(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile = false, const char *entryName = "main");
+
+        // DX Compiler Instance, automatically create if not created yet.
+        static Ref<umbra::DXCInstance> GetDXCInstance();
     
     private:
-        ShaderType m_Type;
-		std::vector<nvrhi::VertexAttributeDesc> m_VertexAttributes;
+        static void InitShaderData();
+        static void ShutdownShaderData();
+    
+    private:
+        UMBRA_ShaderType m_Type;
+        nvrhi::ShaderDesc m_ShaderDesc;
         nvrhi::ShaderHandle m_Handle = nullptr;
+        ignite::Path m_Filepath;
+
+		std::vector<nvrhi::VertexAttributeDesc> m_VertexAttributes;
+
+        static Ref<umbra::DXCInstance> s_DXCInstance;
+        static std::unordered_map<ShaderKey, Ref<Shader>, ShaderKeyHasher> s_ShaderCache;
+
+        friend class Renderer;
     };
 }
 

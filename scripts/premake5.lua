@@ -4,7 +4,6 @@ workspace "IGN"
     multiprocessorcompile("On")
     configurations {
         "Debug",
-        "Debug",
         "Release",
         "Shipping"
     }
@@ -15,24 +14,28 @@ workspace "IGN"
     THIRDPARTY_OUTPUT_DIR = "%{BUILD_DIR}/%{cfg.buildcfg}/thirdparty/%{prj.name}"
     INTOUTPUT_DIR = "%{wks.location}/bin/objs/%{cfg.buildcfg}/%{prj.name}"
 
-    include "thirdparty_scripts/thirdparty.lua"
-    group "Engine/Executable"
-        include "../editor/ignite-editor.lua"
-        include "../runtime/ignite-runtime.lua"
-    group ""
-    group "Engine/Executable/Tests"
-        include "../test/test.lua"
-    group ""
+include "thirdparty_scripts/thirdparty.lua"
+group "Engine/Executable"
+    include "../editor/ignite-editor.lua"
+    include "../runtime/ignite-runtime.lua"
+group ""
+group "Engine/Executable/Tests"
+    include "../test/test.lua"
+group ""
     
-    group "Engine/Core"
-        include "../engine/ignite-engine.lua"
-        include "mochisharp-native.lua"
-    group ""
+group "Engine/Core"
+    include "../engine/ignite-engine.lua"
+    include "mochisharp-native.lua"
+group ""
 
-    group "Engine/Managed"
-        include "../scriptengine/ignite-scriptengine.lua"
-        include "mochisharp-managed.lua"
-    group ""
+group "Engine/Managed"
+    include "../scriptengine/ignite-scriptengine.lua"
+    include "mochisharp-managed.lua"
+group ""
+
+group "Utilities"
+if not os.getenv("GITHUB_ACTIONS") then include "utility_project.lua" end
+group ""
 
 -- Automatically generate MSBuild properties to combat Any CPU mapping bugs for Slnx when forcing x64 workspace architecture
 require "vstudio"

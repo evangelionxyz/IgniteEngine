@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "shader.hpp"
 
@@ -32,112 +11,147 @@
 #include <iterator>
 #include <string>
 
-#ifdef PLATFORM_WINDOWS
-    #include <dxcapi.h>
-    #include <d3d12shader.h>
-    #include <wrl/client.h>
-
-using Microsoft::WRL::ComPtr;
-
-    #ifndef DXC_PART_DXIL
-        #define DXC_PART_DXIL (('D') | ('X' << 8) | ('I' << 16) | ('L' << 24))
-    #endif
-    #ifndef DXC_PART_DXBC
-        #define DXC_PART_DXBC (('D') | ('X' << 8) | ('B' << 16) | ('C' << 24))
-    #endif
-#endif
-
 namespace ignite
 {
-    std::string GetShaderCacheDirectory()
-    {
-        return "resources/shaders/bin/";
-    }
+    Ref<umbra::DXCInstance> Shader::s_DXCInstance = nullptr;
+    std::unordered_map<ShaderKey, Ref<Shader>, ShaderKeyHasher> Shader::s_ShaderCache;
 
-    void CreateShaderCachedDirectoryIfNeeded()
+    namespace
     {
-        static std::string cachedDirectory = GetShaderCacheDirectory();
-        if (!ignite::Path::exists(cachedDirectory))
-            ignite::Path::create_directories(cachedDirectory);
-    }
-
-    const char* GetShaderTypeString(ShaderType type)
-    {
-        switch (type)
+        static std::string GetShaderCacheDirectory()
         {
-            case ShaderType::Vertex: return "Vertex";
-            case ShaderType::Pixel: return "Pixel";
-            case ShaderType::Geometry: return "Geometry";
-            case ShaderType::Compute: return "Compute";
+            return "resources/shaders/bin/";
         }
 
-        LOG_ASSERT(false, "Invalid shader type");
-        return "Invalid shader type";
-    }
-
-    static const char *GetShaderExtension(nvrhi::GraphicsAPI api)
-    {
-        switch (api)
+        static void CreateShaderCachedDirectoryIfNeeded()
         {
-            case nvrhi::GraphicsAPI::D3D12: return ".dxil";
-            case nvrhi::GraphicsAPI::VULKAN: return ".spirv";
+            static std::string cachedDirectory = GetShaderCacheDirectory();
+            if (!ignite::Path::exists(cachedDirectory))
+                ignite::Path::create_directories(cachedDirectory);
         }
 
-        LOG_ASSERT(false, "Invalid Graphics API");
-        return "Invalid Graphics API";
+        static void ShaderDebugLog(UMBRA_LogType type, const char *message, void *userData)
+        {
+            switch (type)
+            {
+                default:
+                case UMBRA_LOG_TYPE_INFO: LOG_TRACE("[Shader]\t{}", message); break;
+                case UMBRA_LOG_TYPE_WARNING: LOG_WARN("[Shader]\t{}", message); break;
+                case UMBRA_LOG_TYPE_ERROR: LOG_ERROR("[Shader]\t{}", message); break;
+                case UMBRA_LOG_TYPE_CRITICAL: LOG_ASSERT(false, "[Shader]\t{}", message); break;
+            }
+        }
+
+        static const char *GetShaderExtension(nvrhi::GraphicsAPI api)
+        {
+            switch (api)
+            {
+                case nvrhi::GraphicsAPI::D3D12: return ".dxil";
+                case nvrhi::GraphicsAPI::VULKAN: return ".spirv";
+            }
+
+            LOG_ASSERT(false, "[Shader] Unreachable, Invalid Graphics API");
+            return "[Shader] Unreachable, Invalid Graphics API";
+        }
+    }
+    
+    void Shader::InitShaderData()
+    {
+        umbra::ShaderCompiler::SetLogCallback(ShaderDebugLog, nullptr);
+        Shader::s_ShaderCache.clear();
     }
 
-    Shader::Shader(const ignite::Path &filepath, ShaderType type, bool recompile)
-        : m_Type(type)
+    void Shader::ShutdownShaderData()
     {
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-        const nvrhi::GraphicsAPI api = device->getGraphicsAPI();
+        Shader::s_ShaderCache.clear();
+        umbra::ShaderCompiler::ClearLogCallback();
+    }
 
+    Shader::Shader(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile, const char *entryName)
+        : m_Filepath(filepath), m_Type(shaderType)
+    {
         CreateShaderCachedDirectoryIfNeeded();
 
-        std::vector<uint8_t> shaderCode = CompileOrGetShader(filepath, type, recompile);
-        LOG_ASSERT(shaderCode.data(), "[Shader] Blob data is not valid {}", filepath);
+        // Setup the shader desc
+        m_ShaderDesc.shaderType = GetNVRHIShaderType(m_Type);
+        m_ShaderDesc.entryName = entryName;
 
-        nvrhi::ShaderDesc shaderDesc;
-        shaderDesc.shaderType = GetNVRHIShaderType(type);
+        // Compile shader source
+        std::vector<uint8_t> shaderCode = CompileOrGetShader(m_Filepath, m_Type, recompile, m_ShaderDesc.entryName.c_str());
+        LOG_ASSERT(shaderCode.data() && !shaderCode.empty(), "[Shader] Blob data is not valid {}", m_Filepath);
 
-        m_Handle = device->createShader(shaderDesc, shaderCode.data(), shaderCode.size());
-        LOG_ASSERT(m_Handle, "Failed to create {} shader: {}", GetShaderTypeString(type), filepath.generic_string());
-
-        if (!shaderCode.empty())
+        // Create the handle and reflect to construct the vertex attributes
+        if (shaderCode.data() && !shaderCode.empty())
         {
-            if (api == nvrhi::GraphicsAPI::VULKAN)
-            {
-                SPIRVReflect(type, shaderCode, m_VertexAttributes);
-            }
-            else if (api == nvrhi::GraphicsAPI::D3D12)
-            {
-                DXILReflect(type, shaderCode, m_VertexAttributes);
-            }
+            nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+            m_Handle = device->createShader(m_ShaderDesc, shaderCode.data(), shaderCode.size());
+            LOG_ASSERT(m_Handle, "[Shader] Failed to create {} shader: {}", UMBRA_GetShaderTypeString(m_Type), m_Filepath.generic_string());
+
+            LOG_WARN("[Shader] Reflection for '{}': ", m_Filepath.generic_string());
+            Reflect(m_Type, shaderCode, m_VertexAttributes);
         }
     }
 
-    std::vector<uint8_t> Shader::CompileOrGetShader(const ignite::Path &filepath, ShaderType type, bool recompile)
+    bool Shader::Recompile()
+    {
+        nvrhi::ShaderHandle newShaderHandle = nullptr;
+
+        // Compile shader source
+        std::vector<uint8_t> shaderCode = CompileOrGetShader(m_Filepath, m_Type, true, m_ShaderDesc.entryName.c_str());
+        LOG_ASSERT(shaderCode.data() && !shaderCode.empty(), "[Shader] Blob data is not valid {}", m_Filepath);
+
+        // Create the handle and reflect to construct the vertex attributes
+        if (shaderCode.data() && !shaderCode.empty())
+        {
+            nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+            newShaderHandle = device->createShader(m_ShaderDesc, shaderCode.data(), shaderCode.size());
+            LOG_ASSERT(newShaderHandle, "[Shader] Failed to create {} shader: {}", UMBRA_GetShaderTypeString(m_Type), m_Filepath.generic_string());
+
+            // Only replace the Main Shader handle if the creation is successful.
+            if (newShaderHandle)
+            {
+                m_Handle = newShaderHandle;
+                LOG_WARN("[Shader] Reflection for '{}': ", m_Filepath.generic_string());
+                Reflect(m_Type, shaderCode, m_VertexAttributes);
+            }
+        }
+
+        return newShaderHandle != nullptr;
+    }
+
+    std::vector<uint8_t> Shader::CompileOrGetShader(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile, const char *entryName)
     {
         LOG_ASSERT(ignite::Path::exists(filepath), "[Shader] File does not exists! '{}'", filepath.generic_string().c_str());
         
         const nvrhi::GraphicsAPI api = DeviceManager::GetInstance()->GetGraphicsAPI();
 
-        CompilerOptions opt = {};
-        opt.filepath = filepath;
-        opt.outputFilepath = filepath.parent_path() / "bin";
-        opt.platformType = api == nvrhi::GraphicsAPI::D3D12 ? ShaderPlatformType::DXIL : ShaderPlatformType::SPIRV;
-        opt.compilerType = CompilerType::DXC;
-        opt.shaderDesc.shaderType = type;
+        umbra::CompilerOptions options = {};
+        options.compilerType = UMBRA_SHADER_COMPILER_TYPE_DXC;
+#ifdef PLATFORM_WINDOWS
+        options.platformType = api == nvrhi::GraphicsAPI::D3D12 ? UMBRA_SHADER_PLATFORM_TYPE_DXIL : UMBRA_SHADER_PLATFORM_TYPE_SPIRV;
+#elif PLATFORM_LINUX
+        options.platformType = UMBRA_SHADER_PLATFORM_TYPE_SPIRV;
+#endif
+        options.filepath = filepath.generic_string();
+        options.outputFilepath = (filepath.parent_path() / "bin").generic_string();
+        options.shaderDesc.entryPoint = entryName;
+        options.shaderDesc.shaderModel = "6_5";
+        options.shaderDesc.vulkanVersion = "1.3";
+        options.shaderDesc.shaderType = shaderType;
+        options.shaderDesc.optLevel = UMBRA_OPT_LEVEL_3;
+        options.tRegShift = 0;   // NVRHI Compatible
+        options.sRegShift = 128; // NVRHI Compatible
+        options.bRegShift = 256; // NVRHI Compatible
+        options.uRegShift = 384; // NVRHI Compatible
         
         // Important!!!!
         if (api == nvrhi::GraphicsAPI::VULKAN)
         {
-            opt.defines = { "SPIRV", "TARGET_VULKAN" };
+            options.defines = { "SPIRV", "TARGET_VULKAN" };
         }
 
         std::vector<uint8_t> shaderCode;
-        ignite::Path cacheFilepath = opt.outputFilepath / filepath.filename().replace_extension(GetShaderExtension(api));
+        ignite::Path cacheFilepath = (options.outputFilepath / options.filepath.filename().replace_extension(GetShaderExtension(api))).generic_string();
         if (ignite::Path::exists(cacheFilepath) && !recompile)
         {
             std::ifstream file(cacheFilepath, std::ios::binary);
@@ -146,149 +160,73 @@ namespace ignite
             file.seekg(0, std::ios::beg);
 
             shaderCode.resize(fileSize);
-            file.read(reinterpret_cast<char*>(shaderCode.data()), fileSize);
+            file.read((char *)(shaderCode.data()), fileSize);
         }
         else
         {
-            shaderCode = ShaderCompiler::CompileDXC(Renderer::GetDXCInstance(), opt);
+            shaderCode = umbra::ShaderCompiler::CompileDXC(GetDXCInstance(), options);
         }
 
         return shaderCode;
     }
 
-    void Shader::SPIRVReflect(ShaderType type, const std::vector<uint8_t> &shaderCode, std::vector<nvrhi::VertexAttributeDesc> &vertexAttributes)
+    umbra::ShaderReflectionInfo Shader::Reflect(UMBRA_ShaderType shaderType, const std::vector<uint8_t> &shaderCode, std::vector<nvrhi::VertexAttributeDesc> &outVertexAttributes)
     {
         if (shaderCode.size() % sizeof(uint32_t) != 0)
         {
             throw std::runtime_error("Shader blob size is not aligned to 4 bytes");
         }
 
-        const uint32_t *ptr = reinterpret_cast<const uint32_t *>(shaderCode.data());
-        size_t wordCount = shaderCode.size() / sizeof(uint32_t);
-        std::vector<uint32_t> dataBlob(ptr, ptr + wordCount);
+        umbra::ShaderReflectionInfo reflectInfo;
 
-        spirv_cross::Compiler compiler(dataBlob);
-        spirv_cross::ShaderResources resources = compiler.get_shader_resources();
-
-#if 0
-        LOG_WARN("[Shader Reflect] {} Shader", GetShaderTypeString(type));
-
-        // --- Uniform Buffers ---
-        LOG_TRACE("   {} uniform buffers", resources.uniform_buffers.size());
-        for (const auto &ubo : resources.uniform_buffers)
+#ifdef PLATFORM_WINDOWS
+        const nvrhi::GraphicsAPI api = DeviceManager::GetInstance()->GetGraphicsAPI();
+        if (api == nvrhi::GraphicsAPI::D3D12)
         {
-            const auto &type = compiler.get_type(ubo.base_type_id);
-            uint32_t size = static_cast<uint32_t>(compiler.get_declared_struct_size(type));
-            uint32_t binding = compiler.get_decoration(ubo.id, spv::DecorationBinding);
-            uint32_t set = compiler.get_decoration(ubo.id, spv::DecorationDescriptorSet);
-            size_t memberCount = type.member_types.size();
-
-            LOG_TRACE("  [UBO] Name: {}, Set: {}, Binding: {}, Size: {}, Members: {}", ubo.name, set, binding, size, memberCount);
+            reflectInfo = umbra::ShaderReflection::DXILReflect(shaderType, shaderCode);
         }
-
-        // --- Sampled Images (combined or separate textures) ---
-        LOG_TRACE("   {} sampled images", resources.sampled_images.size());
-        for (const auto &image : resources.sampled_images)
-        {
-            uint32_t binding = compiler.get_decoration(image.id, spv::DecorationBinding);
-            uint32_t set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
-
-            LOG_TRACE("  [Texture] Name: {}, Set: {}, Binding: {}", image.name, set, binding);
-        }
-
-        // --- Separate Samplers ---
-        LOG_TRACE("   {} separate samplers", resources.separate_samplers.size());
-        for (const auto &sampler : resources.separate_samplers)
-        {
-            uint32_t binding = compiler.get_decoration(sampler.id, spv::DecorationBinding);
-            uint32_t set = compiler.get_decoration(sampler.id, spv::DecorationDescriptorSet);
-
-            LOG_TRACE("  [Sampler] Name: {}, Set: {}, Binding: {}", sampler.name, set, binding);
-        }
-
-        // --- Separate Images (non-combined, i.e., texture2D) ---
-        LOG_TRACE("   {} separate images", resources.separate_images.size());
-        for (const auto &image : resources.separate_images)
-        {
-            uint32_t binding = compiler.get_decoration(image.id, spv::DecorationBinding);
-            uint32_t set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
-
-            LOG_TRACE("  [Separate Image] Name: {}, Set: {}, Binding: {}", image.name, set, binding);
-        }
-
-        // --- Push Constants ---
-        LOG_TRACE("   {} push constants", resources.push_constant_buffers.size());
-        for (const auto &pcb : resources.push_constant_buffers)
-        {
-            const auto &type = compiler.get_type(pcb.base_type_id);
-            uint32_t size = static_cast<uint32_t>(compiler.get_declared_struct_size(type));
-
-            LOG_TRACE("  [PushConstant] Name: {}, Size: {}", pcb.name, size);
-        }
+        else if (api == nvrhi::GraphicsAPI::VULKAN)
 #endif
-
-		// Vertex inputs (only for vertex shaders)
-        if (type == ShaderType::Vertex)
         {
-            vertexAttributes.clear();
-            
-            // Sort inputs by location to compute offsets consistently
-            struct InAttribute
-            {
-                uint32_t location; 
-                spirv_cross::ID id;
-            };
-
-            std::vector<InAttribute> inputs;
-            inputs.reserve(resources.stage_inputs.size());
-            for (const auto& in : resources.stage_inputs)
-            {
-				uint32_t location = compiler.get_decoration(in.id, spv::DecorationLocation);
-				inputs.push_back({ location, in.id });
-            }
-            
-            std::sort(inputs.begin(), inputs.end(), [](const InAttribute& a, const InAttribute& b) {
-                return a.location < b.location;
-			});
-
-            uint32_t offset = 0;
-            for (const auto& it : inputs)
-            {
-				const spirv_cross::SPIRType &type = compiler.get_type(compiler.get_type_from_variable(it.id).self);
-				nvrhi::Format format = MapSPIRVTypeToNVRHIFormat(type);
-                if (format == nvrhi::Format::UNKNOWN)
-                {
-                    LOG_WARN("  [Vertex Attribute] Unsupported format for input at location {}", it.location);
-                    continue;
-				}
-
-				const uint32_t componentSize = 4; // 32-bit float assumed
-				const uint32_t elementCount = std::max(type.vecsize, 1u);
-				const uint32_t attributeSize = componentSize * elementCount;
-
-                nvrhi::VertexAttributeDesc attr;
-                attr.name = compiler.get_name(it.id);
-                attr.format = format;
-                attr.offset = offset;
-                attr.bufferIndex = 0; // Assuming single vertex buffer for simplicity
-                attr.isInstanced = false;
-                // attr.elementStride; // calculated later
-
-				offset += attributeSize;
-                vertexAttributes.push_back(attr);
-
-				// LOG_TRACE("  [Vertex Attribute] Name: {}, Location: {}, Format: {}, Offset: {}",  attr.name, it.location, static_cast<uint32_t>(attr.format), attr.offset);
-            }
-
-			const uint32_t stride = offset;
-            for (auto& attr : vertexAttributes)
-            {
-                attr.elementStride = stride;
-			}
+            reflectInfo = umbra::ShaderReflection::SPIRVReflect(shaderType, shaderCode);
         }
+
+        // Vertex inputs (only for vertex shaders)
+        if (shaderType == UMBRA_SHADER_TYPE_VERTEX)
+        {
+            outVertexAttributes.clear();
+            outVertexAttributes.reserve(reflectInfo.vertexAttributes.size());
+
+            for (const auto &vertexAttr : reflectInfo.vertexAttributes)
+            {
+                nvrhi::VertexAttributeDesc attr;
+
+                attr.name = vertexAttr.name;
+                attr.format = MapUmbraTypeToNVRHIFormat(vertexAttr.format);
+                attr.offset = vertexAttr.offset;
+                attr.bufferIndex = vertexAttr.bufferIndex;
+                attr.isInstanced = false;
+                attr.elementStride = vertexAttr.elementStride;
+                
+                outVertexAttributes.push_back(attr);
+            }
+        }
+
+        return reflectInfo;
     }
 
-    void Shader::DXILReflect(ShaderType type, const std::vector<uint8_t>& shaderCode, std::vector<nvrhi::VertexAttributeDesc> &vertexAttributes)
+    Ref<umbra::DXCInstance> Shader::GetDXCInstance()
+    {
+        if (!s_DXCInstance)
+        {
+            s_DXCInstance = umbra::ShaderCompiler::CreateDXCCompiler();
+        }
+
+        return s_DXCInstance;
+    }
+
+#if 0
+    void Shader::DXILReflect(UMBRA_ShaderType shaderType, const std::vector<uint8_t>& shaderCode, std::vector<nvrhi::VertexAttributeDesc> &vertexAttributes)
     {
 #ifdef PLATFORM_WINDOWS
         // Validate the blob first
@@ -297,6 +235,8 @@ namespace ignite
             LOG_ERROR("[Shader Reflect] Invalid blob: empty or too small (size: {})", shaderCode.size());
             return;
         }
+
+        const umbra::ShaderReflectionInfo reflectInfo = umbra::ShaderReflection::DXILReflect(shaderType, shaderCode);
 
         // Check for DXIL signature - DXIL files should start with "DXBC" header or have specific DXIL markers
         const uint32_t* header = reinterpret_cast<const uint32_t*>(shaderCode.data());
@@ -671,16 +611,24 @@ namespace ignite
 #else
         LOG_WARN("[Shader Reflect] DXIL reflection is only available on Windows platform");
 #endif
+
     }
+#endif
 
-    Ref<Shader> Shader::Create(const ignite::Path &filepath, ShaderType type, bool recompile)
+    Ref<Shader> Shader::Create(const ignite::Path &filepath, UMBRA_ShaderType shaderType, bool recompile, const char *entryName)
     {
-        Ref<Shader> returnShader = CreateRef<Shader>(filepath, type, recompile);
-        if (returnShader->GetHandle() == nullptr)
-        {
-            return nullptr;
-        }
+        // Try to get cached Shader Object
+        ShaderKey key = { filepath.filename(), entryName, shaderType };
+        auto shaderIt = s_ShaderCache.find(key);
+        if (shaderIt != s_ShaderCache.end())
+            return shaderIt->second;
 
+        Ref<Shader> returnShader = CreateRef<Shader>(filepath, shaderType, recompile, entryName);
+        if (returnShader->GetHandle() == nullptr)
+            return nullptr;
+
+        // Cache the shader object
+        s_ShaderCache[key] = returnShader;
         return returnShader;
     }
 }

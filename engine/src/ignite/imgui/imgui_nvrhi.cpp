@@ -379,8 +379,8 @@ namespace ignite
             bindingLayout = m_Device->createBindingLayout(layoutDesc);
         }
 
-        auto vertexShader = Shader::Create("resources/shaders/imgui.vertex.hlsl", ShaderType::Vertex);
-        auto pixelShader = Shader::Create("resources/shaders/imgui.pixel.hlsl", ShaderType::Pixel);
+        auto vertexShader = Shader::Create("resources/shaders/imgui.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX);
+        auto pixelShader = Shader::Create("resources/shaders/imgui.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL);
 
         GraphicsPipelineParams params;
         params.fillMode = nvrhi::RasterFillMode::Solid;

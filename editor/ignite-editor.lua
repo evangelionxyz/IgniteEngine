@@ -22,13 +22,15 @@ project "IgniteEditor"
         "IgniteEngine",
         "JOLT",
         "ZLIB",
-        "YAMLCPP"
+        "YAMLCPP",
+        "UmbraShaderCompiler",
     }
 
     includedirs {
         "src",
         "%{wks.location}/engine/src",
         "%{IncludeDir.SDL3}",
+        "%{IncludeDir.UmbraShaderCompiler}",
         "%{IncludeDir.BOX2D}",
         "%{IncludeDir.ENTT}",
         "%{IncludeDir.JOLT}",
@@ -71,6 +73,51 @@ project "IgniteEditor"
     }
 
     --linux
+    filter "system:linux"
+        pic "on"
+        defines {
+            "PLATFORM_LINUX",
+            "IGNITE_WITH_VULKAN"
+        }
+        libdirs {
+            "/usr/lib",
+            "/usr/local/lib",
+            "%{LibraryDir.FMOD_LINUX}"
+        }
+        includedirs {
+            "/usr/include",
+            "%{IncludeDir.OPENEXR_LINUX}",
+            "%{IncludeDir.IMATH_LINUX}",
+            "%{IncludeDir.SDL3_LINUX}"
+        }
+        links {
+            "vulkan",
+            "shaderc_shared",
+            "spirv-cross-c",
+            "spirv-cross-core",
+            "spirv-cross-glsl",
+            "nethost",
+            "SDL3",
+            "OpenEXR",
+            "Iex",
+            "IlmThread",
+            "Imath",
+            "xml2",
+            "pthread",
+            "dl",
+            "m",
+            "rt",
+            "glib-2.0"
+        }
+        linkoptions { "-Wl,-rpath,'$$ORIGIN'" }
+
+    filter { "system:linux", "configurations:Debug" }
+        libdirs { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}" }
+        links { "fmodL", "fbxsdk" }
+
+    filter { "system:linux", "configurations:Release or Shipping" }
+        libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }
+        links { "fmod", "fbxsdk" }
 
     --windows
      filter { "system:windows", "toolset:msc*"}

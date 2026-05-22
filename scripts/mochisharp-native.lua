@@ -39,6 +39,14 @@ project "MochiSharp.Native"
             "_CRT_SECURE_NO_WARNINGS"
         }
 
+    filter "system:linux"
+        pic "on"
+        defines { "PLATFORM_LINUX" }
+        libdirs { "/usr/local/lib" }
+        -- nethost is symlinked to /usr/local/lib by the Dockerfile
+        -- (linked from the dotnet-sdk-10.0 install path)
+        links { "nethost" }
+
     filter "configurations:Debug"
         runtime "Debug"
         optimize "off"

@@ -279,13 +279,13 @@ namespace ignite
 
         if (scriptEngineData->hasAppAssemblyLastWriteTime)
         {
-            if (!ignite::Path::WaitForAssemblyNewerThan(filepath, scriptEngineData->appAssemblyLastWriteTime))
+            if (!ignite::Path::WaitForFileNewerThan(filepath, scriptEngineData->appAssemblyLastWriteTime))
             {
                 LOG_WARN("[Script Engine] App assembly timestamp did not advance before reload: {}", filepath.generic_string());
             }
         }
 
-        if (!ignite::Path::WaitForAssemblyFileReady(filepath))
+        if (!ignite::Path::WaitForFileReady(filepath))
         {
             LOG_WARN("[Script Engine] App assembly may still be updating: {}", filepath.generic_string());
         }
@@ -327,7 +327,7 @@ namespace ignite
         scriptEngineData->assemblyReloadingPending = false;
 
         std::chrono::time_point<std::chrono::file_clock> currentWriteTime {};
-        if (ignite::Path::TryGetAssemblyWriteTime(filepath, currentWriteTime))
+        if (ignite::Path::TryGetFileWriteTime(filepath, currentWriteTime))
         {
             scriptEngineData->appAssemblyLastWriteTime = currentWriteTime;
             scriptEngineData->hasAppAssemblyLastWriteTime = true;

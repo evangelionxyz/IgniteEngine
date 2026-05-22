@@ -54,3 +54,4 @@ thirdparty/TINYGLTF.dir
 
 examples/*/obj
 examples/*/Bin
+scripts/obj
