@@ -735,6 +735,9 @@ namespace ignite
         {
             IGN_PROFILE_SCOPE("SceneRenderer::RecordEditorCommandList");
             cmd->open();
+            // Upload the shared fullscreen quad vertex buffer used by Bloom, SSAO, and CompositePass.
+            // Must happen before any of those passes execute — not just inside CompositePass.
+            EnsureCompositeVertexBufferUploaded(cmd);
             m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
 
             if (worldEnvironment && worldEnvironment->environment && !worldEnvironment->gpuInitialized && !worldEnvironment->dirtyEnvironment)
@@ -784,7 +787,6 @@ namespace ignite
                 m_CompositeRT->ClearColorAttachmentFloat(cmd, 0);
                 m_CompositeRT->ClearDepthAttachment(cmd, 1.0f, 0);
             }
-
 
             nvrhi::IFramebuffer *framebuffer = m_SceneRT->GetFramebuffer();
             {
@@ -952,6 +954,9 @@ namespace ignite
         {
             IGN_PROFILE_SCOPE("SceneRenderer::RecordEditorCommandList");
             cmd->open();
+            // Upload the shared fullscreen quad vertex buffer used by Bloom, SSAO, and CompositePass.
+            // Must happen before any of those passes execute — not just inside CompositePass.
+            EnsureCompositeVertexBufferUploaded(cmd);
             m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
 
             if (worldEnvironment && worldEnvironment->environment && !worldEnvironment->gpuInitialized && !worldEnvironment->dirtyEnvironment)
@@ -1160,6 +1165,26 @@ namespace ignite
                 m_CascadedShadowMap->Resize(quality);
                 csmPipeline = m_CascadedShadowMap->GetPipeline();
                 csmState.pipeline = csmPipeline->GetHandle();
+
+                s_CSMBindingSetCache.clear();
+
+                // Resize creates a new depth texture, so any material binding set that
+                // embeds the old CSM SRV (slot 7) is now stale. Invalidate them all so
+                // they are rebuilt with the new texture handle on the next frame.
+                if (m_Scene && m_Scene->GetProject())
+                {
+                    const auto &loadedAssets = m_Scene->GetProject()->GetAssetManager()->GetLoadedAssets();
+                    for (const auto &[handle, asset] : loadedAssets)
+                    {
+                        if (asset && asset->GetAssetType() == AssetType::Material)
+                        {
+                            if (auto material = std::dynamic_pointer_cast<Material>(asset))
+                            {
+                                material->InvalidateBindingSet();
+                            }
+                        }
+                    }
+                }
             }
 
             break;
@@ -1172,11 +1197,15 @@ namespace ignite
         sceneCascadeData.cascadeIndex = -1;
         m_CascadedShadowMapBuffer->SetData(cmd, Buffer(&sceneCascadeData, sizeof(sceneCascadeData)));
 
+        // Pre-fetch the per-cascade GPU data buffer so the depth shader gets the correct
+        // cascadeIndex (and therefore the correct lightViewProjection column).
+        // m_CascadedShadowMapBuffer has cascadeIndex=-1 (sentinel for ColorPass);
+        // the depth shader needs the per-cascade buffer that has cascadeIndex=i.
         for (int i = 0; i < NUM_CASCADES; ++i)
         {
             CascadedShadowMapBufferData cascadeGpuData = sceneCascadeData;
             cascadeGpuData.cascadeIndex = i;
-            m_CascadedShadowMap->GetGPUDataBuffer()->SetData(cmd, Buffer(&cascadeGpuData, sizeof(cascadeGpuData)));
+            m_CSMPerCascadeBuffers[i]->SetData(cmd, Buffer(&cascadeGpuData, sizeof(cascadeGpuData)));
 
             // Clear the specific array layer for this cascade
             m_CascadedShadowMap->BeginCascade(cmd, i);
@@ -1215,13 +1244,13 @@ namespace ignite
                     {
                         GPUSkeletonBuffer skeletonGPUData{};
                         const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
-                        for (size_t i = 0; i < boneCount; ++i)
+                        for (size_t j = 0; j < boneCount; ++j)
                         {
-                            skeletonGPUData.bones[i] = boneTransforms[i];
+                            skeletonGPUData.bones[j] = boneTransforms[j];
                         }
-                        for (size_t i = boneCount; i < MAX_BONES; ++i)
+                        for (size_t j = boneCount; j < MAX_BONES; ++j)
                         {
-                            skeletonGPUData.bones[i] = glm::mat4(1.0f);
+                            skeletonGPUData.bones[j] = glm::mat4(1.0f);
                         }
                         smc.skeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
                     }
@@ -1240,7 +1269,13 @@ namespace ignite
                             continue;
                         }
 
-                        meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, smc.skeletonGpuBuffer);
+                        // Use m_CSMPerCascadeBuffers[i] (b4) so the depth shader gets cascadeIndex=i
+                        // and samples lightViewProjection[i] — the correct light-space matrix for
+                        // this cascade. Using m_CascadedShadowMapBuffer here (cascadeIndex=-1)
+                        // causes the shader to always use lightViewProjection[0], making cascades
+                        // 1-3 incorrect. This specifically breaks the gameplay camera whose visible
+                        // depth range may not fall into cascade 0 at all.
+                        meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CSMPerCascadeBuffers[i], smc.skeletonGpuBuffer);
 
                         SkinnedMeshBufferData gpuData;
 
@@ -1943,11 +1978,14 @@ namespace ignite
         }
 
         m_CompositePostProcessBuffer->SetData(cmd, Buffer(&postProcessData, sizeof(postProcessData)));
+        cmd->setBufferState(m_CompositePostProcessBuffer->GetHandle(), nvrhi::ResourceStates::ConstantBuffer);
 
         Ref<GraphicsPipeline> compositePipeline = GetCompositePipelineForFB(framebuffer, nvrhi::RasterFillMode::Solid);
         nvrhi::BindingSetHandle bindingSet = GetOrCreateCompositeBindingSet(compositePipeline->GetBindingLayout(0),
             sceneTexture, uiTexture, edgeTexture, bloomTexture, ssaoTexture,
             m_CompositePostProcessBuffer, m_CompositeSampler.Get());
+
+        cmd->setBufferState(m_CompositeVertexBuffer->GetHandle(), nvrhi::ResourceStates::VertexBuffer);
 
         auto graphicsState = nvrhi::GraphicsState();
         graphicsState.pipeline = compositePipeline->GetHandle();

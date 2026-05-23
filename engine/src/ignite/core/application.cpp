@@ -50,7 +50,7 @@ namespace ignite
 #if _DEBUG
         deviceParams.enableDebugRuntime = true;
 #endif
-        deviceParams.swapChainBufferCount = 3;
+        deviceParams.swapChainBufferCount = 3; // TRIPLE BUFFER
         deviceParams.enableNvrhiValidationLayer = true;
         deviceParams.enablePerMonitorDPI = true;
         deviceParams.enableGPUValidation = true;
@@ -58,7 +58,7 @@ namespace ignite
 
         m_Window = CreateScope<Window>(m_CreateInfo.name.c_str(),  deviceParams, m_CreateInfo.graphicsApi );
         m_Window->SetEventCallback(BIND_CLASS_EVENT_FN(Application::OnEvent));
-        m_Window->SetIcon("resources/icon.png");
+        m_Window->SetIcon("resources/ignite-icon256px.png");
 
         m_Input = CreateScope<Input>(m_Window.get());
 
@@ -198,8 +198,7 @@ namespace ignite
 
                 // Wait up to 2 ms for a frame OR until a task arrives so we
                 // loop back and check m_RenderThreadHasTasks quickly.
-                m_FrameCV.wait_for(lock, std::chrono::milliseconds(2),
-                    [this] { return m_CurrentFrameReady.load() || !m_RenderThreadRunning.load(); });
+                m_FrameCV.wait_for(lock, std::chrono::milliseconds(2), [this] { return m_CurrentFrameReady.load() || !m_RenderThreadRunning.load(); });
 
                 if (!m_RenderThreadRunning)
                     break;
@@ -218,18 +217,16 @@ namespace ignite
 
             IGN_PROFILE_SCOPE("RenderThread::Frame");
 
-            // Get frame resources
-            uint32_t frameIndex = currentFrame % FRAMES_IN_FLIGHT;
-            FrameResources &frame = m_FrameResources[frameIndex];
-
             // Get the current framebuffer (must be done after BeginFrame on main thread)
-            nvrhi::IFramebuffer *framebuffer = deviceManager->GetCurrentFramebuffer();
+            nvrhi::IFramebuffer *backBufferFrameBuffer = deviceManager->GetCurrentFramebuffer();
 
-            // Clear framebuffer
+            // ------------------------------
+            // Clear Back Buffer Framebuffer
+            // ------------------------------
             {
                 IGN_PROFILE_SCOPE("RenderThread::ClearFramebuffer");
                 renderCommandList->open();
-                nvrhi::utils::ClearColorAttachment(renderCommandList, framebuffer, 0, nvrhi::Color(0.0f, 0.0f, 0.0f, 1.0f));
+                nvrhi::utils::ClearColorAttachment(renderCommandList, backBufferFrameBuffer, 0, nvrhi::Color(0.0f, 0.0f, 0.0f, 1.0f));
                 renderCommandList->close();
                 {
                     auto &queueMutex = GPUUploadSync::GetQueueMutex();
@@ -254,7 +251,7 @@ namespace ignite
                 for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
                 {
                     Layer *layer = *it;
-                    layer->OnRender(framebuffer);
+                    layer->OnRender(backBufferFrameBuffer);
                 }
             }
 
@@ -280,7 +277,7 @@ namespace ignite
             if (m_CreateInfo.useGui && m_ImGuiLayer)
             {
                 IGN_PROFILE_SCOPE("RenderThread::ImGuiEndFrame");
-                m_ImGuiLayer->EndFrame(framebuffer);
+                m_ImGuiLayer->EndFrame(backBufferFrameBuffer);
 
                 IGN_PROFILE_SCOPE("RenderThread::ImGuiRenderPlatformWindows");
                 m_ImGuiLayer->RenderPlatformWindows();

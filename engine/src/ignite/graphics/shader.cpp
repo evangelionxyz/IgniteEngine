@@ -199,6 +199,20 @@ namespace ignite
 
             for (const auto &vertexAttr : reflectInfo.vertexAttributes)
             {
+                // Skip system-value semantics (SV_VertexID, SV_InstanceID, etc.).
+                // These are supplied by the GPU and never read from a vertex buffer.
+                // Including them would create an input-layout element on slot 0,
+                // which forces D3D12 to require a bound vertex buffer even when the
+                // shader is purely procedural (e.g. infinite_grid.vertex.hlsl).
+                const bool isSysValue = vertexAttr.name.size() >= 3 &&
+                    vertexAttr.name[0] == 'S' &&
+                    vertexAttr.name[1] == 'V' &&
+                    vertexAttr.name[2] == '_';
+                if (isSysValue)
+                {
+                    continue;
+                }
+
                 nvrhi::VertexAttributeDesc attr;
 
                 attr.name = vertexAttr.name;

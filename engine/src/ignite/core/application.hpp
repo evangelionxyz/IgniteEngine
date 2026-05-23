@@ -139,16 +139,6 @@ namespace ignite
         std::condition_variable m_FrameCV;
         std::mutex m_FrameMutex;
         uint64_t m_FrameCounter{ 0 };
-
-        // Per-frame resources (triple buffered)
-        static constexpr uint32_t FRAMES_IN_FLIGHT = 3;
-        struct FrameResources
-        {
-            nvrhi::CommandListHandle commandList;
-            std::vector<nvrhi::CommandListHandle> workerCommandLists;
-        };
-
-        std::array<FrameResources, FRAMES_IN_FLIGHT> m_FrameResources;
     };
 
     Application *CreateApplication(ApplicationCommandLineArgs args);

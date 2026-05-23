@@ -41,7 +41,7 @@ namespace ignite
 	}
 
 	void CascadedShadowMap::Resize(ShadowMapQuality quality)
-{
+	{
         if (quality == m_Quality)
             return;
 
@@ -49,6 +49,7 @@ namespace ignite
 					   ShadowMapQuality::MEDIUM == quality ? 1024 :
 					   ShadowMapQuality::HIGH == quality ? 2048 :
 					   ShadowMapQuality::ULTRA == quality ? 4096 : 1024;
+		
 		m_Quality = quality;
 
 		// Configure depth texture sampler settings
@@ -85,9 +86,6 @@ namespace ignite
 
 	void CascadedShadowMap::ComputeMatrices(ICamera *camera, const glm::vec3 &lightPosition)
 	{
-		if (!camera)
-			return;
-
 		glm::vec3 lightDir = lightPosition;
 		if (glm::dot(lightDir, lightDir) < 1e-6f)
 		{
@@ -194,10 +192,6 @@ namespace ignite
 			float extent = glm::max(cascadeMax.x - cascadeMin.x, cascadeMax.y - cascadeMin.y) * 0.5f;
 			extent = glm::max(extent, radius);
 
-			computeCascadeBounds(lightView, cascadeMin, cascadeMax);
-			extent = glm::max(cascadeMax.x - cascadeMin.x, cascadeMax.y - cascadeMin.y) * 0.5f;
-			extent = glm::max(extent, radius);
-
 			cascadeMin.x = -extent;
 			cascadeMax.x = extent;
 			cascadeMin.y = -extent;
@@ -212,13 +206,28 @@ namespace ignite
 
 			glm::mat4 lightProj = glm::orthoZO(cascadeMin.x, cascadeMax.x, cascadeMin.y, cascadeMax.y, nearPlaneLS, farPlaneLS);
 
-			glm::mat4 lightViewProj = lightProj * lightView;
-			glm::vec4 shadowOrigin = lightViewProj * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-			shadowOrigin *= static_cast<float>(m_Resolution) / 2.0f;
-			glm::vec4 roundedOrigin = glm::round(shadowOrigin);
-			glm::vec4 roundOffset = (roundedOrigin - shadowOrigin) * 2.0f / static_cast<float>(m_Resolution);
-			lightProj[3][0] += roundOffset.x;
-			lightProj[3][1] += roundOffset.y;
+			// Texel-snapping: align the projection's translation to whole shadow-map texels so
+			// the shadow map doesn't shimmer as the camera moves.
+			// Strategy: project any fixed world-space point through the current lightViewProj,
+			// measure the sub-texel offset of that point, then shift the ortho projection to
+			// cancel the offset. Using the frustum center in light space as the reference point
+			// keeps the snap stable and independent of the camera position.
+			{
+				const float texelsPerUnit = static_cast<float>(m_Resolution) / (2.0f * extent);
+				// Project frustum center into light view space (w=1, so just multiply).
+				glm::vec3 centerLS = glm::vec3(lightView * glm::vec4(cascadeCenter, 1.0f));
+
+				// Map to texel space.
+				glm::vec2 centerTex = glm::vec2(centerLS.x, centerLS.y) * texelsPerUnit;
+
+				// Round to nearest texel.
+				glm::vec2 roundedTex = glm::round(centerTex);
+
+				// Convert the sub-texel offset back to world units and shift the ortho projection.
+				glm::vec2 snapOffset = (roundedTex - centerTex) / texelsPerUnit;
+				lightProj[3][0] += snapOffset.x * (2.0f / (cascadeMax.x - cascadeMin.x));
+				lightProj[3][1] += snapOffset.y * (2.0f / (cascadeMax.y - cascadeMin.y));
+			}
 
 			m_GPUData.lightViewProj[cascadeIdx] = lightProj * lightView;
 
@@ -254,7 +263,6 @@ namespace ignite
 	void CascadedShadowMap::CreateCascadeFramebuffers()
 	{
 		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
 
 	    nvrhi::Format depthFormat = nvrhi::Format::D32;
 

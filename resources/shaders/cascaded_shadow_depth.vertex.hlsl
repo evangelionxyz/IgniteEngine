@@ -8,6 +8,19 @@ struct Camera
     float4 position;
 };
 
+struct Object
+{
+    float4x4 transformMatrix;
+    float4x4 normalMatrix;
+    uint objectID;
+    float3 _padding;
+};
+
+struct Skeleton
+{
+    float4x4 boneTransforms[MAX_BONES];
+};
+
 struct Scene
 {
     float4 lightColor;
@@ -18,15 +31,6 @@ struct Scene
     float exposure;
     float gamma;
     float ambient;
-};
-
-struct Object
-{
-    float4x4 transformMatrix;
-    float4x4 normalMatrix;
-    float4x4 boneTransforms[MAX_BONES];
-    uint objectID;
-    float3 _padding;
 };
 
 struct CascadesShadows
@@ -44,10 +48,13 @@ struct CascadesShadows
     float padding[3];
 };
 
+// Register bindings must match the NVRHI binding set layout (space0):
+// b0 = CameraBuffer, b1 = ObjectBuffer, b2 = SkeletonBuffer, b3 = SceneBuffer, b4 = CascadesBuffer
 cbuffer CameraBuffer   : register(b0, space0) { Camera camera; }
 cbuffer ObjectBuffer   : register(b1, space0) { Object object; }
-cbuffer SceneBuffer    : register(b2, space0) { Scene scene; }
-cbuffer CascadesBuffer : register(b3, space0) { CascadesShadows csm; }
+cbuffer SkeletonBuffer : register(b2, space0) { Skeleton skeleton; }
+cbuffer SceneBuffer    : register(b3, space0) { Scene scene; }
+cbuffer CascadesBuffer : register(b4, space0) { CascadesShadows csm; }
 
 struct VSInput
 {
@@ -83,10 +90,10 @@ float4 SkinPosition(VSInput input)
     for (uint i = 0; i < VERTEX_MAX_BONES; ++i)
     {
         const float weight = input.weights[i];
-        const uint bone = input.boneIDs[i];
-        if (weight > 0.0f && bone < MAX_BONES)
+        const uint bone = min(input.boneIDs[i], (uint)(MAX_BONES - 1));
+        if (weight > 0.0f)
         {
-            skinned += mul(object.boneTransforms[bone], float4(input.position, 1.0f)) * weight;
+            skinned += mul(skeleton.boneTransforms[bone], float4(input.position, 1.0f)) * weight;
         }
     }
 

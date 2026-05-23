@@ -20,6 +20,10 @@ namespace ignite
         m_SceneBuffer = ConstantBuffer::Create(sizeof(SceneBufferData), false, 1, "[SceneRenderer] Scene Buffer");
         m_CameraBuffer = ConstantBuffer::Create(sizeof(CameraBufferData), false, 1, "[SceneRenderer] Camera buffer");
         m_CascadedShadowMapBuffer = ConstantBuffer::Create(sizeof(CascadedShadowMapBufferData), false, 1, "[SceneRenderer] CSM Buffer");
+        for (int i = 0; i < NUM_CASCADES; ++i)
+        {
+            m_CSMPerCascadeBuffers[i] = ConstantBuffer::Create(sizeof(CascadedShadowMapBufferData), false, 1, "[SceneRenderer] CSM Per-Cascade Buffer " + std::to_string(i));
+        }
     }
 
     void ISceneRenderer::EnsureCompositeVertexBufferUploaded(nvrhi::ICommandList *cmd)
@@ -68,6 +72,10 @@ namespace ignite
         m_SceneBuffer = nullptr;
         m_CameraBuffer = nullptr;
         m_CascadedShadowMapBuffer = nullptr;
+        for (auto &CSMPerCascadeBuffer : m_CSMPerCascadeBuffers)
+        {
+            CSMPerCascadeBuffer = nullptr;
+        }
     }
 
     void ISceneRenderer::ResizeFramebuffer(uint32_t width, uint32_t height)

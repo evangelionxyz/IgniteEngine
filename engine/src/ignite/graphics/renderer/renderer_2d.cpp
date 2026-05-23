@@ -1009,6 +1009,8 @@ namespace ignite
             const size_t bufferSize = reinterpret_cast<uint8_t *>(m_LineBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_LineBatch.vertexBufferBase);
             m_LineBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_LineBatch.vertexBufferBase, bufferSize));
 
+            m_Cmd->setBufferState(m_LineBatch.vertexBuffer->GetHandle(), nvrhi::ResourceStates::VertexBuffer);
+
             Renderer::Stats.lineVerticesSize += bufferSize;
 
             Ref<GraphicsPipeline> gp = GetLinePipelineForFB(framebuffer);
