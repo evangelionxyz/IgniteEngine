@@ -16,6 +16,11 @@ project "IgniteEditor"
         "src/**.cpp",
         "src/**.hpp",
         "src/**.h",
+
+        -- Resource
+        "resource.h",
+        "IgniteEditor.rc",
+        "icon.ico",
     }
 
     links {

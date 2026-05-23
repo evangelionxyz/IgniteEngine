@@ -235,6 +235,10 @@ namespace ignite
         m_CameraBuffer->SetData(cmd, Buffer(&cameraBufferData, sizeof(CameraBufferData)));
 
         m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(SceneBufferData)));
+        
+        // --------------------------------------
+        // Cascaded Shadow Map buffer
+        // --------------------------------------
         m_CSMGPUData = {};
         m_CSMGPUData.cascadeIndex = -1;
         m_CSMGPUData.shadowStrength = 0.0f;
@@ -620,6 +624,9 @@ namespace ignite
         bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, m_CompositeSampler));
 
         nvrhi::BindingSetHandle bindingSet = m_Device->createBindingSet(bindingSetDesc, pipeline->GetBindingLayout(0));
+
+        // Prepare for GPU read
+        cmd->setBufferState(m_CompositeVertexBuffer->GetHandle(), nvrhi::ResourceStates::VertexBuffer);
 
         nvrhi::GraphicsState state;
         state.pipeline = pipeline->GetHandle();

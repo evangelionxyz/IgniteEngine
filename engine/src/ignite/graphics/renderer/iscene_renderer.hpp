@@ -4,6 +4,7 @@
 #define ISCENE_RENDERER_HPP
 
 #include "ignite/graphics/buffers/constant_buffer.hpp"
+#include "ignite/graphics/gpu_data.hpp"
 #include "ignite/graphics/bloom.hpp"
 #include "ignite/graphics/ssao.hpp"
 #include "ignite/graphics/edge_detection.hpp"
@@ -105,6 +106,7 @@ namespace ignite
         Ref<ConstantBuffer> m_SceneBuffer;
         Ref<ConstantBuffer> m_CameraBuffer;
         Ref<ConstantBuffer> m_CascadedShadowMapBuffer;
+        Ref<ConstantBuffer> m_CSMPerCascadeBuffers[NUM_CASCADES];
 
         nvrhi::BindingSetHandle m_MeshBindingSet;
         SceneBufferData m_SceneGPUData;
