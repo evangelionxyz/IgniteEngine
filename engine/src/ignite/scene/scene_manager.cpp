@@ -449,6 +449,8 @@ namespace ignite
 
         if (scene->IsRunning())
         {
+            // IMPORTANT!: Need to reset copied body from source
+            //             Should have a Brand new body
             if (newEntity.HasComponent<RigidbodyComponent>())
             {
                 auto &rb = newEntity.GetComponent<RigidbodyComponent>();
