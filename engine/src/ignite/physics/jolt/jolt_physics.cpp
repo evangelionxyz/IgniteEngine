@@ -74,12 +74,11 @@ namespace ignite
     void JoltScene::SimulationStart()
     {
         IGN_PROFILE_FUNCTION();
-        m_PhysicsSystem.Init(cNumBodies, cNumBodyMutexes, cMaxBodyPairs,
-            cMaxContactConstraints, s_JoltInstance->broadPhaseLayer,
-            s_JoltInstance->objectVsBroadPhaseLayerFilter, s_JoltInstance->objectLayerPairFilter);
+        m_PhysicsSystem.Init(cNumBodies, cNumBodyMutexes, cMaxBodyPairs, cMaxContactConstraints,
+            s_JoltInstance->broadPhaseLayer,
+            s_JoltInstance->objectVsBroadPhaseLayerFilter,
+            s_JoltInstance->objectLayerPairFilter);
 
-        // m_PhysicsSystem.SetBodyActivationListener(s_JoltInstance->bodyActivationListener.get());
-        // m_PhysicsSystem.SetContactListener(s_JoltInstance->contactListener.get());
         m_PhysicsSystem.SetBodyActivationListener(s_JoltInstance->bodyActivationListener.get());
         m_PhysicsSystem.SetContactListener(s_JoltInstance->contactListener.get());
         m_PhysicsSystem.SetGravity(GlmToJoltVec3(m_Scene->physicsGravity));
@@ -87,7 +86,7 @@ namespace ignite
 
         m_BodyInterface = &m_PhysicsSystem.GetBodyInterface();
 
-        for (entt::entity e : m_Scene->registry->view<RigibodyComponent>())
+        for (entt::entity e : m_Scene->registry->view<RigidbodyComponent>())
         {
             InstantiateEntity(Entity { e, m_Scene });
         }
@@ -101,7 +100,7 @@ namespace ignite
             return;
         }
 
-        for (entt::entity e : m_Scene->registry->view<RigibodyComponent>())
+        for (entt::entity e : m_Scene->registry->view<RigidbodyComponent>())
         {
             DestroyEntity(Entity { e, m_Scene });
         }
@@ -114,21 +113,30 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
         {
             IGN_PROFILE_SCOPE("JoltScene::SyncEntitiesFromPhysics");
-            for (const auto id : m_Scene->registry->view<RigibodyComponent>())
+            for (const auto id : m_Scene->registry->view<RigidbodyComponent>())
             {
                 Entity entity = { id, m_Scene };
-                const RigibodyComponent &rb = entity.GetComponent<RigibodyComponent>();
+                const RigidbodyComponent &rb = entity.GetComponent<RigidbodyComponent>();
                 TransformComponent &tc = entity.GetComponent<TransformComponent>();
                 IDComponent &idc = entity.GetComponent<IDComponent>();
 
                 if (!rb.body)
                     continue;
 
-                // we don't care about the parent
-                tc.localTranslation = JoltToGlmVec3(rb.body->GetPosition());
-                tc.localRotation = JoltToGlmQuat(rb.body->GetRotation());
-                tc.translation = tc.localTranslation;
-                tc.rotation = tc.localRotation;
+                if (tc.dirtyPhysics)
+                {
+                    SetPosition(*rb.body, tc.translation, true);
+                    SetRotation(*rb.body, tc.rotation, true);
+                    tc.dirtyPhysics = false;
+                }
+                else
+                {
+                    // we don't care about the parent
+                    tc.localTranslation = JoltToGlmVec3(rb.body->GetPosition());
+                    tc.localRotation = JoltToGlmQuat(rb.body->GetRotation());
+                    tc.translation = tc.localTranslation;
+                    tc.rotation = tc.localRotation;
+                }
             }
         }
 
@@ -140,37 +148,51 @@ namespace ignite
 
     void JoltScene::InstantiateEntity(Entity entity)
     {
-        if (entity.HasComponent<RigibodyComponent>())
+        // Guard against race/timing: body interface must be initialized before creating bodies
+        if (!m_BodyInterface)
         {
-            auto &rb = entity.GetComponent<RigibodyComponent>();
+            LOG_WARN("[Jolt Physics] InstantiateEntity called but BodyInterface is not initialized. Skipping entity {}", (uint64_t)entity.GetUUID());
+            return;
+        }
 
-            if (entity.HasComponent<BoxColliderComponent>())
-            {
-                CreateBoxCollider(entity);
-            }
+        if (!entity.HasComponent<RigidbodyComponent>())
+            return;
 
-            if (entity.HasComponent<SphereColliderComponent>())
-            {
-                CreateSphereCollider(entity);
-            }
+        auto &rb = entity.GetComponent<RigidbodyComponent>();
 
-            if (entity.HasComponent<CapsuleColliderComponent>())
-            {
-                CreateCapsuleCollider(entity);
-            }
+        // Prevent duplicate runtime state: if a body already exists for this component, skip creating another
+        if (rb.body)
+        {
+            LOG_WARN("[Jolt Physics] Entity {} already has a Jolt body; skipping duplicate instantiation", (uint64_t)entity.GetUUID());
+            return;
+        }
 
-            if (entity.HasComponent<MeshColliderComponent>())
-            {
-                CreateMeshCollider(entity);
-            }
+        if (entity.HasComponent<BoxColliderComponent>())
+        {
+            CreateBoxCollider(entity);
+        }
+
+        if (entity.HasComponent<SphereColliderComponent>())
+        {
+            CreateSphereCollider(entity);
+        }
+
+        if (entity.HasComponent<CapsuleColliderComponent>())
+        {
+            CreateCapsuleCollider(entity);
+        }
+
+        if (entity.HasComponent<MeshColliderComponent>())
+        {
+            CreateMeshCollider(entity);
         }
     }
 
     void JoltScene::DestroyEntity(Entity entity)
     {
-        if (entity.HasComponent<RigibodyComponent>())
+        if (entity.HasComponent<RigidbodyComponent>())
         {
-            auto &rb = entity.GetComponent<RigibodyComponent>();
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
             if (rb.body)
             {
                 m_BodyInterface->RemoveBody(rb.body->GetID());
@@ -180,11 +202,17 @@ namespace ignite
         }
     }
 
-    JPH::BodyCreationSettings JoltScene::CreateBody(JPH::ShapeRefC shape, RigibodyComponent &rb, const glm::vec3 &position, const glm::quat &rotation)
+    JPH::BodyCreationSettings JoltScene::CreateBody(JPH::ShapeRefC shape, RigidbodyComponent &rb, const glm::vec3 &position, const glm::quat &rotation)
     {
-        JPH::BodyCreationSettings bodySettings(shape, GlmToJoltVec3(position), GlmToJoltQuat(rotation),
-            rb.isStatic ? JPH::EMotionType::Static : JPH::EMotionType::Dynamic,
-            rb.isStatic ? Layers::NON_MOVING : Layers::MOVING);
+        const auto motionType = static_cast<JPH::EMotionType>(rb.bodyType);
+        
+        JPH::BodyCreationSettings bodySettings(shape,
+            GlmToJoltVec3(position),
+            GlmToJoltQuat(rotation),
+            motionType,
+            motionType == JPH::EMotionType::Static ? Layers::NON_MOVING : Layers::MOVING);
+
+        bodySettings.mMotionQuality = static_cast<JPH::EMotionQuality>(rb.motionQuality);
 
         bodySettings.mAllowedDOFs = JPH::EAllowedDOFs::None;
         if (rb.rotateX) bodySettings.mAllowedDOFs |= JPH::EAllowedDOFs::RotationX;
@@ -193,16 +221,6 @@ namespace ignite
         if (rb.moveX) bodySettings.mAllowedDOFs |= JPH::EAllowedDOFs::TranslationX;
         if (rb.moveY) bodySettings.mAllowedDOFs |= JPH::EAllowedDOFs::TranslationY;
         if (rb.moveZ) bodySettings.mAllowedDOFs |= JPH::EAllowedDOFs::TranslationZ;
-
-        switch (rb.MotionQuality)
-        {
-        case RigibodyComponent::EMotionQuality::Discrete:
-            bodySettings.mMotionQuality = JPH::EMotionQuality::Discrete;
-            break;
-        case RigibodyComponent::EMotionQuality::LinearCast:
-            bodySettings.mMotionQuality = JPH::EMotionQuality::LinearCast;
-            break;
-        }
 
         return bodySettings;
     }
@@ -215,15 +233,18 @@ namespace ignite
     void JoltScene::CreatePlaneCollider(Entity entity)
     {
         auto &tc = entity.GetComponent<TransformComponent>();
-        auto &rb = entity.GetComponent<RigibodyComponent>();
+        auto &rb = entity.GetComponent<RigidbodyComponent>();
         auto &col = entity.GetComponent<PlaneColliderComponent>();
 
         glm::vec3 halfExtents = col.scale * tc.scale;
         JPH::Plane inPlane(JPH::Vec3Arg{0.0f, 1.0f, 0.0f}, 1.0f);
         JPH::PlaneShapeSettings planeShapeSettings(inPlane);
         JPH::ShapeSettings::ShapeResult shapeResult = planeShapeSettings.Create();
-        if (shapeResult.HasError())
+        if (!shapeResult.IsValid() || shapeResult.HasError())
+        {
+            LOG_ASSERT(false, "[Jolt Physics] Invalid shape settings!", shapeResult.GetError());
             return;
+        }
 
         JPH::ShapeRefC shape = shapeResult.Get();
 
@@ -241,22 +262,55 @@ namespace ignite
         }
 
         col.shape = (void *)shape.GetPtr();
-
     }
 
     void JoltScene::CreateBoxCollider(Entity entity)
     {
         auto &tc = entity.GetComponent<TransformComponent>();
-        auto &rb = entity.GetComponent<RigibodyComponent>();
+        auto &rb = entity.GetComponent<RigidbodyComponent>();
         auto &col = entity.GetComponent<BoxColliderComponent>();
 
+        // Validate transform and scales
+        if (!std::isfinite(tc.scale.x) || !std::isfinite(tc.scale.y) || !std::isfinite(tc.scale.z))
+        {
+            LOG_WARN("[Jolt Physics] Invalid transform scale for entity {}: {},{},{} - skipping collider creation",
+                (uint64_t)entity.GetUUID(), tc.scale.x, tc.scale.y, tc.scale.z);
+            return;
+        }
+
         glm::vec3 halfExtents = col.scale * tc.scale;
+
+        // Ensure extents are positive and non-zero
+        if (halfExtents.x <= 0.0f || halfExtents.y <= 0.0f || halfExtents.z <= 0.0f)
+        {
+            LOG_WARN("[Jolt Physics] Box collider for entity {} has non-positive half extents {},{},{} - skipping",
+                (uint64_t)entity.GetUUID(), halfExtents.x, halfExtents.y, halfExtents.z);
+            return;
+        }
+
         JPH::BoxShapeSettings shapeSettings(GlmToJoltVec3(halfExtents));
 
         JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
-        JPH::ShapeRefC shape = shapeResult.Get();
+        if (!shapeResult.IsValid() || shapeResult.HasError())
+        {
+            LOG_ASSERT(false, "[Jolt Physics] Invalid shape settings! {}", shapeResult.GetError());
+            return;
+        }
 
+        JPH::ShapeRefC shape = shapeResult.Get();
         JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation + col.center, tc.rotation);
+
+        // Extra safety: ensure body pointer is still null to avoid duplicates
+        if (rb.body)
+        {
+            LOG_WARN("[Jolt Physics] Entity {} already has a body when creating box collider - removing existing body", (uint64_t)entity.GetUUID());
+            if (m_BodyInterface)
+            {
+                m_BodyInterface->RemoveBody(rb.body->GetID());
+                m_BodyInterface->DestroyBody(rb.body->GetID());
+            }
+            rb.body = nullptr;
+        }
 
         JPH::Body *body = m_BodyInterface->CreateBody(bodySettings);
         if (body)
@@ -275,26 +329,64 @@ namespace ignite
     void JoltScene::CreateCapsuleCollider(Entity entity)
     {
         auto &tc = entity.GetComponent<TransformComponent>();
-        auto &rb = entity.GetComponent<RigibodyComponent>();
+        auto &rb = entity.GetComponent<RigidbodyComponent>();
         auto &col = entity.GetComponent<CapsuleColliderComponent>();
+
+        // Validate scales
+        if (!std::isfinite(tc.scale.x) || !std::isfinite(tc.scale.y) || !std::isfinite(tc.scale.z))
+        {
+            LOG_WARN("[Jolt Physics] Invalid transform scale for entity {} when creating capsule: {},{},{} - skipping",
+                (uint64_t)entity.GetUUID(), tc.scale.x, tc.scale.y, tc.scale.z);
+            return;
+        }
 
         // Create a horizontal capsule by rotating the default vertical capsule 90 degrees around X.
         const float maxScale = glm::compMax(tc.scale);
         const float halfHeight = col.height * 0.5f * maxScale;
         const float radius = col.radius * maxScale;
 
+        if (halfHeight <= 0.0f || radius <= 0.0f)
+        {
+            LOG_WARN("[Jolt Physics] Capsule collider for entity {} has non-positive dimensions halfHeight={}, radius={} - skipping",
+                (uint64_t)entity.GetUUID(), halfHeight, radius);
+            return;
+        }
+
         JPH::CapsuleShapeSettings capsuleShapeSettings(halfHeight, radius);
 
         JPH::ShapeSettings::ShapeResult capsuleShapeResult = capsuleShapeSettings.Create();
+        if (!capsuleShapeResult.IsValid() || capsuleShapeResult.HasError())
+        {
+            LOG_ASSERT(false, "[Jolt Physics] Invalid shape settings! {}", capsuleShapeResult.GetError());
+            return;
+        }
+
         JPH::ShapeRefC capsuleShape = capsuleShapeResult.Get();
 
         const glm::quat horizontalRotation = glm::angleAxis(1.57079632679f, glm::vec3(1.0f, 0.0f, 0.0f));
         JPH::RotatedTranslatedShapeSettings shapeSettings(JPH::Vec3::sZero(), GlmToJoltQuat(horizontalRotation), capsuleShape.GetPtr());
 
         JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
+        if (!shapeResult.IsValid() || shapeResult.HasError())
+        {
+            LOG_ASSERT(false, "[Jolt Physics] Invalid shape settings! {}", shapeResult.GetError());
+            return;
+        }
+
         JPH::ShapeRefC shape = shapeResult.Get();
 
         JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation + col.center, tc.rotation);
+
+        if (rb.body)
+        {
+            LOG_WARN("[Jolt Physics] Entity {} already has a body when creating capsule - removing existing body", (uint64_t)entity.GetUUID());
+            if (m_BodyInterface)
+            {
+                m_BodyInterface->RemoveBody(rb.body->GetID());
+                m_BodyInterface->DestroyBody(rb.body->GetID());
+            }
+            rb.body = nullptr;
+        }
 
         JPH::Body *body = m_BodyInterface->CreateBody(bodySettings);
         if (body)
@@ -313,15 +405,46 @@ namespace ignite
     void JoltScene::CreateSphereCollider(Entity entity)
     {
         auto &tc = entity.GetComponent<TransformComponent>();
-        auto &rb = entity.GetComponent<RigibodyComponent>();
+        auto &rb = entity.GetComponent<RigidbodyComponent>();
         auto &col = entity.GetComponent<SphereColliderComponent>();
 
-        JPH::SphereShapeSettings shapeSettings(col.radius * glm::compMax(tc.scale));
+        // Validate scale
+        if (!std::isfinite(tc.scale.x) || !std::isfinite(tc.scale.y) || !std::isfinite(tc.scale.z))
+        {
+            LOG_WARN("[Jolt Physics] Invalid transform scale for entity {} when creating sphere: {},{},{} - skipping",
+                (uint64_t)entity.GetUUID(), tc.scale.x, tc.scale.y, tc.scale.z);
+            return;
+        }
 
+        float effectiveRadius = col.radius * glm::compMax(tc.scale);
+        if (effectiveRadius <= 0.0f)
+        {
+            LOG_WARN("[Jolt Physics] Sphere collider for entity {} has non-positive radius {} - skipping",
+                (uint64_t)entity.GetUUID(), effectiveRadius);
+            return;
+        }
+
+        JPH::SphereShapeSettings shapeSettings(effectiveRadius);
         JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
+        if (!shapeResult.IsValid() || shapeResult.HasError())
+        {
+            LOG_ASSERT(false, "[Jolt Physics] Invalid shape settings! {}", shapeResult.GetError());
+            return;
+        }
         JPH::ShapeRefC shape = shapeResult.Get();
 
         JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation + col.center, tc.rotation);
+
+        if (rb.body)
+        {
+            LOG_WARN("[Jolt Physics] Entity {} already has a body when creating sphere - removing existing body", (uint64_t)entity.GetUUID());
+            if (m_BodyInterface)
+            {
+                m_BodyInterface->RemoveBody(rb.body->GetID());
+                m_BodyInterface->DestroyBody(rb.body->GetID());
+            }
+            rb.body = nullptr;
+        }
 
         JPH::Body *body = m_BodyInterface->CreateBody(bodySettings);
         if (body)
@@ -340,7 +463,7 @@ namespace ignite
     void JoltScene::CreateMeshCollider(Entity entity)
     {
         auto &tc = entity.GetComponent<TransformComponent>();
-        auto &rb = entity.GetComponent<RigibodyComponent>();
+        auto &rb = entity.GetComponent<RigidbodyComponent>();
         auto &col = entity.GetComponent<MeshColliderComponent>();
 
         if (col.vertices.empty())
@@ -364,6 +487,11 @@ namespace ignite
 
             JPH::ConvexHullShapeSettings shapeSettings(vertices);
             JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
+            if (!shapeResult.IsValid() || shapeResult.HasError())
+            {
+                LOG_ASSERT(false, "[Jolt Physics] Invalid shape settings! {}", shapeResult.GetError());
+                return;
+            }
             shape = shapeResult.Get();
         }
         else
@@ -420,6 +548,12 @@ namespace ignite
 
             JPH::MeshShapeSettings shapeSettings(triangles);
             JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
+            if (!shapeResult.IsValid() || shapeResult.HasError())
+            {
+                LOG_ASSERT(false, "[Jolt Physics] Invalid shape settings! {}", shapeResult.GetError());
+                return;
+            }
+
             shape = shapeResult.Get();
         }
 
@@ -637,5 +771,4 @@ namespace ignite
     {
         return m_BodyInterface->GetUserData(bodyId);
     }
-
 }

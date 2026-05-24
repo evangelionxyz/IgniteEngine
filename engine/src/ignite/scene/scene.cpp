@@ -281,6 +281,9 @@ namespace ignite
             }
         }
 
+        physics2D->SimulationStart();
+        physics->SimulationStart();
+
         registry->view<ScriptComponent>().each([this](entt::entity e, ScriptComponent &script)
         {
             Entity entity{ e, this };
@@ -294,9 +297,6 @@ namespace ignite
         });
 
         m_SharedAnimatorRuntime.clear();
-
-        physics2D->SimulationStart();
-        physics->SimulationStart();
     }
 
     void Scene::OnStop()
@@ -882,7 +882,7 @@ namespace ignite
 	}
 
     template<>
-    void Scene::OnComponentAdded<RigibodyComponent>(Entity entity, RigibodyComponent &comp)
+    void Scene::OnComponentAdded<RigidbodyComponent>(Entity entity, RigidbodyComponent &comp)
     {
     }
 

@@ -449,6 +449,12 @@ namespace ignite
 
         if (scene->IsRunning())
         {
+            if (newEntity.HasComponent<RigidbodyComponent>())
+            {
+                auto &rb = newEntity.GetComponent<RigidbodyComponent>();
+                rb.body = nullptr;
+            }
+
 		    scene->physics->InstantiateEntity(newEntity);
 		    scene->physics2D->InstantiateEntity(newEntity);
         }

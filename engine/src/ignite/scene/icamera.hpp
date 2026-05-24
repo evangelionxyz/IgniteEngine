@@ -93,7 +93,9 @@ namespace ignite
         virtual glm::mat4 &GetProjection();
         virtual glm::mat4 GetView();
 
-        Rect GetRect() { return { viewportPosition, viewportPosition + viewportSize }; }
+        inline Rect GetRect() const { return { viewportPosition, viewportPosition + viewportSize }; }
+
+        inline bool IsPerspective() const { return projectionType == ProjectionType::Perspective; }
 
         // Converts an absolute screen-space position (e.g. from SDL / ImGui::GetMousePos())
         // to a position relative to this camera's viewport top-left corner.

@@ -22,6 +22,9 @@
 */
 
 #pragma once
+#ifndef PHYSICS_2D_COMPONENT_HPP
+#define PHYSICS_2D_COMPONENT_HPP
+
 #include "box2d/box2d.h"
 #include "box2d/types.h"
 
@@ -32,50 +35,23 @@
 
 namespace ignite
 {
-    enum Body2DType
-    {
-        Body2DType_Static = 0, Body2DType_Dynamic, Body2DType_Kinematic
-    };
-
-    static b2BodyType GetB2BodyType(Body2DType type)
-    {
-        switch (type)
-        {
-        case Body2DType_Static: return b2_staticBody;
-        case Body2DType_Dynamic: return b2_dynamicBody;
-        case Body2DType_Kinematic: return b2_kinematicBody;
-        }
-        return b2_staticBody;
-    }
-
-    static std::string BodyTypeToString(Body2DType type)
-    {
-        switch (type)
-        {
-            case ignite::Body2DType_Static: return "Static";
-            case ignite::Body2DType_Dynamic: return "Dynamic";
-            case ignite::Body2DType_Kinematic: return "Kinematic";
-            default: return "Invalid";
-        }
-    }
-
-    static Body2DType BodyTypeFromString(const std::string &typeStr)
-    {
-        if (typeStr == "Static") return Body2DType_Static;
-        else if (typeStr == "Dynamic") return Body2DType_Dynamic;
-        else if (typeStr == "Kinematic") return Body2DType_Kinematic;
-        return Body2DType_Static;
-    }
-
     class Rigidbody2DComponent : public IComponent
     {
     public:
-        Body2DType type = Body2DType_Static;
+        enum class EBodyType : uint8_t
+        {
+            Static = 0,
+            Kinematic = 1,
+            Dynamic = 2
+        };
+
+        EBodyType bodyType = EBodyType::Static;
+
         glm::vec2 linearVelocity = { 0.0f, 0.0f };
-        f32 angularVelocity = 0.0f;
-        f32 gravityScale = 1.0f;
-        f32 linearDamping = 0.6f;
-        f32 angularDamping = 0.2f;
+        float angularVelocity = 0.0f;
+        float gravityScale = 1.0f;
+        float linearDamping = 0.6f;
+        float angularDamping = 0.2f;
         bool isAwake = true;
         bool isEnabled = true;
         bool isEnableSleep = false;
@@ -91,9 +67,9 @@ namespace ignite
     public:
         glm::vec2 center{ 0.0f, 0.0f };
         float radius = 0.5f;
-		f32 restitution = 0.1f;
-		f32 friction = 0.5f;
-		f32 density = 1.0f;
+		float restitution = 0.1f;
+		float friction = 0.5f;
+		float density = 1.0f;
         bool isSensor = false;
 
         b2ShapeId shapeId{};
@@ -107,9 +83,9 @@ namespace ignite
         glm::vec2 size        = {0.5f, 0.5f};
         glm::vec2 offset      = {0.0f, 0.0f};
         glm::vec2 currentSize = {0.5f, 0.5f};
-        f32 restitution       = 0.1f;
-        f32 friction          = 0.5f;
-        f32 density           = 1.0f;
+        float restitution       = 0.1f;
+        float friction          = 0.5f;
+        float density           = 1.0f;
         bool isSensor         = false;
 
         b2ShapeId shapeId{};
@@ -117,3 +93,5 @@ namespace ignite
 		COMPONENT_CLASS_TYPE(CompType_BoxCollider2D)
     };
 }
+
+#endif

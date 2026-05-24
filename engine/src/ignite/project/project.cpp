@@ -716,7 +716,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
             {
                 AssetWorker::ReportStatus(std::format("Copying Dependency {}", dep));
 
-                LOG_INFO("[Project] Copying script dependency \"{}\".", dep);
+                LOG_WARN("[Project] Copying script dependency \"{}\".", dep);
                 std::filesystem::copy_file(depFilename.string(), targetDepFilename.string(), std::filesystem::copy_options::overwrite_existing);
                 depAvailable = true;
             }

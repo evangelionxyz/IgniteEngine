@@ -253,6 +253,7 @@ namespace ignite
 
         bool isAnimated = false;
         bool visible = true;
+        bool dirtyPhysics = false;
 
         TransformComponent() = default;
 
@@ -281,18 +282,21 @@ namespace ignite
         {
             localTranslation = newTranslation;
             dirty = true;
+            dirtyPhysics = true;
         }
 
         void SetLocalRotation(const glm::quat &newRotation)
         {
             localRotation = newRotation;
             dirty = true;
+            dirtyPhysics = true;
         }
 
         void SetLocalScale(const glm::vec3 &newScale)
         {
             localScale = newScale;
             dirty = true;
+            dirtyPhysics = true;
         }
 
         glm::mat4 GetLocalMatrix() const
@@ -305,18 +309,21 @@ namespace ignite
         {
             translation = newTranslation;
             dirty = true;
+            dirtyPhysics = true;
         }
 
         void SetWorldRotation(const glm::quat &newRotation)
         {
             rotation = newRotation;
             dirty = true;
+            dirtyPhysics = true;
         }
 
         void SetWorldScale(const glm::vec3 &newScale)
         {
             scale = newScale;
             dirty = true;
+            dirtyPhysics = true;
         }
 
         glm::mat4 GetWorldMatrix() const
@@ -457,21 +464,28 @@ namespace ignite
 		COMPONENT_CLASS_TYPE(CompType_Mesh)
 	};
 
-    class RigibodyComponent : public IComponent
+    class RigidbodyComponent : public IComponent
     {
     public:
-        enum class EMotionQuality
+        enum class EMotionQuality : uint8_t
         {
             Discrete = 0,
             LinearCast = 1
         };
 
-        EMotionQuality MotionQuality = EMotionQuality::Discrete;
+        enum class EBodyType : uint8_t
+        {
+            Static = 0,
+            Kinematic = 1,
+            Dynamic = 2,
+        };
+
+        EMotionQuality motionQuality = EMotionQuality::Discrete;
+        EBodyType bodyType = EBodyType::Static;
 
         bool useGravity = true;
         bool rotateX = true, rotateY = true, rotateZ = true;
         bool moveX = true, moveY = true, moveZ = true;
-        bool isStatic = false;
         float mass = 1.0f;
         bool allowSleeping = true;
         bool retainAcceleration = false;
@@ -480,7 +494,7 @@ namespace ignite
 
         JPH::Body *body = nullptr;
 
-        RigibodyComponent() = default;
+        RigidbodyComponent() = default;
 
         COMPONENT_CLASS_TYPE(CompType_Rigidbody)
     };

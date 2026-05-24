@@ -201,25 +201,36 @@ namespace ignite
         return glm::normalize(glm::vec3(worldCoords));
     }
 
-    glm::vec3 Math::GetRayFromScreenCoords(const glm::vec2 &coord, const glm::vec2 &screen, const glm::mat4 &projection,
-        const glm::mat4 &view, bool isPerspective, glm::vec3 &outRayOrigin)
+    glm::vec3 Math::GetRayFromScreenCoords(const glm::vec2 &coord, const glm::vec2 &screen, const glm::mat4 &projection, const glm::mat4 &view, bool isPerspective, glm::vec3 *outRayOrigin)
     {
         glm::vec2 ndc = GetNormalizedDeviceCoord(coord, screen);
-        glm::vec4 hmc = glm::vec4(ndc.x, ndc.y, -1.0f, 1.0f);
 
-        if (isPerspective)
+        // Zero-to-One (ZO) projection uses Z=0.0f for near plane and Z=1.0f for far plane
+        glm::mat4 invViewProj = glm::inverse(projection * view);
+
+        glm::vec4 worldNear = invViewProj * glm::vec4(ndc.x, ndc.y, 0.0f, 1.0f);
+        glm::vec4 worldFar = invViewProj * glm::vec4(ndc.x, ndc.y, 1.0f, 1.0f);
+
+        // Normalized World Plane (0-1)
+        if (worldNear.w != 0.0f)
+            worldNear /= worldNear.w;
+        if (worldFar.w != 0.0f)
+            worldFar /= worldFar.w;
+
+        if (outRayOrigin)
         {
-            glm::vec4 eye = GetEyeCoord(hmc, projection);
-            outRayOrigin = glm::vec3(glm::inverse(view) * glm::vec4(0, 0, 0, 1));
-            return GetWorldPosition(eye, view);
+            // For perspective projection, the ray origin is the camera position.
+            *outRayOrigin = isPerspective
+                ? glm::vec3(glm::inverse(view) * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f))
+                : glm::vec3(worldNear);
         }
-        else
-        {
-            glm::mat4 invViewProj = glm::inverse(projection * view);
-            glm::vec4 worldCoords = invViewProj * hmc;
-            outRayOrigin = glm::vec3(worldCoords) / worldCoords.w;
-            return -glm::normalize(glm::vec3(view[2])); // Forward direction in world space
-        }
+
+        return glm::normalize(glm::vec3(worldFar - worldNear));
+    }
+
+    glm::vec3 Math::GetRayFromScreenCoords(const glm::vec2 &coord, const glm::vec2 &screen, ICamera *camera, glm::vec3 *outOrigin)
+    {
+        return GetRayFromScreenCoords(coord, screen, camera->GetProjection(), camera->GetView(), camera->IsPerspective(), outOrigin);
     }
 
     glm::vec3 Math::ScreenToWorldOnPlane(const glm::vec2 &screenPos, float planeZ, const glm::mat4 &viewProjection, const Rect &viewportRect, bool *isValid)

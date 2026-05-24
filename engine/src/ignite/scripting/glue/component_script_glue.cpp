@@ -50,6 +50,9 @@ namespace ignite
             return nullptr;
         }
 
+
+        // Get Ray Origin from Primary Camera Position
+        // Get Ray Direction from Camera Position towards to -Z Axis
         static void Scene_GetScreenToWorldRay(float x, float y, glm::vec3 *outOrigin, glm::vec3 *outDirection)
         {
             if (outOrigin) *outOrigin = glm::vec3(0.0f);
@@ -64,10 +67,7 @@ namespace ignite
                 return;
 
             auto &cc = cameraEntity.GetComponent<CameraComponent>();
-            const glm::mat4 view = cc.camera.GetView();
-            const glm::mat4 projection = cc.camera.GetProjection();
-            const bool isPerspective = cc.camera.projectionType != ProjectionType::Orthographic;
-
+            
             glm::vec2 viewportSize = cc.camera.viewportSize;
             if (viewportSize.x <= 0.0f || viewportSize.y <= 0.0f)
                 return;
@@ -80,16 +80,16 @@ namespace ignite
                 return;
 
             glm::vec3 rayOrigin;
-            glm::vec3 rayDir = Math::GetRayFromScreenCoords(coord, viewportSize, projection, view, isPerspective, rayOrigin);
+            glm::vec3 rayDir = Math::GetRayFromScreenCoords(coord, viewportSize, &cc.camera, &rayOrigin);
 
             if (outOrigin) *outOrigin = rayOrigin;
             if (outDirection) *outDirection = rayDir;
         }
 
-        static uint64_t Scene_Raycast(glm::vec3 origin, glm::vec3 direction)
+        static uint64_t Scene_Raycast(const glm::vec3 *origin, const glm::vec3 *direction)
         {
             Scene *scene = GetSceneContext();
-            if (!scene)
+            if (!scene || !origin || !direction)
                 return 0;
 
             float minDistance = std::numeric_limits<float>::max();
@@ -105,7 +105,7 @@ namespace ignite
 
                 auto &mesh = entity.GetComponent<MeshComponent>();
                 float t;
-                if (mesh.worldAABB.IntersectRay(origin, direction, t))
+                if (mesh.worldAABB.IntersectRay(*origin, *direction, t))
                 {
                     if (t < minDistance)
                     {
@@ -116,7 +116,8 @@ namespace ignite
             }
 
             // Helper for quad intersection (2D components)
-            auto CheckQuad = [&](Entity entity, glm::vec2 size) {
+            auto CheckQuad = [&](Entity entity, glm::vec2 size)
+            {
                 auto &transform = entity.GetComponent<TransformComponent>();
                 if (!transform.visible) return;
 
@@ -132,7 +133,7 @@ namespace ignite
                 glm::vec3 v3 = pos + rot * glm::vec3(-halfSize.x,  halfSize.y, 0.0f);
 
                 float t;
-                if (Math::RayQuadIntersection(origin, direction, v0, v1, v2, v3, t))
+                if (Math::RayQuadIntersection(*origin, *direction, v0, v1, v2, v3, t))
                 {
                     if (t < minDistance)
                     {
@@ -166,16 +167,16 @@ namespace ignite
         // Physics (Jolt narrow-phase) raycast - returns first solid-body hit
         // outHitEntityID: UUID of the hit entity (0 if none)
         // outHitPoint, outHitNormal: world-space hit info
-        static uint64_t Scene_PhysicsRaycast(glm::vec3 origin, glm::vec3 direction, float maxDistance, glm::vec3 *outHitPoint, glm::vec3 *outHitNormal)
+        static uint64_t Scene_PhysicsRaycast(const glm::vec3 *origin, const glm::vec3 *direction, float maxDistance, glm::vec3 *outHitPoint, glm::vec3 *outHitNormal)
         {
-            if (outHitPoint)  *outHitPoint = glm::vec3(0.f);
+            if (outHitPoint) *outHitPoint = glm::vec3(0.f);
             if (outHitNormal) *outHitNormal = glm::vec3(0.f, 1.f, 0.f);
 
             Scene *scene = GetSceneContext();
-            if (!scene || !scene->physics)
+            if (!scene || !scene->physics || !origin || !direction)
                 return 0;
 
-            JoltRaycastHit hit = scene->physics->Raycast(origin, direction, maxDistance);
+            JoltRaycastHit hit = scene->physics->Raycast(*origin, *direction, maxDistance);
             if (!hit.hit)
                 return 0;
 
@@ -188,6 +189,16 @@ namespace ignite
             // Resolve body ID to entity UUID directly from the Jolt body user data.
             const uint64_t entityID = static_cast<uint64_t>(scene->physics->GetUserData(hit.bodyId));
             return entityID;
+        }
+
+        static uint64_t Scene_GetPrimaryCamera()
+        {
+            Scene *scene = GetSceneContext();
+            if (!scene)
+                return 0;
+
+            Entity cameraEntity = scene->GetPrimaryCamera();
+            return cameraEntity.IsValid() ? static_cast<uint64_t>(cameraEntity.GetUUID()) : 0;
         }
 
         static Entity GetEntityByID(uint64_t entityID)
@@ -710,14 +721,14 @@ namespace ignite
             return static_cast<uint64_t>(entity.GetParentUUID());
         }
 
-        static uint64_t Entity_InstantiateWithName(const char *name, glm::vec3 value)
+        static uint64_t Entity_InstantiateWithName(const char *name, const glm::vec3 *value)
         {
             Scene *scene = GetSceneContext();
-            if (!scene)
+            if (!scene || !value)
                 return 0;
 
             Entity entity = SceneManager::CreateEmptyEntity(scene, name);
-            entity.GetComponent<TransformComponent>().translation = value;
+            entity.GetComponent<TransformComponent>().translation = *value;
 
             if (scene->IsRunning())
             {
@@ -733,10 +744,10 @@ namespace ignite
             return static_cast<uint64_t>(entity.GetUUID());
         }
 
-        static uint64_t Entity_Instantiate(uint64_t entityID, glm::vec3 value)
+        static uint64_t Entity_Instantiate(uint64_t entityID, const glm::vec3 *value)
         {
             Scene *scene = GetSceneContext();
-            if (!scene)
+            if (!scene || !value)
                 return 0;
 
             Entity entity = GetEntityByID(entityID);
@@ -747,8 +758,28 @@ namespace ignite
             if (!copyEntity.IsValid())
                 return 0;
 
-            copyEntity.GetComponent<TransformComponent>().SetWorldTranslation(value);
-            
+            // If physics is running, ensure we set transform before physics instantiation happens.
+            // DuplicateEntity will call scene->physics->InstantiateEntity() when scene->IsRunning().
+            // Move the entity to the requested world position and clear any existing runtime physics body
+            // on the copied entity before returning.
+            copyEntity.GetComponent<TransformComponent>().SetWorldTranslation(*value);
+
+            // If duplicated entity has a RigidbodyComponent, ensure no stale body pointer is present
+            // if (copyEntity.HasComponent<RigidbodyComponent>())
+            // {
+            //     auto &rb = copyEntity.GetComponent<RigidbodyComponent>();
+            //     if (rb.body)
+            //     {
+            //         // Remove and destroy any stale body attached to this component to avoid duplicates
+            //         if (scene->physics && scene->physics->GetBodyInterface())
+            //         {
+            //             scene->physics->GetBodyInterface()->RemoveBody(rb.body->GetID());
+            //             scene->physics->GetBodyInterface()->DestroyBody(rb.body->GetID());
+            //         }
+            //         rb.body = nullptr;
+            //     }
+            // }
+
             if (scene->IsRunning())
             {
                 auto *scriptEngine = ScriptEngine::GetInstance();
@@ -1425,13 +1456,14 @@ namespace ignite
             *result = glm::vec3(transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f));
         }
 
-        static void TransformComponent_SetForward(uint64_t entityID, glm::vec3 value)
+        static void TransformComponent_SetForward(uint64_t entityID, const glm::vec3 *value)
         {
+            if (!value) return;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
                 return;
 
-            glm::vec3 forward = glm::normalize(value);
+            glm::vec3 forward = glm::normalize(*value);
             if (glm::length2(forward) <= 0.0f)
             {
                 return;
@@ -1460,9 +1492,10 @@ namespace ignite
             *result = glm::vec3(transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f));
         }
 
-        static void TransformComponent_SetRight(uint64_t entityID, glm::vec3 value)
+        static void TransformComponent_SetRight(uint64_t entityID, const glm::vec3 *value)
         {
-            glm::vec3 right = glm::normalize(value);
+            if (!value) return;
+            glm::vec3 right = glm::normalize(*value);
             if (glm::length2(right) <= 0.0f)
             {
                 return;
@@ -1475,7 +1508,7 @@ namespace ignite
                 return;
             }
 
-            TransformComponent_SetForward(entityID, glm::vec3(forward));
+            TransformComponent_SetForward(entityID, &forward);
         }
 
         static void TransformComponent_GetUp(uint64_t entityID, glm::vec3 *result)
@@ -1494,9 +1527,10 @@ namespace ignite
             *result = glm::vec3(transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f));
         }
 
-        static void TransformComponent_SetUp(uint64_t entityID, glm::vec3 value)
+        static void TransformComponent_SetUp(uint64_t entityID, const glm::vec3 *value)
         {
-            glm::vec3 up = glm::normalize(value);
+            if (!value) return;
+            glm::vec3 up = glm::normalize(*value);
             if (glm::length2(up) <= 0.0f)
             {
                 return;
@@ -1535,16 +1569,18 @@ namespace ignite
             *result = glm::vec3(entity.GetComponent<TransformComponent>().translation);
         }
 
-        static void TransformComponent_SetTranslation(uint64_t entityID, glm::vec3 value)
+        static void TransformComponent_SetTranslation(uint64_t entityID, const glm::vec3 *value)
         {
+            if (!value) return;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
                 return;
 
             auto &transform = entity.GetComponent<TransformComponent>();
-            transform.localTranslation = value;
-            transform.translation = value;
+            transform.localTranslation = *value;
+            transform.translation = *value;
             transform.dirty = true;
+            transform.dirtyPhysics = true;
         }
 
         static void TransformComponent_GetRotation(uint64_t entityID, glm::quat *result)
@@ -1562,16 +1598,18 @@ namespace ignite
             *result = glm::quat(entity.GetComponent<TransformComponent>().rotation);
         }
 
-        static void TransformComponent_SetRotation(uint64_t entityID, glm::quat value)
+        static void TransformComponent_SetRotation(uint64_t entityID, const glm::quat *value)
         {
+            if (!value) return;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
                 return;
 
             auto &transform = entity.GetComponent<TransformComponent>();
-            transform.localRotation = value;
-            transform.rotation = value;
+            transform.localRotation = *value;
+            transform.rotation = *value;
             transform.dirty = true;
+            transform.dirtyPhysics = true;
         }
 
         static void TransformComponent_GetEulerAngles(uint64_t entityID, glm::vec3 *result)
@@ -1589,14 +1627,15 @@ namespace ignite
             *result = glm::vec3(glm::eulerAngles(entity.GetComponent<TransformComponent>().rotation));
         }
 
-        static void TransformComponent_SetEulerAngles(uint64_t entityID, glm::vec3 value)
+        static void TransformComponent_SetEulerAngles(uint64_t entityID, const glm::vec3 *value)
         {
+            if (!value) return;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
                 return;
 
             auto &transform = entity.GetComponent<TransformComponent>();
-            const glm::quat rotation = glm::quat(value);
+            const glm::quat rotation = glm::quat(*value);
             transform.localRotation = rotation;
             transform.rotation = rotation;
             transform.dirty = true;
@@ -1617,26 +1656,28 @@ namespace ignite
             *result = glm::vec3(entity.GetComponent<TransformComponent>().scale);
         }
 
-        static void TransformComponent_SetScale(uint64_t entityID, glm::vec3 value)
+        static void TransformComponent_SetScale(uint64_t entityID, const glm::vec3 *value)
         {
+            if (!value) return;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
                 return;
 
             auto &transform = entity.GetComponent<TransformComponent>();
-            transform.localScale = value;
-            transform.scale = value;
+            transform.localScale = *value;
+            transform.scale = *value;
             transform.dirty = true;
         }
 
-        static void Sprite2DComponent_SetColor(uint64_t entityID, glm::vec4 value)
+        static void Sprite2DComponent_SetColor(uint64_t entityID, const glm::vec4 *color)
         {
+            if (!color) return;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Sprite2DComponent>())
                 return;
 
             auto &comp = entity.GetComponent<Sprite2DComponent>();
-            comp.color = value;
+            comp.color = *color;
         }
 
         static void Sprite2DComponent_GetColor(uint64_t entityID, glm::vec4 *result)
@@ -1649,14 +1690,15 @@ namespace ignite
             *result = comp.color;
         }
 
-        static void Circle2DComponent_SetColor(uint64_t entityID, glm::vec4 value)
+        static void Circle2DComponent_SetColor(uint64_t entityID, const glm::vec4 *color)
         {
+            if (!color) return;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Circle2DComponent>())
                 return;
 
             auto &comp = entity.GetComponent<Circle2DComponent>();
-            comp.color = value;
+            comp.color = *color;
         }
 
         static void Circle2DComponent_GetColor(uint64_t entityID, glm::vec4 *result)
@@ -1669,14 +1711,15 @@ namespace ignite
             *result = comp.color;
         }
 
-        static void Sprite2DComponent_SetTilingFactor(uint64_t entityID, glm::vec2 value)
+        static void Sprite2DComponent_SetTilingFactor(uint64_t entityID, const glm::vec2 *value)
         {
+            if (!value) return;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Sprite2DComponent>())
                 return;
 
             auto &comp = entity.GetComponent<Sprite2DComponent>();
-            comp.tilingFactor = value;
+            comp.tilingFactor = *value;
         }
 
         static void Sprite2DComponent_GetTilingFactor(uint64_t entityID, glm::vec2 *result)
@@ -1697,16 +1740,14 @@ namespace ignite
         static void Rigidbody2DComponent_GetType(uint64_t entityID, int32_t *result)
         {
             if (!result)
-            {
                 return;
-            }
 
-            *result = static_cast<int32_t>(Body2DType_Static);
+            *result = static_cast<int32_t>(Rigidbody2DComponent::EBodyType::Static);
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
                 return;
 
-            *result = static_cast<int32_t>(entity.GetComponent<Rigidbody2DComponent>().type);
+            *result = static_cast<int32_t>(entity.GetComponent<Rigidbody2DComponent>().bodyType);
         }
 
         static void Rigidbody2DComponent_SetType(uint64_t entityID, int32_t value)
@@ -1716,19 +1757,17 @@ namespace ignite
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            rb.type = static_cast<Body2DType>(value);
+            rb.bodyType = static_cast<Rigidbody2DComponent::EBodyType>(value);
             if (b2Body_IsValid(rb.bodyId))
             {
-                b2Body_SetType(rb.bodyId, GetB2BodyType(rb.type));
+                b2Body_SetType(rb.bodyId, static_cast<b2BodyType>(rb.bodyType));
             }
         }
 
         static void Rigidbody2DComponent_GetLinearVelocity(uint64_t entityID, glm::vec2 *result)
         {
             if (!result)
-            {
                 return;
-            }
 
             *result = {};
             Entity entity = GetEntityByID(entityID);
@@ -1738,17 +1777,18 @@ namespace ignite
             *result = entity.GetComponent<Rigidbody2DComponent>().linearVelocity;
         }
 
-        static void Rigidbody2DComponent_SetLinearVelocity(uint64_t entityID, glm::vec2 value)
+        static void Rigidbody2DComponent_SetLinearVelocity(uint64_t entityID, const glm::vec2 *value)
         {
+            if (!value) return;
             Entity entity = GetEntityByID(entityID);
             if (!entity.IsValid() || !entity.HasComponent<Rigidbody2DComponent>())
                 return;
 
             auto &rb = entity.GetComponent<Rigidbody2DComponent>();
-            rb.linearVelocity = value;
+            rb.linearVelocity = *value;
             if (b2Body_IsValid(rb.bodyId))
             {
-                b2Body_SetLinearVelocity(rb.bodyId, { value.x, value.y });
+                b2Body_SetLinearVelocity(rb.bodyId, { value->x, value->y });
             }
         }
 
@@ -2484,11 +2524,707 @@ namespace ignite
             *result = entity.GetComponent<TextComponent>().lineSpacing;
         }
 
+        // --- RigidbodyComponent ---
+        static void RigidbodyComponent_GetType(uint64_t entityID, int32_t *result)
+        {
+            if (!result) return;
+            *result = static_cast<int32_t>(RigidbodyComponent::EBodyType::Static);
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            *result = static_cast<int32_t>(entity.GetComponent<RigidbodyComponent>().bodyType);
+        }
+
+        static void RigidbodyComponent_SetType(uint64_t entityID, int32_t value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            rb.bodyType = static_cast<RigidbodyComponent::EBodyType>(value);
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                JPH::EMotionType motionType = JPH::EMotionType::Static;
+                if (rb.bodyType == RigidbodyComponent::EBodyType::Kinematic) motionType = JPH::EMotionType::Kinematic;
+                else if (rb.bodyType == RigidbodyComponent::EBodyType::Dynamic) motionType = JPH::EMotionType::Dynamic;
+                scene->physics->GetBodyInterface()->SetMotionType(rb.body->GetID(), motionType, JPH::EActivation::Activate);
+            }
+        }
+
+        static void RigidbodyComponent_GetMotionQuality(uint64_t entityID, int32_t *result)
+        {
+            if (!result) return;
+            *result = static_cast<int32_t>(RigidbodyComponent::EMotionQuality::Discrete);
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            *result = static_cast<int32_t>(entity.GetComponent<RigidbodyComponent>().motionQuality);
+        }
+
+        static void RigidbodyComponent_GetUseGravity(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            *result = true;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            *result = entity.GetComponent<RigidbodyComponent>().useGravity;
+        }
+
+        static void RigidbodyComponent_SetUseGravity(uint64_t entityID, bool value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            rb.useGravity = value;
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                scene->physics->SetGravityFactor(*rb.body, rb.useGravity ? rb.gravityFactor : 0.0f);
+            }
+        }
+
+        static void RigidbodyComponent_GetMass(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 1.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            *result = entity.GetComponent<RigidbodyComponent>().mass;
+        }
+
+        static void RigidbodyComponent_GetGravityFactor(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 1.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            *result = entity.GetComponent<RigidbodyComponent>().gravityFactor;
+        }
+
+        static void RigidbodyComponent_SetGravityFactor(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            rb.gravityFactor = value;
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                scene->physics->SetGravityFactor(*rb.body, rb.useGravity ? rb.gravityFactor : 0.0f);
+            }
+        }
+
+        static void RigidbodyComponent_GetLinearVelocity(uint64_t entityID, glm::vec3 *result)
+        {
+            if (!result) return;
+            *result = glm::vec3(0.0f);
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                *result = scene->physics->GetLinearVelocity(*rb.body);
+            }
+        }
+
+        static void RigidbodyComponent_SetLinearVelocity(uint64_t entityID, const glm::vec3 *value)
+        {
+            if (!value) return;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                scene->physics->SetLinearVelocity(*rb.body, *value);
+            }
+        }
+
+        static void RigidbodyComponent_GetPosition(uint64_t entityID, glm::vec3 *result)
+        {
+            if (!result) return;
+            *result = glm::vec3(0.0f);
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                *result = scene->physics->GetPosition(*rb.body);
+            }
+        }
+
+        static void RigidbodyComponent_SetPosition(uint64_t entityID, const glm::vec3 *value)
+        {
+            if (!value) return;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                scene->physics->SetPosition(*rb.body, *value, true);
+            }
+        }
+
+        static void RigidbodyComponent_GetRotation(uint64_t entityID, glm::quat *result)
+        {
+            if (!result) return;
+            *result = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                *result = scene->physics->GetRotation(*rb.body);
+            }
+        }
+
+        static void RigidbodyComponent_SetRotation(uint64_t entityID, const glm::quat *value)
+        {
+            if (!value) return;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                scene->physics->SetRotation(*rb.body, *value, true);
+            }
+        }
+
+        static void RigidbodyComponent_GetAngularVelocity(uint64_t entityID, glm::vec3 *result)
+        {
+            if (!result) return;
+            *result = glm::vec3(0.0f);
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                *result = JoltToGlmVec3(scene->physics->GetBodyInterface()->GetAngularVelocity(rb.body->GetID()));
+            }
+        }
+
+        static void RigidbodyComponent_GetCenterOfMass(uint64_t entityID, glm::vec3 *result)
+        {
+            if (!result) return;
+            *result = glm::vec3(0.0f);
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                *result = scene->physics->GetCenterOfMassPosition(*rb.body);
+            }
+        }
+
+        static void RigidbodyComponent_IsActive(uint64_t entityID, bool *result)
+        {
+            if (!result) return;
+            *result = false;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                *result = scene->physics->IsActive(*rb.body);
+            }
+        }
+
+        static void RigidbodyComponent_ApplyForce(uint64_t entityID, const glm::vec3 *force, const glm::vec3 *point)
+        {
+            if (!force || !point) return;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                scene->physics->GetBodyInterface()->AddForce(rb.body->GetID(), GlmToJoltVec3(*force), GlmToJoltVec3(*point));
+            }
+        }
+
+        static void RigidbodyComponent_ApplyForceToCenter(uint64_t entityID, const glm::vec3 *force)
+        {
+            if (!force) return;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                scene->physics->AddForce(*rb.body, *force);
+            }
+        }
+
+        static void RigidbodyComponent_ApplyTorque(uint64_t entityID, const glm::vec3 *torque)
+        {
+            if (!torque) return;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                scene->physics->AddTorque(*rb.body, *torque);
+            }
+        }
+
+        static void RigidbodyComponent_ApplyLinearImpulse(uint64_t entityID, const glm::vec3 *impulse, const glm::vec3 *point)
+        {
+            if (!impulse || !point) return;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                scene->physics->GetBodyInterface()->AddImpulse(rb.body->GetID(), GlmToJoltVec3(*impulse), GlmToJoltVec3(*point));
+            }
+        }
+
+        static void RigidbodyComponent_ApplyLinearImpulseToCenter(uint64_t entityID, const glm::vec3 *impulse)
+        {
+            if (!impulse) return;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                scene->physics->AddImpulse(*rb.body, *impulse);
+            }
+        }
+
+        static void RigidbodyComponent_ApplyAngularImpulse(uint64_t entityID, const glm::vec3 *impulse)
+        {
+            if (!impulse) return;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                scene->physics->AddAngularImpulse(*rb.body, *impulse);
+            }
+        }
+
+        static void RigidbodyComponent_Activate(uint64_t entityID)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                scene->physics->ActivateBody(*rb.body);
+            }
+        }
+
+        static void RigidbodyComponent_Deactivate(uint64_t entityID)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                scene->physics->DeactivateBody(*rb.body);
+            }
+        }
+
+        static void RigidbodyComponent_MoveKinematic(uint64_t entityID, const glm::vec3 *targetPosition, const glm::vec3 *targetRotation, float deltaTime)
+        {
+            if (!targetPosition || !targetRotation) return;
+            Entity entity = GetEntityByID(entityID);
+            if (!entity.IsValid() || !entity.HasComponent<RigidbodyComponent>())
+                return;
+            auto &rb = entity.GetComponent<RigidbodyComponent>();
+            Scene *scene = GetSceneContext();
+            if (scene && scene->physics && rb.body)
+            {
+                scene->physics->MoveKinematic(*rb.body, *targetPosition, *targetRotation, deltaTime);
+            }
+        }
+
+        // --- BoxColliderComponent ---
+        static void BoxColliderComponent_GetCenter(uint64_t entityID, glm::vec3 *result)
+        {
+            if (!result) return;
+            *result = glm::vec3(0.0f);
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
+                *result = entity.GetComponent<BoxColliderComponent>().center;
+        }
+
+        static void BoxColliderComponent_SetCenter(uint64_t entityID, const glm::vec3 *value)
+        {
+            if (!value) return;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
+            {
+                entity.GetComponent<BoxColliderComponent>().center = *value;
+            }
+        }
+
+        static void BoxColliderComponent_GetScale(uint64_t entityID, glm::vec3 *result)
+        {
+            if (!result) return;
+            *result = glm::vec3(1.0f);
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
+                *result = entity.GetComponent<BoxColliderComponent>().scale;
+        }
+
+        static void BoxColliderComponent_SetScale(uint64_t entityID, const glm::vec3 *value)
+        {
+            if (!value) return;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
+            {
+                entity.GetComponent<BoxColliderComponent>().scale = *value;
+            }
+        }
+
+        static void BoxColliderComponent_GetFriction(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 0.6f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
+                *result = entity.GetComponent<BoxColliderComponent>().friction;
+        }
+
+        static void BoxColliderComponent_SetFriction(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
+            {
+                auto &col = entity.GetComponent<BoxColliderComponent>();
+                col.friction = value;
+                Scene *scene = GetSceneContext();
+                if (scene && scene->physics && entity.HasComponent<RigidbodyComponent>())
+                {
+                    auto &rb = entity.GetComponent<RigidbodyComponent>();
+                    if (rb.body)
+                        scene->physics->GetBodyInterface()->SetFriction(rb.body->GetID(), value);
+                }
+            }
+        }
+
+        static void BoxColliderComponent_GetRestitution(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 0.6f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
+                *result = entity.GetComponent<BoxColliderComponent>().restitution;
+        }
+
+        static void BoxColliderComponent_SetRestitution(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
+            {
+                auto &col = entity.GetComponent<BoxColliderComponent>();
+                col.restitution = value;
+                Scene *scene = GetSceneContext();
+                if (scene && scene->physics && entity.HasComponent<RigidbodyComponent>())
+                {
+                    auto &rb = entity.GetComponent<RigidbodyComponent>();
+                    if (rb.body)
+                        scene->physics->GetBodyInterface()->SetRestitution(rb.body->GetID(), value);
+                }
+            }
+        }
+
+        static void BoxColliderComponent_GetDensity(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 1.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
+                *result = entity.GetComponent<BoxColliderComponent>().density;
+        }
+
+        static void BoxColliderComponent_SetDensity(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<BoxColliderComponent>())
+            {
+                entity.GetComponent<BoxColliderComponent>().density = value;
+            }
+        }
+
+        // --- SphereColliderComponent ---
+        static void SphereColliderComponent_GetCenter(uint64_t entityID, glm::vec3 *result)
+        {
+            if (!result) return;
+            *result = glm::vec3(0.0f);
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
+                *result = entity.GetComponent<SphereColliderComponent>().center;
+        }
+
+        static void SphereColliderComponent_SetCenter(uint64_t entityID, const glm::vec3 *value)
+        {
+            if (!value) return;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
+            {
+                entity.GetComponent<SphereColliderComponent>().center = *value;
+            }
+        }
+
+        static void SphereColliderComponent_GetRadius(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 1.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
+                *result = entity.GetComponent<SphereColliderComponent>().radius;
+        }
+
+        static void SphereColliderComponent_SetRadius(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
+            {
+                entity.GetComponent<SphereColliderComponent>().radius = value;
+            }
+        }
+
+        static void SphereColliderComponent_GetFriction(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 0.6f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
+                *result = entity.GetComponent<SphereColliderComponent>().friction;
+        }
+
+        static void SphereColliderComponent_SetFriction(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
+            {
+                auto &col = entity.GetComponent<SphereColliderComponent>();
+                col.friction = value;
+                Scene *scene = GetSceneContext();
+                if (scene && scene->physics && entity.HasComponent<RigidbodyComponent>())
+                {
+                    auto &rb = entity.GetComponent<RigidbodyComponent>();
+                    if (rb.body)
+                        scene->physics->GetBodyInterface()->SetFriction(rb.body->GetID(), value);
+                }
+            }
+        }
+
+        static void SphereColliderComponent_GetRestitution(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 0.6f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
+                *result = entity.GetComponent<SphereColliderComponent>().restitution;
+        }
+
+        static void SphereColliderComponent_SetRestitution(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
+            {
+                auto &col = entity.GetComponent<SphereColliderComponent>();
+                col.restitution = value;
+                Scene *scene = GetSceneContext();
+                if (scene && scene->physics && entity.HasComponent<RigidbodyComponent>())
+                {
+                    auto &rb = entity.GetComponent<RigidbodyComponent>();
+                    if (rb.body)
+                        scene->physics->GetBodyInterface()->SetRestitution(rb.body->GetID(), value);
+                }
+            }
+        }
+
+        static void SphereColliderComponent_GetDensity(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 1.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
+                *result = entity.GetComponent<SphereColliderComponent>().density;
+        }
+
+        static void SphereColliderComponent_SetDensity(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<SphereColliderComponent>())
+            {
+                entity.GetComponent<SphereColliderComponent>().density = value;
+            }
+        }
+
+        // --- CapsuleColliderComponent ---
+        static void CapsuleColliderComponent_GetCenter(uint64_t entityID, glm::vec3 *result)
+        {
+            if (!result) return;
+            *result = glm::vec3(0.0f);
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
+                *result = entity.GetComponent<CapsuleColliderComponent>().center;
+        }
+
+        static void CapsuleColliderComponent_SetCenter(uint64_t entityID, const glm::vec3 *value)
+        {
+            if (!value) return;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
+            {
+                entity.GetComponent<CapsuleColliderComponent>().center = *value;
+            }
+        }
+
+        static void CapsuleColliderComponent_GetRadius(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 1.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
+                *result = entity.GetComponent<CapsuleColliderComponent>().radius;
+        }
+
+        static void CapsuleColliderComponent_SetRadius(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
+            {
+                entity.GetComponent<CapsuleColliderComponent>().radius = value;
+            }
+        }
+
+        static void CapsuleColliderComponent_GetHeight(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 2.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
+                *result = entity.GetComponent<CapsuleColliderComponent>().height;
+        }
+
+        static void CapsuleColliderComponent_SetHeight(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
+            {
+                entity.GetComponent<CapsuleColliderComponent>().height = value;
+            }
+        }
+
+        static void CapsuleColliderComponent_GetFriction(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 0.6f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
+                *result = entity.GetComponent<CapsuleColliderComponent>().friction;
+        }
+
+        static void CapsuleColliderComponent_SetFriction(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
+            {
+                auto &col = entity.GetComponent<CapsuleColliderComponent>();
+                col.friction = value;
+                Scene *scene = GetSceneContext();
+                if (scene && scene->physics && entity.HasComponent<RigidbodyComponent>())
+                {
+                    auto &rb = entity.GetComponent<RigidbodyComponent>();
+                    if (rb.body)
+                        scene->physics->GetBodyInterface()->SetFriction(rb.body->GetID(), value);
+                }
+            }
+        }
+
+        static void CapsuleColliderComponent_GetRestitution(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 0.6f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
+                *result = entity.GetComponent<CapsuleColliderComponent>().restitution;
+        }
+
+        static void CapsuleColliderComponent_SetRestitution(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
+            {
+                auto &col = entity.GetComponent<CapsuleColliderComponent>();
+                col.restitution = value;
+                Scene *scene = GetSceneContext();
+                if (scene && scene->physics && entity.HasComponent<RigidbodyComponent>())
+                {
+                    auto &rb = entity.GetComponent<RigidbodyComponent>();
+                    if (rb.body)
+                        scene->physics->GetBodyInterface()->SetRestitution(rb.body->GetID(), value);
+                }
+            }
+        }
+
+        static void CapsuleColliderComponent_GetDensity(uint64_t entityID, float *result)
+        {
+            if (!result) return;
+            *result = 1.0f;
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
+                *result = entity.GetComponent<CapsuleColliderComponent>().density;
+        }
+
+        static void CapsuleColliderComponent_SetDensity(uint64_t entityID, float value)
+        {
+            Entity entity = GetEntityByID(entityID);
+            if (entity.IsValid() && entity.HasComponent<CapsuleColliderComponent>())
+            {
+                entity.GetComponent<CapsuleColliderComponent>().density = value;
+            }
+        }
+
         static const ComponentScriptGlueAPI s_ComponentScriptGlueAPI =
         {
             &Scene_GetScreenToWorldRay,
             &Scene_Raycast,
             &Scene_PhysicsRaycast,
+            &Scene_GetPrimaryCamera,
             &Entity_HasComponent,
             &Entity_AddComponent,
             &Entity_FindEntityByName,
@@ -2624,6 +3360,68 @@ namespace ignite
             &TextComponent_GetKerning,
             &TextComponent_SetLineSpacing,
             &TextComponent_GetLineSpacing,
+
+            &RigidbodyComponent_GetType,
+            &RigidbodyComponent_SetType,
+            &RigidbodyComponent_GetMotionQuality,
+            &RigidbodyComponent_GetUseGravity,
+            &RigidbodyComponent_SetUseGravity,
+            &RigidbodyComponent_GetMass,
+            &RigidbodyComponent_GetGravityFactor,
+            &RigidbodyComponent_SetGravityFactor,
+            &RigidbodyComponent_GetLinearVelocity,
+            &RigidbodyComponent_SetLinearVelocity,
+            &RigidbodyComponent_GetAngularVelocity,
+            &RigidbodyComponent_GetPosition,
+            &RigidbodyComponent_SetPosition,
+            &RigidbodyComponent_GetRotation,
+            &RigidbodyComponent_SetRotation,
+            &RigidbodyComponent_GetCenterOfMass,
+            &RigidbodyComponent_IsActive,
+            &RigidbodyComponent_ApplyForce,
+            &RigidbodyComponent_ApplyForceToCenter,
+            &RigidbodyComponent_ApplyTorque,
+            &RigidbodyComponent_ApplyLinearImpulse,
+            &RigidbodyComponent_ApplyLinearImpulseToCenter,
+            &RigidbodyComponent_ApplyAngularImpulse,
+            &RigidbodyComponent_Activate,
+            &RigidbodyComponent_Deactivate,
+            &RigidbodyComponent_MoveKinematic,
+
+            &BoxColliderComponent_GetCenter,
+            &BoxColliderComponent_SetCenter,
+            &BoxColliderComponent_GetScale,
+            &BoxColliderComponent_SetScale,
+            &BoxColliderComponent_GetFriction,
+            &BoxColliderComponent_SetFriction,
+            &BoxColliderComponent_GetRestitution,
+            &BoxColliderComponent_SetRestitution,
+            &BoxColliderComponent_GetDensity,
+            &BoxColliderComponent_SetDensity,
+
+            &SphereColliderComponent_GetCenter,
+            &SphereColliderComponent_SetCenter,
+            &SphereColliderComponent_GetRadius,
+            &SphereColliderComponent_SetRadius,
+            &SphereColliderComponent_GetFriction,
+            &SphereColliderComponent_SetFriction,
+            &SphereColliderComponent_GetRestitution,
+            &SphereColliderComponent_SetRestitution,
+            &SphereColliderComponent_GetDensity,
+            &SphereColliderComponent_SetDensity,
+
+            &CapsuleColliderComponent_GetCenter,
+            &CapsuleColliderComponent_SetCenter,
+            &CapsuleColliderComponent_GetRadius,
+            &CapsuleColliderComponent_SetRadius,
+            &CapsuleColliderComponent_GetHeight,
+            &CapsuleColliderComponent_SetHeight,
+            &CapsuleColliderComponent_GetFriction,
+            &CapsuleColliderComponent_SetFriction,
+            &CapsuleColliderComponent_GetRestitution,
+            &CapsuleColliderComponent_SetRestitution,
+            &CapsuleColliderComponent_GetDensity,
+            &CapsuleColliderComponent_SetDensity,
         };
     }
 

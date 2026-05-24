@@ -7,6 +7,7 @@
 #include "ignite/audio/fmod_dsp.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/input/event.hpp"
+#include "ignite/core/input/input.hpp"
 #include "ignite/core/input/key_event.hpp"
 #include "ignite/core/input/mouse_event.hpp"
 #include "ignite/core/input/joystick_event.hpp"
@@ -1142,32 +1143,6 @@ namespace ignite
                 }
             });
 
-            RenderComponent<Rigidbody2DComponent>("Rigid Body 2D", selectedEntity, [&]()
-            {
-                auto &c = selectedEntity.GetComponent<Rigidbody2DComponent>();
-                std::array<const char *, 3> bodyTypeStr = { "Static", "Dynamic", "Kinematic" };
-                int bodyTypeIndex = std::clamp(static_cast<int>(c.type), 0, static_cast<int>(bodyTypeStr.size()) - 1);
-                if (UI::DrawComboBox("Body Type", bodyTypeStr.data(), static_cast<int>(bodyTypeStr.size()), &bodyTypeIndex))
-                {
-                    c.type = static_cast<Body2DType>(bodyTypeIndex);
-                }
-
-                UI::DrawVec2Control("Linear Vel", c.linearVelocity, 0.025f);
-                UI::DrawFloatControl("Angular Vel", &c.angularVelocity, 0.025f, FLT_MIN, FLT_MAX);
-                UI::DrawFloatControl("Gravity", &c.gravityScale, 0.025f, FLT_MIN, FLT_MAX);
-                UI::DrawFloatControl("Linear Damping", &c.linearDamping, 0.025f, 0.0f, FLT_MAX);
-                UI::DrawFloatControl("Angular Damping", &c.angularDamping, 0.025f, 0.0f, FLT_MAX);
-                UI::DrawCheckbox("Awake", &c.isAwake);
-                UI::DrawCheckbox("Enabled", &c.isEnabled);
-                UI::DrawCheckbox("Sleep", &c.isEnableSleep);
-                UI::DrawCheckbox("Fixed Rotation", &c.fixedRotation);
-
-                if (!c.fixedRotation)
-                {
-                    UI::DrawCheckbox("Fast Rotation", &c.allowFastRotation);
-                }
-            });
-
             RenderComponent<CameraComponent>("Camera", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<CameraComponent>();
@@ -1193,7 +1168,7 @@ namespace ignite
                         c.dirty = true;
                     }
                 }
-               
+
                 if (c.camera.projectionType == ProjectionType::Perspective)
                 {
                     UI::State fovState = UI::DrawFloatControl("Fov", &c.camera.fov, 0.025f, 0.0f, FLT_MAX);
@@ -1201,7 +1176,7 @@ namespace ignite
                         s_CameraBefore = c;
                     if (fovState.isItemEdited)
                         c.dirty = true;
-                    if (fovState.isItemDeactivatedAfterEdit) 
+                    if (fovState.isItemDeactivatedAfterEdit)
                         CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
                 }
                 else
@@ -1211,7 +1186,7 @@ namespace ignite
                         s_CameraBefore = c;
                     if (orthoState.isItemEdited)
                         c.dirty = true;
-                    if (orthoState.isItemDeactivatedAfterEdit) 
+                    if (orthoState.isItemDeactivatedAfterEdit)
                         CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<CameraComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_CameraBefore, c));
                 }
 
@@ -1292,6 +1267,33 @@ namespace ignite
                 }
             });
 
+            RenderComponent<Rigidbody2DComponent>("Rigid Body 2D", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<Rigidbody2DComponent>();
+                
+                static std::array<const char *, 3> bodyTypeStr = { "Static", "Dynamic", "Kinematic" };
+                int bodyTypeIndex = static_cast<int>(c.bodyType);
+                if (UI::DrawComboBox("Body Type", bodyTypeStr.data(), static_cast<int>(bodyTypeStr.size()), &bodyTypeIndex))
+                {
+                    c.bodyType = static_cast<Rigidbody2DComponent::EBodyType>(bodyTypeIndex);
+                }
+
+                UI::DrawVec2Control("Linear Vel", c.linearVelocity, 0.025f);
+                UI::DrawFloatControl("Angular Vel", &c.angularVelocity, 0.025f, FLT_MIN, FLT_MAX);
+                UI::DrawFloatControl("Gravity", &c.gravityScale, 0.025f, FLT_MIN, FLT_MAX);
+                UI::DrawFloatControl("Linear Damping", &c.linearDamping, 0.025f, 0.0f, FLT_MAX);
+                UI::DrawFloatControl("Angular Damping", &c.angularDamping, 0.025f, 0.0f, FLT_MAX);
+                UI::DrawCheckbox("Awake", &c.isAwake);
+                UI::DrawCheckbox("Enabled", &c.isEnabled);
+                UI::DrawCheckbox("Sleep", &c.isEnableSleep);
+                UI::DrawCheckbox("Fixed Rotation", &c.fixedRotation);
+
+                if (!c.fixedRotation)
+                {
+                    UI::DrawCheckbox("Fast Rotation", &c.allowFastRotation);
+                }
+            });
+
             RenderComponent<BoxCollider2DComponent>("Box Collider 2D", selectedEntity, [&]()
             {
                 auto &c = selectedEntity.GetComponent<BoxCollider2DComponent>();
@@ -1314,10 +1316,17 @@ namespace ignite
                     cc.dirty |= UI::DrawCheckbox("Is Sensor", &cc.isSensor);
                 });
 
-            RenderComponent<RigibodyComponent>("Rigid Body", selectedEntity, [&]()
+            RenderComponent<RigidbodyComponent>("Rigid Body", selectedEntity, [&]()
             {
-                auto &c = selectedEntity.GetComponent<RigibodyComponent>();
-                UI::DrawCheckbox("Static", &c.isStatic);
+                auto &c = selectedEntity.GetComponent<RigidbodyComponent>();
+
+                std::array<const char *, 3> bodyTypeLabels = { "Static", "Kinematic", "Dynamic" };
+                int bodyTypeIndex = static_cast<int>(c.bodyType);
+
+                if (UI::DrawComboBox("Body Type", bodyTypeLabels.data(), static_cast<int>(bodyTypeLabels.size()), &bodyTypeIndex))
+                {
+                    c.bodyType = static_cast<RigidbodyComponent::EBodyType>(bodyTypeIndex);
+                }
             });
 
             RenderComponent<BoxColliderComponent>("Box Collider", selectedEntity, [&]()
@@ -2292,7 +2301,7 @@ namespace ignite
                         entity.AddComponent<MeshComponent>();
                         break;
                     case CompType_Rigidbody:
-                        entity.AddComponent<RigibodyComponent>();
+                        entity.AddComponent<RigidbodyComponent>();
                         break;
                     case CompType_BoxCollider:
                         entity.AddComponent<BoxColliderComponent>();
@@ -2760,6 +2769,7 @@ namespace ignite
                         const float safeCanvasH = glm::max(canvasSize.y, 1.0f);
                         const float canvasAspect = safeCanvasW / safeCanvasH;
 
+                        // Calculate the ImGui Image Canvas Aspect Ratio
                         float targetAspect = canvasAspect;
                         if (!cc.camera.IsFreeAspect())
                         {
@@ -2777,41 +2787,50 @@ namespace ignite
                             baseImagePos.y += (safeCanvasH - baseImageSize.y) * 0.5f;
                         }
 
+                        // Calculate the ImGui Image Size by baseImageSize * gamePreviewZoom
                         m_Data.gamePreviewZoom = glm::clamp(m_Data.gamePreviewZoom, 0.25f, 4.0f);
+                        ImVec2 imageSize = { baseImageSize.x * m_Data.gamePreviewZoom, baseImageSize.y * m_Data.gamePreviewZoom };
 
-                        ImVec2 imageSize =
-                        {
-                            baseImageSize.x * m_Data.gamePreviewZoom,
-                            baseImageSize.y * m_Data.gamePreviewZoom
-                        };
-
+                        // Panning constraint
                         const float maxPanX = glm::max((imageSize.x - baseImageSize.x) * 0.5f, 0.0f);
                         const float maxPanY = glm::max((imageSize.y - baseImageSize.y) * 0.5f, 0.0f);
                         m_Data.gamePreviewPan.x = glm::clamp(m_Data.gamePreviewPan.x, -maxPanX, maxPanX);
                         m_Data.gamePreviewPan.y = glm::clamp(m_Data.gamePreviewPan.y, -maxPanY, maxPanY);
 
-                        ImVec2 imagePos =
-                        {
-                            baseImagePos.x + (baseImageSize.x - imageSize.x) * 0.5f + m_Data.gamePreviewPan.x,
-                            baseImagePos.y + (baseImageSize.y - imageSize.y) * 0.5f + m_Data.gamePreviewPan.y
-                        };
+                        // Calculate the ImGui Image Position by the Panning Position
+                        ImVec2 imagePos = { baseImagePos.x + (baseImageSize.x - imageSize.x) * 0.5f + m_Data.gamePreviewPan.x, baseImagePos.y + (baseImageSize.y - imageSize.y) * 0.5f + m_Data.gamePreviewPan.y };
 
-                        const bool imageHovered = ImGui::GetMousePos().x >= imagePos.x && ImGui::GetMousePos().x <= imagePos.x + imageSize.x &&
-                            ImGui::GetMousePos().y >= imagePos.y && ImGui::GetMousePos().y <= imagePos.y + imageSize.y;
+                        // ImGui Global Window Cursor Position
+                        const ImVec2 cursor = ImGui::GetMousePos();
 
-                        if (auto sceneRenderer = m_EditorLayer->GetSceneRenderer(); sceneRenderer)
+                        // Check if the Image is containing the Cursor
+                        const bool imageHovered = cursor.x >= imagePos.x && cursor.x <= imagePos.x + imageSize.x  // X Bounds
+                                               && cursor.y >= imagePos.y && cursor.y <= imagePos.y + imageSize.y; // Y Bounds
+
+                        if (SceneRenderer *sceneRenderer = m_EditorLayer->GetSceneRenderer())
                         {
                             uint32_t localMouseX = 0;
                             uint32_t localMouseY = 0;
+
+                            // We need to store the Game-play Mouse Position if only the Image is hovered
                             if (imageHovered)
                             {
-                                const ImVec2 cursor = ImGui::GetMousePos();
                                 const float u = std::clamp((cursor.x - imagePos.x) / std::max(imageSize.x, 1.0f), 0.0f, 1.0f);
                                 const float v = std::clamp((cursor.y - imagePos.y) / std::max(imageSize.y, 1.0f), 0.0f, 1.0f);
                                 localMouseX = static_cast<uint32_t>(u * static_cast<float>(std::max(sceneRenderer->GetGameplayWidgetRT()->GetWidth(), 1u)));
                                 localMouseY = static_cast<uint32_t>(v * static_cast<float>(std::max(sceneRenderer->GetGameplayWidgetRT()->GetHeight(), 1u)));
+
+                                float rx = u * baseImageSize.x;
+                                float ry = v * baseImageSize.y;
+                                Input::SetGameplayMousePosition(rx, ry, true);
+                            }
+                            else
+                            {
+                                // Otherwise set it to Zero and and Disable it
+                                Input::SetGameplayMousePosition(0.0f, 0.0f, false);
                             }
 
+                            // Set the Widget Mouse Position
                             sceneRenderer->SetGameplayWidgetMousePosition(localMouseX, localMouseY, imageHovered);
                         }
 
@@ -2835,19 +2854,13 @@ namespace ignite
                             const float padding = 18.0f;
                             float yPosition = 6.0f;
                             const float fps = ImGui::GetIO().Framerate;
-                            std::string statusStr = std::format("FPS {:.5}", fps);
+                            std::string statusStr = std::format("FPS {:.5} {:.3}ms", fps, 1000.0f / fps);
                             drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + 6), 0xFFFFFFFF, statusStr.c_str());
 
                             yPosition += padding;
-                            statusStr = std::format("Response Time {:.3} ms", 1000.0f / fps);
-                            drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
+                            statusStr = std::format("Viewport x: {} y: {} w: {} h: {}", baseImagePos.x, baseImagePos.y,
+                                baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y);
                             
-                            yPosition += padding;
-                            statusStr = std::format("Viewport pos {} {}", baseImagePos.x, baseImagePos.y);
-                            drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
-
-                            yPosition += padding;
-                            statusStr = std::format("Viewport size {} {}", baseImagePos.x + baseImageSize.x, baseImagePos.y + baseImageSize.y);
                             drawList->AddText(ImVec2(canvasPos.x + 6, canvasPos.y + yPosition), 0xFFFFFFFF, statusStr.c_str());
                         }
 

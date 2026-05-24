@@ -11,8 +11,9 @@ namespace ignite
     struct ComponentScriptGlueAPI
     {
         void (*Scene_GetScreenToWorldRay)(float x, float y, glm::vec3 *outOrigin, glm::vec3 *outDirection);
-        uint64_t (*Scene_Raycast)(glm::vec3 origin, glm::vec3 direction);
-        uint64_t (*Scene_PhysicsRaycast)(glm::vec3 origin, glm::vec3 direction, float maxDistance, glm::vec3 *outHitPoint, glm::vec3 *outHitNormal);
+        uint64_t (*Scene_Raycast)(const glm::vec3 *origin, const glm::vec3 *direction);
+        uint64_t (*Scene_PhysicsRaycast)(const glm::vec3 *origin, const glm::vec3 *direction, float maxDistance, glm::vec3 *outHitPoint, glm::vec3 *outHitNormal);
+        uint64_t (*Scene_GetPrimaryCamera)();
 
         bool (*Entity_HasComponent)(uint64_t entityID, const char *componentTypeName);
         void (*Entity_AddComponent)(uint64_t entityID, const char *componentTypeName);
@@ -20,8 +21,8 @@ namespace ignite
         uint64_t (*Entity_FindChildByName)(uint64_t entityID, const char *childName);
         bool (*Entity_IsParent)(uint64_t entityID, uint64_t parentEntityID);
         uint64_t (*Entity_GetParent)(uint64_t entityID);
-        uint64_t (*Entity_InstantiateWithName)(const char *name, glm::vec3 value);
-        uint64_t (*Entity_Instantiate)(uint64_t entityID, glm::vec3 value);
+        uint64_t (*Entity_InstantiateWithName)(const char *name, const glm::vec3 *value);
+        uint64_t (*Entity_Instantiate)(uint64_t entityID, const glm::vec3 *value);
         void (*Entity_Destroy)(uint64_t entityID);
         void (*Entity_SetVisibility)(uint64_t entityID, bool value);
         void (*Entity_GetVisibility)(uint64_t entityID, bool *result);
@@ -68,32 +69,32 @@ namespace ignite
         void (*AudioSourceComponent_ClearDSPs)(uint64_t entityID);
 
         void (*TransformComponent_GetForward)(uint64_t entityID, glm::vec3 *result);
-        void (*TransformComponent_SetForward)(uint64_t entityID, glm::vec3 value);
+        void (*TransformComponent_SetForward)(uint64_t entityID, const glm::vec3 *value);
         void (*TransformComponent_GetRight)(uint64_t entityID, glm::vec3 *result);
-        void (*TransformComponent_SetRight)(uint64_t entityID, glm::vec3 value);
+        void (*TransformComponent_SetRight)(uint64_t entityID, const glm::vec3 *value);
         void (*TransformComponent_GetUp)(uint64_t entityID, glm::vec3 *result);
-        void (*TransformComponent_SetUp)(uint64_t entityID, glm::vec3 value);
+        void (*TransformComponent_SetUp)(uint64_t entityID, const glm::vec3 *value);
         void (*TransformComponent_GetTranslation)(uint64_t entityID, glm::vec3 *result);
-        void (*TransformComponent_SetTranslation)(uint64_t entityID, glm::vec3 value);
+        void (*TransformComponent_SetTranslation)(uint64_t entityID, const glm::vec3 *value);
         void (*TransformComponent_GetRotation)(uint64_t entityID, glm::quat *result);
-        void (*TransformComponent_SetRotation)(uint64_t entityID, glm::quat value);
+        void (*TransformComponent_SetRotation)(uint64_t entityID, const glm::quat *value);
         void (*TransformComponent_GetEulerAngles)(uint64_t entityID, glm::vec3 *result);
-        void (*TransformComponent_SetEulerAngles)(uint64_t entityID, glm::vec3 value);
+        void (*TransformComponent_SetEulerAngles)(uint64_t entityID, const glm::vec3 *value);
         void (*TransformComponent_GetScale)(uint64_t entityID, glm::vec3 *result);
-        void (*TransformComponent_SetScale)(uint64_t entityID, glm::vec3 value);
+        void (*TransformComponent_SetScale)(uint64_t entityID, const glm::vec3 *value);
 
-		void (*Sprite2DComponent_SetColor)(uint64_t entityID, glm::vec4 color);
+		void (*Sprite2DComponent_SetColor)(uint64_t entityID, const glm::vec4 *color);
 		void (*Sprite2DComponent_GetColor)(uint64_t entityID, glm::vec4 *result);
-		void (*Sprite2DComponent_SetTilingFactor)(uint64_t entityID, glm::vec2 tiling);
+		void (*Sprite2DComponent_SetTilingFactor)(uint64_t entityID, const glm::vec2 *tiling);
 		void (*Sprite2DComponent_GetTilingFactor)(uint64_t entityID, glm::vec2 *result);
 
-		void (*Circle2DComponent_SetColor)(uint64_t entityID, glm::vec4 color);
+		void (*Circle2DComponent_SetColor)(uint64_t entityID, const glm::vec4 *color);
 		void (*Circle2DComponent_GetColor)(uint64_t entityID, glm::vec4 *result);
 
         void (*Rigidbody2DComponent_GetType)(uint64_t entityID, int32_t *result);
         void (*Rigidbody2DComponent_SetType)(uint64_t entityID, int32_t value);
         void (*Rigidbody2DComponent_GetLinearVelocity)(uint64_t entityID, glm::vec2 *result);
-        void (*Rigidbody2DComponent_SetLinearVelocity)(uint64_t entityID, glm::vec2 value);
+        void (*Rigidbody2DComponent_SetLinearVelocity)(uint64_t entityID, const glm::vec2 *value);
         void (*Rigidbody2DComponent_GetAngularVelocity)(uint64_t entityID, float *result);
         void (*Rigidbody2DComponent_SetAngularVelocity)(uint64_t entityID, float value);
         void (*Rigidbody2DComponent_GetGravityScale)(uint64_t entityID, float *result);
@@ -152,6 +153,72 @@ namespace ignite
         void (*TextComponent_GetKerning)(uint64_t entityID, float *result);
         void (*TextComponent_SetLineSpacing)(uint64_t entityID, float value);
         void (*TextComponent_GetLineSpacing)(uint64_t entityID, float *result);
+
+        // RigidbodyComponent (3D)
+        void (*RigidbodyComponent_GetType)(uint64_t entityID, int32_t *result);
+        void (*RigidbodyComponent_SetType)(uint64_t entityID, int32_t value);
+        void (*RigidbodyComponent_GetMotionQuality)(uint64_t entityID, int32_t *result);
+        void (*RigidbodyComponent_GetUseGravity)(uint64_t entityID, bool *result);
+        void (*RigidbodyComponent_SetUseGravity)(uint64_t entityID, bool value);
+        void (*RigidbodyComponent_GetMass)(uint64_t entityID, float *result);
+        void (*RigidbodyComponent_GetGravityFactor)(uint64_t entityID, float *result);
+        void (*RigidbodyComponent_SetGravityFactor)(uint64_t entityID, float value);
+        void (*RigidbodyComponent_GetLinearVelocity)(uint64_t entityID, glm::vec3 *result);
+        void (*RigidbodyComponent_SetLinearVelocity)(uint64_t entityID, const glm::vec3 *value);
+        void (*RigidbodyComponent_GetAngularVelocity)(uint64_t entityID, glm::vec3 *result);
+        void (*RigidbodyComponent_GetPosition)(uint64_t entityID, glm::vec3 *result);
+        void (*RigidbodyComponent_SetPosition)(uint64_t entityID, const glm::vec3 *value);
+        void (*RigidbodyComponent_GetRotation)(uint64_t entityID, glm::quat *result);
+        void (*RigidbodyComponent_SetRotation)(uint64_t entityID, const glm::quat *value);
+        void (*RigidbodyComponent_GetCenterOfMass)(uint64_t entityID, glm::vec3 *result);
+        void (*RigidbodyComponent_IsActive)(uint64_t entityID, bool *result);
+        void (*RigidbodyComponent_ApplyForce)(uint64_t entityID, const glm::vec3 *force, const glm::vec3 *point);
+        void (*RigidbodyComponent_ApplyForceToCenter)(uint64_t entityID, const glm::vec3 *force);
+        void (*RigidbodyComponent_ApplyTorque)(uint64_t entityID, const glm::vec3 *torque);
+        void (*RigidbodyComponent_ApplyLinearImpulse)(uint64_t entityID, const glm::vec3 *impulse, const glm::vec3 *point);
+        void (*RigidbodyComponent_ApplyLinearImpulseToCenter)(uint64_t entityID, const glm::vec3 *impulse);
+        void (*RigidbodyComponent_ApplyAngularImpulse)(uint64_t entityID, const glm::vec3 *impulse);
+        void (*RigidbodyComponent_Activate)(uint64_t entityID);
+        void (*RigidbodyComponent_Deactivate)(uint64_t entityID);
+        void (*RigidbodyComponent_MoveKinematic)(uint64_t entityID, const glm::vec3 *targetPosition, const glm::vec3 *targetRotation, float deltaTime);
+
+        // BoxColliderComponent
+        void (*BoxColliderComponent_GetCenter)(uint64_t entityID, glm::vec3 *result);
+        void (*BoxColliderComponent_SetCenter)(uint64_t entityID, const glm::vec3 *value);
+        void (*BoxColliderComponent_GetScale)(uint64_t entityID, glm::vec3 *result);
+        void (*BoxColliderComponent_SetScale)(uint64_t entityID, const glm::vec3 *value);
+        void (*BoxColliderComponent_GetFriction)(uint64_t entityID, float *result);
+        void (*BoxColliderComponent_SetFriction)(uint64_t entityID, float value);
+        void (*BoxColliderComponent_GetRestitution)(uint64_t entityID, float *result);
+        void (*BoxColliderComponent_SetRestitution)(uint64_t entityID, float value);
+        void (*BoxColliderComponent_GetDensity)(uint64_t entityID, float *result);
+        void (*BoxColliderComponent_SetDensity)(uint64_t entityID, float value);
+
+        // SphereColliderComponent
+        void (*SphereColliderComponent_GetCenter)(uint64_t entityID, glm::vec3 *result);
+        void (*SphereColliderComponent_SetCenter)(uint64_t entityID, const glm::vec3 *value);
+        void (*SphereColliderComponent_GetRadius)(uint64_t entityID, float *result);
+        void (*SphereColliderComponent_SetRadius)(uint64_t entityID, float value);
+        void (*SphereColliderComponent_GetFriction)(uint64_t entityID, float *result);
+        void (*SphereColliderComponent_SetFriction)(uint64_t entityID, float value);
+        void (*SphereColliderComponent_GetRestitution)(uint64_t entityID, float *result);
+        void (*SphereColliderComponent_SetRestitution)(uint64_t entityID, float value);
+        void (*SphereColliderComponent_GetDensity)(uint64_t entityID, float *result);
+        void (*SphereColliderComponent_SetDensity)(uint64_t entityID, float value);
+
+        // CapsuleColliderComponent
+        void (*CapsuleColliderComponent_GetCenter)(uint64_t entityID, glm::vec3 *result);
+        void (*CapsuleColliderComponent_SetCenter)(uint64_t entityID, const glm::vec3 *value);
+        void (*CapsuleColliderComponent_GetRadius)(uint64_t entityID, float *result);
+        void (*CapsuleColliderComponent_SetRadius)(uint64_t entityID, float value);
+        void (*CapsuleColliderComponent_GetHeight)(uint64_t entityID, float *result);
+        void (*CapsuleColliderComponent_SetHeight)(uint64_t entityID, float value);
+        void (*CapsuleColliderComponent_GetFriction)(uint64_t entityID, float *result);
+        void (*CapsuleColliderComponent_SetFriction)(uint64_t entityID, float value);
+        void (*CapsuleColliderComponent_GetRestitution)(uint64_t entityID, float *result);
+        void (*CapsuleColliderComponent_SetRestitution)(uint64_t entityID, float value);
+        void (*CapsuleColliderComponent_GetDensity)(uint64_t entityID, float *result);
+        void (*CapsuleColliderComponent_SetDensity)(uint64_t entityID, float value);
     };
 
     class ComponentScriptGlue

@@ -5,21 +5,14 @@ using static Ignite.Mathf;
 
 namespace Ignite;
 
-public enum Body2DType
-{
-    Static = 0,
-    Dynamic = 1,
-    Kinematic = 2
-}
-
 public sealed class Rigidbody2DComponent : IComponent
 {
-    public Body2DType Type
+    public BodyType Type
     {
         get
         {
             ComponentInternalCalls.Rigidbody2DComponent_GetType(Entity!.ID, out int result);
-            return (Body2DType)result;
+            return (BodyType)result;
         }
         set => ComponentInternalCalls.Rigidbody2DComponent_SetType(Entity!.ID, (int)value);
     }
