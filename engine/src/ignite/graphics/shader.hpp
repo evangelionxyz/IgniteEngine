@@ -124,6 +124,9 @@ namespace ignite
         }
     };
 
+    class Shader;
+    using ShaderMap = std::unordered_map<ShaderKey, Ref<Shader>, ShaderKeyHasher>;
+
     class Shader
     {
     public:
@@ -149,7 +152,12 @@ namespace ignite
 
         // DX Compiler Instance, automatically create if not created yet.
         static Ref<umbra::DXCInstance> GetDXCInstance();
-    
+
+        static ShaderMap &GetShaderCache();
+
+        inline const umbra::ShaderReflectionInfo &GetReflectionInfo() { return m_ReflectionInfo; }
+        inline const std::string &GetName() { return m_Name; }
+
     private:
         static void InitShaderData();
         static void ShutdownShaderData();
@@ -159,11 +167,13 @@ namespace ignite
         nvrhi::ShaderDesc m_ShaderDesc;
         nvrhi::ShaderHandle m_Handle = nullptr;
         ignite::Path m_Filepath;
+        std::string m_Name;
 
+        umbra::ShaderReflectionInfo m_ReflectionInfo;
 		std::vector<nvrhi::VertexAttributeDesc> m_VertexAttributes;
 
         static Ref<umbra::DXCInstance> s_DXCInstance;
-        static std::unordered_map<ShaderKey, Ref<Shader>, ShaderKeyHasher> s_ShaderCache;
+        static ShaderMap s_ShaderCache;
 
         friend class Renderer;
     };

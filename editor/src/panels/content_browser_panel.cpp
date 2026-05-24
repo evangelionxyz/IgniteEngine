@@ -253,9 +253,9 @@ namespace ignite
     void ContentBrowserPanel::RefreshFiles()
     {
         m_NeedsRefresh = false;
-
         auto project = m_EditorLayer->GetActiveProject();
         project->ValidateAssetRegistry();
+
         PruneMissingNodes(0, m_EditorLayer->GetActiveProject()->GetDirectory());
         RefreshAssetTree();
         CompactTree();
@@ -2375,6 +2375,8 @@ namespace ignite
         while (currentIndex != 0 && currentIndex < m_TreeNodes.size())
         {
             const FileTreeNode &node = m_TreeNodes[currentIndex];
+            if (node.isDeleted)
+                continue;
 
             // Avoid using operator/ with empty path to prevent trailing separators
             if (result.empty())

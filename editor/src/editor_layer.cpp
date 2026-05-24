@@ -17,6 +17,7 @@
 #include "ignite/core/platform_utils.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/imgui/imgui_nvrhi.hpp"
+#include "ignite/graphics/shader.hpp"
 #include "stb_image_write.h"
 
 #include <algorithm>
@@ -732,7 +733,6 @@ namespace ignite
         
         UIProjectCreation();
 
-        
         ImVec2 avail = ImGui::GetContentRegionAvail();
 
         // Dockspace tabs area gets everything except status bar
@@ -904,6 +904,8 @@ namespace ignite
         }
 
         // Draw UI
+        UISceneRenderer();
+
         UISettings();
     }
 
@@ -1488,7 +1490,8 @@ namespace ignite
                         // Submit scene save to asset worker
                         ignite::Path filepath = pf.metadata.filepath;
 
-                        AssetWorker::SubmitJob([this, filepath]()
+                        // AssetWorker::SubmitJob([this, filepath]()
+                        Application::SubmitToMainThread([this, filepath]()
                         {
                             SceneSerializer serializer(m_ActiveScene, m_ActiveProject.get());
                             serializer.Serialize(filepath);
@@ -2078,4 +2081,35 @@ namespace ignite
             ImGui::End();
         }
     }
+
+    void EditorLayer::UISceneRenderer()
+    {
+        ImGui::Begin("Scene Renderer");
+
+        // Shaders
+        if (ImGui::TreeNodeEx("Shaders", ImGuiTreeNodeFlags_Framed))
+        {
+            for (auto &[key, shader] : Shader::GetShaderCache())
+            {
+                ImGui::Button(shader->GetName().c_str(), { -1.0f, 0.0f });
+
+            }
+            ImGui::TreePop();
+        }
+
+        // Render Stats
+        if (ImGui::TreeNodeEx("Stats", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::TreePop();
+        }
+
+        // Scene Render Mode
+        if (ImGui::TreeNodeEx("Render", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::TreePop();
+        }
+
+        ImGui::End();
+    }
+
 }

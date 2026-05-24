@@ -14,7 +14,7 @@
 namespace ignite
 {
     Ref<umbra::DXCInstance> Shader::s_DXCInstance = nullptr;
-    std::unordered_map<ShaderKey, Ref<Shader>, ShaderKeyHasher> Shader::s_ShaderCache;
+    ShaderMap Shader::s_ShaderCache;
 
     namespace
     {
@@ -72,6 +72,8 @@ namespace ignite
     {
         CreateShaderCachedDirectoryIfNeeded();
 
+        m_Name = filepath.stem().string();
+
         // Setup the shader desc
         m_ShaderDesc.shaderType = GetNVRHIShaderType(m_Type);
         m_ShaderDesc.entryName = entryName;
@@ -112,7 +114,7 @@ namespace ignite
             {
                 m_Handle = newShaderHandle;
                 LOG_WARN("[Shader] Reflection for '{}': ", m_Filepath.generic_string());
-                Reflect(m_Type, shaderCode, m_VertexAttributes);
+                m_ReflectionInfo = Reflect(m_Type, shaderCode, m_VertexAttributes);
             }
         }
 
@@ -237,6 +239,11 @@ namespace ignite
         }
 
         return s_DXCInstance;
+    }
+
+    ShaderMap &Shader::GetShaderCache()
+    {
+        return s_ShaderCache;
     }
 
 #if 0

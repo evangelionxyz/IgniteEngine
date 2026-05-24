@@ -122,6 +122,7 @@ namespace ignite
 
         void UIProjectCreation();
         void UISettings();
+        void UISceneRenderer();
 
         ScenePanel *m_ScenePanel;
         AssetImporterPanel *m_AssetImporterPanel;

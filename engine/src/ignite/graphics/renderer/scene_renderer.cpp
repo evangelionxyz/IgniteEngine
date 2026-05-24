@@ -2106,8 +2106,7 @@ namespace ignite
     void SceneRenderer::SetSelectedEntity(const Entity &entity)
     {
         const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(entity.GetUUID()));
-        const auto it = std::ranges::find_if(m_SelectedEntities,
-            [&](const uint32_t id)
+        const auto it = std::ranges::find_if(m_SelectedEntities, [&](const uint32_t id)
         {
             return id == objectID;
         });
