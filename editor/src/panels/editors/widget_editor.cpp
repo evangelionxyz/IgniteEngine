@@ -779,6 +779,7 @@ namespace ignite
             static std::unordered_map<uint64_t, float>     s_WidgetPreviewZoom;
             static std::unordered_map<uint64_t, glm::vec2> s_WidgetPreviewPan;
             static std::unordered_map<uint64_t, int>       s_WidgetPreviewAspect;
+            static std::unordered_map<uint64_t, glm::vec2> s_WidgetPreviewViewportSize;
 
             const auto stateKey = static_cast<uint64_t>(assetData.handle);
 
@@ -790,6 +791,9 @@ namespace ignite
             if (widgetPreviewZoom <= 0.0f) widgetPreviewZoom = 1.0f;
             glm::vec2 &widgetPreviewPan = s_WidgetPreviewPan[stateKey];
             int &widgetPreviewAspect = s_WidgetPreviewAspect[stateKey];
+            glm::vec2 &widgetPreviewViewportSize = s_WidgetPreviewViewportSize[stateKey];
+            if (widgetPreviewViewportSize.x <= 0.0f || widgetPreviewViewportSize.y <= 0.0f)
+                widgetPreviewViewportSize = { 1920.0f, 1080.0f };
 
             if (sceneData.sceneRenderer)
                 sceneData.sceneRenderer->SetPreviewWidget(widget);
@@ -840,42 +844,51 @@ namespace ignite
             ImGui::SameLine();
 
             // MIDDLE PANEL — Scene Preview
-            ImGui::BeginChild("##widget_scene_preview", { 0.0f, 0.0f }, ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
+            ImGui::BeginChild("##widget_scene_preview", { 0.0f, 0.0f }, ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoScrollbar);
             {
                 static const char *aspectRatioLabels[] = { "Free", "16:9", "16:10", "4:3", "21:9", "1:1" };
                 static const float aspectRatioValues[] = { 0.0f, 16.0f / 9.0f, 16.0f / 10.0f, 4.0f / 3.0f, 21.0f / 9.0f, 1.0f };
 
                 widgetPreviewAspect = std::clamp(widgetPreviewAspect, 0, static_cast<int>(IM_ARRAYSIZE(aspectRatioLabels)) - 1);
                 ImGui::SetNextItemWidth(140.0f);
-                ImGui::Combo("Aspect Ratio", &widgetPreviewAspect, aspectRatioLabels, IM_ARRAYSIZE(aspectRatioLabels));
+                if (ImGui::Combo("Aspect Ratio", &widgetPreviewAspect, aspectRatioLabels, IM_ARRAYSIZE(aspectRatioLabels)))
+                {
+                    if (widgetPreviewAspect > 0)
+                    {
+                        const float aspect = aspectRatioValues[widgetPreviewAspect];
+                        widgetPreviewViewportSize.y = std::max(widgetPreviewViewportSize.x / aspect, 1.0f);
+                    }
+                }
+
+                ImGui::SetNextItemWidth(180.0f);
+                ImGui::SameLine();
+                if (ImGui::InputFloat2("Viewport Size", &widgetPreviewViewportSize.x, "%.0f"))
+                {
+                    widgetPreviewViewportSize.x = std::max(widgetPreviewViewportSize.x, 1.0f);
+                    widgetPreviewViewportSize.y = std::max(widgetPreviewViewportSize.y, 1.0f);
+                    widgetPreviewAspect = 0;
+                }
+                widgetPreviewViewportSize.x = std::max(widgetPreviewViewportSize.x, 1.0f);
+                widgetPreviewViewportSize.y = std::max(widgetPreviewViewportSize.y, 1.0f);
 
                 const ImVec2 previewRegionSize = ImGui::GetContentRegionAvail();
                 const ImVec2 previewRegionPos = ImGui::GetCursorScreenPos();
                 const float selectedAspect = aspectRatioValues[widgetPreviewAspect];
 
-                ImVec2 viewportSize = previewRegionSize;
-                if (selectedAspect > 0.0f && viewportSize.x > 0.0f && viewportSize.y > 0.0f)
+                ImVec2 viewportSize = { widgetPreviewViewportSize.x, widgetPreviewViewportSize.y };
+                if (selectedAspect > 0.0f)
                 {
-                    const float regionAspect = viewportSize.x / std::max(viewportSize.y, 1.0f);
-                    if (regionAspect > selectedAspect)
-                    {
-                        viewportSize.x = viewportSize.y * selectedAspect;
-                    }
-                    else
-                    {
-                        viewportSize.y = viewportSize.x / selectedAspect;
-                    }
+                    viewportSize.y = std::max(viewportSize.x / selectedAspect, 1.0f);
                 }
 
                 viewportSize.x = std::max(viewportSize.x, 1.0f);
                 viewportSize.y = std::max(viewportSize.y, 1.0f);
 
-                const ImVec2 viewportOffset =
+                const ImVec2 viewportPos =
                 {
-                    std::max((previewRegionSize.x - viewportSize.x) * 0.5f, 0.0f),
-                    std::max((previewRegionSize.y - viewportSize.y) * 0.5f, 0.0f)
+                    previewRegionPos.x + std::max((previewRegionSize.x - viewportSize.x) * 0.5f, 0.0f),
+                    previewRegionPos.y + std::max((previewRegionSize.y - viewportSize.y) * 0.5f, 0.0f)
                 };
-                const ImVec2 viewportPos = { previewRegionPos.x + viewportOffset.x, previewRegionPos.y + viewportOffset.y };
 
                 sceneData.viewportWidth  = std::max(1u, static_cast<uint32_t>(viewportSize.x + 0.5f));
                 sceneData.viewportHeight = std::max(1u, static_cast<uint32_t>(viewportSize.y + 0.5f));
@@ -888,8 +901,8 @@ namespace ignite
                     Ref<Texture> previewTexture = sceneData.compositeRT->GetColorAttachment(0);
 
                     const std::string previewBtnId = std::format("##widget_preview_{}", stateKey);
-                    ImGui::SetCursorScreenPos(viewportPos);
-                    ImGui::InvisibleButton(previewBtnId.c_str(), viewportSize);
+                    ImGui::SetCursorScreenPos(previewRegionPos);
+                    ImGui::InvisibleButton(previewBtnId.c_str(), previewRegionSize);
                     sceneData.viewportHovered = ImGui::IsItemHovered();
 
                     // Drop a WidgetCanvas from the Content Browser as a child canvas
@@ -933,7 +946,7 @@ namespace ignite
                         if (widgetPreviewZoom != previousZoom)
                         {
                             const ImVec2 prevImagePos  = { viewportPos.x + widgetPreviewPan.x, viewportPos.y + widgetPreviewPan.y };
-                            const ImVec2 prevImageSize = { viewportSize.x * previousZoom,      viewportSize.y * previousZoom };
+                            const ImVec2 prevImageSize = { viewportSize.x * previousZoom, viewportSize.y * previousZoom };
                             const ImVec2 uvAtMouse =
                             {
                                 (mousePos.x - prevImagePos.x) / std::max(prevImageSize.x, 1.0f),
@@ -952,25 +965,25 @@ namespace ignite
                     }
 
                     const ImVec2 imagePos  = { viewportPos.x + widgetPreviewPan.x, viewportPos.y + widgetPreviewPan.y };
-                    const ImVec2 imageSize = { viewportSize.x * widgetPreviewZoom,  viewportSize.y * widgetPreviewZoom };
+                    const ImVec2 scaledImageSize = { viewportSize.x * widgetPreviewZoom, viewportSize.y * widgetPreviewZoom };
 
                     ImDrawList *drawList = ImGui::GetWindowDrawList();
-                    const ImVec2 clipMax = { viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y };
-                    drawList->PushClipRect(viewportPos, clipMax, true);
+                    const ImVec2 clipMax = { previewRegionPos.x + previewRegionSize.x, previewRegionPos.y + previewRegionSize.y };
+                    drawList->PushClipRect(previewRegionPos, clipMax, true);
 
-                    drawList->AddImage(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), imagePos, { imagePos.x + imageSize.x, imagePos.y + imageSize.y }, { 0.0f, 0.0f }, { 1.0f, 1.0f });
-                    WidgetEditor::DrawPreviewOverlay(drawList, widget, selectedItemId, imagePos, imageSize, canvasW, canvasH);
+                    drawList->AddImage(reinterpret_cast<ImTextureID>(previewTexture->GetHandle().Get()), imagePos, { imagePos.x + scaledImageSize.x, imagePos.y + scaledImageSize.y }, { 0.0f, 0.0f }, { 1.0f, 1.0f });
+                    WidgetEditor::DrawPreviewOverlay(drawList, widget, selectedItemId, imagePos, scaledImageSize, canvasW, canvasH);
 
                     if (selectedItem && widget->GetRoot() && selectedItem->id != widget->GetRoot()->id)
                     {
-                        WidgetEditor::DrawAnchorPoints(drawList, selectedItem, widget, imagePos, imageSize, canvasW, canvasH);
+                        WidgetEditor::DrawAnchorPoints(drawList, selectedItem, widget, imagePos, scaledImageSize, canvasW, canvasH);
                     }
 
                     drawList->PopClipRect();
                 }
                 else
                 {
-                    ImGui::Dummy(viewportSize);
+                    ImGui::Dummy(previewRegionSize);
                 }
             }
             ImGui::EndChild();
