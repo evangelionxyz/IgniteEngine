@@ -636,7 +636,6 @@ namespace ignite
             if (m_WidgetRenderer)
             {
                 m_WidgetRenderer->SetProject(m_Project);
-                m_WidgetRenderer->SetActiveWidget(m_Scene->GetRootWidget());
             }
         }
 
@@ -1583,9 +1582,11 @@ namespace ignite
     void SceneRenderer::UIPass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
     {
         if (!m_WidgetRenderer || !m_Scene || !m_Scene->registry || !m_Project || !framebuffer)
-        {
             return;
-        }
+
+        // Set root widget
+        auto rootWidget = m_Scene->GetRootWidget();
+        m_WidgetRenderer->SetActiveWidget(rootWidget);
 
         const nvrhi::Viewport viewport = framebuffer->getFramebufferInfo().getViewport();
         const uint32_t width = std::max(1u, static_cast<uint32_t>(viewport.maxX - viewport.minX));
@@ -2024,9 +2025,9 @@ namespace ignite
             glm::mat4 iconTransform = glm::translate(glm::mat4(1.0f), worldPos) * billboardRotation * glm::scale(glm::mat4(1.0f), glm::vec3(1.0f));
             m_Renderer2D->DrawQuad(iconTransform, glm::vec4(1.0f), texture, {0.0f, 1.0f }, { 1.0f, 0.0f }, glm::vec2(1.0f), objectID);
 
-            if (camera)
+            auto &cc = m_Scene->registry->get<CameraComponent>(e);
+            if (camera && cc.camera.GetAspectRatioPreset() != SceneCamera::AspectRatioPreset::Free)
             {
-                auto &cc = m_Scene->registry->get<CameraComponent>(e);
                 glm::mat4 viewProj = cc.camera.GetProjection() * glm::inverse(world);
                 Frustum frustum(viewProj);
                 auto edges = frustum.GetEdges();

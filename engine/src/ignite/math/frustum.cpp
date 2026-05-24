@@ -51,9 +51,16 @@ namespace ignite {
         }
 
         m_ViewProjectionInverse = glm::inverse(view_projection);
-        const glm::vec4 corners[8] = {
-            {-1, -1, -1, 1}, {1, -1, -1, 1}, {1, 1, -1, 1}, {-1, 1, -1, 1},
-            {-1, -1,  1, 1}, {1, -1,  1, 1}, {1, 1,  1, 1}, {-1, 1,  1, 1}
+        static std::array<glm::vec4, 8> corners =
+        {
+            glm::vec4{-1, -1, 0, 1},
+            glm::vec4{1, -1, 0, 1},
+            glm::vec4{1, 1, 0, 1},
+            glm::vec4{-1, 1, 0, 1},
+            glm::vec4{-1, -1, 1, 1},
+            glm::vec4{1, -1, 1, 1},
+            glm::vec4{1, 1, 1, 1},
+            glm::vec4{-1, 1, 1, 1}
         };
 
         for (int i = 0; i < 8; ++i)

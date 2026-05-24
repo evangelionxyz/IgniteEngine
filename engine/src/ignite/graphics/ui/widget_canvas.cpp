@@ -79,6 +79,7 @@ namespace ignite
                     sr.AddKeyValue("HoverColor", button->style.hoverColor);
                     sr.AddKeyValue("PressedColor", button->style.pressedColor);
                     sr.AddKeyValue("BorderColor", button->style.borderColor);
+                    sr.AddKeyValue("BorderWidth", button->style.borderWidth);
                     sr.AddKeyValue("CornerRadius", button->style.cornerRadius);
 
                     if (button->label)
@@ -214,6 +215,7 @@ namespace ignite
                         if (auto n = itemNode["HoverColor"]) button->style.hoverColor = n.as<glm::vec4>();
                         if (auto n = itemNode["PressedColor"]) button->style.pressedColor = n.as<glm::vec4>();
                         if (auto n = itemNode["BorderColor"]) button->style.borderColor = (n.as<glm::vec4>());
+                        if (auto n = itemNode["BorderWidth"]) button->style.borderWidth = n.as<float>();
                         if (auto n = itemNode["CornerRadius"]) button->style.cornerRadius = n.as<float>();
 
                         // Load label

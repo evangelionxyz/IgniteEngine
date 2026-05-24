@@ -153,7 +153,19 @@ namespace ignite
 
             if (Ref<WidgetButton> button = item->As<WidgetButton>())
             {
-                renderer->DrawQuad(button->GetAlignedRect(), 0.0f, button->GetCurrentColor(), button->image, glm::vec2(0.0f), glm::vec2(1.0f));
+                if (button->style.cornerRadius > 0.0f)
+                {
+                    renderer->DrawRoundedQuad(button->GetAlignedRect(), button->style.cornerRadius, button->GetCurrentColor(), button->image, glm::vec2(0.0f), glm::vec2(1.0f));
+                }
+                else
+                {
+                    renderer->DrawQuad(button->GetAlignedRect(), 0.0f, button->GetCurrentColor(), button->image, glm::vec2(0.0f), glm::vec2(1.0f));
+                }
+
+                if (button->style.borderWidth > 0.0f && button->style.borderColor.a > 0.0f)
+                {
+                    renderer->DrawRoundedBorder(button->GetAlignedRect(), button->style.cornerRadius, button->style.borderWidth, button->style.borderColor);
+                }
 
                 if (button->label && button->label->font && button->label->font->IsReady())
                 {
@@ -378,6 +390,7 @@ namespace ignite
         s_WidgetQuadPSOCache.clear();
         s_WidgetTextPSOCache.clear();
         s_WidgetBindingSetCache.clear();
+        delete[] m_QuadIndicesBase;
     }
 
     void WidgetRenderer::SetMousePosition(uint32_t mouseX, uint32_t mouseY)
@@ -388,6 +401,12 @@ namespace ignite
 
     void WidgetRenderer::DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1)
     {
+        uint32_t vertexOffset = static_cast<uint32_t>(m_QuadBatch.vertexBufferPtr - m_QuadBatch.vertexBufferBase);
+        if (vertexOffset + 4 > m_QuadBatch.maxVertices || m_QuadBatch.indexCount + 6 > m_QuadBatch.maxIndices)
+        {
+            return;
+        }
+
         const glm::vec2 textureCoords[] =
         {
             { uv0.x, uv0.y },
@@ -416,7 +435,190 @@ namespace ignite
             m_QuadBatch.vertexBufferPtr++;
         }
 
+        *m_QuadIndicesPtr++ = vertexOffset + 0;
+        *m_QuadIndicesPtr++ = vertexOffset + 1;
+        *m_QuadIndicesPtr++ = vertexOffset + 2;
+        *m_QuadIndicesPtr++ = vertexOffset + 0;
+        *m_QuadIndicesPtr++ = vertexOffset + 3;
+        *m_QuadIndicesPtr++ = vertexOffset + 1;
+
         m_QuadBatch.indexCount += 6;
+        m_QuadBatch.count++;
+    }
+
+    void WidgetRenderer::DrawRoundedQuad(const Rect &rect, float cornerRadius, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1)
+    {
+        float r = std::min({ cornerRadius, rect.GetSize().x * 0.5f, rect.GetSize().y * 0.5f });
+        if (r <= 0.0f)
+        {
+            DrawQuad(rect, 0.0f, color, texture, uv0, uv1);
+            return;
+        }
+
+        uint32_t texIndex = GetOrInsertQuadTexture(texture);
+
+        const int segments = 8;
+        std::vector<glm::vec2> points;
+        points.reserve(32);
+
+        auto addCornerArc = [&](const glm::vec2 &center, float startAngle, float endAngle) {
+            for (int i = 0; i < segments; ++i) {
+                float theta = startAngle + (endAngle - startAngle) * (static_cast<float>(i) / segments);
+                points.push_back(center + glm::vec2(r * cosf(theta), r * sinf(theta)));
+            }
+        };
+
+        // Top-Left: PI to 1.5 * PI
+        addCornerArc(glm::vec2(rect.min.x + r, rect.min.y + r), 3.14159265f, 4.71238898f);
+        // Top-Right: 1.5 * PI to 2.0 * PI
+        addCornerArc(glm::vec2(rect.max.x - r, rect.min.y + r), 4.71238898f, 6.28318531f);
+        // Bottom-Right: 0 to 0.5 * PI
+        addCornerArc(glm::vec2(rect.max.x - r, rect.max.y - r), 0.0f, 1.57079633f);
+        // Bottom-Left: 0.5 * PI to PI
+        addCornerArc(glm::vec2(rect.min.x + r, rect.max.y - r), 1.57079633f, 3.14159265f);
+
+        uint32_t K = static_cast<uint32_t>(points.size());
+        uint32_t vertexOffset = static_cast<uint32_t>(m_QuadBatch.vertexBufferPtr - m_QuadBatch.vertexBufferBase);
+
+        if (vertexOffset + K + 1 > m_QuadBatch.maxVertices || m_QuadBatch.indexCount + K * 3 > m_QuadBatch.maxIndices)
+        {
+            return;
+        }
+
+        // Center point
+        glm::vec2 centerPos = (rect.min + rect.max) * 0.5f;
+        m_QuadBatch.vertexBufferPtr->position = glm::vec4(centerPos.x, centerPos.y, 0.0f, 1.0f);
+        m_QuadBatch.vertexBufferPtr->texCoord = glm::vec2(0.5f, 0.5f);
+        m_QuadBatch.vertexBufferPtr->tilingFactor = glm::vec2(1.0f);
+        m_QuadBatch.vertexBufferPtr->color = color;
+        m_QuadBatch.vertexBufferPtr->texIndex = texIndex;
+        m_QuadBatch.vertexBufferPtr++;
+
+        // Contour points
+        for (const auto &p : points) {
+            float u = uv0.x + (p.x - rect.min.x) / rect.GetSize().x * (uv1.x - uv0.x);
+            float v = uv0.y + (p.y - rect.min.y) / rect.GetSize().y * (uv1.y - uv0.y);
+
+            m_QuadBatch.vertexBufferPtr->position = glm::vec4(p.x, p.y, 0.0f, 1.0f);
+            m_QuadBatch.vertexBufferPtr->texCoord = glm::vec2(u, v);
+            m_QuadBatch.vertexBufferPtr->tilingFactor = glm::vec2(1.0f);
+            m_QuadBatch.vertexBufferPtr->color = color;
+            m_QuadBatch.vertexBufferPtr->texIndex = texIndex;
+            m_QuadBatch.vertexBufferPtr++;
+        }
+
+        // Indices
+        for (uint32_t i = 0; i < K - 1; ++i) {
+            *m_QuadIndicesPtr++ = vertexOffset + 0;
+            *m_QuadIndicesPtr++ = vertexOffset + 1 + i;
+            *m_QuadIndicesPtr++ = vertexOffset + 2 + i;
+        }
+        *m_QuadIndicesPtr++ = vertexOffset + 0;
+        *m_QuadIndicesPtr++ = vertexOffset + K;
+        *m_QuadIndicesPtr++ = vertexOffset + 1;
+
+        m_QuadBatch.indexCount += K * 3;
+        m_QuadBatch.count++;
+    }
+
+    void WidgetRenderer::DrawRoundedBorder(const Rect &rect, float cornerRadius, float borderWidth, const glm::vec4 &borderColor)
+    {
+        if (borderWidth <= 0.0f || borderColor.a <= 0.0f)
+            return;
+
+        uint32_t texIndex = 0; // Solid color border
+
+        float r_out = std::min({ cornerRadius, rect.GetSize().x * 0.5f, rect.GetSize().y * 0.5f });
+
+        std::vector<glm::vec2> outerPoints;
+        std::vector<glm::vec2> innerPoints;
+        outerPoints.reserve(32);
+        innerPoints.reserve(32);
+
+        if (r_out <= 0.0f)
+        {
+            outerPoints = {
+                { rect.min.x, rect.min.y },
+                { rect.max.x, rect.min.y },
+                { rect.max.x, rect.max.y },
+                { rect.min.x, rect.max.y }
+            };
+
+            Rect innerRect = { rect.min + glm::vec2(borderWidth), rect.max - glm::vec2(borderWidth) };
+            innerPoints = {
+                { innerRect.min.x, innerRect.min.y },
+                { innerRect.max.x, innerRect.min.y },
+                { innerRect.max.x, innerRect.max.y },
+                { innerRect.min.x, innerRect.max.y }
+            };
+        }
+        else
+        {
+            float r_in = std::max(0.0f, r_out - borderWidth);
+            const int segments = 8;
+
+            auto addCornerArcs = [&](const glm::vec2 &center, float startAngle, float endAngle) {
+                for (int i = 0; i < segments; ++i) {
+                    float theta = startAngle + (endAngle - startAngle) * (static_cast<float>(i) / segments);
+                    float ct = cosf(theta);
+                    float st = sinf(theta);
+                    outerPoints.push_back(center + glm::vec2(r_out * ct, r_out * st));
+                    innerPoints.push_back(center + glm::vec2(r_in * ct, r_in * st));
+                }
+            };
+
+            // Top-Left
+            addCornerArcs(glm::vec2(rect.min.x + r_out, rect.min.y + r_out), 3.14159265f, 4.71238898f);
+            // Top-Right
+            addCornerArcs(glm::vec2(rect.max.x - r_out, rect.min.y + r_out), 4.71238898f, 6.28318531f);
+            // Bottom-Right
+            addCornerArcs(glm::vec2(rect.max.x - r_out, rect.max.y - r_out), 0.0f, 1.57079633f);
+            // Bottom-Left
+            addCornerArcs(glm::vec2(rect.min.x + r_out, rect.max.y - r_out), 1.57079633f, 3.14159265f);
+        }
+
+        uint32_t K = static_cast<uint32_t>(outerPoints.size());
+        uint32_t vertexOffset = static_cast<uint32_t>(m_QuadBatch.vertexBufferPtr - m_QuadBatch.vertexBufferBase);
+
+        if (vertexOffset + K * 2 > m_QuadBatch.maxVertices || m_QuadBatch.indexCount + K * 6 > m_QuadBatch.maxIndices)
+        {
+            return;
+        }
+
+        // Outer vertices
+        for (uint32_t i = 0; i < K; ++i) {
+            m_QuadBatch.vertexBufferPtr->position = glm::vec4(outerPoints[i].x, outerPoints[i].y, 0.0f, 1.0f);
+            m_QuadBatch.vertexBufferPtr->texCoord = glm::vec2(0.0f);
+            m_QuadBatch.vertexBufferPtr->tilingFactor = glm::vec2(1.0f);
+            m_QuadBatch.vertexBufferPtr->color = borderColor;
+            m_QuadBatch.vertexBufferPtr->texIndex = texIndex;
+            m_QuadBatch.vertexBufferPtr++;
+        }
+
+        // Inner vertices
+        for (uint32_t i = 0; i < K; ++i) {
+            m_QuadBatch.vertexBufferPtr->position = glm::vec4(innerPoints[i].x, innerPoints[i].y, 0.0f, 1.0f);
+            m_QuadBatch.vertexBufferPtr->texCoord = glm::vec2(0.0f);
+            m_QuadBatch.vertexBufferPtr->tilingFactor = glm::vec2(1.0f);
+            m_QuadBatch.vertexBufferPtr->color = borderColor;
+            m_QuadBatch.vertexBufferPtr->texIndex = texIndex;
+            m_QuadBatch.vertexBufferPtr++;
+        }
+
+        // Indices
+        for (uint32_t i = 0; i < K; ++i) {
+            uint32_t next = (i + 1) % K;
+
+            *m_QuadIndicesPtr++ = vertexOffset + i;
+            *m_QuadIndicesPtr++ = vertexOffset + next;
+            *m_QuadIndicesPtr++ = vertexOffset + K + next;
+
+            *m_QuadIndicesPtr++ = vertexOffset + i;
+            *m_QuadIndicesPtr++ = vertexOffset + K + next;
+            *m_QuadIndicesPtr++ = vertexOffset + K + i;
+        }
+
+        m_QuadBatch.indexCount += K * 6;
         m_QuadBatch.count++;
     }
 
@@ -579,6 +781,7 @@ namespace ignite
         m_QuadBatch.count = 0;
         m_QuadBatch.textureSlotIndex = 1;
         m_QuadBatch.vertexBufferPtr = m_QuadBatch.vertexBufferBase;
+        m_QuadIndicesPtr = m_QuadIndicesBase;
 
         m_TextBatch.indexCount = 0;
         m_TextBatch.count = 0;
@@ -596,6 +799,9 @@ namespace ignite
         {
             const size_t bufferSize = reinterpret_cast<uint8_t *>(m_QuadBatch.vertexBufferPtr) - reinterpret_cast<uint8_t *>(m_QuadBatch.vertexBufferBase);
             m_QuadBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_QuadBatch.vertexBufferBase, bufferSize));
+
+            const size_t indexBufferSize = reinterpret_cast<uint8_t *>(m_QuadIndicesPtr) - reinterpret_cast<uint8_t *>(m_QuadIndicesBase);
+            m_QuadBatch.indexBuffer->SetData(m_Cmd, Buffer(m_QuadIndicesBase, indexBufferSize));
 
             Ref<GraphicsPipeline> gp = GetWidgetQuadPipelineForFB(framebuffer);
             nvrhi::BindingSetHandle bindingSet = GetWidgetBindingSet(gp->GetBindingLayout(0), m_QuadBatch.textureSlots, m_CameraBuffer);
@@ -787,7 +993,7 @@ namespace ignite
 
     void WidgetRenderer::InitQuadData()
     {
-        m_QuadBatch.minCount = 64;
+        m_QuadBatch.minCount = 2048;
         m_QuadBatch.maxCount = m_QuadBatch.minCount;
         m_QuadBatch.verticesPerObject = 4;
         m_QuadBatch.indicesPerObject = 6;
@@ -801,28 +1007,11 @@ namespace ignite
         size_t indicesAllocSize = m_QuadBatch.maxIndices * sizeof(uint32_t);
         m_QuadBatch.indexBuffer = IndexBuffer::Create(indicesAllocSize);
 
+        m_QuadIndicesBase = new uint32_t[m_QuadBatch.maxIndices];
+        m_QuadIndicesPtr = m_QuadIndicesBase;
+
         m_QuadBatch.textureSlots.resize(32);
         m_QuadBatch.textureSlots[0] = Renderer::GetWhiteTexture();
-
-        std::vector<uint32_t> indices(m_QuadBatch.maxIndices);
-        uint32_t offset = 0;
-        for (uint32_t i = 0; i < m_QuadBatch.maxIndices; i += 6)
-        {
-            indices[0 + i] = offset + 0;
-            indices[1 + i] = offset + 1;
-            indices[2 + i] = offset + 2;
-            indices[3 + i] = offset + 0;
-            indices[4 + i] = offset + 3;
-            indices[5 + i] = offset + 1;
-            offset += 4;
-        }
-
-        auto device = DeviceManager::GetInstance()->GetDevice();
-        nvrhi::CommandListHandle cmd = device->createCommandList();
-        cmd->open();
-        m_QuadBatch.indexBuffer->SetData(cmd, Buffer(indices.data(), indices.size() * sizeof(uint32_t)));
-        cmd->close();
-        device->executeCommandList(cmd);
     }
 
     void WidgetRenderer::InitTextData()

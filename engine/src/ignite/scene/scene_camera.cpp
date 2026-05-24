@@ -17,7 +17,26 @@ namespace ignite
       return glm::inverse(m_Transform);
 	}
 
-	float SceneCamera::GetAspectRatioValue() const
+    void SceneCamera::SetAspectRatioPreset(AspectRatioPreset preset)
+    {
+		m_AspectRatioPreset = preset;
+		if (preset == AspectRatioPreset::Free)
+			return;
+
+		const float aspect = viewportSize.x / viewportSize.y;
+		const float targetAspect = GetAspectRatioValue();
+
+        if (aspect > targetAspect)
+        {
+			viewportSize.x = viewportSize.y * targetAspect;
+        }
+        else
+        {
+			viewportSize.y = viewportSize.x / targetAspect;
+        }
+    }
+
+    float SceneCamera::GetAspectRatioValue() const
 	{
 		switch (m_AspectRatioPreset)
 		{

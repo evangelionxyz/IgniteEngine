@@ -32,6 +32,8 @@ namespace ignite
         void Flush(nvrhi::IFramebuffer *framebuffer);
 
         void DrawQuad(const Rect &rect, float rotation, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1);
+        void DrawRoundedQuad(const Rect &rect, float cornerRadius, const glm::vec4 &color, const Ref<Texture> &texture, const glm::vec2 &uv0, const glm::vec2 &uv1);
+        void DrawRoundedBorder(const Rect &rect, float cornerRadius, float borderWidth, const glm::vec4 &borderColor);
         void DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing);
 
         void SetProject(Project *project) { m_Project = project; }
@@ -73,6 +75,8 @@ namespace ignite
         Ref<ConstantBuffer> m_CameraBuffer;
 
         BatchRender<VertexWidgetQuad> m_QuadBatch;
+        uint32_t *m_QuadIndicesBase = nullptr;
+        uint32_t *m_QuadIndicesPtr = nullptr;
         BatchRender<VertexWidgetText> m_TextBatch;
 
         Project *m_Project = nullptr;

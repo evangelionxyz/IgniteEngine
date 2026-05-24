@@ -17,6 +17,7 @@ namespace ignite
         glm::vec4 pressedColor;
         glm::vec4 borderColor;
         float cornerRadius = 0.0f;
+        float borderWidth = 1.0f;
     };
 
     class WidgetButton : public IWidgetItem

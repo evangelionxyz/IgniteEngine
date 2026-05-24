@@ -15,6 +15,7 @@ namespace ignite
         style.pressedColor = UI_COLOR_DARK_GRAY;
         style.borderColor = UI_COLOR_GRAY;
         style.cornerRadius = 0.0f;
+        style.borderWidth = 1.0f;
     }
 
     WidgetButton::~WidgetButton()

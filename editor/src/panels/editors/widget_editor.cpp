@@ -310,7 +310,7 @@ namespace ignite
             ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
 
             const std::string btnLabel = std::format("  {}  {}", entry.icon, entry.label);
-            ImGui::Button(btnLabel.c_str(), ImVec2(-1.0f, 34.0f));
+            ImGui::Button(btnLabel.c_str(), ImVec2(-1.0f, 24.0f));
 
             ImGui::PopStyleColor(4);
 
@@ -494,7 +494,7 @@ namespace ignite
             return;
         }
 
-        ImGui::PushID(selectedItem.get());
+        ImGui::PushID(selectedItem.get()); // SelectedItem ID
 
         bool dirty = false;
 
@@ -572,6 +572,8 @@ namespace ignite
                 dirty |= UI::DrawColorVec4("Hover Color", button->style.hoverColor);
                 dirty |= UI::DrawColorVec4("Pressed Color", button->style.pressedColor);
                 dirty |= UI::DrawColorVec4("Border Color", button->style.borderColor);
+                dirty |= UI::DrawFloatControl("Border Width", &button->style.borderWidth, 0.5f, 0.0f, 100.0f);
+                dirty |= UI::DrawFloatControl("Corner Radius", &button->style.cornerRadius, 0.5f, 0.0f, 100.0f);
 
                 // Background
                 bool isImageLoaded = button->imageHandle != AssetHandle(0);
@@ -632,14 +634,14 @@ namespace ignite
                 ImGui::TreePop();
             }
         }
-
+        
         // Container-specific
         else if (Ref<WidgetContainer> container = selectedItem->As<WidgetContainer>())
         {
-            ImGui::PushID(container.get());
+            ImGui::PushID(container.get()); // Container ID
+
             if (ImGui::TreeNodeEx("##widget_container_props", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, "Container"))
             {
-
                 int layout = static_cast<int>(container->layout);
                 const char *layoutNames[] = { "Horizontal", "Vertical", "Grid", "Absolute" };
                 if (UI::DrawComboBox("Layout", layoutNames, IM_ARRAYSIZE(layoutNames), &layout))
@@ -664,25 +666,25 @@ namespace ignite
                 dirty |= UI::DrawFloatControl("Gap", &container->gap, 0.5f, 0.0f, 512.0f);
 
                 ImGui::TreePop();
-                ImGui::PopID();
             }
 
-            // --- Add Child / Remove ---
-            WidgetContainer *insertParent = ResolveInsertionParent(selectedItem, widget);
-            if (widget->GetRoot() && selectedItem->id != widget->GetRoot()->id)
+            ImGui::PopID(); // !Container ID
+        }
+
+        WidgetContainer *insertParent = ResolveInsertionParent(selectedItem, widget);
+        if (widget->GetRoot() && selectedItem->id != widget->GetRoot()->id)
+        {
+            ImGui::Spacing();
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.15f, 0.15f, 1.0f));
+            if (ImGui::Button("Remove Selected Item", ImVec2(-1.0f, 0.0f)))
             {
-                ImGui::Spacing();
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.15f, 0.15f, 1.0f));
-                if (ImGui::Button("Remove Selected Item", ImVec2(-1.0f, 0.0f)))
+                if (widget->RemoveItem(selectedItem->id))
                 {
-                    if (widget->RemoveItem(selectedItem->id))
-                    {
-                        selectedItemId = widget->GetRoot() ? widget->GetRoot()->id : 0;
-                        dirty = true;
-                    }
+                    selectedItemId = widget->GetRoot() ? widget->GetRoot()->id : 0;
+                    dirty = true;
                 }
-                ImGui::PopStyleColor();
             }
+            ImGui::PopStyleColor();
         }
 
         if (dirty)
@@ -690,7 +692,7 @@ namespace ignite
             widget->SetDirtyFlag(true);
         }
 
-        ImGui::PopID();
+        ImGui::PopID(); // !SelectedItem ID
     }
 
     // Draw Funcs
@@ -800,7 +802,7 @@ namespace ignite
             // LEFT PANEL — Toolbox + Layout Tree
             if (ImGui::BeginChild("##widget_layout_toolbox_tree", { 250.0f, 0.0f }, ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX))
             {
-                ImGui::BeginChild("##widget_layout_toolbox", { 0.0f, 250.0f }, ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeY);
+                ImGui::BeginChild("##widget_layout_toolbox", { 0.0f, 250.0f }, ImGuiChildFlags_ResizeY);
                 {
                     if (ImGui::BeginTabBar("##layout_toolbox_tab_bar"))
                     {
@@ -816,7 +818,7 @@ namespace ignite
                 ImGui::EndChild(); // !Toolbox
 
                 // Tree - bottom
-                ImGui::BeginChild("##widget_layout_tree", { 0.0f, 0.0f }, ImGuiChildFlags_Borders);
+                ImGui::BeginChild("##widget_layout_tree", { 0.0f, 0.0f });
                 {
                     if (ImGui::BeginTabBar("##layout_tree_tab_bar"))
                     {

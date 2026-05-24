@@ -569,6 +569,7 @@ namespace ignite
                             if (metadata.type == AssetType::Widget)
                             {
                                 c.widgetHandle = handle;
+                                c.dirty = true;
                             }
                         }
                         ImGui::EndDragDropTarget();
@@ -580,6 +581,7 @@ namespace ignite
                         if (ImGui::Button("X##ClearWidget"))
                         {
                             c.widgetHandle = AssetHandle(0);
+                            c.dirty = true;
                         }
                     }
                 });
@@ -1155,6 +1157,7 @@ namespace ignite
                     if (UI::DrawComboBox("Projection", projectionTypeStr, IM_ARRAYSIZE(projectionTypeStr), &projectionIdx))
                     {
                         c.camera.projectionType = static_cast<ProjectionType>(projectionIdx);
+                        c.dirty = true;
                     }
                 }
 

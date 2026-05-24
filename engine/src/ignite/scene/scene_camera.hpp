@@ -24,7 +24,7 @@ namespace ignite
         void SetTransform(const glm::mat4 &transform);
         virtual glm::mat4 GetView() override;
 
-        void SetAspectRatioPreset(AspectRatioPreset preset) { m_AspectRatioPreset = preset; }
+        void SetAspectRatioPreset(AspectRatioPreset preset);
         AspectRatioPreset GetAspectRatioPreset() const { return m_AspectRatioPreset; }
         bool IsFreeAspect() const { return m_AspectRatioPreset == AspectRatioPreset::Free; }
         float GetAspectRatioValue() const;
