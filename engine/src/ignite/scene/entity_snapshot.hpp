@@ -42,7 +42,7 @@ namespace ignite
         // Identity
         UUID       uuid;
         std::string name;
-        EntityType type   = EntityType_Node;
+        EntityType type = EntityType_Node;
         UUID       parent = UUID(0);
         std::vector<UUID> children;
 
@@ -58,54 +58,56 @@ namespace ignite
         // 2D Physics — body / shape IDs are runtime-only, we copy editable fields only
         struct Rigidbody2DSnapshot
         {
-            Body2DType type          = Body2DType_Static;
-            glm::vec2  linearVelocity = { 0.0f, 0.0f };
-            float      angularVelocity = 0.0f;
-            float      gravityScale    = 1.0f;
-            float      linearDamping   = 0.6f;
-            float      angularDamping  = 0.2f;
-            bool       isAwake         = true;
-            bool       isEnabled       = true;
-            bool       isEnableSleep   = false;
-            bool       allowFastRotation = true;
-            bool       fixedRotation   = false;
+            Rigidbody2DComponent::EBodyType bodyType = Rigidbody2DComponent::EBodyType::Static;
+            glm::vec2 linearVelocity = { 0.0f, 0.0f };
+            float angularVelocity = 0.0f;
+            float gravityScale = 1.0f;
+            float linearDamping = 0.6f;
+            float angularDamping = 0.2f;
+            bool isAwake = true;
+            bool isEnabled = true;
+            bool isEnableSleep = false;
+            bool allowFastRotation = true;
+            bool fixedRotation = false;
         };
+
         std::optional<Rigidbody2DSnapshot> rigidbody2D;
 
         struct BoxCollider2DSnapshot
         {
-            glm::vec2 size        = { 0.5f, 0.5f };
-            glm::vec2 offset      = { 0.0f, 0.0f };
+            glm::vec2 size = { 0.5f, 0.5f };
+            glm::vec2 offset = { 0.0f, 0.0f };
             float     restitution = 0.1f;
-            float     friction    = 0.5f;
-            float     density     = 1.0f;
-            bool      isSensor    = false;
+            float     friction = 0.5f;
+            float     density = 1.0f;
+            bool      isSensor = false;
         };
+
         std::optional<BoxCollider2DSnapshot> boxCollider2D;
 
-		struct CircleCollider2DSnapshot
-		{
-			glm::vec2 center = { 0.0f, 0.0f };
-			float     radius = 0.5f;
-			float     restitution = 0.1f;
-			float     friction = 0.5f;
-			float     density = 1.0f;
-			bool      isSensor = false;
-		};
-		std::optional<CircleCollider2DSnapshot> circleCollider2D;
+        struct CircleCollider2DSnapshot
+        {
+            glm::vec2 center = { 0.0f, 0.0f };
+            float     radius = 0.5f;
+            float     restitution = 0.1f;
+            float     friction = 0.5f;
+            float     density = 1.0f;
+            bool      isSensor = false;
+        };
+        std::optional<CircleCollider2DSnapshot> circleCollider2D;
 
         // 3D Physics — JPH::Body* is runtime-only
         struct RigidbodySnapshot
         {
-            bool  isStatic           = false;
-            bool  useGravity         = true;
+            RigidbodyComponent::EBodyType bodyType = RigidbodyComponent::EBodyType::Static;
+            bool  useGravity = true;
             bool  rotateX = true, rotateY = true, rotateZ = true;
-            bool  moveX   = true, moveY   = true, moveZ   = true;
-            float mass               = 1.0f;
-            bool  allowSleeping      = true;
+            bool  moveX = true, moveY = true, moveZ = true;
+            float mass = 1.0f;
+            bool  allowSleeping = true;
             bool  retainAcceleration = false;
-            float gravityFactor      = 1.0f;
-            glm::vec3 centerMass     = { 0.0f, 0.0f, 0.0f };
+            float gravityFactor = 1.0f;
+            glm::vec3 centerMass = { 0.0f, 0.0f, 0.0f };
         };
         std::optional<RigidbodySnapshot> rigidbody;
 
@@ -158,7 +160,7 @@ namespace ignite
         {
             const Rigidbody2DComponent &rb = entity.GetComponent<Rigidbody2DComponent>();
             EntitySnapshot::Rigidbody2DSnapshot s;
-            s.type             = rb.type;
+            s.bodyType         = rb.bodyType;
             s.linearVelocity   = rb.linearVelocity;
             s.angularVelocity  = rb.angularVelocity;
             s.gravityScale     = rb.gravityScale;
@@ -198,11 +200,11 @@ namespace ignite
 			snap.circleCollider2D = s;
 		}
 
-        if (entity.HasComponent<RigibodyComponent>())
+        if (entity.HasComponent<RigidbodyComponent>())
         {
-            const RigibodyComponent &rb = entity.GetComponent<RigibodyComponent>();
+            const RigidbodyComponent &rb = entity.GetComponent<RigidbodyComponent>();
             EntitySnapshot::RigidbodySnapshot s;
-            s.isStatic           = rb.isStatic;
+            s.bodyType           = rb.bodyType;
             s.useGravity         = rb.useGravity;
             s.rotateX            = rb.rotateX;
             s.rotateY            = rb.rotateY;
@@ -272,7 +274,7 @@ namespace ignite
         {
             const auto &s = *snap.rigidbody2D;
             Rigidbody2DComponent rb;
-            rb.type              = s.type;
+            rb.bodyType              = s.bodyType;
             rb.linearVelocity    = s.linearVelocity;
             rb.angularVelocity   = s.angularVelocity;
             rb.gravityScale      = s.gravityScale;
@@ -316,8 +318,8 @@ namespace ignite
         if (snap.rigidbody)
         {
             const auto &s = *snap.rigidbody;
-            RigibodyComponent rb;
-            rb.isStatic           = s.isStatic;
+            RigidbodyComponent rb;
+            rb.bodyType           = s.bodyType;
             rb.useGravity         = s.useGravity;
             rb.rotateX            = s.rotateX;
             rb.rotateY            = s.rotateY;
@@ -331,7 +333,7 @@ namespace ignite
             rb.gravityFactor      = s.gravityFactor;
             rb.centerMass         = s.centerMass;
             // body ptr is left null — physics system assigns it at runtime
-            e.AddOrReplaceComponent<RigibodyComponent>(rb);
+            e.AddOrReplaceComponent<RigidbodyComponent>(rb);
         }
 
         if (snap.boxCollider)

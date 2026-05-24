@@ -36,7 +36,7 @@ namespace ignite
             TransformComponent &tr   = reg->get<TransformComponent>(e);
 
             b2BodyDef bodyDef        = b2DefaultBodyDef();
-            bodyDef.type             = GetB2BodyType(rb.type);
+            bodyDef.type             = static_cast<b2BodyType>(rb.bodyType);
             bodyDef.position         = { tr.translation.x, tr.translation.y };
             bodyDef.rotation         = b2MakeRot(eulerAngles(tr.rotation).z);
             bodyDef.angularVelocity  = rb.angularVelocity;
@@ -91,7 +91,7 @@ namespace ignite
         auto &rb = entity.GetComponent<Rigidbody2DComponent>();
 
         b2BodyDef bodyDef        = b2DefaultBodyDef();
-        bodyDef.type             = GetB2BodyType(rb.type);
+        bodyDef.type             = static_cast<b2BodyType>(rb.bodyType);
         bodyDef.position         = { tr.translation.x, tr.translation.y };
         bodyDef.rotation         = b2MakeRot(eulerAngles(tr.rotation).z);
         bodyDef.angularVelocity  = rb.angularVelocity;
@@ -233,6 +233,12 @@ namespace ignite
 					b2Shape_SetCircle(cc.shapeId, &circleShape);
                     cc.dirty = false;
                 }
+            }
+
+            if (tr.dirtyPhysics)
+            {
+                b2Body_SetTransform(rb.bodyId, { tr.translation.x, tr.translation.y }, b2MakeRot(eulerAngles(tr.rotation).z));
+                tr.dirtyPhysics = false;
             }
 
             // first, calculate the local transform

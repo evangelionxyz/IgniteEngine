@@ -23,6 +23,20 @@ public static class Input
         }
     }
 
+    public static Vector2 mousePosition => MousePosition;
+
+    public static bool GetMouseButtonDown(int button)
+    {
+        MouseCode code = button switch
+        {
+            0 => MouseCode.Left,
+            1 => MouseCode.Right,
+            2 => MouseCode.Middle,
+            _ => MouseCode.Left
+        };
+        return IsMouseButtonPressed(code);
+    }
+
     public static void SetMouseToCenter() => CoreInternalCalls.Input_SetMouseToCenter();
     public static void SetCursorMode(CursorMode mode) => CoreInternalCalls.Input_SetCursorMode((int)mode);
 }

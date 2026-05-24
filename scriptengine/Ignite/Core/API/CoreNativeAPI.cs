@@ -72,25 +72,25 @@ public static class CoreNativeAPI
         public delegate void GetVector2Fn(ulong entityID, out NativeObject.Vector2 result);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void SetVector2Fn(ulong entityID, NativeObject.Vector2 value);
+        public delegate void SetVector2Fn(ulong entityID, ref NativeObject.Vector2 value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate ulong GetVector3Fn(ulong entityID, out NativeObject.Vector3 value);
+        public delegate void GetVector3Fn(ulong entityID, out NativeObject.Vector3 value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate ulong SetVector3Fn(ulong entityID, NativeObject.Vector3 value);
+        public delegate void SetVector3Fn(ulong entityID, ref NativeObject.Vector3 value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate ulong GetVector4Fn(ulong entityID, out NativeObject.Vector4 value);
+        public delegate void GetVector4Fn(ulong entityID, out NativeObject.Vector4 value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate ulong SetVector4Fn(ulong entityID, NativeObject.Vector4 value);
+        public delegate void SetVector4Fn(ulong entityID, ref NativeObject.Vector4 value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void GetQuaternionFn(ulong entityID, out NativeObject.Quaternion result);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void SetQuaternionFn(ulong entityID, NativeObject.Quaternion value);
+        public delegate void SetQuaternionFn(ulong entityID, ref NativeObject.Quaternion value);
 
         // Input system
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]

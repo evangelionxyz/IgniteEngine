@@ -223,7 +223,7 @@ namespace ignite
                     const auto &comp = entity.GetComponent<Rigidbody2DComponent>();
                     sr.BeginMap("Rigidbody2D");
                     {
-                        sr.AddKeyValue("Type", BodyTypeToString(comp.type));
+                        sr.AddKeyValue("BodyType", static_cast<int>(comp.bodyType));
                         sr.AddKeyValue("LinearVelocity", comp.linearVelocity);
                         sr.AddKeyValue("AngularVelocity", comp.angularVelocity);
                         sr.AddKeyValue("GravityScale", comp.gravityScale);
@@ -284,12 +284,13 @@ namespace ignite
                 }
 
                 // Rigidbody
-                if (entity.HasComponent<RigibodyComponent>())
+                if (entity.HasComponent<RigidbodyComponent>())
                 {
-                    const auto &comp = entity.GetComponent<RigibodyComponent>();
+                    const auto &comp = entity.GetComponent<RigidbodyComponent>();
                     sr.BeginMap("Rigidbody");
                     {
-                        sr.AddKeyValue("MotionQuality", static_cast<int>(comp.MotionQuality));
+                        sr.AddKeyValue("MotionQuality", static_cast<int>(comp.motionQuality));
+                        sr.AddKeyValue("BodyType", static_cast<int>(comp.bodyType));
                         sr.AddKeyValue("UseGravity", comp.useGravity);
                         sr.AddKeyValue("RotateX", comp.rotateX);
                         sr.AddKeyValue("RotateY", comp.rotateY);
@@ -297,7 +298,6 @@ namespace ignite
                         sr.AddKeyValue("MoveX", comp.moveX);
                         sr.AddKeyValue("MoveY", comp.moveY);
                         sr.AddKeyValue("MoveZ", comp.moveZ);
-                        sr.AddKeyValue("IsStatic", comp.isStatic);
                         sr.AddKeyValue("Mass", comp.mass);
                         sr.AddKeyValue("AllowSleeping", comp.allowSleeping);
                         sr.AddKeyValue("RetainAcceleration", comp.retainAcceleration);
@@ -754,7 +754,7 @@ namespace ignite
             if (YAML::Node node = entityNode["Rigidbody2D"])
             {
                 auto &comp = desEntity.AddComponent<Rigidbody2DComponent>();
-                if (auto n = node["Type"]) comp.type = BodyTypeFromString(n.as<std::string>());
+                if (auto n = node["BodyType"]) comp.bodyType = static_cast<Rigidbody2DComponent::EBodyType>(n.as<int>());
                 if (auto n = node["LinearVelocity"]) comp.linearVelocity = n.as<glm::vec2>();
                 if (auto n = node["AngularVelocity"]) comp.angularVelocity = n.as<float>();
                 if (auto n = node["GravityScale"]) comp.gravityScale = n.as<float>();
@@ -794,8 +794,9 @@ namespace ignite
             // Rigidbody
             if (YAML::Node node = entityNode["Rigidbody"])
             {
-                auto &comp = desEntity.AddComponent<RigibodyComponent>();
-                comp.MotionQuality = static_cast<RigibodyComponent::EMotionQuality>(node["MotionQuality"].as<int>());
+                auto &comp = desEntity.AddComponent<RigidbodyComponent>();
+                if (auto n = node["MotionQuality"]) comp.motionQuality = static_cast<RigidbodyComponent::EMotionQuality>(n.as<int>());
+                if (auto n = node["BodyType"]) comp.bodyType = static_cast<RigidbodyComponent::EBodyType>(n.as<int>());
                 if (auto n = node["UseGravity"]) comp.useGravity = n.as<bool>();
                 if (auto n = node["RotateX"]) comp.rotateX = n.as<bool>();
                 if (auto n = node["RotateY"]) comp.rotateY = n.as<bool>();
@@ -803,7 +804,6 @@ namespace ignite
                 if (auto n = node["MoveX"]) comp.moveX = n.as<bool>();
                 if (auto n = node["MoveY"]) comp.moveY = n.as<bool>();
                 if (auto n = node["MoveZ"]) comp.moveZ = n.as<bool>();
-                if (auto n = node["IsStatic"]) comp.isStatic = n.as<bool>();
                 if (auto n = node["Mass"]) comp.mass = n.as<float>();
                 if (auto n = node["AllowSleeping"]) comp.allowSleeping = n.as<bool>();
                 if (auto n = node["RetainAcceleration"]) comp.retainAcceleration = n.as<bool>();

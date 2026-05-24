@@ -45,6 +45,7 @@
 
 namespace ignite
 {
+    class ICamera;
     class TransformComponent;
     struct Rect;
 
@@ -64,7 +65,9 @@ namespace ignite
         static glm::vec2 GetNormalizedDeviceCoord(const glm::vec2 &mouse, const glm::vec2 &screen);
         static glm::vec4 GetEyeCoord(glm::vec4 clipCoords, const glm::mat4 &projectionMatrix);
         static glm::vec3 GetWorldPosition(const glm::vec4 &eyeCoords, const glm::mat4 &view);
-        static glm::vec3 GetRayFromScreenCoords(const glm::vec2 &coord, const glm::vec2 &screen, const glm::mat4 &projection, const glm::mat4 &view, bool isPerspective, glm::vec3 &rayOrigin);
+        static glm::vec3 GetRayFromScreenCoords(const glm::vec2 &coord, const glm::vec2 &screen, const glm::mat4 &projection, const glm::mat4 &view, bool isPerspective, glm::vec3 *rayOrigin);
+        static glm::vec3 GetRayFromScreenCoords(const glm::vec2 &coord, const glm::vec2 &screen, ICamera *camera, glm::vec3 *outOrigin);
+
         static glm::vec3 ScreenToWorldOnPlane(const glm::vec2 &screenPos, float planeZ, const glm::mat4 &viewProjection, const Rect &viewportRect, bool *isValid = nullptr);
         static glm::mat4 RemoveScale(const glm::mat4 &matrix);
         static void ComputeCascadeMatrices(const glm::vec3 &cameraPosition, const glm::mat4 &view, const glm::mat4 &projection, const glm::vec3 lightDriection, int32_t cascadeCount, const std::vector<float> &cascade_splits, std::vector<glm::mat4> &cascade_light_matrices);

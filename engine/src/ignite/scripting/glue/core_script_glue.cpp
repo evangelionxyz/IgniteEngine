@@ -9,6 +9,9 @@
 #include "ignite/scripting/scriptable_object.hpp"
 #include "ignite/project/project.hpp"
 
+#include "ignite/core/application.hpp"
+#include "ignite/graphics/window.hpp"
+
 namespace ignite
 {
     namespace
@@ -57,16 +60,28 @@ namespace ignite
                 return;
             }
 
+            if (Input::IsGameplayMousePositionEnabled())
+            {
+                *result = Input::GetGameplayMousePosition();
+                return;
+            }
+
             const glm::ivec2 mousePos = Input::GetMousePosition();
             glm::vec2 absPos = glm::vec2(mousePos.x, mousePos.y);
+
             Scene *scene = GetSceneContext();
             if (scene)
             {
-                Entity cameraEntity = scene->GetPrimaryCamera();
-                if (cameraEntity.IsValid() && cameraEntity.HasComponent<CameraComponent>())
+                if (Entity cameraEntity = scene->GetPrimaryCamera())
                 {
                     const auto &cc = cameraEntity.GetComponent<CameraComponent>();
-                    absPos -= cc.camera.viewportPosition;
+                    glm::vec2 vpPosition = cc.camera.viewportPosition;
+                    if (auto *window = Application::GetInstance()->GetWindow())
+                    {
+                        glm::ivec2 winPos = window->GetPosition();
+                        vpPosition -= glm::vec2(winPos.x, winPos.y);
+                    }
+                    absPos -= vpPosition;
                 }
             }
 

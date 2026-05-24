@@ -34,7 +34,7 @@ public abstract class IgniteObject : IEquatable<IgniteObject>
         return ID == other.ID;
     }
 
-    public static bool operator ==(IgniteObject left, IgniteObject right)
+    public static bool operator ==(IgniteObject? left, IgniteObject? right)
     {
         if (ReferenceEquals(left, right))
             return true;
@@ -45,6 +45,6 @@ public abstract class IgniteObject : IEquatable<IgniteObject>
         return left.ID == right.ID;
     }
 
-    public static bool operator !=(IgniteObject left, IgniteObject right) => !(left == right);
-    public static implicit operator ulong(IgniteObject so) => so?.ID ?? 0UL;
+    public static bool operator !=(IgniteObject? left, IgniteObject? right) => !(left == right);
+    public static implicit operator ulong(IgniteObject? so) => so?.ID ?? 0UL;
 }

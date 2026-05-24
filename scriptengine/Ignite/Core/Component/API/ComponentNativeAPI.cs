@@ -11,6 +11,7 @@ public static class ComponentNativeAPI
         public IntPtr Scene_GetScreenToWorldRay;
         public IntPtr Scene_Raycast;
         public IntPtr Scene_PhysicsRaycast;
+        public IntPtr Scene_GetPrimaryCamera;
         public IntPtr Entity_HasComponent;
         public IntPtr Entity_AddComponent;
         public IntPtr Entity_FindEntityByName;
@@ -146,6 +147,72 @@ public static class ComponentNativeAPI
         public IntPtr TextComponent_GetKerning;
         public IntPtr TextComponent_SetLineSpacing;
         public IntPtr TextComponent_GetLineSpacing;
+
+        // RigidbodyComponent (3D)
+        public IntPtr RigidbodyComponent_GetType;
+        public IntPtr RigidbodyComponent_SetType;
+        public IntPtr RigidbodyComponent_GetMotionQuality;
+        public IntPtr RigidbodyComponent_GetUseGravity;
+        public IntPtr RigidbodyComponent_SetUseGravity;
+        public IntPtr RigidbodyComponent_GetMass;
+        public IntPtr RigidbodyComponent_GetGravityFactor;
+        public IntPtr RigidbodyComponent_SetGravityFactor;
+        public IntPtr RigidbodyComponent_GetLinearVelocity;
+        public IntPtr RigidbodyComponent_SetLinearVelocity;
+        public IntPtr RigidbodyComponent_GetAngularVelocity;
+        public IntPtr RigidbodyComponent_GetPosition;
+        public IntPtr RigidbodyComponent_SetPosition;
+        public IntPtr RigidbodyComponent_GetRotation;
+        public IntPtr RigidbodyComponent_SetRotation;
+        public IntPtr RigidbodyComponent_GetCenterOfMass;
+        public IntPtr RigidbodyComponent_IsActive;
+        public IntPtr RigidbodyComponent_ApplyForce;
+        public IntPtr RigidbodyComponent_ApplyForceToCenter;
+        public IntPtr RigidbodyComponent_ApplyTorque;
+        public IntPtr RigidbodyComponent_ApplyLinearImpulse;
+        public IntPtr RigidbodyComponent_ApplyLinearImpulseToCenter;
+        public IntPtr RigidbodyComponent_ApplyAngularImpulse;
+        public IntPtr RigidbodyComponent_Activate;
+        public IntPtr RigidbodyComponent_Deactivate;
+        public IntPtr RigidbodyComponent_MoveKinematic;
+
+        // BoxColliderComponent
+        public IntPtr BoxColliderComponent_GetCenter;
+        public IntPtr BoxColliderComponent_SetCenter;
+        public IntPtr BoxColliderComponent_GetScale;
+        public IntPtr BoxColliderComponent_SetScale;
+        public IntPtr BoxColliderComponent_GetFriction;
+        public IntPtr BoxColliderComponent_SetFriction;
+        public IntPtr BoxColliderComponent_GetRestitution;
+        public IntPtr BoxColliderComponent_SetRestitution;
+        public IntPtr BoxColliderComponent_GetDensity;
+        public IntPtr BoxColliderComponent_SetDensity;
+
+        // SphereColliderComponent
+        public IntPtr SphereColliderComponent_GetCenter;
+        public IntPtr SphereColliderComponent_SetCenter;
+        public IntPtr SphereColliderComponent_GetRadius;
+        public IntPtr SphereColliderComponent_SetRadius;
+        public IntPtr SphereColliderComponent_GetFriction;
+        public IntPtr SphereColliderComponent_SetFriction;
+        public IntPtr SphereColliderComponent_GetRestitution;
+        public IntPtr SphereColliderComponent_SetRestitution;
+        public IntPtr SphereColliderComponent_GetDensity;
+        public IntPtr SphereColliderComponent_SetDensity;
+
+        // CapsuleColliderComponent
+        public IntPtr CapsuleColliderComponent_GetCenter;
+        public IntPtr CapsuleColliderComponent_SetCenter;
+        public IntPtr CapsuleColliderComponent_GetRadius;
+        public IntPtr CapsuleColliderComponent_SetRadius;
+        public IntPtr CapsuleColliderComponent_GetHeight;
+        public IntPtr CapsuleColliderComponent_SetHeight;
+        public IntPtr CapsuleColliderComponent_GetFriction;
+        public IntPtr CapsuleColliderComponent_SetFriction;
+        public IntPtr CapsuleColliderComponent_GetRestitution;
+        public IntPtr CapsuleColliderComponent_SetRestitution;
+        public IntPtr CapsuleColliderComponent_GetDensity;
+        public IntPtr CapsuleColliderComponent_SetDensity;
     }
 
     public struct Funcs
@@ -156,16 +223,19 @@ public static class ComponentNativeAPI
         public delegate void SceneGetScreenToWorldRayFn(float x, float y, out NativeObject.Vector3 outOrigin, out NativeObject.Vector3 outDirection);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate ulong SceneRaycastFn(NativeObject.Vector3 origin, NativeObject.Vector3 direction);
+        public delegate ulong SceneRaycastFn(ref NativeObject.Vector3 origin, ref NativeObject.Vector3 direction);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public unsafe delegate ulong ScenePhysicsRaycastFn(NativeObject.Vector3 origin, NativeObject.Vector3 direction, float maxDistance, NativeObject.Vector3* outHitPoint, NativeObject.Vector3* outHitNormal);
+        public unsafe delegate ulong ScenePhysicsRaycastFn(ref NativeObject.Vector3 origin, ref NativeObject.Vector3 direction, float maxDistance, NativeObject.Vector3* outHitPoint, NativeObject.Vector3* outHitNormal);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate ulong EntityInstantiateWithNameFn(IntPtr name, NativeObject.Vector3 value);
+        public delegate ulong SceneGetPrimaryCameraFn();
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate ulong EntityInstantiateFn(ulong entityID, NativeObject.Vector3 value);
+        public delegate ulong EntityInstantiateWithNameFn(IntPtr name, ref NativeObject.Vector3 value);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate ulong EntityInstantiateFn(ulong entityID, ref NativeObject.Vector3 value);
 
         [return: MarshalAs(UnmanagedType.I1)]
         public delegate bool EntityHasComponentFn(ulong entityID, IntPtr componentTypeName);
@@ -285,5 +355,43 @@ public static class ComponentNativeAPI
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void WidgetComponentSetU64ByNameFn(ulong entityID, IntPtr name, ulong value);
+
+        // ==========================================
+        // RigidbodyComponent (3D) and Collider Delegates
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void GetVector3VoidFn(ulong entityID, out NativeObject.Vector3 result);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void SetVector3VoidFn(ulong entityID, ref NativeObject.Vector3 value);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void GetQuaternionVoidFn(ulong entityID, out NativeObject.Quaternion result);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void SetQuaternionVoidFn(ulong entityID, ref NativeObject.Quaternion value);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void RigidbodyApplyForceFn(ulong entityID, ref NativeObject.Vector3 force, ref NativeObject.Vector3 point);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void RigidbodyApplyForceToCenterFn(ulong entityID, ref NativeObject.Vector3 force);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void RigidbodyApplyTorqueFn(ulong entityID, ref NativeObject.Vector3 torque);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void RigidbodyApplyLinearImpulseFn(ulong entityID, ref NativeObject.Vector3 impulse, ref NativeObject.Vector3 point);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void RigidbodyApplyLinearImpulseToCenterFn(ulong entityID, ref NativeObject.Vector3 impulse);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void RigidbodyApplyAngularImpulseFn(ulong entityID, ref NativeObject.Vector3 impulse);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void RigidbodyActionFn(ulong entityID);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void RigidbodyMoveKinematicFn(ulong entityID, ref NativeObject.Vector3 targetPosition, ref NativeObject.Vector3 targetRotation, float deltaTime);
     }
 }

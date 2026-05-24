@@ -26,6 +26,7 @@
 #include "component_group.hpp"
 #include "ignite/core/uuid.hpp"
 #include "entity.hpp"
+#include <type_traits>
 
 namespace ignite
 {

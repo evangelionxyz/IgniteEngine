@@ -4,6 +4,19 @@ using Ignite.Core.Component;
 
 namespace Ignite;
 
+public enum BodyType
+{
+    Static = 0,
+    Kinematic = 1,
+    Dynamic = 2,
+}
+
+public enum MotionQuality
+{
+    Discrete = 0,
+    LinearCast = 1,
+}
+
 /// <summary>Holds information about a collision event, similar to Unity's Collision class.</summary>
 public class Collision
 {
@@ -12,6 +25,17 @@ public class Collision
     internal Collision(Entity other)
     {
         Other = other;
+    }
+}
+
+public class Collider
+{
+    public Entity Entity { get; }
+    public string name => Entity?.GetName() ?? string.Empty;
+
+    internal Collider(Entity entity)
+    {
+        Entity = entity;
     }
 }
 
@@ -29,6 +53,8 @@ public struct RaycastHit
 
     /// <summary>True when something was hit.</summary>
     public bool IsHit => Entity != null;
+
+    public Collider? collider => Entity != null ? new Collider(Entity) : null;
 }
 
 public static class Physics
@@ -89,5 +115,13 @@ public static class Physics
             ray.Origin, ray.Direction, maxDistance,
             out _, out _);
         return entityID != 0 ? new Entity(entityID) : null;
+    }
+
+    /// <summary>
+    /// Unity-style narrow-phase raycast using Jolt physics.
+    /// </summary>
+    public static bool Raycast(Ray ray, out RaycastHit hit, float maxDistance = 1000f)
+    {
+        return PhysicsRaycast(ray, maxDistance, out hit);
     }
 }
