@@ -123,6 +123,180 @@ namespace ignite
                 if (!rb.body)
                     continue;
 
+                if (entity.HasComponent<BoxColliderComponent>())
+                {
+                    auto &col = entity.GetComponent<BoxColliderComponent>();
+                    if (col.dirty)
+                    {
+                        glm::vec3 halfExtents = col.scale * tc.scale;
+                        if (halfExtents.x > 0.0f && halfExtents.y > 0.0f && halfExtents.z > 0.0f)
+                        {
+                            JPH::BoxShapeSettings shapeSettings(GlmToJoltVec3(halfExtents));
+                            JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
+                            if (shapeResult.IsValid() && !shapeResult.HasError())
+                            {
+                                JPH::ShapeRefC shape = shapeResult.Get();
+                                JPH::RotatedTranslatedShapeSettings offsetSettings(GlmToJoltVec3(col.center * tc.scale), JPH::Quat::sIdentity(), shape.GetPtr());
+                                JPH::ShapeSettings::ShapeResult offsetResult = offsetSettings.Create();
+                                if (offsetResult.IsValid() && !offsetResult.HasError())
+                                {
+                                    shape = offsetResult.Get();
+                                    m_BodyInterface->SetShape(rb.body->GetID(), shape.GetPtr(), true, JPH::EActivation::Activate);
+                                    m_BodyInterface->SetFriction(rb.body->GetID(), col.friction);
+                                    m_BodyInterface->SetRestitution(rb.body->GetID(), col.restitution);
+                                    col.shape = (void *)shape.GetPtr();
+                                }
+                            }
+                        }
+                        col.dirty = false;
+                    }
+                }
+
+                if (entity.HasComponent<SphereColliderComponent>())
+                {
+                    auto &col = entity.GetComponent<SphereColliderComponent>();
+                    if (col.dirty)
+                    {
+                        float maxAxis = glm::compMax(tc.scale);
+                        float effectiveRadius = col.radius * maxAxis;
+                        if (effectiveRadius > 0.0f)
+                        {
+                            JPH::SphereShapeSettings shapeSettings(effectiveRadius);
+                            JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
+                            if (shapeResult.IsValid() && !shapeResult.HasError())
+                            {
+                                JPH::ShapeRefC shape = shapeResult.Get();
+                                JPH::RotatedTranslatedShapeSettings offsetSettings(GlmToJoltVec3(col.center * maxAxis), JPH::Quat::sIdentity(), shape.GetPtr());
+                                JPH::ShapeSettings::ShapeResult offsetResult = offsetSettings.Create();
+                                if (offsetResult.IsValid() && !offsetResult.HasError())
+                                {
+                                    shape = offsetResult.Get();
+                                    m_BodyInterface->SetShape(rb.body->GetID(), shape.GetPtr(), true, JPH::EActivation::Activate);
+                                    m_BodyInterface->SetFriction(rb.body->GetID(), col.friction);
+                                    m_BodyInterface->SetRestitution(rb.body->GetID(), col.restitution);
+                                    col.shape = (void *)shape.GetPtr();
+                                }
+                            }
+                        }
+                        col.dirty = false;
+                    }
+                }
+
+                if (entity.HasComponent<CapsuleColliderComponent>())
+                {
+                    auto &col = entity.GetComponent<CapsuleColliderComponent>();
+                    if (col.dirty)
+                    {
+                        float maxScale = glm::compMax(tc.scale);
+                        float halfHeight = col.height * 0.5f * maxScale;
+                        float radius = col.radius * maxScale;
+                        if (halfHeight > 0.0f && radius > 0.0f)
+                        {
+                            JPH::CapsuleShapeSettings capsuleShapeSettings(halfHeight, radius);
+                            JPH::ShapeSettings::ShapeResult capsuleShapeResult = capsuleShapeSettings.Create();
+                            if (capsuleShapeResult.IsValid() && !capsuleShapeResult.HasError())
+                            {
+                                JPH::ShapeRefC capsuleShape = capsuleShapeResult.Get();
+                                const glm::quat horizontalRotation = glm::angleAxis(1.57079632679f, glm::vec3(1.0f, 0.0f, 0.0f));
+                                JPH::RotatedTranslatedShapeSettings shapeSettings(GlmToJoltVec3(col.center * maxScale), GlmToJoltQuat(horizontalRotation), capsuleShape.GetPtr());
+                                JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
+                                if (shapeResult.IsValid() && !shapeResult.HasError())
+                                {
+                                    JPH::ShapeRefC shape = shapeResult.Get();
+                                    m_BodyInterface->SetShape(rb.body->GetID(), shape.GetPtr(), true, JPH::EActivation::Activate);
+                                    m_BodyInterface->SetFriction(rb.body->GetID(), col.friction);
+                                    m_BodyInterface->SetRestitution(rb.body->GetID(), col.restitution);
+                                    col.shape = (void *)shape.GetPtr();
+                                }
+                            }
+                        }
+                        col.dirty = false;
+                    }
+                }
+
+                if (entity.HasComponent<MeshColliderComponent>())
+                {
+                    auto &col = entity.GetComponent<MeshColliderComponent>();
+                    if (col.dirty)
+                    {
+                        if (!col.vertices.empty())
+                        {
+                            JPH::ShapeRefC shape;
+                            if (col.convex)
+                            {
+                                JPH::Array<JPH::Vec3> vertices;
+                                vertices.reserve(col.vertices.size());
+                                for (const auto& vertex : col.vertices)
+                                {
+                                    vertices.push_back(GlmToJoltVec3(vertex));
+                                }
+                                JPH::ConvexHullShapeSettings shapeSettings(vertices);
+                                JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
+                                if (shapeResult.IsValid() && !shapeResult.HasError())
+                                {
+                                    shape = shapeResult.Get();
+                                }
+                            }
+                            else
+                            {
+                                JPH::TriangleList triangles;
+                                if (col.indices.empty())
+                                {
+                                    if (col.vertices.size() % 3 == 0)
+                                    {
+                                        for (size_t i = 0; i < col.vertices.size(); i += 3)
+                                        {
+                                            JPH::Triangle triangle(
+                                                GlmToJoltVec3(col.vertices[i]),
+                                                GlmToJoltVec3(col.vertices[i + 1]),
+                                                GlmToJoltVec3(col.vertices[i + 2])
+                                            );
+                                            triangles.push_back(triangle);
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    for (size_t i = 0; i < col.indices.size(); i += 3)
+                                    {
+                                        if (i + 2 < col.indices.size() &&
+                                            col.indices[i] < col.vertices.size() &&
+                                            col.indices[i + 1] < col.vertices.size() &&
+                                            col.indices[i + 2] < col.vertices.size())
+                                        {
+                                            JPH::Triangle triangle(
+                                                GlmToJoltVec3(col.vertices[col.indices[i]]),
+                                                GlmToJoltVec3(col.vertices[col.indices[i + 1]]),
+                                                GlmToJoltVec3(col.vertices[col.indices[i + 2]])
+                                            );
+                                            triangles.push_back(triangle);
+                                        }
+                                    }
+                                }
+
+                                if (!triangles.empty())
+                                {
+                                    JPH::MeshShapeSettings shapeSettings(triangles);
+                                    JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
+                                    if (shapeResult.IsValid() && !shapeResult.HasError())
+                                    {
+                                        shape = shapeResult.Get();
+                                    }
+                                }
+                            }
+
+                            if (shape)
+                            {
+                                m_BodyInterface->SetShape(rb.body->GetID(), shape.GetPtr(), true, JPH::EActivation::Activate);
+                                m_BodyInterface->SetFriction(rb.body->GetID(), col.friction);
+                                m_BodyInterface->SetRestitution(rb.body->GetID(), col.restitution);
+                                col.shape = (void *)shape.GetPtr();
+                            }
+                        }
+                        col.dirty = false;
+                    }
+                }
+
                 if (tc.dirtyPhysics)
                 {
                     SetPosition(*rb.body, tc.translation, true);
@@ -248,7 +422,17 @@ namespace ignite
 
         JPH::ShapeRefC shape = shapeResult.Get();
 
-        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation + col.center, tc.rotation);
+        // Wrap with offset
+        JPH::RotatedTranslatedShapeSettings offsetSettings(GlmToJoltVec3(col.center * tc.scale), JPH::Quat::sIdentity(), shape.GetPtr());
+        JPH::ShapeSettings::ShapeResult offsetResult = offsetSettings.Create();
+        if (!offsetResult.IsValid() || offsetResult.HasError())
+        {
+            LOG_ASSERT(false, "[Jolt Physics] Invalid shape settings! {}", offsetResult.GetError());
+            return;
+        }
+        shape = offsetResult.Get();
+
+        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation, tc.rotation);
 
         JPH::Body *body = m_BodyInterface->CreateBody(bodySettings);
         if (body)
@@ -298,7 +482,18 @@ namespace ignite
         }
 
         JPH::ShapeRefC shape = shapeResult.Get();
-        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation + col.center, tc.rotation);
+
+        // Wrap with offset to match renderer visualizer (using entity transform origin as body origin)
+        JPH::RotatedTranslatedShapeSettings offsetSettings(GlmToJoltVec3(col.center * tc.scale), JPH::Quat::sIdentity(), shape.GetPtr());
+        JPH::ShapeSettings::ShapeResult offsetResult = offsetSettings.Create();
+        if (!offsetResult.IsValid() || offsetResult.HasError())
+        {
+            LOG_ASSERT(false, "[Jolt Physics] Invalid shape settings! {}", offsetResult.GetError());
+            return;
+        }
+        shape = offsetResult.Get();
+
+        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation, tc.rotation);
 
         // Extra safety: ensure body pointer is still null to avoid duplicates
         if (rb.body)
@@ -364,7 +559,7 @@ namespace ignite
         JPH::ShapeRefC capsuleShape = capsuleShapeResult.Get();
 
         const glm::quat horizontalRotation = glm::angleAxis(1.57079632679f, glm::vec3(1.0f, 0.0f, 0.0f));
-        JPH::RotatedTranslatedShapeSettings shapeSettings(JPH::Vec3::sZero(), GlmToJoltQuat(horizontalRotation), capsuleShape.GetPtr());
+        JPH::RotatedTranslatedShapeSettings shapeSettings(GlmToJoltVec3(col.center * maxScale), GlmToJoltQuat(horizontalRotation), capsuleShape.GetPtr());
 
         JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
         if (!shapeResult.IsValid() || shapeResult.HasError())
@@ -375,7 +570,7 @@ namespace ignite
 
         JPH::ShapeRefC shape = shapeResult.Get();
 
-        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation + col.center, tc.rotation);
+        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation, tc.rotation);
 
         if (rb.body)
         {
@@ -416,7 +611,8 @@ namespace ignite
             return;
         }
 
-        float effectiveRadius = col.radius * glm::compMax(tc.scale);
+        float maxAxis = glm::compMax(tc.scale);
+        float effectiveRadius = col.radius * maxAxis;
         if (effectiveRadius <= 0.0f)
         {
             LOG_WARN("[Jolt Physics] Sphere collider for entity {} has non-positive radius {} - skipping",
@@ -433,7 +629,16 @@ namespace ignite
         }
         JPH::ShapeRefC shape = shapeResult.Get();
 
-        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation + col.center, tc.rotation);
+        JPH::RotatedTranslatedShapeSettings offsetSettings(GlmToJoltVec3(col.center * maxAxis), JPH::Quat::sIdentity(), shape.GetPtr());
+        JPH::ShapeSettings::ShapeResult offsetResult = offsetSettings.Create();
+        if (!offsetResult.IsValid() || offsetResult.HasError())
+        {
+            LOG_ASSERT(false, "[Jolt Physics] Invalid shape settings! {}", offsetResult.GetError());
+            return;
+        }
+        shape = offsetResult.Get();
+
+        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation, tc.rotation);
 
         if (rb.body)
         {
