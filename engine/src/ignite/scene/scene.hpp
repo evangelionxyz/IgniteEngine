@@ -67,8 +67,12 @@ namespace ignite
         Scope<JoltScene> physics;
         std::unordered_map<UUID, entt::entity> entities; // uuid to entity
         
-		bool IsPaused() const { return m_IsPaused; }
-        bool IsRunning() const { return m_IsPlaying; }
+		inline bool IsPaused() const { return m_IsPaused; }
+        inline bool IsRunning() const { return m_IsPlaying; }
+        inline bool IsFocusing() const { return m_IsFocusing; }
+
+        void Focus();
+        void Unfocus();
         
         static Ref<Scene> Create(Project *project, const std::string &name);
         
@@ -98,6 +102,7 @@ namespace ignite
         
         bool m_IsPaused = false;
         bool m_IsPlaying = false;
+        bool m_IsFocusing = false;
 
         std::unordered_map<AssetHandle, Ref<AnimatorController>> m_SharedAnimatorCache;
         std::unordered_map<AssetHandle, AnimatorControllerRuntime> m_SharedAnimatorRuntime;

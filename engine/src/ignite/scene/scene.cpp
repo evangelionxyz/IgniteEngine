@@ -510,6 +510,18 @@ namespace ignite
         }
     }
 
+    void Scene::Focus()
+    {
+        m_IsFocusing = true;
+        // TODO
+    }
+
+    void Scene::Unfocus()
+    {
+        m_IsFocusing = false;
+        // TODO
+    }
+
     Ref<Scene> Scene::Create(Project *project, const std::string &name)
     {
         return CreateRef<Scene>(project, name);
