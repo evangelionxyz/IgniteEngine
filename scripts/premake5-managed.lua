@@ -1,6 +1,6 @@
 -- Separated Managed Project
 workspace "IGN-Managed"
-    location "../"
+    location (path.getabsolute("../"))
     architecture "x64"
     multiprocessorcompile("On")
     configurations {
@@ -9,11 +9,12 @@ workspace "IGN-Managed"
         "Shipping"
     }
 
-    BUILD_DIR = "%{wks.location}/bin"
-    OUTPUT_DIR = "%{BUILD_DIR}/%{cfg.buildcfg}"
-    THIRDPARTY_DIR = "%{wks.location}/thirdparty"
-    THIRDPARTY_OUTPUT_DIR = "%{BUILD_DIR}/%{cfg.buildcfg}/thirdparty/%{prj.name}"
-    INTOUTPUT_DIR = "%{wks.location}/bin/objs/%{cfg.buildcfg}/%{prj.name}"
+    local wks_absolute = path.getabsolute("../")
+    BUILD_DIR = wks_absolute .. "/bin"
+    OUTPUT_DIR = BUILD_DIR .. "/%{cfg.buildcfg}"
+    THIRDPARTY_DIR = wks_absolute .. "/thirdparty"
+    THIRDPARTY_OUTPUT_DIR = BUILD_DIR .. "/%{cfg.buildcfg}/thirdparty/%{prj.name}"
+    INTOUTPUT_DIR = wks_absolute .. "/bin/objs/%{cfg.buildcfg}/%{prj.name}"
 
     group "Managed"
         include "../scriptengine/ignite-scriptengine.lua"

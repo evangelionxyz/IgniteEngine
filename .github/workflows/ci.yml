@@ -15,8 +15,8 @@ jobs:
         configuration: [Release]
     env:
       VS_VERSION: "2026"
-      PROJECT_FILE_EDITOR: editor/IgniteEditor.vcxproj
-      PROJECT_FILE_SCRIPTENGINE: scriptengine/IgniteScriptEngine.csproj
+      PROJECT_FILE_EDITOR: ignite/editor/Ignite.Editor.vcxproj
+      PROJECT_FILE_SCRIPTENGINE: scriptengine/Ignite.ScriptEngine.csproj
       SOLUTION_FILE_IGN: IGN.slnx
       PREMAKE_VERSION: 5.0.0-beta8
 

@@ -1,0 +1,55 @@
+// Copyright (c) 2026 Evangelion Manuhutu
+
+#ifndef IGN_BASE_HPP
+#define IGN_BASE_HPP
+
+#ifdef _WIN32
+    #ifndef PLATFORM_WINDOWS
+        #define PLATFORM_WINDOWS
+    #endif
+    #ifdef IGN_DLL_EXPORTS
+        #define IGN_API __declspec(dllexport)
+    #else
+        #define IGN_API __declspec(dllimport)
+    #endif
+#elif __linux__ || __GNUG__
+    #ifndef PLATFORM_LINUX
+        #define PLATFORM_LINUX
+    #endif
+    #ifdef IGN_DLL_EXPORTS
+        #define IGN_API __attribute__((visibility("default")))
+    #else
+        #define IGN_API
+    #endif
+#endif
+
+#if defined(_DEBUG) || defined(IGN_DEBUG_BUILD)
+    #define ENABLE_ASSERTS
+    #ifdef _WIN32
+        #define DEBUGBREAK() __debugbreak()
+    #elif __linux__
+        #define DEBUGBREAK() __builtin_trap()
+    #endif
+#else
+#define DEBUGBREAK()
+#endif
+
+#if !defined(IGN_RELEASE_BUILD) || !defined(IGN_SHIPPING_BUILD)
+    #define ENABLE_VERIFY
+#endif
+
+#if defined(IGN_ENABLE_TRACY)
+    #define TRACY_ENABLE
+    #include <tracy/Tracy.hpp>
+#endif
+
+#define ENGINE_VERSION "Alpha-0.1"
+
+#define EXPAND_MACRO(x)
+#define STRINGIFY_MACRO(x) #x
+
+#define BIT(x)(1 << x)
+#define BIND_EVENT_FN(fn) [](auto&&... args) -> decltype(auto) { return fn(std::forward<decltype(args)>(args)...); }
+#define BIND_CLASS_EVENT_FN(fn) [this](auto&&... args) -> decltype(auto) { return this->fn(std::forward<decltype(args)>(args)...); }
+
+#endif
