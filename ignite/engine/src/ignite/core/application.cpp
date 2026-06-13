@@ -3,6 +3,7 @@
 #include "pch.hpp"
 
 #include "application.hpp"
+#include "ignite/core/profiler/profiler.hpp"
 #include "input/app_event.hpp"
 #include "ignite/imgui/imgui_layer.hpp"
 #include "ignite/asset/asset_worker.hpp"
@@ -10,7 +11,6 @@
 #include "ignite/audio/fmod_audio.hpp"
 #include "ignite/physics/jolt/jolt_physics.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
-#include "ignite/core/profiler/profiler.hpp"
 #include "ignite/graphics/window.hpp"
 #include "ignite/graphics/ui/game_ui_system.hpp"
 #include "input/input_system.hpp"
@@ -277,11 +277,8 @@ namespace ignite
 
             if (m_CreateInfo.useGui && m_ImGuiLayer)
             {
-                IGN_PROFILE_SCOPE("RenderThread::ImGuiEndFrame");
-                m_ImGuiLayer->EndFrame(backBufferFrameBuffer);
-
-                IGN_PROFILE_SCOPE("RenderThread::ImGuiRenderPlatformWindows");
-                m_ImGuiLayer->RenderPlatformWindows();
+				m_ImGuiLayer->EndFrame(backBufferFrameBuffer);
+				m_ImGuiLayer->RenderPlatformWindows();
             }
 
             // Collect worker command lists with minimal lock hold.

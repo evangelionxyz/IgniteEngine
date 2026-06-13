@@ -5,6 +5,9 @@
 
 #include "ignite/core/base.hpp"
 
+// Note: If you want to trace you can enable by define IGN_ENABLE_TRACY
+//       Do not define TRACY_ENABLE directly
+
 #if defined(TRACY_ENABLE)
     #include <tracy/Tracy.hpp>
 

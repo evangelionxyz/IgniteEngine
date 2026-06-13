@@ -411,6 +411,8 @@ namespace ignite
 
     void ImGuiLayer::RenderPlatformWindows()
     {
+		IGN_PROFILE_FUNCTION();
+
         ImGuiIO &io = ImGui::GetIO();
         if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
         {
