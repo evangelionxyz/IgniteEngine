@@ -2528,14 +2528,15 @@ namespace ignite
 
             if (m_EditorCamera.projectionType != ProjectionType::Orthographic)
             {
-                const float orientationSize = ImGuiOrientation::internal::config.mSize = 80.0f;
-                const float orientationPadding = 25.0f;
+                constexpr float orientationSize = 80.0f;
+                ImGuiOrientation::internal::config.mSize = orientationSize;
+
+                constexpr float orientationPadding = 25.0f;
                 ImGuiOrientation::config.axisLengthScale = 0.25f;
                 ImGuiOrientation::SetRect
                 (
-
                     globals::GEditor::EditorViewport.max.x + globals::GEditor::EditorViewport.min.x - orientationSize - orientationPadding,
-                    globals::GEditor::EditorViewport.max.y + orientationPadding
+                    globals::GEditor::EditorViewport.min.y + orientationPadding
                 );
 
                 if (ImGuiOrientation::DrawGizmo(ImGui::GetWindowDrawList(), (float *const)glm::value_ptr(view), glm::value_ptr(projection), 100.0f))
