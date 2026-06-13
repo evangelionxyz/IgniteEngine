@@ -460,6 +460,7 @@ namespace ignite
         Ref<AnimatorController> runtimeAnimatorInstance = nullptr; // runtime-only for unique animator mode
         Ref<ConstantBuffer> skeletonGpuBuffer = nullptr;
         std::vector<glm::mat4> finalBoneTransforms; // per-entity GPU-ready bone transforms
+        std::vector<SkinnedMeshBufferData> cachedInstanceTransforms; // cached transforms per sub-mesh instance
 
         // Enable unique for each entity
         bool uniqueAnimator = true;

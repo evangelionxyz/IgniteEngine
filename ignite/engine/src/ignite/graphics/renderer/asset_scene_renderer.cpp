@@ -21,6 +21,15 @@
 
 namespace ignite
 {
+    static const GPUSkeletonBuffer s_IdentitySkeleton = []() {
+        GPUSkeletonBuffer buf;
+        for (int i = 0; i < MAX_BONES; ++i)
+        {
+            buf.bones[i] = glm::mat4(1.0f);
+        }
+        return buf;
+    }();
+
     Ref<Texture> AssetSceneRenderer::m_DefaultEnvTexture;
 
     AssetSceneRenderer::AssetSceneRenderer()
@@ -432,16 +441,15 @@ namespace ignite
                 m_SkeletonGpuBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Preview Skeleton Buffer");
             }
 
-            GPUSkeletonBuffer skeletonGPUData {};
+            GPUSkeletonBuffer skeletonGPUData;
             const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), m_BoneTransforms.size());
-            for (size_t i = 0; i < boneCount; ++i)
+            if (boneCount > 0)
             {
-                skeletonGPUData.bones[i] = m_BoneTransforms[i];
+                std::memcpy(skeletonGPUData.bones, m_BoneTransforms.data(), boneCount * sizeof(glm::mat4));
             }
-
-            for (size_t i = boneCount; i < MAX_BONES; ++i)
+            if (boneCount < MAX_BONES)
             {
-                skeletonGPUData.bones[i] = glm::mat4(1.0f);
+                std::memcpy(&skeletonGPUData.bones[boneCount], &s_IdentitySkeleton.bones[boneCount], (MAX_BONES - boneCount) * sizeof(glm::mat4));
             }
 
             m_SkeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));

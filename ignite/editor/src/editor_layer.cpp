@@ -320,8 +320,6 @@ namespace ignite
                 modifiedEvent.button.y = mousePos.y;
             }
         }
-        
-        m_SceneRenderer->HandleNuklearEvent(&modifiedEvent);
     }
 
     bool EditorLayer::OnKeyPressedEvent(KeyPressedEvent &event)

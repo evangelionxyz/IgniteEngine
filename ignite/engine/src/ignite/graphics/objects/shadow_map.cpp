@@ -45,6 +45,8 @@ namespace ignite
         if (quality == m_Quality)
             return;
 
+		IGN_PROFILE_FUNCTION();
+
 		m_Resolution = ShadowMapQuality::LOW == quality ? 512 :
 					   ShadowMapQuality::MEDIUM == quality ? 1024 :
 					   ShadowMapQuality::HIGH == quality ? 2048 :
@@ -71,6 +73,8 @@ namespace ignite
 
 	void CascadedShadowMap::BeginCascade(nvrhi::ICommandList *cmd, int cascadeIndex)
 	{
+		IGN_PROFILE_FUNCTION();
+
 		// Clear depth for the entire texture (all layers) on first cascade
 		if (cascadeIndex == 0)
 		{
@@ -86,6 +90,8 @@ namespace ignite
 
 	void CascadedShadowMap::ComputeMatrices(ICamera *camera, const glm::vec3 &lightPosition)
 	{
+		IGN_PROFILE_FUNCTION();
+
 		glm::vec3 lightDir = lightPosition;
 		if (glm::dot(lightDir, lightDir) < 1e-6f)
 		{
@@ -237,6 +243,8 @@ namespace ignite
 
 	void CascadedShadowMap::CreatePipeline(nvrhi::IFramebuffer *framebuffer)
 	{
+		IGN_PROFILE_FUNCTION();
+
         if (!m_VS) m_VS = Shader::Create("resources/shaders/cascaded_shadow_depth.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
 		if (!m_PS) m_PS = Shader::Create("resources/shaders/cascaded_shadow_depth.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
 
@@ -262,6 +270,8 @@ namespace ignite
 
 	void CascadedShadowMap::CreateCascadeFramebuffers()
 	{
+		IGN_PROFILE_FUNCTION();
+
 		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
 	    nvrhi::Format depthFormat = nvrhi::Format::D32;

@@ -518,9 +518,9 @@ namespace ignite
         }
 
 #if _DEBUG
-        static constexpr uint64_t MAX_CONCURRENT_LOAD_BYTES = 128 * 1024 * 1024; // 128 MB
-#else
         static constexpr uint64_t MAX_CONCURRENT_LOAD_BYTES = 256 * 1024 * 1024; // 256 MB
+#else
+        static constexpr uint64_t MAX_CONCURRENT_LOAD_BYTES = 512 * 1024 * 1024; // 512 MB
 #endif
         const uint64_t size = GetAssetFileSize(metadata);
         
@@ -537,10 +537,13 @@ namespace ignite
                     std::unique_lock<std::mutex> lock(manager->m_ThrottleMutex);
                     manager->m_ThrottleCV.wait(lock, [&]()
                     {
-                        LOG_WARN("[Throttle Guard] Throttling asset loading {} bytes, max concurent load bytes: {} bytes",
-                            manager->m_ActiveLoadBytes + size, MAX_CONCURRENT_LOAD_BYTES);
-
-                        return manager->m_ActiveLoadBytes == 0 || (manager->m_ActiveLoadBytes + size <= MAX_CONCURRENT_LOAD_BYTES);
+                        const bool signaled = manager->m_ActiveLoadBytes == 0 || (manager->m_ActiveLoadBytes + size <= MAX_CONCURRENT_LOAD_BYTES);
+                        if (!signaled)
+                        {
+                            LOG_WARN("[Throttle Guard] Throttling asset loading {} bytes, max concurent load bytes: {} bytes",
+                                manager->m_ActiveLoadBytes + size, MAX_CONCURRENT_LOAD_BYTES);
+                        }
+                        return signaled;
                     });
                     manager->m_ActiveLoadBytes += size;
                 }

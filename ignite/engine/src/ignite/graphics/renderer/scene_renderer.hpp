@@ -30,7 +30,6 @@ namespace ignite
 
         virtual void ResizeFramebuffer(uint32_t width, uint32_t height) override;
         void ResizeGameplayFramebuffer(uint32_t width, uint32_t height);
-        void HandleNuklearEvent(SDL_Event *evt);
         void SetFillMode(nvrhi::RasterFillMode mode);
 
         void SetSelectedEntity(const Entity& entity);
@@ -58,6 +57,7 @@ namespace ignite
         Ref<Mesh> ResolveMesh(Project *project, AssetHandle handle);
         Ref<Material> ResolveMaterial(Project *project, AssetHandle handle);
 
+        void UploadSkeletonBuffers(nvrhi::ICommandList *cmd);
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer);
         void UIPass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
