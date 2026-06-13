@@ -8,9 +8,8 @@ project "Project Generator"
 		"%{prj.location}/**.py",
 
 		-- Core Project
-		"%{wks.location}/editor/ignite-editor.lua",
-		"%{wks.location}/engine/ignite-engine.lua",
-		"%{wks.location}/scriptengine/ignite-scriptengine.lua",
+		"%{wks.location}/ignite/**.lua",
+		"%{wks.location}/scriptengine/ignite.scriptengine.lua",
 		
 		-- Project Root
 		"%{wks.location}/dockerfile",
@@ -26,11 +25,11 @@ project "Project Generator"
 	filter "system:windows"
 		prebuildcommands {
 			"premake5 vs2026 --file=%{wks.location}/scripts/premake5.lua",
-			"premake5 vs2026 --file=%{wks.location}/scripts/premake5-managed.lua",
+			-- "premake5 vs2026 --file=%{wks.location}/scripts/premake5-managed.lua",
 		}
 
 	filter "system:linux"
 		prebuildcommands {
 			"premake5 gmake --file=%{wks.location}/scripts/premake5.lua",
-			"premake5 gmake --file=%{wks.location}/scripts/premake5-managed.lua",
+			-- "premake5 gmake --file=%{wks.location}/scripts/premake5-managed.lua",
 		}

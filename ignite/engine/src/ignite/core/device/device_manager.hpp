@@ -51,7 +51,7 @@ namespace ignite
 {
     class Window;
 
-    struct IGN_API DefaultMessageCallback final : public nvrhi::IMessageCallback
+    struct DefaultMessageCallback final : public nvrhi::IMessageCallback
     {
         static DefaultMessageCallback &GetInstance();
         void message(nvrhi::MessageSeverity severity, const char *messageText) override;

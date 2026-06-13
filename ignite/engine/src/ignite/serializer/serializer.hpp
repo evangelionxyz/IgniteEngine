@@ -3,9 +3,11 @@
 #ifndef IGN_SERIALIZER_HPP
 #define IGN_SERIALIZER_HPP
 
-#include "ignite/animation/skeletal_animation.hpp"
 #include "ignite/core/uuid.hpp"
+#include "ignite/core/path.hpp"
 #include "ignite/math/math.hpp"
+
+#include "ignite/animation/skeletal_animation.hpp"
 
 #pragma warning(push)
 #pragma warning(disable : 4275 4251)
@@ -15,8 +17,6 @@
 
 #include <glm/glm.hpp>
 #include <string>
-
-#include "ignite/core/path.hpp"
 
 namespace YAML
 {

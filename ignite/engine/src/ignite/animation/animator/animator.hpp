@@ -4,6 +4,8 @@
 #ifndef IGN_ANIMATOR_HPP
 #define IGN_ANIMATOR_HPP
 
+#include "ignite/core/base.hpp"
+
 #include <string>
 #include <vector>
 #include <glm/glm.hpp>
@@ -51,7 +53,7 @@ namespace ignite
         float exitTime = 1.0f; // normalized [0..1]
     };
 
-    class Animator
+    class IGN_API Animator
     {
     public:
         // ----- Runtime param setters -----
@@ -63,7 +65,7 @@ namespace ignite
         virtual AnimParam *GetParam(const std::string &name);
         virtual const AnimParam *GetParam(const std::string &name) const;
 
-        std::vector<AnimParam>      params;
+        std::vector<AnimParam> params;
         std::vector<AnimTransition> transitions;
     };
 
@@ -76,18 +78,18 @@ namespace ignite
         {
             switch (t)
             {
-                case AnimParam::Type::Float:  return "Float";
-                case AnimParam::Type::Int:    return "Int";
-                case AnimParam::Type::Bool:   return "Bool";
+                case AnimParam::Type::Float: return "Float";
+                case AnimParam::Type::Int: return "Int";
+                case AnimParam::Type::Bool: return "Bool";
                 case AnimParam::Type::String: return "String";
-                default:                        return "Float";
+                default: return "Float";
             }
         }
 
         static AnimParam::Type StrToParamType(const std::string &s)
         {
-            if (s == "Int")    return AnimParam::Type::Int;
-            if (s == "Bool")   return AnimParam::Type::Bool;
+            if (s == "Int") return AnimParam::Type::Int;
+            if (s == "Bool") return AnimParam::Type::Bool;
             if (s == "String") return AnimParam::Type::String;
             return AnimParam::Type::Float;
         }
@@ -96,23 +98,23 @@ namespace ignite
         {
             switch (op)
             {
-                case AnimCondition::Op::Equals:    return "Equals";
+                case AnimCondition::Op::Equals: return "Equals";
                 case AnimCondition::Op::NotEquals: return "NotEquals";
-                case AnimCondition::Op::Greater:   return "Greater";
-                case AnimCondition::Op::Less:      return "Less";
+                case AnimCondition::Op::Greater: return "Greater";
+                case AnimCondition::Op::Less: return "Less";
                 case AnimCondition::Op::GreaterEq: return "GreaterEq";
-                case AnimCondition::Op::LessEq:    return "LessEq";
-                default:                             return "Equals";
+                case AnimCondition::Op::LessEq: return "LessEq";
+                default: return "Equals";
             }
         }
 
         static AnimCondition::Op StrToOp(const std::string &s)
         {
             if (s == "NotEquals") return AnimCondition::Op::NotEquals;
-            if (s == "Greater")   return AnimCondition::Op::Greater;
-            if (s == "Less")      return AnimCondition::Op::Less;
+            if (s == "Greater") return AnimCondition::Op::Greater;
+            if (s == "Less") return AnimCondition::Op::Less;
             if (s == "GreaterEq") return AnimCondition::Op::GreaterEq;
-            if (s == "LessEq")   return AnimCondition::Op::LessEq;
+            if (s == "LessEq") return AnimCondition::Op::LessEq;
             return AnimCondition::Op::Equals;
         }
 
@@ -122,7 +124,6 @@ namespace ignite
                 return false;
 
             const auto op = cond.op;
-
             switch (param->type)
             {
                 case AnimParam::Type::Float:
@@ -131,12 +132,12 @@ namespace ignite
                     const float t = cond.floatThreshold;
                     switch (op)
                     {
-                        case AnimCondition::Op::Equals:    return v == t;
+                        case AnimCondition::Op::Equals: return v == t;
                         case AnimCondition::Op::NotEquals: return v != t;
-                        case AnimCondition::Op::Greater:   return v > t;
-                        case AnimCondition::Op::Less:      return v < t;
+                        case AnimCondition::Op::Greater: return v > t;
+                        case AnimCondition::Op::Less: return v < t;
                         case AnimCondition::Op::GreaterEq: return v >= t;
-                        case AnimCondition::Op::LessEq:    return v <= t;
+                        case AnimCondition::Op::LessEq: return v <= t;
                         default: return false;
                     }
                 }
@@ -146,12 +147,12 @@ namespace ignite
                     const int t = cond.intThreshold;
                     switch (op)
                     {
-                        case AnimCondition::Op::Equals:    return v == t;
+                        case AnimCondition::Op::Equals: return v == t;
                         case AnimCondition::Op::NotEquals: return v != t;
-                        case AnimCondition::Op::Greater:   return v > t;
-                        case AnimCondition::Op::Less:      return v < t;
+                        case AnimCondition::Op::Greater: return v > t;
+                        case AnimCondition::Op::Less: return v < t;
                         case AnimCondition::Op::GreaterEq: return v >= t;
-                        case AnimCondition::Op::LessEq:    return v <= t;
+                        case AnimCondition::Op::LessEq: return v <= t;
                         default: return false;
                     }
                 }

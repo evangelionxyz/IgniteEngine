@@ -3,6 +3,10 @@
 #ifndef IGN_BASE_HPP
 #define IGN_BASE_HPP
 
+#ifdef _MSC_VER
+#pragma warning(disable:4251)
+#endif
+
 #ifdef _WIN32
     #ifndef PLATFORM_WINDOWS
         #define PLATFORM_WINDOWS
