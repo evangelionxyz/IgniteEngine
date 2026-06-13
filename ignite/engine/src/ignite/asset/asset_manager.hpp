@@ -187,6 +187,11 @@ namespace ignite
 
     private:
         static void VerifyNotRenderThread();
+        uint64_t GetAssetFileSize(const AssetMetaData &metadata) const;
+
+        std::atomic<uint64_t> m_ActiveLoadBytes{ 0 };
+        std::mutex m_ThrottleMutex;
+        std::condition_variable m_ThrottleCV;
 
         AssetRegistry m_AssetRegistry;
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;

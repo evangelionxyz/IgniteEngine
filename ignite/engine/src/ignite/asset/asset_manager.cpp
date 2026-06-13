@@ -33,6 +33,18 @@ namespace ignite
         }
     }
 
+    uint64_t AssetManager::GetAssetFileSize(const AssetMetaData &metadata) const
+    {
+        if (metadata.filepath.empty())
+        {
+            return 0;
+        }
+        std::error_code ec;
+        const auto absolutePath = m_Project->GetProjectFilepath(metadata.filepath);
+        const uint64_t size = std::filesystem::file_size(absolutePath.string(), ec);
+        return ec ? 0 : size;
+    }
+
     bool AssetManager::IsAssetLoaded(AssetHandle handle) const
     {
         std::unique_lock lock(m_AssetMutex);
@@ -504,6 +516,46 @@ namespace ignite
                 return m_LoadedAssets[handle];
             }
         }
+
+#if _DEBUG
+        static constexpr uint64_t MAX_CONCURRENT_LOAD_BYTES = 128 * 1024 * 1024; // 128 MB
+#else
+        static constexpr uint64_t MAX_CONCURRENT_LOAD_BYTES = 256 * 1024 * 1024; // 256 MB
+#endif
+        const uint64_t size = GetAssetFileSize(metadata);
+        
+        struct ThrottleGuard
+        {
+            AssetManager *manager;
+            uint64_t size;
+
+            ThrottleGuard(AssetManager *m, uint64_t s)
+                : manager(m), size(s)
+            {
+                if (size > 0 && manager)
+                {
+                    std::unique_lock<std::mutex> lock(manager->m_ThrottleMutex);
+                    manager->m_ThrottleCV.wait(lock, [&]()
+                    {
+                        LOG_WARN("[Throttle Guard] Throttling asset loading {} bytes, max concurent load bytes: {} bytes",
+                            manager->m_ActiveLoadBytes + size, MAX_CONCURRENT_LOAD_BYTES);
+
+                        return manager->m_ActiveLoadBytes == 0 || (manager->m_ActiveLoadBytes + size <= MAX_CONCURRENT_LOAD_BYTES);
+                    });
+                    manager->m_ActiveLoadBytes += size;
+                }
+            }
+
+            ~ThrottleGuard()
+            {
+                if (size > 0 && manager)
+                {
+                    std::lock_guard<std::mutex> lock(manager->m_ThrottleMutex);
+                    manager->m_ActiveLoadBytes -= size;
+                    manager->m_ThrottleCV.notify_all();
+                }
+            }
+        } guard(this, size);
 
         Ref<Asset> asset;
 
