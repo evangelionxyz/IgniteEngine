@@ -13,7 +13,7 @@
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/graphics/window.hpp"
 #include "ignite/graphics/ui/game_ui_system.hpp"
-#include "input/input.hpp"
+#include "input/input_system.hpp"
 #include "command.hpp"
 #include <nvrhi/utils.h>
 
@@ -61,9 +61,14 @@ namespace ignite
         m_Window->SetEventCallback(BIND_CLASS_EVENT_FN(Application::OnEvent));
         m_Window->SetIcon("resources/ignite-icon256px.png");
 
-        m_Input = CreateScope<Input>(m_Window.get());
+        InputSystem::SetWindow(m_Window.get());
 
-        m_Renderer = CreateRef<Renderer>(m_Window->GetDeviceManager(), m_CreateInfo.graphicsApi);
+        m_EditorInputSystem = (EditorInputSystem *)AddSubsystem(new EditorInputSystem());
+        m_GameInputSystem = (GameInputSystem *)AddSubsystem(new GameInputSystem());
+        
+        InputSystem::SetActiveSystem(m_EditorInputSystem);
+
+        m_Renderer = (Renderer *)AddSubsystem(new Renderer(m_Window->GetDeviceManager(), m_CreateInfo.graphicsApi));
 
         if (createInfo.useGui)
         {
@@ -72,17 +77,11 @@ namespace ignite
         }
 
         AddSubsystem(new AssetWorker());
-        AddSubsystem(new GameUISystem());
 
         if (m_CreateInfo.useAudio)
-        {
             AddSubsystem(new FmodAudio());
-        }
-
         if (m_CreateInfo.usePhysics)
-        {
             AddSubsystem(new JoltPhysics());
-        }
     }
 
     Application *Application::GetInstance()
@@ -382,6 +381,11 @@ namespace ignite
             IGN_PROFILE_SCOPE("MainThread::Frame");
             while (SDL_PollEvent(&sdlEvent))
             {
+                if (auto* activeInput = InputSystem::GetActiveSystem())
+                {
+                    activeInput->ProcessEvent(&sdlEvent);
+                }
+
                 m_Window->PollEvents(sdlEvent);
                 if (m_CreateInfo.useGui)
                 {
@@ -506,9 +510,6 @@ namespace ignite
             (*it)->OnDetach();
             delete *it;
         }
-        
-        // destroy
-        m_Renderer.reset();
 
         // destroy subsystems
 		for (auto subsystem : m_Subsystems)
@@ -625,12 +626,12 @@ namespace ignite
         return ImGui::GetCurrentContext();
     }
 
-	void Application::AddSubsystem(Subsystem* subsystem)
+	Subsystem *Application::AddSubsystem(Subsystem* subsystem)
 	{
         subsystem->Init();
-
         auto app = GetInstance();
         app->m_Subsystems.push_back(subsystem);
+        return subsystem;
 	}
 
 	float Application::GetDeltaTime()

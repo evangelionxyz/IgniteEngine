@@ -7,7 +7,7 @@
 #include "ignite/audio/fmod_dsp.hpp"
 #include "ignite/core/application.hpp"
 #include "ignite/core/input/event.hpp"
-#include "ignite/core/input/input.hpp"
+#include "ignite/core/input/input_system.hpp"
 #include "ignite/core/input/key_event.hpp"
 #include "ignite/core/input/mouse_event.hpp"
 #include "ignite/core/input/joystick_event.hpp"
@@ -164,7 +164,7 @@ namespace ignite
 
     void ScenePanel::OnUpdate(float deltaTime)
     {
-        if (m_Scene && m_EditorLayer->GetState().sceneState != State::ScenePlay)
+        if (m_Scene && m_EditorLayer->GetState().sceneState != ESceneState::Play)
         {
             UpdateCameraInput(deltaTime);
         }
@@ -2828,12 +2828,12 @@ namespace ignite
 
                                 float rx = u * baseImageSize.x;
                                 float ry = v * baseImageSize.y;
-                                Input::SetGameplayMousePosition(rx, ry, true);
+                                InputSystem::SetGameplayMousePosition(rx, ry, true);
                             }
                             else
                             {
                                 // Otherwise set it to Zero and and Disable it
-                                Input::SetGameplayMousePosition(0.0f, 0.0f, false);
+                                InputSystem::SetGameplayMousePosition(0.0f, 0.0f, false);
                             }
 
                             // Set the Widget Mouse Position
@@ -3001,8 +3001,8 @@ namespace ignite
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
 
-        State sceneState = m_EditorLayer->GetState().sceneState;
-        const bool isScenePlaying = sceneState == ignite::State::ScenePlay;
+        ESceneState sceneState = m_EditorLayer->GetState().sceneState;
+        const bool isScenePlaying = sceneState == ESceneState::Play;
         Ref<Texture> scenePlayStopTex = isScenePlaying ? m_Icons["stop"] : m_Icons["play"];
         ImTextureID scenePlayStopID = (ImTextureID)scenePlayStopTex->GetHandle().Get();
 
@@ -3030,7 +3030,7 @@ namespace ignite
             }
         }
 
-        const bool isSceneSimulate = sceneState == ignite::State::SceneSimulate;
+        const bool isSceneSimulate = sceneState == ESceneState::Simulate;
         Ref<Texture> sceneSimulateTex = isSceneSimulate ? m_Icons["stop"] : m_Icons["simulate"];
         ImTextureID sceneSimulateID = (ImTextureID)sceneSimulateTex->GetHandle().Get();
 

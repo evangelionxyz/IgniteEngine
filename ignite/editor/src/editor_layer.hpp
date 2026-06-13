@@ -12,6 +12,7 @@
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/serializer/scene_serializer.hpp"
 #include "ignite/project/project.hpp"
+#include "ignite/scene/scene.hpp"
 #include "states.hpp"
 
 #include <future>
@@ -54,7 +55,7 @@ namespace ignite
             uint32_t hoveredEntity = static_cast<uint32_t>(-1);
             ProjectInfo projectCreateInfo;
 
-            State sceneState = State::SceneEdit;
+            ESceneState sceneState = ESceneState::Stop;
             nvrhi::RasterFillMode rasterFillMode = nvrhi::RasterFillMode::Solid;
             nvrhi::RasterCullMode rasterCullMode = nvrhi::RasterCullMode::Front;
         };

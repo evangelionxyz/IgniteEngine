@@ -17,6 +17,6 @@ workspace "IGN-Managed"
     INTOUTPUT_DIR = wks_absolute .. "/bin/objs/%{cfg.buildcfg}/%{prj.name}"
 
     group "Managed"
-        include "../scriptengine/ignite-scriptengine.lua"
+        include "../scriptengine/ignite.scriptengine.lua"
         include "mochisharp-managed.lua"
     group ""

@@ -9,8 +9,6 @@
 #include "ignite/core/input/mouse_event.hpp"
 #include "ignite/core/input/joystick_event.hpp"
 
-#include "ignite/core/input/input.hpp"
-
 #include <SDL3/SDL_video.h>
 
 #ifdef _WIN32
@@ -272,17 +270,6 @@ namespace ignite
             if (event.key.windowID != mainWindowId)
                 break;
 
-            Input::SetModifier(KeyMod::Shift, event.key.mod & SDL_KMOD_SHIFT);
-            Input::SetModifier(KeyMod::Control, event.key.mod & SDL_KMOD_CTRL);
-            Input::SetModifier(KeyMod::LeftAlt, event.key.mod & SDL_KMOD_LALT);
-            Input::SetModifier(KeyMod::RightAlt, event.key.mod & SDL_KMOD_RALT);
-            Input::SetModifier(KeyMod::LeftShift, event.key.mod & SDL_KMOD_LSHIFT);
-            Input::SetModifier(KeyMod::RightShift, event.key.mod & SDL_KMOD_RSHIFT);
-            Input::SetModifier(KeyMod::LeftControl, event.key.mod & SDL_KMOD_LCTRL);
-            Input::SetModifier(KeyMod::RightControl, event.key.mod & SDL_KMOD_RCTRL);
-
-			Input::SetKey(event.key.key, true);
-
             if (event.key.repeat)
             {
                 KeyPressedEvent e(event.key.key, 1);
@@ -300,17 +287,6 @@ namespace ignite
             if (event.key.windowID != mainWindowId)
                 break;
 
-            Input::SetModifier(KeyMod::Shift, event.key.mod& SDL_KMOD_SHIFT);
-            Input::SetModifier(KeyMod::Control, event.key.mod& SDL_KMOD_CTRL);
-            Input::SetModifier(KeyMod::LeftAlt, event.key.mod& SDL_KMOD_LALT);
-            Input::SetModifier(KeyMod::RightAlt, event.key.mod& SDL_KMOD_RALT);
-            Input::SetModifier(KeyMod::LeftShift, event.key.mod& SDL_KMOD_LSHIFT);
-            Input::SetModifier(KeyMod::RightShift, event.key.mod& SDL_KMOD_RSHIFT);
-            Input::SetModifier(KeyMod::LeftControl, event.key.mod& SDL_KMOD_LCTRL);
-            Input::SetModifier(KeyMod::RightControl, event.key.mod& SDL_KMOD_RCTRL);
-
-            Input::SetKey(event.key.key, false);
-
             KeyReleasedEvent e(event.key.key);
             m_Callback(e);
             break;
@@ -320,7 +296,6 @@ namespace ignite
            if (event.button.windowID != mainWindowId)
                 break;
 
-			Input::SetMouseButton(event.button.button, true);
             MouseButtonPressedEvent e(event.button.button);
             m_Callback(e);
 			break;
@@ -330,7 +305,6 @@ namespace ignite
             if (event.button.windowID != mainWindowId)
                 break;
 
-            Input::SetMouseButton(event.button.button, false);
             MouseButtonReleasedEvent e(event.button.button);
             m_Callback(e);
             break;
@@ -349,7 +323,6 @@ namespace ignite
           if (event.motion.windowID != mainWindowId)
                 break;
 
-			Input::SetMousePosition((int)event.motion.x, (int)event.motion.y);
             MouseMovedEvent e((int)event.motion.x, (int)event.motion.y);
             m_Callback(e);
             break;

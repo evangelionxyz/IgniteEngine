@@ -11,14 +11,6 @@ namespace ignite
 #define DND_PAYLOAD_CONTENT_BROWSER_ITEM "content_browser_item"
 #define DND_PAYLOAD_ENTITY_SOURCE_ITEM "entity_source_item"
 
-    enum class State
-    {
-        SceneEdit,
-        ScenePlay,
-        ScenePaused,
-        SceneSimulate
-    };
-
     enum class GizmoOperation
     {
         NONE = -1,

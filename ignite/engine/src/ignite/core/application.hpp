@@ -25,12 +25,14 @@ namespace ignite
     class Renderer;
     class Window;
     class CommandManager;
-    class Input;
+    class InputSystem;
+    class EditorInputSystem;
+    class GameInputSystem;
     class ImGuiLayer;
 
     struct ApplicationCommandLineArgs
     {
-        i32 count = 0;
+        int count = 0;
         char **args = nullptr;
 
         const char *operator[](int index) const
@@ -48,8 +50,8 @@ namespace ignite
         std::string workingDirectory;
         nvrhi::GraphicsAPI graphicsApi = nvrhi::GraphicsAPI::VULKAN;
 
-        u32 width = 1280;
-        u32 height = 640;
+        uint32_t width = 1280;
+        uint32_t height = 640;
 		bool borderless = false;
         bool maximized = false;
         bool useGui = true;
@@ -73,6 +75,8 @@ namespace ignite
         const ApplicationCreateInfo &GetCreateInfo() { return m_CreateInfo; }
 
         Window *GetWindow() { return m_Window.get(); }
+        EditorInputSystem *GetEditorInputSystem() { return m_EditorInputSystem; }
+        GameInputSystem *GetGameInputSystem() { return m_GameInputSystem; }
 
         static Application *GetInstance();
         static CommandManager *GetCommandManager();
@@ -80,7 +84,7 @@ namespace ignite
         static std::thread::id GetMainThreadId();
         static ImGuiContext *GetImGuiContext();
 
-        static void AddSubsystem(Subsystem* subsystem);
+        static Subsystem *AddSubsystem(Subsystem* subsystem);
 
         static float GetDeltaTime();
 
@@ -109,9 +113,9 @@ namespace ignite
         Scope<CommandManager> m_CommandManager;
         LayerStack m_LayerStack;
         ImGuiLayer *m_ImGuiLayer;
-        Scope<Input> m_Input;
-
-        Ref<Renderer> m_Renderer;
+        EditorInputSystem *m_EditorInputSystem;
+        GameInputSystem *m_GameInputSystem;
+        Renderer *m_Renderer;
 
         std::vector<Subsystem *> m_Subsystems;
 

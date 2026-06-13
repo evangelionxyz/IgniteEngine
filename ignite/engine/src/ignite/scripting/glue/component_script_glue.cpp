@@ -3,7 +3,7 @@
 #include "pch.hpp"
 
 #include "component_script_glue.hpp"
-#include "ignite/core/input/input.hpp"
+#include "ignite/core/input/input_system.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/scene/component.hpp"
 #include "ignite/scene/component_group.hpp"

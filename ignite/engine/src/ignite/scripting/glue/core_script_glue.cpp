@@ -3,7 +3,7 @@
 #include "pch.hpp"
 
 #include "core_script_glue.hpp"
-#include "ignite/core/input/input.hpp"
+#include "ignite/core/input/input_system.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/scriptable_object.hpp"
@@ -40,17 +40,17 @@ namespace ignite
         
         static bool Input_IsKeyPressed(uint32_t keyCode)
         {
-            return Input::IsKeyPressed(static_cast<KeyCode>(keyCode));
+            return InputSystem::IsKeyPressed(static_cast<KeyCode>(keyCode));
         }
 
         static bool Input_IsModifierPressed(uint16_t modCode)
         {
-            return Input::IsModifierPressed(static_cast<KeyModCode>(modCode));
+            return InputSystem::IsModifierPressed(static_cast<KeyModCode>(modCode));
         }
 
         static bool Input_IsMouseButtonPressed(uint8_t button)
         {
-            return Input::IsMouseButtonPressed(static_cast<MouseCode>(button));
+            return InputSystem::IsMouseButtonPressed(static_cast<MouseCode>(button));
         }
 
         static void Input_GetMousePosition(glm::vec2 *result)
@@ -60,13 +60,13 @@ namespace ignite
                 return;
             }
 
-            if (Input::IsGameplayMousePositionEnabled())
+            if (InputSystem::IsGameplayMousePositionEnabled())
             {
-                *result = Input::GetGameplayMousePosition();
+                *result = InputSystem::GetGameplayMousePosition();
                 return;
             }
 
-            const glm::ivec2 mousePos = Input::GetMousePosition();
+            const glm::ivec2 mousePos = InputSystem::GetMousePosition();
             glm::vec2 absPos = glm::vec2(mousePos.x, mousePos.y);
 
             Scene *scene = GetSceneContext();
@@ -90,12 +90,12 @@ namespace ignite
 
         static void Input_SetMouseToCenter()
         {
-            Input::SetMouseToCenter();
+            InputSystem::SetMouseToCenter();
         }
 
         static void Input_SetCursorMode(int32_t mode)
         {
-            Input::SetCursorMode(static_cast<CursorMode>(mode));
+            InputSystem::SetCursorMode(static_cast<CursorMode>(mode));
         }
 
         static bool AssetManager_IsAssetHandleValid(uint64_t handle)

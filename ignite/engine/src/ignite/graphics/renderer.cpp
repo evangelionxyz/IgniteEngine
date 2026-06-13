@@ -68,17 +68,17 @@ namespace ignite
         m_BindingLayouts[GLayoutMap::MATERIAL] = s_instance->m_Device->createBindingLayout(Material::GetBindingLayoutDesc());
     }
 
-    Renderer::~Renderer()
-    {
-        MeshInstance::ReleaseGlobalResources();
-        
-        Shader::ShutdownShaderData();
-        Shader::s_DXCInstance.reset();
+	void Renderer::Shutdown()
+	{
+		MeshInstance::ReleaseGlobalResources();
 
-        m_WhiteTexture.reset();
-        m_MagentaTexture.reset();
-        m_BlackTexture.reset();
-    }
+		Shader::ShutdownShaderData();
+		Shader::s_DXCInstance.reset();
+
+		m_WhiteTexture.reset();
+		m_MagentaTexture.reset();
+		m_BlackTexture.reset();
+	}
 
     void Renderer::BeginStats()
     {

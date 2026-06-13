@@ -267,17 +267,17 @@ namespace ignite
             m_SceneRenderer->OnUpdate(deltaTime);
 
             // multi select entity
-            m_State.multiSelect = Input::IsModifierPressed(KeyMod::LeftShift);
+            m_State.multiSelect = InputSystem::IsModifierPressed(KeyMod::LeftShift);
 
             switch (m_State.sceneState)
             {
-            case State::SceneSimulate:
-            case State::ScenePlay:
+            case ESceneState::Simulate:
+            case ESceneState::Play:
             {
                 m_ActiveScene->OnUpdateRuntimeSimulate(deltaTime);
                 break;
             }
-            case State::SceneEdit:
+            case ESceneState::Stop:
             {
                 m_ActiveScene->OnUpdateEdit(deltaTime);
                 break;
@@ -324,8 +324,8 @@ namespace ignite
 
     bool EditorLayer::OnKeyPressedEvent(KeyPressedEvent &event)
     {
-        bool control = Input::IsModifierPressed(KeyMod::Control);
-        bool shift = Input::IsModifierPressed(KeyMod::LeftShift);
+        bool control = InputSystem::IsModifierPressed(KeyMod::Control);
+        bool shift = InputSystem::IsModifierPressed(KeyMod::LeftShift);
 
         if (ImGui::GetIO().WantTextInput)
             return false;
@@ -413,31 +413,31 @@ namespace ignite
             }
             case Key::Q:
             {
-                if (!Input::IsMouseButtonPressed(Mouse::ButtonRight))
+                if (!InputSystem::IsMouseButtonPressed(Mouse::ButtonRight))
                     m_ScenePanel->SetGizmoOperation(GizmoOperation::BOUND_SIZING_2D);
                 break;
             }
             case Key::T:
             {
-                if (!Input::IsMouseButtonPressed(Mouse::ButtonRight))
+                if (!InputSystem::IsMouseButtonPressed(Mouse::ButtonRight))
                     m_ScenePanel->SetGizmoOperation(GizmoOperation::TRANSLATE);
                 break;
             }
             case Key::R:
             {
-                if (!Input::IsMouseButtonPressed(Mouse::ButtonRight))
+                if (!InputSystem::IsMouseButtonPressed(Mouse::ButtonRight))
                     m_ScenePanel->SetGizmoOperation(GizmoOperation::ROTATE);
                 break;
             }
             case Key::E:
             {
-                if (!Input::IsMouseButtonPressed(Mouse::ButtonRight))
+                if (!InputSystem::IsMouseButtonPressed(Mouse::ButtonRight))
                     m_ScenePanel->SetGizmoOperation(GizmoOperation::SCALE);
                 break;
             }
             case Key::F5:
             {
-                (m_State.sceneState == State::SceneEdit || m_State.sceneState == State::SceneSimulate)
+                (m_State.sceneState == ESceneState::Stop || m_State.sceneState == ESceneState::Simulate)
                     ? OnScenePlay()
                     : OnSceneStop();
 
@@ -445,7 +445,7 @@ namespace ignite
             }
             case Key::F6:
             {
-                (m_State.sceneState == State::SceneEdit || m_State.sceneState == State::ScenePlay)
+                (m_State.sceneState == ESceneState::Stop || m_State.sceneState == ESceneState::Play)
                     ? OnScenePlay()
                     : OnSceneStop();
                 break;
@@ -554,9 +554,9 @@ namespace ignite
         {
             switch (m_State.sceneState)
             {
-                case State::SceneSimulate:
-                case State::SceneEdit:
-                case State::ScenePlay:
+                case ESceneState::Simulate:
+                case ESceneState::Stop:
+                case ESceneState::Play:
                 {
                     ICamera *editCamera = &m_ScenePanel->GetViewportCamera();
                     if (editCamera)
@@ -993,7 +993,7 @@ namespace ignite
             m_EditorScene->OnStop();
         }
 
-        if (m_State.sceneState == State::ScenePlay)
+        if (m_State.sceneState == ESceneState::Play)
         {
             OnSceneStop();
         }
@@ -1073,7 +1073,7 @@ namespace ignite
             m_EditorScene->OnStop();
         }
 
-        if (m_State.sceneState == State::ScenePlay)
+        if (m_State.sceneState == ESceneState::Play)
         {
             OnSceneStop();
         }
@@ -1215,10 +1215,10 @@ namespace ignite
 
         m_ScenePanel->SetGizmoOperation(GizmoOperation::NONE);
 
-        if (m_State.sceneState != State::SceneEdit)
+        if (m_State.sceneState != ESceneState::Stop)
             OnSceneStop();
 
-        m_State.sceneState = State::ScenePlay;
+        m_State.sceneState = ESceneState::Play;
 
         // copy initial components to new scene
         SetActiveScene(SceneManager::Copy(m_EditorScene));
@@ -1227,7 +1227,7 @@ namespace ignite
 
     void EditorLayer::OnSceneStop()
     {
-        m_State.sceneState = State::SceneEdit;
+        m_State.sceneState = ESceneState::Stop;
 
         m_ActiveScene->OnStop();
         SetActiveScene(m_EditorScene);
@@ -1235,10 +1235,10 @@ namespace ignite
 
     void  EditorLayer::OnSceneSimulate()
     {
-        if (m_State.sceneState != State::SceneEdit)
+        if (m_State.sceneState != ESceneState::Stop)
             OnSceneStop();
 
-        m_State.sceneState = State::SceneSimulate;
+        m_State.sceneState = ESceneState::Simulate;
 
         // copy initial components to new scene
         SetActiveScene(SceneManager::Copy(m_EditorScene));
@@ -1444,7 +1444,7 @@ namespace ignite
                                         m_EditorScene->OnStop();
                                     }
 
-                                    if (m_State.sceneState == State::ScenePlay)
+                                    if (m_State.sceneState == ESceneState::Play)
                                     {
                                         OnSceneStop();
                                     }

@@ -10,7 +10,7 @@
 #include "widget_label.hpp"
 #include "widget_image.hpp"
 
-#include "ignite/core/input/input.hpp"
+#include "ignite/core/input/input_system.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/graphics/graphics_pipeline.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
@@ -750,7 +750,7 @@ namespace ignite
         }
 
         const glm::uvec2 mousePos = { m_MouseX, m_MouseY };
-        const bool isMousePressed = Input::IsMouseButtonPressed(Mouse::ButtonLeft);
+        const bool isMousePressed = InputSystem::IsMouseButtonPressed(Mouse::ButtonLeft);
 
         for (const WidgetRenderLayer &layer : m_RenderLayers)
         {

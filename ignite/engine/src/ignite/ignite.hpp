@@ -45,7 +45,7 @@
 #include "core/string_utils.hpp"
 #include "core/types.hpp"
 #include "core/time.hpp"
-#include "core/input/input.hpp"
+#include "core/input/input_system.hpp"
 
 #include "asset/asset.hpp"
 

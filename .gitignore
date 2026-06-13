@@ -31,3 +31,5 @@ scriptengine/obj
 scriptengine/bin
 scripts/bin
 scripts/obj
+.agent
+openspec

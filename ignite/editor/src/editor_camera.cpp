@@ -4,7 +4,7 @@
 #include "editor_camera.hpp"
 
 #include "ignite/core/application.hpp"
-#include "ignite/core/input/input.hpp"
+#include "ignite/core/input/input_system.hpp"
 
 #include <cmath>
 
@@ -88,12 +88,12 @@ namespace ignite
 		mouse.lastPosition = mouse.position;
 
 		// update current position
-		mouse.position = Input::GetMousePosition();
+		mouse.position = InputSystem::GetMousePosition();
 
 		// update button states
-		mouse.leftButtonDown = Input::IsMouseButtonPressed(Mouse::ButtonLeft);
-		mouse.middleButtonDown = Input::IsMouseButtonPressed(Mouse::ButtonMiddle);
-		mouse.rightButtonDown = Input::IsMouseButtonPressed(Mouse::ButtonRight);
+		mouse.leftButtonDown = InputSystem::IsMouseButtonPressed(Mouse::ButtonLeft);
+		mouse.middleButtonDown = InputSystem::IsMouseButtonPressed(Mouse::ButtonMiddle);
+		mouse.rightButtonDown = InputSystem::IsMouseButtonPressed(Mouse::ButtonRight);
 	}
 
 	void EditorCamera::UpdateSphericalPosition()
@@ -117,7 +117,7 @@ namespace ignite
 			glm::vec2 delta = mouse.position - mouse.lastPosition;
 
 			// handle zoom
-			if (Input::IsModifierPressed(KeyMod::LeftControl))
+			if (InputSystem::IsModifierPressed(KeyMod::LeftControl))
 			{
 				delta.y *= -1.0f * 0.5f; // inverting mouse y
 
@@ -186,19 +186,19 @@ namespace ignite
 			pitch += delta.y * controls.mouseSensitivity;
 			pitch = glm::clamp(pitch, controls.minPitch, controls.maxPitch);
 
-            if (Input::IsKeyPressed(Key::W))
+            if (InputSystem::IsKeyPressed(Key::W))
 			{
 				moveDir += GetForwardDirection();
 			}
-            if (Input::IsKeyPressed(Key::S))
+            if (InputSystem::IsKeyPressed(Key::S))
 			{
 				moveDir -= GetForwardDirection();
 			}
-            if (Input::IsKeyPressed(Key::D))
+            if (InputSystem::IsKeyPressed(Key::D))
 			{
 				moveDir += GetRightDirection();
 			}
-            if (Input::IsKeyPressed(Key::A))
+            if (InputSystem::IsKeyPressed(Key::A))
 			{
 				moveDir -= GetRightDirection();
 			}
@@ -207,10 +207,10 @@ namespace ignite
 		if (glm::length(moveDir) > 0.0f)
 		{
 			float speed = m_FlySpeed;
-			if (Input::IsModifierPressed(KeyMod::LeftShift) || Input::IsModifierPressed(KeyMod::RightShift))
+			if (InputSystem::IsModifierPressed(KeyMod::LeftShift) || InputSystem::IsModifierPressed(KeyMod::RightShift))
 				speed *= 2.5f;
 
-			if (Input::IsModifierPressed(KeyMod::LeftControl) || Input::IsModifierPressed(KeyMod::RightControl))
+			if (InputSystem::IsModifierPressed(KeyMod::LeftControl) || InputSystem::IsModifierPressed(KeyMod::RightControl))
 				speed *= 0.35f;
 
 			position += glm::normalize(moveDir) * speed * deltaTime;

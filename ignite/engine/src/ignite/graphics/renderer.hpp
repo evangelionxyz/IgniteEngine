@@ -4,7 +4,7 @@
 #ifndef IGN_RENDERER_HPP
 #define IGN_RENDERER_HPP
 
-#include "ignite/core/base.hpp"
+#include "ignite/core/subsystem.hpp"
 #include "ignite/core/types.hpp"
 #include "graphics_pipeline.hpp"
 
@@ -51,13 +51,13 @@ namespace ignite
         size_t textIndicesSize = 0;
     };
 
-    class IGN_API Renderer
+    class IGN_API Renderer : public Subsystem
     {
     public:
         Renderer() = default;
         Renderer(DeviceManager *deviceManager, nvrhi::GraphicsAPI api);
 
-        ~Renderer();
+        virtual void Shutdown() override;
 
         static void BeginStats();
         

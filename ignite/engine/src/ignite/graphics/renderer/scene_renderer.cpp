@@ -23,7 +23,7 @@
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/graphics/ui/widget_renderer.hpp"
-#include "ignite/core/input/input.hpp"
+#include "ignite/core/input/input_system.hpp"
 
 #include <ranges>
 #include <cstdlib>
@@ -1601,7 +1601,7 @@ namespace ignite
         const bool isHovered = isGameplayFramebuffer ? m_GameplayWidgetMouseHovered : m_EditorWidgetMouseHovered;
         const uint32_t mouseX = isGameplayFramebuffer ? m_GameplayWidgetMouseX : m_EditorWidgetMouseX;
         const uint32_t mouseY = isGameplayFramebuffer ? m_GameplayWidgetMouseY : m_EditorWidgetMouseY;
-        const glm::ivec2 mousePos = Input::GetMousePosition();
+        const glm::ivec2 mousePos = InputSystem::GetMousePosition();
 
         if (useMouseOverride)
         {
