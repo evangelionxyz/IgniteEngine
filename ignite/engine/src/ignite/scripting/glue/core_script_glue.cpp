@@ -4,10 +4,12 @@
 
 #include "core_script_glue.hpp"
 #include "ignite/core/input/input_system.hpp"
+#include "ignite/graphics/ui/game_ui_system.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/scriptable_object.hpp"
 #include "ignite/project/project.hpp"
+#include "ignite/globals/globals.hpp"
 
 #include "ignite/core/application.hpp"
 #include "ignite/graphics/window.hpp"
@@ -75,13 +77,13 @@ namespace ignite
                 if (Entity cameraEntity = scene->GetPrimaryCamera())
                 {
                     const auto &cc = cameraEntity.GetComponent<CameraComponent>();
-                    glm::vec2 vpPosition = cc.camera.viewportPosition;
+                    glm::vec2 viewportPosition = globals::GEditor::GameViewport.min;
                     if (auto *window = Application::GetInstance()->GetWindow())
                     {
                         glm::ivec2 winPos = window->GetPosition();
-                        vpPosition -= glm::vec2(winPos.x, winPos.y);
+                        viewportPosition -= glm::vec2(winPos.x, winPos.y);
                     }
-                    absPos -= vpPosition;
+                    absPos -= viewportPosition;
                 }
             }
 
@@ -96,6 +98,13 @@ namespace ignite
         static void Input_SetCursorMode(int32_t mode)
         {
             InputSystem::SetCursorMode(static_cast<CursorMode>(mode));
+        }
+
+        static bool Input_IsMouseOverUI()
+        {
+            glm::vec2 mousePos(0.0f);
+            Input_GetMousePosition(&mousePos);
+            return GameUISystem::IsMouseOverUI(mousePos.x, mousePos.y);
         }
 
         static bool AssetManager_IsAssetHandleValid(uint64_t handle)
@@ -168,8 +177,7 @@ namespace ignite
             }
         }
 
-        // ---- ScriptableObject runtime field access ----
-
+        // ScriptableObject runtime field access
         static Ref<ScriptableObject> GetSO(uint64_t handle)
         {
             if (Scene *scene = GetSceneContext())
@@ -252,6 +260,7 @@ namespace ignite
             &Input_GetMousePosition,
             &Input_SetMouseToCenter,
             &Input_SetCursorMode,
+            &Input_IsMouseOverUI,
 
             &AssetManager_IsAssetHandleValid,
             &AssetManager_IsAssetLoaded,

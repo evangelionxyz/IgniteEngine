@@ -94,17 +94,8 @@ namespace ignite
         virtual glm::mat4 &GetProjection();
         virtual glm::mat4 GetView();
 
-        inline Rect GetRect() const { return { viewportPosition, viewportPosition + viewportSize }; }
-
         inline bool IsPerspective() const { return projectionType == ProjectionType::Perspective; }
-
-        // Converts an absolute screen-space position (e.g. from SDL / ImGui::GetMousePos())
-        // to a position relative to this camera's viewport top-left corner.
-        // The result can be passed directly to ray-casting helpers that expect viewport-local coords.
-        glm::vec2 GetMousePositionRelative(glm::vec2 absoluteScreenPos) const
-        {
-            return absoluteScreenPos - viewportPosition;
-        }
+        inline const glm::vec2 &GetViewportSize() const { return m_ViewportSize; }
 
         float pitch = 0.0f; // rotation around X axis
         float yaw = 0.0f; // rotation around Y axis
@@ -115,8 +106,6 @@ namespace ignite
         float orthoSize = 10.0f;
 
         glm::vec3 position;
-        glm::vec2 viewportSize;
-        glm::vec2 viewportPosition;
 
         // Control settings
         struct Controls
@@ -143,6 +132,7 @@ namespace ignite
     protected:
         glm::mat4 m_View = glm::mat4(1.0f);
         glm::mat4 m_Projection = glm::mat4(1.0f);
+		glm::vec2 m_ViewportSize;
     };
 }
 

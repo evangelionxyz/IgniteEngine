@@ -132,6 +132,8 @@ namespace ignite
         }
     };
 
+	using Viewport = Rect;
+
     struct IGN_API Margin
     {
         float top, bottom, left, right;
@@ -143,7 +145,6 @@ namespace ignite
         glm::vec2 Start() const { return { left, top }; }
         glm::vec2 End() const { return { right, bottom }; }
     };
-
 }
 
 #endif

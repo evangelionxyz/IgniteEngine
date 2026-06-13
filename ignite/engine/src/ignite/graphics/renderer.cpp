@@ -70,6 +70,8 @@ namespace ignite
 
 	void Renderer::Shutdown()
 	{
+        LOG_WARN("[Renderer] Shutdown");
+
 		MeshInstance::ReleaseGlobalResources();
 
 		Shader::ShutdownShaderData();

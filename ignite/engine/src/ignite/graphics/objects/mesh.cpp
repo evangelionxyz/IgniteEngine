@@ -497,7 +497,7 @@ namespace ignite
     {
         if (s_DefaultSkeletonBuffer)
         {
-            LOG_INFO("[MeshInstance] Releasing global default skeleton buffer before device teardown");
+            LOG_WARN("[Mesh Instance] Releasing global default skeleton buffer before device teardown");
             s_DefaultSkeletonBuffer.reset();
         }
 

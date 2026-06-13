@@ -3,6 +3,7 @@
 #include "pch.hpp"
 
 #include "asset_manager.hpp"
+#include "ignite/core/application.hpp"
 #include "asset_importer.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/core/device/device_manager.hpp"
@@ -20,6 +21,16 @@ namespace ignite
     AssetManager::AssetManager(Project *project)
         : m_Project(project)
     {
+    }
+
+    void AssetManager::VerifyNotRenderThread()
+    {
+        auto *app = Application::GetInstance();
+        const std::thread *renderThread = app ? app->GetRenderThread() : nullptr;
+        if (renderThread && Application::IsRenderThreadRunning() && std::this_thread::get_id() == renderThread->get_id())
+        {
+            LOG_ASSERT(false, "[Asset Manager] GetAssetImmediate called on the Render Thread! This will cause stuttering and deadlocks!");
+        }
     }
 
     bool AssetManager::IsAssetLoaded(AssetHandle handle) const

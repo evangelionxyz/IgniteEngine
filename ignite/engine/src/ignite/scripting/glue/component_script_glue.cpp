@@ -10,6 +10,7 @@
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/project/project.hpp"
+#include "ignite/globals/globals.hpp"
 
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/graphics/ui/widget_canvas.hpp"
@@ -68,7 +69,7 @@ namespace ignite
 
             auto &cc = cameraEntity.GetComponent<CameraComponent>();
             
-            glm::vec2 viewportSize = cc.camera.viewportSize;
+            glm::vec2 viewportSize = globals::GEditor::GameViewport.max;
             if (viewportSize.x <= 0.0f || viewportSize.y <= 0.0f)
                 return;
 

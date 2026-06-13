@@ -49,8 +49,13 @@ namespace ignite
         {
             if (asset && std::is_base_of_v<Asset, T>)
             {
+                Ref<Asset> oldAsset;
                 {
                     std::unique_lock lock(m_AssetMutex);
+                    if (m_LoadedAssets.contains(handle))
+                    {
+                        oldAsset = m_LoadedAssets.at(handle);
+                    }
                     m_LoadedAssets[handle] = asset;
                 }
             }
@@ -128,6 +133,8 @@ namespace ignite
         template<typename T = Asset>
         Ref<T> GetAssetImmediate(AssetHandle handle)
         {
+            VerifyNotRenderThread();
+
             if (!IsAssetHandleValid(handle))
             {
                 return nullptr;
@@ -179,6 +186,8 @@ namespace ignite
         std::mutex &GetFbxSdkMutex() { return m_FbxSdkMutex; }
 
     private:
+        static void VerifyNotRenderThread();
+
         AssetRegistry m_AssetRegistry;
         std::unordered_map<AssetHandle, Ref<Asset>> m_LoadedAssets;
         std::unordered_set<AssetHandle> m_LoadingAssets;

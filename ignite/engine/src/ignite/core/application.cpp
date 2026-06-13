@@ -504,20 +504,20 @@ namespace ignite
             m_RenderThread->join();
 
         GPUUploadSync::DeviceWaitIdle(device);
+
+		// destroy subsystems
+		for (auto subsystem : m_Subsystems)
+		{
+			subsystem->Shutdown();
+			delete subsystem;
+		}
+		m_Subsystems.clear();
         
         for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
         {
             (*it)->OnDetach();
             delete *it;
         }
-
-        // destroy subsystems
-		for (auto subsystem : m_Subsystems)
-		{
-			subsystem->Shutdown();
-			delete subsystem;
-		}
-        m_Subsystems.clear();
 
         // destroy device
         deviceManager->Destroy();
@@ -626,15 +626,15 @@ namespace ignite
         return ImGui::GetCurrentContext();
     }
 
-	Subsystem *Application::AddSubsystem(Subsystem* subsystem)
-	{
+    Subsystem *Application::AddSubsystem(Subsystem* subsystem)
+    {
         subsystem->Init();
         auto app = GetInstance();
         app->m_Subsystems.push_back(subsystem);
         return subsystem;
-	}
+    }
 
-	float Application::GetDeltaTime()
+    float Application::GetDeltaTime()
     {
         return GetInstance()->m_DeltaTime;
     }

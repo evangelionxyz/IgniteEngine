@@ -31,6 +31,7 @@
 #include "ignite/scene/entity_rename_command.hpp"
 #include "ignite/scene/entity_reparent_command.hpp"
 #include "ignite/scene/component_property_command.hpp"
+#include "ignite/globals/globals.hpp"
 
 #include "ext/imgui_orientation.hpp"
 #include "ext/imgui_knobs.hpp"
@@ -1268,7 +1269,7 @@ namespace ignite
                 if (c.dirty)
                 {
                     c.camera.UpdateView();
-                    c.camera.UpdateProjection(c.camera.viewportSize.x, c.camera.viewportSize.y);
+                    c.camera.UpdateProjection(globals::GEditor::GameViewport.max.x, globals::GEditor::GameViewport.max.y);
                     c.dirty = false;
                 }
             });
@@ -2383,9 +2384,9 @@ namespace ignite
             const ImVec2 &canvasPos = ImGui::GetCursorScreenPos();
             const ImVec2 &canvasSize = ImGui::GetContentRegionAvail();
 
-            m_EditorCamera.viewportPosition = { canvasPos.x, canvasPos.y };
-            m_EditorCamera.viewportSize = { canvasSize.x, canvasSize.y };
-
+            globals::GEditor::EditorViewport.min = { canvasPos.x, canvasPos.y };
+            globals::GEditor::EditorViewport.max = { canvasSize.x, canvasSize.y };
+            
             // Mouse position in screen space
             const ImVec2 &mousePos = ImGui::GetMousePos();
             m_ViewportData.mousePos = { mousePos.x - canvasPos.x, mousePos.y - canvasPos.y };
@@ -2532,8 +2533,9 @@ namespace ignite
                 ImGuiOrientation::config.axisLengthScale = 0.25f;
                 ImGuiOrientation::SetRect
                 (
-                    m_EditorCamera.viewportPosition.x + m_EditorCamera.viewportSize.x - orientationSize - orientationPadding,
-                    m_EditorCamera.viewportPosition.y + orientationPadding
+
+                    globals::GEditor::EditorViewport.max.x + globals::GEditor::EditorViewport.min.x - orientationSize - orientationPadding,
+                    globals::GEditor::EditorViewport.max.y + orientationPadding
                 );
 
                 if (ImGuiOrientation::DrawGizmo(ImGui::GetWindowDrawList(), (float *const)glm::value_ptr(view), glm::value_ptr(projection), 100.0f))
@@ -2549,7 +2551,7 @@ namespace ignite
             gizmoInfo.cameraProjection = projection;
             gizmoInfo.cameraType = m_EditorCamera.projectionType;
             gizmoInfo.snapValue = m_ViewportData.snapValue;
-            gizmoInfo.viewRect = Rect(m_EditorCamera.viewportPosition, m_EditorCamera.viewportPosition + m_EditorCamera.viewportSize);
+            gizmoInfo.viewRect = Rect(globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max);
 
             m_Gizmo.SetInfo(gizmoInfo);
 
@@ -2846,8 +2848,8 @@ namespace ignite
                             m_Data.gamePreviewPan += glm::vec2(delta.x, delta.y);
                         }
 
-                        camera->viewportPosition = { baseImagePos.x, baseImagePos.y };
-                        camera->viewportSize = { baseImageSize.x, baseImageSize.y };
+                        globals::GEditor::GameViewport.min = { baseImagePos.x, baseImagePos.y };
+                        globals::GEditor::GameViewport.max = { baseImageSize.x, baseImageSize.y };
                         
                         const auto &sceneRenderer = m_EditorLayer->GetSceneRenderer();
                         ImTextureID gameplayViewImaage = (ImTextureID)sceneRenderer->GetGameplayCompositeRT()->GetColorAttachment(0)->GetHandle().Get();
@@ -3072,7 +3074,7 @@ namespace ignite
     {
         return Math::ScreenToWorldOnPlane(screenPos, planeZ,
             m_EditorCamera.GetProjection() * m_EditorCamera.GetView(),
-            { m_EditorCamera.viewportPosition, m_EditorCamera.viewportPosition + m_EditorCamera.viewportSize },
+            { globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max },
             isValid
         );
     }
@@ -3137,7 +3139,7 @@ namespace ignite
         {
             const glm::vec4 world = worldMatrix * glm::vec4(kBoundsCorners[i].x, kBoundsCorners[i].y, 0.0f, 1.0f);
             worldCorners[i] = glm::vec3(world);
-            if (!Math::ProjectWorldToScreen(worldCorners[i], viewProjection, {m_EditorCamera.viewportPosition, m_EditorCamera.viewportPosition + m_EditorCamera.viewportSize}, screenCorners[i]))
+            if (!Math::ProjectWorldToScreen(worldCorners[i], viewProjection, {globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max}, screenCorners[i]))
             {
                 if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
                 {
@@ -3153,8 +3155,8 @@ namespace ignite
 
         const ImVec2 mousePos = ImGui::GetMousePos();
         const bool mouseInViewport = 
-            mousePos.x >= m_EditorCamera.viewportPosition.x && mousePos.x <= (m_EditorCamera.viewportPosition.x + m_EditorCamera.viewportSize.x) &&
-            mousePos.y >= m_EditorCamera.viewportPosition.y && mousePos.y <= (m_EditorCamera.viewportPosition.y + m_EditorCamera.viewportSize.y);
+            mousePos.x >= globals::GEditor::EditorViewport.min.x && mousePos.x <= (globals::GEditor::EditorViewport.min.x + globals::GEditor::EditorViewport.max.x) &&
+            mousePos.y >= globals::GEditor::EditorViewport.min.y && mousePos.y <= (globals::GEditor::EditorViewport.min.y + globals::GEditor::EditorViewport.max.y);
 
         constexpr float handleRadius = 6.0f;
         const float handleRadiusSq = handleRadius * handleRadius;

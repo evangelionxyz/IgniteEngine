@@ -18,6 +18,8 @@
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/imgui/imgui_nvrhi.hpp"
 #include "ignite/graphics/shader.hpp"
+#include "ignite/graphics/ui/game_ui_system.hpp"
+#include "ignite/globals/globals.hpp"
 #include "stb_image_write.h"
 
 #include <algorithm>
@@ -496,8 +498,7 @@ namespace ignite
         {
             // Resize Edit Viewport Framebuffer
             const glm::vec2 framebufferSize = m_SceneRenderer->GetCompositeRT()->GetSize();
-            const glm::vec2 currentViewportSize = editCamera->viewportSize;
-            const glm::vec2 desiredSize = glm::max(glm::vec2(0.0f), currentViewportSize);
+            const glm::vec2 desiredSize = glm::max(glm::vec2(0.0f), globals::GEditor::EditorViewport.max);
             const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
 
             // Resize camera
@@ -527,8 +528,7 @@ namespace ignite
             {
                 // Resize Game Viewport Framebuffer
                 const glm::vec2 framebufferSize = m_SceneRenderer->GetGameplayCompositeRT()->GetSize();
-                const glm::vec2 currentViewportSize = gameCamera->viewportSize;
-                const glm::vec2 desiredSize = glm::max(glm::vec2(0.0f), currentViewportSize);
+                const glm::vec2 desiredSize = glm::max(glm::vec2(0.0f), gameCamera->GetViewportSize());
                 const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
 
                 if (framebufferNeedsResize && desiredSize.x > 0.0f && desiredSize.y > 0.0f)
@@ -968,6 +968,7 @@ namespace ignite
         }
 
         m_SceneRenderer->SetActiveScene(scene);
+        GameUISystem::SetSceneContext(scene.get());
     }
 
     void EditorLayer::RefreshContentBrowsers()
@@ -1208,41 +1209,50 @@ namespace ignite
 
     void EditorLayer::OnScenePlay()
     {
-        if (m_EditorScene)
+        Application::SubmitToMainThread([this]()
         {
-            m_EditorScene->OnStop();
-        }
+			if (m_EditorScene)
+			{
+				m_EditorScene->OnStop();
+			}
 
-        m_ScenePanel->SetGizmoOperation(GizmoOperation::NONE);
+			m_ScenePanel->SetGizmoOperation(GizmoOperation::NONE);
 
-        if (m_State.sceneState != ESceneState::Stop)
-            OnSceneStop();
+			if (m_State.sceneState != ESceneState::Stop)
+				OnSceneStop();
 
-        m_State.sceneState = ESceneState::Play;
+			m_State.sceneState = ESceneState::Play;
 
-        // copy initial components to new scene
-        SetActiveScene(SceneManager::Copy(m_EditorScene));
-        m_ActiveScene->OnStart();
+			// copy initial components to new scene
+			SetActiveScene(SceneManager::Copy(m_EditorScene));
+			m_ActiveScene->OnStart();
+        });
     }
 
     void EditorLayer::OnSceneStop()
     {
-        m_State.sceneState = ESceneState::Stop;
+        Application::SubmitToMainThread([this]()
+        {
+			m_State.sceneState = ESceneState::Stop;
 
-        m_ActiveScene->OnStop();
-        SetActiveScene(m_EditorScene);
+			m_ActiveScene->OnStop();
+			SetActiveScene(m_EditorScene);
+        });
     }
 
     void  EditorLayer::OnSceneSimulate()
     {
-        if (m_State.sceneState != ESceneState::Stop)
-            OnSceneStop();
+        Application::SubmitToMainThread([this]()
+        {
+			if (m_State.sceneState != ESceneState::Stop)
+				OnSceneStop();
 
-        m_State.sceneState = ESceneState::Simulate;
+			m_State.sceneState = ESceneState::Simulate;
 
-        // copy initial components to new scene
-        SetActiveScene(SceneManager::Copy(m_EditorScene));
-        m_ActiveScene->OnStart();
+			// copy initial components to new scene
+			SetActiveScene(SceneManager::Copy(m_EditorScene));
+			m_ActiveScene->OnStart();
+        });
     }
 
     void EditorLayer::OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter)

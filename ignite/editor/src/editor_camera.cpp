@@ -234,7 +234,7 @@ namespace ignite
 			return;
 		}
 
-		const float safeHeight = glm::max(viewportSize.y, 1.0f);
+		const float safeHeight = glm::max(m_ViewportSize.y, 1.0f);
 		float panUnitsPerPixel = controls.panSensitivity;
 
 		if (projectionType == ProjectionType::Orthographic)
@@ -326,10 +326,10 @@ namespace ignite
 				m_Distance = glm::clamp(orthoSize, controls.minDistance, controls.maxDistance);
 				m_ZoomVelocity = 0.0f;
 
-				if (viewportSize.x > 0.0f && viewportSize.y > 0.0f)
+				if (m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f)
 				{
 					UpdateView();
-					UpdateProjection(viewportSize.x, viewportSize.y);
+					UpdateProjection(m_ViewportSize.x, m_ViewportSize.y);
 				}
 
 				return;
@@ -356,10 +356,10 @@ namespace ignite
 					orthoSize = glm::clamp(orthoSize, minOrthoSize, controls.maxOrthoSize);
 					m_Distance = glm::clamp(orthoSize, controls.minDistance, controls.maxDistance);
 
-					if (viewportSize.x > 0.0f && viewportSize.y > 0.0f)
+					if (m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f)
 					{
 						UpdateView();
-						UpdateProjection(viewportSize.x, viewportSize.y);
+						UpdateProjection(m_ViewportSize.x, m_ViewportSize.y);
 					}
 				}
 			}
@@ -404,7 +404,7 @@ namespace ignite
 			return;
 		}
 
-		// apply angular intertia
+		// apply angular inertia
 		if (glm::length(m_AngularVelocity) > 0.001f)
 		{
 			yaw += m_AngularVelocity.x * deltaTime;
@@ -540,7 +540,7 @@ namespace ignite
 
 	void EditorCamera::UpdateProjection(float width, float height)
 	{
-		viewportSize = { width, height };
+		m_ViewportSize = { width, height };
 		const float aspectRatio = width / height;
 
 		switch (projectionType)

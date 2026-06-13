@@ -426,7 +426,7 @@ namespace ignite
             if (widgetComp.widgetHandle == AssetHandle(0))
                 continue;
 
-            return m_Project->GetAssetImmediate<WidgetCanvas>(widgetComp.widgetHandle);
+            return m_Project->GetAsset<WidgetCanvas>(widgetComp.widgetHandle);
         }
 
         return nullptr;

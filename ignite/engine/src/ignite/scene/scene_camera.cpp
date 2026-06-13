@@ -23,16 +23,16 @@ namespace ignite
 		if (preset == AspectRatioPreset::Free)
 			return;
 
-		const float aspect = viewportSize.x / viewportSize.y;
+		const float aspect = m_ViewportSize.x / m_ViewportSize.y;
 		const float targetAspect = GetAspectRatioValue();
 
         if (aspect > targetAspect)
         {
-			viewportSize.x = viewportSize.y * targetAspect;
+			m_ViewportSize.x = m_ViewportSize.y * targetAspect;
         }
         else
         {
-			viewportSize.y = viewportSize.x / targetAspect;
+			m_ViewportSize.y = m_ViewportSize.x / targetAspect;
         }
     }
 
