@@ -12,6 +12,7 @@
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/graphics/window.hpp"
+#include "ignite/graphics/ui/game_ui_system.hpp"
 #include "input/input.hpp"
 #include "command.hpp"
 #include <nvrhi/utils.h>
@@ -70,16 +71,17 @@ namespace ignite
             PushLayer(m_ImGuiLayer);
         }
 
-        AssetWorker::Init();
+        AddSubsystem(new AssetWorker());
+        AddSubsystem(new GameUISystem());
 
         if (m_CreateInfo.useAudio)
         {
-            FmodAudio::Init();
+            AddSubsystem(new FmodAudio());
         }
 
         if (m_CreateInfo.usePhysics)
         {
-            JoltPhysics::Init();
+            AddSubsystem(new JoltPhysics());
         }
     }
 
@@ -497,8 +499,6 @@ namespace ignite
         if (m_RenderThread && m_RenderThread->joinable())
             m_RenderThread->join();
 
-        AssetWorker::Shutdown();
-        
         GPUUploadSync::DeviceWaitIdle(device);
         
         for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
@@ -510,19 +510,17 @@ namespace ignite
         // destroy
         m_Renderer.reset();
 
+        // destroy subsystems
+		for (auto subsystem : m_Subsystems)
+		{
+			subsystem->Shutdown();
+			delete subsystem;
+		}
+        m_Subsystems.clear();
+
         // destroy device
         deviceManager->Destroy();
         m_Window->Destroy();
-
-        if (m_CreateInfo.usePhysics)
-        {
-            JoltPhysics::Shutdown();
-        }
-
-        if (m_CreateInfo.useAudio)
-        {
-            FmodAudio::Shutdown();
-        }
     }
 
     void Application::OnEvent(Event &e)
@@ -627,7 +625,15 @@ namespace ignite
         return ImGui::GetCurrentContext();
     }
 
-    float Application::GetDeltaTime()
+	void Application::AddSubsystem(Subsystem* subsystem)
+	{
+        subsystem->Init();
+
+        auto app = GetInstance();
+        app->m_Subsystems.push_back(subsystem);
+	}
+
+	float Application::GetDeltaTime()
     {
         return GetInstance()->m_DeltaTime;
     }

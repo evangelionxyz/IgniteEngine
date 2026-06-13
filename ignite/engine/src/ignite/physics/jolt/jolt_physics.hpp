@@ -4,6 +4,7 @@
 #ifndef IGN_JOLT_PHYSICS_HPP
 #define IGN_JOLT_PHYSICS_HPP
 
+#include "ignite/core/subsystem.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/scene/entity.hpp"
 #include "ignite/scene/component.hpp"
@@ -289,11 +290,11 @@ namespace ignite
         }
     };
 
-    class IGN_API JoltPhysics
+    class IGN_API JoltPhysics : public Subsystem
     {
     public:
-        static void Init();
-        static void Shutdown();
+        virtual void Init() override;
+        virtual void Shutdown() override;
 
         static JoltPhysics *GetInstance();
 

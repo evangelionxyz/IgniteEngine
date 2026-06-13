@@ -244,8 +244,7 @@ namespace ignite
 
     void Scene::OnStart()
     {
-        m_IsPlaying = true;
-        m_IsPaused = false;
+        m_State = ESceneState::Play;
 
 		ScriptEngine::GetInstance()->SetSceneContext(this);
 
@@ -303,10 +302,9 @@ namespace ignite
 
     void Scene::OnStop()
     {
-        m_IsPlaying = false;
-        m_IsPaused = false;
-        m_StepFrame = 0;
+        m_State = ESceneState::Stop;
 
+        m_StepFrame = 0;
         timeInSeconds = 0.0f;
 
         // play on start audio
@@ -339,7 +337,7 @@ namespace ignite
 
 	void Scene::Pause()
 	{
-        m_IsPaused = !m_IsPaused;
+        m_State = ESceneState::Paused;
 	}
 
 	void Scene::Step(int frame)
@@ -350,7 +348,6 @@ namespace ignite
 	void Scene::UpdateTransforms(float deltaTime)
     {
         IGN_PROFILE_FUNCTION();
-
         UpdateAnimations(deltaTime);
 
         auto view = registry->view<IDComponent, TransformComponent>();
@@ -438,7 +435,7 @@ namespace ignite
     void Scene::OnUpdateRuntimeSimulate(float deltaTime)
     {
         IGN_PROFILE_FUNCTION();
-        if (!m_IsPaused || m_StepFrame-- > 0)
+        if (!((m_State & ESceneState::Paused) != ESceneState::None)  || m_StepFrame-- > 0)
         {
             IGN_PROFILE_SCOPE("Scene::RuntimeTick");
             timeInSeconds += deltaTime;
@@ -514,13 +511,13 @@ namespace ignite
 
     void Scene::Focus()
     {
-        m_IsFocusing = true;
+        m_State |= ESceneState::Focus;
         // TODO
     }
 
     void Scene::Unfocus()
     {
-        m_IsFocusing = false;
+		m_State &= ESceneState::Focus;
         // TODO
     }
 

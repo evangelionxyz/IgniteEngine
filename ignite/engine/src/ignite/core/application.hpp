@@ -9,6 +9,7 @@
 #include "layer_stack.hpp"
 #include "logger.hpp"
 #include "types.hpp"
+#include "subsystem.hpp"
 #include "device/device_manager.hpp"
 #include "ignite/core/input/event.hpp"
 #include "ignite/core/path.hpp"
@@ -79,6 +80,8 @@ namespace ignite
         static std::thread::id GetMainThreadId();
         static ImGuiContext *GetImGuiContext();
 
+        static void AddSubsystem(Subsystem* subsystem);
+
         static float GetDeltaTime();
 
         static void SetWindowTitle(const std::string &title);
@@ -109,6 +112,8 @@ namespace ignite
         Scope<Input> m_Input;
 
         Ref<Renderer> m_Renderer;
+
+        std::vector<Subsystem *> m_Subsystems;
 
         float m_PreviousTime = 0.0f;
         float m_FrameTimeSum = 0.0f;

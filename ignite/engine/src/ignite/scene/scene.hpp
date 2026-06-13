@@ -20,6 +20,7 @@
 
 #include <unordered_map>
 #include <unordered_set>
+#include <type_traits>
 
 namespace ignite
 {
@@ -32,7 +33,44 @@ namespace ignite
     class Project;
     class WidgetCanvas;
 
-    class IGN_API Scene : public Asset
+    enum class ESceneState : uint8_t
+    {
+        None = 0,
+        Stop = 1 << 0, // 0001
+        Play = 1 << 1, // 0010
+		Simulate = 1 << 2, // 0100
+		Paused = 1 << 3, // 1000
+
+        Focus = 1 << 4, // 1 0000
+    };
+
+    inline IGN_API ESceneState operator|(ESceneState lhs, ESceneState rhs)
+    {
+        using UnderlyingType = std::underlying_type_t<ESceneState>;
+        return static_cast<ESceneState>(static_cast<UnderlyingType>(lhs) | static_cast<UnderlyingType>(rhs));
+    }
+	inline IGN_API ESceneState operator&(ESceneState lhs, ESceneState rhs)
+    {
+        using UnderlyingType = std::underlying_type_t<ESceneState>;
+        return static_cast<ESceneState>(static_cast<UnderlyingType>(lhs) & static_cast<UnderlyingType>(rhs));
+    }
+    inline IGN_API ESceneState operator~(ESceneState flag)
+    {
+        using UnderlyingType = std::underlying_type_t<ESceneState>;
+        return static_cast<ESceneState>(~static_cast<UnderlyingType>(flag));
+    }
+    inline IGN_API ESceneState& operator|=(ESceneState& lhs, ESceneState rhs)
+    {
+        lhs = lhs | rhs;
+        return lhs;
+    }
+    inline IGN_API ESceneState &operator&=(ESceneState &lhs, ESceneState rhs)
+	{
+		lhs = lhs & rhs;
+		return lhs;
+	}
+
+    class IGN_API Scene final : public Asset
     {
     public:
         Scene();
@@ -53,12 +91,16 @@ namespace ignite
         void OnUpdateEdit(float deltaTime);
         void SetSceneRenderer(SceneRenderer *sceneRenderer) { m_SceneRenderer = sceneRenderer; }
 
+        inline void SetStateFlag(ESceneState state) { m_State = state; }
+        inline bool IsInState(ESceneState state) const { return (m_State & state) != ESceneState::None; }
+        inline ESceneState GetStateFlag() const { return m_State; }
+
         template<typename T>
         void OnComponentAdded(Entity entity, T &comp);
 
         Entity GetPrimaryCamera();
-        Project *GetProject() { return m_Project; }
-        AssetManager *GetAssetManager() { return m_AssetManager; }
+        inline Project *GetProject() { return m_Project; }
+        inline AssetManager *GetAssetManager() { return m_AssetManager; }
 
         Ref<WidgetCanvas> GetRootWidget();
 
@@ -68,9 +110,9 @@ namespace ignite
         Scope<JoltScene> physics;
         std::unordered_map<UUID, entt::entity> entities; // uuid to entity
         
-		inline bool IsPaused() const { return m_IsPaused; }
-        inline bool IsRunning() const { return m_IsPlaying; }
-        inline bool IsFocusing() const { return m_IsFocusing; }
+		inline bool IsPaused() const { return IsInState(ESceneState::Paused); }
+        inline bool IsRunning() const { return IsInState(ESceneState::Play); }
+        inline bool IsFocus() const { return IsInState(ESceneState::Focus); }
 
         void Focus();
         void Unfocus();
@@ -95,16 +137,11 @@ namespace ignite
 
         Project *m_Project;
         AssetManager *m_AssetManager;
-        
         uint32_t m_ViewportWidth;
         uint32_t m_ViewportHeight;
-
 		uint64_t m_StepFrame = 0;
+        ESceneState m_State = ESceneState::Stop;
         
-        bool m_IsPaused = false;
-        bool m_IsPlaying = false;
-        bool m_IsFocusing = false;
-
         std::unordered_map<AssetHandle, Ref<AnimatorController>> m_SharedAnimatorCache;
         std::unordered_map<AssetHandle, AnimatorControllerRuntime> m_SharedAnimatorRuntime;
 

@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Evangelion Manuhutu
 
 #pragma once
-
-#define GLM_ENABLE_EXPERIMENTAL
+#ifndef IGN_COMPONENT_HPP
+#define IGN_COMPONENT_HPP
 
 #include "icomponent.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
@@ -19,6 +19,10 @@
 #include "scene_camera.hpp"
 #include "ignite/core/string_utils.hpp"
 #include <string>
+
+#ifndef GLM_ENABLE_EXPERIMENTAL
+#define GLM_ENABLE_EXPERIMENTAL
+#endif
 #include <glm/glm.hpp>
 
 // Forward declaration
@@ -662,3 +666,5 @@ namespace ignite
     };
 
 }
+
+#endif

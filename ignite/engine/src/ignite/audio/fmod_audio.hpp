@@ -11,7 +11,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "ignite/core/base.hpp"
+#include "ignite/core/subsystem.hpp"
 #include "ignite/core/types.hpp"
 #include "ignite/core/logger.hpp"
 
@@ -21,11 +21,11 @@ namespace ignite
 {
     struct FmodSound;
     
-    class IGN_API FmodAudio
+    class IGN_API FmodAudio : public Subsystem
     {
     public:
-        static void Init();
-        static void Shutdown();
+        virtual void Init() override;
+        virtual void Shutdown() override;
 
         static void SetMasterVolume(float volume);
         static void MuteMaster(bool mute);
