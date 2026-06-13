@@ -672,6 +672,10 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 
 	void Project::CreateDirectories() const
 	{
+		// Create root directory
+		if (!ignite::Path::exists(m_Info.rootDirectory))
+			ignite::Path::create_directory(m_Info.rootDirectory);
+
         // Create script bin
         ignite::Path projectBinDir = GetScriptBinDirectory();
         if (!ignite::Path::exists(projectBinDir))

@@ -1625,6 +1625,7 @@ namespace ignite
                     Application::SubmitToMainThread([this, newProject]()
                     {
                         m_ActiveProject = newProject;
+                        m_ActiveProject->InitScriptEngine();
 
                         // Serialize
                         m_ActiveProject->Serialize(m_State.projectCreateInfo.filepath);
