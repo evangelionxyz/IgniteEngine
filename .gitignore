@@ -33,3 +33,4 @@ scripts/bin
 scripts/obj
 .agent
 openspec
+ignite/editor/Ignite.Editor.aps

@@ -19,6 +19,7 @@ project "Ignite.Editor"
 
         -- Resource
         "resource.h",
+        "Ignite.Editor.aps",
         "Ignite.Editor.rc",
         "ignite-icon256px.ico",
         "ignite-icon256px.png",

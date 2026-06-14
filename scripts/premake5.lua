@@ -23,10 +23,10 @@ workspace "IGN"
     include "../scriptengine/ignite.scriptengine.lua"
     include "mochisharp-native.lua"
     include "mochisharp-managed.lua"
-
-    group "Utilities"
-        if not os.getenv("GITHUB_ACTIONS") then include "utility_project.lua" end
-    group ""
+    
+    if not os.getenv("GITHUB_ACTIONS") then
+        include "utility_project.lua"
+    end
 
 
 -- Automatically generate MSBuild properties to combat Any CPU mapping bugs for Slnx when forcing x64 workspace architecture

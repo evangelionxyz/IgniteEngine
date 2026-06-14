@@ -72,7 +72,7 @@ namespace ignite
 
         if (m_ImFont)
         {
-            io.Fonts->TexID = 0;
+            io.Fonts->TexRef = ImTextureRef((ImTextureID)0);
         }
     }
 
@@ -309,7 +309,7 @@ namespace ignite
         // This just clears the current font texture
         ImGuiIO &io = ImGui::GetIO();
         io.Fonts->Clear();
-        io.Fonts->TexID = 0;
+        io.Fonts->TexRef = ImTextureRef((ImTextureID)0);
 
         m_Font->ReleaseScaledFont();
 
@@ -324,7 +324,7 @@ namespace ignite
         // Force immediate font and style update
         ImGuiIO &io = ImGui::GetIO();
         io.Fonts->Clear();
-        io.Fonts->TexID = 0;
+        io.Fonts->TexRef = ImTextureRef((ImTextureID)0);
 
         m_Font->ReleaseScaledFont();
         m_Font->CreateScaledFont(event.GetScaleX());
@@ -357,7 +357,7 @@ namespace ignite
                 // Clear existing font and recreate with new scale
                 ImGuiIO &io = ImGui::GetIO();
                 io.Fonts->Clear();
-                io.Fonts->TexID = 0;
+                io.Fonts->TexRef = ImTextureRef((ImTextureID)0);
                 
                 m_Font->ReleaseScaledFont();
             }

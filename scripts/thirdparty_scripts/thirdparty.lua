@@ -152,7 +152,6 @@ LibraryDir["FMOD_LINUX"]              = "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64"
 LibraryDir["FBX_SDK_LINUX_DEBUG"]     = "%{FBX_SDK_PATH}/lib/gcc/x64/debug"
 LibraryDir["FBX_SDK_LINUX_RELEASE"]   = "%{FBX_SDK_PATH}/lib/gcc/x64/release"
 
-
 -- include lua files
 group "Third Party"
     include "box2d.lua"
@@ -168,8 +167,5 @@ group "Third Party"
     include "freetype.lua"
     include "tracy.lua"
     include "umbrashadercompiler.lua"
-group ""
-
-group "NVIDIA"
     include "nvrhi.lua"
 group ""
