@@ -39,7 +39,7 @@ namespace ignite
         sr.BeginMap(); // START
 
         sr.BeginMap("Scene"); // scene file header
-        sr.AddKeyValue<std::string>("Version", ENGINE_VERSION);
+        sr.AddKeyValue<uint32_t>("Version", Application::GetVersion());
         sr.AddKeyValue<std::string>("Title", m_Scene->name);
         sr.BeginSequence("Entities");
 

@@ -182,7 +182,7 @@ namespace ignite
 		sr.BeginMap();
         {
 		    sr.BeginMap("Material"); // MATERIAL START
-		    sr.AddKeyValue("Version", ENGINE_VERSION);
+		    sr.AddKeyValue("Version", Application::GetVersion());
 		    sr.AddKeyValue("Name", name);
 		    sr.AddKeyValue("Type", static_cast<int>(GetType()));
 		    sr.AddKeyValue("BaseColorTextureHandle", static_cast<uint64_t>(baseColorTextureHandle));

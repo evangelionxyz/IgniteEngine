@@ -15,8 +15,16 @@
 
 #if PLATFORM_WINDOWS
 #include <Shlwapi.h>
+#include <ShObjIdl.h>
+#include <Windows.h>
+#include <commdlg.h>
 #elif __linux__ || __GNUG__
 #include <glob.h>
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+#include <array>
+#include <unistd.h>
 #endif
 
 namespace ignite::vfs
@@ -420,4 +428,40 @@ namespace ignite::vfs
 
         return regex.str();
     }
+
+	// Executable helpers
+#ifdef PLATFORM_WINDOWS
+	ignite::Path GetExecutablePath()
+	{
+		char buffer[MAX_PATH] = { 0 };
+		DWORD size = GetModuleFileNameA(nullptr, buffer, MAX_PATH);
+		if (size == 0 || size == MAX_PATH)
+			return ignite::Path(std::filesystem::current_path().string());
+		return ignite::Path(std::string(buffer, buffer + size));
+	}
+#elif defined(PLATFORM_LINUX)
+	ignite::Path GetExecutablePath()
+	{
+		std::array<char, 1024> buffer;
+		ssize_t len = readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
+		if (len == -1)
+			return ignite::Path(std::filesystem::current_path().string());
+		buffer[len] = '\0';
+		return ignite::Path(buffer.data());
+	}
+#else
+	ignite::Path GetExecutablePath()
+	{
+		return ignite::Path(std::filesystem::current_path().string());
+	}
+#endif
+
+	ignite::Path GetExecutableDirectory()
+	{
+		auto exe = GetExecutablePath();
+		if (exe.empty())
+			return ignite::Path(std::filesystem::current_path().string());
+		return exe.parent_path();
+	}
+
 }

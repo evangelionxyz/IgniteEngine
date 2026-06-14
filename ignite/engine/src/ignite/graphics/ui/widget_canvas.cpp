@@ -8,6 +8,7 @@
 #include "widget_button.hpp"
 #include "widget_image.hpp"
 
+#include "ignite/core/application.hpp"
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/asset/asset_manager.hpp"
 
@@ -35,7 +36,7 @@ namespace ignite
         sr.BeginMap();
 
         sr.BeginMap("Widget");
-        sr.AddKeyValue("Version", ENGINE_VERSION);
+        sr.AddKeyValue("Version", Application::GetVersion());
         sr.AddKeyValue("Name", name);
         sr.AddKeyValue("Enabled", m_Enabled);
         sr.AddKeyValue("BlocksWidgetsBelow", m_BlocksWidgetsBelow);

@@ -42,6 +42,20 @@ namespace ignite
             }
         }
 
+        // Print engine version
+        {
+            const uint32_t major = version::GetMajor(m_CreateInfo.version);
+            const uint32_t minor = version::GetMinor(m_CreateInfo.version);
+            const uint32_t patch = version::GetPatch(m_CreateInfo.version);
+
+            LOG_TRACE("Ignite version: {}.{}.{}\n", major, minor, patch);
+        }
+
+        // Create native filesystem
+        const ignite::Path exePath = m_CreateInfo.cmdLineArgs[0];
+        m_AppNativeFileSystem = CreateRef<vfs::NativeFileSystem>();
+        m_AppRelativeFilesystem = CreateRef<vfs::RelativeFileSystem>(m_AppNativeFileSystem, exePath.parent_path());
+
         m_CommandManager = CreateScope<CommandManager>();
         DeviceParameters deviceParams;
         deviceParams.backBufferWidth = m_CreateInfo.width;
@@ -631,7 +645,17 @@ namespace ignite
         return subsystem;
     }
 
-    float Application::GetDeltaTime()
+	Ref<vfs::NativeFileSystem> Application::GetNativeFileSystem()
+	{
+		return GetInstance()->m_AppNativeFileSystem;
+	}
+
+	Ref<vfs::RelativeFileSystem> Application::GeRelativeFileSystem()
+	{
+        return GetInstance()->m_AppRelativeFilesystem;
+	}
+
+	float Application::GetDeltaTime()
     {
         return GetInstance()->m_DeltaTime;
     }

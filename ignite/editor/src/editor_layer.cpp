@@ -855,7 +855,7 @@ namespace ignite
         ImGui::SameLine();
         ImGui::TextUnformatted(m_StatusText.c_str());
 
-        const std::string versionStr = std::format("Version: {}", ENGINE_VERSION);
+        const std::string versionStr = std::format("Version: {}", Application::GetVersionString());
         float versionWidth = ImGui::CalcTextSize(versionStr.c_str()).x;
         ImGui::SameLine(ImGui::GetWindowWidth() - versionWidth - 10.0f);
         ImGui::TextUnformatted(versionStr.c_str());

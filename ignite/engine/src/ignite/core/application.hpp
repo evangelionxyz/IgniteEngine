@@ -11,6 +11,7 @@
 #include "types.hpp"
 #include "subsystem.hpp"
 #include "device/device_manager.hpp"
+#include "ignite/core/vfs/vfs.hpp"
 #include "ignite/core/input/event.hpp"
 #include "ignite/core/path.hpp"
 
@@ -34,7 +35,6 @@ namespace ignite
     {
         int count = 0;
         char **args = nullptr;
-
         const char *operator[](int index) const
         {
             LOG_ASSERT(index < count, "Invalid index");
@@ -48,8 +48,8 @@ namespace ignite
         std::string name = "Ignite";
         std::string iconPath = " ";
         std::string workingDirectory;
-        nvrhi::GraphicsAPI graphicsApi = nvrhi::GraphicsAPI::VULKAN;
 
+        uint32_t version = 0;
         uint32_t width = 1280;
         uint32_t height = 640;
 		bool borderless = false;
@@ -57,6 +57,8 @@ namespace ignite
         bool useGui = true;
         bool usePhysics = true;
         bool useAudio = true;
+
+        nvrhi::GraphicsAPI graphicsApi = nvrhi::GraphicsAPI::VULKAN;
     };
 
     class IGN_API Application
@@ -85,6 +87,17 @@ namespace ignite
         static ImGuiContext *GetImGuiContext();
 
         static Subsystem *AddSubsystem(Subsystem* subsystem);
+        static Ref<vfs::NativeFileSystem> GetNativeFileSystem();
+        static Ref<vfs::RelativeFileSystem> GeRelativeFileSystem();
+        static inline uint32_t GetVersion() { return GetInstance()->m_CreateInfo.version; }
+        
+        static inline std::string GetVersionString()
+        {
+			const uint32_t major = version::GetMajor(GetVersion());
+			const uint32_t minor = version::GetMinor(GetVersion());
+			const uint32_t patch = version::GetPatch(GetVersion());
+			return std::format("{}.{}.{}", major, minor, patch);
+        }
 
         static float GetDeltaTime();
 
@@ -118,6 +131,9 @@ namespace ignite
         Renderer *m_Renderer;
 
         std::vector<Subsystem *> m_Subsystems;
+
+        Ref<vfs::NativeFileSystem> m_AppNativeFileSystem;
+        Ref<vfs::RelativeFileSystem> m_AppRelativeFilesystem;
 
         float m_PreviousTime = 0.0f;
         float m_FrameTimeSum = 0.0f;

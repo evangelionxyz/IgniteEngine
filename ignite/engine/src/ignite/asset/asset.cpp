@@ -3,7 +3,7 @@
 
 #include "asset.hpp"
 
-#include "ignite/core/base.hpp"
+#include "ignite/core/application.hpp"
 #include "ignite/serializer/serializer.hpp"
 
 namespace ignite
@@ -17,7 +17,7 @@ namespace ignite
 
         Serializer sr(filepath);
         sr.BeginMap();
-        sr.AddKeyValue("ENGINE_VERSION", ENGINE_VERSION);
+        sr.AddKeyValue("Version", Application::GetVersion());
         sr.AddKeyValue("ASSET_HANDLE", static_cast<uint64_t>(handle));
         sr.AddKeyValue("ASSET_TYPE", AssetTypeToString(const_cast<Asset *>(this)->GetAssetType()));
 

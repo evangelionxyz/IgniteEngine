@@ -28,15 +28,16 @@ namespace ignite
     public:
         GuiFont();
         GuiFont(float size);
-        GuiFont(std::vector<uint8_t> data, bool isCompressed, float size);
+        GuiFont(Buffer buffer, bool isCompressed, float size);
 
-        bool HasFontData() const { return m_Data.data() != nullptr; }
+        [[nodiscard]]
+        bool HasFontData() const { return !m_Buffer.IsEmpty(); }
         ImFont *GetScaledFont() const { return m_ImFont; }
 
     protected:
         friend class ImGuiLayer;
+        Buffer m_Buffer;
 
-        std::vector<uint8_t> m_Data;
         bool const m_IsDefault;
         bool const m_IsCompressed;
         float const m_SizeAtDefaultScale;

@@ -91,7 +91,13 @@ namespace ignite::vfs
         bool FindMountPoint(const ignite::Path& path, ignite::Path* pRelativePath, IFileSystem** ppFS);
     };
 
-    std::string GetFileSearchRegex(const ignite::Path &path, const std::vector<std::string> &extensions);
+    IGN_API std::string GetFileSearchRegex(const ignite::Path &path, const std::vector<std::string> &extensions);
+
+	// Returns the full path to the running executable, e.g. C:\Dev\Ignite\Build\MyExe.exe
+	IGN_API ignite::Path GetExecutablePath();
+
+	// Returns the directory that contains the running executable, e.g. C:\Dev\Ignite\Build
+	IGN_API ignite::Path GetExecutableDirectory();
 }
 
 #endif
