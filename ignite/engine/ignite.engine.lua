@@ -128,7 +128,6 @@ project "Ignite.Engine"
         -- Set rpath to $ORIGIN so the binary finds .so files next to itself
         linkoptions { "-Wl,-rpath,'$$ORIGIN'" }
         postbuildcommands {
-            '{COPYDIR} "%{wks.location}/resources" "%{cfg.targetdir}/resources"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so" "%{cfg.targetdir}"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14" "%{cfg.targetdir}"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/linux/x64/libfmod.so.14.13" "%{cfg.targetdir}"'
@@ -176,7 +175,6 @@ project "Ignite.Engine"
         }
 
         postbuildcommands {
-            '{COPYDIR} "%{wks.location}/resources" "%{cfg.targetdir}/resources"',
             '{COPYFILE} "%{LibraryDir.VULKAN_SDK_BIN}/dxcompiler.dll" "%{cfg.targetdir}"',
 
             '{COPYFILE} "%{THIRDPARTY_DIR}/OpenEXR/lib/win32/deflate.dll" "%{cfg.targetdir}"',
@@ -190,7 +188,7 @@ project "Ignite.Engine"
             '{COPYFILE} "%{THIRDPARTY_DIR}/ASSIMP/lib/win32/assimp-vc143-mt.dll" "%{cfg.targetdir}"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/FMOD/lib/windows/x64/fmod.dll" "%{cfg.targetdir}"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/SDL3/lib/windows/x64/SDL3.dll" "%{cfg.targetdir}"',
-            
+
             -- Copying dotnet libraries
             '{COPYFILE} "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/nethost.dll\" "%{cfg.targetdir}\"',
             '{COPYFILE} "%{THIRDPARTY_DIR}/MochiSharp/ThirdParty/dotnet/host/fxr/9.0.11/x64/hostfxr.dll\" "%{cfg.targetdir}\"'

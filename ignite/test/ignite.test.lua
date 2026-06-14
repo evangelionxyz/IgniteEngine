@@ -1,31 +1,22 @@
-project "Ignite.Editor"
-    location "%{wks.location}/ignite/editor"
+project "Ignite.Test"
+    location "%{wks.location}/ignite/test"
     kind "ConsoleApp"
     staticruntime "off"
     architecture "x64"
     language "c++"
     cppdialect "c++23"
 
-    targetdir (OUTPUT_DIR)
-    objdir (INTOUTPUT_DIR)
-
-    pchheader "pch.hpp"
-    pchsource "src/pch.cpp"
+    targetdir (OUTPUT_DIR .. "/test")
+    objdir (INTOUTPUT_DIR .. "/test")
 
     files {
         "src/**.cpp",
         "src/**.hpp",
         "src/**.h",
-
-        -- Resource
-        "resource.h",
-        "Ignite.Editor.aps",
-        "Ignite.Editor.rc",
-        "ignite-icon256px.ico",
-        "ignite-icon256px.png",
     }
 
     links {
+        "gtest",
         "Ignite.Engine",
         "JOLT",
         "ZLIB",
@@ -51,6 +42,7 @@ project "Ignite.Editor"
         "%{IncludeDir.UmbraShaderCompiler}",
         "%{IncludeDir.BOX2D}",
         "%{IncludeDir.ENTT}",
+        "%{IncludeDir.gtest}",
         "%{IncludeDir.JOLT}",
         "%{IncludeDir.GLM}",
         "%{IncludeDir.FMOD}",
