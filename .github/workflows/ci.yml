@@ -68,8 +68,8 @@ jobs:
 
       - name: Resore NuGet packages - Visual Studio
         shell: pwsh
-        run: msbuild $env:SOLUTION_FILE_IGN /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform="x64"
+        run: msbuild $env:SOLUTION_FILE_IGN /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform="x64" /v:n
 
       - name: Build Solution - Visual Studio
         shell: pwsh
-        run: msbuild $env:SOLUTION_FILE_IGN /t:Rebuild /p:Configuration=${{ matrix.configuration }} /p:Platform="x64"
+        run: msbuild $env:SOLUTION_FILE_IGN /t:Rebuild /p:Configuration=${{ matrix.configuration }} /p:Platform="x64" /v:m
