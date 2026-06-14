@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2026 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "vfs.hpp"
 
@@ -35,39 +14,13 @@
 #include <stdint.h>
 
 #if PLATFORM_WINDOWS
-#   include <Shlwapi.h>
+#include <Shlwapi.h>
 #elif __linux__ || __GNUG__
-#   include <glob.h>
+#include <glob.h>
 #endif
 
 namespace ignite::vfs
 {
-    Blob::Blob(void* data, size_t size)
-        : m_Data(data)
-        , m_Size(size)
-    {
-    }
-
-    const void* Blob::Data() const
-    {
-        return m_Data;
-    }
-
-    size_t Blob::Size() const
-    {
-        return m_Size;
-    }
-
-    Blob::~Blob()
-    {
-        if (m_Data)
-        {
-            free(m_Data);
-            m_Data = nullptr;
-        }
-        m_Size = 0;
-    }
-
     bool NativeFileSystem::DirectoryExists(const ignite::Path &path)
     {
         return ignite::Path::exists(path) && ignite::Path::is_directory(path);
@@ -78,41 +31,43 @@ namespace ignite::vfs
         return ignite::Path::exists(path) && ignite::Path::is_regular_file(path);
     }
 
-    Ref<IBlob> NativeFileSystem::ReadFile(const ignite::Path &path)
+    Buffer NativeFileSystem::ReadFile(const ignite::Path &path)
     {
         std::ifstream file(path, std::ios::binary);
         if (!file.is_open())
-        {
-            return nullptr;
-        }
+            return { };
 
         file.seekg(0, std::ios::end);
-        u64 size = file.tellg();
+        std::streampos tellgSize = file.tellg();
+        
+        if (tellgSize < 0)
+        {
+			LOG_ASSERT(false, "[NativeFileSystem] Failed to determine file size!", tellgSize);
+			return { };
+        }
+        
+        const auto size = static_cast<uint64_t>(tellgSize);
         file.seekg(0, std::ios::beg);
-
-        if (size > static_cast<u64>(std::numeric_limits<size_t>::max()))
+        if (size > std::numeric_limits<size_t>::max())
         {
-            LOG_ASSERT(false, "File too large");
-            return nullptr;
+			LOG_ASSERT(false, "[NativeFileSystem] File is too large! {} bytes", size);
+			return { };
         }
 
-        char *data = static_cast<char *>(malloc(size));
-        if (data == nullptr)
+        if (size == 0 || !file.good())
         {
-            LOG_ASSERT(false, "Out of memory");
-            return nullptr;
+            LOG_ASSERT(false, "[NativeFileSystem] File might corrupted!");
+            return { };
         }
 
-        file.read(data, size);
-
-        if (!file.good())
+        std::vector<uint8_t> dataVector(size);
+        if (!file.read((char *)dataVector.data(), static_cast<std::streamsize>(size)))
         {
-            free(data);
-            LOG_ASSERT(false, "File reading error");
-            return nullptr;
+			LOG_ASSERT(false, "[NativeFileSystem] Failed to read expected file bytes!");
+			return { };
         }
 
-        return CreateRef<Blob>(data, size);
+        return { dataVector };
     }
 
     bool NativeFileSystem::WriteFile(const ignite::Path &path, const void *data, size_t size)
@@ -241,33 +196,51 @@ namespace ignite::vfs
 
     bool RelativeFileSystem::DirectoryExists(const ignite::Path& name)
     {
-        return m_UnderlyingFS->DirectoryExists(m_BasePath / name.relative_path());
+        auto relative = ResolveAndSanitize(name);
+        return m_UnderlyingFS->DirectoryExists(relative);
     }
 
     bool RelativeFileSystem::FileExists(const ignite::Path& name)
     {
-        return m_UnderlyingFS->FileExists(m_BasePath / name.relative_path());
+		auto relative = ResolveAndSanitize(name);
+        return m_UnderlyingFS->FileExists(relative);
     }
 
-    Ref<IBlob> RelativeFileSystem::ReadFile(const ignite::Path& name)
+    Buffer RelativeFileSystem::ReadFile(const ignite::Path& name)
     {
-        return m_UnderlyingFS->ReadFile(m_BasePath / name.relative_path());
+		auto relative = ResolveAndSanitize(name);
+        return m_UnderlyingFS->ReadFile(relative);
     }
 
     bool RelativeFileSystem::WriteFile(const ignite::Path& name, const void* data, size_t size)
     {
-        return m_UnderlyingFS->WriteFile(m_BasePath / name.relative_path(), data, size);
+		auto relative = ResolveAndSanitize(name);
+        return m_UnderlyingFS->WriteFile(relative, data, size);
     }
 
     int RelativeFileSystem::EnumerateFiles(const ignite::Path& path, const std::vector<std::string>& extensions, enumerate_callback_t callback, bool allowDuplicates)
     {
-        return m_UnderlyingFS->EnumerateFiles(m_BasePath / path.relative_path(), extensions, callback, allowDuplicates);
+		auto relative = ResolveAndSanitize(path);
+        return m_UnderlyingFS->EnumerateFiles(relative, extensions, callback, allowDuplicates);
     }
 
     int RelativeFileSystem::EnumerateDirectories(const ignite::Path& path, enumerate_callback_t callback, bool allowDuplicates)
     {
-        return m_UnderlyingFS->EnumerateDirectories(m_BasePath / path.relative_path(), callback, allowDuplicates);
+		auto relative = ResolveAndSanitize(path);
+        return m_UnderlyingFS->EnumerateDirectories(relative, callback, allowDuplicates);
     }
+
+	ignite::Path RelativeFileSystem::ResolveAndSanitize(const ignite::Path &name) const
+	{
+		ignite::Path combined = (m_BasePath / name).lexically_normal();
+        ignite::Path relative = combined.lexically_relative(m_BasePath);
+        std::string relativeStr = relative.generic_string();
+        if (relativeStr.find("..") != std::string::npos)
+        {
+            return { };
+        }
+        return combined;
+	}
 
     void RootFileSystem::Mount(const ignite::Path& path, std::shared_ptr<IFileSystem> fs)
     {
@@ -353,7 +326,7 @@ namespace ignite::vfs
         return false;
     }
 
-    std::shared_ptr<IBlob> RootFileSystem::ReadFile(const ignite::Path& name)
+    Buffer RootFileSystem::ReadFile(const ignite::Path& name)
     {
         ignite::Path relativePath;
         IFileSystem* fs = nullptr;
@@ -363,7 +336,7 @@ namespace ignite::vfs
             return fs->ReadFile(relativePath);
         }
 
-        return nullptr;
+        return { };
     }
 
     bool RootFileSystem::WriteFile(const ignite::Path& name, const void* data, size_t size)

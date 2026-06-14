@@ -39,6 +39,7 @@ namespace ignite
         {
             return 0;
         }
+
         std::error_code ec;
         const auto absolutePath = m_Project->GetProjectFilepath(metadata.filepath);
         const uint64_t size = std::filesystem::file_size(absolutePath.string(), ec);

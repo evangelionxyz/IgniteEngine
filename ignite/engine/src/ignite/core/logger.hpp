@@ -6,14 +6,16 @@
 
 #include "base.hpp"
 #include "types.hpp"
-
+#include <fstream>
 #include <spdlog/spdlog.h>
 #include <spdlog/async.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 #include "ignite/core/path.hpp"
 
+#ifndef GLM_ENABLE_EXPERIMENTAL
 #define GLM_ENABLE_EXPERIMENTAL
+#endif
 #include <glm/gtx/string_cast.hpp>
 
 namespace ignite
@@ -51,6 +53,38 @@ struct formatter<ignite::Path>
     {
         return fmt::format_to(ctx.out(), "{}", filepath.generic_string());
     }
+};
+
+template<>
+struct formatter<std::streamsize>
+{
+	template<typename ParseContext>
+	constexpr auto parse(ParseContext &ctx)
+	{
+		return ctx.begin();
+	}
+
+	template<typename FormatContext>
+	auto format(const std::streamsize streamSize, FormatContext &ctx) const
+	{
+		return fmt::format_to(ctx.out(), "{}", static_cast<size_t>(streamSize));
+	}
+};
+
+template<>
+struct formatter<std::streampos>
+{
+	template<typename ParseContext>
+	constexpr auto parse(ParseContext &ctx)
+	{
+		return ctx.begin();
+	}
+
+	template<typename FormatContext>
+	auto format(const std::streampos streamPos, FormatContext &ctx) const
+	{
+		return fmt::format_to(ctx.out(), "{}", static_cast<size_t>(streamPos));
+	}
 };
 }
 

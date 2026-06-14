@@ -62,7 +62,7 @@ namespace ignite
     void IndexBuffer::SetData(nvrhi::ICommandList *cmd, Buffer buffer, size_t offset) const
     {
         IGN_PROFILE_SCOPE("IndexBuffer::SetData");
-        cmd->writeBuffer(m_Handle, buffer.data, buffer.size, offset);
+        cmd->writeBuffer(m_Handle, buffer.Data(), buffer.Size(), offset);
     }
 
     Ref<IndexBuffer> IndexBuffer::Create(size_t size, const std::string &debugName)
