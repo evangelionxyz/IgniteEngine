@@ -25,6 +25,8 @@ public static class Input
 
     public static Vector2 mousePosition => MousePosition;
 
+    public static bool IsMouseOverUI => CoreInternalCalls.Input_IsMouseOverUI();
+
     public static bool GetMouseButtonDown(int button)
     {
         MouseCode code = button switch

@@ -1,6 +1,6 @@
 -- Main Engine Project
 workspace "IGN"
-    location "../"
+    location (path.getabsolute("../"))
     architecture "x64"
     multiprocessorcompile("On")
     configurations {
@@ -9,30 +9,20 @@ workspace "IGN"
         "Shipping"
     }
 
-    BUILD_DIR = "%{wks.location}/bin"
-    OUTPUT_DIR = "%{BUILD_DIR}/%{cfg.buildcfg}"
-    THIRDPARTY_DIR = "%{wks.location}/thirdparty"
-    THIRDPARTY_OUTPUT_DIR = "%{BUILD_DIR}/%{cfg.buildcfg}/thirdparty/%{prj.name}"
-    INTOUTPUT_DIR = "%{wks.location}/bin/objs/%{cfg.buildcfg}/%{prj.name}"
+    local wks_absolute = path.getabsolute("../")
+    BUILD_DIR = wks_absolute .. "/bin"
+    OUTPUT_DIR = BUILD_DIR .. "/%{cfg.buildcfg}"
+    THIRDPARTY_DIR = wks_absolute .. "/thirdparty"
+    THIRDPARTY_OUTPUT_DIR = BUILD_DIR .. "/%{cfg.buildcfg}/thirdparty/%{prj.name}"
+    INTOUTPUT_DIR = wks_absolute .. "/bin/objs/%{cfg.buildcfg}/%{prj.name}"
 
     include "thirdparty_scripts/thirdparty.lua"
-    group "Engine/Executable"
-        include "../editor/ignite-editor.lua"
-        include "../runtime/ignite-runtime.lua"
-    group ""
-    group "Engine/Executable/Tests"
-        include "../test/test.lua"
-    group ""
     
-    group "Engine/Core"
-        include "../engine/ignite-engine.lua"
-        include "mochisharp-native.lua"
-    group ""
-
-    group "Engine/Managed"
-        include "../scriptengine/ignite-scriptengine.lua"
-        include "mochisharp-managed.lua"
-    group ""
+    include "../ignite/editor/ignite.editor.lua"
+    include "../ignite/engine/ignite.engine.lua"
+    include "../scriptengine/ignite.scriptengine.lua"
+    include "mochisharp-native.lua"
+    include "mochisharp-managed.lua"
 
     group "Utilities"
         if not os.getenv("GITHUB_ACTIONS") then include "utility_project.lua" end

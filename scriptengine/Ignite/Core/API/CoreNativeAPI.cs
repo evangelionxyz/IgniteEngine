@@ -16,6 +16,7 @@ public static class CoreNativeAPI
         public IntPtr Input_GetMousePosition;
         public IntPtr Input_SetMouseToCenter;
         public IntPtr Input_SetCursorMode;
+        public IntPtr Input_IsMouseOverUI;
 
         public IntPtr AssetManager_IsAssetHandleValid;
 
@@ -113,6 +114,10 @@ public static class CoreNativeAPI
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void InputSetCursorModeFn(int mode);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        public delegate bool InputIsMouseOverUIFn();
 
         // Asset Manager
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]

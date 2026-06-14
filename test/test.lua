@@ -16,7 +16,7 @@ project "TEST"
     }
 
     links {
-        "IgniteEngine",
+        "Ignite.Engine",
         "JOLT",
         "ZLIB",
         "YAMLCPP"
@@ -24,7 +24,7 @@ project "TEST"
 
     includedirs {
         "src",
-        "%{wks.location}/engine/src",
+        "%{wks.location}/ignite/ignite.engine/src",
         "%{IncludeDir.SDL3}",
         "%{IncludeDir.BOX2D}",
         "%{IncludeDir.ENTT}",

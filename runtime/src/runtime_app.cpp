@@ -1,6 +1,6 @@
 /* MIT License
 * 
-* Copyright (c) 2025 Evangelion Manuhutu | IGNITE STUDIO
+* Copyright (c) 2026 Evangelion Manuhutu | IGNITE STUDIO
 * 
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -21,8 +21,8 @@
 * SOFTWARE.
 */
 
-#include <ignite/entry_point.hpp>
-#include <ignite/core/application.hpp>
+#include <engine/entry_point.hpp>
+#include <engine/core/application.hpp>
 #include "runtime_layer.hpp"
 
 class RuntimeApp final : public ignite::Application
