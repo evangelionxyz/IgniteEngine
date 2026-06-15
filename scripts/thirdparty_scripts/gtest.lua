@@ -1,4 +1,5 @@
 project "gtest"
+    location (THIRDPARTY_DIR)
     kind "StaticLib"
     language "C++"
     cppdialect "C++23"
