@@ -11,19 +11,19 @@
 *.sln
 *.slnx
 *cmake_install.cmake
+*.aps
+
 imgui.ini
 
+.agent
 Makefile
 CMakeFiles
 CMakeCache.txt
-__pycache__
 bin
 out
 lib
 cmake
 bin-cmake
-
-resources/shaders/bin
 
 scripts/premake
 scripts/downloads
@@ -31,6 +31,5 @@ scriptengine/obj
 scriptengine/bin
 scripts/bin
 scripts/obj
-.agent
+__pycache__
 openspec
-ignite/editor/Ignite.Editor.aps
