@@ -3,8 +3,9 @@
 #include "jolt_physics.hpp"
 #include "ignite/core/types.hpp"
 #include "ignite/core/profiler/profiler.hpp"
-
 #include "ignite/scene/scene.hpp"
+
+#include <Jolt/Core/Factory.h>
 
 namespace ignite
 {
@@ -13,6 +14,7 @@ namespace ignite
     static constexpr unsigned int cNumBodyMutexes = 0;
     static constexpr unsigned int cMaxBodyPairs = 64000;
     static constexpr unsigned int cMaxContactConstraints = 20480;
+	static constexpr unsigned int cAllocatorSize = 32 * 1024 * 1024;
 
     using namespace JPH::literals;
 
@@ -30,14 +32,15 @@ namespace ignite
         JPH::Factory::sInstance = new JPH::Factory();
         
         JPH::RegisterTypes();
+
         
-        s_JoltInstance->tempAllocator = std::make_unique<JPH::TempAllocatorImpl>(32 * 1024 * 1024);
-        s_JoltInstance->jobSystem = std::make_unique<JPH::JobSystemThreadPool>(cMaxPhysicsJobs, 8,
+        s_JoltInstance->tempAllocator = CreateScope<JPH::TempAllocatorImpl>(cAllocatorSize);
+        s_JoltInstance->jobSystem = CreateScope<JPH::JobSystemThreadPool>(cMaxPhysicsJobs, 8,
             std::thread::hardware_concurrency() - 1);
 
         // Create collision listeners
-        s_JoltInstance->contactListener = std::make_unique<JoltContactListener>();
-        s_JoltInstance->bodyActivationListener = std::make_unique<JoltBodyActivationListener>();
+        s_JoltInstance->contactListener = CreateScope<JoltContactListener>();
+        s_JoltInstance->bodyActivationListener = CreateScope<JoltBodyActivationListener>();
 
         LOG_WARN("[Jolt Physics] Initalized");
     }
