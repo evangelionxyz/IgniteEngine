@@ -270,6 +270,7 @@ namespace ignite
             m_Scene->SetSceneRenderer(nullptr);
         }
 
+        m_WorldEnvironment = nullptr;
 
         m_SelectedEntities.clear();
         m_Has2DPreRenderCache = false;
