@@ -43,7 +43,7 @@ namespace ignite
             m_CompositeSampler = m_Device->createSampler(samplerDesc);
         }
 
-        std::array vertices
+        static constexpr std::array vertices
         {
             VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
             VertexScreen{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },

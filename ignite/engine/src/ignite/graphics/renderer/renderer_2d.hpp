@@ -18,6 +18,7 @@
 #include "ignite/graphics/buffers/index_buffer.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/objects/material_2d.hpp"
+#include "ignite/graphics/framebuffer_key.hpp"
 
 #include <array>
 #include <unordered_map>
@@ -105,6 +106,18 @@ namespace ignite
         static Ref<Renderer2D> Create();
         
     private:
+        Ref<GraphicsPipeline> GetQuadPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
+        Ref<GraphicsPipeline> GetTextPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
+        Ref<GraphicsPipeline> GetCirclePipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
+        Ref<GraphicsPipeline> GetLinePipelineForFB(nvrhi::IFramebuffer *framebuffer);
+
+        nvrhi::BindingSetHandle GetQuadBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &lightingBuffer);
+        nvrhi::BindingSetHandle GetTextBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &lightingBuffer);
+        nvrhi::BindingSetHandle GetLineBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer);
+        nvrhi::BindingSetHandle GetCircleBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer);
+
+
+    private:
         nvrhi::ICommandList *m_Cmd;
         BatchRender<Vertex2DQuad> m_QuadBatch;
         BatchRender<Vertex2DLine> m_LineBatch;
@@ -138,8 +151,62 @@ namespace ignite
             }
         };
 
+		struct CameraBindingKey
+		{
+			nvrhi::IBindingLayout *layout = nullptr;
+			nvrhi::IBuffer *cameraBuffer = nullptr;
+
+			bool operator==(const CameraBindingKey &other) const noexcept
+			{
+				return layout == other.layout && cameraBuffer == other.cameraBuffer;
+			}
+		};
+
+		struct CameraBindingKeyHash
+		{
+			size_t operator()(const CameraBindingKey &k) const noexcept
+			{
+				size_t h = std::hash<const void *>{}(k.layout);
+				h ^= (std::hash<const void *>{}(k.cameraBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+				return h;
+			}
+		};
+
+		struct CameraLightingBindingKey
+		{
+			nvrhi::IBindingLayout *layout = nullptr;
+			nvrhi::IBuffer *cameraBuffer = nullptr;
+			nvrhi::IBuffer *lightingBuffer = nullptr;
+
+			bool operator==(const CameraLightingBindingKey &other) const noexcept
+			{
+				return layout == other.layout && cameraBuffer == other.cameraBuffer && lightingBuffer == other.lightingBuffer;
+			}
+		};
+
+		struct CameraLightingBindingKeyHash
+		{
+			size_t operator()(const CameraLightingBindingKey &k) const noexcept
+			{
+				size_t h = std::hash<const void *>{}(k.layout);
+				h ^= (std::hash<const void *>{}(k.cameraBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+				h ^= (std::hash<const void *>{}(k.lightingBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+				return h;
+			}
+		};
+
         std::unordered_map<AssetResolveKey, Ref<Texture>, AssetResolveKeyHash> m_TextureResolveCache;
         std::unordered_map<AssetResolveKey, Ref<Material2D>, AssetResolveKeyHash> m_Material2DResolveCache;
+
+		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_LinePSOCache;
+		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_QuadPSOCache;
+		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_CirclePSOCache;
+		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TextPSOCache;
+
+		std::unordered_map<CameraLightingBindingKey, nvrhi::BindingSetHandle, CameraLightingBindingKeyHash> m_QuadBindingSetCache;
+		std::unordered_map<CameraLightingBindingKey, nvrhi::BindingSetHandle, CameraLightingBindingKeyHash> m_TextBindingSetCache;
+		std::unordered_map<CameraBindingKey, nvrhi::BindingSetHandle, CameraBindingKeyHash> m_LineBindingSetCache;
+		std::unordered_map<CameraBindingKey, nvrhi::BindingSetHandle, CameraBindingKeyHash> m_CircleBindingSetCache;
 
         struct PreRenderCacheData
         {
