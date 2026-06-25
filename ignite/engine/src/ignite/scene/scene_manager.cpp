@@ -115,7 +115,7 @@ namespace ignite
         scene->SetDirtyFlag(true);
         Entity entity = Entity { scene->registry->create(), scene };
         entity.AddComponent<IDComponent>(name, type, uuid);
-        entity.AddComponent<TransformComponent>(TransformComponent({0.0f, 0.0f, 0.0f}));
+        entity.AddComponent<TransformComponent>();
         scene->entities[uuid] = entity;
         return entity;
     }
@@ -240,7 +240,7 @@ namespace ignite
 
         Entity entity = Entity { scene->registry->create(), scene };
         entity.AddComponent<IDComponent>(name, EntityType_Node, uuid);
-        entity.AddComponent<TransformComponent>(TransformComponent({ 0.0f, 0.0f, 0.0f }));
+        entity.AddComponent<TransformComponent>();
 
         scene->entities[uuid] = entity;
 

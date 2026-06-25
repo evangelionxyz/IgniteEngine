@@ -10,26 +10,19 @@
 
 namespace ignite
 {
-    TRS AnimationChannel::CalculateTRS(float timeInTicks, const glm::vec3& defaultTranslation, const glm::quat& defaultRotation, const glm::vec3& defaultScale)
+    Transform AnimationChannel::Calculate(float timeInTicks, const Transform& defaultTransform)
     {
-        TRS trs;
-        trs.translation = translationKeys.frames.empty()
-            ? defaultTranslation : translationKeys.InterpolateTranslation(timeInTicks);
+        Transform tr;
+        tr.translation = translationKeys.frames.empty()
+            ? defaultTransform.translation : translationKeys.InterpolateTranslation(timeInTicks);
 
-        trs.rotation = rotationKeys.frames.empty()
-            ? defaultRotation : rotationKeys.InterpolateRotation(timeInTicks);
+        tr.rotation = rotationKeys.frames.empty()
+            ? defaultTransform.rotation : rotationKeys.InterpolateRotation(timeInTicks);
 
-        trs.scale = scaleKeys.frames.empty()
-            ? defaultScale : scaleKeys.InterpolateScaling(timeInTicks);
+        tr.scale = scaleKeys.frames.empty()
+            ? defaultTransform.scale : scaleKeys.InterpolateScaling(timeInTicks);
 
-        return trs;
-    }
-
-    glm::mat4 AnimationChannel::CalculateTransform(float timeInTicks, const glm::vec3 &defaultTranslation, const glm::quat &defaultRotation, const glm::vec3 &defaultScale)
-    {
-        TRS trs = CalculateTRS(timeInTicks, defaultTranslation, defaultRotation, defaultScale);
-        return glm::translate(glm::mat4(1.0f), trs.translation) *
-            glm::toMat4(trs.rotation) * glm::scale(glm::mat4(1.0f), trs.scale);
+        return tr;
     }
 
     bool SkeletalAnimation::Serialize(const ignite::Path &filepath)

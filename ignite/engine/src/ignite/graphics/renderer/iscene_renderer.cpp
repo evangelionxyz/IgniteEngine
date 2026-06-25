@@ -33,7 +33,7 @@ namespace ignite
             return;
         }
 
-        const std::array vertices
+        static constexpr std::array screenVertices
         {
             VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
             VertexScreen{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },
@@ -44,7 +44,7 @@ namespace ignite
             VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
         };
 
-        m_CompositeVertexBuffer->SetData(cmd, Buffer((void *)vertices.data(), sizeof(vertices)));
+        m_CompositeVertexBuffer->SetData(cmd, Buffer((void *)screenVertices.data(), sizeof(screenVertices)));
         m_CompositeVertexBufferUploadPending = false;
     }
 
@@ -100,12 +100,7 @@ namespace ignite
 
     Ref<Texture> ISceneRenderer::GetCascadedShadowMapDepthTexture() const
     {
-        if (m_CascadedShadowMap)
-        {
-            return m_CascadedShadowMap->GetDepthTexture();
-        }
-
-        return nullptr;
+        return m_CascadedShadowMap ? m_CascadedShadowMap->GetDepthTexture() : nullptr;
     }
 
     Ref<CascadedShadowMap> ISceneRenderer::GetCascadedShadowMap()

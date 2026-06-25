@@ -120,7 +120,7 @@ namespace ignite
             {
                 Entity entity = { id, m_Scene };
                 const RigidbodyComponent &rb = entity.GetComponent<RigidbodyComponent>();
-                TransformComponent &tc = entity.GetComponent<TransformComponent>();
+                TransformComponent &tr = entity.GetComponent<TransformComponent>();
                 IDComponent &idc = entity.GetComponent<IDComponent>();
 
                 if (!rb.body)
@@ -131,7 +131,7 @@ namespace ignite
                     auto &col = entity.GetComponent<BoxColliderComponent>();
                     if (col.dirty)
                     {
-                        glm::vec3 halfExtents = col.scale * tc.scale;
+                        glm::vec3 halfExtents = col.scale * tr.world.scale;
                         if (halfExtents.x > 0.0f && halfExtents.y > 0.0f && halfExtents.z > 0.0f)
                         {
                             JPH::BoxShapeSettings shapeSettings(GlmToJoltVec3(halfExtents));
@@ -139,7 +139,7 @@ namespace ignite
                             if (shapeResult.IsValid() && !shapeResult.HasError())
                             {
                                 JPH::ShapeRefC shape = shapeResult.Get();
-                                JPH::RotatedTranslatedShapeSettings offsetSettings(GlmToJoltVec3(col.center * tc.scale), JPH::Quat::sIdentity(), shape.GetPtr());
+                                JPH::RotatedTranslatedShapeSettings offsetSettings(GlmToJoltVec3(col.center * tr.world.scale), JPH::Quat::sIdentity(), shape.GetPtr());
                                 JPH::ShapeSettings::ShapeResult offsetResult = offsetSettings.Create();
                                 if (offsetResult.IsValid() && !offsetResult.HasError())
                                 {
@@ -160,7 +160,7 @@ namespace ignite
                     auto &col = entity.GetComponent<SphereColliderComponent>();
                     if (col.dirty)
                     {
-                        float maxAxis = glm::compMax(tc.scale);
+                        float maxAxis = glm::compMax(tr.world.scale);
                         float effectiveRadius = col.radius * maxAxis;
                         if (effectiveRadius > 0.0f)
                         {
@@ -190,7 +190,7 @@ namespace ignite
                     auto &col = entity.GetComponent<CapsuleColliderComponent>();
                     if (col.dirty)
                     {
-                        float maxScale = glm::compMax(tc.scale);
+                        float maxScale = glm::compMax(tr.world.scale);
                         float halfHeight = col.height * 0.5f * maxScale;
                         float radius = col.radius * maxScale;
                         if (halfHeight > 0.0f && radius > 0.0f)
@@ -300,19 +300,19 @@ namespace ignite
                     }
                 }
 
-                if (tc.dirtyPhysics)
+                if (tr.dirtyPhysics)
                 {
-                    SetPosition(*rb.body, tc.translation, true);
-                    SetRotation(*rb.body, tc.rotation, true);
-                    tc.dirtyPhysics = false;
+                    SetPosition(*rb.body, tr.world.translation, true);
+                    SetRotation(*rb.body, tr.world.rotation, true);
+                    tr.dirtyPhysics = false;
                 }
                 else
                 {
                     // we don't care about the parent
-                    tc.localTranslation = JoltToGlmVec3(rb.body->GetPosition());
-                    tc.localRotation = JoltToGlmQuat(rb.body->GetRotation());
-                    tc.translation = tc.localTranslation;
-                    tc.rotation = tc.localRotation;
+                    tr.local.translation = JoltToGlmVec3(rb.body->GetPosition());
+                    tr.local.rotation = JoltToGlmQuat(rb.body->GetRotation());
+                    tr.world.translation = tr.local.translation;
+                    tr.world.rotation = tr.local.rotation;
                 }
             }
         }
@@ -409,11 +409,11 @@ namespace ignite
 
     void JoltScene::CreatePlaneCollider(Entity entity)
     {
-        auto &tc = entity.GetComponent<TransformComponent>();
+        auto &tr = entity.GetComponent<TransformComponent>();
         auto &rb = entity.GetComponent<RigidbodyComponent>();
         auto &col = entity.GetComponent<PlaneColliderComponent>();
 
-        glm::vec3 halfExtents = col.scale * tc.scale;
+        glm::vec3 halfExtents = col.scale * tr.world.scale;
         JPH::Plane inPlane(JPH::Vec3Arg{0.0f, 1.0f, 0.0f}, 1.0f);
         JPH::PlaneShapeSettings planeShapeSettings(inPlane);
         JPH::ShapeSettings::ShapeResult shapeResult = planeShapeSettings.Create();
@@ -426,7 +426,7 @@ namespace ignite
         JPH::ShapeRefC shape = shapeResult.Get();
 
         // Wrap with offset
-        JPH::RotatedTranslatedShapeSettings offsetSettings(GlmToJoltVec3(col.center * tc.scale), JPH::Quat::sIdentity(), shape.GetPtr());
+        JPH::RotatedTranslatedShapeSettings offsetSettings(GlmToJoltVec3(col.center * tr.world.scale), JPH::Quat::sIdentity(), shape.GetPtr());
         JPH::ShapeSettings::ShapeResult offsetResult = offsetSettings.Create();
         if (!offsetResult.IsValid() || offsetResult.HasError())
         {
@@ -435,7 +435,7 @@ namespace ignite
         }
         shape = offsetResult.Get();
 
-        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation, tc.rotation);
+        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tr.world.translation, tr.world.rotation);
 
         JPH::Body *body = m_BodyInterface->CreateBody(bodySettings);
         if (body)
@@ -453,19 +453,19 @@ namespace ignite
 
     void JoltScene::CreateBoxCollider(Entity entity)
     {
-        auto &tc = entity.GetComponent<TransformComponent>();
+        auto &tr = entity.GetComponent<TransformComponent>();
         auto &rb = entity.GetComponent<RigidbodyComponent>();
         auto &col = entity.GetComponent<BoxColliderComponent>();
 
         // Validate transform and scales
-        if (!std::isfinite(tc.scale.x) || !std::isfinite(tc.scale.y) || !std::isfinite(tc.scale.z))
+        if (!std::isfinite(tr.world.scale.x) || !std::isfinite(tr.world.scale.y) || !std::isfinite(tr.world.scale.z))
         {
             LOG_WARN("[Jolt Physics] Invalid transform scale for entity {}: {},{},{} - skipping collider creation",
-                (uint64_t)entity.GetUUID(), tc.scale.x, tc.scale.y, tc.scale.z);
+                (uint64_t)entity.GetUUID(), tr.world.scale.x, tr.world.scale.y, tr.world.scale.z);
             return;
         }
 
-        glm::vec3 halfExtents = col.scale * tc.scale;
+        glm::vec3 halfExtents = col.scale * tr.world.scale;
 
         // Ensure extents are positive and non-zero
         if (halfExtents.x <= 0.0f || halfExtents.y <= 0.0f || halfExtents.z <= 0.0f)
@@ -487,7 +487,7 @@ namespace ignite
         JPH::ShapeRefC shape = shapeResult.Get();
 
         // Wrap with offset to match renderer visualizer (using entity transform origin as body origin)
-        JPH::RotatedTranslatedShapeSettings offsetSettings(GlmToJoltVec3(col.center * tc.scale), JPH::Quat::sIdentity(), shape.GetPtr());
+        JPH::RotatedTranslatedShapeSettings offsetSettings(GlmToJoltVec3(col.center * tr.world.scale), JPH::Quat::sIdentity(), shape.GetPtr());
         JPH::ShapeSettings::ShapeResult offsetResult = offsetSettings.Create();
         if (!offsetResult.IsValid() || offsetResult.HasError())
         {
@@ -496,7 +496,7 @@ namespace ignite
         }
         shape = offsetResult.Get();
 
-        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation, tc.rotation);
+        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tr.world.translation, tr.world.rotation);
 
         // Extra safety: ensure body pointer is still null to avoid duplicates
         if (rb.body)
@@ -526,20 +526,20 @@ namespace ignite
 
     void JoltScene::CreateCapsuleCollider(Entity entity)
     {
-        auto &tc = entity.GetComponent<TransformComponent>();
+        auto &tr = entity.GetComponent<TransformComponent>();
         auto &rb = entity.GetComponent<RigidbodyComponent>();
         auto &col = entity.GetComponent<CapsuleColliderComponent>();
 
         // Validate scales
-        if (!std::isfinite(tc.scale.x) || !std::isfinite(tc.scale.y) || !std::isfinite(tc.scale.z))
+        if (!std::isfinite(tr.world.scale.x) || !std::isfinite(tr.world.scale.y) || !std::isfinite(tr.world.scale.z))
         {
             LOG_WARN("[Jolt Physics] Invalid transform scale for entity {} when creating capsule: {},{},{} - skipping",
-                (uint64_t)entity.GetUUID(), tc.scale.x, tc.scale.y, tc.scale.z);
+                (uint64_t)entity.GetUUID(), tr.world.scale.x, tr.world.scale.y, tr.world.scale.z);
             return;
         }
 
         // Create a horizontal capsule by rotating the default vertical capsule 90 degrees around X.
-        const float maxScale = glm::compMax(tc.scale);
+        const float maxScale = glm::compMax(tr.world.scale);
         const float halfHeight = col.height * 0.5f * maxScale;
         const float radius = col.radius * maxScale;
 
@@ -573,7 +573,7 @@ namespace ignite
 
         JPH::ShapeRefC shape = shapeResult.Get();
 
-        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation, tc.rotation);
+        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tr.world.translation, tr.world.rotation);
 
         if (rb.body)
         {
@@ -602,19 +602,19 @@ namespace ignite
 
     void JoltScene::CreateSphereCollider(Entity entity)
     {
-        auto &tc = entity.GetComponent<TransformComponent>();
+        auto &tr = entity.GetComponent<TransformComponent>();
         auto &rb = entity.GetComponent<RigidbodyComponent>();
         auto &col = entity.GetComponent<SphereColliderComponent>();
 
         // Validate scale
-        if (!std::isfinite(tc.scale.x) || !std::isfinite(tc.scale.y) || !std::isfinite(tc.scale.z))
+        if (!std::isfinite(tr.world.scale.x) || !std::isfinite(tr.world.scale.y) || !std::isfinite(tr.world.scale.z))
         {
             LOG_WARN("[Jolt Physics] Invalid transform scale for entity {} when creating sphere: {},{},{} - skipping",
-                (uint64_t)entity.GetUUID(), tc.scale.x, tc.scale.y, tc.scale.z);
+                (uint64_t)entity.GetUUID(), tr.world.scale.x, tr.world.scale.y, tr.world.scale.z);
             return;
         }
 
-        float maxAxis = glm::compMax(tc.scale);
+        float maxAxis = glm::compMax(tr.world.scale);
         float effectiveRadius = col.radius * maxAxis;
         if (effectiveRadius <= 0.0f)
         {
@@ -641,7 +641,7 @@ namespace ignite
         }
         shape = offsetResult.Get();
 
-        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation, tc.rotation);
+        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tr.world.translation, tr.world.rotation);
 
         if (rb.body)
         {
@@ -670,7 +670,7 @@ namespace ignite
 
     void JoltScene::CreateMeshCollider(Entity entity)
     {
-        auto &tc = entity.GetComponent<TransformComponent>();
+        auto &tr = entity.GetComponent<TransformComponent>();
         auto &rb = entity.GetComponent<RigidbodyComponent>();
         auto &col = entity.GetComponent<MeshColliderComponent>();
 
@@ -771,7 +771,7 @@ namespace ignite
             return;
         }
 
-        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tc.translation, tc.rotation);
+        JPH::BodyCreationSettings bodySettings = CreateBody(shape, rb, tr.world.translation, tr.world.rotation);
 
         JPH::Body *body = m_BodyInterface->CreateBody(bodySettings);
         if (body)

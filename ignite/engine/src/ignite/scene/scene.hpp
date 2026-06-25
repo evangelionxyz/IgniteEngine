@@ -29,6 +29,7 @@ namespace ignite
     class JoltScene;
     class Entity;
     class Environment;
+    class WorldEnvironment;
     class SceneRenderer;
     class Project;
     class WidgetCanvas;
@@ -121,6 +122,8 @@ namespace ignite
         
         SceneRenderer *GetSceneRenderer() { return m_SceneRenderer; }
         Environment *GetEnvironment();
+        WorldEnvironment *GetActiveWorldEnvironment();
+
         std::unordered_set<AssetHandle> CollectReferencedAssetHandles() const;
 
         glm::vec3 physicsGravity{ 0.0f, -9.8f, 0.0f };

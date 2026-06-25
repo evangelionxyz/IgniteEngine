@@ -872,18 +872,18 @@ namespace ignite
                 ds.nameOffset = nameOffsets[socket.name];
                 ds.parentId = socket.parentJointId;
 
-                ds.translation[0] = socket.localTranslation.x;
-                ds.translation[1] = socket.localTranslation.y;
-                ds.translation[2] = socket.localTranslation.z;
+                ds.translation[0] = socket.local.translation.x;
+                ds.translation[1] = socket.local.translation.y;
+                ds.translation[2] = socket.local.translation.z;
 
-                ds.rotation[0] = socket.localRotation.x;
-                ds.rotation[1] = socket.localRotation.y;
-                ds.rotation[2] = socket.localRotation.z;
-                ds.rotation[3] = socket.localRotation.w;
+                ds.rotation[0] = socket.local.rotation.x;
+                ds.rotation[1] = socket.local.rotation.y;
+                ds.rotation[2] = socket.local.rotation.z;
+                ds.rotation[3] = socket.local.rotation.w;
 
-                ds.scale[0] = socket.localScale.x;
-                ds.scale[1] = socket.localScale.y;
-                ds.scale[2] = socket.localScale.z;
+                ds.scale[0] = socket.local.scale.x;
+                ds.scale[1] = socket.local.scale.y;
+                ds.scale[2] = socket.local.scale.z;
 
                 AppendRaw(buffer, ds);
             }
@@ -983,9 +983,9 @@ namespace ignite
                 JointSocket socket{};
                 socket.name = std::string(socketNamePtr);
                 socket.parentJointId = ds.parentId;
-                socket.localTranslation = glm::vec3(ds.translation[0], ds.translation[1], ds.translation[2]);
-                socket.localRotation = glm::quat(ds.rotation[3], ds.rotation[0], ds.rotation[1], ds.rotation[2]);
-                socket.localScale = glm::vec3(ds.scale[0], ds.scale[1], ds.scale[2]);
+                socket.local.translation = glm::vec3(ds.translation[0], ds.translation[1], ds.translation[2]);
+                socket.local.rotation = glm::quat(ds.rotation[3], ds.rotation[0], ds.rotation[1], ds.rotation[2]);
+                socket.local.scale = glm::vec3(ds.scale[0], ds.scale[1], ds.scale[2]);
 
                 skeleton->socketNameToIndex[socket.name] = static_cast<int32_t>(skeleton->sockets.size());
                 skeleton->sockets.push_back(std::move(socket));

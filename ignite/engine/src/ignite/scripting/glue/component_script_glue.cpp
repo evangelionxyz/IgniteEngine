@@ -122,9 +122,9 @@ namespace ignite
                 auto &transform = entity.GetComponent<TransformComponent>();
                 if (!transform.visible) return;
 
-                glm::vec3 pos = transform.translation;
-                glm::quat rot = transform.rotation;
-                glm::vec3 scale = transform.scale;
+                glm::vec3 pos = transform.world.translation;
+                glm::quat rot = transform.world.rotation;
+                glm::vec3 scale = transform.world.scale;
                 
                 glm::vec3 halfSize = glm::vec3(size.x * 0.5f, size.y * 0.5f, 0.0f) * scale;
 
@@ -729,7 +729,7 @@ namespace ignite
                 return 0;
 
             Entity entity = SceneManager::CreateEmptyEntity(scene, name);
-            entity.GetComponent<TransformComponent>().translation = *value;
+            entity.GetComponent<TransformComponent>().world.translation = *value;
 
             if (scene->IsRunning())
             {
@@ -763,7 +763,7 @@ namespace ignite
             // DuplicateEntity will call scene->physics->InstantiateEntity() when scene->IsRunning().
             // Move the entity to the requested world position and clear any existing runtime physics body
             // on the copied entity before returning.
-            copyEntity.GetComponent<TransformComponent>().SetWorldTranslation(*value);
+            copyEntity.GetComponent<TransformComponent>().world.translation = *value;
 
             // If duplicated entity has a RigidbodyComponent, ensure no stale body pointer is present
             // if (copyEntity.HasComponent<RigidbodyComponent>())
@@ -1454,7 +1454,7 @@ namespace ignite
                 return;
 
             const auto &transform = entity.GetComponent<TransformComponent>();
-            *result = glm::vec3(transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f));
+            *result = glm::vec3(transform.world.rotation * glm::vec3(0.0f, 0.0f, -1.0f));
         }
 
         static void TransformComponent_SetForward(uint64_t entityID, const glm::vec3 *value)
@@ -1472,8 +1472,8 @@ namespace ignite
 
             auto &transform = entity.GetComponent<TransformComponent>();
             const glm::quat rotation = glm::quatLookAtRH(forward, glm::vec3(0.0f, 1.0f, 0.0f));
-            transform.localRotation = rotation;
-            transform.rotation = rotation;
+            transform.local.rotation = rotation;
+            transform.world.rotation = rotation;
             transform.dirty = true;
         }
 
@@ -1490,7 +1490,7 @@ namespace ignite
                 return;
 
             const auto &transform = entity.GetComponent<TransformComponent>();
-            *result = glm::vec3(transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f));
+            *result = glm::vec3(transform.world.rotation * glm::vec3(1.0f, 0.0f, 0.0f));
         }
 
         static void TransformComponent_SetRight(uint64_t entityID, const glm::vec3 *value)
@@ -1525,7 +1525,7 @@ namespace ignite
                 return;
 
             const auto &transform = entity.GetComponent<TransformComponent>();
-            *result = glm::vec3(transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f));
+            *result = glm::vec3(transform.world.rotation * glm::vec3(0.0f, 1.0f, 0.0f));
         }
 
         static void TransformComponent_SetUp(uint64_t entityID, const glm::vec3 *value)
@@ -1542,7 +1542,7 @@ namespace ignite
                 return;
 
             auto &transform = entity.GetComponent<TransformComponent>();
-            glm::vec3 right = glm::normalize(transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f));
+            glm::vec3 right = glm::normalize(transform.world.rotation * glm::vec3(1.0f, 0.0f, 0.0f));
             glm::vec3 forward = glm::normalize(glm::cross(up, right));
             if (glm::length2(forward) <= 0.0f)
             {
@@ -1550,8 +1550,8 @@ namespace ignite
             }
 
             const glm::quat rotation = glm::quatLookAtRH(forward, up);
-            transform.localRotation = rotation;
-            transform.rotation = rotation;
+            transform.local.rotation = rotation;
+            transform.world.rotation = rotation;
             transform.dirty = true;
         }
 
@@ -1567,7 +1567,7 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
                 return;
 
-            *result = glm::vec3(entity.GetComponent<TransformComponent>().translation);
+            *result = glm::vec3(entity.GetComponent<TransformComponent>().world.translation);
         }
 
         static void TransformComponent_SetTranslation(uint64_t entityID, const glm::vec3 *value)
@@ -1578,8 +1578,8 @@ namespace ignite
                 return;
 
             auto &transform = entity.GetComponent<TransformComponent>();
-            transform.localTranslation = *value;
-            transform.translation = *value;
+            transform.local.translation = *value;
+            transform.world.translation = *value;
             transform.dirty = true;
             transform.dirtyPhysics = true;
         }
@@ -1596,7 +1596,7 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
                 return;
 
-            *result = glm::quat(entity.GetComponent<TransformComponent>().rotation);
+            *result = glm::quat(entity.GetComponent<TransformComponent>().world.rotation);
         }
 
         static void TransformComponent_SetRotation(uint64_t entityID, const glm::quat *value)
@@ -1607,8 +1607,8 @@ namespace ignite
                 return;
 
             auto &transform = entity.GetComponent<TransformComponent>();
-            transform.localRotation = *value;
-            transform.rotation = *value;
+            transform.local.rotation = *value;
+            transform.world.rotation = *value;
             transform.dirty = true;
             transform.dirtyPhysics = true;
         }
@@ -1625,7 +1625,7 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
                 return;
 
-            *result = glm::vec3(glm::eulerAngles(entity.GetComponent<TransformComponent>().rotation));
+            *result = glm::vec3(glm::eulerAngles(entity.GetComponent<TransformComponent>().world.rotation));
         }
 
         static void TransformComponent_SetEulerAngles(uint64_t entityID, const glm::vec3 *value)
@@ -1637,8 +1637,8 @@ namespace ignite
 
             auto &transform = entity.GetComponent<TransformComponent>();
             const glm::quat rotation = glm::quat(*value);
-            transform.localRotation = rotation;
-            transform.rotation = rotation;
+            transform.local.rotation = rotation;
+            transform.world.rotation = rotation;
             transform.dirty = true;
         }
 
@@ -1654,7 +1654,7 @@ namespace ignite
             if (!entity.IsValid() || !entity.HasComponent<TransformComponent>())
                 return;
 
-            *result = glm::vec3(entity.GetComponent<TransformComponent>().scale);
+            *result = glm::vec3(entity.GetComponent<TransformComponent>().world.scale);
         }
 
         static void TransformComponent_SetScale(uint64_t entityID, const glm::vec3 *value)
@@ -1665,8 +1665,8 @@ namespace ignite
                 return;
 
             auto &transform = entity.GetComponent<TransformComponent>();
-            transform.localScale = *value;
-            transform.scale = *value;
+            transform.local.scale = *value;
+            transform.world.scale = *value;
             transform.dirty = true;
         }
 

@@ -14,6 +14,7 @@
 #include "ignite/physics/2d/physics_2d.hpp"
 #include "ignite/physics/jolt/jolt_physics.hpp"
 #include "ignite/math/math.hpp"
+#include "ignite/math/transform.hpp"
 #include "scene_manager.hpp"
 #include "ignite/scripting/script_engine.hpp"
 
@@ -365,27 +366,19 @@ namespace ignite
         {
             auto &tr = cameraView.get<TransformComponent>(entity);
             auto &cc = cameraView.get<CameraComponent>(entity);
-            cc.camera.SetTransform(tr.GetWorldMatrix());
+            cc.camera.SetTransform(tr.world.GetMatrix());
         }
     }
 
     void Scene::UpdateTransformRecursive(Entity entity, const glm::mat4 &parentWorldTransform)
     {
         TransformComponent &transform = entity.GetTransform();
-        IDComponent &id = entity.GetComponent<IDComponent>();
+        auto &id = entity.GetComponent<IDComponent>();
 
-        glm::vec3 skew;
-        glm::vec4 perspective;
-        
-        glm::mat4 worldMatrix = parentWorldTransform * transform.GetLocalMatrix();
-        
-        glm::decompose(worldMatrix,
-            transform.scale,
-            transform.rotation,
-            transform.translation,
-            skew,
-            perspective);
+        glm::mat4 worldMatrix = parentWorldTransform * transform.local.GetMatrix();
 
+        Transform::Decompose(worldMatrix, transform.world);
+        
         transform.dirty = false;
 
         for (const UUID &childUUID : id.children)
@@ -533,14 +526,6 @@ namespace ignite
         for (entt::entity e : view)
         {
             WorldEnvironment &we = registry->get<WorldEnvironment>(e);
-            if (!we.enabled || !we.environment)
-                continue;
-
-            if (we.primary)
-            {
-                return we.environment.get();
-            }
-
             if (!fallback)
             {
                 fallback = &we;
@@ -549,6 +534,22 @@ namespace ignite
 
         return fallback ? fallback->environment.get() : nullptr;
     }
+
+	WorldEnvironment *Scene::GetActiveWorldEnvironment()
+	{
+		auto view = registry->view<WorldEnvironment>();
+		WorldEnvironment *fallback = nullptr;
+		for (entt::entity e : view)
+		{
+			WorldEnvironment &world = view.get<WorldEnvironment>(e);
+			if (!fallback)
+			{
+				fallback = &world;
+			}
+		}
+
+		return fallback;
+	}
 
     std::unordered_set<AssetHandle> Scene::CollectReferencedAssetHandles() const
     {
@@ -607,7 +608,7 @@ namespace ignite
         return handles;
     }
 
-    void Scene::UpdateAnimations(float deltaTime)
+	void Scene::UpdateAnimations(float deltaTime)
     {
         auto skeletalMeshView = registry->view<TransformComponent, MeshComponent>();
         std::unordered_set<AssetHandle> updatedSharedHandles;
@@ -622,7 +623,7 @@ namespace ignite
             if (!mesh)
                 continue;
 
-            sm.worldMatrix = tr.GetWorldMatrix();
+            sm.worldMatrix = tr.world.GetMatrix();
             sm.normalMatrix = glm::transpose(glm::inverse(glm::mat3(sm.worldMatrix)));
 
             if (mesh)

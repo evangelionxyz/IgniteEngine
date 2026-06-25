@@ -340,8 +340,8 @@ namespace ignite
                     auto &cam = m_ScenePanel->GetViewportCamera();
                     auto &tr = entity.GetComponent<TransformComponent>();
 
-                    glm::vec3 focusCenter = tr.translation;
-                    glm::vec3 halfExtents = glm::abs(tr.scale) * 0.5f;
+                    glm::vec3 focusCenter = tr.world.translation;
+                    glm::vec3 halfExtents = glm::abs(tr.world.scale) * 0.5f;
 
                     auto tryFocusFromAABB = [&](const AABB &meshAABB)
                     {
@@ -357,7 +357,7 @@ namespace ignite
                             { meshAABB.max.x, meshAABB.max.y, meshAABB.max.z },
                         };
 
-                        const glm::mat4 worldTransform = tr.GetWorldMatrix();
+                        const glm::mat4 worldTransform = tr.world.GetMatrix();
                         glm::vec3 worldMin(std::numeric_limits<float>::max());
                         glm::vec3 worldMax(std::numeric_limits<float>::lowest());
 

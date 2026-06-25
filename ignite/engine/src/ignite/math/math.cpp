@@ -7,36 +7,6 @@
 
 namespace ignite
 {
-    glm::mat4 Math::ComposeTransformComponent(const TransformComponent &transform)
-    {
-        const glm::mat4 translation = glm::translate(glm::mat4(1.0f), transform.translation);
-        const glm::mat4 rotation = glm::toMat4(transform.rotation);
-        const glm::mat4 scale = glm::scale(glm::mat4(1.0f), transform.scale);
-        return translation * rotation * scale;
-    }
-
-    void Math::DecomposeTransformComponent(const glm::mat4 &matrix, TransformComponent &outTransform)
-    {
-        glm::vec3 scale;
-        glm::vec3 skew;
-        glm::vec4 perspective;
-        glm::quat orientation;
-        glm::vec3 translation;
-
-        if (!glm::decompose(matrix, scale, orientation, translation, skew, perspective))
-        {
-            translation = glm::vec3(0.0f);
-            orientation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-            scale = glm::vec3(1.0f);
-        }
-
-        orientation = glm::normalize(orientation);
-
-        outTransform.translation = translation;
-        outTransform.scale = scale;
-        outTransform.rotation = orientation;
-    }
-
     bool Math::DecomposeTransform(const glm::mat4 &transform, glm::vec3 &translation, glm::quat &outOrientation, glm::vec3 &outScale)
     {
         glm::mat4 localMatrix(transform);

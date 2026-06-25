@@ -16,13 +16,11 @@
 #include "ignite/graphics/objects/environment.hpp"
 #include "ignite/graphics/gpu_data.hpp"
 #include "ignite/math/aabb.hpp"
+#include "ignite/math/transform.hpp"
 #include "scene_camera.hpp"
 #include "ignite/core/string_utils.hpp"
 #include <string>
 
-#ifndef GLM_ENABLE_EXPERIMENTAL
-#define GLM_ENABLE_EXPERIMENTAL
-#endif
 #include <glm/glm.hpp>
 
 // Forward declaration
@@ -247,93 +245,14 @@ namespace ignite
     class TransformComponent : public IComponent
     {
     public:
-        // world transforms
-        glm::vec3 translation, scale;
-        glm::quat rotation;
-
-        // local transforms
-        glm::vec3 localTranslation, localScale;
-        glm::quat localRotation;
+        Transform world;
+        Transform local;
 
         bool isAnimated = false;
         bool visible = true;
         bool dirtyPhysics = false;
 
         TransformComponent() = default;
-
-        TransformComponent(const glm::vec3 &_translation)
-            : translation(_translation)
-            , rotation(glm::quat(1.0f, 0.0f, 0.0f, 0.0f))
-            , scale(glm::vec3(1.0f))
-            , localTranslation(_translation)
-            , localRotation(glm::quat(1.0f, 0.0f, 0.0f, 0.0f))
-            , localScale(glm::vec3(1.0f))
-        {
-        }
-
-        TransformComponent(const glm::vec3 &_translation, const glm::quat &_rotation, const glm::vec3 _scale)
-            : translation(_translation)
-            , rotation(_rotation)
-            , scale(_scale)
-            , localTranslation(_translation)
-            , localRotation(_rotation)
-            , localScale(_scale)
-        {
-        }
-
-        // local transformation
-        void SetLocalTranslation(const glm::vec3 &newTranslation)
-        {
-            localTranslation = newTranslation;
-            dirty = true;
-            dirtyPhysics = true;
-        }
-
-        void SetLocalRotation(const glm::quat &newRotation)
-        {
-            localRotation = newRotation;
-            dirty = true;
-            dirtyPhysics = true;
-        }
-
-        void SetLocalScale(const glm::vec3 &newScale)
-        {
-            localScale = newScale;
-            dirty = true;
-            dirtyPhysics = true;
-        }
-
-        glm::mat4 GetLocalMatrix() const
-        {
-            return glm::translate(glm::mat4(1.0f), localTranslation) * glm::mat4(localRotation) * glm::scale(glm::mat4(1.0f), localScale);
-        }
-
-        // World transformation
-        void SetWorldTranslation(const glm::vec3 &newTranslation)
-        {
-            translation = newTranslation;
-            dirty = true;
-            dirtyPhysics = true;
-        }
-
-        void SetWorldRotation(const glm::quat &newRotation)
-        {
-            rotation = newRotation;
-            dirty = true;
-            dirtyPhysics = true;
-        }
-
-        void SetWorldScale(const glm::vec3 &newScale)
-        {
-            scale = newScale;
-            dirty = true;
-            dirtyPhysics = true;
-        }
-
-        glm::mat4 GetWorldMatrix() const
-        {
-            return glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale);
-        }
 
         COMPONENT_CLASS_TYPE(CompType_Transform)
     };
@@ -368,8 +287,6 @@ namespace ignite
         float gamma = 2.2f;
         float ambient = 0.5f;
 
-        bool primary = false;
-        bool enabled = true;
         bool gpuInitialized = false;
         bool dirtyEnvironment = true;
 

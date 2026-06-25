@@ -19,6 +19,7 @@
 #include "ignite/graphics/font.hpp"
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/math/math.hpp"
+#include "ignite/math/transform.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/script_field.hpp"
 #include "ignite/scripting/script_instances/script_instance.hpp"
@@ -513,7 +514,7 @@ namespace ignite
                 // so it must be checked AFTER the widget call, unconditionally.
                 static TransformComponent s_TransformBefore;
 
-                UI::State translationState = UI::DrawVec3Control("Translation", comp.localTranslation, 0.025f, 0.0f, componentColumnWidth);
+                UI::State translationState = UI::DrawVec3Control("Translation", comp.local.translation, 0.025f, 0.0f, componentColumnWidth);
                 if (translationState.isItemActivated)            s_TransformBefore = comp;
                 if (translationState.isItemEdited)               comp.dirty = true;
                 if (translationState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp));
@@ -525,22 +526,22 @@ namespace ignite
                 if (s_RotationEditEntity != selectedEntity.GetUUID())
                 {
                     s_RotationEditEntity = selectedEntity.GetUUID();
-                    s_RotationEditEuler = eulerAngles(comp.localRotation);
+                    s_RotationEditEuler = eulerAngles(comp.local.rotation);
                     s_RotationEditing = false;
                 }
 
                 if (!s_RotationEditing)
                 {
-                    s_RotationEditEuler = eulerAngles(comp.localRotation);
+                    s_RotationEditEuler = eulerAngles(comp.local.rotation);
                 }
 
                 UI::State rotationState = UI::DrawVec3Control("Rotation", s_RotationEditEuler, 0.025f, 0.0f, componentColumnWidth);
                 if (rotationState.isItemActivated)            s_TransformBefore = comp;
                 if (rotationState.isItemActivated)            s_RotationEditing = true;
-                if (rotationState.isItemEdited)               { comp.localRotation = glm::quat(s_RotationEditEuler); comp.dirty = true; }
+                if (rotationState.isItemEdited)               { comp.local.rotation = glm::quat(s_RotationEditEuler); comp.dirty = true; }
                 if (rotationState.isItemDeactivatedAfterEdit) { CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp)); s_RotationEditing = false; }
 
-                UI::State scaleState = UI::DrawVec3Control("Scale", comp.localScale, 0.025f, 1.0f, componentColumnWidth);
+                UI::State scaleState = UI::DrawVec3Control("Scale", comp.local.scale, 0.025f, 1.0f, componentColumnWidth);
                 if (scaleState.isItemActivated)            s_TransformBefore = comp;
                 if (scaleState.isItemEdited)               comp.dirty = true;
                 if (scaleState.isItemDeactivatedAfterEdit) CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<TransformComponent>>(m_Scene.get(), selectedEntity.GetUUID(), s_TransformBefore, comp));
@@ -599,9 +600,6 @@ namespace ignite
                 UI::DrawFloatControl("Gamma", &c.gamma, 0.025f, 0.0f, FLT_MAX);
                 UI::DrawFloatControl("Ambient", &c.ambient, 0.025f, 0.0f, FLT_MAX);
 
-                UI::DrawCheckbox("Primary", &c.primary);
-                UI::DrawCheckbox("Enabled", &c.enabled);
-
                 const bool hasHDR = c.hdrHandle != AssetHandle(0);
                 std::string buttonLabel = hasHDR ? assetManager->GetAssetDisplayName(c.hdrHandle) : "Drag Here";
                 UI::DrawButtonWithColumn("HDR", buttonLabel.c_str(), nullptr, [&c, this, &hasHDR]()
@@ -629,7 +627,6 @@ namespace ignite
                             if (ImGui::Button("X"))
                             {
                                 c.hdrHandle = AssetHandle(0);
-                                c.dirtyEnvironment = true;
                                 c.gpuInitialized = false;
                             }
                         }
@@ -645,7 +642,7 @@ namespace ignite
                 UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
                 UI::DrawFloatControl("Angular Radius", &c.angularRadius, 0.01f, 0.0f, 45.0f);
 
-                const glm::vec3 sunDirection = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+                const glm::vec3 sunDirection = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
                 const float azimuth = std::atan2(sunDirection.x, sunDirection.z);
                 const float elevation = std::asin(glm::clamp(sunDirection.y, -1.0f, 1.0f));
 
@@ -2584,7 +2581,7 @@ namespace ignite
                 glm::vec3 pivot(0.0f);
                 for (Entity entity : m_SelectedEntities | std::views::values)
                 {
-                    pivot += entity.GetTransform().translation;
+                    pivot += entity.GetTransform().world.translation;
                 }
                 pivot /= static_cast<float>(m_SelectedEntities.size());
 
@@ -2611,7 +2608,7 @@ namespace ignite
 
                         // Get the ORIGINAL transform we stored at the beginning of the manipulation
                         const auto &initialTransform = initialTransforms.at(uuid);
-                        glm::mat4 initialWorldMatrix = initialTransform.GetWorldMatrix();
+                        glm::mat4 initialWorldMatrix = initialTransform.world.GetMatrix();
 
                         // Apply Translation and Rotation around the shared pivot
                         glm::mat4 toPivot = glm::translate(glm::mat4(1.0f), -pivot);
@@ -2619,7 +2616,7 @@ namespace ignite
                         glm::mat4 noScaleDelta = Math::RemoveScale(gizmoDelta);
 
                         // Apply the total delta to the ORIGINAL world matrix
-                        glm::mat4 newWorldMatrix = fromPivot * noScaleDelta * toPivot * tr.GetWorldMatrix();
+                        glm::mat4 newWorldMatrix = fromPivot * noScaleDelta * toPivot * tr.world.GetMatrix();
                         glm::vec3 newTranslation, newRotationEuler, newScale;
                         Math::DecomposeTransformEuler(newWorldMatrix, newTranslation, newRotationEuler, newScale);
 
@@ -2628,24 +2625,24 @@ namespace ignite
                         {
                             Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
                             const auto &parentTr = parent.GetTransform();
-                            glm::mat4 parentWorld = parentTr.GetWorldMatrix();
+                            glm::mat4 parentWorld = parentTr.world.GetMatrix();
                             glm::mat4 localMatrix = glm::inverse(parentWorld) * newWorldMatrix;
 
                             glm::vec3 localTranslation, localEuler, localScale;
                             Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                            tr.localTranslation = localTranslation;
-                            tr.localRotation = glm::quat(localEuler);
+                            tr.local.translation = localTranslation;
+                            tr.local.rotation = glm::quat(localEuler);
 
                             // Apply the total scale delta to the ORIGINAL local scale
-                            tr.localScale = initialTransform.localScale * deltaScale;
+                            tr.local.scale = initialTransform.local.scale * deltaScale;
                         }
                         else
                         {
-                            tr.localTranslation = newTranslation;
-                            tr.localRotation = glm::quat(newRotationEuler);
+                            tr.local.translation = newTranslation;
+                            tr.local.rotation = glm::quat(newRotationEuler);
 
                             // Apply the total scale delta to the ORIGINAL local scale
-                            tr.localScale = initialTransform.localScale * deltaScale;
+                            tr.local.scale = initialTransform.local.scale * deltaScale;
                         }
                         tr.dirty = true;
                     }
@@ -2674,13 +2671,13 @@ namespace ignite
                 if (allowGizmoManipulation)
                 {
                     auto &tr = entity.GetTransform();
-                    glm::mat4 transformMatrix = tr.GetWorldMatrix();
+                    glm::mat4 transformMatrix = tr.world.GetMatrix();
 
                     m_Gizmo.Manipulate(transformMatrix);
 
                     if (m_Gizmo.IsManipulating())
                     {
-                        const glm::vec3 preservedLocalScale = tr.localScale;
+                        const glm::vec3 preservedLocalScale = tr.local.scale;
                         glm::vec3 translation, rotation, scale;
                         Math::DecomposeTransformEuler(transformMatrix, translation, rotation, scale);
                         const ImGuizmo::OPERATION op = m_Gizmo.GetOperation();
@@ -2689,35 +2686,35 @@ namespace ignite
                         {
                             Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
                             const auto &parentTr = parent.GetTransform();
-                            const glm::mat4 parentWorld = parentTr.GetWorldMatrix();
+                            const glm::mat4 parentWorld = parentTr.world.GetMatrix();
                             const glm::mat4 localMatrix = glm::inverse(parentWorld) * transformMatrix;
 
                             glm::vec3 localTranslation, localEuler, localScale;
                             Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                            tr.localTranslation = localTranslation;
-                            tr.localRotation = glm::quat(localEuler);
+                            tr.local.translation = localTranslation;
+                            tr.local.rotation = glm::quat(localEuler);
 
                             if (op == ImGuizmo::SCALE)
                             {
-                                tr.localScale = localScale;
+                                tr.local.scale = localScale;
                             }
                             else
                             {
-                                tr.localScale = preservedLocalScale;
+                                tr.local.scale = preservedLocalScale;
                             }
                         }
                         else
                         {
-                            tr.localTranslation = translation;
-                            tr.localRotation = glm::quat(rotation);
+                            tr.local.translation = translation;
+                            tr.local.rotation = glm::quat(rotation);
 
                             if (op == ImGuizmo::SCALE)
                             {
-                                tr.localScale = scale;
+                                tr.local.scale = scale;
                             }
                             else
                             {
-                                tr.localScale = preservedLocalScale;
+                                tr.local.scale = preservedLocalScale;
                             }
                         }
                         tr.dirty = true;
@@ -3131,7 +3128,7 @@ namespace ignite
         }
 
         auto &tr = entity.GetTransform();
-        const glm::mat4 worldMatrix = tr.GetWorldMatrix();
+        const glm::mat4 worldMatrix = tr.world.GetMatrix();
         const glm::mat4 viewProjection = m_EditorCamera.GetProjection() * m_EditorCamera.GetView();
 
         std::array<glm::vec3, 4> worldCorners{};
@@ -3250,20 +3247,20 @@ namespace ignite
                     if (entity.GetParentUUID() != UUID(0))
                     {
                         Entity parent = SceneManager::GetEntity(m_Scene.get(), entity.GetParentUUID());
-                        const glm::mat4 parentWorld = parent.GetTransform().GetWorldMatrix();
+                        const glm::mat4 parentWorld = parent.GetTransform().world.GetMatrix();
                         const glm::mat4 localMatrix = glm::inverse(parentWorld) * targetWorld;
 
                         glm::vec3 localTranslation, localEuler, localScale;
                         Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                        tr.localTranslation = localTranslation;
-                        tr.localRotation = glm::quat(localEuler);
-                        tr.localScale = localScale;
+                        tr.local.translation = localTranslation;
+                        tr.local.rotation = glm::quat(localEuler);
+                        tr.local.scale = localScale;
                     }
                     else
                     {
-                        tr.localTranslation = centerWorld;
-                        tr.localScale.x = targetWorldScaleX;
-                        tr.localScale.y = targetWorldScaleY;
+                        tr.local.translation = centerWorld;
+                        tr.local.scale.x = targetWorldScaleX;
+                        tr.local.scale.y = targetWorldScaleY;
                     }
 
                     tr.dirty = true;

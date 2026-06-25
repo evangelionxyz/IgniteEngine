@@ -577,12 +577,14 @@ namespace ignite
             {
                 const Joint &joint = skeleton->joints[jointIndex];
 
-                glm::mat4 local = joint.defaultLocalTransform;
+                glm::mat4 local = joint.defaultTransform.GetMatrix();
                 if (hasPreviewAnimation)
                 {
                     if (previewAnimation->channels.contains((int)jointIndex))
                     {
-                        local = previewAnimation->channels[(int)jointIndex].CalculateTransform(timeInTicks, joint.defaultTranslation, joint.defaultRotation, joint.defaultScale);
+                        // defaultTransform as fallback (inside Calculate function)
+                        const Transform localTransform = previewAnimation->channels[(int)jointIndex].Calculate(timeInTicks, joint.defaultTransform);
+                        local = localTransform.GetMatrix();
                     }
                 }
 
@@ -3608,7 +3610,7 @@ namespace ignite
                                             if (useSocketGizmo)
                                             {
                                                 const JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
-                                                const glm::mat4 socketLocal = socket.GetLocalTransform();
+                                                const glm::mat4 socketLocal = socket.local.GetMatrix();
                                                 if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
                                                 {
                                                     gizmoTransform = getJointGlobal(socket.parentJointId) * socketLocal;
@@ -3641,9 +3643,9 @@ namespace ignite
                                                     const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
                                                     glm::vec3 localTranslation, localEuler, localScale;
                                                     Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                                                    socket.localTranslation = localTranslation;
-                                                    socket.localRotation = glm::quat(localEuler);
-                                                    socket.localScale = localScale;
+                                                    socket.local.translation = localTranslation;
+                                                    socket.local.rotation = glm::quat(localEuler);
+                                                    socket.local.scale = localScale;
                                                 }
                                                 else if (hasSelectedJoint)
                                                 {
@@ -3657,12 +3659,10 @@ namespace ignite
                                                     const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
                                                     glm::vec3 localTranslation, localEuler, localScale;
                                                     Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                                                    joint.defaultTranslation = localTranslation;
-                                                    joint.defaultRotation = glm::quat(localEuler);
-                                                    joint.defaultScale = localScale;
-                                                    joint.localTransform = glm::translate(glm::mat4(1.0f), joint.defaultTranslation)
-                                                        * glm::toMat4(joint.defaultRotation)
-                                                        * glm::scale(glm::mat4(1.0f), joint.defaultScale);
+                                                    joint.defaultTransform.translation = localTranslation;
+                                                    joint.defaultTransform.rotation = glm::quat(localEuler);
+                                                    joint.defaultTransform.scale = localScale;
+                                                    joint.localTransform = joint.defaultTransform.GetMatrix();
                                                 }
 
                                                 skeleton->SetDirtyFlag(true);
@@ -3972,19 +3972,19 @@ namespace ignite
                                                 ImGui::EndCombo();
                                             }
 
-                                            if (ImGui::DragFloat3("Socket Translation", &socket.localTranslation.x, 0.01f))
+                                            if (ImGui::DragFloat3("Socket Translation", &socket.local.translation.x, 0.01f))
                                             {
                                                 skeleton->SetDirtyFlag(true);
                                             }
 
-                                            glm::vec3 eulerDeg = glm::degrees(glm::eulerAngles(socket.localRotation));
+                                            glm::vec3 eulerDeg = glm::degrees(glm::eulerAngles(socket.local.rotation));
                                             if (ImGui::DragFloat3("Socket Rotation", &eulerDeg.x, 0.1f))
                                             {
-                                                socket.localRotation = glm::quat(glm::radians(eulerDeg));
+                                                socket.local.rotation = glm::quat(glm::radians(eulerDeg));
                                                 skeleton->SetDirtyFlag(true);
                                             }
 
-                                            if (ImGui::DragFloat3("Socket Scale", &socket.localScale.x, 0.01f, 0.001f, 1000.0f))
+                                            if (ImGui::DragFloat3("Socket Scale", &socket.local.scale.x, 0.01f, 0.001f, 1000.0f))
                                             {
                                                 skeleton->SetDirtyFlag(true);
                                             }
@@ -4224,7 +4224,7 @@ namespace ignite
                                     if (useSocketGizmo)
                                     {
                                         const JointSocket &socket = skeleton->sockets[static_cast<size_t>(selectedSocket)];
-                                        const glm::mat4 socketLocal = socket.GetLocalTransform();
+                                        const glm::mat4 socketLocal = socket.local.GetMatrix();
                                         if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton->joints.size()))
                                         {
                                             gizmoTransform = getJointGlobal(socket.parentJointId) * socketLocal;
@@ -4257,9 +4257,7 @@ namespace ignite
                                             const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
                                             glm::vec3 localTranslation, localEuler, localScale;
                                             Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                                            socket.localTranslation = localTranslation;
-                                            socket.localRotation = glm::quat(localEuler);
-                                            socket.localScale = localScale;
+                                            socket.local = Transform(localTranslation, glm::quat(localEuler), localScale);
                                         }
                                         else if (hasSelectedJoint)
                                         {
@@ -4273,12 +4271,8 @@ namespace ignite
                                             const glm::mat4 localMatrix = glm::inverse(parentWorld) * gizmoTransform;
                                             glm::vec3 localTranslation, localEuler, localScale;
                                             Math::DecomposeTransformEuler(localMatrix, localTranslation, localEuler, localScale);
-                                            joint.defaultTranslation = localTranslation;
-                                            joint.defaultRotation = glm::quat(localEuler);
-                                            joint.defaultScale = localScale;
-                                            joint.localTransform = glm::translate(glm::mat4(1.0f), joint.defaultTranslation)
-                                                * glm::toMat4(joint.defaultRotation)
-                                                * glm::scale(glm::mat4(1.0f), joint.defaultScale);
+                                            joint.defaultTransform = Transform(localTranslation, glm::quat(localEuler), localScale);
+                                            joint.localTransform = joint.defaultTransform.GetMatrix();
                                         }
 
                                         skeleton->SetDirtyFlag(true);
@@ -4517,19 +4511,19 @@ namespace ignite
                                     ImGui::EndCombo();
                                 }
 
-                                if (ImGui::DragFloat3("Socket Translation", &socket.localTranslation.x, 0.01f))
+                                if (ImGui::DragFloat3("Socket Translation", &socket.local.translation.x, 0.01f))
                                 {
                                     skeleton->SetDirtyFlag(true);
                                 }
 
-                                glm::vec3 eulerDeg = glm::degrees(glm::eulerAngles(socket.localRotation));
+                                glm::vec3 eulerDeg = glm::degrees(glm::eulerAngles(socket.local.rotation));
                                 if (ImGui::DragFloat3("Socket Rotation", &eulerDeg.x, 0.1f))
                                 {
-                                    socket.localRotation = glm::quat(glm::radians(eulerDeg));
+                                    socket.local.rotation = glm::quat(glm::radians(eulerDeg));
                                     skeleton->SetDirtyFlag(true);
                                 }
 
-                                if (ImGui::DragFloat3("Socket Scale", &socket.localScale.x, 0.01f, 0.001f, 1000.0f))
+                                if (ImGui::DragFloat3("Socket Scale", &socket.local.scale.x, 0.01f, 0.001f, 1000.0f))
                                 {
                                     skeleton->SetDirtyFlag(true);
                                 }

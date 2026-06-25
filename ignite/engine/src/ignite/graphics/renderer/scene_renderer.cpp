@@ -44,37 +44,6 @@ namespace ignite
         return buf;
     }();
 
-    static WorldEnvironment *GetActiveWorldEnvironment(Scene *scene)
-    {
-        if (!scene || !scene->registry)
-        {
-            return nullptr;
-        }
-
-        auto view = scene->registry->view<WorldEnvironment>();
-        WorldEnvironment *fallback = nullptr;
-        for (entt::entity e : view)
-        {
-            WorldEnvironment &world = view.get<WorldEnvironment>(e);
-            if (!world.enabled)
-            {
-                continue;
-            }
-
-            if (world.primary)
-            {
-                return &world;
-            }
-
-            if (!fallback)
-            {
-                fallback = &world;
-            }
-        }
-
-        return fallback;
-    }
-
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_GeometryPSOCache;
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_EnvironmentPSOCache;
     static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_CompositePSOCache;
@@ -433,7 +402,8 @@ namespace ignite
             if (!smc.skeletonGpuBuffer)
             {
                 smc.skeletonGpuBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Per-Entity Skeleton Buffer");
-                LOG_INFO("[SceneRenderer] Created non-volatile skeleton GPU buffer for entity {}", static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                LOG_INFO("[SceneRenderer] Created non-volatile skeleton GPU buffer for entity {}",
+                    static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
             }
 
             GPUSkeletonBuffer skeletonGPUData;
@@ -558,6 +528,7 @@ namespace ignite
     SceneRenderer::~SceneRenderer()
     {
         m_WidgetRenderer = nullptr;
+        m_WorldEnvironment = nullptr;
 
         s_GeometryPSOCache.clear();
         s_EnvironmentPSOCache.clear();
@@ -772,39 +743,33 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
         IGN_PROFILE_FRAME_NAMED("Editor Frame");
 
-        WorldEnvironment *worldEnvironment =  GetActiveWorldEnvironment(m_Scene.get());
+        if (!m_WorldEnvironment)
+            m_WorldEnvironment = m_Scene->GetActiveWorldEnvironment();
 
-        if (worldEnvironment)
+        if (m_WorldEnvironment)
         {
-            if (!worldEnvironment->environment)
-            {
-                worldEnvironment->environment = Environment::Create();
-                worldEnvironment->dirtyEnvironment = true;
-                worldEnvironment->gpuInitialized = false;
-            }
-
-            const bool isHDRLoaded = worldEnvironment->hdrHandle != AssetHandle(0);
-            if (worldEnvironment->dirtyEnvironment)
+            const bool isHDRLoaded = m_WorldEnvironment->hdrHandle != AssetHandle(0);
+            if (m_WorldEnvironment->dirtyEnvironment)
             {
                 Ref<Texture> hdrTexture;
                 if (isHDRLoaded)
                 {
-                    hdrTexture = m_Scene->GetProject()->GetAssetManager()->GetAsset<Texture>(worldEnvironment->hdrHandle);
+                    hdrTexture = m_Scene->GetProject()->GetAssetManager()->GetAsset<Texture>(m_WorldEnvironment->hdrHandle);
                     if (hdrTexture && hdrTexture->IsReady())
                     {
-                        worldEnvironment->environment->SetTexture(hdrTexture);
+                        m_WorldEnvironment->environment->SetTexture(hdrTexture);
                     }
                 }
                 else
                 {
-                    worldEnvironment->environment->SetTexture(Renderer::GetBlackTexture());
+                    m_WorldEnvironment->environment->SetTexture(Renderer::GetBlackTexture());
                 }
 
                 // Keep retrieve HDR If it is loaded, but still empty
                 if (isHDRLoaded && hdrTexture == nullptr || (hdrTexture && !hdrTexture->IsReady()))
-                    worldEnvironment->dirtyEnvironment = true;
+                    m_WorldEnvironment->dirtyEnvironment = true;
                 else
-                    worldEnvironment->dirtyEnvironment = false;
+                    m_WorldEnvironment->dirtyEnvironment = false;
             }
         }
 
@@ -819,13 +784,13 @@ namespace ignite
             m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
             UploadSkeletonBuffers(cmd);
 
-            if (worldEnvironment && worldEnvironment->environment && !worldEnvironment->gpuInitialized && !worldEnvironment->dirtyEnvironment)
+            if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->gpuInitialized && !m_WorldEnvironment->dirtyEnvironment)
             {
-                worldEnvironment->environment->WriteBuffer(cmd);
-                worldEnvironment->gpuInitialized = true;
+                m_WorldEnvironment->environment->WriteBuffer(cmd);
+                m_WorldEnvironment->gpuInitialized = true;
 
                 // Update env & materials if already  get the HDR texture
-                worldEnvironment->environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer);
+                m_WorldEnvironment->environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer);
 
                 const auto &assets = m_Scene->GetProject()->GetAssetManager()->GetLoadedAssets();
                 for (const auto &[handle, asset] : assets)
@@ -871,10 +836,10 @@ namespace ignite
 
             ShadowPass(cmd, camera);
 
-            if (worldEnvironment && worldEnvironment->environment && !worldEnvironment->dirtyEnvironment)
+            if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->dirtyEnvironment)
             {
                 const Ref<GraphicsPipeline> envPSO = GetEnvPipelineForFB(framebuffer, m_FillMode);
-                worldEnvironment->environment->Draw(cmd, camera, framebuffer, envPSO);
+                m_WorldEnvironment->environment->Draw(cmd, camera, framebuffer, envPSO);
             }
 
 			ColorPass(cmd, camera, framebuffer);
@@ -972,39 +937,41 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
         IGN_PROFILE_FRAME_NAMED("Gameplay Frame");
-        WorldEnvironment *worldEnvironment = GetActiveWorldEnvironment(m_Scene.get());
 
-        if (worldEnvironment)
+        if (!m_WorldEnvironment)
+            m_WorldEnvironment = m_Scene->GetActiveWorldEnvironment();
+
+        if (m_WorldEnvironment)
         {
-            if (!worldEnvironment->environment)
+            if (!m_WorldEnvironment->environment)
             {
-                worldEnvironment->environment = Environment::Create();
-                worldEnvironment->dirtyEnvironment = true;
-                worldEnvironment->gpuInitialized = false;
+                m_WorldEnvironment->environment = Environment::Create();
+                m_WorldEnvironment->dirtyEnvironment = true;
+                m_WorldEnvironment->gpuInitialized = false;
             }
 
-            const bool isHDRLoaded = worldEnvironment->hdrHandle != AssetHandle(0);
-            if (worldEnvironment->dirtyEnvironment)
+            const bool isHDRLoaded = m_WorldEnvironment->hdrHandle != AssetHandle(0);
+            if (m_WorldEnvironment->dirtyEnvironment)
             {
                 Ref<Texture> hdrTexture;
                 if (isHDRLoaded)
                 {
-                    hdrTexture = m_Scene->GetProject()->GetAssetManager()->GetAsset<Texture>(worldEnvironment->hdrHandle);
+                    hdrTexture = m_Scene->GetProject()->GetAssetManager()->GetAsset<Texture>(m_WorldEnvironment->hdrHandle);
                     if (hdrTexture && hdrTexture->IsReady())
                     {
-                        worldEnvironment->environment->SetTexture(hdrTexture);
+                        m_WorldEnvironment->environment->SetTexture(hdrTexture);
                     }
                 }
                 else
                 {
-                    worldEnvironment->environment->SetTexture(Renderer::GetBlackTexture());
+                    m_WorldEnvironment->environment->SetTexture(Renderer::GetBlackTexture());
                 }
 
                 // Keep retrieve HDR If it is loaded, but still empty
                 if (isHDRLoaded && hdrTexture == nullptr || (hdrTexture && !hdrTexture->IsReady()))
-                    worldEnvironment->dirtyEnvironment = true;
+                    m_WorldEnvironment->dirtyEnvironment = true;
                 else
-                    worldEnvironment->dirtyEnvironment = false;
+                    m_WorldEnvironment->dirtyEnvironment = false;
             }
         }
 
@@ -1019,13 +986,13 @@ namespace ignite
             m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
             UploadSkeletonBuffers(cmd);
 
-            if (worldEnvironment && worldEnvironment->environment && !worldEnvironment->gpuInitialized && !worldEnvironment->dirtyEnvironment)
+            if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->gpuInitialized && !m_WorldEnvironment->dirtyEnvironment)
             {
-                worldEnvironment->environment->WriteBuffer(cmd);
-                worldEnvironment->gpuInitialized = true;
+                m_WorldEnvironment->environment->WriteBuffer(cmd);
+                m_WorldEnvironment->gpuInitialized = true;
 
                 // Update env & materials if already  get the HDR texture
-                worldEnvironment->environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer);
+                m_WorldEnvironment->environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer);
 
                 const auto &assets = m_Scene->GetProject()->GetAssetManager()->GetLoadedAssets();
                 for (const auto &[handle, asset] : assets)
@@ -1063,10 +1030,10 @@ namespace ignite
 			
             ShadowPass(cmd, camera);
 
-            if (worldEnvironment && worldEnvironment->environment && !worldEnvironment->dirtyEnvironment)
+            if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->dirtyEnvironment)
             {
                 const Ref<GraphicsPipeline> envPSO = GetEnvPipelineForFB(framebuffer, m_FillMode);
-                worldEnvironment->environment->Draw(cmd, camera, framebuffer, envPSO);
+                m_WorldEnvironment->environment->Draw(cmd, camera, framebuffer, envPSO);
             }
 
 			ColorPass(cmd, camera, framebuffer);
@@ -1162,7 +1129,7 @@ namespace ignite
             const TransformComponent &tr = dirLightView.get<TransformComponent>(e);
             const DirectionalLightComponent &light = dirLightView.get<DirectionalLightComponent>(e);
 
-            const glm::vec3 forward = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+            const glm::vec3 forward = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
 
             m_SceneGPUData.sunColor = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
             m_SceneGPUData.sungAngles.x = std::atan2(forward.x, forward.z);
@@ -1176,13 +1143,9 @@ namespace ignite
         for (entt::entity e : worldEnvView)
         {
             WorldEnvironment &world = worldEnvView.get<WorldEnvironment>(e);
-            if (!world.enabled)
-                continue;
-
             m_SceneGPUData.exposure = world.exposure;
             m_SceneGPUData.gamma = world.gamma;
             m_SceneGPUData.ambient = world.ambient;
-
             break;
         }
 
@@ -1199,7 +1162,7 @@ namespace ignite
             const TransformComponent &tr = lightView.get<TransformComponent>(e);
             const DirectionalLightComponent &light = lightView.get<DirectionalLightComponent>(e);
 
-            sunDirection = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+            sunDirection = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
 
             auto &csmData = m_CascadedShadowMap->GetGPUData();
             csmData.shadowStrength = light.cascadeShadow ? light.shadowStrength : 0.0f;
@@ -1529,7 +1492,7 @@ namespace ignite
                         continue;
 
                     PointLight2D_GPUData gpuLight;
-                    gpuLight.position = glm::vec4(tr.translation, 1.0f);
+                    gpuLight.position = glm::vec4(tr.world.translation, 1.0f);
                     gpuLight.color = light.color;
                     gpuLight.radius = light.radius;
                     gpuLight.intensity = light.intensity;
@@ -1553,7 +1516,7 @@ namespace ignite
                     {
                         Circle2DComponent &circle = m_Scene->registry->get<Circle2DComponent>(e);
                         const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                        m_Renderer2D->DrawCircle(tr.GetWorldMatrix(), circle.color, circle.thickness, circle.fade, objectID);
+                        m_Renderer2D->DrawCircle(tr.world.GetMatrix(), circle.color, circle.thickness, circle.fade, objectID);
                     }
                 }
             }
@@ -1591,13 +1554,13 @@ namespace ignite
                     if (mat2d)
                     {
                         Ref<Texture> texture = m_Renderer2D->ResolveTexture(project, mat2d->textureHandle);
-                        m_Renderer2D->DrawQuad(tr.GetWorldMatrix(), mat2d->data.baseColor, mat2d->data.additiveColor,
+                        m_Renderer2D->DrawQuad(tr.world.GetMatrix(), mat2d->data.baseColor, mat2d->data.additiveColor,
                             mat2d->data.type, texture, uv0, uv1, mat2d->data.tilingFactor, objectID);
                     }
                     else // Render with default
                     {
                         Ref<Texture> texture = m_Renderer2D->ResolveTexture(project, sprite.handle);
-                        m_Renderer2D->DrawQuad(tr.GetWorldMatrix(), sprite.color, texture, uv0, uv1, sprite.tilingFactor, objectID);
+                        m_Renderer2D->DrawQuad(tr.world.GetMatrix(), sprite.color, texture, uv0, uv1, sprite.tilingFactor, objectID);
                     }
 
                 }
@@ -1636,7 +1599,7 @@ namespace ignite
                         }
                     }
 
-                    m_Renderer2D->DrawString(text.text, font, textColor, tr.GetWorldMatrix(), text.kerning, text.lineSpacing, objectID);
+                    m_Renderer2D->DrawString(text.text, font, textColor, tr.world.GetMatrix(), text.kerning, text.lineSpacing, objectID);
                 }
             }
 
@@ -1777,7 +1740,7 @@ namespace ignite
                 continue;
 
             const BoxCollider2DComponent &box = m_Scene->registry->get<BoxCollider2DComponent>(e);
-            const glm::mat4 world = tr.GetWorldMatrix();
+            const glm::mat4 world = tr.world.GetMatrix();
 
             const glm::vec2 halfExtents = box.size;
             const glm::vec2 offset = box.offset;
@@ -1801,7 +1764,7 @@ namespace ignite
                 continue;
 
             const CircleCollider2DComponent &circle = m_Scene->registry->get<CircleCollider2DComponent>(e);
-            const glm::mat4 world = tr.GetWorldMatrix();
+            const glm::mat4 world = tr.world.GetMatrix();
             const glm::vec3 centerWorld = glm::vec3(world * glm::vec4(circle.center, 0.0f, 1.0f));
 
             const float worldScaleX = glm::length(glm::vec2(world[0]));
@@ -1879,7 +1842,7 @@ namespace ignite
                 continue;
 
             const auto &box = m_Scene->registry->get<BoxColliderComponent>(e);
-            const glm::mat4 world = tr.GetWorldMatrix();
+            const glm::mat4 world = tr.world.GetMatrix();
 
             const glm::vec3 c = box.center;
             const glm::vec3 h = box.scale;
@@ -1916,9 +1879,9 @@ namespace ignite
                 continue;
 
             const auto &sphere = m_Scene->registry->get<SphereColliderComponent>(e);
-            const glm::mat4 world = tr.GetWorldMatrix();
+            const glm::mat4 world = tr.world.GetMatrix();
 
-            const float maxAxis = glm::compMax(tr.scale);
+            const float maxAxis = glm::compMax(tr.world.scale);
             const float scaledRadius = sphere.radius * maxAxis;
 
             const glm::vec3 center = glm::vec3(world * glm::vec4(sphere.center, 1.0f));
@@ -1940,8 +1903,8 @@ namespace ignite
                 continue;
 
             const auto &capsule = m_Scene->registry->get<CapsuleColliderComponent>(e);
-            const glm::mat4 world = tr.GetWorldMatrix();
-            const float maxAxis = std::max({ tr.scale.x, tr.scale.y, tr.scale.z });
+            const glm::mat4 world = tr.world.GetMatrix();
+            const float maxAxis = std::max({ tr.world.scale.x, tr.world.scale.y, tr.world.scale.z });
             const float scaledRadius = capsule.radius * maxAxis;
             const float scaledHalfHeight = glm::max(capsule.height - capsule.radius, 0.0f) * maxAxis;
 
@@ -1980,7 +1943,7 @@ namespace ignite
             if (mesh.vertices.empty())
                 continue;
 
-            const glm::mat4 world = tr.GetWorldMatrix();
+            const glm::mat4 world = tr.world.GetMatrix();
 
             if (!mesh.indices.empty() && mesh.indices.size() % 3 == 0)
             {
@@ -2086,7 +2049,7 @@ namespace ignite
                 continue;
 
             const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-            const glm::mat4 world = tr.GetWorldMatrix();
+            const glm::mat4 world = tr.world.GetMatrix();
             const glm::vec3 worldPos = glm::vec3(world[3]);
 
             Ref<Texture> texture = m_Icons["camera"];
@@ -2116,14 +2079,14 @@ namespace ignite
             auto &lc = m_Scene->registry->get<DirectionalLightComponent>(e);
 
             const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-            const glm::mat4 world = tr.GetWorldMatrix();
+            const glm::mat4 world = tr.world.GetMatrix();
             const glm::vec3 worldPos = glm::vec3(world[3]);
 
             Ref<Texture> texture = m_Icons["lighting"];
             glm::mat4 iconTransform = glm::translate(glm::mat4(1.0f), worldPos) * billboardRotation * glm::scale(glm::mat4(1.0f), glm::vec3(1.0f));
             m_Renderer2D->DrawQuad(iconTransform, lc.color, texture, { 0.0f, 0.0f }, { 1.0f, 1.0f }, glm::vec2(1.0f), objectID);
 
-            const glm::vec3 direction = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+            const glm::vec3 direction = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
             m_Renderer2D->DrawLine(worldPos, worldPos - direction * 5.0f, lc.color);
         }
 
@@ -2131,31 +2094,21 @@ namespace ignite
         m_Renderer2D->End();
     }
 
-    Ref<Texture> SceneRenderer::GetEnvironmentMapColorTexture() const
-    {
-        if (WorldEnvironment *world = GetActiveWorldEnvironment(m_Scene.get()))
-        {
-            if (world->environment)
-            {
-                return world->environment->GetHDRTexture();
-            }
-        }
-        return nullptr;
-    }
-
     Ref<Texture> SceneRenderer::GetCascadedShadowMapDepthTexture() const
     {
-        if (m_CascadedShadowMap)
-        {
-            return m_CascadedShadowMap->GetDepthTexture();
-        }
-        return nullptr;
+        return m_CascadedShadowMap ? m_CascadedShadowMap->GetDepthTexture() : nullptr;
     }
 
     Ref<CascadedShadowMap> SceneRenderer::GetCascadedShadowMap()
     {
         return m_CascadedShadowMap;
     }
+
+	Ref<Texture> SceneRenderer::GetEnvironmentMapColorTexture() const
+	{
+		return (m_WorldEnvironment && m_WorldEnvironment->environment) 
+            ? m_WorldEnvironment->environment->GetHDRTexture() : nullptr;
+	}
 
     void SceneRenderer::SetFillMode(nvrhi::RasterFillMode mode)
     {
