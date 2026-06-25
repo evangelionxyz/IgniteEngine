@@ -43,6 +43,50 @@ namespace ignite
         std::array<PointLight2D_GPUData, MAX_POINT_LIGHTS_2D> pointLights;
     };
 
+	struct CameraBindingKey
+	{
+		nvrhi::IBindingLayout *layout = nullptr;
+		nvrhi::IBuffer *cameraBuffer = nullptr;
+
+		bool operator==(const CameraBindingKey &other) const noexcept
+		{
+			return layout == other.layout && cameraBuffer == other.cameraBuffer;
+		}
+	};
+
+	struct CameraBindingKeyHash
+	{
+		size_t operator()(const CameraBindingKey &k) const noexcept
+		{
+			size_t h = std::hash<const void *>{}(k.layout);
+			h ^= (std::hash<const void *>{}(k.cameraBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+			return h;
+		}
+	};
+
+	struct CameraLightingBindingKey
+	{
+		nvrhi::IBindingLayout *layout = nullptr;
+		nvrhi::IBuffer *cameraBuffer = nullptr;
+		nvrhi::IBuffer *lightingBuffer = nullptr;
+
+		bool operator==(const CameraLightingBindingKey &other) const noexcept
+		{
+			return layout == other.layout && cameraBuffer == other.cameraBuffer && lightingBuffer == other.lightingBuffer;
+		}
+	};
+
+	struct CameraLightingBindingKeyHash
+	{
+		size_t operator()(const CameraLightingBindingKey &k) const noexcept
+		{
+			size_t h = std::hash<const void *>{}(k.layout);
+			h ^= (std::hash<const void *>{}(k.cameraBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+			h ^= (std::hash<const void *>{}(k.lightingBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+			return h;
+		}
+	};
+
     class GraphicsPipeline;
     class DeviceManager;
     class Texture;
@@ -124,76 +168,8 @@ namespace ignite
         BatchRender<Vertex2DCircle> m_CircleBatch;
         BatchRender<VertexText> m_TextBatch;
 
-        nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
-
         Ref<ConstantBuffer> m_Material2DLightingBuffer;
-        Material2DLighting_GPUData m_Material2DLightingData;
-        bool m_Material2DLightingDirty = true;
-
-        struct AssetResolveKey
-        {
-            Project *project = nullptr;
-            AssetHandle handle = AssetHandle(0);
-
-            bool operator==(const AssetResolveKey &other) const noexcept
-            {
-                return project == other.project && handle == other.handle;
-            }
-        };
-
-        struct AssetResolveKeyHash
-        {
-            size_t operator()(const AssetResolveKey &key) const noexcept
-            {
-                size_t h = std::hash<const void *>{}(key.project);
-                h ^= (std::hash<AssetHandle>{}(key.handle) + 0x9e3779b9 + (h << 6) + (h >> 2));
-                return h;
-            }
-        };
-
-		struct CameraBindingKey
-		{
-			nvrhi::IBindingLayout *layout = nullptr;
-			nvrhi::IBuffer *cameraBuffer = nullptr;
-
-			bool operator==(const CameraBindingKey &other) const noexcept
-			{
-				return layout == other.layout && cameraBuffer == other.cameraBuffer;
-			}
-		};
-
-		struct CameraBindingKeyHash
-		{
-			size_t operator()(const CameraBindingKey &k) const noexcept
-			{
-				size_t h = std::hash<const void *>{}(k.layout);
-				h ^= (std::hash<const void *>{}(k.cameraBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-				return h;
-			}
-		};
-
-		struct CameraLightingBindingKey
-		{
-			nvrhi::IBindingLayout *layout = nullptr;
-			nvrhi::IBuffer *cameraBuffer = nullptr;
-			nvrhi::IBuffer *lightingBuffer = nullptr;
-
-			bool operator==(const CameraLightingBindingKey &other) const noexcept
-			{
-				return layout == other.layout && cameraBuffer == other.cameraBuffer && lightingBuffer == other.lightingBuffer;
-			}
-		};
-
-		struct CameraLightingBindingKeyHash
-		{
-			size_t operator()(const CameraLightingBindingKey &k) const noexcept
-			{
-				size_t h = std::hash<const void *>{}(k.layout);
-				h ^= (std::hash<const void *>{}(k.cameraBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-				h ^= (std::hash<const void *>{}(k.lightingBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-				return h;
-			}
-		};
+        Ref<Material2DLighting_GPUData> m_Material2DLightingData;
 
         std::unordered_map<AssetResolveKey, Ref<Texture>, AssetResolveKeyHash> m_TextureResolveCache;
         std::unordered_map<AssetResolveKey, Ref<Material2D>, AssetResolveKeyHash> m_Material2DResolveCache;
@@ -210,9 +186,7 @@ namespace ignite
 
         struct PreRenderCacheData
         {
-            bool valid = false;
-
-            Material2DLighting_GPUData lightingData;
+            Ref<Material2DLighting_GPUData> lightingData;
 
             std::vector<Vertex2DCircle> circleVertices;
             uint32_t circleIndexCount = 0;
@@ -224,9 +198,14 @@ namespace ignite
             std::vector<VertexText> textVertices;
             uint32_t textIndexCount = 0;
             std::vector<Ref<Texture>> textTextureSlots;
+
+			bool valid = false;
         };
 
-        PreRenderCacheData m_PreRenderCache;
+        Ref<PreRenderCacheData> m_PreRenderCache;
+
+		nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
+		bool m_Material2DLightingDirty = true;
     };
 }
 

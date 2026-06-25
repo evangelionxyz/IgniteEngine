@@ -15,6 +15,8 @@
 namespace ignite
 {
     class Serializer;
+    class Project;
+
     using AssetHandle = UUID;
 
     enum class AssetType
@@ -208,6 +210,27 @@ namespace ignite
 
         return AssetType::Invalid;
     }
+
+	struct AssetResolveKey
+	{
+		Project *project = nullptr;
+		AssetHandle handle = AssetHandle(0);
+
+		bool operator==(const AssetResolveKey &other) const noexcept
+		{
+			return project == other.project && handle == other.handle;
+		}
+	};
+
+	struct AssetResolveKeyHash
+	{
+		size_t operator()(const AssetResolveKey &key) const noexcept
+		{
+			size_t h = std::hash<const void *>{}(key.project);
+			h ^= (std::hash<AssetHandle>{}(key.handle) + 0x9e3779b9 + (h << 6) + (h >> 2));
+			return h;
+		}
+	};
 
     class IGN_API AssetMetaData
     {

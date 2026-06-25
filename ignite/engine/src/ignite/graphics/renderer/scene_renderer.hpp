@@ -13,6 +13,61 @@ namespace ignite
 {
     class WidgetRenderer;
 
+	struct DebugGridBindingKey
+	{
+		nvrhi::IBindingLayout *layout = nullptr;
+		nvrhi::IBuffer *gridBuffer = nullptr;
+
+		bool operator==(const DebugGridBindingKey &other) const noexcept
+		{
+			return layout == other.layout && gridBuffer == other.gridBuffer;
+		}
+	};
+
+	struct DebugGridBindingKeyHash
+	{
+		size_t operator()(const DebugGridBindingKey &k) const noexcept
+		{
+			size_t h = std::hash<const void *>{}(k.layout);
+			h ^= (std::hash<const void *>{}(k.gridBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+			return h;
+		}
+	};
+
+	struct CompositeBindingKey
+	{
+		nvrhi::IBindingLayout *layout = nullptr;
+		nvrhi::ITexture *sceneTex = nullptr;
+		nvrhi::ITexture *uiTex = nullptr;
+		nvrhi::ITexture *edgeTex = nullptr;
+		nvrhi::ITexture *bloomTex = nullptr;
+		nvrhi::ITexture *ssaoTex = nullptr;
+		nvrhi::IBuffer *postProcessBuffer = nullptr;
+		nvrhi::ISampler *sampler = nullptr;
+
+		bool operator==(const CompositeBindingKey &other) const noexcept
+		{
+			return layout == other.layout && sceneTex == other.sceneTex
+				&& uiTex == other.uiTex && edgeTex == other.edgeTex && bloomTex == other.bloomTex
+				&& ssaoTex == other.ssaoTex && postProcessBuffer == other.postProcessBuffer
+				&& sampler == other.sampler;
+		}
+	};
+
+	struct CompositeBindingKeyHash
+	{
+		size_t operator()(const CompositeBindingKey &k) const noexcept
+		{
+			size_t h = std::hash<const void *>{}(k.layout);
+			h ^= (std::hash<const void *>{}(k.sceneTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
+			h ^= (std::hash<const void *>{}(k.uiTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
+			h ^= (std::hash<const void *>{}(k.edgeTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
+			h ^= (std::hash<const void *>{}(k.bloomTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
+			h ^= (std::hash<const void *>{}(k.ssaoTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
+			return h;
+		}
+	};
+
     class IGN_API SceneRenderer : public ISceneRenderer
     {
     public:
@@ -81,84 +136,6 @@ namespace ignite
         nvrhi::BindingSetHandle GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<ConstantBuffer> postProcessBuffer, nvrhi::ISampler *sampler);
         nvrhi::BindingSetHandle GetOrCreateCSMBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<ConstantBuffer> skinnedMeshGPUDataBuffer, Ref<ConstantBuffer> csmGPUDataBuffer);
 
-    private:
-        struct AssetResolveKey
-        {
-            Project *project = nullptr;
-            AssetHandle handle = AssetHandle(0);
-
-            bool operator==(const AssetResolveKey &other) const noexcept
-            {
-                return project == other.project && handle == other.handle;
-            }
-        };
-
-        struct AssetResolveKeyHash
-        {
-            size_t operator()(const AssetResolveKey &key) const noexcept
-            {
-                size_t h = std::hash<const void *>{}(key.project);
-                h ^= (std::hash<AssetHandle>{}(key.handle) + 0x9e3779b9 + (h << 6) + (h >> 2));
-                return h;
-            }
-        };
-
-		struct DebugGridBindingKey
-		{
-			nvrhi::IBindingLayout *layout = nullptr;
-			nvrhi::IBuffer *gridBuffer = nullptr;
-
-			bool operator==(const DebugGridBindingKey &other) const noexcept
-			{
-				return layout == other.layout && gridBuffer == other.gridBuffer;
-			}
-		};
-
-		struct DebugGridBindingKeyHash
-		{
-			size_t operator()(const DebugGridBindingKey &k) const noexcept
-			{
-				size_t h = std::hash<const void *>{}(k.layout);
-				h ^= (std::hash<const void *>{}(k.gridBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-				return h;
-			}
-		};
-
-		struct CompositeBindingKey
-		{
-			nvrhi::IBindingLayout *layout = nullptr;
-			nvrhi::ITexture *sceneTex = nullptr;
-			nvrhi::ITexture *uiTex = nullptr;
-			nvrhi::ITexture *edgeTex = nullptr;
-			nvrhi::ITexture *bloomTex = nullptr;
-			nvrhi::ITexture *ssaoTex = nullptr;
-			nvrhi::IBuffer *postProcessBuffer = nullptr;
-			nvrhi::ISampler *sampler = nullptr;
-
-			bool operator==(const CompositeBindingKey &other) const noexcept
-			{
-				return layout == other.layout && sceneTex == other.sceneTex
-					&& uiTex == other.uiTex && edgeTex == other.edgeTex && bloomTex == other.bloomTex
-					&& ssaoTex == other.ssaoTex && postProcessBuffer == other.postProcessBuffer
-					&& sampler == other.sampler;
-			}
-		};
-
-		struct CompositeBindingKeyHash
-		{
-			size_t operator()(const CompositeBindingKey &k) const noexcept
-			{
-				size_t h = std::hash<const void *>{}(k.layout);
-				h ^= (std::hash<const void *>{}(k.sceneTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
-				h ^= (std::hash<const void *>{}(k.uiTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
-				h ^= (std::hash<const void *>{}(k.edgeTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
-				h ^= (std::hash<const void *>{}(k.bloomTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
-				h ^= (std::hash<const void *>{}(k.ssaoTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
-				return h;
-			}
-		};
-
-        
     private:
         Ref<WidgetRenderer> m_WidgetRenderer;
 
