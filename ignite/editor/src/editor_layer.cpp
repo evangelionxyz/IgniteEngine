@@ -684,6 +684,11 @@ namespace ignite
                     OpenProject();
                 }
 
+				else if (ImGui::MenuItem("Close Project", nullptr, false, m_ActiveProject != nullptr))
+				{
+					CloseCurrentProject();
+				}
+
                 ImGui::EndMenu();
             }
 
@@ -945,7 +950,9 @@ namespace ignite
         {
             m_ScenePanel->SetActiveScene(nullptr);
         }
+
         m_SceneRenderer->SetActiveScene(nullptr);
+
         if (m_ActiveProject)
         {
             m_ActiveProject->SetActiveScene(nullptr);
@@ -966,6 +973,7 @@ namespace ignite
         }
 
         m_SceneRenderer->SetActiveScene(scene);
+
         GameUISystem::SetSceneContext(scene.get());
     }
 
@@ -1127,6 +1135,27 @@ namespace ignite
             nullptr, false);
     }
 
+    void EditorLayer::CloseCurrentProject()
+    {
+        if (m_ActiveProject)
+        {
+            SaveProject();
+
+            SetActiveScene(nullptr);
+
+            m_EditorScene.reset();
+            m_ActiveScene.reset();
+
+            m_ActiveProject->GetAssetManager()->ClearAllLoadedAssets();
+
+            // Reset everything
+            m_ActiveProject.reset();
+            m_CurrentProjectFilepath.clear();
+            m_CurrentSceneFilePath.clear();
+            m_CurrentSceneHandle = AssetHandle(0);
+        }
+    }
+
     void EditorLayer::OpenProject(const ignite::Path &filepath)
     {
         if (filepath == m_CurrentProjectFilepath)
@@ -1153,47 +1182,47 @@ namespace ignite
             m_ActiveProject->ResetReadyState();
 
             auto readyFunc = [this]() -> void
-            {
-                // Reload project files
-                ReloadContentBrowserPanels();
-
-                // Get Project default scene (use immediate load for synchronous path)
-                AssetHandle defSceneAssetHandle = m_ActiveProject->GetInfo().defaultSceneHandle;
-                if (defSceneAssetHandle != AssetHandle(0))
                 {
-                    // Use GetAssetImmediate since we're on main thread and need synchronous load
-                    if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(defSceneAssetHandle))
+                    // Reload project files
+                    ReloadContentBrowserPanels();
+
+                    // Get Project default scene (use immediate load for synchronous path)
+                    AssetHandle defSceneAssetHandle = m_ActiveProject->GetInfo().defaultSceneHandle;
+                    if (defSceneAssetHandle != AssetHandle(0))
                     {
-                        m_EditorScene = SceneManager::Copy(activeScene);
-                        m_EditorScene->SetDirtyFlag(false);
-                        SetActiveScene(m_EditorScene);
+                        // Use GetAssetImmediate since we're on main thread and need synchronous load
+                        if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(defSceneAssetHandle))
+                        {
+                            m_EditorScene = SceneManager::Copy(activeScene);
+                            m_EditorScene->SetDirtyFlag(false);
+                            SetActiveScene(m_EditorScene);
 
-                        const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
+                            const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
 
-                        m_CurrentSceneFilePath = m_ActiveProject->GetProjectFilepath(assetFilepath);
-                        m_CurrentSceneHandle = activeScene->handle;
+                            m_CurrentSceneFilePath = m_ActiveProject->GetProjectFilepath(assetFilepath);
+                            m_CurrentSceneHandle = activeScene->handle;
+                        }
+                        else
+                        {
+                            // Create a default scene if load failed
+                            NewScene();
+                        }
                     }
                     else
                     {
-                        // Create a default scene if load failed
+                        // Create a default scene
                         NewScene();
                     }
-                }
-                else
-                {
-                    // Create a default scene
-                    NewScene();
-                }
-            };
+                };
 
             // Register Build Solution callback
             m_ActiveProject->AddOnProjectReadyFuncs([readyFunc](bool isSuccess)
-            {
-                if (isSuccess)
                 {
-                    readyFunc();
-                }
-            });
+                    if (isSuccess)
+                    {
+                        readyFunc();
+                    }
+                });
 
             // Initialize Script engine
             openedProject->InitScriptEngine();
