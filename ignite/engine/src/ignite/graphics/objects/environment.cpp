@@ -26,6 +26,7 @@
 #include "ignite/graphics/graphics_pipeline.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/scene/icamera.hpp"
+#include "ignite/core/application.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/core/device/device_manager.hpp"
@@ -154,6 +155,10 @@ namespace ignite
 
         m_BindingSet = device->createBindingSet(bsDesc, Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT));
         LOG_ASSERT(m_BindingSet, "Failed to create binding set");
+
+		AssetChangeEvent event(handle, AssetType::Environment);
+		Application::GetInstance()->OnEvent(event);
+
         return m_BindingSet != nullptr;
     }
 

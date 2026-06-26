@@ -1811,24 +1811,14 @@ namespace ignite
                     sampleTime.Set(tick);
 
                     const float timestamp = static_cast<float>((sampleTime.GetSecondDouble() - startSeconds) * ticksPerSecond);
-
                     const glm::mat4 localMatrix = ToGlmMatrix(node->EvaluateLocalTransform(sampleTime));
-
-                    glm::vec3 decomposedScale(1.0f);
-                    glm::quat decomposedRotation(1.0f, 0.0f, 0.0f, 0.0f);
-                    glm::vec3 decomposedTranslation(0.0f);
-                    glm::vec3 skew(0.0f);
-                    glm::vec4 perspective(0.0f);
-                    glm::decompose(localMatrix,
-                        decomposedScale,
-                        decomposedRotation,
-                        decomposedTranslation,
-                        skew,
-                        perspective);
-
-                    channel.translationKeys.AddFrame({ decomposedTranslation * scaleFactor, timestamp });
-                    channel.rotationKeys.AddFrame({ decomposedRotation, timestamp });
-                    channel.scaleKeys.AddFrame({ decomposedScale, timestamp });
+                    
+                    Transform decomposed;
+                    Transform::Decompose(localMatrix, decomposed);
+                    
+                    channel.translationKeys.AddFrame({ decomposed.translation * scaleFactor, timestamp });
+                    channel.rotationKeys.AddFrame({ decomposed.rotation, timestamp });
+                    channel.scaleKeys.AddFrame({ decomposed.scale, timestamp });
                 }
 
                 animation->channels[(int)jointIndex] = std::move(channel);
@@ -1872,10 +1862,7 @@ namespace ignite
         joint.name = jointName;
         joint.localTransform = ScaleTranslation(ToGlmMatrix(jointNode->EvaluateLocalTransform()), scaleFactor);
 
-        glm::vec3 skew;
-        glm::vec4 perspective;
-        glm::decompose(joint.localTransform, joint.defaultScale, joint.defaultRotation, joint.defaultTranslation, skew, perspective);
-        joint.defaultLocalTransform = joint.localTransform;
+        Transform::Decompose(joint.localTransform, joint.defaultTransform);
 
         joint.globalTransform = glm::mat4(1.0f);
         joint.inverseBindPose = glm::mat4(1.0f);

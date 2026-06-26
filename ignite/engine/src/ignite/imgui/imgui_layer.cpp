@@ -5,6 +5,8 @@
 #include "ignite/graphics/window.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/core/profiler/profiler.hpp"
+#include "ignite/core/vfs/vfs.hpp"
+#include "ignite/core/platform_utils.hpp"
 
 #include <backends/imgui_impl_sdl3.h>
 #include <ImGuizmo.h>
@@ -41,15 +43,15 @@ namespace ignite
     {
     }
 
-    GuiFont::GuiFont(std::vector<uint8_t> data, bool isCompressed, float size)
-        : m_Data(std::move(data))
-        , m_IsDefault(false)
-        , m_IsCompressed(isCompressed)
-        , m_SizeAtDefaultScale(size)
-    {
-    }
+	GuiFont::GuiFont(Buffer buffer, bool isCompressed, float size)
+        : m_Buffer(std::move(buffer))
+		, m_IsDefault(false)
+		, m_IsCompressed(isCompressed)
+		, m_SizeAtDefaultScale(size)
+	{
+	}
 
-    void GuiFont::CreateScaledFont(float displayScale)
+	void GuiFont::CreateScaledFont(float displayScale)
     {
         ImFontConfig fontConfig;
         fontConfig.SizePixels = m_SizeAtDefaultScale * displayScale;
@@ -58,12 +60,12 @@ namespace ignite
 
         auto &io = ImGui::GetIO();
 
-        if (m_Data.data() && !m_Data.empty())
+        if (m_Buffer)
         {
             fontConfig.FontDataOwnedByAtlas = false;
             m_ImFont = m_IsCompressed 
-                ? io.Fonts->AddFontFromMemoryCompressedTTF(m_Data.data(), static_cast<int>(m_Data.size()), 0.0f, &fontConfig)
-                : io.Fonts->AddFontFromMemoryTTF(m_Data.data(), static_cast<int>(m_Data.size()), 0.0f, &fontConfig);
+                ? io.Fonts->AddFontFromMemoryCompressedTTF(m_Buffer.Data(), static_cast<int>(m_Buffer.Size()), 0.0f, &fontConfig)
+                : io.Fonts->AddFontFromMemoryTTF((void *)m_Buffer.Data(), static_cast<int>(m_Buffer.Size()), 0.0f, &fontConfig);
         }
         else if (m_IsDefault)
         {
@@ -72,7 +74,7 @@ namespace ignite
 
         if (m_ImFont)
         {
-            io.Fonts->TexID = 0;
+            io.Fonts->TexRef = ImTextureRef((ImTextureID)0);
         }
     }
 
@@ -86,35 +88,20 @@ namespace ignite
         , m_DeviceManager(deviceManager)
         , m_SupportExplicitDisplayScaling(deviceManager->GetDeviceParameters().supportExplicitDisplayScaling)
     {
-
         LOG_ASSERT(m_DeviceManager, "Invalid device manager");
 
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
 
+        auto rfs = Application::GeRelativeFileSystem();
         ignite::Path fontPath = "resources/fonts/segoeui.ttf";
-        
-        LOG_ASSERT(ignite::Path::exists(fontPath), "[ImGui Layer] font does not found");
+        LOG_ASSERT(rfs->FileExists(fontPath), "[ImGui Layer] font does not found");
 
-        std::ifstream file(fontPath, std::ios::binary);
-        if (file.is_open())
+        Buffer fileBuffer = rfs->ReadFile(fontPath);
+        if (fileBuffer)
         {
-            file.seekg(0, std::ios::end);
-            const uint64_t size = file.tellg();
-            file.seekg(0, std::ios::beg);
-
-            std::vector<uint8_t> dataArray;
-            dataArray.resize(size);
-
-            file.read(reinterpret_cast<char *>(dataArray.data()), static_cast<std::streamsize>(dataArray.size()));
-            
-            if (file.good())
-            {
-                constexpr float fontSize = 16.0f;
-                m_Font = CreateRef<GuiFont>(dataArray, false, fontSize);
-            }
-
-            file.close();
+			constexpr float fontSize = 16.0f;
+			m_Font = CreateRef<GuiFont>(fileBuffer, false, fontSize);
         }
 
         ImGuiStyle &style = ImGui::GetStyle();
@@ -309,7 +296,7 @@ namespace ignite
         // This just clears the current font texture
         ImGuiIO &io = ImGui::GetIO();
         io.Fonts->Clear();
-        io.Fonts->TexID = 0;
+        io.Fonts->TexRef = ImTextureRef((ImTextureID)0);
 
         m_Font->ReleaseScaledFont();
 
@@ -324,7 +311,7 @@ namespace ignite
         // Force immediate font and style update
         ImGuiIO &io = ImGui::GetIO();
         io.Fonts->Clear();
-        io.Fonts->TexID = 0;
+        io.Fonts->TexRef = ImTextureRef((ImTextureID)0);
 
         m_Font->ReleaseScaledFont();
         m_Font->CreateScaledFont(event.GetScaleX());
@@ -357,7 +344,7 @@ namespace ignite
                 // Clear existing font and recreate with new scale
                 ImGuiIO &io = ImGui::GetIO();
                 io.Fonts->Clear();
-                io.Fonts->TexID = 0;
+                io.Fonts->TexRef = ImTextureRef((ImTextureID)0);
                 
                 m_Font->ReleaseScaledFont();
             }

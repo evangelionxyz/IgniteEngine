@@ -14,6 +14,7 @@
 
 #include "ignite/graphics/vertex_data.hpp"
 #include "ignite/graphics/gpu_data.hpp"
+#include "ignite/math/transform.hpp"
 
 namespace ignite
 {
@@ -28,12 +29,12 @@ namespace ignite
         std::string name;
         int32_t id; // index in joints array
         int32_t parentJointId; // parent in skeleton hierarchy (-1 for root)
-        glm::vec3 defaultTranslation;
-        glm::quat defaultRotation;
-        glm::vec3 defaultScale;
+        
+        Transform defaultTransform;
+
+        // on runtime calculation
         glm::mat4 inverseBindPose; // inverse bind pose matrix
         glm::mat4 localTransform; // current local transform
-        glm::mat4 defaultLocalTransform;
         glm::mat4 globalTransform; // current global transform
     };
 
@@ -41,11 +42,7 @@ namespace ignite
     {
         std::string name;
         int32_t parentJointId = -1;
-        glm::vec3 localTranslation = glm::vec3(0.0f);
-        glm::quat localRotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-        glm::vec3 localScale = glm::vec3(1.0f);
-
-        glm::mat4 GetLocalTransform() const;
+        Transform local;
     };
 
     class IGN_API Skeleton : public Asset

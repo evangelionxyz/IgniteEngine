@@ -15,19 +15,13 @@
 #include <limits>
 #include <unordered_set>
 
-// ImGui color channel shifts for ImU32 RGBA packed format
-#define IM_COL32_R_SHIFT    0
-#define IM_COL32_G_SHIFT    8
-#define IM_COL32_B_SHIFT    16
-#define IM_COL32_A_SHIFT    24
-
 #ifdef PLATFORM_WINDOWS
-    #include "ignite/core/device/device_manager_dx12.hpp"
-    #include <dxgi1_5.h>
+#include "ignite/core/device/device_manager_dx12.hpp"
+#include <dxgi1_5.h>
 #endif
 
 #ifdef IGNITE_WITH_VULKAN
-    #include "ignite/core/device/device_manager_vk.hpp"
+#include "ignite/core/device/device_manager_vk.hpp"
 #endif
 
 namespace
@@ -39,8 +33,8 @@ namespace
         std::vector<nvrhi::RefCountPtr<ID3D12Resource>> backBuffers;
         std::vector<std::shared_ptr<ignite::RenderTarget>> renderTargets;
         DXGI_SWAP_CHAIN_DESC1 swapChainDesc{};
-        u32 pendingWidth = 0;
-        u32 pendingHeight = 0;
+        uint32_t pendingWidth = 0;
+        uint32_t pendingHeight = 0;
         bool hasPendingResize = false;
     };
 #endif
@@ -56,9 +50,9 @@ namespace
         vk::Extent2D extent{};
         vk::Fence acquireFence;
         vk::Semaphore presentSemaphore;
-        u32 currentImageIndex = 0;
-        u32 pendingWidth = 0;
-        u32 pendingHeight = 0;
+        uint32_t currentImageIndex = 0;
+        uint32_t pendingWidth = 0;
+        uint32_t pendingHeight = 0;
         bool hasPendingResize = false;
         bool hasAcquiredImage = false;
     };
@@ -71,8 +65,8 @@ namespace ignite
 
     struct ImGuiPushConstants
     {
-        float invDisplaySize[2];
-        float displayPos[2];
+        std::array<float, 2> invDisplaySize;
+        std::array<float, 2> displayPos;
     };
 
     bool ImGui_NVRHI::UpdateFontTexture()
@@ -83,11 +77,11 @@ namespace ignite
 
         // If the font texture exists and is bound to ImGui, we're done.
         // Note: ImGui_Renderer will reset io.Fonts->TexID when new fonts are added.
-        if (fontTexture && io.Fonts->TexID)
+        if (fontTexture && io.Fonts->TexRef.GetTexID())
             return true;
 
-        unsigned char *pixels;
-        i32 width, height;
+        uint8_t* pixels { nullptr };
+        int width, height;
 
         // Atlas build is CPU-only — no GPU lock needed here.
         io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
@@ -248,14 +242,14 @@ namespace ignite
         nvrhi::IBindingSet *lastBindingSet = nullptr;
 
         // render command list
-        i32 vtxOffset = 0;
-        i32 idxOffset = 0;
-        for (i32 n = 0; n < drawData->CmdListsCount; ++n)
+        int vtxOffset = 0;
+        int idxOffset = 0;
+        for (int n = 0; n < drawData->CmdListsCount; ++n)
         {
             IGN_PROFILE_SCOPE("ImGui_NVRHI::DrawList");
             const ImDrawList *cmdList = drawData->CmdLists[n];
 
-            for (i32 i = 0; i < cmdList->CmdBuffer.Size; ++i)
+            for (int i = 0; i < cmdList->CmdBuffer.Size; ++i)
             {
                 const ImDrawCmd *pCmd = &cmdList->CmdBuffer[i];
 
@@ -265,9 +259,13 @@ namespace ignite
                 }
                 else
                 {
-                    nvrhi::ITexture *texture = (nvrhi::ITexture *)pCmd->TextureId;
+                    auto texture = (nvrhi::ITexture *)pCmd->TexRef.GetTexID();
                     if (texture != lastTexture)
                     {
+                        // Please check your ImGui texture somewhere in ImGui::Image stuff
+                        // If it is null, it can binds wrong texture in wrong place
+                        LOG_ASSERT(texture, "[ImGui NVRHI] ImGui::Image should takes a valid texture, not null");
+                        
                         lastTexture = texture;
                         lastBindingSet = GetBindingSet(texture, bindingLayout);
                     }
@@ -336,7 +334,7 @@ namespace ignite
         if (buffer == nullptr || size_t(buffer->getDesc().byteSize) < requiredSize)
         {
             nvrhi::BufferDesc desc;
-            desc.byteSize = static_cast<u32>(reallocateSize);
+            desc.byteSize = static_cast<uint32_t>(reallocateSize);
             desc.debugName = isIndexBuffer ? "ImGui index buffer" : "ImGui vertex buffer";
             desc.canHaveUAVs = false;
             desc.isVertexBuffer = !isIndexBuffer;
@@ -467,12 +465,12 @@ namespace ignite
         ImGuiVertexData *vtxDst = imguiVertexBuffer.data();
         ImDrawIdx *idxDst = imguiIndexBuffer.data();
 
-        for (i32 n = 0; n < drawData->CmdListsCount; ++n)
+        for (int n = 0; n < drawData->CmdListsCount; ++n)
         {
             const ImDrawList *cmdList = drawData->CmdLists[n];
             
             // Convert ImDrawVert to ImGuiVertexData (expand ImU32 color to float4)
-            for (i32 i = 0; i < cmdList->VtxBuffer.Size; ++i)
+            for (int i = 0; i < cmdList->VtxBuffer.Size; ++i)
             {
                 const ImDrawVert& src = cmdList->VtxBuffer[i];
                 ImGuiVertexData& dst = vtxDst[i];
@@ -603,7 +601,7 @@ namespace ignite
         }
     }
 
-    static bool CreateViewportSwapChainAndRenderTargetsVK(ImGuiViewportRendererData_VK *viewportData, DeviceManager_VK &deviceManager, u32 width, u32 height)
+    static bool CreateViewportSwapChainAndRenderTargetsVK(ImGuiViewportRendererData_VK *viewportData, DeviceManager_VK &deviceManager, uint32_t width, uint32_t height)
     {
         if (!viewportData || !viewportData->surface || !deviceManager.m_VulkanDevice)
             return false;
@@ -616,7 +614,7 @@ namespace ignite
             return false;
 
         vk::Extent2D extent{};
-        if (capabilities.currentExtent.width != std::numeric_limits<u32>::max())
+        if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
         {
             extent = capabilities.currentExtent;
         }
@@ -639,16 +637,16 @@ namespace ignite
 
         const vk::PresentModeKHR presentMode = SelectViewportPresentMode(presentModes, deviceManager.GetDeviceParameters().vsyncEnable);
 
-        u32 minImageCount = std::max(capabilities.minImageCount, deviceManager.GetDeviceParameters().swapChainBufferCount);
+        uint32_t minImageCount = std::max(capabilities.minImageCount, deviceManager.GetDeviceParameters().swapChainBufferCount);
         if (capabilities.maxImageCount > 0)
             minImageCount = std::min(minImageCount, capabilities.maxImageCount);
 
-        std::unordered_set<u32> uniqueQueues =
+        std::unordered_set<uint32_t> uniqueQueues =
         {
-            static_cast<u32>(deviceManager.m_GraphicsQueueFamily),
-            static_cast<u32>(deviceManager.m_PresentQueueFamily)
+            static_cast<uint32_t>(deviceManager.m_GraphicsQueueFamily),
+            static_cast<uint32_t>(deviceManager.m_PresentQueueFamily)
         };
-        std::vector<u32> queueFamilies(uniqueQueues.begin(), uniqueQueues.end());
+        std::vector<uint32_t> queueFamilies(uniqueQueues.begin(), uniqueQueues.end());
         const bool sharedSwapChain = queueFamilies.size() > 1;
 
         if (viewportData->swapChain)
@@ -668,7 +666,7 @@ namespace ignite
             .setImageArrayLayers(1)
             .setImageUsage(vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled)
             .setImageSharingMode(sharedSwapChain ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive)
-            .setQueueFamilyIndexCount(sharedSwapChain ? static_cast<u32>(queueFamilies.size()) : 0)
+            .setQueueFamilyIndexCount(sharedSwapChain ? static_cast<uint32_t>(queueFamilies.size()) : 0)
             .setPQueueFamilyIndices(sharedSwapChain ? queueFamilies.data() : nullptr)
             .setPreTransform(capabilities.currentTransform)
             .setCompositeAlpha(vk::CompositeAlphaFlagBitsKHR::eOpaque)
@@ -733,23 +731,14 @@ namespace ignite
         if (!platformIO.Platform_CreateVkSurface)
             return;
 
-        auto *viewportData = new ImGuiViewportRendererData_VK();
+        Ref<ImGuiViewportRendererData_VK> viewportData = CreateRef<ImGuiViewportRendererData_VK>();
 
         ImU64 surface = 0;
-        const int surfaceResult = platformIO.Platform_CreateVkSurface(
-            viewport,
-            static_cast<ImU64>(reinterpret_cast<uintptr_t>(static_cast<VkInstance>(deviceManager->m_VulkanInstance))),
-            nullptr,
-            &surface);
-
+        const int surfaceResult = platformIO.Platform_CreateVkSurface(viewport, static_cast<ImU64>((uintptr_t)(VkInstance)deviceManager->m_VulkanInstance), nullptr, &surface);
         if (surfaceResult != 0 || surface == 0)
-        {
-            delete viewportData;
             return;
-        }
 
-        viewportData->surface = vk::SurfaceKHR(reinterpret_cast<VkSurfaceKHR>(static_cast<uintptr_t>(surface)));
-
+        viewportData->surface = vk::SurfaceKHR((VkSurfaceKHR)static_cast<uintptr_t>(surface));
         viewportData->acquireFence = deviceManager->m_VulkanDevice.createFence(vk::FenceCreateInfo());
         viewportData->presentSemaphore = deviceManager->m_VulkanDevice.createSemaphore(vk::SemaphoreCreateInfo());
 
@@ -760,24 +749,19 @@ namespace ignite
             if (viewportData->presentSemaphore)
                 deviceManager->m_VulkanDevice.destroySemaphore(viewportData->presentSemaphore);
             deviceManager->m_VulkanInstance.destroySurfaceKHR(viewportData->surface);
-            delete viewportData;
             return;
         }
 
-        if (!CreateViewportSwapChainAndRenderTargetsVK(
-            viewportData,
-            *deviceManager,
-            static_cast<u32>(std::max(viewport->Size.x, 1.0f)),
-            static_cast<u32>(std::max(viewport->Size.y, 1.0f))))
+        if (!CreateViewportSwapChainAndRenderTargetsVK(viewportData.get(), *deviceManager,
+            static_cast<uint32_t>(std::max(viewport->Size.x, 1.0f)), static_cast<uint32_t>(std::max(viewport->Size.y, 1.0f))))
         {
             deviceManager->m_VulkanDevice.destroyFence(viewportData->acquireFence);
             deviceManager->m_VulkanDevice.destroySemaphore(viewportData->presentSemaphore);
             deviceManager->m_VulkanInstance.destroySurfaceKHR(viewportData->surface);
-            delete viewportData;
             return;
         }
 
-        viewport->RendererUserData = viewportData;
+        viewport->RendererUserData = viewportData.get();
     }
 
     void ImGui_NVRHI::RendererDestroyWindowVK(ImGuiViewport *viewport)
@@ -847,8 +831,8 @@ namespace ignite
         if (size.x <= 0.0f || size.y <= 0.0f)
             return;
 
-        const u32 requestedWidth = static_cast<u32>(size.x);
-        const u32 requestedHeight = static_cast<u32>(size.y);
+        const uint32_t requestedWidth = static_cast<uint32_t>(size.x);
+        const uint32_t requestedHeight = static_cast<uint32_t>(size.y);
 
         if (viewportData->hasPendingResize
             && viewportData->pendingWidth == requestedWidth
@@ -882,8 +866,8 @@ namespace ignite
 
         if (viewportData->hasPendingResize)
         {
-            const u32 width = viewportData->pendingWidth;
-            const u32 height = viewportData->pendingHeight;
+            const uint32_t width = viewportData->pendingWidth;
+            const uint32_t height = viewportData->pendingHeight;
 
             if (width > 0 && height > 0)
             {
@@ -980,7 +964,7 @@ namespace ignite
         return static_cast<ImGuiViewportRendererData_DX12 *>(viewport->RendererUserData);
     }
 
-    static bool CreateViewportRenderTargets(ImGuiViewportRendererData_DX12 *viewportData, u32 width, u32 height)
+    static bool CreateViewportRenderTargets(ImGuiViewportRendererData_DX12 *viewportData, uint32_t width, uint32_t height)
     {
         if (!viewportData || !viewportData->swapChain)
             return false;
@@ -990,7 +974,7 @@ namespace ignite
         viewportData->renderTargets.reserve(viewportData->swapChainDesc.BufferCount);
 
         DeviceManager_DX12 &deviceManager = DeviceManager_DX12::GetInstance();
-        for (u32 i = 0; i < viewportData->swapChainDesc.BufferCount; ++i)
+        for (uint32_t i = 0; i < viewportData->swapChainDesc.BufferCount; ++i)
         {
             HRESULT hr = viewportData->swapChain->GetBuffer(i, IID_PPV_ARGS(&viewportData->backBuffers[i]));
             if (FAILED(hr))
@@ -1027,10 +1011,10 @@ namespace ignite
         if (!hwnd)
             return;
 
-        auto *viewportData = new ImGuiViewportRendererData_DX12();
+        Ref<ImGuiViewportRendererData_DX12> viewportData = CreateRef<ImGuiViewportRendererData_DX12>();
         viewportData->swapChainDesc = deviceManager.m_SwapChainDesc;
-        viewportData->swapChainDesc.Width = static_cast<u32>(std::max(viewport->Size.x, 1.0f));
-        viewportData->swapChainDesc.Height = static_cast<u32>(std::max(viewport->Size.y, 1.0f));
+        viewportData->swapChainDesc.Width = static_cast<uint32_t>(std::max(viewport->Size.x, 1.0f));
+        viewportData->swapChainDesc.Height = static_cast<uint32_t>(std::max(viewport->Size.y, 1.0f));
 
         nvrhi::RefCountPtr<IDXGISwapChain1> swapChain1;
         HRESULT hr = deviceManager.m_DxgiFactory2->CreateSwapChainForHwnd(
@@ -1044,7 +1028,6 @@ namespace ignite
         LOG_ASSERT(SUCCEEDED(hr), "Failed to create ImGui viewport swap chain");
         if (FAILED(hr))
         {
-            delete viewportData;
             return;
         }
 
@@ -1052,20 +1035,15 @@ namespace ignite
         LOG_ASSERT(SUCCEEDED(hr), "Failed to query IDXGISwapChain3 for ImGui viewport");
         if (FAILED(hr))
         {
-            delete viewportData;
             return;
         }
 
-        if (!CreateViewportRenderTargets(
-            viewportData,
-            static_cast<u32>(std::max(viewport->Size.x, 1.0f)),
-            static_cast<u32>(std::max(viewport->Size.y, 1.0f))))
+        if (!CreateViewportRenderTargets(viewportData.get(), static_cast<uint32_t>(std::max(viewport->Size.x, 1.0f)), static_cast<uint32_t>(std::max(viewport->Size.y, 1.0f))))
         {
-            delete viewportData;
             return;
         }
 
-        viewport->RendererUserData = viewportData;
+        viewport->RendererUserData = viewportData.get();
     }
 
     void ImGui_NVRHI::RendererDestroyWindow(ImGuiViewport *viewport)
@@ -1095,8 +1073,8 @@ namespace ignite
         if (size.x <= 0.0f || size.y <= 0.0f)
             return;
 
-        const u32 requestedWidth = static_cast<u32>(size.x);
-        const u32 requestedHeight = static_cast<u32>(size.y);
+        const uint32_t requestedWidth = static_cast<uint32_t>(size.x);
+        const uint32_t requestedHeight = static_cast<uint32_t>(size.y);
 
         if (viewportData->hasPendingResize
             && viewportData->pendingWidth == requestedWidth
@@ -1129,8 +1107,8 @@ namespace ignite
 
         if (viewportData->hasPendingResize)
         {
-            const u32 width = viewportData->pendingWidth;
-            const u32 height = viewportData->pendingHeight;
+            const uint32_t width = viewportData->pendingWidth;
+            const uint32_t height = viewportData->pendingHeight;
 
             if (width > 0 && height > 0)
             {
@@ -1192,14 +1170,14 @@ namespace ignite
                 }
                 else
                 {
-                    LOG_WARN("Failed to resize ImGui viewport swap chain (HRESULT=0x{:08X}, size={}x{})", static_cast<u32>(hr), width, height);
+                    LOG_WARN("Failed to resize ImGui viewport swap chain (HRESULT=0x{:08X}, size={}x{})", static_cast<uint32_t>(hr), width, height);
                     viewportData->hasPendingResize = false;
                     return;
                 }
             }
         }
 
-        const u32 backBufferIndex = viewportData->swapChain->GetCurrentBackBufferIndex();
+        const uint32_t backBufferIndex = viewportData->swapChain->GetCurrentBackBufferIndex();
         if (backBufferIndex >= viewportData->renderTargets.size())
             return;
 
@@ -1227,7 +1205,7 @@ namespace ignite
 
         if (hr == DXGI_ERROR_INVALID_CALL || hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
         {
-            LOG_WARN("ImGui viewport present skipped during teardown/reset (HRESULT=0x{:08X})", static_cast<u32>(hr));
+            LOG_WARN("ImGui viewport present skipped during teardown/reset (HRESULT=0x{:08X})", static_cast<uint32_t>(hr));
             return;
         }
 

@@ -7,8 +7,7 @@
 #include "ignite/asset/asset.hpp"
 
 #include "animator.hpp"
-
-#include <glm/glm.hpp>
+#include "ignite/math/transform.hpp"
 
 namespace ignite
 {
@@ -28,8 +27,8 @@ namespace ignite
         float stateElapsed = 0.0f;
         float stateNormalized = 0.0f;
 
-        std::vector<TRS> localPoses;
-        std::vector<TRS> globalPoses;
+        std::vector<Transform> localPoses;
+        std::vector<Transform> globalPoses;
         std::vector<glm::mat4> finalTransforms; // per-instance GPU-ready bone transforms
     };
 

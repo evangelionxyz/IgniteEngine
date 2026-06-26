@@ -8,6 +8,8 @@
 #include "animator/animator.hpp"
 #include "keyframes.hpp"
 
+#include "ignite/math/transform.hpp"
+
 #include <string>
 #include <unordered_map>
 
@@ -19,17 +21,11 @@ namespace ignite
         AnimationChannel() = default;
 
         // S * (T/S)
-        TRS CalculateTRS(float timeInTicks, const glm::vec3& defaultTranslation, const glm::quat& defaultRotation, const glm::vec3& defaultScale);
-
-        glm::mat4 CalculateTransform(float timeInTicks, const glm::vec3 &defaultTranslation, const glm::quat &defaultRotation, const glm::vec3 &defaultScale);
+        Transform Calculate(float timeInTicks, const Transform& defaultTransform);
 
         Vec3Key translationKeys;
         QuatKey rotationKeys;
         Vec3Key scaleKeys;
-
-        glm::vec3 translation;
-        glm::vec3 scale;
-        glm::quat rotation;
     };
 
     class IGN_API SkeletalAnimation : public Asset

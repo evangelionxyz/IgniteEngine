@@ -23,14 +23,6 @@
 
 namespace ignite
 {
-
-    glm::mat4 TRSToMat4(const TRS& trs)
-    {
-        return glm::translate(glm::mat4(1.0f), trs.translation) *
-               glm::toMat4(trs.rotation) *
-               glm::scale(glm::mat4(1.0f), trs.scale);
-    }
-
     std::string AnimatorController::EvaluateTransitions(const std::string &currentState, float normalizedTime) const
     {
         for (const auto &tr : transitions)
@@ -379,14 +371,14 @@ namespace ignite
         for (size_t i = 0; i < jointCount; ++i)
         {
             const Joint &joint = skeleton->joints[i];
-            runtime.localPoses[i] = {joint.defaultTranslation, joint.defaultRotation, joint.defaultScale};
+            runtime.localPoses[i] = joint.defaultTransform;
         }
 
         // Apply animation channels to per-instance local poses
         for (auto &[jointIndex, channel] : animation->channels)
         {
             const Joint &joint = skeleton->joints[jointIndex];
-            runtime.localPoses[jointIndex] = channel.CalculateTRS(animTime, joint.defaultTranslation, joint.defaultRotation, joint.defaultScale);
+            runtime.localPoses[jointIndex] = channel.Calculate(animTime, joint.defaultTransform);
         }
 
         // Compute per-instance global poses using read-only skeleton hierarchy
@@ -399,8 +391,8 @@ namespace ignite
             }
             else
             {
-                const TRS& parent = runtime.globalPoses[joint.parentJointId];
-                TRS& global = runtime.globalPoses[i];
+                const Transform& parent = runtime.globalPoses[joint.parentJointId];
+                Transform &global = runtime.globalPoses[i];
                 global.translation = parent.translation + parent.rotation * (parent.scale * runtime.localPoses[i].translation);
                 global.rotation = parent.rotation * runtime.localPoses[i].rotation;
                 global.scale = parent.scale * runtime.localPoses[i].scale;
@@ -410,8 +402,7 @@ namespace ignite
         // Compute GPU-ready final transforms: globalPose -> mat4 * inverseBindPose
         for (size_t i = 0; i < jointCount; ++i)
         {
-            glm::mat4 globalMat = TRSToMat4(runtime.globalPoses[i]);
-            runtime.finalTransforms[i] = globalMat * skeleton->joints[i].inverseBindPose;
+            runtime.finalTransforms[i] = runtime.globalPoses[i].GetMatrix() * skeleton->joints[i].inverseBindPose;
         }
 
         return true;

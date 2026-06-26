@@ -4,7 +4,6 @@
 
 #include "renderer_2d.hpp"
 #include "ignite/graphics/render_target.hpp"
-#include "ignite/graphics/framebuffer_key.hpp"
 #include "ignite/scene/component.hpp"
 #include "ignite/graphics/buffers/constant_buffer.hpp"
 
@@ -25,60 +24,6 @@ namespace ignite
 {
     static glm::vec4 QUAD_POSITIONS[4];
     const uint8_t MAX_TEXTURE_BATCH_COUNT = 32;
-
-    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_LinePSOCache;
-    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_QuadPSOCache;
-    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_CirclePSOCache;
-    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_TextPSOCache;
-
-    struct CameraBindingKey
-    {
-        nvrhi::IBindingLayout *layout = nullptr;
-        nvrhi::IBuffer *cameraBuffer = nullptr;
-
-        bool operator==(const CameraBindingKey &other) const noexcept
-        {
-            return layout == other.layout && cameraBuffer == other.cameraBuffer;
-        }
-    };
-
-    struct CameraBindingKeyHash
-    {
-        size_t operator()(const CameraBindingKey &k) const noexcept
-        {
-            size_t h = std::hash<const void *>{}(k.layout);
-            h ^= (std::hash<const void *>{}(k.cameraBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-            return h;
-        }
-    };
-
-    struct CameraLightingBindingKey
-    {
-        nvrhi::IBindingLayout *layout = nullptr;
-        nvrhi::IBuffer *cameraBuffer = nullptr;
-        nvrhi::IBuffer *lightingBuffer = nullptr;
-
-        bool operator==(const CameraLightingBindingKey &other) const noexcept
-        {
-            return layout == other.layout && cameraBuffer == other.cameraBuffer && lightingBuffer == other.lightingBuffer;
-        }
-    };
-
-    struct CameraLightingBindingKeyHash
-    {
-        size_t operator()(const CameraLightingBindingKey &k) const noexcept
-        {
-            size_t h = std::hash<const void *>{}(k.layout);
-            h ^= (std::hash<const void *>{}(k.cameraBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-            h ^= (std::hash<const void *>{}(k.lightingBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-            return h;
-        }
-    };
-
-    static std::unordered_map<CameraLightingBindingKey, nvrhi::BindingSetHandle, CameraLightingBindingKeyHash> s_QuadBindingSetCache;
-    static std::unordered_map<CameraBindingKey, nvrhi::BindingSetHandle, CameraBindingKeyHash> s_LineBindingSetCache;
-    static std::unordered_map<CameraBindingKey, nvrhi::BindingSetHandle, CameraBindingKeyHash> s_CircleBindingSetCache;
-    static std::unordered_map<CameraLightingBindingKey, nvrhi::BindingSetHandle, CameraLightingBindingKeyHash> s_TextBindingSetCache;
 
     static constexpr uint32_t s_BatchGrowThresholdPercent = 90;
     static constexpr uint32_t s_BatchShrinkThresholdPercent = 30;
@@ -238,356 +183,6 @@ namespace ignite
         batch.lowUsageFrames = 0;
     }
 
-    // Helper to build a quad pipeline for a framebuffer (once) and cache it.
-    static Ref<GraphicsPipeline> GetQuadPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
-    {
-        IGN_PROFILE_FUNCTION();
-
-        auto key = MakeFramebufferKey(framebuffer);
-        auto it = s_QuadPSOCache.find(key);
-        if (it != s_QuadPSOCache.end())
-            return it->second;
-
-        s_QuadPSOCache.clear();
-        s_QuadBindingSetCache.clear();
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-        const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
-        bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
-
-        GraphicsPipelineParams params;
-        params.enableBlend = true;
-        params.enableDepthWrite = hasDepthAttachment;
-        params.enableDepthTest = hasDepthAttachment;
-        params.enableDepthStencil = false;
-        params.fillMode = fillMode;
-
-        // create binding layout
-        nvrhi::BindingLayoutDesc bindingLayoutDesc;
-        bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
-        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
-        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(1));
-        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
-
-        for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; i++)
-        {
-            bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(i));
-        }
-
-        nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
-
-        params.cullMode = nvrhi::RasterCullMode::None;
-        params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
-
-        Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_quad.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_quad.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
-
-        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
-        gp->SetShaders({ vertexShader, pixelShader })
-            .AddBindingLayout(bindingLayout)
-            .Build(framebuffer, params);
-
-        s_QuadPSOCache.emplace(key, gp);
-
-        return gp;
-    }
-
-    static Ref<GraphicsPipeline> GetTextPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
-    {
-        IGN_PROFILE_FUNCTION();
-
-        auto key = MakeFramebufferKey(framebuffer);
-        auto it = s_TextPSOCache.find(key);
-        if (it != s_TextPSOCache.end())
-            return it->second;
-
-        s_TextPSOCache.clear();
-        s_TextBindingSetCache.clear();
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-        const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
-        bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
-
-        GraphicsPipelineParams params;
-        params.enableBlend = true;
-        params.enableDepthWrite = hasDepthAttachment;
-        params.enableDepthTest = hasDepthAttachment;
-        params.enableDepthStencil = false;
-        params.fillMode = fillMode;
-
-        // create binding layout
-        nvrhi::BindingLayoutDesc bindingLayoutDesc;
-        bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
-        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
-        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(1));
-        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
-
-        for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; i++)
-        {
-            bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(i));
-        }
-
-        nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
-
-        params.cullMode = nvrhi::RasterCullMode::None;
-        params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
-
-        Ref<Shader> vertexShader = Shader::Create("resources/shaders/msdf_font.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/msdf_font.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
-
-        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
-        gp->SetShaders({ vertexShader, pixelShader })
-            .AddBindingLayout(bindingLayout)
-            .Build(framebuffer, params);
-
-        s_TextPSOCache.emplace(key, gp);
-
-        return gp;
-    }
-
-    // Helper to build a line pipeline for a framebuffer (once) and cache it.
-    static Ref<GraphicsPipeline> GetLinePipelineForFB(nvrhi::IFramebuffer *framebuffer)
-    {
-        IGN_PROFILE_FUNCTION();
-
-        auto key = MakeFramebufferKey(framebuffer);
-        auto it = s_LinePSOCache.find(key);
-        if (it != s_LinePSOCache.end())
-            return it->second;
-
-        s_LinePSOCache.clear();
-        s_LineBindingSetCache.clear();
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-        const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
-        bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
-
-        GraphicsPipelineParams params;
-        params.enableBlend = true;
-        params.enableDepthWrite = hasDepthAttachment;
-        params.enableDepthTest = hasDepthAttachment;
-        params.enableDepthStencil = false;
-        params.fillMode = nvrhi::RasterFillMode::Wireframe;
-        params.cullMode = nvrhi::RasterCullMode::None;
-        params.primitiveType = nvrhi::PrimitiveType::LineList;
-        params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
-
-        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
-        nvrhi::BindingLayoutDesc bindingLayoutDesc;
-        bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
-        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
-        nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
-
-        Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_line.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_line.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
-
-        gp->SetShaders({ vertexShader, pixelShader })
-            .AddBindingLayout(bindingLayout)
-            .Build(framebuffer, params);
-
-        s_LinePSOCache.emplace(key, gp);
-
-        return gp;
-    }
-
-    static Ref<GraphicsPipeline> GetCirclePipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
-    {
-        IGN_PROFILE_FUNCTION();
-
-        auto key = MakeFramebufferKey(framebuffer);
-        auto it = s_CirclePSOCache.find(key);
-        if (it != s_CirclePSOCache.end())
-            return it->second;
-
-        s_CirclePSOCache.clear();
-        s_CircleBindingSetCache.clear();
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-        const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
-        bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
-
-        GraphicsPipelineParams params;
-        params.enableBlend = true;
-        params.enableDepthWrite = hasDepthAttachment;
-        params.enableDepthTest = hasDepthAttachment;
-        params.enableDepthStencil = false;
-        params.fillMode = fillMode;
-        params.cullMode = nvrhi::RasterCullMode::None;
-        params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
-
-        nvrhi::BindingLayoutDesc bindingLayoutDesc;
-        bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
-        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
-
-        nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
-
-        Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_circle.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_circle.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
-
-        Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
-        gp->SetShaders({ vertexShader, pixelShader })
-            .AddBindingLayout(bindingLayout)
-            .Build(framebuffer, params);
-
-        s_CirclePSOCache.emplace(key, gp);
-
-        return gp;
-    }
-
-    static nvrhi::BindingSetHandle GetQuadBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &lightingBuffer)
-    {
-        IGN_PROFILE_FUNCTION();
-
-        CameraLightingBindingKey key{ bindingLayout, cameraBuffer ? cameraBuffer->GetHandle() : nullptr, lightingBuffer ? lightingBuffer->GetHandle() : nullptr };
-        auto it = s_QuadBindingSetCache.find(key);
-        if (it != s_QuadBindingSetCache.end())
-            return it->second;
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-        nvrhi::SamplerHandle sampler;
-        Ref<Texture> whiteTexture = Renderer::GetWhiteTexture();
-        for (uint8_t i = 1; i < MAX_TEXTURE_BATCH_COUNT; ++i)
-        {
-            if (i >= textures.size())
-                break;
-
-            Ref<Texture> tex = textures[i];
-            if (tex && tex.get() != whiteTexture.get() && tex->GetSampler())
-            {
-                sampler = tex->GetSampler();
-                break;
-            }
-        }
-
-        if (!sampler)
-        {
-            Ref<Texture> fallback = Renderer::GetWhiteTexture();
-            sampler = fallback ? fallback->GetSampler() : nullptr;
-        }
-
-        nvrhi::BindingSetDesc bindingSetDesc;
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, lightingBuffer->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
-        for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
-        {
-            Ref<Texture> tex = textures[i];
-            if (!tex)
-                tex = Renderer::GetWhiteTexture();
-            bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(i, tex->GetHandle()));
-        }
-
-        nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
-        LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
-
-        s_QuadBindingSetCache.emplace(key, bindingSet);
-
-        return bindingSet;
-    }
-
-    static nvrhi::BindingSetHandle GetTextBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &lightingBuffer)
-    {
-        IGN_PROFILE_FUNCTION();
-
-        CameraLightingBindingKey key{ bindingLayout, cameraBuffer ? cameraBuffer->GetHandle() : nullptr, lightingBuffer ? lightingBuffer->GetHandle() : nullptr };
-        auto it = s_TextBindingSetCache.find(key);
-        if (it != s_TextBindingSetCache.end())
-            return it->second;
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-       nvrhi::SamplerHandle sampler;
-        Ref<Texture> whiteTexture = Renderer::GetWhiteTexture();
-        for (uint8_t i = 1; i < MAX_TEXTURE_BATCH_COUNT; ++i)
-        {
-            if (i >= textures.size())
-                break;
-
-            Ref<Texture> tex = textures[i];
-           if (tex && tex.get() != whiteTexture.get() && tex->GetSampler())
-            {
-                sampler = tex->GetSampler();
-                break;
-            }
-        }
-
-        if (!sampler)
-        {
-            Ref<Texture> fallback = Renderer::GetWhiteTexture();
-            sampler = fallback ? fallback->GetSampler() : nullptr;
-        }
-
-        nvrhi::BindingSetDesc bindingSetDesc;
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, lightingBuffer->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
-        for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
-        {
-            Ref<Texture> tex = textures[i];
-            if (!tex)
-                tex = Renderer::GetWhiteTexture();
-            bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(i, tex->GetHandle()));
-        }
-
-        nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
-        LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
-
-        s_TextBindingSetCache.emplace(key, bindingSet);
-
-        return bindingSet;
-    }
-
-    static nvrhi::BindingSetHandle GetLineBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer)
-    {
-        IGN_PROFILE_FUNCTION();
-
-        CameraBindingKey key{ bindingLayout, cameraBuffer ? cameraBuffer->GetHandle() : nullptr };
-        auto it = s_LineBindingSetCache.find(key);
-        if (it != s_LineBindingSetCache.end())
-            return it->second;
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-        // create binding set
-        nvrhi::BindingSetDesc bindingSetDesc;
-        // add constant buffer
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
-
-        nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
-        LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
-
-        s_LineBindingSetCache.emplace(key, bindingSet);
-
-        return bindingSet;
-    }
-
-    static nvrhi::BindingSetHandle GetCircleBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer)
-    {
-        IGN_PROFILE_FUNCTION();
-
-        CameraBindingKey key{ bindingLayout, cameraBuffer ? cameraBuffer->GetHandle() : nullptr };
-        auto it = s_CircleBindingSetCache.find(key);
-        if (it != s_CircleBindingSetCache.end())
-            return it->second;
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-        nvrhi::BindingSetDesc bindingSetDesc;
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
-
-        nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
-        LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
-
-        s_CircleBindingSetCache.emplace(key, bindingSet);
-
-        return bindingSet;
-    }
-
     Ref<Renderer2D> Renderer2D::Create()
     {
         return CreateRef<Renderer2D>();
@@ -601,20 +196,16 @@ namespace ignite
         InitTextData();
 
         m_Material2DLightingBuffer = ConstantBuffer::Create(sizeof(Material2DLighting_GPUData), false, 1, "Material2D Lighting Buffer");
-        m_Material2DLightingData.pointLightCount = 0;
+
+        m_Material2DLightingData = CreateRef<Material2DLighting_GPUData>();
+        m_Material2DLightingData->pointLightCount = 0;
+
+        m_PreRenderCache = CreateRef<PreRenderCacheData>();
     }
 
     Renderer2D::~Renderer2D()
     {
-        s_QuadPSOCache.clear();
-        s_LinePSOCache.clear();
-        s_CirclePSOCache.clear();
-        s_TextPSOCache.clear();
-
-        s_QuadBindingSetCache.clear();
-        s_LineBindingSetCache.clear();
-        s_CircleBindingSetCache.clear();
-        s_TextBindingSetCache.clear();
+        ClearPipelineCache();
 
         m_TextureResolveCache.clear();
         m_Material2DResolveCache.clear();
@@ -672,35 +263,35 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        m_PreRenderCache.valid = true;
-        m_PreRenderCache.lightingData = m_Material2DLightingData;
+		m_PreRenderCache->valid = true;
+        m_PreRenderCache->lightingData = m_Material2DLightingData;
 
         const uint32_t circleVertexCount = m_CircleBatch.vertexBufferPtr
             ? static_cast<uint32_t>(m_CircleBatch.vertexBufferPtr - m_CircleBatch.vertexBufferBase)
             : 0;
-        m_PreRenderCache.circleVertices.assign(m_CircleBatch.vertexBufferBase, m_CircleBatch.vertexBufferBase + circleVertexCount);
-        m_PreRenderCache.circleIndexCount = m_CircleBatch.indexCount;
+        m_PreRenderCache->circleVertices.assign(m_CircleBatch.vertexBufferBase, m_CircleBatch.vertexBufferBase + circleVertexCount);
+        m_PreRenderCache->circleIndexCount = m_CircleBatch.indexCount;
 
         const uint32_t quadVertexCount = m_QuadBatch.vertexBufferPtr
             ? static_cast<uint32_t>(m_QuadBatch.vertexBufferPtr - m_QuadBatch.vertexBufferBase)
             : 0;
-        m_PreRenderCache.quadVertices.assign(m_QuadBatch.vertexBufferBase, m_QuadBatch.vertexBufferBase + quadVertexCount);
-        m_PreRenderCache.quadIndexCount = m_QuadBatch.indexCount;
-        m_PreRenderCache.quadTextureSlots = m_QuadBatch.textureSlots;
+        m_PreRenderCache->quadVertices.assign(m_QuadBatch.vertexBufferBase, m_QuadBatch.vertexBufferBase + quadVertexCount);
+        m_PreRenderCache->quadIndexCount = m_QuadBatch.indexCount;
+        m_PreRenderCache->quadTextureSlots = m_QuadBatch.textureSlots;
 
         const uint32_t textVertexCount = m_TextBatch.vertexBufferPtr
             ? static_cast<uint32_t>(m_TextBatch.vertexBufferPtr - m_TextBatch.vertexBufferBase)
             : 0;
-        m_PreRenderCache.textVertices.assign(m_TextBatch.vertexBufferBase, m_TextBatch.vertexBufferBase + textVertexCount);
-        m_PreRenderCache.textIndexCount = m_TextBatch.indexCount;
-        m_PreRenderCache.textTextureSlots = m_TextBatch.textureSlots;
+        m_PreRenderCache->textVertices.assign(m_TextBatch.vertexBufferBase, m_TextBatch.vertexBufferBase + textVertexCount);
+        m_PreRenderCache->textIndexCount = m_TextBatch.indexCount;
+        m_PreRenderCache->textTextureSlots = m_TextBatch.textureSlots;
     }
 
     bool Renderer2D::ReplayPreRenderCache(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const Ref<ConstantBuffer> &cameraBuffer)
     {
         IGN_PROFILE_FUNCTION();
 
-        if (!m_PreRenderCache.valid || !cmd || !framebuffer)
+        if (!m_PreRenderCache->valid || !cmd || !framebuffer)
         {
             return false;
         }
@@ -709,14 +300,14 @@ namespace ignite
 
         if (m_Material2DLightingBuffer)
         {
-            m_Material2DLightingBuffer->SetData(m_Cmd, Buffer(&m_PreRenderCache.lightingData, sizeof(m_PreRenderCache.lightingData)));
+            m_Material2DLightingBuffer->SetData(m_Cmd, Buffer(&m_PreRenderCache->lightingData, sizeof(m_PreRenderCache->lightingData)));
         }
 
         const nvrhi::Viewport &viewport = framebuffer->getFramebufferInfo().getViewport();
 
-        if (m_PreRenderCache.circleIndexCount > 0 && !m_PreRenderCache.circleVertices.empty())
+        if (m_PreRenderCache->circleIndexCount > 0 && !m_PreRenderCache->circleVertices.empty())
         {
-            m_CircleBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache.circleVertices.data(), m_PreRenderCache.circleVertices.size() * sizeof(Vertex2DCircle)));
+            m_CircleBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache->circleVertices.data(), m_PreRenderCache->circleVertices.size() * sizeof(Vertex2DCircle)));
 
             Ref<GraphicsPipeline> gp = GetCirclePipelineForFB(framebuffer, m_FillMode);
             nvrhi::BindingSetHandle bindingSet = GetCircleBindingSet(gp->GetBindingLayout(0), cameraBuffer);
@@ -731,17 +322,17 @@ namespace ignite
             m_Cmd->setGraphicsState(graphicsState);
 
             nvrhi::DrawArguments args;
-            args.vertexCount = m_PreRenderCache.circleIndexCount;
+            args.vertexCount = m_PreRenderCache->circleIndexCount;
             args.instanceCount = 1;
             m_Cmd->drawIndexed(args);
         }
 
-        if (m_PreRenderCache.quadIndexCount > 0 && !m_PreRenderCache.quadVertices.empty())
+        if (m_PreRenderCache->quadIndexCount > 0 && !m_PreRenderCache->quadVertices.empty())
         {
-            m_QuadBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache.quadVertices.data(), m_PreRenderCache.quadVertices.size() * sizeof(Vertex2DQuad)));
+            m_QuadBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache->quadVertices.data(), m_PreRenderCache->quadVertices.size() * sizeof(Vertex2DQuad)));
 
             Ref<GraphicsPipeline> gp = GetQuadPipelineForFB(framebuffer, m_FillMode);
-            nvrhi::BindingSetHandle bindingSet = GetQuadBindingSet(gp->GetBindingLayout(0), m_PreRenderCache.quadTextureSlots, cameraBuffer, m_Material2DLightingBuffer);
+            nvrhi::BindingSetHandle bindingSet = GetQuadBindingSet(gp->GetBindingLayout(0), m_PreRenderCache->quadTextureSlots, cameraBuffer, m_Material2DLightingBuffer);
 
             const auto graphicsState = nvrhi::GraphicsState()
                 .setPipeline(gp->GetHandle())
@@ -753,17 +344,17 @@ namespace ignite
             m_Cmd->setGraphicsState(graphicsState);
 
             nvrhi::DrawArguments args;
-            args.vertexCount = m_PreRenderCache.quadIndexCount;
+            args.vertexCount = m_PreRenderCache->quadIndexCount;
             args.instanceCount = 1;
             m_Cmd->drawIndexed(args);
         }
 
-        if (m_PreRenderCache.textIndexCount > 0 && !m_PreRenderCache.textVertices.empty())
+        if (m_PreRenderCache->textIndexCount > 0 && !m_PreRenderCache->textVertices.empty())
         {
-            m_TextBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache.textVertices.data(), m_PreRenderCache.textVertices.size() * sizeof(VertexText)));
+            m_TextBatch.vertexBuffer->SetData(m_Cmd, Buffer(m_PreRenderCache->textVertices.data(), m_PreRenderCache->textVertices.size() * sizeof(VertexText)));
 
             Ref<GraphicsPipeline> gp = GetTextPipelineForFB(framebuffer, m_FillMode);
-            nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_PreRenderCache.textTextureSlots, cameraBuffer, m_Material2DLightingBuffer);
+            nvrhi::BindingSetHandle bindingSet = GetTextBindingSet(gp->GetBindingLayout(0), m_PreRenderCache->textTextureSlots, cameraBuffer, m_Material2DLightingBuffer);
 
             const auto graphicsState = nvrhi::GraphicsState()
                 .setPipeline(gp->GetHandle())
@@ -775,7 +366,7 @@ namespace ignite
             m_Cmd->setGraphicsState(graphicsState);
 
             nvrhi::DrawArguments args;
-            args.vertexCount = m_PreRenderCache.textIndexCount;
+            args.vertexCount = m_PreRenderCache->textIndexCount;
             args.instanceCount = 1;
             m_Cmd->drawIndexed(args);
         }
@@ -785,15 +376,15 @@ namespace ignite
 
     void Renderer2D::InvalidatePreRenderCache()
     {
-        m_PreRenderCache.valid = false;
-        m_PreRenderCache.circleVertices.clear();
-        m_PreRenderCache.quadVertices.clear();
-        m_PreRenderCache.textVertices.clear();
-        m_PreRenderCache.quadTextureSlots.clear();
-        m_PreRenderCache.textTextureSlots.clear();
-        m_PreRenderCache.circleIndexCount = 0;
-        m_PreRenderCache.quadIndexCount = 0;
-        m_PreRenderCache.textIndexCount = 0;
+        m_PreRenderCache->valid = false;
+        m_PreRenderCache->circleVertices.clear();
+        m_PreRenderCache->quadVertices.clear();
+        m_PreRenderCache->textVertices.clear();
+        m_PreRenderCache->quadTextureSlots.clear();
+        m_PreRenderCache->textTextureSlots.clear();
+        m_PreRenderCache->circleIndexCount = 0;
+        m_PreRenderCache->quadIndexCount = 0;
+        m_PreRenderCache->textIndexCount = 0;
     }
 
     void Renderer2D::InitQuadData()
@@ -957,10 +548,15 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        s_LinePSOCache.clear();
-        s_QuadPSOCache.clear();
-        s_CirclePSOCache.clear();
-        s_TextPSOCache.clear();
+		m_LinePSOCache.clear();
+		m_QuadPSOCache.clear();
+		m_CirclePSOCache.clear();
+		m_TextPSOCache.clear();
+
+		m_QuadBindingSetCache.clear();
+		m_LineBindingSetCache.clear();
+		m_CircleBindingSetCache.clear();
+		m_TextBindingSetCache.clear();
     }
 
     void Renderer2D::Begin(nvrhi::ICommandList *cmd)
@@ -1403,15 +999,15 @@ namespace ignite
 
     void Renderer2D::SetPointLights2D(const std::vector<PointLight2D_GPUData> &pointLights)
     {
-        m_Material2DLightingData.pointLightCount = std::min<uint32_t>(static_cast<uint32_t>(pointLights.size()), MAX_POINT_LIGHTS_2D);
-        for (uint32_t i = 0; i < m_Material2DLightingData.pointLightCount; ++i)
+        m_Material2DLightingData->pointLightCount = std::min<uint32_t>(static_cast<uint32_t>(pointLights.size()), MAX_POINT_LIGHTS_2D);
+        for (uint32_t i = 0; i < m_Material2DLightingData->pointLightCount; ++i)
         {
-            m_Material2DLightingData.pointLights[i] = pointLights[i];
+            m_Material2DLightingData->pointLights[i] = pointLights[i];
         }
 
-        for (uint32_t i = m_Material2DLightingData.pointLightCount; i < MAX_POINT_LIGHTS_2D; ++i)
+        for (uint32_t i = m_Material2DLightingData->pointLightCount; i < MAX_POINT_LIGHTS_2D; ++i)
         {
-            m_Material2DLightingData.pointLights[i] = PointLight2D_GPUData{};
+            m_Material2DLightingData->pointLights[i] = PointLight2D_GPUData{};
         }
 
         m_Material2DLightingDirty = true;
@@ -1594,7 +1190,7 @@ namespace ignite
             m_QuadBatch.textureSlots[m_QuadBatch.textureSlotIndex] = texture;
             m_QuadBatch.textureSlotIndex++;
 
-            s_QuadBindingSetCache.clear(); // reset (so we can recreate it)
+            m_QuadBindingSetCache.clear(); // reset (so we can recreate it)
         }
 
         return textureIndex;
@@ -1632,9 +1228,359 @@ namespace ignite
             m_TextBatch.textureSlots[m_TextBatch.textureSlotIndex] = texture;
             m_TextBatch.textureSlotIndex++;
 
-            s_TextBindingSetCache.clear(); // reset (so we can recreate it)
+            m_TextBindingSetCache.clear(); // reset (so we can recreate it)
         }
 
         return textureIndex;
     }
+
+	// Helper to build a quad pipeline for a framebuffer (once) and cache it.
+	Ref<GraphicsPipeline> Renderer2D::GetQuadPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+	{
+		IGN_PROFILE_FUNCTION();
+
+		auto key = MakeFramebufferKey(framebuffer);
+		auto it = m_QuadPSOCache.find(key);
+		if (it != m_QuadPSOCache.end())
+			return it->second;
+
+		m_QuadPSOCache.clear();
+		m_QuadBindingSetCache.clear();
+
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+
+		GraphicsPipelineParams params;
+		params.enableBlend = true;
+		params.enableDepthWrite = hasDepthAttachment;
+		params.enableDepthTest = hasDepthAttachment;
+		params.enableDepthStencil = false;
+		params.fillMode = fillMode;
+
+		// create binding layout
+		nvrhi::BindingLayoutDesc bindingLayoutDesc;
+		bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
+		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
+		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(1));
+		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
+
+		for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; i++)
+		{
+			bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(i));
+		}
+
+		nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
+
+		params.cullMode = nvrhi::RasterCullMode::None;
+		params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
+
+		Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_quad.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
+		Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_quad.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
+
+		Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
+		gp->SetShaders({ vertexShader, pixelShader })
+			.AddBindingLayout(bindingLayout)
+			.Build(framebuffer, params);
+
+		m_QuadPSOCache.emplace(key, gp);
+
+		return gp;
+	}
+
+	Ref<GraphicsPipeline> Renderer2D::GetTextPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+	{
+		IGN_PROFILE_FUNCTION();
+
+		auto key = MakeFramebufferKey(framebuffer);
+		auto it = m_TextPSOCache.find(key);
+		if (it != m_TextPSOCache.end())
+			return it->second;
+
+		m_TextPSOCache.clear();
+		m_TextBindingSetCache.clear();
+
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+
+		GraphicsPipelineParams params;
+		params.enableBlend = true;
+		params.enableDepthWrite = hasDepthAttachment;
+		params.enableDepthTest = hasDepthAttachment;
+		params.enableDepthStencil = false;
+		params.fillMode = fillMode;
+
+		// create binding layout
+		nvrhi::BindingLayoutDesc bindingLayoutDesc;
+		bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
+		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
+		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(1));
+		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0));
+
+		for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; i++)
+		{
+			bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(i));
+		}
+
+		nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
+
+		params.cullMode = nvrhi::RasterCullMode::None;
+		params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
+
+		Ref<Shader> vertexShader = Shader::Create("resources/shaders/msdf_font.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
+		Ref<Shader> pixelShader = Shader::Create("resources/shaders/msdf_font.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
+
+		Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
+		gp->SetShaders({ vertexShader, pixelShader })
+			.AddBindingLayout(bindingLayout)
+			.Build(framebuffer, params);
+
+		m_TextPSOCache.emplace(key, gp);
+
+		return gp;
+	}
+
+	Ref<GraphicsPipeline> Renderer2D::GetCirclePipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+	{
+		IGN_PROFILE_FUNCTION();
+
+		auto key = MakeFramebufferKey(framebuffer);
+		auto it = m_CirclePSOCache.find(key);
+		if (it != m_CirclePSOCache.end())
+			return it->second;
+
+		m_CirclePSOCache.clear();
+		m_CircleBindingSetCache.clear();
+
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+
+		GraphicsPipelineParams params;
+		params.enableBlend = true;
+		params.enableDepthWrite = hasDepthAttachment;
+		params.enableDepthTest = hasDepthAttachment;
+		params.enableDepthStencil = false;
+		params.fillMode = fillMode;
+		params.cullMode = nvrhi::RasterCullMode::None;
+		params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
+
+		nvrhi::BindingLayoutDesc bindingLayoutDesc;
+		bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
+		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
+
+		nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
+
+		Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_circle.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
+		Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_circle.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
+
+		Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
+		gp->SetShaders({ vertexShader, pixelShader })
+			.AddBindingLayout(bindingLayout)
+			.Build(framebuffer, params);
+
+		m_CirclePSOCache.emplace(key, gp);
+
+		return gp;
+	}
+
+	// Helper to build a line pipeline for a framebuffer (once) and cache it.
+	Ref<GraphicsPipeline> Renderer2D::GetLinePipelineForFB(nvrhi::IFramebuffer *framebuffer)
+	{
+		IGN_PROFILE_FUNCTION();
+
+		auto key = MakeFramebufferKey(framebuffer);
+		auto it = m_LinePSOCache.find(key);
+		if (it != m_LinePSOCache.end())
+			return it->second;
+
+		m_LinePSOCache.clear();
+		m_LineBindingSetCache.clear();
+
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+
+		GraphicsPipelineParams params;
+		params.enableBlend = true;
+		params.enableDepthWrite = hasDepthAttachment;
+		params.enableDepthTest = hasDepthAttachment;
+		params.enableDepthStencil = false;
+		params.fillMode = nvrhi::RasterFillMode::Wireframe;
+		params.cullMode = nvrhi::RasterCullMode::None;
+		params.primitiveType = nvrhi::PrimitiveType::LineList;
+		params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
+
+		Ref<GraphicsPipeline> gp = GraphicsPipeline::Create();
+		nvrhi::BindingLayoutDesc bindingLayoutDesc;
+		bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
+		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
+		nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
+
+		Ref<Shader> vertexShader = Shader::Create("resources/shaders/batch_2d_line.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
+		Ref<Shader> pixelShader = Shader::Create("resources/shaders/batch_2d_line.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
+
+		gp->SetShaders({ vertexShader, pixelShader })
+			.AddBindingLayout(bindingLayout)
+			.Build(framebuffer, params);
+
+		m_LinePSOCache.emplace(key, gp);
+
+		return gp;
+	}
+
+	nvrhi::BindingSetHandle Renderer2D::GetQuadBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &lightingBuffer)
+	{
+		IGN_PROFILE_FUNCTION();
+
+		CameraLightingBindingKey key{ bindingLayout, cameraBuffer ? cameraBuffer->GetHandle() : nullptr, lightingBuffer ? lightingBuffer->GetHandle() : nullptr };
+		auto it = m_QuadBindingSetCache.find(key);
+		if (it != m_QuadBindingSetCache.end())
+			return it->second;
+
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+		nvrhi::SamplerHandle sampler;
+		Ref<Texture> whiteTexture = Renderer::GetWhiteTexture();
+		for (uint8_t i = 1; i < MAX_TEXTURE_BATCH_COUNT; ++i)
+		{
+			if (i >= textures.size())
+				break;
+
+			Ref<Texture> tex = textures[i];
+			if (tex && tex.get() != whiteTexture.get() && tex->GetSampler())
+			{
+				sampler = tex->GetSampler();
+				break;
+			}
+		}
+
+		if (!sampler)
+		{
+			Ref<Texture> fallback = Renderer::GetWhiteTexture();
+			sampler = fallback ? fallback->GetSampler() : nullptr;
+		}
+
+		nvrhi::BindingSetDesc bindingSetDesc;
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, lightingBuffer->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
+		for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
+		{
+			Ref<Texture> tex = textures[i];
+			if (!tex)
+				tex = Renderer::GetWhiteTexture();
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(i, tex->GetHandle()));
+		}
+
+		nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
+		LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
+
+		m_QuadBindingSetCache.emplace(key, bindingSet);
+
+		return bindingSet;
+	}
+
+	nvrhi::BindingSetHandle Renderer2D::GetTextBindingSet(nvrhi::IBindingLayout *bindingLayout, const std::vector<Ref<Texture>> &textures, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &lightingBuffer)
+	{
+		IGN_PROFILE_FUNCTION();
+
+		CameraLightingBindingKey key{ bindingLayout, cameraBuffer ? cameraBuffer->GetHandle() : nullptr, lightingBuffer ? lightingBuffer->GetHandle() : nullptr };
+		auto it = m_TextBindingSetCache.find(key);
+		if (it != m_TextBindingSetCache.end())
+			return it->second;
+
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+		nvrhi::SamplerHandle sampler;
+		Ref<Texture> whiteTexture = Renderer::GetWhiteTexture();
+		for (uint8_t i = 1; i < MAX_TEXTURE_BATCH_COUNT; ++i)
+		{
+			if (i >= textures.size())
+				break;
+
+			Ref<Texture> tex = textures[i];
+			if (tex && tex.get() != whiteTexture.get() && tex->GetSampler())
+			{
+				sampler = tex->GetSampler();
+				break;
+			}
+		}
+
+		if (!sampler)
+		{
+			Ref<Texture> fallback = Renderer::GetWhiteTexture();
+			sampler = fallback ? fallback->GetSampler() : nullptr;
+		}
+
+		nvrhi::BindingSetDesc bindingSetDesc;
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, lightingBuffer->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
+		for (uint8_t i = 0; i < MAX_TEXTURE_BATCH_COUNT; ++i)
+		{
+			Ref<Texture> tex = textures[i];
+			if (!tex)
+				tex = Renderer::GetWhiteTexture();
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(i, tex->GetHandle()));
+		}
+
+		nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
+		LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
+
+		m_TextBindingSetCache.emplace(key, bindingSet);
+
+		return bindingSet;
+	}
+
+	nvrhi::BindingSetHandle Renderer2D::GetLineBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer)
+	{
+		IGN_PROFILE_FUNCTION();
+
+		CameraBindingKey key{ bindingLayout, cameraBuffer ? cameraBuffer->GetHandle() : nullptr };
+		auto it = m_LineBindingSetCache.find(key);
+		if (it != m_LineBindingSetCache.end())
+			return it->second;
+
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+		// create binding set
+		nvrhi::BindingSetDesc bindingSetDesc;
+		// add constant buffer
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
+
+		nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
+		LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
+
+		m_LineBindingSetCache.emplace(key, bindingSet);
+
+		return bindingSet;
+	}
+
+	nvrhi::BindingSetHandle Renderer2D::GetCircleBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer)
+	{
+		IGN_PROFILE_FUNCTION();
+
+		CameraBindingKey key{ bindingLayout, cameraBuffer ? cameraBuffer->GetHandle() : nullptr };
+		auto it = m_CircleBindingSetCache.find(key);
+		if (it != m_CircleBindingSetCache.end())
+			return it->second;
+
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+		nvrhi::BindingSetDesc bindingSetDesc;
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
+
+		nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
+		LOG_ASSERT(bindingSet, "[Renderer 2D] Failed to create binding");
+
+		m_CircleBindingSetCache.emplace(key, bindingSet);
+
+		return bindingSet;
+	}
 }

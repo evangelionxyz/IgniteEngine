@@ -10,14 +10,6 @@
 
 namespace ignite
 {
-
-    glm::mat4 JointSocket::GetLocalTransform() const
-    {
-        return glm::translate(glm::mat4(1.0f), localTranslation)
-            * glm::toMat4(localRotation)
-            * glm::scale(glm::mat4(1.0f), localScale);
-    }
-
     std::vector<glm::mat4> Skeleton::GetFinalJointTransforms()
     {
         std::vector<glm::mat4> result;
@@ -75,7 +67,7 @@ namespace ignite
         }
 
         const JointSocket &socket = sockets[static_cast<size_t>(socketIndex)];
-        const glm::mat4 socketLocal = socket.GetLocalTransform();
+        const glm::mat4 socketLocal = socket.local.GetMatrix();
         if (socket.parentJointId < 0 || socket.parentJointId >= static_cast<int32_t>(joints.size()))
         {
             return socketLocal;

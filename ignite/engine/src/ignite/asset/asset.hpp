@@ -15,6 +15,8 @@
 namespace ignite
 {
     class Serializer;
+    class Project;
+
     using AssetHandle = UUID;
 
     enum class AssetType
@@ -54,7 +56,7 @@ namespace ignite
         AnimatorController2D, // .ac2d    - 2D animator state machine
     };
 
-    inline std::string AssetTypeToString(AssetType type)
+    static inline std::string AssetTypeToString(AssetType type)
     {
         switch (type)
         {
@@ -88,7 +90,7 @@ namespace ignite
         }
     }
 
-    inline AssetType AssetTypeFromString(const std::string &typeStr)
+    static inline AssetType AssetTypeFromString(const std::string &typeStr)
     {
         if (typeStr == "Metadata") return AssetType::Metadata;
         if (typeStr == "Shader") return AssetType::Shader;
@@ -120,7 +122,7 @@ namespace ignite
         return AssetType::Invalid;
     }
 
-    inline std::map<std::string, AssetType> s_AssetExtensionMap =
+    static inline std::map<std::string, AssetType> s_AssetExtensionMap =
     {
         { ".meta", AssetType::Metadata },
         { ".hlsl", AssetType::Shader },
@@ -171,7 +173,7 @@ namespace ignite
     };
 
     // Binary Extensions
-    inline std::string GetAssetExtensionFromType(const AssetType type)
+    static inline std::string GetAssetExtensionFromType(const AssetType type)
     {
         switch (type)
         {
@@ -208,6 +210,27 @@ namespace ignite
 
         return AssetType::Invalid;
     }
+
+	struct AssetResolveKey
+	{
+		Project *project = nullptr;
+		AssetHandle handle = AssetHandle(0);
+
+		bool operator==(const AssetResolveKey &other) const noexcept
+		{
+			return project == other.project && handle == other.handle;
+		}
+	};
+
+	struct AssetResolveKeyHash
+	{
+		size_t operator()(const AssetResolveKey &key) const noexcept
+		{
+			size_t h = std::hash<const void *>{}(key.project);
+			h ^= (std::hash<AssetHandle>{}(key.handle) + 0x9e3779b9 + (h << 6) + (h >> 2));
+			return h;
+		}
+	};
 
     class IGN_API AssetMetaData
     {

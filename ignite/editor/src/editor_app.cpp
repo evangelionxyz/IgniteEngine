@@ -24,9 +24,13 @@ namespace ignite
 {
     Application *CreateApplication(const ApplicationCommandLineArgs args)
     {
-        ApplicationCreateInfo createInfo;
+        ApplicationCreateInfo createInfo{};
+        
+        createInfo.version = version::MakeVersion(0, 1, 0);
+        
         createInfo.cmdLineArgs = args;
         createInfo.name = "Ignite Editor";
+        // Engine Versioning
         createInfo.width = 1640;
         createInfo.height = 940;
         createInfo.useGui = true;

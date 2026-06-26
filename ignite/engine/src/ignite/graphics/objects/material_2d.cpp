@@ -1,6 +1,7 @@
 // Copyright(c) 2026 Evangelion Manuhutu
 
 #include "material_2d.hpp"
+#include "ignite/core/application.hpp"
 #include "ignite/serializer/serializer.hpp"
 
 namespace ignite
@@ -13,7 +14,7 @@ namespace ignite
 		sr.BeginMap();
 		{
 			sr.BeginMap("Material2D");
-			sr.AddKeyValue("Version", ENGINE_VERSION);
+			sr.AddKeyValue("Version", Application::GetVersion());
 			sr.AddKeyValue("Name", name);
 			sr.AddKeyValue("TextureHandle", static_cast<uint64_t>(textureHandle));
 			sr.AddKeyValue("BaseColor", data.baseColor);

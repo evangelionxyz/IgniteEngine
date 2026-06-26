@@ -33,7 +33,7 @@ namespace ignite
             return;
         }
 
-        const std::array vertices
+        static constexpr std::array screenVertices
         {
             VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
             VertexScreen{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },
@@ -44,11 +44,54 @@ namespace ignite
             VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
         };
 
-        m_CompositeVertexBuffer->SetData(cmd, Buffer((void *)vertices.data(), sizeof(vertices)));
+        m_CompositeVertexBuffer->SetData(cmd, Buffer((void *)screenVertices.data(), sizeof(screenVertices)));
         m_CompositeVertexBufferUploadPending = false;
     }
 
-    ISceneRenderer::~ISceneRenderer()
+	void ISceneRenderer::EnsureSceneEnvironmentMap()
+	{
+		if (!m_WorldEnvironment)
+		{
+			m_WorldEnvironment = m_Scene->GetActiveWorldEnvironment();
+			m_WorldEnvironment->dirtyEnvironment = true;
+		}
+
+		if (m_WorldEnvironment)
+		{
+			if (!m_WorldEnvironment->environment)
+			{
+				m_WorldEnvironment->environment = Environment::Create();
+				m_WorldEnvironment->dirtyEnvironment = true;
+				m_WorldEnvironment->gpuInitialized = false;
+			}
+
+			const bool isHDRLoaded = m_WorldEnvironment->hdrHandle != AssetHandle(0);
+			if (m_WorldEnvironment->dirtyEnvironment && m_WorldEnvironment->environment)
+			{
+				Ref<Texture> hdrTexture;
+				if (isHDRLoaded)
+				{
+					hdrTexture = m_Scene->GetProject()->GetAssetManager()->GetAsset<Texture>(m_WorldEnvironment->hdrHandle);
+					if (hdrTexture && hdrTexture->IsReady())
+					{
+						m_WorldEnvironment->environment->SetTexture(hdrTexture);
+					}
+				}
+				else
+				{
+					m_WorldEnvironment->environment->SetTexture(Renderer::GetBlackTexture());
+				}
+
+				// Keep retrieve HDR If it is loaded, but still empty
+				if (isHDRLoaded && hdrTexture == nullptr || (hdrTexture && !hdrTexture->IsReady()))
+					m_WorldEnvironment->dirtyEnvironment = true;
+				else
+					m_WorldEnvironment->dirtyEnvironment = false;
+			}
+		}
+	}
+
+	ISceneRenderer::~ISceneRenderer()
     {
         GPUUploadSync::DeviceWaitIdle(m_Device);
 
@@ -100,12 +143,7 @@ namespace ignite
 
     Ref<Texture> ISceneRenderer::GetCascadedShadowMapDepthTexture() const
     {
-        if (m_CascadedShadowMap)
-        {
-            return m_CascadedShadowMap->GetDepthTexture();
-        }
-
-        return nullptr;
+        return m_CascadedShadowMap ? m_CascadedShadowMap->GetDepthTexture() : nullptr;
     }
 
     Ref<CascadedShadowMap> ISceneRenderer::GetCascadedShadowMap()

@@ -18,7 +18,6 @@
 #include "ignite/graphics/objects/shadow_map.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/core/profiler/profiler.hpp"
-#include "ignite/graphics/framebuffer_key.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/ui/widget.hpp"
@@ -35,7 +34,8 @@
 
 namespace ignite
 {
-    static const GPUSkeletonBuffer s_IdentitySkeleton = []() {
+    static const GPUSkeletonBuffer s_IdentitySkeleton = []()
+    {
         GPUSkeletonBuffer buf;
         for (int i = 0; i < MAX_BONES; ++i)
         {
@@ -43,439 +43,6 @@ namespace ignite
         }
         return buf;
     }();
-
-    static WorldEnvironment *GetActiveWorldEnvironment(Scene *scene)
-    {
-        if (!scene || !scene->registry)
-        {
-            return nullptr;
-        }
-
-        auto view = scene->registry->view<WorldEnvironment>();
-        WorldEnvironment *fallback = nullptr;
-        for (entt::entity e : view)
-        {
-            WorldEnvironment &world = view.get<WorldEnvironment>(e);
-            if (!world.enabled)
-            {
-                continue;
-            }
-
-            if (world.primary)
-            {
-                return &world;
-            }
-
-            if (!fallback)
-            {
-                fallback = &world;
-            }
-        }
-
-        return fallback;
-    }
-
-    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_GeometryPSOCache;
-    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_EnvironmentPSOCache;
-    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_CompositePSOCache;
-    static std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> s_DebugGridPSOCache;
-
-    // Helper to build a debug-grid pipeline per framebuffer (once)
-    static Ref<GraphicsPipeline> GetDebugGridPipelineForFB(nvrhi::IFramebuffer *framebuffer)
-    {
-        auto key = MakeFramebufferKey(framebuffer, nvrhi::RasterFillMode::Solid);
-        auto it = s_DebugGridPSOCache.find(key);
-        if (it != s_DebugGridPSOCache.end())
-        {
-            return it->second;
-        }
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-        const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
-        bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
-
-        GraphicsPipelineParams params;
-        params.enableBlend = true;
-        params.srcBlend = nvrhi::BlendFactor::SrcAlpha;
-        params.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
-        params.srcBlendAlpha = nvrhi::BlendFactor::One;
-        params.destBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
-        params.enableDepthWrite = false;
-        params.enableDepthTest = hasDepthAttachment;
-        params.enableDepthStencil = false;
-        params.fillMode = nvrhi::RasterFillMode::Solid;
-        params.cullMode = nvrhi::RasterCullMode::None;
-        params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
-
-        nvrhi::BindingLayoutDesc bindingLayoutDesc;
-        bindingLayoutDesc.setRegisterSpace(0);
-        bindingLayoutDesc.setRegisterSpaceIsDescriptorSet(true);
-        bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
-        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
-        bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1));
-        nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
-
-        Ref<Shader> vertexShader = Shader::Create("resources/shaders/infinite_grid.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/infinite_grid.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
-
-        auto gp = GraphicsPipeline::Create();
-        gp->SetShaders({ vertexShader, pixelShader })
-            .AddBindingLayout(bindingLayout)
-            .Build(framebuffer, params);
-
-        s_DebugGridPSOCache.clear();
-        s_DebugGridPSOCache.emplace(key, gp);
-        return gp;
-    }
-
-    struct DebugGridBindingKey
-    {
-        nvrhi::IBindingLayout *layout = nullptr;
-        nvrhi::IBuffer *gridBuffer = nullptr;
-
-        bool operator==(const DebugGridBindingKey &other) const noexcept
-        {
-            return layout == other.layout && gridBuffer == other.gridBuffer;
-        }
-    };
-
-    struct DebugGridBindingKeyHash
-    {
-        size_t operator()(const DebugGridBindingKey &k) const noexcept
-        {
-            size_t h = std::hash<const void *> {}(k.layout);
-            h ^= (std::hash<const void *>{}(k.gridBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
-            return h;
-        }
-    };
-
-    static std::unordered_map<DebugGridBindingKey, nvrhi::BindingSetHandle, DebugGridBindingKeyHash> s_DebugGridBindingSetCache;
-
-    static nvrhi::BindingSetHandle GetOrCreateDebugGridBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &gridBuffer)
-    {
-        DebugGridBindingKey key { bindingLayout, gridBuffer ? gridBuffer->GetHandle() : nullptr };
-        auto it = s_DebugGridBindingSetCache.find(key);
-        if (it != s_DebugGridBindingSetCache.end())
-        {
-            return it->second;
-        }
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-        auto bindingSetDesc = nvrhi::BindingSetDesc();
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, gridBuffer->GetHandle()));
-
-        nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
-        LOG_ASSERT(bindingSet, "[Debug Grid] Failed to create binding set");
-        if (bindingSet)
-        {
-            s_DebugGridBindingSetCache.emplace(key, bindingSet);
-        }
-
-        return bindingSet;
-    }
-
-    // Helper to build a geometry pipeline for a framebuffer (once) and cache it.
-    static Ref<GraphicsPipeline> GetGeomPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
-    {
-        auto key = MakeFramebufferKey(framebuffer, fillMode);
-        auto it = s_GeometryPSOCache.find(key);
-        if (it != s_GeometryPSOCache.end())
-        {
-            return it->second;
-        }
-
-        const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
-        bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
-
-        GraphicsPipelineParams params;
-        params.enableBlend = true;
-        params.enableDepthWrite = hasDepthAttachment;
-        params.enableDepthTest = hasDepthAttachment;
-        params.enableDepthStencil = false;
-        params.fillMode = fillMode;
-        params.cullMode = nvrhi::RasterCullMode::Front;
-        params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
-
-        Ref<Shader> vertexShader = Shader::Create("resources/shaders/mesh_anim.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/mesh_anim.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
-
-        auto gp = GraphicsPipeline::Create();
-        gp->SetShaders({ vertexShader, pixelShader })
-            .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
-            .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
-            .Build(framebuffer, params);
-
-        s_GeometryPSOCache.clear();
-        s_GeometryPSOCache.emplace(key, gp);
-        return gp;
-    }
-
-    // Helper to build an environment pipeline per framebuffer (once)
-    static Ref<GraphicsPipeline> GetEnvPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
-    {
-        auto key = MakeFramebufferKey(framebuffer, fillMode);
-        auto it = s_EnvironmentPSOCache.find(key);
-        if (it != s_EnvironmentPSOCache.end())
-        {
-            return it->second;
-        }
-
-        const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
-        bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
-
-        GraphicsPipelineParams params;
-        params.enableBlend = true;
-        params.enableDepthWrite = hasDepthAttachment;
-        params.enableDepthTest = hasDepthAttachment;
-        params.enableDepthStencil = false;
-        params.fillMode = fillMode;
-        params.cullMode = nvrhi::RasterCullMode::Front;
-        params.depthFunc = nvrhi::ComparisonFunc::Always;
-
-        Ref<Shader> vertexShader = Shader::Create("resources/shaders/skybox.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/skybox.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
-
-        auto gp = GraphicsPipeline::Create();
-        gp->SetShaders({ vertexShader, pixelShader })
-            .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT))
-            .Build(framebuffer, params);
-
-        s_EnvironmentPSOCache.clear();
-        s_EnvironmentPSOCache.emplace(key, gp);
-        return gp;
-    }
-
-    // Helper to build a composite pipeline per framebuffer (once)
-    static Ref<GraphicsPipeline> GetCompositePipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
-    {
-        auto key = MakeFramebufferKey(framebuffer, fillMode);
-        auto it = s_CompositePSOCache.find(key);
-
-        if (it != s_CompositePSOCache.end())
-        {
-            return it->second;
-        }
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-        // Binding layout
-        nvrhi::BindingLayoutDesc layoutDesc = {};
-        layoutDesc.visibility = nvrhi::ShaderType::All;
-        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)); // scene
-        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)); // ui
-        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(2)); // edge
-        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(3)); // bloom
-        layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)); // ssao
-        layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // post-process params
-        layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0)); // sampler
-        nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(layoutDesc);
-
-        const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
-        bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
-
-        GraphicsPipelineParams params;
-        params.enableBlend = true;
-        params.enableDepthWrite = hasDepthAttachment;
-        params.enableDepthTest = hasDepthAttachment;
-        params.enableDepthStencil = false;
-        params.fillMode = fillMode;
-        params.cullMode = nvrhi::RasterCullMode::None;
-
-        // Create pipeline
-        Ref<Shader> vertexShader = Shader::Create("resources/shaders/composite.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
-        Ref<Shader> pixelShader = Shader::Create("resources/shaders/composite.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
-
-        auto gp = GraphicsPipeline::Create();
-        gp->SetShaders({ vertexShader, pixelShader })
-            .AddBindingLayout(bindingLayout)
-            .Build(framebuffer, params);
-
-        LOG_INFO("[Composite] Created new pipeline with forced shader recompilation");
-
-        s_CompositePSOCache.emplace(key, gp);
-
-        return gp;
-    }
-
-    struct CompositeBindingKey
-    {
-        nvrhi::IBindingLayout *layout = nullptr;
-        nvrhi::ITexture *sceneTex = nullptr;
-        nvrhi::ITexture *uiTex = nullptr;
-        nvrhi::ITexture *edgeTex = nullptr;
-        nvrhi::ITexture *bloomTex = nullptr;
-        nvrhi::ITexture *ssaoTex = nullptr;
-        nvrhi::IBuffer *postProcessBuffer = nullptr;
-        nvrhi::ISampler *sampler = nullptr;
-
-        bool operator==(const CompositeBindingKey &other) const noexcept
-        {
-            return layout == other.layout && sceneTex == other.sceneTex
-                && uiTex == other.uiTex && edgeTex == other.edgeTex && bloomTex == other.bloomTex
-                && ssaoTex == other.ssaoTex && postProcessBuffer == other.postProcessBuffer
-                && sampler == other.sampler;
-        }
-    };
-
-    struct CompositeBindingKeyHash
-    {
-        size_t operator()(const CompositeBindingKey &k) const noexcept
-        {
-            size_t h = std::hash<const void *> {}(k.layout);
-            h ^= (std::hash<const void *>{}(k.sceneTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
-            h ^= (std::hash<const void *>{}(k.uiTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
-            h ^= (std::hash<const void *>{}(k.edgeTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
-            h ^= (std::hash<const void *>{}(k.bloomTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
-            h ^= (std::hash<const void *>{}(k.ssaoTex) + 0x9e3779b9 + (h << 6) + (h >> 2));
-            return h;
-        }
-    };
-
-    static std::unordered_map<CompositeBindingKey, nvrhi::BindingSetHandle, CompositeBindingKeyHash> s_CompositeBindingSetCache;
-
-    static nvrhi::BindingSetHandle GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout,
-        Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture,
-        Ref<ConstantBuffer> postProcessBuffer, nvrhi::ISampler *sampler)
-    {
-        Ref<Texture> edge = edgeTexture ? edgeTexture : Renderer::GetBlackTexture();
-        Ref<Texture> bloom = bloomTexture ? bloomTexture : Renderer::GetBlackTexture();
-        Ref<Texture> ssao = ssaoTexture ? ssaoTexture : Renderer::GetWhiteTexture();
-        CompositeBindingKey key
-        { 
-            bindingLayout,
-            sceneTexture->GetHandle(),
-            uiTexture->GetHandle(),
-            edge->GetHandle(),
-            bloom->GetHandle(),
-            ssao->GetHandle(),
-            postProcessBuffer->GetHandle(),
-            sampler
-        };
-        
-        auto it = s_CompositeBindingSetCache.find(key);
-        if (it != s_CompositeBindingSetCache.end())
-        {
-            return it->second;
-        }
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-        // Composite Binding set
-        auto bindingSetDesc = nvrhi::BindingSetDesc();
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, sceneTexture->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, uiTexture->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, edge->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, bloom->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, ssao->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, postProcessBuffer->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
-
-        nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
-        LOG_ASSERT(bindingSet, "[Composite] Failed to create Composite Binding Set");
-
-        s_CompositeBindingSetCache.emplace(key, bindingSet);
-
-        return bindingSet;
-    }
-
-    static std::unordered_map<nvrhi::IBindingLayout *, nvrhi::BindingSetHandle> s_CSMBindingSetCache;
-
-    static nvrhi::BindingSetHandle GetOrCreateCSMBindingSet(nvrhi::IBindingLayout *bindingLayout,
-        Ref<ConstantBuffer> skinnedMeshGPUDataBuffer, Ref<ConstantBuffer> csmGPUDataBuffer)
-    {
-        auto it = s_CSMBindingSetCache.find(bindingLayout);
-        if (it != s_CSMBindingSetCache.end())
-        {
-            return it->second;
-        }
-
-        nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-
-        // Composite Binding set
-        auto bindingSetDesc = nvrhi::BindingSetDesc();
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, skinnedMeshGPUDataBuffer->GetHandle()));
-        bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, csmGPUDataBuffer->GetHandle()));
-
-        nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
-        LOG_ASSERT(bindingSet, "[Composite] Failed to create Composite Binding Set");
-        if (bindingSet)
-        {
-            s_CSMBindingSetCache.emplace(bindingLayout, bindingSet);
-        }
-
-        return bindingSet;
-    }
-
-    void SceneRenderer::UploadSkeletonBuffers(nvrhi::ICommandList *cmd)
-    {
-        IGN_PROFILE_FUNCTION();
-        if (!m_Scene || !m_Scene->registry)
-        {
-            return;
-        }
-
-        auto skelMeshView = m_Scene->registry->view<TransformComponent, MeshComponent>();
-        for (entt::entity e : skelMeshView)
-        {
-            TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-            if (!tr.visible)
-                continue;
-
-            MeshComponent &smc = m_Scene->registry->get<MeshComponent>(e);
-            if (smc.handle == AssetHandle(0))
-                continue;
-
-            const std::vector<glm::mat4> &boneTransforms = smc.finalBoneTransforms;
-            if (boneTransforms.empty())
-                continue;
-
-            if (!smc.skeletonGpuBuffer)
-            {
-                smc.skeletonGpuBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Per-Entity Skeleton Buffer");
-                LOG_INFO("[SceneRenderer] Created non-volatile skeleton GPU buffer for entity {}", static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-            }
-
-            GPUSkeletonBuffer skeletonGPUData;
-            const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
-            if (boneCount > 0)
-            {
-                std::memcpy(skeletonGPUData.bones, boneTransforms.data(), boneCount * sizeof(glm::mat4));
-            }
-            if (boneCount < MAX_BONES)
-            {
-                std::memcpy(&skeletonGPUData.bones[boneCount], &s_IdentitySkeleton.bones[boneCount], (MAX_BONES - boneCount) * sizeof(glm::mat4));
-            }
-            smc.skeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
-
-            Ref<Mesh> sm = ResolveMesh(m_Project, smc.handle);
-            if (sm)
-            {
-                const auto &instances = sm->GetMeshInstances();
-                smc.cachedInstanceTransforms.resize(instances.size());
-                for (size_t idx = 0; idx < instances.size(); ++idx)
-                {
-                    auto &meshInstance = instances[idx];
-                    SkinnedMeshBufferData &gpuData = smc.cachedInstanceTransforms[idx];
-
-                    // For non-skinned sub-meshes linked to a joint, apply the joint's animated transform
-                    glm::mat4 meshTransform = meshInstance->global;
-                    if (meshInstance->linkedJointIndex >= 0 && !boneTransforms.empty())
-                    {
-                        const size_t ji = static_cast<size_t>(meshInstance->linkedJointIndex);
-                        if (ji < boneTransforms.size())
-                        {
-                            meshTransform = boneTransforms[ji] * meshTransform;
-                        }
-                    }
-
-                    gpuData.transformation = smc.worldMatrix * meshTransform;
-                    gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                    gpuData.normal = smc.normalMatrix;
-                }
-            }
-        }
-    }
 
     // ===============================
     // Scene Renderer Implementation
@@ -489,7 +56,7 @@ namespace ignite
         compositeSamplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp);
         m_CompositeSampler = m_Device->createSampler(compositeSamplerDesc);
 
-        std::array vertices
+        static constexpr std::array vertices
         {
             VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
             VertexScreen{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },
@@ -558,84 +125,17 @@ namespace ignite
     SceneRenderer::~SceneRenderer()
     {
         m_WidgetRenderer = nullptr;
+        m_WorldEnvironment = nullptr;
 
-        s_GeometryPSOCache.clear();
-        s_EnvironmentPSOCache.clear();
-        s_CompositePSOCache.clear();
-        s_DebugGridPSOCache.clear();
-        s_CompositeBindingSetCache.clear();
-        s_DebugGridBindingSetCache.clear();
-        s_CSMBindingSetCache.clear();
+        m_GeometryPSOCache.clear();
+        m_EnvironmentPSOCache.clear();
+        m_CompositePSOCache.clear();
+        m_DebugGridPSOCache.clear();
+        m_CompositeBindingSetCache.clear();
+        m_DebugGridBindingSetCache.clear();
+        m_CSMBindingSetCache.clear();
 
         Clear3DAssetResolveCache();
-    }
-
-    void SceneRenderer::OnUpdate(float deltaTime)
-    {
-        if (!m_Scene)
-        {
-            return;
-        }
-
-        // Check if any materials need binding set creation/recreation
-        {
-            IGN_PROFILE_SCOPE("SceneRenderer::UpdateMaterialBindingSets");
-            bool waitedForMaterialUpdate = false;
-            const auto &assets = m_Scene->GetProject()->GetAssetManager()->GetLoadedAssets();
-            for (const auto &[handle, asset] : assets)
-            {
-                if (asset->GetAssetType() == AssetType::Material)
-                {
-                    Ref<Material> material = std::static_pointer_cast<Material>(asset);
-                    if (material && (material->IsBindingSetDirty() || !material->GetBindingSet()))
-                    {
-                        auto assetManager = m_Scene->GetProject()->GetAssetManager();
-                        auto isTextureReady = [&assetManager](AssetHandle textureHandle)
-                        {
-                            if (textureHandle == 0)
-                            {
-                                return true;
-                            }
-
-                            Ref<Texture> texAsset = assetManager->GetAsset<Texture>(textureHandle);
-                            return texAsset && texAsset->IsReady();
-                        };
-
-                        // Only update if all textures are available and ready
-                        bool allTexturesReady = true;
-                        if (!isTextureReady(material->baseColorTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->emissiveTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->metallicTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->roughnessTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->normalTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->occlusionTextureHandle))
-                            allTexturesReady = false;
-
-                        if (allTexturesReady)
-                        {
-                            MaterialTextures textures;
-                            material->RetrieveTextures(assetManager, &textures);
-
-                            if (!waitedForMaterialUpdate)
-                            {
-                                // Ensure no other GPU operations are in flight before updating material
-                                // This prevents threading errors when materials are being invalidated
-                                GPUUploadSync::DeviceWaitIdle(m_Device);
-                                waitedForMaterialUpdate = true;
-                            }
-
-                            material->UpdateBindingSet(this, &textures, assetManager);
-                        }
-                    }
-
-                }
-            }
-        }
     }
 
     Ref<Mesh> SceneRenderer::ResolveMesh(Project *project, AssetHandle handle)
@@ -702,6 +202,14 @@ namespace ignite
             m_Scene->SetSceneRenderer(nullptr);
         }
 
+        if (m_WorldEnvironment)
+        {
+            if (scene == nullptr && m_WorldEnvironment->environment)
+            {
+                m_WorldEnvironment->environment.reset();
+            }
+            m_WorldEnvironment = nullptr;
+        }
 
         m_SelectedEntities.clear();
         m_Has2DPreRenderCache = false;
@@ -718,13 +226,13 @@ namespace ignite
             }
         }
 
-        s_GeometryPSOCache.clear();
-        s_EnvironmentPSOCache.clear();
-        s_CompositePSOCache.clear();
-        s_DebugGridPSOCache.clear();
-        s_CompositeBindingSetCache.clear();
-        s_DebugGridBindingSetCache.clear();
-        s_CSMBindingSetCache.clear();
+        m_GeometryPSOCache.clear();
+        m_EnvironmentPSOCache.clear();
+        m_CompositePSOCache.clear();
+        m_DebugGridPSOCache.clear();
+        m_CompositeBindingSetCache.clear();
+        m_DebugGridBindingSetCache.clear();
+        m_CSMBindingSetCache.clear();
 
         if (m_Renderer2D)
         {
@@ -772,41 +280,7 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
         IGN_PROFILE_FRAME_NAMED("Editor Frame");
 
-        WorldEnvironment *worldEnvironment =  GetActiveWorldEnvironment(m_Scene.get());
-
-        if (worldEnvironment)
-        {
-            if (!worldEnvironment->environment)
-            {
-                worldEnvironment->environment = Environment::Create();
-                worldEnvironment->dirtyEnvironment = true;
-                worldEnvironment->gpuInitialized = false;
-            }
-
-            const bool isHDRLoaded = worldEnvironment->hdrHandle != AssetHandle(0);
-            if (worldEnvironment->dirtyEnvironment)
-            {
-                Ref<Texture> hdrTexture;
-                if (isHDRLoaded)
-                {
-                    hdrTexture = m_Scene->GetProject()->GetAssetManager()->GetAsset<Texture>(worldEnvironment->hdrHandle);
-                    if (hdrTexture && hdrTexture->IsReady())
-                    {
-                        worldEnvironment->environment->SetTexture(hdrTexture);
-                    }
-                }
-                else
-                {
-                    worldEnvironment->environment->SetTexture(Renderer::GetBlackTexture());
-                }
-
-                // Keep retrieve HDR If it is loaded, but still empty
-                if (isHDRLoaded && hdrTexture == nullptr || (hdrTexture && !hdrTexture->IsReady()))
-                    worldEnvironment->dirtyEnvironment = true;
-                else
-                    worldEnvironment->dirtyEnvironment = false;
-            }
-        }
+        EnsureSceneEnvironmentMap();
 
         // Create fresh command list for this frame
         nvrhi::CommandListHandle cmd = m_Device->createCommandList();
@@ -819,26 +293,13 @@ namespace ignite
             m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
             UploadSkeletonBuffers(cmd);
 
-            if (worldEnvironment && worldEnvironment->environment && !worldEnvironment->gpuInitialized && !worldEnvironment->dirtyEnvironment)
+            if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->gpuInitialized && !m_WorldEnvironment->dirtyEnvironment)
             {
-                worldEnvironment->environment->WriteBuffer(cmd);
-                worldEnvironment->gpuInitialized = true;
+                m_WorldEnvironment->environment->WriteBuffer(cmd);
+                m_WorldEnvironment->gpuInitialized = true;
 
                 // Update env & materials if already  get the HDR texture
-                worldEnvironment->environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer);
-
-                const auto &assets = m_Scene->GetProject()->GetAssetManager()->GetLoadedAssets();
-                for (const auto &[handle, asset] : assets)
-                {
-                    if (asset->GetAssetType() == AssetType::Material)
-                    {
-                        Ref<Material> material = std::static_pointer_cast<Material>(asset);
-                        if (material)
-                        {
-                            material->InvalidateBindingSet();
-                        }
-                    }
-                }
+                m_WorldEnvironment->environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer);
             }
 
             // Scene post processing
@@ -871,10 +332,10 @@ namespace ignite
 
             ShadowPass(cmd, camera);
 
-            if (worldEnvironment && worldEnvironment->environment && !worldEnvironment->dirtyEnvironment)
+            if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->dirtyEnvironment)
             {
                 const Ref<GraphicsPipeline> envPSO = GetEnvPipelineForFB(framebuffer, m_FillMode);
-                worldEnvironment->environment->Draw(cmd, camera, framebuffer, envPSO);
+                m_WorldEnvironment->environment->Draw(cmd, camera, framebuffer, envPSO);
             }
 
 			ColorPass(cmd, camera, framebuffer);
@@ -972,41 +433,8 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
         IGN_PROFILE_FRAME_NAMED("Gameplay Frame");
-        WorldEnvironment *worldEnvironment = GetActiveWorldEnvironment(m_Scene.get());
 
-        if (worldEnvironment)
-        {
-            if (!worldEnvironment->environment)
-            {
-                worldEnvironment->environment = Environment::Create();
-                worldEnvironment->dirtyEnvironment = true;
-                worldEnvironment->gpuInitialized = false;
-            }
-
-            const bool isHDRLoaded = worldEnvironment->hdrHandle != AssetHandle(0);
-            if (worldEnvironment->dirtyEnvironment)
-            {
-                Ref<Texture> hdrTexture;
-                if (isHDRLoaded)
-                {
-                    hdrTexture = m_Scene->GetProject()->GetAssetManager()->GetAsset<Texture>(worldEnvironment->hdrHandle);
-                    if (hdrTexture && hdrTexture->IsReady())
-                    {
-                        worldEnvironment->environment->SetTexture(hdrTexture);
-                    }
-                }
-                else
-                {
-                    worldEnvironment->environment->SetTexture(Renderer::GetBlackTexture());
-                }
-
-                // Keep retrieve HDR If it is loaded, but still empty
-                if (isHDRLoaded && hdrTexture == nullptr || (hdrTexture && !hdrTexture->IsReady()))
-                    worldEnvironment->dirtyEnvironment = true;
-                else
-                    worldEnvironment->dirtyEnvironment = false;
-            }
-        }
+        EnsureSceneEnvironmentMap();
 
         // Create fresh command list for this frame
         nvrhi::CommandListHandle cmd = m_Device->createCommandList();
@@ -1019,26 +447,13 @@ namespace ignite
             m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
             UploadSkeletonBuffers(cmd);
 
-            if (worldEnvironment && worldEnvironment->environment && !worldEnvironment->gpuInitialized && !worldEnvironment->dirtyEnvironment)
+            if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->gpuInitialized && !m_WorldEnvironment->dirtyEnvironment)
             {
-                worldEnvironment->environment->WriteBuffer(cmd);
-                worldEnvironment->gpuInitialized = true;
+                m_WorldEnvironment->environment->WriteBuffer(cmd);
+                m_WorldEnvironment->gpuInitialized = true;
 
                 // Update env & materials if already  get the HDR texture
-                worldEnvironment->environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer);
-
-                const auto &assets = m_Scene->GetProject()->GetAssetManager()->GetLoadedAssets();
-                for (const auto &[handle, asset] : assets)
-                {
-                    if (asset->GetAssetType() == AssetType::Material)
-                    {
-                        Ref<Material> material = std::static_pointer_cast<Material>(asset);
-                        if (material)
-                        {
-                            material->InvalidateBindingSet();
-                        }
-                    }
-                }
+                m_WorldEnvironment->environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer);
             }
 
             // setup camera constants
@@ -1063,10 +478,10 @@ namespace ignite
 			
             ShadowPass(cmd, camera);
 
-            if (worldEnvironment && worldEnvironment->environment && !worldEnvironment->dirtyEnvironment)
+            if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->dirtyEnvironment)
             {
                 const Ref<GraphicsPipeline> envPSO = GetEnvPipelineForFB(framebuffer, m_FillMode);
-                worldEnvironment->environment->Draw(cmd, camera, framebuffer, envPSO);
+                m_WorldEnvironment->environment->Draw(cmd, camera, framebuffer, envPSO);
             }
 
 			ColorPass(cmd, camera, framebuffer);
@@ -1120,9 +535,9 @@ namespace ignite
         if (m_EditorSSAO)
             m_EditorSSAO->Resize(width, height);
 
-        s_CompositeBindingSetCache.clear();
-        s_DebugGridBindingSetCache.clear();
-        s_CSMBindingSetCache.clear();
+        m_CompositeBindingSetCache.clear();
+        m_DebugGridBindingSetCache.clear();
+        m_CSMBindingSetCache.clear();
 
         m_SceneRT->Resize(width, height);
         m_WidgetRT->Resize(width, height);
@@ -1139,9 +554,9 @@ namespace ignite
         if (m_GameplaySSAO)
             m_GameplaySSAO->Resize(width, height);
 
-        s_CompositeBindingSetCache.clear();
-        s_DebugGridBindingSetCache.clear();
-        s_CSMBindingSetCache.clear();
+        m_CompositeBindingSetCache.clear();
+        m_DebugGridBindingSetCache.clear();
+        m_CSMBindingSetCache.clear();
 
         m_GameplaySceneRT->Resize(width, height);
         m_GameplayWidgetRT->Resize(width, height);
@@ -1162,7 +577,7 @@ namespace ignite
             const TransformComponent &tr = dirLightView.get<TransformComponent>(e);
             const DirectionalLightComponent &light = dirLightView.get<DirectionalLightComponent>(e);
 
-            const glm::vec3 forward = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+            const glm::vec3 forward = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
 
             m_SceneGPUData.sunColor = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
             m_SceneGPUData.sungAngles.x = std::atan2(forward.x, forward.z);
@@ -1176,13 +591,9 @@ namespace ignite
         for (entt::entity e : worldEnvView)
         {
             WorldEnvironment &world = worldEnvView.get<WorldEnvironment>(e);
-            if (!world.enabled)
-                continue;
-
             m_SceneGPUData.exposure = world.exposure;
             m_SceneGPUData.gamma = world.gamma;
             m_SceneGPUData.ambient = world.ambient;
-
             break;
         }
 
@@ -1199,7 +610,7 @@ namespace ignite
             const TransformComponent &tr = lightView.get<TransformComponent>(e);
             const DirectionalLightComponent &light = lightView.get<DirectionalLightComponent>(e);
 
-            sunDirection = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+            sunDirection = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
 
             auto &csmData = m_CascadedShadowMap->GetGPUData();
             csmData.shadowStrength = light.cascadeShadow ? light.shadowStrength : 0.0f;
@@ -1215,25 +626,10 @@ namespace ignite
                 csmPipeline = m_CascadedShadowMap->GetPipeline();
                 csmState.pipeline = csmPipeline->GetHandle();
 
-                s_CSMBindingSetCache.clear();
+                m_CSMBindingSetCache.clear();
 
-                // Resize creates a new depth texture, so any material binding set that
-                // embeds the old CSM SRV (slot 7) is now stale. Invalidate them all so
-                // they are rebuilt with the new texture handle on the next frame.
-                if (m_Scene && m_Scene->GetProject())
-                {
-                    const auto &loadedAssets = m_Scene->GetProject()->GetAssetManager()->GetLoadedAssets();
-                    for (const auto &[handle, asset] : loadedAssets)
-                    {
-                        if (asset && asset->GetAssetType() == AssetType::Material)
-                        {
-                            if (auto material = std::dynamic_pointer_cast<Material>(asset))
-                            {
-                                material->InvalidateBindingSet();
-                            }
-                        }
-                    }
-                }
+				AssetChangeEvent event(AssetHandle(0), AssetType::Environment);
+				Application::GetInstance()->OnEvent(event);
             }
 
             break;
@@ -1479,7 +875,7 @@ namespace ignite
                         MaterialTextures textures;
                         auto assetManager = m_Scene->GetProject()->GetAssetManager();
                         material->RetrieveTextures(assetManager, &textures);
-                        material->UpdateBindingSet(this, &textures, assetManager);
+                        material->UpdateBindingSet(&textures, assetManager, GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture());
 
                         if (!material->GetBindingSet())
                         {
@@ -1529,7 +925,7 @@ namespace ignite
                         continue;
 
                     PointLight2D_GPUData gpuLight;
-                    gpuLight.position = glm::vec4(tr.translation, 1.0f);
+                    gpuLight.position = glm::vec4(tr.world.translation, 1.0f);
                     gpuLight.color = light.color;
                     gpuLight.radius = light.radius;
                     gpuLight.intensity = light.intensity;
@@ -1553,7 +949,7 @@ namespace ignite
                     {
                         Circle2DComponent &circle = m_Scene->registry->get<Circle2DComponent>(e);
                         const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-                        m_Renderer2D->DrawCircle(tr.GetWorldMatrix(), circle.color, circle.thickness, circle.fade, objectID);
+                        m_Renderer2D->DrawCircle(tr.world.GetMatrix(), circle.color, circle.thickness, circle.fade, objectID);
                     }
                 }
             }
@@ -1591,13 +987,13 @@ namespace ignite
                     if (mat2d)
                     {
                         Ref<Texture> texture = m_Renderer2D->ResolveTexture(project, mat2d->textureHandle);
-                        m_Renderer2D->DrawQuad(tr.GetWorldMatrix(), mat2d->data.baseColor, mat2d->data.additiveColor,
+                        m_Renderer2D->DrawQuad(tr.world.GetMatrix(), mat2d->data.baseColor, mat2d->data.additiveColor,
                             mat2d->data.type, texture, uv0, uv1, mat2d->data.tilingFactor, objectID);
                     }
                     else // Render with default
                     {
                         Ref<Texture> texture = m_Renderer2D->ResolveTexture(project, sprite.handle);
-                        m_Renderer2D->DrawQuad(tr.GetWorldMatrix(), sprite.color, texture, uv0, uv1, sprite.tilingFactor, objectID);
+                        m_Renderer2D->DrawQuad(tr.world.GetMatrix(), sprite.color, texture, uv0, uv1, sprite.tilingFactor, objectID);
                     }
 
                 }
@@ -1636,7 +1032,7 @@ namespace ignite
                         }
                     }
 
-                    m_Renderer2D->DrawString(text.text, font, textColor, tr.GetWorldMatrix(), text.kerning, text.lineSpacing, objectID);
+                    m_Renderer2D->DrawString(text.text, font, textColor, tr.world.GetMatrix(), text.kerning, text.lineSpacing, objectID);
                 }
             }
 
@@ -1777,7 +1173,7 @@ namespace ignite
                 continue;
 
             const BoxCollider2DComponent &box = m_Scene->registry->get<BoxCollider2DComponent>(e);
-            const glm::mat4 world = tr.GetWorldMatrix();
+            const glm::mat4 world = tr.world.GetMatrix();
 
             const glm::vec2 halfExtents = box.size;
             const glm::vec2 offset = box.offset;
@@ -1801,7 +1197,7 @@ namespace ignite
                 continue;
 
             const CircleCollider2DComponent &circle = m_Scene->registry->get<CircleCollider2DComponent>(e);
-            const glm::mat4 world = tr.GetWorldMatrix();
+            const glm::mat4 world = tr.world.GetMatrix();
             const glm::vec3 centerWorld = glm::vec3(world * glm::vec4(circle.center, 0.0f, 1.0f));
 
             const float worldScaleX = glm::length(glm::vec2(world[0]));
@@ -1879,7 +1275,7 @@ namespace ignite
                 continue;
 
             const auto &box = m_Scene->registry->get<BoxColliderComponent>(e);
-            const glm::mat4 world = tr.GetWorldMatrix();
+            const glm::mat4 world = tr.world.GetMatrix();
 
             const glm::vec3 c = box.center;
             const glm::vec3 h = box.scale;
@@ -1916,9 +1312,9 @@ namespace ignite
                 continue;
 
             const auto &sphere = m_Scene->registry->get<SphereColliderComponent>(e);
-            const glm::mat4 world = tr.GetWorldMatrix();
+            const glm::mat4 world = tr.world.GetMatrix();
 
-            const float maxAxis = glm::compMax(tr.scale);
+            const float maxAxis = glm::compMax(tr.world.scale);
             const float scaledRadius = sphere.radius * maxAxis;
 
             const glm::vec3 center = glm::vec3(world * glm::vec4(sphere.center, 1.0f));
@@ -1940,8 +1336,8 @@ namespace ignite
                 continue;
 
             const auto &capsule = m_Scene->registry->get<CapsuleColliderComponent>(e);
-            const glm::mat4 world = tr.GetWorldMatrix();
-            const float maxAxis = std::max({ tr.scale.x, tr.scale.y, tr.scale.z });
+            const glm::mat4 world = tr.world.GetMatrix();
+            const float maxAxis = std::max({ tr.world.scale.x, tr.world.scale.y, tr.world.scale.z });
             const float scaledRadius = capsule.radius * maxAxis;
             const float scaledHalfHeight = glm::max(capsule.height - capsule.radius, 0.0f) * maxAxis;
 
@@ -1980,7 +1376,7 @@ namespace ignite
             if (mesh.vertices.empty())
                 continue;
 
-            const glm::mat4 world = tr.GetWorldMatrix();
+            const glm::mat4 world = tr.world.GetMatrix();
 
             if (!mesh.indices.empty() && mesh.indices.size() % 3 == 0)
             {
@@ -2017,7 +1413,8 @@ namespace ignite
         m_Renderer2D->End();
     }
 
-    void SceneRenderer::CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, const PostProcessing &postProcessing, nvrhi::IFramebuffer *framebuffer,
+
+	void SceneRenderer::CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, const PostProcessing &postProcessing, nvrhi::IFramebuffer *framebuffer,
         Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture)
     {
         IGN_PROFILE_FUNCTION();
@@ -2086,7 +1483,7 @@ namespace ignite
                 continue;
 
             const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-            const glm::mat4 world = tr.GetWorldMatrix();
+            const glm::mat4 world = tr.world.GetMatrix();
             const glm::vec3 worldPos = glm::vec3(world[3]);
 
             Ref<Texture> texture = m_Icons["camera"];
@@ -2116,14 +1513,14 @@ namespace ignite
             auto &lc = m_Scene->registry->get<DirectionalLightComponent>(e);
 
             const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-            const glm::mat4 world = tr.GetWorldMatrix();
+            const glm::mat4 world = tr.world.GetMatrix();
             const glm::vec3 worldPos = glm::vec3(world[3]);
 
             Ref<Texture> texture = m_Icons["lighting"];
             glm::mat4 iconTransform = glm::translate(glm::mat4(1.0f), worldPos) * billboardRotation * glm::scale(glm::mat4(1.0f), glm::vec3(1.0f));
             m_Renderer2D->DrawQuad(iconTransform, lc.color, texture, { 0.0f, 0.0f }, { 1.0f, 1.0f }, glm::vec2(1.0f), objectID);
 
-            const glm::vec3 direction = glm::normalize(tr.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+            const glm::vec3 direction = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
             m_Renderer2D->DrawLine(worldPos, worldPos - direction * 5.0f, lc.color);
         }
 
@@ -2131,25 +1528,9 @@ namespace ignite
         m_Renderer2D->End();
     }
 
-    Ref<Texture> SceneRenderer::GetEnvironmentMapColorTexture() const
-    {
-        if (WorldEnvironment *world = GetActiveWorldEnvironment(m_Scene.get()))
-        {
-            if (world->environment)
-            {
-                return world->environment->GetHDRTexture();
-            }
-        }
-        return nullptr;
-    }
-
     Ref<Texture> SceneRenderer::GetCascadedShadowMapDepthTexture() const
     {
-        if (m_CascadedShadowMap)
-        {
-            return m_CascadedShadowMap->GetDepthTexture();
-        }
-        return nullptr;
+        return m_CascadedShadowMap ? m_CascadedShadowMap->GetDepthTexture() : nullptr;
     }
 
     Ref<CascadedShadowMap> SceneRenderer::GetCascadedShadowMap()
@@ -2157,17 +1538,23 @@ namespace ignite
         return m_CascadedShadowMap;
     }
 
+	Ref<Texture> SceneRenderer::GetEnvironmentMapColorTexture() const
+	{
+		return (m_WorldEnvironment && m_WorldEnvironment->environment) 
+            ? m_WorldEnvironment->environment->GetHDRTexture() : nullptr;
+	}
+
     void SceneRenderer::SetFillMode(nvrhi::RasterFillMode mode)
     {
         m_FillMode = mode;
 
         // Recreate pipelines
-        s_GeometryPSOCache.clear();
-        s_EnvironmentPSOCache.clear();
-        s_CompositePSOCache.clear();
-        s_DebugGridPSOCache.clear();
-        s_CompositeBindingSetCache.clear();
-        s_DebugGridBindingSetCache.clear();
+        m_GeometryPSOCache.clear();
+        m_EnvironmentPSOCache.clear();
+        m_CompositePSOCache.clear();
+        m_DebugGridPSOCache.clear();
+        m_CompositeBindingSetCache.clear();
+        m_DebugGridBindingSetCache.clear();
 
         m_Renderer2D->SetFillMode(mode);
     }
@@ -2200,4 +1587,343 @@ namespace ignite
     {
         m_SelectedEntities.clear();
     }
+
+	// Helper to build a debug-grid pipeline per framebuffer (once)
+	Ref<GraphicsPipeline> SceneRenderer::GetDebugGridPipelineForFB(nvrhi::IFramebuffer *framebuffer)
+	{
+		auto key = MakeFramebufferKey(framebuffer, nvrhi::RasterFillMode::Solid);
+		auto it = m_DebugGridPSOCache.find(key);
+		if (it != m_DebugGridPSOCache.end())
+		{
+			return it->second;
+		}
+
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+
+		GraphicsPipelineParams params;
+		params.enableBlend = true;
+		params.srcBlend = nvrhi::BlendFactor::SrcAlpha;
+		params.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
+		params.srcBlendAlpha = nvrhi::BlendFactor::One;
+		params.destBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
+		params.enableDepthWrite = false;
+		params.enableDepthTest = hasDepthAttachment;
+		params.enableDepthStencil = false;
+		params.fillMode = nvrhi::RasterFillMode::Solid;
+		params.cullMode = nvrhi::RasterCullMode::None;
+		params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
+
+		nvrhi::BindingLayoutDesc bindingLayoutDesc;
+		bindingLayoutDesc.setRegisterSpace(0);
+		bindingLayoutDesc.setRegisterSpaceIsDescriptorSet(true);
+		bindingLayoutDesc.setVisibility(nvrhi::ShaderType::All);
+		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0));
+		bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1));
+		nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(bindingLayoutDesc);
+
+		Ref<Shader> vertexShader = Shader::Create("resources/shaders/infinite_grid.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
+		Ref<Shader> pixelShader = Shader::Create("resources/shaders/infinite_grid.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
+
+		auto gp = GraphicsPipeline::Create();
+		gp->SetShaders({ vertexShader, pixelShader })
+			.AddBindingLayout(bindingLayout)
+			.Build(framebuffer, params);
+
+		m_DebugGridPSOCache.clear();
+		m_DebugGridPSOCache.emplace(key, gp);
+		return gp;
+	}
+
+
+	nvrhi::BindingSetHandle SceneRenderer::GetOrCreateDebugGridBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &gridBuffer)
+	{
+		DebugGridBindingKey key{ bindingLayout, gridBuffer ? gridBuffer->GetHandle() : nullptr };
+		auto it = m_DebugGridBindingSetCache.find(key);
+		if (it != m_DebugGridBindingSetCache.end())
+		{
+			return it->second;
+		}
+
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+		auto bindingSetDesc = nvrhi::BindingSetDesc();
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, cameraBuffer->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, gridBuffer->GetHandle()));
+
+		nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
+		LOG_ASSERT(bindingSet, "[Debug Grid] Failed to create binding set");
+		if (bindingSet)
+		{
+			m_DebugGridBindingSetCache.emplace(key, bindingSet);
+		}
+
+		return bindingSet;
+	}
+
+	// Helper to build a geometry pipeline for a framebuffer (once) and cache it.
+	Ref<GraphicsPipeline> SceneRenderer::GetGeomPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+	{
+		auto key = MakeFramebufferKey(framebuffer, fillMode);
+		auto it = m_GeometryPSOCache.find(key);
+		if (it != m_GeometryPSOCache.end())
+		{
+			return it->second;
+		}
+
+		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+
+		GraphicsPipelineParams params;
+		params.enableBlend = true;
+		params.enableDepthWrite = hasDepthAttachment;
+		params.enableDepthTest = hasDepthAttachment;
+		params.enableDepthStencil = false;
+		params.fillMode = fillMode;
+		params.cullMode = nvrhi::RasterCullMode::Front;
+		params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
+
+		Ref<Shader> vertexShader = Shader::Create("resources/shaders/mesh_anim.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
+		Ref<Shader> pixelShader = Shader::Create("resources/shaders/mesh_anim.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
+
+		auto gp = GraphicsPipeline::Create();
+		gp->SetShaders({ vertexShader, pixelShader })
+			.AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
+			.AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
+			.Build(framebuffer, params);
+
+		m_GeometryPSOCache.clear();
+		m_GeometryPSOCache.emplace(key, gp);
+		return gp;
+	}
+
+	// Helper to build an environment pipeline per framebuffer (once)
+	Ref<GraphicsPipeline> SceneRenderer::GetEnvPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+	{
+		auto key = MakeFramebufferKey(framebuffer, fillMode);
+		auto it = m_EnvironmentPSOCache.find(key);
+		if (it != m_EnvironmentPSOCache.end())
+		{
+			return it->second;
+		}
+
+		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+
+		GraphicsPipelineParams params;
+		params.enableBlend = true;
+		params.enableDepthWrite = hasDepthAttachment;
+		params.enableDepthTest = hasDepthAttachment;
+		params.enableDepthStencil = false;
+		params.fillMode = fillMode;
+		params.cullMode = nvrhi::RasterCullMode::Front;
+		params.depthFunc = nvrhi::ComparisonFunc::Always;
+
+		Ref<Shader> vertexShader = Shader::Create("resources/shaders/skybox.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
+		Ref<Shader> pixelShader = Shader::Create("resources/shaders/skybox.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
+
+		auto gp = GraphicsPipeline::Create();
+		gp->SetShaders({ vertexShader, pixelShader })
+			.AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT))
+			.Build(framebuffer, params);
+
+		m_EnvironmentPSOCache.clear();
+		m_EnvironmentPSOCache.emplace(key, gp);
+		return gp;
+	}
+
+	// Helper to build a composite pipeline per framebuffer (once)
+	Ref<GraphicsPipeline> SceneRenderer::GetCompositePipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+	{
+		auto key = MakeFramebufferKey(framebuffer, fillMode);
+		auto it = m_CompositePSOCache.find(key);
+
+		if (it != m_CompositePSOCache.end())
+		{
+			return it->second;
+		}
+
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+		// Binding layout
+		nvrhi::BindingLayoutDesc layoutDesc = {};
+		layoutDesc.visibility = nvrhi::ShaderType::All;
+		layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)); // scene
+		layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(1)); // ui
+		layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(2)); // edge
+		layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(3)); // bloom
+		layoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)); // ssao
+		layoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(0)); // post-process params
+		layoutDesc.addItem(nvrhi::BindingLayoutItem::Sampler(0)); // sampler
+		nvrhi::BindingLayoutHandle bindingLayout = device->createBindingLayout(layoutDesc);
+
+		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+
+		GraphicsPipelineParams params;
+		params.enableBlend = true;
+		params.enableDepthWrite = hasDepthAttachment;
+		params.enableDepthTest = hasDepthAttachment;
+		params.enableDepthStencil = false;
+		params.fillMode = fillMode;
+		params.cullMode = nvrhi::RasterCullMode::None;
+
+		// Create pipeline
+		Ref<Shader> vertexShader = Shader::Create("resources/shaders/composite.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
+		Ref<Shader> pixelShader = Shader::Create("resources/shaders/composite.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
+
+		auto gp = GraphicsPipeline::Create();
+		gp->SetShaders({ vertexShader, pixelShader })
+			.AddBindingLayout(bindingLayout)
+			.Build(framebuffer, params);
+
+		LOG_INFO("[Composite] Created new pipeline with forced shader recompilation");
+
+		m_CompositePSOCache.emplace(key, gp);
+
+		return gp;
+	}
+
+	nvrhi::BindingSetHandle SceneRenderer::GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout,
+		Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture,
+		Ref<ConstantBuffer> postProcessBuffer, nvrhi::ISampler *sampler)
+	{
+		Ref<Texture> edge = edgeTexture ? edgeTexture : Renderer::GetBlackTexture();
+		Ref<Texture> bloom = bloomTexture ? bloomTexture : Renderer::GetBlackTexture();
+		Ref<Texture> ssao = ssaoTexture ? ssaoTexture : Renderer::GetWhiteTexture();
+		CompositeBindingKey key
+		{
+			bindingLayout,
+			sceneTexture->GetHandle(),
+			uiTexture->GetHandle(),
+			edge->GetHandle(),
+			bloom->GetHandle(),
+			ssao->GetHandle(),
+			postProcessBuffer->GetHandle(),
+			sampler
+		};
+
+		auto it = m_CompositeBindingSetCache.find(key);
+		if (it != m_CompositeBindingSetCache.end())
+		{
+			return it->second;
+		}
+
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+		// Composite Binding set
+		auto bindingSetDesc = nvrhi::BindingSetDesc();
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, sceneTexture->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, uiTexture->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, edge->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, bloom->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, ssao->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, postProcessBuffer->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
+
+		nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
+		LOG_ASSERT(bindingSet, "[Composite] Failed to create Composite Binding Set");
+
+		m_CompositeBindingSetCache.emplace(key, bindingSet);
+
+		return bindingSet;
+	}
+
+
+
+	nvrhi::BindingSetHandle SceneRenderer::GetOrCreateCSMBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<ConstantBuffer> skinnedMeshGPUDataBuffer, Ref<ConstantBuffer> csmGPUDataBuffer)
+	{
+		auto it = m_CSMBindingSetCache.find(bindingLayout);
+		if (it != m_CSMBindingSetCache.end())
+		{
+			return it->second;
+		}
+
+		nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
+
+		// Composite Binding set
+		auto bindingSetDesc = nvrhi::BindingSetDesc();
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, skinnedMeshGPUDataBuffer->GetHandle()));
+		bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(1, csmGPUDataBuffer->GetHandle()));
+
+		nvrhi::BindingSetHandle bindingSet = device->createBindingSet(bindingSetDesc, bindingLayout);
+		LOG_ASSERT(bindingSet, "[Composite] Failed to create Composite Binding Set");
+		if (bindingSet)
+		{
+			m_CSMBindingSetCache.emplace(bindingLayout, bindingSet);
+		}
+
+		return bindingSet;
+	}
+
+	void SceneRenderer::UploadSkeletonBuffers(nvrhi::ICommandList *cmd)
+	{
+		IGN_PROFILE_FUNCTION();
+		if (!m_Scene || !m_Scene->registry)
+		{
+			return;
+		}
+
+		auto skelMeshView = m_Scene->registry->view<TransformComponent, MeshComponent>();
+		for (entt::entity e : skelMeshView)
+		{
+			TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+			if (!tr.visible)
+				continue;
+
+			MeshComponent &smc = m_Scene->registry->get<MeshComponent>(e);
+			if (smc.handle == AssetHandle(0))
+				continue;
+
+			const std::vector<glm::mat4> &boneTransforms = smc.finalBoneTransforms;
+			if (boneTransforms.empty())
+				continue;
+
+			if (!smc.skeletonGpuBuffer)
+			{
+				smc.skeletonGpuBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Per-Entity Skeleton Buffer");
+				LOG_INFO("[SceneRenderer] Created non-volatile skeleton GPU buffer for entity {}",
+					static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+			}
+
+			GPUSkeletonBuffer skeletonGPUData;
+			const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
+			if (boneCount > 0)
+			{
+				std::memcpy(skeletonGPUData.bones, boneTransforms.data(), boneCount * sizeof(glm::mat4));
+			}
+			if (boneCount < MAX_BONES)
+			{
+				std::memcpy(&skeletonGPUData.bones[boneCount], &s_IdentitySkeleton.bones[boneCount], (MAX_BONES - boneCount) * sizeof(glm::mat4));
+			}
+			smc.skeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
+
+			Ref<Mesh> sm = ResolveMesh(m_Project, smc.handle);
+			if (sm)
+			{
+				const auto &instances = sm->GetMeshInstances();
+				smc.cachedInstanceTransforms.resize(instances.size());
+				for (size_t idx = 0; idx < instances.size(); ++idx)
+				{
+					auto &meshInstance = instances[idx];
+					SkinnedMeshBufferData &gpuData = smc.cachedInstanceTransforms[idx];
+
+					// For non-skinned sub-meshes linked to a joint, apply the joint's animated transform
+					glm::mat4 meshTransform = meshInstance->global;
+					if (meshInstance->linkedJointIndex >= 0 && !boneTransforms.empty())
+					{
+						const size_t ji = static_cast<size_t>(meshInstance->linkedJointIndex);
+						if (ji < boneTransforms.size())
+						{
+							meshTransform = boneTransforms[ji] * meshTransform;
+						}
+					}
+
+					gpuData.transformation = smc.worldMatrix * meshTransform;
+					gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+					gpuData.normal = smc.normalMatrix;
+				}
+			}
+		}
+	}
 }

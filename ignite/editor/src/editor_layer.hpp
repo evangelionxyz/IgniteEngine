@@ -40,7 +40,7 @@ namespace ignite
             bool popupNewProjectModal = false;
             bool assetRegistryWindow = false;
             bool takeScreenshot = false;
-            bool gameplayViewportWindow = true;
+            bool gameplayViewportWindow = false;
             bool consoleWindow = true;
 
             const int STABLE_RESIZE_FRAME = 12;
@@ -89,6 +89,7 @@ namespace ignite
         void SaveProject();
         void SaveProjectAs();
         void OpenProject();
+        void CloseCurrentProject();
         void OpenProject(const ignite::Path &filepath);
 
         void SetActiveScene(const Ref<Scene> &scene);

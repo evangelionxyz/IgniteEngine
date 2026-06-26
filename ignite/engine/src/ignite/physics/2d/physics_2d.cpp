@@ -9,6 +9,8 @@
 #include "ignite/scene/scene_manager.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 
+#include "ignite/math/transform.hpp"
+
 namespace ignite
 {
     Physics2D::Physics2D(Scene *scene)
@@ -37,8 +39,8 @@ namespace ignite
 
             b2BodyDef bodyDef        = b2DefaultBodyDef();
             bodyDef.type             = static_cast<b2BodyType>(rb.bodyType);
-            bodyDef.position         = { tr.translation.x, tr.translation.y };
-            bodyDef.rotation         = b2MakeRot(eulerAngles(tr.rotation).z);
+            bodyDef.position         = { tr.world.translation.x, tr.world.translation.y };
+            bodyDef.rotation         = b2MakeRot(glm::eulerAngles(tr.world.rotation).z);
             bodyDef.angularVelocity  = rb.angularVelocity;
             bodyDef.linearVelocity.x = rb.linearVelocity.x;
             bodyDef.linearVelocity.y = rb.linearVelocity.y;
@@ -57,7 +59,7 @@ namespace ignite
             if (reg->any_of<BoxCollider2DComponent>(e))
             {
                 auto &bc = reg->get<BoxCollider2DComponent>(e);
-                CreateBoxCollider(&bc, rb.bodyId, b2Vec2(bc.size.x * tr.scale.x, bc.size.y * tr.scale.y));
+                CreateBoxCollider(&bc, rb.bodyId, b2Vec2(bc.size.x * tr.world.scale.x, bc.size.y * tr.world.scale.y));
                 b2Shape_SetUserData(bc.shapeId, static_cast<void *>(&e));
             }
 
@@ -65,7 +67,7 @@ namespace ignite
             if (reg->any_of<CircleCollider2DComponent>(e))
             {
                 auto &cc = reg->get<CircleCollider2DComponent>(e);
-				CreateCircleCollider(&cc, rb.bodyId, glm::max(tr.scale.x, tr.scale.y));
+				CreateCircleCollider(&cc, rb.bodyId, glm::max(tr.world.scale.x, tr.world.scale.y));
 				b2Shape_SetUserData(cc.shapeId, static_cast<void *>(&e));
             }
         }
@@ -92,8 +94,8 @@ namespace ignite
 
         b2BodyDef bodyDef        = b2DefaultBodyDef();
         bodyDef.type             = static_cast<b2BodyType>(rb.bodyType);
-        bodyDef.position         = { tr.translation.x, tr.translation.y };
-        bodyDef.rotation         = b2MakeRot(eulerAngles(tr.rotation).z);
+        bodyDef.position         = { tr.world.translation.x, tr.world.translation.y };
+        bodyDef.rotation         = b2MakeRot(glm::eulerAngles(tr.world.rotation).z);
         bodyDef.angularVelocity  = rb.angularVelocity;
         bodyDef.linearVelocity.x = rb.linearVelocity.x;
         bodyDef.linearVelocity.y = rb.linearVelocity.y;
@@ -112,7 +114,7 @@ namespace ignite
         if (entity.HasComponent<BoxCollider2DComponent>())
         {
             auto &bc = entity.GetComponent<BoxCollider2DComponent>();
-            CreateBoxCollider(&bc, rb.bodyId, b2Vec2(bc.size.x * tr.scale.x, bc.size.y * tr.scale.y));
+            CreateBoxCollider(&bc, rb.bodyId, b2Vec2(bc.size.x * tr.world.scale.x, bc.size.y * tr.world.scale.y));
             b2Shape_SetUserData(bc.shapeId, static_cast<void *>(&entity));
         }
 
@@ -120,7 +122,7 @@ namespace ignite
 		if (entity.HasComponent<CircleCollider2DComponent>())
 		{
 			auto &cc = entity.GetComponent<CircleCollider2DComponent>();
-			CreateCircleCollider(&cc, rb.bodyId, glm::max(tr.scale.x, tr.scale.y));
+			CreateCircleCollider(&cc, rb.bodyId, glm::max(tr.world.scale.x, tr.world.scale.y));
 			b2Shape_SetUserData(cc.shapeId, static_cast<void *>(&entity));
 		}
     }
@@ -175,106 +177,102 @@ namespace ignite
             IGN_PROFILE_SCOPE("Physics2D::SyncEntities");
             for (const auto e : reg->view<Rigidbody2DComponent>())
             {
-            TransformComponent &tr = reg->get<TransformComponent>(e);
-            Rigidbody2DComponent &rb = reg->get<Rigidbody2DComponent>(e);
+                TransformComponent &tr = reg->get<TransformComponent>(e);
+                Rigidbody2DComponent &rb = reg->get<Rigidbody2DComponent>(e);
 
-            if (rb.dirty)
-            {
-                b2Body_SetLinearVelocity(rb.bodyId, { rb.linearVelocity.x, rb.linearVelocity.y });
-                b2Body_SetAngularVelocity(rb.bodyId, rb.angularVelocity);
-                b2Body_SetGravityScale(rb.bodyId, rb.gravityScale);
-                b2Body_SetLinearDamping(rb.bodyId, rb.linearDamping);
-                b2Body_SetAngularDamping(rb.bodyId, rb.angularDamping);
-                b2Body_SetAwake(rb.bodyId, rb.isAwake);
-                rb.isEnabled ? b2Body_Enable(rb.bodyId) : b2Body_Disable(rb.bodyId);
-                b2Body_EnableSleep(rb.bodyId, rb.isEnableSleep);
-
-                b2MotionLocks ml;
-                ml.angularZ = rb.fixedRotation;
-                b2Body_SetMotionLocks(rb.bodyId, ml);
-
-                rb.dirty = false;
-            }
-
-            if (reg->any_of<BoxCollider2DComponent>(e))
-            {
-                BoxCollider2DComponent &bc = reg->get<BoxCollider2DComponent>(e);
-                if (bc.dirty)
+                if (rb.dirty)
                 {
-					b2Shape_SetFriction(bc.shapeId, bc.friction);
-					b2Shape_SetDensity(bc.shapeId, bc.density, true);
-					b2Shape_SetRestitution(bc.shapeId, bc.restitution);
+                    b2Body_SetLinearVelocity(rb.bodyId, { rb.linearVelocity.x, rb.linearVelocity.y });
+                    b2Body_SetAngularVelocity(rb.bodyId, rb.angularVelocity);
+                    b2Body_SetGravityScale(rb.bodyId, rb.gravityScale);
+                    b2Body_SetLinearDamping(rb.bodyId, rb.linearDamping);
+                    b2Body_SetAngularDamping(rb.bodyId, rb.angularDamping);
+                    b2Body_SetAwake(rb.bodyId, rb.isAwake);
+                    rb.isEnabled ? b2Body_Enable(rb.bodyId) : b2Body_Disable(rb.bodyId);
+                    b2Body_EnableSleep(rb.bodyId, rb.isEnableSleep);
 
-					float width = glm::abs(bc.size.x * tr.scale.x);
-					float height = glm::abs(bc.size.y * tr.scale.y);
+                    b2MotionLocks ml;
+                    ml.angularZ = rb.fixedRotation;
+                    b2Body_SetMotionLocks(rb.bodyId, ml);
 
-					width = glm::max(width, glm::epsilon<float>());
-					height = glm::max(height, glm::epsilon<float>());
-                    const b2Vec2 offset = { bc.offset.x * tr.scale.x, bc.offset.y * tr.scale.y };
-                    const b2Polygon boxShape = b2MakeOffsetBox(width, height, offset, b2MakeRot(0.0f));
-					b2Shape_SetPolygon(bc.shapeId, &boxShape);
-                    bc.dirty = false;
+                    rb.dirty = false;
                 }
-            }
 
-            if (reg->any_of<CircleCollider2DComponent>(e))
-            {
-                CircleCollider2DComponent &cc = reg->get<CircleCollider2DComponent>(e);
-                if (cc.dirty)
+                if (reg->any_of<BoxCollider2DComponent>(e))
                 {
-					b2Shape_SetFriction(cc.shapeId, cc.friction);
-					b2Shape_SetDensity(cc.shapeId, cc.density, true);
-					b2Shape_SetRestitution(cc.shapeId, cc.restitution);
+                    BoxCollider2DComponent &bc = reg->get<BoxCollider2DComponent>(e);
+                    if (bc.dirty)
+                    {
+                        b2Shape_SetFriction(bc.shapeId, bc.friction);
+                        b2Shape_SetDensity(bc.shapeId, bc.density, true);
+                        b2Shape_SetRestitution(bc.shapeId, bc.restitution);
 
-					const b2Circle circleShape = {
-						.center = {cc.center.x, cc.center.y},
-						.radius = cc.radius
-					};
-					b2Shape_SetCircle(cc.shapeId, &circleShape);
-                    cc.dirty = false;
+                        float width = glm::abs(bc.size.x * tr.world.scale.x);
+                        float height = glm::abs(bc.size.y * tr.world.scale.y);
+
+                        width = glm::max(width, glm::epsilon<float>());
+                        height = glm::max(height, glm::epsilon<float>());
+                        const b2Vec2 offset = { bc.offset.x * tr.world.scale.x, bc.offset.y * tr.world.scale.y };
+                        const b2Polygon boxShape = b2MakeOffsetBox(width, height, offset, b2MakeRot(0.0f));
+                        b2Shape_SetPolygon(bc.shapeId, &boxShape);
+                        bc.dirty = false;
+                    }
                 }
-            }
 
-            if (tr.dirtyPhysics)
-            {
-                b2Body_SetTransform(rb.bodyId, { tr.translation.x, tr.translation.y }, b2MakeRot(eulerAngles(tr.rotation).z));
-                tr.dirtyPhysics = false;
-            }
+                if (reg->any_of<CircleCollider2DComponent>(e))
+                {
+                    CircleCollider2DComponent &cc = reg->get<CircleCollider2DComponent>(e);
+                    if (cc.dirty)
+                    {
+                        b2Shape_SetFriction(cc.shapeId, cc.friction);
+                        b2Shape_SetDensity(cc.shapeId, cc.density, true);
+                        b2Shape_SetRestitution(cc.shapeId, cc.restitution);
 
-            // first, calculate the local transform
-            const auto [x, y] = b2Body_GetPosition(rb.bodyId);
-            const b2Rot rotation = b2Body_GetRotation(rb.bodyId);
-            const b2Vec2 linearVelocity = b2Body_GetLinearVelocity(rb.bodyId);
+                        const b2Circle circleShape = {
+                            .center = {cc.center.x, cc.center.y},
+                            .radius = cc.radius
+                        };
+                        b2Shape_SetCircle(cc.shapeId, &circleShape);
+                        cc.dirty = false;
+                    }
+                }
 
-            tr.localTranslation = { x, y, tr.translation.z };
-			tr.localRotation = glm::quat({ 0.0f, 0.0f, b2Rot_GetAngle(rotation) });
+                if (tr.dirtyPhysics)
+                {
+                    b2Body_SetTransform(rb.bodyId, { tr.world.translation.x, tr.world.translation.y }, b2MakeRot(eulerAngles(tr.world.rotation).z));
+                    tr.dirtyPhysics = false;
+                }
 
-            tr.translation = tr.localTranslation;
-            tr.rotation = tr.localRotation;
+                // first, calculate the local transform
+                const auto [x, y] = b2Body_GetPosition(rb.bodyId);
+                const b2Rot rotation = b2Body_GetRotation(rb.bodyId);
+                const b2Vec2 linearVelocity = b2Body_GetLinearVelocity(rb.bodyId);
 
-            rb.linearVelocity = { linearVelocity.x, linearVelocity.y };
-            rb.angularVelocity = b2Body_GetAngularVelocity(rb.bodyId);
-            rb.isAwake = b2Body_IsAwake(rb.bodyId);
-             rb.isEnabled = b2Body_IsEnabled(rb.bodyId);
+                tr.local.translation = { x, y, tr.world.translation.z };
+                tr.local.rotation = glm::quat({ 0.0f, 0.0f, b2Rot_GetAngle(rotation) });
+
+                tr.world.translation = tr.local.translation;
+                tr.world.rotation = tr.local.rotation;
+
+                rb.linearVelocity = { linearVelocity.x, linearVelocity.y };
+                rb.angularVelocity = b2Body_GetAngularVelocity(rb.bodyId);
+                rb.isAwake = b2Body_IsAwake(rb.bodyId);
+                rb.isEnabled = b2Body_IsEnabled(rb.bodyId);
             }
         }
     }
 
     void Physics2D::CreateBoxCollider(BoxCollider2DComponent *box, b2BodyId bodyId, b2Vec2 size)
     {
-        float width = glm::abs(size.x);
-        float height = glm::abs(size.y);
-        width = glm::max(width, glm::epsilon<float>());
-        height = glm::max(height, glm::epsilon<float>());
-        
-        box->currentSize = { width, height };
-
         float scaleX = 1.0f;
         float scaleY = 1.0f;
         if (glm::abs(box->size.x) > glm::epsilon<float>())
             scaleX = size.x / box->size.x;
         if (glm::abs(box->size.y) > glm::epsilon<float>())
-            scaleY = size.y / box->size.y;
+			scaleY = size.y / box->size.y;
+
+		const float width = glm::max(glm::abs(size.x), glm::epsilon<float>());
+		const float height = glm::max(glm::abs(size.y), glm::epsilon<float>());
 
         const b2Vec2 offset = { box->offset.x * scaleX, box->offset.y * scaleY };
         const b2Polygon boxShape = b2MakeOffsetBox(width, height, offset, b2MakeRot(0.0f));

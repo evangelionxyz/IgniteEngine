@@ -82,10 +82,10 @@ namespace ignite
     {
     public:
         ICamera();
-        ~ICamera() { }
+        virtual ~ICamera() = default;
 
         virtual void UpdateView();
-        virtual void UpdateProjection(float width, float height);
+        virtual void UpdateProjection(uint32_t width, uint32_t height);
        
         virtual glm::vec3 GetUpDirection() const;
         virtual glm::vec3 GetRightDirection() const;
@@ -95,7 +95,7 @@ namespace ignite
         virtual glm::mat4 GetView();
 
         inline bool IsPerspective() const { return projectionType == ProjectionType::Perspective; }
-        inline const glm::vec2 &GetViewportSize() const { return m_ViewportSize; }
+        inline const glm::uvec2 &GetViewportSize() const { return m_ViewportSize; }
 
         float pitch = 0.0f; // rotation around X axis
         float yaw = 0.0f; // rotation around Y axis
@@ -132,7 +132,7 @@ namespace ignite
     protected:
         glm::mat4 m_View = glm::mat4(1.0f);
         glm::mat4 m_Projection = glm::mat4(1.0f);
-		glm::vec2 m_ViewportSize;
+		glm::uvec2 m_ViewportSize;
     };
 }
 

@@ -4,33 +4,32 @@
 #define IGN_IMPORT_FILE_EVENT_HPP
 
 #include "event.hpp"
-
 #include "ignite/asset/asset.hpp"
-
-#include <vector>
 #include "ignite/core/path.hpp"
+#include <vector>
 
 namespace ignite
 {
-	class AssetImportEvent : public Event
+	class AssetImportEvent final : public Event
 	{
 	public:
-      AssetImportEvent(const std::vector<ignite::Path> &filepaths, AssetType assetType, const ignite::Path &targetDirectory = {})
+		AssetImportEvent(const std::vector<ignite::Path> &filepaths, AssetType assetType, const ignite::Path &targetDirectory = {})
 			: m_Filepaths(filepaths), m_AssetType(assetType), m_TargetDirectory(targetDirectory)
 		{
 		}
 
-		AssetType GetAssetType() { return m_AssetType; }
+		const AssetType &GetAssetType() const { return m_AssetType; }
+
 		std::vector<ignite::Path> &GetFilepaths() { return m_Filepaths; }
 		const ignite::Path &GetTargetDirectory() const { return m_TargetDirectory; }
 
 		EVENT_CLASS_TYPE(AssetImport)
-		EVENT_CLASS_CATEGORY(EventCategoryApplication)
+		EVENT_CLASS_CATEGORY(EventCategoryAsset)
 	private:
 
 		AssetType m_AssetType;
 		std::vector<ignite::Path> m_Filepaths;
-      ignite::Path m_TargetDirectory;
+		ignite::Path m_TargetDirectory;
 	};
 }
 

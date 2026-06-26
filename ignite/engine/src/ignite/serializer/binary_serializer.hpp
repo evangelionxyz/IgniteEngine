@@ -113,20 +113,53 @@ namespace ignite
             if (stream.peek() != std::ifstream::traits_type::eof())
             {
                 stream.read(reinterpret_cast<char *>(outData), sizeInBytes ? sizeInBytes : sizeof(T));
-                return true;
+                return !stream.fail();
             }
             return false;
         }
 
         static std::string ReadString(std::ifstream &stream, uint32_t strSize)
         {
+            if (strSize == 0)
+                return "";
+
+            // Limit to maximum sensible string size (e.g 1MB) to prevent OOM
+            if (strSize > 1024 * 1024)
+            {
+                throw std::runtime_error("String size exceeds safety limit");
+            }
+
+            if (!HasRemainingBytes(stream, strSize))
+            {
+                throw std::runtime_error("Corrupt file: string size exceeds remaining file size");
+            }
+
+
             std::vector<char> stringBytes(strSize); // owns the bytes
             stream.read(stringBytes.data(), strSize);
+            if (stream.gcount() < static_cast<std::streamsize>(strSize))
+            {
+                throw std::runtime_error("Corrupt file: failed to read complete string");
+            }
 
-            std::string result = std::string(stringBytes.data());
-            return result;
+            size_t len = 0;
+			while (len < strSize && stringBytes[len] != '\0')
+			{
+				len++;
+			}
+			return std::string(stringBytes.data(), len);
         }
 
+        static bool HasRemainingBytes(std::ifstream &stream, size_t neededBytes)
+        {
+            std::streampos current = stream.tellg();
+            stream.seekg(0, std::ios::end);
+            
+            std::streampos end = stream.tellg();
+            stream.seekg(current);
+
+            return (end - current) >= static_cast<std::streamoff>(neededBytes);
+        }
 
         static bool SerializeTextureToPNG(const Ref<Texture> &texture, const ignite::Path &filepath)
         {
@@ -134,8 +167,8 @@ namespace ignite
                 return false;
 
             const int channels = 4;
-            const int width = static_cast<int>(texture->GetWidth());
-            const int height = static_cast<int>(texture->GetHeight());
+            const auto width = static_cast<int>(texture->GetWidth());
+            const auto height = static_cast<int>(texture->GetHeight());
 
             if (width <= 0 || height <= 0)
                 return false;
@@ -143,13 +176,12 @@ namespace ignite
             const size_t bytesPerPixel = channels * sizeof(uint8_t);
             const size_t expectedSize = static_cast<size_t>(width) * static_cast<size_t>(height) * bytesPerPixel;
 
-            std::vector<uint8_t> pixelCopy;
-            pixelCopy.resize(expectedSize);
+            const Buffer &texturePixel = texture->GetBuffer();
+            Buffer pixelCopy(expectedSize);
 
-            const Buffer &buffer = texture->GetBuffer();
-            if (buffer.data && buffer.size >= expectedSize)
+            if (!texturePixel.IsEmpty())
             {
-                std::memcpy(pixelCopy.data(), buffer.data, expectedSize);
+                pixelCopy = texturePixel;
             }
             else
             {
@@ -170,11 +202,11 @@ namespace ignite
                     return false;
                 }
 
-                std::memcpy(pixelCopy.data(), sourceData, expectedSize);
+                pixelCopy = Buffer(sourceData, expectedSize);
                 stbi_image_free(sourceData);
             }
 
-            int result = stbi_write_png(filepath.generic_string().c_str(), width, height, channels, pixelCopy.data(), width * channels);
+            int result = stbi_write_png(filepath.generic_string().c_str(), width, height, channels, pixelCopy.Data(), width * channels);
             return result == 1;
         }
 
@@ -193,7 +225,7 @@ namespace ignite
             }
 
             const Buffer &buffer = texture->GetBuffer();
-            if (!buffer.data || buffer.size == 0)
+            if (buffer.IsEmpty())
             {
                 return false;
             }
@@ -206,12 +238,12 @@ namespace ignite
 
             const auto fillFromFloatRGBA = [&]() -> bool
             {
-                if (buffer.size < pixelCount * 4u * sizeof(float))
+                if (buffer.Size() < pixelCount * 4u * sizeof(float))
                 {
                     return false;
                 }
 
-                const float *src = reinterpret_cast<const float *>(buffer.data);
+                const auto src = (const float *)buffer.Data();
                 for (size_t i = 0; i < pixelCount; ++i)
                 {
                     red[i] = src[i * 4u + 0u];
@@ -224,12 +256,12 @@ namespace ignite
 
             const auto fillFromByteRGBA = [&]() -> bool
             {
-                if (buffer.size < pixelCount * 4u)
+                if (buffer.Size() < pixelCount * 4u)
                 {
                     return false;
                 }
 
-                const uint8_t *src = buffer.data;
+                const uint8_t *src = buffer.Data();
                 for (size_t i = 0; i < pixelCount; ++i)
                 {
                     red[i] = static_cast<float>(src[i * 4u + 0u]) / 255.0f;
@@ -249,11 +281,11 @@ namespace ignite
             {
                 bufferDecoded = fillFromByteRGBA();
             }
-            else if (buffer.size >= pixelCount * 4u * sizeof(float))
+            else if (buffer.Size() >= pixelCount * 4u * sizeof(float))
             {
                 bufferDecoded = fillFromFloatRGBA();
             }
-            else if (buffer.size >= pixelCount * 4u)
+            else if (buffer.Size() >= pixelCount * 4u)
             {
                 bufferDecoded = fillFromByteRGBA();
             }
@@ -840,18 +872,18 @@ namespace ignite
                 ds.nameOffset = nameOffsets[socket.name];
                 ds.parentId = socket.parentJointId;
 
-                ds.translation[0] = socket.localTranslation.x;
-                ds.translation[1] = socket.localTranslation.y;
-                ds.translation[2] = socket.localTranslation.z;
+                ds.translation[0] = socket.local.translation.x;
+                ds.translation[1] = socket.local.translation.y;
+                ds.translation[2] = socket.local.translation.z;
 
-                ds.rotation[0] = socket.localRotation.x;
-                ds.rotation[1] = socket.localRotation.y;
-                ds.rotation[2] = socket.localRotation.z;
-                ds.rotation[3] = socket.localRotation.w;
+                ds.rotation[0] = socket.local.rotation.x;
+                ds.rotation[1] = socket.local.rotation.y;
+                ds.rotation[2] = socket.local.rotation.z;
+                ds.rotation[3] = socket.local.rotation.w;
 
-                ds.scale[0] = socket.localScale.x;
-                ds.scale[1] = socket.localScale.y;
-                ds.scale[2] = socket.localScale.z;
+                ds.scale[0] = socket.local.scale.x;
+                ds.scale[1] = socket.local.scale.y;
+                ds.scale[2] = socket.local.scale.z;
 
                 AppendRaw(buffer, ds);
             }
@@ -877,7 +909,10 @@ namespace ignite
 
             // read joint count
             uint32_t jointCount = 0;
-            ReadRaw(inFile, &jointCount);
+            if (!ReadRaw(inFile, &jointCount) && !HasRemainingBytes(inFile, jointCount * sizeof(DiskJoint)))
+            {
+                throw std::runtime_error("Corrupt file: invalid joint count");
+            }
 
             // read disk joint array
             std::vector<DiskJoint> diskJoints(jointCount);
@@ -900,7 +935,18 @@ namespace ignite
                 }
 
                 const char *namePtr = stringTable.data() + dj.nameOffset;
-                std::string jointName = std::string(namePtr);
+                size_t maxLen = (size_t)(stringTableSize - dj.nameOffset);
+                size_t actualLen = 0;
+                while (actualLen < maxLen && namePtr[actualLen] != '\0')
+                {
+                    actualLen++;
+                }
+                if (actualLen == maxLen)
+                {
+                    throw std::runtime_error("Corrupt file: string in table is not null-terminated");
+                }
+
+                std::string jointName = std::string(namePtr, actualLen);
 
                 Joint joint{};
                 joint.name = jointName;
@@ -937,9 +983,9 @@ namespace ignite
                 JointSocket socket{};
                 socket.name = std::string(socketNamePtr);
                 socket.parentJointId = ds.parentId;
-                socket.localTranslation = glm::vec3(ds.translation[0], ds.translation[1], ds.translation[2]);
-                socket.localRotation = glm::quat(ds.rotation[3], ds.rotation[0], ds.rotation[1], ds.rotation[2]);
-                socket.localScale = glm::vec3(ds.scale[0], ds.scale[1], ds.scale[2]);
+                socket.local.translation = glm::vec3(ds.translation[0], ds.translation[1], ds.translation[2]);
+                socket.local.rotation = glm::quat(ds.rotation[3], ds.rotation[0], ds.rotation[1], ds.rotation[2]);
+                socket.local.scale = glm::vec3(ds.scale[0], ds.scale[1], ds.scale[2]);
 
                 skeleton->socketNameToIndex[socket.name] = static_cast<int32_t>(skeleton->sockets.size());
                 skeleton->sockets.push_back(std::move(socket));

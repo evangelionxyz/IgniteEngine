@@ -22,13 +22,14 @@
 */
 
 #include "texture.hpp"
+#include "ignite/core/base.hpp"
+#include "ignite/core/application.hpp"
 #include "ignite/core/device/device_manager.hpp"
 #include "ignite/core/profiler/profiler.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/imgui/imgui_nvrhi.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/serializer/serializer.hpp"
-#include "ignite/core/base.hpp"
 #include <stb_image.h>
 #include <algorithm>
 #include <cctype>
@@ -117,7 +118,7 @@ namespace ignite
 
         Serializer sr(filepath);
         sr.BeginMap();
-        sr.AddKeyValue("ENGINE_VERSION", ENGINE_VERSION);
+        sr.AddKeyValue("Version", Application::GetVersion());
         sr.AddKeyValue("ASSET_HANDLE", static_cast<uint64_t>(handle));
         sr.AddKeyValue("ASSET_TYPE", AssetTypeToString(AssetType::Texture));
 

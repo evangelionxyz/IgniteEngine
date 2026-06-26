@@ -210,7 +210,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 		{
 			projectSr.BeginMap("Project");
 
-			projectSr.AddKeyValue("Version", ENGINE_VERSION);
+			projectSr.AddKeyValue("Version", Application::GetVersion());
 			projectSr.AddKeyValue("Name", m_Info.name);
 			projectSr.AddKeyValue("AssetPath", m_Info.assetDirectory.generic_string());
 			projectSr.AddKeyValue("AssetRegistry", m_Info.assetRegistryFilepath.generic_string());
@@ -376,7 +376,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         };
 
         // Candidate source directories to search for dependencies. Prefer the executable directory.
-        const ignite::Path exeDir = GetExecutableDirectory();
+        const ignite::Path exeDir = vfs::GetExecutableDirectory();
         const ignite::Path projectBinDir = GetScriptBinDirectory();
 
         std::lock_guard<std::mutex> lock(m_CoreDependencyMutex);
@@ -410,7 +410,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
     {
         m_CoreDependencyWatchers.clear();
 
-        const ignite::Path exeDir = GetExecutableDirectory();
+        const ignite::Path exeDir = vfs::GetExecutableDirectory();
         for (const auto &[dep, upToDate] : m_CoreDependencies)
         {
             const ignite::Path depFilename = exeDir / dep;
@@ -441,7 +441,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         {
             using namespace std::chrono_literals;
 
-            const ignite::Path exeDir = GetExecutableDirectory();
+            const ignite::Path exeDir = vfs::GetExecutableDirectory();
             const ignite::Path sourcePath = exeDir / path;
             if (!ignite::Path::exists(sourcePath))
             {
@@ -698,7 +698,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 
 		// copy Ignite.ScriptEngine.dll to project dir
         // Candidate source directories to search for dependencies. Prefer the executable directory.
-        const ignite::Path exeDir = GetExecutableDirectory();
+        const ignite::Path exeDir = vfs::GetExecutableDirectory();
 
         bool depAvailable = false;
         for (auto &[dep, upToDate] : m_CoreDependencies)

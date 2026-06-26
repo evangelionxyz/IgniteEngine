@@ -17,16 +17,17 @@ workspace "IGN"
     INTOUTPUT_DIR = wks_absolute .. "/bin/objs/%{cfg.buildcfg}/%{prj.name}"
 
     include "thirdparty_scripts/thirdparty.lua"
-    
+
     include "../ignite/editor/ignite.editor.lua"
     include "../ignite/engine/ignite.engine.lua"
+    include "../ignite/test/ignite.test.lua"
     include "../scriptengine/ignite.scriptengine.lua"
     include "mochisharp-native.lua"
     include "mochisharp-managed.lua"
 
-    group "Utilities"
-        if not os.getenv("GITHUB_ACTIONS") then include "utility_project.lua" end
-    group ""
+    if not os.getenv("GITHUB_ACTIONS") then
+        include "utility_project.lua"
+    end
 
 
 -- Automatically generate MSBuild properties to combat Any CPU mapping bugs for Slnx when forcing x64 workspace architecture
@@ -41,7 +42,7 @@ premake.override(premake.action, "call", function(base, name)
                 -- Calculate relative path to the workspace bin folder
                 local relBin = path.getrelative(prj.location, binPath) .. "\\\\"
                 local propsFile = path.join(prj.location, "Directory.Build.props")
-                
+
                 local f = io.open(propsFile, "w")
                 if f then
                     f:write("<Project>\n")

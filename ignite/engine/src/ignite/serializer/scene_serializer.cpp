@@ -39,7 +39,7 @@ namespace ignite
         sr.BeginMap(); // START
 
         sr.BeginMap("Scene"); // scene file header
-        sr.AddKeyValue<std::string>("Version", ENGINE_VERSION);
+        sr.AddKeyValue<uint32_t>("Version", Application::GetVersion());
         sr.AddKeyValue<std::string>("Title", m_Scene->name);
         sr.BeginSequence("Entities");
 
@@ -81,13 +81,13 @@ namespace ignite
                     const auto &comp = entity.GetComponent<TransformComponent>();
                     sr.BeginMap("Transform");
                     {
-                        sr.AddKeyValue("WorldTranslation", comp.translation);
-                        sr.AddKeyValue("WorldRotation", comp.rotation);
-                        sr.AddKeyValue("WorldScale", comp.scale);
+                        sr.AddKeyValue("WorldTranslation", comp.world.translation);
+                        sr.AddKeyValue("WorldRotation", comp.world.rotation);
+                        sr.AddKeyValue("WorldScale", comp.world.scale);
 
-                        sr.AddKeyValue("LocalTranslation", comp.localTranslation);
-                        sr.AddKeyValue("LocalRotation", comp.localRotation);
-                        sr.AddKeyValue("LocalScale", comp.localScale);
+                        sr.AddKeyValue("LocalTranslation", comp.local.translation);
+                        sr.AddKeyValue("LocalRotation", comp.local.rotation);
+                        sr.AddKeyValue("LocalScale", comp.local.scale);
 
                         sr.AddKeyValue("Visible", comp.visible);
                     }
@@ -454,8 +454,6 @@ namespace ignite
                     const WorldEnvironment &comp = entity.GetComponent<WorldEnvironment>();
                     sr.BeginMap("WorldEnvironment");
                     {
-                        sr.AddKeyValue("Primary", comp.primary);
-                        sr.AddKeyValue("Enabled", comp.enabled);
                         sr.AddKeyValue("HDRHandle", static_cast<uint64_t>(comp.hdrHandle));
                         sr.AddKeyValue("Exposure", comp.exposure);
                         sr.AddKeyValue("Gamma", comp.gamma);
@@ -651,13 +649,13 @@ namespace ignite
             if (YAML::Node node = entityNode["Transform"])
             {
                 auto &comp = desEntity.AddComponent<TransformComponent>();
-                comp.translation = node["WorldTranslation"].as<glm::vec3>();
-                comp.rotation = node["WorldRotation"].as<glm::quat>();
-                comp.scale = node["WorldScale"].as<glm::vec3>();
+                comp.world.translation = node["WorldTranslation"].as<glm::vec3>();
+                comp.world.rotation = node["WorldRotation"].as<glm::quat>();
+                comp.world.scale = node["WorldScale"].as<glm::vec3>();
 
-                comp.localTranslation = node["LocalTranslation"].as<glm::vec3>();
-                comp.localRotation = node["LocalRotation"].as<glm::quat>();
-                comp.localScale = node["LocalScale"].as<glm::vec3>();
+                comp.local.translation = node["LocalTranslation"].as<glm::vec3>();
+                comp.local.rotation = node["LocalRotation"].as<glm::quat>();
+                comp.local.scale = node["LocalScale"].as<glm::vec3>();
 
                 comp.visible = node["Visible"].as<bool>();
             }
@@ -708,7 +706,7 @@ namespace ignite
                 }
 
                 comp.camera.UpdateView();
-                comp.camera.UpdateProjection(1280.0f, 720.0f);
+                comp.camera.UpdateProjection(1280, 720);
             }
 
             // Sprite 2D component
@@ -963,14 +961,6 @@ namespace ignite
                 if (node["HDRHandle"])
                 {
                     world.hdrHandle = AssetHandle(node["HDRHandle"].as<uint64_t>());
-                }
-                if (node["Primary"])
-                {
-                    world.primary = node["Primary"].as<bool>();
-                }
-                if (node["Enabled"])
-                {
-                    world.enabled = node["Enabled"].as<bool>();
                 }
                 if (node["Exposure"])
                 {

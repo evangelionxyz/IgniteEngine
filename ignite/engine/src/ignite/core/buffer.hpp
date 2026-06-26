@@ -1,136 +1,143 @@
-/* MIT License
-* 
-* Copyright (c) 2025 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
-
+// Copyright (c) 2025 Evangelion Manuhutu
 #pragma once
+#ifndef IGN_BUFFER_HPP
+#define IGN_BUFFER_HPP
 
 #include <cstdint>
 #include <cstdlib>
 #include <vector>
-#include <string.h>
+#include <cstring>
 
 #include "ignite/core/profiler/profiler.hpp"
 
 namespace ignite
 {
-    struct Buffer
+    class IBuffer
     {
-        uint8_t* data = nullptr;
-        uint64_t size = 0;
-
-        Buffer() = default;
-        Buffer(uint64_t size)
+    public:
+        virtual ~IBuffer()
         {
-            Allocate(size);
+            Release();
         }
 
-        Buffer(const std::vector<uint8_t> &inData)
+        [[nodiscard]]
+        virtual const uint8_t *Data() const { return m_Data.data(); }
+
+		[[nodiscard]]
+		virtual const uint8_t *Data() { return m_Data.data(); }
+        
+        [[nodiscard]]
+        virtual const size_t Size() const { return m_Data.size(); }
+
+        [[nodiscard]]
+        static bool IsEmpty(IBuffer const *buffer)
         {
-            Allocate(inData.size());
-            memcpy(data, inData.data(), size);
+            return buffer == nullptr || buffer->Data() == nullptr || buffer->Size() == 0;
         }
 
-        Buffer(void* data, uint64_t size)
-            : data(static_cast<uint8_t *>(data)), size(size)
+        [[nodiscard]]
+        inline bool IsEmpty() const
         {
+            return m_Data.empty();
         }
 
-        static Buffer Copy(uint8_t *inData, uint64_t size)
+        virtual void Allocate(size_t size)
         {
-            if (!inData || size == 0)
+			Release();
+
+            m_Data.resize(size);
+#ifdef IGN_ENABLE_TRACY
+            if (m_Data.data() && size > 0)
             {
-                return {};
+			    IGN_PROFILE_ALLOC_N(Data(), size, "CPU Buffer");
             }
+#endif
+        }
 
-            Buffer result(size);
-            memcpy(result.data, inData, size);
-            return result;
+        virtual void Release()
+        {
+            if (!IsEmpty())
+            {
+                IGN_PROFILE_FREE_N(Data(), "CPU Buffer");
+                m_Data.clear();
+                m_Data.shrink_to_fit(); // Forces deallocation of capacity
+            }
+        }
+
+		template<typename T>
+		T *As() { return (T *)Data(); }
+
+		template<typename T>
+		const T *As() const { return (T *)Data(); }
+
+		operator bool() const { return !IsEmpty(); }
+
+        const std::vector<uint8_t> &Get() const { return m_Data; }
+
+    protected:
+        std::vector<uint8_t> m_Data;
+    };
+
+    class Buffer : public IBuffer
+    {
+    public:
+		Buffer() = default;
+
+		Buffer(size_t size)
+		{
+			m_Data.resize(size);
+		}
+
+		Buffer(const std::vector<uint8_t> &inData)
+		{
+			m_Data = inData;
+		}
+
+		Buffer(void *data, size_t size)
+		{
+			if (data && size > 0)
+			{
+				m_Data.resize(size);
+				std::memcpy(m_Data.data(), data, size);
+			}
+		}
+
+        static Buffer Copy(uint8_t *data, size_t size)
+        {
+            if (!data || size == 0)
+            {
+                return { };
+            }
+            return { data, size };
         }
 
         static Buffer Copy(const std::vector<uint8_t> &data)
         {
             if (data.empty())
-                return {};
-
-            Buffer result(data.size());
-            memcpy(result.data, data.data(), data.size());
-            return result;
+                return { };
+            return { data };
         }
 
         static Buffer Copy(const Buffer &other)
         {
-            if (!other.data || other.size == 0)
+            if (IBuffer::IsEmpty(&other))
             {
                 return {};
             }
 
-            Buffer result(other.size);
-            memcpy(result.data, other.data, other.size);
-            return result;
-        }
-
-        void Allocate(uint64_t size)
-        {
-            Release();
-
-            data = static_cast<uint8_t *>(std::malloc(size));
-            this->size = size;
-            if (data && size > 0)
-            {
-                IGN_PROFILE_ALLOC_N(data, size, "CPU Buffer");
-            }
-        }
-
-        void Release()
-        {
-            if (data != nullptr)
-            {
-                IGN_PROFILE_FREE_N(data, "CPU Buffer");
-                std::free(data);
-                data = nullptr;
-                size = 0;
-            }
-        }
-
-        template<typename T>
-        T* As()
-        {
-            return static_cast<T *>(data);
-        }
-
-        operator bool() const
-        {
-            return static_cast<bool>(data);
+            return { other.m_Data };
         }
     };
 
-    struct ScopedBuffer
+    class ScopedBuffer
     {
+    public:
         ScopedBuffer(Buffer buffer)
             : m_Buffer(buffer)
         {
         }
 
-        ScopedBuffer(uint64_t size)
+        ScopedBuffer(size_t size)
             : m_Buffer(size)
         {
         }
@@ -140,8 +147,8 @@ namespace ignite
             m_Buffer.Release();
         }
 
-        uint8_t* Data() { return m_Buffer.data; }
-        uint8_t Size() { return static_cast<uint8_t>(m_Buffer.size); }
+        const uint8_t* Data() const { return m_Buffer.Data(); }
+        const size_t Size() const { return m_Buffer.Size(); }
 
         template<typename T>
         T* As()
@@ -153,6 +160,7 @@ namespace ignite
 
     private:
         Buffer m_Buffer;
-
     };
 }
+
+#endif

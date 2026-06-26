@@ -19,6 +19,7 @@ project "Ignite.Editor"
 
         -- Resource
         "resource.h",
+        "Ignite.Editor.aps",
         "Ignite.Editor.rc",
         "ignite-icon256px.ico",
         "ignite-icon256px.png",
@@ -87,6 +88,10 @@ project "Ignite.Editor"
         "JPH_DEBUG_RENDERER",
         "JPH_PROFILE_ENABLED",
         "JPH_OBJECT_STREAM",
+    }
+
+    postbuildcommands {
+        '{COPYDIR} "%{prj.location}/resources" "%{cfg.targetdir}/resources"',
     }
 
     --linux

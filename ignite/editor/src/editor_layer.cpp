@@ -263,11 +263,14 @@ namespace ignite
             }
         }
 
+        if (m_ActiveProject)
+        {
+            m_ActiveProject->GetAssetManager()->OnUpdate();
+        }
+
         // update panels
         if (m_ActiveScene)
         {
-            m_SceneRenderer->OnUpdate(deltaTime);
-
             // multi select entity
             m_State.multiSelect = InputSystem::IsModifierPressed(KeyMod::LeftShift);
 
@@ -298,6 +301,14 @@ namespace ignite
         EventDispatcher dispatcher(e);
         dispatcher.Dispatch<KeyPressedEvent>(BIND_CLASS_EVENT_FN(EditorLayer::OnKeyPressedEvent));
         dispatcher.Dispatch<MouseButtonPressedEvent>(BIND_CLASS_EVENT_FN(EditorLayer::OnMouseButtonPressed));
+        if (m_ActiveProject)
+        {
+            if (auto assetManager = m_ActiveProject->GetAssetManager())
+            {
+                assetManager->OnEvent(e);
+            }
+        }
+
     }
 
     void EditorLayer::OnSDLEvent(SDL_Event *evt)
@@ -340,8 +351,8 @@ namespace ignite
                     auto &cam = m_ScenePanel->GetViewportCamera();
                     auto &tr = entity.GetComponent<TransformComponent>();
 
-                    glm::vec3 focusCenter = tr.translation;
-                    glm::vec3 halfExtents = glm::abs(tr.scale) * 0.5f;
+                    glm::vec3 focusCenter = tr.world.translation;
+                    glm::vec3 halfExtents = glm::abs(tr.world.scale) * 0.5f;
 
                     auto tryFocusFromAABB = [&](const AABB &meshAABB)
                     {
@@ -357,7 +368,7 @@ namespace ignite
                             { meshAABB.max.x, meshAABB.max.y, meshAABB.max.z },
                         };
 
-                        const glm::mat4 worldTransform = tr.GetWorldMatrix();
+                        const glm::mat4 worldTransform = tr.world.GetMatrix();
                         glm::vec3 worldMin(std::numeric_limits<float>::max());
                         glm::vec3 worldMax(std::numeric_limits<float>::lowest());
 
@@ -495,26 +506,30 @@ namespace ignite
         if (editCamera)
         {
             // Resize Edit Viewport Framebuffer
-            const glm::vec2 framebufferSize = m_SceneRenderer->GetCompositeRT()->GetSize();
-            const glm::vec2 desiredSize = glm::max(glm::vec2(0.0f), globals::GEditor::EditorViewport.max);
-            const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
+            const glm::uvec2 framebufferSize = m_SceneRenderer->GetCompositeRT()->GetSize();
+            const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::EditorViewport.max));
+            const bool framebufferNeedsResize = (framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y);
+            const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
 
-            // Resize camera
-            if (framebufferNeedsResize && desiredSize.x > 0.0f && desiredSize.y > 0.0f)
+            if (isFramebufferSizeValid)
             {
-                m_ScenePanel->GetViewportCamera().UpdateProjection(desiredSize.x, desiredSize.y);
-                m_State.editorResizing = true;
-            }
+				// Resize camera
+				if (framebufferNeedsResize)
+				{
+					m_ScenePanel->GetViewportCamera().UpdateProjection(desiredSize.x, desiredSize.y);
+					m_State.editorResizing = true;
+				}
 
-            // Resize framebuffer when in stable frame
-            if (m_State.editorResizing && desiredSize.x > 0.0f && desiredSize.y > 0.0f)
-            {
-                if (m_State.editorResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
-                {
-                    m_SceneRenderer->ResizeFramebuffer(static_cast<uint32_t>(desiredSize.x), static_cast<uint32_t>(desiredSize.y));
-                    m_State.editorResizing = false;
-                    m_State.editorResizingFrame = 0;
-                }
+				// Resize framebuffer when in stable frame
+				if (m_State.editorResizing)
+				{
+					if (m_State.editorResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
+					{
+						m_SceneRenderer->ResizeFramebuffer(desiredSize.x, desiredSize.y);
+						m_State.editorResizing = false;
+						m_State.editorResizingFrame = 0;
+					}
+				}
             }
         }
 
@@ -525,24 +540,28 @@ namespace ignite
             ICamera *gameCamera = &cc.camera;
             {
                 // Resize Game Viewport Framebuffer
-                const glm::vec2 framebufferSize = m_SceneRenderer->GetGameplayCompositeRT()->GetSize();
-                const glm::vec2 desiredSize = glm::max(glm::vec2(0.0f), gameCamera->GetViewportSize());
+                const glm::uvec2 framebufferSize = m_SceneRenderer->GetGameplayCompositeRT()->GetSize();
+                const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::GameViewport.max));
                 const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
+				const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
 
-                if (framebufferNeedsResize && desiredSize.x > 0.0f && desiredSize.y > 0.0f)
+                if (isFramebufferSizeValid)
                 {
-                    gameCamera->UpdateProjection(desiredSize.x, desiredSize.y);
-                    m_State.gameplayResizing = true;
-                }
+					if (framebufferNeedsResize)
+					{
+						gameCamera->UpdateProjection(desiredSize.x, desiredSize.y);
+						m_State.gameplayResizing = true;
+					}
 
-                if (m_State.gameplayResizing && desiredSize.x > 0.0f && desiredSize.y > 0.0f)
-                {
-                    if (m_State.gameplayResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
-                    {
-                        m_SceneRenderer->ResizeGameplayFramebuffer(static_cast<uint32_t>(desiredSize.x), static_cast<uint32_t>(desiredSize.y));
-                        m_State.gameplayResizing = false;
-                        m_State.gameplayResizingFrame = 0;
-                    }
+					if (m_State.gameplayResizing)
+					{
+						if (m_State.gameplayResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
+						{
+							m_SceneRenderer->ResizeGameplayFramebuffer(desiredSize.x, desiredSize.y);
+							m_State.gameplayResizing = false;
+							m_State.gameplayResizingFrame = 0;
+						}
+					}
                 }
             }
         }
@@ -683,6 +702,11 @@ namespace ignite
                 {
                     OpenProject();
                 }
+
+				else if (ImGui::MenuItem("Close Project", nullptr, false, m_ActiveProject != nullptr))
+				{
+					CloseCurrentProject();
+				}
 
                 ImGui::EndMenu();
             }
@@ -855,7 +879,7 @@ namespace ignite
         ImGui::SameLine();
         ImGui::TextUnformatted(m_StatusText.c_str());
 
-        const std::string versionStr = std::format("Version: {}", ENGINE_VERSION);
+        const std::string versionStr = std::format("Version: {}", Application::GetVersionString());
         float versionWidth = ImGui::CalcTextSize(versionStr.c_str()).x;
         ImGui::SameLine(ImGui::GetWindowWidth() - versionWidth - 10.0f);
         ImGui::TextUnformatted(versionStr.c_str());
@@ -945,7 +969,9 @@ namespace ignite
         {
             m_ScenePanel->SetActiveScene(nullptr);
         }
+
         m_SceneRenderer->SetActiveScene(nullptr);
+
         if (m_ActiveProject)
         {
             m_ActiveProject->SetActiveScene(nullptr);
@@ -966,6 +992,7 @@ namespace ignite
         }
 
         m_SceneRenderer->SetActiveScene(scene);
+
         GameUISystem::SetSceneContext(scene.get());
     }
 
@@ -1127,6 +1154,27 @@ namespace ignite
             nullptr, false);
     }
 
+    void EditorLayer::CloseCurrentProject()
+    {
+        if (m_ActiveProject)
+        {
+            SaveProject();
+
+            SetActiveScene(nullptr);
+
+            m_EditorScene.reset();
+            m_ActiveScene.reset();
+
+            m_ActiveProject->GetAssetManager()->ClearAllLoadedAssets();
+
+            // Reset everything
+            m_ActiveProject.reset();
+            m_CurrentProjectFilepath.clear();
+            m_CurrentSceneFilePath.clear();
+            m_CurrentSceneHandle = AssetHandle(0);
+        }
+    }
+
     void EditorLayer::OpenProject(const ignite::Path &filepath)
     {
         if (filepath == m_CurrentProjectFilepath)
@@ -1153,47 +1201,47 @@ namespace ignite
             m_ActiveProject->ResetReadyState();
 
             auto readyFunc = [this]() -> void
-            {
-                // Reload project files
-                ReloadContentBrowserPanels();
-
-                // Get Project default scene (use immediate load for synchronous path)
-                AssetHandle defSceneAssetHandle = m_ActiveProject->GetInfo().defaultSceneHandle;
-                if (defSceneAssetHandle != AssetHandle(0))
                 {
-                    // Use GetAssetImmediate since we're on main thread and need synchronous load
-                    if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(defSceneAssetHandle))
+                    // Reload project files
+                    ReloadContentBrowserPanels();
+
+                    // Get Project default scene (use immediate load for synchronous path)
+                    AssetHandle defSceneAssetHandle = m_ActiveProject->GetInfo().defaultSceneHandle;
+                    if (defSceneAssetHandle != AssetHandle(0))
                     {
-                        m_EditorScene = SceneManager::Copy(activeScene);
-                        m_EditorScene->SetDirtyFlag(false);
-                        SetActiveScene(m_EditorScene);
+                        // Use GetAssetImmediate since we're on main thread and need synchronous load
+                        if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(defSceneAssetHandle))
+                        {
+                            m_EditorScene = SceneManager::Copy(activeScene);
+                            m_EditorScene->SetDirtyFlag(false);
+                            SetActiveScene(m_EditorScene);
 
-                        const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
+                            const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
 
-                        m_CurrentSceneFilePath = m_ActiveProject->GetProjectFilepath(assetFilepath);
-                        m_CurrentSceneHandle = activeScene->handle;
+                            m_CurrentSceneFilePath = m_ActiveProject->GetProjectFilepath(assetFilepath);
+                            m_CurrentSceneHandle = activeScene->handle;
+                        }
+                        else
+                        {
+                            // Create a default scene if load failed
+                            NewScene();
+                        }
                     }
                     else
                     {
-                        // Create a default scene if load failed
+                        // Create a default scene
                         NewScene();
                     }
-                }
-                else
-                {
-                    // Create a default scene
-                    NewScene();
-                }
-            };
+                };
 
             // Register Build Solution callback
             m_ActiveProject->AddOnProjectReadyFuncs([readyFunc](bool isSuccess)
-            {
-                if (isSuccess)
                 {
-                    readyFunc();
-                }
-            });
+                    if (isSuccess)
+                    {
+                        readyFunc();
+                    }
+                });
 
             // Initialize Script engine
             openedProject->InitScriptEngine();
