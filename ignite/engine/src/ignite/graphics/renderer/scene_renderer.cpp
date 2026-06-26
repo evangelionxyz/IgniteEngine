@@ -780,11 +780,24 @@ namespace ignite
         Project *project = m_Scene ? m_Scene->GetProject() : nullptr;
         std::unordered_set<Material *> uploadedMaterialsThisPass;
         Ref<GraphicsPipeline> geomPSO = GetGeomPipelineForFB(framebuffer, m_FillMode);
+        Ref<GraphicsPipeline> transparentPSO = GetTransparentGeomPipelineForFB(framebuffer, m_FillMode);
 
         nvrhi::GraphicsState geomGState = nvrhi::GraphicsState();
         geomGState.pipeline = geomPSO->GetHandle();
         geomGState.framebuffer = framebuffer;
         geomGState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+
+        // Deferred draw call info for transparent meshes (sorted back-to-front)
+        struct TransparentDrawCall
+        {
+            nvrhi::BindingSetHandle meshBindingSet;
+            nvrhi::BindingSetHandle materialBindingSet;
+            nvrhi::BufferHandle vertexBuffer;
+            nvrhi::BufferHandle indexBuffer;
+            uint32_t indexCount;
+            float distanceToCamera;
+        };
+        std::vector<TransparentDrawCall> transparentDrawCalls;
 
         {
             IGN_PROFILE_SCOPE("SceneRenderer::Meshes");
@@ -866,7 +879,16 @@ namespace ignite
                         primitive->WriteBuffer(cmd);
                     }
 
-                    Ref<Material> material = ResolveMaterial(project, meshInstance->GetMaterialHandle());
+                    Ref<Material> material = nullptr;
+                    auto overrideIt = smc.overrideMaterials.find(static_cast<int>(idx));
+                    if (overrideIt != smc.overrideMaterials.end() && overrideIt->second != AssetHandle(0))
+                    {
+                        material = ResolveMaterial(project, overrideIt->second);
+                    }
+                    if (!material)
+                    {
+                        material = ResolveMaterial(project, meshInstance->GetMaterialHandle());
+                    }
                     if (!material)
                         continue;
 
@@ -890,20 +912,73 @@ namespace ignite
 
                     if (meshBindingSet && material->GetBindingSet() && primitive->vertexBuffer && primitive->indexBuffer)
                     {
-                        geomGState.bindings = { meshBindingSet, material->GetBindingSet() };
-                        geomGState.vertexBuffers.resize(0);
-                        geomGState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
-                        geomGState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+                        // Transparent materials are deferred to the transparent sub-pass
+                        if (material->GetType() == MaterialType::Transparent)
+                        {
+                            TransparentDrawCall dc;
+                            dc.meshBindingSet = meshBindingSet;
+                            dc.materialBindingSet = material->GetBindingSet();
+                            dc.vertexBuffer = primitive->vertexBuffer->GetHandle();
+                            dc.indexBuffer = primitive->indexBuffer->GetHandle();
+                            dc.indexCount = primitive->indexBuffer->GetCount();
 
-                        cmd->setGraphicsState(geomGState);
+                            // Compute distance from camera for back-to-front sorting
+                            glm::vec3 meshWorldPos = glm::vec3(gpuData.transformation[3]);
+                            dc.distanceToCamera = glm::length(camera->position - meshWorldPos);
+                            transparentDrawCalls.push_back(dc);
+                        }
+                        else
+                        {
+                            // Opaque: draw immediately
+                            geomGState.bindings = { meshBindingSet, material->GetBindingSet() };
+                            geomGState.vertexBuffers.resize(0);
+                            geomGState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
+                            geomGState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
 
-                        nvrhi::DrawArguments args;
-                        args.setVertexCount(primitive->indexBuffer->GetCount());
-                        args.instanceCount = 1;
+                            cmd->setGraphicsState(geomGState);
 
-                        cmd->drawIndexed(args);
+                            nvrhi::DrawArguments args;
+                            args.setVertexCount(primitive->indexBuffer->GetCount());
+                            args.instanceCount = 1;
+
+                            cmd->drawIndexed(args);
+                        }
                     }
                 }
+            }
+        }
+
+        // Transparent sub-pass: sorted back-to-front, alpha blending, no depth write
+        if (!transparentDrawCalls.empty())
+        {
+            IGN_PROFILE_SCOPE("SceneRenderer::TransparentMeshes");
+
+            // Sort back-to-front (farthest first)
+            std::sort(transparentDrawCalls.begin(), transparentDrawCalls.end(),
+                [](const TransparentDrawCall &a, const TransparentDrawCall &b)
+                {
+                    return a.distanceToCamera > b.distanceToCamera;
+                });
+
+            nvrhi::GraphicsState transparentGState = nvrhi::GraphicsState();
+            transparentGState.pipeline = transparentPSO->GetHandle();
+            transparentGState.framebuffer = framebuffer;
+            transparentGState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+
+            for (const auto &dc : transparentDrawCalls)
+            {
+                transparentGState.bindings = { dc.meshBindingSet, dc.materialBindingSet };
+                transparentGState.vertexBuffers.resize(0);
+                transparentGState.vertexBuffers.push_back({ dc.vertexBuffer, 0, 0 });
+                transparentGState.setIndexBuffer({ dc.indexBuffer, nvrhi::Format::R32_UINT });
+
+                cmd->setGraphicsState(transparentGState);
+
+                nvrhi::DrawArguments args;
+                args.setVertexCount(dc.indexCount);
+                args.instanceCount = 1;
+
+                cmd->drawIndexed(args);
             }
         }
 
@@ -1694,6 +1769,46 @@ namespace ignite
 
 		m_GeometryPSOCache.clear();
 		m_GeometryPSOCache.emplace(key, gp);
+		return gp;
+	}
+
+	// Helper to build a transparent geometry pipeline per framebuffer (once)
+	Ref<GraphicsPipeline> SceneRenderer::GetTransparentGeomPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode)
+	{
+		auto key = MakeFramebufferKey(framebuffer, fillMode);
+		auto it = m_TransparentGeometryPSOCache.find(key);
+		if (it != m_TransparentGeometryPSOCache.end())
+		{
+			return it->second;
+		}
+
+		const nvrhi::FramebufferDesc &fbDesc = framebuffer->getDesc();
+		bool hasDepthAttachment = fbDesc.depthAttachment.texture != nullptr;
+
+		GraphicsPipelineParams params;
+		params.enableBlend = true;
+		params.srcBlend = nvrhi::BlendFactor::SrcAlpha;
+		params.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
+		params.srcBlendAlpha = nvrhi::BlendFactor::One;
+		params.destBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
+		params.enableDepthWrite = false; // Transparent objects should not write to depth
+		params.enableDepthTest = hasDepthAttachment;
+		params.enableDepthStencil = false;
+		params.fillMode = fillMode;
+		params.cullMode = nvrhi::RasterCullMode::None; // Render both sides for transparent
+		params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
+
+		Ref<Shader> vertexShader = Shader::Create("resources/shaders/mesh_anim.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, true);
+		Ref<Shader> pixelShader = Shader::Create("resources/shaders/mesh_anim.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, true);
+
+		auto gp = GraphicsPipeline::Create();
+		gp->SetShaders({ vertexShader, pixelShader })
+			.AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
+			.AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
+			.Build(framebuffer, params);
+
+		m_TransparentGeometryPSOCache.clear();
+		m_TransparentGeometryPSOCache.emplace(key, gp);
 		return gp;
 	}
 

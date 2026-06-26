@@ -364,6 +364,9 @@ namespace ignite
 	public:
         AssetHandle handle = AssetHandle(0);         // class SkeletalMesh in mesh.hpp
 
+        // Mesh index, Material Handle
+        std::unordered_map<int, AssetHandle> overrideMaterials;
+
         glm::mat4 worldMatrix = glm::mat4(1.0f);
         glm::mat4 normalMatrix = glm::mat4(1.0f);
 

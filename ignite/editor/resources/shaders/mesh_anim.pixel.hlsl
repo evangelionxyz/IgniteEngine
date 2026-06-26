@@ -1,4 +1,4 @@
-﻿#include "include/helpers.hlsli"
+#include "include/helpers.hlsli"
 #include "include/pbr.hlsli"
 #include "include/binding_helpers.hlsli"
 
@@ -53,7 +53,8 @@ struct Material
     float occlusionStrength;
     int metallicChannel;
     int roughnessChannel;
-    float padding[3];
+    int blendMode;      // 0 = Opaque, 1 = Transparent
+    float2 tilingFactor;
 };
 
 struct CascadesShadows
@@ -112,7 +113,8 @@ struct PSOutput
 
 float3 GenNormalFromMap(float3x3 TBN, float2 uv)
 {
-    float3 normalMap = normalMapTexture.Sample(sampler0, uv).rgb * 2.0f - 1.0f;
+    float2 tiledUV = uv * material.tilingFactor;
+    float3 normalMap = normalMapTexture.Sample(sampler0, tiledUV).rgb * 2.0f - 1.0f;
     return normalize(mul(TBN, normalMap));
 }
 
@@ -189,6 +191,8 @@ PSOutput main(PSInput input)
     PSOutput result;
     result.objectID = object.objectID;
 
+    float2 tiledUV = input.uv * material.tilingFactor;
+
     float3 N = normalize(input.normal);
     float3 viewDirection = normalize(camera.position.xyz - input.worldPos);
 
@@ -202,17 +206,27 @@ PSOutput main(PSInput input)
 
     float3 lightDirection = normalize(sunDirection);
 
-    float3 emissiveColor = emissiveTexture.Sample(sampler0, input.uv).rgb * material.emissiveFactor.rgb;
-    float4 metallicColor = metallicTexture.Sample(sampler0, input.uv);
-    float4 roughnessColor = roughnessTexture.Sample(sampler0, input.uv);
-    float3 normalMap = normalMapTexture.Sample(sampler0, input.uv).rgb;
+    float3 emissiveColor = emissiveTexture.Sample(sampler0, tiledUV).rgb * material.emissiveFactor.rgb;
+    float4 metallicColor = metallicTexture.Sample(sampler0, tiledUV);
+    float4 roughnessColor = roughnessTexture.Sample(sampler0, tiledUV);
+    float3 normalMap = normalMapTexture.Sample(sampler0, tiledUV).rgb;
 
     float metallic = clamp(SelectChannel(metallicColor, material.metallicChannel) * material.metallicFactor, 0.0f, 1.0f);
     float roughness = clamp(SelectChannel(roughnessColor, material.roughnessChannel) * material.roughnessFactor, 0.0f, 1.0f);
 
+    // Sample base color with alpha for transparency support
+    float4 baseColorSample = baseColorTexture.Sample(sampler0, tiledUV);
+    float finalAlpha = baseColorSample.a * material.baseColorFactor.a;
+
+    // Discard nearly transparent fragments in transparent mode
+    if (material.blendMode == 1 && finalAlpha < 0.001f)
+    {
+        discard;
+    }
+
     if (scene.renderMode == RENDER_MODE_COLOR)
     {
-        float3 baseColor = baseColorTexture.Sample(sampler0, input.uv).rgb * material.baseColorFactor.rgb;
+        float3 baseColor = baseColorSample.rgb * material.baseColorFactor.rgb;
         float3 diffuseColor = baseColor * (1.0f - metallic);
         float3 specularColor = lerp(float3(0.04f, 0.04f, 0.04f), baseColor, metallic);
 
@@ -279,11 +293,13 @@ PSOutput main(PSInput input)
             finalColor *= dbg;
         }
 
-        result.color = float4(FilmicTonemap(finalColor, scene.exposure, scene.gamma), 1.0f);
+        // Output alpha: 1.0 for opaque, actual alpha for transparent
+        float outputAlpha = (material.blendMode == 1) ? finalAlpha : 1.0f;
+        result.color = float4(FilmicTonemap(finalColor, scene.exposure, scene.gamma), outputAlpha);
     }
     else if (scene.renderMode == RENDER_MODE_DIFFUSE)
     {
-        float3 diffuse = baseColorTexture.Sample(sampler0, input.uv).rgb;
+        float3 diffuse = baseColorTexture.Sample(sampler0, tiledUV).rgb;
         result.color = float4(diffuse, 1.0f);
     }
     else if (scene.renderMode == RENDER_MODE_NORMALS)

@@ -131,6 +131,8 @@ namespace ignite
     void Material::UploadToGpu(nvrhi::ICommandList *cmd)
     {
         EnsureGpuResources();
+        // Sync blend mode from material type so the shader always has the correct value
+        gpuData.blendMode = static_cast<int>(m_Type);
         m_GPUDataBuffer->SetData(cmd, Buffer(&gpuData, sizeof(MaterialBufferData)));
     }
 
@@ -197,6 +199,8 @@ namespace ignite
 		    sr.AddKeyValue("OcclusionStrength", gpuData.occlusionStrength);
             sr.AddKeyValue("MetallicChannel", gpuData.metallicChannel);
             sr.AddKeyValue("RoughnessChannel", gpuData.roughnessChannel);
+            sr.AddKeyValue("TilingFactorX", gpuData.tilingFactor.x);
+            sr.AddKeyValue("TilingFactorY", gpuData.tilingFactor.y);
 		    sr.EndMap();
 
 		    sr.EndMap(); // MATERIAL END
@@ -244,6 +248,8 @@ namespace ignite
             if (gpuDataNode["OcclusionStrength"]) material->gpuData.occlusionStrength = gpuDataNode["OcclusionStrength"].as<float>();
             if (gpuDataNode["MetallicChannel"]) material->gpuData.metallicChannel = gpuDataNode["MetallicChannel"].as<int>();
             if (gpuDataNode["RoughnessChannel"]) material->gpuData.roughnessChannel = gpuDataNode["RoughnessChannel"].as<int>();
+            if (gpuDataNode["TilingFactorX"]) material->gpuData.tilingFactor.x = gpuDataNode["TilingFactorX"].as<float>();
+            if (gpuDataNode["TilingFactorY"]) material->gpuData.tilingFactor.y = gpuDataNode["TilingFactorY"].as<float>();
         }
 
         material->SetReadyFlag(true);

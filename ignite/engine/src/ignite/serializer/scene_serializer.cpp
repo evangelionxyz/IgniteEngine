@@ -279,6 +279,17 @@ namespace ignite
                         sr.AddKeyValue("Handle", static_cast<uint64_t>(comp.handle));
                         sr.AddKeyValue("AnimatorHandle", static_cast<uint64_t>(comp.runtimeAnimatorHandle));
                         sr.AddKeyValue("UniqueAnimator", comp.uniqueAnimator);
+
+						// Serialize vertices
+						sr.BeginSequence("OverrideMaterials");
+						for (const auto &[meshIndex, materialHandle] : comp.overrideMaterials)
+						{
+							sr.BeginMap();
+							sr.AddKeyValue("Mesh", meshIndex);
+							sr.AddKeyValue("MaterialHandle", static_cast<uint64_t>(materialHandle));
+							sr.EndMap();
+						}
+						sr.EndSequence();
                     }
                     sr.EndMap();
                 }
@@ -1033,6 +1044,21 @@ namespace ignite
                 if (auto n = node["UniqueAnimator"])
                 {
                     // comp.uniqueAnimator = n.as<bool>();
+                }
+
+                if (auto overrideMaterialsNode = node["OverrideMaterials"])
+                {
+                    for (auto materials : overrideMaterialsNode)
+                    {
+                        int meshIndex = -1;
+                        AssetHandle materialHandle = AssetHandle(0);
+
+                        if (auto n = materials["Mesh"]) meshIndex = n.as<int>();
+                        if (auto n = materials["MaterialHandle"]) materialHandle = AssetHandle(n.as<uint64_t>());
+
+                        if (meshIndex != -1 || materialHandle != AssetHandle(0))
+                            comp.overrideMaterials[meshIndex] = materialHandle;
+                    }
                 }
             }
 

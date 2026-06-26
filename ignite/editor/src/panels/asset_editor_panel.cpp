@@ -2855,6 +2855,25 @@ namespace ignite
                             material->SetDirtyFlag(true);
                         }
 
+                        // Blend Mode
+                        {
+                            const char *blendModeNames[] = { "Opaque", "Transparent" };
+                            int currentBlendMode = static_cast<int>(material->GetType());
+                            if (currentBlendMode > 1) currentBlendMode = 0; // clamp Masked to Opaque for display
+                            if (ImGui::Combo("Blend Mode", &currentBlendMode, blendModeNames, IM_ARRAYSIZE(blendModeNames)))
+                            {
+                                material->SetType(static_cast<MaterialType>(currentBlendMode));
+                                material->SetDirtyFlag(true);
+                                material->InvalidateBindingSet();
+                            }
+                        }
+
+                        // Tiling Factor
+                        if (ImGui::DragFloat2("Tiling Factor", &material->gpuData.tilingFactor.x, 0.05f, 0.01f, 100.0f))
+                        {
+                            material->SetDirtyFlag(true);
+                        }
+
                         ImGui::Separator();
 
                         // Base texture

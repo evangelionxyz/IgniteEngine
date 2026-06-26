@@ -53,15 +53,14 @@ namespace ignite
 		if (!m_WorldEnvironment)
 		{
 			m_WorldEnvironment = m_Scene->GetActiveWorldEnvironment();
-			m_WorldEnvironment->dirtyEnvironment = true;
 		}
 
 		if (m_WorldEnvironment)
 		{
+			m_WorldEnvironment->dirtyEnvironment = true;
 			if (!m_WorldEnvironment->environment)
 			{
 				m_WorldEnvironment->environment = Environment::Create();
-				m_WorldEnvironment->dirtyEnvironment = true;
 				m_WorldEnvironment->gpuInitialized = false;
 			}
 

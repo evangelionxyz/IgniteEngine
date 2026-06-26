@@ -400,33 +400,73 @@ namespace ignite
 
         m_RuntimeMaterial->UploadToGpu(cmd);
 
+        const bool isTransparent = m_RuntimeMaterial->GetType() == MaterialType::Transparent;
+
+        // Select opaque or transparent pipeline based on material type
         Ref<GraphicsPipeline> geopPipeline;
-        if (auto it = m_GeometryPipelineCache.find(framebuffer); it != m_GeometryPipelineCache.end())
+        if (isTransparent)
         {
-            geopPipeline = it->second;
+            if (auto it = m_TransparentGeometryPipelineCache.find(framebuffer); it != m_TransparentGeometryPipelineCache.end())
+            {
+                geopPipeline = it->second;
+            }
+            else
+            {
+                GraphicsPipelineParams params;
+                params.enableBlend = true;
+                params.srcBlend = nvrhi::BlendFactor::SrcAlpha;
+                params.destBlend = nvrhi::BlendFactor::InvSrcAlpha;
+                params.srcBlendAlpha = nvrhi::BlendFactor::One;
+                params.destBlendAlpha = nvrhi::BlendFactor::InvSrcAlpha;
+                params.enableDepthWrite = false;
+                params.enableDepthTest = true;
+                params.enableDepthStencil = false;
+                params.fillMode = nvrhi::RasterFillMode::Solid;
+                params.cullMode = nvrhi::RasterCullMode::None;
+                params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
+
+                Ref<Shader> vertexShader = Shader::Create("resources/shaders/mesh_anim.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
+                Ref<Shader> pixelShader = Shader::Create("resources/shaders/mesh_anim.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
+
+                geopPipeline = GraphicsPipeline::Create();
+                geopPipeline->SetShaders({ vertexShader, pixelShader })
+                    .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
+                    .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
+                    .Build(framebuffer, params);
+
+                m_TransparentGeometryPipelineCache.clear();
+                m_TransparentGeometryPipelineCache[framebuffer] = geopPipeline;
+            }
         }
         else
         {
-            GraphicsPipelineParams params;
-            params.enableBlend = true;
-            params.enableDepthWrite = true;
-            params.enableDepthTest = true;
-            params.enableDepthStencil = false;
-            params.fillMode = nvrhi::RasterFillMode::Solid;
-            params.cullMode = nvrhi::RasterCullMode::None;
-            params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
+            if (auto it = m_GeometryPipelineCache.find(framebuffer); it != m_GeometryPipelineCache.end())
+            {
+                geopPipeline = it->second;
+            }
+            else
+            {
+                GraphicsPipelineParams params;
+                params.enableBlend = true;
+                params.enableDepthWrite = true;
+                params.enableDepthTest = true;
+                params.enableDepthStencil = false;
+                params.fillMode = nvrhi::RasterFillMode::Solid;
+                params.cullMode = nvrhi::RasterCullMode::None;
+                params.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
 
-            Ref<Shader> vertexShader = Shader::Create("resources/shaders/mesh_anim.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
-            Ref<Shader> pixelShader = Shader::Create("resources/shaders/mesh_anim.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
+                Ref<Shader> vertexShader = Shader::Create("resources/shaders/mesh_anim.vertex.hlsl", UMBRA_SHADER_TYPE_VERTEX, false);
+                Ref<Shader> pixelShader = Shader::Create("resources/shaders/mesh_anim.pixel.hlsl", UMBRA_SHADER_TYPE_PIXEL, false);
 
-            geopPipeline = GraphicsPipeline::Create();
-            geopPipeline->SetShaders({ vertexShader, pixelShader })
-                .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
-                .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
-                .Build(framebuffer, params);
+                geopPipeline = GraphicsPipeline::Create();
+                geopPipeline->SetShaders({ vertexShader, pixelShader })
+                    .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM))
+                    .AddBindingLayout(Renderer::GetBindingLayout(GLayoutMap::MATERIAL))
+                    .Build(framebuffer, params);
 
-            m_GeometryPipelineCache.clear();
-            m_GeometryPipelineCache[framebuffer] = geopPipeline;
+                m_GeometryPipelineCache.clear();
+                m_GeometryPipelineCache[framebuffer] = geopPipeline;
+            }
         }
 
         nvrhi::GraphicsState state;

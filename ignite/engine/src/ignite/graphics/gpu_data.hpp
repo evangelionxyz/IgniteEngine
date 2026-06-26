@@ -86,7 +86,8 @@ namespace ignite
 		float occlusionStrength = 0.0f;
 		int metallicChannel = 2;
 		int roughnessChannel = 1;
-		float _padding[3] = { 0.0f, 0.0f, 0.0f };
+		int blendMode = 0; // 0 = Opaque, 1 = Transparent
+		glm::vec2 tilingFactor = glm::vec2(1.0f, 1.0f);
 	};
 }
 
