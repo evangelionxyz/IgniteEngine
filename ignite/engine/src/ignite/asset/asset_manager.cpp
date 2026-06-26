@@ -10,6 +10,7 @@
 #include "ignite/core/base.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/texture.hpp"
+#include "ignite/graphics/renderer/scene_renderer.hpp"
 #include <cstdint>
 #include <filesystem>
 #include <fbxsdk.h>
@@ -359,7 +360,108 @@ namespace ignite
         return m_AssetPinCounts.contains(handle);
     }
 
-    void AssetManager::ClearAllLoadedAssets()
+	void AssetManager::OnUpdate()
+	{
+        // Call each frame
+        if (!m_OnChangeCallbacks.empty())
+        {
+            auto &f = m_OnChangeCallbacks.front();
+            if (f && f())
+            {
+                m_OnChangeCallbacks.pop();
+            }
+        }
+	}
+
+	void AssetManager::OnEvent(Event &event)
+	{
+        EventDispatcher e(event);
+        e.Dispatch<AssetChangeEvent>(BIND_CLASS_EVENT_FN(AssetManager::OnAssetChangeEvent));
+	}
+
+	bool AssetManager::OnAssetChangeEvent(AssetChangeEvent &event)
+	{
+        switch (event.GetAssetType())
+        {
+            // Handle environment changes
+        case AssetType::Environment:
+        {
+            auto activeScene = m_Project->GetActiveScene();
+            if (!activeScene)
+                break;
+
+            auto onChangeFunc = [this, scene = activeScene]() -> bool
+            {
+				auto sceneRenderer = scene->GetSceneRenderer();
+				auto envMap = sceneRenderer->GetEnvironmentMapColorTexture();
+				auto shadowMap = sceneRenderer->GetCascadedShadowMapDepthTexture();
+
+                // we need to check all of the materials are up to date
+				bool waitedForMaterialUpdate = false;
+                bool allMaterialsUpdated = true; // it should be true by default
+
+				const auto &assets = GetLoadedAssets();
+				for (const auto &[handle, asset] : assets)
+				{
+					if (asset->GetAssetType() == AssetType::Material)
+					{
+						Ref<Material> material = std::static_pointer_cast<Material>(asset);
+						if (material && (material->IsBindingSetDirty() || !material->GetBindingSet()))
+						{
+							auto isTextureReady = [this](AssetHandle textureHandle)
+							{
+								if (textureHandle == 0)
+								{
+									return true;
+								}
+
+								Ref<Texture> texAsset = GetAsset<Texture>(textureHandle);
+								return texAsset && texAsset->IsReady();
+							};
+
+							// Only update if all textures are available and ready
+							const bool allTexturesReady = isTextureReady(material->baseColorTextureHandle)
+								&& isTextureReady(material->emissiveTextureHandle)
+								&& isTextureReady(material->metallicTextureHandle)
+								&& isTextureReady(material->roughnessTextureHandle)
+								&& isTextureReady(material->normalTextureHandle)
+								&& isTextureReady(material->occlusionTextureHandle);
+
+							if (allTexturesReady)
+							{
+								MaterialTextures textures;
+								material->RetrieveTextures(this, &textures);
+
+								if (!waitedForMaterialUpdate)
+								{
+									// Ensure no other GPU operations are in flight before updating material
+									// This prevents threading errors when materials are being invalidated
+									GPUUploadSync::DeviceWaitIdle(DeviceManager::GetInstance()->GetDevice());
+									waitedForMaterialUpdate = true;
+								}
+
+								material->UpdateBindingSet(&textures, this, envMap, shadowMap);
+							}
+
+                            // keeps loading
+                            allMaterialsUpdated = false;
+						}
+					}
+				}
+
+                return allMaterialsUpdated;
+            };
+
+            m_OnChangeCallbacks.push(std::move(onChangeFunc));
+			
+            break;
+        }
+        }
+
+        return false;
+	}
+
+	void AssetManager::ClearAllLoadedAssets()
     {
         IGN_PROFILE_FUNCTION();
 

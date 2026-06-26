@@ -627,6 +627,7 @@ namespace ignite
                             if (ImGui::Button("X"))
                             {
                                 c.hdrHandle = AssetHandle(0);
+                                c.dirtyEnvironment = true;
                                 c.gpuInitialized = false;
                             }
                         }

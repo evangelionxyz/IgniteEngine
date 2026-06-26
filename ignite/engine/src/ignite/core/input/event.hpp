@@ -57,6 +57,8 @@ namespace ignite
         AssetImport,
         AssetEditorOpen,
         AssetEditorCreate,
+
+        AssetChange,
     };
 
     enum EventCategory
@@ -66,7 +68,8 @@ namespace ignite
         EventCategoryKeyboard = BIT(2),
         EventCategoryMouse = BIT(3),
         EventCategoryMouseButton = BIT(4),
-        EventCategoryJoystick = BIT(5)
+        EventCategoryJoystick = BIT(5),
+        EventCategoryAsset = BIT(6),
     };
 
 #define EVENT_CLASS_TYPE(type)\

@@ -138,74 +138,6 @@ namespace ignite
         Clear3DAssetResolveCache();
     }
 
-    void SceneRenderer::OnUpdate(float deltaTime)
-    {
-        if (!m_Scene)
-        {
-            return;
-        }
-
-        // Check if any materials need binding set creation/recreation
-        {
-            IGN_PROFILE_SCOPE("SceneRenderer::UpdateMaterialBindingSets");
-            bool waitedForMaterialUpdate = false;
-            const auto &assets = m_Scene->GetProject()->GetAssetManager()->GetLoadedAssets();
-            for (const auto &[handle, asset] : assets)
-            {
-                if (asset->GetAssetType() == AssetType::Material)
-                {
-                    Ref<Material> material = std::static_pointer_cast<Material>(asset);
-                    if (material && (material->IsBindingSetDirty() || !material->GetBindingSet()))
-                    {
-                        auto assetManager = m_Scene->GetProject()->GetAssetManager();
-                        auto isTextureReady = [&assetManager](AssetHandle textureHandle)
-                        {
-                            if (textureHandle == 0)
-                            {
-                                return true;
-                            }
-
-                            Ref<Texture> texAsset = assetManager->GetAsset<Texture>(textureHandle);
-                            return texAsset && texAsset->IsReady();
-                        };
-
-                        // Only update if all textures are available and ready
-                        bool allTexturesReady = true;
-                        if (!isTextureReady(material->baseColorTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->emissiveTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->metallicTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->roughnessTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->normalTextureHandle))
-                            allTexturesReady = false;
-                        if (!isTextureReady(material->occlusionTextureHandle))
-                            allTexturesReady = false;
-
-                        if (allTexturesReady)
-                        {
-                            MaterialTextures textures;
-                            material->RetrieveTextures(assetManager, &textures);
-
-                            if (!waitedForMaterialUpdate)
-                            {
-                                // Ensure no other GPU operations are in flight before updating material
-                                // This prevents threading errors when materials are being invalidated
-                                GPUUploadSync::DeviceWaitIdle(m_Device);
-                                waitedForMaterialUpdate = true;
-                            }
-
-                            material->UpdateBindingSet(this, &textures, assetManager);
-                        }
-                    }
-
-                }
-            }
-        }
-    }
-
     Ref<Mesh> SceneRenderer::ResolveMesh(Project *project, AssetHandle handle)
     {
         if (!project || handle == AssetHandle(0))
@@ -396,19 +328,6 @@ namespace ignite
 
                 // Update env & materials if already  get the HDR texture
                 m_WorldEnvironment->environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer);
-
-                const auto &assets = m_Scene->GetProject()->GetAssetManager()->GetLoadedAssets();
-                for (const auto &[handle, asset] : assets)
-                {
-                    if (asset->GetAssetType() == AssetType::Material)
-                    {
-                        Ref<Material> material = std::static_pointer_cast<Material>(asset);
-                        if (material)
-                        {
-                            material->InvalidateBindingSet();
-                        }
-                    }
-                }
             }
 
             // Scene post processing
@@ -598,19 +517,6 @@ namespace ignite
 
                 // Update env & materials if already  get the HDR texture
                 m_WorldEnvironment->environment->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer);
-
-                const auto &assets = m_Scene->GetProject()->GetAssetManager()->GetLoadedAssets();
-                for (const auto &[handle, asset] : assets)
-                {
-                    if (asset->GetAssetType() == AssetType::Material)
-                    {
-                        Ref<Material> material = std::static_pointer_cast<Material>(asset);
-                        if (material)
-                        {
-                            material->InvalidateBindingSet();
-                        }
-                    }
-                }
             }
 
             // setup camera constants
@@ -785,23 +691,8 @@ namespace ignite
 
                 m_CSMBindingSetCache.clear();
 
-                // Resize creates a new depth texture, so any material binding set that
-                // embeds the old CSM SRV (slot 7) is now stale. Invalidate them all so
-                // they are rebuilt with the new texture handle on the next frame.
-                if (m_Scene && m_Scene->GetProject())
-                {
-                    const auto &loadedAssets = m_Scene->GetProject()->GetAssetManager()->GetLoadedAssets();
-                    for (const auto &[handle, asset] : loadedAssets)
-                    {
-                        if (asset && asset->GetAssetType() == AssetType::Material)
-                        {
-                            if (auto material = std::dynamic_pointer_cast<Material>(asset))
-                            {
-                                material->InvalidateBindingSet();
-                            }
-                        }
-                    }
-                }
+				AssetChangeEvent event(AssetHandle(0), AssetType::Environment);
+				Application::GetInstance()->OnEvent(event);
             }
 
             break;
@@ -1047,7 +938,7 @@ namespace ignite
                         MaterialTextures textures;
                         auto assetManager = m_Scene->GetProject()->GetAssetManager();
                         material->RetrieveTextures(assetManager, &textures);
-                        material->UpdateBindingSet(this, &textures, assetManager);
+                        material->UpdateBindingSet(&textures, assetManager, GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture());
 
                         if (!material->GetBindingSet())
                         {

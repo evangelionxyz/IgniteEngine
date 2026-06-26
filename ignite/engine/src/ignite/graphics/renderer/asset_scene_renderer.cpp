@@ -390,7 +390,7 @@ namespace ignite
         {
             auto *assetManager = m_Project->GetAssetManager();
             m_RuntimeMaterial->RetrieveTextures(assetManager, &textures);
-            m_RuntimeMaterial->UpdateBindingSet(this, &textures, assetManager);
+            m_RuntimeMaterial->UpdateBindingSet(&textures, assetManager, GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture());
         }
 
         if (!m_RuntimeMaterial->GetBindingSet())
@@ -514,20 +514,13 @@ namespace ignite
                         return texture && texture->IsReady();
                     };
 
-                    // Only update if all textures are available and ready
-                    bool allTexturesReady = true;
-                    if (!isTextureReady(material->baseColorTextureHandle))
-                        allTexturesReady = false;
-                    if (!isTextureReady(material->emissiveTextureHandle))
-                        allTexturesReady = false;
-                    if (!isTextureReady(material->metallicTextureHandle))
-                        allTexturesReady = false;
-                    if (!isTextureReady(material->roughnessTextureHandle))
-                        allTexturesReady = false;
-                    if (!isTextureReady(material->normalTextureHandle))
-                        allTexturesReady = false;
-                    if (!isTextureReady(material->occlusionTextureHandle))
-                        allTexturesReady = false;
+					// Only update if all textures are available and ready
+					bool allTexturesReady = isTextureReady(material->baseColorTextureHandle)
+						&& isTextureReady(material->emissiveTextureHandle)
+						&& isTextureReady(material->metallicTextureHandle)
+						&& isTextureReady(material->roughnessTextureHandle)
+						&& isTextureReady(material->normalTextureHandle)
+						&& isTextureReady(material->occlusionTextureHandle);
 
                     if (allTexturesReady)
                     {
@@ -542,7 +535,7 @@ namespace ignite
                             waitedForMaterialUpdate = true;
                         }
 
-                        material->UpdateBindingSet(this, &textures, assetManager);
+                        material->UpdateBindingSet(&textures, assetManager, GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture());
                     }
                 }
             }
@@ -553,7 +546,7 @@ namespace ignite
                 MaterialTextures textures;
                 auto assetManager = m_Project->GetAssetManager();
                 material->RetrieveTextures(assetManager, &textures);
-                material->UpdateBindingSet(this, &textures, assetManager);
+                material->UpdateBindingSet(&textures, assetManager, GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture());
             }
 
             if (material)

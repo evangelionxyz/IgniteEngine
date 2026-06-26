@@ -6,6 +6,7 @@
 
 #include "ignite/asset/asset.hpp"
 #include "ignite/core/logger.hpp"
+#include "ignite/core/input/asset_event.hpp"
 #include "asset_worker.hpp"
 
 #include <map>
@@ -70,6 +71,11 @@ namespace ignite
         void ReplaceAssetPins(const std::string &ownerTag, const std::unordered_set<AssetHandle> &handles);
         void ClearAssetPins(std::string_view ownerTag);
         bool IsAssetPinned(AssetHandle handle) const;
+
+        void OnUpdate();
+
+        void OnEvent(Event &event);
+        bool OnAssetChangeEvent(AssetChangeEvent &event);
 
         template<typename T = Asset>
         Ref<T> GetAsset(AssetHandle handle)
@@ -207,6 +213,8 @@ namespace ignite
         std::unordered_map<AssetHandle, uint32_t> m_AssetPinCounts;
         std::unordered_map<std::string, std::unordered_set<AssetHandle>> m_PinnedAssetsByOwner;
         std::unordered_map<std::string, AssetHandle> m_AssetHandleByPath;
+
+        std::queue<std::function<bool()>> m_OnChangeCallbacks;
     };
 }
 

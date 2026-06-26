@@ -74,8 +74,6 @@ namespace ignite
         SceneRenderer();
         ~SceneRenderer();
 
-        virtual void OnUpdate(float deltaTime) override;
-
         void BeginFrame();
         void SetActiveScene(const Ref<Scene> &scene);
         

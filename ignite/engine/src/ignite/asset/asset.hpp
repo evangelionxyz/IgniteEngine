@@ -56,7 +56,7 @@ namespace ignite
         AnimatorController2D, // .ac2d    - 2D animator state machine
     };
 
-    inline std::string AssetTypeToString(AssetType type)
+    static inline std::string AssetTypeToString(AssetType type)
     {
         switch (type)
         {
@@ -90,7 +90,7 @@ namespace ignite
         }
     }
 
-    inline AssetType AssetTypeFromString(const std::string &typeStr)
+    static inline AssetType AssetTypeFromString(const std::string &typeStr)
     {
         if (typeStr == "Metadata") return AssetType::Metadata;
         if (typeStr == "Shader") return AssetType::Shader;
@@ -122,7 +122,7 @@ namespace ignite
         return AssetType::Invalid;
     }
 
-    inline std::map<std::string, AssetType> s_AssetExtensionMap =
+    static inline std::map<std::string, AssetType> s_AssetExtensionMap =
     {
         { ".meta", AssetType::Metadata },
         { ".hlsl", AssetType::Shader },
@@ -173,7 +173,7 @@ namespace ignite
     };
 
     // Binary Extensions
-    inline std::string GetAssetExtensionFromType(const AssetType type)
+    static inline std::string GetAssetExtensionFromType(const AssetType type)
     {
         switch (type)
         {

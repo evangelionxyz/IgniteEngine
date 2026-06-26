@@ -57,7 +57,7 @@ namespace ignite
         sampler = nullptr;
     }
 
-    void Material::UpdateBindingSet(ISceneRenderer *sceneRenderer, MaterialTextures *textures, AssetManager *assetManager)
+    void Material::UpdateBindingSet(MaterialTextures *textures, AssetManager *assetManager, Ref<Texture> envMap, Ref<Texture> shadowMap)
     {
         if (m_BindingSet && !m_BindingSetDirty)
             return;
@@ -73,13 +73,13 @@ namespace ignite
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, textures->roughness->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, textures->normal->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, textures->occlusion->GetHandle()));
-        Ref<Texture> environmentTexture = sceneRenderer ? sceneRenderer->GetEnvironmentMapColorTexture() : nullptr;
+        Ref<Texture> environmentTexture = envMap;
         if (!environmentTexture)
         {
             environmentTexture = Renderer::GetBlackTexture();
         }
 
-        Ref<Texture> shadowTexture = sceneRenderer ? sceneRenderer->GetCascadedShadowMapDepthTexture() : nullptr;
+        Ref<Texture> shadowTexture = shadowMap;
         if (!shadowTexture)
         {
             shadowTexture = Renderer::GetWhiteTexture();
@@ -90,16 +90,9 @@ namespace ignite
 
         // Sampler
         desc.addItem(nvrhi::BindingSetItem::Sampler(0, sampler));
-        nvrhi::SamplerHandle shadowSampler = sampler;
-        if (sceneRenderer)
-        {
-            if (auto cascadedShadowMap = sceneRenderer->GetCascadedShadowMap())
-            {
-                shadowSampler = cascadedShadowMap->GetDepthSampler();
-            }
-        }
-
-        desc.addItem(nvrhi::BindingSetItem::Sampler(1, shadowSampler));
+        desc.addItem(nvrhi::BindingSetItem::Sampler(1, shadowMap 
+            ? shadowMap->GetSampler() 
+            : sampler));
 
         auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MATERIAL));
         LOG_ASSERT(newBindingSet, "Failed to create material binding set");
