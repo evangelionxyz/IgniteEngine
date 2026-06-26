@@ -442,9 +442,12 @@ namespace ignite
 
 								material->UpdateBindingSet(&textures, this, envMap, shadowMap);
 							}
+                            else
+                            {
+                                // keeps loading
+                                allMaterialsUpdated = false;
+                            }
 
-                            // keeps loading
-                            allMaterialsUpdated = false;
 						}
 					}
 				}
