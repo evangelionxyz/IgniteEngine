@@ -48,7 +48,50 @@ namespace ignite
         m_CompositeVertexBufferUploadPending = false;
     }
 
-    ISceneRenderer::~ISceneRenderer()
+	void ISceneRenderer::EnsureSceneEnvironmentMap()
+	{
+		if (!m_WorldEnvironment)
+		{
+			m_WorldEnvironment = m_Scene->GetActiveWorldEnvironment();
+			m_WorldEnvironment->dirtyEnvironment = true;
+		}
+
+		if (m_WorldEnvironment)
+		{
+			if (!m_WorldEnvironment->environment)
+			{
+				m_WorldEnvironment->environment = Environment::Create();
+				m_WorldEnvironment->dirtyEnvironment = true;
+				m_WorldEnvironment->gpuInitialized = false;
+			}
+
+			const bool isHDRLoaded = m_WorldEnvironment->hdrHandle != AssetHandle(0);
+			if (m_WorldEnvironment->dirtyEnvironment && m_WorldEnvironment->environment)
+			{
+				Ref<Texture> hdrTexture;
+				if (isHDRLoaded)
+				{
+					hdrTexture = m_Scene->GetProject()->GetAssetManager()->GetAsset<Texture>(m_WorldEnvironment->hdrHandle);
+					if (hdrTexture && hdrTexture->IsReady())
+					{
+						m_WorldEnvironment->environment->SetTexture(hdrTexture);
+					}
+				}
+				else
+				{
+					m_WorldEnvironment->environment->SetTexture(Renderer::GetBlackTexture());
+				}
+
+				// Keep retrieve HDR If it is loaded, but still empty
+				if (isHDRLoaded && hdrTexture == nullptr || (hdrTexture && !hdrTexture->IsReady()))
+					m_WorldEnvironment->dirtyEnvironment = true;
+				else
+					m_WorldEnvironment->dirtyEnvironment = false;
+			}
+		}
+	}
+
+	ISceneRenderer::~ISceneRenderer()
     {
         GPUUploadSync::DeviceWaitIdle(m_Device);
 

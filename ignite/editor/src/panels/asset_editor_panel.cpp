@@ -4900,6 +4900,9 @@ namespace ignite
         if (assetType != AssetType::Material && assetType != AssetType::Mesh && assetType != AssetType::Skeleton && assetType != AssetType::Widget)
             return;
 
+		const uint32_t width = assetData.sceneData.viewportWidth > 0 ? assetData.sceneData.viewportWidth : 1280;
+		const uint32_t height = assetData.sceneData.viewportHeight > 0 ? assetData.sceneData.viewportHeight : 720;
+
         assetData.sceneData.camera = EditorCamera(std::format("AssetEditorCamera-{}", static_cast<uint64_t>(assetData.handle)));
         assetData.sceneData.camera.SetTarget(glm::vec3(0.0f, assetType == AssetType::Mesh ? 1.0f : 0.0f, 0.0f));
         assetData.sceneData.camera.SetDistance(5.5f);
@@ -4907,13 +4910,8 @@ namespace ignite
         assetData.sceneData.camera.pitch = 0.0f;
         assetData.sceneData.camera.UpdateSphericalPosition();
         assetData.sceneData.camera.UpdateView();
-        assetData.sceneData.camera.UpdateProjection(
-            static_cast<float>(assetData.sceneData.viewportWidth > 0 ? assetData.sceneData.viewportWidth : 1280),
-            static_cast<float>(assetData.sceneData.viewportHeight > 0 ? assetData.sceneData.viewportHeight : 720)
-        );
+        assetData.sceneData.camera.UpdateProjection(width, height);
 
-        uint32_t width = assetData.sceneData.viewportWidth > 0 ? assetData.sceneData.viewportWidth : 1280;
-        uint32_t height = assetData.sceneData.viewportHeight > 0 ? assetData.sceneData.viewportHeight : 720;
         Project *activeProject = m_EditorLayer->GetActiveProject().get();
         Ref<Mesh> meshResult = s_DefaultMeshes[ICO_SPHERE];
         AssetHandle handle = assetData.handle;
@@ -4999,7 +4997,7 @@ namespace ignite
 
         if (sceneData.viewportWidth > 0 && sceneData.viewportHeight > 0)
         {
-            sceneData.camera.UpdateProjection(static_cast<float>(sceneData.viewportWidth), static_cast<float>(sceneData.viewportHeight));
+            sceneData.camera.UpdateProjection(sceneData.viewportWidth, sceneData.viewportHeight);
         }
 
         sceneData.camera.UpdateView();

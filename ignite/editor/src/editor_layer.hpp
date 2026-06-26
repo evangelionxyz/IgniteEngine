@@ -40,7 +40,7 @@ namespace ignite
             bool popupNewProjectModal = false;
             bool assetRegistryWindow = false;
             bool takeScreenshot = false;
-            bool gameplayViewportWindow = true;
+            bool gameplayViewportWindow = false;
             bool consoleWindow = true;
 
             const int STABLE_RESIZE_FRAME = 12;

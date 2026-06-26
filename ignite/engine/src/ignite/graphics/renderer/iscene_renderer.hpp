@@ -93,6 +93,7 @@ namespace ignite
 
     protected:
         void EnsureCompositeVertexBufferUploaded(nvrhi::ICommandList *cmd);
+		void EnsureSceneEnvironmentMap();
 
         Ref<CascadedShadowMap> m_CascadedShadowMap;
 
@@ -108,6 +109,8 @@ namespace ignite
         Ref<ConstantBuffer> m_CameraBuffer;
         Ref<ConstantBuffer> m_CascadedShadowMapBuffer;
         Ref<ConstantBuffer> m_CSMPerCascadeBuffers[NUM_CASCADES];
+
+		WorldEnvironment *m_WorldEnvironment = nullptr;
 
         nvrhi::BindingSetHandle m_MeshBindingSet;
         SceneBufferData m_SceneGPUData;

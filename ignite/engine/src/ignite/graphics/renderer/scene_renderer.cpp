@@ -204,7 +204,7 @@ namespace ignite
 
         if (m_WorldEnvironment)
         {
-            if (m_WorldEnvironment->environment)
+            if (scene == nullptr && m_WorldEnvironment->environment)
             {
                 m_WorldEnvironment->environment.reset();
             }
@@ -280,35 +280,7 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
         IGN_PROFILE_FRAME_NAMED("Editor Frame");
 
-        if (!m_WorldEnvironment)
-            m_WorldEnvironment = m_Scene->GetActiveWorldEnvironment();
-
-        if (m_WorldEnvironment)
-        {
-            const bool isHDRLoaded = m_WorldEnvironment->hdrHandle != AssetHandle(0);
-            if (m_WorldEnvironment->dirtyEnvironment)
-            {
-                Ref<Texture> hdrTexture;
-                if (isHDRLoaded)
-                {
-                    hdrTexture = m_Scene->GetProject()->GetAssetManager()->GetAsset<Texture>(m_WorldEnvironment->hdrHandle);
-                    if (hdrTexture && hdrTexture->IsReady())
-                    {
-                        m_WorldEnvironment->environment->SetTexture(hdrTexture);
-                    }
-                }
-                else
-                {
-                    m_WorldEnvironment->environment->SetTexture(Renderer::GetBlackTexture());
-                }
-
-                // Keep retrieve HDR If it is loaded, but still empty
-                if (isHDRLoaded && hdrTexture == nullptr || (hdrTexture && !hdrTexture->IsReady()))
-                    m_WorldEnvironment->dirtyEnvironment = true;
-                else
-                    m_WorldEnvironment->dirtyEnvironment = false;
-            }
-        }
+        EnsureSceneEnvironmentMap();
 
         // Create fresh command list for this frame
         nvrhi::CommandListHandle cmd = m_Device->createCommandList();
@@ -462,42 +434,7 @@ namespace ignite
         IGN_PROFILE_FUNCTION();
         IGN_PROFILE_FRAME_NAMED("Gameplay Frame");
 
-        if (!m_WorldEnvironment)
-            m_WorldEnvironment = m_Scene->GetActiveWorldEnvironment();
-
-        if (m_WorldEnvironment)
-        {
-            if (!m_WorldEnvironment->environment)
-            {
-                m_WorldEnvironment->environment = Environment::Create();
-                m_WorldEnvironment->dirtyEnvironment = true;
-                m_WorldEnvironment->gpuInitialized = false;
-            }
-
-            const bool isHDRLoaded = m_WorldEnvironment->hdrHandle != AssetHandle(0);
-            if (m_WorldEnvironment->dirtyEnvironment)
-            {
-                Ref<Texture> hdrTexture;
-                if (isHDRLoaded)
-                {
-                    hdrTexture = m_Scene->GetProject()->GetAssetManager()->GetAsset<Texture>(m_WorldEnvironment->hdrHandle);
-                    if (hdrTexture && hdrTexture->IsReady())
-                    {
-                        m_WorldEnvironment->environment->SetTexture(hdrTexture);
-                    }
-                }
-                else
-                {
-                    m_WorldEnvironment->environment->SetTexture(Renderer::GetBlackTexture());
-                }
-
-                // Keep retrieve HDR If it is loaded, but still empty
-                if (isHDRLoaded && hdrTexture == nullptr || (hdrTexture && !hdrTexture->IsReady()))
-                    m_WorldEnvironment->dirtyEnvironment = true;
-                else
-                    m_WorldEnvironment->dirtyEnvironment = false;
-            }
-        }
+        EnsureSceneEnvironmentMap();
 
         // Create fresh command list for this frame
         nvrhi::CommandListHandle cmd = m_Device->createCommandList();
@@ -1476,7 +1413,8 @@ namespace ignite
         m_Renderer2D->End();
     }
 
-    void SceneRenderer::CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, const PostProcessing &postProcessing, nvrhi::IFramebuffer *framebuffer,
+
+	void SceneRenderer::CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, const PostProcessing &postProcessing, nvrhi::IFramebuffer *framebuffer,
         Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture)
     {
         IGN_PROFILE_FUNCTION();

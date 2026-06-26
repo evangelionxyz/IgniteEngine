@@ -151,8 +151,6 @@ namespace ignite
         Ref<Bloom> m_GameplayBloom;
         Ref<SSAO> m_GameplaySSAO;
 
-        WorldEnvironment *m_WorldEnvironment = nullptr;
-
         std::unordered_map<std::string, Ref<Texture>> m_Icons;
         std::unordered_map<AssetResolveKey, Ref<Mesh>, AssetResolveKeyHash> m_MeshResolveCache;
         std::unordered_map<AssetResolveKey, Ref<Material>, AssetResolveKeyHash> m_MaterialResolveCache;
