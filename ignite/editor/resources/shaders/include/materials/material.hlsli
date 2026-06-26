@@ -7,5 +7,6 @@ struct Material
     float occlusionStrength;
     int metallicChannel;
     int roughnessChannel;
-    float padding[3];
+    int blendMode;      // 0 = Opaque, 1 = Transparent
+    float2 tilingFactor;
 };

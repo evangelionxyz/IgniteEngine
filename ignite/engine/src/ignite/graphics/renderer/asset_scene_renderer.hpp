@@ -55,6 +55,7 @@ namespace ignite
         Project *m_Project = nullptr;
 
         std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_GeometryPipelineCache;
+        std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_TransparentGeometryPipelineCache;
         std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_EnvironmentPipelineCache;
         std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_CompositePipelineCache;
 

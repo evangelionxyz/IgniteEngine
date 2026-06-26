@@ -918,6 +918,68 @@ namespace ignite
                     Ref<Mesh> sm = m_EditorLayer->GetActiveProject()->GetAsset<Mesh>(c.handle);
                     if (sm)
                     {
+                        // Override Materials
+                        if (ImGui::CollapsingHeader("Override Materials", ImGuiTreeNodeFlags_DefaultOpen))
+                        {
+                            const auto &instances = sm->GetMeshInstances();
+                            for (size_t i = 0; i < instances.size(); ++i)
+                            {
+                                const auto &instance = instances[i];
+                                std::string submeshName = instance->GetName();
+                                if (submeshName.empty())
+                                {
+                                    submeshName = "Submesh " + std::to_string(i);
+                                }
+                                else
+                                {
+                                    submeshName = std::format("{} (Submesh {})", submeshName, i);
+                                }
+
+                                AssetHandle overrideMaterialHandle = AssetHandle(0);
+                                auto it = c.overrideMaterials.find(static_cast<int>(i));
+                                if (it != c.overrideMaterials.end())
+                                {
+                                    overrideMaterialHandle = it->second;
+                                }
+
+                                bool isOverrideLoaded = overrideMaterialHandle != AssetHandle(0);
+                                std::string matLabel = isOverrideLoaded ? assetManager->GetAssetDisplayName(overrideMaterialHandle) : "Drag Material Here";
+
+                                UI::DrawButtonWithColumn(submeshName.c_str(), matLabel.c_str(), nullptr, [this, &c, i, isOverrideLoaded, &selectedEntity]()
+                                {
+                                    if (ImGui::BeginDragDropTarget())
+                                    {
+                                        if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(DND_PAYLOAD_CONTENT_BROWSER_ITEM))
+                                        {
+                                            LOG_ASSERT(payload->DataSize == sizeof(AssetHandle), "WRONG ITEM, that should be an asset handle");
+                                            AssetHandle handle = *static_cast<AssetHandle *>(payload->Data);
+                                            auto assetManager = m_EditorLayer->GetActiveProject()->GetAssetManager();
+                                            AssetMetaData metadata = assetManager->GetMetaData(handle);
+
+                                            if (metadata.type == AssetType::Material)
+                                            {
+                                                MeshComponent before = c;
+                                                c.overrideMaterials[static_cast<int>(i)] = handle;
+                                                CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<MeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                            }
+                                        }
+                                        ImGui::EndDragDropTarget();
+                                    }
+
+                                    if (isOverrideLoaded)
+                                    {
+                                        ImGui::SameLine();
+                                        if (ImGui::Button((std::string("X##") + std::to_string(i)).c_str()))
+                                        {
+                                            MeshComponent before = c;
+                                            c.overrideMaterials.erase(static_cast<int>(i));
+                                            CommandManager::AddCommand(CreateScope<ComponentPropertyCommand<MeshComponent>>(m_Scene.get(), selectedEntity.GetUUID(), before, c));
+                                        }
+                                    }
+                                });
+                            }
+                        }
+
                         // Animator
                         bool isAnimatorLoaded = c.runtimeAnimatorHandle != AssetHandle(0);
                         std::string buttonLabel = isAnimatorLoaded ? assetManager->GetAssetDisplayName(c.runtimeAnimatorHandle) : "Drag Here";
