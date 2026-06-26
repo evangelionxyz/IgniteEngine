@@ -257,7 +257,7 @@ namespace ignite
         for (entt::entity entity : camView)
         {
             CameraComponent &cc = camView.get<CameraComponent>(entity);
-            cc.camera.UpdateProjection(static_cast<float>(m_ViewportWidth), static_cast<float>(m_ViewportHeight));
+            cc.camera.UpdateProjection(m_ViewportWidth, m_ViewportHeight);
         }
 
         // play on start audio
@@ -969,6 +969,6 @@ namespace ignite
     template<>
     IGN_API void Scene::OnComponentAdded<CameraComponent>(Entity entity, CameraComponent &comp)
     {
-        comp.camera.UpdateProjection(static_cast<float>(m_ViewportWidth), static_cast<float>(m_ViewportHeight));
+        comp.camera.UpdateProjection(m_ViewportWidth, m_ViewportHeight);
     }
 }

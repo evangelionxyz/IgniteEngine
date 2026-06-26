@@ -40,10 +40,9 @@ namespace ignite
 		float GetPanSnapValue() const { return m_PanSnapValue; }
 
 		virtual void UpdateView() override;
-		virtual void UpdateProjection(float width, float height) override;
 
 		void SetDistance(float distance) { m_Distance = distance; }
-		float GetDistance() { return m_Distance; }
+		const float &GetDistance() const { return m_Distance; }
 
 		void SetTarget(const glm::vec3 &target) { m_Target = target; }
 		void FocusTarget(const glm::vec3 &target, float distance);

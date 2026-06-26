@@ -506,26 +506,30 @@ namespace ignite
         if (editCamera)
         {
             // Resize Edit Viewport Framebuffer
-            const glm::vec2 framebufferSize = m_SceneRenderer->GetCompositeRT()->GetSize();
-            const glm::vec2 desiredSize = glm::max(glm::vec2(0.0f), globals::GEditor::EditorViewport.max);
-            const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
+            const glm::uvec2 framebufferSize = m_SceneRenderer->GetCompositeRT()->GetSize();
+            const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::EditorViewport.max));
+            const bool framebufferNeedsResize = (framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y);
+            const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
 
-            // Resize camera
-            if (framebufferNeedsResize && desiredSize.x > 0.0f && desiredSize.y > 0.0f)
+            if (isFramebufferSizeValid)
             {
-                m_ScenePanel->GetViewportCamera().UpdateProjection(desiredSize.x, desiredSize.y);
-                m_State.editorResizing = true;
-            }
+				// Resize camera
+				if (framebufferNeedsResize)
+				{
+					m_ScenePanel->GetViewportCamera().UpdateProjection(desiredSize.x, desiredSize.y);
+					m_State.editorResizing = true;
+				}
 
-            // Resize framebuffer when in stable frame
-            if (m_State.editorResizing && desiredSize.x > 0.0f && desiredSize.y > 0.0f)
-            {
-                if (m_State.editorResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
-                {
-                    m_SceneRenderer->ResizeFramebuffer(static_cast<uint32_t>(desiredSize.x), static_cast<uint32_t>(desiredSize.y));
-                    m_State.editorResizing = false;
-                    m_State.editorResizingFrame = 0;
-                }
+				// Resize framebuffer when in stable frame
+				if (m_State.editorResizing)
+				{
+					if (m_State.editorResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
+					{
+						m_SceneRenderer->ResizeFramebuffer(desiredSize.x, desiredSize.y);
+						m_State.editorResizing = false;
+						m_State.editorResizingFrame = 0;
+					}
+				}
             }
         }
 
@@ -536,24 +540,28 @@ namespace ignite
             ICamera *gameCamera = &cc.camera;
             {
                 // Resize Game Viewport Framebuffer
-                const glm::vec2 framebufferSize = m_SceneRenderer->GetGameplayCompositeRT()->GetSize();
-                const glm::vec2 desiredSize = glm::max(glm::vec2(0.0f), gameCamera->GetViewportSize());
+                const glm::uvec2 framebufferSize = m_SceneRenderer->GetGameplayCompositeRT()->GetSize();
+                const glm::uvec2 desiredSize = glm::max(glm::uvec2(0), glm::uvec2(globals::GEditor::GameViewport.max));
                 const bool framebufferNeedsResize = framebufferSize.x != desiredSize.x || framebufferSize.y != desiredSize.y;
+				const bool isFramebufferSizeValid = desiredSize.x > 0 && desiredSize.y > 0;
 
-                if (framebufferNeedsResize && desiredSize.x > 0.0f && desiredSize.y > 0.0f)
+                if (isFramebufferSizeValid)
                 {
-                    gameCamera->UpdateProjection(desiredSize.x, desiredSize.y);
-                    m_State.gameplayResizing = true;
-                }
+					if (framebufferNeedsResize)
+					{
+						gameCamera->UpdateProjection(desiredSize.x, desiredSize.y);
+						m_State.gameplayResizing = true;
+					}
 
-                if (m_State.gameplayResizing && desiredSize.x > 0.0f && desiredSize.y > 0.0f)
-                {
-                    if (m_State.gameplayResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
-                    {
-                        m_SceneRenderer->ResizeGameplayFramebuffer(static_cast<uint32_t>(desiredSize.x), static_cast<uint32_t>(desiredSize.y));
-                        m_State.gameplayResizing = false;
-                        m_State.gameplayResizingFrame = 0;
-                    }
+					if (m_State.gameplayResizing)
+					{
+						if (m_State.gameplayResizingFrame++ >= m_State.STABLE_RESIZE_FRAME)
+						{
+							m_SceneRenderer->ResizeGameplayFramebuffer(desiredSize.x, desiredSize.y);
+							m_State.gameplayResizing = false;
+							m_State.gameplayResizingFrame = 0;
+						}
+					}
                 }
             }
         }

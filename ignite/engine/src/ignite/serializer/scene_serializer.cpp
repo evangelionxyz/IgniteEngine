@@ -706,7 +706,7 @@ namespace ignite
                 }
 
                 comp.camera.UpdateView();
-                comp.camera.UpdateProjection(1280.0f, 720.0f);
+                comp.camera.UpdateProjection(1280, 720);
             }
 
             // Sprite 2D component

@@ -234,7 +234,7 @@ namespace ignite
 			return;
 		}
 
-		const float safeHeight = glm::max(m_ViewportSize.y, 1.0f);
+		const uint32_t safeHeight = glm::max(m_ViewportSize.y, 1u);
 		float panUnitsPerPixel = controls.panSensitivity;
 
 		if (projectionType == ProjectionType::Orthographic)
@@ -536,29 +536,6 @@ namespace ignite
 		}
 
 		m_View = glm::lookAt(position, m_Target, { 0.0f, 1.0f, 0.0f });
-	}
-
-	void EditorCamera::UpdateProjection(float width, float height)
-	{
-		m_ViewportSize = { width, height };
-		const float aspectRatio = width / height;
-
-		switch (projectionType)
-		{
-			case ProjectionType::Orthographic:
-			{
-				const float halfH = orthoSize * 0.5f;
-				const float halfW = halfH * aspectRatio;
-				m_Projection = glm::orthoZO(-halfW, halfW, -halfH, halfH, nearPlane, farPlane);
-				break;
-			}
-			case ProjectionType::Perspective:
-			default:
-			{
-				m_Projection = glm::perspectiveZO(glm::radians(fov), aspectRatio, nearPlane, farPlane);
-				break;
-			}
-		}
 	}
 
 	glm::vec3 EditorCamera::GetUpDirection() const

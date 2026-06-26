@@ -76,8 +76,8 @@ namespace ignite
     {
         Application* app = Application::GetInstance();
 
-        auto width = static_cast<float>(app->GetCreateInfo().width);
-        auto height = static_cast<float>(app->GetCreateInfo().height);
+		const uint32_t width = app->GetCreateInfo().width;
+        const uint32_t height = app->GetCreateInfo().height;
 
         m_EditorCamera = EditorCamera("ScenePanel-Editor Camera");
 
@@ -1267,7 +1267,9 @@ namespace ignite
                 if (c.dirty)
                 {
                     c.camera.UpdateView();
-                    c.camera.UpdateProjection(globals::GEditor::GameViewport.max.x, globals::GEditor::GameViewport.max.y);
+                    c.camera.UpdateProjection(
+                        static_cast<uint32_t>(globals::GEditor::GameViewport.max.x), 
+						static_cast<uint32_t>(globals::GEditor::GameViewport.max.y));
                     c.dirty = false;
                 }
             });
