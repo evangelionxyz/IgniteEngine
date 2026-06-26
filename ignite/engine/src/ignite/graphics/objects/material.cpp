@@ -62,8 +62,33 @@ namespace ignite
         if (m_BindingSet && !m_BindingSetDirty)
             return;
 
-        EnsureGpuResources();
-        auto device = DeviceManager::GetInstance()->GetDevice();
+		auto isTextureReady = [assetManager](AssetHandle textureHandle)
+			{
+				if (textureHandle == 0)
+				{
+					return true;
+				}
+
+				Ref<Texture> texture = assetManager->GetAsset<Texture>(textureHandle);
+				return texture && texture->IsReady();
+			};
+
+		const bool allTexturesReady =
+			isTextureReady(baseColorTextureHandle)
+			&& isTextureReady(emissiveTextureHandle)
+			&& isTextureReady(metallicTextureHandle)
+			&& isTextureReady(roughnessTextureHandle)
+			&& isTextureReady(normalTextureHandle)
+			&& isTextureReady(occlusionTextureHandle);
+
+        if (!allTexturesReady)
+        {
+            m_BindingSetDirty = true;
+            return;
+        }
+
+		EnsureGpuResources();
+		auto device = DeviceManager::GetInstance()->GetDevice();
 
         nvrhi::BindingSetDesc desc = nvrhi::BindingSetDesc();
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_GPUDataBuffer->GetHandle()));
@@ -100,27 +125,6 @@ namespace ignite
         if (newBindingSet)
         {
             m_BindingSet = newBindingSet;
-
-            auto isTextureReady = [assetManager](AssetHandle textureHandle)
-            {
-                if (textureHandle == 0)
-                {
-                    return true;
-                }
-
-                Ref<Texture> texture = assetManager->GetAsset<Texture>(textureHandle);
-                return texture && texture->IsReady();
-            };
-
-            const bool allTexturesReady =
-                isTextureReady(baseColorTextureHandle)
-                && isTextureReady(emissiveTextureHandle)
-                && isTextureReady(metallicTextureHandle)
-                && isTextureReady(roughnessTextureHandle)
-                && isTextureReady(normalTextureHandle)
-                && isTextureReady(occlusionTextureHandle);
-
-            m_BindingSetDirty = !allTexturesReady;
         }
     }
 
