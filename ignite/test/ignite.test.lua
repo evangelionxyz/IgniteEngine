@@ -82,9 +82,9 @@ project "Ignite.Test"
         "JPH_OBJECT_STREAM",
     }
 
-    postbuildcommands {
-        '{COPYDIR} "%{prj.location}/resources" "%{cfg.targetdir}/resources"',
-    }
+    -- postbuildcommands {
+        -- '{COPYDIR} "%{prj.location}/resources" "%{cfg.targetdir}/resources"',
+    -- }
 
     --linux
     filter "system:linux"
