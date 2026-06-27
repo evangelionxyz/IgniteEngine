@@ -65,11 +65,11 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <TargetFramework>net10.0</TargetFramework>
-    <Configurations>Release</Configurations>
+    <Configurations>Release;Debug</Configurations>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
+    <PlatformTarget>x64</PlatformTarget>
     <DebugType>portable</DebugType>
     <DebugSymbols>true</DebugSymbols>
     <Optimize>true</Optimize>
@@ -84,7 +84,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
     <ImplicitUsing>enable</ImplicitUsing>
     <Nullable>disable</Nullable>
   </PropertyGroup>
-  <ItemGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+  <ItemGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
     <Reference Include="MochiSharp.Managed">
       <HintPath>Bin\MochiSharp.Managed.dll</HintPath>
     </Reference>
@@ -522,7 +522,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
                 }
             }
 
-            m_Info.scriptModuleFilepath = std::format("Bin/{}.dll", m_Info.name);
+            // m_Info.scriptModuleFilepath = std::format("Bin/{}.dll", m_Info.name);
             buildSuccess = ignite::Path::exists(GetScriptModulePath());
 
             // Validate .dll file
@@ -696,7 +696,7 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
     {
         CreateDirectories();
 
-        m_Info.scriptModuleFilepath = std::format("Bin/{}.dll", m_Info.name);
+        // m_Info.scriptModuleFilepath = std::format("Bin/{}.dll", m_Info.name);
 
         // Generate the Visual Studio project if there is no solution file
         ignite::Path solutionFilepath = GetSolutionFilepath();

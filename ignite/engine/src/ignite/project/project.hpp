@@ -20,6 +20,13 @@ namespace ignite
 {
     class Scene;
     class ScriptEngine;
+
+    enum class ProjectConfiguration
+    {
+        Debug = 0,
+        Release,
+        Shipping
+    };
     
     struct ProjectInfo
     {
@@ -32,6 +39,8 @@ namespace ignite
         ignite::Path assetDirectory = "Assets";
         ignite::Path scriptsDirectory = "Scripts";
         ignite::Path assetRegistryFilepath = "AssetRegistry.ixreg";
+
+        ProjectConfiguration configuration = ProjectConfiguration::Debug;
     };
 
     using ProjectCallbackFn = std::function<void(bool)>;
@@ -118,6 +127,8 @@ namespace ignite
         ScriptEngine *GetScriptEngine() { return m_ScriptEngine; }
         ProjectInfo &GetInfo() { return m_Info; }
         Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
+
+        ProjectConfiguration GetConfiguration() const { return m_Info.configuration; }
 
         static Ref<Project> Create(const ProjectInfo &info);
 

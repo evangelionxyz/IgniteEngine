@@ -1192,7 +1192,6 @@ namespace ignite
 
         if (const Ref<Project> openedProject = Project::Deserialize(filepath))
         {
-
 			// Subscribe Build Solution callback
 			m_ProjectReadySignalToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
 				{ OnProjectReadySignal(signal); });
