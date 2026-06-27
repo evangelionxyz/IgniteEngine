@@ -12,8 +12,8 @@
 #include "ignite/scene/sprite_sheet.hpp"
 #include "ignite/scripting/script_engine.hpp"
 
-#include "ignite/core/input/asset_import_event.hpp"
-#include "ignite/core/input/app_event.hpp"
+#include "ignite/core/input/asset_signal.hpp"
+#include "ignite/core/signal_bus.hpp"
 
 #include <format>
 #include <algorithm>
@@ -52,8 +52,7 @@ namespace ignite
 
             Application::SubmitToMainThread([handle, metadata]()
             {
-                AssetEditorOpenEvent openEvent(handle, metadata);
-                Application::GetInstance()->OnEvent(openEvent);
+                SignalBus::Emit(AssetEditorOpenSignal{ handle, metadata });
             });
 
             return true;
@@ -68,8 +67,7 @@ namespace ignite
 
             Application::SubmitToMainThread([assetType, targetDirectory]()
             {
-                AssetEditorCreateEvent createEvent(assetType, targetDirectory);
-                Application::GetInstance()->OnEvent(createEvent);
+                SignalBus::Emit(AssetEditorCreateSignal{ assetType, targetDirectory });
             });
         }
 
@@ -252,7 +250,6 @@ namespace ignite
 
     void ContentBrowserPanel::RefreshFiles()
     {
-        m_NeedsRefresh = false;
         auto project = m_EditorLayer->GetActiveProject();
         project->ValidateAssetRegistry();
 
@@ -716,7 +713,7 @@ namespace ignite
                             std::filesystem::create_directory(newPath.string(), ec);
                             if (!ec)
                             {
-                                m_NeedsRefresh = true;
+                                Application::SubmitToMainThread([this]() { RefreshFiles(); });
                             }
                         }
                     }
@@ -757,7 +754,7 @@ namespace ignite
                         if (!ignite::Path::exists(newPath))
                         {
                             m_EditorLayer->GetActiveProject()->CreateCSharpScript(newPath);
-                            m_NeedsRefresh = true;
+							Application::SubmitToMainThread([this]() { RefreshFiles(); });
                         }
                     }
                     m_PopupInputBuffer[0] = '\0';
@@ -796,7 +793,8 @@ namespace ignite
                             m_PendingScriptableObjectClassName,
                             assetName,
                             m_CurrentDirectory);
-                        m_NeedsRefresh = true;
+
+						Application::SubmitToMainThread([this]() { RefreshFiles(); });
                     }
                     m_PopupInputBuffer[0] = '\0';
                     m_PendingScriptableObjectClassName.clear();
@@ -894,7 +892,7 @@ namespace ignite
                                 }
                             }
 
-                            m_NeedsRefresh = true;
+							Application::SubmitToMainThread([this]() { RefreshFiles(); });
                         }
                     }
                     m_PopupInputBuffer[0] = '\0';
@@ -999,7 +997,7 @@ namespace ignite
                             m_EditorLayer->GetActiveProject()->RegenerateCSharpProject();
                         }
 
-                        m_NeedsRefresh = true;
+						Application::SubmitToMainThread([this]() { RefreshFiles(); });
                     }
 
                     ImGui::CloseCurrentPopup();
@@ -1066,33 +1064,6 @@ namespace ignite
         // Increment frame counter
         s_SharedCurrentFrame++;
 
-        while (!m_PendingAssetLoading.empty())
-        {
-            auto [assetType, fileStatus, assetMetaData, userData] = m_PendingAssetLoading.front();
-            m_PendingAssetLoading.pop();
-
-            if (assetType == ImportType::ImportAssets)
-            {
-                // submit to asset worker
-                AssetWorker::SubmitJob(std::format("Importing {}...", assetMetaData.filepath.filename().string()), [this, assetType, assetMetaData]()
-                {
-                    if (Ref<Asset> asset = m_AssetManager->Import(AssetHandle(), assetMetaData))
-                    {
-                        Application::SubmitToMainThread([this]() mutable
-                        {
-                            m_NeedsRefresh = true;
-                        });
-                    }
-                });
-            }
-        }
-
-        // Perform refresh once per frame if needed, avoiding overlapping command lists
-        if (m_NeedsRefresh)
-        {
-            RefreshFiles();
-        }
-
         // Check if thumbnail size changed and clear thumbnails if needed
         if (m_ThumbnailSize != m_LastThumbnailSize)
         {
@@ -1125,7 +1096,7 @@ namespace ignite
         }
     }
 
-    void ContentBrowserPanel::RefreshEntryPathList()
+	void ContentBrowserPanel::RefreshEntryPathList()
     {
         if (!m_PathEntryList.empty())
         {
@@ -1244,6 +1215,9 @@ namespace ignite
             {
                 // Skip dot file/directory
                 if (relativePath.string()[0] == '.')
+                    continue;
+
+                if (m_TreeNodes.empty())
                     continue;
 
                 const auto it = m_TreeNodes[currentNodeIndex].children.find(path.generic_string());
@@ -1527,7 +1501,10 @@ namespace ignite
                                         m_AssetManager->AssignAsset(montageHandle, montage);
                                         m_EditorLayer->SaveProject();
 
-                                        m_NeedsRefresh = DispatchOpenAssetEditorEvent(montageHandle, montageMetaData);
+                                        if (DispatchOpenAssetEditorEvent(montageHandle, montageMetaData))
+                                        {
+											Application::SubmitToMainThread([this]() { RefreshFiles(); });
+                                        }
                                     }
                                 }
                             }
@@ -1713,8 +1690,11 @@ namespace ignite
 
         m_AssetManager->AssignMetaData(duplicateHandle, duplicateMetadata);
 
-        m_NeedsRefresh = DispatchOpenAssetEditorEvent(duplicateHandle, duplicateMetadata);
-        return m_NeedsRefresh;
+        if (DispatchOpenAssetEditorEvent(duplicateHandle, duplicateMetadata))
+        {
+			Application::SubmitToMainThread([this]() { RefreshFiles(); });
+        }
+        return true;
     }
 
     void ContentBrowserPanel::UpdateSelection(const ignite::Path &filepath)
@@ -1965,7 +1945,7 @@ namespace ignite
         if (changed)
         {
             m_EditorLayer->SaveProject();
-            m_NeedsRefresh = true;
+			Application::SubmitToMainThread([this]() { RefreshFiles(); });
         }
 
         return changed;
@@ -2358,8 +2338,7 @@ namespace ignite
 
         Application::SubmitToMainThread([filepaths, payload]()
         {
-            AssetImportEvent importEvent(std::move(filepaths), payload->assetType, payload->targetDirectory);
-            Application::GetInstance()->OnEvent(importEvent);
+            SignalBus::Emit(AssetImportSignal{ std::move(filepaths), payload->assetType, payload->targetDirectory });
         });
     }
 

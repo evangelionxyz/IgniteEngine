@@ -49,7 +49,7 @@ namespace ignite
         ImportAssets,
     };
 
-    struct PendingFileLoading
+    struct FileImportPayload
     {
         ImportType type = ImportType::None;
         FileStatus loadStatus = FileStatus::Unknown;

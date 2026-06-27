@@ -251,7 +251,7 @@ namespace ignite
 
         AssetHandle handle;
 
-        virtual ~Asset() { };
+        virtual ~Asset() = default;
 
         template<typename T>
         Ref<T> As()
@@ -263,6 +263,8 @@ namespace ignite
         virtual bool SerializeMetaFile(const ignite::Path &filepath, const MetaSerializer &customSerializer = nullptr) const;
 
         virtual AssetType GetAssetType() { return AssetType::Invalid; }
+
+        void NotifyChange();
 
         void SetDirtyFlag(bool dirty)  { m_Dirty = dirty; }
         bool IsDirty() const  { return m_Dirty; }

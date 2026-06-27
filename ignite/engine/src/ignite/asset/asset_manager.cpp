@@ -22,6 +22,14 @@ namespace ignite
     AssetManager::AssetManager(Project *project)
         : m_Project(project)
     {
+        // Self-register for asset change notifications via SignalBus.
+        // This avoids the old pattern of manually forwarding Event& through
+        // EditorLayer::OnEvent → assetManager->OnEvent(e).
+        m_AssetChangeToken = SignalBus::Subscribe<AssetChangeSignal>(
+            [this](const AssetChangeSignal& signal)
+            {
+                OnAssetChangeSignal(signal);
+            });
     }
 
     void AssetManager::VerifyNotRenderThread()
@@ -80,6 +88,9 @@ namespace ignite
 
     AssetManager::~AssetManager()
     {
+        SignalBus::Unsubscribe<AssetChangeSignal>(m_AssetChangeToken);
+        m_AssetChangeToken = kInvalidSignalToken;
+
         m_PinnedAssetsByOwner.clear();
         m_AssetPinCounts.clear();
         m_AssetHandleByPath.clear();
@@ -373,25 +384,20 @@ namespace ignite
         }
 	}
 
-	void AssetManager::OnEvent(Event &event)
+	void AssetManager::OnAssetChangeSignal(const AssetChangeSignal &signal)
 	{
-        EventDispatcher e(event);
-        e.Dispatch<AssetChangeEvent>(BIND_CLASS_EVENT_FN(AssetManager::OnAssetChangeEvent));
-	}
+		auto activeScene = m_Project->GetActiveScene();
+		if (!activeScene)
+			return;
 
-	bool AssetManager::OnAssetChangeEvent(AssetChangeEvent &event)
-	{
-        switch (event.GetAssetType())
+        switch (signal.type)
         {
-            // Handle environment changes
+        case AssetType::Texture:
         case AssetType::Environment:
         {
-            auto activeScene = m_Project->GetActiveScene();
-            if (!activeScene)
-                break;
-
-            auto onChangeFunc = [this, scene = activeScene]() -> bool
+            auto onChangeFunc = [this, scene = activeScene, signal]() -> bool
             {
+                // Checking environment map
 				auto sceneRenderer = scene->GetSceneRenderer();
 				auto envMap = sceneRenderer->GetEnvironmentMapColorTexture();
 				auto shadowMap = sceneRenderer->GetCascadedShadowMapDepthTexture();
@@ -408,16 +414,23 @@ namespace ignite
 						Ref<Material> material = std::static_pointer_cast<Material>(asset);
 						if (material && (material->IsBindingSetDirty() || !material->GetBindingSet()))
 						{
-							auto isTextureReady = [this](AssetHandle textureHandle)
+							auto isTextureReady = [this](AssetHandle textureHandle) -> bool
 							{
 								if (textureHandle == 0)
-								{
 									return true;
-								}
-
 								Ref<Texture> texAsset = GetAsset<Texture>(textureHandle);
 								return texAsset && texAsset->IsReady();
 							};
+
+                            auto isTextureBeingUsed = [this](AssetHandle textureHandle, Ref<Material> material) -> bool
+                            {
+                                return textureHandle == material->baseColorTextureHandle
+                                    || textureHandle == material->emissiveTextureHandle
+                                    || textureHandle == material->metallicTextureHandle
+                                    || textureHandle == material->roughnessTextureHandle
+                                    || textureHandle == material->normalTextureHandle
+                                    || textureHandle == material->occlusionTextureHandle;
+                            };
 
 							// Only update if all textures are available and ready
 							const bool allTexturesReady = isTextureReady(material->baseColorTextureHandle)
@@ -427,7 +440,12 @@ namespace ignite
 								&& isTextureReady(material->normalTextureHandle)
 								&& isTextureReady(material->occlusionTextureHandle);
 
-							if (allTexturesReady)
+                            // Reload if:
+                            //   all textures ready
+                            //   AND if Environment requested
+                            //   OR if Texture requested but only if there is TextureHandle inside
+                            const bool validTextureRequest = signal.type == AssetType::Texture && isTextureBeingUsed(signal.handle, material);
+							if (allTexturesReady && signal.type == AssetType::Environment || validTextureRequest)
 							{
 								MaterialTextures textures;
 								material->RetrieveTextures(this, &textures);
@@ -444,10 +462,9 @@ namespace ignite
 							}
                             else
                             {
-                                // keeps loading
-                                allMaterialsUpdated = false;
+                                if (validTextureRequest)
+								    allMaterialsUpdated = false;
                             }
-
 						}
 					}
 				}
@@ -461,7 +478,7 @@ namespace ignite
         }
         }
 
-        return false;
+        return;
 	}
 
 	void AssetManager::ClearAllLoadedAssets()

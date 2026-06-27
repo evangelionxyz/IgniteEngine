@@ -23,6 +23,8 @@
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/graphics/ui/widget_renderer.hpp"
 #include "ignite/core/input/input_system.hpp"
+#include "ignite/core/signal_bus.hpp"
+#include "ignite/core/input/asset_signal.hpp"
 
 #include <ranges>
 #include <cstdlib>
@@ -335,7 +337,7 @@ namespace ignite
             if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->dirtyEnvironment)
             {
                 const Ref<GraphicsPipeline> envPSO = GetEnvPipelineForFB(framebuffer, m_FillMode);
-                m_WorldEnvironment->environment->Draw(cmd, camera, framebuffer, envPSO);
+                m_WorldEnvironment->environment->Draw(cmd, framebuffer, envPSO);
             }
 
 			ColorPass(cmd, camera, framebuffer);
@@ -481,7 +483,7 @@ namespace ignite
             if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->dirtyEnvironment)
             {
                 const Ref<GraphicsPipeline> envPSO = GetEnvPipelineForFB(framebuffer, m_FillMode);
-                m_WorldEnvironment->environment->Draw(cmd, camera, framebuffer, envPSO);
+                m_WorldEnvironment->environment->Draw(cmd, framebuffer, envPSO);
             }
 
 			ColorPass(cmd, camera, framebuffer);
@@ -628,8 +630,10 @@ namespace ignite
 
                 m_CSMBindingSetCache.clear();
 
-				AssetChangeEvent event(AssetHandle(0), AssetType::Environment);
-				Application::GetInstance()->OnEvent(event);
+				Application::SubmitToMainThread([]()
+				{
+					SignalBus::Emit(AssetChangeSignal{ AssetHandle(0), AssetType::Environment });
+				});
             }
 
             break;

@@ -28,6 +28,7 @@ namespace ignite
     bool SkeletalAnimation::Serialize(const ignite::Path &filepath)
 	{
 		BinarySerializer::SerializeSkeletalAnimation(this, filepath);
+        SetDirtyFlag(false);
 		return true;
 	}
 

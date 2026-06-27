@@ -79,6 +79,7 @@ namespace ignite
     bool Skeleton::Serialize(const ignite::Path &filepath)
     {
         BinarySerializer::SerializeSkeleton(this, filepath);
+        SetDirtyFlag(false);
         return true;
     }
 

@@ -6,7 +6,8 @@
 
 #include "ipanel.hpp"
 
-#include "ignite/core/input/asset_import_event.hpp"
+#include "ignite/core/input/asset_signal.hpp"
+#include "ignite/core/signal_bus.hpp"
 #include "ignite/asset/asset_importer.hpp"
 
 #include <queue>
@@ -24,12 +25,11 @@ namespace ignite
 	{
 	public:
 		AssetImporterPanel(const char *name, EditorLayer *editor);
-		virtual ~AssetImporterPanel() override = default;
+		virtual ~AssetImporterPanel() override;
 
-		virtual void OnEvent(Event &event) override;
 		virtual void OnUpdate(float deltaTime) override;
 
-		bool OnAssetImportEvent(AssetImportEvent &event);
+		bool OnAssetImportSignal(const AssetImportSignal &signal);
 
 		virtual void OnGuiRender() override;
 
@@ -72,6 +72,8 @@ namespace ignite
 		std::atomic<int> m_ActiveImportJobs = 0;
 		std::atomic<int> m_TotalImportItems = 0;
 		std::atomic<int> m_ImportedItems = 0;
+
+		SignalToken m_ImportSignalToken = kInvalidSignalToken;
 
    };
 }

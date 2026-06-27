@@ -8,6 +8,7 @@
 #include "script_class.hpp"
 #include "script_host.hpp"
 
+
 #include "ignite/scene/component.hpp"
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/project/project.hpp"
@@ -15,6 +16,7 @@
 #include "ignite/core/string_utils.hpp"
 #include "ignite/core/platform_utils.hpp"
 #include "ignite/core/profiler/profiler.hpp"
+#include "ignite/core/signals/signals.hpp"
 
 #include <cstdlib>
 #include <format>
@@ -32,8 +34,6 @@ namespace ignite
         constexpr const char *kSerializeFieldTypeName = "Ignite.SerializeField";
         constexpr const char *kScriptableObjectTypeName = "Ignite.ScriptableObject";
         constexpr const char *kEntityTypeName = "Ignite.Entity";
-
-        
     }
 
     static std::unordered_map<std::string, ScriptFieldType> s_ScriptFieldTypeMap =
@@ -94,12 +94,14 @@ namespace ignite
         ignite::Path mochiSharpAssemblyFilepath;
         ignite::Path coreAssemblyFilepath;
 
-        bool isReady = false;
+        SignalToken solutionBuildToken;
 
         Scope<filewatch::FileWatch<std::string>> appAssemblyFileWatcher;
+        std::chrono::time_point<std::chrono::file_clock> appAssemblyLastWriteTime{};
+        ProjectConfiguration currentProjectConfig;
+        bool isReady = false;
         bool assemblyReloadingPending = false;
         bool assemblyReloadDeferred = false;
-        std::chrono::time_point<std::chrono::file_clock> appAssemblyLastWriteTime{};
         bool hasAppAssemblyLastWriteTime = false;
 
         // Entity script
@@ -120,26 +122,53 @@ namespace ignite
     {
         LOG_ASSERT(!m_Project->GetScriptModulePath().empty(), "[Script Engine] App Assembly should not empty!");
 
-        // Skip building if the App Assembly exists AND the DLL is Up-To-Date
-        if (ignite::Path::exists(m_Project->GetScriptModulePath()) && m_Project->IsCoreDependenciesUpToDate())
+        // Load immediately if the App Assembly (.dll) exists.
+        // This ensures the editor loads the default scene successfully on startup
+        // if a valid DLL is already present, without waiting for/blocking on a rebuild
+ 
+        auto modulePath = m_Project->GetScriptModulePath();
+        if (ignite::Path::exists(modulePath))
         {
-            // Load App Assembly immediately
-            scriptEngineData->isReady = LoadAppAssembly(m_Project->GetScriptModulePath());
-            m_Project->ProcessOnProjectReadyFuncs(scriptEngineData->isReady);
+            // Clean up any leftover slow-path subscription from a previous call
+            SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
+            scriptEngineData->solutionBuildToken = kInvalidSignalToken;
+
+            // Load App Assembly immediately (we may be on a worker thread)
+            scriptEngineData->isReady = LoadAppAssembly(modulePath);
+            const bool ready = scriptEngineData->isReady;
+            Application::SubmitToMainThread([ready]()
+                {
+                    SignalBus::Emit(SuccessResultSignal{ ready, SignalType::Project });
+                });
             return FileStatus::Success;
         }
 
-        // Register Build Solution callback
-        m_Project->AddBuildSolutionFunc([this](bool isSuccess)
+        // Slow path: DLL does not exist yet. Deregister any leftover subscription.
+        SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
+        scriptEngineData->solutionBuildToken = kInvalidSignalToken;
+
+        // Register Build Solution callback — one-shot, only fires on ScriptEngine signal
+        scriptEngineData->solutionBuildToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
         {
-            LOG_ASSERT(isSuccess, "[Script Engine] Failed to build solution!");
-            if (isSuccess)
+            // Guard: only handle the "build finished" notification, not any re-emitted Project signals
+            if (signal.type != SignalType::ScriptEngine)
+                return;
+
+            // One-shot: unsubscribe immediately so cascading Project emits don't re-trigger this
+            SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
+            scriptEngineData->solutionBuildToken = kInvalidSignalToken;
+
+            LOG_ASSERT(signal.isSuccess, "[Script Engine] Failed to build solution!");
+            if (signal.isSuccess)
             {
                 scriptEngineData->isReady = LoadAppAssembly(m_Project->GetScriptModulePath());
             }
-            m_Project->ProcessOnProjectReadyFuncs(isSuccess && scriptEngineData->isReady);
-        });
 
+            // We are already on the main thread (called from project.cpp's SubmitToMainThread),
+            // so emit Project signal directly — no need for another SubmitToMainThread.
+            SignalBus::Emit(SuccessResultSignal{ signal.isSuccess && scriptEngineData->isReady, SignalType::Project });
+        });
+        
         // Run the build and load the App Assembly if success
         LOG_DEBUG("Building Visual Studio Solution...");
         m_Project->BuildSolution(true);
@@ -188,6 +217,7 @@ namespace ignite
     {
         scriptEngine = this;
 
+
         if (scriptEngineData)
         {
             ReloadAssembly();
@@ -215,6 +245,7 @@ namespace ignite
 
         // Build solution if the App Assembly is not available yet
         EnsureAppAssembly();
+		scriptEngineData->currentProjectConfig = m_Project->GetConfiguration();
     }
 
     ScriptEngine::~ScriptEngine()
@@ -246,7 +277,7 @@ namespace ignite
         ComponentScriptGlue::RegisterFunctions();
         ComponentScriptGlue::RegisterComponents();
 
-        LOG_INFO("[Script Engine] Core assembly loaded: {}", filepath.generic_string());
+        LOG_WARN("[Script Engine] Core assembly loaded: {}", filepath.generic_string());
         return true;
     }
 
@@ -256,7 +287,10 @@ namespace ignite
         {
             scriptEngineData->assemblyReloadingPending = true;
 
-            Application::SubmitToMainThread([&]()
+            // NOTE: Use [] (no capture) — this lambda is queued to the main thread and
+            // executes later; the file-watcher thread's stack frame will be gone by then.
+            // We rely on the process-lifetime globals `scriptEngineData` and `scriptEngine`.
+            Application::SubmitToMainThread([]()
             {
                 if (scriptEngine->m_Scene && scriptEngine->m_Scene->IsRunning())
                 {
@@ -265,6 +299,13 @@ namespace ignite
                     LOG_INFO("[Script Engine] App assembly change detected during play. Reload deferred until scene stops.");
                     return;
                 }
+
+                // Reset the last-write-time guard BEFORE destroying the watcher.
+                // This ensures that LoadAppAssembly's WaitForFileNewerThan check uses
+                // a zeroed baseline and waits for the truly new timestamp rather than
+                // accepting a partial/in-progress write that already bumped the timestamp.
+                scriptEngineData->hasAppAssemblyLastWriteTime = false;
+                scriptEngineData->appAssemblyLastWriteTime = {};
 
                 scriptEngineData->appAssemblyFileWatcher.reset();
                 scriptEngine->ReloadAssembly();
@@ -277,11 +318,14 @@ namespace ignite
     {
         LOG_ASSERT(!filepath.empty(), "[Script Engine] App Assembly should not empty!");
 
-        if (scriptEngineData->hasAppAssemblyLastWriteTime)
+        if (scriptEngineData->hasAppAssemblyLastWriteTime && scriptEngineData->currentProjectConfig == m_Project->GetConfiguration())
         {
             if (!ignite::Path::WaitForFileNewerThan(filepath, scriptEngineData->appAssemblyLastWriteTime))
             {
-                LOG_WARN("[Script Engine] App assembly timestamp did not advance before reload: {}", filepath.generic_string());
+                // The DLL timestamp never advanced past the previously-loaded version.
+                // Loading now would give us the same (or a partial) binary — bail out.
+                LOG_WARN("[Script Engine] App assembly timestamp did not advance; skipping reload to avoid loading a stale binary: {}", filepath.generic_string());
+                return false;
             }
         }
 
@@ -323,6 +367,7 @@ namespace ignite
         }
 
         // Create App Assembly File-watcher
+        LOG_WARN("[Script Engine] Watching App Assembly '{}'", filepath.string());
         scriptEngineData->appAssemblyFileWatcher = ignite::Path::WatchFile(filepath.string(), ScriptEngine::OnAppAssemblyFileSystemEvent);
         scriptEngineData->assemblyReloadingPending = false;
 
@@ -375,7 +420,7 @@ namespace ignite
 
         // Register method signatures AFTER Core Assembly is loaded
         scriptEngineData->scriptHost->RegisterSignatures();
-        LOG_INFO("[Script Engine] Registered method signatures");
+        LOG_TRACE("[Script Engine] Registered method signatures");
 
         // Re-initialize the native bridge into the freshly loaded core assembly.
         // The new ALC gives CoreInternalCalls/ComponentInternalCalls clean static
@@ -394,6 +439,7 @@ namespace ignite
 
         // Reload app assembly (MochiSharp handles unloading through collectible context)
         EnsureAppAssembly();
+		scriptEngineData->currentProjectConfig = m_Project->GetConfiguration();
     }
 
     void ScriptEngine::SetSceneContext(Scene *scene)

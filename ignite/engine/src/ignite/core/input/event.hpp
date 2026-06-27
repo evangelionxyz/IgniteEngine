@@ -54,11 +54,6 @@ namespace ignite
         MouseMoved,
         MouseScrolled,
 
-        AssetImport,
-        AssetEditorOpen,
-        AssetEditorCreate,
-
-        AssetChange,
     };
 
     enum EventCategory
@@ -69,7 +64,6 @@ namespace ignite
         EventCategoryMouse = BIT(3),
         EventCategoryMouseButton = BIT(4),
         EventCategoryJoystick = BIT(5),
-        EventCategoryAsset = BIT(6),
     };
 
 #define EVENT_CLASS_TYPE(type)\

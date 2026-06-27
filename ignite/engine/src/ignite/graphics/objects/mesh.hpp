@@ -168,7 +168,7 @@ namespace ignite
     {
     public:
         Mesh() = default;
-        virtual ~Mesh();
+        virtual ~Mesh() override;
 
         static Ref<Mesh> Create();
         static AssetType GetStaticType() { return AssetType::Mesh; }

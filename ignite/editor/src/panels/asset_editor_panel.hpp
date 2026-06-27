@@ -10,7 +10,8 @@
 #include "ignite/asset/asset.hpp"
 #include "ignite/graphics/render_target.hpp"
 #include "ignite/graphics/renderer/asset_scene_renderer.hpp"
-#include "ignite/core/input/app_event.hpp"
+#include "ignite/core/input/asset_signal.hpp"
+#include "ignite/core/signal_bus.hpp"
 #include "ignite/core/input/mouse_event.hpp"
 
 namespace ignite
@@ -72,8 +73,8 @@ namespace ignite
         virtual void OnGuiRender() override;
         virtual void OnEvent(Event &event) override;
 
-        bool OnAssetEditorOpenEvent(AssetEditorOpenEvent &event);
-        bool OnAssetEditorCreateEvent(AssetEditorCreateEvent &event);
+        bool OnAssetEditorOpenSignal(const AssetEditorOpenSignal &signal);
+        bool OnAssetEditorCreateSignal(const AssetEditorCreateSignal &signal);
         bool OnMouseScrollEvent(MouseScrolledEvent &event);
 
         struct CreateAssetRequest
@@ -111,6 +112,9 @@ namespace ignite
 
         std::vector<AssetEditorData> m_Assets;
         CreateAssetRequest m_CreateRequest;
+
+        SignalToken m_OpenSignalToken   = kInvalidSignalToken;
+        SignalToken m_CreateSignalToken = kInvalidSignalToken;
     };
 }
 

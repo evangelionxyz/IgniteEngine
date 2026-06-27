@@ -20,6 +20,13 @@ namespace ignite
 {
     class Scene;
     class ScriptEngine;
+
+    enum class ProjectConfiguration
+    {
+        Debug = 0,
+        Release,
+        Shipping
+    };
     
     struct ProjectInfo
     {
@@ -28,10 +35,11 @@ namespace ignite
 
         ignite::Path filepath; // the actual project file (.ixproj)
         ignite::Path rootDirectory; // project directory
-        ignite::Path scriptModuleFilepath; // .dll Script file
         ignite::Path assetDirectory = "Assets";
         ignite::Path scriptsDirectory = "Scripts";
         ignite::Path assetRegistryFilepath = "AssetRegistry.ixreg";
+
+        ProjectConfiguration configuration = ProjectConfiguration::Debug;
     };
 
     using ProjectCallbackFn = std::function<void(bool)>;
@@ -57,12 +65,6 @@ namespace ignite
         void CreateCSharpScript(const ignite::Path &filepath);
         void CreateScriptableObject(const std::string &className, const std::string &fileName, const ignite::Path &targetDirectory);
         void RegenerateCSharpProject() const;
-
-        void AddBuildSolutionFunc(const ProjectCallbackFn &func);
-        void AddOnProjectReadyFuncs(const ProjectCallbackFn &func);
-
-        void ProcessOnProjectReadyFuncs(bool isSuccess = true);
-        void ResetReadyState();
 
         std::vector<std::pair<AssetHandle, AssetMetaData>> ValidateAssetRegistry();
 
@@ -98,7 +100,10 @@ namespace ignite
 
         ignite::Path GetScriptModulePath() const
         {
-            return m_Info.rootDirectory / m_Info.scriptModuleFilepath;
+            std::string configDir = "Debug";
+            if (m_Info.configuration == ProjectConfiguration::Release) configDir = "Release";
+            else if (m_Info.configuration == ProjectConfiguration::Shipping) configDir = "Shipping";
+            return m_Info.rootDirectory / "Bin" / configDir / (m_Info.name + ".dll");
         }
 
         template<typename T>
@@ -125,13 +130,14 @@ namespace ignite
         ProjectInfo &GetInfo() { return m_Info; }
         Ref<Scene> GetActiveScene() const { return m_ActiveScene; }
 
+        ProjectConfiguration GetConfiguration() const { return m_Info.configuration; }
+
         static Ref<Project> Create(const ProjectInfo &info);
 
         static AssetType GetStaticType() { return AssetType::Project; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }
 
         bool IsCoreDependenciesUpToDate();
-        bool IsReady() const { return m_IsReady; }
 
         void StartCoreDependencyWatchers();
         void OnCoreDependencyChanged(const std::string &path, const filewatch::Event eventType);
@@ -145,17 +151,12 @@ namespace ignite
 
         MaterialManager m_MaterialManager;
         AssetManager *m_AssetManager = nullptr;
-        ScriptEngine *m_ScriptEngine = nullptr;
-
-        std::vector<ProjectCallbackFn> m_BuildSolutionFuncs;
-        std::vector<ProjectCallbackFn> m_OnProjectReadyFuncs;
+		ScriptEngine *m_ScriptEngine = nullptr;
 
         std::map<std::string, bool> m_CoreDependencies;
         std::map<std::string, bool> m_CoreDependenciesPending;
         std::vector<Scope<filewatch::FileWatch<std::string>>> m_CoreDependencyWatchers;
         std::mutex m_CoreDependencyMutex;
-
-        bool m_IsReady = false;
     };
 }
 

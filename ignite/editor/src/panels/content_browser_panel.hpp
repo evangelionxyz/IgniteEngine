@@ -99,7 +99,6 @@ namespace ignite
 
         std::vector<FileTreeNode> m_TreeNodes;
         std::vector<uint32_t> m_SortedRootNodeIndices;
-        std::queue<PendingFileLoading> m_PendingAssetLoading;
 
         AssetEditorPanel *m_AssetEditorPanel;
         AssetManager *m_AssetManager = nullptr;
@@ -131,8 +130,6 @@ namespace ignite
         static std::unordered_set<ignite::Path> s_SharedThumbnailLoadsInFlight;
         static uint64_t s_SharedThumbnailLoadGeneration;
         static uint64_t s_SharedCurrentFrame;
-        
-        bool m_NeedsRefresh = false;
 
         // Modal state for create/rename/delete operations
         bool m_ShowCreateFolderModal = false;

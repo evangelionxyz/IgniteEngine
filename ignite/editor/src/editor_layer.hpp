@@ -11,6 +11,7 @@
 #include "ignite/graphics/renderer/scene_renderer.hpp"
 #include "ignite/serializer/serializer.hpp"
 #include "ignite/serializer/scene_serializer.hpp"
+#include "ignite/core/signals/signals.hpp"
 #include "ignite/project/project.hpp"
 #include "ignite/scene/scene.hpp"
 #include "states.hpp"
@@ -117,7 +118,9 @@ namespace ignite
         static void OnScreenshotSaveFileSelected(void *userData, const char *const *filelist, int filter);
         static void OnProjectFolderSelected(void *userData, const char *const *filelist, int filter);
 
-        void ProcessPendingFileLoading();
+        void OnProjectReadySignal(const SuccessResultSignal &signal);
+
+        void OnFileImport(const FileImportPayload &payload);
         void AddContentBrowserPanel();
         void ReloadContentBrowserPanels();
         uint32_t GetOpenContentBrowserCount() const;
@@ -160,11 +163,13 @@ namespace ignite
 
         AssetHandle m_CurrentSceneHandle = AssetHandle(0);
 
-        std::queue<PendingFileLoading> m_PendingFileLoading;
         uint32_t m_PendingContentBrowserPanelsToAdd = 0;
         std::unordered_set<ContentBrowserPanel *> m_ContentBrowserPanelsPendingRemoval;
         uint32_t m_NextContentBrowserPanelId = 1;
         uint32_t m_ActiveEditorDockspaceId = 0;
+
+        SignalToken m_FileImportSignalToken = kInvalidSignalToken;
+        SignalToken m_ProjectReadySignalToken = kInvalidSignalToken;
         
         std::string m_StatusText;
         float m_LoadingProgress = 0.0f;

@@ -80,6 +80,8 @@ namespace ignite
 		m_WhiteTexture.reset();
 		m_MagentaTexture.reset();
 		m_BlackTexture.reset();
+
+		m_BindingLayouts.clear();
 	}
 
     void Renderer::BeginStats()

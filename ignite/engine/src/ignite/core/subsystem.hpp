@@ -10,6 +10,7 @@ namespace ignite
 	class IGN_API Subsystem
 	{
 	public:
+		virtual ~Subsystem() = default;
 		virtual void Init() { };
 		virtual void Shutdown() { };
 	};

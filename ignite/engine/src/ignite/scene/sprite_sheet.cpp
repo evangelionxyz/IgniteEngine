@@ -33,8 +33,8 @@ namespace ignite
 		{
 			return false;
 		}
-
 		file << out.c_str();
+		SetDirtyFlag(false);
 		return true;
 	}
 

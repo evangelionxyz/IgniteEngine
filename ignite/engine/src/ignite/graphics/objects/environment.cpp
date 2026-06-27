@@ -1,25 +1,4 @@
-/* MIT License
-* 
-* Copyright (c) 2026 Evangelion Manuhutu
-* 
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* of this software and associated documentation files (the "Software"), to deal
-* in the Software without restriction, including without limitation the rights
-* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the Software is
-* furnished to do so, subject to the following conditions:
-* 
-* The above copyright notice and this permission notice shall be included in all
-* copies or substantial portions of the Software.
-* 
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-* SOFTWARE.
-*/
+// Copyright (c) 2026 Evangelion Manuhutu
 
 #include "environment.hpp"
 #include "ignite/graphics/vertex_data.hpp"
@@ -30,53 +9,22 @@
 #include "ignite/core/logger.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/core/device/device_manager.hpp"
+#include "ignite/core/signal_bus.hpp"
+#include "ignite/core/input/asset_signal.hpp"
 
 #include <stb_image.h>
 
 namespace ignite
 {
-
-    // clock wise
-    std::array<glm::vec3, 24> vertices =
-    {
-        glm::vec3( 1.0f,  1.0f,  1.0f), // top right    front  
-        glm::vec3( 1.0f,  1.0f, -1.0f), // top right    back
-        glm::vec3( 1.0f, -1.0f, -1.0f), // bottom right back
-        glm::vec3( 1.0f, -1.0f,  1.0f), // bottom right front
-
-        glm::vec3(-1.0f,  1.0f, -1.0f), // top    left back
-        glm::vec3(-1.0f,  1.0f,  1.0f), // top    left front
-        glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left front
-        glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left back
-        
-        glm::vec3(-1.0f,  1.0f,  1.0f), // top left  front
-        glm::vec3(-1.0f,  1.0f, -1.0f), // top left  back
-        glm::vec3( 1.0f,  1.0f, -1.0f), // top right back
-        glm::vec3( 1.0f,  1.0f,  1.0f), // top right front
-
-        glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left  front
-        glm::vec3( 1.0f, -1.0f,  1.0f), // bottom right front
-        glm::vec3( 1.0f, -1.0f, -1.0f), // bottom right back
-        glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left  back
-
-        glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left  back
-        glm::vec3( 1.0f, -1.0f, -1.0f), // bottom right back
-        glm::vec3( 1.0f,  1.0f, -1.0f), // top    right back
-        glm::vec3(-1.0f,  1.0f, -1.0f), // top    left  back
-
-        glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left  front
-        glm::vec3(-1.0f,  1.0f,  1.0f), // top    left  front
-        glm::vec3( 1.0f,  1.0f,  1.0f), // top    right front
-        glm::vec3( 1.0f, -1.0f,  1.0f), // bottom right front
-    };
-
     Environment::Environment()
     {
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
 
+        CreateVerticesIndices();
+
         // create vertex buffer
-        m_VertexBuffer = VertexBuffer::Create(sizeof(vertices), "Environment Vertex Buffer");
-        m_IndexBuffer = IndexBuffer::Create(sizeof(uint32_t) * 36, "Environment Index Buffer");
+        m_VertexBuffer = VertexBuffer::Create(sizeof(m_Vertices), "Environment Vertex Buffer");
+        m_IndexBuffer = IndexBuffer::Create(sizeof(uint32_t) * m_Indices.size(), "Environment Index Buffer");
 
         m_HDRTexture = Renderer::GetBlackTexture();
 
@@ -95,17 +43,14 @@ namespace ignite
 
         // Clear binding set first (it references other resources)
         m_BindingSet.Reset();
-
-        // Clear sampler
         m_Sampler.Reset();
 
-        // Clear texture and buffers
         m_HDRTexture.reset();
         m_VertexBuffer.reset();
         m_IndexBuffer.reset();
     }
 
-    void Environment::Draw(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *fb, const Ref<GraphicsPipeline> &pipeline)
+    void Environment::Draw(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *fb, const Ref<GraphicsPipeline> &pipeline)
     {
         LOG_ASSERT(m_BindingSet, "[Environment] Invalid binding set");
 
@@ -126,7 +71,6 @@ namespace ignite
 
         cmd->drawIndexed(args);
     }
-
 
     bool Environment::UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer)
     {
@@ -156,8 +100,11 @@ namespace ignite
         m_BindingSet = device->createBindingSet(bsDesc, Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT));
         LOG_ASSERT(m_BindingSet, "Failed to create binding set");
 
-		AssetChangeEvent event(handle, AssetType::Environment);
-		Application::GetInstance()->OnEvent(event);
+		// Notify dependents (e.g. AssetManager) that this environment has changed.
+		Application::SubmitToMainThread([this]()
+		{
+			SignalBus::Emit(AssetChangeSignal{ handle, AssetType::Environment });
+		});
 
         return m_BindingSet != nullptr;
     }
@@ -181,25 +128,8 @@ namespace ignite
 	void Environment::WriteBuffer(nvrhi::ICommandList *cmd)
     {
         // write buffers
-        m_VertexBuffer->SetData(cmd, Buffer(vertices.data(), sizeof(vertices)));
-
-        // index buffer
-		std::vector<uint32_t> indices(36);
-        u32 offset = 0;
-        for (u32 i = 0; i < 36; i += 6)
-        {
-            indices[i + 0] = offset + 0;
-			indices[i + 1] = offset + 1;
-			indices[i + 2] = offset + 2;
-
-			indices[i + 3] = offset + 2;
-			indices[i + 4] = offset + 3;
-			indices[i + 5] = offset + 0;
-
-			offset += 4;
-        }
-
-        m_IndexBuffer->SetData(cmd, Buffer(indices.data(), sizeof(uint32_t) * indices.size()));
+        m_VertexBuffer->SetData(cmd, Buffer(m_Vertices.data(), sizeof(m_Vertices)));
+        m_IndexBuffer->SetData(cmd, Buffer(m_Indices.data(), sizeof(uint32_t) * m_Indices.size()));
     }
 
     Ref<Environment> Environment::Create()
@@ -216,4 +146,55 @@ namespace ignite
             .addItem(nvrhi::BindingLayoutItem::Texture_SRV(0)) // texture
             .addItem(nvrhi::BindingLayoutItem::Sampler(0));
     }
+
+	void Environment::CreateVerticesIndices()
+	{
+		// clock wise Vertices
+		m_Vertices =
+		{
+			glm::vec3(1.0f,  1.0f,  1.0f), // top right    front  
+			glm::vec3(1.0f,  1.0f, -1.0f), // top right    back
+			glm::vec3(1.0f, -1.0f, -1.0f), // bottom right back
+			glm::vec3(1.0f, -1.0f,  1.0f), // bottom right front
+
+			glm::vec3(-1.0f,  1.0f, -1.0f), // top    left back
+			glm::vec3(-1.0f,  1.0f,  1.0f), // top    left front
+			glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left front
+			glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left back
+
+			glm::vec3(-1.0f,  1.0f,  1.0f), // top left  front
+			glm::vec3(-1.0f,  1.0f, -1.0f), // top left  back
+			glm::vec3(1.0f,  1.0f, -1.0f), // top right back
+			glm::vec3(1.0f,  1.0f,  1.0f), // top right front
+
+			glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left  front
+			glm::vec3(1.0f, -1.0f,  1.0f), // bottom right front
+			glm::vec3(1.0f, -1.0f, -1.0f), // bottom right back
+			glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left  back
+
+			glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left  back
+			glm::vec3(1.0f, -1.0f, -1.0f), // bottom right back
+			glm::vec3(1.0f,  1.0f, -1.0f), // top    right back
+			glm::vec3(-1.0f,  1.0f, -1.0f), // top    left  back
+
+			glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left  front
+			glm::vec3(-1.0f,  1.0f,  1.0f), // top    left  front
+			glm::vec3(1.0f,  1.0f,  1.0f), // top    right front
+			glm::vec3(1.0f, -1.0f,  1.0f), // bottom right front
+		};
+
+
+        // Indices
+		size_t offset = 0;
+		for (size_t i = 0; i < m_Indices.size(); i += 6)
+		{
+			m_Indices[i + 0] = static_cast<uint32_t>(offset + 0zu);
+			m_Indices[i + 1] = static_cast<uint32_t>(offset + 1zu);
+			m_Indices[i + 2] = static_cast<uint32_t>(offset + 2zu);
+			m_Indices[i + 3] = static_cast<uint32_t>(offset + 2zu);
+			m_Indices[i + 4] = static_cast<uint32_t>(offset + 3zu);
+			m_Indices[i + 5] = static_cast<uint32_t>(offset + 0zu);
+			offset += 4;
+		}
+	}
 }

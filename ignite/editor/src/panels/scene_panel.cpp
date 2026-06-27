@@ -3086,7 +3086,7 @@ namespace ignite
         {
             if (isScenePlaying)
             {
-                m_EditorLayer->OnSceneStop();
+                Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneStop(); });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
@@ -3095,7 +3095,7 @@ namespace ignite
             }
             else
             {
-                m_EditorLayer->OnScenePlay();
+				Application::SubmitToMainThread([this]() { m_EditorLayer->OnScenePlay(); });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
@@ -3114,7 +3114,7 @@ namespace ignite
         {
             if (isSceneSimulate)
             {
-                m_EditorLayer->OnSceneStop();
+				Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneStop(); });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x00E86071;
@@ -3123,7 +3123,7 @@ namespace ignite
             }
             else
             {
-                m_EditorLayer->OnSceneSimulate();
+				Application::SubmitToMainThread([this]() { m_EditorLayer->OnSceneSimulate(); });
 #if _WIN32
                 HWND hwnd = Application::GetInstance()->GetWindow()->GetNativeWindow();
                 COLORREF rgbRed = 0x000000AB;
