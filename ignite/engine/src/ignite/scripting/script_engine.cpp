@@ -124,15 +124,17 @@ namespace ignite
 
         // Load immediately if the App Assembly (.dll) exists.
         // This ensures the editor loads the default scene successfully on startup
-        // if a valid DLL is already present, without waiting for/blocking on a rebuild.
-        if (ignite::Path::exists(m_Project->GetScriptModulePath()))
+        // if a valid DLL is already present, without waiting for/blocking on a rebuild
+ 
+        auto modulePath = m_Project->GetScriptModulePath();
+        if (ignite::Path::exists(modulePath))
         {
             // Clean up any leftover slow-path subscription from a previous call
             SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
             scriptEngineData->solutionBuildToken = kInvalidSignalToken;
 
             // Load App Assembly immediately (we may be on a worker thread)
-            scriptEngineData->isReady = LoadAppAssembly(m_Project->GetScriptModulePath());
+            scriptEngineData->isReady = LoadAppAssembly(modulePath);
             const bool ready = scriptEngineData->isReady;
             Application::SubmitToMainThread([ready]()
                 {
@@ -273,7 +275,7 @@ namespace ignite
         ComponentScriptGlue::RegisterFunctions();
         ComponentScriptGlue::RegisterComponents();
 
-        LOG_INFO("[Script Engine] Core assembly loaded: {}", filepath.generic_string());
+        LOG_WARN("[Script Engine] Core assembly loaded: {}", filepath.generic_string());
         return true;
     }
 
@@ -283,7 +285,10 @@ namespace ignite
         {
             scriptEngineData->assemblyReloadingPending = true;
 
-            Application::SubmitToMainThread([&]()
+            // NOTE: Use [] (no capture) — this lambda is queued to the main thread and
+            // executes later; the file-watcher thread's stack frame will be gone by then.
+            // We rely on the process-lifetime globals `scriptEngineData` and `scriptEngine`.
+            Application::SubmitToMainThread([]()
             {
                 if (scriptEngine->m_Scene && scriptEngine->m_Scene->IsRunning())
                 {
@@ -292,6 +297,13 @@ namespace ignite
                     LOG_INFO("[Script Engine] App assembly change detected during play. Reload deferred until scene stops.");
                     return;
                 }
+
+                // Reset the last-write-time guard BEFORE destroying the watcher.
+                // This ensures that LoadAppAssembly's WaitForFileNewerThan check uses
+                // a zeroed baseline and waits for the truly new timestamp rather than
+                // accepting a partial/in-progress write that already bumped the timestamp.
+                scriptEngineData->hasAppAssemblyLastWriteTime = false;
+                scriptEngineData->appAssemblyLastWriteTime = {};
 
                 scriptEngineData->appAssemblyFileWatcher.reset();
                 scriptEngine->ReloadAssembly();
@@ -308,7 +320,10 @@ namespace ignite
         {
             if (!ignite::Path::WaitForFileNewerThan(filepath, scriptEngineData->appAssemblyLastWriteTime))
             {
-                LOG_WARN("[Script Engine] App assembly timestamp did not advance before reload: {}", filepath.generic_string());
+                // The DLL timestamp never advanced past the previously-loaded version.
+                // Loading now would give us the same (or a partial) binary — bail out.
+                LOG_WARN("[Script Engine] App assembly timestamp did not advance; skipping reload to avoid loading a stale binary: {}", filepath.generic_string());
+                return false;
             }
         }
 
@@ -350,6 +365,7 @@ namespace ignite
         }
 
         // Create App Assembly File-watcher
+        LOG_WARN("[Script Engine] Watching App Assembly '{}'", filepath.string());
         scriptEngineData->appAssemblyFileWatcher = ignite::Path::WatchFile(filepath.string(), ScriptEngine::OnAppAssemblyFileSystemEvent);
         scriptEngineData->assemblyReloadingPending = false;
 
@@ -402,7 +418,7 @@ namespace ignite
 
         // Register method signatures AFTER Core Assembly is loaded
         scriptEngineData->scriptHost->RegisterSignatures();
-        LOG_INFO("[Script Engine] Registered method signatures");
+        LOG_TRACE("[Script Engine] Registered method signatures");
 
         // Re-initialize the native bridge into the freshly loaded core assembly.
         // The new ALC gives CoreInternalCalls/ComponentInternalCalls clean static

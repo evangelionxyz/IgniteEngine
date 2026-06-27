@@ -149,8 +149,25 @@ internal static class ScriptReflectionBridge
     private static Assembly? ResolveAssembly(string assemblyName)
     {
         string expectedName = assemblyName.Trim();
+
+        // IMPORTANT: Search within the same AssemblyLoadContext that this bridge lives in.
+        // Using AppDomain.CurrentDomain.GetAssemblies() would search ALL ALCs, including
+        // old collectible ALCs that are still being unloaded by the GC after a hot-reload.
+        // FirstOrDefault would then return the OLD assembly (same name, stale types),
+        // causing class names from the previous compilation to persist after reload.
+        var selfContext = AssemblyLoadContext.GetLoadContext(typeof(ScriptReflectionBridge).Assembly);
+        if (selfContext != null)
+        {
+            var found = selfContext.Assemblies
+                .FirstOrDefault(a => string.Equals(a.GetName().Name, expectedName, StringComparison.OrdinalIgnoreCase));
+            if (found != null)
+                return found;
+        }
+
+        // Fallback: search the whole domain (covers the case where the app assembly was
+        // loaded into the default ALC or a different context for some reason).
         return AppDomain.CurrentDomain.GetAssemblies()
-            .FirstOrDefault(assembly => string.Equals(assembly.GetName().Name, expectedName, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(a => string.Equals(a.GetName().Name, expectedName, StringComparison.OrdinalIgnoreCase));
     }
 
     private static Type? ResolveType(string typeName)

@@ -397,6 +397,11 @@ namespace ignite
         bool hasLastWrite = false;
         int stableCount = 0;
 
+        // Require more consecutive stable reads to handle MSBuild's two-phase write
+        // (write partial file -> flush -> rename/finalize). Each poll is 25ms apart,
+        // so stableRequired=5 means ~125ms of confirmed stability before loading.
+        constexpr int stableRequired = 5;
+
         for (int i = 0; i < 80; i++)
         {
             std::error_code ec;
@@ -433,7 +438,7 @@ namespace ignite
             if (sameWrite && sameSize)
             {
                 stableCount++;
-                if (stableCount >= 3)
+                if (stableCount >= stableRequired)
                 {
                     return true;
                 }

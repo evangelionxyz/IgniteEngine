@@ -86,10 +86,6 @@ namespace ignite
 
         auto *app = Application::GetInstance();
 
-		// Subscribe Build Solution callback
-		m_ProjectReadySignalToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
-			{ OnProjectReadySignal(signal); });
-
         m_FileImportSignalToken = SignalBus::Subscribe<FileImportPayload>([this](const FileImportPayload & payload)
             { OnFileImport(payload); });
 
@@ -1196,6 +1192,11 @@ namespace ignite
 
         if (const Ref<Project> openedProject = Project::Deserialize(filepath))
         {
+
+			// Subscribe Build Solution callback
+			m_ProjectReadySignalToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
+				{ OnProjectReadySignal(signal); });
+
             m_ActiveProject = openedProject;
             m_CurrentProjectFilepath = filepath;
             openedProject->InitScriptEngine();
@@ -1248,7 +1249,7 @@ namespace ignite
 
     void EditorLayer::OnSceneSaveFileSelected(void *userData, const char *const *filelist, int filter)
     {
-        EditorLayer *editor = (EditorLayer *)userData;
+        auto *editor = (EditorLayer *)userData;
 
         // Check for errors
         if (editor == nullptr || filelist == nullptr)
@@ -1424,6 +1425,10 @@ namespace ignite
 	{
 		if (signal.isSuccess && signal.type == SignalType::Project)
 		{
+			// One shot signal
+			SignalBus::Unsubscribe<SuccessResultSignal>(m_ProjectReadySignalToken);
+			m_ProjectReadySignalToken = kInvalidSignalToken;
+
 			// Reload project files
 			ReloadContentBrowserPanels();
 
