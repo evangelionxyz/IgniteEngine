@@ -120,7 +120,7 @@ namespace ignite
 
         void OnProjectReadySignal(const SuccessResultSignal &signal);
 
-        void ProcessPendingFileLoading();
+        void OnFileImport(const FileImportPayload &payload);
         void AddContentBrowserPanel();
         void ReloadContentBrowserPanels();
         uint32_t GetOpenContentBrowserCount() const;
@@ -163,12 +163,12 @@ namespace ignite
 
         AssetHandle m_CurrentSceneHandle = AssetHandle(0);
 
-        std::queue<PendingFileLoading> m_PendingFileLoading;
         uint32_t m_PendingContentBrowserPanelsToAdd = 0;
         std::unordered_set<ContentBrowserPanel *> m_ContentBrowserPanelsPendingRemoval;
         uint32_t m_NextContentBrowserPanelId = 1;
         uint32_t m_ActiveEditorDockspaceId = 0;
 
+        SignalToken m_FileImportSignalToken = kInvalidSignalToken;
         SignalToken m_ProjectReadySignalToken = kInvalidSignalToken;
         
         std::string m_StatusText;
