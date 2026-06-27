@@ -3049,13 +3049,9 @@ namespace ignite
                             const float aspectRatio = static_cast<float>(texture->GetWidth()) / static_cast<float>(texture->GetHeight());
                             ImVec2 previewSize(previewMaxWidth, previewMaxWidth);
                             if (aspectRatio > 1.0f)
-                            {
                                 previewSize.y = previewMaxWidth / aspectRatio;
-                            }
                             else
-                            {
                                 previewSize.x = previewMaxWidth * aspectRatio;
-                            }
 
                             ImGui::Text("Preview");
                             ImTextureID textureId = reinterpret_cast<ImTextureID>(texture->GetHandle().Get());
@@ -3064,25 +3060,25 @@ namespace ignite
 
                         ImGui::Separator();
 
-                        int mipLevels = static_cast<int>(state.createInfo.mipLevels);
+                        auto mipLevels = static_cast<int>(state.createInfo.mipLevels);
                         if (UI::DrawIntControl("Mip Levels", &mipLevels, 1.0f, 0, 16))
                         {
                             state.createInfo.mipLevels = static_cast<uint32_t>(std::max(mipLevels, 1));
                         }
 
-                        int arraySize = static_cast<int>(state.createInfo.arraySize);
+                        auto arraySize = static_cast<int>(state.createInfo.arraySize);
                         if (UI::DrawIntControl("Array Size", &arraySize, 1.0f, 1, 64))
                         {
                             state.createInfo.arraySize = static_cast<uint32_t>(std::max(arraySize, 1));
                         }
 
-                        int sampleCount = static_cast<int>(state.createInfo.sampleCount);
+                        auto sampleCount = static_cast<int>(state.createInfo.sampleCount);
                         if (UI::DrawIntControl("Sample Count", &sampleCount, 1.0f, 1, 16))
                         {
                             state.createInfo.sampleCount = static_cast<uint32_t>(std::max(sampleCount, 1));
                         }
 
-                        int sampleQuality = static_cast<int>(state.createInfo.sampleQuality);
+                        auto sampleQuality = static_cast<int>(state.createInfo.sampleQuality);
                         if (UI::DrawIntControl("Sample Quality", &sampleQuality, 1.0f, 0, 16))
                         {
                             state.createInfo.sampleQuality = static_cast<uint32_t>(std::max(sampleQuality, 0));
@@ -3159,10 +3155,7 @@ namespace ignite
                             {
                                 reimportedTexture->handle = assetData.handle;
                                 assetManager->AssignAsset(assetData.handle, reimportedTexture);
-                                Texture::SerializeMetaFile(BuildAssetMetaPath(project, assetData.metadata), assetData.handle, reimportedTexture->GetCreateInfo());
-                                assetData.asset = reimportedTexture;
-                                state.createInfo = reimportedTexture->GetCreateInfo();
-                                reimportedTexture->SetDirtyFlag(false);
+                                SaveAsset(assetData);
                             }
                         }
                     }
@@ -4689,239 +4682,183 @@ namespace ignite
         {
             case AssetType::Texture:
             {
-                Ref<Texture> texture = assetData.asset->As<Texture>();
-                if (!texture)
-                {
+                Ref<Texture> asset = assetData.asset->As<Texture>();
+                if (!asset)
                     return false;
-                }
 
-                TextureCreateInfo createInfo = texture->GetCreateInfo();
+                TextureCreateInfo createInfo = asset->GetCreateInfo();
                 const auto stateIt = s_TextureEditorState.find(static_cast<uint64_t>(assetData.handle));
                 if (stateIt != s_TextureEditorState.end() && stateIt->second.initialized)
-                {
                     createInfo = stateIt->second.createInfo;
-                }
 
                 const bool metaSaved = Texture::SerializeMetaFile(metaPath, assetData.handle, createInfo);
-                if (metaSaved)
-                {
-                    texture->SetDirtyFlag(false);
-                }
-                return metaSaved;
+                if (!metaSaved)
+                    return false;
+
+                asset->SetDirtyFlag(false);
+                return true;
             }
 
             case AssetType::SpriteSheet:
             {
-                Ref<SpriteSheet> spriteSheet = assetData.asset->As<SpriteSheet>();
-                if (!spriteSheet)
-                {
+                Ref<SpriteSheet> asset = assetData.asset->As<SpriteSheet>();
+                if (!asset)
                     return false;
-                }
-
-                if (!spriteSheet->Serialize(savePath))
-                {
+                if (!asset->Serialize(savePath))
                     return false;
-                }
-
-                spriteSheet->SetDirtyFlag(false);
+                asset->NotifyChange();
                 return saveDefaultMeta();
             }
 
             case AssetType::Material2D:
             {
-                Ref<Material2D> material2D = assetData.asset->As<Material2D>();
-                if (!material2D)
-                {
+                Ref<Material2D> asset = assetData.asset->As<Material2D>();
+                if (!asset)
                     return false;
-                }
-
-                if (!material2D->Serialize(savePath))
-                {
+                if (!asset->Serialize(savePath))
                     return false;
-                }
-
-                material2D->SetDirtyFlag(false);
+                asset->NotifyChange();
                 return saveDefaultMeta();
             }
 
             case AssetType::SkeletalAnimation:
             {
-                Ref<SkeletalAnimation> animation = assetData.asset->As<SkeletalAnimation>();
-                if (!animation)
-                {
+                Ref<SkeletalAnimation> asset = assetData.asset->As<SkeletalAnimation>();
+                if (!asset)
                     return false;
-                }
-                animation->Serialize(savePath);
-                animation->SetDirtyFlag(false);
+                if (!asset->Serialize(savePath))
+                    return false;
+
+                asset->NotifyChange();
                 return saveDefaultMeta();
             }
 
             case AssetType::Skeleton:
             {
-                Ref<Skeleton> skeleton = assetData.asset->As<Skeleton>();
-                if (!skeleton)
-                {
+                Ref<Skeleton> asset = assetData.asset->As<Skeleton>();
+                if (!asset)
                     return false;
-                }
-
-                if (!skeleton->Serialize(savePath))
-                {
+                if (!asset->Serialize(savePath))
                     return false;
-                }
-
-                skeleton->SetDirtyFlag(false);
+                asset->NotifyChange();
                 return saveDefaultMeta();
             }
 
             case AssetType::AnimationMontage:
             {
-                Ref<AnimationMontage> montage = assetData.asset->As<AnimationMontage>();
-                if (!montage)
-                {
+                Ref<AnimationMontage> asset = assetData.asset->As<AnimationMontage>();
+                if (!asset)
                     return false;
-                }
-
-                if (!montage->Serialize(savePath))
-                {
+                if (!asset->Serialize(savePath))
                     return false;
-                }
-
-                montage->SetDirtyFlag(false);
+                asset->NotifyChange();
                 return saveDefaultMeta();
             }
 
             case AssetType::BlendSpace:
             {
-                Ref<BlendSpace> blendSpace = assetData.asset->As<BlendSpace>();
-                if (!blendSpace)
-                {
+                Ref<BlendSpace> asset = assetData.asset->As<BlendSpace>();
+                if (!asset)
                     return false;
-                }
-
-                if (!blendSpace->Serialize(savePath))
-                {
+                if (!asset->Serialize(savePath))
                     return false;
-                }
-
-                blendSpace->SetDirtyFlag(false);
+                asset->NotifyChange();
                 return saveDefaultMeta();
             }
 
             case AssetType::LocomotionController:
             {
-                Ref<LocomotionController> controller = assetData.asset->As<LocomotionController>();
-                if (!controller)
-                {
+                Ref<LocomotionController> asset = assetData.asset->As<LocomotionController>();
+                if (!asset)
                     return false;
-                }
-
-                if (!controller->Serialize(savePath))
-                {
+                if (!asset->Serialize(savePath))
                     return false;
-                }
-
-                controller->SetDirtyFlag(false);
+                asset->NotifyChange();
                 return saveDefaultMeta();
             }
 
             case AssetType::Mesh:
             {
-                Ref<Mesh> mesh = assetData.asset->As<Mesh>();
-                if (!mesh)
-                {
+                Ref<Mesh> asset = assetData.asset->As<Mesh>();
+                if (!asset)
                     return false;
-                }
-                mesh->Serialize(savePath);
-                mesh->SetDirtyFlag(false);
+                if (!asset->Serialize(savePath))
+                    return false;
+                asset->NotifyChange();
                 return saveDefaultMeta();
             }
 
             case AssetType::Animation2D:
             {
-                Ref<Animation2D> anim = assetData.asset->As<Animation2D>();
-                if (!anim)
-                {
+                Ref<Animation2D> asset = assetData.asset->As<Animation2D>();
+                if (!asset)
                     return false;
-                }
-                if (!anim->Serialize(savePath))
-                {
+                if (!asset->Serialize(savePath))
                     return false;
-                }
+                asset->SetDirtyFlag(false);
+                asset->NotifyChange();
                 return saveDefaultMeta();
             }
             case AssetType::AnimatorController2D:
             {
-                Ref<AnimatorController2D> ctrl = assetData.asset->As<AnimatorController2D>();
-                if (!ctrl)
-                {
+                Ref<AnimatorController2D> asset = assetData.asset->As<AnimatorController2D>();
+                if (!asset)
                     return false;
-                }
-                if (!ctrl->Serialize(savePath))
-                {
+                if (!asset->Serialize(savePath))
                     return false;
-                }
+                asset->SetDirtyFlag(false);
+                asset->NotifyChange();
                 return saveDefaultMeta();
             }
             case AssetType::AnimatorController:
             {
-                Ref<AnimatorController> ctrl = assetData.asset->As<AnimatorController>();
-                if (!ctrl)
-                {
+                Ref<AnimatorController> asset = assetData.asset->As<AnimatorController>();
+                if (!asset)
                     return false;
-                }
-                const bool saved = ctrl->Serialize(savePath);
-                if (saved)
-                {
-                    const uint64_t key = static_cast<uint64_t>(ctrl->handle);
-                    if (s_AnimatorControllerEditorState.contains(key))
-                    {
-                        SaveAnimatorControllerEditorMeta(project, ctrl, assetData.metadata, s_AnimatorControllerEditorState[key]);
-                    }
-                    return true;
-                }
-                return false;
+
+                if (!asset->Serialize(savePath))
+                    return false;
+                
+                const auto key = static_cast<uint64_t>(asset->handle);
+                if (s_AnimatorControllerEditorState.contains(key))
+                    SaveAnimatorControllerEditorMeta(project, asset, assetData.metadata, s_AnimatorControllerEditorState[key]);
+
+                asset->NotifyChange();
+                return true;
             }
             case AssetType::Material:
             {
-                Ref<Material> mat = assetData.asset->As<Material>();
-                if (!mat)
-                {
+                Ref<Material> asset = assetData.asset->As<Material>();
+                if (!asset)
                     return false;
-                }
-
-                mat->InvalidateBindingSet();
-                if (!mat->Serialize(savePath))
-                {
+                asset->InvalidateBindingSet();
+                if (!asset->Serialize(savePath))
                     return false;
-                }
+                asset->NotifyChange();
                 return saveDefaultMeta();
             }
             case AssetType::ScriptableObject:
             {
-                Ref<ScriptableObject> so = assetData.asset->As<ScriptableObject>();
-                if (!so)
+                Ref<ScriptableObject> asset = assetData.asset->As<ScriptableObject>();
+                if (!asset)
                     return false;
 
-                if (!so->Serialize(savePath))
+                if (!asset->Serialize(savePath))
                     return false;
 
-                so->SetDirtyFlag(false);
+                asset->SetDirtyFlag(false);
+                asset->NotifyChange();
                 return saveDefaultMeta();
             }
             case AssetType::Widget:
             {
-                Ref<WidgetCanvas> widget = assetData.asset->As<WidgetCanvas>();
-                if (!widget)
-                {
+                Ref<WidgetCanvas> asset = assetData.asset->As<WidgetCanvas>();
+                if (!asset)
                     return false;
-                }
 
-                if (!widget->Serialize(savePath))
-                {
+                if (!asset->Serialize(savePath))
                     return false;
-                }
-
-                widget->SetDirtyFlag(false);
+                asset->NotifyChange();
                 return saveDefaultMeta();
             }
             default:
@@ -4936,8 +4873,8 @@ namespace ignite
         if (assetType != AssetType::Material && assetType != AssetType::Mesh && assetType != AssetType::Skeleton && assetType != AssetType::Widget)
             return;
 
-		const uint32_t width = assetData.sceneData.viewportWidth > 0 ? assetData.sceneData.viewportWidth : 1280;
-		const uint32_t height = assetData.sceneData.viewportHeight > 0 ? assetData.sceneData.viewportHeight : 720;
+        const uint32_t width = assetData.sceneData.viewportWidth > 0 ? assetData.sceneData.viewportWidth : 1280;
+        const uint32_t height = assetData.sceneData.viewportHeight > 0 ? assetData.sceneData.viewportHeight : 720;
 
         assetData.sceneData.camera = EditorCamera(std::format("AssetEditorCamera-{}", static_cast<uint64_t>(assetData.handle)));
         assetData.sceneData.camera.SetTarget(glm::vec3(0.0f, assetType == AssetType::Mesh ? 1.0f : 0.0f, 0.0f));

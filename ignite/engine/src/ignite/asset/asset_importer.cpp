@@ -679,6 +679,7 @@ namespace ignite
             Application::SubmitWorkerCommandList(cmd, [texture]()
             {
                 texture->SetReadyFlag(true);
+				texture->NotifyChange();
             });
         });
 

@@ -26,7 +26,7 @@ namespace ignite
 		sr.EndMap();
 
 		sr.Serialize(filepath);
-
+		SetDirtyFlag(false);
 		return true;
 	}
 

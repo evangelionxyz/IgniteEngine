@@ -264,6 +264,8 @@ namespace ignite
 
         virtual AssetType GetAssetType() { return AssetType::Invalid; }
 
+        void NotifyChange();
+
         void SetDirtyFlag(bool dirty)  { m_Dirty = dirty; }
         bool IsDirty() const  { return m_Dirty; }
 

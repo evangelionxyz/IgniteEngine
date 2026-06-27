@@ -75,7 +75,7 @@ namespace ignite
 
         void OnUpdate();
 
-        bool OnAssetChangeSignal(const AssetChangeSignal &signal);
+        void OnAssetChangeSignal(const AssetChangeSignal &signal);
 
         template<typename T = Asset>
         Ref<T> GetAsset(AssetHandle handle)

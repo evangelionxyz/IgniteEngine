@@ -2,6 +2,8 @@
 #include "pch.hpp"
 
 #include "asset.hpp"
+#include "ignite/core/input/asset_signal.hpp"
+#include "ignite/core/signal_bus.hpp"
 
 #include "ignite/core/application.hpp"
 #include "ignite/serializer/serializer.hpp"
@@ -32,4 +34,13 @@ namespace ignite
         sr.Serialize();
         return true;
     }
+
+	void Asset::NotifyChange()
+	{
+		Application::SubmitToMainThread([this]()
+		{
+			SignalBus::Emit<AssetChangeSignal>(AssetChangeSignal{ handle, GetAssetType() });
+		});
+	}
+
 }

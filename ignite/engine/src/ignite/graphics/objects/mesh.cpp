@@ -618,6 +618,7 @@ namespace ignite
     bool Mesh::Serialize(const ignite::Path &filepath)
     {
         BinarySerializer::SerializeMesh(this, filepath);
+        SetDirtyFlag(false);
         return true;
     }
 
