@@ -53,7 +53,10 @@ public class {CLASS_NAME} : Entity
     static std::string s_SlnxTemplate = 
 R"(<Solution Description="Visual Studio slnx" Version="1.4">
   <Configurations>
+    <BuildType Name="Debug" />
     <BuildType Name="Release" />
+    <BuildType Name="Shipping" />
+    <Platform Name="x64" />
   </Configurations>
   <Project Path="{PROJECT_NAME}.csproj" Id="{GENERATED_GUID}" />
 </Solution>
@@ -65,16 +68,16 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <TargetFramework>net10.0</TargetFramework>
-    <Configurations>Release;Debug</Configurations>
+    <Configurations>Debug;Release;Shipping</Configurations>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
     <PlatformTarget>x64</PlatformTarget>
-    <DebugType>portable</DebugType>
+    <DebugType>pdbonly</DebugType>
     <DebugSymbols>true</DebugSymbols>
-    <Optimize>true</Optimize>
+    <Optimize>false</Optimize>
     <OutputPath>Bin\</OutputPath>
-    <IntermediateOutputPath>Bin\Objs\</IntermediateOutputPath>
+    <IntermediateOutputPath>Bin</IntermediateOutputPath>
     <DefineConstants></DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -84,19 +87,60 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
     <ImplicitUsing>enable</ImplicitUsing>
     <Nullable>disable</Nullable>
   </PropertyGroup>
-  <ItemGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
-    <Reference Include="MochiSharp.Managed">
-      <HintPath>Bin\MochiSharp.Managed.dll</HintPath>
-    </Reference>
-  </ItemGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
+    <PlatformTarget>x64</PlatformTarget>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <Optimize>true</Optimize>
+    <OutputPath>Bin\</OutputPath>
+    <IntermediateOutputPath>Bin</IntermediateOutputPath>
+    <DefineConstants></DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <ImplicitUsing>enable</ImplicitUsing>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Shipping|x64' ">
+    <PlatformTarget>x64</PlatformTarget>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <Optimize>true</Optimize>
+    <OutputPath>Bin\</OutputPath>
+    <IntermediateOutputPath>Bin</IntermediateOutputPath>
+    <DefineConstants></DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <ImplicitUsing>enable</ImplicitUsing>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
   <ItemGroup>
     <Compile Include="Scripts\Game.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Reference Include="MochiSharp.Managed">
+      <HintPath>$(SolutionDir)\Bin\MochiSharp.Managed.dll</HintPath>
+    </Reference>
     <Reference Include="Ignite.ScriptEngine">
-      <HintPath>Bin\Ignite.ScriptEngine.dll</HintPath>
+      <HintPath>$(SolutionDir)\Bin\Ignite.ScriptEngine.dll</HintPath>
     </Reference>
   </ItemGroup>
+</Project>
+)";
+
+	static std::string s_BuildProps = 
+R"(<Project>
+	<PropertyGroup>
+		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+		<BaseOutputPath>$(MSBuildProjectDirectory)\Bin\</BaseOutputPath>
+		<IntermediateOutputPath>$(MSBuildProjectDirectory)\Bin\Objs\$(MSBuildProjectName)\</IntermediateOutputPath>
+		<GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+	</PropertyGroup>
 </Project>
 )";
 
@@ -215,8 +259,12 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 			projectSr.AddKeyValue("Name", m_Info.name);
 			projectSr.AddKeyValue("AssetPath", m_Info.assetDirectory.generic_string());
 			projectSr.AddKeyValue("AssetRegistry", m_Info.assetRegistryFilepath.generic_string());
-			projectSr.AddKeyValue("ScriptModule", m_Info.scriptModuleFilepath.generic_string());
 			projectSr.AddKeyValue("DefaultSceneHandle", m_Info.defaultSceneHandle);
+
+			std::string configStr = "Debug";
+			if (m_Info.configuration == ProjectConfiguration::Release) configStr = "Release";
+			else if (m_Info.configuration == ProjectConfiguration::Shipping) configStr = "Shipping";
+			projectSr.AddKeyValue("Configuration", configStr);
 
 			projectSr.EndMap();
 		}
@@ -295,10 +343,21 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 		info.name = projectNode["Name"].as<std::string>();
 		info.filepath = filepath;
         info.rootDirectory = filepath.parent_path();
-		info.scriptModuleFilepath = projectNode["ScriptModule"].as<std::string>();
 		info.assetDirectory = projectNode["AssetPath"].as<std::string>();
 		info.assetRegistryFilepath = projectNode["AssetRegistry"].as<std::string>();
 		info.defaultSceneHandle = AssetHandle(projectNode["DefaultSceneHandle"].as<uint64_t>());
+
+		if (projectNode["Configuration"])
+		{
+			std::string configStr = projectNode["Configuration"].as<std::string>();
+			if (configStr == "Debug") info.configuration = ProjectConfiguration::Debug;
+			else if (configStr == "Release") info.configuration = ProjectConfiguration::Release;
+			else if (configStr == "Shipping") info.configuration = ProjectConfiguration::Shipping;
+		}
+		else
+		{
+			info.configuration = ProjectConfiguration::Debug;
+		}
 
 		Ref<Project> project = Project::Create(info);
 
@@ -489,13 +548,9 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
             // Check every deps update
             if (checkPendingDeps())
             {
-                Application::SubmitToMainThread([this]()
-                {
-                    LOG_TRACE("[Project] Dependencies are up to date.");
-                    BuildSolution(true);
-                });
+				LOG_TRACE("[Project] Dependencies are up to date.");
+				BuildSolution(true);
             }
-            
         });
     }
 
@@ -505,24 +560,27 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
         {
             bool buildSuccess = ignite::Path::exists(GetScriptModulePath());
 
+            std::string configStr = "Debug";
+            if (m_Info.configuration == ProjectConfiguration::Release) configStr = "Release";
+            else if (m_Info.configuration == ProjectConfiguration::Shipping) configStr = "Shipping";
+
             if (!buildSuccess || forceRebuild)
             {
                 // restore NuGet
                 {
                     AssetWorker::ReportStatus("Building Solution - Restore NuGet Packages...", 0.4f);
-                    std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /t:Restore /p:Configuration=Release /p:Platform=\"Any CPU\"";
+                    std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /t:Restore /p:Configuration=" + configStr + " /p:Platform=\"x64\"";
                     std::system(buildCommand.c_str());
                 }
 
                 // Build
                 {
                     AssetWorker::ReportStatus("Building Solution...", 0.8f);
-                    std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /p:Configuration=Release /p:Platform=\"Any CPU\"";
+                    std::string buildCommand = "msbuild \"" + GetSolutionFilepath().generic_string() + "\" /p:Configuration=" + configStr + " /p:Platform=\"x64\"";
                     std::system(buildCommand.c_str());
                 }
             }
 
-            // m_Info.scriptModuleFilepath = std::format("Bin/{}.dll", m_Info.name);
             buildSuccess = ignite::Path::exists(GetScriptModulePath());
 
             // Validate .dll file
@@ -627,8 +685,14 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
             csproj.replace(pos, std::string("  <ItemGroup>\n    <Compile Include=\"Scripts\\Game.cs\" />\n  </ItemGroup>").length(), newItemGroup);
         }
 
+        // C# Project
         std::ofstream out(GetDirectory() / (m_Info.name + ".csproj"), std::ios::out);
         out << csproj;
+        out.close();
+
+        // Build props
+        out = std::ofstream(GetDirectory() / "Directory.Build.props", std::ios::out);
+        out << s_BuildProps;
         out.close();
     }
 
@@ -695,8 +759,6 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 	void Project::GenerateProject()
     {
         CreateDirectories();
-
-        // m_Info.scriptModuleFilepath = std::format("Bin/{}.dll", m_Info.name);
 
         // Generate the Visual Studio project if there is no solution file
         ignite::Path solutionFilepath = GetSolutionFilepath();
@@ -786,9 +848,15 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
                     csproj.replace(pos, std::string("  <ItemGroup>\n    <Compile Include=\"Scripts\\Game.cs\" />\n  </ItemGroup>").length(), newItemGroup);
                 }
 
+                // C# Project
                 std::ofstream out(GetDirectory() / (m_Info.name + ".csproj"), std::ios::out);
                 out << csproj;
                 out.close();
+
+				// Build props
+				out = std::ofstream(GetDirectory() / "Directory.Build.props", std::ios::out);
+				out << s_BuildProps;
+				out.close();
             }
 
             // Create dummy c# script when there is no scripts (new project)

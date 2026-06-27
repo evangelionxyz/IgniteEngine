@@ -1217,6 +1217,9 @@ namespace ignite
                 if (relativePath.string()[0] == '.')
                     continue;
 
+                if (m_TreeNodes.empty())
+                    continue;
+
                 const auto it = m_TreeNodes[currentNodeIndex].children.find(path.generic_string());
                 if (it != m_TreeNodes[currentNodeIndex].children.end())
                 {

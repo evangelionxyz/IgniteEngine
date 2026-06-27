@@ -747,6 +747,39 @@ namespace ignite
                 ImGui::EndMenu();
             }
 
+            // BUILD MENU
+            if (ImGui::BeginMenu("Script", m_ActiveProject != nullptr))
+            {
+                if (ImGui::MenuItem("Build Solution"))
+                {
+                    m_ActiveProject->BuildSolution(true);
+                }
+
+				ProjectConfiguration currentConfig = m_ActiveProject->GetConfiguration();
+				static const char *configNames[] = { "Debug", "Release", "Shipping" };
+				const char *currentConfigName = configNames[static_cast<int>(currentConfig)];
+
+                if (ImGui::BeginMenu("Active Configuration"))
+                {
+                    for (size_t i = 0; i < std::size(configNames); ++i)
+                    {
+                        if (ImGui::MenuItem(configNames[i], nullptr, nullptr, i != (size_t)m_ActiveProject->GetConfiguration()))
+                        {
+							m_ActiveProject->GetInfo().configuration = static_cast<ProjectConfiguration>(i);
+							AssetWorker::SubmitJob([this]()
+							{
+							    SaveProject();
+							    m_ActiveProject->BuildSolution(true);
+								m_ActiveProject->GetScriptEngine()->ReloadAssembly();
+							});
+                        }
+                    }
+                    ImGui::EndMenu();
+                }
+                ImGui::EndMenu();
+            
+            }
+
             ImGui::EndMenuBar();
         }
 
@@ -1415,7 +1448,7 @@ namespace ignite
         std::string filepath = filelist[0];
         if (!filepath.empty())
         {
-            EditorLayer *editor = static_cast<EditorLayer *>(userData);
+            auto *editor = static_cast<EditorLayer *>(userData);
             editor->m_State.projectCreateInfo.filepath = ignite::Path(filepath) / editor->m_State.projectCreateInfo.name; // Append project name
         }
     }
@@ -1663,6 +1696,10 @@ namespace ignite
 
                 if (Ref<Project> newProject = Project::Create(m_State.projectCreateInfo))
                 {
+					// Subscribe Build Solution callback
+					m_ProjectReadySignalToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
+						{ OnProjectReadySignal(signal); });
+
                     // Submit to main thread to sync
                     Application::SubmitToMainThread([this, newProject]()
                     {

@@ -35,7 +35,6 @@ namespace ignite
 
         ignite::Path filepath; // the actual project file (.ixproj)
         ignite::Path rootDirectory; // project directory
-        ignite::Path scriptModuleFilepath; // .dll Script file
         ignite::Path assetDirectory = "Assets";
         ignite::Path scriptsDirectory = "Scripts";
         ignite::Path assetRegistryFilepath = "AssetRegistry.ixreg";
@@ -101,7 +100,10 @@ namespace ignite
 
         ignite::Path GetScriptModulePath() const
         {
-            return m_Info.rootDirectory / m_Info.scriptModuleFilepath;
+            std::string configDir = "Debug";
+            if (m_Info.configuration == ProjectConfiguration::Release) configDir = "Release";
+            else if (m_Info.configuration == ProjectConfiguration::Shipping) configDir = "Shipping";
+            return m_Info.rootDirectory / "Bin" / configDir / (m_Info.name + ".dll");
         }
 
         template<typename T>

@@ -94,14 +94,14 @@ namespace ignite
         ignite::Path mochiSharpAssemblyFilepath;
         ignite::Path coreAssemblyFilepath;
 
-        bool isReady = false;
-
         SignalToken solutionBuildToken;
 
         Scope<filewatch::FileWatch<std::string>> appAssemblyFileWatcher;
+        std::chrono::time_point<std::chrono::file_clock> appAssemblyLastWriteTime{};
+        ProjectConfiguration currentProjectConfig;
+        bool isReady = false;
         bool assemblyReloadingPending = false;
         bool assemblyReloadDeferred = false;
-        std::chrono::time_point<std::chrono::file_clock> appAssemblyLastWriteTime{};
         bool hasAppAssemblyLastWriteTime = false;
 
         // Entity script
@@ -217,6 +217,7 @@ namespace ignite
     {
         scriptEngine = this;
 
+
         if (scriptEngineData)
         {
             ReloadAssembly();
@@ -244,6 +245,7 @@ namespace ignite
 
         // Build solution if the App Assembly is not available yet
         EnsureAppAssembly();
+		scriptEngineData->currentProjectConfig = m_Project->GetConfiguration();
     }
 
     ScriptEngine::~ScriptEngine()
@@ -316,7 +318,7 @@ namespace ignite
     {
         LOG_ASSERT(!filepath.empty(), "[Script Engine] App Assembly should not empty!");
 
-        if (scriptEngineData->hasAppAssemblyLastWriteTime)
+        if (scriptEngineData->hasAppAssemblyLastWriteTime && scriptEngineData->currentProjectConfig == m_Project->GetConfiguration())
         {
             if (!ignite::Path::WaitForFileNewerThan(filepath, scriptEngineData->appAssemblyLastWriteTime))
             {
@@ -437,6 +439,7 @@ namespace ignite
 
         // Reload app assembly (MochiSharp handles unloading through collectible context)
         EnsureAppAssembly();
+		scriptEngineData->currentProjectConfig = m_Project->GetConfiguration();
     }
 
     void ScriptEngine::SetSceneContext(Scene *scene)

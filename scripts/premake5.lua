@@ -67,10 +67,8 @@ local function writeMixedDebuggerUserFile(prj, wksLocation)
 
         f:write(string.format("  <PropertyGroup Condition=\"%s\">\n", condition))
         f:write("    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n")
-        -- "Mixed (.NET Core, .NET 5+)" — replaces the legacy NativeWithManagedCore
-        f:write("    <LocalDebuggerDebuggerType>NativeWithManagedCore</LocalDebuggerDebuggerType>\n")
+        -- f:write("    <LocalDebuggerDebuggerType>NativeWithManagedCore</LocalDebuggerDebuggerType>\n")
         f:write("    <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>\n")
-        -- Tell VS where to search for .pdb files (native + managed assemblies land here)
         f:write(string.format("    <LocalDebuggerSymbolPath>%s</LocalDebuggerSymbolPath>\n", symPath))
         f:write("  </PropertyGroup>\n")
     end
