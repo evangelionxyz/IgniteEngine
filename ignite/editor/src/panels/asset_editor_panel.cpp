@@ -391,10 +391,27 @@ namespace ignite
     {
         s_DefaultMeshes[ICO_SPHERE] = BinarySerializer::DeserializeMesh("resources/staticmeshes/ico_sphere.mesh");
         s_DefaultMeshes[SPHERE] = BinarySerializer::DeserializeMesh("resources/staticmeshes/sphere.mesh");
+
+        m_OpenSignalToken = SignalBus::Subscribe<AssetEditorOpenSignal>(
+            [this](const AssetEditorOpenSignal& signal)
+            {
+                OnAssetEditorOpenSignal(signal);
+            });
+
+        m_CreateSignalToken = SignalBus::Subscribe<AssetEditorCreateSignal>(
+            [this](const AssetEditorCreateSignal& signal)
+            {
+                OnAssetEditorCreateSignal(signal);
+            });
     }
 
     void AssetEditorPanel::OnDetach()
     {
+        SignalBus::Unsubscribe<AssetEditorOpenSignal>(m_OpenSignalToken);
+        SignalBus::Unsubscribe<AssetEditorCreateSignal>(m_CreateSignalToken);
+        m_OpenSignalToken   = kInvalidSignalToken;
+        m_CreateSignalToken = kInvalidSignalToken;
+
         s_DefaultMeshes.clear();
         s_SkeletonPreviewMaterial.reset();
         s_SkeletonPreviewEditorState.clear();
@@ -5045,16 +5062,16 @@ namespace ignite
     // :EVENTS
     void AssetEditorPanel::OnEvent(Event &event)
     {
+        // Asset open/create signals are now received via SignalBus (subscribed in OnAttach).
+        // Only true input events remain here.
         EventDispatcher dispatcher(event);
-        dispatcher.Dispatch<AssetEditorOpenEvent>(BIND_CLASS_EVENT_FN(AssetEditorPanel::OnAssetEditorOpenEvent));
-        dispatcher.Dispatch<AssetEditorCreateEvent>(BIND_CLASS_EVENT_FN(AssetEditorPanel::OnAssetEditorCreateEvent));
         dispatcher.Dispatch<MouseScrolledEvent>(BIND_CLASS_EVENT_FN(AssetEditorPanel::OnMouseScrollEvent));
     }
 
-    bool AssetEditorPanel::OnAssetEditorOpenEvent(AssetEditorOpenEvent &event)
+    bool AssetEditorPanel::OnAssetEditorOpenSignal(const AssetEditorOpenSignal &signal)
     {
-        auto handle = event.GetAssetHandle();
-        auto &metadata = event.GetAssetMetaData();
+        auto handle = signal.handle;
+        const auto &metadata = signal.metadata;
         if (metadata.type == AssetType::Invalid || handle == AssetHandle(0) || !m_EditorLayer || !m_EditorLayer->GetActiveProject())
         {
             return false;
@@ -5096,21 +5113,21 @@ namespace ignite
         return true;
     }
 
-    bool AssetEditorPanel::OnAssetEditorCreateEvent(AssetEditorCreateEvent &event)
+    bool AssetEditorPanel::OnAssetEditorCreateSignal(const AssetEditorCreateSignal &signal)
     {
         if (!m_EditorLayer || !m_EditorLayer->GetActiveProject())
         {
             return false;
         }
 
-        if (event.GetAssetType() == AssetType::Invalid)
+        if (signal.type == AssetType::Invalid)
         {
             return false;
         }
 
         m_CreateRequest = {};
-        m_CreateRequest.type = event.GetAssetType();
-        m_CreateRequest.targetDirectory = event.GetTargetDirectory();
+        m_CreateRequest.type = signal.type;
+        m_CreateRequest.targetDirectory = signal.targetDirectory;
         m_CreateRequest.open = true;
 
         if (m_CreateRequest.type == AssetType::Material2D)

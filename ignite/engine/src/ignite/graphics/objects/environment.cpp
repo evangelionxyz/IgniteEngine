@@ -30,45 +30,51 @@
 #include "ignite/core/logger.hpp"
 #include "ignite/scene/scene.hpp"
 #include "ignite/core/device/device_manager.hpp"
+#include "ignite/core/signal_bus.hpp"
+#include "ignite/core/input/asset_signal.hpp"
 
 #include <stb_image.h>
 
 namespace ignite
 {
 
-    // clock wise
-    std::array<glm::vec3, 24> vertices =
+    namespace
     {
-        glm::vec3( 1.0f,  1.0f,  1.0f), // top right    front  
-        glm::vec3( 1.0f,  1.0f, -1.0f), // top right    back
-        glm::vec3( 1.0f, -1.0f, -1.0f), // bottom right back
-        glm::vec3( 1.0f, -1.0f,  1.0f), // bottom right front
+		// clock wise
+		static inline std::array<glm::vec3, 24> vertices =
+		{
+			glm::vec3(1.0f,  1.0f,  1.0f), // top right    front  
+			glm::vec3(1.0f,  1.0f, -1.0f), // top right    back
+			glm::vec3(1.0f, -1.0f, -1.0f), // bottom right back
+			glm::vec3(1.0f, -1.0f,  1.0f), // bottom right front
 
-        glm::vec3(-1.0f,  1.0f, -1.0f), // top    left back
-        glm::vec3(-1.0f,  1.0f,  1.0f), // top    left front
-        glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left front
-        glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left back
-        
-        glm::vec3(-1.0f,  1.0f,  1.0f), // top left  front
-        glm::vec3(-1.0f,  1.0f, -1.0f), // top left  back
-        glm::vec3( 1.0f,  1.0f, -1.0f), // top right back
-        glm::vec3( 1.0f,  1.0f,  1.0f), // top right front
+			glm::vec3(-1.0f,  1.0f, -1.0f), // top    left back
+			glm::vec3(-1.0f,  1.0f,  1.0f), // top    left front
+			glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left front
+			glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left back
 
-        glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left  front
-        glm::vec3( 1.0f, -1.0f,  1.0f), // bottom right front
-        glm::vec3( 1.0f, -1.0f, -1.0f), // bottom right back
-        glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left  back
+			glm::vec3(-1.0f,  1.0f,  1.0f), // top left  front
+			glm::vec3(-1.0f,  1.0f, -1.0f), // top left  back
+			glm::vec3(1.0f,  1.0f, -1.0f), // top right back
+			glm::vec3(1.0f,  1.0f,  1.0f), // top right front
 
-        glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left  back
-        glm::vec3( 1.0f, -1.0f, -1.0f), // bottom right back
-        glm::vec3( 1.0f,  1.0f, -1.0f), // top    right back
-        glm::vec3(-1.0f,  1.0f, -1.0f), // top    left  back
+			glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left  front
+			glm::vec3(1.0f, -1.0f,  1.0f), // bottom right front
+			glm::vec3(1.0f, -1.0f, -1.0f), // bottom right back
+			glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left  back
 
-        glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left  front
-        glm::vec3(-1.0f,  1.0f,  1.0f), // top    left  front
-        glm::vec3( 1.0f,  1.0f,  1.0f), // top    right front
-        glm::vec3( 1.0f, -1.0f,  1.0f), // bottom right front
-    };
+			glm::vec3(-1.0f, -1.0f, -1.0f), // bottom left  back
+			glm::vec3(1.0f, -1.0f, -1.0f), // bottom right back
+			glm::vec3(1.0f,  1.0f, -1.0f), // top    right back
+			glm::vec3(-1.0f,  1.0f, -1.0f), // top    left  back
+
+			glm::vec3(-1.0f, -1.0f,  1.0f), // bottom left  front
+			glm::vec3(-1.0f,  1.0f,  1.0f), // top    left  front
+			glm::vec3(1.0f,  1.0f,  1.0f), // top    right front
+			glm::vec3(1.0f, -1.0f,  1.0f), // bottom right front
+		};
+    }
+    
 
     Environment::Environment()
     {
@@ -156,8 +162,11 @@ namespace ignite
         m_BindingSet = device->createBindingSet(bsDesc, Renderer::GetBindingLayout(GLayoutMap::ENVIRONMENT));
         LOG_ASSERT(m_BindingSet, "Failed to create binding set");
 
-		AssetChangeEvent event(handle, AssetType::Environment);
-		Application::GetInstance()->OnEvent(event);
+		// Notify dependents (e.g. AssetManager) that this environment has changed.
+		Application::SubmitToMainThread([this]()
+		{
+			SignalBus::Emit(AssetChangeSignal{ handle, AssetType::Environment });
+		});
 
         return m_BindingSet != nullptr;
     }
@@ -184,19 +193,22 @@ namespace ignite
         m_VertexBuffer->SetData(cmd, Buffer(vertices.data(), sizeof(vertices)));
 
         // index buffer
-		std::vector<uint32_t> indices(36);
-        u32 offset = 0;
-        for (u32 i = 0; i < 36; i += 6)
+		static std::array<uint32_t, 36> indices;
+
         {
-            indices[i + 0] = offset + 0;
-			indices[i + 1] = offset + 1;
-			indices[i + 2] = offset + 2;
+            uint32_t offset = 0;
+            for (uint32_t i = 0; i < 36; i += 6)
+            {
+                indices[i + 0] = offset + 0;
+			    indices[i + 1] = offset + 1;
+			    indices[i + 2] = offset + 2;
 
-			indices[i + 3] = offset + 2;
-			indices[i + 4] = offset + 3;
-			indices[i + 5] = offset + 0;
+			    indices[i + 3] = offset + 2;
+			    indices[i + 4] = offset + 3;
+			    indices[i + 5] = offset + 0;
 
-			offset += 4;
+			    offset += 4;
+            }
         }
 
         m_IndexBuffer->SetData(cmd, Buffer(indices.data(), sizeof(uint32_t) * indices.size()));

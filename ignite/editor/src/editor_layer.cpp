@@ -301,14 +301,6 @@ namespace ignite
         EventDispatcher dispatcher(e);
         dispatcher.Dispatch<KeyPressedEvent>(BIND_CLASS_EVENT_FN(EditorLayer::OnKeyPressedEvent));
         dispatcher.Dispatch<MouseButtonPressedEvent>(BIND_CLASS_EVENT_FN(EditorLayer::OnMouseButtonPressed));
-        if (m_ActiveProject)
-        {
-            if (auto assetManager = m_ActiveProject->GetAssetManager())
-            {
-                assetManager->OnEvent(e);
-            }
-        }
-
     }
 
     void EditorLayer::OnSDLEvent(SDL_Event *evt)

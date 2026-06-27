@@ -6,7 +6,8 @@
 
 #include "ignite/asset/asset.hpp"
 #include "ignite/core/logger.hpp"
-#include "ignite/core/input/asset_event.hpp"
+#include "ignite/core/signal_bus.hpp"
+#include "ignite/core/input/asset_signal.hpp"
 #include "asset_worker.hpp"
 
 #include <map>
@@ -74,8 +75,7 @@ namespace ignite
 
         void OnUpdate();
 
-        void OnEvent(Event &event);
-        bool OnAssetChangeEvent(AssetChangeEvent &event);
+        bool OnAssetChangeSignal(const AssetChangeSignal &signal);
 
         template<typename T = Asset>
         Ref<T> GetAsset(AssetHandle handle)
@@ -215,6 +215,8 @@ namespace ignite
         std::unordered_map<std::string, AssetHandle> m_AssetHandleByPath;
 
         std::queue<std::function<bool()>> m_OnChangeCallbacks;
+
+        SignalToken m_AssetChangeToken = kInvalidSignalToken;
     };
 }
 

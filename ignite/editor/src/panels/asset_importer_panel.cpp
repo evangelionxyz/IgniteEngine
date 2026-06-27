@@ -91,21 +91,25 @@ namespace ignite
     AssetImporterPanel::AssetImporterPanel(const char *name, EditorLayer *editor)
         : IPanel(name, editor)
     {
+        m_ImportSignalToken = SignalBus::Subscribe<AssetImportSignal>(
+            [this](const AssetImportSignal& signal)
+            {
+                OnAssetImportSignal(signal);
+            });
     }
 
-    void AssetImporterPanel::OnEvent(Event &event)
+    AssetImporterPanel::~AssetImporterPanel()
     {
-        IGN_PROFILE_FUNCTION();
-        EventDispatcher dispatcher(event);
-        dispatcher.Dispatch<AssetImportEvent>(BIND_CLASS_EVENT_FN(AssetImporterPanel::OnAssetImportEvent));
+        SignalBus::Unsubscribe<AssetImportSignal>(m_ImportSignalToken);
+        m_ImportSignalToken = kInvalidSignalToken;
     }
 
-    bool AssetImporterPanel::OnAssetImportEvent(AssetImportEvent &event)
+    bool AssetImporterPanel::OnAssetImportSignal(const AssetImportSignal &signal)
     {
         IGN_PROFILE_FUNCTION();
         ResetImportState();
 
-        m_TargetDirectory = event.GetTargetDirectory();
+        m_TargetDirectory = signal.targetDirectory;
         if (m_TargetDirectory.empty())
         {
             m_TargetDirectory = m_EditorLayer->GetActiveProject() ? m_EditorLayer->GetActiveProject()->GetAssetDirectory() : ignite::Path();
@@ -113,7 +117,7 @@ namespace ignite
 
         m_MeshOptions = {};
         m_MeshOptions.targetDirectory = m_TargetDirectory;
-        for (auto &p : event.GetFilepaths())
+        for (auto &p : signal.filepaths)
         {
             const AssetType assetType = GetAssetTypeFromExtension(ToLower(p.extension().string()));
             if (assetType == AssetType::Invalid)

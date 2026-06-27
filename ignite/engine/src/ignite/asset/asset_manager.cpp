@@ -22,6 +22,14 @@ namespace ignite
     AssetManager::AssetManager(Project *project)
         : m_Project(project)
     {
+        // Self-register for asset change notifications via SignalBus.
+        // This avoids the old pattern of manually forwarding Event& through
+        // EditorLayer::OnEvent → assetManager->OnEvent(e).
+        m_AssetChangeToken = SignalBus::Subscribe<AssetChangeSignal>(
+            [this](const AssetChangeSignal& signal)
+            {
+                OnAssetChangeSignal(signal);
+            });
     }
 
     void AssetManager::VerifyNotRenderThread()
@@ -80,6 +88,9 @@ namespace ignite
 
     AssetManager::~AssetManager()
     {
+        SignalBus::Unsubscribe<AssetChangeSignal>(m_AssetChangeToken);
+        m_AssetChangeToken = kInvalidSignalToken;
+
         m_PinnedAssetsByOwner.clear();
         m_AssetPinCounts.clear();
         m_AssetHandleByPath.clear();
@@ -373,15 +384,9 @@ namespace ignite
         }
 	}
 
-	void AssetManager::OnEvent(Event &event)
+	bool AssetManager::OnAssetChangeSignal(const AssetChangeSignal &signal)
 	{
-        EventDispatcher e(event);
-        e.Dispatch<AssetChangeEvent>(BIND_CLASS_EVENT_FN(AssetManager::OnAssetChangeEvent));
-	}
-
-	bool AssetManager::OnAssetChangeEvent(AssetChangeEvent &event)
-	{
-        switch (event.GetAssetType())
+        switch (signal.type)
         {
             // Handle environment changes
         case AssetType::Environment:

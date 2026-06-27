@@ -23,6 +23,8 @@
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/graphics/ui/widget_renderer.hpp"
 #include "ignite/core/input/input_system.hpp"
+#include "ignite/core/signal_bus.hpp"
+#include "ignite/core/input/asset_signal.hpp"
 
 #include <ranges>
 #include <cstdlib>
@@ -628,8 +630,10 @@ namespace ignite
 
                 m_CSMBindingSetCache.clear();
 
-				AssetChangeEvent event(AssetHandle(0), AssetType::Environment);
-				Application::GetInstance()->OnEvent(event);
+				Application::SubmitToMainThread([]()
+				{
+					SignalBus::Emit(AssetChangeSignal{ AssetHandle(0), AssetType::Environment });
+				});
             }
 
             break;

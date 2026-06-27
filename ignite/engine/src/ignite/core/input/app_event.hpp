@@ -5,7 +5,6 @@
 #define IGN_APP_EVENT_HPP
 
 #include "event.hpp"
-#include "ignite/asset/asset.hpp"
 
 #include <vector>
 #include <sstream>
@@ -142,44 +141,6 @@ namespace ignite
 
     private:
         float m_ScaleX, m_ScaleY;
-    };
-
-    class AssetEditorOpenEvent final : public Event
-    {
-    public:
-        AssetEditorOpenEvent(AssetHandle handle, AssetMetaData metadata)
-            : m_Handle(handle), m_AssetMetaData(metadata)
-        {
-        }
-
-        AssetHandle GetAssetHandle() { return m_Handle; }
-        AssetMetaData &GetAssetMetaData() { return m_AssetMetaData; }
-
-		EVENT_CLASS_TYPE(AssetEditorOpen);
-		EVENT_CLASS_CATEGORY(EventCategoryApplication);
-
-    private:
-        AssetMetaData m_AssetMetaData;
-        AssetHandle m_Handle;
-    };
-
-    class AssetEditorCreateEvent final : public Event
-    {
-    public:
-        AssetEditorCreateEvent(AssetType type, ignite::Path targetDirectory)
-            : m_Type(type), m_TargetDirectory(std::move(targetDirectory))
-        {
-        }
-
-        AssetType GetAssetType() const { return m_Type; }
-        const ignite::Path &GetTargetDirectory() const { return m_TargetDirectory; }
-
-        EVENT_CLASS_TYPE(AssetEditorCreate);
-		EVENT_CLASS_CATEGORY(EventCategoryApplication);
-
-    private:
-        AssetType m_Type = AssetType::Invalid;
-        ignite::Path m_TargetDirectory;
     };
 }
 

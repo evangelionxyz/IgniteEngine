@@ -12,8 +12,8 @@
 #include "ignite/scene/sprite_sheet.hpp"
 #include "ignite/scripting/script_engine.hpp"
 
-#include "ignite/core/input/asset_import_event.hpp"
-#include "ignite/core/input/app_event.hpp"
+#include "ignite/core/input/asset_signal.hpp"
+#include "ignite/core/signal_bus.hpp"
 
 #include <format>
 #include <algorithm>
@@ -52,8 +52,7 @@ namespace ignite
 
             Application::SubmitToMainThread([handle, metadata]()
             {
-                AssetEditorOpenEvent openEvent(handle, metadata);
-                Application::GetInstance()->OnEvent(openEvent);
+                SignalBus::Emit(AssetEditorOpenSignal{ handle, metadata });
             });
 
             return true;
@@ -68,8 +67,7 @@ namespace ignite
 
             Application::SubmitToMainThread([assetType, targetDirectory]()
             {
-                AssetEditorCreateEvent createEvent(assetType, targetDirectory);
-                Application::GetInstance()->OnEvent(createEvent);
+                SignalBus::Emit(AssetEditorCreateSignal{ assetType, targetDirectory });
             });
         }
 
@@ -2358,8 +2356,7 @@ namespace ignite
 
         Application::SubmitToMainThread([filepaths, payload]()
         {
-            AssetImportEvent importEvent(std::move(filepaths), payload->assetType, payload->targetDirectory);
-            Application::GetInstance()->OnEvent(importEvent);
+            SignalBus::Emit(AssetImportSignal{ std::move(filepaths), payload->assetType, payload->targetDirectory });
         });
     }
 
