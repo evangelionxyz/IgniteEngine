@@ -8,6 +8,7 @@
 #include "script_class.hpp"
 #include "script_host.hpp"
 
+
 #include "ignite/scene/component.hpp"
 #include "ignite/asset/asset_manager.hpp"
 #include "ignite/project/project.hpp"
@@ -15,6 +16,7 @@
 #include "ignite/core/string_utils.hpp"
 #include "ignite/core/platform_utils.hpp"
 #include "ignite/core/profiler/profiler.hpp"
+#include "ignite/core/signals/signals.hpp"
 
 #include <cstdlib>
 #include <format>
@@ -32,8 +34,6 @@ namespace ignite
         constexpr const char *kSerializeFieldTypeName = "Ignite.SerializeField";
         constexpr const char *kScriptableObjectTypeName = "Ignite.ScriptableObject";
         constexpr const char *kEntityTypeName = "Ignite.Entity";
-
-        
     }
 
     static std::unordered_map<std::string, ScriptFieldType> s_ScriptFieldTypeMap =
@@ -96,6 +96,8 @@ namespace ignite
 
         bool isReady = false;
 
+        SignalToken solutionBuildToken;
+
         Scope<filewatch::FileWatch<std::string>> appAssemblyFileWatcher;
         bool assemblyReloadingPending = false;
         bool assemblyReloadDeferred = false;
@@ -120,26 +122,51 @@ namespace ignite
     {
         LOG_ASSERT(!m_Project->GetScriptModulePath().empty(), "[Script Engine] App Assembly should not empty!");
 
-        // Skip building if the App Assembly exists AND the DLL is Up-To-Date
-        if (ignite::Path::exists(m_Project->GetScriptModulePath()) && m_Project->IsCoreDependenciesUpToDate())
+        // Load immediately if the App Assembly (.dll) exists.
+        // This ensures the editor loads the default scene successfully on startup
+        // if a valid DLL is already present, without waiting for/blocking on a rebuild.
+        if (ignite::Path::exists(m_Project->GetScriptModulePath()))
         {
-            // Load App Assembly immediately
+            // Clean up any leftover slow-path subscription from a previous call
+            SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
+            scriptEngineData->solutionBuildToken = kInvalidSignalToken;
+
+            // Load App Assembly immediately (we may be on a worker thread)
             scriptEngineData->isReady = LoadAppAssembly(m_Project->GetScriptModulePath());
-            m_Project->ProcessOnProjectReadyFuncs(scriptEngineData->isReady);
+            const bool ready = scriptEngineData->isReady;
+            Application::SubmitToMainThread([ready]()
+                {
+                    SignalBus::Emit(SuccessResultSignal{ ready, SignalType::Project });
+                });
             return FileStatus::Success;
         }
 
-        // Register Build Solution callback
-        m_Project->AddBuildSolutionFunc([this](bool isSuccess)
+        // Slow path: DLL does not exist yet. Deregister any leftover subscription.
+        SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
+        scriptEngineData->solutionBuildToken = kInvalidSignalToken;
+
+        // Register Build Solution callback — one-shot, only fires on ScriptEngine signal
+        scriptEngineData->solutionBuildToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
         {
-            LOG_ASSERT(isSuccess, "[Script Engine] Failed to build solution!");
-            if (isSuccess)
+            // Guard: only handle the "build finished" notification, not any re-emitted Project signals
+            if (signal.type != SignalType::ScriptEngine)
+                return;
+
+            // One-shot: unsubscribe immediately so cascading Project emits don't re-trigger this
+            SignalBus::Unsubscribe<SuccessResultSignal>(scriptEngineData->solutionBuildToken);
+            scriptEngineData->solutionBuildToken = kInvalidSignalToken;
+
+            LOG_ASSERT(signal.isSuccess, "[Script Engine] Failed to build solution!");
+            if (signal.isSuccess)
             {
                 scriptEngineData->isReady = LoadAppAssembly(m_Project->GetScriptModulePath());
             }
-            m_Project->ProcessOnProjectReadyFuncs(isSuccess && scriptEngineData->isReady);
-        });
 
+            // We are already on the main thread (called from project.cpp's SubmitToMainThread),
+            // so emit Project signal directly — no need for another SubmitToMainThread.
+            SignalBus::Emit(SuccessResultSignal{ signal.isSuccess && scriptEngineData->isReady, SignalType::Project });
+        });
+        
         // Run the build and load the App Assembly if success
         LOG_DEBUG("Building Visual Studio Solution...");
         m_Project->BuildSolution(true);

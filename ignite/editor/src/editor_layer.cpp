@@ -94,6 +94,10 @@ namespace ignite
         app->PushLayer(m_AssetImporterPanel);
         app->PushLayer(m_AssetEditorPanel);
 
+		// Subscribe Build Solution callback
+		m_ProjectReadySignalToken = SignalBus::Subscribe<SuccessResultSignal>([this](const SuccessResultSignal &signal)
+            { OnProjectReadySignal(signal); });
+
         AddContentBrowserPanel();
         
         AssetWorker::SetStatusCallback([this](std::string_view status, float progress)
@@ -130,6 +134,10 @@ namespace ignite
     void EditorLayer::OnDetach()
     {
         Layer::OnDetach();
+
+        // Unsubscribe signals
+		SignalBus::Unsubscribe<SuccessResultSignal>(m_ProjectReadySignalToken);
+		m_ProjectReadySignalToken = kInvalidSignalToken;
 
         m_ContentBrowserPanels.clear();
         m_ContentBrowserPanelsPendingRemoval.clear();
@@ -1190,51 +1198,6 @@ namespace ignite
         {
             m_ActiveProject = openedProject;
             m_CurrentProjectFilepath = filepath;
-            m_ActiveProject->ResetReadyState();
-
-            auto readyFunc = [this]() -> void
-                {
-                    // Reload project files
-                    ReloadContentBrowserPanels();
-
-                    // Get Project default scene (use immediate load for synchronous path)
-                    AssetHandle defSceneAssetHandle = m_ActiveProject->GetInfo().defaultSceneHandle;
-                    if (defSceneAssetHandle != AssetHandle(0))
-                    {
-                        // Use GetAssetImmediate since we're on main thread and need synchronous load
-                        if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(defSceneAssetHandle))
-                        {
-                            m_EditorScene = SceneManager::Copy(activeScene);
-                            m_EditorScene->SetDirtyFlag(false);
-                            SetActiveScene(m_EditorScene);
-
-                            const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
-
-                            m_CurrentSceneFilePath = m_ActiveProject->GetProjectFilepath(assetFilepath);
-                            m_CurrentSceneHandle = activeScene->handle;
-                        }
-                        else
-                        {
-                            // Create a default scene if load failed
-                            NewScene();
-                        }
-                    }
-                    else
-                    {
-                        // Create a default scene
-                        NewScene();
-                    }
-                };
-
-            // Register Build Solution callback
-            m_ActiveProject->AddOnProjectReadyFuncs([readyFunc](bool isSuccess)
-                {
-                    if (isSuccess)
-                    {
-                        readyFunc();
-                    }
-                });
-
             // Initialize Script engine
             openedProject->InitScriptEngine();
         }
@@ -1451,7 +1414,44 @@ namespace ignite
         }
     }
 
-    void EditorLayer::ProcessPendingFileLoading()
+	void EditorLayer::OnProjectReadySignal(const SuccessResultSignal &signal)
+	{
+		if (signal.isSuccess && signal.type == SignalType::Project)
+		{
+			// Reload project files
+			ReloadContentBrowserPanels();
+
+			// Get Project default scene (use immediate load for synchronous path)
+			AssetHandle defSceneAssetHandle = m_ActiveProject->GetInfo().defaultSceneHandle;
+			if (defSceneAssetHandle != AssetHandle(0))
+			{
+				// Use GetAssetImmediate since we're on main thread and need synchronous load
+				if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(defSceneAssetHandle))
+				{
+					m_EditorScene = SceneManager::Copy(activeScene);
+					m_EditorScene->SetDirtyFlag(false);
+					SetActiveScene(m_EditorScene);
+
+					const auto &[assetFilepath, assetType] = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
+
+					m_CurrentSceneFilePath = m_ActiveProject->GetProjectFilepath(assetFilepath);
+					m_CurrentSceneHandle = activeScene->handle;
+				}
+				else
+				{
+					// Create a default scene if load failed
+					NewScene();
+				}
+			}
+			else
+			{
+				// Create a default scene
+				NewScene();
+			}
+		}
+	}
+
+	void EditorLayer::ProcessPendingFileLoading()
     {
         while (!m_PendingFileLoading.empty())
         {
@@ -1667,28 +1667,6 @@ namespace ignite
 
                         // Serialize
                         m_ActiveProject->Serialize(m_State.projectCreateInfo.filepath);
-
-                        // Reload content browser
-                        ReloadContentBrowserPanels();
-
-                        if (m_ActiveProject->GetInfo().defaultSceneHandle != AssetHandle(0))
-                        {
-                            if (Ref<Scene> activeScene = m_ActiveProject->GetAssetImmediate<Scene>(m_ActiveProject->GetInfo().defaultSceneHandle))
-                            {
-                                m_EditorScene = SceneManager::Copy(activeScene);
-                                m_EditorScene->SetDirtyFlag(false);
-
-                                SetActiveScene(m_EditorScene);
-
-                                AssetMetaData metadata = m_ActiveProject->GetAssetManager()->GetMetaData(activeScene->handle);
-                                auto scenePath = m_ActiveProject->GetProjectFilepath(metadata.filepath);
-                                m_CurrentSceneFilePath = scenePath;
-                            }
-                        }
-                        else
-                        {
-                            NewScene();
-                        }
 
                         // clear modal inputs
                         m_State.projectCreateInfo.filepath.clear();

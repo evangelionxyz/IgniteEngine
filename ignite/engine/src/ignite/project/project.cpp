@@ -4,6 +4,7 @@
 
 #include "project.hpp"
 #include "ignite/core/string_utils.hpp"
+#include "ignite/core/signals/signals.hpp"
 #include "ignite/core/logger.hpp"
 #include "ignite/scripting/script_engine.hpp"
 #include "ignite/scripting/scriptable_object.hpp"
@@ -328,37 +329,6 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
 		return project;
 	}
 
-    void Project::AddBuildSolutionFunc(const ProjectCallbackFn &func)
-    {
-        m_BuildSolutionFuncs.push_back(func);
-    }
-
-    void Project::AddOnProjectReadyFuncs(const ProjectCallbackFn &func)
-    {
-        m_OnProjectReadyFuncs.push_back(func);
-    }
-
-    void Project::ProcessOnProjectReadyFuncs(bool isSuccess)
-    {
-        // Process the OnReady callbacks
-        if (!m_IsReady)
-        {
-            m_IsReady = true;
-            for (auto &func : m_OnProjectReadyFuncs)
-            {
-                if (func)
-                    func(isSuccess);
-            }
-            m_OnProjectReadyFuncs.clear();
-        }
-    }
-
-    void Project::ResetReadyState()
-    {
-        m_IsReady = false;
-        m_OnProjectReadyFuncs.clear();
-    }
-
     Ref<Project> Project::Create(const ProjectInfo &info)
     {
         return CreateRef<Project>(info);
@@ -559,19 +529,11 @@ R"(<Project Sdk="Microsoft.NET.Sdk">
             LOG_ASSERT(buildSuccess, "[Project] Failed to build Solution");
 
             // MAIN THREAD
-            // Calling on result when done building
+            // Notify script engine that the build finished; the script engine will
+            // load the assembly and then emit SignalType::Project for the editor layer.
             Application::SubmitToMainThread([this, buildSuccess]()
             {
-                // Process the solution build callback
-                for (auto &func : m_BuildSolutionFuncs)
-                {
-                    if (func)
-                        func(buildSuccess);
-                }
-                m_BuildSolutionFuncs.clear();
-
-                ProcessOnProjectReadyFuncs(buildSuccess);
-
+                SignalBus::Emit(SuccessResultSignal{ buildSuccess, SignalType::ScriptEngine });
                 AssetWorker::ReportStatus("Project loaded...", 1.0f);
             });
         });

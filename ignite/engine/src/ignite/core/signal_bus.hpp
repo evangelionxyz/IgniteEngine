@@ -4,11 +4,12 @@
 #ifndef IGN_SIGNAL_BUS_HPP
 #define IGN_SIGNAL_BUS_HPP
 
+#include "base.hpp"
 #include <cstdint>
 #include <functional>
-#include <mutex>
 #include <vector>
-#include <algorithm>
+#include <memory>
+#include <typeindex>
 
 namespace ignite
 {
@@ -36,33 +37,52 @@ namespace ignite
     using SignalToken = uint32_t;
     static constexpr SignalToken kInvalidSignalToken = 0;
 
-    class SignalBus
+    class IGN_API SignalBus
     {
+    public:
+        struct SubscriberWrapper
+        {
+            SignalToken token;
+            virtual ~SubscriberWrapper() = default;
+            virtual void Invoke(const void* signalPtr) = 0;
+        };
+
+    private:
+        template<typename T>
+        struct SubscriberWrapperImpl : public SubscriberWrapper
+        {
+            std::function<void(const T&)> callback;
+
+            SubscriberWrapperImpl(SignalToken t, std::function<void(const T&)> cb)
+                : callback(std::move(cb)) { token = t; }
+
+            void Invoke(const void* signalPtr) override
+            {
+                callback(*static_cast<const T*>(signalPtr));
+            }
+        };
+
+        static SignalToken AddSubscriber(std::type_index type, std::shared_ptr<SubscriberWrapper> subscriber);
+        static void RemoveSubscriber(std::type_index type, SignalToken token);
+        static std::vector<std::shared_ptr<SubscriberWrapper>> GetSubscribers(std::type_index type);
+        static SignalToken GenerateNextToken();
+
     public:
         SignalBus() = delete;
 
         template<typename T>
-        static SignalToken Subscribe(std::function<void(const T&)> callback)
+        [[nodiscard]] static SignalToken Subscribe(std::function<void(const T&)> callback)
         {
-            auto& state = GetState<T>();
-            std::lock_guard lock(state.mutex);
-            SignalToken token = ++s_NextToken;
-            state.entries.push_back({ token, std::move(callback) });
+            SignalToken token = GenerateNextToken();
+            auto wrapper = std::make_shared<SubscriberWrapperImpl<T>>(token, std::move(callback));
+            AddSubscriber(typeid(T), wrapper);
             return token;
         }
 
         template<typename T>
         static void Unsubscribe(SignalToken token)
         {
-            if (token == kInvalidSignalToken)
-                return;
-
-            auto& state = GetState<T>();
-            std::lock_guard lock(state.mutex);
-            auto& v = state.entries;
-            v.erase(std::remove_if(v.begin(), v.end(),
-                [token](const Entry<T>& e) { return e.token == token; }),
-                v.end());
+            RemoveSubscriber(typeid(T), token);
         }
 
         // Emit the signal to all currently-registered subscribers.
@@ -71,39 +91,10 @@ namespace ignite
         template<typename T>
         static void Emit(const T& signal)
         {
-            std::vector<Entry<T>> snapshot;
-            {
-                auto& state = GetState<T>();
-                std::lock_guard lock(state.mutex);
-                snapshot = state.entries; // copy
-            }
+            auto snapshot = GetSubscribers(typeid(T));
             for (const auto& entry : snapshot)
-                entry.callback(signal);
+                entry->Invoke(&signal);
         }
-
-    private:
-        template<typename T>
-        struct Entry
-        {
-            SignalToken token;
-            std::function<void(const T&)> callback;
-        };
-
-        template<typename T>
-        struct State
-        {
-            std::mutex mutex;
-            std::vector<Entry<T>> entries;
-        };
-
-        template<typename T>
-        static State<T>& GetState()
-        {
-            static State<T> s_State;
-            return s_State;
-        }
-
-        static inline std::atomic<SignalToken> s_NextToken{ 0 };
     };
 }
 

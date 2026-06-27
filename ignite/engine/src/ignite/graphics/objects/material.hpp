@@ -62,7 +62,7 @@ namespace ignite
     {
     public:
         Material();
-    	~Material();
+    	virtual ~Material() override;
 
         std::string name;
 

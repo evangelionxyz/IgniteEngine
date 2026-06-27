@@ -375,7 +375,7 @@ namespace ignite
             }
         }
 
-        m_Environment->Draw(cmd, camera, framebuffer, envPipeline);
+        m_Environment->Draw(cmd, framebuffer, envPipeline);
     }
 
     void AssetSceneRenderer::DrawPreviewMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)

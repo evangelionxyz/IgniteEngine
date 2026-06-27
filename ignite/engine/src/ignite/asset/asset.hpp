@@ -251,7 +251,7 @@ namespace ignite
 
         AssetHandle handle;
 
-        virtual ~Asset() { };
+        virtual ~Asset() = default;
 
         template<typename T>
         Ref<T> As()

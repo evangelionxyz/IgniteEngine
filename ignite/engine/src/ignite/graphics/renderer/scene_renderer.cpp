@@ -337,7 +337,7 @@ namespace ignite
             if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->dirtyEnvironment)
             {
                 const Ref<GraphicsPipeline> envPSO = GetEnvPipelineForFB(framebuffer, m_FillMode);
-                m_WorldEnvironment->environment->Draw(cmd, camera, framebuffer, envPSO);
+                m_WorldEnvironment->environment->Draw(cmd, framebuffer, envPSO);
             }
 
 			ColorPass(cmd, camera, framebuffer);
@@ -483,7 +483,7 @@ namespace ignite
             if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->dirtyEnvironment)
             {
                 const Ref<GraphicsPipeline> envPSO = GetEnvPipelineForFB(framebuffer, m_FillMode);
-                m_WorldEnvironment->environment->Draw(cmd, camera, framebuffer, envPSO);
+                m_WorldEnvironment->environment->Draw(cmd, framebuffer, envPSO);
             }
 
 			ColorPass(cmd, camera, framebuffer);

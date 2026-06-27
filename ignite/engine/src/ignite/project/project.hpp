@@ -58,12 +58,6 @@ namespace ignite
         void CreateScriptableObject(const std::string &className, const std::string &fileName, const ignite::Path &targetDirectory);
         void RegenerateCSharpProject() const;
 
-        void AddBuildSolutionFunc(const ProjectCallbackFn &func);
-        void AddOnProjectReadyFuncs(const ProjectCallbackFn &func);
-
-        void ProcessOnProjectReadyFuncs(bool isSuccess = true);
-        void ResetReadyState();
-
         std::vector<std::pair<AssetHandle, AssetMetaData>> ValidateAssetRegistry();
 
         ignite::Path GetFilepath() const
@@ -131,7 +125,6 @@ namespace ignite
         virtual AssetType GetAssetType() override { return GetStaticType(); }
 
         bool IsCoreDependenciesUpToDate();
-        bool IsReady() const { return m_IsReady; }
 
         void StartCoreDependencyWatchers();
         void OnCoreDependencyChanged(const std::string &path, const filewatch::Event eventType);
@@ -145,17 +138,12 @@ namespace ignite
 
         MaterialManager m_MaterialManager;
         AssetManager *m_AssetManager = nullptr;
-        ScriptEngine *m_ScriptEngine = nullptr;
-
-        std::vector<ProjectCallbackFn> m_BuildSolutionFuncs;
-        std::vector<ProjectCallbackFn> m_OnProjectReadyFuncs;
+		ScriptEngine *m_ScriptEngine = nullptr;
 
         std::map<std::string, bool> m_CoreDependencies;
         std::map<std::string, bool> m_CoreDependenciesPending;
         std::vector<Scope<filewatch::FileWatch<std::string>>> m_CoreDependencyWatchers;
         std::mutex m_CoreDependencyMutex;
-
-        bool m_IsReady = false;
     };
 }
 
