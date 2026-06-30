@@ -55,6 +55,8 @@ namespace ignite
         // Ray intersection that returns distance to intersection in outT (near hit)
         bool IntersectRay(const glm::vec3 &rayOrigin, const glm::vec3 &rayDirection, float &outT) const;
 
+        AABB Transform(const glm::mat4 &M) const;
+
         static AABB CalculateMeshAABB(const std::vector<Ref<MeshInstance>> &meshInstances);
     };
 }

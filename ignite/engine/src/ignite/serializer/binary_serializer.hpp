@@ -993,6 +993,7 @@ namespace ignite
                 skeleton->sockets.push_back(std::move(socket));
             }
 
+            skeleton->UpdateGlobalTransforms();
             inFile.close();
 
             return skeleton;

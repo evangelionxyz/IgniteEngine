@@ -393,7 +393,7 @@ namespace ignite
         // Enable unique for each entity
         bool uniqueAnimator = true;
 
-        glm::mat4 GetSocketWorldTransform(const glm::mat4 &meshWorldMatrix, const Skeleton &skeleton, const std::string &socketName)
+        glm::mat4 GetSocketWorldTransform(const glm::mat4 &meshWorldMatrix, const Skeleton &skeleton, const std::string &socketName) const
         {
             const auto it = skeleton.socketNameToIndex.find(socketName);
             if (it == skeleton.socketNameToIndex.end())

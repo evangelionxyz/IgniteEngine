@@ -115,7 +115,6 @@ namespace ignite
         void UIPass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
         void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, const PostProcessing &postProcessing,  nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr);
 
-        void DrawIcons(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, ICamera *camera);
         void DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const DebugGridStyle &style, bool is2D);
         void DrawDebug2D(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
         void DrawDebug3D(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
@@ -153,8 +152,6 @@ namespace ignite
         Ref<Bloom> m_GameplayBloom;
         Ref<SSAO> m_GameplaySSAO;
 
-        std::unordered_map<std::string, Ref<Texture>> m_Icons;
-
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_GeometryPSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TransparentGeometryPSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_EnvironmentPSOCache;
@@ -175,6 +172,8 @@ namespace ignite
         uint32_t m_GameplayWidgetMouseY = 0;
         bool m_GameplayWidgetMouseHovered = false;
         bool m_UseGameplayWidgetMouseOverride = false;
+
+        bool m_SkeletonBuffersUploadedThisFrame = false;
     };
 }
 

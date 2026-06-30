@@ -383,8 +383,17 @@ namespace ignite
         return m_AssetPinCounts.contains(handle);
     }
 
-    void AssetManager::OnUpdate()
+    void AssetManager::OnUpdate(float deltaTime)
     {
+		// Call each frame
+		assetUnloadTimer += deltaTime;
+		constexpr float kUnloadInterval = 10.0f;
+		if (assetUnloadTimer >= kUnloadInterval)
+		{
+			assetUnloadTimer = 0.0f;
+			UnloadUnusedAssets();
+		}
+
         // Call each frame
         if (!m_OnChangeCallbacks.empty())
         {

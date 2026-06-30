@@ -290,6 +290,16 @@ namespace ignite
 							sr.EndMap();
 						}
 						sr.EndSequence();
+
+						sr.BeginSequence("SocketAttachments");
+						for (const auto &[socketName, attachedMeshHandle] : comp.socketAttachments)
+						{
+							sr.BeginMap();
+							sr.AddKeyValue("SocketName", socketName);
+							sr.AddKeyValue("MeshHandle", static_cast<uint64_t>(attachedMeshHandle));
+							sr.EndMap();
+						}
+						sr.EndSequence();
                     }
                     sr.EndMap();
                 }
@@ -1058,6 +1068,21 @@ namespace ignite
 
                         if (meshIndex != -1 || materialHandle != AssetHandle(0))
                             comp.overrideMaterials[meshIndex] = materialHandle;
+                    }
+                }
+
+                if (auto socketAttachmentsNode = node["SocketAttachments"])
+                {
+                    for (auto attachment : socketAttachmentsNode)
+                    {
+                        std::string socketName;
+                        AssetHandle attachedMeshHandle = AssetHandle(0);
+
+                        if (auto n = attachment["SocketName"]) socketName = n.as<std::string>();
+                        if (auto n = attachment["MeshHandle"]) attachedMeshHandle = AssetHandle(n.as<uint64_t>());
+
+                        if (!socketName.empty() && attachedMeshHandle != AssetHandle(0))
+                            comp.socketAttachments[socketName] = attachedMeshHandle;
                     }
                 }
             }

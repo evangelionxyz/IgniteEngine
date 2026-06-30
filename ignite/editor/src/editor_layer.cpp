@@ -273,7 +273,7 @@ namespace ignite
 
         if (m_ActiveProject)
         {
-            m_ActiveProject->GetAssetManager()->OnUpdate();
+            m_ActiveProject->GetAssetManager()->OnUpdate(deltaTime);
         }
 
         // update panels

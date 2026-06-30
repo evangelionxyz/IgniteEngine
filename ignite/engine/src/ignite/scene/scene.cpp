@@ -761,9 +761,9 @@ namespace ignite
 
 					// ==== Socket system: Cache global joint transforms ====
                     smc.globalJointTransforms.resize(runtime.globalPoses.size());
-                    for (size_t i = 0; i < sharedRuntime->globalPoses.size(); ++i)
+                    for (size_t i = 0; i < runtime.globalPoses.size(); ++i)
 					{
-						smc.globalJointTransforms[i] = sharedRuntime->globalPoses[i].GetMatrix();
+						smc.globalJointTransforms[i] = runtime.globalPoses[i].GetMatrix();
 					}
 
                     smc.currentStateName = runtime.currentStateName;

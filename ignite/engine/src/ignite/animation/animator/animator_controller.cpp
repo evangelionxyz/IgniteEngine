@@ -23,7 +23,22 @@
 
 namespace ignite
 {
-    std::string AnimatorController::EvaluateTransitions(const std::string &currentState, float normalizedTime) const
+
+	AnimatorController::~AnimatorController()
+	{
+        auto assetManager = AssetManager::GetInstance();
+        if (!assetManager)
+            return;
+
+        for (auto &state : states)
+        {
+            assetManager->RemoveAssetPin(state.animHandle, std::format("animator.controller.{}", (uint64_t)state.animHandle));
+        }
+
+        states.clear();
+	}
+
+	std::string AnimatorController::EvaluateTransitions(const std::string &currentState, float normalizedTime) const
     {
         for (const auto &tr : transitions)
         {
@@ -198,6 +213,8 @@ namespace ignite
         if (!node)
             return nullptr;
 
+        auto assetManager = AssetManager::GetInstance();
+
         auto ctrl = CreateRef<AnimatorController>();
         if (auto n = node["DefaultState"]) ctrl->defaultState = n.as<std::string>();
         if (auto n = node["SkeletonHandle"]) ctrl->skeletonHandle = AssetHandle(n.as<uint64_t>());
@@ -211,6 +228,10 @@ namespace ignite
                 if (auto n = sn["AnimHandle"]) s.animHandle = AssetHandle(n.as<uint64_t>());
                 if (auto n = sn["EditorPos"]; n && n.IsSequence() && n.size() == 2)
                     s.editorPos = { n[0].as<float>(), n[1].as<float>() };
+
+                // Don't forget to Add asset pin
+				assetManager->AddAssetPin(s.animHandle, std::format("animator.controller.{}", (uint64_t)s.animHandle));
+
                 ctrl->states.push_back(s);
             }
         }

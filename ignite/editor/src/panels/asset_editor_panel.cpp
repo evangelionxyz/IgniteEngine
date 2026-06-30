@@ -144,7 +144,6 @@ namespace ignite
         static std::unordered_map<uint64_t, SpriteSheetEditorState> s_SpriteSheetEditorState;
         static std::unordered_map<uint64_t, Animation2DEditorState> s_Anim2DEditorState;
 
-        static AssetHandle s_ActiveSkeletonEditorHandle = AssetHandle(0);
         static Gizmo s_SkeletonPreviewGizmo;
 
         // Default static meshes
@@ -365,36 +364,23 @@ namespace ignite
             ImGui::PopID();
         }
 
-        static AssetHandle FindFirstMeshHandleForSkeleton(Project *project, AssetHandle skeletonHandle)
+        static AssetHandle FindFirstMeshHandleForSkeleton(AssetHandle skeletonHandle)
         {
-            if (!project || skeletonHandle == AssetHandle(0))
-            {
+            if (skeletonHandle == AssetHandle(0))
                 return AssetHandle(0);
-            }
 
-            auto assetManager = project->GetAssetManager();
+            auto assetManager = AssetManager::GetInstance();
             if (!assetManager)
-            {
                 return AssetHandle(0);
-            }
 
             for (const auto &[meshHandle, metadata] : assetManager->GetAssetAssetRegistry())
             {
                 if (metadata.type != AssetType::Mesh)
-                {
                     continue;
-                }
 
-                Ref<Mesh> mesh = project->GetAsset<Mesh>(meshHandle);
-                if (!mesh)
-                {
-                    mesh = project->GetAssetImmediate<Mesh>(meshHandle);
-                }
-
+                Ref<Mesh> mesh = assetManager->GetAsset<Mesh>(meshHandle);
                 if (mesh && mesh->GetSkeletonHandle() == skeletonHandle)
-                {
                     return meshHandle;
-                }
             }
 
             return AssetHandle(0);
@@ -443,15 +429,8 @@ namespace ignite
             return;
         }
 
-        Project *project = m_EditorLayer->GetActiveProject().get();
-        auto *assetManager = project->GetAssetManager();
+        auto assetManager = AssetManager::GetInstance();
 
-        // -----------------------------------------------------------------------
-        // Poll for async-loaded assets.
-        // GetAsset() submits a background job and returns nullptr immediately.
-        // Once the worker completes, GetAsset() returns the loaded Ref on the
-        // next call. We keep polling each frame until the asset arrives.
-        // -----------------------------------------------------------------------
         for (auto &assetData : m_Assets)
         {
             if (!assetData.isOpen)
@@ -485,6 +464,14 @@ namespace ignite
                             }
                             break;
                         }
+                        case AssetType::Skeleton:
+                        {
+                            if (sceneRenderer)
+                            {
+                                assetData.asset = loaded;
+                            }
+                            break;
+                        }
                         case AssetType::Widget:
                         {
                             if (sceneRenderer)
@@ -505,27 +492,6 @@ namespace ignite
             }
         }
 
-        // -----------------------------------------------------------------------
-        // Periodic auto-unload of unused assets.
-        // After an asset editor tab is closed, ClearAssetPins() is called (in
-        // the erase_if below). If no scene entity references the asset either,
-        // it becomes unused and should be evicted from m_LoadedAssets to free
-        // memory. We throttle this to at most once every 10 seconds.
-        // -----------------------------------------------------------------------
-        {
-            auto &state = m_EditorLayer->GetState();
-            state.assetUnloadTimer += deltaTime;
-            constexpr float kUnloadInterval = 10.0f;
-            if (m_EditorLayer->GetState().assetUnloadTimer >= kUnloadInterval)
-            {
-                state.assetUnloadTimer = 0.0f;
-                if (assetManager)
-                {
-                    assetManager->UnloadUnusedAssets();
-                }
-            }
-        }
-
         // -----------------------------------------------
         // Per-asset animation / skeleton preview update
         // -----------------------------------------------
@@ -537,11 +503,6 @@ namespace ignite
             }
 
             if (assetData.metadata.type != AssetType::Skeleton && assetData.metadata.type != AssetType::Mesh)
-            {
-                continue;
-            }
-
-            if (assetData.metadata.type == AssetType::Skeleton && assetData.handle != s_ActiveSkeletonEditorHandle)
             {
                 continue;
             }
@@ -562,7 +523,7 @@ namespace ignite
                 const AssetHandle skeletonHandle = mesh->GetSkeletonHandle();
                 if (skeletonHandle != AssetHandle(0))
                 {
-                    skeleton = project->GetAsset<Skeleton>(skeletonHandle);
+                    skeleton = assetManager->GetAsset<Skeleton>(skeletonHandle);
                 }
             }
 
@@ -577,10 +538,40 @@ namespace ignite
 
             SkeletonPreviewEditorState &previewState = s_SkeletonPreviewEditorState[static_cast<uint64_t>(skeleton->handle)];
 
+            if (assetData.sceneData.sceneRenderer)
+            {
+                if (previewState.previewMeshHandle == AssetHandle(0))
+                {
+                    previewState.previewMeshHandle = FindFirstMeshHandleForSkeleton(skeleton->handle);
+                    previewState.cachedPreviewMesh.reset();
+                }
+
+                if (previewState.previewMeshHandle != AssetHandle(0))
+                {
+                    if (!previewState.cachedPreviewMesh || previewState.cachedPreviewMesh->handle != previewState.previewMeshHandle)
+                    {
+                        previewState.cachedPreviewMesh = assetManager->GetAsset<Mesh>(previewState.previewMeshHandle);
+                    }
+
+                    if (previewState.cachedPreviewMesh && previewState.cachedPreviewMesh->IsReady())
+                    {
+                        assetData.sceneData.sceneRenderer->SetPreviewMesh(previewState.cachedPreviewMesh);
+                    }
+                    else
+                    {
+                        assetData.sceneData.sceneRenderer->SetPreviewMesh(nullptr);
+                    }
+                }
+                else
+                {
+                    assetData.sceneData.sceneRenderer->SetPreviewMesh(nullptr);
+                }
+            }
+
             Ref<SkeletalAnimation> previewAnimation = nullptr;
             if (previewState.previewAnimationHandle != AssetHandle(0))
             {
-                previewAnimation = project->GetAsset<SkeletalAnimation>(previewState.previewAnimationHandle);
+                previewAnimation = assetManager->GetAsset<SkeletalAnimation>(previewState.previewAnimationHandle);
             }
 
             if (previewAnimation && previewAnimation->duration > 0.0f)
@@ -697,7 +688,6 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
         UICreateAssetPopup();
-        s_ActiveSkeletonEditorHandle = AssetHandle(0);
 
         for (auto &assetData : m_Assets)
         {
@@ -4072,11 +4062,6 @@ namespace ignite
         bool isOpen = assetData.isOpen;
         if (BeginAssetEditorWindow(assetData, isOpen, ImVec2(1100.0f, 900.0f), ImVec2(560.0f, 620.0f), 0))
         {
-            if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows))
-            {
-                s_ActiveSkeletonEditorHandle = assetData.handle;
-            }
-
             if (DrawAssetEditorHeader(assetData))
             {
                 if (assetData.asset && assetData.asset->IsReady())
@@ -4094,7 +4079,7 @@ namespace ignite
 
                         if (previewState.previewMeshHandle == AssetHandle(0))
                         {
-                            const AssetHandle matchedMeshHandle = FindFirstMeshHandleForSkeleton(project, skeleton->handle);
+                            const AssetHandle matchedMeshHandle = FindFirstMeshHandleForSkeleton(skeleton->handle);
                             if (matchedMeshHandle != AssetHandle(0))
                             {
                                 previewState.previewMeshHandle = matchedMeshHandle;
@@ -4442,7 +4427,7 @@ namespace ignite
                                 }
                                 ImGui::EndDragDropTarget();
                             }
-                            ImGui::TextDisabled("Preview Mesh Handle: %llu", static_cast<unsigned long long>(static_cast<uint64_t>(previewState.previewMeshHandle)));
+                            ImGui::TextDisabled("Preview Mesh Handle: %llu", static_cast<uint64_t>(previewState.previewMeshHandle));
                             if (ImGui::SmallButton("Clear Preview Mesh"))
                             {
                                 previewState.previewMeshHandle = AssetHandle(0);
@@ -4463,7 +4448,7 @@ namespace ignite
                                         {
                                             previewState.previewAnimationHandle = droppedHandle;
                                             previewState.timeSeconds = 0.0f;
-                                            previewState.playing = true;
+                                            assetManager->AddAssetPin(droppedHandle, BuildAssetEditorPinOwnerTag(droppedHandle));
                                         }
                                     }
                                 }
@@ -4897,25 +4882,26 @@ namespace ignite
         assetData.sceneData.camera.UpdateView();
         assetData.sceneData.camera.UpdateProjection(width, height);
 
-        Project *activeProject = m_EditorLayer->GetActiveProject().get();
+        auto assetManager = AssetManager::GetInstance();
+
         Ref<Mesh> meshResult = GetDefaultMesh(UV_SPHERE);
         AssetHandle handle = assetData.handle;
 
         Ref<Material> material;
         if (assetType == AssetType::Material)
         {
-            material = activeProject->GetAsset<Material>(handle);
+            material = assetManager->GetAsset<Material>(handle);
         }
         else if (assetType == AssetType::Mesh)
         {
-            meshResult = activeProject->GetAsset<Mesh>(handle);
+            meshResult = assetManager->GetAsset<Mesh>(handle);
         }
         else if (assetType == AssetType::Skeleton)
         {
-            const AssetHandle matchedMeshHandle = FindFirstMeshHandleForSkeleton(activeProject, assetData.handle);
+            const AssetHandle matchedMeshHandle = FindFirstMeshHandleForSkeleton(assetData.handle);
             if (matchedMeshHandle != AssetHandle(0))
             {
-                Ref<Mesh> matchedMesh = activeProject->GetAsset<Mesh>(matchedMeshHandle);
+                Ref<Mesh> matchedMesh = assetManager->GetAsset<Mesh>(matchedMeshHandle);
                 if (matchedMesh)
                 {
                     meshResult = matchedMesh;
@@ -4926,7 +4912,7 @@ namespace ignite
             }
         }
 
-        Application::SubmitToRenderThread([this, handle, width, height, activeProject, meshResult, assetType, material]()
+        Application::SubmitToRenderThread([this, handle, width, height, meshResult, assetType, material]()
         {
             RenderTargetCreateInfo rtCreateInfo = {};
             rtCreateInfo.width = width;
@@ -4950,7 +4936,7 @@ namespace ignite
             };
             auto compositeRT = RenderTarget::Create(compositeInfo, "[Asset Preview Composite RT]");
 
-            Application::SubmitToMainThread([this, handle, sceneRT, uiRT, compositeRT, activeProject]()
+            Application::SubmitToMainThread([this, handle, sceneRT, uiRT, compositeRT]()
             {
                 auto it = std::ranges::find(m_Assets, handle, &AssetEditorData::handle);
                 if (it != m_Assets.end())

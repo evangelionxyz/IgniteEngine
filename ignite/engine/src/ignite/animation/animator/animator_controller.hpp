@@ -38,6 +38,8 @@ namespace ignite
         std::string defaultState;
         std::vector<AnimState> states;
 
+        virtual ~AnimatorController() override;
+
         AssetHandle skeletonHandle = AssetHandle(0);
 
         // Returns new state name if a transition fires, else empty string.
