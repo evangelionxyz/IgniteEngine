@@ -12,16 +12,18 @@
 #include "ignite/graphics/gpu_data.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/project/project.hpp"
-#include "ignite/animation/skeleton.hpp"
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/graphics/ui/widget_renderer.hpp"
+
+#include "ignite/graphics/objects/environment.hpp"
 
 #include <algorithm>
 #include <limits>
 
 namespace ignite
 {
-    static const GPUSkeletonBuffer s_IdentitySkeleton = []() {
+    static const GPUSkeletonBuffer s_IdentitySkeleton = []()
+    {
         GPUSkeletonBuffer buf;
         for (int i = 0; i < MAX_BONES; ++i)
         {
@@ -57,12 +59,6 @@ namespace ignite
         m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
         m_CompositePostProcessBuffer = ConstantBuffer::Create(sizeof(CompositePostProcess_GPUData), true, 16, "Composite PostProcess Buffer");
 
-        // m_Renderer2D = Renderer2D::Create();
-
-        // m_EdgeDetection = EdgeDetection::Create();
-        // m_EdgeDetection->CreatePipeline();
-        // m_DebugGridBuffer = ConstantBuffer::Create(sizeof(DebugGrid_GPUData), true, 16, "Debug Grid Buffer");
-
         m_PreviewMesh = nullptr;
         m_PreviewWidget = nullptr;
         m_SourceMaterial = nullptr;
@@ -77,6 +73,8 @@ namespace ignite
 
     AssetSceneRenderer::~AssetSceneRenderer()
     {
+        ClearPinnedAssets();
+
         m_GeometryPipelineCache.clear();
         m_CompositePipelineCache.clear();
 
@@ -139,19 +137,6 @@ namespace ignite
         m_EnvironmentTextureLoadAttempted = false;
     }
 
-    void AssetSceneRenderer::SetProject(Project *project)
-    {
-        m_Project = project;
-        if (m_WidgetRenderer)
-        {
-            m_WidgetRenderer->SetProject(project);
-        }
-        if (m_RuntimeMaterial)
-        {
-            m_RuntimeMaterial->InvalidateBindingSet();
-        }
-    }
-
     void AssetSceneRenderer::SetPreviewWidget(const Ref<WidgetCanvas> &widget)
     {
         m_UseEnvironment = false;
@@ -164,7 +149,6 @@ namespace ignite
 
         if (m_WidgetRenderer)
         {
-            m_WidgetRenderer->SetProject(m_Project);
             m_WidgetRenderer->SetActiveWidget(widget);
         }
     }
@@ -213,7 +197,7 @@ namespace ignite
                 // prefer explicit handle if provided
                 if (m_EnvTexHandle != AssetHandle(0))
                 {
-                    envTex = m_Project->GetAsset<Texture>(m_EnvTexHandle);
+                    envTex = AssetManager::GetInstance()->GetAsset<Texture>(m_EnvTexHandle);
                 }
                 else
                 {
@@ -307,7 +291,14 @@ namespace ignite
         }
     }
 
-    void AssetSceneRenderer::SyncRuntimeMaterialFromSource()
+	Ref<Texture> AssetSceneRenderer::GetEnvironmentMapColorTexture() const
+	{
+        if (m_Environment && m_Environment->GetHDRTexture())
+            return m_Environment->GetHDRTexture();
+        return m_DefaultEnvTexture ? m_DefaultEnvTexture : nullptr;
+	}
+
+	void AssetSceneRenderer::SyncRuntimeMaterialFromSource()
     {
         if (!m_SourceMaterial)
         {
@@ -381,22 +372,10 @@ namespace ignite
     void AssetSceneRenderer::DrawPreviewMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer)
     {
         if (!m_PreviewMesh || !m_RuntimeMaterial)
-        {
             return;
-        }
 
-        MaterialTextures textures;
-        if (m_Project)
-        {
-            auto *assetManager = m_Project->GetAssetManager();
-            m_RuntimeMaterial->RetrieveTextures(assetManager, &textures);
-            m_RuntimeMaterial->UpdateBindingSet(&textures, assetManager, GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture());
-        }
-
-        if (!m_RuntimeMaterial->GetBindingSet())
-        {
+        if (!m_RuntimeMaterial->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture()))
             return;
-        }
 
         m_RuntimeMaterial->UploadToGpu(cmd);
 
@@ -519,7 +498,7 @@ namespace ignite
             glm::mat4 meshTransform = meshInstance->global;
             if (meshInstance->linkedJointIndex >= 0 && !m_BoneTransforms.empty())
             {
-                const size_t ji = static_cast<size_t>(meshInstance->linkedJointIndex);
+                const auto ji = static_cast<size_t>(meshInstance->linkedJointIndex);
                 if (ji < m_BoneTransforms.size())
                 {
                     meshTransform = m_BoneTransforms[ji] * meshTransform;
@@ -535,68 +514,25 @@ namespace ignite
             meshInstance->SetData(cmd, &gpuData, sizeof(SkinnedMeshBufferData));
             meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, m_SkeletonGpuBuffer);
 
-            nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
-            
-            Ref<Material> material = m_Project->GetAsset<Material>(meshInstance->GetMaterialHandle());
-            {
-                bool waitedForMaterialUpdate = false;
-                if (material && (material->IsBindingSetDirty() || !material->GetBindingSet()))
-                {
-                    auto assetManager = m_Project->GetAssetManager();
-                    auto isTextureReady = [&assetManager](AssetHandle textureHandle)
-                    {
-                        if (textureHandle == 0)
-                        {
-                            return true;
-                        }
-
-                        Ref<Texture> texture = assetManager->GetAsset<Texture>(textureHandle);
-                        return texture && texture->IsReady();
-                    };
-
-					// Only update if all textures are available and ready
-					bool allTexturesReady = isTextureReady(material->baseColorTextureHandle)
-						&& isTextureReady(material->emissiveTextureHandle)
-						&& isTextureReady(material->metallicTextureHandle)
-						&& isTextureReady(material->roughnessTextureHandle)
-						&& isTextureReady(material->normalTextureHandle)
-						&& isTextureReady(material->occlusionTextureHandle);
-
-                    if (allTexturesReady)
-                    {
-                        MaterialTextures textures;
-                        material->RetrieveTextures(assetManager, &textures);
-
-                        if (!waitedForMaterialUpdate)
-                        {
-                            // Ensure no other GPU operations are in flight before updating material
-                            // This prevents threading errors when materials are being invalidated
-                            GPUUploadSync::DeviceWaitIdle(m_Device);
-                            waitedForMaterialUpdate = true;
-                        }
-
-                        material->UpdateBindingSet(&textures, assetManager, GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture());
-                    }
-                }
-            }
-            
-
-            if (material && !material->GetBindingSet())
-            {
-                MaterialTextures textures;
-                auto assetManager = m_Project->GetAssetManager();
-                material->RetrieveTextures(assetManager, &textures);
-                material->UpdateBindingSet(&textures, assetManager, GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture());
-            }
-
+            // Get individual mesh material if available
+            // Will fallback to m_RuntimeMaterial if not exists
+			Ref<Material> material = AssetManager::GetInstance()->GetAsset<Material>(meshInstance->GetMaterialHandle());
             if (material)
             {
-                material->UploadToGpu(cmd);
+                if (material->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture()))
+                {
+                    material->UploadToGpu(cmd);
+                }
             }
 
-            if (meshBindingSet)
+            const nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
+            const nvrhi::BindingSetHandle materialBindingSet = (material && material->GetBindingSet())
+                ? material->GetBindingSet()
+                : m_RuntimeMaterial->GetBindingSet();
+
+            if (meshBindingSet && materialBindingSet)
             {
-                state.bindings = { meshBindingSet, material ? material->GetBindingSet() : m_RuntimeMaterial->GetBindingSet() };
+                state.bindings = { meshBindingSet, materialBindingSet };
                 state.vertexBuffers = { nvrhi::VertexBufferBinding { primitive->vertexBuffer->GetHandle(), 0, 0 } };
                 state.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
                 cmd->setGraphicsState(state);
@@ -682,4 +618,16 @@ namespace ignite
         args.vertexCount = 6;
         cmd->draw(args);
     }
+
+	void AssetSceneRenderer::AddAssetPin(AssetHandle handle)
+	{
+        m_PinnedAssetHandles.push_back(handle);
+        AssetManager::GetInstance()->AddAssetPin(handle, BuildAssetPinName(handle));
+	}
+
+	std::string_view AssetSceneRenderer::BuildAssetPinName(AssetHandle handle)
+	{
+        return std::format("asset_scene_renderer_", (uint64_t)handle);
+	}
+
 }

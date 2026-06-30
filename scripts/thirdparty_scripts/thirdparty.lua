@@ -41,7 +41,7 @@ print("FBX_SDK path: " .. tostring(FBX_SDK_PATH))
 
 --includedirs
 IncludeDir                          = {}
-IncludeDir["ASSIM"]                 = "%{THIRDPARTY_DIR}/ASSIMP/include"
+IncludeDir["ASSIMP"]                = "%{THIRDPARTY_DIR}/ASSIMP/include"
 IncludeDir["GLFW"]                  = "%{THIRDPARTY_DIR}/GLFW/include"
 IncludeDir["BOX2D"]                 = "%{THIRDPARTY_DIR}/BOX2D/include"
 IncludeDir["ENTT"]                  = "%{THIRDPARTY_DIR}/entt/"

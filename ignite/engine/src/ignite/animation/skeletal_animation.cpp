@@ -41,5 +41,4 @@ namespace ignite
     {
         m_SkeletonHandle = skeletonHandle;
     }
-
 }

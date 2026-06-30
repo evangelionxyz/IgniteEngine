@@ -73,7 +73,7 @@ namespace ignite
         void ClearAssetPins(std::string_view ownerTag);
         bool IsAssetPinned(AssetHandle handle) const;
 
-        void OnUpdate();
+        void OnUpdate(float deltaTime);
 
         void OnAssetChangeSignal(const AssetChangeSignal &signal);
 
@@ -188,6 +188,8 @@ namespace ignite
 
         Project *GetProject() { return m_Project; }
 
+        static AssetManager *GetInstance();
+
         fbxsdk::FbxManager *GetOrCreateFbxSdkManager();
         std::mutex &GetFbxSdkMutex() { return m_FbxSdkMutex; }
 
@@ -209,6 +211,8 @@ namespace ignite
 
         std::mutex m_FbxSdkMutex;
         mutable std::mutex m_AssetMutex;
+
+        float assetUnloadTimer = 0.0f;
         
         std::unordered_map<AssetHandle, uint32_t> m_AssetPinCounts;
         std::unordered_map<std::string, std::unordered_set<AssetHandle>> m_PinnedAssetsByOwner;

@@ -709,7 +709,7 @@ namespace ignite
         if (!skeleton)
         {
             skeleton = CreateRef<Skeleton>();
-            FBXMeshLoader::LoadSkeletonOnlyFromFBX(filepath.generic_string(), skeleton, assetManager);
+            FBXMeshLoader::LoadSkeletonOnly(filepath.generic_string(), skeleton, assetManager);
         }
 
         if (!skeleton)
@@ -748,7 +748,7 @@ namespace ignite
         if (options.importAnimations)
         {
             std::vector<Ref<SkeletalAnimation>> animations;
-            FBXMeshLoader::LoadAnimationsOnlyFromFBX(filepath.generic_string(), skeleton, animations, assetManager);
+            FBXMeshLoader::LoadAnimationsOnly(filepath.generic_string(), skeleton, animations, assetManager);
 
             if (animations.empty())
             {

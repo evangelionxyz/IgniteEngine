@@ -57,58 +57,81 @@ namespace ignite
         sampler = nullptr;
     }
 
-    void Material::UpdateBindingSet(MaterialTextures *textures, AssetManager *assetManager, Ref<Texture> envMap, Ref<Texture> shadowMap)
+    bool Material::UpdateBindingSet(Ref<Texture> envMap, Ref<Texture> shadowMap)
     {
-        if (m_BindingSet && !m_BindingSetDirty)
-            return;
+        Texture* envPtr = envMap ? envMap.get() : nullptr;
+        Texture* shadowPtr = shadowMap ? shadowMap.get() : nullptr;
+        auto key = std::make_pair(envPtr, shadowPtr);
 
-		auto isTextureReady = [assetManager](AssetHandle textureHandle)
-			{
-				if (textureHandle == 0)
-				{
-					return true;
-				}
-
-				Ref<Texture> texture = assetManager->GetAsset<Texture>(textureHandle);
-				return texture && texture->IsReady();
-			};
-
-		const bool allTexturesReady =
-			isTextureReady(baseColorTextureHandle)
-			&& isTextureReady(emissiveTextureHandle)
-			&& isTextureReady(metallicTextureHandle)
-			&& isTextureReady(roughnessTextureHandle)
-			&& isTextureReady(normalTextureHandle)
-			&& isTextureReady(occlusionTextureHandle);
-
-        if (!allTexturesReady)
+        if (m_BindingSetDirty)
         {
-            m_BindingSetDirty = true;
-            return;
+            m_BindingSets.clear();
+        }
+        else
+        {
+            auto it = m_BindingSets.find(key);
+            if (it != m_BindingSets.end())
+            {
+                m_BindingSet = it->second;
+                return true;
+            }
         }
 
-		EnsureGpuResources();
-		auto device = DeviceManager::GetInstance()->GetDevice();
+        auto isTextureReady = [](AssetHandle textureHandle, Ref<Texture> &outTexture, Ref<Texture> fallback) -> bool
+        {
+            if (textureHandle == AssetHandle(0))
+            {
+                outTexture = fallback;
+                return false;
+            }
+
+			Ref<Texture> result = AssetManager::GetInstance()->GetAsset<Texture>(textureHandle);
+            const bool ready = result && result->IsReady();
+			if (result && result->IsReady())
+			{
+                AssetManager::GetInstance()->AddAssetPin(textureHandle, std::format("material_{}", static_cast<uint64_t>(textureHandle)));
+				outTexture = result;
+			}
+            return ready;
+        };
+
+        Ref<Texture> baseColor, emissive, metallic, roughness, normal, occlusion;
+		bool allTexturesReady = isTextureReady(baseColorTextureHandle, baseColor, Renderer::GetWhiteTexture());
+        allTexturesReady &= isTextureReady(emissiveTextureHandle, emissive, Renderer::GetBlackTexture());
+        allTexturesReady &= isTextureReady(metallicTextureHandle, metallic, Renderer::GetBlackTexture());
+        allTexturesReady &= isTextureReady(roughnessTextureHandle, roughness, Renderer::GetBlackTexture());
+        allTexturesReady &= isTextureReady(normalTextureHandle, normal, Renderer::GetWhiteTexture());
+        allTexturesReady &= isTextureReady(occlusionTextureHandle, occlusion, Renderer::GetWhiteTexture());
+
+        // Waiting for all textures loaded
+        // binding set is still not created
+        if (!allTexturesReady && !(baseColor && emissive && metallic && roughness && normal && occlusion))
+        {
+            m_BindingSet = nullptr;
+            m_BindingSetDirty = true;
+            return false;
+        }
+
+        EnsureGpuResources();
+        auto device = DeviceManager::GetInstance()->GetDevice();
+        GPUUploadSync::DeviceWaitIdle(device);
 
         nvrhi::BindingSetDesc desc = nvrhi::BindingSetDesc();
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(0, m_GPUDataBuffer->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, textures->baseColor->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, textures->emissive->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, textures->metallic->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, textures->roughness->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, textures->normal->GetHandle()));
-        desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, textures->occlusion->GetHandle()));
+		desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, baseColor->GetHandle()));
+		desc.addItem(nvrhi::BindingSetItem::Texture_SRV(1, emissive->GetHandle()));
+		desc.addItem(nvrhi::BindingSetItem::Texture_SRV(2, metallic->GetHandle()));
+		desc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, roughness->GetHandle()));
+		desc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, normal->GetHandle()));
+		desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, occlusion->GetHandle()));
+
         Ref<Texture> environmentTexture = envMap;
         if (!environmentTexture)
-        {
             environmentTexture = Renderer::GetBlackTexture();
-        }
 
         Ref<Texture> shadowTexture = shadowMap;
         if (!shadowTexture)
-        {
             shadowTexture = Renderer::GetWhiteTexture();
-        }
 
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(6, environmentTexture->GetHandle()));
         desc.addItem(nvrhi::BindingSetItem::Texture_SRV(7, shadowTexture->GetHandle()));
@@ -122,10 +145,17 @@ namespace ignite
         auto newBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MATERIAL));
         LOG_ASSERT(newBindingSet, "Failed to create material binding set");
 
+        // All created
         if (newBindingSet)
         {
             m_BindingSet = newBindingSet;
+            m_BindingSets[key] = newBindingSet;
+            m_BindingSetDirty = false;
+
+            return true;
         }
+
+        return false;
     }
 
     void Material::UploadToGpu(nvrhi::ICommandList *cmd)
@@ -142,77 +172,50 @@ namespace ignite
         m_HasSamplerDesc = true;
     }
 
-    void Material::RetrieveTextures(AssetManager *assetManager, MaterialTextures *textures) const
-    {
-        textures->baseColor = RetrieveTexture(assetManager, baseColorTextureHandle, Renderer::GetWhiteTexture());
-        textures->emissive = RetrieveTexture(assetManager, emissiveTextureHandle, Renderer::GetBlackTexture());
-        textures->metallic = RetrieveTexture(assetManager, metallicTextureHandle, Renderer::GetBlackTexture());
-        textures->roughness = RetrieveTexture(assetManager, roughnessTextureHandle, Renderer::GetWhiteTexture());
-        textures->normal = RetrieveTexture(assetManager, normalTextureHandle, Renderer::GetWhiteTexture());
-        textures->occlusion = RetrieveTexture(assetManager, occlusionTextureHandle, Renderer::GetWhiteTexture());
-    }
-
-    bool Material::IsNeedToInvalidate()
+    bool Material::IsNeedToInvalidate() const
     {
         return m_BindingSetDirty;
     }
 
-    Ref<Texture> Material::RetrieveTexture(AssetManager *assetManager, AssetHandle handle, Ref<Texture> fallback)
+    bool Material::Serialize(const ignite::Path &filepath)
     {
-        if (handle == 0)
+        Serializer sr(filepath);
+
+        sr.BeginMap();
         {
-            return fallback;
-        }
-
-        Ref<Texture> result = assetManager->GetProject()->GetAsset<Texture>(handle);
-        if (result && result->IsReady())
-        {
-            assetManager->AddAssetPin(handle, std::format("material.{}", static_cast<uint64_t>(handle)));
-            return result;
-        }
-
-        return fallback;
-    }
-
-	bool Material::Serialize(const ignite::Path &filepath)
-	{
-		Serializer sr(filepath);
-
-		sr.BeginMap();
-        {
-		    sr.BeginMap("Material"); // MATERIAL START
-		    sr.AddKeyValue("Version", Application::GetVersion());
-		    sr.AddKeyValue("Name", name);
-		    sr.AddKeyValue("Type", static_cast<int>(GetType()));
-		    sr.AddKeyValue("BaseColorTextureHandle", static_cast<uint64_t>(baseColorTextureHandle));
-		    sr.AddKeyValue("EmissiveTextureHandle", static_cast<uint64_t>(emissiveTextureHandle));
+            sr.BeginMap("Material"); // MATERIAL START
+            sr.AddKeyValue("Version", Application::GetVersion());
+            sr.AddKeyValue("Name", name);
+            sr.AddKeyValue("Type", static_cast<int>(GetType()));
+            sr.AddKeyValue("BaseColorTextureHandle", static_cast<uint64_t>(baseColorTextureHandle));
+            sr.AddKeyValue("EmissiveTextureHandle", static_cast<uint64_t>(emissiveTextureHandle));
             sr.AddKeyValue("MetallicTextureHandle", static_cast<uint64_t>(metallicTextureHandle));
             sr.AddKeyValue("RoughnessTextureHandle", static_cast<uint64_t>(roughnessTextureHandle));
-		    sr.AddKeyValue("NormalTextureHandle", static_cast<uint64_t>(normalTextureHandle));
-		    sr.AddKeyValue("OcclusionTextureHandle", static_cast<uint64_t>(occlusionTextureHandle));
+            sr.AddKeyValue("NormalTextureHandle", static_cast<uint64_t>(normalTextureHandle));
+            sr.AddKeyValue("OcclusionTextureHandle", static_cast<uint64_t>(occlusionTextureHandle));
 
-		    sr.BeginMap("GPUData");
-		    sr.AddKeyValue("BaseColorFactor", gpuData.baseColorFactor);
-		    sr.AddKeyValue("EmissiveFactor", gpuData.emissiveFactor);
-		    sr.AddKeyValue("MetallicFactor", gpuData.metallicFactor);
-		    sr.AddKeyValue("RoughnessFactor", gpuData.roughnessFactor);
-		    sr.AddKeyValue("OcclusionStrength", gpuData.occlusionStrength);
+            sr.BeginMap("GPUData");
+            sr.AddKeyValue("BaseColorFactor", gpuData.baseColorFactor);
+            sr.AddKeyValue("EmissiveFactor", gpuData.emissiveFactor);
+            sr.AddKeyValue("MetallicFactor", gpuData.metallicFactor);
+            sr.AddKeyValue("RoughnessFactor", gpuData.roughnessFactor);
+            sr.AddKeyValue("OcclusionStrength", gpuData.occlusionStrength);
             sr.AddKeyValue("MetallicChannel", gpuData.metallicChannel);
             sr.AddKeyValue("RoughnessChannel", gpuData.roughnessChannel);
             sr.AddKeyValue("TilingFactorX", gpuData.tilingFactor.x);
             sr.AddKeyValue("TilingFactorY", gpuData.tilingFactor.y);
-		    sr.EndMap();
+            sr.EndMap();
 
-		    sr.EndMap(); // MATERIAL END
+            sr.EndMap(); // MATERIAL END
         }
-		sr.EndMap();
+        sr.EndMap();
 
         SetReadyFlag(true);
         SetDirtyFlag(false);
 
-		sr.Serialize(filepath);
-		return true;
-	}
+        sr.Serialize(filepath);
+        return true;
+    }
 
     Ref<Material> Material::Deserialize(const ignite::Path &filepath)
     {
@@ -258,7 +261,7 @@ namespace ignite
         return material;
     }
 
-	nvrhi::BindingLayoutDesc Material::GetBindingLayoutDesc()
+    nvrhi::BindingLayoutDesc Material::GetBindingLayoutDesc()
     {
         auto bindingLayoutDesc = nvrhi::BindingLayoutDesc()
             .setRegisterSpace(1) // set 1

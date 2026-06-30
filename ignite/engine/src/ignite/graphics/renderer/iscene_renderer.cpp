@@ -11,6 +11,9 @@
 #include "ignite/core/application.hpp"
 #include "ignite/scene/scene.hpp"
 
+#include "ignite/graphics/objects/environment.hpp"
+#include "ignite/scene/component.hpp"
+
 #include <array>
 
 namespace ignite
@@ -90,6 +93,18 @@ namespace ignite
 		}
 	}
 
+	void ISceneRenderer::ClearPinnedAssets()
+	{
+        if (m_PinnedAssetHandles.empty())
+            return;
+
+		for (const AssetHandle handle : m_PinnedAssetHandles)
+		{
+			AssetManager::GetInstance()->RemoveAssetPin(handle, BuildAssetPinName(handle));
+		}
+		m_PinnedAssetHandles.clear();
+	}
+
 	ISceneRenderer::~ISceneRenderer()
     {
         GPUUploadSync::DeviceWaitIdle(m_Device);
@@ -102,7 +117,6 @@ namespace ignite
 
         if (m_Renderer2D)
         {
-            m_Renderer2D->ClearAssetResolveCache();
             m_Renderer2D->InvalidatePreRenderCache();
         }
 
@@ -118,6 +132,8 @@ namespace ignite
         {
             CSMPerCascadeBuffer = nullptr;
         }
+
+        LOG_ASSERT(m_PinnedAssetHandles.empty(), "[Scene Renderer] Please release all the Pinned asset!");
     }
 
     void ISceneRenderer::ResizeFramebuffer(uint32_t width, uint32_t height)

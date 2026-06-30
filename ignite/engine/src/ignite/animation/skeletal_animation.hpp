@@ -44,7 +44,7 @@ namespace ignite
         static Ref<SkeletalAnimation> Deserialize(const ignite::Path &filepath);
 
         void SetSkeletonHandle(UUID skeletonHandle);
-        UUID GetSkeletonHandle() { return m_SkeletonHandle; }
+        UUID GetSkeletonHandle() const { return m_SkeletonHandle; }
 
         static AssetType GetStaticType() { return AssetType::SkeletalAnimation; }
         virtual AssetType GetAssetType() override { return GetStaticType(); }

@@ -498,6 +498,7 @@ namespace ignite
                     AppendRaw(buffer, vertex.tangent);
                     AppendRaw(buffer, vertex.bitangent);
                     AppendRaw(buffer, vertex.uv);
+                    AppendRaw(buffer, vertex.color);
                     AppendRaw(buffer, vertex.boneIDs);
                     AppendRaw(buffer, vertex.weights);
                 }
@@ -574,6 +575,7 @@ namespace ignite
                     ReadRaw(inFile, &vertex.tangent);
                     ReadRaw(inFile, &vertex.bitangent);
                     ReadRaw(inFile, &vertex.uv);
+                    ReadRaw(inFile, &vertex.color);
                     ReadRaw(inFile, &vertex.boneIDs);
                     ReadRaw(inFile, &vertex.weights);
                     primitive->vertices.push_back(vertex);
@@ -991,6 +993,7 @@ namespace ignite
                 skeleton->sockets.push_back(std::move(socket));
             }
 
+            skeleton->UpdateGlobalTransforms();
             inFile.close();
 
             return skeleton;

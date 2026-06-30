@@ -14,17 +14,22 @@
 #include "ignite/animation/skeleton.hpp"
 #include "ignite/physics/2d/physics_2d_component.hpp"
 #include "ignite/core/application.hpp"
-#include "ignite/graphics/font.hpp"
-#include "ignite/graphics/objects/shadow_map.hpp"
-#include "ignite/project/project.hpp"
 #include "ignite/core/profiler/profiler.hpp"
+#include "ignite/core/input/input_system.hpp"
+#include "ignite/core/signal_bus.hpp"
+#include "ignite/core/input/asset_signal.hpp"
+#include "ignite/project/project.hpp"
+
+#include "ignite/graphics/font.hpp"
 #include "ignite/graphics/gpu_upload_sync.hpp"
 #include "ignite/graphics/renderer.hpp"
 #include "ignite/graphics/ui/widget.hpp"
 #include "ignite/graphics/ui/widget_renderer.hpp"
-#include "ignite/core/input/input_system.hpp"
-#include "ignite/core/signal_bus.hpp"
-#include "ignite/core/input/asset_signal.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
+#include "ignite/graphics/objects/material.hpp"
+#include "ignite/graphics/objects/material_2d.hpp"
+#include "ignite/graphics/objects/shadow_map.hpp"
+#include "ignite/graphics/texture.hpp"
 
 #include <ranges>
 #include <cstdlib>
@@ -126,6 +131,8 @@ namespace ignite
 
     SceneRenderer::~SceneRenderer()
     {
+		ClearPinnedAssets();
+
         m_WidgetRenderer = nullptr;
         m_WorldEnvironment = nullptr;
 
@@ -137,59 +144,7 @@ namespace ignite
         m_DebugGridBindingSetCache.clear();
         m_CSMBindingSetCache.clear();
 
-        Clear3DAssetResolveCache();
-    }
-
-    Ref<Mesh> SceneRenderer::ResolveMesh(Project *project, AssetHandle handle)
-    {
-        if (!project || handle == AssetHandle(0))
-        {
-            return nullptr;
-        }
-
-        AssetResolveKey key{ project, handle };
-        auto it = m_MeshResolveCache.find(key);
-        if (it != m_MeshResolveCache.end())
-        {
-            return it->second;
-        }
-
-        Ref<Mesh> mesh = project->GetAsset<Mesh>(handle);
-        if (mesh)
-        {
-            m_MeshResolveCache.emplace(key, mesh);
-        }
-
-        return mesh;
-    }
-
-    Ref<Material> SceneRenderer::ResolveMaterial(Project *project, AssetHandle handle)
-    {
-        if (!project || handle == AssetHandle(0))
-        {
-            return nullptr;
-        }
-
-        AssetResolveKey key{ project, handle };
-        auto it = m_MaterialResolveCache.find(key);
-        if (it != m_MaterialResolveCache.end())
-        {
-            return it->second;
-        }
-
-        Ref<Material> material = project->GetAsset<Material>(handle);
-        if (material)
-        {
-            m_MaterialResolveCache.emplace(key, material);
-        }
-
-        return material;
-    }
-
-    void SceneRenderer::Clear3DAssetResolveCache()
-    {
-        m_MeshResolveCache.clear();
-        m_MaterialResolveCache.clear();
+        m_ResolvedAssetsCache.clear();
     }
 
     void SceneRenderer::SetActiveScene(const Ref<Scene> &scene)
@@ -213,21 +168,14 @@ namespace ignite
             m_WorldEnvironment = nullptr;
         }
 
+		ClearPinnedAssets();
+
         m_SelectedEntities.clear();
         m_Has2DPreRenderCache = false;
-        Clear3DAssetResolveCache();
+
+        m_ResolvedAssetsCache.clear();
 
         m_Scene = scene;
-        if (m_Scene)
-        {
-            m_Project = m_Scene->GetProject();
-
-            if (m_WidgetRenderer)
-            {
-                m_WidgetRenderer->SetProject(m_Project);
-            }
-        }
-
         m_GeometryPSOCache.clear();
         m_EnvironmentPSOCache.clear();
         m_CompositePSOCache.clear();
@@ -238,7 +186,6 @@ namespace ignite
 
         if (m_Renderer2D)
         {
-            m_Renderer2D->ClearAssetResolveCache();
             m_Renderer2D->InvalidatePreRenderCache();
         }
 
@@ -246,31 +193,12 @@ namespace ignite
         {
             m_Scene->SetSceneRenderer(this);
         }
-
-        {
-            nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
-            nvrhi::CommandListHandle cmd = device->createCommandList();
-            cmd->open();
-
-            // Load icons
-            TextureCreateInfo createInfo;
-            createInfo.mipLevels = 1;
-            createInfo.samplerLinearFiltering = false;
-            createInfo.format = nvrhi::Format::RGBA8_UNORM;
-            createInfo.initialState = nvrhi::ResourceStates::ShaderResource;
-            createInfo.keepInitialState = true;
-
-            m_Icons["camera"] = Texture::Create("resources/ui/world/ic_world_camera.png", createInfo, cmd);
-            m_Icons["lighting"] = Texture::Create("resources/ui/world/ic_world_lighting.png", createInfo, cmd);
-
-            cmd->close();
-            device->executeCommandList(cmd);
-        }
     }
 
     void SceneRenderer::BeginFrame()
     {
         m_Has2DPreRenderCache = false;
+        m_SkeletonBuffersUploadedThisFrame = false;
         if (m_Renderer2D)
         {
             m_Renderer2D->InvalidatePreRenderCache();
@@ -343,8 +271,6 @@ namespace ignite
 			ColorPass(cmd, camera, framebuffer);
 
 			UIPass(cmd, m_WidgetRT->GetFramebuffer());
-
-			DrawIcons(cmd, framebuffer, camera);
 
             if (camera->projectionType == ProjectionType::Orthographic)
             {
@@ -667,6 +593,8 @@ namespace ignite
             csmState.framebuffer = csmFramebuffer;
             csmState.viewport = nvrhi::ViewportState().addViewportAndScissorRect(viewport);
 
+            Frustum cascadeFrustum(cascadeGpuData.lightViewProj[i]);
+
             {
                 IGN_PROFILE_SCOPE("SceneRenderer::MeshesShadow");
                 auto skelMeshView = m_Scene->registry->view<TransformComponent, MeshComponent>();
@@ -680,8 +608,13 @@ namespace ignite
                     if (smc.handle == AssetHandle(0))
                         continue;
 
-                    Ref<Mesh> sm = ResolveMesh(m_Project, smc.handle);
+                    Ref<Mesh> sm = ResolveAsset<Mesh>(smc.handle);
                     if (!sm)
+                        continue;
+
+                    // Perform cascade frustum culling
+                    AABB worldAABB = sm->aabb.Transform(tr.world.GetMatrix());
+                    if (!cascadeFrustum.IsAABBVisible(worldAABB.min, worldAABB.max))
                         continue;
 
                     // Per-entity GPU-ready bone transforms written by Scene::UpdateAnimations
@@ -746,7 +679,7 @@ namespace ignite
                                 }
                             }
 
-                            gpuData.transformation = smc.worldMatrix * meshTransform;
+                            gpuData.transformation = tr.world.GetMatrix() * meshTransform;
                             gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
                             gpuData.normal = smc.normalMatrix;
                         }
@@ -772,6 +705,68 @@ namespace ignite
                             cmd->drawIndexed(args);
                         }
                     }
+
+                    // --- SOCKET SYSTEM: Render attached meshes for Shadows ---
+                    if (sm && sm->GetSkeletonHandle() != AssetHandle(0))
+                    {
+                        Ref<Skeleton> skeleton = ResolveAsset<Skeleton>(sm->GetSkeletonHandle());
+                        if (skeleton)
+                        {
+                            for (const auto &[socketName, attachedMeshHandle] : smc.socketAttachments)
+                            {
+                                if (attachedMeshHandle == AssetHandle(0))
+                                    continue;
+
+                                Ref<Mesh> attachedMesh = ResolveAsset<Mesh>(attachedMeshHandle);
+                                if (!attachedMesh)
+                                    continue;
+
+                                glm::mat4 socketWorld = smc.GetSocketWorldTransform(tr.world.GetMatrix(), *skeleton, socketName);
+                                glm::mat4 normalMatrix = glm::transpose(glm::inverse(glm::mat3(socketWorld)));
+
+                                const auto &attInstances = attachedMesh->GetMeshInstances();
+                                for (size_t idx = 0; idx < attInstances.size(); ++idx)
+                                {
+                                    auto &meshInstance = attInstances[idx];
+                                    auto &primitive = meshInstance->GetPrimitive();
+                                    const bool buffersCreated = primitive->vertexBuffer && primitive->indexBuffer;
+                                    if (!buffersCreated)
+                                    {
+                                        primitive->WriteBuffer(cmd);
+                                    }
+                                    if (!primitive->vertexBuffer || !primitive->indexBuffer)
+                                    {
+                                        continue;
+                                    }
+
+                                    meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CSMPerCascadeBuffers[i], nullptr);
+
+                                    SkinnedMeshBufferData gpuData;
+                                    gpuData.transformation = socketWorld * meshInstance->global;
+                                    gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                                    gpuData.normal = normalMatrix;
+
+                                    meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
+
+                                    nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
+                                    if (meshBindingSet)
+                                    {
+                                        csmState.bindings = { meshBindingSet };
+                                        csmState.vertexBuffers.resize(0);
+                                        csmState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
+                                        csmState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+
+                                        cmd->setGraphicsState(csmState);
+
+                                        nvrhi::DrawArguments args;
+                                        args.setVertexCount(primitive->indexBuffer->GetCount());
+                                        args.instanceCount = 1;
+                                        cmd->drawIndexed(args);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -781,7 +776,8 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        Project *project = m_Scene ? m_Scene->GetProject() : nullptr;
+        Frustum frustum(camera->GetProjection() * camera->GetView());
+
         std::unordered_set<Material *> uploadedMaterialsThisPass;
         Ref<GraphicsPipeline> geomPSO = GetGeomPipelineForFB(framebuffer, m_FillMode);
         Ref<GraphicsPipeline> transparentPSO = GetTransparentGeomPipelineForFB(framebuffer, m_FillMode);
@@ -814,15 +810,16 @@ namespace ignite
 
                 MeshComponent &smc = m_Scene->registry->get<MeshComponent>(e);
                 if (smc.handle == AssetHandle(0))
-                {
                     continue;
-                }
 
-                Ref<Mesh> sm = ResolveMesh(project, smc.handle);
-                if (!sm)
-                {
+                Ref<Mesh> mesh = ResolveAsset<Mesh>(smc.handle);
+                if (!mesh)
                     continue;
-                }
+
+                // Perform Frustum Culling
+                AABB worldAABB = mesh->aabb.Transform(tr.world.GetMatrix());
+                if (!frustum.IsAABBVisible(worldAABB.min, worldAABB.max))
+                    continue;
 
                 // Per-entity GPU-ready bone transforms written by Scene::UpdateAnimations
                 const std::vector<glm::mat4> &boneTransforms = smc.finalBoneTransforms;
@@ -845,7 +842,7 @@ namespace ignite
                     smc.skeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
                 }
 
-                const auto &instances = sm->GetMeshInstances();
+                const auto &instances = mesh->GetMeshInstances();
                 for (size_t idx = 0; idx < instances.size(); ++idx)
                 {
                     auto &meshInstance = instances[idx];
@@ -868,14 +865,12 @@ namespace ignite
                                 meshTransform = boneTransforms[ji] * meshTransform;
                             }
                         }
-                        gpuData.transformation = smc.worldMatrix * meshTransform;
+                        gpuData.transformation = tr.world.GetMatrix() * meshTransform;
                         gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
                         gpuData.normal = smc.normalMatrix;
                     }
 
                     meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
-
-                    nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
 
                     auto &primitive = meshInstance->GetPrimitive();
                     if (!primitive->vertexBuffer || !primitive->indexBuffer)
@@ -885,43 +880,34 @@ namespace ignite
 
                     Ref<Material> material = nullptr;
                     auto overrideIt = smc.overrideMaterials.find(static_cast<int>(idx));
+
                     if (overrideIt != smc.overrideMaterials.end() && overrideIt->second != AssetHandle(0))
-                    {
-                        material = ResolveMaterial(project, overrideIt->second);
-                    }
+                        material = ResolveAsset<Material>(overrideIt->second);
                     if (!material)
-                    {
-                        material = ResolveMaterial(project, meshInstance->GetMaterialHandle());
-                    }
+                        material = ResolveAsset<Material>(meshInstance->GetMaterialHandle());
+
                     if (!material)
                         continue;
 
-                    if (!material->GetBindingSet())
-                    {
-                        MaterialTextures textures;
-                        auto assetManager = m_Scene->GetProject()->GetAssetManager();
-                        material->RetrieveTextures(assetManager, &textures);
-                        material->UpdateBindingSet(&textures, assetManager, GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture());
+                    if (!material->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture()))
+                        continue;
 
-                        if (!material->GetBindingSet())
-                        {
-                            continue;
-                        }
-                    }
+					const nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
+                    const nvrhi::BindingSetHandle materialBindingSet = material ? material->GetBindingSet() : nullptr;
 
-                    if (uploadedMaterialsThisPass.insert(material.get()).second)
+                    if (meshBindingSet && materialBindingSet && primitive->vertexBuffer && primitive->indexBuffer)
                     {
-                        material->UploadToGpu(cmd);
-                    }
+						if (uploadedMaterialsThisPass.insert(material.get()).second)
+						{
+							material->UploadToGpu(cmd);
+						}
 
-                    if (meshBindingSet && material->GetBindingSet() && primitive->vertexBuffer && primitive->indexBuffer)
-                    {
                         // Transparent materials are deferred to the transparent sub-pass
                         if (material->GetType() == MaterialType::Transparent)
                         {
                             TransparentDrawCall dc;
                             dc.meshBindingSet = meshBindingSet;
-                            dc.materialBindingSet = material->GetBindingSet();
+                            dc.materialBindingSet = materialBindingSet;
                             dc.vertexBuffer = primitive->vertexBuffer->GetHandle();
                             dc.indexBuffer = primitive->indexBuffer->GetHandle();
                             dc.indexCount = primitive->indexBuffer->GetCount();
@@ -934,7 +920,7 @@ namespace ignite
                         else
                         {
                             // Opaque: draw immediately
-                            geomGState.bindings = { meshBindingSet, material->GetBindingSet() };
+                            geomGState.bindings = { meshBindingSet, materialBindingSet };
                             geomGState.vertexBuffers.resize(0);
                             geomGState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
                             geomGState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
@@ -949,6 +935,95 @@ namespace ignite
                         }
                     }
                 }
+
+                // --- SOCKET SYSTEM: Render attached meshes ---
+                if (mesh && mesh->GetSkeletonHandle() != AssetHandle(0))
+                {
+                    Ref<Skeleton> skeleton = ResolveAsset<Skeleton>(mesh->GetSkeletonHandle());
+                    if (skeleton)
+                    {
+                        for (const auto &[socketName, attachedMeshHandle] : smc.socketAttachments)
+                        {
+                            if (attachedMeshHandle == AssetHandle(0))
+                                continue;
+
+                            Ref<Mesh> attachedMesh = ResolveAsset<Mesh>(attachedMeshHandle);
+                            if (!attachedMesh)
+                                continue;
+
+                            glm::mat4 socketWorld = smc.GetSocketWorldTransform(tr.world.GetMatrix(), *skeleton, socketName);
+                            glm::mat4 normalMatrix = glm::transpose(glm::inverse(glm::mat3(socketWorld)));
+
+                            const auto &attInstances = attachedMesh->GetMeshInstances();
+                            for (size_t idx = 0; idx < attInstances.size(); ++idx)
+                            {
+                                auto &meshInstance = attInstances[idx];
+                                auto &primitive = meshInstance->GetPrimitive();
+                                const bool buffersCreated = primitive->vertexBuffer && primitive->indexBuffer;
+                                if (!buffersCreated)
+                                    primitive->WriteBuffer(cmd);
+
+                                if (!primitive->vertexBuffer || !primitive->indexBuffer)
+                                    continue;
+
+                                // Sockets are drawn as static submeshes attached to bones (skeletonGpuBuffer = nullptr)
+                                meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, nullptr);
+
+                                SkinnedMeshBufferData gpuData;
+                                gpuData.transformation = socketWorld * meshInstance->global;
+                                gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
+                                gpuData.normal = normalMatrix;
+
+                                meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
+
+                                Ref<Material> material = ResolveAsset<Material>(meshInstance->GetMaterialHandle());
+                                if (!material)
+                                    continue;
+
+                                if (!material->UpdateBindingSet(GetEnvironmentMapColorTexture(), GetCascadedShadowMapDepthTexture()))
+                                    continue;
+
+                                const nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
+                                const nvrhi::BindingSetHandle materialBindingSet = material->GetBindingSet();
+
+                                if (meshBindingSet && materialBindingSet)
+                                {
+                                    if (uploadedMaterialsThisPass.insert(material.get()).second)
+                                    {
+                                        material->UploadToGpu(cmd);
+                                    }
+
+                                    if (material->GetType() == MaterialType::Transparent)
+                                    {
+                                        TransparentDrawCall dc;
+                                        dc.meshBindingSet = meshBindingSet;
+                                        dc.materialBindingSet = materialBindingSet;
+                                        dc.vertexBuffer = primitive->vertexBuffer->GetHandle();
+                                        dc.indexBuffer = primitive->indexBuffer->GetHandle();
+                                        dc.indexCount = primitive->indexBuffer->GetCount();
+                                        dc.distanceToCamera = glm::length(camera->position - glm::vec3(gpuData.transformation[3]));
+                                        transparentDrawCalls.push_back(dc);
+                                    }
+                                    else
+                                    {
+                                        geomGState.bindings = { meshBindingSet, materialBindingSet };
+                                        geomGState.vertexBuffers.resize(0);
+                                        geomGState.vertexBuffers.push_back({ primitive->vertexBuffer->GetHandle(), 0, 0 });
+                                        geomGState.setIndexBuffer({ primitive->indexBuffer->GetHandle(), nvrhi::Format::R32_UINT });
+
+                                        cmd->setGraphicsState(geomGState);
+
+                                        nvrhi::DrawArguments args;
+                                        args.setVertexCount(primitive->indexBuffer->GetCount());
+                                        args.instanceCount = 1;
+
+                                        cmd->drawIndexed(args);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -959,10 +1034,10 @@ namespace ignite
 
             // Sort back-to-front (farthest first)
             std::sort(transparentDrawCalls.begin(), transparentDrawCalls.end(),
-                [](const TransparentDrawCall &a, const TransparentDrawCall &b)
-                {
-                    return a.distanceToCamera > b.distanceToCamera;
-                });
+            [](const TransparentDrawCall &a, const TransparentDrawCall &b)
+            {
+                return a.distanceToCamera > b.distanceToCamera;
+            });
 
             nvrhi::GraphicsState transparentGState = nvrhi::GraphicsState();
             transparentGState.pipeline = transparentPSO->GetHandle();
@@ -1060,19 +1135,21 @@ namespace ignite
                     }
 
                     // Find material if available (use frame cache — avoids repeated AssetManager map lookups)
-                    Ref<Material2D> mat2d = m_Renderer2D->ResolveMaterial2D(project, sprite.materialHandle);
+                    Ref<Material2D> mat2d = ResolveAsset<Material2D>(sprite.materialHandle);
 
                     // Render with Material2D
                     if (mat2d)
                     {
-                        Ref<Texture> texture = m_Renderer2D->ResolveTexture(project, mat2d->textureHandle);
-                        m_Renderer2D->DrawQuad(tr.world.GetMatrix(), mat2d->data.baseColor, mat2d->data.additiveColor,
-                            mat2d->data.type, texture, uv0, uv1, mat2d->data.tilingFactor, objectID);
+                        Ref<Texture> texture = ResolveAsset<Texture>(mat2d->textureHandle);
+                        m_Renderer2D->DrawQuad(tr.world.GetMatrix(), mat2d->data.baseColor,
+                            mat2d->data.additiveColor, mat2d->data.type, texture, uv0, uv1,
+                            mat2d->data.tilingFactor, objectID);
                     }
                     else // Render with default
                     {
-                        Ref<Texture> texture = m_Renderer2D->ResolveTexture(project, sprite.handle);
-                        m_Renderer2D->DrawQuad(tr.world.GetMatrix(), sprite.color, texture, uv0, uv1, sprite.tilingFactor, objectID);
+                        Ref<Texture> texture = ResolveAsset<Texture>(sprite.handle);
+                        m_Renderer2D->DrawQuad(tr.world.GetMatrix(), sprite.color, 
+                            texture, uv0, uv1, sprite.tilingFactor, objectID);
                     }
 
                 }
@@ -1111,7 +1188,8 @@ namespace ignite
                         }
                     }
 
-                    m_Renderer2D->DrawString(text.text, font, textColor, tr.world.GetMatrix(), text.kerning, text.lineSpacing, objectID);
+                    m_Renderer2D->DrawString(text.text, font, textColor, tr.world.GetMatrix(),
+                        text.kerning, text.lineSpacing, objectID);
                 }
             }
 
@@ -1126,11 +1204,14 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
 
-        if (!m_WidgetRenderer || !m_Scene || !m_Scene->registry || !m_Project || !framebuffer)
+        if (!m_WidgetRenderer || !m_Scene || !m_Scene->registry || !framebuffer)
             return;
 
         // Set root widget
         auto rootWidget = m_Scene->GetRootWidget();
+        if (!rootWidget)
+            return;
+
         m_WidgetRenderer->SetActiveWidget(rootWidget);
 
         const nvrhi::Viewport viewport = framebuffer->getFramebufferInfo().getViewport();
@@ -1208,14 +1289,11 @@ namespace ignite
             glm::max(style.cellSize, 0.0001f),
             glm::max(style.minPixelsBetweenCells, 0.1f),
             glm::max(style.gridSize, 1.0f),
-            glm::max(style.majorLineScale, 1.0f)
-        );
-        gpuData.settings1 = glm::vec4(
-            is2D ? 1.0f : 0.0f,
+            glm::max(style.majorLineScale, 1.0f));
+        gpuData.settings1 = glm::vec4(is2D ? 1.0f : 0.0f,
             style.enableXAxis ? 1.0f : 0.0f,
             style.enableYAxis ? 1.0f : 0.0f,
-            style.enableZAxis ? 1.0f : 0.0f
-        );
+            style.enableZAxis ? 1.0f : 0.0f);
 
         m_DebugGridBuffer->SetData(cmd, Buffer(&gpuData, sizeof(gpuData)));
 
@@ -1493,6 +1571,11 @@ namespace ignite
     }
 
 
+	void SceneRenderer::DrawMesh(const MeshComponent &smc)
+	{
+
+	}
+
 	void SceneRenderer::CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, const PostProcessing &postProcessing, nvrhi::IFramebuffer *framebuffer,
         Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture)
     {
@@ -1543,68 +1626,6 @@ namespace ignite
         args.instanceCount = 1;
         args.vertexCount = 6;
         cmd->draw(args);
-    }
-
-    void SceneRenderer::DrawIcons(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, ICamera *camera)
-    {
-        IGN_PROFILE_FUNCTION();
-
-        m_Renderer2D->Begin(cmd);
-
-        glm::mat4 cameraView = camera ? camera->GetView() : glm::mat4(1.0f);
-        glm::mat4 billboardRotation = glm::inverse(glm::mat4(glm::mat3(cameraView)));
-
-        auto cameraViewReg = m_Scene->registry->view<TransformComponent, CameraComponent>();
-        for (entt::entity e : cameraViewReg)
-        {
-            auto &tr = m_Scene->registry->get<TransformComponent>(e);
-            if (!tr.visible)
-                continue;
-
-            const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-            const glm::mat4 world = tr.world.GetMatrix();
-            const glm::vec3 worldPos = glm::vec3(world[3]);
-
-            Ref<Texture> texture = m_Icons["camera"];
-            glm::mat4 iconTransform = glm::translate(glm::mat4(1.0f), worldPos) * billboardRotation * glm::scale(glm::mat4(1.0f), glm::vec3(1.0f));
-            m_Renderer2D->DrawQuad(iconTransform, glm::vec4(1.0f), texture, {0.0f, 1.0f }, { 1.0f, 0.0f }, glm::vec2(1.0f), objectID);
-
-            auto &cc = m_Scene->registry->get<CameraComponent>(e);
-            if (camera && cc.camera.GetAspectRatioPreset() != SceneCamera::AspectRatioPreset::Free)
-            {
-                glm::mat4 viewProj = cc.camera.GetProjection() * glm::inverse(world);
-                Frustum frustum(viewProj);
-                auto edges = frustum.GetEdges();
-                for (const auto &edge : edges)
-                {
-                    m_Renderer2D->DrawLine(edge.first, edge.second, glm::vec4(1.0f));
-                }
-            }
-        }
-
-        auto dirLight = m_Scene->registry->view<TransformComponent, DirectionalLightComponent>();
-        for (entt::entity e : dirLight)
-        {
-            TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-            if (!tr.visible)
-                continue;
-
-            auto &lc = m_Scene->registry->get<DirectionalLightComponent>(e);
-
-            const uint32_t objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-            const glm::mat4 world = tr.world.GetMatrix();
-            const glm::vec3 worldPos = glm::vec3(world[3]);
-
-            Ref<Texture> texture = m_Icons["lighting"];
-            glm::mat4 iconTransform = glm::translate(glm::mat4(1.0f), worldPos) * billboardRotation * glm::scale(glm::mat4(1.0f), glm::vec3(1.0f));
-            m_Renderer2D->DrawQuad(iconTransform, lc.color, texture, { 0.0f, 0.0f }, { 1.0f, 1.0f }, glm::vec2(1.0f), objectID);
-
-            const glm::vec3 direction = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
-            m_Renderer2D->DrawLine(worldPos, worldPos - direction * 5.0f, lc.color);
-        }
-
-        m_Renderer2D->Flush(framebuffer, m_CameraBuffer);
-        m_Renderer2D->End();
     }
 
     Ref<Texture> SceneRenderer::GetCascadedShadowMapDepthTexture() const
@@ -1978,10 +1999,17 @@ namespace ignite
 	void SceneRenderer::UploadSkeletonBuffers(nvrhi::ICommandList *cmd)
 	{
 		IGN_PROFILE_FUNCTION();
+		if (m_SkeletonBuffersUploadedThisFrame)
+		{
+			return;
+		}
+
 		if (!m_Scene || !m_Scene->registry)
 		{
 			return;
 		}
+
+		m_SkeletonBuffersUploadedThisFrame = true;
 
 		auto skelMeshView = m_Scene->registry->view<TransformComponent, MeshComponent>();
 		for (entt::entity e : skelMeshView)
@@ -2017,7 +2045,7 @@ namespace ignite
 			}
 			smc.skeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
 
-			Ref<Mesh> sm = ResolveMesh(m_Project, smc.handle);
+			Ref<Mesh> sm = ResolveAsset<Mesh>(smc.handle);
 			if (sm)
 			{
 				const auto &instances = sm->GetMeshInstances();
@@ -2038,11 +2066,24 @@ namespace ignite
 						}
 					}
 
-					gpuData.transformation = smc.worldMatrix * meshTransform;
+					gpuData.transformation = tr.world.GetMatrix() * meshTransform;
 					gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
 					gpuData.normal = smc.normalMatrix;
 				}
 			}
 		}
+	}
+
+	void SceneRenderer::AddAssetPin(AssetHandle handle)
+	{
+		m_PinnedAssetHandles.push_back(handle);
+
+		const auto assetPinName = BuildAssetPinName(handle);
+		AssetManager::GetInstance()->AddAssetPin(handle, assetPinName);
+	}
+
+	std::string_view SceneRenderer::BuildAssetPinName(AssetHandle handle)
+	{
+		return std::format("scene_renderer_", (uint64_t)handle);
 	}
 }

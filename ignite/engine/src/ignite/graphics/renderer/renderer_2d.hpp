@@ -129,10 +129,6 @@ namespace ignite
 
         void DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing, uint32_t objectID = 0xFFFFFFFFu);
 
-        Ref<Texture> ResolveTexture(Project *project, AssetHandle handle);
-        Ref<Material2D> ResolveMaterial2D(Project *project, AssetHandle handle);
-        void ClearAssetResolveCache();
-
         void BuildPreRenderCache();
         bool ReplayPreRenderCache(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const Ref<ConstantBuffer> &cameraBuffer);
         void InvalidatePreRenderCache();
@@ -170,9 +166,6 @@ namespace ignite
 
         Ref<ConstantBuffer> m_Material2DLightingBuffer;
         Ref<Material2DLighting_GPUData> m_Material2DLightingData;
-
-        std::unordered_map<AssetResolveKey, Ref<Texture>, AssetResolveKeyHash> m_TextureResolveCache;
-        std::unordered_map<AssetResolveKey, Ref<Material2D>, AssetResolveKeyHash> m_Material2DResolveCache;
 
 		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_LinePSOCache;
 		std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_QuadPSOCache;

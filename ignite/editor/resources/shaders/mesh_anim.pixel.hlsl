@@ -103,6 +103,7 @@ struct PSInput
     float3 bitangent : BITANGENT;
     float3 worldPos  : WORLDPOS;
     float2 uv        : TEXCOORD;
+    float4 color     : COLOR;
 };
 
 struct PSOutput
@@ -215,7 +216,7 @@ PSOutput main(PSInput input)
     float roughness = clamp(SelectChannel(roughnessColor, material.roughnessChannel) * material.roughnessFactor, 0.0f, 1.0f);
 
     // Sample base color with alpha for transparency support
-    float4 baseColorSample = baseColorTexture.Sample(sampler0, tiledUV);
+    float4 baseColorSample = baseColorTexture.Sample(sampler0, tiledUV) * input.color;
     float finalAlpha = baseColorSample.a * material.baseColorFactor.a;
 
     // Discard nearly transparent fragments in transparent mode

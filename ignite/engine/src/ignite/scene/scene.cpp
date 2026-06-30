@@ -615,16 +615,16 @@ namespace ignite
         for (auto ent : skeletalMeshView)
         {
             TransformComponent &tr = skeletalMeshView.get<TransformComponent>(ent);
-            MeshComponent &sm = skeletalMeshView.get<MeshComponent>(ent);
-            if (!tr.visible || sm.handle == AssetHandle(0))
+            MeshComponent &smc = skeletalMeshView.get<MeshComponent>(ent);
+            if (!tr.visible || smc.handle == AssetHandle(0))
                 continue;
 
-            Ref<Mesh> mesh = m_AssetManager->GetAsset<Mesh>(sm.handle);
+            Ref<Mesh> mesh = m_AssetManager->GetAsset<Mesh>(smc.handle);
             if (!mesh)
                 continue;
 
-            sm.worldMatrix = tr.world.GetMatrix();
-            sm.normalMatrix = glm::transpose(glm::inverse(glm::mat3(sm.worldMatrix)));
+            const auto worldMatrix = tr.world.GetMatrix();
+            smc.normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldMatrix)));
 
             if (mesh)
             {
@@ -642,55 +642,54 @@ namespace ignite
                     { localAabb.max.x, localAabb.max.y, localAabb.max.z },
                 };
 
-                sm.worldAABB.min = glm::vec3(std::numeric_limits<float>::max());
-                sm.worldAABB.max = glm::vec3(std::numeric_limits<float>::lowest());
+                smc.worldAABB.min = glm::vec3(std::numeric_limits<float>::max());
+                smc.worldAABB.max = glm::vec3(std::numeric_limits<float>::lowest());
 
-                const glm::mat4 &worldMat = sm.worldMatrix;
                 for (const glm::vec3 &corner : corners)
                 {
-                    const glm::vec4 wc = worldMat * glm::vec4(corner, 1.0f);
-                    sm.worldAABB.min = glm::min(sm.worldAABB.min, glm::vec3(wc));
-                    sm.worldAABB.max = glm::max(sm.worldAABB.max, glm::vec3(wc));
+                    const glm::vec4 wc = worldMatrix * glm::vec4(corner, 1.0f);
+                    smc.worldAABB.min = glm::min(smc.worldAABB.min, glm::vec3(wc));
+                    smc.worldAABB.max = glm::max(smc.worldAABB.max, glm::vec3(wc));
                 }
             }
 
-            AssetHandle sourceAnimatorHandle = ResolveMeshAnimatorSourceHandle(sm, mesh);
+            AssetHandle sourceAnimatorHandle = ResolveMeshAnimatorSourceHandle(smc, mesh);
             if (sourceAnimatorHandle == AssetHandle(0))
             {
-                sm.runtimeAnimatorInstance.reset();
-                sm.runtimeParams.clear();
-                sm.skeletonGpuBuffer.reset();
-                sm.finalBoneTransforms.clear();
-                ResetMeshAnimatorRuntime(sm);
+                smc.runtimeAnimatorInstance.reset();
+                smc.runtimeParams.clear();
+                smc.skeletonGpuBuffer.reset();
+                smc.finalBoneTransforms.clear();
+                ResetMeshAnimatorRuntime(smc);
                 continue;
             }
 
-            sm.runtimeAnimatorHandle = sourceAnimatorHandle;
+            smc.runtimeAnimatorHandle = sourceAnimatorHandle;
 
             Ref<AnimatorController> animController = nullptr;
             AnimatorControllerRuntime *sharedRuntime = nullptr;
 
-            if (sm.uniqueAnimator)
+            if (smc.uniqueAnimator)
             {
-                if (!sm.runtimeAnimatorInstance)
+                if (!smc.runtimeAnimatorInstance)
                 {
                     Ref<AnimatorController> sourceController = m_AssetManager->GetAsset<AnimatorController>(sourceAnimatorHandle);
                     if (sourceController)
                     {
-                        sm.runtimeAnimatorInstance = CloneAnimatorController(sourceController);
-                        if (sm.runtimeAnimatorInstance)
+                        smc.runtimeAnimatorInstance = CloneAnimatorController(sourceController);
+                        if (smc.runtimeAnimatorInstance)
                         {
-                            sm.runtimeParams.clear();
-                            ResetMeshAnimatorRuntime(sm);
+                            smc.runtimeParams.clear();
+                            ResetMeshAnimatorRuntime(smc);
                         }
                     }
                 }
 
-                animController = sm.runtimeAnimatorInstance;
+                animController = smc.runtimeAnimatorInstance;
             }
             else
             {
-                sm.runtimeAnimatorInstance.reset();
+                smc.runtimeAnimatorInstance.reset();
 
                 auto sharedIt = m_SharedAnimatorCache.find(sourceAnimatorHandle);
                 if (sharedIt == m_SharedAnimatorCache.end())
@@ -706,19 +705,19 @@ namespace ignite
                 animController = sharedIt->second;
                 sharedRuntime = &m_SharedAnimatorRuntime[sourceAnimatorHandle];
 
-                if (sharedRuntime->currentStateName.empty() && !sm.currentStateName.empty())
+                if (sharedRuntime->currentStateName.empty() && !smc.currentStateName.empty())
                 {
-                    sharedRuntime->currentStateName = sm.currentStateName;
-                    sharedRuntime->stateElapsed = sm.stateElapsed;
-                    sharedRuntime->stateNormalized = sm.stateNormalized;
+                    sharedRuntime->currentStateName = smc.currentStateName;
+                    sharedRuntime->stateElapsed = smc.stateElapsed;
+                    sharedRuntime->stateNormalized = smc.stateNormalized;
                 }
             }
 
             if (!animController)
                 continue;
 
-            SyncMeshAnimatorParams(sm, *animController);
-            ApplyMeshRuntimeParamsToController(sm, *animController);
+            SyncMeshAnimatorParams(smc, *animController);
+            ApplyMeshRuntimeParamsToController(smc, *animController);
 
             if (sharedRuntime)
             {
@@ -735,25 +734,41 @@ namespace ignite
 
                 if (!sharedRuntime->finalTransforms.empty())
                 {
-                    sm.finalBoneTransforms = sharedRuntime->finalTransforms;
-                    sm.currentStateName = sharedRuntime->currentStateName;
-                    sm.stateElapsed = sharedRuntime->stateElapsed;
-                    sm.stateNormalized = sharedRuntime->stateNormalized;
+                    smc.finalBoneTransforms = sharedRuntime->finalTransforms;
+                    
+					// ==== Socket system: Cache global joint transforms ====
+					smc.globalJointTransforms.resize(sharedRuntime->globalPoses.size());
+					for (size_t i = 0; i < sharedRuntime->globalPoses.size(); ++i)
+					{
+						smc.globalJointTransforms[i] = sharedRuntime->globalPoses[i].GetMatrix();
+					}
+
+                    smc.currentStateName = sharedRuntime->currentStateName;
+                    smc.stateElapsed = sharedRuntime->stateElapsed;
+                    smc.stateNormalized = sharedRuntime->stateNormalized;
                 }
             }
             else
             {
                 AnimatorControllerRuntime runtime;
-                runtime.currentStateName = sm.currentStateName;
-                runtime.stateElapsed = sm.stateElapsed;
-                runtime.stateNormalized = sm.stateNormalized;
+                runtime.currentStateName = smc.currentStateName;
+                runtime.stateElapsed = smc.stateElapsed;
+                runtime.stateNormalized = smc.stateNormalized;
 
                 if (animController->UpdateSkeleton(deltaTime, runtime, m_AssetManager))
                 {
-                    sm.finalBoneTransforms = std::move(runtime.finalTransforms);
-                    sm.currentStateName = runtime.currentStateName;
-                    sm.stateElapsed = runtime.stateElapsed;
-                    sm.stateNormalized = runtime.stateNormalized;
+                    smc.finalBoneTransforms = std::move(runtime.finalTransforms);
+
+					// ==== Socket system: Cache global joint transforms ====
+                    smc.globalJointTransforms.resize(runtime.globalPoses.size());
+                    for (size_t i = 0; i < runtime.globalPoses.size(); ++i)
+					{
+						smc.globalJointTransforms[i] = runtime.globalPoses[i].GetMatrix();
+					}
+
+                    smc.currentStateName = runtime.currentStateName;
+                    smc.stateElapsed = runtime.stateElapsed;
+                    smc.stateNormalized = runtime.stateNormalized;
                 }
             }
         }

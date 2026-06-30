@@ -744,11 +744,6 @@ namespace ignite
         (void)deltaTime;
         BuildRenderLayers();
 
-        if (!m_Project || !m_ActiveWidget)
-        {
-            return;
-        }
-
         const glm::uvec2 mousePos = { m_MouseX, m_MouseY };
         const bool isMousePressed = InputSystem::IsMouseButtonPressed(Mouse::ButtonLeft);
 
@@ -770,7 +765,7 @@ namespace ignite
 
             MeasureRecursive(root->As<IWidgetItem>());
             root->Arrange(Rect(0.0f, 0.0f, static_cast<float>(m_Width), static_cast<float>(m_Height)));
-            ResolveWidgetAssetsRecursive(root->As<IWidgetItem>(), m_Project->GetAssetManager());
+            ResolveWidgetAssetsRecursive(root->As<IWidgetItem>(), AssetManager::GetInstance());
             UpdateRecursive(root->As<IWidgetItem>(), mousePos, isMousePressed);
         }
     }
@@ -922,11 +917,6 @@ namespace ignite
     void WidgetRenderer::BuildRenderLayers()
     {
         m_RenderLayers.clear();
-        if (!m_Project || !m_ActiveWidget)
-        {
-            LOG_ASSERT(m_Project, "[Widget Renderer] Project should not be null!");
-            return;
-        }
 
         std::unordered_set<uint64_t> visited;
         std::function<void(const Ref<WidgetCanvas> &, bool)> collectWidget = [&](const Ref<WidgetCanvas> &widget, bool blocksLower)
@@ -953,7 +943,7 @@ namespace ignite
                 if (!child.enabled || child.handle == AssetHandle(0))
                     continue;
 
-                Ref<WidgetCanvas> childWidget = m_Project->GetAsset<WidgetCanvas>(child.handle);
+                Ref<WidgetCanvas> childWidget = AssetManager::GetInstance()->GetAsset<WidgetCanvas>(child.handle);
                 if (!childWidget)
                     continue;
 
@@ -966,12 +956,6 @@ namespace ignite
 
     void WidgetRenderer::RenderWidgetItems()
     {
-        if (!m_Project || !m_ActiveWidget)
-        {
-            LOG_ASSERT(m_Project, "[Widget Renderer] Project should not be null!");
-            return;
-        }
-
         for (const WidgetRenderLayer &layer : m_RenderLayers)
         {
             if (!layer.widget || !layer.widget->IsEnabled())

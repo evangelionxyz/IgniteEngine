@@ -12,6 +12,7 @@
 namespace ignite
 {
     class WidgetRenderer;
+    class MeshComponent;
 
 	struct DebugGridBindingKey
 	{
@@ -108,23 +109,19 @@ namespace ignite
         const Ref<RenderTarget> &GetGameplaySceneRT() { return m_GameplaySceneRT; }
         const Ref<RenderTarget> &GetGameplayWidgetRT() { return m_GameplayWidgetRT; }
     private:
-        Ref<Mesh> ResolveMesh(Project *project, AssetHandle handle);
-        Ref<Material> ResolveMaterial(Project *project, AssetHandle handle);
-
         void UploadSkeletonBuffers(nvrhi::ICommandList *cmd);
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer);
         void UIPass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
         void CompositePass(nvrhi::ICommandList *cmd, ICamera *camera, const PostProcessing &postProcessing,  nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture = nullptr, Ref<Texture> bloomTexture = nullptr, Ref<Texture> ssaoTexture = nullptr);
 
-        void DrawIcons(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, ICamera *camera);
         void DrawDebugGrid(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, const DebugGridStyle &style, bool is2D);
         void DrawDebug2D(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
         void DrawDebug3D(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
 
+        void DrawMesh(const MeshComponent &smc);
+
     private:
-        void Clear3DAssetResolveCache();
-        
         Ref<GraphicsPipeline> GetDebugGridPipelineForFB(nvrhi::IFramebuffer *framebuffer);
         Ref<GraphicsPipeline> GetGeomPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
         Ref<GraphicsPipeline> GetTransparentGeomPipelineForFB(nvrhi::IFramebuffer *framebuffer, nvrhi::RasterFillMode fillMode);
@@ -134,6 +131,9 @@ namespace ignite
         nvrhi::BindingSetHandle GetOrCreateDebugGridBindingSet(nvrhi::IBindingLayout *bindingLayout, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &gridBuffer);
         nvrhi::BindingSetHandle GetOrCreateCompositeBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<Texture> sceneTexture, Ref<Texture> uiTexture, Ref<Texture> edgeTexture, Ref<Texture> bloomTexture, Ref<Texture> ssaoTexture, Ref<ConstantBuffer> postProcessBuffer, nvrhi::ISampler *sampler);
         nvrhi::BindingSetHandle GetOrCreateCSMBindingSet(nvrhi::IBindingLayout *bindingLayout, Ref<ConstantBuffer> skinnedMeshGPUDataBuffer, Ref<ConstantBuffer> csmGPUDataBuffer);
+        
+		virtual void AddAssetPin(AssetHandle handle) override;
+		virtual std::string_view BuildAssetPinName(AssetHandle handle) override;
 
     private:
         Ref<WidgetRenderer> m_WidgetRenderer;
@@ -151,10 +151,6 @@ namespace ignite
 
         Ref<Bloom> m_GameplayBloom;
         Ref<SSAO> m_GameplaySSAO;
-
-        std::unordered_map<std::string, Ref<Texture>> m_Icons;
-        std::unordered_map<AssetResolveKey, Ref<Mesh>, AssetResolveKeyHash> m_MeshResolveCache;
-        std::unordered_map<AssetResolveKey, Ref<Material>, AssetResolveKeyHash> m_MaterialResolveCache;
 
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_GeometryPSOCache;
         std::unordered_map<FramebufferKey, Ref<GraphicsPipeline>, FramebufferKeyHash> m_TransparentGeometryPSOCache;
@@ -176,6 +172,8 @@ namespace ignite
         uint32_t m_GameplayWidgetMouseY = 0;
         bool m_GameplayWidgetMouseHovered = false;
         bool m_UseGameplayWidgetMouseOverride = false;
+
+        bool m_SkeletonBuffersUploadedThisFrame = false;
     };
 }
 

@@ -206,57 +206,6 @@ namespace ignite
     Renderer2D::~Renderer2D()
     {
         ClearPipelineCache();
-
-        m_TextureResolveCache.clear();
-        m_Material2DResolveCache.clear();
-    }
-
-    Ref<Texture> Renderer2D::ResolveTexture(Project *project, AssetHandle handle)
-    {
-        IGN_PROFILE_FUNCTION();
-
-        if (!project || handle == AssetHandle(0))
-            return nullptr;
-
-        const AssetResolveKey key{ project, handle };
-        auto it = m_TextureResolveCache.find(key);
-        if (it != m_TextureResolveCache.end())
-            return it->second;
-
-        Ref<Texture> texture = project->GetAsset<Texture>(handle);
-        if (texture)
-        {
-            m_TextureResolveCache.emplace(key, texture);
-        }
-
-        return texture;
-    }
-
-    Ref<Material2D> Renderer2D::ResolveMaterial2D(Project *project, AssetHandle handle)
-    {
-        IGN_PROFILE_FUNCTION();
-
-        if (!project || handle == AssetHandle(0))
-            return nullptr;
-
-        const AssetResolveKey key{ project, handle };
-        auto it = m_Material2DResolveCache.find(key);
-        if (it != m_Material2DResolveCache.end())
-            return it->second;
-
-        Ref<Material2D> material = project->GetAsset<Material2D>(handle);
-        if (material)
-        {
-            m_Material2DResolveCache.emplace(key, material);
-        }
-
-        return material;
-    }
-
-    void Renderer2D::ClearAssetResolveCache()
-    {
-        m_TextureResolveCache.clear();
-        m_Material2DResolveCache.clear();
     }
 
     void Renderer2D::BuildPreRenderCache()

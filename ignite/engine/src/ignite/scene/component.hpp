@@ -6,6 +6,7 @@
 
 #include "icomponent.hpp"
 #include "ignite/animation/skeletal_animation.hpp"
+#include "ignite/animation/skeleton.hpp"
 #include "ignite/animation/animation_2d.hpp"
 #include "ignite/animation/animator/animator.hpp"
 #include "ignite/animation/animator/animator_controller_2d.hpp"
@@ -367,11 +368,11 @@ namespace ignite
         // Mesh index, Material Handle
         std::unordered_map<int, AssetHandle> overrideMaterials;
 
-        glm::mat4 worldMatrix = glm::mat4(1.0f);
         glm::mat4 normalMatrix = glm::mat4(1.0f);
 
         AABB worldAABB;
 
+        // ==== RUNTIME DATA ====
         std::string currentStateName;
         float stateElapsed = 0.0f;
         float stateNormalized = 0.0f;
@@ -382,8 +383,43 @@ namespace ignite
         std::vector<glm::mat4> finalBoneTransforms; // per-entity GPU-ready bone transforms
         std::vector<SkinnedMeshBufferData> cachedInstanceTransforms; // cached transforms per sub-mesh instance
 
+        // ==== Socket System ====
+        // Cache of animated joint transforms in model space (before inverse bind pose multiplication)
+        std::vector<glm::mat4> globalJointTransforms;
+
+        // Mapping from socket name to attached Mesh asset handle
+        std::unordered_map<std::string, AssetHandle> socketAttachments;
+
         // Enable unique for each entity
         bool uniqueAnimator = true;
+
+        glm::mat4 GetSocketWorldTransform(const glm::mat4 &meshWorldMatrix, const Skeleton &skeleton, const std::string &socketName) const
+        {
+            const auto it = skeleton.socketNameToIndex.find(socketName);
+            if (it == skeleton.socketNameToIndex.end())
+                return meshWorldMatrix;
+
+            const int32_t socketIndex = it->second;
+            if (socketIndex < 0 || socketIndex >= static_cast<int32_t>(skeleton.sockets.size()))
+                return meshWorldMatrix;
+
+            const JointSocket &socket = skeleton.sockets[socketIndex];
+            glm::mat4 socketLocal = socket.local.GetMatrix();
+
+            // If active bone global transforms exist from animation update, use them
+            if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(this->globalJointTransforms.size()))
+            {
+                return meshWorldMatrix * this->globalJointTransforms[socket.parentJointId] * socketLocal;
+            }
+
+            // Fallback: use default bind pose global transforms from skeleton
+            if (socket.parentJointId >= 0 && socket.parentJointId < static_cast<int32_t>(skeleton.joints.size()))
+            {
+                return meshWorldMatrix * skeleton.joints[socket.parentJointId].globalTransform * socketLocal;
+            }
+
+            return meshWorldMatrix * socketLocal;
+        }
 
         MeshComponent() = default;
 		COMPONENT_CLASS_TYPE(CompType_Mesh)
