@@ -22,6 +22,8 @@ namespace fbxsdk
 {
     class FbxNode;
     class FbxScene;
+    class FbxMesh;
+    class FbxAMatrix;
     class FbxSurfaceMaterial;
 }
 
@@ -103,7 +105,6 @@ namespace ignite
 
         glm::mat4 local = glm::mat4(1.0f);
         glm::mat4 global = glm::mat4(1.0f);
-
         int32_t linkedJointIndex = -1;
 
         void SetName(const std::string &name) { m_Name = name; }
@@ -194,6 +195,8 @@ namespace ignite
         std::vector<Ref<MeshInstance>> m_MeshInstances;
     };
 
+    // ==== LOADERS ====
+
     class IGN_API GLTFMeshLoader
     {
     public:
@@ -202,18 +205,17 @@ namespace ignite
         static void LoadVertexData(std::vector<VertexMesh_Anim>& vertices, const tinygltf::Primitive& primitive, const tinygltf::Model& model);
         static void LoadIndicesData(std::vector<uint32_t>& indices, const tinygltf::Primitive& primitive, const tinygltf::Model& model);
 
-        static void LoadSceneGraphFromGLTF(const std::string& filename, MeshScene &outScene);
+        static void LoadSceneGraph(const std::string& filename, MeshScene &outScene);
 
     private:
-        static std::vector<std::pair<std::string, Ref<Texture>>> LoadTexturesFromGLTF(const tinygltf::Model& model);
-        static std::vector<nvrhi::SamplerDesc> GetSamplersFromGLTF(const tinygltf::Model& model);
+        static std::vector<std::pair<std::string, Ref<Texture>>> LoadTextures(const tinygltf::Model& model);
+        static std::vector<nvrhi::SamplerDesc> GetSamplers(const tinygltf::Model& model);
         static const unsigned char* GetBufferData(const tinygltf::Model& model, const tinygltf::Accessor& accessor);
     };
 
     class IGN_API FBXMeshLoader
     {
     public:
-
         using JointMap = std::unordered_map<std::string, fbxsdk::FbxNode *>;
         using JointIdxMap = std::unordered_map<std::string, int32_t>;
 
@@ -236,18 +238,23 @@ namespace ignite
 			std::array<float, VERTEX_MAX_BONES> weights = { 0.0f, 0.0f, 0.0f, 0.0f };
 		};
 
-        static void LoadSceneGraphFromFBX(const std::string &filename, MeshScene &outScene, AssetManager *assetManager, bool importSkeletonAndAnimations = true);
-        static void LoadSkeletonOnlyFromFBX(const std::string &filename, Ref<Skeleton> &skeleton, AssetManager *assetManager);
-        static void LoadAnimationsOnlyFromFBX(const std::string &filename, Ref<Skeleton> skeleton, std::vector<Ref<SkeletalAnimation>> &outAnimations, AssetManager *assetManager);
+        static void LoadSceneGraph(const std::string &filename, MeshScene &outScene, AssetManager *assetManager, bool importSkeletonAndAnimations = true);
+        static void LoadSkeletonOnly(const std::string &filename, Ref<Skeleton> &skeleton, AssetManager *assetManager);
+        static void LoadAnimationsOnly(const std::string &filename, Ref<Skeleton> skeleton, std::vector<Ref<SkeletalAnimation>> &outAnimations, AssetManager *assetManager);
 
         static void BuildNode(fbxsdk::FbxNode *node, fbxsdk::FbxScene *fbxScene, MeshScene &outscene, MaterialLoader &materialLoader, JointLoader &jointLoader, const ignite::Path &sourceDir, int parentIdx, const glm::mat4 &parentGlobal, float scaleFactor, bool importSkinningData = true);
 
-        static Ref<Skeleton> LoadSkeletonFBX(fbxsdk::FbxScene *fbxScene, JointLoader &outJointResult, float scaleFactor);
-        static void LoadAnimationsFBX(fbxsdk::FbxScene *fbxScene, const Ref<Skeleton> &skeleton, JointMap &jointNodes, std::vector<Ref<SkeletalAnimation>> &outAnimations, float scaleFactor);
+        static Ref<Skeleton> LoadSkeleton(fbxsdk::FbxScene *fbxScene, JointLoader &outJointResult, float scaleFactor);
+        static void LoadAnimations(fbxsdk::FbxScene *fbxScene, const Ref<Skeleton> &skeleton, JointMap &jointNodes, std::vector<Ref<SkeletalAnimation>> &outAnimations, float scaleFactor);
 
     private:
         static void SkeletonBuildHierarchy(fbxsdk::FbxNode *node, const Ref<Skeleton> &skeleton, JointLoader &outJointResult, float scaleFactor);
         static int32_t SkeletonFindOrAddJoint(fbxsdk::FbxNode *jointNode, const Ref<Skeleton> &skeleton, JointLoader &outJointResult, float scaleFactor);
+
+        static void ExtractBonesAndWeights(fbxsdk::FbxMesh *fbxMesh, const MeshNode &meshNode, std::vector<FBXBoneInfluence> &controlPointInfluence, MeshScene &outScene, JointLoader &jointLoader, float scaleFactor, bool importSkinningData);
+        static void ProcessMeshGeometry(fbxsdk::FbxMesh *fbxMesh, const fbxsdk::FbxAMatrix &meshGeom, float scaleFactor, const std::vector<FBXBoneInfluence> &controlPointInfluence, bool importSkinningData, std::vector<VertexMesh_Anim> &vertices, std::vector<uint32_t> &indices);
+        static void LinkUnskinnedMeshToSkeleton(fbxsdk::FbxNode *node, const MeshNode &meshNode, Ref<MeshInstance> &meshInstance, MeshScene &outScene, fbxsdk::FbxScene *fbxScene);
+        static int ProcessMaterialAndTextures(fbxsdk::FbxNode *node, MeshScene &outScene, MaterialLoader &materialLoader, const ignite::Path &sourceDir);
     };
 
     class IGN_API MeshLoader

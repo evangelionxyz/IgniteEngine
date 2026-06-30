@@ -31,6 +31,9 @@ namespace ignite
 
 	void ICamera::UpdateProjection(uint32_t width, uint32_t height)
     {
+        if (width == 0 || height == 0)
+            return;
+
         m_ViewportSize = { width, height };
 		const float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
         

@@ -45,6 +45,7 @@ struct VSInput
     float3 tangent      : TANGENT;
     float3 bitangent    : BITANGENT;
     float2 uv           : TEXCOORD;
+    float4 color        : COLOR;
     uint4 boneIDs       : BONEIDS;
     float4 weights      : WEIGHTS;
 };
@@ -57,6 +58,7 @@ struct PSInput
     float3 bitangent    : BITANGENT;
     float3 worldPos     : WORLDPOS;
     float2 uv           : TEXCOORD;
+    float4 color        : COLOR;
 };
 
 PSInput main(VSInput input)
@@ -105,5 +107,6 @@ PSInput main(VSInput input)
     output.bitangent    = normalize(mul(N, bitangentL));
     output.worldPos     = worldPos.xyz;
     output.uv           = input.uv;
+    output.color        = input.color;
     return output;
 }

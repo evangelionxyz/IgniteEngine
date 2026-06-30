@@ -18,10 +18,13 @@
 namespace ignite
 {
     static AssetMetaData s_NullMetaData;
+    static AssetManager *s_AssetManagerInstance = nullptr;
 
     AssetManager::AssetManager(Project *project)
         : m_Project(project)
     {
+        s_AssetManagerInstance = this;
+
         // Self-register for asset change notifications via SignalBus.
         // This avoids the old pattern of manually forwarding Event& through
         // EditorLayer::OnEvent → assetManager->OnEvent(e).
@@ -88,6 +91,7 @@ namespace ignite
 
     AssetManager::~AssetManager()
     {
+
         SignalBus::Unsubscribe<AssetChangeSignal>(m_AssetChangeToken);
         m_AssetChangeToken = kInvalidSignalToken;
 
@@ -100,24 +104,32 @@ namespace ignite
             m_FbxSdkManager->Destroy();
             m_FbxSdkManager = nullptr;
         }
+
+        m_LoadedAssets.clear();
+        m_LoadingAssets.clear();
+
+        s_AssetManagerInstance = nullptr;
     }
 
-    fbxsdk::FbxManager *AssetManager::GetOrCreateFbxSdkManager()
+	AssetManager *AssetManager::GetInstance()
+	{
+        return s_AssetManagerInstance;
+	}
+
+	fbxsdk::FbxManager *AssetManager::GetOrCreateFbxSdkManager()
     {
         if (!m_FbxSdkManager)
         {
+            std::unique_lock lock(m_FbxSdkMutex);
+
+            m_FbxSdkManager = fbxsdk::FbxManager::Create();
+            if (!m_FbxSdkManager)
             {
-                std::unique_lock lock(m_FbxSdkMutex);
-
-                m_FbxSdkManager = fbxsdk::FbxManager::Create();
-                if (!m_FbxSdkManager)
-                {
-                    return nullptr;
-                }
-
-                fbxsdk::FbxIOSettings *ioSettings = fbxsdk::FbxIOSettings::Create(m_FbxSdkManager, IOSROOT);
-                m_FbxSdkManager->SetIOSettings(ioSettings);
+                return nullptr;
             }
+
+            fbxsdk::FbxIOSettings *ioSettings = fbxsdk::FbxIOSettings::Create(m_FbxSdkManager, IOSROOT);
+            m_FbxSdkManager->SetIOSettings(ioSettings);
         }
 
         return m_FbxSdkManager;
@@ -371,8 +383,8 @@ namespace ignite
         return m_AssetPinCounts.contains(handle);
     }
 
-	void AssetManager::OnUpdate()
-	{
+    void AssetManager::OnUpdate()
+    {
         // Call each frame
         if (!m_OnChangeCallbacks.empty())
         {
@@ -382,13 +394,13 @@ namespace ignite
                 m_OnChangeCallbacks.pop();
             }
         }
-	}
+    }
 
-	void AssetManager::OnAssetChangeSignal(const AssetChangeSignal &signal)
-	{
-		auto activeScene = m_Project->GetActiveScene();
-		if (!activeScene)
-			return;
+    void AssetManager::OnAssetChangeSignal(const AssetChangeSignal &signal)
+    {
+        auto activeScene = m_Project->GetActiveScene();
+        if (!activeScene)
+            return;
 
         switch (signal.type)
         {
@@ -398,31 +410,22 @@ namespace ignite
             auto onChangeFunc = [this, scene = activeScene, signal]() -> bool
             {
                 // Checking environment map
-				auto sceneRenderer = scene->GetSceneRenderer();
-				auto envMap = sceneRenderer->GetEnvironmentMapColorTexture();
-				auto shadowMap = sceneRenderer->GetCascadedShadowMapDepthTexture();
+                auto sceneRenderer = scene->GetSceneRenderer();
+                auto envMap = sceneRenderer->GetEnvironmentMapColorTexture();
+                auto shadowMap = sceneRenderer->GetCascadedShadowMapDepthTexture();
 
-                // we need to check all of the materials are up to date
-				bool waitedForMaterialUpdate = false;
-                bool allMaterialsUpdated = true; // it should be true by default
+                bool allMaterialsUpdated = true; // this should be true by default
 
-				const auto &assets = GetLoadedAssets();
-				for (const auto &[handle, asset] : assets)
-				{
-					if (asset->GetAssetType() == AssetType::Material)
-					{
-						Ref<Material> material = std::static_pointer_cast<Material>(asset);
-						if (material && (material->IsBindingSetDirty() || !material->GetBindingSet()))
-						{
-							auto isTextureReady = [this](AssetHandle textureHandle) -> bool
-							{
-								if (textureHandle == 0)
-									return true;
-								Ref<Texture> texAsset = GetAsset<Texture>(textureHandle);
-								return texAsset && texAsset->IsReady();
-							};
+                const auto &assets = GetLoadedAssets();
+                for (const auto &[handle, asset] : assets)
+                {
+                    if (asset->GetAssetType() == AssetType::Material)
+                    {
+                        Ref<Material> material = std::static_pointer_cast<Material>(asset);
+                        if (!material)
+                            continue;
 
-                            auto isTextureBeingUsed = [this](AssetHandle textureHandle, Ref<Material> material) -> bool
+                        auto isTextureBeingUsed = [this](AssetHandle textureHandle, Ref<Material> material) -> bool
                             {
                                 return textureHandle == material->baseColorTextureHandle
                                     || textureHandle == material->emissiveTextureHandle
@@ -432,56 +435,30 @@ namespace ignite
                                     || textureHandle == material->occlusionTextureHandle;
                             };
 
-							// Only update if all textures are available and ready
-							const bool allTexturesReady = isTextureReady(material->baseColorTextureHandle)
-								&& isTextureReady(material->emissiveTextureHandle)
-								&& isTextureReady(material->metallicTextureHandle)
-								&& isTextureReady(material->roughnessTextureHandle)
-								&& isTextureReady(material->normalTextureHandle)
-								&& isTextureReady(material->occlusionTextureHandle);
-
-                            // Reload if:
-                            //   all textures ready
-                            //   AND if Environment requested
-                            //   OR if Texture requested but only if there is TextureHandle inside
-                            const bool validTextureRequest = signal.type == AssetType::Texture && isTextureBeingUsed(signal.handle, material);
-							if (allTexturesReady && signal.type == AssetType::Environment || validTextureRequest)
-							{
-								MaterialTextures textures;
-								material->RetrieveTextures(this, &textures);
-
-								if (!waitedForMaterialUpdate)
-								{
-									// Ensure no other GPU operations are in flight before updating material
-									// This prevents threading errors when materials are being invalidated
-									GPUUploadSync::DeviceWaitIdle(DeviceManager::GetInstance()->GetDevice());
-									waitedForMaterialUpdate = true;
-								}
-
-								material->UpdateBindingSet(&textures, this, envMap, shadowMap);
-							}
-                            else
+                        // Reload if:
+                        //    if Environment requested
+                        // OR if Texture requested but only if there is TextureHandle inside
+                        const bool validTextureRequest = signal.type == AssetType::Texture && isTextureBeingUsed(signal.handle, material);
+                        if (signal.type == AssetType::Environment || validTextureRequest)
+                        {
+                            material->InvalidateBindingSet();
+                            if (!material->UpdateBindingSet(envMap, shadowMap))
                             {
-                                if (validTextureRequest)
-								    allMaterialsUpdated = false;
+                                allMaterialsUpdated = false;
                             }
-						}
-					}
-				}
-
+                        }
+                    }
+                }
                 return allMaterialsUpdated;
             };
 
             m_OnChangeCallbacks.push(std::move(onChangeFunc));
-			
             break;
         }
         }
+    }
 
-        return;
-	}
-
-	void AssetManager::ClearAllLoadedAssets()
+    void AssetManager::ClearAllLoadedAssets()
     {
         IGN_PROFILE_FUNCTION();
 

@@ -20,7 +20,9 @@
 #include <glm/gtx/hash.hpp>
 #include <glm/glm.hpp>
 
+#ifndef IMGUI_DEFINE_MATH_OPERATORS
 #define IMGUI_DEFINE_MATH_OPERATORS
+#endif
 #include "imgui.h"
 #include "obb.hpp"
 

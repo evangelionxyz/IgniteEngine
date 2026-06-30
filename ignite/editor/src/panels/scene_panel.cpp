@@ -1326,7 +1326,7 @@ namespace ignite
                     }
                 }
 
-                if (c.dirty)
+                if (c.dirty && m_Data.sceneViewportGameplayVisible)
                 {
                     c.camera.UpdateView();
                     c.camera.UpdateProjection(

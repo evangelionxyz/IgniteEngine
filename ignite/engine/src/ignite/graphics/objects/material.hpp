@@ -34,6 +34,7 @@
 
 #include <glm/glm.hpp>
 #include <nvrhi/nvrhi.h>
+#include <map>
 
 namespace ignite
 {
@@ -46,16 +47,6 @@ namespace ignite
         Opaque = 0,
         Transparent,
         Masked
-    };
-
-    struct MaterialTextures
-    {
-		Ref<Texture> baseColor;
-	    Ref<Texture> emissive;
-        Ref<Texture> metallic;
-        Ref<Texture> roughness;
-	    Ref<Texture> normal;
-        Ref<Texture> occlusion;
     };
 
     class IGN_API Material : public Asset
@@ -76,13 +67,12 @@ namespace ignite
         nvrhi::SamplerHandle sampler;
         void SetSamplerDesc(const nvrhi::SamplerDesc &desc);
 
-        void UpdateBindingSet(MaterialTextures *textures, AssetManager *assetManager, Ref<Texture> envMap = nullptr, Ref<Texture> shadowMap = nullptr);
+        bool UpdateBindingSet(Ref<Texture> envMap = nullptr, Ref<Texture> shadowMap = nullptr);
         void UploadToGpu(nvrhi::ICommandList *cmd);
         void SetType(MaterialType type) { m_Type = type; }
-		void RetrieveTextures(AssetManager *assetManager, MaterialTextures *textures) const;
 
-        bool IsNeedToInvalidate();
-        void InvalidateBindingSet() { m_BindingSetDirty = true; m_BindingSet = nullptr; }
+        bool IsNeedToInvalidate() const;
+        void InvalidateBindingSet() { m_BindingSetDirty = true; m_BindingSet = nullptr; m_BindingSets.clear(); }
         bool IsBindingSetDirty() const { return m_BindingSetDirty; }
         void SetBindingSetClean() { m_BindingSetDirty = false; }
         
@@ -96,7 +86,6 @@ namespace ignite
 		static AssetType GetStaticType() { return AssetType::Material; }
 		virtual AssetType GetAssetType() override { return GetStaticType(); }
 
-        static Ref<Texture> RetrieveTexture(AssetManager *assetManager, AssetHandle handle, Ref<Texture> fallback);
 
         virtual bool Serialize(const ignite::Path &filepath) override;
         static Ref<Material> Deserialize(const ignite::Path &filepath);
@@ -107,6 +96,7 @@ namespace ignite
         MaterialType m_Type = MaterialType::Opaque;
         Ref<ConstantBuffer> m_GPUDataBuffer;
         nvrhi::BindingSetHandle m_BindingSet;
+        std::map<std::pair<Texture*, Texture*>, nvrhi::BindingSetHandle> m_BindingSets;
         nvrhi::SamplerDesc m_SamplerDesc{};
         bool m_BindingSetDirty = true;
         bool m_HasSamplerDesc = false;

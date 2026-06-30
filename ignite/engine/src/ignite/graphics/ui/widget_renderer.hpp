@@ -36,7 +36,6 @@ namespace ignite
         void DrawRoundedBorder(const Rect &rect, float cornerRadius, float borderWidth, const glm::vec4 &borderColor);
         void DrawString(const std::string &str, const Ref<Font> &font, const glm::vec4 &color, const glm::mat4 &transform, float kerning, float linespacing);
 
-        void SetProject(Project *project) { m_Project = project; }
         void SetActiveWidget(const Ref<WidgetCanvas> &widget) { m_ActiveWidget = widget; }
         void SetMousePosition(uint32_t mouseX, uint32_t mouseY);
 
@@ -79,7 +78,6 @@ namespace ignite
         uint32_t *m_QuadIndicesPtr = nullptr;
         BatchRender<VertexWidgetText> m_TextBatch;
 
-        Project *m_Project = nullptr;
         Ref<WidgetCanvas> m_ActiveWidget = nullptr;
         std::vector<WidgetRenderLayer> m_RenderLayers;
 

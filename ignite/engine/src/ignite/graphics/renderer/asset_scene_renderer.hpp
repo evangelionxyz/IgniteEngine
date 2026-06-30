@@ -26,11 +26,12 @@ namespace ignite
         void SetEnvironmentTexture(AssetHandle textureHandle);
         
         void SetBoneTransforms(const std::vector<glm::mat4> &boneTransforms);
-        void SetProject(Project *project);
         void SetPreviewWidget(const Ref<WidgetCanvas> &widget);
         void SetPreviewMouseState(uint32_t mouseX, uint32_t mouseY, bool hovered);
 
         void Render(ICamera *camera, const Ref<RenderTarget> &sceneRT, const Ref<RenderTarget> &uiRT, const Ref<RenderTarget> &compositeRT);
+
+		virtual Ref<Texture> GetEnvironmentMapColorTexture() const override;
 
     private:
         void SyncRuntimeMaterialFromSource();
@@ -39,6 +40,9 @@ namespace ignite
         void DrawPreviewMesh(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
 
         void CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture);
+
+        virtual void AddAssetPin(AssetHandle handle) override;
+        virtual std::string_view BuildAssetPinName(AssetHandle handle) override;
 
     private:
         Ref<Mesh> m_PreviewMesh;
@@ -52,7 +56,6 @@ namespace ignite
         AssetHandle m_EnvTexHandle = AssetHandle(0);
 
         nvrhi::BindingLayoutHandle m_CompositeBindingLayout;
-        Project *m_Project = nullptr;
 
         std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_GeometryPipelineCache;
         std::unordered_map<const nvrhi::IFramebuffer *, Ref<GraphicsPipeline>> m_TransparentGeometryPipelineCache;
@@ -64,7 +67,7 @@ namespace ignite
         uint32_t m_PreviewMouseX = 0;
         uint32_t m_PreviewMouseY = 0;
         bool m_PreviewMouseHovered = false;
-        bool m_UseEnvironment = false;;
+        bool m_UseEnvironment = false;
         bool m_EnvTextureInvalidating = false;
         bool m_EnvironmentTextureLoadAttempted = false;
 

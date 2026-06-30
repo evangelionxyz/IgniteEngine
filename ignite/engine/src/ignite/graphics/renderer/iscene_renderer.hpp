@@ -3,15 +3,21 @@
 #ifndef IGN_ISCENE_RENDERER_HPP
 #define IGN_ISCENE_RENDERER_HPP
 
+#include "ignite/asset/asset.hpp"
 #include "ignite/core/base.hpp"
-#include "ignite/graphics/buffers/constant_buffer.hpp"
 #include "ignite/graphics/gpu_data.hpp"
 #include "ignite/graphics/bloom.hpp"
 #include "ignite/graphics/ssao.hpp"
 #include "ignite/graphics/edge_detection.hpp"
-#include "ignite/graphics/graphics_pipeline.hpp"
 #include "ignite/graphics/render_target.hpp"
-#include "ignite/scene/entity.hpp"
+#include "ignite/graphics/buffers/constant_buffer.hpp"
+
+#include "ignite/graphics/objects/mesh.hpp"
+#include "ignite/graphics/objects/material.hpp"
+#include "ignite/graphics/objects/material_2d.hpp"
+#include "ignite/graphics/objects/shadow_map.hpp"
+#include "ignite/graphics/texture.hpp"
+
 #include <nvrhi/nvrhi.h>
 #include <unordered_map>
 
@@ -19,14 +25,9 @@ namespace ignite
 {
     class Scene;
     class ICamera;
-    class Project;
-    class RenderTarget;
     class Renderer2D;
     class CascadedShadowMap;
-    class MeshPrimitive;
-    class StaticMesh;
-    class SkeletalMesh;
-    class Material;
+    class WorldEnvironment;
 
     struct DebugGridStyle
     {
@@ -84,16 +85,38 @@ namespace ignite
         ISceneRenderer();
         virtual ~ISceneRenderer();
 
-        virtual void OnUpdate(float deltaTime) { };
-
         virtual void ResizeFramebuffer(uint32_t width, uint32_t height);
+
         virtual Ref<Texture> GetEnvironmentMapColorTexture() const;
         virtual Ref<Texture> GetCascadedShadowMapDepthTexture() const;
         virtual Ref<CascadedShadowMap> GetCascadedShadowMap();
 
+		template<typename T>
+		Ref<T> ResolveAsset(AssetHandle handle)
+		{
+            auto assetManager = AssetManager::GetInstance();
+			if (!assetManager || handle == AssetHandle(0))
+				return nullptr;
+
+			AssetResolveKey key{ assetManager->GetProject(), handle};
+			auto it = m_ResolvedAssetsCache.find(key);
+			if (it != m_ResolvedAssetsCache.end())
+				return it->second->As<T>();
+
+			Ref<T> asset = assetManager->GetAsset<T>(handle);
+			if (asset)
+				m_ResolvedAssetsCache.emplace(key, asset);
+
+			return asset;
+		}
+
     protected:
         void EnsureCompositeVertexBufferUploaded(nvrhi::ICommandList *cmd);
 		void EnsureSceneEnvironmentMap();
+
+        virtual void AddAssetPin(AssetHandle handle) = 0;
+        virtual std::string_view BuildAssetPinName(AssetHandle handle) = 0;
+        void ClearPinnedAssets();
 
         Ref<CascadedShadowMap> m_CascadedShadowMap;
 
@@ -110,10 +133,14 @@ namespace ignite
         Ref<ConstantBuffer> m_CascadedShadowMapBuffer;
         Ref<ConstantBuffer> m_CSMPerCascadeBuffers[NUM_CASCADES];
 
+		std::unordered_map<AssetResolveKey, Ref<Asset>, AssetResolveKeyHash> m_ResolvedAssetsCache;
+
 		WorldEnvironment *m_WorldEnvironment = nullptr;
 
         nvrhi::BindingSetHandle m_MeshBindingSet;
         SceneBufferData m_SceneGPUData;
+
+        std::vector<AssetHandle> m_PinnedAssetHandles;
 
         std::vector<uint32_t> m_SelectedEntities;
         nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
@@ -121,8 +148,9 @@ namespace ignite
         DebugGridSettings m_DebugGridSettings;
 
         nvrhi::IDevice *m_Device = nullptr;
+        
         Ref<Scene> m_Scene;
-        Project *m_Project = nullptr;
+
         bool m_Has2DPreRenderCache = false;
         bool m_CompositeVertexBufferUploadPending = true;
     };

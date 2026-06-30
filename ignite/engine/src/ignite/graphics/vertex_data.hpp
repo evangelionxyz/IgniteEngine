@@ -37,6 +37,7 @@ namespace ignite
         glm::vec3 tangent;
         glm::vec3 bitangent;
         glm::vec2 uv;
+        glm::vec4 color = glm::vec4(1.0f);
     };
 
     struct VertexMesh_Anim
@@ -46,6 +47,7 @@ namespace ignite
         glm::vec3 tangent;
         glm::vec3 bitangent;
         glm::vec2 uv;
+        glm::vec4 color = glm::vec4(1.0f);
         uint32_t boneIDs[4] = { 0 };
         float weights[4] = { 0.0f };
 

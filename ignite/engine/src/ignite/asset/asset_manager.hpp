@@ -188,6 +188,8 @@ namespace ignite
 
         Project *GetProject() { return m_Project; }
 
+        static AssetManager *GetInstance();
+
         fbxsdk::FbxManager *GetOrCreateFbxSdkManager();
         std::mutex &GetFbxSdkMutex() { return m_FbxSdkMutex; }
 

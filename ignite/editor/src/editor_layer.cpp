@@ -145,6 +145,7 @@ namespace ignite
         m_ContentBrowserPanel = nullptr;
         ContentBrowserPanel::ReleaseSharedResources();
 
+        m_SceneRenderer.reset();
         m_ActiveProject.reset();
     }
 
@@ -1312,7 +1313,7 @@ namespace ignite
 			Application::SubmitToMainThread([editor, file = filepath, userData]()
 			{
 				SignalBus::Emit<FileImportPayload>(
-					FileImportPayload{ ImportType::Open, FileStatus::Success, AssetMetaData(file, AssetType::Scene), userData }
+					FileImportPayload{ ImportType::Save, FileStatus::Success, AssetMetaData(file, AssetType::Scene), userData }
 				);
 			});
         }
@@ -1380,7 +1381,7 @@ namespace ignite
 			Application::SubmitToMainThread([editor, file = filepath, userData]()
 			{
 				SignalBus::Emit<FileImportPayload>(
-					FileImportPayload{ ImportType::Open, FileStatus::Success, AssetMetaData(file, AssetType::Project), userData }
+					FileImportPayload{ ImportType::Save, FileStatus::Success, AssetMetaData(file, AssetType::Project), userData }
 				);
 			});
         }
