@@ -1403,7 +1403,7 @@ namespace ignite
             {
                 auto &c = selectedEntity.GetComponent<Rigidbody2DComponent>();
                 
-                static std::array<const char *, 3> bodyTypeStr = { "Static", "Dynamic", "Kinematic" };
+                static std::array<const char *, 3> bodyTypeStr = { "Static", "Kinematic", "Dynamic" };
                 int bodyTypeIndex = static_cast<int>(c.bodyType);
                 if (UI::DrawComboBox("Body Type", bodyTypeStr.data(), static_cast<int>(bodyTypeStr.size()), &bodyTypeIndex))
                 {
