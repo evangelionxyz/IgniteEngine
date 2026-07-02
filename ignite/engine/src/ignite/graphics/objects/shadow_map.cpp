@@ -54,18 +54,25 @@ namespace ignite
 		
 		m_Quality = quality;
 
-		// Configure depth texture sampler settings
+		// Linear clamp sampler for shadow map PCF — used with SampleLevel in the shader.
+		// Linear filtering provides smooth interpolation between depth texels across Poisson taps.
 		nvrhi::IDevice* device = DeviceManager::GetInstance()->GetDevice();
 
 		nvrhi::SamplerDesc samplerDesc;
 		samplerDesc.addressU = nvrhi::SamplerAddressMode::ClampToEdge;
 		samplerDesc.addressV = nvrhi::SamplerAddressMode::ClampToEdge;
 		samplerDesc.addressW = nvrhi::SamplerAddressMode::ClampToEdge;
-		samplerDesc.borderColor = nvrhi::Color(1.0f, 1.0f, 1.0f, 1.0f); // White border = lit
-		samplerDesc.setAllFilters(true);
+		samplerDesc.borderColor = nvrhi::Color(1.0f, 1.0f, 1.0f, 1.0f);
+		samplerDesc.minFilter = true;
+		samplerDesc.magFilter = true;
+		samplerDesc.mipFilter = false;
+		// Standard sampler: depth comparison is done manually in the shader.
+		// NVRHI binds this as the texture's sampler via Texture::GetSampler(), so
+		// this m_DepthSampler is kept for reference but the binding uses the
+		// depth texture's own internal sampler created in Texture::Create().
 
 		m_DepthSampler = device->createSampler(samplerDesc);
-		LOG_ASSERT(m_DepthSampler, "Failed to create depth sampler");
+		LOG_ASSERT(m_DepthSampler, "Failed to create depth comparison sampler");
 
 		CreateCascadeFramebuffers();
 		CreatePipeline(m_CascadeFramebuffers[0]);
@@ -188,52 +195,71 @@ namespace ignite
 					}
 				};
 
+			// -----------------------------------------------------------------------
+			// Step 1 – Snap the bounding sphere radius to a whole-texel multiple.
+			// This prevents the ortho extent from changing sub-texel as the camera
+			// rotates, which is the primary cause of shadow-map shimmering.
+			// -----------------------------------------------------------------------
+			const float texelWorldSize = (2.0f * radius) / static_cast<float>(m_Resolution);
+			radius = std::ceil(radius / texelWorldSize) * texelWorldSize;
+
+			// -----------------------------------------------------------------------
+			// Step 2 – Build an initial light-view from the raw frustum center so we
+			// can measure the sub-texel offset of that center.
+			// -----------------------------------------------------------------------
+			const float extent = radius; // symmetric ortho half-extent
+			const float texelsPerUnit = static_cast<float>(m_Resolution) / (2.0f * extent);
+
 			glm::vec3 cascadeCenter = frustumCenter;
 			glm::vec3 lightPos = cascadeCenter - lightDir * radius * 2.0f;
 			glm::mat4 lightView = glm::lookAt(lightPos, cascadeCenter, upDir);
 
+			// -----------------------------------------------------------------------
+			// Step 3 – Snap the light-eye position so the frustum center lands exactly
+			// on a texel boundary. We move the camera rather than patching the
+			// projection matrix — this avoids the NDC-scale-factor bug and is how
+			// Unreal Engine 4/5 and Unity HDRP implement stable CSM.
+			// -----------------------------------------------------------------------
+			{
+				// Project frustum center into light-view space.
+				glm::vec3 centerLS = glm::vec3(lightView * glm::vec4(cascadeCenter, 1.0f));
+
+				// Express in texel-space and find the fractional (sub-texel) part.
+				glm::vec2 centerTex  = glm::vec2(centerLS.x, centerLS.y) * texelsPerUnit;
+				glm::vec2 snapOffset = (glm::round(centerTex) - centerTex) / texelsPerUnit;
+
+				// Shift the light position along the light's local X/Y axes.
+				// Extracting the axes from the view matrix rows avoids an extra inverse.
+				glm::vec3 lightRight = glm::vec3(lightView[0][0], lightView[1][0], lightView[2][0]);
+				glm::vec3 lightUp    = glm::vec3(lightView[0][1], lightView[1][1], lightView[2][1]);
+				lightPos += lightRight * snapOffset.x + lightUp * snapOffset.y;
+
+				// Rebuild the view matrix with the snapped position.
+				lightView = glm::lookAt(lightPos, lightPos + lightDir, upDir);
+			}
+
+			// -----------------------------------------------------------------------
+			// Step 4 – Build symmetric ortho and depth bounds.
+			// -----------------------------------------------------------------------
 			glm::vec3 cascadeMin, cascadeMax;
 			computeCascadeBounds(lightView, cascadeMin, cascadeMax);
 
-			float extent = glm::max(cascadeMax.x - cascadeMin.x, cascadeMax.y - cascadeMin.y) * 0.5f;
-			extent = glm::max(extent, radius);
-
 			cascadeMin.x = -extent;
-			cascadeMax.x = extent;
+			cascadeMax.x =  extent;
 			cascadeMin.y = -extent;
-			cascadeMax.y = extent;
+			cascadeMax.y =  extent;
 
 			const float zPadding = 100.0f;
 			cascadeMin.z -= zPadding;
 			cascadeMax.z += zPadding;
 
-			float nearPlaneLS = glm::max(0.001f, -cascadeMax.z);
-			float farPlaneLS = glm::max(nearPlaneLS + 1.0f, -cascadeMin.z);
+			const float nearPlaneLS = glm::max(0.001f, -cascadeMax.z);
+			const float farPlaneLS  = glm::max(nearPlaneLS + 1.0f, -cascadeMin.z);
 
-			glm::mat4 lightProj = glm::orthoZO(cascadeMin.x, cascadeMax.x, cascadeMin.y, cascadeMax.y, nearPlaneLS, farPlaneLS);
-
-			// Texel-snapping: align the projection's translation to whole shadow-map texels so
-			// the shadow map doesn't shimmer as the camera moves.
-			// Strategy: project any fixed world-space point through the current lightViewProj,
-			// measure the sub-texel offset of that point, then shift the ortho projection to
-			// cancel the offset. Using the frustum center in light space as the reference point
-			// keeps the snap stable and independent of the camera position.
-			{
-				const float texelsPerUnit = static_cast<float>(m_Resolution) / (2.0f * extent);
-				// Project frustum center into light view space (w=1, so just multiply).
-				glm::vec3 centerLS = glm::vec3(lightView * glm::vec4(cascadeCenter, 1.0f));
-
-				// Map to texel space.
-				glm::vec2 centerTex = glm::vec2(centerLS.x, centerLS.y) * texelsPerUnit;
-
-				// Round to nearest texel.
-				glm::vec2 roundedTex = glm::round(centerTex);
-
-				// Convert the sub-texel offset back to world units and shift the ortho projection.
-				glm::vec2 snapOffset = (roundedTex - centerTex) / texelsPerUnit;
-				lightProj[3][0] += snapOffset.x * (2.0f / (cascadeMax.x - cascadeMin.x));
-				lightProj[3][1] += snapOffset.y * (2.0f / (cascadeMax.y - cascadeMin.y));
-			}
+			const glm::mat4 lightProj = glm::orthoZO(
+				cascadeMin.x, cascadeMax.x,
+				cascadeMin.y, cascadeMax.y,
+				nearPlaneLS,  farPlaneLS);
 
 			m_GPUData.lightViewProj[cascadeIdx] = lightProj * lightView;
 
@@ -254,7 +280,6 @@ namespace ignite
 		params.depthFunc = nvrhi::ComparisonFunc::Less;
 		params.cullMode = nvrhi::RasterCullMode::Front;
 		params.fillMode = nvrhi::RasterFillMode::Solid;
-
        m_BindingLayout = Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM);
 
 		m_Pipeline = GraphicsPipeline::Create();

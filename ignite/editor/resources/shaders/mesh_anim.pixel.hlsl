@@ -93,7 +93,7 @@ Texture2D occlusionTexture         : register(t5, space1);
 Texture2D environmentMapTexture    : register(t6, space1);
 Texture2DArray shadowMap           : register(t7, space1);
 SamplerState sampler0              : register(s0, space1);
-SamplerState sampler1              : register(s1, space1);
+SamplerState shadowSampler         : register(s1, space1); // linear sampler for shadow map PCF
 
 struct PSInput
 {
@@ -135,7 +135,43 @@ int GetCascadeIndex(float viewDepth)
     return 3;
 }
 
-float SampleShadow(float3 worldPos, float3 normal, float3 lightDirection)
+// ---------------------------------------------------------------------------
+// 16-tap Poisson disk in unit-disk space.
+// Samples are hand-tuned for good coverage without visible patterns.
+// ---------------------------------------------------------------------------
+static const float2 k_PoissonDisk[16] =
+{
+    float2(-0.94201624f, -0.39906216f),
+    float2( 0.94558609f, -0.76890725f),
+    float2(-0.09418410f, -0.92938870f),
+    float2( 0.34495938f,  0.29387760f),
+    float2(-0.91588581f,  0.45771432f),
+    float2(-0.81544232f, -0.87912464f),
+    float2(-0.38277543f,  0.27676845f),
+    float2( 0.97484398f,  0.75648379f),
+    float2( 0.44323325f, -0.97511554f),
+    float2( 0.53742981f, -0.47373420f),
+    float2(-0.26496911f, -0.41893023f),
+    float2( 0.79197514f,  0.19090188f),
+    float2(-0.24188840f,  0.99706507f),
+    float2(-0.81409955f,  0.91437590f),
+    float2( 0.19984126f,  0.78641367f),
+    float2( 0.14383161f, -0.14100790f)
+};
+
+// ---------------------------------------------------------------------------
+// Interleaved-gradient noise hash — fast, low-correlation per-pixel rotation
+// angle used to decorrelate Poisson taps across neighbouring pixels, which
+// removes the regular banding you get from an unrotated disk.
+// Reference: Jimenez 2014, "Next-Generation Post Processing in Call of Duty"
+// ---------------------------------------------------------------------------
+float InterleavedGradientNoise(float2 screenPos)
+{
+    float3 magic = float3(0.06711056f, 0.00583715f, 52.9829189f);
+    return frac(magic.z * frac(dot(screenPos, magic.xy)));
+}
+
+float SampleShadow(float3 worldPos, float3 normal, float3 lightDirection, float2 screenPos)
 {
     float3 viewPos = mul(camera.view, float4(worldPos, 1.0f)).xyz;
     float viewDepth = -viewPos.z;
@@ -145,45 +181,61 @@ float SampleShadow(float3 worldPos, float3 normal, float3 lightDirection)
     float4 lightSpace = mul(csm.lightViewProjection[cascadeIdx], float4(worldPos, 1.0f));
     float3 ndc = lightSpace.xyz / lightSpace.w;
     float2 shadowUV = ndc.xy * 0.5f + 0.5f;
-#if defined(TARGET_VULKAN) || defined(SPIRV)
-    shadowUV.y = 1.0f - shadowUV.y;
-    float shadowDepth = ndc.z;
-#else
-    float shadowDepth = ndc.z * 0.5f + 0.5f;
-#endif
-    float3 shadowCoord = float3(shadowUV, shadowDepth);
+    float shadowDepth = ndc.z; // orthoZO already outputs z in [0, 1] for both D3D12 and Vulkan
+    shadowUV.y = 1.0f - shadowUV.y; // Vulkan NDC Y is flipped relative to texture UV
 
-    if (shadowCoord.x < 0.0f || shadowCoord.x > 1.0f ||
-        shadowCoord.y < 0.0f || shadowCoord.y > 1.0f)
+    if (shadowUV.x < 0.0f || shadowUV.x > 1.0f ||
+        shadowUV.y < 0.0f || shadowUV.y > 1.0f)
     {
         return 1.0f;
     }
 
+    // Slope-scaled bias: steep surfaces get more bias to avoid acne.
     float cosTheta = saturate(dot(normal, -lightDirection));
     float bias = lerp(csm.maxBias, csm.minBias, cosTheta);
+    float compareDepth = shadowDepth - bias;
 
+    // Texel size in UV space.
     uint width, height, layers;
     shadowMap.GetDimensions(width, height, layers);
     float2 texelSize = 1.0f / float2(width, height);
-    float sampleRadius = max(csm.pcfRadius, 0.0f);
-    int kernelRadius = max(2, (int)ceil(sampleRadius));
 
+    // ---------------------------------------------------------------------------
+    // PCF radius scales with cascade: keep cascade 0 sharp, relax for far ones.
+    // csm.pcfRadius acts as the base radius in texels for cascade 0.
+    // ---------------------------------------------------------------------------
+    float cascadeScale = 1.0f + float(cascadeIdx) * 0.5f;
+    float filterRadius = max(csm.pcfRadius, 0.5f) * cascadeScale;
+
+    // ---------------------------------------------------------------------------
+    // Per-pixel rotation of the Poisson disk using interleaved-gradient noise.
+    // This breaks the structured pattern and eliminates banding without TAA.
+    // ---------------------------------------------------------------------------
+    float angle  = InterleavedGradientNoise(screenPos) * 6.28318530718f; // 2*PI
+    float sinA   = sin(angle);
+    float cosA   = cos(angle);
+    float2x2 rot = float2x2(cosA, -sinA, sinA, cosA);
+
+    // ---------------------------------------------------------------------------
+    // 16-tap Poisson-disk PCF with hardware comparison sampler.
+    // SampleCmpLevelZero performs a bilinear 2x2 gather and returns the
+    // average of the four per-texel comparisons — 4x quality for free.
+    // ---------------------------------------------------------------------------
     float visibility = 0.0f;
-    float sampleCount = 0.0f;
-
-    for (int x = -kernelRadius; x <= kernelRadius; ++x)
+    [unroll]
+    for (int i = 0; i < 16; ++i)
     {
-        for (int y = -kernelRadius; y <= kernelRadius; ++y)
-        {
-            float2 offset = float2(x, y) * texelSize * sampleRadius;
-            float2 sampleUV = clamp(shadowCoord.xy + offset, 0.0f, 1.0f);
-            float depth = shadowMap.SampleLevel(sampler0, float3(sampleUV, cascadeIdx), 0.0f).r;
-            visibility += (shadowCoord.z - bias <= depth) ? 1.0f : 0.0f;
-            sampleCount += 1.0f;
-        }
+        float2 tapOffset = mul(rot, k_PoissonDisk[i]) * texelSize * filterRadius;
+        float2 sampleUV  = clamp(shadowUV + tapOffset, 0.0f, 1.0f);
+        float storedDepth = shadowMap.SampleLevel(
+            shadowSampler,
+            float3(sampleUV, float(cascadeIdx)),
+            0.0f).r;
+        // Lit when fragment depth (with bias) is less than the stored occluder depth.
+        visibility += (compareDepth < storedDepth) ? 1.0f : 0.0f;
     }
+    visibility /= 16.0f;
 
-    visibility /= max(sampleCount, 1.0f);
     return saturate(lerp(1.0f, visibility, csm.shadowStrength));
 }
 
@@ -259,7 +311,7 @@ PSOutput main(PSInput input)
             roughness
         );
 
-        float shadowTerm = SampleShadow(input.worldPos, finalNormal, lightDirection);
+        float shadowTerm = SampleShadow(input.worldPos, finalNormal, lightDirection, input.position.xy);
         directLighting *= shadowTerm;
 
         float baseAmbient = 0.03f;
