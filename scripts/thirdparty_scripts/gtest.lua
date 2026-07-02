@@ -18,17 +18,17 @@ project "gtest"
         "%{THIRDPARTY_DIR}/gtest/googletest/include",
     }
 
-    filter "configurations:Debug"
+    filter { "configurations:Debug or Debug-Profiling" }
         runtime "Debug"
         optimize "off"
         symbols "on"
 
-    filter "configurations:Release"
+    filter { "configurations:Release or Release-Profiling" }
         runtime "Release"
         optimize "on"
         symbols "on"
 
-    filter "configurations:Shipping"
+    filter { "configurations:Shipping or Shipping-Profiling" }
         runtime "Release"
         optimize "on"
         symbols "off"

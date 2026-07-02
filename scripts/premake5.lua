@@ -6,7 +6,11 @@ workspace "IGN"
     configurations {
         "Debug",
         "Release",
-        "Shipping"
+        "Shipping",
+
+        "Debug-Profiling",
+        "Release-Profiling",
+        "Shipping-Profiling"
     }
 
     local wks_absolute = path.getabsolute("../")
@@ -40,6 +44,9 @@ local function writeMixedDebuggerUserFile(prj, wksLocation)
         { name = "Debug",    platform = "x64" },
         { name = "Release",  platform = "x64" },
         { name = "Shipping", platform = "x64" },
+        { name = "Debug-Profiling",    platform = "x64" },
+        { name = "Release-Profiling",  platform = "x64" },
+        { name = "Shipping-Profiling", platform = "x64" },
     }
 
     -- Use the actual project name (e.g. "Ignite.Editor") for the filename

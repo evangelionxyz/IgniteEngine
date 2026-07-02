@@ -36,11 +36,15 @@ project "BOX2D"
             "/experimental:c11atomics",
         }
 
-    filter "configurations:Debug"
+    filter { "configurations:Debug or Debug-Profiling" }
         runtime "debug"
         symbols "on"
 
-    filter "configurations:Release"
-        runtime "release"
-        symbols "off"
+    filter { "configurations:Release or Release-Profiling" }
+        runtime "Release"
         optimize "on"
+
+    filter { "configurations:Shipping or Shipping-Profiling" }
+        runtime "Release"
+        optimize "on"
+        symbols "off"

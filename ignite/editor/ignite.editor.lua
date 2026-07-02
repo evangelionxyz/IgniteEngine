@@ -193,6 +193,16 @@ project "Ignite.Editor"
             "DEBUG",
             "_DEBUG"
         }
+    
+    filter "configurations:Debug-Profiling"
+        runtime "Debug"
+        symbols "on" -- with debug info
+        defines {
+            "IGN_ENABLE_TRACY",
+            "IGN_DEBUG_BUILD",
+            "DEBUG",
+            "_DEBUG"
+        }
 
     filter "configurations:Release"
         runtime "Release"
@@ -202,12 +212,32 @@ project "Ignite.Editor"
             "IGN_RELEASE_BUILD",
             "NDEBUG"
         }
+    
+    filter "configurations:Release-Profiling"
+        runtime "release"
+        optimize "on"
+        symbols "on" -- with debug info
+        defines {
+            "IGN_ENABLE_TRACY",
+            "IGN_RELEASE_BUILD",
+            "NDEBUG"
+        }
 
     filter "configurations:Shipping"
         runtime "Release"
         optimize "on"
         symbols "off"
         defines {
+            "IGN_SHIPPING_BUILD",
+            "NDEBUG"
+        }
+
+    filter "configurations:Shipping-Profiling"
+        runtime "release"
+        optimize "speed"
+        symbols "off" -- without debug info
+        defines {
+            "IGN_ENABLE_TRACY",
             "IGN_SHIPPING_BUILD",
             "NDEBUG"
         }

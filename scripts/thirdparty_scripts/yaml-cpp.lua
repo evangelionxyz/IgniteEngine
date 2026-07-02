@@ -30,10 +30,16 @@ project "YAMLCPP"
     filter "system:windows"
         systemversion "latest"
 
-    filter "configurations:Debug"
+    filter { "configurations:Debug or Debug-Profiling" }
         runtime "Debug"
         symbols "on"
 
-    filter "configurations:Release"
+    filter { "configurations:Release or Release-Profiling" }
         runtime "Release"
         optimize "on"
+        symbols "on"
+
+    filter { "configurations:Shipping or Shipping-Profiling" }
+        runtime "release"
+        optimize "on"
+        symbols "off"

@@ -25,14 +25,14 @@ project "msdfgen"
 
     defines { "MSDF_USE_CPP11" }
 
-    filter "configurations:Debug"
+    filter { "configurations:Debug or Debug-Profiling" }
         runtime "Debug"
         symbols "on"
 
-    filter "configurations:Release"
+    filter { "configurations:Release or Release-Profiling" }
         runtime "Release"
         optimize "on"
 
-    filter "configurations:Shipping"
+    filter { "configurations:Shipping or Shipping-Profiling" }
         runtime "Release"
         optimize "on"

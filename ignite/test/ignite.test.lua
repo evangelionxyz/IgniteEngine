@@ -125,11 +125,11 @@ project "Ignite.Test"
         }
         linkoptions { "-Wl,-rpath,'$$ORIGIN'" }
 
-    filter { "system:linux", "configurations:Debug" }
+    filter { "system:linux", "configurations:Debug or Debug-Profiling" }
         libdirs { "%{LibraryDir.FBX_SDK_LINUX_DEBUG}" }
         links { "fmodL", "fbxsdk" }
 
-    filter { "system:linux", "configurations:Release or Shipping" }
+    filter { "system:linux", "configurations:Release or Release-Profiling or Shipping or Shipping-Profiling" }
         libdirs { "%{LibraryDir.FBX_SDK_LINUX_RELEASE}" }
         links { "fmod", "fbxsdk" }
 
@@ -176,7 +176,7 @@ project "Ignite.Test"
 
     links { "d3dcompiler", "dxcompiler", "delayimp" }
 
-    filter "configurations:Debug"
+    filter "configurations:Debug or Debug-Profiling"
         runtime "Debug"
         optimize "off"
         symbols "on"
@@ -186,7 +186,7 @@ project "Ignite.Test"
             "_DEBUG"
         }
 
-    filter "configurations:Release"
+    filter "configurations:Release or Release-Profiling"
         runtime "Release"
         optimize "on"
         symbols "on"
@@ -195,7 +195,7 @@ project "Ignite.Test"
             "NDEBUG"
         }
 
-    filter "configurations:Shipping"
+    filter "configurations:Shipping or Shipping-Profiling"
         runtime "Release"
         optimize "on"
         symbols "off"

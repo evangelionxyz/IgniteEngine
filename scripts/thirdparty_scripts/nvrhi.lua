@@ -54,11 +54,15 @@ project "NVRHI"
         "VULKAN_HPP_STORAGE_SHARED_EXPORT",
     }
 
-    filter "configurations:Debug"
+    filter { "configurations:Debug or Debug-Profiling" }
         runtime "Debug"
         symbols "on"
 
-    filter "configurations:Release"
+    filter { "configurations:Release or Release-Profiling" }
+        runtime "Release"
+        symbols "off"
+
+    filter { "configurations:Shipping or Shipping-Profiling" }
         runtime "Release"
         symbols "off"
 

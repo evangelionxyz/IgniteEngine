@@ -31,7 +31,7 @@ project "JOLT"
     filter "system:windows"
         systemversion "latest"
 
-    filter "configurations:Debug"
+    filter { "configurations:Debug or Debug-Profiling" }
         optimize "off"
         symbols "on"
         defines {
@@ -47,13 +47,13 @@ project "JOLT"
             "msvcrtd",
         }
 
-    filter "configurations:Release"
+    filter { "configurations:Release or Release-Profiling" }
         optimize "on"
         symbols "on"
         defines {
             "NDEBUG"
         }
-    filter { "system:windows", "configurations:Release" }
+    filter { "system:windows", "configurations:Release or Release-Profiling" }
         defines {
             "_WINDOWS",
         }
@@ -63,13 +63,13 @@ project "JOLT"
             "msvcrt",
         }
 
-    filter "configurations:Shipping"
+    filter { "configurations:Shipping or Shipping-Profiling" }
         optimize "on"
         symbols "off"
         defines {
             "NDEBUG"
         }
-    filter { "system:windows", "configurations:Shipping" }
+    filter { "system:windows", "configurations:Shipping or Shipping-Profiling" }
         defines {
             "_WINDOWS",
         }

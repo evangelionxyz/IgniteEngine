@@ -6,7 +6,11 @@ workspace "IGN-Managed"
     configurations {
         "Debug",
         "Release",
-        "Shipping"
+        "Shipping",
+
+        "Debug-Profiling",
+        "Release-Profiling",
+        "Shipping-Profiling"
     }
 
     local wks_absolute = path.getabsolute("../")

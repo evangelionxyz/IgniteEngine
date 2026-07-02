@@ -16,3 +16,17 @@ project "STB"
     includedirs {
         "%{THIRDPARTY_DIR}/STB/include"
     }
+
+    filter { "configurations:Debug or Debug-Profiling" }
+        runtime "Debug"
+        symbols "on"
+
+    filter { "configurations:Release or Release-Profiling" }
+        runtime "Release"
+        optimize "on"
+        symbols "on"
+
+    filter { "configurations:Shipping or Shipping-Profiling" }
+        runtime "release"
+        optimize "on"
+        symbols "off"
