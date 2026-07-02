@@ -15,6 +15,46 @@ namespace ignite
     class IBuffer
     {
     public:
+        IBuffer() = default;
+
+        IBuffer(const IBuffer& other)
+        {
+            if (!other.IsEmpty())
+            {
+                m_Data = other.m_Data;
+                IGN_PROFILE_ALLOC_N(Data(), Size(), "CPU Buffer");
+            }
+        }
+
+        IBuffer(IBuffer&& other) noexcept
+        {
+            m_Data = std::move(other.m_Data);
+        }
+
+        IBuffer& operator=(const IBuffer& other)
+        {
+            if (this != &other)
+            {
+                Release();
+                if (!other.IsEmpty())
+                {
+                    m_Data = other.m_Data;
+                    IGN_PROFILE_ALLOC_N(Data(), Size(), "CPU Buffer");
+                }
+            }
+            return *this;
+        }
+
+        IBuffer& operator=(IBuffer&& other) noexcept
+        {
+            if (this != &other)
+            {
+                Release();
+                m_Data = std::move(other.m_Data);
+            }
+            return *this;
+        }
+
         virtual ~IBuffer()
         {
             Release();
@@ -23,8 +63,8 @@ namespace ignite
         [[nodiscard]]
         virtual const uint8_t *Data() const { return m_Data.data(); }
 
-		[[nodiscard]]
-		virtual const uint8_t *Data() { return m_Data.data(); }
+        [[nodiscard]]
+        virtual const uint8_t *Data() { return m_Data.data(); }
         
         [[nodiscard]]
         virtual const size_t Size() const { return m_Data.size(); }
@@ -43,15 +83,12 @@ namespace ignite
 
         virtual void Allocate(size_t size)
         {
-			Release();
-
+            Release();
             m_Data.resize(size);
-#ifdef IGN_ENABLE_TRACY
             if (m_Data.data() && size > 0)
             {
-			    IGN_PROFILE_ALLOC_N(Data(), size, "CPU Buffer");
+                IGN_PROFILE_ALLOC_N(Data(), size, "CPU Buffer");
             }
-#endif
         }
 
         virtual void Release()
@@ -64,13 +101,13 @@ namespace ignite
             }
         }
 
-		template<typename T>
-		T *As() { return (T *)Data(); }
+        template<typename T>
+        T *As() { return (T *)Data(); }
 
-		template<typename T>
-		const T *As() const { return (T *)Data(); }
+        template<typename T>
+        const T *As() const { return (T *)Data(); }
 
-		operator bool() const { return !IsEmpty(); }
+        operator bool() const { return !IsEmpty(); }
 
         const std::vector<uint8_t> &Get() const { return m_Data; }
 
@@ -81,26 +118,30 @@ namespace ignite
     class Buffer : public IBuffer
     {
     public:
-		Buffer() = default;
+        Buffer() = default;
 
-		Buffer(size_t size)
-		{
-			m_Data.resize(size);
-		}
+        Buffer(size_t size)
+        {
+            Allocate(size);
+        }
 
-		Buffer(const std::vector<uint8_t> &inData)
-		{
-			m_Data = inData;
-		}
+        Buffer(const std::vector<uint8_t> &inData)
+        {
+            if (!inData.empty())
+            {
+                Allocate(inData.size());
+                std::memcpy(m_Data.data(), inData.data(), inData.size());
+            }
+        }
 
-		Buffer(void *data, size_t size)
-		{
-			if (data && size > 0)
-			{
-				m_Data.resize(size);
-				std::memcpy(m_Data.data(), data, size);
-			}
-		}
+        Buffer(void *data, size_t size)
+        {
+            if (data && size > 0)
+            {
+                Allocate(size);
+                std::memcpy(m_Data.data(), data, size);
+            }
+        }
 
         static Buffer Copy(uint8_t *data, size_t size)
         {
