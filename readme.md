@@ -18,16 +18,6 @@ Run Visual Studio Project Generator
 gen.bat
 ```
 
-## Linux Build
-
-Run Make Generator.
-
-Will automatically download dependencies
- ```bash
- sudo bash ./gen.sh
- ```
-
-
 ## Docker build
 
 ```bash
@@ -63,11 +53,10 @@ now, lets build.
 ## Preview
 
 <div style='display:flex;flex-direction:column;width:80%;margin:auto; gap:12px'>
+  <img src="ignite/editor/resources/examples/image_08.png">
   <img src="ignite/editor/resources/examples/image_01.png">
-  <img src="ignite/editor/resources/examples/image_02.png">
-  <img src="ignite/editor/resources/examples/image_03.png">
-  <img src="ignite/editor/resources/examples/image_04.png">
   <img src="ignite/editor/resources/examples/image_05.png">
   <img src="ignite/editor/resources/examples/image_06.png">
-  <img src="ignite/editor/resources/examples/image_07.png">
+  <img src="ignite/editor/resources/examples/image_04.png">
+  <img src="ignite/editor/resources/examples/image_03.png">
 </div>
