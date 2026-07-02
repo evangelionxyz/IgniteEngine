@@ -36,7 +36,7 @@ namespace ignite {
     void Gizmo::Manipulate(glm::mat4 &inOutMatrix)
     {
         // X, Y, Z axes
-        f32 snapValues[] = { m_GizmoInfo.snapValue, m_GizmoInfo.snapValue, m_GizmoInfo.snapValue };
+        float snapValues[3] = { m_GizmoInfo.snapValue, m_GizmoInfo.snapValue, m_GizmoInfo.snapValue };
 
         ImGuizmo::Manipulate(glm::value_ptr(m_GizmoInfo.cameraView),
             glm::value_ptr(m_GizmoInfo.cameraProjection),

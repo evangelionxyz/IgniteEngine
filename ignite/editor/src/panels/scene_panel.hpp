@@ -90,7 +90,10 @@ namespace ignite
 		struct ViewportData
 		{
 			glm::vec2 mousePos = glm::vec2(0.0f);
-            float snapValue = 0.05f;
+
+            // Individual operation snap for TRANSLATE, ROTATION, SCALE
+            // - Rotation in Degree
+            std::array<float,3> snapValues = { 0.25f, 15.0f, 0.25f };
             float panSnapValue = 0.0025f;
 			bool wantMouseDragging = false;
 		};

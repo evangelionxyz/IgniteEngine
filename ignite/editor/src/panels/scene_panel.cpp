@@ -2671,9 +2671,9 @@ namespace ignite
 						if (clickedIconEntity.IsValid())
 						{
 							Entity targetSelection = clickedIconEntity;
-							if (!mouseDoubleDown)
+							if (!mouseDoubleDown && !ImGui::IsKeyDown(ImGuiKey_LeftShift))
 							{
-								const UUID parent = clickedIconEntity.GetParentUUID();
+								const auto parent = clickedIconEntity.GetParentUUID();
 								if (parent != UUID(0))
 								{
 									if (Entity parentEntity = SceneManager::GetEntity(m_Scene.get(), parent); parentEntity.IsValid())
@@ -2711,7 +2711,7 @@ namespace ignite
 									size_t rowPitch = 0;
 									if (void *mapped = device->mapStagingTexture(stagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch))
 									{
-										const uint32_t *pixelData = static_cast<const uint32_t *>(mapped);
+										const auto pixelData = static_cast<const uint32_t *>(mapped);
 										const uint32_t pickedObjectId = pixelData[pixelY * (rowPitch / sizeof(uint32_t)) + pixelX];
 										device->unmapStagingTexture(stagingTexture);
 
@@ -2719,16 +2719,16 @@ namespace ignite
 										if (pickedObjectId != 0xFFFFFFFFu)
 										{
 											m_Scene->registry->view<IDComponent>().each([&](const entt::entity e, const auto &id)
-												{
-													if (pickedEntity.IsValid())
-														return;
+											{
+												if (pickedEntity.IsValid())
+													return;
 
-													const uint32_t objectId = static_cast<uint32_t>(static_cast<uint64_t>(id.uuid));
-													if (objectId == pickedObjectId)
-													{
-														pickedEntity = Entity{ e, m_Scene.get() };
-													}
-												});
+												const auto objectId = static_cast<uint32_t>(static_cast<uint64_t>(id.uuid));
+												if (objectId == pickedObjectId)
+												{
+													pickedEntity = Entity{ e, m_Scene.get() };
+												}
+											});
 										}
 
 										if (pickedEntity.IsValid())
@@ -2737,9 +2737,9 @@ namespace ignite
 
 											// Single click: prefer selecting the direct parent group first.
 											// Double click: select the exact clicked entity.
-											if (!mouseDoubleDown)
+											if (!mouseDoubleDown && !ImGui::IsKeyDown(ImGuiKey_LeftShift))
 											{
-												const UUID parent = pickedEntity.GetParentUUID();
+												const auto parent = pickedEntity.GetParentUUID();
 												if (parent != UUID(0))
 												{
 													if (Entity parentEntity = SceneManager::GetEntity(m_Scene.get(), parent); parentEntity.IsValid())
@@ -2813,8 +2813,14 @@ namespace ignite
 				gizmoInfo.cameraView = view;
 				gizmoInfo.cameraProjection = projection;
 				gizmoInfo.cameraType = m_EditorCamera.projectionType;
-				gizmoInfo.snapValue = m_ViewportData.snapValue;
 				gizmoInfo.viewRect = Rect(globals::GEditor::EditorViewport.min, globals::GEditor::EditorViewport.min + globals::GEditor::EditorViewport.max);
+				switch (m_Gizmo.GetOperation())
+				{
+				default:
+				case ImGuizmo::OPERATION::TRANSLATE: gizmoInfo.snapValue = m_ViewportData.snapValues[0]; break;
+                case ImGuizmo::OPERATION::ROTATE: gizmoInfo.snapValue = m_ViewportData.snapValues[1]; break;
+                case ImGuizmo::OPERATION::SCALE: gizmoInfo.snapValue = m_ViewportData.snapValues[2]; break;
+				}
 
 				m_Gizmo.SetInfo(gizmoInfo);
 
@@ -2829,7 +2835,7 @@ namespace ignite
 				if (isManipulatingNow && !m_Data.isGizmoManipulating)
 				{
 					initialTransforms.clear();
-					for (auto [uuid, entity] : m_SelectedEntities)
+					for (const auto &[uuid, entity] : m_SelectedEntities)
 					{
 						// Store the original transform of each selected entity
 						initialTransforms[uuid] = entity.GetTransform();
@@ -3265,7 +3271,19 @@ namespace ignite
 
         ImGui::SameLine();
         ImGui::SetNextItemWidth(90.0f);
-        ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValue, 0.05f, 0.0f, 100.0f, "Snap %.2f");
+        switch (m_Gizmo.GetOperation())
+        {
+        default:
+        case ImGuizmo::OPERATION::TRANSLATE:
+            ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[0], 0.05f, 0.0f, 100.0f, "Snap %.2f");
+            break;
+		case ImGuizmo::OPERATION::ROTATE:
+			ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[1], 0.05f, 0.0f, 100.0f, "Snap %.2f");
+			break;
+		case ImGuizmo::OPERATION::SCALE:
+			ImGui::DragFloat("##GizmoSnapping", &m_ViewportData.snapValues[2], 0.05f, 0.0f, 100.0f, "Snap %.2f");
+			break;
+        }
         ImGui::SameLine();
 
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
