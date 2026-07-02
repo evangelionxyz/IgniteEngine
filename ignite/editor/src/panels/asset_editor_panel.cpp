@@ -62,11 +62,6 @@ namespace ignite
 {
     namespace
     {
-        enum MeshType
-        {
-            UV_SPHERE = 0,
-        };
-
         struct TextureEditorState
         {
             TextureCreateInfo createInfo;
@@ -146,8 +141,6 @@ namespace ignite
 
         static Gizmo s_SkeletonPreviewGizmo;
 
-        // Default static meshes
-        static std::unordered_map<MeshType, Ref<Mesh>> s_DefaultMeshes;
         static Ref<Material> s_SkeletonPreviewMaterial;
 
         static ignite::Path BuildAssetMetaPath(Project *project, const AssetMetaData &metadata)
@@ -165,16 +158,6 @@ namespace ignite
         static std::string BuildAssetEditorPinOwnerTag(AssetHandle handle)
         {
             return std::format("editor.asset-editor.{}", static_cast<uint64_t>(handle));
-        }
-
-        static Ref<Mesh> GetDefaultMesh(MeshType type)
-        {
-            auto it = s_DefaultMeshes.find(type);
-            if (it != s_DefaultMeshes.end())
-                return s_DefaultMeshes[type];
-
-			s_DefaultMeshes[type] = BinarySerializer::DeserializeMesh("resources/staticmeshes/uvsphere.mesh");
-            return s_DefaultMeshes[type];
         }
 
         static void SaveAnimatorControllerEditorMeta(Project *project, const Ref<AnimatorController> &controller, const AssetMetaData &metadata,
@@ -417,7 +400,6 @@ namespace ignite
         m_OpenSignalToken   = kInvalidSignalToken;
         m_CreateSignalToken = kInvalidSignalToken;
 
-        s_DefaultMeshes.clear();
         s_SkeletonPreviewMaterial.reset();
         s_SkeletonPreviewEditorState.clear();
     }
@@ -449,7 +431,7 @@ namespace ignite
                         {
                             if (sceneRenderer)
                             {
-                                assetData.sceneData.sceneRenderer->SetPreviewMesh(GetDefaultMesh(UV_SPHERE));
+                                assetData.sceneData.sceneRenderer->SetPreviewMesh(Renderer::GetDefaultMesh(MeshType::UV_SPHERE));
                                 sceneRenderer->SetPreviewMaterial(loaded->As<Material>());
                                 assetData.asset = loaded;
                             }
@@ -2770,7 +2752,7 @@ namespace ignite
                         MaterialPreviewEditorState &previewState = s_MaterialPreviewEditorState[stateKey];
                         if (!previewState.initialized)
                         {
-                            previewState.selectedMeshType = static_cast<int>(UV_SPHERE);
+                            previewState.selectedMeshType = static_cast<int>(MeshType::UV_SPHERE);
                             previewState.initialized = true;
                         }
 
@@ -2837,7 +2819,7 @@ namespace ignite
                         if (ImGui::Combo("Preview Mesh", &meshSelection, meshNames, IM_ARRAYSIZE(meshNames)))
                         {
                             previewState.selectedMeshType = meshSelection;
-                            assetData.sceneData.sceneRenderer->SetPreviewMesh(GetDefaultMesh((MeshType)meshSelection));
+                            assetData.sceneData.sceneRenderer->SetPreviewMesh(Renderer::GetDefaultMesh((MeshType)meshSelection));
                         }
 
                         DrawTexturePreviewDropTarget(m_EditorLayer->GetActiveProject().get(), "Environment", assetData.previewEnvTexHandle, [&]()
@@ -4884,7 +4866,7 @@ namespace ignite
 
         auto assetManager = AssetManager::GetInstance();
 
-        Ref<Mesh> meshResult = GetDefaultMesh(UV_SPHERE);
+        Ref<Mesh> meshResult = Renderer::GetDefaultMesh(MeshType::UV_SPHERE);
         AssetHandle handle = assetData.handle;
 
         Ref<Material> material;

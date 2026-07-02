@@ -22,6 +22,8 @@ namespace ignite
 
     class DeviceManager;
     class Texture;
+    class Mesh;
+    class Material;
     class Shader;
 	class ConstantBuffer;
 
@@ -32,6 +34,11 @@ namespace ignite
         MATERIAL,
         ENVIRONMENT,
     };
+
+	enum class MeshType
+	{
+		UV_SPHERE = 0,
+	};
 
     struct RendererStats
     {
@@ -65,6 +72,10 @@ namespace ignite
         static Ref<Texture> GetBlackTexture();
         static Ref<Texture> GetMagentaTexture();
 
+        static Ref<Material> GetDefaultMaterial();
+
+        static Ref<Mesh> GetDefaultMesh(MeshType type);
+
         static nvrhi::GraphicsAPI GetGraphicsAPI();
         static nvrhi::BindingLayoutHandle GetBindingLayout(GLayoutMap type);
 
@@ -74,13 +85,17 @@ namespace ignite
         nvrhi::GraphicsAPI m_GraphicsAPI;
 
         std::unordered_map<GLayoutMap, nvrhi::BindingLayoutHandle> m_BindingLayouts;
+		std::unordered_map<MeshType, Ref<Mesh>> m_DefaultMeshes;
 
         Ref<Texture> m_WhiteTexture;
         Ref<Texture> m_BlackTexture;
         Ref<Texture> m_MagentaTexture;
 
+        Ref<Material> m_DefaultMaterial;
+
         nvrhi::IDevice *m_Device;
         std::vector<std::function<void(nvrhi::ICommandList *)>> m_SubmitFuncs;
+
 
         friend class ShaderLibrary;
     };

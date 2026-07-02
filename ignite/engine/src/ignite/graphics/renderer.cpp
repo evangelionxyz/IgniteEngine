@@ -7,31 +7,41 @@
 #include "shader.hpp"
 
 #include "ignite/graphics/buffers/constant_buffer.hpp"
+#include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/graphics/objects/material.hpp"
 #include "ignite/graphics/objects/environment.hpp"
-#include "ignite/graphics/objects/mesh.hpp"
 #include "ignite/core/device/device_manager.hpp"
+
+#include "ignite/serializer/binary_serializer.hpp"
 
 #include <ranges>
 #include "ignite/core/path.hpp"
 
 namespace ignite
 {
-    Renderer *s_instance = nullptr;
+    static Renderer *s_RendererInstance = nullptr;
+
     RendererStats Renderer::Stats;
 
     Renderer::Renderer(DeviceManager *deviceManager, nvrhi::GraphicsAPI api)
     {
-        s_instance = this;
+        s_RendererInstance = this;
+
         m_GraphicsAPI = api;
 
-        s_instance->m_Device = deviceManager->GetDevice();
+        m_Device = deviceManager->GetDevice();
 
         Shader::InitShaderData();
 
-        nvrhi::CommandListHandle cmd = DeviceManager::GetInstance()->GetDevice()->createCommandList();
-        cmd->open();
+		// Create binding layouts
+		m_BindingLayouts[GLayoutMap::MESH_ANIM] = m_Device->createBindingLayout(VertexMesh_Anim::GetBindingLayoutDesc());
+		m_BindingLayouts[GLayoutMap::ENVIRONMENT] = m_Device->createBindingLayout(Environment::GetBindingLayoutDesc());
+		m_BindingLayouts[GLayoutMap::MATERIAL] = m_Device->createBindingLayout(Material::GetBindingLayoutDesc());
 
+
+        nvrhi::CommandListHandle cmd = m_Device->createCommandList();
+
+        // Default textures
         {
             TextureCreateInfo textureCreateInfo;
             textureCreateInfo.format = nvrhi::Format::RGBA8_UNORM;
@@ -41,6 +51,8 @@ namespace ignite
             textureCreateInfo.flip = false;
         	textureCreateInfo.initialState = nvrhi::ResourceStates::ShaderResource;
         	textureCreateInfo.keepInitialState = true;
+
+			cmd->open();
 
             size_t texSize = sizeof(uint32_t);
             uint32_t white = 0xFFFFFFFF;
@@ -57,15 +69,21 @@ namespace ignite
             std::vector<uint8_t> magentaData(texSize);
             memcpy(magentaData.data(), &magenta, texSize);
             m_MagentaTexture = Texture::Create(magentaData, textureCreateInfo, cmd);
+
+            cmd->close();
+            m_Device->executeCommandList(cmd);
         }
 
-        cmd->close();
-        Application::SubmitWorkerCommandList(cmd);
+		// Default material
+		{
+			cmd->open();
+			m_DefaultMaterial = CreateRef<Material>();
+			m_DefaultMaterial->UpdateBindingSet();
+			m_DefaultMaterial->UploadToGpu(cmd);
+			cmd->close();
+			m_Device->executeCommandList(cmd);
+		}
 
-        // Create binding layouts
-        m_BindingLayouts[GLayoutMap::MESH_ANIM] = s_instance->m_Device->createBindingLayout(VertexMesh_Anim::GetBindingLayoutDesc());
-        m_BindingLayouts[GLayoutMap::ENVIRONMENT] = s_instance->m_Device->createBindingLayout(Environment::GetBindingLayoutDesc());
-        m_BindingLayouts[GLayoutMap::MATERIAL] = s_instance->m_Device->createBindingLayout(Material::GetBindingLayoutDesc());
     }
 
 	void Renderer::Shutdown()
@@ -81,6 +99,9 @@ namespace ignite
 		m_MagentaTexture.reset();
 		m_BlackTexture.reset();
 
+        m_DefaultMaterial.reset();
+
+        m_DefaultMeshes.clear();
 		m_BindingLayouts.clear();
 	}
 
@@ -95,30 +116,45 @@ namespace ignite
 
     nvrhi::GraphicsAPI Renderer::GetGraphicsAPI()
     {
-        return s_instance->m_GraphicsAPI;
+        return s_RendererInstance->m_GraphicsAPI;
     }
 
     nvrhi::BindingLayoutHandle Renderer::GetBindingLayout(GLayoutMap type)
     {
-        if (s_instance->m_BindingLayouts.contains(type))
-            return s_instance->m_BindingLayouts[type];
+        if (s_RendererInstance->m_BindingLayouts.contains(type))
+            return s_RendererInstance->m_BindingLayouts[type];
 
         return nullptr;
     }
 
     Ref<Texture> Renderer::GetWhiteTexture()
     {
-        return s_instance->m_WhiteTexture;
+        return s_RendererInstance->m_WhiteTexture;
     }
 
     Ref<Texture> Renderer::GetBlackTexture()
     {
-        return s_instance->m_BlackTexture;
+        return s_RendererInstance->m_BlackTexture;
     }
 
     Ref<Texture> Renderer::GetMagentaTexture()
     {
-        return s_instance->m_MagentaTexture;
+        return s_RendererInstance->m_MagentaTexture;
     }
+
+	Ref<Material> Renderer::GetDefaultMaterial()
+	{
+        return s_RendererInstance->m_DefaultMaterial;
+	}
+
+	Ref<Mesh> Renderer::GetDefaultMesh(MeshType type)
+	{
+		auto it = s_RendererInstance->m_DefaultMeshes.find(type);
+        if (it != s_RendererInstance->m_DefaultMeshes.end())
+            return s_RendererInstance->m_DefaultMeshes[type];
+
+        s_RendererInstance->m_DefaultMeshes[type] = BinarySerializer::DeserializeMesh("resources/staticmeshes/uvsphere.mesh");
+        return s_RendererInstance->m_DefaultMeshes[type];
+	}
 
 }

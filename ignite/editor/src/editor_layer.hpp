@@ -143,13 +143,8 @@ namespace ignite
         ignite::Path m_CurrentSceneFilePath;
     	ignite::Path m_CurrentProjectFilepath;
 
-        std::vector<uint8_t> m_ScreenshotPixelData;
-        int m_ScreenshotWidth = 0;
-        int m_ScreenshotHeight = 0;
-
         nvrhi::BufferHandle m_DebugRenderBuffer;
         nvrhi::StagingTextureHandle m_MousePickingStagingTexture;
-        nvrhi::StagingTextureHandle m_ScreenshotStagingTexture;
         nvrhi::CommandListHandle m_Cmd;
         glm::vec2 m_CurrentFramebufferSize;
             

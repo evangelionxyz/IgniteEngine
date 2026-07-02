@@ -600,48 +600,63 @@ namespace ignite
             }
         }
 
-        m_Cmd->open();
-
         if (m_State.takeScreenshot)
         {
             auto sceneTexture = m_SceneRenderer->GetCompositeRT()->GetColorAttachment(0)->GetHandle();
             nvrhi::TextureDesc stagingDesc = sceneTexture->getDesc();
             stagingDesc.initialState = nvrhi::ResourceStates::CopyDest;
-            m_ScreenshotStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
-            m_Cmd->copyTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), sceneTexture, nvrhi::TextureSlice());
-        }
+            auto screenShotStagingTexture = m_Device->createStagingTexture(stagingDesc, nvrhi::CpuAccessMode::Read);
+            
+            nvrhi::CommandListHandle cmd = m_Device->createCommandList();
+            cmd->open();
+            cmd->copyTexture(screenShotStagingTexture, nvrhi::TextureSlice(), sceneTexture, nvrhi::TextureSlice());
+            cmd->close();
 
-        m_Cmd->close();
-        Application::SubmitWorkerCommandList(m_Cmd);
+            m_Device->executeCommandList(cmd);
 
-        if (m_State.takeScreenshot)
-        {
-            // Map and read the pixel data
-            size_t rowPitch = 0;
-            if (void *mappedData = m_Device->mapStagingTexture(m_ScreenshotStagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch))
-            {
-                m_ScreenshotWidth = static_cast<int>(m_ScreenshotStagingTexture->getDesc().width);
-                m_ScreenshotHeight = static_cast<int>(m_ScreenshotStagingTexture->getDesc().height);
+			if (!screenShotStagingTexture)
+			{
+				m_State.takeScreenshot = false;
+			}            
+            else
+			{
+				// Map and read the pixel data
+				size_t rowPitch = 0;
+				if (void *mappedData = m_Device->mapStagingTexture(screenShotStagingTexture, nvrhi::TextureSlice(), nvrhi::CpuAccessMode::Read, &rowPitch))
+				{
+                    static ImageData image;
+					image.width = screenShotStagingTexture->getDesc().width;
+                    image.height = screenShotStagingTexture->getDesc().height;
 
-                size_t packedStride = m_ScreenshotWidth * 4;
-                m_ScreenshotPixelData.resize(m_ScreenshotHeight * packedStride);
+					const uint32_t packedStride = image.width * 4u;
+					
+                    image.pixels.resize(image.height * packedStride);
+					const auto src = static_cast<const uint8_t *>(mappedData);
+					uint8_t *dst = image.pixels.data();
 
-                const auto src = static_cast<const uint8_t *>(mappedData);
-                uint8_t *dst = m_ScreenshotPixelData.data();
+					for (uint32_t y = 0u; y < image.height; ++y)
+					{
+						memcpy(dst + y * packedStride, src + y * rowPitch, packedStride);
+					}
 
-                for (int y = 0; y < m_ScreenshotHeight; ++y)
-                {
-                    memcpy(dst + y * packedStride, src + y * rowPitch, packedStride);
-                }
+					m_Device->unmapStagingTexture(screenShotStagingTexture);
 
-                m_Device->unmapStagingTexture(m_ScreenshotStagingTexture);
+                    const std::tm local_tm = Timestep::GetLocalTime();
 
-                SDL_ShowSaveFileDialog(OnScreenshotSaveFileSelected, this,
-                    Application::GetInstance()->GetWindow()->GetWindowHandle(),
-                    kScreenshotFileFilters, IM_ARRAYSIZE(kScreenshotFileFilters),
-                    "Screenshot.png");
-            }
-            m_State.takeScreenshot = false;
+                    std::ostringstream oss;
+                    oss << std::put_time(&local_tm, "igite_ss %D-%H-%M-%S");
+                    std::string filename = oss.str();
+                    stringutils::ReplaceWith(filename, "/", "-");
+
+					SDL_ShowSaveFileDialog(OnScreenshotSaveFileSelected, &image,
+						Application::GetInstance()->GetWindow()->GetWindowHandle(),
+						kScreenshotFileFilters, IM_ARRAYSIZE(kScreenshotFileFilters),
+						filename.c_str());
+				}
+
+				m_State.takeScreenshot = false;
+			}
+
         }
     }
 
@@ -1429,15 +1444,15 @@ namespace ignite
                 filepath += ".png";
             }
 
-            EditorLayer *editor = static_cast<EditorLayer *>(userData);
-            if (!editor->m_ScreenshotPixelData.empty())
+            auto image = static_cast<ImageData *>(userData);
+            if (!image->pixels.empty())
             {
                 const int channels = 4;
                 // stride is width * 4 because we packed it
-                stbi_write_png(filepath.c_str(), editor->m_ScreenshotWidth, editor->m_ScreenshotHeight, channels, editor->m_ScreenshotPixelData.data(), editor->m_ScreenshotWidth * channels);
+                stbi_write_png(filepath.c_str(), image->width, image->height, channels, image->pixels.data(), image->width * channels);
 
-                editor->m_ScreenshotPixelData.clear();
-                editor->m_ScreenshotPixelData.shrink_to_fit();
+                image->pixels.clear();
+                image->pixels.shrink_to_fit();
             }
         }
     }
