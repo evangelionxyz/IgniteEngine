@@ -274,11 +274,11 @@ namespace ignite
 
             if (camera->projectionType == ProjectionType::Orthographic)
             {
-                DrawDebugGrid(cmd, framebuffer, m_DebugGridSettings.world2D, true);
+                DrawDebugGrid(cmd, framebuffer, debugSettings.worldGrid2D, true);
             }
             else
             {
-                DrawDebugGrid(cmd, framebuffer, m_DebugGridSettings.world3D, false);
+                DrawDebugGrid(cmd, framebuffer, debugSettings.worldGrid3D, false);
             }
 
             DrawDebug2D(cmd, framebuffer);
@@ -1322,57 +1322,59 @@ namespace ignite
         constexpr int kCircleDebugSegments = 24;
         constexpr float kTwoPi = 6.28318530718f;
 
-        auto boxCollider2DView = m_Scene->registry->view<TransformComponent, BoxCollider2DComponent>();
-        for (entt::entity e : boxCollider2DView)
+        if (debugSettings.showPhysicsCollider)
         {
-            TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-            if (!tr.visible)
-                continue;
-
-            const BoxCollider2DComponent &box = m_Scene->registry->get<BoxCollider2DComponent>(e);
-            const glm::mat4 world = tr.world.GetMatrix();
-
-            const glm::vec2 halfExtents = box.size;
-            const glm::vec2 offset = box.offset;
-
-            const glm::vec4 c0 = world * glm::vec4(offset.x - halfExtents.x, offset.y - halfExtents.y, 0.0f, 1.0f);
-            const glm::vec4 c1 = world * glm::vec4(offset.x + halfExtents.x, offset.y - halfExtents.y, 0.0f, 1.0f);
-            const glm::vec4 c2 = world * glm::vec4(offset.x + halfExtents.x, offset.y + halfExtents.y, 0.0f, 1.0f);
-            const glm::vec4 c3 = world * glm::vec4(offset.x - halfExtents.x, offset.y + halfExtents.y, 0.0f, 1.0f);
-
-            m_Renderer2D->DrawLine(glm::vec3(c0), glm::vec3(c1), kPhysicsDebugColor);
-            m_Renderer2D->DrawLine(glm::vec3(c1), glm::vec3(c2), kPhysicsDebugColor);
-            m_Renderer2D->DrawLine(glm::vec3(c2), glm::vec3(c3), kPhysicsDebugColor);
-            m_Renderer2D->DrawLine(glm::vec3(c3), glm::vec3(c0), kPhysicsDebugColor);
-        }
-
-        auto circleCollider2DView = m_Scene->registry->view<TransformComponent, CircleCollider2DComponent>();
-        for (entt::entity e : circleCollider2DView)
-        {
-            TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-            if (!tr.visible)
-                continue;
-
-            const CircleCollider2DComponent &circle = m_Scene->registry->get<CircleCollider2DComponent>(e);
-            const glm::mat4 world = tr.world.GetMatrix();
-            const glm::vec3 centerWorld = glm::vec3(world * glm::vec4(circle.center, 0.0f, 1.0f));
-
-            const float worldScaleX = glm::length(glm::vec2(world[0]));
-            const float worldScaleY = glm::length(glm::vec2(world[1]));
-            const float scaledRadius = circle.radius * glm::max(worldScaleX, worldScaleY);
-
-            for (int i = 0; i < kCircleDebugSegments; ++i)
+            auto boxCollider2DView = m_Scene->registry->view<TransformComponent, BoxCollider2DComponent>();
+            for (entt::entity e : boxCollider2DView)
             {
-                const float t0 = (static_cast<float>(i) / static_cast<float>(kCircleDebugSegments)) * kTwoPi;
-                const float t1 = (static_cast<float>(i + 1) / static_cast<float>(kCircleDebugSegments)) * kTwoPi;
+                TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                if (!tr.visible)
+                    continue;
 
-                const glm::vec3 p0 = centerWorld + glm::vec3(std::cos(t0) * scaledRadius, std::sin(t0) * scaledRadius, 0.0f);
-                const glm::vec3 p1 = centerWorld + glm::vec3(std::cos(t1) * scaledRadius, std::sin(t1) * scaledRadius, 0.0f);
+                const BoxCollider2DComponent &box = m_Scene->registry->get<BoxCollider2DComponent>(e);
+                const glm::mat4 world = tr.world.GetMatrix();
 
-                m_Renderer2D->DrawLine(p0, p1, kPhysicsDebugColor);
+                const glm::vec2 halfExtents = box.size;
+                const glm::vec2 offset = box.offset;
+
+                const glm::vec4 c0 = world * glm::vec4(offset.x - halfExtents.x, offset.y - halfExtents.y, 0.0f, 1.0f);
+                const glm::vec4 c1 = world * glm::vec4(offset.x + halfExtents.x, offset.y - halfExtents.y, 0.0f, 1.0f);
+                const glm::vec4 c2 = world * glm::vec4(offset.x + halfExtents.x, offset.y + halfExtents.y, 0.0f, 1.0f);
+                const glm::vec4 c3 = world * glm::vec4(offset.x - halfExtents.x, offset.y + halfExtents.y, 0.0f, 1.0f);
+
+                m_Renderer2D->DrawLine(glm::vec3(c0), glm::vec3(c1), kPhysicsDebugColor);
+                m_Renderer2D->DrawLine(glm::vec3(c1), glm::vec3(c2), kPhysicsDebugColor);
+                m_Renderer2D->DrawLine(glm::vec3(c2), glm::vec3(c3), kPhysicsDebugColor);
+                m_Renderer2D->DrawLine(glm::vec3(c3), glm::vec3(c0), kPhysicsDebugColor);
+            }
+
+            auto circleCollider2DView = m_Scene->registry->view<TransformComponent, CircleCollider2DComponent>();
+            for (entt::entity e : circleCollider2DView)
+            {
+                TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                if (!tr.visible)
+                    continue;
+
+                const CircleCollider2DComponent &circle = m_Scene->registry->get<CircleCollider2DComponent>(e);
+                const glm::mat4 world = tr.world.GetMatrix();
+                const glm::vec3 centerWorld = glm::vec3(world * glm::vec4(circle.center, 0.0f, 1.0f));
+
+                const float worldScaleX = glm::length(glm::vec2(world[0]));
+                const float worldScaleY = glm::length(glm::vec2(world[1]));
+                const float scaledRadius = circle.radius * glm::max(worldScaleX, worldScaleY);
+
+                for (int i = 0; i < kCircleDebugSegments; ++i)
+                {
+                    const float t0 = (static_cast<float>(i) / static_cast<float>(kCircleDebugSegments)) * kTwoPi;
+                    const float t1 = (static_cast<float>(i + 1) / static_cast<float>(kCircleDebugSegments)) * kTwoPi;
+
+                    const glm::vec3 p0 = centerWorld + glm::vec3(std::cos(t0) * scaledRadius, std::sin(t0) * scaledRadius, 0.0f);
+                    const glm::vec3 p1 = centerWorld + glm::vec3(std::cos(t1) * scaledRadius, std::sin(t1) * scaledRadius, 0.0f);
+
+                    m_Renderer2D->DrawLine(p0, p1, kPhysicsDebugColor);
+                }
             }
         }
-
         m_Renderer2D->Flush(framebuffer, m_CameraBuffer);
         m_Renderer2D->End();
     }
@@ -1413,159 +1415,165 @@ namespace ignite
             }
         };
 
-        auto aabbView = m_Scene->registry->view<TransformComponent, MeshComponent>();
-        for (entt::entity e : aabbView)
+        if (debugSettings.showBoundingBox)
         {
-            TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-            if (!tr.visible)
-                continue;
-
-            auto &mc = m_Scene->registry->get<MeshComponent>(e);
-            m_Renderer2D->DrawAABB(mc.worldAABB);
-        }
-
-        auto boxCollider = m_Scene->registry->view<TransformComponent, BoxColliderComponent>();
-        for (entt::entity e : boxCollider)
-        {
-            TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-            if (!tr.visible)
-                continue;
-
-            const auto &box = m_Scene->registry->get<BoxColliderComponent>(e);
-            const glm::mat4 world = tr.world.GetMatrix();
-
-            const glm::vec3 c = box.center;
-            const glm::vec3 h = box.scale;
-            const glm::vec3 corners[8] =
+            auto aabbView = m_Scene->registry->view<TransformComponent, MeshComponent>();
+            for (entt::entity e : aabbView)
             {
-                glm::vec3(world * glm::vec4(c.x - h.x, c.y - h.y, c.z - h.z, 1.0f)),
-                glm::vec3(world * glm::vec4(c.x + h.x, c.y - h.y, c.z - h.z, 1.0f)),
-                glm::vec3(world * glm::vec4(c.x + h.x, c.y + h.y, c.z - h.z, 1.0f)),
-                glm::vec3(world * glm::vec4(c.x - h.x, c.y + h.y, c.z - h.z, 1.0f)),
-                glm::vec3(world * glm::vec4(c.x - h.x, c.y - h.y, c.z + h.z, 1.0f)),
-                glm::vec3(world * glm::vec4(c.x + h.x, c.y - h.y, c.z + h.z, 1.0f)),
-                glm::vec3(world * glm::vec4(c.x + h.x, c.y + h.y, c.z + h.z, 1.0f)),
-                glm::vec3(world * glm::vec4(c.x - h.x, c.y + h.y, c.z + h.z, 1.0f))
-            };
+                TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                if (!tr.visible)
+                    continue;
 
-            constexpr int edges[12][2] =
-            {
-                { 0, 1 }, { 1, 2 }, { 2, 3 }, { 3, 0 },
-                { 4, 5 }, { 5, 6 }, { 6, 7 }, { 7, 4 },
-                { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 }
-            };
-
-            for (const auto &edge : edges)
-            {
-                m_Renderer2D->DrawLine(corners[edge[0]], corners[edge[1]], kPhysicsDebugColor);
+                auto &mc = m_Scene->registry->get<MeshComponent>(e);
+                m_Renderer2D->DrawAABB(mc.worldAABB);
             }
         }
 
-        auto sphereCollider = m_Scene->registry->view<TransformComponent, SphereColliderComponent>();
-        for (entt::entity e : sphereCollider)
+        if (debugSettings.showPhysicsCollider)
         {
-            TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-            if (!tr.visible)
-                continue;
-
-            const auto &sphere = m_Scene->registry->get<SphereColliderComponent>(e);
-            const glm::mat4 world = tr.world.GetMatrix();
-
-            const float maxAxis = glm::compMax(tr.world.scale);
-            const float scaledRadius = sphere.radius * maxAxis;
-
-            const glm::vec3 center = glm::vec3(world * glm::vec4(sphere.center, 1.0f));
-
-            const glm::vec3 axisX = glm::normalize(glm::vec3(world[0])) * scaledRadius;
-            const glm::vec3 axisY = glm::normalize(glm::vec3(world[1])) * scaledRadius;
-            const glm::vec3 axisZ = glm::normalize(glm::vec3(world[2])) * scaledRadius;
-
-            drawCircleRing(center, axisX, axisY, kCircleSegments, kPhysicsDebugColor);
-            drawCircleRing(center, axisX, axisZ, kCircleSegments, kPhysicsDebugColor);
-            drawCircleRing(center, axisY, axisZ, kCircleSegments, kPhysicsDebugColor);
-        }
-
-        auto capsuleCollider = m_Scene->registry->view<TransformComponent, CapsuleColliderComponent>();
-        for (entt::entity e : capsuleCollider)
-        {
-            TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-            if (!tr.visible)
-                continue;
-
-            const auto &capsule = m_Scene->registry->get<CapsuleColliderComponent>(e);
-            const glm::mat4 world = tr.world.GetMatrix();
-            const float maxAxis = std::max({ tr.world.scale.x, tr.world.scale.y, tr.world.scale.z });
-            const float scaledRadius = capsule.radius * maxAxis;
-            const float scaledHalfHeight = glm::max(capsule.height - capsule.radius, 0.0f) * maxAxis;
-
-            const glm::vec3 center = glm::vec3(world * glm::vec4(capsule.center, 1.0f));
-            const glm::vec3 right = glm::normalize(glm::vec3(world[0])) * scaledRadius;
-            const glm::vec3 up = glm::normalize(glm::vec3(world[1])) * scaledRadius;
-            const glm::vec3 forward = glm::normalize(glm::vec3(world[2])) * scaledHalfHeight;
-
-            const glm::vec3 heightOffset = forward;
-            const glm::vec3 topCenter = center + heightOffset;
-            const glm::vec3 bottomCenter = center - heightOffset;
-
-            drawCircleRing(topCenter, right, up, kCircleSegments, kPhysicsDebugColor);
-            drawCircleRing(bottomCenter, right, up, kCircleSegments, kPhysicsDebugColor);
-
-            m_Renderer2D->DrawLine(topCenter + right, bottomCenter + right, kPhysicsDebugColor);
-            m_Renderer2D->DrawLine(topCenter - right, bottomCenter - right, kPhysicsDebugColor);
-            m_Renderer2D->DrawLine(topCenter + up, bottomCenter + up, kPhysicsDebugColor);
-            m_Renderer2D->DrawLine(topCenter - up, bottomCenter - up, kPhysicsDebugColor);
-
-            const glm::vec3 axisRadius = forward;
-            drawArc(topCenter, right, axisRadius, kCircleSegments / 2, kPhysicsDebugColor);
-            drawArc(topCenter, up, axisRadius, kCircleSegments / 2, kPhysicsDebugColor);
-            drawArc(bottomCenter, right, -axisRadius, kCircleSegments / 2, kPhysicsDebugColor);
-            drawArc(bottomCenter, up, -axisRadius, kCircleSegments / 2, kPhysicsDebugColor);
-        }
-
-        auto meshCollider = m_Scene->registry->view<TransformComponent, MeshColliderComponent>();
-        for (entt::entity e : meshCollider)
-        {
-            TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-            if (!tr.visible)
-                continue;
-
-            const auto &mesh = m_Scene->registry->get<MeshColliderComponent>(e);
-            if (mesh.vertices.empty())
-                continue;
-
-            const glm::mat4 world = tr.world.GetMatrix();
-
-            if (!mesh.indices.empty() && mesh.indices.size() % 3 == 0)
+            auto boxCollider = m_Scene->registry->view<TransformComponent, BoxColliderComponent>();
+            for (entt::entity e : boxCollider)
             {
-                for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3)
+                TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                if (!tr.visible)
+                    continue;
+
+                const auto &box = m_Scene->registry->get<BoxColliderComponent>(e);
+                const glm::mat4 world = tr.world.GetMatrix();
+
+                const glm::vec3 c = box.center;
+                const glm::vec3 h = box.scale;
+                const glm::vec3 corners[8] =
                 {
-                    const uint32_t i0 = mesh.indices[i + 0];
-                    const uint32_t i1 = mesh.indices[i + 1];
-                    const uint32_t i2 = mesh.indices[i + 2];
+                    glm::vec3(world * glm::vec4(c.x - h.x, c.y - h.y, c.z - h.z, 1.0f)),
+                    glm::vec3(world * glm::vec4(c.x + h.x, c.y - h.y, c.z - h.z, 1.0f)),
+                    glm::vec3(world * glm::vec4(c.x + h.x, c.y + h.y, c.z - h.z, 1.0f)),
+                    glm::vec3(world * glm::vec4(c.x - h.x, c.y + h.y, c.z - h.z, 1.0f)),
+                    glm::vec3(world * glm::vec4(c.x - h.x, c.y - h.y, c.z + h.z, 1.0f)),
+                    glm::vec3(world * glm::vec4(c.x + h.x, c.y - h.y, c.z + h.z, 1.0f)),
+                    glm::vec3(world * glm::vec4(c.x + h.x, c.y + h.y, c.z + h.z, 1.0f)),
+                    glm::vec3(world * glm::vec4(c.x - h.x, c.y + h.y, c.z + h.z, 1.0f))
+                };
 
-                    if (i0 >= mesh.vertices.size() || i1 >= mesh.vertices.size() || i2 >= mesh.vertices.size())
-                        continue;
+                constexpr int edges[12][2] =
+                {
+                    { 0, 1 }, { 1, 2 }, { 2, 3 }, { 3, 0 },
+                    { 4, 5 }, { 5, 6 }, { 6, 7 }, { 7, 4 },
+                    { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 }
+                };
 
-                    const glm::vec3 p0 = glm::vec3(world * glm::vec4(mesh.vertices[i0], 1.0f));
-                    const glm::vec3 p1 = glm::vec3(world * glm::vec4(mesh.vertices[i1], 1.0f));
-                    const glm::vec3 p2 = glm::vec3(world * glm::vec4(mesh.vertices[i2], 1.0f));
-
-                    m_Renderer2D->DrawLine(p0, p1, kPhysicsDebugColor);
-                    m_Renderer2D->DrawLine(p1, p2, kPhysicsDebugColor);
-                    m_Renderer2D->DrawLine(p2, p0, kPhysicsDebugColor);
+                for (const auto &edge : edges)
+                {
+                    m_Renderer2D->DrawLine(corners[edge[0]], corners[edge[1]], kPhysicsDebugColor);
                 }
             }
-            else if (mesh.vertices.size() >= 2)
+
+            auto sphereCollider = m_Scene->registry->view<TransformComponent, SphereColliderComponent>();
+            for (entt::entity e : sphereCollider)
             {
-                for (size_t i = 0; i + 1 < mesh.vertices.size(); ++i)
+                TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                if (!tr.visible)
+                    continue;
+
+                const auto &sphere = m_Scene->registry->get<SphereColliderComponent>(e);
+                const glm::mat4 world = tr.world.GetMatrix();
+
+                const float maxAxis = glm::compMax(tr.world.scale);
+                const float scaledRadius = sphere.radius * maxAxis;
+
+                const glm::vec3 center = glm::vec3(world * glm::vec4(sphere.center, 1.0f));
+
+                const glm::vec3 axisX = glm::normalize(glm::vec3(world[0])) * scaledRadius;
+                const glm::vec3 axisY = glm::normalize(glm::vec3(world[1])) * scaledRadius;
+                const glm::vec3 axisZ = glm::normalize(glm::vec3(world[2])) * scaledRadius;
+
+                drawCircleRing(center, axisX, axisY, kCircleSegments, kPhysicsDebugColor);
+                drawCircleRing(center, axisX, axisZ, kCircleSegments, kPhysicsDebugColor);
+                drawCircleRing(center, axisY, axisZ, kCircleSegments, kPhysicsDebugColor);
+            }
+
+            auto capsuleCollider = m_Scene->registry->view<TransformComponent, CapsuleColliderComponent>();
+            for (entt::entity e : capsuleCollider)
+            {
+                TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                if (!tr.visible)
+                    continue;
+
+                const auto &capsule = m_Scene->registry->get<CapsuleColliderComponent>(e);
+                const glm::mat4 world = tr.world.GetMatrix();
+                const float maxAxis = std::max({ tr.world.scale.x, tr.world.scale.y, tr.world.scale.z });
+                const float scaledRadius = capsule.radius * maxAxis;
+                const float scaledHalfHeight = glm::max(capsule.height - capsule.radius, 0.0f) * maxAxis;
+
+                const glm::vec3 center = glm::vec3(world * glm::vec4(capsule.center, 1.0f));
+                const glm::vec3 right = glm::normalize(glm::vec3(world[0])) * scaledRadius;
+                const glm::vec3 up = glm::normalize(glm::vec3(world[1])) * scaledRadius;
+                const glm::vec3 forward = glm::normalize(glm::vec3(world[2])) * scaledHalfHeight;
+
+                const glm::vec3 heightOffset = forward;
+                const glm::vec3 topCenter = center + heightOffset;
+                const glm::vec3 bottomCenter = center - heightOffset;
+
+                drawCircleRing(topCenter, right, up, kCircleSegments, kPhysicsDebugColor);
+                drawCircleRing(bottomCenter, right, up, kCircleSegments, kPhysicsDebugColor);
+
+                m_Renderer2D->DrawLine(topCenter + right, bottomCenter + right, kPhysicsDebugColor);
+                m_Renderer2D->DrawLine(topCenter - right, bottomCenter - right, kPhysicsDebugColor);
+                m_Renderer2D->DrawLine(topCenter + up, bottomCenter + up, kPhysicsDebugColor);
+                m_Renderer2D->DrawLine(topCenter - up, bottomCenter - up, kPhysicsDebugColor);
+
+                const glm::vec3 axisRadius = forward;
+                drawArc(topCenter, right, axisRadius, kCircleSegments / 2, kPhysicsDebugColor);
+                drawArc(topCenter, up, axisRadius, kCircleSegments / 2, kPhysicsDebugColor);
+                drawArc(bottomCenter, right, -axisRadius, kCircleSegments / 2, kPhysicsDebugColor);
+                drawArc(bottomCenter, up, -axisRadius, kCircleSegments / 2, kPhysicsDebugColor);
+            }
+
+            auto meshCollider = m_Scene->registry->view<TransformComponent, MeshColliderComponent>();
+            for (entt::entity e : meshCollider)
+            {
+                TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
+                if (!tr.visible)
+                    continue;
+
+                const auto &mesh = m_Scene->registry->get<MeshColliderComponent>(e);
+                if (mesh.vertices.empty())
+                    continue;
+
+                const glm::mat4 world = tr.world.GetMatrix();
+
+                if (!mesh.indices.empty() && mesh.indices.size() % 3 == 0)
                 {
-                    const glm::vec3 p0 = glm::vec3(world * glm::vec4(mesh.vertices[i], 1.0f));
-                    const glm::vec3 p1 = glm::vec3(world * glm::vec4(mesh.vertices[i + 1], 1.0f));
-                    m_Renderer2D->DrawLine(p0, p1, kPhysicsDebugColor);
+                    for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3)
+                    {
+                        const uint32_t i0 = mesh.indices[i + 0];
+                        const uint32_t i1 = mesh.indices[i + 1];
+                        const uint32_t i2 = mesh.indices[i + 2];
+
+                        if (i0 >= mesh.vertices.size() || i1 >= mesh.vertices.size() || i2 >= mesh.vertices.size())
+                            continue;
+
+                        const glm::vec3 p0 = glm::vec3(world * glm::vec4(mesh.vertices[i0], 1.0f));
+                        const glm::vec3 p1 = glm::vec3(world * glm::vec4(mesh.vertices[i1], 1.0f));
+                        const glm::vec3 p2 = glm::vec3(world * glm::vec4(mesh.vertices[i2], 1.0f));
+
+                        m_Renderer2D->DrawLine(p0, p1, kPhysicsDebugColor);
+                        m_Renderer2D->DrawLine(p1, p2, kPhysicsDebugColor);
+                        m_Renderer2D->DrawLine(p2, p0, kPhysicsDebugColor);
+                    }
+                }
+                else if (mesh.vertices.size() >= 2)
+                {
+                    for (size_t i = 0; i + 1 < mesh.vertices.size(); ++i)
+                    {
+                        const glm::vec3 p0 = glm::vec3(world * glm::vec4(mesh.vertices[i], 1.0f));
+                        const glm::vec3 p1 = glm::vec3(world * glm::vec4(mesh.vertices[i + 1], 1.0f));
+                        m_Renderer2D->DrawLine(p0, p1, kPhysicsDebugColor);
+                    }
                 }
             }
-        }
 
+        }
         m_Renderer2D->Flush(framebuffer, m_CameraBuffer);
         m_Renderer2D->End();
     }

@@ -17,6 +17,7 @@ namespace ignite {
         ProjectionType cameraType;
 
         Rect viewRect;
+
         float snapValue = 0.05f;
         bool isSnapping = true;
     };
@@ -31,8 +32,8 @@ namespace ignite {
         void SetOperation(ImGuizmo::OPERATION op);
         void SetMode(ImGuizmo::MODE mode);
 
-        ImGuizmo::MODE GetMode() { return m_Mode; }
-        ImGuizmo::OPERATION GetOperation() { return m_Operation; }
+        ImGuizmo::MODE GetMode() const { return m_Mode; }
+        ImGuizmo::OPERATION GetOperation() const { return m_Operation; }
 
         void Manipulate(glm::mat4 &inOutMatrix);
         void DrawGrid(float gridSize = 10.0f, const glm::mat4 &gridMatrix = glm::mat4(1.0f));

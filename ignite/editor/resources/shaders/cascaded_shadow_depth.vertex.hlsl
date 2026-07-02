@@ -63,6 +63,7 @@ struct VSInput
     float3 tangent      : TANGENT;
     float3 bitangent    : BITANGENT;
     float2 uv           : TEXCOORD;
+    float4 color        : COLOR;
     uint4  boneIDs      : BONEIDS;
     float4 weights      : WEIGHTS;
 };
@@ -75,6 +76,7 @@ struct PSInput
     float3 bitangent : BITANGENT;
     float3 worldPos  : WORLDPOS;
     float2 uv        : TEXCOORD;
+    float4 color : COLOR;
 };
 
 float4 SkinPosition(VSInput input)
@@ -121,6 +123,7 @@ PSInput main(VSInput input)
     output.bitangent = input.bitangent;
     output.worldPos = worldPosition.xyz;
     output.uv = input.uv;
+    output.color = input.color;
 
     const int cascadeIdx = clamp(csm.cascadeIndex, 0, 3);
     output.position = mul(csm.lightViewProjection[cascadeIdx], worldPosition);

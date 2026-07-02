@@ -6,6 +6,7 @@ struct PSInput
     float3 bitangent : BITANGENT;
     float3 worldPos  : WORLDPOS;
     float2 uv        : TEXCOORD;
+    float4 color : COLOR;
 };
 
 void main(PSInput input)
