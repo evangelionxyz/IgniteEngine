@@ -105,7 +105,6 @@ namespace ignite
         const Ref<RenderTarget> &GetGameplaySceneRT() { return m_GameplaySceneRT; }
         const Ref<RenderTarget> &GetGameplayWidgetRT() { return m_GameplayWidgetRT; }
     private:
-        void UploadSkeletonBuffers(nvrhi::ICommandList *cmd);
         void ShadowPass(nvrhi::ICommandList *cmd, ICamera *camera);
         void ColorPass(nvrhi::ICommandList *cmd, ICamera *camera, nvrhi::IFramebuffer *framebuffer);
         void UIPass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer);
@@ -168,8 +167,6 @@ namespace ignite
         uint32_t m_GameplayWidgetMouseY = 0;
         bool m_GameplayWidgetMouseHovered = false;
         bool m_UseGameplayWidgetMouseOverride = false;
-
-        bool m_SkeletonBuffersUploadedThisFrame = false;
     };
 }
 

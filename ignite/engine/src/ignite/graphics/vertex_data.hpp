@@ -57,11 +57,11 @@ namespace ignite
                 .setRegisterSpace(0) // set 0
                 .setRegisterSpaceIsDescriptorSet(true)
                 .setVisibility(nvrhi::ShaderType::All)
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0))         // Camera
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(1))         // Object
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(2))         // Skeleton
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(3))         // Scene
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(4));        // CSM
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(0))                 // Camera
+                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1))         // Object
+                .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(2))         // Skeleton
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(3))                 // Scene
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(4));                // CSM
         }
     };
 

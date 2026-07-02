@@ -90,8 +90,6 @@ namespace ignite
 	{
         LOG_WARN("[Renderer] Shutdown");
 
-		MeshInstance::ReleaseGlobalResources();
-
 		Shader::ShutdownShaderData();
 		Shader::s_DXCInstance.reset();
 

@@ -40,11 +40,6 @@ namespace ignite
 		glm::vec3 _padding = glm::vec3(0.0f);
 	};
 
-	struct GPUSkeletonBuffer
-	{
-		glm::mat4 bones[MAX_BONES];
-	};
-
 	struct SceneBufferData
 	{
 		glm::vec4 sunColor = glm::vec4(0.87f, 0.87f, 0.87f, 1.1f); // w = light intensity

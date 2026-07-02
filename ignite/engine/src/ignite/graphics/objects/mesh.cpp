@@ -29,9 +29,6 @@ namespace ignite
 
     namespace
     {
-        static Ref<ConstantBuffer> s_DefaultSkeletonBuffer;
-        static bool s_DefaultSkeletonBufferInitialized = false;
-
         static bool Mat4NearEqual(const glm::mat4 &a, const glm::mat4 &b, const float epsilon = 0.0001f)
         {
             for (int c = 0; c < 4; ++c)
@@ -429,6 +426,20 @@ namespace ignite
     MeshInstance::MeshInstance(const std::string &name, const Ref<MeshPrimitive> &mesh)
         : m_Name(name), m_Primitive(mesh)
     {
+		if (!m_MeshConstantBuffer)
+		{
+			constexpr uint32_t maxVersion = 2048;
+			m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(SkinnedMeshBufferData), true, maxVersion, "Per-Entity Transform Buffer");
+			LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
+		}
+
+		if (!m_SkeletonBuffer)
+		{
+			constexpr uint32_t skeletonMaxVersion = 2048;
+			m_SkeletonBuffer = ConstantBuffer::Create(sizeof(glm::mat4) * MAX_BONES, true, skeletonMaxVersion, "Default Skeleton Buffer");
+			LOG_INFO("[MeshInstance] Created skeleton buffer '{}' as volatile", m_Name.empty() ? "<unnamed>" : m_Name);
+		}
+
     }
 
     MeshInstance::MeshInstance()
@@ -445,8 +456,8 @@ namespace ignite
 
     MeshInstance::~MeshInstance()
     {
-		AssetManager::GetInstance()->RemoveAssetPin(m_MaterialHandle, std::format("material_{}_{}-{}", m_Name,
-			(uint32_t)m_Primitive->vertices.size(), (uint64_t)m_MaterialHandle));
+        AssetManager::GetInstance()->RemoveAssetPin(m_MaterialHandle, std::format("material_{}_{}-{}", m_Name,
+            (uint32_t)m_Primitive->vertices.size(), (uint64_t)m_MaterialHandle));
 
         // Wait for GPU to ensure resources are not in use
         if (auto *device = DeviceManager::GetInstance()->GetDevice())
@@ -464,94 +475,38 @@ namespace ignite
     void MeshInstance::SetMaterial(AssetHandle handle)
     {
         m_MaterialHandle = handle;
-        AssetManager::GetInstance()->AddAssetPin(m_MaterialHandle, std::format("material_{}_{}-{}", m_Name,
+        AssetManager::GetInstance()->AddAssetPin(m_MaterialHandle, std::format("material.{}.{}.{}", m_Name,
             (uint32_t)m_Primitive->vertices.size(), (uint64_t)m_MaterialHandle));
-    }
-
-    void MeshInstance::ReleaseGlobalResources()
-    {
-        if (s_DefaultSkeletonBuffer)
-        {
-            LOG_WARN("[Mesh Instance] Releasing global default skeleton buffer before device teardown");
-            s_DefaultSkeletonBuffer.reset();
-        }
-
-        s_DefaultSkeletonBufferInitialized = false;
     }
 
     void MeshInstance::SetData(nvrhi::ICommandList *cmd, void *data, size_t size)
     {
-        if (!m_MeshConstantBuffer)
-        {
-           m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(SkinnedMeshBufferData), false, 1, "Per-Entity Transform Buffer");
-             LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as non-volatile", m_Name.empty() ? "<unnamed>" : m_Name);
-        }
-
         m_MeshConstantBuffer->SetData(cmd, Buffer(data, size));
     }
 
-    void MeshInstance::EnsureBuffer(nvrhi::ICommandList *cmd, const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer, const Ref<ConstantBuffer> &skeletonBuffer)
+	void MeshInstance::SetSkeletonData(nvrhi::ICommandList *cmd, void *data, size_t size)
+	{
+        m_SkeletonBuffer->SetData(cmd, Buffer(data, size));
+	}
+
+	bool MeshInstance::UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer)
     {
-        if (!m_MeshConstantBuffer)
+        if (!m_SkeletonBuffer || !m_MeshConstantBuffer)
         {
-            m_MeshConstantBuffer = ConstantBuffer::Create(sizeof(SkinnedMeshBufferData), false, 1, "Per-Entity Transform Buffer");
-            LOG_INFO("[MeshInstance] Created per-draw object buffer '{}' as non-volatile", m_Name.empty() ? "<unnamed>" : m_Name);
-        }
-
-        Ref<ConstantBuffer> resolvedSkeletonBuffer = skeletonBuffer;
-        if (!resolvedSkeletonBuffer)
-        {
-            if (!s_DefaultSkeletonBuffer)
-            {
-                GPUSkeletonBuffer identityBones {};
-                for (int i = 0; i < MAX_BONES; ++i)
-                {
-                    identityBones.bones[i] = glm::mat4(1.0f);
-                }
-
-                s_DefaultSkeletonBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Default Skeleton Buffer");
-                s_DefaultSkeletonBufferInitialized = false;
-
-                if (cmd)
-                {
-                    s_DefaultSkeletonBuffer->SetData(cmd, Buffer(&identityBones, sizeof(identityBones)));
-                    s_DefaultSkeletonBufferInitialized = true;
-                }
-            }
-            else if (!s_DefaultSkeletonBufferInitialized)
-            {
-                GPUSkeletonBuffer identityBones {};
-                for (int i = 0; i < MAX_BONES; ++i)
-                {
-                    identityBones.bones[i] = glm::mat4(1.0f);
-                }
-
-                if (cmd)
-                {
-                    s_DefaultSkeletonBuffer->SetData(cmd, Buffer(&identityBones, sizeof(identityBones)));
-                    s_DefaultSkeletonBufferInitialized = true;
-                }
-            }
-            resolvedSkeletonBuffer = s_DefaultSkeletonBuffer;
-        }
-
-        LOG_ASSERT(resolvedSkeletonBuffer && resolvedSkeletonBuffer->GetHandle(), "[MeshInstance] Missing skeleton constant buffer handle");
-        if (!resolvedSkeletonBuffer || !resolvedSkeletonBuffer->GetHandle())
-        {
-            return;
+            return false;
         }
 
         BindingSetCacheKey cacheKey {};
-        cacheKey.cameraBuffer = cameraBuffer ? cameraBuffer->GetHandle() : nullptr;
-        cacheKey.objectBuffer = m_MeshConstantBuffer ? m_MeshConstantBuffer->GetHandle() : nullptr;
-        cacheKey.skeletonBuffer = resolvedSkeletonBuffer->GetHandle();
+        cacheKey.cameraBuffer = cameraBuffer->GetHandle();
+        cacheKey.objectBuffer = m_MeshConstantBuffer->GetHandle();
+        cacheKey.skeletonBuffer = m_SkeletonBuffer->GetHandle();
         cacheKey.sceneBuffer = sceneBuffer ? sceneBuffer->GetHandle() : nullptr;
         cacheKey.csmBuffer = csmBuffer ? csmBuffer->GetHandle() : nullptr;
 
         if (auto it = m_MeshBindingSetCache.find(cacheKey); it != m_MeshBindingSetCache.end())
         {
             m_MeshBindingSet = it->second;
-            return;
+            return true;
         }
 
         nvrhi::IDevice *device = DeviceManager::GetInstance()->GetDevice();
@@ -573,6 +528,8 @@ namespace ignite
                 LOG_WARN("[MeshInstance] Binding cache for '{}' grew to {} entries. Verify instance buffer sharing strategy.", m_Name, m_MeshBindingSetCache.size());
             }
         }
+
+        return true;
     }
 
     Ref<MeshInstance> MeshInstance::Create(const std::string &name, const Ref<MeshPrimitive> &mesh)
@@ -1730,23 +1687,23 @@ namespace ignite
                     const auto &weight = static_cast<float>(controlPointWeights[i]);
                     const auto boneId = static_cast<uint32_t>(jointId);
 
-					if (weight > 0.0f)
-					{
-						size_t minIndex = 0;
-						for (size_t i = 1; i < VERTEX_MAX_BONES; ++i)
-						{
-							if (influence.weights[i] < influence.weights[minIndex])
-							{
-								minIndex = i;
-							}
-						}
+                    if (weight > 0.0f)
+                    {
+                        size_t minIndex = 0;
+                        for (size_t i = 1; i < VERTEX_MAX_BONES; ++i)
+                        {
+                            if (influence.weights[i] < influence.weights[minIndex])
+                            {
+                                minIndex = i;
+                            }
+                        }
 
-						if (weight > influence.weights[minIndex])
-						{
-							influence.weights[minIndex] = weight;
-							influence.ids[minIndex] = boneId;
-						}
-					}
+                        if (weight > influence.weights[minIndex])
+                        {
+                            influence.weights[minIndex] = weight;
+                            influence.ids[minIndex] = boneId;
+                        }
+                    }
                 }
             }
         }
@@ -1757,22 +1714,22 @@ namespace ignite
             // Normalize bone influence
             for (FBXMeshLoader::FBXBoneInfluence &influence : controlPointInfluence)
             {
-				float total = 0.0f;
-				for (float w : influence.weights)
-				{
-					total += w;
-				}
+                float total = 0.0f;
+                for (float w : influence.weights)
+                {
+                    total += w;
+                }
 
-				if (total <= 0.000001f)
-				{
-					return;
-				}
+                if (total <= 0.000001f)
+                {
+                    return;
+                }
 
-				const float inv = 1.0f / total;
-				for (float &w : influence.weights)
-				{
-					w *= inv;
-				}
+                const float inv = 1.0f / total;
+                for (float &w : influence.weights)
+                {
+                    w *= inv;
+                }
             }
         }
     }

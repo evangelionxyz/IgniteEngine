@@ -658,7 +658,6 @@ namespace ignite
             {
                 smc.runtimeAnimatorInstance.reset();
                 smc.runtimeParams.clear();
-                smc.skeletonGpuBuffer.reset();
                 smc.finalBoneTransforms.clear();
                 ResetMeshAnimatorRuntime(smc);
                 continue;

@@ -19,15 +19,16 @@
 
 #include <algorithm>
 #include <limits>
+#include <array>
 
 namespace ignite
 {
-    static const GPUSkeletonBuffer s_IdentitySkeleton = []()
+    static const std::array<glm::mat4, MAX_BONES> s_IdentitySkeleton = []()
     {
-        GPUSkeletonBuffer buf;
+        std::array<glm::mat4, MAX_BONES> buf;
         for (int i = 0; i < MAX_BONES; ++i)
         {
-            buf.bones[i] = glm::mat4(1.0f);
+            buf[i] = glm::mat4(1.0f);
         }
         return buf;
     }();
@@ -36,28 +37,12 @@ namespace ignite
 
     AssetSceneRenderer::AssetSceneRenderer()
     {
-        m_Device = DeviceManager::GetInstance()->GetDevice();
-
         {
             auto samplerDesc = nvrhi::SamplerDesc();
             samplerDesc.setAllFilters(false);
             samplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp);
             m_CompositeSampler = m_Device->createSampler(samplerDesc);
         }
-
-        static constexpr std::array vertices
-        {
-            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
-            VertexScreen{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },
-            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
-
-            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
-            VertexScreen{ {  1.0f, -1.0f }, { 1.0f, 1.0f } },
-            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
-        };
-
-        m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
-        m_CompositePostProcessBuffer = ConstantBuffer::Create(sizeof(CompositePostProcess_GPUData), true, 16, "Composite PostProcess Buffer");
 
         m_PreviewMesh = nullptr;
         m_PreviewWidget = nullptr;
@@ -453,48 +438,33 @@ namespace ignite
         state.framebuffer = framebuffer;
         state.viewport = nvrhi::ViewportState().addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
+        glm::mat4 bones[MAX_BONES];
         if (!m_BoneTransforms.empty())
         {
-            if (!m_SkeletonGpuBuffer)
-            {
-                m_SkeletonGpuBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Preview Skeleton Buffer");
-            }
-
-            GPUSkeletonBuffer skeletonGPUData;
             const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), m_BoneTransforms.size());
             if (boneCount > 0)
             {
-                std::memcpy(skeletonGPUData.bones, m_BoneTransforms.data(), boneCount * sizeof(glm::mat4));
+                std::memcpy(bones, m_BoneTransforms.data(), boneCount * sizeof(glm::mat4));
             }
             if (boneCount < MAX_BONES)
             {
-                std::memcpy(&skeletonGPUData.bones[boneCount], &s_IdentitySkeleton.bones[boneCount], (MAX_BONES - boneCount) * sizeof(glm::mat4));
+                std::memcpy(&bones[boneCount], &s_IdentitySkeleton[boneCount], (MAX_BONES - boneCount) * sizeof(glm::mat4));
             }
-
-            m_SkeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
         }
 
         for (auto &meshInstance : m_PreviewMesh->GetMeshInstances())
         {
             auto &primitive = meshInstance->GetPrimitive();
             if (!primitive)
-            {
                 continue;
-            }
 
             if (!primitive->vertexBuffer || !primitive->indexBuffer)
-            {
                 primitive->WriteBuffer(cmd);
-            }
 
-            if (!primitive->vertexBuffer || !primitive->indexBuffer)
-            {
+            if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer))
                 continue;
-            }
 
             SkinnedMeshBufferData gpuData;
-
-            // For non-skinned sub-meshes linked to a joint, apply the joint's animated transform
             glm::mat4 meshTransform = meshInstance->global;
             if (meshInstance->linkedJointIndex >= 0 && !m_BoneTransforms.empty())
             {
@@ -512,7 +482,7 @@ namespace ignite
             const glm::mat3 normalMat3 = glm::transpose(glm::inverse(glm::mat3(gpuData.transformation)));
             gpuData.normal = glm::mat4(normalMat3);
             meshInstance->SetData(cmd, &gpuData, sizeof(SkinnedMeshBufferData));
-            meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, m_SkeletonGpuBuffer);
+            meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
 
             // Get individual mesh material if available
             // Will fallback to m_RuntimeMaterial if not exists
@@ -547,8 +517,6 @@ namespace ignite
 
     void AssetSceneRenderer::CompositePass(nvrhi::ICommandList *cmd, nvrhi::IFramebuffer *framebuffer, Ref<Texture> sceneTexture, Ref<Texture> uiTexture)
     {
-        EnsureCompositeVertexBufferUploaded(cmd);
-
         CompositePostProcess_GPUData postProcessData;
         m_CompositePostProcessBuffer->SetData(cmd, Buffer(&postProcessData, sizeof(postProcessData)));
 

@@ -41,12 +41,12 @@
 
 namespace ignite
 {
-    static const GPUSkeletonBuffer s_IdentitySkeleton = []()
+    static const std::array<glm::mat4, MAX_BONES> s_IdentitySkeleton = []()
     {
-        GPUSkeletonBuffer buf;
+        std::array<glm::mat4, MAX_BONES> buf;
         for (int i = 0; i < MAX_BONES; ++i)
         {
-            buf.bones[i] = glm::mat4(1.0f);
+            buf[i] = glm::mat4(1.0f);
         }
         return buf;
     }();
@@ -56,31 +56,15 @@ namespace ignite
     // ===============================
     SceneRenderer::SceneRenderer()
     {
-        m_Device = DeviceManager::GetInstance()->GetDevice();
-
         auto compositeSamplerDesc = nvrhi::SamplerDesc();
         compositeSamplerDesc.setAllFilters(false);
         compositeSamplerDesc.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp);
         m_CompositeSampler = m_Device->createSampler(compositeSamplerDesc);
 
-        static constexpr std::array vertices
-        {
-            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
-            VertexScreen{ { -1.0f,  1.0f }, { 0.0f, 0.0f } },
-            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
-
-            VertexScreen{ {  1.0f,  1.0f }, { 1.0f, 0.0f } },
-            VertexScreen{ {  1.0f, -1.0f }, { 1.0f, 1.0f } },
-            VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },
-        };
-
-        m_CompositeVertexBuffer = VertexBuffer::Create(sizeof(vertices));
-
         m_Renderer2D = Renderer2D::Create();
         m_EdgeDetection = EdgeDetection::Create();
         m_EdgeDetection->CreatePipeline();
         m_DebugGridBuffer = ConstantBuffer::Create(sizeof(DebugGrid_GPUData), true, 16, "Debug Grid Buffer");
-        m_CompositePostProcessBuffer = ConstantBuffer::Create(sizeof(CompositePostProcess_GPUData), true, 16, "Composite PostProcess Buffer");
 
         {
             m_EditorBloom = CreateRef<Bloom>(1280, 720);
@@ -198,7 +182,6 @@ namespace ignite
     void SceneRenderer::BeginFrame()
     {
         m_Has2DPreRenderCache = false;
-        m_SkeletonBuffersUploadedThisFrame = false;
         if (m_Renderer2D)
         {
             m_Renderer2D->InvalidatePreRenderCache();
@@ -217,11 +200,8 @@ namespace ignite
         {
             IGN_PROFILE_SCOPE("SceneRenderer::RecordEditorCommandList");
             cmd->open();
-            // Upload the shared fullscreen quad vertex buffer used by Bloom, SSAO, and CompositePass.
-            // Must happen before any of those passes execute — not just inside CompositePass.
-            EnsureCompositeVertexBufferUploaded(cmd);
+            
             m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
-            UploadSkeletonBuffers(cmd);
 
             if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->gpuInitialized && !m_WorldEnvironment->dirtyEnvironment)
             {
@@ -369,11 +349,8 @@ namespace ignite
         {
             IGN_PROFILE_SCOPE("SceneRenderer::RecordEditorCommandList");
             cmd->open();
-            // Upload the shared fullscreen quad vertex buffer used by Bloom, SSAO, and CompositePass.
-            // Must happen before any of those passes execute — not just inside CompositePass.
-            EnsureCompositeVertexBufferUploaded(cmd);
+
             m_SceneBuffer->SetData(cmd, Buffer(&m_SceneGPUData, sizeof(m_SceneGPUData)));
-            UploadSkeletonBuffers(cmd);
 
             if (m_WorldEnvironment && m_WorldEnvironment->environment && !m_WorldEnvironment->gpuInitialized && !m_WorldEnvironment->dirtyEnvironment)
             {
@@ -619,22 +596,18 @@ namespace ignite
 
                     // Per-entity GPU-ready bone transforms written by Scene::UpdateAnimations
                     const std::vector<glm::mat4> &boneTransforms = smc.finalBoneTransforms;
-                    if (!smc.skeletonGpuBuffer && !boneTransforms.empty())
+                    glm::mat4 bones[MAX_BONES];
+                    if (!boneTransforms.empty())
                     {
-                        smc.skeletonGpuBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Per-Entity Skeleton Buffer");
-                        LOG_INFO("[SceneRenderer] Created non-volatile skeleton GPU buffer for entity {}", static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-
-                        GPUSkeletonBuffer skeletonGPUData;
                         const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
                         if (boneCount > 0)
                         {
-                            std::memcpy(skeletonGPUData.bones, boneTransforms.data(), boneCount * sizeof(glm::mat4));
+                            std::memcpy(bones, boneTransforms.data(), boneCount * sizeof(glm::mat4));
                         }
                         if (boneCount < MAX_BONES)
                         {
-                            std::memcpy(&skeletonGPUData.bones[boneCount], &s_IdentitySkeleton.bones[boneCount], (MAX_BONES - boneCount) * sizeof(glm::mat4));
+                            std::memcpy(&bones[boneCount], &s_IdentitySkeleton[boneCount], (MAX_BONES - boneCount) * sizeof(glm::mat4));
                         }
-                        smc.skeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
                     }
 
                     const auto &instances = sm->GetMeshInstances();
@@ -653,13 +626,8 @@ namespace ignite
                             continue;
                         }
 
-                        // Use m_CSMPerCascadeBuffers[i] (b4) so the depth shader gets cascadeIndex=i
-                        // and samples lightViewProjection[i] — the correct light-space matrix for
-                        // this cascade. Using m_CascadedShadowMapBuffer here (cascadeIndex=-1)
-                        // causes the shader to always use lightViewProjection[0], making cascades
-                        // 1-3 incorrect. This specifically breaks the gameplay camera whose visible
-                        // depth range may not fall into cascade 0 at all.
-                        meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CSMPerCascadeBuffers[i], smc.skeletonGpuBuffer);
+                        if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CSMPerCascadeBuffers[i]))
+                            continue;
 
                         SkinnedMeshBufferData gpuData;
                         if (idx < smc.cachedInstanceTransforms.size())
@@ -685,6 +653,7 @@ namespace ignite
                         }
 
                         meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
+                        meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
 
                         nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
 
@@ -739,7 +708,8 @@ namespace ignite
                                         continue;
                                     }
 
-                                    meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CSMPerCascadeBuffers[i], nullptr);
+                                    if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CSMPerCascadeBuffers[i]))
+                                        continue;
 
                                     SkinnedMeshBufferData gpuData;
                                     gpuData.transformation = socketWorld * meshInstance->global;
@@ -747,6 +717,7 @@ namespace ignite
                                     gpuData.normal = normalMatrix;
 
                                     meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
+                                    meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
 
                                     nvrhi::BindingSetHandle meshBindingSet = meshInstance->GetBindingSet();
                                     if (meshBindingSet)
@@ -820,33 +791,28 @@ namespace ignite
                 AABB worldAABB = mesh->aabb.Transform(tr.world.GetMatrix());
                 if (!frustum.IsAABBVisible(worldAABB.min, worldAABB.max))
                     continue;
-
-                // Per-entity GPU-ready bone transforms written by Scene::UpdateAnimations
                 const std::vector<glm::mat4> &boneTransforms = smc.finalBoneTransforms;
-                if (!smc.skeletonGpuBuffer && !boneTransforms.empty())
-                {
-                    smc.skeletonGpuBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Per-Entity Skeleton Buffer");
-                    LOG_INFO("[SceneRenderer] Created non-volatile skeleton GPU buffer for entity {}", static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-
-                    GPUSkeletonBuffer skeletonGPUData;
-                    const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
-                    if (boneCount > 0)
-                    {
-                        std::memcpy(skeletonGPUData.bones, boneTransforms.data(), boneCount * sizeof(glm::mat4));
-                    }
-                    if (boneCount < MAX_BONES)
-                    {
-                        std::memcpy(&skeletonGPUData.bones[boneCount], &s_IdentitySkeleton.bones[boneCount], (MAX_BONES - boneCount) * sizeof(glm::mat4));
-                    }
-
-                    smc.skeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
-                }
+                glm::mat4 bones[MAX_BONES];
+				if (!boneTransforms.empty())
+				{
+					const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
+					if (boneCount > 0)
+					{
+						std::memcpy(bones, boneTransforms.data(), boneCount * sizeof(glm::mat4));
+					}
+					if (boneCount < MAX_BONES)
+					{
+						std::memcpy(&bones[boneCount], &s_IdentitySkeleton[boneCount], (MAX_BONES - boneCount) * sizeof(glm::mat4));
+					}
+				}
 
                 const auto &instances = mesh->GetMeshInstances();
                 for (size_t idx = 0; idx < instances.size(); ++idx)
                 {
                     auto &meshInstance = instances[idx];
-                    meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, smc.skeletonGpuBuffer);
+
+                    if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer))
+                        continue;
 
                     SkinnedMeshBufferData gpuData;
                     if (idx < smc.cachedInstanceTransforms.size())
@@ -871,6 +837,7 @@ namespace ignite
                     }
 
                     meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
+                    meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
 
                     auto &primitive = meshInstance->GetPrimitive();
                     if (!primitive->vertexBuffer || !primitive->indexBuffer)
@@ -966,8 +933,8 @@ namespace ignite
                                 if (!primitive->vertexBuffer || !primitive->indexBuffer)
                                     continue;
 
-                                // Sockets are drawn as static submeshes attached to bones (skeletonGpuBuffer = nullptr)
-                                meshInstance->EnsureBuffer(cmd, m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, nullptr);
+								if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer))
+									continue;
 
                                 SkinnedMeshBufferData gpuData;
                                 gpuData.transformation = socketWorld * meshInstance->global;
@@ -975,6 +942,7 @@ namespace ignite
                                 gpuData.normal = normalMatrix;
 
                                 meshInstance->SetData(cmd, &gpuData, sizeof(gpuData));
+								meshInstance->SetSkeletonData(cmd, bones, sizeof(bones));
 
                                 Ref<Material> material = ResolveAsset<Material>(meshInstance->GetMaterialHandle());
                                 if (!material)
@@ -1589,8 +1557,6 @@ namespace ignite
     {
         IGN_PROFILE_FUNCTION();
         
-        EnsureCompositeVertexBufferUploaded(cmd);
-
         CompositePostProcess_GPUData postProcessData;
         if (camera)
         {
@@ -2002,84 +1968,6 @@ namespace ignite
 		}
 
 		return bindingSet;
-	}
-
-	void SceneRenderer::UploadSkeletonBuffers(nvrhi::ICommandList *cmd)
-	{
-		IGN_PROFILE_FUNCTION();
-		if (m_SkeletonBuffersUploadedThisFrame)
-		{
-			return;
-		}
-
-		if (!m_Scene || !m_Scene->registry)
-		{
-			return;
-		}
-
-		m_SkeletonBuffersUploadedThisFrame = true;
-
-		auto skelMeshView = m_Scene->registry->view<TransformComponent, MeshComponent>();
-		for (entt::entity e : skelMeshView)
-		{
-			TransformComponent &tr = m_Scene->registry->get<TransformComponent>(e);
-			if (!tr.visible)
-				continue;
-
-			MeshComponent &smc = m_Scene->registry->get<MeshComponent>(e);
-			if (smc.handle == AssetHandle(0))
-				continue;
-
-			const std::vector<glm::mat4> &boneTransforms = smc.finalBoneTransforms;
-			if (boneTransforms.empty())
-				continue;
-
-			if (!smc.skeletonGpuBuffer)
-			{
-				smc.skeletonGpuBuffer = ConstantBuffer::Create(sizeof(GPUSkeletonBuffer), false, 1, "Per-Entity Skeleton Buffer");
-				LOG_INFO("[SceneRenderer] Created non-volatile skeleton GPU buffer for entity {}",
-					static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-			}
-
-			GPUSkeletonBuffer skeletonGPUData;
-			const size_t boneCount = std::min(static_cast<size_t>(MAX_BONES), boneTransforms.size());
-			if (boneCount > 0)
-			{
-				std::memcpy(skeletonGPUData.bones, boneTransforms.data(), boneCount * sizeof(glm::mat4));
-			}
-			if (boneCount < MAX_BONES)
-			{
-				std::memcpy(&skeletonGPUData.bones[boneCount], &s_IdentitySkeleton.bones[boneCount], (MAX_BONES - boneCount) * sizeof(glm::mat4));
-			}
-			smc.skeletonGpuBuffer->SetData(cmd, Buffer(&skeletonGPUData, sizeof(skeletonGPUData)));
-
-			Ref<Mesh> sm = ResolveAsset<Mesh>(smc.handle);
-			if (sm)
-			{
-				const auto &instances = sm->GetMeshInstances();
-				smc.cachedInstanceTransforms.resize(instances.size());
-				for (size_t idx = 0; idx < instances.size(); ++idx)
-				{
-					auto &meshInstance = instances[idx];
-					SkinnedMeshBufferData &gpuData = smc.cachedInstanceTransforms[idx];
-
-					// For non-skinned sub-meshes linked to a joint, apply the joint's animated transform
-					glm::mat4 meshTransform = meshInstance->global;
-					if (meshInstance->linkedJointIndex >= 0 && !boneTransforms.empty())
-					{
-						const size_t ji = static_cast<size_t>(meshInstance->linkedJointIndex);
-						if (ji < boneTransforms.size())
-						{
-							meshTransform = boneTransforms[ji] * meshTransform;
-						}
-					}
-
-					gpuData.transformation = tr.world.GetMatrix() * meshTransform;
-					gpuData.objectID = static_cast<uint32_t>(static_cast<uint64_t>(m_Scene->registry->get<IDComponent>(e).uuid));
-					gpuData.normal = smc.normalMatrix;
-				}
-			}
-		}
 	}
 
 	void SceneRenderer::AddAssetPin(AssetHandle handle)

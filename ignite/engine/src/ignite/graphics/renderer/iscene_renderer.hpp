@@ -116,7 +116,6 @@ namespace ignite
 		DebugSettings debugSettings;
 
     protected:
-        void EnsureCompositeVertexBufferUploaded(nvrhi::ICommandList *cmd);
 		void EnsureSceneEnvironmentMap();
 
         virtual void AddAssetPin(AssetHandle handle) = 0;
