@@ -39,6 +39,13 @@
 
 namespace ignite
 {
+    struct ImageData
+    {
+        std::vector<uint8_t> pixels;
+        uint32_t width = 0;
+        uint32_t height = 0;
+    };
+
     struct TextureCreateInfo
     {
         uint32_t width = 0;

@@ -29,15 +29,23 @@ namespace ignite
     class Timestep
     {
     public:
-        explicit Timestep(const f32 time = 0.0) : m_Time(time)
+        explicit Timestep(const float time = 0.0) : m_Time(time)
         {
         }
 
-        explicit operator f32() const { return m_Time; }
-        [[nodiscard]] f32 Seconds() const { return m_Time; }
-        [[nodiscard]] f32 MilliSeconds() const { return m_Time * 1000.0f; }
+        explicit operator float() const { return m_Time; }
+        [[nodiscard]] float Seconds() const { return m_Time; }
+        [[nodiscard]] float MilliSeconds() const { return m_Time * 1000.0f; }
+
+        [[nodiscard]] static constexpr std::tm GetLocalTime()
+        {
+			const auto now = std::chrono::system_clock::now();
+			const auto time_t_now = std::chrono::system_clock::to_time_t(now);
+            return *std::localtime(&time_t_now);
+        }
+
     private:
-        f32 m_Time;
+        float m_Time;
     };
 
     class Timer
@@ -53,12 +61,12 @@ namespace ignite
             m_Start = std::chrono::high_resolution_clock::now();
         }
 
-        [[nodiscard]] f32 Elapsed() const
+        [[nodiscard]] float Elapsed() const
         {
-            return static_cast<f32>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - m_Start).count()) * 0.001f * 0.001f * 0.001f;
+            return static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - m_Start).count()) * 0.001f * 0.001f * 0.001f;
         }
 
-        [[nodiscard]] f32 ElapsedMillis() const
+        [[nodiscard]] float ElapsedMillis() const
         {
             return Elapsed() * 1000.0f;
         }

@@ -68,35 +68,19 @@ namespace ignite
 
         std::vector<std::pair<AssetHandle, AssetMetaData>> ValidateAssetRegistry();
 
-        ignite::Path GetFilepath() const
-        {
-            return m_Info.rootDirectory / m_Info.filepath;
-        }
+        ignite::Path GetFilepath() const { return m_Info.rootDirectory / m_Info.filepath; }
 
-        const ignite::Path &GetDirectory() const
-        {
-            return m_Info.rootDirectory;
-        }
+        const ignite::Path &GetDirectory() const { return m_Info.rootDirectory; }
 
-        ignite::Path GetSolutionFilepath() const
-        {
-            return m_Info.rootDirectory / std::string(m_Info.name + ".slnx");
-        }
+        ignite::Path GetSolutionFilepath() const { return m_Info.rootDirectory / std::string(m_Info.name + ".slnx"); }
 
-        ignite::Path GetAssetDirectory() const
-        {
-            return m_Info.rootDirectory / m_Info.assetDirectory;
-        }
+        ignite::Path GetAssetDirectory() const { return m_Info.rootDirectory / m_Info.assetDirectory; }
 
-        ignite::Path GetScriptsDirectory() const
-        {
-            return m_Info.rootDirectory / m_Info.scriptsDirectory;
-        }
+        ignite::Path GetScriptsDirectory() const { return m_Info.rootDirectory / m_Info.scriptsDirectory; }
 
-        ignite::Path GetScriptBinDirectory() const
-        {
-            return m_Info.rootDirectory / "Bin";
-        }
+        ignite::Path GetScriptBinDirectory() const { return m_Info.rootDirectory / "Bin"; }
+
+        ignite::Path GetCacheDirectory() const { return m_Info.rootDirectory / ".cache"; }
 
         ignite::Path GetScriptModulePath() const
         {
