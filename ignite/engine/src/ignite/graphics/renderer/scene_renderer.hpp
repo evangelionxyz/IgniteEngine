@@ -97,10 +97,6 @@ namespace ignite
         virtual Ref<CascadedShadowMap> GetCascadedShadowMap() override;
         Ref<Renderer2D> &GetRenderer2D() { return m_Renderer2D; }
 
-        DebugGridSettings &GetDebugGridSettings() { return m_DebugGridSettings; }
-        const DebugGridSettings &GetDebugGridSettings() const { return m_DebugGridSettings; }
-        void SetDebugGridSettings(const DebugGridSettings &settings) { m_DebugGridSettings = settings; }
-
         const Ref<RenderTarget> &GetCompositeRT() { return m_CompositeRT; }
         const Ref<RenderTarget> &GetSceneRT() { return m_SceneRT; }
         const Ref<RenderTarget> &GetWidgetRT() { return m_WidgetRT; }

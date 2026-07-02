@@ -2201,9 +2201,13 @@ namespace ignite
             ImGui::TreePop();
         }
 
-        // Scene Render Mode
-        if (ImGui::TreeNodeEx("Render", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
+        // Scene Render
+        if (ImGui::TreeNodeEx("Settings Render", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
         {
+            ImGui::SeparatorText("Visibility");
+            UI::DrawCheckbox("Bounding Box", &m_SceneRenderer->debugSettings.showBoundingBox);
+            UI::DrawCheckbox("Physics Collider", &m_SceneRenderer->debugSettings.showPhysicsCollider);
+            
             ImGui::TreePop();
         }
 

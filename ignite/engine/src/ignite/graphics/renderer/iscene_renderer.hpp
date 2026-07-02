@@ -48,15 +48,18 @@ namespace ignite
         glm::vec4 zAxisColor = glm::vec4(0.29f, 0.52f, 0.96f, 1.0f);
     };
 
-    struct DebugGridSettings
+    struct DebugSettings
     {
-        DebugGridStyle world3D;
-        DebugGridStyle world2D;
+        DebugGridStyle worldGrid3D;
+        DebugGridStyle worldGrid2D;
 
-        DebugGridSettings()
+        bool showBoundingBox = false;
+        bool showPhysicsCollider = true;
+
+        DebugSettings()
         {
-            world2D.enableZAxis = false;
-            world2D.gridSize = 100.0f;
+            worldGrid2D.enableZAxis = false;
+            worldGrid2D.gridSize = 100.0f;
         }
     };
 
@@ -110,6 +113,8 @@ namespace ignite
 			return asset;
 		}
 
+		DebugSettings debugSettings;
+
     protected:
         void EnsureCompositeVertexBufferUploaded(nvrhi::ICommandList *cmd);
 		void EnsureSceneEnvironmentMap();
@@ -145,7 +150,6 @@ namespace ignite
         std::vector<uint32_t> m_SelectedEntities;
         nvrhi::RasterFillMode m_FillMode = nvrhi::RasterFillMode::Solid;
         Ref<ConstantBuffer> m_DebugGridBuffer;
-        DebugGridSettings m_DebugGridSettings;
 
         nvrhi::IDevice *m_Device = nullptr;
         

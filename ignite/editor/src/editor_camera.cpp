@@ -447,7 +447,8 @@ namespace ignite
 	{
 		if (m_FocusActive)
 		{
-			const float blend = 1.0f - std::exp(-m_FocusSpeed * glm::max(deltaTime, 0.0f));
+			constexpr float blendFactor = 0.025f;
+			const float blend = 1.0f - std::exp(-m_FocusSpeed * glm::max(blendFactor, 0.0f));
 
 			if (m_NavigationMode != NavigationMode::Fly)
 			{
