@@ -893,6 +893,16 @@ namespace ignite
     }
 
     template<>
+    IGN_API void Scene::OnComponentAdded<PointLightComponent>(Entity entity, PointLightComponent &comp)
+    {
+    }
+
+    template<>
+    IGN_API void Scene::OnComponentAdded<SpotLightComponent>(Entity entity, SpotLightComponent &comp)
+    {
+    }
+
+    template<>
     IGN_API void Scene::OnComponentAdded<Rigidbody2DComponent>(Entity entity, Rigidbody2DComponent &comp)
     {
     }

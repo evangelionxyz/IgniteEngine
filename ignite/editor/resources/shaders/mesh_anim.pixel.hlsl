@@ -29,6 +29,24 @@ struct Scene
     float exposure;
     float gamma;
     float ambient;
+    int numPointLights;
+    int numSpotLights;
+    float3 _pad;
+};
+
+struct PointLight
+{
+    float4 positionAndRange;  // xyz = position, w = range
+    float4 color;             // rgb = color, a = intensity
+    float4 attenuation;       // x = constant, y = linear, z = quadratic, w = unused
+};
+
+struct SpotLight
+{
+    float4 positionAndRange;  // xyz = position, w = range
+    float4 directionAndAngle; // xyz = direction, w = cos(outerConeAngle)
+    float4 color;             // rgb = color, a = intensity
+    float4 attenuation;       // x = constant, y = linear, z = quadratic, w = cos(innerConeAngle)
 };
 
 struct Object
@@ -80,6 +98,19 @@ cbuffer ObjectBuffer      : register(b1, space0) { Object object; }
 cbuffer SkeletonBuffer    : register(b2, space0) { Skeleton skeleton; }
 cbuffer SceneBuffer       : register(b3, space0) { Scene scene; }
 cbuffer CascadesBuffer    : register(b4, space0) { CascadesShadows csm; }
+
+#define MAX_POINT_LIGHTS 16
+#define MAX_SPOT_LIGHTS 16
+
+cbuffer PointLightBuffer  : register(b5, space0)
+{
+    PointLight pointLights[MAX_POINT_LIGHTS];
+};
+
+cbuffer SpotLightBuffer   : register(b6, space0)
+{
+    SpotLight spotLights[MAX_SPOT_LIGHTS];
+};
 
 // set 1
 cbuffer MaterialBuffer    : register(b0, space1) { Material material; }
@@ -319,6 +350,77 @@ PSOutput main(PSInput input)
 
         float shadowTerm = SampleShadow(input.worldPos, finalNormal, lightDirection, input.position.xy);
         directLighting *= shadowTerm;
+
+        // Point Lights PBR
+        for (int pi = 0; pi < scene.numPointLights; ++pi)
+        {
+            float3 lightPos = pointLights[pi].positionAndRange.xyz;
+            float range = pointLights[pi].positionAndRange.w;
+            float3 color = pointLights[pi].color.rgb;
+            float intensity = pointLights[pi].color.a;
+            float constAtt = pointLights[pi].attenuation.x;
+            float linAtt = pointLights[pi].attenuation.y;
+            float quadAtt = pointLights[pi].attenuation.z;
+
+            float3 lightVec = lightPos - input.worldPos;
+            float d = length(lightVec);
+            if (d > range) continue;
+
+            float3 toLight = normalize(lightVec);
+            float atten = 1.0f / (constAtt + linAtt * d + quadAtt * (d * d));
+            atten *= saturate(1.0f - (d / range));
+
+            float3 ptIrradiance = color * intensity * atten;
+            directLighting += GGX(
+                finalNormal,
+                toLight,
+                viewDirection,
+                ptIrradiance,
+                diffuseColor,
+                specularColor,
+                roughness
+            );
+        }
+
+        // Spot Lights PBR
+        for (int si = 0; si < scene.numSpotLights; ++si)
+        {
+            float3 lightPos = spotLights[si].positionAndRange.xyz;
+            float range = spotLights[si].positionAndRange.w;
+            float3 spotDir = spotLights[si].directionAndAngle.xyz;
+            float cosOuter = spotLights[si].directionAndAngle.w;
+            float3 color = spotLights[si].color.rgb;
+            float intensity = spotLights[si].color.a;
+            float constAtt = spotLights[si].attenuation.x;
+            float linAtt = spotLights[si].attenuation.y;
+            float quadAtt = spotLights[si].attenuation.z;
+            float cosInner = spotLights[si].attenuation.w;
+
+            float3 lightVec = lightPos - input.worldPos;
+            float d = length(lightVec);
+            if (d > range) continue;
+
+            float3 toLight = normalize(lightVec);
+            float theta = dot(-toLight, spotDir);
+            if (theta < cosOuter) continue;
+
+            float atten = 1.0f / (constAtt + linAtt * d + quadAtt * (d * d));
+            atten *= saturate(1.0f - (d / range));
+
+            float coneFactor = saturate((theta - cosOuter) / max(0.0001f, cosInner - cosOuter));
+            atten *= coneFactor;
+
+            float3 spIrradiance = color * intensity * atten;
+            directLighting += GGX(
+                finalNormal,
+                toLight,
+                viewDirection,
+                spIrradiance,
+                diffuseColor,
+                specularColor,
+                roughness
+            );
+        }
 
         float baseAmbient = 0.03f;
         float occScale = 0.35f;

@@ -54,6 +54,8 @@ namespace ignite
         TextComponent,
         WorldEnvironment,
         DirectionalLightComponent,
+        PointLightComponent,
+        SpotLightComponent,
         Animator2DComponent
     >; 
 }

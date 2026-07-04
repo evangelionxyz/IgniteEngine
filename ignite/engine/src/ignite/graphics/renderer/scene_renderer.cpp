@@ -473,6 +473,65 @@ namespace ignite
             break;
         }
 
+        // Collect point lights
+        {
+            PointLightBufferData pointLightData = {};
+            int pointLightCount = 0;
+
+            auto pointLightView = m_Scene->registry->view<TransformComponent, PointLightComponent>();
+            for (entt::entity e : pointLightView)
+            {
+                if (pointLightCount >= MAX_POINT_LIGHTS)
+                    break;
+
+                const TransformComponent &tr = pointLightView.get<TransformComponent>(e);
+                const PointLightComponent &light = pointLightView.get<PointLightComponent>(e);
+
+                if (!tr.visible || !light.enabled)
+                    continue;
+
+                PointLight_GPUData &gpu = pointLightData.lights[pointLightCount];
+                gpu.positionAndRange = glm::vec4(tr.world.translation, light.range);
+                gpu.color = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
+                gpu.attenuation = glm::vec4(light.constantAttenuation, light.linearAttenuation, light.quadraticAttenuation, 0.0f);
+                ++pointLightCount;
+            }
+
+            m_SceneGPUData.numPointLights = pointLightCount;
+            m_PointLightBuffer->SetData(cmd, Buffer(&pointLightData, sizeof(pointLightData)));
+        }
+
+        // Collect spot lights
+        {
+            SpotLightBufferData spotLightData = {};
+            int spotLightCount = 0;
+
+            auto spotLightView = m_Scene->registry->view<TransformComponent, SpotLightComponent>();
+            for (entt::entity e : spotLightView)
+            {
+                if (spotLightCount >= MAX_SPOT_LIGHTS)
+                    break;
+
+                const TransformComponent &tr = spotLightView.get<TransformComponent>(e);
+                const SpotLightComponent &light = spotLightView.get<SpotLightComponent>(e);
+
+                if (!tr.visible || !light.enabled)
+                    continue;
+
+                const glm::vec3 forward = glm::normalize(tr.world.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+
+                SpotLight_GPUData &gpu = spotLightData.lights[spotLightCount];
+                gpu.positionAndRange = glm::vec4(tr.world.translation, light.range);
+                gpu.directionAndAngle = glm::vec4(forward, glm::cos(glm::radians(light.outerConeAngle)));
+                gpu.color = glm::vec4(light.color.r, light.color.g, light.color.b, light.intensity);
+                gpu.attenuation = glm::vec4(light.constantAttenuation, light.linearAttenuation, light.quadraticAttenuation, glm::cos(glm::radians(light.innerConeAngle)));
+                ++spotLightCount;
+            }
+
+            m_SceneGPUData.numSpotLights = spotLightCount;
+            m_SpotLightBuffer->SetData(cmd, Buffer(&spotLightData, sizeof(spotLightData)));
+        }
+
         glm::vec3 sunDirection =
         {
             glm::cos(m_SceneGPUData.sungAngles.y) * glm::sin(m_SceneGPUData.sungAngles.x),
@@ -598,7 +657,7 @@ namespace ignite
                             continue;
                         }
 
-                        if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CSMPerCascadeBuffers[i]))
+                        if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CSMPerCascadeBuffers[i], m_PointLightBuffer, m_SpotLightBuffer))
                             continue;
 
                         SkinnedMeshBufferData gpuData;
@@ -680,7 +739,7 @@ namespace ignite
                                         continue;
                                     }
 
-                                    if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CSMPerCascadeBuffers[i]))
+                                    if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CSMPerCascadeBuffers[i], m_PointLightBuffer, m_SpotLightBuffer))
                                         continue;
 
                                     SkinnedMeshBufferData gpuData;
@@ -783,7 +842,7 @@ namespace ignite
                 {
                     auto &meshInstance = instances[idx];
 
-                    if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer))
+                    if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, m_PointLightBuffer, m_SpotLightBuffer))
                         continue;
 
                     SkinnedMeshBufferData gpuData;
@@ -905,7 +964,7 @@ namespace ignite
                                 if (!primitive->vertexBuffer || !primitive->indexBuffer)
                                     continue;
 
-								if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer))
+								if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, m_PointLightBuffer, m_SpotLightBuffer))
 									continue;
 
                                 SkinnedMeshBufferData gpuData;

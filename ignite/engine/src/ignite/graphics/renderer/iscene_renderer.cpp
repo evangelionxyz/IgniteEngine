@@ -28,6 +28,9 @@ namespace ignite
             m_CSMPerCascadeBuffers[i] = ConstantBuffer::Create(sizeof(CascadedShadowMapBufferData), false, 1, "[SceneRenderer] CSM Per-Cascade Buffer " + std::to_string(i));
         }
 
+        m_PointLightBuffer = ConstantBuffer::Create(sizeof(PointLightBufferData), false, 1, "[SceneRenderer] Point Light Buffer");
+        m_SpotLightBuffer = ConstantBuffer::Create(sizeof(SpotLightBufferData), false, 1, "[SceneRenderer] Spot Light Buffer");
+
 		static constexpr std::array screenVertices
 		{
 			VertexScreen{ { -1.0f, -1.0f }, { 0.0f, 1.0f } },

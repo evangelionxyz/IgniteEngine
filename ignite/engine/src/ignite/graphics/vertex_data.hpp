@@ -61,7 +61,9 @@ namespace ignite
                 .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(1))         // Object
                 .addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(2))         // Skeleton
                 .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(3))                 // Scene
-                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(4));                // CSM
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(4))                 // CSM
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(5))                 // PointLight
+                .addItem(nvrhi::BindingLayoutItem::ConstantBuffer(6));                // SpotLight
         }
     };
 

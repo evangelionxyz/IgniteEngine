@@ -461,7 +461,7 @@ namespace ignite
             if (!primitive->vertexBuffer || !primitive->indexBuffer)
                 primitive->WriteBuffer(cmd);
 
-            if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer))
+            if (!meshInstance->UpdateBindingSet(m_CameraBuffer, m_SceneBuffer, m_CascadedShadowMapBuffer, m_PointLightBuffer, m_SpotLightBuffer))
                 continue;
 
             SkinnedMeshBufferData gpuData;

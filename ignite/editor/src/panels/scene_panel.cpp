@@ -308,6 +308,22 @@ namespace ignite
                     entity.AddComponent<DirectionalLightComponent>();
                 }
             }
+            if (ImGui::MenuItem("Point Light"))
+            {
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Point Light"));
+                if (entity.IsValid() && !entity.HasComponent<PointLightComponent>())
+                {
+                    entity.AddComponent<PointLightComponent>();
+                }
+            }
+            if (ImGui::MenuItem("Spot Light"))
+            {
+                entity = SetSelectedEntity(SceneManager::CreateEmptyEntity(m_Scene.get(), "Spot Light"));
+                if (entity.IsValid() && !entity.HasComponent<SpotLightComponent>())
+                {
+                    entity.AddComponent<SpotLightComponent>();
+                }
+            }
             if (ImGui::MenuItem("World Environment"))
             {
                 entity = SetSelectedEntity(SceneManager::CreateWorldEnvironment(m_Scene.get(), "World Environment"));
@@ -707,6 +723,40 @@ namespace ignite
                         }
                     }
                 }
+            });
+
+            RenderComponent<PointLightComponent>("Point Light", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<PointLightComponent>();
+
+                UI::DrawCheckbox("Enabled", &c.enabled);
+                ImGui::ColorEdit4("Color", &c.color.x);
+                UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
+                UI::DrawFloatControl("Range", &c.range, 0.1f, 0.0f, 1000.0f);
+
+                ImGui::SeparatorText("Attenuation");
+                UI::DrawFloatControl("Constant", &c.constantAttenuation, 0.01f, 0.0f, 10.0f);
+                UI::DrawFloatControl("Linear", &c.linearAttenuation, 0.001f, 0.0f, 10.0f);
+                UI::DrawFloatControl("Quadratic", &c.quadraticAttenuation, 0.0001f, 0.0f, 10.0f);
+            });
+
+            RenderComponent<SpotLightComponent>("Spot Light", selectedEntity, [&]()
+            {
+                auto &c = selectedEntity.GetComponent<SpotLightComponent>();
+
+                UI::DrawCheckbox("Enabled", &c.enabled);
+                ImGui::ColorEdit4("Color", &c.color.x);
+                UI::DrawFloatControl("Intensity", &c.intensity, 0.01f, 0.0f, 100.0f);
+                UI::DrawFloatControl("Range", &c.range, 0.1f, 0.0f, 1000.0f);
+
+                ImGui::SeparatorText("Attenuation");
+                UI::DrawFloatControl("Constant", &c.constantAttenuation, 0.01f, 0.0f, 10.0f);
+                UI::DrawFloatControl("Linear", &c.linearAttenuation, 0.001f, 0.0f, 10.0f);
+                UI::DrawFloatControl("Quadratic", &c.quadraticAttenuation, 0.0001f, 0.0f, 10.0f);
+
+                ImGui::SeparatorText("Cone angles");
+                UI::DrawFloatControl("Inner Angle", &c.innerConeAngle, 0.1f, 0.0f, 90.0f);
+                UI::DrawFloatControl("Outer Angle", &c.outerConeAngle, 0.1f, 0.0f, 90.0f);
             });
 
             RenderComponent<Sprite2DComponent>("Sprite 2D", selectedEntity, [&]()
@@ -2462,6 +2512,12 @@ namespace ignite
                         break;
                     case CompType_DirectionalLight:
                         entity.AddComponent<DirectionalLightComponent>();
+                        break;
+                    case CompType_PointLight:
+                        entity.AddComponent<PointLightComponent>();
+                        break;
+                    case CompType_SpotLight:
+                        entity.AddComponent<SpotLightComponent>();
                         break;
                     case CompType_Text:
                         entity.AddComponent<TextComponent>();

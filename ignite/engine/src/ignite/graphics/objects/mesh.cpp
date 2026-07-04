@@ -489,7 +489,13 @@ namespace ignite
         m_SkeletonBuffer->SetData(cmd, Buffer(data, size));
 	}
 
-	bool MeshInstance::UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer)
+	bool MeshInstance::UpdateBindingSet(
+        const Ref<ConstantBuffer> &cameraBuffer,
+        const Ref<ConstantBuffer> &sceneBuffer,
+        const Ref<ConstantBuffer> &csmBuffer,
+        const Ref<ConstantBuffer> &pointLightBuffer,
+        const Ref<ConstantBuffer> &spotLightBuffer
+    )
     {
         if (!m_SkeletonBuffer || !m_MeshConstantBuffer)
         {
@@ -502,6 +508,8 @@ namespace ignite
         cacheKey.skeletonBuffer = m_SkeletonBuffer->GetHandle();
         cacheKey.sceneBuffer = sceneBuffer ? sceneBuffer->GetHandle() : nullptr;
         cacheKey.csmBuffer = csmBuffer ? csmBuffer->GetHandle() : nullptr;
+        cacheKey.pointLightBuffer = pointLightBuffer ? pointLightBuffer->GetHandle() : nullptr;
+        cacheKey.spotLightBuffer = spotLightBuffer ? spotLightBuffer->GetHandle() : nullptr;
 
         if (auto it = m_MeshBindingSetCache.find(cacheKey); it != m_MeshBindingSetCache.end())
         {
@@ -516,6 +524,8 @@ namespace ignite
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(2, cacheKey.skeletonBuffer));
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, cacheKey.sceneBuffer));
         desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(4, cacheKey.csmBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(5, cacheKey.pointLightBuffer));
+        desc.addItem(nvrhi::BindingSetItem::ConstantBuffer(6, cacheKey.spotLightBuffer));
 
         m_MeshBindingSet = device->createBindingSet(desc, Renderer::GetBindingLayout(GLayoutMap::MESH_ANIM));
         LOG_ASSERT(m_MeshBindingSet, "Failed to create mesh binding set");

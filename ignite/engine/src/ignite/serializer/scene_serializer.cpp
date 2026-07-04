@@ -114,6 +114,42 @@ namespace ignite
                     sr.EndMap();
                 }
 
+                // Point Light
+                if (entity.HasComponent<PointLightComponent>())
+                {
+                    const PointLightComponent &comp = entity.GetComponent<PointLightComponent>();
+                    sr.BeginMap("PointLight");
+                    {
+                        sr.AddKeyValue("Color", comp.color);
+                        sr.AddKeyValue("Intensity", comp.intensity);
+                        sr.AddKeyValue("Range", comp.range);
+                        sr.AddKeyValue("Enabled", comp.enabled);
+                        sr.AddKeyValue("ConstantAttenuation", comp.constantAttenuation);
+                        sr.AddKeyValue("LinearAttenuation", comp.linearAttenuation);
+                        sr.AddKeyValue("QuadraticAttenuation", comp.quadraticAttenuation);
+                    }
+                    sr.EndMap();
+                }
+
+                // Spot Light
+                if (entity.HasComponent<SpotLightComponent>())
+                {
+                    const SpotLightComponent &comp = entity.GetComponent<SpotLightComponent>();
+                    sr.BeginMap("SpotLight");
+                    {
+                        sr.AddKeyValue("Color", comp.color);
+                        sr.AddKeyValue("Intensity", comp.intensity);
+                        sr.AddKeyValue("Range", comp.range);
+                        sr.AddKeyValue("Enabled", comp.enabled);
+                        sr.AddKeyValue("ConstantAttenuation", comp.constantAttenuation);
+                        sr.AddKeyValue("LinearAttenuation", comp.linearAttenuation);
+                        sr.AddKeyValue("QuadraticAttenuation", comp.quadraticAttenuation);
+                        sr.AddKeyValue("InnerConeAngle", comp.innerConeAngle);
+                        sr.AddKeyValue("OuterConeAngle", comp.outerConeAngle);
+                    }
+                    sr.EndMap();
+                }
+
                 // Camera
                 if (entity.HasComponent<CameraComponent>())
                 {
@@ -940,6 +976,34 @@ namespace ignite
                 if (auto n = node["ShadowDistance"]) comp.shadowDistance = n.as<float>();
                 if (auto n = node["ShadowResolution"]) comp.shadowResolution = n.as<int>();
                 if (auto n = node["CascadeShadow"]) comp.cascadeShadow = n.as<bool>();
+            }
+
+            // Point Light component
+            if (YAML::Node node = entityNode["PointLight"])
+            {
+                auto &comp = desEntity.AddComponent<PointLightComponent>();
+                if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
+                if (auto n = node["Intensity"]) comp.intensity = n.as<float>();
+                if (auto n = node["Range"]) comp.range = n.as<float>();
+                if (auto n = node["Enabled"]) comp.enabled = n.as<bool>();
+                if (auto n = node["ConstantAttenuation"]) comp.constantAttenuation = n.as<float>();
+                if (auto n = node["LinearAttenuation"]) comp.linearAttenuation = n.as<float>();
+                if (auto n = node["QuadraticAttenuation"]) comp.quadraticAttenuation = n.as<float>();
+            }
+
+            // Spot Light component
+            if (YAML::Node node = entityNode["SpotLight"])
+            {
+                auto &comp = desEntity.AddComponent<SpotLightComponent>();
+                if (auto n = node["Color"]) comp.color = n.as<glm::vec4>();
+                if (auto n = node["Intensity"]) comp.intensity = n.as<float>();
+                if (auto n = node["Range"]) comp.range = n.as<float>();
+                if (auto n = node["Enabled"]) comp.enabled = n.as<bool>();
+                if (auto n = node["ConstantAttenuation"]) comp.constantAttenuation = n.as<float>();
+                if (auto n = node["LinearAttenuation"]) comp.linearAttenuation = n.as<float>();
+                if (auto n = node["QuadraticAttenuation"]) comp.quadraticAttenuation = n.as<float>();
+                if (auto n = node["InnerConeAngle"]) comp.innerConeAngle = n.as<float>();
+                if (auto n = node["OuterConeAngle"]) comp.outerConeAngle = n.as<float>();
             }
 
             // Audio Source

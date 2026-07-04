@@ -163,6 +163,8 @@ namespace ignite
         Ref<ConstantBuffer> m_CameraBuffer;
         Ref<ConstantBuffer> m_CascadedShadowMapBuffer;
         Ref<ConstantBuffer> m_CSMPerCascadeBuffers[NUM_CASCADES];
+        Ref<ConstantBuffer> m_PointLightBuffer;
+        Ref<ConstantBuffer> m_SpotLightBuffer;
 
 		std::unordered_map<AssetResolveKey, Ref<Asset>, AssetResolveKeyHash> m_ResolvedAssetsCache;
 

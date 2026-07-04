@@ -31,6 +31,8 @@ namespace ignite
 	static constexpr int NUM_CASCADES = 4;
 	static constexpr int MAX_BONES = 100;
 	static constexpr int VERTEX_MAX_BONES = 4;
+	static constexpr int MAX_POINT_LIGHTS = 16;
+	static constexpr int MAX_SPOT_LIGHTS = 16;
 
 	struct SkinnedMeshBufferData
 	{
@@ -51,6 +53,10 @@ namespace ignite
 		float exposure = 1.1f;
 		float gamma = 2.2f;
 		float ambient = 0.5f;
+
+		int numPointLights = 0;
+		int numSpotLights = 0;
+		float _pad[3] = { 0.0f, 0.0f, 0.0f };
 	};
 
 	struct CascadedShadowMapBufferData
@@ -86,6 +92,33 @@ namespace ignite
 		int roughnessChannel = 1;
 		int blendMode = 0; // 0 = Opaque, 1 = Transparent
 		glm::vec2 tilingFactor = glm::vec2(1.0f, 1.0f);
+	};
+
+	// GPU-side point light data (16-byte aligned for HLSL constant buffers)
+	struct PointLight_GPUData
+	{
+		glm::vec4 positionAndRange;  // xyz = position, w = range
+		glm::vec4 color;             // rgb = color, a = intensity
+		glm::vec4 attenuation;       // x = constant, y = linear, z = quadratic, w = unused
+	};
+
+	// GPU-side spot light data (16-byte aligned for HLSL constant buffers)
+	struct SpotLight_GPUData
+	{
+		glm::vec4 positionAndRange;  // xyz = position, w = range
+		glm::vec4 directionAndAngle; // xyz = direction, w = cos(outerConeAngle)
+		glm::vec4 color;             // rgb = color, a = intensity
+		glm::vec4 attenuation;       // x = constant, y = linear, z = quadratic, w = cos(innerConeAngle)
+	};
+
+	struct PointLightBufferData
+	{
+		PointLight_GPUData lights[MAX_POINT_LIGHTS];
+	};
+
+	struct SpotLightBufferData
+	{
+		SpotLight_GPUData lights[MAX_SPOT_LIGHTS];
 	};
 }
 

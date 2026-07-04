@@ -121,7 +121,13 @@ namespace ignite
         void SetData(nvrhi::ICommandList *cmd, void *data, size_t size);
         void SetSkeletonData(nvrhi::ICommandList *cmd, void *data, size_t size);
 
-        bool UpdateBindingSet(const Ref<ConstantBuffer> &cameraBuffer, const Ref<ConstantBuffer> &sceneBuffer, const Ref<ConstantBuffer> &csmBuffer);
+        bool UpdateBindingSet(
+            const Ref<ConstantBuffer> &cameraBuffer,
+            const Ref<ConstantBuffer> &sceneBuffer,
+            const Ref<ConstantBuffer> &csmBuffer,
+            const Ref<ConstantBuffer> &pointLightBuffer = nullptr,
+            const Ref<ConstantBuffer> &spotLightBuffer = nullptr
+        );
 
         nvrhi::BindingSetHandle GetBindingSet() const { return m_MeshBindingSet; }
         Ref<ConstantBuffer> GetConstantBuffer() { return m_MeshConstantBuffer; }
@@ -135,6 +141,8 @@ namespace ignite
             nvrhi::IBuffer *skeletonBuffer = nullptr;
             nvrhi::IBuffer *sceneBuffer = nullptr;
             nvrhi::IBuffer *csmBuffer = nullptr;
+            nvrhi::IBuffer *pointLightBuffer = nullptr;
+            nvrhi::IBuffer *spotLightBuffer = nullptr;
 
             bool operator==(const BindingSetCacheKey &other) const noexcept
             {
@@ -142,7 +150,9 @@ namespace ignite
                     && objectBuffer == other.objectBuffer
                     && skeletonBuffer == other.skeletonBuffer
                     && sceneBuffer == other.sceneBuffer
-                    && csmBuffer == other.csmBuffer;
+                    && csmBuffer == other.csmBuffer
+                    && pointLightBuffer == other.pointLightBuffer
+                    && spotLightBuffer == other.spotLightBuffer;
             }
         };
 
@@ -155,6 +165,8 @@ namespace ignite
                 h ^= (std::hash<const void *>{}(k.skeletonBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
                 h ^= (std::hash<const void *>{}(k.sceneBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
                 h ^= (std::hash<const void *>{}(k.csmBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+                h ^= (std::hash<const void *>{}(k.pointLightBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
+                h ^= (std::hash<const void *>{}(k.spotLightBuffer) + 0x9e3779b9 + (h << 6) + (h >> 2));
                 return h;
             }
         };

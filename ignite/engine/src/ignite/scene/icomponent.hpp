@@ -37,6 +37,8 @@ namespace ignite
         CompType_Script,
         CompType_WorldEnvironment,
         CompType_Animator2D,
+        CompType_PointLight,
+        CompType_SpotLight,
         CompType_LAST
     };
 

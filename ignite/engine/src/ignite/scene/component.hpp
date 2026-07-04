@@ -63,6 +63,8 @@ namespace ignite
         { "World Environment", CompType_WorldEnvironment },
         { "C# Script", CompType_Script },
         { "Animator 2D", CompType_Animator2D },
+        { "Point Light", CompType_PointLight },
+        { "Spot Light", CompType_SpotLight },
     };
 
     enum EntityType : uint8_t
@@ -176,6 +178,8 @@ namespace ignite
             case CompType_ID: return "CompType_ID";
             case CompType_Transform: return "CompType_Transform";
             case CompType_Widget: return "CompType_Widget";
+            case CompType_PointLight: return "CompType_PointLight";
+            case CompType_SpotLight: return "CompType_SpotLight";
             case CompType_Invalid:
             default: return "Invalid Component";
         }
@@ -277,6 +281,46 @@ namespace ignite
         bool cascadeShadow = true;
 
         COMPONENT_CLASS_TYPE(CompType_DirectionalLight)
+    };
+
+    class PointLightComponent : public IComponent
+    {
+    public:
+        PointLightComponent() = default;
+
+        glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        float intensity = 1.0f;
+        float range = 10.0f;
+        bool enabled = true;
+
+        // Attenuation: 1 / (constant + linear*d + quadratic*d^2)
+        float constantAttenuation = 1.0f;
+        float linearAttenuation = 0.09f;
+        float quadraticAttenuation = 0.032f;
+
+        COMPONENT_CLASS_TYPE(CompType_PointLight)
+    };
+
+    class SpotLightComponent : public IComponent
+    {
+    public:
+        SpotLightComponent() = default;
+
+        glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        float intensity = 1.0f;
+        float range = 10.0f;
+        bool enabled = true;
+
+        // Attenuation: 1 / (constant + linear*d + quadratic*d^2)
+        float constantAttenuation = 1.0f;
+        float linearAttenuation = 0.09f;
+        float quadraticAttenuation = 0.032f;
+
+        // Cone angles in degrees
+        float innerConeAngle = 12.5f;  // Full-intensity inner cone
+        float outerConeAngle = 45.0f;  // Falloff outer cone
+
+        COMPONENT_CLASS_TYPE(CompType_SpotLight)
     };
 
     class WorldEnvironment : public IComponent
